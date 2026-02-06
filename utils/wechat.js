@@ -1,4 +1,5 @@
 const axios = require('axios');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const WECHAT_APPID = process.env.WECHAT_APPID;
@@ -32,18 +33,18 @@ async function code2Session(code) {
             session_key: data.session_key
         };
     } catch (error) {
-        console.error('code2Session错误:', error);
+        console.error('code2Session错误:', error.message);
         throw error;
     }
 }
 
 /**
  * 生成订单号
- * @returns {string} 格式: 时间戳 + 随机数
+ * @returns {string} 格式: ORD + 时间戳 + 加密随机数（防碰撞）
  */
 function generateOrderNo() {
     const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    const random = crypto.randomBytes(4).toString('hex');
     return `ORD${timestamp}${random}`;
 }
 

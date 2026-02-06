@@ -23,7 +23,15 @@ const adminRoutes = require('./routes/admin');
 const app = express();
 
 // 中间件
-app.use(cors()); // 跨域支持
+const corsOptions = {
+    origin: process.env.CORS_ORIGINS
+        ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+        : (process.env.NODE_ENV === 'production' ? [] : '*'),
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+};
+app.use(cors(corsOptions)); // 跨域支持
 app.use(bodyParser.json()); // 解析JSON请求体
 app.use(bodyParser.urlencoded({ extended: true }));
 
