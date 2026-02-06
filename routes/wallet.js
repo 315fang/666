@@ -7,6 +7,7 @@ const {
     applyWithdrawal
 } = require('../controllers/walletController');
 const { authenticate } = require('../middleware/auth');
+const { validateWithdrawal, validatePagination } = require('../middleware/validate');
 
 // 所有钱包接口需要登录
 router.use(authenticate);
@@ -15,12 +16,12 @@ router.use(authenticate);
 router.get('/', getWalletInfo);
 
 // GET /api/wallet/commissions - 获取佣金明细
-router.get('/commissions', getCommissionLogs);
+router.get('/commissions', validatePagination, getCommissionLogs);
 
 // GET /api/wallet/withdrawals - 获取提现记录
-router.get('/withdrawals', getWithdrawals);
+router.get('/withdrawals', validatePagination, getWithdrawals);
 
 // POST /api/wallet/withdraw - 申请提现
-router.post('/withdraw', applyWithdrawal);
+router.post('/withdraw', validateWithdrawal, applyWithdrawal);
 
 module.exports = router;

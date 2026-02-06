@@ -1,6 +1,7 @@
 const { User } = require('../models');
 const { code2Session } = require('../utils/wechat');
 const { checkRoleUpgrade } = require('../utils/commission');
+const { generateUserToken } = require('../middleware/auth');
 
 /**
  * 用户登录/注册
@@ -65,9 +66,12 @@ async function login(req, res, next) {
             });
         }
 
+        // 生成JWT Token
+        const token = generateUserToken(user);
+
         res.json({
             success: true,
-            openid,
+            token,
             userInfo: {
                 id: user.id,
                 openid: user.openid,

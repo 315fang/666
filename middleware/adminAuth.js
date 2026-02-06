@@ -1,6 +1,17 @@
 const jwt = require('jsonwebtoken');
 const { Admin } = require('../models');
 
+/**
+ * 获取管理员JWT密钥
+ */
+function getAdminJwtSecret() {
+    const secret = process.env.ADMIN_JWT_SECRET;
+    if (!secret) {
+        throw new Error('ADMIN_JWT_SECRET 环境变量未配置');
+    }
+    return secret;
+}
+
 // 管理员认证中间件
 const adminAuth = async (req, res, next) => {
     try {
@@ -11,7 +22,7 @@ const adminAuth = async (req, res, next) => {
         }
 
         const token = authHeader.substring(7);
-        const secret = process.env.ADMIN_JWT_SECRET || 'admin-secret-key';
+        const secret = getAdminJwtSecret();
 
         let decoded;
         try {
@@ -29,7 +40,7 @@ const adminAuth = async (req, res, next) => {
         req.admin = admin;
         next();
     } catch (error) {
-        console.error('管理员认证错误:', error);
+        console.error('管理员认证错误:', error.message);
         res.status(500).json({ code: -1, message: '认证失败' });
     }
 };
@@ -71,7 +82,7 @@ const checkPermission = (...requiredPermissions) => {
 
 // 生成管理员Token
 const generateAdminToken = (admin) => {
-    const secret = process.env.ADMIN_JWT_SECRET || 'admin-secret-key';
+    const secret = getAdminJwtSecret();
     return jwt.sign(
         {
             id: admin.id,

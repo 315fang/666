@@ -6,13 +6,13 @@ services:
     container_name: s2b2c_mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: your_password
-      MYSQL_DATABASE: s2b2c_db
-      MYSQL_USER: s2b2c_user
-      MYSQL_PASSWORD: s2b2c_pass
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme_root}
+      MYSQL_DATABASE: ${DB_NAME:-s2b2c_db}
+      MYSQL_USER: ${DB_USER:-s2b2c_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-changeme_user}
       TZ: Asia/Shanghai
     ports:
-      - "3306:3306"
+      - "${DB_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./seeds:/docker-entrypoint-initdb.d

@@ -2,7 +2,12 @@
  * 全局错误处理中间件
  */
 function errorHandler(err, req, res, next) {
-    console.error('错误详情:', err);
+    // 生产环境仅记录错误消息，开发环境记录完整错误
+    if (process.env.NODE_ENV === 'production') {
+        console.error('错误:', err.message);
+    } else {
+        console.error('错误详情:', err);
+    }
 
     // Sequelize验证错误
     if (err.name === 'SequelizeValidationError') {
@@ -21,10 +26,15 @@ function errorHandler(err, req, res, next) {
         });
     }
 
-    // 默认错误
-    res.status(err.status || 500).json({
+    // 默认错误 — 生产环境隐藏内部错误信息
+    const statusCode = err.status || 500;
+    const message = (statusCode === 500 && process.env.NODE_ENV === 'production')
+        ? '服务器内部错误'
+        : (err.message || '服务器内部错误');
+
+    res.status(statusCode).json({
         success: false,
-        message: err.message || '服务器内部错误'
+        message
     });
 }
 
