@@ -1,0 +1,195 @@
+/* pages/order/list.wxss - 订单列表样式 */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--color-background);
+}
+
+/* ==================== Tab栏 ==================== */
+.tabs-wrapper {
+  background: var(--color-white);
+  border-bottom: 1rpx solid var(--color-divider);
+}
+
+.tabs-scroll {
+  white-space: nowrap;
+}
+
+.tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28rpx var(--spacing-lg);
+  font-size: var(--font-size-md);
+  color: var(--color-secondary);
+  position: relative;
+  transition: all 0.2s;
+}
+
+.tab-item.active {
+  color: var(--color-navy);
+  font-weight: 500;
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40rpx;
+  height: 4rpx;
+  background: var(--color-navy);
+  border-radius: 2rpx;
+}
+
+/* ==================== 订单列表 ==================== */
+.order-list {
+  flex: 1;
+  padding: var(--spacing-md);
+}
+
+.order-card {
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* 订单头部 */
+.order-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1rpx solid var(--color-divider);
+}
+
+.order-no {
+  font-size: var(--font-size-sm);
+  color: var(--color-secondary);
+}
+
+.order-status {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.order-status.pending { color: var(--color-warning); }
+.order-status.paid { color: var(--color-primary); }
+.order-status.shipped { color: var(--color-primary); }
+.order-status.completed { color: var(--color-success); }
+.order-status.cancelled { color: var(--color-placeholder); }
+
+/* 商品列表 */
+.order-products {
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.order-product {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-sm) 0;
+}
+
+.order-product:not(:last-child) {
+  border-bottom: 1rpx solid var(--color-divider);
+}
+
+.product-image {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: var(--radius-sm);
+  background: var(--color-background);
+  flex-shrink: 0;
+}
+
+.product-info {
+  flex: 1;
+  margin-left: var(--spacing-md);
+  overflow: hidden;
+}
+
+.product-name {
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-spec {
+  font-size: var(--font-size-sm);
+  color: var(--color-placeholder);
+  margin-top: 4rpx;
+  display: block;
+}
+
+.product-price-qty {
+  text-align: right;
+  margin-left: var(--spacing-md);
+}
+
+.product-price {
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  display: block;
+}
+
+.product-qty {
+  font-size: var(--font-size-sm);
+  color: var(--color-placeholder);
+  margin-top: 4rpx;
+  display: block;
+}
+
+/* 订单底部 */
+.order-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--color-background);
+}
+
+.order-total {
+  font-size: var(--font-size-sm);
+  color: var(--color-secondary);
+}
+
+.total-amount {
+  font-size: var(--font-size-lg);
+  font-weight: 500;
+  color: var(--color-title);
+  font-family: 'DIN Pro', -apple-system, sans-serif;
+}
+
+.order-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.order-actions .btn {
+  padding: 0 var(--spacing-lg);
+}
+
+/* ==================== 加载更多 ==================== */
+.load-more {
+  text-align: center;
+  padding: var(--spacing-lg) 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-placeholder);
+}
+
+/* ==================== 空状态 ==================== */
+.empty {
+  padding: 120rpx 0;
+}
+
+/* ==================== 加载状态 ==================== */
+.loading {
+  padding: 60rpx 0;
+}

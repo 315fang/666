@@ -1,0 +1,126 @@
+<!--pages/product/detail.wxml - 商品详情-->
+<view class="container">
+  <!-- 商品图片 -->
+  <view class="gallery">
+    <swiper class="gallery-swiper" 
+            autoplay circular 
+            current="{{currentImage}}"
+            bindchange="onImageChange">
+      <swiper-item wx:for="{{product.images || []}}" wx:key="index">
+        <image class="gallery-image" src="{{item}}" mode="aspectFill" bindtap="onPreviewImage" data-index="{{index}}"></image>
+      </swiper-item>
+    </swiper>
+    <view class="gallery-counter">
+      <text>{{currentImage + 1}}/{{imageCount}}</text>
+    </view>
+    <view class="back-btn" bindtap="onBack">‹</view>
+  </view>
+
+  <!-- 商品信息 -->
+  <view class="product-section">
+    <view class="price-row">
+      <text class="current-price">{{product.displayPrice || product.retail_price || '0.00'}}</text>
+      <text class="original-price" wx:if="{{product.original_price}}">¥{{product.original_price}}</text>
+      <view class="price-tag" wx:if="{{roleLevel > 0}}">{{roleLevel === 1 ? '会员价' : (roleLevel === 2 ? '团长价' : '代理价')}}</view>
+    </view>
+    <text class="product-name">{{product.name}}</text>
+    <text class="product-desc" wx:if="{{product.subtitle}}">{{product.subtitle}}</text>
+  </view>
+
+  <!-- 服务 -->
+  <view class="service-row">
+    <view class="service-item">
+      <text>✓ 正品保证</text>
+    </view>
+    <view class="service-item">
+      <text>✓ 品质直发</text>
+    </view>
+    <view class="service-item">
+      <text>✓ 售后无忧</text>
+    </view>
+  </view>
+
+  <!-- 规格选择 -->
+  <view class="spec-entry" bindtap="onShowSku" wx:if="{{skus.length > 0}}">
+    <text class="spec-label">规格</text>
+    <view class="spec-value">
+      <text wx:if="{{selectedSku}}">{{selectedSku.spec_value}}</text>
+      <text wx:else>请选择</text>
+    </view>
+    <text class="spec-arrow">›</text>
+  </view>
+
+  <!-- 商品详情 -->
+  <view class="detail-section">
+    <view class="detail-title">
+      <text class="line"></text>
+      <text>商品详情</text>
+      <text class="line"></text>
+    </view>
+    <view class="detail-content">
+      <rich-text nodes="{{product.description || ''}}"></rich-text>
+      <block wx:for="{{product.detail_images || []}}" wx:key="index">
+        <image class="detail-image" src="{{item}}" mode="widthFix"></image>
+      </block>
+      <view class="empty" wx:if="{{!product.description && (!product.detail_images || product.detail_images.length === 0)}}">
+        <text class="empty-text">暂无详情</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 底部栏 -->
+  <view class="action-bar safe-bottom">
+    <view class="action-icons">
+      <navigator url="/pages/cart/cart" open-type="switchTab" class="action-icon">
+        <text>🛒</text>
+        <view class="cart-badge" wx:if="{{cartCount > 0}}">{{cartCount}}</view>
+      </navigator>
+    </view>
+    <view class="action-btns">
+      <view class="btn btn-secondary" bindtap="onAddToCart">加入购物车</view>
+      <view class="btn btn-primary" bindtap="onBuyNow">立即购买</view>
+    </view>
+  </view>
+
+  <!-- SKU弹窗 -->
+  <view class="sku-popup {{showSku ? 'show' : ''}}">
+    <view class="sku-mask" bindtap="onHideSku"></view>
+    <view class="sku-content">
+      <view class="sku-header">
+        <image class="sku-image" src="{{(selectedSku && selectedSku.image) || (product.images && product.images[0]) || ''}}" mode="aspectFill"></image>
+        <view class="sku-info">
+          <text class="sku-price">{{(selectedSku && selectedSku.retail_price) || product.retail_price}}</text>
+          <text class="sku-stock">库存: {{(selectedSku && selectedSku.stock) || product.stock || 0}}</text>
+        </view>
+        <view class="sku-close" bindtap="onHideSku">✕</view>
+      </view>
+      
+      <view class="sku-specs">
+        <view class="spec-group">
+          <text class="spec-name">规格</text>
+          <view class="spec-list">
+            <view class="spec-item {{selectedSku && selectedSku.id === item.id ? 'active' : ''}} {{item.stock <= 0 ? 'disabled' : ''}}"
+                  wx:for="{{skus}}" wx:key="id"
+                  bindtap="onSelectSku" data-sku="{{item}}">
+              {{item.spec_value}}
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="sku-quantity">
+        <text>数量</text>
+        <view class="quantity-ctrl">
+          <view class="qty-btn {{quantity <= 1 ? 'disabled' : ''}}" bindtap="onQuantityMinus">−</view>
+          <text class="qty-num">{{quantity}}</text>
+          <view class="qty-btn" bindtap="onQuantityPlus">+</view>
+        </view>
+      </view>
+
+      <view class="sku-btns">
+        <view class="btn btn-secondary btn-block" bindtap="onConfirmAddCart">加入购物车</view>
+        <view class="btn btn-primary btn-block" bindtap="onConfirmBuy">立即购买</view>
+      </view>
+    </view>
+  </view>
+</view>

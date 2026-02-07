@@ -1,0 +1,87 @@
+<!--pages/category/category.wxml - 分类页面-->
+<view class="container">
+  <!-- 搜索栏 -->
+  <view class="search-header">
+    <view class="search-box" bindtap="onSearchTap">
+      <text class="search-icon">🔍</text>
+      <text class="search-text">搜索商品</text>
+    </view>
+  </view>
+
+  <view class="main-content">
+    <!-- 左侧分类列表 -->
+    <scroll-view class="category-sidebar" scroll-y>
+      <view class="category-nav-item {{currentCategory === '' ? 'active' : ''}}"
+            bindtap="onCategoryChange" data-id="">
+        <text>全部商品</text>
+      </view>
+      <view class="category-nav-item {{currentCategory === item.id ? 'active' : ''}}"
+            wx:for="{{categories}}" wx:key="id"
+            bindtap="onCategoryChange" data-id="{{item.id}}">
+        <text>{{item.name}}</text>
+      </view>
+    </scroll-view>
+
+    <!-- 右侧商品列表 -->
+    <scroll-view class="product-area" scroll-y bindscrolltolower="onLoadMore">
+      <!-- 排序筛选 -->
+      <view class="filter-bar">
+        <view class="filter-item {{sortBy === 'default' ? 'active' : ''}}" 
+              bindtap="onSort" data-sort="default">
+          <text>综合</text>
+        </view>
+        <view class="filter-item {{sortBy === 'sales' ? 'active' : ''}}" 
+              bindtap="onSort" data-sort="sales">
+          <text>销量</text>
+        </view>
+        <view class="filter-item {{sortBy === 'price' ? 'active' : ''}}" 
+              bindtap="onSort" data-sort="price">
+          <text>价格</text>
+          <text class="sort-arrow">{{sortOrder === 'asc' ? '↑' : '↓'}}</text>
+        </view>
+      </view>
+
+      <!-- 商品网格 -->
+      <view class="product-list">
+        <view class="product-item" 
+              wx:for="{{products}}" wx:key="id"
+              bindtap="onProductTap" data-item="{{item}}">
+          <view class="product-image-wrapper">
+            <image class="product-image" 
+                   src="{{item.images[0] || '/assets/images/placeholder.png'}}" 
+                   mode="aspectFill"></image>
+            <view class="hot-tag" wx:if="{{item.is_hot}}">热</view>
+          </view>
+          <view class="product-info">
+            <text class="product-name">{{item.name}}</text>
+            <view class="product-price-row">
+              <text class="product-price">{{item.retail_price}}</text>
+              <text class="product-sales">已售{{item.sales_count || 0}}</text>
+            </view>
+            <view class="quick-add" catchtap="onQuickAdd" data-item="{{item}}">
+              <text>+</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 加载更多 -->
+      <view class="load-more" wx:if="{{products.length > 0}}">
+        <text wx:if="{{hasMore}}">上拉加载更多</text>
+        <text wx:else>没有更多了</text>
+      </view>
+
+      <!-- 空状态 -->
+      <view class="empty" wx:if="{{!loading && products.length === 0}}">
+        <text class="empty-icon">📦</text>
+        <text class="empty-text">暂无商品</text>
+      </view>
+
+      <!-- 加载中 -->
+      <view class="loading" wx:if="{{loading}}">
+        <view class="loading-spinner"></view>
+        <text>加载中...</text>
+      </view>
+    </scroll-view>
+  </view>
+</view>

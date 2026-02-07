@@ -35,6 +35,11 @@ app.use(cors(corsOptions)); // 跨域支持
 app.use(bodyParser.json()); // 解析JSON请求体
 app.use(bodyParser.urlencoded({ extended: true }));
 
+app.use((req, res, next) => {
+    res.setHeader("Content-Security-Policy", "default-src 'self' * data: blob:; script-src 'self' * 'unsafe-inline' 'unsafe-eval' data: blob:; style-src 'self' * 'unsafe-inline' data: blob:;");
+    next();
+});
+
 // 请求日志（开发环境）
 if (process.env.NODE_ENV === 'development') {
     app.use((req, res, next) => {

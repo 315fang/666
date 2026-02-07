@@ -1,0 +1,2 @@
+.container { padding: 20rpx; }
+.card { background: #fff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 20rpx; }
