@@ -1,0 +1,40 @@
+<!--pages/wallet/index.wxml - 我的钱包-->
+<view class="container">
+  <!-- 余额卡片 -->
+  <view class="balance-card">
+    <view class="balance-label">账户余额(元)</view>
+    <view class="balance-amount">{{balance || '0.00'}}</view>
+    <view class="balance-actions">
+      <view class="action-btn" bindtap="onWithdrawTap">提现</view>
+    </view>
+  </view>
+
+  <!-- 资金明细 -->
+  <view class="list-section">
+    <view class="section-title">资金明细</view>
+    <view class="log-list">
+      <view class="log-item" wx:for="{{logs}}" wx:key="id">
+        <view class="log-info">
+          <text class="log-type">{{item.type === 'level1' ? '一级分销' : (item.type === 'level2' ? '二级分销' : '提现')}}</text>
+          <text class="log-time">{{item.created_at}}</text>
+        </view>
+        <view class="log-amount {{item.amount > 0 ? 'income' : 'expense'}}">
+          {{item.amount > 0 ? '+' : ''}}{{item.amount}}
+        </view>
+      </view>
+      <view class="empty" wx:if="{{logs.length === 0}}">
+        <text class="empty-text">暂无明细</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 提现弹窗 -->
+  <view class="withdraw-popup {{showWithdraw ? 'show' : ''}}">
+    <view class="mask" bindtap="hideWithdraw"></view>
+    <view class="popup-content">
+      <view class="popup-title">申请提现</view>
+      <input class="input" type="digit" placeholder="请输入提现金额" model:value="{{withdrawAmount}}" />
+      <button class="btn btn-primary btn-block" bindtap="confirmWithdraw">确认提现</button>
+    </view>
+  </view>
+</view>

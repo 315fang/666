@@ -1,0 +1,52 @@
+<!--pages/distribution/team.wxml-->
+<view class="container">
+  <!-- 统计概览 -->
+  <view class="stats-card">
+    <view class="stats-item">
+      <text class="stats-val">{{directCount || 0}}</text>
+      <text class="stats-label">直推成员</text>
+    </view>
+    <view class="stats-item">
+      <text class="stats-val">{{indirectCount || 0}}</text>
+      <text class="stats-label">二代成员</text>
+    </view>
+    <view class="stats-item">
+      <text class="stats-val">{{totalCount || 0}}</text>
+      <text class="stats-label">团队总数</text>
+    </view>
+  </view>
+
+  <!-- 搜索筛选 -->
+  <view class="tab-header">
+    <view class="tab-item {{currentTab === 'direct' ? 'active' : ''}}" bindtap="switchTab" data-tab="direct">直推成员</view>
+    <view class="tab-item {{currentTab === 'indirect' ? 'active' : ''}}" bindtap="switchTab" data-tab="indirect">下级团队</view>
+  </view>
+
+  <!-- 成员列表 -->
+  <scroll-view class="member-list" scroll-y bindscrolltolower="onLoadMore">
+    <view class="member-item" wx:for="{{members}}" wx:key="id">
+      <image class="member-avatar" src="{{item.avatar_url || '/assets/images/default-avatar.png'}}" mode="aspectFill"></image>
+      <view class="member-info">
+        <view class="member-top">
+          <text class="member-name">{{item.nickname}}</text>
+          <text class="member-tag">{{item.role_name}}</text>
+        </view>
+        <view class="member-bottom">
+          <text>加入时间: {{item.joined_at_format}}</text>
+          <text class="member-sales">贡献订单: {{item.order_count}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty-state" wx:if="{{members.length === 0 && !loading}}">
+      <text class="empty-icon">👥</text>
+      <text>暂无团队成员</text>
+    </view>
+
+    <!-- 加载中 -->
+    <view class="loading" wx:if="{{loading}}">
+      <view class="spinner"></view>
+    </view>
+  </scroll-view>
+</view>

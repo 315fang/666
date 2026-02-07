@@ -1,0 +1,51 @@
+{
+    "pages": [
+        "pages/index/index",
+        "pages/category/category",
+        "pages/cart/cart",
+        "pages/user/user",
+        "pages/product/detail",
+        "pages/order/list",
+        "pages/order/detail",
+        "pages/order/confirm",
+        "pages/address/list",
+        "pages/address/edit",
+        "pages/distribution/center",
+        "pages/distribution/team",
+        "pages/wallet/index",
+        "pages/user/notifications"
+    ],
+    "tabBar": {
+        "color": "#94A3B8",
+        "selectedColor": "#0F172A",
+        "backgroundColor": "#ffffff",
+        "borderStyle": "white",
+        "list": [
+            {
+                "pagePath": "pages/index/index",
+                "text": "首页"
+            },
+            {
+                "pagePath": "pages/category/category",
+                "text": "分类"
+            },
+            {
+                "pagePath": "pages/cart/cart",
+                "text": "购物车"
+            },
+            {
+                "pagePath": "pages/user/user",
+                "text": "我的"
+            }
+        ]
+    },
+    "window": {
+        "navigationBarBackgroundColor": "#0F172A",
+        "navigationBarTitleText": "臻选",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#F8FAFC"
+    },
+    "style": "v2",
+    "sitemapLocation": "sitemap.json",
+    "lazyCodeLoading": "requiredComponents"
+}

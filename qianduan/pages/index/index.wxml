@@ -1,0 +1,97 @@
+<!--pages/index/index.wxml - 臻选商城首页-->
+<view class="container">
+  <!-- 极简顶栏 -->
+  <view class="header">
+    <text class="brand-name">臻选</text>
+    <view class="header-actions">
+      <view class="search-btn" bindtap="onSearchTap">
+        <text>🔍</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 主视觉区域 - 沉浸式大图 -->
+  <view class="hero-section">
+    <swiper class="hero-swiper" 
+            autoplay circular 
+            interval="{{5000}}"
+            duration="{{800}}"
+            wx:if="{{banners.length > 0}}">
+      <swiper-item wx:for="{{banners}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}">
+        <image class="hero-image" src="{{item.image_url}}" mode="aspectFill"></image>
+        <view class="hero-overlay"></view>
+      </swiper-item>
+    </swiper>
+    <!-- 默认占位 -->
+    <view class="hero-placeholder" wx:else>
+      <view class="hero-content">
+        <text class="hero-subtitle">PREMIUM SELECTION</text>
+        <text class="hero-title">臻选好物</text>
+        <text class="hero-desc">品质生活，从此开始</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 品牌理念 -->
+  <view class="brand-statement">
+    <text class="statement-line"></text>
+    <text class="statement-text">精选全球优质好物</text>
+    <text class="statement-line"></text>
+  </view>
+
+  <!-- 分类导航 -->
+  <scroll-view class="category-nav" scroll-x wx:if="{{categories.length > 0}}">
+    <view class="category-item {{currentCategory === '' ? 'active' : ''}}" 
+          bindtap="onCategoryTap" data-id="">
+      <text>全部</text>
+    </view>
+    <view class="category-item {{currentCategory === item.id ? 'active' : ''}}" 
+          wx:for="{{categories}}" wx:key="id"
+          bindtap="onCategoryTap" data-id="{{item.id}}">
+      <text>{{item.name}}</text>
+    </view>
+  </scroll-view>
+
+  <!-- 精选商品 -->
+  <view class="products-section">
+    <view class="section-header">
+      <text class="section-title">精选推荐</text>
+    </view>
+
+    <!-- 商品列表 - 大图单列 -->
+    <view class="product-list">
+      <view class="product-card" 
+            wx:for="{{products}}" wx:key="id"
+            bindtap="onProductTap" data-item="{{item}}">
+        <view class="product-image-wrapper">
+          <image class="product-image" 
+                 src="{{item.images[0]}}" 
+                 mode="aspectFill"></image>
+          <view class="product-badge" wx:if="{{item.is_new}}">NEW</view>
+        </view>
+        <view class="product-info">
+          <text class="product-name">{{item.name}}</text>
+          <text class="product-desc" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
+          <view class="product-price-row">
+            <text class="product-price">{{item.retail_price}}</text>
+            <text class="product-original" wx:if="{{item.original_price}}">¥{{item.original_price}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty" wx:if="{{!loading && products.length === 0}}">
+      <text class="empty-icon">📦</text>
+      <text class="empty-text">暂无商品</text>
+    </view>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
+  </view>
+
+  <!-- 底部留白 -->
+  <view style="height: 120rpx;"></view>
+</view>

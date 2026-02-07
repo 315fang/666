@@ -1,0 +1,25 @@
+<view class="container">
+  <view class="notif-list" wx:if="{{notifications.length > 0}}">
+    <view class="notif-item {{item.is_read ? '' : 'unread'}}" wx:for="{{notifications}}" wx:key="id" bindtap="onRead" data-id="{{item.id}}" data-index="{{index}}">
+      <view class="notif-icon-box">
+        <text class="notif-icon upgrade-icon" wx:if="{{item.type === 'upgrade'}}">🚀</text>
+        <text class="notif-icon commission-icon" wx:if="{{item.type === 'commission'}}">💰</text>
+        <text class="notif-icon stock-icon" wx:if="{{item.type === 'stock'}}">⚠️</text>
+        <text class="notif-icon system-icon" wx:if="{{item.type === 'system'}}">⚙️</text>
+      </view>
+      <view class="notif-content">
+        <view class="notif-header">
+          <text class="notif-title">{{item.title}}</text>
+          <text class="notif-time">{{item.created_at_format}}</text>
+        </view>
+        <text class="notif-desc">{{item.content}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- Empty State -->
+  <view class="empty" wx:else>
+    <text class="empty-icon">🔔</text>
+    <text class="empty-text">暂无消息通知</text>
+  </view>
+</view>

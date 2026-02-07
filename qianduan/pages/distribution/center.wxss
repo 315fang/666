@@ -1,0 +1,196 @@
+/* pages/distribution/center.wxss */
+.container {
+  min-height: 100vh;
+  background: var(--color-background);
+  padding: var(--spacing-lg);
+}
+
+/* 用户卡片 */
+.user-card {
+  display: flex;
+  align-items: center;
+  background: var(--color-white);
+  padding: 30rpx;
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-md);
+}
+
+.user-avatar {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  margin-right: 24rpx;
+  background: #eee;
+}
+
+.user-info {
+  flex: 1;
+}
+
+.user-name {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: var(--color-title);
+}
+
+.user-level {
+  font-size: 20rpx;
+  background: linear-gradient(135deg, #FFD700 0%, #FDB931 100%);
+  color: #855E00;
+  padding: 4rpx 12rpx;
+  border-radius: 20rpx;
+  margin-left: 16rpx;
+  font-weight: 500;
+}
+
+.inviter-info {
+  font-size: 24rpx;
+  color: var(--color-secondary);
+}
+
+/* 头部卡片 */
+.header-card {
+  background: var(--gradient-primary);
+  border-radius: var(--radius-lg);
+  padding: 40rpx;
+  color: var(--color-white);
+  box-shadow: var(--shadow-md);
+  margin-bottom: var(--spacing-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+.total-label {
+  font-size: var(--font-size-sm);
+  opacity: 0.8;
+  margin-bottom: var(--spacing-xs);
+}
+
+.total-amount {
+  font-size: 64rpx;
+  font-weight: 600;
+  font-family: 'DIN Pro', -apple-system, sans-serif;
+  margin-bottom: 40rpx;
+}
+
+.header-sub {
+  display: flex;
+  justify-content: space-between;
+}
+
+.sub-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.sub-label {
+  font-size: var(--font-size-xs);
+  opacity: 0.8;
+}
+
+.sub-value {
+  font-size: var(--font-size-lg);
+  font-weight: 500;
+  margin-top: 4rpx;
+}
+
+.withdraw-btn {
+  position: absolute;
+  top: 40rpx;
+  right: 40rpx;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 8rpx 24rpx;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  backdrop-filter: blur(10px);
+}
+
+/* 菜单网格 */
+.menu-grid {
+  display: flex;
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md) 0;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+.menu-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-md) 0;
+  position: relative;
+}
+
+.menu-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 1rpx;
+  background: var(--color-divider);
+}
+
+.menu-icon {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40rpx;
+  margin-bottom: var(--spacing-sm);
+}
+
+.team-icon { background: #EEF2FF; color: #4F46E5; }
+.order-icon { background: #FFF7ED; color: #F97316; }
+.code-icon { background: #ECFDF5; color: #10B981; }
+
+.menu-text {
+  font-size: var(--font-size-md);
+  color: var(--color-title);
+  margin-bottom: 4rpx;
+}
+
+.menu-sub {
+  font-size: var(--font-size-xs);
+  color: var(--color-secondary);
+}
+
+/* 邀请码 */
+.invite-card {
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  padding: 40rpx;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.invite-title {
+  font-size: var(--font-size-md);
+  color: var(--color-secondary);
+  margin-bottom: var(--spacing-md);
+}
+
+.invite-code {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: var(--color-title);
+  background: var(--color-background);
+  padding: 20rpx;
+  border-radius: var(--radius-md);
+  word-break: break-all;
+  margin-bottom: var(--spacing-md);
+}
+
+.invite-tips {
+  font-size: var(--font-size-xs);
+  color: var(--color-placeholder);
+}

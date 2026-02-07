@@ -1,0 +1,95 @@
+<!--pages/user/user.wxml - 个人中心-->
+<view class="container">
+  <!-- 用户信息区 -->
+  <view class="user-header">
+    <block wx:if="{{isLoggedIn}}">
+      <view class="user-info">
+        <image class="user-avatar" src="{{userInfo.avatar || ''}}" mode="aspectFill" wx:if="{{userInfo.avatar}}"></image>
+        <view class="user-avatar-placeholder" wx:else>
+          <text>{{userInfo.nickname ? userInfo.nickname[0] : '臻'}}</text>
+        </view>
+        <view class="user-detail">
+          <text class="user-name">{{userInfo.nickname || '臻选用户'}}</text>
+          <view class="user-level" wx:if="{{userInfo.level}}">
+            <text>{{userInfo.level_name || '会员'}}</text>
+          </view>
+        </view>
+      </view>
+    </block>
+    <block wx:else>
+      <view class="login-prompt">
+        <text class="login-title">登录后享受更多权益</text>
+        <button class="btn btn-primary btn-sm" bindtap="onLogin">
+          立即登录
+        </button>
+      </view>
+    </block>
+  </view>
+
+  <!-- 订单入口 -->
+  <view class="section-card">
+    <view class="section-header" bindtap="onOrderAllTap">
+      <text class="section-title">我的订单</text>
+      <view class="section-more">
+        <text>查看全部</text>
+        <text class="arrow">›</text>
+      </view>
+    </view>
+    <view class="order-nav">
+      <view class="order-item" bindtap="onOrderTap" data-status="pending">
+        <text class="order-icon">📝</text>
+        <text class="order-text">待付款</text>
+        <view class="order-badge" wx:if="{{orderCounts.pending > 0}}">{{orderCounts.pending}}</view>
+      </view>
+      <view class="order-item" bindtap="onOrderTap" data-status="paid">
+        <text class="order-icon">📦</text>
+        <text class="order-text">待发货</text>
+        <view class="order-badge" wx:if="{{orderCounts.paid > 0}}">{{orderCounts.paid}}</view>
+      </view>
+      <view class="order-item" bindtap="onOrderTap" data-status="shipped">
+        <text class="order-icon">🚚</text>
+        <text class="order-text">待收货</text>
+        <view class="order-badge" wx:if="{{orderCounts.shipped > 0}}">{{orderCounts.shipped}}</view>
+      </view>
+      <view class="order-item" bindtap="onOrderTap" data-status="completed">
+        <text class="order-icon">✓</text>
+        <text class="order-text">已完成</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 功能菜单 -->
+  <view class="menu-section">
+    <view class="menu-item" bindtap="onMenuTap" data-url="/pages/distribution/center">
+      <text class="menu-icon">👥</text>
+      <text class="menu-title">分销中心</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-item" bindtap="onMenuTap" data-url="/pages/wallet/index">
+      <text class="menu-icon">💰</text>
+      <text class="menu-title">我的钱包</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-item" bindtap="onMenuTap" data-url="/pages/address/list">
+      <text class="menu-icon">📍</text>
+      <text class="menu-title">收货地址</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-item" bindtap="onMenuTap" data-url="">
+      <text class="menu-icon">🎧</text>
+      <text class="menu-title">联系客服</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-item" bindtap="onMenuTap" data-url="">
+      <text class="menu-icon">ℹ️</text>
+      <text class="menu-title">关于我们</text>
+      <text class="menu-arrow">›</text>
+    </view>
+  </view>
+
+  <!-- 底部信息 -->
+  <view class="footer">
+    <text>臻选 · 精选全球好物</text>
+    <text class="version">v1.0.0</text>
+  </view>
+</view>

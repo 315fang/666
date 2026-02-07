@@ -1,0 +1,138 @@
+/* pages/wallet/index.wxss */
+.container {
+  min-height: 100vh;
+  background: var(--color-background);
+  padding: var(--spacing-lg);
+}
+
+/* 余额卡片 */
+.balance-card {
+  background: var(--color-navy);
+  color: var(--color-white);
+  border-radius: var(--radius-lg);
+  padding: 60rpx 40rpx;
+  text-align: center;
+  margin-bottom: var(--spacing-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.balance-label {
+  font-size: var(--font-size-md);
+  opacity: 0.8;
+  margin-bottom: var(--spacing-sm);
+}
+
+.balance-amount {
+  font-size: 80rpx;
+  font-weight: 600;
+  font-family: 'DIN Pro', -apple-system, sans-serif;
+  margin-bottom: 40rpx;
+}
+
+.balance-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.action-btn {
+  background: var(--color-white);
+  color: var(--color-navy);
+  padding: 12rpx 60rpx;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-md);
+  font-weight: 500;
+}
+
+/* 列表 */
+.list-section {
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  min-height: 400rpx;
+}
+
+.section-title {
+  font-size: var(--font-size-lg);
+  color: var(--color-title);
+  font-weight: 500;
+  margin-bottom: var(--spacing-lg);
+}
+
+.log-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) 0;
+  border-bottom: 1rpx solid var(--color-divider);
+}
+
+.log-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.log-type {
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  margin-bottom: 4rpx;
+}
+
+.log-time {
+  font-size: var(--font-size-xs);
+  color: var(--color-placeholder);
+}
+
+.log-amount {
+  font-size: var(--font-size-lg);
+  font-weight: 500;
+  font-family: 'DIN Pro', -apple-system, sans-serif;
+}
+
+.log-amount.income { color: var(--color-success); }
+.log-amount.expense { color: var(--color-title); }
+
+.empty { padding: 60rpx 0; }
+
+/* 提现弹窗 */
+.withdraw-popup {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 100;
+  visibility: hidden;
+}
+
+.withdraw-popup.show { visibility: visible; }
+
+.mask {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+}
+
+.popup-content {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: var(--color-white);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: 40rpx;
+  transform: translateY(100%);
+  transition: transform 0.3s;
+}
+
+.withdraw-popup.show .popup-content { transform: translateY(0); }
+
+.popup-title {
+  font-size: var(--font-size-lg);
+  color: var(--color-title);
+  text-align: center;
+  margin-bottom: 40rpx;
+}
+
+.popup-content .input {
+  margin-bottom: 40rpx;
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 20rpx;
+  font-size: 40rpx;
+  height: 100rpx;
+}

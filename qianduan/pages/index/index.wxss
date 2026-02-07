@@ -1,0 +1,270 @@
+/* pages/index/index.wxss - 臻选首页样式 */
+
+.container {
+  background: var(--color-white);
+  min-height: 100vh;
+}
+
+/* ==================== 顶栏 ==================== */
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--spacing-lg);
+  height: 88rpx;
+  background: transparent;
+}
+
+.brand-name {
+  font-size: 40rpx;
+  font-weight: 300;
+  color: var(--color-white);
+  letter-spacing: 8rpx;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+}
+
+.search-btn {
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+}
+
+/* ==================== 主视觉 ==================== */
+.hero-section {
+  width: 100%;
+  height: 800rpx;
+  position: relative;
+}
+
+.hero-swiper {
+  width: 100%;
+  height: 100%;
+}
+
+.hero-image {
+  width: 100%;
+  height: 100%;
+}
+
+.hero-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(15, 23, 42, 0.3) 0%,
+    transparent 30%,
+    transparent 60%,
+    rgba(15, 23, 42, 0.5) 100%
+  );
+}
+
+.hero-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--color-white);
+}
+
+.hero-subtitle {
+  font-size: var(--font-size-sm);
+  letter-spacing: 8rpx;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: var(--spacing-md);
+}
+
+.hero-title {
+  font-size: 72rpx;
+  font-weight: 200;
+  letter-spacing: 16rpx;
+  margin-bottom: var(--spacing-md);
+}
+
+.hero-desc {
+  font-size: var(--font-size-md);
+  letter-spacing: 4rpx;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ==================== 品牌理念 ==================== */
+.brand-statement {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xxl) 0;
+  background: var(--color-white);
+}
+
+.statement-line {
+  width: 60rpx;
+  height: 1rpx;
+  background: var(--color-border);
+}
+
+.statement-text {
+  font-size: var(--font-size-sm);
+  color: var(--color-secondary);
+  letter-spacing: 6rpx;
+  margin: 0 var(--spacing-lg);
+}
+
+/* ==================== 分类导航 ==================== */
+.category-nav {
+  white-space: nowrap;
+  padding: 0 var(--spacing-lg) var(--spacing-xl);
+  background: var(--color-white);
+}
+
+.category-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  margin-right: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-secondary);
+  letter-spacing: 2rpx;
+  border-radius: var(--radius-full);
+  transition: all 0.3s ease;
+}
+
+.category-item.active {
+  background: var(--color-navy);
+  color: var(--color-white);
+}
+
+/* ==================== 商品区域 ==================== */
+.products-section {
+  padding: 0 var(--spacing-lg);
+  background: var(--color-white);
+}
+
+.section-header {
+  padding: var(--spacing-lg) 0;
+}
+
+.section-title {
+  font-size: var(--font-size-lg);
+  font-weight: 300;
+  color: var(--color-title);
+  letter-spacing: 4rpx;
+}
+
+/* ==================== 商品卡片 - 大图单列 ==================== */
+.product-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xxl);
+}
+
+.product-card {
+  background: var(--color-white);
+}
+
+.product-image-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4/5;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-background);
+}
+
+.product-image {
+  width: 100%;
+  height: 100%;
+  transition: transform 0.5s ease;
+}
+
+.product-card:active .product-image {
+  transform: scale(1.02);
+}
+
+.product-badge {
+  position: absolute;
+  top: var(--spacing-md);
+  left: var(--spacing-md);
+  padding: 8rpx 20rpx;
+  background: var(--color-navy);
+  color: var(--color-white);
+  font-size: var(--font-size-xs);
+  letter-spacing: 2rpx;
+  border-radius: var(--radius-sm);
+}
+
+.product-info {
+  padding: var(--spacing-lg) 0;
+}
+
+.product-name {
+  font-size: var(--font-size-lg);
+  font-weight: 400;
+  color: var(--color-title);
+  letter-spacing: 2rpx;
+  display: block;
+}
+
+.product-desc {
+  font-size: var(--font-size-sm);
+  color: var(--color-secondary);
+  margin-top: var(--spacing-xs);
+  display: block;
+}
+
+.product-price-row {
+  display: flex;
+  align-items: baseline;
+  margin-top: var(--spacing-md);
+}
+
+.product-price {
+  font-size: var(--font-size-xl);
+  font-weight: 500;
+  color: var(--color-title);
+  font-family: 'DIN Pro', -apple-system, sans-serif;
+}
+
+.product-price::before {
+  content: '¥';
+  font-size: var(--font-size-md);
+}
+
+.product-original {
+  font-size: var(--font-size-sm);
+  color: var(--color-placeholder);
+  text-decoration: line-through;
+  margin-left: var(--spacing-sm);
+}
+
+/* ==================== 空状态 ==================== */
+.empty {
+  padding: 120rpx 0;
+}
+
+/* ==================== 加载 ==================== */
+.loading {
+  padding: var(--spacing-xxl) 0;
+}
