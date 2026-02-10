@@ -1,0 +1,119 @@
+.address-card {
+  position: relative;
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+  display: flex;
+  align-items: flex-start;
+  transition: all 0.3s;
+}
+
+.address-card--selected {
+  border: 2rpx solid #07c160;
+  box-shadow: 0 0 20rpx rgba(7, 193, 96, 0.1);
+}
+
+/* 复选框 */
+.address-card__checkbox {
+  margin-right: 20rpx;
+  padding-top: 4rpx;
+}
+
+.address-card__checkbox-icon {
+  width: 40rpx;
+  height: 40rpx;
+}
+
+/* 内容区域 */
+.address-card__content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 头部 */
+.address-card__header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16rpx;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.address-card__name {
+  font-size: 32rpx;
+  color: #333;
+  font-weight: 600;
+}
+
+.address-card__phone {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.address-card__default-badge {
+  font-size: 22rpx;
+  color: #ff4d4f;
+  border: 1rpx solid #ff4d4f;
+  border-radius: 4rpx;
+  padding: 4rpx 8rpx;
+  line-height: 1;
+}
+
+/* 地址详情 */
+.address-card__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.address-card__region {
+  font-size: 26rpx;
+  color: #999;
+}
+
+.address-card__address {
+  font-size: 28rpx;
+  color: #666;
+  line-height: 1.5;
+}
+
+/* 操作按钮 */
+.address-card__actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 24rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.address-card__action-btn {
+  flex: 1;
+  padding: 16rpx;
+  font-size: 26rpx;
+  border-radius: 8rpx;
+  background: #f5f5f5;
+  color: #666;
+  border: none;
+  line-height: 1.2;
+}
+
+.address-card__action-btn::after {
+  border: none;
+}
+
+.address-card__action-btn--delete {
+  color: #ff4d4f;
+}
+
+/* 右侧箭头 */
+.address-card__arrow {
+  margin-left: 20rpx;
+  padding-top: 8rpx;
+}
+
+.address-card__arrow image {
+  width: 28rpx;
+  height: 28rpx;
+  opacity: 0.3;
+}

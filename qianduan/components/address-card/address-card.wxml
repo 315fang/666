@@ -1,0 +1,56 @@
+<view class="address-card {{selected ? 'address-card--selected' : ''}}" bindtap="onCardTap">
+  <!-- 选中标记 -->
+  <view wx:if="{{showCheckbox}}" class="address-card__checkbox">
+    <image
+      class="address-card__checkbox-icon"
+      src="{{selected ? '/assets/images/checked.svg' : '/assets/images/unchecked.svg'}}"
+      mode="aspectFit"
+    ></image>
+  </view>
+
+  <!-- 地址信息 -->
+  <view class="address-card__content">
+    <!-- 收货人信息 -->
+    <view class="address-card__header">
+      <text class="address-card__name">{{address.contact_name}}</text>
+      <text class="address-card__phone">{{address.contact_phone}}</text>
+      <view wx:if="{{address.is_default}}" class="address-card__default-badge">
+        默认
+      </view>
+    </view>
+
+    <!-- 地址详情 -->
+    <view class="address-card__detail">
+      <text class="address-card__region">{{address.province}} {{address.city}} {{address.district}}</text>
+      <text class="address-card__address">{{address.detail_address}}</text>
+    </view>
+  </view>
+
+  <!-- 操作按钮 -->
+  <view wx:if="{{showActions}}" class="address-card__actions">
+    <button
+      class="address-card__action-btn"
+      catchtap="onEdit"
+    >
+      编辑
+    </button>
+    <button
+      wx:if="{{!address.is_default}}"
+      class="address-card__action-btn"
+      catchtap="onSetDefault"
+    >
+      设为默认
+    </button>
+    <button
+      class="address-card__action-btn address-card__action-btn--delete"
+      catchtap="onDelete"
+    >
+      删除
+    </button>
+  </view>
+
+  <!-- 右侧箭头 -->
+  <view wx:if="{{showArrow}}" class="address-card__arrow">
+    <image src="/assets/images/arrow-right.svg" mode="aspectFit"></image>
+  </view>
+</view>
