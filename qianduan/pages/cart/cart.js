@@ -22,12 +22,38 @@ Page({
             const res = await get('/cart');
             // 后端返回 { items: [...], summary: {...} }
             const items = res.data?.items || res.data || [];
-            const cartItems = (Array.isArray(items) ? items : []).map(item => ({
-                ...item,
-                selected: item.selected !== false, // 保持后端的选中状态
-                // 获取价格：优先 SKU 价格，其次商品价格
-                price: parseFloat(item.sku?.retail_price || item.product?.retail_price || 0)
-            }));
+            const cartItems = (Array.isArray(items) ? items : []).map(item => {
+                // 处理商品图片 - 可能是字符串或数组
+                let productImages = [];
+                if (item.product?.images) {
+                    if (typeof item.product.images === 'string') {
+                        try {
+                            productImages = JSON.parse(item.product.images);
+                        } catch (e) {
+                            productImages = [item.product.images];
+                        }
+                    } else if (Array.isArray(item.product.images)) {
+                        productImages = item.product.images;
+                    }
+                }
+
+                // SKU图片优先
+                const skuImage = item.sku?.image || null;
+                const firstImage = skuImage || (productImages.length > 0 ? productImages[0] : '');
+
+                return {
+                    ...item,
+                    selected: item.selected !== false,
+                    // 获取价格：优先 SKU 价格，其次商品价格
+                    price: parseFloat(item.sku?.retail_price || item.product?.retail_price || 0),
+                    // 解析后的图片数组
+                    productImages: productImages,
+                    // 第一张图片（用于显示）
+                    firstImage: firstImage,
+                    // 商品名称
+                    productName: item.product?.name || '商品'
+                };
+            });
 
             this.setData({
                 cartItems,

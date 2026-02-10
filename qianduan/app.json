@@ -8,12 +8,19 @@
         "pages/order/list",
         "pages/order/detail",
         "pages/order/confirm",
+        "pages/order/refund-apply",
+        "pages/order/refund-list",
+        "pages/order/refund-detail",
         "pages/address/list",
         "pages/address/edit",
         "pages/distribution/center",
         "pages/distribution/team",
+        "pages/distribution/workbench",
+        "pages/distribution/restock",
+        "pages/distribution/stock-logs",
         "pages/wallet/index",
-        "pages/user/notifications"
+        "pages/user/notifications",
+        "pages/search/search"
     ],
     "tabBar": {
         "color": "#94A3B8",
@@ -23,19 +30,27 @@
         "list": [
             {
                 "pagePath": "pages/index/index",
-                "text": "首页"
+                "text": "首页",
+                "iconPath": "assets/icons/home.png",
+                "selectedIconPath": "assets/icons/home_active.png"
             },
             {
                 "pagePath": "pages/category/category",
-                "text": "分类"
+                "text": "分类",
+                "iconPath": "assets/icons/category.png",
+                "selectedIconPath": "assets/icons/category_active.png"
             },
             {
                 "pagePath": "pages/cart/cart",
-                "text": "购物车"
+                "text": "购物车",
+                "iconPath": "assets/icons/cart.png",
+                "selectedIconPath": "assets/icons/cart_active.png"
             },
             {
                 "pagePath": "pages/user/user",
-                "text": "我的"
+                "text": "我的",
+                "iconPath": "assets/icons/user.png",
+                "selectedIconPath": "assets/icons/user_active.png"
             }
         ]
     },

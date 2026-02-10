@@ -7,8 +7,9 @@ const app = getApp();
 
 // 请求配置
 const config = {
-    baseUrl: 'https://api.jxalk.cn/api', // 后端 API 地址
-    timeout: 10000
+    // 你的服务器后端地址
+    baseUrl: 'https://api.jxalk.cn/api',
+    timeout: 15000 // 超时改为15秒，避免慢网络误报
 };
 
 /**
@@ -30,6 +31,7 @@ function request(options) {
         }
 
         // 获取用户标识（用于身份验证）
+        const token = wx.getStorageSync('token') || '';
         const openid = wx.getStorageSync('openid') || '';
 
         wx.request({
@@ -38,7 +40,8 @@ function request(options) {
             data,
             header: {
                 'Content-Type': 'application/json',
-                'x-openid': openid // 后端通过这个识别用户
+                'Authorization': token ? `Bearer ${token}` : '', // JWT Token 认证
+                'x-openid': openid // 向下兼容（开发调试用）
             },
             timeout: config.timeout,
             success: (res) => {
@@ -61,10 +64,17 @@ function request(options) {
                         reject(res.data);
                     }
                 } else if (res.statusCode === 401) {
-                    // 未登录或登录过期
-                    wx.showToast({ title: '请先登录', icon: 'none' });
-                    // 可以在这里触发重新登录
-                    reject({ code: 401, message: '未登录' });
+                    // 未登录或登录过期，清除缓存并重新登录
+                    wx.removeStorageSync('token');
+                    wx.removeStorageSync('openid');
+                    wx.removeStorageSync('userInfo');
+                    wx.showToast({ title: '登录已过期，请重新进入', icon: 'none' });
+                    // 尝试自动重新登录
+                    const appInstance = getApp();
+                    if (appInstance && appInstance.wxLogin) {
+                        appInstance.wxLogin().catch(() => {});
+                    }
+                    reject({ code: 401, message: '登录已过期' });
                 } else {
                     // 其他 HTTP 错误
                     if (showError) {

@@ -1,97 +1,76 @@
-<!--pages/index/index.wxml - 臻选商城首页-->
+<!--pages/index/index.wxml-->
 <view class="container">
-  <!-- 极简顶栏 -->
-  <view class="header">
-    <text class="brand-name">臻选</text>
-    <view class="header-actions">
-      <view class="search-btn" bindtap="onSearchTap">
-        <text>🔍</text>
-      </view>
-    </view>
-  </view>
-
-  <!-- 主视觉区域 - 沉浸式大图 -->
-  <view class="hero-section">
-    <swiper class="hero-swiper" 
-            autoplay circular 
-            interval="{{5000}}"
-            duration="{{800}}"
-            wx:if="{{banners.length > 0}}">
+  <!-- 1. Custom Header (Removed as per user request) -->
+  
+  <!-- 2. Banner (Figma Style) -->
+  <view class="banner-section">
+    <swiper class="banner-swiper" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}" indicator-color="rgba(255,255,255,0.4)" indicator-active-color="#ffffff">
       <swiper-item wx:for="{{banners}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}">
-        <image class="hero-image" src="{{item.image_url}}" mode="aspectFill"></image>
-        <view class="hero-overlay"></view>
+        <view class="banner-item">
+          <image src="{{item.image_url}}" mode="aspectFill" class="banner-img"></image>
+          <view class="banner-overlay"></view>
+          <view class="banner-text">
+            <view class="banner-tag">LIMITED EDITION</view>
+            <view class="banner-title">春季高奢秀场<br/>限时鉴赏系列</view>
+          </view>
+        </view>
       </swiper-item>
     </swiper>
-    <!-- 默认占位 -->
-    <view class="hero-placeholder" wx:else>
-      <view class="hero-content">
-        <text class="hero-subtitle">PREMIUM SELECTION</text>
-        <text class="hero-title">臻选好物</text>
-        <text class="hero-desc">品质生活，从此开始</text>
+  </view>
+
+  <!-- 3. Grid Nav -->
+  <view class="nav-grid">
+    <view class="nav-item" wx:for="{{topCategories}}" wx:key="id" bindtap="onCategoryTap" data-id="{{item.id}}">
+      <view class="nav-icon-box" style="background-color: {{item.bgColor}}">
+        <text class="nav-icon">{{item.icon}}</text>
       </view>
+      <text class="nav-text">{{item.name}}</text>
     </view>
   </view>
 
-  <!-- 品牌理念 -->
-  <view class="brand-statement">
-    <text class="statement-line"></text>
-    <text class="statement-text">精选全球优质好物</text>
-    <text class="statement-line"></text>
-  </view>
-
-  <!-- 分类导航 -->
-  <scroll-view class="category-nav" scroll-x wx:if="{{categories.length > 0}}">
-    <view class="category-item {{currentCategory === '' ? 'active' : ''}}" 
-          bindtap="onCategoryTap" data-id="">
-      <text>全部</text>
+  <!-- 4. Category Tabs -->
+  <scroll-view scroll-x class="tab-scroll" enable-flex>
+    <view 
+      class="tab-item {{currentCategory === 0 ? 'active' : ''}}" 
+      bindtap="onCategoryChange" 
+      data-id="{{0}}"
+    >
+      精选推荐
     </view>
-    <view class="category-item {{currentCategory === item.id ? 'active' : ''}}" 
-          wx:for="{{categories}}" wx:key="id"
-          bindtap="onCategoryTap" data-id="{{item.id}}">
-      <text>{{item.name}}</text>
+    <view 
+      class="tab-item {{currentCategory === item.id ? 'active' : ''}}" 
+      wx:for="{{categories}}" 
+      wx:key="id" 
+      bindtap="onCategoryChange" 
+      data-id="{{item.id}}"
+    >
+      {{item.name}}
     </view>
   </scroll-view>
 
-  <!-- 精选商品 -->
-  <view class="products-section">
-    <view class="section-header">
-      <text class="section-title">精选推荐</text>
+  <!-- 5. Product Waterfall -->
+  <view class="product-grid">
+    <view class="grid-col">
+      <product-card 
+        wx:for="{{leftProducts}}" 
+        wx:key="id" 
+        product="{{item}}" 
+        bind:click="onProductTap"
+        data-id="{{item.id}}"
+      />
     </view>
-
-    <!-- 商品列表 - 大图单列 -->
-    <view class="product-list">
-      <view class="product-card" 
-            wx:for="{{products}}" wx:key="id"
-            bindtap="onProductTap" data-item="{{item}}">
-        <view class="product-image-wrapper">
-          <image class="product-image" 
-                 src="{{item.images[0]}}" 
-                 mode="aspectFill"></image>
-          <view class="product-badge" wx:if="{{item.is_new}}">NEW</view>
-        </view>
-        <view class="product-info">
-          <text class="product-name">{{item.name}}</text>
-          <text class="product-desc" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
-          <view class="product-price-row">
-            <text class="product-price">{{item.retail_price}}</text>
-            <text class="product-original" wx:if="{{item.original_price}}">¥{{item.original_price}}</text>
-          </view>
-        </view>
-      </view>
-    </view>
-
-    <!-- 空状态 -->
-    <view class="empty" wx:if="{{!loading && products.length === 0}}">
-      <text class="empty-icon">📦</text>
-      <text class="empty-text">暂无商品</text>
+    <view class="grid-col">
+      <product-card 
+        wx:for="{{rightProducts}}" 
+        wx:key="id" 
+        product="{{item}}" 
+        bind:click="onProductTap"
+        data-id="{{item.id}}"
+      />
     </view>
   </view>
 
-  <!-- 加载状态 -->
-  <view class="loading" wx:if="{{loading}}">
-    <view class="loading-spinner"></view>
+  <view class="loading-footer" wx:if="{{loading}}">
+    <view class="spinner"></view>
   </view>
-
-  <!-- 底部留白 -->
-  <view style="height: 120rpx;"></view>
 </view>

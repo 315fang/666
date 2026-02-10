@@ -15,7 +15,7 @@
     <view class="log-list">
       <view class="log-item" wx:for="{{logs}}" wx:key="id">
         <view class="log-info">
-          <text class="log-type">{{item.type === 'level1' ? '一级分销' : (item.type === 'level2' ? '二级分销' : '提现')}}</text>
+          <text class="log-type">{{item.type === 'gap' ? '级差利润' : (item.type === 'level1' ? '直推佣金' : (item.type === 'level2' ? '二级佣金' : (item.type === 'withdrawal' ? '提现' : item.type)))}}</text>
           <text class="log-time">{{item.created_at}}</text>
         </view>
         <view class="log-amount {{item.amount > 0 ? 'income' : 'expense'}}">

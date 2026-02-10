@@ -1,0 +1,15 @@
+/* components/ui/card/card.wxss */
+.card {
+  background-color: var(--color-bg-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  position: relative;
+  overflow: hidden;
+}
+
+.card-hover:active {
+  transform: scale(0.99);
+  transition: transform 0.2s;
+}

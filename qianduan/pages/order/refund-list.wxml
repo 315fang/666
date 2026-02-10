@@ -1,0 +1,48 @@
+<!--pages/order/refund-list.wxml - 退货/退款列表-->
+<view class="container">
+  <scroll-view class="refund-list" scroll-y bindscrolltolower="onLoadMore">
+    <view class="refund-card" wx:for="{{refunds}}" wx:key="id" bindtap="onRefundTap" data-id="{{item.id}}">
+      <!-- 头部 -->
+      <view class="refund-header">
+        <text class="refund-type">{{typeText[item.type] || '退款'}}</text>
+        <text class="refund-status status-{{item.status}}">{{statusText[item.status] || item.status}}</text>
+      </view>
+
+      <!-- 商品信息 -->
+      <view class="refund-product" wx:if="{{item.order && item.order.product}}">
+        <image class="product-img" src="{{item.order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{item.order.product.images && item.order.product.images.length > 0}}"></image>
+        <view class="product-img placeholder" wx:else><text>暂无图</text></view>
+        <view class="product-info">
+          <text class="product-name">{{item.order.product.name}}</text>
+          <text class="product-order">订单: {{item.order.order_no}}</text>
+        </view>
+        <text class="refund-amount">¥{{item.amount}}</text>
+      </view>
+
+      <!-- 底部操作 -->
+      <view class="refund-footer">
+        <text class="refund-no">退款单号: {{item.refund_no}}</text>
+        <view class="refund-actions">
+          <view class="btn-cancel" wx:if="{{item.status === 'pending'}}" catchtap="onCancelRefund" data-id="{{item.id}}" data-index="{{index}}">取消申请</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty" wx:if="{{!loading && refunds.length === 0}}">
+      <text class="empty-icon">🔄</text>
+      <text class="empty-text">暂无售后记录</text>
+    </view>
+
+    <!-- 加载 -->
+    <view class="load-more" wx:if="{{refunds.length > 0}}">
+      <text wx:if="{{hasMore}}">上拉加载更多</text>
+      <text wx:else>没有更多记录了</text>
+    </view>
+
+    <view class="loading" wx:if="{{loading}}">
+      <view class="loading-spinner"></view>
+      <text>加载中...</text>
+    </view>
+  </scroll-view>
+</view>

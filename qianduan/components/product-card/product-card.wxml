@@ -1,0 +1,21 @@
+<!-- components/product-card/product-card.wxml -->
+<view class="card card-hover" bindtap="onTap">
+  <view class="image-wrapper">
+    <image class="image" src="{{product.image || '/assets/images/placeholder.svg'}}" mode="aspectFill"></image>
+    <view class="new-tag" wx:if="{{product.isNew}}">NEW</view>
+  </view>
+  <view class="content">
+    <view class="title">{{product.name || product.title}}</view>
+    <view class="tags">
+      <view class="tag" wx:for="{{product.tags}}" wx:key="*this">{{item}}</view>
+    </view>
+    <view class="footer">
+      <view class="price-box">
+        <text class="currency">¥</text>
+        <text class="price">{{product.price}}</text>
+        <text class="original-price" wx:if="{{product.originalPrice}}">¥{{product.originalPrice}}</text>
+      </view>
+      <view class="buy-btn">选购</view>
+    </view>
+  </view>
+</view>

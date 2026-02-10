@@ -1,0 +1,78 @@
+<!--pages/order/refund-apply.wxml - 申请退货/退款-->
+<view class="container">
+  <view class="section-title">退款类型</view>
+  <radio-group bindchange="onTypeChange" class="type-group">
+    <label class="type-item {{type === 'refund_only' ? 'active' : ''}}">
+      <radio value="refund_only" checked="{{type === 'refund_only'}}" color="#0F172A" />
+      <view class="type-info">
+        <text class="type-name">仅退款</text>
+        <text class="type-desc">无需退货，直接退款</text>
+      </view>
+    </label>
+    <label class="type-item {{type === 'return_refund' ? 'active' : ''}}">
+      <radio value="return_refund" checked="{{type === 'return_refund'}}" color="#0F172A" />
+      <view class="type-info">
+        <text class="type-name">退货退款</text>
+        <text class="type-desc">需要寄回商品后退款</text>
+      </view>
+    </label>
+  </radio-group>
+
+  <!-- 订单信息 -->
+  <view class="order-card" wx:if="{{order}}">
+    <view class="order-product">
+      <image class="product-img" src="{{order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{order.product && order.product.images && order.product.images.length > 0}}"></image>
+      <view class="product-info">
+        <text class="product-name">{{order.product.name || '商品'}}</text>
+        <text class="product-price">¥{{order.total_amount}} × {{order.quantity}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 退款原因 -->
+  <view class="section-title">退款原因</view>
+  <picker mode="selector" range="{{reasons}}" range-key="label" value="{{reasonIndex}}" bindchange="onReasonChange">
+    <view class="picker-row">
+      <text wx:if="{{reasonIndex >= 0}}">{{reasons[reasonIndex].label}}</text>
+      <text class="placeholder" wx:else>请选择退款原因</text>
+      <text class="arrow">›</text>
+    </view>
+  </picker>
+
+  <!-- 退款说明 -->
+  <view class="section-title">退款说明（选填）</view>
+  <textarea class="desc-input" placeholder="请描述您遇到的问题" bindinput="onDescInput" value="{{description}}" maxlength="200"></textarea>
+
+  <!-- 退款金额 -->
+  <view class="section-title">退款金额</view>
+  <view class="amount-row">
+    <text class="amount-symbol">¥</text>
+    <input class="amount-input" type="digit" value="{{amount}}" bindinput="onAmountInput" placeholder="请输入退款金额" />
+    <text class="amount-max">最多 ¥{{order.total_amount || '0.00'}}</text>
+  </view>
+
+  <!-- 退货数量（仅退货退款显示） -->
+  <view wx:if="{{type === 'return_refund'}}">
+    <view class="section-title">退货数量</view>
+    <view class="qty-row">
+      <view class="qty-control">
+        <view class="qty-btn" bindtap="onRefundQtyMinus">−</view>
+        <input class="qty-input" type="number" value="{{refundQuantity}}" bindinput="onRefundQtyInput" />
+        <view class="qty-btn" bindtap="onRefundQtyPlus">+</view>
+      </view>
+      <text class="qty-hint">订单共 {{order.quantity || 0}} 件</text>
+    </view>
+    <view class="refund-qty-tip">退货数量对应实际退回的商品件数，库存将按此数量恢复</view>
+  </view>
+  <view class="refund-only-tip" wx:if="{{type === 'refund_only'}}">
+    <text class="tip-icon">💡</text>
+    <text>仅退款不退货，不恢复库存</text>
+  </view>
+
+  <!-- 提交按钮 -->
+  <view class="submit-bar">
+    <button class="submit-btn {{submitting ? 'disabled' : ''}}" bindtap="onSubmit" disabled="{{submitting}}">
+      {{submitting ? '提交中...' : '提交申请'}}
+    </button>
+  </view>
+</view>

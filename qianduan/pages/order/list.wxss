@@ -83,6 +83,8 @@
 .order-status.shipped { color: var(--color-primary); }
 .order-status.completed { color: var(--color-success); }
 .order-status.cancelled { color: var(--color-placeholder); }
+.order-status.agent_confirmed { color: #6366F1; }
+.order-status.shipping_requested { color: #D97706; }
 
 /* 商品列表 */
 .order-products {
@@ -192,4 +194,14 @@
 /* ==================== 加载状态 ==================== */
 .loading {
   padding: 60rpx 0;
+}
+
+/* 发货方式标签 */
+.fulfillment-tag {
+  font-size: 20rpx;
+  background: #EEF2FF;
+  color: #4F46E5;
+  padding: 2rpx 12rpx;
+  border-radius: 6rpx;
+  margin-left: 12rpx;
 }

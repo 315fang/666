@@ -1,0 +1,74 @@
+/* pages/user/preferences.wxss */
+.container {
+  min-height: 100vh;
+  background: #F8FAFC;
+  padding: 40rpx;
+}
+
+.header {
+  margin-bottom: 60rpx;
+}
+
+.title {
+  display: block;
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #0F172A;
+  margin-bottom: 16rpx;
+}
+
+.subtitle {
+  font-size: 28rpx;
+  color: #64748B;
+}
+
+.question-card {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 40rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.05);
+}
+
+.q-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #334155;
+  margin-bottom: 30rpx;
+}
+
+.option-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+}
+
+.option-item {
+  padding: 16rpx 32rpx;
+  background: #F1F5F9;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  color: #475569;
+  border: 2rpx solid transparent;
+  transition: all 0.2s;
+}
+
+.option-item.active {
+  background: #EFF6FF;
+  border-color: #2563EB;
+  color: #2563EB;
+  font-weight: 500;
+}
+
+.footer {
+  margin-top: 60rpx;
+}
+
+.save-btn {
+  background: #0F172A;
+  color: #fff;
+  border-radius: 50rpx;
+  font-size: 32rpx;
+  font-weight: bold;
+  padding: 24rpx 0;
+}

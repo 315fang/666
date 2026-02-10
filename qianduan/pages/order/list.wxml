@@ -25,17 +25,19 @@
         <text class="order-status {{item.status}}">{{statusText[item.status]}}</text>
       </view>
 
-      <!-- 商品列表 -->
+      <!-- 商品信息（单商品订单） -->
       <view class="order-products" bindtap="onOrderTap" data-order="{{item}}">
-        <view class="order-product" wx:for="{{item.items}}" wx:key="id" wx:for-item="product">
-          <image class="product-image" src="{{product.product.images[0]}}" mode="aspectFill"></image>
+        <view class="order-product" wx:if="{{item.product}}">
+          <image class="product-image" src="{{item.product.images[0]}}" mode="aspectFill" wx:if="{{item.product.images && item.product.images.length > 0}}"></image>
+          <view class="product-image product-image-placeholder" wx:else>
+            <text>暂无图</text>
+          </view>
           <view class="product-info">
-            <text class="product-name">{{product.product.name}}</text>
-            <text class="product-spec" wx:if="{{product.sku}}">{{product.sku.spec_value}}</text>
+            <text class="product-name">{{item.product.name || '商品'}}</text>
           </view>
           <view class="product-price-qty">
-            <text class="product-price">¥{{product.price}}</text>
-            <text class="product-qty">x{{product.quantity}}</text>
+            <text class="product-price">¥{{item.total_amount}}</text>
+            <text class="product-qty">x{{item.quantity}}</text>
           </view>
         </view>
       </view>
@@ -43,9 +45,10 @@
       <!-- 订单底部 -->
       <view class="order-footer">
         <view class="order-total">
-          <text>共{{item.totalQuantity}}件</text>
+          <text>共{{item.quantity}}件</text>
           <text class="total-label">实付: </text>
           <text class="total-amount">¥{{item.total_amount}}</text>
+          <text class="fulfillment-tag" wx:if="{{item.fulfillment_type === 'Agent'}}">团队发货</text>
         </view>
         <view class="order-actions">
           <view class="btn btn-sm btn-ghost" wx:if="{{item.status === 'pending'}}"

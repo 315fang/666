@@ -1,1 +1,133 @@
-.container { padding: 20rpx; }
+/* pages/address/list.wxss */
+.container {
+  min-height: 100vh;
+  background: #F8FAFC;
+  padding-bottom: 140rpx;
+}
+
+.address-list {
+  padding: 20rpx 24rpx;
+}
+
+.address-card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 28rpx 24rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
+}
+
+.address-card.selectable {
+  position: relative;
+}
+
+.address-card.selectable:active {
+  background: #F8FAFC;
+}
+
+.address-main {
+  margin-bottom: 20rpx;
+}
+
+.address-top {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 12rpx;
+}
+
+.address-name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #0F172A;
+}
+
+.address-phone {
+  font-size: 28rpx;
+  color: #64748B;
+}
+
+.address-tag {
+  font-size: 20rpx;
+  color: #2563EB;
+  border: 1rpx solid #2563EB;
+  border-radius: 6rpx;
+  padding: 2rpx 12rpx;
+}
+
+.address-detail {
+  font-size: 26rpx;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.address-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 24rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid #F1F5F9;
+}
+
+.action-btn {
+  font-size: 24rpx;
+  color: #64748B;
+  padding: 8rpx 16rpx;
+}
+
+.action-btn.danger {
+  color: #EF4444;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 200rpx;
+}
+
+.empty-icon {
+  font-size: 80rpx;
+  margin-bottom: 20rpx;
+}
+
+.empty-text {
+  font-size: 30rpx;
+  color: #334155;
+  margin-bottom: 8rpx;
+}
+
+.empty-sub {
+  font-size: 24rpx;
+  color: #94A3B8;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 100rpx 0;
+  color: #94A3B8;
+  font-size: 28rpx;
+}
+
+/* 底部添加按钮 */
+.bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20rpx 24rpx;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+  background: #fff;
+  box-shadow: 0 -2rpx 20rpx rgba(0, 0, 0, 0.05);
+}
+
+.add-btn {
+  background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+  color: #fff;
+  text-align: center;
+  padding: 24rpx 0;
+  border-radius: 48rpx;
+  font-size: 30rpx;
+  font-weight: 500;
+}

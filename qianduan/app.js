@@ -5,8 +5,9 @@ App({
     globalData: {
         userInfo: null,
         openid: null,
+        token: null,
         isLoggedIn: false,
-        baseUrl: 'https://api.jxalk.cn/api' // 你的后端地址
+        baseUrl: 'https://api.jxalk.cn/api' // 你的服务器后端地址
     },
 
     onLaunch(options) {
@@ -37,10 +38,12 @@ App({
             // 检查本地是否有登录信息
             const userInfo = wx.getStorageSync('userInfo');
             const openid = wx.getStorageSync('openid');
+            const token = wx.getStorageSync('token');
 
-            if (userInfo && openid) {
+            if (userInfo && openid && token) {
                 this.globalData.userInfo = userInfo;
                 this.globalData.openid = openid;
+                this.globalData.token = token;
                 this.globalData.isLoggedIn = true;
                 console.log('从缓存恢复登录状态');
                 return;
@@ -72,13 +75,15 @@ App({
             });
 
             if (result.success) {
-                // 3. 保存用户信息
+                // 3. 保存用户信息和 Token
                 this.globalData.userInfo = result.userInfo;
                 this.globalData.openid = result.openid;
+                this.globalData.token = result.token;
                 this.globalData.isLoggedIn = true;
 
                 wx.setStorageSync('userInfo', result.userInfo);
                 wx.setStorageSync('openid', result.openid);
+                wx.setStorageSync('token', result.token);
 
                 console.log('登录成功:', result.userInfo);
                 return result;
@@ -95,9 +100,11 @@ App({
     logout() {
         this.globalData.userInfo = null;
         this.globalData.openid = null;
+        this.globalData.token = null;
         this.globalData.isLoggedIn = false;
         wx.removeStorageSync('userInfo');
         wx.removeStorageSync('openid');
+        wx.removeStorageSync('token');
     },
 
     // 工具方法：将回调风格 API 转为 Promise

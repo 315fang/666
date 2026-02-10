@@ -1,17 +1,61 @@
 // pages/index/index.js
-const { get } = require('../../utils/request');
+const { get, post } = require('../../utils/request');
+const app = getApp();
+
+// Figma Design Colors: Blue-50, Pink-50, Indigo-50
+const NAV_COLORS = ['#EFF6FF', '#FDF2F8', '#EEF2FF'];
+const NAV_ICONS = ['🔥', '👑', '🎁'];
 
 Page({
     data: {
         banners: [],
         products: [],
         categories: [],
+        topCategories: [],
         currentCategory: '',
-        loading: true
+        loading: true,
+        isScrolled: false, // For header transition
+        statusBarHeight: 20 // Default fallback
     },
 
-    onLoad() {
+    onPageScroll(e) {
+        // Toggle header style on scroll
+        const isScrolled = e.scrollTop > 50;
+        if (isScrolled !== this.data.isScrolled) {
+            this.setData({ isScrolled });
+        }
+    },
+
+    onLoad(options) {
+        // 获取状态栏高度用于自定义导航栏
+        const sysInfo = wx.getSystemInfoSync();
+        this.setData({
+            statusBarHeight: sysInfo.statusBarHeight
+        });
+
+        // 关键：接收分享进来的邀请码
+        if (options.share_id) {
+            console.log('通过分享进入，邀请人ID:', options.share_id);
+            wx.setStorageSync('distributor_id', options.share_id);
+
+            // 如果已登录但还没有上级，尝试绑定
+            if (app.globalData.isLoggedIn) {
+                this.tryBindParent(options.share_id);
+            }
+        }
+
         this.loadData();
+    },
+
+    // 尝试绑定上级
+    async tryBindParent(parentId) {
+        try {
+            await post('/bind-parent', { parent_id: parseInt(parentId) });
+            console.log('绑定上级成功');
+        } catch (err) {
+            // 已有上级会返回错误，忽略
+            console.log('绑定上级:', err.message || '已有上级');
+        }
     },
 
     onPullDownRefresh() {
@@ -30,14 +74,69 @@ Page({
                 get('/categories').catch(() => ({ data: [] }))
             ]);
 
-            const bannersRes = results[0];
-            const productsRes = results[1];
-            const categoriesRes = results[2];
+            const categories = results[2].data || [];
+
+            // 金刚区：取前3个分类，不足用默认补齐
+            const defaultNav = [
+                { id: '__hot', name: '热门推荐', icon: '🔥', bgColor: '#FEF3C7' },
+                { id: '__new', name: '新品上市', icon: '✨', bgColor: '#FCE7F3' },
+                { id: '__sale', name: '限时特惠', icon: '🏷️', bgColor: '#DCFCE7' }
+            ];
+            const topCategories = [];
+            for (let i = 0; i < 3; i++) {
+                if (i < categories.length) {
+                    topCategories.push({
+                        id: categories[i].id,
+                        name: categories[i].name,
+                        icon: categories[i].icon || NAV_ICONS[i],
+                        bgColor: NAV_COLORS[i]
+                    });
+                } else {
+                    topCategories.push(defaultNav[i]);
+                }
+            }
+
+            // 处理商品数据
+            const rawProducts = results[1].data && results[1].data.list ? results[1].data.list : (results[1].data || []);
+            const products = rawProducts.map(item => {
+                // 解析图片
+                let images = [];
+                if (item.images) {
+                    if (typeof item.images === 'string') {
+                        try {
+                            images = JSON.parse(item.images);
+                        } catch (e) {
+                            images = [item.images];
+                        }
+                    } else if (Array.isArray(item.images)) {
+                        images = item.images;
+                    }
+                }
+                return {
+                    ...item,
+                    image: images.length > 0 ? images[0] : '/assets/images/placeholder.svg',
+                    price: item.retail_price || item.price || 0
+                };
+            });
+
+            // 分成左右两列（瀑布流）
+            const leftProducts = [];
+            const rightProducts = [];
+            products.forEach((item, index) => {
+                if (index % 2 === 0) {
+                    leftProducts.push(item);
+                } else {
+                    rightProducts.push(item);
+                }
+            });
 
             this.setData({
-                banners: bannersRes.data || [],
-                products: productsRes.data && productsRes.data.list ? productsRes.data.list : (productsRes.data || []),
-                categories: categoriesRes.data || [],
+                banners: results[0].data || [],
+                products,
+                leftProducts,
+                rightProducts,
+                categories,
+                topCategories,
                 loading: false
             });
         } catch (err) {
@@ -51,6 +150,21 @@ Page({
         wx.navigateTo({ url: '/pages/search/search' });
     },
 
+    // 扫码
+    onScanTap() {
+        wx.scanCode({
+            success: (res) => {
+                console.log('扫码结果:', res);
+                // 尝试跳转商品详情或搜索
+                if (res.path) {
+                    wx.navigateTo({ url: '/' + res.path });
+                } else if (res.result) {
+                    wx.navigateTo({ url: '/pages/search/search?q=' + res.result });
+                }
+            }
+        });
+    },
+
     // Banner点击
     onBannerTap(e) {
         const banner = e.currentTarget.dataset.item;
@@ -59,8 +173,19 @@ Page({
         }
     },
 
-    // 分类切换
+    // 分类切换（金刚区）
     onCategoryTap(e) {
+        const categoryId = e.currentTarget.dataset.id;
+        if (typeof categoryId === 'string' && categoryId.startsWith('__')) {
+            wx.switchTab({ url: '/pages/category/category' });
+            return;
+        }
+        this.setData({ currentCategory: categoryId, loading: true });
+        this.loadProducts(categoryId);
+    },
+
+    // 分类Tab切换（胶囊分类栏）
+    onCategoryChange(e) {
         const categoryId = e.currentTarget.dataset.id;
         this.setData({ currentCategory: categoryId, loading: true });
         this.loadProducts(categoryId);
@@ -73,8 +198,44 @@ Page({
             if (categoryId) params.category_id = categoryId;
 
             const res = await get('/products', params);
+            const rawProducts = res.data && res.data.list ? res.data.list : (res.data || []);
+
+            // 处理商品数据
+            const products = rawProducts.map(item => {
+                let images = [];
+                if (item.images) {
+                    if (typeof item.images === 'string') {
+                        try {
+                            images = JSON.parse(item.images);
+                        } catch (e) {
+                            images = [item.images];
+                        }
+                    } else if (Array.isArray(item.images)) {
+                        images = item.images;
+                    }
+                }
+                return {
+                    ...item,
+                    image: images.length > 0 ? images[0] : '/assets/images/placeholder.svg',
+                    price: item.retail_price || item.price || 0
+                };
+            });
+
+            // 分成左右两列
+            const leftProducts = [];
+            const rightProducts = [];
+            products.forEach((item, index) => {
+                if (index % 2 === 0) {
+                    leftProducts.push(item);
+                } else {
+                    rightProducts.push(item);
+                }
+            });
+
             this.setData({
-                products: res.data && res.data.list ? res.data.list : (res.data || []),
+                products,
+                leftProducts,
+                rightProducts,
                 loading: false
             });
         } catch (err) {
@@ -85,7 +246,21 @@ Page({
 
     // 商品点击
     onProductTap(e) {
-        const product = e.currentTarget.dataset.item;
-        wx.navigateTo({ url: '/pages/product/detail?id=' + product.id });
+        const dataset = e.currentTarget.dataset;
+        const productId = dataset.id || dataset.item?.id;
+        if (productId) {
+            wx.navigateTo({ url: '/pages/product/detail?id=' + productId });
+        }
+    },
+
+    // 分享（带邀请码）
+    onShareAppMessage() {
+        const userInfo = app.globalData.userInfo;
+        const inviteCode = userInfo ? (userInfo.invite_code || userInfo.id) : '';
+        return {
+            title: '臻选 · 精选全球好物',
+            path: `/pages/index/index?share_id=${inviteCode}`,
+            imageUrl: ''
+        };
     }
 });
