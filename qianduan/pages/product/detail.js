@@ -1,5 +1,7 @@
 // pages/product/detail.js
 const { get, post } = require('../../utils/request');
+const { parseImages, calculatePrice } = require('../../utils/dataFormatter');
+const { USER_ROLES } = require('../../config/constants');
 
 Page({
     data: {
@@ -46,37 +48,16 @@ Page({
             const res = await get(`/products/${id}`);
             const product = res.data || {};
 
-            // 处理图片
-            if (typeof product.images === 'string') {
-                try {
-                    product.images = JSON.parse(product.images);
-                } catch (e) {
-                    product.images = product.images ? [product.images] : [];
-                }
-            }
-
-            // 处理详情图片
-            if (typeof product.detail_images === 'string') {
-                try {
-                    product.detail_images = JSON.parse(product.detail_images);
-                } catch (e) {
-                    product.detail_images = product.detail_images ? [product.detail_images] : [];
-                }
-            }
-            if (!product.detail_images) product.detail_images = [];
+            // 使用统一的图片解析工具
+            product.images = parseImages(product.images);
+            product.detail_images = parseImages(product.detail_images);
 
             // 获取用户身份计算动态价格
             const user = wx.getStorageSync('userInfo') || {};
-            const roleLevel = user.role_level || 0;
+            const roleLevel = user.role_level || USER_ROLES.GUEST;
 
-            let displayPrice = product.retail_price;
-            if (roleLevel === 1) {
-                displayPrice = product.price_member || product.retail_price;
-            } else if (roleLevel === 2) {
-                displayPrice = product.price_leader || product.price_member || product.retail_price;
-            } else if (roleLevel === 3) {
-                displayPrice = product.price_agent || product.price_leader || product.price_member || product.retail_price;
-            }
+            // 使用统一的价格计算工具
+            const displayPrice = calculatePrice(product, null, roleLevel);
 
             this.setData({
                 product: {
@@ -85,7 +66,7 @@ Page({
                 },
                 skus: product.skus || [],
                 selectedSku: (product.skus && product.skus.length > 0) ? product.skus[0] : null,
-                imageCount: (product.images && product.images.length) || 1,
+                imageCount: product.images.length || 1,
                 roleLevel
             });
 
