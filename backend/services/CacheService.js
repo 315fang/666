@@ -1,15 +1,25 @@
 /**
- * Redis 缓存服务
- * 统一管理缓存操作，提供简洁的API
+ * 缓存服务 (内存版/Redis版自适应)
+ * 适用于低配服务器，无需强制安装 Redis
+ * 自动降级策略：Redis连接失败或未安装模块 -> 内存缓存
  */
 
-const redis = require('redis');
+let redis = null;
+try {
+    // 尝试加载 redis 模块，如果未安装也不会报错
+    redis = require('redis');
+} catch (e) {
+    console.log('提示: 未检测到 redis 模块，将使用内存缓存模式');
+}
+
 const { promisify } = require('util');
 
 class CacheService {
     constructor() {
         this.client = null;
         this.isConnected = false;
+        this.useMemory = true; // 默认优先尝试内存模式
+        this.memoryCache = new Map(); // 内存缓存容器
 
         // 缓存键前缀
         this.PREFIX = {
@@ -30,80 +40,109 @@ class CacheService {
             HOUR: 3600,          // 1小时
             DAY: 86400           // 24小时
         };
+
+        // 启动内存缓存清理定时器 (每分钟清理一次过期键)
+        this._startMemoryCleanup();
     }
 
     /**
-     * 初始化 Redis 连接
-     * @param {Object} config - Redis 配置
+     * 内存缓存清理任务
+     */
+    _startMemoryCleanup() {
+        setInterval(() => {
+            const now = Date.now();
+            let count = 0;
+            for (const [key, item] of this.memoryCache.entries()) {
+                if (item.expireAt && item.expireAt < now) {
+                    this.memoryCache.delete(key);
+                    count++;
+                }
+            }
+            if (count > 0 && process.env.NODE_ENV === 'development') {
+                // console.log(`[Cache] 内存清理: 移除了 ${count} 个过期键`);
+            }
+        }, 60 * 1000);
+    }
+
+    /**
+     * 初始化连接
      */
     async connect(config = {}) {
-        if (this.isConnected) {
+        // 1. 如果没有 redis 模块，直接使用内存模式
+        if (!redis) {
+            this.useMemory = true;
+            this.isConnected = true;
+            console.log('✓ 缓存服务已就绪 (内存模式 - 未安装Redis)');
             return;
         }
 
+        // 2. 如果环境变量明确禁用 Redis，使用内存模式
+        if (process.env.USE_REDIS === 'false') {
+            this.useMemory = true;
+            this.isConnected = true;
+            console.log('✓ 缓存服务已就绪 (内存模式 - 配置禁用Redis)');
+            return;
+        }
+
+        // 3. 尝试连接 Redis
+        await this._connectRedis(config);
+    }
+
+    async _connectRedis(config) {
         const defaultConfig = {
             host: process.env.REDIS_HOST || 'localhost',
             port: process.env.REDIS_PORT || 6379,
             password: process.env.REDIS_PASSWORD || undefined,
             db: process.env.REDIS_DB || 0,
             retry_strategy: (options) => {
-                if (options.error && options.error.code === 'ECONNREFUSED') {
-                    console.error('Redis 连接被拒绝');
-                    return new Error('Redis 服务器拒绝连接');
+                // 如果连接失败超过3次，降级为内存模式
+                if (options.attempt > 3) {
+                    console.log('⚠️ Redis 连接重试次数过多，自动降级为内存模式');
+                    this.useMemory = true;
+                    this.isConnected = true;
+                    if (this.client) {
+                        this.client.quit();
+                        this.client = null;
+                    }
+                    return undefined; 
                 }
-                if (options.total_retry_time > 1000 * 60 * 60) {
-                    return new Error('Redis 重试超时');
-                }
-                if (options.attempt > 10) {
-                    return undefined;
-                }
-                // 重新连接间隔
-                return Math.min(options.attempt * 100, 3000);
+                // 重试间隔
+                return Math.min(options.attempt * 200, 2000);
             }
         };
 
         try {
             this.client = redis.createClient({ ...defaultConfig, ...config });
-
-            // Promisify Redis 方法
-            this.get = promisify(this.client.get).bind(this.client);
-            this.set = promisify(this.client.set).bind(this.client);
-            this.del = promisify(this.client.del).bind(this.client);
-            this.exists = promisify(this.client.exists).bind(this.client);
-            this.expire = promisify(this.client.expire).bind(this.client);
-            this.ttl = promisify(this.client.ttl).bind(this.client);
-            this.keys = promisify(this.client.keys).bind(this.client);
-            this.hget = promisify(this.client.hget).bind(this.client);
-            this.hset = promisify(this.client.hset).bind(this.client);
-            this.hdel = promisify(this.client.hdel).bind(this.client);
-            this.hgetall = promisify(this.client.hgetall).bind(this.client);
-
+            
             this.client.on('connect', () => {
                 console.log('✓ Redis 连接成功');
                 this.isConnected = true;
+                this.useMemory = false;
             });
 
             this.client.on('error', (err) => {
-                console.error('✗ Redis 错误:', err.message);
-                this.isConnected = false;
+                // 仅在首次连接时报错，后续重试策略会处理
+                if (!this.isConnected && !this.useMemory) {
+                    console.error('✗ Redis 连接错误:', err.message);
+                }
             });
 
-            this.client.on('end', () => {
-                console.log('Redis 连接已关闭');
-                this.isConnected = false;
-            });
+            // Promisify Redis methods
+            this.getAsync = promisify(this.client.get).bind(this.client);
+            this.setAsync = promisify(this.client.set).bind(this.client);
+            this.delAsync = promisify(this.client.del).bind(this.client);
+            this.keysAsync = promisify(this.client.keys).bind(this.client);
+            this.expireAsync = promisify(this.client.expire).bind(this.client);
 
         } catch (error) {
-            console.error('Redis 初始化失败:', error.message);
-            throw error;
+            console.error('Redis 初始化异常，降级为内存模式:', error.message);
+            this.useMemory = true;
+            this.isConnected = true;
         }
     }
 
     /**
      * 生成缓存键
-     * @param {string} prefix - 键前缀
-     * @param {string|number} id - ID
-     * @returns {string} 完整的缓存键
      */
     _makeKey(prefix, id) {
         return `${prefix}${id}`;
@@ -111,200 +150,118 @@ class CacheService {
 
     /**
      * 获取缓存
-     * @param {string} key - 缓存键
-     * @returns {Promise<any>} 缓存值（自动解析JSON）
      */
     async getCache(key) {
-        if (!this.isConnected) {
-            return null;
-        }
+        if (!this.isConnected) return null;
 
-        try {
-            const value = await this.get(key);
-            if (!value) {
+        // 内存模式
+        if (this.useMemory) {
+            const item = this.memoryCache.get(key);
+            if (!item) return null;
+            
+            // 检查过期
+            if (item.expireAt && item.expireAt < Date.now()) {
+                this.memoryCache.delete(key);
                 return null;
             }
-            return JSON.parse(value);
+            return item.value;
+        }
+
+        // Redis 模式
+        try {
+            const value = await this.getAsync(key);
+            return value ? JSON.parse(value) : null;
         } catch (error) {
-            console.error(`获取缓存失败 [${key}]:`, error.message);
+            console.error(`Redis Get Error [${key}]:`, error.message);
             return null;
         }
     }
 
     /**
      * 设置缓存
-     * @param {string} key - 缓存键
-     * @param {any} value - 缓存值（自动转JSON）
-     * @param {number} ttl - 过期时间（秒），不传则永不过期
-     * @returns {Promise<boolean>} 是否成功
      */
     async setCache(key, value, ttl = null) {
-        if (!this.isConnected) {
-            return false;
+        if (!this.isConnected) return false;
+
+        // 内存模式
+        if (this.useMemory) {
+            const expireAt = ttl ? Date.now() + (ttl * 1000) : null;
+            this.memoryCache.set(key, { value, expireAt });
+            return true;
         }
 
+        // Redis 模式
         try {
             const serialized = JSON.stringify(value);
             if (ttl) {
-                await this.set(key, serialized, 'EX', ttl);
+                await this.setAsync(key, serialized, 'EX', ttl);
             } else {
-                await this.set(key, serialized);
+                await this.setAsync(key, serialized);
             }
             return true;
         } catch (error) {
-            console.error(`设置缓存失败 [${key}]:`, error.message);
+            console.error(`Redis Set Error [${key}]:`, error.message);
             return false;
         }
     }
 
     /**
      * 删除缓存
-     * @param {string} key - 缓存键
-     * @returns {Promise<boolean>} 是否成功
      */
     async deleteCache(key) {
-        if (!this.isConnected) {
-            return false;
+        if (!this.isConnected) return false;
+
+        // 内存模式
+        if (this.useMemory) {
+            return this.memoryCache.delete(key);
         }
 
+        // Redis 模式
         try {
-            await this.del(key);
+            await this.delAsync(key);
             return true;
         } catch (error) {
-            console.error(`删除缓存失败 [${key}]:`, error.message);
+            console.error(`Redis Del Error [${key}]:`, error.message);
             return false;
         }
     }
 
     /**
-     * 批量删除缓存（支持通配符）
-     * @param {string} pattern - 键模式（如 'user:*'）
-     * @returns {Promise<number>} 删除的键数量
+     * 批量删除缓存
      */
     async deleteByPattern(pattern) {
-        if (!this.isConnected) {
-            return 0;
-        }
+        if (!this.isConnected) return 0;
 
-        try {
-            const keys = await this.keys(pattern);
-            if (keys.length === 0) {
-                return 0;
+        // 内存模式
+        if (this.useMemory) {
+            // 将 Redis 通配符转换为正则: user:* -> ^user:.*
+            // 简单处理 * 通配符
+            const regexStr = '^' + pattern.replace(/\*/g, '.*');
+            const regex = new RegExp(regexStr);
+            
+            let count = 0;
+            for (const key of this.memoryCache.keys()) {
+                if (regex.test(key)) {
+                    this.memoryCache.delete(key);
+                    count++;
+                }
             }
-            await this.del(...keys);
-            return keys.length;
+            return count;
+        }
+
+        // Redis 模式
+        try {
+            const keys = await this.keysAsync(pattern);
+            if (keys && keys.length > 0) {
+                await this.delAsync(...keys);
+                return keys.length;
+            }
+            return 0;
         } catch (error) {
-            console.error(`批量删除缓存失败 [${pattern}]:`, error.message);
+            console.error(`Redis Batch Del Error [${pattern}]:`, error.message);
             return 0;
         }
-    }
-
-    /**
-     * 检查缓存是否存在
-     * @param {string} key - 缓存键
-     * @returns {Promise<boolean>} 是否存在
-     */
-    async hasCache(key) {
-        if (!this.isConnected) {
-            return false;
-        }
-
-        try {
-            const exists = await this.exists(key);
-            return exists === 1;
-        } catch (error) {
-            console.error(`检查缓存失败 [${key}]:`, error.message);
-            return false;
-        }
-    }
-
-    /**
-     * 缓存用户信息
-     * @param {number} userId - 用户ID
-     * @param {Object} userData - 用户数据
-     * @param {number} ttl - 过期时间
-     */
-    async cacheUser(userId, userData, ttl = this.TTL.HOUR) {
-        const key = this._makeKey(this.PREFIX.USER, userId);
-        return this.setCache(key, userData, ttl);
-    }
-
-    /**
-     * 获取用户缓存
-     * @param {number} userId - 用户ID
-     * @returns {Promise<Object|null>} 用户数据
-     */
-    async getUser(userId) {
-        const key = this._makeKey(this.PREFIX.USER, userId);
-        return this.getCache(key);
-    }
-
-    /**
-     * 清除用户缓存
-     * @param {number} userId - 用户ID
-     */
-    async clearUser(userId) {
-        const key = this._makeKey(this.PREFIX.USER, userId);
-        return this.deleteCache(key);
-    }
-
-    /**
-     * 缓存商品信息
-     * @param {number} productId - 商品ID
-     * @param {Object} productData - 商品数据
-     * @param {number} ttl - 过期时间
-     */
-    async cacheProduct(productId, productData, ttl = this.TTL.LONG) {
-        const key = this._makeKey(this.PREFIX.PRODUCT, productId);
-        return this.setCache(key, productData, ttl);
-    }
-
-    /**
-     * 获取商品缓存
-     * @param {number} productId - 商品ID
-     * @returns {Promise<Object|null>} 商品数据
-     */
-    async getProduct(productId) {
-        const key = this._makeKey(this.PREFIX.PRODUCT, productId);
-        return this.getCache(key);
-    }
-
-    /**
-     * 清除商品缓存
-     * @param {number} productId - 商品ID
-     */
-    async clearProduct(productId) {
-        const key = this._makeKey(this.PREFIX.PRODUCT, productId);
-        return this.deleteCache(key);
-    }
-
-    /**
-     * 清除所有商品缓存
-     */
-    async clearAllProducts() {
-        return this.deleteByPattern(this.PREFIX.PRODUCT + '*');
-    }
-
-    /**
-     * 关闭 Redis 连接
-     */
-    async disconnect() {
-        if (this.client && this.isConnected) {
-            this.client.quit();
-            this.isConnected = false;
-        }
-    }
-
-    /**
-     * 获取连接状态
-     * @returns {boolean} 是否已连接
-     */
-    isReady() {
-        return this.isConnected;
     }
 }
 
-// 导出单例
-const cacheService = new CacheService();
-
-module.exports = cacheService;
+module.exports = new CacheService();
