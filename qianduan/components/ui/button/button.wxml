@@ -1,0 +1,9 @@
+<!-- components/ui/button/button.wxml -->
+<button 
+  class="btn btn-{{variant}} btn-{{size}} {{disabled ? 'btn-disabled' : ''}} {{className}}" 
+  style="{{customStyle}}"
+  bindtap="onTap"
+  hover-class="none"
+>
+  <slot></slot>
+</button>

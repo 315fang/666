@@ -1,5 +1,5 @@
 // pages/order/list.js
-const { get, put } = require('../../utils/request');
+const { get, post } = require('../../utils/request');
 
 Page({
     data: {
@@ -12,6 +12,8 @@ Page({
         statusText: {
             pending: '待付款',
             paid: '待发货',
+            agent_confirmed: '代理已确认',
+            shipping_requested: '待平台发货',
             shipped: '待收货',
             completed: '已完成',
             cancelled: '已取消',
@@ -54,22 +56,15 @@ Page({
             const res = await get('/orders', params);
             let newOrders = res.data?.list || res.data || [];
 
-            // 计算每个订单的商品总数
+            // 处理每个订单的商品图片（后端为单商品订单模式）
             newOrders = newOrders.map(order => {
-                const items = order.items || [];
-                order.totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
-
-                // 处理商品图片
-                items.forEach(item => {
-                    if (item.product && typeof item.product.images === 'string') {
-                        try {
-                            item.product.images = JSON.parse(item.product.images);
-                        } catch (e) {
-                            item.product.images = item.product.images ? [item.product.images] : [];
-                        }
+                if (order.product && typeof order.product.images === 'string') {
+                    try {
+                        order.product.images = JSON.parse(order.product.images);
+                    } catch (e) {
+                        order.product.images = order.product.images ? [order.product.images] : [];
                     }
-                });
-
+                }
                 return order;
             });
 
@@ -118,7 +113,7 @@ Page({
             success: async (res) => {
                 if (res.confirm) {
                     try {
-                        await put(`/orders/${order.id}/cancel`);
+                        await post(`/orders/${order.id}/cancel`);
                         wx.showToast({ title: '订单已取消', icon: 'success' });
                         this.loadOrders();
                     } catch (err) {
@@ -145,7 +140,7 @@ Page({
             success: async (res) => {
                 if (res.confirm) {
                     try {
-                        await put(`/orders/${order.id}/confirm`);
+                        await post(`/orders/${order.id}/confirm`);
                         wx.showToast({ title: '已确认收货', icon: 'success' });
                         this.loadOrders();
                     } catch (err) {
@@ -156,13 +151,26 @@ Page({
         });
     },
 
+    // 查看物流
+    onViewLogistics(e) {
+        const order = e.currentTarget.dataset.order;
+        if (order.tracking_no) {
+            wx.navigateTo({
+                url: `/pages/order/logistics?id=${order.id}`
+            });
+        } else {
+            wx.showToast({ title: '暂无物流信息', icon: 'none' });
+        }
+    },
+
     // 再次购买
     onBuyAgain(e) {
         const order = e.currentTarget.dataset.order;
-        // 跳转到首页或商品详情
-        if (order.items && order.items.length > 0) {
-            const productId = order.items[0].product_id;
-            wx.navigateTo({ url: `/pages/product/detail?id=${productId}` });
+        // ... (保持原有逻辑)
+        if (order.product_id) {
+            wx.navigateTo({ url: `/pages/product/detail?id=${order.product_id}` });
+        } else if (order.product && order.product.id) {
+            wx.navigateTo({ url: `/pages/product/detail?id=${order.product.id}` });
         } else {
             wx.switchTab({ url: '/pages/index/index' });
         }

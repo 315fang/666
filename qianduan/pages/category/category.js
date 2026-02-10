@@ -6,6 +6,7 @@ Page({
         categories: [],
         products: [],
         currentCategory: '',
+        currentCategoryName: '全部商品',
         sortBy: 'default',
         sortOrder: 'desc',
         loading: false,
@@ -53,7 +54,28 @@ Page({
             }
 
             const res = await get('/products', params);
-            const newProducts = res.data?.list || res.data || [];
+            const rawProducts = res.data?.list || res.data || [];
+
+            // 处理商品数据，确保图片字段正确
+            const newProducts = rawProducts.map(item => {
+                let images = [];
+                if (item.images) {
+                    if (typeof item.images === 'string') {
+                        try {
+                            images = JSON.parse(item.images);
+                        } catch (e) {
+                            images = [item.images];
+                        }
+                    } else if (Array.isArray(item.images)) {
+                        images = item.images;
+                    }
+                }
+                return {
+                    ...item,
+                    image: images.length > 0 ? images[0] : '/assets/images/placeholder.svg',
+                    price: item.retail_price || item.price || 0
+                };
+            });
 
             this.setData({
                 products: append ? [...this.data.products, ...newProducts] : newProducts,
@@ -71,19 +93,27 @@ Page({
         wx.navigateTo({ url: '/pages/search/search' });
     },
 
-    // 分类切换
-    onCategoryChange(e) {
+    // 分类切换 (WXML用onCategoryTap)
+    onCategoryTap(e) {
         const categoryId = e.currentTarget.dataset.id;
+        const category = this.data.categories.find(c => c.id === categoryId);
+
         this.setData({
             currentCategory: categoryId,
+            currentCategoryName: category?.name || '全部商品',
             page: 1,
             hasMore: true
         });
         this.loadProducts();
     },
 
-    // 排序切换
-    onSort(e) {
+    // 分类切换别名
+    onCategoryChange(e) {
+        this.onCategoryTap(e);
+    },
+
+    // 排序切换 (WXML用onSortChange)
+    onSortChange(e) {
         const sort = e.currentTarget.dataset.sort;
         let { sortBy, sortOrder } = this.data;
 
@@ -98,6 +128,11 @@ Page({
         this.loadProducts();
     },
 
+    // 排序切换别名
+    onSort(e) {
+        this.onSortChange(e);
+    },
+
     // 加载更多
     onLoadMore() {
         if (!this.data.hasMore || this.data.loading) return;
@@ -107,8 +142,14 @@ Page({
 
     // 商品点击
     onProductTap(e) {
-        const product = e.currentTarget.dataset.item;
-        wx.navigateTo({ url: `/pages/product/detail?id=${product.id}` });
+        const dataset = e.currentTarget.dataset;
+        const productId = dataset.id || (dataset.item && dataset.item.id);
+        
+        if (productId) {
+            wx.navigateTo({ url: `/pages/product/detail?id=${productId}` });
+        } else {
+            console.error('onProductTap: Product ID not found', dataset);
+        }
     },
 
     // 快速加购

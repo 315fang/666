@@ -23,21 +23,21 @@
       <!-- 商品图片 -->
       <view class="product-image-wrapper" bindtap="onProductTap" data-item="{{item}}">
         <image class="product-image" 
-               src="{{item.product.images[0] || '/assets/images/placeholder.png'}}" 
+               src="{{item.firstImage || '/assets/images/placeholder.svg'}}" 
                mode="aspectFill"></image>
       </view>
 
       <!-- 商品信息 -->
       <view class="product-info">
         <text class="product-name" bindtap="onProductTap" data-item="{{item}}">
-          {{item.product.name}}
+          {{item.productName}}
         </text>
         <text class="product-spec" wx:if="{{item.sku && item.sku.spec_value}}">
           {{item.sku.spec_value}}
         </text>
         
         <view class="price-quantity-row">
-          <text class="product-price">{{item.price}}</text>
+          <text class="product-price">¥{{item.price}}</text>
           
           <!-- 数量控制 -->
           <view class="quantity-control">
@@ -79,7 +79,7 @@
     <view class="total-section">
       <view class="total-label">
         <text>合计：</text>
-        <text class="total-price">{{totalPrice}}</text>
+        <text class="total-price">¥{{totalPrice}}</text>
       </view>
       <text class="total-count">共{{totalCount}}件</text>
     </view>

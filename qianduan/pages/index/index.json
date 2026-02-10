@@ -1,4 +1,6 @@
 {
-    "navigationBarTitleText": "首页",
-    "enablePullDownRefresh": true
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "product-card": "../../components/product-card/product-card"
+  }
 }

@@ -1,0 +1,63 @@
+<!--pages/distribution/stock-logs.wxml - 代理商库存变动日志-->
+<view class="container">
+  <!-- 库存概览 -->
+  <view class="stock-header">
+    <view class="stock-header-info">
+      <text class="stock-header-label">当前云仓库存</text>
+      <view class="stock-header-row">
+        <text class="stock-header-value">{{currentStock}}</text>
+        <text class="stock-header-unit">件</text>
+      </view>
+    </view>
+    <view class="stock-header-btn" bindtap="goRestock">补货</view>
+  </view>
+
+  <!-- 筛选 Tab -->
+  <view class="filter-bar">
+    <view class="filter-item {{activeFilter === 'all' ? 'active' : ''}}" data-filter="all" bindtap="onFilterChange">全部</view>
+    <view class="filter-item {{activeFilter === 'in' ? 'active' : ''}}" data-filter="in" bindtap="onFilterChange">
+      <text class="filter-dot in"></text>入库
+    </view>
+    <view class="filter-item {{activeFilter === 'out' ? 'active' : ''}}" data-filter="out" bindtap="onFilterChange">
+      <text class="filter-dot out"></text>出库
+    </view>
+  </view>
+
+  <!-- 日志列表 -->
+  <view class="log-list">
+    <view class="log-card {{item.type}}" wx:for="{{logs}}" wx:key="id">
+      <view class="log-card-left">
+        <view class="log-type-icon {{item.type}}">
+          <text wx:if="{{item.type === 'in'}}">📦</text>
+          <text wx:else>🚚</text>
+        </view>
+        <view class="log-card-info">
+          <text class="log-card-label">{{item.label}}</text>
+          <text class="log-card-product">{{item.product_name}}</text>
+          <text class="log-card-detail" wx:if="{{item.type === 'out' && item.buyer_name}}">买家: {{item.buyer_name}}</text>
+          <text class="log-card-detail" wx:if="{{item.type === 'in' && item.amount}}">金额: ¥{{item.amount}}</text>
+          <text class="log-card-time">{{item.time_format}}</text>
+        </view>
+      </view>
+      <view class="log-card-right">
+        <text class="log-qty {{item.type}}">{{item.type === 'in' ? '+' : '-'}}{{item.quantity}}</text>
+        <text class="log-qty-unit">件</text>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty-state" wx:if="{{logs.length === 0 && !loading}}">
+      <text class="empty-icon">📋</text>
+      <text class="empty-text">暂无库存变动记录</text>
+      <view class="empty-btn" bindtap="goRestock">去采购入仓</view>
+    </view>
+
+    <!-- 加载更多 -->
+    <view class="loading-tip" wx:if="{{loading}}">
+      <text>加载中...</text>
+    </view>
+    <view class="loading-tip" wx:if="{{!hasMore && logs.length > 0}}">
+      <text>没有更多了</text>
+    </view>
+  </view>
+</view>

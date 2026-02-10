@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分佣功能演示工具 - 臻选后台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 28px; margin-bottom: 8px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+        
+        .content {
+            padding: 40px;
+        }
+        .section {
+            margin-bottom: 40px;
+            padding-bottom: 40px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .section:last-child { border-bottom: none; }
+        .section-title {
+            font-size: 20px;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 2px;
+        }
+        
+        .demo-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 16px 40px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            font-weight: 500;
+        }
+        .demo-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        .demo-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+        }
+        .btn-secondary:hover {
+            box-shadow: 0 6px 20px rgba(245, 87, 108, 0.6);
+        }
+        
+        .result-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+        .result-box.show { display: block; animation: slideIn 0.3s; }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .result-box h3 {
+            color: #2c3e50;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        .result-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .result-item:last-child { border-bottom: none; }
+        .result-label {
+            color: #7f8c8d;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+        .result-value {
+            color: #2c3e50;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .commission-item {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .commission-item strong { color: #667eea; }
+        
+        .success { color: #27ae60; }
+        .error { color: #e74c3c; }
+        
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .info-box {
+            background: #e8f4fd;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin-left: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 分佣功能演示工具</h1>
+            <p>快速演示臻选小程序的二级分佣体系</p>
+        </div>
+        
+        <div class="content">
+            <!-- 一键演示 -->
+            <div class="section">
+                <h2 class="section-title">🚀 一键演示完整流程</h2>
+                <div class="info-box">
+                    <strong>演示内容:</strong><br>
+                    • 自动创建3个测试用户(A邀请B,B邀请C)<br>
+                    • 用户C下单购买商品<br>
+                    • 系统自动计算并发放佣金给A和B<br>
+                    • 展示完整的佣金分配结果
+                </div>
+                <button class="demo-btn" onclick="runDemo()">
+                    <span id="demoText">开始演示</span>
+                </button>
+                <div id="demoResult" class="result-box"></div>
+            </div>
+            
+            <!-- 查看测试用户 -->
+            <div class="section">
+                <h2 class="section-title">👥 测试用户管理</h2>
+                <div class="btn-group">
+                    <button class="demo-btn" onclick="viewTestUsers()">查看所有测试用户</button>
+                    <button class="demo-btn btn-secondary" onclick="clearTestData()">清空测试数据</button>
+                </div>
+                <div id="usersResult" class="result-box"></div>
+            </div>
+            
+            <!-- 使用说明 -->
+            <div class="section">
+                <h2 class="section-title">📖 使用说明</h2>
+                <div class="info-box">
+                    <strong>演示步骤:</strong><br>
+                    1. 点击"开始演示"按钮,系统将自动创建演示数据<br>
+                    2. 查看返回的用户ID和佣金分配结果<br>
+                    3. 在后台用户管理中查看对应用户的佣金明细<br>
+                    4. 演示完成后,点击"清空测试数据"清理测试用户<br><br>
+                    
+                    <strong>分佣规则:</strong><br>
+                    • 一级分销商(直接推荐人):获得订单金额的10%<br>
+                    • 二级分销商(间接推荐人):获得订单金额的5%<br>
+                    • 佣金实时结算到用户钱包余额
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/admin/api';
+        
+        async function request(url, options = {}) {
+            try {
+                const token = localStorage.getItem('admin_token');
+                const response = await fetch(API_BASE + url, {
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                        ...options.headers
+                    }
+                });
+                return await response.json();
+            } catch (error) {
+                console.error('请求失败:', error);
+                return { code: -1, message: '网络错误' };
+            }
+        }
+        
+        async function runDemo() {
+            const btn = document.querySelector('.demo-btn');
+            const btnText = document.getElementById('demoText');
+            const resultBox = document.getElementById('demoResult');
+            
+            btn.disabled = true;
+            btnText.innerHTML = '执行中<span class="loading"></span>';
+            
+            const result = await request('/test/demo-commission-flow', { method: 'POST' });
+            
+            btn.disabled = false;
+            btnText.textContent = '开始演示';
+            
+            if (result.code === 0) {
+                const data = result.data;
+                resultBox.innerHTML = `
+                    <h3 class="success">✅ ${result.message}</h3>
+                    <div class="result-item">
+                        <div class="result-label">演示场景</div>
+                        <div class="result-value">${data.scenario}</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">订单信息</div>
+                        <div class="result-value">
+                            订单号: ${data.order.order_no}<br>
+                            购买人: ${data.order.buyer}<br>
+                            商品: ${data.order.product}<br>
+                            金额: ¥${data.order.amount}
+                        </div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">佣金分配</div>
+                        <div class="result-value">
+                            ${data.commissions.map(c => `
+                                <div class="commission-item">
+                                    <strong>${c.user}</strong> 获得${c.level}佣金 <strong style="color:#27ae60">¥${c.amount}</strong>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">汇总</div>
+                        <div class="result-value">${data.summary}</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">用户ID（可在后台管理中查看详情）</div>
+                        <div class="result-value">
+                            用户A ID: ${data.user_ids.userA}<br>
+                            用户B ID: ${data.user_ids.userB}<br>
+                            用户C ID: ${data.user_ids.userC}
+                        </div>
+                    </div>
+                `;
+                resultBox.classList.add('show');
+            } else {
+                resultBox.innerHTML = `<h3 class="error">❌ ${result.message}</h3>`;
+                resultBox.classList.add('show');
+            }
+        }
+        
+        async function viewTestUsers() {
+            const resultBox = document.getElementById('usersResult');
+            resultBox.innerHTML = '<p>加载中...</p>';
+            resultBox.classList.add('show');
+            
+            const result = await request('/test/users');
+            
+            if (result.code === 0) {
+                const users = result.data;
+                if (users.length === 0) {
+                    resultBox.innerHTML = '<h3>暂无测试用户</h3>';
+                } else {
+                    resultBox.innerHTML = `
+                        <h3 class="success">找到 ${users.length} 个测试用户</h3>
+                        ${users.map(u => `
+                            <div class="commission-item">
+                                <strong>${u.nickname}</strong> (ID: ${u.id})<br>
+                                级别: ${['普通用户', '一级分销商', '二级分销商'][u.role_level]}<br>
+                                累计佣金: ¥${u.total_commission || 0}<br>
+                                可用余额: ¥${u.available_balance || 0}<br>
+                                推荐人数: ${u.referee_count || 0}
+                            </div>
+                        `).join('')}
+                    `;
+                }
+            } else {
+                resultBox.innerHTML = `<h3 class="error">❌ ${result.message}</h3>`;
+            }
+        }
+        
+        async function clearTestData() {
+            if (!confirm('确定要清空所有测试数据吗?此操作不可恢复!')) {
+                return;
+            }
+            
+            const resultBox = document.getElementById('usersResult');
+            resultBox.innerHTML = '<p>清理中...</p>';
+            resultBox.classList.add('show');
+            
+            const result = await request('/test/clear', { method: 'DELETE' });
+            
+            if (result.code === 0) {
+                resultBox.innerHTML = `<h3 class="success">✅ ${result.message}</h3>`;
+                setTimeout(() => {
+                    resultBox.classList.remove('show');
+                }, 3000);
+            } else {
+                resultBox.innerHTML = `<h3 class="error">❌ ${result.message}</h3>`;
+            }
+        }
+    </script>
+</body>
+</html>

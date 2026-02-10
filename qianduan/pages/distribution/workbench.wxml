@@ -1,0 +1,124 @@
+<!--pages/distribution/workbench.wxml - 代理商发货工作台-->
+<view class="container">
+  <!-- 云仓状态卡片 -->
+  <view class="stock-card">
+    <view class="stock-main">
+      <view class="stock-number">{{workbench.stock_count || 0}}</view>
+      <view class="stock-label">云仓库存(件)</view>
+    </view>
+    <view class="stock-stats">
+      <view class="stat-item">
+        <text class="stat-value">{{workbench.pending_ship || 0}}</text>
+        <text class="stat-label">待发货</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-value">{{workbench.pending_confirm || 0}}</text>
+        <text class="stat-label">待确认</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-value">{{workbench.total_handled || 0}}</text>
+        <text class="stat-label">累计发货</text>
+      </view>
+      <view class="stat-item">
+        <text class="stat-value">¥{{workbench.month_profit || '0.00'}}</text>
+        <text class="stat-label">本月利润</text>
+      </view>
+    </view>
+    <view class="stock-actions">
+      <view class="stock-btn" bindtap="goRestock">📦 采购入仓</view>
+      <view class="stock-btn outline" bindtap="goStockLogs">📋 库存明细</view>
+    </view>
+  </view>
+
+  <!-- 订单筛选 Tab -->
+  <view class="tab-bar">
+    <view class="tab-item {{activeStatus === 'pending' ? 'active' : ''}}" data-status="pending" bindtap="onStatusChange">
+      待发货
+      <view class="tab-badge" wx:if="{{workbench.pending_ship > 0}}">{{workbench.pending_ship}}</view>
+    </view>
+    <view class="tab-item {{activeStatus === 'shipping_requested' ? 'active' : ''}}" data-status="shipping_requested" bindtap="onStatusChange">
+      待确认
+    </view>
+    <view class="tab-item {{activeStatus === 'shipped' ? 'active' : ''}}" data-status="shipped" bindtap="onStatusChange">
+      已发货
+    </view>
+    <view class="tab-item {{activeStatus === 'all' ? 'active' : ''}}" data-status="all" bindtap="onStatusChange">
+      全部
+    </view>
+  </view>
+
+  <!-- 订单列表 -->
+  <view class="order-list">
+    <view class="order-card" wx:for="{{orders}}" wx:key="id">
+      <view class="order-header">
+        <text class="order-no">{{item.order_no}}</text>
+        <text class="order-status status-{{item.status}}">
+          {{item.status === 'paid' ? '待发货' : item.status === 'agent_confirmed' ? '已确认' : item.status === 'shipping_requested' ? '待平台确认' : item.status === 'shipped' ? '已发货' : item.status === 'completed' ? '已完成' : item.status}}
+        </text>
+      </view>
+
+      <view class="order-product">
+        <image class="product-img" src="{{item.product.images[0] || ''}}" mode="aspectFill" wx:if="{{item.product && item.product.images}}"></image>
+        <view class="product-info">
+          <text class="product-name">{{item.product.name || '商品'}}</text>
+          <view class="product-meta">
+            <text>买家: {{item.buyer.nickname || '用户'}}</text>
+            <text>×{{item.quantity}}</text>
+          </view>
+          <text class="product-price">实付 ¥{{item.actual_price || item.total_amount}}</text>
+        </view>
+      </view>
+
+      <!-- 收货地址 -->
+      <view class="order-address" wx:if="{{item.address_snapshot}}">
+        <text class="address-icon">📍</text>
+        <text class="address-text">{{item.address_snapshot.receiver_name}} {{item.address_snapshot.phone}} | {{item.address_snapshot.province}}{{item.address_snapshot.city}}{{item.address_snapshot.district}}{{item.address_snapshot.detail}}</text>
+      </view>
+
+      <!-- 操作按钮 -->
+      <view class="order-actions" wx:if="{{item.status === 'paid' || item.status === 'agent_confirmed'}}">
+        <view class="action-btn primary" data-id="{{item.id}}" data-order="{{item}}" bindtap="onShipTap">
+          🚚 填单号发货
+        </view>
+      </view>
+      <view class="order-actions" wx:if="{{item.status === 'shipped' || item.status === 'completed'}}">
+        <text class="tracking-info">物流: {{item.tracking_no || '无'}}</text>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty" wx:if="{{orders.length === 0 && !loading}}">
+      <text class="empty-icon">📭</text>
+      <text class="empty-text">暂无订单</text>
+    </view>
+
+    <!-- 加载中 -->
+    <view class="loading-more" wx:if="{{loading}}">
+      <text>加载中...</text>
+    </view>
+  </view>
+
+  <!-- 发货弹窗 -->
+  <view class="ship-popup {{showShipPopup ? 'show' : ''}}">
+    <view class="mask" bindtap="hideShipPopup"></view>
+    <view class="popup-content">
+      <view class="popup-title">填写发货信息</view>
+      <view class="popup-order-info">
+        订单: {{shipOrder.order_no || ''}} | 数量: {{shipOrder.quantity || 0}}件
+      </view>
+      <view class="popup-stock-info">
+        当前云仓库存: {{workbench.stock_count || 0}}件
+        <text class="stock-warn" wx:if="{{workbench.stock_count < (shipOrder.quantity || 0)}}">（库存不足！）</text>
+      </view>
+      <view class="form-group">
+        <text class="form-label">物流公司</text>
+        <input class="form-input" type="text" placeholder="如：顺丰、圆通、中通" bindinput="onCompanyInput" value="{{shipCompany}}" />
+      </view>
+      <view class="form-group">
+        <text class="form-label">物流单号</text>
+        <input class="form-input" type="text" placeholder="请输入物流单号" bindinput="onTrackingInput" value="{{shipTrackingNo}}" />
+      </view>
+      <button class="popup-btn" bindtap="confirmShip" disabled="{{!shipTrackingNo}}">确认发货</button>
+    </view>
+  </view>
+</view>

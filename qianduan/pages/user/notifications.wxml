@@ -6,6 +6,8 @@
         <text class="notif-icon commission-icon" wx:if="{{item.type === 'commission'}}">💰</text>
         <text class="notif-icon stock-icon" wx:if="{{item.type === 'stock'}}">⚠️</text>
         <text class="notif-icon system-icon" wx:if="{{item.type === 'system'}}">⚙️</text>
+        <text class="notif-icon withdrawal-icon" wx:if="{{item.type === 'withdrawal'}}">💳</text>
+        <text class="notif-icon refund-icon" wx:if="{{item.type === 'refund'}}">🔄</text>
       </view>
       <view class="notif-content">
         <view class="notif-header">

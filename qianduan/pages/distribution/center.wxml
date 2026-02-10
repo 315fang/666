@@ -1,20 +1,31 @@
-<!--pages/distribution/center.wxml - 分销中心-->
+<!--pages/distribution/center.wxml - 分佣中心（整合钱包、邀请、佣金明细）-->
 <view class="container">
   <!-- 用户信息卡片 -->
   <view class="user-card">
-    <image class="user-avatar" src="{{userInfo.avatar_url || ''}}" mode="aspectFill"></image>
+    <image class="user-avatar" src="{{userInfo.avatar_url || ''}}" mode="aspectFill" wx:if="{{userInfo.avatar_url}}"></image>
+    <view class="user-avatar-default" wx:else>
+      <text>{{userInfo.nickname ? userInfo.nickname[0] : '臻'}}</text>
+    </view>
     <view class="user-info">
       <view class="user-name">
         <text>{{userInfo.nickname || '微信用户'}}</text>
-        <text class="user-level">{{userInfo.role_name}}</text>
+        <text class="user-level">{{userInfo.role_name || '普通用户'}}</text>
       </view>
-      <view class="inviter-info">
-        <text>邀请人: {{userInfo.inviter ? userInfo.inviter.nickname : '平台直属'}}</text>
+      <view class="inviter-info" wx:if="{{hasParent && parentInfo}}">
+        <text>邀请人: {{parentInfo.nickname}}</text>
       </view>
+      <view class="inviter-info bind-invite-entry" bindtap="onBindInviteTap" wx:else>
+        <text>未绑定上级，点击填写邀请码 →</text>
+      </view>
+    </view>
+    <!-- 通知铃铛 -->
+    <view class="notif-bell" bindtap="onNotificationsTap">
+      <text class="bell-icon">🔔</text>
+      <view class="notif-badge" wx:if="{{unreadCount > 0}}">{{unreadCount > 99 ? '99+' : unreadCount}}</view>
     </view>
   </view>
 
-  <!-- 头部统计 -->
+  <!-- 资金总览卡片 -->
   <view class="header-card">
     <view class="header-main">
       <view class="total-label">累计佣金(元)</view>
@@ -22,18 +33,18 @@
     </view>
     <view class="header-sub">
       <view class="sub-item">
-        <text class="sub-label">可提现</text>
-        <text class="sub-value">{{stats.availableAmount || '0.00'}}</text>
+        <text class="sub-label">可提现余额</text>
+        <text class="sub-value">¥{{balance || '0.00'}}</text>
       </view>
       <view class="sub-item">
         <text class="sub-label">待结算</text>
-        <text class="sub-value">{{stats.frozenAmount || '0.00'}}</text>
+        <text class="sub-value">¥{{stats.frozenAmount || '0.00'}}</text>
       </view>
     </view>
     <view class="withdraw-btn" bindtap="onWithdrawTap">立即提现</view>
   </view>
 
-  <!-- 菜单导航 -->
+  <!-- 功能菜单 -->
   <view class="menu-grid">
     <view class="menu-item" bindtap="onTeamTap">
       <view class="menu-icon team-icon">👥</view>
@@ -45,17 +56,174 @@
       <view class="menu-text">分销订单</view>
       <view class="menu-sub">查看明细</view>
     </view>
-    <view class="menu-item" bindtap="onPosterTap">
+    <view class="menu-item" bindtap="onRefundTap">
+      <view class="menu-icon refund-icon">🔄</view>
+      <view class="menu-text">退货管理</view>
+      <view class="menu-sub">售后处理</view>
+    </view>
+    <button class="menu-item share-menu-btn" open-type="share">
       <view class="menu-icon code-icon">📷</view>
-      <view class="menu-text">推广海报</view>
-      <view class="menu-sub">邀请好友</view>
+      <view class="menu-text">邀请好友</view>
+      <view class="menu-sub">分享赚钱</view>
+    </button>
+  </view>
+
+  <!-- 代理商专属功能区（仅代理商可见） -->
+  <view class="agent-section" wx:if="{{isAgent}}">
+    <view class="section-header">
+      <text class="section-title">🏭 代理商专区</text>
+      <text class="section-badge">代理商</text>
+    </view>
+    <!-- 云仓库存概览 -->
+    <view class="agent-stock-card">
+      <view class="stock-overview">
+        <view class="stock-big-number">{{agentStock || 0}}</view>
+        <view class="stock-unit">云仓库存(件)</view>
+      </view>
+      <view class="stock-mini-stats">
+        <view class="mini-stat">
+          <text class="mini-value">{{agentPending || 0}}</text>
+          <text class="mini-label">待发货</text>
+        </view>
+        <view class="mini-stat">
+          <text class="mini-value">¥{{agentMonthProfit || '0.00'}}</text>
+          <text class="mini-label">本月利润</text>
+        </view>
+      </view>
+    </view>
+    <!-- 代理商功能入口 -->
+    <view class="agent-menu">
+      <view class="agent-menu-item" bindtap="goWorkbench">
+        <view class="agent-menu-icon" style="background:#EEF2FF;">🚚</view>
+        <view class="agent-menu-info">
+          <text class="agent-menu-title">发货工作台</text>
+          <text class="agent-menu-desc">处理订单、填写物流</text>
+        </view>
+        <view class="agent-menu-badge" wx:if="{{agentPending > 0}}">{{agentPending}}</view>
+        <text class="agent-menu-arrow">›</text>
+      </view>
+      <view class="agent-menu-item" bindtap="goRestock">
+        <view class="agent-menu-icon" style="background:#FFF7ED;">📦</view>
+        <view class="agent-menu-info">
+          <text class="agent-menu-title">采购入仓</text>
+          <text class="agent-menu-desc">补充云仓库存</text>
+        </view>
+        <text class="agent-menu-arrow">›</text>
+      </view>
+      <view class="agent-menu-item" bindtap="goStockLogs">
+        <view class="agent-menu-icon" style="background:#ECFDF5;">📋</view>
+        <view class="agent-menu-info">
+          <text class="agent-menu-title">库存明细</text>
+          <text class="agent-menu-desc">出入库记录查询</text>
+        </view>
+        <text class="agent-menu-arrow">›</text>
+      </view>
+    </view>
+    <!-- 欠款提示 -->
+    <view class="debt-warn" wx:if="{{agentDebt > 0}}">
+      <text class="debt-icon">⚠️</text>
+      <text class="debt-text">您有 ¥{{agentDebt}} 待追回欠款，新佣金将优先抵扣，提现暂时冻结</text>
     </view>
   </view>
 
-  <!-- 邀请码模拟 -->
+  <!-- 最近通知 -->
+  <view class="notif-card" wx:if="{{latestNotifications.length > 0}}">
+    <view class="notif-card-header" bindtap="onNotificationsTap">
+      <text class="notif-card-title">📢 最新消息</text>
+      <text class="notif-card-more">查看全部 ›</text>
+    </view>
+    <view class="notif-card-list">
+      <view class="notif-card-item {{item.is_read ? '' : 'unread'}}" wx:for="{{latestNotifications}}" wx:key="id" wx:if="{{index < 3}}">
+        <view class="notif-card-dot" wx:if="{{!item.is_read}}"></view>
+        <text class="notif-card-content">{{item.title}}: {{item.content}}</text>
+        <text class="notif-card-time">{{item.time_format}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 邀请码 + 绑定邀请码 -->
   <view class="invite-card">
     <view class="invite-title">我的邀请码</view>
-    <view class="invite-code">{{userInfo.openid || '未登录'}}</view>
-    <view class="invite-tips">长按复制或分享给好友</view>
+    <view class="invite-code">{{inviteCode || '登录后查看'}}</view>
+    <view class="invite-actions">
+      <view class="invite-btn" bindtap="onCopyInviteCode">复制邀请码</view>
+      <button class="invite-btn primary" open-type="share">分享给好友</button>
+    </view>
+    <view class="invite-tips">好友通过您的分享进入小程序即可自动绑定关系</view>
+    <!-- 填写他人邀请码 -->
+    <view class="bind-invite-row" wx:if="{{!hasParent}}">
+      <view class="bind-invite-divider"></view>
+      <view class="bind-invite-btn" bindtap="onBindInviteTap">
+        <text>📝 我有邀请码，点击填写加入团队</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- Tab切换：佣金明细 / 提现记录 -->
+  <view class="tab-bar">
+    <view class="tab-item {{activeTab === 'overview' ? 'active' : ''}}" data-tab="overview" bindtap="onTabChange">
+      佣金明细
+    </view>
+    <view class="tab-item {{activeTab === 'withdraw' ? 'active' : ''}}" data-tab="withdraw" bindtap="onTabChange">
+      提现记录
+    </view>
+  </view>
+
+  <!-- 佣金明细列表 -->
+  <view class="list-section" wx:if="{{activeTab === 'overview'}}">
+    <view class="log-list">
+      <view class="log-item" wx:for="{{commissionLogs}}" wx:key="id">
+        <view class="log-info">
+          <text class="log-type">{{item.typeName}}</text>
+          <text class="log-status {{item.statusClass}}">{{item.statusText}}</text>
+          <text class="log-time">{{item.created_at}}</text>
+        </view>
+        <view class="log-amount income">+{{item.amount}}</view>
+        <view class="log-remark" wx:if="{{item.remark}}" style="font-size: 20rpx; color: #999; margin-top: 4rpx; width: 100%;">{{item.remark}}</view>
+      </view>
+      <view class="empty" wx:if="{{commissionLogs.length === 0}}">
+        <text class="empty-text">暂无佣金记录</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 提现记录列表 -->
+  <view class="list-section" wx:if="{{activeTab === 'withdraw'}}">
+    <view class="log-list">
+      <view class="log-item" wx:for="{{withdrawals}}" wx:key="id">
+        <view class="log-info">
+          <text class="log-type">提现 ¥{{item.amount}}</text>
+          <text class="log-status {{item.statusClass}}">{{item.statusText}}</text>
+          <text class="log-time">{{item.created_at}}</text>
+        </view>
+        <view class="log-amount expense">-{{item.actual_amount || item.amount}}</view>
+        <view class="log-remark" wx:if="{{item.reject_reason}}" style="font-size: 20rpx; color: #ff4d4f; margin-top: 4rpx; width: 100%;">拒绝原因: {{item.reject_reason}}</view>
+      </view>
+      <view class="empty" wx:if="{{withdrawals.length === 0}}">
+        <text class="empty-text">暂无提现记录</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 提现弹窗 -->
+  <view class="withdraw-popup {{showWithdraw ? 'show' : ''}}">
+    <view class="mask" bindtap="hideWithdraw"></view>
+    <view class="popup-content">
+      <view class="popup-title">申请提现</view>
+      <view class="popup-balance">当前可提现余额：¥{{balance}}</view>
+      <input class="popup-input" type="digit" placeholder="请输入提现金额" bindinput="onWithdrawInput" value="{{withdrawAmount}}" />
+      <button class="popup-btn" bindtap="confirmWithdraw">确认提现</button>
+    </view>
+  </view>
+
+  <!-- 绑定邀请码弹窗 -->
+  <view class="withdraw-popup {{showBindInvite ? 'show' : ''}}">
+    <view class="mask" bindtap="hideBindInvite"></view>
+    <view class="popup-content">
+      <view class="popup-title">填写邀请码</view>
+      <view class="popup-balance">输入推荐人的邀请码加入团队，绑定后不可更改</view>
+      <input class="popup-input" type="text" placeholder="请输入6位邀请码" bindinput="onBindInviteInput" value="{{bindInviteCode}}" maxlength="6" />
+      <button class="popup-btn" bindtap="confirmBindInvite">确认绑定</button>
+    </view>
   </view>
 </view>

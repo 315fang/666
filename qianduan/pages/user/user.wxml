@@ -1,95 +1,158 @@
-<!--pages/user/user.wxml - 个人中心-->
+<!--pages/user/user.wxml-->
 <view class="container">
-  <!-- 用户信息区 -->
+  <!-- 1. Deep Midnight Header -->
   <view class="user-header">
-    <block wx:if="{{isLoggedIn}}">
-      <view class="user-info">
-        <image class="user-avatar" src="{{userInfo.avatar || ''}}" mode="aspectFill" wx:if="{{userInfo.avatar}}"></image>
-        <view class="user-avatar-placeholder" wx:else>
-          <text>{{userInfo.nickname ? userInfo.nickname[0] : '臻'}}</text>
+    <view class="user-info-box">
+      <!-- Glow Avatar -->
+      <view class="avatar-container" bindtap="onEditNickname">
+        <view class="avatar-glow"></view>
+        <image class="user-avatar" src="{{userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
+        <view class="edit-icon">✎</view>
+      </view>
+      <!-- Names & Tags -->
+      <view class="user-names">
+        <view class="name-text" bindtap="onLoginTap">
+          {{hasUserInfo ? (userInfo.nickname || '微信用户') : '点击登录'}}
         </view>
-        <view class="user-detail">
-          <text class="user-name">{{userInfo.nickname || '臻选用户'}}</text>
-          <view class="user-level" wx:if="{{userInfo.level}}">
-            <text>{{userInfo.level_name || '会员'}}</text>
+        <view class="user-tags" wx:if="{{hasUserInfo}}">
+          <view class="tag-pill gold" wx:if="{{userInfo.role !== 'user'}}">
+            <text class="icon">👑</text>
+            <text>{{userInfo.role_name}}</text>
+          </view>
+          <view class="tag-pill blue">
+            <text class="icon">🔗</text>
+            <text>分享官</text>
           </view>
         </view>
       </view>
-    </block>
-    <block wx:else>
-      <view class="login-prompt">
-        <text class="login-title">登录后享受更多权益</text>
-        <button class="btn btn-primary btn-sm" bindtap="onLogin">
-          立即登录
-        </button>
-      </view>
-    </block>
+    </view>
+    <!-- Background Decoration -->
+    <view class="header-bg-decoration"></view>
   </view>
 
-  <!-- 订单入口 -->
+  <!-- 2. Floating Asset Card -->
+  <view class="asset-card-wrapper">
+    <view class="asset-card">
+      <view class="asset-item" bindtap="goCommission">
+        <text class="asset-label">待结算</text>
+        <text class="asset-value">¥{{stats.frozenAmount || '0.00'}}</text>
+      </view>
+      <view class="divider"></view>
+      <view class="asset-item" bindtap="goWallet">
+        <text class="asset-label">可提现</text>
+        <text class="asset-value highlight">¥{{balance || '0.00'}}</text>
+      </view>
+      <view class="divider"></view>
+      <view class="asset-item" bindtap="goTeam">
+        <text class="asset-label">团队人数</text>
+        <text class="asset-value">{{teamCount || 0}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 3. Agent Workbench Banner (Texture) -->
+  <view class="banner-wrapper" wx:if="{{isAgent}}" bindtap="goWorkbench">
+    <view class="agent-banner">
+      <view class="banner-overlay"></view>
+      <view class="banner-content">
+        <view class="banner-left">
+          <text class="material-icon highlight">📊</text>
+          <view class="banner-texts">
+            <text class="banner-title">代理商工作台</text>
+            <text class="banner-sub">管理库存 & 发货</text>
+          </view>
+        </view>
+        <view class="banner-arrow arrow-circle">→</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 4. Order Section -->
   <view class="section-card">
-    <view class="section-header" bindtap="onOrderAllTap">
-      <text class="section-title">我的订单</text>
-      <view class="section-more">
-        <text>查看全部</text>
+    <view class="card-header" bindtap="onOrderTap" data-type="all">
+      <text class="card-title">我的订单</text>
+      <view class="card-more">
+        <text>全部</text>
         <text class="arrow">›</text>
       </view>
     </view>
-    <view class="order-nav">
-      <view class="order-item" bindtap="onOrderTap" data-status="pending">
-        <text class="order-icon">📝</text>
-        <text class="order-text">待付款</text>
-        <view class="order-badge" wx:if="{{orderCounts.pending > 0}}">{{orderCounts.pending}}</view>
+    <view class="order-icons">
+      <view class="icon-item" bindtap="onOrderTap" data-type="pending">
+        <view class="icon-circle">
+          <text>💳</text>
+          <view class="badge" wx:if="{{orderStats.pending > 0}}">{{orderStats.pending}}</view>
+        </view>
+        <text class="icon-text">待付款</text>
       </view>
-      <view class="order-item" bindtap="onOrderTap" data-status="paid">
-        <text class="order-icon">📦</text>
-        <text class="order-text">待发货</text>
-        <view class="order-badge" wx:if="{{orderCounts.paid > 0}}">{{orderCounts.paid}}</view>
+      <view class="icon-item" bindtap="onOrderTap" data-type="paid">
+        <view class="icon-circle">
+          <text>📦</text>
+          <view class="badge" wx:if="{{orderStats.paid > 0}}">{{orderStats.paid}}</view>
+        </view>
+        <text class="icon-text">待发货</text>
       </view>
-      <view class="order-item" bindtap="onOrderTap" data-status="shipped">
-        <text class="order-icon">🚚</text>
-        <text class="order-text">待收货</text>
-        <view class="order-badge" wx:if="{{orderCounts.shipped > 0}}">{{orderCounts.shipped}}</view>
+      <view class="icon-item" bindtap="onOrderTap" data-type="shipped">
+        <view class="icon-circle">
+          <text>🚚</text>
+          <view class="badge" wx:if="{{orderStats.shipped > 0}}">{{orderStats.shipped}}</view>
+        </view>
+        <text class="icon-text">待收货</text>
       </view>
-      <view class="order-item" bindtap="onOrderTap" data-status="completed">
-        <text class="order-icon">✓</text>
-        <text class="order-text">已完成</text>
+      <view class="icon-item" bindtap="onOrderTap" data-type="completed">
+        <view class="icon-circle">
+          <text>✨</text>
+        </view>
+        <text class="icon-text">已完成</text>
+      </view>
+      <view class="icon-item" bindtap="onRefundTap">
+        <view class="icon-circle">
+          <text>🔄</text>
+        </view>
+        <text class="icon-text">售后</text>
       </view>
     </view>
   </view>
 
-  <!-- 功能菜单 -->
-  <view class="menu-section">
-    <view class="menu-item" bindtap="onMenuTap" data-url="/pages/distribution/center">
-      <text class="menu-icon">👥</text>
-      <text class="menu-title">分销中心</text>
-      <text class="menu-arrow">›</text>
+  <!-- 5. My Tools Grid -->
+  <view class="section-card mb-safe">
+    <view class="card-header">
+      <text class="card-title">常用工具</text>
     </view>
-    <view class="menu-item" bindtap="onMenuTap" data-url="/pages/wallet/index">
-      <text class="menu-icon">💰</text>
-      <text class="menu-title">我的钱包</text>
-      <text class="menu-arrow">›</text>
+    <view class="tools-grid">
+      <view class="tool-item" bindtap="goTeam">
+        <text class="tool-icon text-blue">👥</text>
+        <text class="tool-text">我的团队</text>
+      </view>
+      <view class="tool-item" bindtap="goWallet">
+        <text class="tool-icon text-orange">💰</text>
+        <text class="tool-text">我的钱包</text>
+      </view>
+      <view class="tool-item" bindtap="goAddress">
+        <text class="tool-icon text-green">📍</text>
+        <text class="tool-text">地址管理</text>
+      </view>
+      <view class="tool-item" bindtap="onShowInvite">
+        <text class="tool-icon text-purple">🎁</text>
+        <text class="tool-text">邀请码</text>
+      </view>
+      <button class="tool-item share-btn" open-type="contact">
+        <text class="tool-icon text-pink">🎧</text>
+        <text class="tool-text">联系客服</text>
+      </button>
+      <view class="tool-item" bindtap="onSettingsTap">
+        <text class="tool-icon text-gray">⚙️</text>
+        <text class="tool-text">设置</text>
+      </view>
     </view>
-    <view class="menu-item" bindtap="onMenuTap" data-url="/pages/address/list">
-      <text class="menu-icon">📍</text>
-      <text class="menu-title">收货地址</text>
-      <text class="menu-arrow">›</text>
-    </view>
-    <view class="menu-item" bindtap="onMenuTap" data-url="">
-      <text class="menu-icon">🎧</text>
-      <text class="menu-title">联系客服</text>
-      <text class="menu-arrow">›</text>
-    </view>
-    <view class="menu-item" bindtap="onMenuTap" data-url="">
-      <text class="menu-icon">ℹ️</text>
-      <text class="menu-title">关于我们</text>
-      <text class="menu-arrow">›</text>
+  </view>
+  
+  <!-- Invite Code Modal -->
+  <view class="invite-modal {{showInvite ? 'show' : ''}}" bindtap="hideInvite">
+    <view class="modal-content" catchtap="stopP">
+      <view class="modal-title">我的邀请码</view>
+      <view class="code-display" bindtap="copyInviteCode">{{inviteCode}}</view>
+      <view class="modal-tip">点击复制，分享给好友</view>
     </view>
   </view>
 
-  <!-- 底部信息 -->
-  <view class="footer">
-    <text>臻选 · 精选全球好物</text>
-    <text class="version">v1.0.0</text>
-  </view>
 </view>

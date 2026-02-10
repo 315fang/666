@@ -1,0 +1,237 @@
+/* pages/order/refund-apply.wxss */
+.container {
+  min-height: 100vh;
+  background: #F8FAFC;
+  padding: 24rpx;
+  padding-bottom: 160rpx;
+}
+
+.section-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #0F172A;
+  margin: 24rpx 0 16rpx;
+}
+
+.type-group {
+  display: flex;
+  gap: 20rpx;
+}
+
+.type-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: #fff;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  border: 2rpx solid #E2E8F0;
+  transition: all 0.2s;
+}
+
+.type-item.active {
+  border-color: #0F172A;
+  background: #F8FAFC;
+}
+
+.type-info {
+  margin-left: 16rpx;
+}
+
+.type-name {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #0F172A;
+  display: block;
+}
+
+.type-desc {
+  font-size: 22rpx;
+  color: #94A3B8;
+  display: block;
+  margin-top: 4rpx;
+}
+
+.order-card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin: 16rpx 0;
+}
+
+.order-product {
+  display: flex;
+  align-items: center;
+}
+
+.product-img {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 12rpx;
+  background: #F1F5F9;
+  margin-right: 20rpx;
+}
+
+.product-info {
+  flex: 1;
+}
+
+.product-name {
+  font-size: 28rpx;
+  color: #0F172A;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.product-price {
+  font-size: 26rpx;
+  color: #64748B;
+}
+
+.picker-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  padding: 24rpx;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  color: #0F172A;
+}
+
+.picker-row .placeholder {
+  color: #94A3B8;
+}
+
+.picker-row .arrow {
+  color: #CBD5E1;
+  font-size: 32rpx;
+}
+
+.desc-input {
+  width: 100%;
+  min-height: 160rpx;
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  font-size: 28rpx;
+  color: #0F172A;
+  box-sizing: border-box;
+}
+
+.amount-row {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  padding: 24rpx;
+  border-radius: 12rpx;
+}
+
+.amount-symbol {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #0F172A;
+  margin-right: 8rpx;
+}
+
+.amount-input {
+  flex: 1;
+  font-size: 32rpx;
+  color: #0F172A;
+}
+
+.amount-max {
+  font-size: 22rpx;
+  color: #94A3B8;
+  flex-shrink: 0;
+}
+
+.submit-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20rpx 30rpx;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+  background: #fff;
+  box-shadow: 0 -4rpx 16rpx rgba(0,0,0,0.06);
+}
+
+.submit-btn {
+  background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%) !important;
+  color: #fff !important;
+  border-radius: 48rpx !important;
+  font-size: 30rpx !important;
+  padding: 24rpx 0 !important;
+  border: none !important;
+}
+
+.submit-btn.disabled {
+  opacity: 0.5;
+}
+
+/* 退货数量 */
+.qty-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  padding: 24rpx;
+  border-radius: 12rpx;
+}
+
+.qty-control {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+}
+
+.qty-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: #F1F5F9;
+  border-radius: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  color: #0F172A;
+}
+
+.qty-input {
+  width: 100rpx;
+  height: 64rpx;
+  text-align: center;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #0F172A;
+  background: #F8FAFC;
+  border-radius: 12rpx;
+}
+
+.qty-hint {
+  font-size: 24rpx;
+  color: #94A3B8;
+}
+
+.refund-qty-tip {
+  font-size: 22rpx;
+  color: #F97316;
+  padding: 12rpx 0 0;
+}
+
+.refund-only-tip {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  background: #FFF7ED;
+  padding: 16rpx 20rpx;
+  border-radius: 10rpx;
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  color: #92400E;
+}
+
+.tip-icon {
+  font-size: 28rpx;
+}

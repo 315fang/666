@@ -1,0 +1,164 @@
+/* pages/order/refund-list.wxss */
+.container {
+  min-height: 100vh;
+  background: #F8FAFC;
+}
+
+.refund-list {
+  height: 100vh;
+  padding: 24rpx;
+}
+
+.refund-card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 8rpx rgba(15,23,42,0.04);
+}
+
+.refund-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+  padding-bottom: 16rpx;
+  border-bottom: 1rpx solid #F1F5F9;
+}
+
+.refund-type {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #0F172A;
+}
+
+.refund-status {
+  font-size: 24rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+}
+
+.status-pending { background: #FFF7ED; color: #F97316; }
+.status-approved { background: #EEF2FF; color: #4F46E5; }
+.status-rejected { background: #FEF2F2; color: #EF4444; }
+.status-processing { background: #FFF7ED; color: #F97316; }
+.status-completed { background: #ECFDF5; color: #10B981; }
+.status-cancelled { background: #F1F5F9; color: #94A3B8; }
+
+.refund-product {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.product-img {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 12rpx;
+  background: #F1F5F9;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.product-img.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22rpx;
+  color: #CBD5E1;
+}
+
+.product-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.product-name {
+  font-size: 28rpx;
+  color: #0F172A;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-order {
+  font-size: 22rpx;
+  color: #94A3B8;
+  display: block;
+  margin-top: 6rpx;
+}
+
+.refund-amount {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #EF4444;
+  flex-shrink: 0;
+}
+
+.refund-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #F8FAFC;
+}
+
+.refund-no {
+  font-size: 22rpx;
+  color: #94A3B8;
+}
+
+.btn-cancel {
+  font-size: 24rpx;
+  color: #64748B;
+  padding: 8rpx 24rpx;
+  border: 1rpx solid #E2E8F0;
+  border-radius: 24rpx;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 200rpx;
+}
+
+.empty-icon {
+  font-size: 100rpx;
+  margin-bottom: 20rpx;
+  opacity: 0.4;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #94A3B8;
+}
+
+.load-more {
+  text-align: center;
+  padding: 30rpx;
+  font-size: 24rpx;
+  color: #94A3B8;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 30rpx;
+  gap: 12rpx;
+}
+
+.loading-spinner {
+  width: 32rpx;
+  height: 32rpx;
+  border: 4rpx solid #E2E8F0;
+  border-top-color: #0F172A;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

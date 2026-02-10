@@ -6,6 +6,8 @@ Page({
         directCount: 0,
         indirectCount: 0,
         totalCount: 0,
+        totalSales: '0.00',
+        monthlyNewMembers: 0,
         members: [],
         currentTab: 'direct',
         page: 1,
@@ -22,11 +24,13 @@ Page({
     async loadStats() {
         try {
             const res = await get('/distribution/stats');
-            const { team } = res.data;
+            const { team, stats } = res.data;
             this.setData({
                 directCount: team.directCount,
                 indirectCount: team.indirectCount,
-                totalCount: team.totalCount
+                totalCount: team.totalCount,
+                monthlyNewMembers: team.monthlyNewMembers || 0,
+                totalSales: stats ? stats.totalEarnings : '0.00'
             });
         } catch (err) {
             console.error('加载统计失败:', err);
@@ -49,7 +53,8 @@ Page({
             const list = res.data.list.map(item => ({
                 ...item,
                 joined_at_format: item.joined_at ? item.joined_at.split('T')[0] : '',
-                role_name: this.getRoleName(item.role_level)
+                role_name: this.getRoleName(item.role_level),
+                total_sales_format: item.total_sales ? parseFloat(item.total_sales).toFixed(2) : '0.00'
             }));
 
             this.setData({
