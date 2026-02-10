@@ -1,5 +1,6 @@
 // app.js - 小程序入口文件
 const { login } = require('./utils/auth');
+const { getApiBaseUrl } = require('./config/env');
 
 App({
     globalData: {
@@ -7,7 +8,7 @@ App({
         openid: null,
         token: null,
         isLoggedIn: false,
-        baseUrl: 'https://api.jxalk.cn/api' // 你的服务器后端地址
+        baseUrl: getApiBaseUrl() // 从环境配置读取
     },
 
     onLaunch(options) {
