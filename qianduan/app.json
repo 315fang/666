@@ -15,6 +15,7 @@
         "pages/address/edit",
         "pages/distribution/center",
         "pages/distribution/team",
+        "pages/distribution/invite",
         "pages/distribution/workbench",
         "pages/distribution/restock",
         "pages/distribution/stock-logs",

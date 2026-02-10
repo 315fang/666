@@ -73,6 +73,33 @@ Page({
         this.loadCommissionLogs();
         this.loadLatestNotifications();
         this.loadAgentData();
+
+        // 如果用户没有上级，且没有提示过，显示提示
+        const hasShownInviteTip = wx.getStorageSync('hasShownInviteTip');
+        if (!this.data.hasParent && !hasShownInviteTip) {
+            setTimeout(() => {
+                this.showInviteTip();
+            }, 800);
+        }
+    },
+
+    // 显示邀请码提示
+    showInviteTip() {
+        if (this.data.hasParent) return;
+
+        wx.showModal({
+            title: '👋 欢迎加入',
+            content: '填写邀请人的邀请码，加入团队一起赚收益吧！\n\n没有邀请码？跳过后也可随时填写。',
+            confirmText: '填写邀请码',
+            cancelText: '暂时跳过',
+            success: (res) => {
+                if (res.confirm) {
+                    this.onBindInviteTap();
+                }
+                // 标记已提示过
+                wx.setStorageSync('hasShownInviteTip', true);
+            }
+        });
     },
 
     // 切换标签
@@ -346,6 +373,11 @@ Page({
                 wx.showToast({ title: '邀请码已复制', icon: 'success' });
             }
         });
+    },
+
+    // 跳转到邀请页面（简化分享流程）
+    onInviteTap() {
+        wx.navigateTo({ url: '/pages/distribution/invite' });
     },
 
     // 分享邀请

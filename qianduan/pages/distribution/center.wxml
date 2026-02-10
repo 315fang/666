@@ -61,10 +61,10 @@
       <view class="menu-text">退货管理</view>
       <view class="menu-sub">售后处理</view>
     </view>
-    <button class="menu-item share-menu-btn" open-type="share">
+    <button class="menu-item share-menu-btn" bindtap="onInviteTap">
       <view class="menu-icon code-icon">📷</view>
       <view class="menu-text">邀请好友</view>
-      <view class="menu-sub">分享赚钱</view>
+      <view class="menu-sub">简单分享</view>
     </button>
   </view>
 

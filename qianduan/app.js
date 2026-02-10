@@ -57,8 +57,8 @@ App({
         }
     },
 
-    // 微信登录
-    async wxLogin(distributorId = null) {
+    // 微信登录（支持静默登录和授权登录）
+    async wxLogin(distributorId = null, withProfile = false) {
         try {
             // 获取缓存的推荐人ID
             if (!distributorId) {
@@ -69,14 +69,33 @@ App({
             const { code } = await this.promisify(wx.login)();
             console.log('获取到 code:', code);
 
-            // 2. 发送给后端换取用户信息
+            // 2. 如果需要用户资料，调用 getUserProfile
+            let profileData = {};
+            if (withProfile) {
+                try {
+                    const profile = await this.promisify(wx.getUserProfile)({
+                        desc: '用于完善会员资料'
+                    });
+                    profileData = {
+                        nickName: profile.userInfo.nickName,
+                        avatarUrl: profile.userInfo.avatarUrl
+                    };
+                    console.log('获取用户资料成功:', profileData);
+                } catch (err) {
+                    console.log('用户取消授权或获取资料失败:', err);
+                    // 不阻断登录流程
+                }
+            }
+
+            // 3. 发送给后端换取用户信息
             const result = await login({
                 code,
-                distributor_id: distributorId // 分销员邀请码
+                distributor_id: distributorId,
+                ...profileData // 携带用户资料（如果有）
             });
 
             if (result.success) {
-                // 3. 保存用户信息和 Token
+                // 4. 保存用户信息和 Token
                 this.globalData.userInfo = result.userInfo;
                 this.globalData.openid = result.openid;
                 this.globalData.token = result.token;

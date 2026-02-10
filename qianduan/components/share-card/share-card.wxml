@@ -1,0 +1,68 @@
+<!-- 分享卡片组件 -->
+<view class="share-card">
+  <!-- 标题 -->
+  <view class="share-header">
+    <text class="share-title">{{title}}</text>
+    <text class="share-desc">{{description}}</text>
+  </view>
+
+  <!-- 邀请码显示 -->
+  <view class="invite-code-section">
+    <view class="invite-label">我的邀请码</view>
+    <view class="invite-code-box" bindtap="onCopyInviteCode">
+      <text class="invite-code">{{inviteCode}}</text>
+      <text class="copy-icon">📋</text>
+    </view>
+  </view>
+
+  <!-- QR码展示 -->
+  <view wx:if="{{showQRCode}}" class="qr-section">
+    <view class="qr-label">分享小程序码</view>
+    <view class="qr-container">
+      <!-- 小程序码 canvas 或 image -->
+      <canvas
+        wx:if="{{qrCodeType === 'canvas'}}"
+        canvas-id="shareQRCode"
+        class="qr-canvas"
+        style="width: {{qrSize}}px; height: {{qrSize}}px;"
+      />
+      <image
+        wx:else
+        src="{{qrCodeUrl}}"
+        class="qr-image"
+        mode="aspectFit"
+      />
+    </view>
+    <text class="qr-tip">长按保存或分享给好友</text>
+  </view>
+
+  <!-- 操作按钮 -->
+  <view class="action-buttons">
+    <button
+      wx:if="{{showCopyLink}}"
+      class="action-btn btn-copy"
+      bindtap="onCopyLink"
+    >
+      🔗 复制邀请链接
+    </button>
+    <button
+      wx:if="{{showShare}}"
+      class="action-btn btn-share"
+      open-type="share"
+    >
+      📤 分享给好友
+    </button>
+    <button
+      wx:if="{{showSaveQR}}"
+      class="action-btn btn-save"
+      bindtap="onSaveQRCode"
+    >
+      💾 保存小程序码
+    </button>
+  </view>
+
+  <!-- 额外提示 -->
+  <view wx:if="{{tip}}" class="share-tip">
+    <text>💡 {{tip}}</text>
+  </view>
+</view>
