@@ -1,7 +1,7 @@
 <template>
   <el-container class="layout-container">
     <el-aside width="220px" class="sidebar">
-      <div class="logo">臻选管理后台</div>
+      <div class="logo">臻选 S2B2C 后台</div>
       <el-menu
         :default-active="activeMenu"
         background-color="#304156"
