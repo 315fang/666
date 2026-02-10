@@ -3,8 +3,6 @@
  * 统一处理请求头、错误处理、Loading 等
  */
 
-const app = getApp();
-
 // 请求配置
 const config = {
     // 你的服务器后端地址
