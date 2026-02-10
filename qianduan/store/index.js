@@ -2,7 +2,7 @@
  * 全局状态管理
  * 管理用户信息、购物车等全局状态
  */
-const { createStore } = require('./store.js');
+const { createStore } = require('../utils/store.js');
 const { USER_ROLES } = require('../config/constants.js');
 
 // 创建全局 store
