@@ -57,34 +57,99 @@ Page({
         }
     },
 
-    // 支付订单（模拟支付）
+    // 支付订单
+    // TODO: 集成微信支付 - 生产环境需要替换为真实的微信支付流程
     async onPayOrder() {
         const { order } = this.data;
 
+        // 生产环境集成步骤：
+        // 1. 向后端请求预支付订单：POST /orders/{id}/prepay
+        // 2. 后端调用微信统一下单接口，返回支付参数
+        // 3. 调用 wx.requestPayment 发起支付
+        // 4. 根据支付结果更新订单状态
+
+        // 当前为模拟支付环境
         wx.showModal({
             title: '确认支付',
-            content: `确认支付 ¥${order.total_amount}？\n(当前为模拟支付，不会真实扣款)`,
+            content: `确认支付 ¥${order.total_amount}？\n\n⚠️ 当前为模拟支付环境，不会真实扣款\n生产环境请集成微信支付`,
             success: async (res) => {
                 if (res.confirm) {
-                    try {
-                        wx.showLoading({ title: '支付中...' });
-                        const payRes = await post(`/orders/${order.id}/pay`);
-                        wx.hideLoading();
-
-                        if (payRes.code === 0) {
-                            wx.showToast({ title: '支付成功！', icon: 'success' });
-                            this.loadOrder(order.id);
-                        } else {
-                            wx.showToast({ title: payRes.message || '支付失败', icon: 'none' });
-                        }
-                    } catch (err) {
-                        wx.hideLoading();
-                        wx.showToast({ title: '支付失败', icon: 'none' });
-                    }
+                    // 模拟支付流程
+                    await this.mockPayment(order);
                 }
             }
         });
     },
+
+    // 模拟支付 - 生产环境替换为真实微信支付
+    async mockPayment(order) {
+        try {
+            wx.showLoading({ title: '支付中...' });
+
+            // 模拟支付API调用
+            const payRes = await post(`/orders/${order.id}/pay`);
+            wx.hideLoading();
+
+            if (payRes.code === 0) {
+                wx.showToast({ title: '支付成功！', icon: 'success' });
+                this.loadOrder(order.id);
+            } else {
+                wx.showToast({ title: payRes.message || '支付失败', icon: 'none' });
+            }
+        } catch (err) {
+            wx.hideLoading();
+            wx.showToast({ title: '支付失败', icon: 'none' });
+        }
+    },
+
+    // 真实微信支付实现示例（生产环境启用）
+    // async realWeChatPayment(order) {
+    //     try {
+    //         wx.showLoading({ title: '正在拉起支付...' });
+    //
+    //         // 1. 向后端请求预支付参数
+    //         const prepayRes = await post(`/orders/${order.id}/prepay`);
+    //
+    //         if (prepayRes.code !== 0) {
+    //             throw new Error(prepayRes.message || '获取支付参数失败');
+    //         }
+    //
+    //         const paymentParams = prepayRes.data; // 后端返回的支付参数
+    //
+    //         // 2. 调起微信支付
+    //         await wx.requestPayment({
+    //             timeStamp: paymentParams.timeStamp,
+    //             nonceStr: paymentParams.nonceStr,
+    //             package: paymentParams.package,
+    //             signType: paymentParams.signType || 'RSA',
+    //             paySign: paymentParams.paySign
+    //         });
+    //
+    //         wx.hideLoading();
+    //
+    //         // 3. 支付成功处理
+    //         wx.showToast({ title: '支付成功', icon: 'success' });
+    //
+    //         // 4. 刷新订单状态
+    //         setTimeout(() => {
+    //             this.loadOrder(order.id);
+    //         }, 1500);
+    //
+    //     } catch (err) {
+    //         wx.hideLoading();
+    //
+    //         // 处理支付错误
+    //         if (err.errMsg) {
+    //             if (err.errMsg.indexOf('cancel') > -1) {
+    //                 wx.showToast({ title: '已取消支付', icon: 'none' });
+    //             } else if (err.errMsg.indexOf('fail') > -1) {
+    //                 wx.showToast({ title: '支付失败，请重试', icon: 'none' });
+    //             }
+    //         } else {
+    //             wx.showToast({ title: err.message || '支付异常', icon: 'none' });
+    //         }
+    //     }
+    // },
 
     // 确认收货
     async onConfirmReceive() {

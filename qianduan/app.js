@@ -1,5 +1,4 @@
 // app.js - 小程序入口文件
-const { login } = require('./utils/auth');
 
 App({
     globalData: {
@@ -69,6 +68,8 @@ App({
             console.log('获取到 code:', code);
 
             // 2. 发送给后端换取用户信息
+            // 动态导入 auth 模块，避免循环依赖
+            const { login } = require('./utils/auth');
             const result = await login({
                 code,
                 distributor_id: distributorId // 分销员邀请码

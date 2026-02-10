@@ -8,6 +8,7 @@
         "pages/order/list",
         "pages/order/detail",
         "pages/order/confirm",
+        "pages/order/logistics",
         "pages/order/refund-apply",
         "pages/order/refund-list",
         "pages/order/refund-detail",
@@ -20,6 +21,7 @@
         "pages/distribution/stock-logs",
         "pages/wallet/index",
         "pages/user/notifications",
+        "pages/user/preferences",
         "pages/search/search"
     ],
     "tabBar": {

@@ -155,19 +155,114 @@ Page({
     // 阻止滑动穿透
     preventMove() { },
 
-    // 选择SKU (Renamed to match WXML: onSpecSelect)
+    // 选择SKU规格
+    // 增强的SKU选择逻辑，支持多规格组合
     onSpecSelect(e) {
-        // Since we don't have full spec logic here, we'll just log it or select if simple
-        // For now assuming simple sku selection logic or placeholder
-        const { key, val } = e.currentTarget.dataset;
-        // In a real app, you'd filter valid SKUs based on selection.
-        // For this fix, let's just highlight it.
-        const selectedSpecs = this.data.selectedSpecs || {};
-        selectedSpecs[key] = val;
-        this.setData({ selectedSpecs });
-        
-        // Try to find matching SKU
-        // ... (Logic skipped for brevity, assuming backend returns SKUs)
+        const { key, value } = e.currentTarget.dataset;
+
+        if (!key || !value) {
+            console.error('规格选择参数错误', { key, value });
+            return;
+        }
+
+        // 更新选中的规格
+        const selectedSpecs = { ...this.data.selectedSpecs };
+        selectedSpecs[key] = value;
+
+        // 查找匹配的SKU
+        const matchedSku = this.findMatchingSku(selectedSpecs);
+
+        if (matchedSku) {
+            // 找到匹配的SKU
+            this.setData({
+                selectedSpecs,
+                selectedSku: matchedSku,
+                displayPrice: matchedSku.retail_price || matchedSku.price || this.data.product.displayPrice,
+                quantity: Math.min(this.data.quantity, matchedSku.stock || 999)
+            });
+
+            // 如果库存不足，提示用户
+            if (matchedSku.stock <= 0) {
+                wx.showToast({
+                    title: '该规格已售罄',
+                    icon: 'none'
+                });
+            }
+        } else {
+            // 没有找到匹配的SKU，仅更新选中状态
+            this.setData({
+                selectedSpecs,
+                selectedSku: null
+            });
+
+            // 检查是否所有规格都已选择
+            const product = this.data.product;
+            const allSpecsSelected = product.specs && product.specs.every(spec =>
+                selectedSpecs[spec.name]
+            );
+
+            if (allSpecsSelected) {
+                wx.showToast({
+                    title: '该规格组合无货',
+                    icon: 'none'
+                });
+            }
+        }
+    },
+
+    // 查找匹配的SKU
+    // 根据选中的规格组合查找对应的SKU
+    findMatchingSku(selectedSpecs) {
+        const { product } = this.data;
+
+        if (!product.skus || product.skus.length === 0) {
+            return null;
+        }
+
+        // 单规格产品：直接返回第一个SKU
+        if (product.skus.length === 1) {
+            return product.skus[0];
+        }
+
+        // 多规格产品：根据规格组合匹配
+        return product.skus.find(sku => {
+            // 检查SKU的规格值是否与选中的规格完全匹配
+            if (!sku.specs) return false;
+
+            // 确保所有选中的规格都匹配
+            return Object.keys(selectedSpecs).every(specName => {
+                const selectedValue = selectedSpecs[specName];
+                const skuSpecValue = sku.specs[specName];
+                return skuSpecValue === selectedValue;
+            });
+        });
+    },
+
+    // 检查规格是否可选（库存检查）
+    // 用于在UI中禁用无库存的规格选项
+    isSpecValueAvailable(specName, specValue) {
+        const { product, selectedSpecs } = this.data;
+
+        if (!product.skus || product.skus.length === 0) {
+            return true;
+        }
+
+        // 构建临时规格组合（包含当前选择）
+        const tempSpecs = { ...selectedSpecs, [specName]: specValue };
+
+        // 检查是否有匹配的SKU且有库存
+        const hasStock = product.skus.some(sku => {
+            if (!sku.specs) return false;
+
+            // 检查是否匹配已选规格
+            const matches = Object.keys(tempSpecs).every(key => {
+                return sku.specs[key] === tempSpecs[key];
+            });
+
+            return matches && (sku.stock > 0);
+        });
+
+        return hasStock;
     },
 
     // 数量减少 (Renamed to match WXML: onMinus)
