@@ -22,6 +22,7 @@ const walletRoutes = require('./routes/wallet');
 const refundRoutes = require('./routes/refunds');
 const dealerRoutes = require('./routes/dealer');
 const agentRoutes = require('./routes/agent');
+const commissionRoutes = require('./routes/commissions');
 const adminRoutes = require('./routes/admin');
 
 const app = express();
@@ -114,6 +115,7 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/refunds', refundRoutes);
 app.use('/api/dealer', dealerRoutes);
 app.use('/api/agent', agentRoutes);
+app.use('/api/commissions', commissionRoutes);
 
 // 后台管理API (使用 /admin/api 避免与静态文件冲突)
 app.use('/admin/api', adminRoutes);
