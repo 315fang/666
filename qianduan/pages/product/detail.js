@@ -67,14 +67,55 @@ Page({
                 skus: product.skus || [],
                 selectedSku: (product.skus && product.skus.length > 0) ? product.skus[0] : null,
                 imageCount: product.images.length || 1,
-                roleLevel
+                roleLevel,
+                isAgent: roleLevel >= USER_ROLES.LEADER // 团长及以上可查看佣金
             });
+
+            // 加载佣金预览（如果用户是团长或代理商）
+            if (roleLevel >= USER_ROLES.LEADER) {
+                this.loadCommissionPreview();
+            }
 
             wx.hideLoading();
         } catch (err) {
             wx.hideLoading();
             wx.showToast({ title: '加载失败', icon: 'none' });
             console.error('加载商品详情失败:', err);
+        }
+    },
+
+    // 加载佣金预览
+    async loadCommissionPreview() {
+        try {
+            const { id, selectedSku, quantity } = this.data;
+            const params = {
+                product_id: id,
+                quantity: quantity || 1
+            };
+
+            if (selectedSku) {
+                params.sku_id = selectedSku.id;
+            }
+
+            const res = await get('/commissions/preview', params);
+
+            if (res.code === 0 && res.data) {
+                const data = res.data;
+
+                // 计算我可以获得的佣金
+                const myCommission = data.commissions
+                    .filter(c => c.level === 0 || c.level === 1)
+                    .reduce((sum, c) => sum + c.amount, 0);
+
+                this.setData({
+                    commission: myCommission.toFixed(2),
+                    commissionDetail: data,
+                    showCommissionTip: true
+                });
+            }
+        } catch (err) {
+            console.error('加载佣金预览失败:', err);
+            // 不影响主流程，静默失败
         }
     },
 
