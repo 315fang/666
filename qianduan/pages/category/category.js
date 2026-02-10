@@ -1,5 +1,6 @@
 // pages/category/category.js
 const { get, post } = require('../../utils/request');
+const { getFirstImage } = require('../../utils/image');
 
 Page({
     data: {
@@ -58,21 +59,9 @@ Page({
 
             // 处理商品数据，确保图片字段正确
             const newProducts = rawProducts.map(item => {
-                let images = [];
-                if (item.images) {
-                    if (typeof item.images === 'string') {
-                        try {
-                            images = JSON.parse(item.images);
-                        } catch (e) {
-                            images = [item.images];
-                        }
-                    } else if (Array.isArray(item.images)) {
-                        images = item.images;
-                    }
-                }
                 return {
                     ...item,
-                    image: images.length > 0 ? images[0] : '/assets/images/placeholder.svg',
+                    image: getFirstImage(item.images, '/assets/images/placeholder.svg'),
                     price: item.retail_price || item.price || 0
                 };
             });

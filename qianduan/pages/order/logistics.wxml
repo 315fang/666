@@ -1,0 +1,77 @@
+<!-- pages/order/logistics.wxml -->
+<view class="logistics-container">
+    <!-- Loading 状态 -->
+    <view wx:if="{{loading}}" class="loading-box">
+        <view class="loading-icon"></view>
+        <text class="loading-text">加载中...</text>
+    </view>
+
+    <!-- 主要内容 -->
+    <view wx:else class="content">
+        <!-- 物流状态卡片 -->
+        <view class="status-card">
+            <view class="status-header">
+                <view class="status-icon {{logisticsStatus}}"></view>
+                <view class="status-info">
+                    <text class="status-title">
+                        {{logisticsStatus === 'delivered' ? '已签收' : logisticsStatus === 'problem' ? '运输异常' : '运输中'}}
+                    </text>
+                    <text class="status-desc" wx:if="{{trackingInfo.length > 0}}">
+                        {{trackingInfo[0].status || trackingInfo[0].context}}
+                    </text>
+                    <text class="status-desc" wx:else>{{errorMessage || '暂无物流轨迹'}}</text>
+                </view>
+            </view>
+
+            <!-- 商品信息 -->
+            <view wx:if="{{product}}" class="product-info">
+                <image class="product-image" src="{{product.image}}" mode="aspectFill"></image>
+                <view class="product-details">
+                    <text class="product-name">{{product.name}}</text>
+                    <text class="product-quantity">x{{product.quantity}}</text>
+                </view>
+            </view>
+
+            <!-- 物流单号 -->
+            <view class="tracking-info">
+                <view class="tracking-row">
+                    <text class="tracking-label">物流公司:</text>
+                    <text class="tracking-value">{{courierCompany}}</text>
+                </view>
+                <view class="tracking-row">
+                    <text class="tracking-label">物流单号:</text>
+                    <text class="tracking-value">{{trackingNumber || '暂无'}}</text>
+                    <text class="copy-btn" wx:if="{{trackingNumber}}" bindtap="copyTrackingNumber">复制</text>
+                </view>
+            </view>
+        </view>
+
+        <!-- 物流轨迹 -->
+        <view class="tracking-timeline" wx:if="{{trackingInfo.length > 0}}">
+            <view class="timeline-title">物流轨迹</view>
+            <view class="timeline-list">
+                <view class="timeline-item {{index === 0 ? 'active' : ''}}" wx:for="{{trackingInfo}}" wx:key="index">
+                    <view class="timeline-dot"></view>
+                    <view class="timeline-content">
+                        <view class="timeline-status">{{item.status || item.context}}</view>
+                        <view class="timeline-time">{{item.time || item.ftime}}</view>
+                    </view>
+                </view>
+            </view>
+        </view>
+
+        <!-- 无物流信息提示 -->
+        <view class="empty-state" wx:if="{{error && trackingInfo.length === 0}}">
+            <image class="empty-icon" src="/assets/images/empty-logistics.png" mode="aspectFit"></image>
+            <text class="empty-text">{{errorMessage}}</text>
+        </view>
+
+        <!-- 操作按钮 -->
+        <view class="action-buttons" wx:if="{{courierPhone}}">
+            <button class="action-btn" bindtap="callCourier">
+                <text class="btn-icon">📞</text>
+                <text class="btn-text">联系快递</text>
+            </button>
+        </view>
+    </view>
+</view>
