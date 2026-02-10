@@ -195,10 +195,40 @@ function request(options) {
     });
 }
 
+// 登录刷新锁和队列
+let isRefreshingToken = false;
+let refreshSubscribers = [];
+
 /**
- * 登录过期处理
+ * Token 刷新成功后通知所有等待的请求
+ */
+function onTokenRefreshed() {
+    refreshSubscribers.forEach(callback => callback());
+    refreshSubscribers = [];
+}
+
+/**
+ * 添加等待 Token 刷新的请求到队列
+ */
+function addRefreshSubscriber(callback) {
+    refreshSubscribers.push(callback);
+}
+
+/**
+ * 登录过期处理（带防重复刷新机制）
  */
 function handleLoginExpired() {
+    // 如果正在刷新 token，直接返回
+    if (isRefreshingToken) {
+        return new Promise((resolve) => {
+            addRefreshSubscriber(() => {
+                resolve();
+            });
+        });
+    }
+
+    isRefreshingToken = true;
+
     // 清除本地登录信息
     wx.removeStorageSync('token');
     wx.removeStorageSync('openid');
@@ -206,7 +236,7 @@ function handleLoginExpired() {
 
     // 显示提示
     wx.showToast({
-        title: '登录已过期，请重新登录',
+        title: '登录已过期，正在重新登录...',
         icon: 'none',
         duration: 2500
     });
@@ -214,11 +244,19 @@ function handleLoginExpired() {
     // 尝试自动重新登录
     const appInstance = getApp();
     if (appInstance && appInstance.wxLogin) {
-        setTimeout(() => {
-            appInstance.wxLogin().catch(() => {
-                // 自动登录失败，不需要额外处理
+        return appInstance.wxLogin()
+            .then(() => {
+                isRefreshingToken = false;
+                onTokenRefreshed();
+            })
+            .catch((error) => {
+                isRefreshingToken = false;
+                refreshSubscribers = [];
+                console.error('自动登录失败:', error);
             });
-        }, 1000);
+    } else {
+        isRefreshingToken = false;
+        return Promise.reject(new Error('无法自动登录'));
     }
 }
 
