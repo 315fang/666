@@ -1,5 +1,7 @@
 const { Product, Category, SKU, Material } = require('../models');
 const { Op } = require('sequelize');
+const PricingService = require('../services/PricingService');
+const CacheService = require('../services/CacheService');
 
 /**
  * 获取商品列表
@@ -26,10 +28,24 @@ async function getProducts(req, res, next) {
             limit: parseInt(limit)
         });
 
+        // 获取用户角色，计算动态价格
+        const roleLevel = req.user ? req.user.role_level : 0;
+
+        // 为每个商品添加动态价格
+        const productsWithPrice = rows.map(product => {
+            const plainProduct = product.toJSON();
+            plainProduct.displayPrice = PricingService.calculateDisplayPrice(
+                plainProduct,
+                null,
+                roleLevel
+            );
+            return plainProduct;
+        });
+
         res.json({
             code: 0,
             data: {
-                list: rows,
+                list: productsWithPrice,
                 pagination: {
                     total: count,
                     page: parseInt(page),
@@ -50,6 +66,24 @@ async function getProductById(req, res, next) {
     try {
         const { id } = req.params;
 
+        // 尝试从缓存获取
+        const cached = await CacheService.getProduct(id);
+        if (cached) {
+            // 即使有缓存，也要根据当前用户角色计算价格
+            const roleLevel = req.user ? req.user.role_level : 0;
+            cached.displayPrice = PricingService.calculateDisplayPrice(
+                cached,
+                null,
+                roleLevel
+            );
+
+            return res.json({
+                code: 0,
+                data: cached,
+                source: 'cache'
+            });
+        }
+
         const product = await Product.findByPk(id, {
             include: [
                 { model: Category, as: 'category' },
@@ -65,9 +99,31 @@ async function getProductById(req, res, next) {
             });
         }
 
+        const plainProduct = product.toJSON();
+
+        // 计算动态价格
+        const roleLevel = req.user ? req.user.role_level : 0;
+        plainProduct.displayPrice = PricingService.calculateDisplayPrice(
+            plainProduct,
+            null,
+            roleLevel
+        );
+
+        // 为每个SKU也计算动态价格
+        if (plainProduct.skus && plainProduct.skus.length > 0) {
+            plainProduct.skus = plainProduct.skus.map(sku => ({
+                ...sku,
+                displayPrice: PricingService.calculateDisplayPrice(plainProduct, sku, roleLevel)
+            }));
+        }
+
+        // 缓存商品信息（30分钟）
+        await CacheService.cacheProduct(id, plainProduct, CacheService.TTL.LONG);
+
         res.json({
             code: 0,
-            data: product
+            data: plainProduct,
+            source: 'database'
         });
     } catch (error) {
         next(error);
