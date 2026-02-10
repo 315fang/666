@@ -135,6 +135,31 @@ Page({
         }
     },
 
+    // 点击用户名触发登录/授权
+    async onLoginTap() {
+        // 如果已登录且有完整信息，不做处理
+        if (this.data.hasUserInfo && this.data.userInfo && this.data.userInfo.nickname) {
+            return;
+        }
+
+        // 如果未登录或信息不完整，引导用户授权
+        try {
+            wx.showModal({
+                title: '完善个人信息',
+                content: '为了更好地为您服务，需要获取您的微信头像和昵称',
+                confirmText: '去授权',
+                cancelText: '取消',
+                success: async (res) => {
+                    if (res.confirm) {
+                        await this.onLogin();
+                    }
+                }
+            });
+        } catch (err) {
+            console.error('授权提示失败:', err);
+        }
+    },
+
     // ======== 修改昵称 ========
     onEditNickname() {
         this.setData({

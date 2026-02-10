@@ -50,8 +50,10 @@ App({
                 return;
             }
 
-            // 没有缓存，执行微信登录
-            await this.wxLogin();
+            // 没有缓存，执行静默微信登录（不收集用户资料）
+            // 用户首次登录时，会在个人中心页面看到"立即登录"按钮
+            // 点击该按钮会调用 wxLogin(null, true) 来收集资料
+            await this.wxLogin(null, false);
         } catch (err) {
             console.error('自动登录失败:', err);
         }
