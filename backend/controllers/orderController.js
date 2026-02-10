@@ -2,6 +2,7 @@ const { Order, Product, SKU, User, Cart, CommissionLog, Address, Notification, s
 const { sendNotification } = require('../models/notificationUtil');
 const { Op } = require('sequelize');
 const constants = require('../config/constants');
+const { logOrder, logCommission, error: logError } = require('../utils/logger');
 
 // 自增序列（进程内唯一），防止同毫秒碰撞
 let _orderSeq = 0;
@@ -198,6 +199,17 @@ const createOrder = async (req, res) => {
 
         await t.commit();
 
+        // Log order creation
+        logOrder('订单创建', {
+            userId,
+            orderIds: orders.map(o => o.id),
+            orderNos: orders.map(o => o.order_no),
+            totalAmount: orders.reduce((sum, o) => sum + parseFloat(o.total_amount), 0),
+            splitOrders: orders.length > 1,
+            agentQuantity,
+            platformQuantity
+        });
+
         res.json({
             code: 0,
             data: orders.length === 1 ? orders[0] : orders,
@@ -205,6 +217,11 @@ const createOrder = async (req, res) => {
         });
     } catch (error) {
         await t.rollback();
+        logError('ORDER', '创建订单失败', {
+            error: error.message,
+            stack: error.stack,
+            userId: req.user?.id
+        });
         console.error('创建订单失败:', error);
         res.status(500).json({ code: -1, message: '创建订单失败' });
     }
@@ -296,6 +313,16 @@ const payOrder = async (req, res) => {
 
         await t.commit();
 
+        // Log payment
+        logOrder('订单支付', {
+            userId,
+            orderId: order.id,
+            orderNo: order.order_no,
+            amount: parseFloat(order.total_amount),
+            childOrders: childOrders.length,
+            userUpgraded: buyer.role_level === constants.ROLES.MEMBER
+        });
+
         const allOrders = [order, ...childOrders];
         res.json({
             code: 0,
@@ -304,6 +331,12 @@ const payOrder = async (req, res) => {
         });
     } catch (error) {
         await t.rollback();
+        logError('ORDER', '支付订单失败', {
+            error: error.message,
+            stack: error.stack,
+            userId: req.user?.id,
+            orderId: req.params?.id
+        });
         console.error('支付订单失败:', error);
         res.status(500).json({ code: -1, message: '支付失败' });
     }
@@ -500,10 +533,18 @@ const settleCommissions = async () => {
         }
 
         if (settledCount > 0) {
+            logCommission('佣金结算完成', {
+                settledCount,
+                totalAmount: approvedLogs.reduce((sum, log) => sum + parseFloat(log.amount), 0)
+            });
             console.log(`[定时任务] 佣金结算完成：${settledCount} 条记录`);
         }
         return settledCount;
     } catch (error) {
+        logError('COMMISSION', '佣金结算查询失败', {
+            error: error.message,
+            stack: error.stack
+        });
         console.error('佣金结算查询失败:', error);
         return 0;
     }
