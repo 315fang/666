@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
+const { requestLogger, errorTracker } = require('./utils/logger');
 const constants = require('./config/constants');
 
 // 导入路由
@@ -35,11 +36,17 @@ const corsOptions = {
         : '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-openid'],
-    credentials: true
+    // 只有在配置了具体origin时才启用credentials
+    credentials: process.env.CORS_ORIGINS ? true : false
 };
 app.use(cors(corsOptions));
 app.use(bodyParser.json({ limit: constants.SECURITY.BODY_SIZE_LIMIT }));
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// Request logging middleware
+if (process.env.NODE_ENV !== 'test') {
+    app.use(requestLogger);
+}
 
 // ★ 安全头中间件（防 XSS、点击劫持等）
 app.use((req, res, next) => {
@@ -84,7 +91,14 @@ app.use((req, res, next) => {
 app.use('/admin', express.static(path.join(__dirname, 'admin-ui/dist')));
 
 // ★ 静态文件 - 本地上传目录（图片等资源）
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// 添加缓存控制和安全headers
+app.use('/uploads', (req, res, next) => {
+    // 设置缓存策略：公开缓存30天
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    // 防止MIME类型嗅探
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    next();
+}, express.static(path.join(__dirname, 'uploads')));
 
 // 根目录重定向到管理后台
 app.get('/', (req, res) => {
@@ -134,6 +148,9 @@ app.get('/health', (req, res) => {
 
 // 404处理
 app.use(notFound);
+
+// Error tracking middleware
+app.use(errorTracker);
 
 // 错误处理
 app.use(errorHandler);

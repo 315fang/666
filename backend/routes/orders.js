@@ -6,9 +6,10 @@ const {
     agentConfirmOrder, requestShipping, settleCommissions, getAgentOrders
 } = require('../controllers/orderController');
 const { authenticate } = require('../middleware/auth');
+const { validate, schemas } = require('../middleware/validation');
 
 // POST /api/orders - 创建订单
-router.post('/orders', authenticate, createOrder);
+router.post('/orders', authenticate, validate(schemas.createOrder), createOrder);
 
 // GET /api/orders - 获取订单列表
 router.get('/orders', authenticate, getOrders);

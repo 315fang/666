@@ -3,6 +3,7 @@ const { User } = require('../models');
 const { code2Session } = require('../utils/wechat');
 const { checkRoleUpgrade } = require('../utils/commission');
 const constants = require('../config/constants');
+const { logAuth, error: logError } = require('../utils/logger');
 
 // 生成用户 JWT Token
 function generateUserToken(user) {
@@ -91,12 +92,14 @@ async function login(req, res, next) {
         if (user) {
             // 用户已存在，更新最后登录时间
             await user.update({ last_login: new Date() });
-            
+
             // 老用户如果没有邀请码，补生成一个
             if (!user.invite_code) {
                 const inviteCode = await generateUniqueInviteCode();
                 await user.update({ invite_code: inviteCode });
             }
+
+            logAuth('用户登录', { userId: user.id, openid: user.openid });
         } else {
             // 用户不存在，创建新用户
             const inviteCode = await generateUniqueInviteCode();
@@ -139,6 +142,13 @@ async function login(req, res, next) {
             user = await User.findByPk(user.id, {
                 include: [{ model: User, as: 'parent' }]
             });
+
+            logAuth('新用户注册', {
+                userId: user.id,
+                openid: user.openid,
+                parentId: parentUser ? parentUser.id : null,
+                hasParent: !!parentUser
+            });
         }
 
         // 签发 JWT Token
@@ -161,6 +171,10 @@ async function login(req, res, next) {
             }
         });
     } catch (error) {
+        logError('AUTH', '登录失败', {
+            error: error.message,
+            stack: error.stack
+        });
         next(error);
     }
 }

@@ -3,9 +3,11 @@
  * 统一处理请求头、错误处理、Loading、重试等
  */
 
+const { getApiBaseUrl, isLogEnabled } = require('../config/env');
+
 // 请求配置
 const config = {
-    baseUrl: 'https://api.jxalk.cn/api',
+    baseUrl: getApiBaseUrl(), // 从环境配置读取
     timeout: 15000,
     maxRetries: 1, // 最大重试次数
     retryDelay: 1000 // 重试延迟（毫秒）
