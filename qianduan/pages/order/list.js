@@ -1,5 +1,8 @@
 // pages/order/list.js
 const { get, post } = require('../../utils/request');
+const { ORDER_STATUS, ORDER_STATUS_TEXT } = require('../../config/constants');
+const { parseImages } = require('../../utils/dataFormatter');
+const { ErrorHandler } = require('../../utils/errorHandler');
 
 Page({
     data: {
@@ -8,17 +11,7 @@ Page({
         loading: false,
         hasMore: true,
         page: 1,
-        limit: 10,
-        statusText: {
-            pending: '待付款',
-            paid: '待发货',
-            agent_confirmed: '代理已确认',
-            shipping_requested: '待平台发货',
-            shipped: '待收货',
-            completed: '已完成',
-            cancelled: '已取消',
-            refunding: '退款中'
-        }
+        limit: 10
     },
 
     onLoad(options) {
@@ -56,15 +49,13 @@ Page({
             const res = await get('/orders', params);
             let newOrders = res.data?.list || res.data || [];
 
-            // 处理每个订单的商品图片（后端为单商品订单模式）
+            // 使用工具函数处理订单图片
             newOrders = newOrders.map(order => {
-                if (order.product && typeof order.product.images === 'string') {
-                    try {
-                        order.product.images = JSON.parse(order.product.images);
-                    } catch (e) {
-                        order.product.images = order.product.images ? [order.product.images] : [];
-                    }
+                if (order.product && order.product.images) {
+                    order.product.images = parseImages(order.product.images);
                 }
+                // 添加状态文本
+                order.statusText = ORDER_STATUS_TEXT[order.status] || '未知状态';
                 return order;
             });
 
@@ -74,7 +65,9 @@ Page({
                 loading: false
             });
         } catch (err) {
-            console.error('加载订单失败:', err);
+            ErrorHandler.handle(err, {
+                customMessage: '加载订单失败，请稍后重试'
+            });
             this.setData({ loading: false });
         }
     },

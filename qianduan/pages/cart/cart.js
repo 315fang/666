@@ -1,5 +1,7 @@
 // pages/cart/cart.js
 const { get, post, put, del } = require('../../utils/request');
+const { parseImages, getFirstImage, formatMoney } = require('../../utils/dataFormatter');
+const { ErrorHandler, showError, showSuccess } = require('../../utils/errorHandler');
 
 Page({
     data: {
@@ -23,23 +25,10 @@ Page({
             // 后端返回 { items: [...], summary: {...} }
             const items = res.data?.items || res.data || [];
             const cartItems = (Array.isArray(items) ? items : []).map(item => {
-                // 处理商品图片 - 可能是字符串或数组
-                let productImages = [];
-                if (item.product?.images) {
-                    if (typeof item.product.images === 'string') {
-                        try {
-                            productImages = JSON.parse(item.product.images);
-                        } catch (e) {
-                            productImages = [item.product.images];
-                        }
-                    } else if (Array.isArray(item.product.images)) {
-                        productImages = item.product.images;
-                    }
-                }
-
-                // SKU图片优先
+                // 使用工具函数处理图片
+                const productImages = parseImages(item.product?.images);
                 const skuImage = item.sku?.image || null;
-                const firstImage = skuImage || (productImages.length > 0 ? productImages[0] : '');
+                const firstImage = skuImage || getFirstImage(item.product?.images);
 
                 return {
                     ...item,
@@ -47,9 +36,9 @@ Page({
                     // 获取价格：优先 SKU 价格，其次商品价格
                     price: parseFloat(item.sku?.retail_price || item.product?.retail_price || 0),
                     // 解析后的图片数组
-                    productImages: productImages,
+                    productImages,
                     // 第一张图片（用于显示）
-                    firstImage: firstImage,
+                    firstImage,
                     // 商品名称
                     productName: item.product?.name || '商品'
                 };
@@ -63,7 +52,9 @@ Page({
 
             this.calculateTotal();
         } catch (err) {
-            console.error('加载购物车失败:', err);
+            ErrorHandler.handle(err, {
+                customMessage: '加载购物车失败，请稍后重试'
+            });
             this.setData({ loading: false, cartItems: [] });
         }
     },
@@ -85,7 +76,7 @@ Page({
         const allSelected = cartItems.length > 0 && cartItems.every(item => item.selected);
 
         this.setData({
-            totalPrice: totalPrice.toFixed(2),
+            totalPrice: formatMoney(totalPrice),
             totalCount,
             selectAll: allSelected
         });
