@@ -50,6 +50,16 @@
     </view>
   </view>
 
+  <!-- 2.5 完善资料提示 (如果没有头像) -->
+  <view class="tip-card" wx:if="{{userInfo && !userInfo.avatar_url}}" bindtap="onGetUserProfile">
+    <view class="tip-icon">✨</view>
+    <view class="tip-content">
+      <text class="tip-title">完善资料，享受更多权益</text>
+      <text class="tip-desc">点击获取微信头像和昵称</text>
+    </view>
+    <text class="tip-arrow">›</text>
+  </view>
+
   <!-- 3. Agent Workbench Banner (Texture) -->
   <view class="banner-wrapper" wx:if="{{isAgent}}" bindtap="goWorkbench">
     <view class="agent-banner">
@@ -133,10 +143,14 @@
       </view>
       <view class="tool-item" bindtap="onShowInvite">
         <text class="tool-icon text-purple">🎁</text>
-        <text class="tool-text">邀请码</text>
+        <text class="tool-text">邀请好友</text>
       </view>
+      <button class="tool-item share-btn" open-type="share">
+        <text class="tool-icon text-pink">📤</text>
+        <text class="tool-text">分享赚钱</text>
+      </button>
       <button class="tool-item share-btn" open-type="contact">
-        <text class="tool-icon text-pink">🎧</text>
+        <text class="tool-icon text-teal">🎧</text>
         <text class="tool-text">联系客服</text>
       </button>
       <view class="tool-item" bindtap="onSettingsTap">
@@ -145,13 +159,29 @@
       </view>
     </view>
   </view>
-  
-  <!-- Invite Code Modal -->
+
+  <!-- Invite Code Modal (Enhanced) -->
   <view class="invite-modal {{showInvite ? 'show' : ''}}" bindtap="hideInvite">
     <view class="modal-content" catchtap="stopP">
-      <view class="modal-title">我的邀请码</view>
-      <view class="code-display" bindtap="copyInviteCode">{{inviteCode}}</view>
-      <view class="modal-tip">点击复制，分享给好友</view>
+      <view class="modal-title">邀请好友赚佣金</view>
+      <view class="code-display" bindtap="copyInviteCode">
+        <text class="code-label">我的邀请码</text>
+        <text class="code-value">{{inviteCode}}</text>
+        <text class="code-copy-hint">点击复制</text>
+      </view>
+      <view class="share-actions">
+        <button class="share-btn-primary" open-type="share">
+          <text class="btn-icon">📤</text>
+          <text>分享给微信好友</text>
+        </button>
+        <button class="share-btn-secondary" bindtap="onCopyShareLink">
+          <text class="btn-icon">🔗</text>
+          <text>复制分享链接</text>
+        </button>
+      </view>
+      <view class="modal-tip">
+        <text>💡 好友通过你的邀请注册，你将获得佣金奖励</text>
+      </view>
     </view>
   </view>
 

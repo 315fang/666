@@ -6,11 +6,18 @@ Page({
     data: {
         userInfo: null,
         isLoggedIn: false,
+        hasUserInfo: false,
         orderCounts: {
             pending: 0,
             paid: 0,
             shipped: 0,
             refund: 0
+        },
+        orderStats: {
+            pending: 0,
+            paid: 0,
+            shipped: 0,
+            completed: 0
         },
         distributionInfo: {
             totalEarnings: '0.00',
@@ -19,9 +26,17 @@ Page({
             role_level: 0,
             role_name: '普通用户'
         },
+        stats: {
+            frozenAmount: '0.00'
+        },
+        balance: '0.00',
+        teamCount: 0,
+        isAgent: false,
         notificationsCount: 0,
         showNicknameModal: false,
-        newNickname: ''
+        newNickname: '',
+        showInvite: false,
+        inviteCode: ''
     },
 
     onShow() {
@@ -31,7 +46,11 @@ Page({
     // 从服务端加载用户最新信息
     async loadUserInfo() {
         const isLoggedIn = app.globalData.isLoggedIn;
-        this.setData({ isLoggedIn });
+        const hasUserInfo = !!(app.globalData.userInfo && app.globalData.userInfo.openid);
+        this.setData({
+            isLoggedIn,
+            hasUserInfo
+        });
 
         if (!isLoggedIn) {
             this.setData({ userInfo: app.globalData.userInfo });
@@ -42,7 +61,12 @@ Page({
             const res = await get('/user/profile');
             if (res.code === 0 && res.data) {
                 const info = res.data;
-                this.setData({ userInfo: info });
+                this.setData({
+                    userInfo: info,
+                    hasUserInfo: true,
+                    inviteCode: info.invite_code || '',
+                    isAgent: info.role >= 3
+                });
                 app.globalData.userInfo = info;
                 wx.setStorageSync('userInfo', info);
             } else {
@@ -66,13 +90,24 @@ Page({
                 get('/orders', { status: 'pending', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
                 get('/orders', { status: 'paid', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
                 get('/orders', { status: 'shipped', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
+                get('/orders', { status: 'completed', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
                 get('/orders', { status: 'refunded', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } }))
             ]);
+            const pending = (results[0].data && results[0].data.pagination && results[0].data.pagination.total) || 0;
+            const paid = (results[1].data && results[1].data.pagination && results[1].data.pagination.total) || 0;
+            const shipped = (results[2].data && results[2].data.pagination && results[2].data.pagination.total) || 0;
+            const completed = (results[3].data && results[3].data.pagination && results[3].data.pagination.total) || 0;
+            const refund = (results[4].data && results[4].data.pagination && results[4].data.pagination.total) || 0;
+
             this.setData({
-                'orderCounts.pending': (results[0].data && results[0].data.pagination && results[0].data.pagination.total) || 0,
-                'orderCounts.paid': (results[1].data && results[1].data.pagination && results[1].data.pagination.total) || 0,
-                'orderCounts.shipped': (results[2].data && results[2].data.pagination && results[2].data.pagination.total) || 0,
-                'orderCounts.refund': (results[3].data && results[3].data.pagination && results[3].data.pagination.total) || 0
+                'orderCounts.pending': pending,
+                'orderCounts.paid': paid,
+                'orderCounts.shipped': shipped,
+                'orderCounts.refund': refund,
+                'orderStats.pending': pending,
+                'orderStats.paid': paid,
+                'orderStats.shipped': shipped,
+                'orderStats.completed': completed
             });
         } catch (err) {
             console.error('加载订单数量失败:', err);
@@ -93,7 +128,10 @@ Page({
                         referee_count: d.team ? d.team.totalCount : 0,
                         role_level: d.userInfo ? d.userInfo.role : 0,
                         role_name: d.userInfo ? (d.userInfo.role_name || roleNames[d.userInfo.role]) : '普通用户'
-                    }
+                    },
+                    'stats.frozenAmount': d.stats ? (d.stats.frozenAmount || d.stats.pendingAmount || '0.00') : '0.00',
+                    balance: d.stats ? (d.stats.availableAmount || '0.00') : '0.00',
+                    teamCount: d.team ? (d.team.totalCount || 0) : 0
                 });
             }
         } catch (err) {
@@ -126,6 +164,54 @@ Page({
             wx.hideLoading();
             wx.showToast({ title: '登录失败', icon: 'none' });
         }
+    },
+
+    // ======== 点击登录按钮 ========
+    onLoginTap() {
+        if (!this.data.hasUserInfo) {
+            this.onLogin();
+        }
+    },
+
+    // ======== 获取用户头像和昵称（微信授权） ========
+    onGetUserProfile() {
+        if (!this.data.hasUserInfo) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+
+        wx.getUserProfile({
+            desc: '用于完善用户资料',
+            success: async (res) => {
+                const { nickName, avatarUrl } = res.userInfo;
+                try {
+                    wx.showLoading({ title: '保存中...' });
+                    // 上传到服务器
+                    const updateRes = await put('/user/profile', {
+                        nickname: nickName,
+                        avatar_url: avatarUrl
+                    });
+
+                    wx.hideLoading();
+
+                    if (updateRes.code === 0) {
+                        wx.showToast({ title: '保存成功', icon: 'success' });
+                        // 重新加载用户信息
+                        this.loadUserInfo();
+                    } else {
+                        wx.showToast({ title: updateRes.message || '保存失败', icon: 'none' });
+                    }
+                } catch (err) {
+                    wx.hideLoading();
+                    console.error('保存用户资料失败:', err);
+                    wx.showToast({ title: '保存失败', icon: 'none' });
+                }
+            },
+            fail: (err) => {
+                console.error('获取用户信息失败:', err);
+                wx.showToast({ title: '已取消授权', icon: 'none' });
+            }
+        });
     },
 
     // ======== 修改昵称 ========
@@ -177,6 +263,11 @@ Page({
         wx.navigateTo({ url: '/pages/distribution/center?tab=logs' });
     },
 
+    // ======== 快捷跳转 - 佣金 ========
+    goCommission() {
+        this.onCommissionTap();
+    },
+
     // ======== ★ 钱包/提现 ========
     onWalletTap() {
         if (!this.data.isLoggedIn) {
@@ -186,6 +277,11 @@ Page({
         wx.navigateTo({ url: '/pages/wallet/index' });
     },
 
+    // ======== 快捷跳转 - 钱包 ========
+    goWallet() {
+        this.onWalletTap();
+    },
+
     // ======== ★ 团队 ========
     onTeamTap() {
         if (!this.data.isLoggedIn) {
@@ -193,6 +289,84 @@ Page({
             return;
         }
         wx.navigateTo({ url: '/pages/distribution/team' });
+    },
+
+    // ======== 快捷跳转 - 团队 ========
+    goTeam() {
+        this.onTeamTap();
+    },
+
+    // ======== 快捷跳转 - 地址 ========
+    goAddress() {
+        if (!this.data.isLoggedIn) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: '/pages/user/address' });
+    },
+
+    // ======== 快捷跳转 - 代理工作台 ========
+    goWorkbench() {
+        if (!this.data.isLoggedIn) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: '/pages/agent/workbench' });
+    },
+
+    // ======== 邀请好友 - 显示弹窗 ========
+    onShowInvite() {
+        if (!this.data.hasUserInfo) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        this.setData({ showInvite: true });
+    },
+
+    // ======== 邀请好友 - 隐藏弹窗 ========
+    hideInvite() {
+        this.setData({ showInvite: false });
+    },
+
+    // ======== 邀请好友 - 阻止冒泡 ========
+    stopP() {
+        // 阻止事件冒泡，防止点击modal内容时关闭
+    },
+
+    // ======== 复制邀请码 ========
+    copyInviteCode() {
+        const code = this.data.inviteCode;
+        if (!code) {
+            wx.showToast({ title: '暂无邀请码', icon: 'none' });
+            return;
+        }
+        wx.setClipboardData({
+            data: code,
+            success: () => {
+                wx.showToast({ title: '邀请码已复制', icon: 'success' });
+            }
+        });
+    },
+
+    // ======== 复制分享链接 ========
+    onCopyShareLink() {
+        const inviteCode = this.data.inviteCode;
+        if (!inviteCode) {
+            wx.showToast({ title: '暂无邀请码', icon: 'none' });
+            return;
+        }
+        // 获取小程序的原始ID或路径
+        const appId = 'your-app-id'; // 需要替换为实际的小程序AppID
+        const path = `pages/index/index?share_id=${inviteCode}`;
+        const shareLink = `微信小程序://臻选?appid=${appId}&path=${encodeURIComponent(path)}`;
+
+        wx.setClipboardData({
+            data: `【臻选】邀请你一起赚钱！\n我的邀请码：${inviteCode}\n立即打开小程序：${shareLink}`,
+            success: () => {
+                wx.showToast({ title: '分享链接已复制', icon: 'success' });
+                this.hideInvite();
+            }
+        });
     },
 
     // ======== 订单入口 ========
@@ -280,22 +454,6 @@ Page({
         } else {
             wx.showToast({ title: '即将开放', icon: 'none' });
         }
-    },
-
-    // ======== 复制邀请码 ========
-    onCopyInviteCode() {
-        const userInfo = this.data.userInfo;
-        const code = userInfo ? userInfo.invite_code : '';
-        if (!code) {
-            wx.showToast({ title: '暂无邀请码', icon: 'none' });
-            return;
-        }
-        wx.setClipboardData({
-            data: code,
-            success: () => {
-                wx.showToast({ title: '邀请码已复制', icon: 'success' });
-            }
-        });
     },
 
     // ======== ★ 分享邀请 ========
