@@ -1,6 +1,9 @@
 // pages/user/user.js - 个人中心（全面升级版）
 const app = getApp();
 const { get, put } = require('../../utils/request');
+const { ErrorHandler } = require('../../utils/errorHandler');
+const globalStore = require('../../store/index');
+const { formatMoney } = require('../../utils/dataFormatter');
 
 Page({
     data: {
@@ -49,7 +52,10 @@ Page({
                 this.setData({ userInfo: app.globalData.userInfo });
             }
         } catch (err) {
-            console.error('加载用户信息失败:', err);
+            ErrorHandler.handle(err, {
+                customMessage: '加载用户信息失败',
+                showToast: false
+            });
             this.setData({ userInfo: app.globalData.userInfo });
         }
 
