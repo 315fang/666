@@ -124,7 +124,8 @@ Page({
     async onLogin() {
         try {
             wx.showLoading({ title: '登录中...' });
-            await app.wxLogin();
+            // 传入 withProfile=true 以获取微信头像和昵称
+            await app.wxLogin(null, true);
             wx.hideLoading();
             this.loadUserInfo();
             wx.showToast({ title: '登录成功', icon: 'success' });

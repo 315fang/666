@@ -1,0 +1,98 @@
+<!-- 邀请好友页面 -->
+<view class="invite-page">
+  <!-- 分享卡片组件 -->
+  <view class="share-section">
+    <share-card
+      title="邀请好友一起赚"
+      description="分享给好友，共享优惠好物"
+      inviteCode="{{inviteCode}}"
+      showQRCode="{{false}}"
+      showCopyLink="{{true}}"
+      showShare="{{true}}"
+      showSaveQR="{{false}}"
+      shareLink="{{shareLink}}"
+      tip="好友通过您的邀请码注册，双方都可获得奖励"
+      bind:copycode="onCopyCode"
+      bind:copylink="onCopyLink"
+    />
+  </view>
+
+  <!-- 团队统计 -->
+  <view class="team-stats">
+    <view class="stats-title">我的团队</view>
+    <view class="stats-grid">
+      <view class="stat-item">
+        <view class="stat-number">{{team.totalCount || 0}}</view>
+        <view class="stat-label">总人数</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-number">{{team.directCount || 0}}</view>
+        <view class="stat-label">直推人数</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-number">{{team.indirectCount || 0}}</view>
+        <view class="stat-label">间接推荐</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 邀请奖励说明 -->
+  <view class="reward-info">
+    <view class="info-title">🎁 邀请奖励</view>
+    <view class="info-list">
+      <view class="info-item">
+        <text class="info-icon">✅</text>
+        <text class="info-text">好友首单返佣：订单金额的 10%</text>
+      </view>
+      <view class="info-item">
+        <text class="info-icon">✅</text>
+        <text class="info-text">团队持续收益：间接推荐 5%</text>
+      </view>
+      <view class="info-item">
+        <text class="info-icon">✅</text>
+        <text class="info-text">邀请越多，等级越高，佣金越多</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 如何邀请步骤 -->
+  <view class="how-to">
+    <view class="info-title">📱 如何邀请</view>
+    <view class="step-list">
+      <view class="step-item">
+        <view class="step-number">1</view>
+        <view class="step-content">
+          <text class="step-title">复制邀请码或链接</text>
+          <text class="step-desc">点击上方按钮复制您的专属邀请码</text>
+        </view>
+      </view>
+      <view class="step-item">
+        <view class="step-number">2</view>
+        <view class="step-content">
+          <text class="step-title">分享给好友</text>
+          <text class="step-desc">通过微信、朋友圈等方式分享</text>
+        </view>
+      </view>
+      <view class="step-item">
+        <view class="step-number">3</view>
+        <view class="step-content">
+          <text class="step-title">好友注册下单</text>
+          <text class="step-desc">好友使用邀请码注册并下单</text>
+        </view>
+      </view>
+      <view class="step-item">
+        <view class="step-number">4</view>
+        <view class="step-content">
+          <text class="step-title">自动获得佣金</text>
+          <text class="step-desc">订单完成后，佣金自动到账</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 查看团队按钮 -->
+  <view class="action-area">
+    <button class="team-btn" bindtap="goTeam">查看我的团队</button>
+    <button class="center-btn" bindtap="goCenter">返回分佣中心</button>
+  </view>
+</view>

@@ -49,13 +49,21 @@ Page({
         this.loadData();
     },
 
-    // 尝试绑定上级
+    // 尝试绑定上级（改进版：提供用户反馈）
     async tryBindParent(parentId) {
         try {
-            await post('/bind-parent', { parent_id: parseInt(parentId) });
-            console.log('绑定上级成功');
+            const res = await post('/bind-parent', { parent_id: parseInt(parentId) });
+            if (res.code === 0) {
+                console.log('绑定上级成功');
+                // 显示成功提示
+                wx.showToast({
+                    title: '已加入团队',
+                    icon: 'success',
+                    duration: 2000
+                });
+            }
         } catch (err) {
-            // 已有上级会返回错误，忽略
+            // 已有上级会返回错误，静默处理
             console.log('绑定上级:', err.message || '已有上级');
         }
     },
