@@ -3,7 +3,7 @@
  * 提供一致的错误提示和日志记录
  */
 
-import { ERROR_MESSAGES } from '../config/constants.js';
+const { ERROR_MESSAGES } = require('../config/constants.js');
 
 /**
  * 错误码映射
@@ -188,7 +188,7 @@ class ErrorHandler {
  * @param {string} message - 错误消息
  * @param {number} duration - 持续时间
  */
-export function showError(message, duration = 2500) {
+function showError(message, duration = 2500) {
   wx.showToast({
     title: message,
     icon: 'none',
@@ -201,7 +201,7 @@ export function showError(message, duration = 2500) {
  * @param {string} message - 成功消息
  * @param {number} duration - 持续时间
  */
-export function showSuccess(message, duration = 2000) {
+function showSuccess(message, duration = 2000) {
   wx.showToast({
     title: message,
     icon: 'success',
@@ -213,7 +213,7 @@ export function showSuccess(message, duration = 2000) {
  * 快捷方法：显示加载中
  * @param {string} title - 加载文本
  */
-export function showLoading(title = '加载中...') {
+function showLoading(title = '加载中...') {
   wx.showLoading({
     title,
     mask: true
@@ -223,8 +223,15 @@ export function showLoading(title = '加载中...') {
 /**
  * 快捷方法：隐藏加载
  */
-export function hideLoading() {
+function hideLoading() {
   wx.hideLoading();
 }
 
-export default ErrorHandler;
+// CommonJS 导出（WeChat Mini Program 兼容）
+module.exports = {
+  ErrorHandler,
+  showError,
+  showSuccess,
+  showLoading,
+  hideLoading
+};

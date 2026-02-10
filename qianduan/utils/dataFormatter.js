@@ -3,14 +3,14 @@
  * 解决图片解析、价格计算等重复代码问题
  */
 
-import { USER_ROLES } from '../config/constants.js';
+const { USER_ROLES } = require('../config/constants.js');
 
 /**
  * 解析图片字段（统一处理字符串 JSON 和数组）
  * @param {string|Array} images - 图片数据
  * @returns {Array} 图片数组
  */
-export function parseImages(images) {
+function parseImages(images) {
   if (!images) return [];
 
   if (Array.isArray(images)) {
@@ -36,7 +36,7 @@ export function parseImages(images) {
  * @param {string} defaultImg - 默认图片
  * @returns {string} 图片 URL
  */
-export function getFirstImage(images, defaultImg = '/assets/images/placeholder.svg') {
+function getFirstImage(images, defaultImg = '/assets/images/placeholder.svg') {
   const imageList = parseImages(images);
   return imageList.length > 0 ? imageList[0] : defaultImg;
 }
@@ -48,7 +48,7 @@ export function getFirstImage(images, defaultImg = '/assets/images/placeholder.s
  * @param {number} roleLevel - 用户角色等级
  * @returns {number} 价格
  */
-export function calculatePrice(product, sku = null, roleLevel = USER_ROLES.GUEST) {
+function calculatePrice(product, sku = null, roleLevel = USER_ROLES.GUEST) {
   if (!product) return 0;
 
   // 如果有 SKU，优先使用 SKU 价格
@@ -99,7 +99,7 @@ function calculateProductPrice(product, roleLevel) {
  * @param {number} amount - 金额
  * @returns {string} 格式化后的金额
  */
-export function formatMoney(amount) {
+function formatMoney(amount) {
   if (isNaN(amount)) return '0.00';
   return Number(amount).toFixed(2);
 }
@@ -109,7 +109,7 @@ export function formatMoney(amount) {
  * @param {number} num - 数字
  * @returns {string} 格式化后的数字
  */
-export function formatNumber(num) {
+function formatNumber(num) {
   if (isNaN(num)) return '0';
   return String(num).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
@@ -120,7 +120,7 @@ export function formatNumber(num) {
  * @param {string} format - 格式化模板
  * @returns {string} 格式化后的时间
  */
-export function formatTime(timestamp, format = 'YYYY-MM-DD HH:mm:ss') {
+function formatTime(timestamp, format = 'YYYY-MM-DD HH:mm:ss') {
   if (!timestamp) return '';
 
   const date = new Date(timestamp);
@@ -143,7 +143,7 @@ export function formatTime(timestamp, format = 'YYYY-MM-DD HH:mm:ss') {
  * @param {string|number|Date} timestamp - 时间戳
  * @returns {string} 相对时间文本
  */
-export function formatRelativeTime(timestamp) {
+function formatRelativeTime(timestamp) {
   if (!timestamp) return '';
 
   const date = new Date(timestamp);
@@ -169,7 +169,7 @@ export function formatRelativeTime(timestamp) {
  * @param {number} roleLevel - 用户角色等级
  * @returns {Object} 处理后的商品对象
  */
-export function processProduct(product, roleLevel = USER_ROLES.GUEST) {
+function processProduct(product, roleLevel = USER_ROLES.GUEST) {
   if (!product) return null;
 
   return {
@@ -187,7 +187,20 @@ export function processProduct(product, roleLevel = USER_ROLES.GUEST) {
  * @param {number} roleLevel - 用户角色等级
  * @returns {Array} 处理后的商品列表
  */
-export function processProducts(products, roleLevel = USER_ROLES.GUEST) {
+function processProducts(products, roleLevel = USER_ROLES.GUEST) {
   if (!Array.isArray(products)) return [];
   return products.map(product => processProduct(product, roleLevel));
 }
+
+// CommonJS 导出（WeChat Mini Program 兼容）
+module.exports = {
+  parseImages,
+  getFirstImage,
+  calculatePrice,
+  formatMoney,
+  formatNumber,
+  formatTime,
+  formatRelativeTime,
+  processProduct,
+  processProducts
+};

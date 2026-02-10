@@ -4,21 +4,21 @@
  */
 
 // ==================== API 配置 ====================
-export const API_CONFIG = {
+const API_CONFIG = {
   BASE_URL: 'https://api.jxalk.cn/api',
   TIMEOUT: 15000,
   RETRY_COUNT: 3
 };
 
 // ==================== 用户角色 ====================
-export const USER_ROLES = {
+const USER_ROLES = {
   GUEST: 0,
   MEMBER: 1,
   LEADER: 2,
   AGENT: 3
 };
 
-export const ROLE_NAMES = {
+const ROLE_NAMES = {
   [USER_ROLES.GUEST]: '普通用户',
   [USER_ROLES.MEMBER]: '会员',
   [USER_ROLES.LEADER]: '团长',
@@ -26,7 +26,7 @@ export const ROLE_NAMES = {
 };
 
 // ==================== 订单状态 ====================
-export const ORDER_STATUS = {
+const ORDER_STATUS = {
   PENDING: 'pending',
   PAID: 'paid',
   SHIPPED: 'shipped',
@@ -35,7 +35,7 @@ export const ORDER_STATUS = {
   REFUNDED: 'refunded'
 };
 
-export const ORDER_STATUS_TEXT = {
+const ORDER_STATUS_TEXT = {
   [ORDER_STATUS.PENDING]: '待付款',
   [ORDER_STATUS.PAID]: '已付款',
   [ORDER_STATUS.SHIPPED]: '已发货',
@@ -45,13 +45,13 @@ export const ORDER_STATUS_TEXT = {
 };
 
 // ==================== 搜索历史配置 ====================
-export const SEARCH_CONFIG = {
+const SEARCH_CONFIG = {
   MAX_HISTORY: 10,
   STORAGE_KEY: 'searchHistory'
 };
 
 // ==================== 缓存配置 ====================
-export const CACHE_KEYS = {
+const CACHE_KEYS = {
   USER_INFO: 'userInfo',
   OPENID: 'openid',
   TOKEN: 'token',
@@ -62,7 +62,7 @@ export const CACHE_KEYS = {
 };
 
 // ==================== 页面路径 ====================
-export const PAGES = {
+const PAGES = {
   INDEX: '/pages/index/index',
   CATEGORY: '/pages/category/category',
   CART: '/pages/cart/cart',
@@ -79,25 +79,40 @@ export const PAGES = {
 };
 
 // ==================== 正则表达式 ====================
-export const REGEX = {
+const REGEX = {
   PHONE: /^1[3-9]\d{9}$/,
   EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
   INVITE_CODE: /^\d{6}$/
 };
 
 // ==================== 默认值 ====================
-export const DEFAULTS = {
+const DEFAULTS = {
   AVATAR: '/assets/images/default-avatar.svg',
   PLACEHOLDER: '/assets/images/placeholder.svg',
   PAGE_SIZE: 20
 };
 
 // ==================== 错误消息 ====================
-export const ERROR_MESSAGES = {
+const ERROR_MESSAGES = {
   NETWORK_ERROR: '网络连接失败，请检查网络',
   LOGIN_EXPIRED: '登录已过期，请重新登录',
   PARAM_ERROR: '参数错误',
   SERVER_ERROR: '服务器错误，请稍后重试',
   NO_PERMISSION: '暂无权限',
   NOT_FOUND: '请求的资源不存在'
+};
+
+// CommonJS 导出（WeChat Mini Program 兼容）
+module.exports = {
+  API_CONFIG,
+  USER_ROLES,
+  ROLE_NAMES,
+  ORDER_STATUS,
+  ORDER_STATUS_TEXT,
+  SEARCH_CONFIG,
+  CACHE_KEYS,
+  PAGES,
+  REGEX,
+  DEFAULTS,
+  ERROR_MESSAGES
 };

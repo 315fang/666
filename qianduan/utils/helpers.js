@@ -9,7 +9,7 @@
  * @param {number} delay - 延迟时间（毫秒）
  * @returns {Function} 防抖后的函数
  */
-export function debounce(fn, delay = 300) {
+function debounce(fn, delay = 300) {
   let timer = null;
   return function (...args) {
     if (timer) clearTimeout(timer);
@@ -25,7 +25,7 @@ export function debounce(fn, delay = 300) {
  * @param {number} delay - 延迟时间（毫秒）
  * @returns {Function} 节流后的函数
  */
-export function throttle(fn, delay = 300) {
+function throttle(fn, delay = 300) {
   let lastTime = 0;
   return function (...args) {
     const now = Date.now();
@@ -41,7 +41,7 @@ export function throttle(fn, delay = 300) {
  * @param {*} obj - 要拷贝的对象
  * @returns {*} 拷贝后的对象
  */
-export function deepClone(obj) {
+function deepClone(obj) {
   if (obj === null || typeof obj !== 'object') return obj;
   if (obj instanceof Date) return new Date(obj);
   if (obj instanceof Array) return obj.map(item => deepClone(item));
@@ -60,7 +60,7 @@ export function deepClone(obj) {
  * @param {*} value - 要检查的值
  * @returns {boolean} 是否为空
  */
-export function isEmpty(value) {
+function isEmpty(value) {
   if (value === null || value === undefined) return true;
   if (typeof value === 'string') return value.trim() === '';
   if (Array.isArray(value)) return value.length === 0;
@@ -73,7 +73,7 @@ export function isEmpty(value) {
  * @param {string} phone - 手机号
  * @returns {boolean} 是否有效
  */
-export function validatePhone(phone) {
+function validatePhone(phone) {
   return /^1[3-9]\d{9}$/.test(phone);
 }
 
@@ -82,7 +82,7 @@ export function validatePhone(phone) {
  * @param {string} email - 邮箱
  * @returns {boolean} 是否有效
  */
-export function validateEmail(email) {
+function validateEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
@@ -91,7 +91,7 @@ export function validateEmail(email) {
  * @param {string} code - 邀请码
  * @returns {boolean} 是否有效
  */
-export function validateInviteCode(code) {
+function validateInviteCode(code) {
   return /^\d{6}$/.test(code);
 }
 
@@ -99,7 +99,7 @@ export function validateInviteCode(code) {
  * 生成唯一 ID
  * @returns {string} 唯一 ID
  */
-export function generateId() {
+function generateId() {
   return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
@@ -109,7 +109,7 @@ export function generateId() {
  * @param {string} key - 对象数组的去重键（可选）
  * @returns {Array} 去重后的数组
  */
-export function unique(arr, key = null) {
+function unique(arr, key = null) {
   if (!Array.isArray(arr)) return [];
 
   if (key) {
@@ -134,7 +134,7 @@ export function unique(arr, key = null) {
  * @param {*} defaultValue - 默认值
  * @returns {*} 值或默认值
  */
-export function get(obj, path, defaultValue = undefined) {
+function get(obj, path, defaultValue = undefined) {
   if (!obj || !path) return defaultValue;
 
   const keys = path.split('.');
@@ -153,7 +153,7 @@ export function get(obj, path, defaultValue = undefined) {
  * @param {number} ms - 延迟时间（毫秒）
  * @returns {Promise} Promise 对象
  */
-export function sleep(ms) {
+function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
@@ -164,7 +164,7 @@ export function sleep(ms) {
  * @param {number} delay - 重试延迟（毫秒）
  * @returns {Promise} Promise 对象
  */
-export async function retry(fn, maxRetries = 3, delay = 1000) {
+async function retry(fn, maxRetries = 3, delay = 1000) {
   let lastError;
 
   for (let i = 0; i < maxRetries; i++) {
@@ -186,7 +186,7 @@ export async function retry(fn, maxRetries = 3, delay = 1000) {
  * @param {Object} params - 参数对象
  * @returns {string} 序列化后的参数字符串
  */
-export function serializeParams(params) {
+function serializeParams(params) {
   if (!params || typeof params !== 'object') return '';
 
   const pairs = [];
@@ -204,7 +204,7 @@ export function serializeParams(params) {
  * @param {string} url - URL 字符串
  * @returns {Object} 参数对象
  */
-export function parseParams(url) {
+function parseParams(url) {
   if (!url || typeof url !== 'string') return {};
 
   const queryIndex = url.indexOf('?');
@@ -230,7 +230,26 @@ export function parseParams(url) {
  * @param {string} suffix - 后缀（如 '...'）
  * @returns {string} 截断后的字符串
  */
-export function truncate(str, maxLength, suffix = '...') {
+function truncate(str, maxLength, suffix = '...') {
   if (!str || str.length <= maxLength) return str;
   return str.substring(0, maxLength - suffix.length) + suffix;
 }
+
+// CommonJS 导出（WeChat Mini Program 兼容）
+module.exports = {
+  debounce,
+  throttle,
+  deepClone,
+  isEmpty,
+  validatePhone,
+  validateEmail,
+  validateInviteCode,
+  generateId,
+  unique,
+  get,
+  sleep,
+  retry,
+  serializeParams,
+  parseParams,
+  truncate
+};
