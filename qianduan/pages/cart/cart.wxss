@@ -16,27 +16,43 @@
 }
 
 .empty-icon {
-  width: 128rpx;
-  height: 128rpx;
-  background: #F1F5F9;
+  width: 160rpx;
+  height: 160rpx;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 64rpx;
+  font-size: 72rpx;
   margin-bottom: 48rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.08);
+  position: relative;
+}
+
+.empty-icon::before {
+  content: '';
+  position: absolute;
+  inset: -8rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+  z-index: -1;
+}
+
+.empty-icon-img {
+  width: 120rpx;
+  height: 120rpx;
   opacity: 0.5;
 }
 
 .empty-title {
-  font-size: 32rpx;
+  font-size: 36rpx;
   font-weight: 700;
   color: #0F172A; /* Slate-900 */
   margin-bottom: 16rpx;
 }
 
 .empty-desc {
-  font-size: 26rpx;
+  font-size: 28rpx;
   color: #64748B; /* Slate-500 */
   margin-bottom: 64rpx;
 }
@@ -52,8 +68,14 @@
   margin-bottom: 32rpx;
   background: #ffffff;
   border-radius: 32rpx; /* Rounded-32rpx */
-  box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.02);
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.04);
   position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cart-item:active {
+  transform: translateY(-4rpx);
+  box-shadow: 0 8rpx 28rpx rgba(0, 0, 0, 0.08);
 }
 
 /* 复选框 */
@@ -71,21 +93,42 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.08);
+}
+
+.checkbox:active {
+  transform: scale(0.9);
 }
 
 /* Selected State: Radio Style (Circle in Circle) */
 .checkbox.checked {
   border-color: var(--color-primary); /* Blue-600 */
   background: transparent;
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.2);
 }
 
 .checkbox.checked::after {
   content: '';
   width: 20rpx;
   height: 20rpx;
-  background: var(--color-primary);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 50%;
+  animation: checkPulse 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes checkPulse {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* Hide original checkmark */
@@ -99,14 +142,20 @@
   height: 192rpx;
   border-radius: 32rpx; /* rounded-2xl approx */
   overflow: hidden;
-  background: #F1F5F9;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
   flex-shrink: 0;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.06);
 }
 
 .product-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.product-image-wrapper:active .product-image {
+  transform: scale(1.05);
 }
 
 /* 商品信息 */
@@ -162,12 +211,19 @@
 .quantity-control {
   display: flex;
   align-items: center;
-  background: #F8FAFC;
-  border: 1rpx solid #E2E8F0;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 2rpx solid #e2e8f0;
   border-radius: 999rpx;
   padding: 4rpx 12rpx;
   height: 56rpx;
   box-sizing: border-box;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  transition: all 0.2s;
+}
+
+.quantity-control:active {
+  background: #f1f5f9;
+  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.06);
 }
 
 .qty-btn {
@@ -176,10 +232,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28rpx;
-  color: #64748B;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #667eea;
   background: transparent;
   box-shadow: none;
+  transition: all 0.2s;
+}
+
+.qty-btn:active {
+  transform: scale(0.9);
 }
 
 .qty-btn.disabled {
@@ -189,8 +251,8 @@
 .qty-num {
   min-width: 48rpx;
   text-align: center;
-  font-size: 26rpx;
-  font-weight: 600;
+  font-size: 28rpx;
+  font-weight: 700;
   color: #0F172A;
 }
 
@@ -205,6 +267,14 @@
   align-items: center;
   justify-content: center;
   color: #94A3B8;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.delete-btn:active {
+  background: #fef2f2;
+  color: #ef4444;
+  transform: scale(0.9);
 }
 
 /* ==================== 底部结算栏 ==================== */
@@ -294,7 +364,7 @@
 }
 
 .checkout-btn {
-  background: var(--color-primary); /* Blue-600 */
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #ffffff;
   padding: 0 64rpx;
   height: 88rpx;
@@ -304,12 +374,33 @@
   justify-content: center;
   font-size: 30rpx;
   font-weight: 700;
-  box-shadow: 0 10rpx 20rpx rgba(37, 99, 235, 0.2);
-  transition: transform 0.2s;
+  box-shadow: 0 8rpx 24rpx rgba(102, 126, 234, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.checkout-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.checkout-btn:active::before {
+  width: 300rpx;
+  height: 300rpx;
 }
 
 .checkout-btn:active {
   transform: scale(0.96);
+  box-shadow: 0 4rpx 16rpx rgba(102, 126, 234, 0.3);
 }
 
 .checkout-btn.disabled {
