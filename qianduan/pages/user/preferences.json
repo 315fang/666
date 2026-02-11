@@ -1,3 +1,8 @@
 {
-  "navigationBarTitleText": "偏好设置"
+  "navigationBarTitleText": "偏好设置",
+  "navigationBarBackgroundColor": "#667eea",
+  "navigationBarTextStyle": "white",
+  "backgroundColor": "#f0f4ff",
+  "enablePullDownRefresh": false,
+  "usingComponents": {}
 }

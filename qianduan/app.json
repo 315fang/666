@@ -21,6 +21,8 @@
         "pages/distribution/stock-logs",
         "pages/wallet/index",
         "pages/user/notifications",
+        "pages/user/preferences",
+        "pages/order/logistics",
         "pages/search/search"
     ],
     "tabBar": {

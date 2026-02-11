@@ -1,0 +1,81 @@
+<!-- 物流轨迹页面 -->
+<view class="logistics-page">
+  <!-- 顶部物流公司卡片 -->
+  <view class="logistics-header">
+    <view class="company-info">
+      <view class="company-logo">
+        <text class="logo-icon">🚚</text>
+      </view>
+      <view class="company-details">
+        <text class="company-name">{{order.express_company || '物流公司'}}</text>
+        <text class="tracking-no">运单号：{{order.tracking_no || '暂无'}}</text>
+      </view>
+    </view>
+    <button class="copy-btn" bindtap="onCopyTrackingNo" wx:if="{{order.tracking_no}}">
+      复制单号
+    </button>
+  </view>
+
+  <!-- 物流状态卡片 -->
+  <view class="status-card" wx:if="{{logistics.status}}">
+    <view class="status-icon {{logistics.status}}">
+      <text wx:if="{{logistics.status === 'delivered'}}">✓</text>
+      <text wx:elif="{{logistics.status === 'shipping'}}">📦</text>
+      <text wx:else>⏰</text>
+    </view>
+    <view class="status-info">
+      <text class="status-text">{{statusText[logistics.status] || '查询中'}}</text>
+      <text class="status-time" wx:if="{{logistics.latestUpdate}}">
+        {{logistics.latestUpdate}}
+      </text>
+    </view>
+  </view>
+
+  <!-- 物流轨迹时间线 -->
+  <view class="timeline-section" wx:if="{{tracks.length > 0}}">
+    <view class="section-title">物流轨迹</view>
+    <view class="timeline">
+      <view
+        class="timeline-item {{index === 0 ? 'active' : ''}}"
+        wx:for="{{tracks}}"
+        wx:key="index"
+      >
+        <view class="timeline-dot">
+          <view class="dot-inner"></view>
+        </view>
+        <view class="timeline-content">
+          <view class="timeline-text">{{item.context}}</view>
+          <view class="timeline-time">{{item.time}}</view>
+          <view class="timeline-location" wx:if="{{item.location}}">
+            📍 {{item.location}}
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{!loading && tracks.length === 0}}">
+    <image class="empty-icon" src="/assets/images/empty-logistics.svg" mode="aspectFit"></image>
+    <text class="empty-text">暂无物流信息</text>
+    <text class="empty-desc">请稍后再查询或联系商家</text>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-state" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">正在查询物流信息...</text>
+  </view>
+
+  <!-- 底部操作区 -->
+  <view class="actions-footer">
+    <button class="action-btn secondary" bindtap="onRefresh">
+      <text class="btn-icon">🔄</text>
+      <text>刷新</text>
+    </button>
+    <button class="action-btn primary" open-type="contact">
+      <text class="btn-icon">💬</text>
+      <text>联系客服</text>
+    </button>
+  </view>
+</view>
