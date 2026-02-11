@@ -1,5 +1,5 @@
 <!-- components/product-card/product-card.wxml -->
-<view class="card card-hover" bindtap="onTap">
+<view class="card card-hover card-{{mode}}" bindtap="onTap">
   <view class="image-wrapper">
     <image class="image" src="{{product.image || '/assets/images/placeholder.svg'}}" mode="aspectFill"></image>
     <view class="new-tag" wx:if="{{product.isNew}}">NEW</view>

@@ -1,5 +1,6 @@
 // pages/order/detail.js - 订单详情
 const { get, post } = require('../../utils/request');
+const { parseImages } = require('../../utils/dataFormatter');
 
 Page({
     data: {
@@ -66,12 +67,8 @@ Page({
             const order = orderRes.data;
 
             // 处理商品图片
-            if (order && order.product && typeof order.product.images === 'string') {
-                try {
-                    order.product.images = JSON.parse(order.product.images);
-                } catch (e) {
-                    order.product.images = [];
-                }
+            if (order && order.product) {
+                order.product.images = parseImages(order.product.images);
             }
 
             // ★ 查找该订单的活跃退款

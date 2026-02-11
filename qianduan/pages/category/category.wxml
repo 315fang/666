@@ -56,32 +56,13 @@
   <!-- 4. Product List (Single Column) -->
   <scroll-view scroll-y class="product-list-scroll" bindscrolltolower="onLoadMore">
     <view class="product-list">
-      <view class="product-item" wx:for="{{products}}" wx:key="id" bindtap="onProductTap" data-id="{{item.id}}">
-        <!-- Left Image -->
-        <view class="item-img-box">
-          <image src="{{item.image}}" mode="aspectFill" class="item-img"></image>
-          <view class="item-tag" wx:if="{{item.is_hot}}">HOT</view>
-        </view>
-        
-        <!-- Right Content -->
-        <view class="item-content">
-          <view class="item-info">
-            <view class="item-title line-clamp-2">{{item.name}}</view>
-            <view class="item-desc line-clamp-1">{{item.description || '暂无描述'}}</view>
-          </view>
-          
-          <view class="item-bottom">
-            <view class="item-price">
-              <text class="currency">¥</text>
-              <text class="amount">{{item.price}}</text>
-            </view>
-            <!-- Black Circle Add Btn -->
-            <view class="add-btn-circle" catchtap="onQuickAdd" data-item="{{item}}">
-              <text class="plus-icon">+</text>
-            </view>
-          </view>
-        </view>
-      </view>
+      <product-card 
+        wx:for="{{products}}" 
+        wx:key="id" 
+        product="{{item}}" 
+        mode="horizontal"
+        bind:click="onProductTap"
+      />
     </view>
 
     <!-- Loading / Empty -->

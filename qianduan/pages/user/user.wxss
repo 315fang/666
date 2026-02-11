@@ -160,7 +160,7 @@
 .asset-value {
   font-size: 32rpx;
   font-weight: 800;
-  color: #0F172A;
+  color: var(--color-text-main);
   font-family: 'DIN Condensed', sans-serif;
 }
 

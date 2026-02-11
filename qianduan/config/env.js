@@ -21,14 +21,14 @@ const CURRENT_ENV = ENV_TYPES.PRODUCTION;
 const envConfigs = {
   // 开发环境
   [ENV_TYPES.DEVELOPMENT]: {
-    apiBaseUrl: 'https://dev-api.jxalk.cn/api',
+    apiBaseUrl: 'https://api.jxalk.cn/api',
     debug: true,
     enableLog: true,
     enableMock: false,
     requestTimeout: 15000,
     cacheEnabled: true,
     imageQuality: 80,
-    cdnBaseUrl: 'https://dev-cdn.jxalk.cn',
+    cdnBaseUrl: 'https://cdn.jxalk.cn',
     version: '2.0.0-dev'
   },
 
