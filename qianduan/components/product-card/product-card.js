@@ -7,6 +7,10 @@ Component({
     product: {
       type: Object,
       value: {}
+    },
+    mode: {
+      type: String,
+      value: 'vertical' // 'vertical' | 'horizontal'
     }
   },
   methods: {
