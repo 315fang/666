@@ -26,6 +26,8 @@ const agentRoutes = require('./routes/agent');
 const commissionRoutes = require('./routes/commissions');
 const adminRoutes = require('./routes/admin');
 const configRoutes = require('./routes/config');
+const adminThemeRoutes = require('./routes/admin/themes');
+const adminLogRoutes = require('./routes/admin/logs');
 
 const app = express();
 
@@ -135,6 +137,8 @@ app.use('/api', configRoutes);
 
 // 后台管理API (使用 /admin/api 避免与静态文件冲突)
 app.use('/admin/api', adminRoutes);
+app.use('/admin/api/themes', adminThemeRoutes);
+app.use('/admin/api/logs', adminLogRoutes);
 
 // ★ 调试接口 - 生产环境自动关闭，防止信息泄露
 if (constants.DEBUG.ENABLE_DEBUG_ROUTES) {

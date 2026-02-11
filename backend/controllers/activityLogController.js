@@ -1,4 +1,4 @@
-const { ActivityLog } = require('../models');
+const { ActivityLog, sequelize } = require('../models');
 const { Op } = require('sequelize');
 
 /**
