@@ -6,6 +6,7 @@ Page({
   data: {
     inviteCode: '',
     shareLink: '',
+    qrCodeUrl: '',
     userInfo: null,
     team: {
       totalCount: 0,
@@ -16,6 +17,7 @@ Page({
 
   onLoad() {
     this.loadUserData();
+    this.generateQRCode();
   },
 
   onShow() {
@@ -58,6 +60,34 @@ Page({
       }
     } catch (err) {
       console.error('加载团队统计失败:', err);
+    }
+  },
+
+  /**
+   * 生成小程序二维码
+   */
+  async generateQRCode() {
+    try {
+      const userInfo = this.data.userInfo || getApp().globalData.userInfo;
+      if (!userInfo) return;
+
+      const inviteCode = userInfo.invite_code || String(userInfo.id);
+
+      // 使用微信API生成临时二维码
+      // 注意：实际生产环境应该调用后端API生成永久二维码
+      const qrCodeUrl = `/pages/index/index?share_id=${inviteCode}`;
+
+      // 可以调用后端API生成二维码图片
+      // const res = await get('/qrcode/generate', { scene: inviteCode });
+      // this.setData({ qrCodeUrl: res.data.url });
+
+      // 临时方案：使用第三方二维码生成服务
+      const encodedUrl = encodeURIComponent(qrCodeUrl);
+      this.setData({
+        qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodedUrl}`
+      });
+    } catch (err) {
+      console.error('生成二维码失败:', err);
     }
   },
 
