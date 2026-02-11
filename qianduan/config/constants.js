@@ -29,18 +29,24 @@ const ROLE_NAMES = {
 const ORDER_STATUS = {
   PENDING: 'pending',
   PAID: 'paid',
+  AGENT_CONFIRMED: 'agent_confirmed',
+  SHIPPING_REQUESTED: 'shipping_requested',
   SHIPPED: 'shipped',
   COMPLETED: 'completed',
   CANCELLED: 'cancelled',
+  REFUNDING: 'refunding',
   REFUNDED: 'refunded'
 };
 
 const ORDER_STATUS_TEXT = {
   [ORDER_STATUS.PENDING]: '待付款',
-  [ORDER_STATUS.PAID]: '已付款',
-  [ORDER_STATUS.SHIPPED]: '已发货',
+  [ORDER_STATUS.PAID]: '待发货',
+  [ORDER_STATUS.AGENT_CONFIRMED]: '代理已确认',
+  [ORDER_STATUS.SHIPPING_REQUESTED]: '发货申请中',
+  [ORDER_STATUS.SHIPPED]: '待收货',
   [ORDER_STATUS.COMPLETED]: '已完成',
   [ORDER_STATUS.CANCELLED]: '已取消',
+  [ORDER_STATUS.REFUNDING]: '退款中',
   [ORDER_STATUS.REFUNDED]: '已退款'
 };
 

@@ -98,17 +98,20 @@ Page({
                 get('/orders', { status: 'pending', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
                 get('/orders', { status: 'paid', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
                 get('/orders', { status: 'shipped', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
-                get('/orders', { status: 'refunded', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } }))
+                // ★ 退款数量从 /refunds 接口获取活跃退款数
+                get('/refunds', { page: 1, limit: 1 }).catch(() => ({ data: { list: [] } }))
             ]);
             const pending = (results[0].data && results[0].data.pagination && results[0].data.pagination.total) || 0;
             const paid = (results[1].data && results[1].data.pagination && results[1].data.pagination.total) || 0;
             const shipped = (results[2].data && results[2].data.pagination && results[2].data.pagination.total) || 0;
-            const refund = (results[3].data && results[3].data.pagination && results[3].data.pagination.total) || 0;
+            // ★ 退款列表的总数
+            const refundList = results[3].data?.list || [];
+            const refundTotal = results[3].data?.pagination?.total || refundList.length;
             this.setData({
                 'orderStats.pending': pending,
                 'orderStats.paid': paid,
                 'orderStats.shipped': shipped,
-                'orderStats.refund': refund
+                'orderStats.refund': refundTotal
             });
         } catch (err) {
             console.error('加载订单数量失败:', err);
@@ -174,10 +177,29 @@ Page({
         }
     },
 
-    // WXML 绑定别名
-    onLoginTap() {
+    // WXML 绑定别名 — 登录/授权
+    async onLoginTap() {
         if (!this.data.isLoggedIn) {
             this.onLogin();
+            return;
+        }
+        // 已登录但信息不完整，引导授权
+        if (!this.data.hasUserInfo || !this.data.userInfo || !this.data.userInfo.nickname) {
+            try {
+                wx.showModal({
+                    title: '完善个人信息',
+                    content: '为了更好地为您服务，需要获取您的微信头像和昵称',
+                    confirmText: '去授权',
+                    cancelText: '取消',
+                    success: async (res) => {
+                        if (res.confirm) {
+                            await this.onLogin();
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error('授权提示失败:', err);
+            }
         }
     },
 

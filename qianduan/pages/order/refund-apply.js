@@ -36,7 +36,7 @@ Page({
             const res = await get(`/orders/${id}`);
             const order = res.data;
             if (order && order.product && typeof order.product.images === 'string') {
-                try { order.product.images = JSON.parse(order.product.images); } catch(e) { order.product.images = []; }
+                try { order.product.images = JSON.parse(order.product.images); } catch (e) { order.product.images = []; }
             }
             this.setData({
                 order,
@@ -139,8 +139,16 @@ Page({
 
             if (res.code === 0) {
                 wx.showToast({ title: '申请已提交', icon: 'success' });
+                // ★ 跳转到退款详情页，而非返回旧页面
+                const refundId = res.data?.id;
                 setTimeout(() => {
-                    wx.navigateBack();
+                    if (refundId) {
+                        wx.redirectTo({
+                            url: `/pages/order/refund-detail?id=${refundId}`
+                        });
+                    } else {
+                        wx.navigateBack();
+                    }
                 }, 1500);
             } else {
                 wx.showToast({ title: res.message || '申请失败', icon: 'none' });

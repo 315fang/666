@@ -13,6 +13,8 @@
             bindtap="onTabChange" data-status="shipped">待收货</view>
       <view class="tab-item {{currentStatus === 'completed' ? 'active' : ''}}"
             bindtap="onTabChange" data-status="completed">已完成</view>
+      <view class="tab-item {{currentStatus === 'refund' ? 'active' : ''}}"
+            bindtap="onTabChange" data-status="refund">退款/售后</view>
     </scroll-view>
   </view>
 
@@ -22,10 +24,10 @@
       <!-- 订单头部 -->
       <view class="order-header">
         <text class="order-no">订单号: {{item.order_no}}</text>
-        <text class="order-status {{item.status}}">{{item.statusText}}</text>
+        <text class="order-status {{item.displayStatus || item.status}} {{item.hasActiveRefund ? 'refunding' : ''}}">{{item.statusText}}</text>
       </view>
 
-      <!-- 商品信息（单商品订单） -->
+      <!-- 商品信息 -->
       <view class="order-products" bindtap="onOrderTap" data-order="{{item}}">
         <view class="order-product" wx:if="{{item.product}}">
           <image class="product-image" src="{{item.product.images[0]}}" mode="aspectFill" wx:if="{{item.product.images && item.product.images.length > 0}}"></image>
@@ -51,14 +53,38 @@
           <text class="fulfillment-tag" wx:if="{{item.fulfillment_type === 'Agent'}}">团队发货</text>
         </view>
         <view class="order-actions">
-          <view class="btn btn-sm btn-ghost" wx:if="{{item.status === 'pending'}}"
-                catchtap="onCancelOrder" data-order="{{item}}">取消订单</view>
-          <view class="btn btn-sm btn-primary" wx:if="{{item.status === 'pending'}}"
-                catchtap="onPayOrder" data-order="{{item}}">去付款</view>
-          <view class="btn btn-sm btn-secondary" wx:if="{{item.status === 'shipped'}}"
-                catchtap="onConfirmReceive" data-order="{{item}}">确认收货</view>
-          <view class="btn btn-sm btn-primary" wx:if="{{item.status === 'completed'}}"
-                catchtap="onBuyAgain" data-order="{{item}}">再次购买</view>
+          <!-- ★ 有活跃退款时：只显示"查看退款" -->
+          <block wx:if="{{item.hasActiveRefund}}">
+            <view class="btn btn-sm btn-secondary"
+                  catchtap="onViewRefund" data-order="{{item}}">查看退款</view>
+          </block>
+
+          <!-- ★ 无活跃退款时：正常按钮逻辑 -->
+          <block wx:else>
+            <!-- 待付款 -->
+            <view class="btn btn-sm btn-ghost" wx:if="{{item.status === 'pending'}}"
+                  catchtap="onCancelOrder" data-order="{{item}}">取消订单</view>
+            <view class="btn btn-sm btn-primary" wx:if="{{item.status === 'pending'}}"
+                  catchtap="onPayOrder" data-order="{{item}}">去付款</view>
+            
+            <!-- 待发货(paid/agent_confirmed/shipping_requested)：可申请退款 -->
+            <view class="btn btn-sm btn-ghost" wx:if="{{item.status === 'paid' || item.status === 'agent_confirmed' || item.status === 'shipping_requested'}}"
+                  catchtap="onApplyRefund" data-order="{{item}}">申请退款</view>
+
+            <!-- 待收货：确认收货 + 申请退款 -->
+            <view class="btn btn-sm btn-ghost" wx:if="{{item.status === 'shipped'}}"
+                  catchtap="onApplyRefund" data-order="{{item}}">申请退款</view>
+            <view class="btn btn-sm btn-secondary" wx:if="{{item.status === 'shipped'}}"
+                  catchtap="onConfirmReceive" data-order="{{item}}">确认收货</view>
+
+            <!-- 已完成 -->
+            <view class="btn btn-sm btn-primary" wx:if="{{item.status === 'completed'}}"
+                  catchtap="onBuyAgain" data-order="{{item}}">再次购买</view>
+            
+            <!-- 退款Tab中已完成的退款 -->
+            <view class="btn btn-sm btn-primary" wx:if="{{item.displayStatus === 'refund_completed' || item.displayStatus === 'refund_rejected' || item.displayStatus === 'refund_cancelled'}}"
+                  catchtap="onViewRefund" data-order="{{item}}">查看详情</view>
+          </block>
         </view>
       </view>
     </view>

@@ -5,12 +5,16 @@ Page({
     data: {
         order: null,
         loading: true,
+        // ★ 退款相关
+        activeRefund: null,
+        hasActiveRefund: false,
+
         statusMap: {
             pending: '待付款',
             paid: '待发货',
-            agent_confirmed: '代理商已确认',
+            agent_confirmed: '代理已确认',
             shipping_requested: '发货申请中',
-            shipped: '配送中',
+            shipped: '待收货',
             completed: '已完成',
             cancelled: '已取消',
             refunding: '退款中',
@@ -24,7 +28,16 @@ Page({
             shipped: '商品已发出，请注意查收快递',
             completed: '交易已完成，佣金将在7天后结算',
             cancelled: '订单已取消',
+            refunding: '退款申请处理中，请耐心等待',
             refunded: '退款已完成'
+        },
+        refundStatusText: {
+            pending: '审核中',
+            approved: '审核通过',
+            processing: '退款处理中',
+            completed: '退款完成',
+            rejected: '申请被拒绝',
+            cancelled: '已取消'
         }
     },
 
@@ -35,10 +48,22 @@ Page({
         }
     },
 
+    // ★ 每次显示刷新（从退款申请页返回时需要更新状态）
+    onShow() {
+        if (this.data.orderId) {
+            this.loadOrder(this.data.orderId);
+        }
+    },
+
     async loadOrder(id) {
         try {
-            const res = await get(`/orders/${id}`);
-            const order = res.data;
+            // ★ 并行加载订单详情和该订单的退款记录
+            const [orderRes, refundsRes] = await Promise.all([
+                get(`/orders/${id}`),
+                get('/refunds', { page: 1, limit: 10 }).catch(() => ({ data: { list: [] } }))
+            ]);
+
+            const order = orderRes.data;
 
             // 处理商品图片
             if (order && order.product && typeof order.product.images === 'string') {
@@ -49,7 +74,23 @@ Page({
                 }
             }
 
-            this.setData({ order, loading: false });
+            // ★ 查找该订单的活跃退款
+            const allRefunds = refundsRes.data?.list || [];
+            const activeRefund = allRefunds.find(r =>
+                r.order_id === parseInt(id) &&
+                ['pending', 'approved', 'processing'].includes(r.status)
+            );
+
+            // 也找最近完成/拒绝的退款（用于展示历史信息）
+            const latestRefund = allRefunds.find(r => r.order_id === parseInt(id));
+
+            this.setData({
+                order,
+                loading: false,
+                activeRefund: activeRefund || null,
+                hasActiveRefund: !!activeRefund,
+                latestRefund: latestRefund || null
+            });
         } catch (err) {
             console.error('加载订单失败:', err);
             this.setData({ loading: false });
@@ -136,6 +177,17 @@ Page({
         wx.navigateTo({
             url: `/pages/order/refund-apply?order_id=${order.id}`
         });
+    },
+
+    // ★ 查看退款详情
+    onViewRefund() {
+        const { activeRefund, latestRefund } = this.data;
+        const refund = activeRefund || latestRefund;
+        if (refund) {
+            wx.navigateTo({
+                url: `/pages/order/refund-detail?id=${refund.id}`
+            });
+        }
     },
 
     // 查看物流
