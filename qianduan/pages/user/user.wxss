@@ -3,7 +3,7 @@
 /* 1. Deep Midnight Header */
 .user-header {
   position: relative;
-  background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); /* Deep Midnight with gradient */
+  background: var(--bg-gradient-midnight);
   padding: 80rpx 40rpx 100rpx; /* Extra bottom padding for overlap */
   color: #fff;
   overflow: hidden;
@@ -53,10 +53,10 @@
 .avatar-glow {
   position: absolute;
   inset: -4rpx;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.6), rgba(118, 75, 162, 0.4)); /* Gradient Glow */
+  background: var(--bg-gradient-purple);
   border-radius: 50%;
   filter: blur(12rpx);
-  animation: avatarPulse 3s ease-in-out infinite;
+  animation: avatarPulse 3s var(--ease-in-out) infinite;
 }
 
 @keyframes avatarPulse {
@@ -77,7 +77,7 @@
   border: 4rpx solid rgba(255,255,255,0.2);
   position: relative;
   z-index: 2;
-  background-color: #1e293b;
+  background-color: var(--color-secondary-light);
 }
 
 .edit-icon {
@@ -92,7 +92,7 @@
   align-items: center;
   justify-content: center;
   font-size: 24rpx;
-  border: 2rpx solid #0F172A;
+  border: 2rpx solid var(--color-secondary);
   z-index: 3;
 }
 
@@ -145,10 +145,10 @@
 }
 
 .asset-card {
-  background: #fff;
-  border-radius: 32rpx;
-  padding: 32rpx;
-  box-shadow: 0 20rpx 40rpx -10rpx rgba(0,0,0,0.08); /* Shadow Float */
+  background: var(--card-surface);
+  border-radius: var(--card-radius);
+  padding: var(--card-padding);
+  box-shadow: var(--card-shadow-float);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -165,12 +165,12 @@
 .divider {
   width: 2rpx;
   height: 40rpx;
-  background-color: #E2E8F0;
+  background-color: var(--color-border);
 }
 
 .asset-label {
   font-size: 24rpx;
-  color: #64748B;
+  color: var(--color-text-sub);
   font-weight: 500;
 }
 
@@ -178,7 +178,7 @@
   font-size: 32rpx;
   font-weight: 800;
   color: var(--color-text-main);
-  font-family: 'DIN Condensed', sans-serif;
+  font-family: var(--font-display);
 }
 
 .asset-value.highlight {
@@ -192,15 +192,15 @@
 }
 
 .agent-banner {
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-  border-radius: 24rpx;
-  padding: 32rpx;
+  background: var(--bg-gradient-midnight-reverse);
+  border-radius: var(--card-radius-sm);
+  padding: var(--card-padding);
   position: relative;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 4rpx 12rpx rgba(15, 23, 42, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .banner-overlay {
@@ -250,10 +250,10 @@
 /* 4. Section Card (Orders/Tools) */
 .section-card {
   margin: 32rpx 32rpx 0;
-  background: #fff;
-  border-radius: 32rpx;
-  padding: 32rpx;
-  box-shadow: 0 2rpx 6rpx rgba(0,0,0,0.02);
+  background: var(--card-surface);
+  border-radius: var(--card-radius);
+  padding: var(--card-padding);
+  box-shadow: var(--card-shadow-default);
 }
 
 .mb-safe { margin-bottom: 60rpx; } /* extra space */
@@ -268,14 +268,14 @@
 .card-title {
   font-size: 32rpx;
   font-weight: 700;
-  color: #0F172A;
+  color: var(--color-secondary);
 }
 
 .card-more {
   display: flex;
   align-items: center;
   font-size: 24rpx;
-  color: #94A3B8;
+  color: var(--color-text-muted);
 }
 
 .order-icons {
@@ -295,26 +295,26 @@
   width: 88rpx;
   height: 88rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: var(--bg-gradient-icon);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 36rpx;
   position: relative;
-  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.06);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-md);
+  transition: all var(--duration-normal) var(--ease-smooth);
 }
 
 .icon-item:active .icon-circle {
   transform: scale(0.9);
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 .badge {
   position: absolute;
   top: -4rpx;
   right: -4rpx;
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  background: var(--bg-gradient-red);
   color: #fff;
   font-size: 20rpx;
   width: 32rpx;
@@ -324,8 +324,8 @@
   align-items: center;
   justify-content: center;
   border: 2rpx solid #fff;
-  box-shadow: 0 4rpx 8rpx rgba(239, 68, 68, 0.3);
-  animation: badgePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: var(--shadow-red);
+  animation: badgePop 0.5s var(--ease-spring);
 }
 
 @keyframes badgePop {
@@ -340,7 +340,7 @@
   }
 }
 
-.icon-text { font-size: 24rpx; color: #64748B; font-weight: 500; }
+.icon-text { font-size: 24rpx; color: var(--color-text-sub); font-weight: 500; }
 
 /* 5. Tools Grid - 使用Flexbox替代Grid */
 .tools-grid {
@@ -390,7 +390,7 @@ button.tool-item::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.3s;
+  transition: transform var(--duration-normal);
   filter: drop-shadow(0 2rpx 4rpx rgba(0, 0, 0, 0.1));
 }
 
@@ -398,9 +398,9 @@ button.tool-item::after {
   transform: scale(1.1);
 }
 
-.tool-text { 
-  font-size: 24rpx; 
-  color: #64748B; 
+.tool-text {
+  font-size: 24rpx;
+  color: var(--color-text-sub);
   text-align: center;
   margin-top: 8rpx;
   line-height: 1.4;
@@ -417,14 +417,14 @@ button.tool-item::after {
 .invite-modal {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.6);
+  background: var(--color-bg-overlay);
   z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.3s;
+  transition: opacity var(--duration-normal);
 }
 
 .invite-modal.show {
@@ -433,13 +433,13 @@ button.tool-item::after {
 }
 
 .modal-content {
-  background: #fff;
+  background: var(--card-surface);
   width: 600rpx;
-  border-radius: 32rpx;
+  border-radius: var(--card-radius);
   padding: 48rpx;
   text-align: center;
   transform: scale(0.9);
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform var(--duration-normal) var(--ease-spring);
 }
 
 .invite-modal.show .modal-content {
@@ -459,12 +459,12 @@ button.tool-item::after {
   color: var(--color-primary);
   background: #EFF6FF;
   padding: 24rpx;
-  border-radius: 16rpx;
+  border-radius: var(--radius-md);
   margin-bottom: 24rpx;
   border: 2rpx dashed rgba(28, 107, 242, 0.3);
 }
 
 .modal-tip {
   font-size: 24rpx;
-  color: #94A3B8;
+  color: var(--color-text-muted);
 }
