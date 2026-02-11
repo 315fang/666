@@ -63,7 +63,18 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-md) 0;
-  border-bottom: 1rpx solid var(--color-divider);
+  border-bottom: 2rpx solid #E2E8F0;
+  margin-bottom: 4rpx;
+  transition: background-color 0.2s;
+}
+
+.log-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.log-item:active {
+  background-color: #F8FAFC;
 }
 
 .log-info {
