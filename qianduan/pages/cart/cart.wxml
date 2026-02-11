@@ -2,7 +2,7 @@
 <view class="container">
   <!-- 空购物车 -->
   <view class="empty-cart" wx:if="{{!loading && cartItems.length === 0}}">
-    <text class="empty-icon">🛒</text>
+      <image class="empty-icon-img" src="/assets/icons/cart.svg" mode="aspectFit"></image>
     <text class="empty-title">购物车是空的</text>
     <text class="empty-desc">快去挑选心仪的商品吧</text>
     <navigator url="/pages/index/index" open-type="switchTab" class="btn btn-primary">
@@ -37,7 +37,7 @@
         </text>
         
         <view class="price-quantity-row">
-          <text class="product-price">¥{{item.price}}</text>
+          <text class="product-price">{{item.price}}</text>
           
           <!-- 数量控制 -->
           <view class="quantity-control">
@@ -56,7 +56,7 @@
 
       <!-- 删除按钮 -->
       <view class="delete-btn" bindtap="onDelete" data-index="{{index}}">
-        <text>🗑️</text>
+        <image src="/assets/icons/trash.svg" style="width:36rpx;height:36rpx;" mode="aspectFit"></image>
       </view>
     </view>
   </view>
@@ -79,7 +79,7 @@
     <view class="total-section">
       <view class="total-label">
         <text>合计：</text>
-        <text class="total-price">¥{{totalPrice}}</text>
+        <text class="total-price">{{totalPrice}}</text>
       </view>
       <text class="total-count">共{{totalCount}}件</text>
     </view>

@@ -6,7 +6,7 @@ const app = getApp();
 
 // Figma Design Colors: Blue-50, Pink-50, Indigo-50
 const NAV_COLORS = ['#EFF6FF', '#FDF2F8', '#EEF2FF'];
-const NAV_ICONS = ['🔥', '👑', '🎁'];
+const NAV_ICONS = ['/assets/icons/hot.svg', '/assets/icons/crown.svg', '/assets/icons/gift.svg'];
 
 Page({
     data: {
@@ -88,9 +88,9 @@ Page({
 
             // 金刚区：取前3个分类，不足用默认补齐
             const defaultNav = [
-                { id: '__hot', name: '热门推荐', icon: '🔥', bgColor: '#FEF3C7' },
-                { id: '__new', name: '新品上市', icon: '✨', bgColor: '#FCE7F3' },
-                { id: '__sale', name: '限时特惠', icon: '🏷️', bgColor: '#DCFCE7' }
+                { id: '__hot', name: '热门推荐', icon: '/assets/icons/hot.svg', bgColor: '#FEF3C7' },
+                { id: '__new', name: '新品上市', icon: '/assets/icons/sparkle.svg', bgColor: '#FCE7F3' },
+                { id: '__sale', name: '限时特惠', icon: '/assets/icons/tag.svg', bgColor: '#DCFCE7' }
             ];
             const topCategories = [];
             for (let i = 0; i < 3; i++) {
@@ -106,27 +106,9 @@ Page({
                 }
             }
 
-            // 处理商品数据
+            // 处理商品数据并分列
             const rawProducts = results[1].data && results[1].data.list ? results[1].data.list : (results[1].data || []);
-            const products = rawProducts.map(item => {
-                const images = parseImages(item.images);
-                return {
-                    ...item,
-                    image: images.length > 0 ? images[0] : DEFAULTS.PLACEHOLDER,
-                    price: item.retail_price || item.price || 0
-                };
-            });
-
-            // 分成左右两列（瀑布流）
-            const leftProducts = [];
-            const rightProducts = [];
-            products.forEach((item, index) => {
-                if (index % 2 === 0) {
-                    leftProducts.push(item);
-                } else {
-                    rightProducts.push(item);
-                }
-            });
+            const { products, leftProducts, rightProducts } = this._processAndSplitProducts(rawProducts);
 
             this.setData({
                 banners: results[0].data || [],
@@ -197,27 +179,7 @@ Page({
 
             const res = await get('/products', params);
             const rawProducts = res.data && res.data.list ? res.data.list : (res.data || []);
-
-            // 处理商品数据
-            const products = rawProducts.map(item => {
-                const images = parseImages(item.images);
-                return {
-                    ...item,
-                    image: images.length > 0 ? images[0] : DEFAULTS.PLACEHOLDER,
-                    price: item.retail_price || item.price || 0
-                };
-            });
-
-            // 分成左右两列
-            const leftProducts = [];
-            const rightProducts = [];
-            products.forEach((item, index) => {
-                if (index % 2 === 0) {
-                    leftProducts.push(item);
-                } else {
-                    rightProducts.push(item);
-                }
-            });
+            const { products, leftProducts, rightProducts } = this._processAndSplitProducts(rawProducts);
 
             this.setData({
                 products,
@@ -229,6 +191,30 @@ Page({
             console.error('加载商品失败:', err);
             this.setData({ loading: false });
         }
+    },
+
+    // 私有方法：处理商品数据并分为左右两列
+    _processAndSplitProducts(rawProducts) {
+        const products = rawProducts.map(item => {
+            const images = parseImages(item.images);
+            return {
+                ...item,
+                image: images.length > 0 ? images[0] : DEFAULTS.PLACEHOLDER,
+                price: item.retail_price || item.price || 0
+            };
+        });
+
+        const leftProducts = [];
+        const rightProducts = [];
+        products.forEach((item, index) => {
+            if (index % 2 === 0) {
+                leftProducts.push(item);
+            } else {
+                rightProducts.push(item);
+            }
+        });
+
+        return { products, leftProducts, rightProducts };
     },
 
     // 商品点击

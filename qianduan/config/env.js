@@ -13,7 +13,7 @@ const ENV_TYPES = {
 // 当前环境配置
 // WeChat小程序不支持process.env，这里手动配置环境
 // 部署时修改此值：开发环境用 DEVELOPMENT，生产环境用 PRODUCTION
-const CURRENT_ENV = ENV_TYPES.DEVELOPMENT;
+const CURRENT_ENV = ENV_TYPES.PRODUCTION;
 
 /**
  * 环境配置

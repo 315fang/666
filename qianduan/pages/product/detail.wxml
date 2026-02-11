@@ -153,23 +153,23 @@
   <view class="bottom-action-bar safe-bottom">
     <view class="bar-icons">
       <view class="icon-btn" bindtap="goHome">
-        <text class="bar-icon">🏠</text>
+        <image src="/assets/icons/home.svg" style="width:40rpx;height:40rpx;" mode="aspectFit"></image>
         <text class="bar-text">首页</text>
       </view>
       <view class="icon-btn" bindtap="goCart">
-        <text class="bar-icon">🛒</text>
+        <image src="/assets/icons/cart.svg" style="width:40rpx;height:40rpx;" mode="aspectFit"></image>
         <text class="bar-text">购物车</text>
         <view class="cart-badge" wx:if="{{cartCount > 0}}">{{cartCount}}</view>
       </view>
       <button class="icon-btn contact-btn" open-type="contact">
-        <text class="bar-icon">💬</text>
+        <image src="/assets/icons/message.svg" style="width:40rpx;height:40rpx;" mode="aspectFit"></image>
         <text class="bar-text">客服</text>
       </button>
     </view>
 
     <view class="bar-buttons">
-      <view class="bar-btn secondary" bindtap="showSkuModal">加入购物车</view>
-      <view class="bar-btn primary" bindtap="showSkuModal">立即购买</view>
+      <view class="bar-btn secondary" bindtap="onAddToCart">加入购物车</view>
+      <view class="bar-btn primary" bindtap="onBuyNow">立即购买</view>
     </view>
   </view>
 </view>
