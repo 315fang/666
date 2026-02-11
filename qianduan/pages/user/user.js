@@ -9,12 +9,21 @@ Page({
     data: {
         userInfo: null,
         isLoggedIn: false,
-        orderCounts: {
+        hasUserInfo: false,
+        // 资产卡数据（WXML 绑定用）
+        stats: { frozenAmount: '0.00' },
+        balance: '0.00',
+        teamCount: 0,
+        // 订单统计（WXML 用 orderStats）
+        orderStats: {
             pending: 0,
             paid: 0,
             shipped: 0,
             refund: 0
         },
+        // 角色相关
+        isAgent: false,
+        // 分销原始信息
         distributionInfo: {
             totalEarnings: '0.00',
             availableAmount: '0.00',
@@ -23,8 +32,12 @@ Page({
             role_name: '普通用户'
         },
         notificationsCount: 0,
+        // 昵称修改弹窗
         showNicknameModal: false,
-        newNickname: ''
+        newNickname: '',
+        // 邀请码弹窗
+        showInvite: false,
+        inviteCode: ''
     },
 
     onShow() {
@@ -45,18 +58,31 @@ Page({
             const res = await get('/user/profile');
             if (res.code === 0 && res.data) {
                 const info = res.data;
-                this.setData({ userInfo: info });
+                this.setData({
+                    userInfo: info,
+                    hasUserInfo: true,
+                    inviteCode: info.invite_code || '',
+                    isAgent: (info.role_level || info.role || 0) >= 2
+                });
                 app.globalData.userInfo = info;
                 wx.setStorageSync('userInfo', info);
             } else {
-                this.setData({ userInfo: app.globalData.userInfo });
+                const cached = app.globalData.userInfo;
+                this.setData({
+                    userInfo: cached,
+                    hasUserInfo: !!cached
+                });
             }
         } catch (err) {
             ErrorHandler.handle(err, {
                 customMessage: '加载用户信息失败',
                 showToast: false
             });
-            this.setData({ userInfo: app.globalData.userInfo });
+            const cached = app.globalData.userInfo;
+            this.setData({
+                userInfo: cached,
+                hasUserInfo: !!cached
+            });
         }
 
         // 并行加载所有数据
@@ -74,11 +100,15 @@ Page({
                 get('/orders', { status: 'shipped', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
                 get('/orders', { status: 'refunded', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } }))
             ]);
+            const pending = (results[0].data && results[0].data.pagination && results[0].data.pagination.total) || 0;
+            const paid = (results[1].data && results[1].data.pagination && results[1].data.pagination.total) || 0;
+            const shipped = (results[2].data && results[2].data.pagination && results[2].data.pagination.total) || 0;
+            const refund = (results[3].data && results[3].data.pagination && results[3].data.pagination.total) || 0;
             this.setData({
-                'orderCounts.pending': (results[0].data && results[0].data.pagination && results[0].data.pagination.total) || 0,
-                'orderCounts.paid': (results[1].data && results[1].data.pagination && results[1].data.pagination.total) || 0,
-                'orderCounts.shipped': (results[2].data && results[2].data.pagination && results[2].data.pagination.total) || 0,
-                'orderCounts.refund': (results[3].data && results[3].data.pagination && results[3].data.pagination.total) || 0
+                'orderStats.pending': pending,
+                'orderStats.paid': paid,
+                'orderStats.shipped': shipped,
+                'orderStats.refund': refund
             });
         } catch (err) {
             console.error('加载订单数量失败:', err);
@@ -92,14 +122,24 @@ Page({
             if (res.code === 0 && res.data) {
                 const d = res.data;
                 const roleNames = { 0: '普通用户', 1: '会员', 2: '团长', 3: '代理商' };
+                const totalEarnings = d.stats ? d.stats.totalEarnings : '0.00';
+                const availableAmount = d.stats ? d.stats.availableAmount : '0.00';
+                const frozenAmount = d.stats ? (d.stats.frozenAmount || '0.00') : '0.00';
+                const teamCount = d.team ? d.team.totalCount : 0;
+                const roleLevel = d.userInfo ? d.userInfo.role : 0;
                 this.setData({
                     distributionInfo: {
-                        totalEarnings: d.stats ? d.stats.totalEarnings : '0.00',
-                        availableAmount: d.stats ? d.stats.availableAmount : '0.00',
-                        referee_count: d.team ? d.team.totalCount : 0,
-                        role_level: d.userInfo ? d.userInfo.role : 0,
-                        role_name: d.userInfo ? (d.userInfo.role_name || roleNames[d.userInfo.role]) : '普通用户'
-                    }
+                        totalEarnings,
+                        availableAmount,
+                        referee_count: teamCount,
+                        role_level: roleLevel,
+                        role_name: d.userInfo ? (d.userInfo.role_name || roleNames[roleLevel]) : '普通用户'
+                    },
+                    // 同步 WXML 用到的顶级变量
+                    stats: { frozenAmount },
+                    balance: availableAmount,
+                    teamCount,
+                    isAgent: roleLevel >= 2
                 });
             }
         } catch (err) {
@@ -120,11 +160,10 @@ Page({
         }
     },
 
-    // ======== 登录 ========
+    // ======== 登录（WXML 用 onLoginTap） ========
     async onLogin() {
         try {
             wx.showLoading({ title: '登录中...' });
-            // 传入 withProfile=true 以获取微信头像和昵称
             await app.wxLogin(null, true);
             wx.hideLoading();
             this.loadUserInfo();
@@ -132,6 +171,13 @@ Page({
         } catch (err) {
             wx.hideLoading();
             wx.showToast({ title: '登录失败', icon: 'none' });
+        }
+    },
+
+    // WXML 绑定别名
+    onLoginTap() {
+        if (!this.data.isLoggedIn) {
+            this.onLogin();
         }
     },
 
@@ -155,12 +201,17 @@ Page({
         // 阻止冒泡
     },
 
+    // 阻止事件冒泡（WXML 中 catchtap="stopP"）
+    stopP() { },
+
     async onConfirmNickname() {
+        if (this._submitting) return;
         const nickname = this.data.newNickname.trim();
         if (!nickname) {
             wx.showToast({ title: '昵称不能为空', icon: 'none' });
             return;
         }
+        this._submitting = true;
         try {
             const res = await put('/user/profile', { nickname });
             if (res.code === 0) {
@@ -172,10 +223,12 @@ Page({
             }
         } catch (err) {
             wx.showToast({ title: '修改失败', icon: 'none' });
+        } finally {
+            this._submitting = false;
         }
     },
 
-    // ======== ★ 佣金明细（点击累计佣金跳转） ========
+    // ======== ★ 佣金明细 ========
     onCommissionTap() {
         if (!this.data.isLoggedIn) {
             wx.showToast({ title: '请先登录', icon: 'none' });
@@ -183,6 +236,8 @@ Page({
         }
         wx.navigateTo({ url: '/pages/distribution/center?tab=logs' });
     },
+    // WXML 绑定别名
+    goCommission() { this.onCommissionTap(); },
 
     // ======== ★ 钱包/提现 ========
     onWalletTap() {
@@ -192,6 +247,7 @@ Page({
         }
         wx.navigateTo({ url: '/pages/wallet/index' });
     },
+    goWallet() { this.onWalletTap(); },
 
     // ======== ★ 团队 ========
     onTeamTap() {
@@ -200,6 +256,25 @@ Page({
             return;
         }
         wx.navigateTo({ url: '/pages/distribution/team' });
+    },
+    goTeam() { this.onTeamTap(); },
+
+    // ======== 地址管理 ========
+    goAddress() {
+        if (!this.data.isLoggedIn) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: '/pages/address/list' });
+    },
+
+    // ======== 工作台 ========
+    goWorkbench() {
+        if (!this.data.isLoggedIn) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: '/pages/distribution/workbench' });
     },
 
     // ======== 订单入口 ========
@@ -289,10 +364,22 @@ Page({
         }
     },
 
+    // ======== 显示/隐藏邀请码弹窗 ========
+    onShowInvite() {
+        if (!this.data.isLoggedIn) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        this.setData({ showInvite: true });
+    },
+
+    hideInvite() {
+        this.setData({ showInvite: false });
+    },
+
     // ======== 复制邀请码 ========
     onCopyInviteCode() {
-        const userInfo = this.data.userInfo;
-        const code = userInfo ? userInfo.invite_code : '';
+        const code = this.data.inviteCode;
         if (!code) {
             wx.showToast({ title: '暂无邀请码', icon: 'none' });
             return;
@@ -304,6 +391,8 @@ Page({
             }
         });
     },
+    // WXML 绑定别名
+    copyInviteCode() { this.onCopyInviteCode(); },
 
     // ======== ★ 分享邀请 ========
     onShareTap() {

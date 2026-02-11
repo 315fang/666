@@ -8,10 +8,10 @@
       <swiper-item wx:for="{{banners}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}">
         <view class="banner-item">
           <image src="{{item.image_url}}" mode="aspectFill" class="banner-img"></image>
-          <view class="banner-overlay"></view>
-          <view class="banner-text">
-            <view class="banner-tag">LIMITED EDITION</view>
-            <view class="banner-title">春季高奢秀场<br/>限时鉴赏系列</view>
+          <view class="banner-overlay" wx:if="{{item.title || item.subtitle}}"></view>
+          <view class="banner-text" wx:if="{{item.title || item.subtitle}}">
+            <view class="banner-tag" wx:if="{{item.subtitle}}">{{item.subtitle}}</view>
+            <view class="banner-title" wx:if="{{item.title}}">{{item.title}}</view>
           </view>
         </view>
       </swiper-item>
@@ -22,7 +22,7 @@
   <view class="nav-grid">
     <view class="nav-item" wx:for="{{topCategories}}" wx:key="id" bindtap="onCategoryTap" data-id="{{item.id}}">
       <view class="nav-icon-box" style="background-color: {{item.bgColor}}">
-        <text class="nav-icon">{{item.icon}}</text>
+        <image class="nav-icon" src="{{item.icon}}" mode="aspectFit" style="width:44rpx;height:44rpx;"></image>
       </view>
       <text class="nav-text">{{item.name}}</text>
     </view>

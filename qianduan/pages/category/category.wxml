@@ -3,7 +3,7 @@
   <!-- 1. Sticky Search Header (White Bg) -->
   <view class="search-sticky-header">
     <view class="search-box" bindtap="onSearchTap">
-      <text class="search-icon">🔍</text>
+      <image class="search-icon-img" src="/assets/icons/search.svg" style="width:32rpx;height:32rpx;" mode="aspectFit"></image>
       <text class="search-text">搜索精选商品</text>
     </view>
   </view>
@@ -49,7 +49,7 @@
       </view>
     </view>
     <view class="filter-icon-btn">
-      <text class="material-icon">⚙️</text>
+      <image src="/assets/icons/settings.svg" style="width:32rpx;height:32rpx;" mode="aspectFit"></image>
     </view>
   </view>
 
@@ -87,7 +87,7 @@
     <!-- Loading / Empty -->
     <view class="loading-footer" wx:if="{{loading}}">
       <view class="spinner"></view>
-      <text>Loading...</text>
+      <text>加载中...</text>
     </view>
     <view class="empty-state" wx:if="{{!loading && products.length === 0}}">
       <text>暂无相关商品</text>

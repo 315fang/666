@@ -22,7 +22,7 @@
       <!-- 订单头部 -->
       <view class="order-header">
         <text class="order-no">订单号: {{item.order_no}}</text>
-        <text class="order-status {{item.status}}">{{statusText[item.status]}}</text>
+        <text class="order-status {{item.status}}">{{item.statusText}}</text>
       </view>
 
       <!-- 商品信息（单商品订单） -->
@@ -71,7 +71,7 @@
 
     <!-- 空状态 -->
     <view class="empty" wx:if="{{!loading && orders.length === 0}}">
-      <text class="empty-icon">📋</text>
+      <image src="/assets/icons/clipboard.svg" style="width:80rpx;height:80rpx;margin-bottom:16rpx;" mode="aspectFit"></image>
       <text class="empty-text">暂无订单</text>
       <navigator url="/pages/index/index" open-type="switchTab" class="btn btn-primary btn-sm">
         去逛逛
