@@ -18,6 +18,8 @@ const Notification = require('./Notification');
 const AppConfig = require('./AppConfig');
 const QuickEntry = require('./QuickEntry');
 const HomeSection = require('./HomeSection');
+const Theme = require('./Theme');
+const ActivityLog = require('./ActivityLog');
 
 // ========== 用户相关关联 ==========
 User.hasMany(Order, { foreignKey: 'buyer_id', as: 'orders' });
@@ -117,5 +119,7 @@ module.exports = {
     Notification,
     AppConfig,
     QuickEntry,
-    HomeSection
+    HomeSection,
+    Theme,
+    ActivityLog
 };
