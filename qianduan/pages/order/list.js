@@ -22,7 +22,7 @@ Page({
     },
 
     onShow() {
-        // 每次显示时刷新
+        // 每次显示时刷新（从详情页/退款页返回后应看到最新状态）
         this.setData({ page: 1, hasMore: true });
         this.loadOrders();
     },
@@ -34,7 +34,7 @@ Page({
         });
     },
 
-    // 加载订单
+    // ★ 核心：加载订单 + 退款状态
     async loadOrders(append = false) {
         if (this.data.loading) return;
 
@@ -44,18 +44,51 @@ Page({
             const { currentStatus, page, limit } = this.data;
             const params = { page, limit };
 
+            // 「退款/售后」Tab 特殊处理：从 /refunds 接口拿
+            if (currentStatus === 'refund') {
+                await this._loadRefundOrders(append);
+                return;
+            }
+
             if (currentStatus) params.status = currentStatus;
 
-            const res = await get('/orders', params);
-            let newOrders = res.data?.list || res.data || [];
+            // ★ 并行加载订单列表 + 用户的活跃退款
+            const [ordersRes, refundsRes] = await Promise.all([
+                get('/orders', params),
+                get('/refunds', { page: 1, limit: 100 }).catch(() => ({ data: { list: [] } }))
+            ]);
 
-            // 使用工具函数处理订单图片
+            let newOrders = ordersRes.data?.list || ordersRes.data || [];
+            const activeRefunds = (refundsRes.data?.list || [])
+                .filter(r => ['pending', 'approved', 'processing'].includes(r.status));
+
+            // 建立 order_id → refund 映射
+            const refundMap = {};
+            activeRefunds.forEach(r => {
+                refundMap[r.order_id] = r;
+            });
+
+            // 处理每个订单
             newOrders = newOrders.map(order => {
                 if (order.product && order.product.images) {
                     order.product.images = parseImages(order.product.images);
                 }
-                // 添加状态文本
-                order.statusText = ORDER_STATUS_TEXT[order.status] || '未知状态';
+
+                // ★ 检查该订单是否有活跃退款
+                const activeRefund = refundMap[order.id];
+                if (activeRefund) {
+                    order.hasActiveRefund = true;
+                    order.refundId = activeRefund.id;
+                    order.refundStatus = activeRefund.status;
+                    // 覆盖状态文本为退款状态
+                    order.statusText = '退款中';
+                    order.displayStatus = 'refunding';
+                } else {
+                    order.hasActiveRefund = false;
+                    order.statusText = ORDER_STATUS_TEXT[order.status] || '未知状态';
+                    order.displayStatus = order.status;
+                }
+
                 return order;
             });
 
@@ -70,6 +103,56 @@ Page({
             });
             this.setData({ loading: false });
         }
+    },
+
+    // ★ 退款/售后 Tab 专用加载
+    async _loadRefundOrders(append) {
+        try {
+            const { page, limit } = this.data;
+            const res = await get('/refunds', { page, limit });
+            const refundList = res.data?.list || [];
+
+            // 将退款记录转换为类订单结构（便于复用同一个模板）
+            const newOrders = refundList.map(refund => {
+                const order = refund.order || {};
+                if (order.product && typeof order.product.images === 'string') {
+                    try { order.product.images = JSON.parse(order.product.images); } catch (e) { order.product.images = []; }
+                }
+
+                return {
+                    ...order,
+                    id: order.id,
+                    hasActiveRefund: ['pending', 'approved', 'processing'].includes(refund.status),
+                    refundId: refund.id,
+                    refundStatus: refund.status,
+                    statusText: this._getRefundStatusText(refund.status),
+                    displayStatus: 'refund_' + refund.status,
+                    refundType: refund.type,
+                    refundAmount: refund.amount
+                };
+            });
+
+            this.setData({
+                orders: append ? [...this.data.orders, ...newOrders] : newOrders,
+                hasMore: refundList.length >= limit,
+                loading: false
+            });
+        } catch (err) {
+            console.error('加载退款列表失败:', err);
+            this.setData({ loading: false });
+        }
+    },
+
+    _getRefundStatusText(status) {
+        const map = {
+            pending: '退款审核中',
+            approved: '退款已通过',
+            processing: '退款处理中',
+            completed: '退款完成',
+            rejected: '退款被拒绝',
+            cancelled: '退款已取消'
+        };
+        return map[status] || '退款中';
     },
 
     // Tab切换
@@ -156,10 +239,27 @@ Page({
         }
     },
 
+    // ★ 申请退款（从列表页直接操作）
+    onApplyRefund(e) {
+        const order = e.currentTarget.dataset.order;
+        wx.navigateTo({
+            url: `/pages/order/refund-apply?order_id=${order.id}`
+        });
+    },
+
+    // ★ 查看退款详情
+    onViewRefund(e) {
+        const order = e.currentTarget.dataset.order;
+        if (order.refundId) {
+            wx.navigateTo({
+                url: `/pages/order/refund-detail?id=${order.refundId}`
+            });
+        }
+    },
+
     // 再次购买
     onBuyAgain(e) {
         const order = e.currentTarget.dataset.order;
-        // ... (保持原有逻辑)
         if (order.product_id) {
             wx.navigateTo({ url: `/pages/product/detail?id=${order.product_id}` });
         } else if (order.product && order.product.id) {
