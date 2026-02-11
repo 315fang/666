@@ -1,18 +1,18 @@
 /* components/product-card/product-card.wxss */
 .card {
-  background: #ffffff;
-  border-radius: 24rpx;
+  background: var(--card-surface);
+  border-radius: var(--card-radius-sm);
   overflow: hidden;
-  box-shadow: 0 4rpx 20rpx rgba(15, 23, 42, 0.06);
+  box-shadow: var(--shadow-product);
   display: flex;
   flex-direction: column;
   height: 100%;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--duration-normal) var(--ease-smooth);
 }
 
 .card-hover:active {
-  transform: translateY(-8rpx) scale(0.98);
-  box-shadow: 0 12rpx 32rpx rgba(15, 23, 42, 0.12);
+  transform: translateY(-8rpx) var(--transform-scale-hover);
+  box-shadow: var(--card-shadow-hover);
 }
 
 /* Vertical Mode (Default) */
@@ -20,7 +20,7 @@
   position: relative;
   width: 100%;
   padding-bottom: 100%; /* Aspect Square */
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  background: var(--bg-gradient-subtle);
   overflow: hidden;
 }
 
@@ -31,19 +31,19 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform var(--duration-slow) var(--ease-smooth);
 }
 
 .card-hover:active .image {
-  transform: scale(1.05);
+  transform: var(--transform-scale-pop);
 }
 
 /* Horizontal Mode */
 .card-horizontal {
   flex-direction: row;
   height: auto;
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 12rpx rgba(15, 23, 42, 0.04);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   border-bottom: 1px solid var(--color-divider);
 }
 
@@ -52,7 +52,7 @@
   width: 200rpx;
   height: 200rpx;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  background: var(--bg-gradient-subtle);
 }
 
 .card-horizontal .image {
@@ -66,31 +66,31 @@
   position: absolute;
   top: 16rpx;
   left: 16rpx;
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  background: var(--bg-gradient-red);
   color: #fff;
   font-size: 20rpx;
   padding: 6rpx 12rpx;
-  border-radius: 12rpx;
+  border-radius: var(--radius-md);
   font-weight: 700;
   z-index: 10;
-  box-shadow: 0 4rpx 12rpx rgba(239, 68, 68, 0.3);
+  box-shadow: var(--shadow-red);
   letter-spacing: 2rpx;
   text-transform: uppercase;
 }
 
 .content {
-  padding: 24rpx;
+  padding: var(--card-padding-sm);
   display: flex;
   flex-direction: column;
   gap: 12rpx;
   flex: 1;
-  background: linear-gradient(to bottom, #ffffff 0%, #fafbfc 100%);
+  background: var(--bg-gradient-card);
 }
 
 .card-horizontal .content {
   padding: 16rpx 24rpx;
   gap: 8rpx;
-  background: #ffffff;
+  background: var(--card-surface);
 }
 
 .title {
@@ -102,7 +102,7 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  transition: color 0.2s;
+  transition: color var(--duration-fast);
 }
 
 .card-hover:active .title {
@@ -121,17 +121,17 @@
 
 .tag {
   color: var(--color-text-sub);
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  background: var(--bg-gradient-tag);
   font-size: 20rpx;
   padding: 6rpx 12rpx;
-  border-radius: 8rpx;
+  border-radius: var(--radius-sm);
   font-weight: 500;
-  border: 1rpx solid #e2e8f0;
-  transition: all 0.2s;
+  border: 1rpx solid var(--color-border);
+  transition: all var(--duration-fast);
 }
 
 .tag:active {
-  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  background: var(--bg-gradient-subtle);
   transform: scale(0.95);
 }
 
@@ -141,7 +141,7 @@
   justify-content: space-between;
   margin-top: auto;
   padding-top: 8rpx;
-  border-top: 1rpx solid #f1f5f9;
+  border-top: 1rpx solid var(--color-divider);
 }
 
 .price-box {
@@ -152,17 +152,17 @@
 }
 
 .currency {
-  color: #d97706;
+  color: var(--color-accent);
   font-size: 22rpx;
   font-weight: 700;
   margin-right: 2rpx;
 }
 
 .price {
-  color: #d97706;
+  color: var(--color-accent);
   font-size: 36rpx;
   font-weight: 800;
-  font-family: 'DIN Condensed', 'SF Pro Display', -apple-system, sans-serif;
+  font-family: var(--font-display);
   line-height: 1;
   text-shadow: 0 2rpx 4rpx rgba(217, 119, 6, 0.1);
 }
@@ -176,20 +176,20 @@
 }
 
 .buy-btn {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  background: var(--bg-gradient-midnight);
   color: #fff;
   font-size: 22rpx;
   padding: 10rpx 20rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-full);
   font-weight: 600;
-  box-shadow: 0 4rpx 12rpx rgba(15, 23, 42, 0.2);
-  transition: all 0.2s;
+  box-shadow: var(--shadow-md);
+  transition: all var(--duration-fast);
 }
 
 .buy-btn:active {
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  background: var(--bg-gradient-midnight-reverse);
   transform: scale(0.95);
-  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.3);
+  box-shadow: var(--shadow-lg);
 }
 
 .card-horizontal .buy-btn {
