@@ -54,8 +54,11 @@ page {
   --shadow-sm: 0 1rpx 2rpx rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4rpx 6rpx -1rpx rgba(0, 0, 0, 0.1), 0 2rpx 4rpx -1rpx rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 10rpx 15rpx -3rpx rgba(0, 0, 0, 0.1), 0 4rpx 6rpx -2rpx rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20rpx 40rpx -10rpx rgba(0, 0, 0, 0.08);  /* Floating card shadow */
   --shadow-blue: 0 10rpx 25rpx -5rpx rgba(37, 99, 235, 0.25);
   --shadow-amber: 0 10rpx 25rpx -5rpx rgba(217, 119, 6, 0.25);
+  --shadow-red: 0 4rpx 12rpx rgba(239, 68, 68, 0.3);
+  --shadow-product: 0 4rpx 20rpx rgba(15, 23, 42, 0.06);  /* Standard product card shadow */
 
   /* Spacing */
   --spacing-xs: 8rpx;
@@ -63,6 +66,62 @@ page {
   --spacing-md: 24rpx;
   --spacing-lg: 32rpx;
   --spacing-xl: 48rpx;
+
+  /* ==================== 高级风格 (Premium Styles) ==================== */
+
+  /* Gradients - Background */
+  --bg-gradient-midnight: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);  /* Deep midnight gradient */
+  --bg-gradient-midnight-reverse: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);  /* Reverse direction */
+  --bg-gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));  /* Glass morphism */
+  --bg-gradient-card: linear-gradient(to bottom, #ffffff 0%, #fafbfc 100%);  /* Subtle card gradient */
+  --bg-gradient-subtle: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);  /* Neutral light gradient */
+  --bg-gradient-icon: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);  /* Icon circle gradient */
+
+  /* Gradients - Accent Colors */
+  --bg-gradient-red: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);  /* Red gradient (badges, NEW tags) */
+  --bg-gradient-purple: linear-gradient(135deg, #667eea 0%, #764ba2 100%);  /* Purple gradient */
+  --bg-gradient-amber: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);  /* Amber/Gold gradient */
+  --bg-gradient-tag: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);  /* Tag background gradient */
+
+  /* Glow Effects */
+  --glow-primary: 0 0 20rpx rgba(37, 99, 235, 0.5);  /* Blue glow */
+  --glow-gold: 0 0 20rpx rgba(255, 215, 0, 0.3);  /* Gold glow */
+  --glow-avatar: 0 0 20rpx rgba(102, 126, 234, 0.4);  /* Avatar glow */
+
+  /* ==================== 统一卡片风格 (Unified Card Styles) ==================== */
+
+  /* Card Surface */
+  --card-surface: #ffffff;
+  --card-radius: 32rpx;  /* 统一大圆角 - Standard large radius for all main cards */
+  --card-radius-sm: 24rpx;  /* Product cards and smaller elements */
+  --card-shadow-default: 0 2rpx 6rpx rgba(0,0,0,0.02);  /* Default card shadow */
+  --card-shadow-float: 0 20rpx 40rpx -10rpx rgba(0,0,0,0.08);  /* Floating/elevated card */
+  --card-shadow-hover: 0 12rpx 32rpx rgba(15, 23, 42, 0.12);  /* Hover state shadow */
+  --card-padding: 32rpx;  /* Standard card padding */
+  --card-padding-sm: 24rpx;  /* Smaller card padding */
+
+  /* ==================== 动画与过渡 (Animations & Transitions) ==================== */
+
+  /* Easing Functions */
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);  /* Standard smooth easing */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);  /* Spring/bounce effect */
+  --ease-in-out: ease-in-out;  /* Standard ease-in-out */
+
+  /* Transition Durations */
+  --duration-fast: 0.2s;  /* Fast transitions (buttons, hover) */
+  --duration-normal: 0.3s;  /* Normal transitions (modals, cards) */
+  --duration-slow: 0.5s;  /* Slow transitions (images, complex animations) */
+
+  /* Transform Effects */
+  --transform-scale-press: scale(0.96);  /* Button press effect */
+  --transform-scale-hover: scale(0.98);  /* Card hover effect */
+  --transform-scale-pop: scale(1.05);  /* Pop/emphasize effect */
+
+  /* ==================== 字体系统 (Typography System) ==================== */
+
+  /* Font Families */
+  --font-display: 'DIN Condensed', 'DIN Pro', -apple-system, sans-serif;  /* Display font for prices, numbers */
+  --font-system: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Segoe UI, Arial, Roboto, 'PingFang SC', 'miui', 'Hiragino Sans GB', 'Microsoft Yahei', sans-serif;  /* System font */
 
   /* Global Reset */
   background-color: var(--color-bg-page);
@@ -74,7 +133,9 @@ page {
 }
 
 /* Typography Utilities */
-.font-din { font-family: 'DIN Condensed', 'DIN Pro', sans-serif; }
+.font-din { font-family: var(--font-display); }
+.font-display { font-family: var(--font-display); }
+.font-system { font-family: var(--font-system); }
 .font-bold { font-weight: 700; }
 .font-semibold { font-weight: 600; }
 .font-medium { font-weight: 500; }
