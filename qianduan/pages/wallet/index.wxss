@@ -43,6 +43,64 @@
   font-weight: 500;
 }
 
+/* 佣金概览 */
+.commission-overview {
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.overview-title {
+  font-size: var(--font-size-lg);
+  color: var(--color-title);
+  font-weight: 500;
+  margin-bottom: var(--spacing-md);
+}
+
+.overview-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+.overview-item {
+  flex: 1;
+  min-width: 160rpx;
+  background: var(--color-background);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  text-align: center;
+}
+
+.overview-label {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-placeholder);
+  margin-bottom: 8rpx;
+}
+
+.overview-value {
+  display: block;
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--color-title);
+  font-family: 'DIN Pro', -apple-system, sans-serif;
+}
+
+.overview-value.freeze {
+  color: #FF9500;
+}
+
+.overview-value.pending {
+  color: #007AFF;
+}
+
+.overview-value.available {
+  color: var(--color-success);
+}
+
 /* 列表 */
 .list-section {
   background: var(--color-white);
@@ -80,17 +138,62 @@
 .log-info {
   display: flex;
   flex-direction: column;
+  gap: 4rpx;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
 }
 
 .log-type {
   font-size: var(--font-size-md);
   color: var(--color-text);
-  margin-bottom: 4rpx;
+}
+
+.status-badge {
+  display: inline-block;
+  font-size: 20rpx;
+  padding: 4rpx 12rpx;
+  border-radius: var(--radius-sm);
+  background: var(--color-background);
+  color: var(--color-placeholder);
+}
+
+.status-badge.status-frozen {
+  background: #FFF3E0;
+  color: #FF9500;
+}
+
+.status-badge.status-pending_approval {
+  background: #E3F2FD;
+  color: #007AFF;
+}
+
+.status-badge.status-approved {
+  background: #E8F5E9;
+  color: #4CAF50;
+}
+
+.status-badge.status-settled {
+  background: #F5F5F5;
+  color: #666;
+}
+
+.status-badge.status-cancelled {
+  background: #FFEBEE;
+  color: #F44336;
 }
 
 .log-time {
   font-size: var(--font-size-xs);
   color: var(--color-placeholder);
+}
+
+.log-detail {
+  font-size: var(--font-size-xs);
+  color: #FF9500;
 }
 
 .log-amount {
@@ -136,7 +239,14 @@
   font-size: var(--font-size-lg);
   color: var(--color-title);
   text-align: center;
-  margin-bottom: 40rpx;
+  margin-bottom: 20rpx;
+}
+
+.available-tip {
+  font-size: var(--font-size-sm);
+  color: var(--color-placeholder);
+  text-align: center;
+  margin-bottom: 20rpx;
 }
 
 .popup-content .input {
