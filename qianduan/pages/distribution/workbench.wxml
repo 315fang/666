@@ -78,7 +78,7 @@
       <!-- 操作按钮 -->
       <view class="order-actions" wx:if="{{item.status === 'paid' || item.status === 'agent_confirmed'}}">
         <view class="action-btn primary" data-id="{{item.id}}" data-order="{{item}}" bindtap="onShipTap">
-          🚚 填单号发货
+          🚀 一键发货
         </view>
       </view>
       <view class="order-actions" wx:if="{{item.status === 'shipped' || item.status === 'completed'}}">
@@ -98,27 +98,29 @@
     </view>
   </view>
 
-  <!-- 发货弹窗 -->
+  <!-- 发货确认弹窗 -->
   <view class="ship-popup {{showShipPopup ? 'show' : ''}}">
     <view class="mask" bindtap="hideShipPopup"></view>
     <view class="popup-content">
-      <view class="popup-title">填写发货信息</view>
-      <view class="popup-order-info">
-        订单: {{shipOrder.order_no || ''}} | 数量: {{shipOrder.quantity || 0}}件
+      <view class="popup-title">确认发货</view>
+      <view class="ship-confirm-info" wx:if="{{shipOrder.id}}">
+        <view class="info-row">
+          <text class="label">收货人:</text>
+          <text class="value">{{shipOrder.address_snapshot.receiver_name}} {{shipOrder.address_snapshot.phone}}</text>
+        </view>
+        <view class="info-row">
+          <text class="label">商品:</text>
+          <text class="value">{{shipOrder.product.name}} ×{{shipOrder.quantity}}</text>
+        </view>
+        <view class="info-row">
+          <text class="label">消耗库存:</text>
+          <text class="value highlight">{{shipOrder.quantity}} 件</text>
+        </view>
       </view>
-      <view class="popup-stock-info">
-        当前云仓库存: {{workbench.stock_count || 0}}件
-        <text class="stock-warn" wx:if="{{workbench.stock_count < (shipOrder.quantity || 0)}}">（库存不足！）</text>
+      <view class="popup-tips">
+        <text>💡 确认后将扣除云仓库存，并通知平台发货。</text>
       </view>
-      <view class="form-group">
-        <text class="form-label">物流公司</text>
-        <input class="form-input" type="text" placeholder="如：顺丰、圆通、中通" bindinput="onCompanyInput" value="{{shipCompany}}" />
-      </view>
-      <view class="form-group">
-        <text class="form-label">物流单号</text>
-        <input class="form-input" type="text" placeholder="请输入物流单号" bindinput="onTrackingInput" value="{{shipTrackingNo}}" />
-      </view>
-      <button class="popup-btn" bindtap="confirmShip" disabled="{{!shipTrackingNo}}">确认发货</button>
+      <button class="btn btn-primary btn-block" bindtap="confirmShip">确认发货</button>
     </view>
   </view>
 </view>

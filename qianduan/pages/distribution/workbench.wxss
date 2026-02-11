@@ -299,18 +299,15 @@
 .mask {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0,0,0,0.5);
 }
 
 .popup-content {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  bottom: 0; left: 0; right: 0;
   background: #fff;
   border-radius: 24rpx 24rpx 0 0;
   padding: 40rpx;
-  padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
   transform: translateY(100%);
   transition: transform 0.3s;
 }
@@ -320,61 +317,59 @@
 }
 
 .popup-title {
-  font-size: 34rpx;
+  font-size: 32rpx;
   font-weight: 600;
-  color: #0F172A;
   text-align: center;
-  margin-bottom: 16rpx;
+  margin-bottom: 40rpx;
 }
 
-.popup-order-info {
-  text-align: center;
-  font-size: 24rpx;
-  color: #64748B;
-  margin-bottom: 12rpx;
-}
-
-.popup-stock-info {
-  text-align: center;
-  font-size: 24rpx;
-  color: #10B981;
+.ship-confirm-info {
+  background: #F8FAFC;
+  padding: 24rpx;
+  border-radius: 12rpx;
   margin-bottom: 32rpx;
 }
 
-.stock-warn {
-  color: #EF4444 !important;
-  font-weight: 500;
-}
-
-.form-group {
-  margin-bottom: 24rpx;
-}
-
-.form-label {
-  font-size: 26rpx;
-  color: #475569;
-  margin-bottom: 12rpx;
-  display: block;
-}
-
-.form-input {
-  border: 2rpx solid #E2E8F0;
-  border-radius: 16rpx;
-  padding: 24rpx;
+.info-row {
+  display: flex;
+  margin-bottom: 16rpx;
   font-size: 28rpx;
+}
+
+.info-row:last-child {
+  margin-bottom: 0;
+}
+
+.info-row .label {
+  color: #64748B;
+  width: 140rpx;
+  flex-shrink: 0;
+}
+
+.info-row .value {
   color: #0F172A;
+  flex: 1;
 }
 
-.popup-btn {
-  background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%) !important;
-  color: #fff !important;
-  border-radius: 48rpx !important;
-  font-size: 30rpx !important;
-  padding: 24rpx 0 !important;
-  border: none !important;
-  margin-top: 16rpx;
+.info-row .value.highlight {
+  color: #EF4444;
+  font-weight: 600;
 }
 
-.popup-btn[disabled] {
-  opacity: 0.5;
+.popup-tips {
+  font-size: 24rpx;
+  color: #94A3B8;
+  margin-bottom: 40rpx;
+  text-align: center;
+}
+
+.btn-block {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  background: #0F172A;
+  color: #fff;
+  border-radius: 44rpx;
+  font-size: 30rpx;
+  font-weight: 500;
 }
