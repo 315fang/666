@@ -73,6 +73,11 @@ const Product = sequelize.define('Product', {
         allowNull: true,
         comment: '代理价 ¥150'
     },
+    cost_price: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        comment: '成本价/进货价 - 供应商给平台的价格'
+    },
     commission_rate_1: {
         type: DataTypes.DECIMAL(4, 2),
         allowNull: true,
