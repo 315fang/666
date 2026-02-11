@@ -82,6 +82,31 @@ async function getDistributionStats(req, res, next) {
             }
         });
 
+        // 查找团队中的代理商库存（递归向上查找）
+        let agentStockInfo = null;
+        let currentUser = user;
+        let maxDepth = 10; // 防止无限循环
+
+        while (maxDepth > 0 && currentUser) {
+            if (currentUser.role_level >= 3) {
+                // 找到代理商
+                agentStockInfo = {
+                    agent_id: currentUser.id,
+                    agent_nickname: currentUser.nickname,
+                    stock_count: currentUser.stock_count || 0
+                };
+                break;
+            }
+
+            // 向上查找parent
+            if (currentUser.parent_id) {
+                currentUser = await User.findByPk(currentUser.parent_id);
+            } else {
+                break;
+            }
+            maxDepth--;
+        }
+
         res.json({
             code: 0,
             data: {
@@ -104,7 +129,8 @@ async function getDistributionStats(req, res, next) {
                     directCount,
                     indirectCount,
                     totalCount: directCount + indirectCount,
-                    monthlyNewMembers
+                    monthlyNewMembers,
+                    agentStock: agentStockInfo
                 }
             }
         });
