@@ -3,15 +3,16 @@
   background: #ffffff;
   border-radius: 24rpx;
   overflow: hidden;
-  box-shadow: 0 4rpx 12rpx rgba(15,23,42,0.05);
+  box-shadow: 0 4rpx 20rpx rgba(15, 23, 42, 0.06);
   display: flex;
   flex-direction: column;
   height: 100%;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .card-hover:active {
-  transform: scale(0.98);
-  transition: transform 0.2s;
+  transform: translateY(-8rpx) scale(0.98);
+  box-shadow: 0 12rpx 32rpx rgba(15, 23, 42, 0.12);
 }
 
 /* Vertical Mode (Default) */
@@ -19,7 +20,8 @@
   position: relative;
   width: 100%;
   padding-bottom: 100%; /* Aspect Square */
-  background: #F1F5F9;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  overflow: hidden;
 }
 
 .card-vertical .image {
@@ -29,6 +31,11 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-hover:active .image {
+  transform: scale(1.05);
 }
 
 /* Horizontal Mode */
@@ -36,7 +43,7 @@
   flex-direction: row;
   height: auto;
   border-radius: 16rpx;
-  box-shadow: none;
+  box-shadow: 0 2rpx 12rpx rgba(15, 23, 42, 0.04);
   border-bottom: 1px solid var(--color-divider);
 }
 
@@ -45,7 +52,7 @@
   width: 200rpx;
   height: 200rpx;
   flex-shrink: 0;
-  background: #F1F5F9;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
 }
 
 .card-horizontal .image {
@@ -54,17 +61,21 @@
   object-fit: cover;
 }
 
+/* NEW Badge with Gradient */
 .new-tag {
   position: absolute;
   top: 16rpx;
   left: 16rpx;
-  background: var(--color-primary);
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: #fff;
   font-size: 20rpx;
-  padding: 4rpx 8rpx;
-  border-radius: 8rpx;
+  padding: 6rpx 12rpx;
+  border-radius: 12rpx;
   font-weight: 700;
   z-index: 10;
+  box-shadow: 0 4rpx 12rpx rgba(239, 68, 68, 0.3);
+  letter-spacing: 2rpx;
+  text-transform: uppercase;
 }
 
 .content {
@@ -73,22 +84,29 @@
   flex-direction: column;
   gap: 12rpx;
   flex: 1;
+  background: linear-gradient(to bottom, #ffffff 0%, #fafbfc 100%);
 }
 
 .card-horizontal .content {
   padding: 16rpx 24rpx;
   gap: 8rpx;
+  background: #ffffff;
 }
 
 .title {
   color: var(--color-secondary);
   font-size: 26rpx;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  transition: color 0.2s;
+}
+
+.card-hover:active .title {
+  color: var(--color-primary);
 }
 
 .card-vertical .title {
@@ -103,10 +121,18 @@
 
 .tag {
   color: var(--color-text-sub);
-  background: var(--color-bg-subtle);
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
   font-size: 20rpx;
-  padding: 4rpx 8rpx;
-  border-radius: 4rpx;
+  padding: 6rpx 12rpx;
+  border-radius: 8rpx;
+  font-weight: 500;
+  border: 1rpx solid #e2e8f0;
+  transition: all 0.2s;
+}
+
+.tag:active {
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  transform: scale(0.95);
 }
 
 .footer {
@@ -114,6 +140,8 @@
   align-items: center;
   justify-content: space-between;
   margin-top: auto;
+  padding-top: 8rpx;
+  border-top: 1rpx solid #f1f5f9;
 }
 
 .price-box {
@@ -124,35 +152,63 @@
 }
 
 .currency {
-  color: var(--color-accent);
-  font-size: 20rpx;
+  color: #d97706;
+  font-size: 22rpx;
   font-weight: 700;
+  margin-right: 2rpx;
 }
 
 .price {
-  color: var(--color-accent);
-  font-size: 32rpx;
+  color: #d97706;
+  font-size: 36rpx;
   font-weight: 800;
-  font-family: 'DIN Condensed', sans-serif;
+  font-family: 'DIN Condensed', 'SF Pro Display', -apple-system, sans-serif;
+  line-height: 1;
+  text-shadow: 0 2rpx 4rpx rgba(217, 119, 6, 0.1);
 }
 
 .original-price {
   color: var(--color-text-muted);
-  font-size: 20rpx;
+  font-size: 22rpx;
   text-decoration: line-through;
   margin-left: 8rpx;
+  opacity: 0.7;
 }
 
 .buy-btn {
-  background: #0F172A;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
   color: #fff;
-  font-size: 20rpx;
-  padding: 8rpx 16rpx;
+  font-size: 22rpx;
+  padding: 10rpx 20rpx;
   border-radius: 999rpx;
   font-weight: 600;
+  box-shadow: 0 4rpx 12rpx rgba(15, 23, 42, 0.2);
+  transition: all 0.2s;
+}
+
+.buy-btn:active {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  transform: scale(0.95);
+  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.3);
 }
 
 .card-horizontal .buy-btn {
-  /* Use icon for horizontal layout if needed, or keep button */
-  padding: 10rpx 20rpx;
+  padding: 12rpx 24rpx;
+  font-size: 24rpx;
+}
+
+/* Loading skeleton animation */
+@keyframes shimmer {
+  0% {
+    background-position: -468rpx 0;
+  }
+  100% {
+    background-position: 468rpx 0;
+  }
+}
+
+.card.loading .image-wrapper {
+  background: linear-gradient(to right, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 936rpx 100%;
+  animation: shimmer 2s infinite;
 }
