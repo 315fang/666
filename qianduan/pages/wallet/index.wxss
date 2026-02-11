@@ -7,13 +7,27 @@
 
 /* 余额卡片 */
 .balance-card {
-  background: var(--color-navy);
-  color: var(--color-white);
-  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #1E3A8A 0%, #172554 100%);
+  color: #ffffff;
+  border-radius: 24rpx;
   padding: 60rpx 40rpx;
   text-align: center;
-  margin-bottom: var(--spacing-lg);
-  box-shadow: var(--shadow-md);
+  margin-bottom: 40rpx;
+  box-shadow: 0 10rpx 30rpx rgba(30, 58, 138, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+.balance-card::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 300rpx;
+  height: 300rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 .balance-label {
@@ -102,7 +116,18 @@
 .log-amount.income { color: var(--color-success); }
 .log-amount.expense { color: var(--color-title); }
 
-.empty { padding: 60rpx 0; }
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100rpx 0;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: var(--color-placeholder);
+}
 
 /* 提现弹窗 */
 .withdraw-popup {

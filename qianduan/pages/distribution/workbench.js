@@ -102,14 +102,11 @@ Page({
         this.setData({ shipTrackingNo: e.detail.value });
     },
 
-    // 确认发货
+    // 确认发货 (Request Platform Ship)
     async confirmShip() {
-        const { shipOrder, shipTrackingNo, shipCompany, workbench } = this.data;
-        if (!shipTrackingNo.trim()) {
-            wx.showToast({ title: '请填写物流单号', icon: 'none' });
-            return;
-        }
+        const { shipOrder, workbench } = this.data;
 
+        // Check Cloud Stock
         if ((workbench.stock_count || 0) < (shipOrder.quantity || 1)) {
             wx.showModal({
                 title: '库存不足',
@@ -124,24 +121,26 @@ Page({
             return;
         }
 
-        wx.showLoading({ title: '发货中...' });
+        wx.showLoading({ title: '提交中...' });
         try {
+            // Note: In Cloud Stock model, Agent does not provide tracking info.
+            // We send empty tracking info or specific flag to backend to indicate "Platform Ship".
             const res = await post(`/agent/ship/${shipOrder.id}`, {
-                tracking_no: shipTrackingNo.trim(),
-                tracking_company: shipCompany.trim()
+                tracking_no: 'WAITING_PLATFORM', // Placeholder or specific flag
+                tracking_company: 'PLATFORM_LOGISTICS'
             });
             wx.hideLoading();
             if (res.code === 0) {
-                wx.showToast({ title: '发货成功！', icon: 'success' });
+                wx.showToast({ title: '已通知发货', icon: 'success' });
                 this.hideShipPopup();
                 this.loadWorkbench();
                 this.loadOrders();
             } else {
-                wx.showToast({ title: res.message || '发货失败', icon: 'none' });
+                wx.showToast({ title: res.message || '操作失败', icon: 'none' });
             }
         } catch (err) {
             wx.hideLoading();
-            wx.showToast({ title: err.message || '发货失败', icon: 'none' });
+            wx.showToast({ title: err.message || '操作失败', icon: 'none' });
         }
     },
 
