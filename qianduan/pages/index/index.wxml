@@ -20,8 +20,8 @@
 
   <!-- 3. Grid Nav -->
   <view class="nav-grid">
-    <view class="nav-item" wx:for="{{topCategories}}" wx:key="id" bindtap="onCategoryTap" data-id="{{item.id}}">
-      <view class="nav-icon-box" style="background-color: {{item.bgColor}}">
+    <view class="nav-item" wx:for="{{topCategories}}" wx:key="id" bindtap="onCategoryTap" data-item="{{item}}">
+      <view class="nav-icon-box" style="background-color: {{item.bg_color || item.bgColor}}">
         <image class="nav-icon" src="{{item.icon}}" mode="aspectFit" style="width:44rpx;height:44rpx;"></image>
       </view>
       <text class="nav-text">{{item.name}}</text>

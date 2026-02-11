@@ -4,20 +4,19 @@ const { parseImages } = require('../../utils/dataFormatter');
 const { DEFAULTS } = require('../../config/constants');
 const app = getApp();
 
-// Figma Design Colors: Blue-50, Pink-50, Indigo-50
-const NAV_COLORS = ['#EFF6FF', '#FDF2F8', '#EEF2FF'];
-const NAV_ICONS = ['/assets/icons/hot.svg', '/assets/icons/crown.svg', '/assets/icons/gift.svg'];
-
 Page({
     data: {
         banners: [],
         products: [],
         categories: [],
-        topCategories: [],
+        topCategories: [], // 快捷入口（金刚区）
         currentCategory: '',
         loading: true,
-        isScrolled: false, // For header transition
-        statusBarHeight: 20 // Default fallback
+        isScrolled: false,
+        statusBarHeight: 20,
+        // 新增：配置相关
+        pageConfig: {},
+        homeSections: []
     },
 
     onPageScroll(e) {
@@ -78,51 +77,88 @@ Page({
         this.setData({ loading: true });
 
         try {
-            const results = await Promise.all([
-                get('/content/banners', { position: 'home' }).catch(() => ({ data: [] })),
-                get('/products', { limit: 10 }).catch(() => ({ data: { list: [] } })),
+            // 优化：使用一个API获取所有首页配置
+            const homeConfigRes = await get('/homepage-config').catch(() => null);
+
+            let banners = [];
+            let quickEntries = [];
+            let configs = {};
+
+            if (homeConfigRes && homeConfigRes.data) {
+                // 后端返回的完整配置
+                configs = homeConfigRes.data.configs || {};
+                quickEntries = homeConfigRes.data.quickEntries || [];
+
+                // 如果后端没有banner数据，使用独立接口获取
+                if (!homeConfigRes.data.banners || homeConfigRes.data.banners.length === 0) {
+                    const bannerRes = await get('/content/banners', { position: 'home' }).catch(() => ({ data: [] }));
+                    banners = bannerRes.data || [];
+                } else {
+                    banners = homeConfigRes.data.banners || [];
+                }
+            } else {
+                // 降级：使用原有方式获取
+                const bannersRes = await get('/content/banners', { position: 'home' }).catch(() => ({ data: [] }));
+                banners = bannersRes.data || [];
+                const entriesRes = await get('/quick-entries', { position: 'home', limit: 6 }).catch(() => ({ data: [] }));
+                quickEntries = entriesRes.data || [];
+            }
+
+            // 获取分类和商品
+            const [productsRes, categoriesRes] = await Promise.all([
+                get('/products', { limit: configs.products_per_page || 20 }).catch(() => ({ data: { list: [] } })),
                 get('/categories').catch(() => ({ data: [] }))
             ]);
 
-            const categories = results[2].data || [];
+            const categories = categoriesRes.data || [];
 
-            // 金刚区：取前3个分类，不足用默认补齐
-            const defaultNav = [
-                { id: '__hot', name: '热门推荐', icon: '/assets/icons/hot.svg', bgColor: '#FEF3C7' },
-                { id: '__new', name: '新品上市', icon: '/assets/icons/sparkle.svg', bgColor: '#FCE7F3' },
-                { id: '__sale', name: '限时特惠', icon: '/assets/icons/tag.svg', bgColor: '#DCFCE7' }
-            ];
-            const topCategories = [];
-            for (let i = 0; i < 3; i++) {
-                if (i < categories.length) {
-                    topCategories.push({
-                        id: categories[i].id,
-                        name: categories[i].name,
-                        icon: categories[i].icon || NAV_ICONS[i],
-                        bgColor: NAV_COLORS[i]
-                    });
-                } else {
-                    topCategories.push(defaultNav[i]);
-                }
-            }
+            // 使用后端返回的快捷入口数据，不再硬编码
+            const topCategories = quickEntries.length > 0 ? quickEntries.slice(0, 6) : this._getDefaultQuickEntries(categories);
 
             // 处理商品数据并分列
-            const rawProducts = results[1].data && results[1].data.list ? results[1].data.list : (results[1].data || []);
+            const rawProducts = productsRes.data && productsRes.data.list ? productsRes.data.list : (productsRes.data || []);
             const { products, leftProducts, rightProducts } = this._processAndSplitProducts(rawProducts);
 
             this.setData({
-                banners: results[0].data || [],
+                banners,
                 products,
                 leftProducts,
                 rightProducts,
                 categories,
                 topCategories,
+                pageConfig: configs,
                 loading: false
             });
         } catch (err) {
             console.error('加载失败:', err);
             this.setData({ loading: false });
         }
+    },
+
+    // 降级方案：如果后端没有配置，使用默认快捷入口
+    _getDefaultQuickEntries(categories) {
+        const defaultNav = [
+            { id: '__hot', name: '热门推荐', icon: '/assets/icons/hot.svg', bg_color: '#FEF3C7', link_type: 'action', link_value: 'hot' },
+            { id: '__new', name: '新品上市', icon: '/assets/icons/sparkle.svg', bg_color: '#FCE7F3', link_type: 'action', link_value: 'new' },
+            { id: '__sale', name: '限时特惠', icon: '/assets/icons/tag.svg', bg_color: '#DCFCE7', link_type: 'action', link_value: 'sale' }
+        ];
+
+        const result = [];
+        for (let i = 0; i < 6; i++) {
+            if (i < categories.length && i < 3) {
+                result.push({
+                    id: categories[i].id,
+                    name: categories[i].name,
+                    icon: categories[i].icon || defaultNav[i].icon,
+                    bg_color: defaultNav[i].bg_color,
+                    link_type: 'category',
+                    link_value: categories[i].id
+                });
+            } else if (i < defaultNav.length) {
+                result.push(defaultNav[i]);
+            }
+        }
+        return result;
     },
 
     // 搜索
@@ -155,13 +191,57 @@ Page({
 
     // 分类切换（金刚区）
     onCategoryTap(e) {
-        const categoryId = e.currentTarget.dataset.id;
-        if (typeof categoryId === 'string' && categoryId.startsWith('__')) {
-            wx.switchTab({ url: '/pages/category/category' });
-            return;
+        const item = e.currentTarget.dataset.item;
+        if (!item) return;
+
+        const { link_type, link_value, id } = item;
+
+        // 根据链接类型处理跳转
+        switch (link_type) {
+            case 'category':
+                // 分类ID跳转
+                const categoryId = link_value || id;
+                if (typeof categoryId === 'string' && categoryId.startsWith('__')) {
+                    wx.switchTab({ url: '/pages/category/category' });
+                } else {
+                    this.setData({ currentCategory: categoryId, loading: true });
+                    this.loadProducts(categoryId);
+                }
+                break;
+            case 'page':
+                // 页面路径跳转
+                if (link_value) {
+                    // 判断是否为tabbar页面
+                    const tabPages = ['/pages/index/index', '/pages/category/category', '/pages/cart/cart', '/pages/user/user'];
+                    if (tabPages.includes(link_value)) {
+                        wx.switchTab({ url: link_value });
+                    } else {
+                        wx.navigateTo({ url: link_value });
+                    }
+                }
+                break;
+            case 'product':
+                // 商品详情
+                if (link_value) {
+                    wx.navigateTo({ url: '/pages/product/detail?id=' + link_value });
+                }
+                break;
+            case 'url':
+                // 外部链接（小程序内使用web-view）
+                if (link_value) {
+                    wx.navigateTo({ url: '/pages/webview/webview?url=' + encodeURIComponent(link_value) });
+                }
+                break;
+            case 'action':
+                // 特殊动作（如筛选）
+                if (link_value === 'hot' || link_value === 'new' || link_value === 'sale') {
+                    wx.switchTab({ url: '/pages/category/category' });
+                }
+                break;
+            default:
+                // 默认跳转到分类页
+                wx.switchTab({ url: '/pages/category/category' });
         }
-        this.setData({ currentCategory: categoryId, loading: true });
-        this.loadProducts(categoryId);
     },
 
     // 分类Tab切换（胶囊分类栏）
