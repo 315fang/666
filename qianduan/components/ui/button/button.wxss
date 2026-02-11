@@ -5,14 +5,14 @@
   justify-content: center;
   border-radius: var(--radius-full);
   font-weight: 600;
-  transition: all 0.2s;
+  transition: all var(--duration-fast);
   box-sizing: border-box;
   position: relative;
   overflow: hidden;
 }
 
 .btn:active {
-  transform: scale(0.96);
+  transform: var(--transform-scale-press);
   opacity: 0.9;
 }
 

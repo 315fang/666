@@ -16,26 +16,32 @@
 
 .empty-state__title {
   font-size: 32rpx;
-  color: #333;
+  color: var(--color-text-main);
   margin-bottom: 16rpx;
   font-weight: 500;
 }
 
 .empty-state__description {
   font-size: 28rpx;
-  color: #999;
+  color: var(--color-text-muted);
   text-align: center;
   line-height: 1.6;
   margin-bottom: 40rpx;
 }
 
 .empty-state__button {
-  background-color: #07c160;
+  background-color: var(--color-primary);
   color: #fff;
-  border-radius: 8rpx;
+  border-radius: var(--radius-sm);
   padding: 20rpx 48rpx;
   font-size: 28rpx;
   border: none;
+  transition: all var(--duration-fast);
+}
+
+.empty-state__button:active {
+  transform: var(--transform-scale-press);
+  opacity: 0.9;
 }
 
 .empty-state__button::after {
