@@ -15,6 +15,9 @@ const Admin = require('./Admin');
 const Refund = require('./Refund');
 const Dealer = require('./Dealer');
 const Notification = require('./Notification');
+const AppConfig = require('./AppConfig');
+const QuickEntry = require('./QuickEntry');
+const HomeSection = require('./HomeSection');
 
 // ========== 用户相关关联 ==========
 User.hasMany(Order, { foreignKey: 'buyer_id', as: 'orders' });
@@ -111,5 +114,8 @@ module.exports = {
     Admin,
     Refund,
     Dealer,
-    Notification
+    Notification,
+    AppConfig,
+    QuickEntry,
+    HomeSection
 };
