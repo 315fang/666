@@ -8,6 +8,7 @@ Page({
         totalCount: 0,
         totalSales: '0.00',
         monthlyNewMembers: 0,
+        agentStockInfo: null,
         members: [],
         currentTab: 'direct',
         page: 1,
@@ -30,6 +31,7 @@ Page({
                 indirectCount: team.indirectCount,
                 totalCount: team.totalCount,
                 monthlyNewMembers: team.monthlyNewMembers || 0,
+                agentStockInfo: team.agentStock || null,
                 totalSales: stats ? stats.totalEarnings : '0.00'
             });
         } catch (err) {
