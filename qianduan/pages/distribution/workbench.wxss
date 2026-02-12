@@ -1,4 +1,4 @@
-/* pages/distribution/workbench.wxss - 工厂发货工作台 */
+/* pages/distribution/workbench.wxss - 代理商工作台 */
 .container {
   min-height: 100vh;
   background: #F8FAFC;
@@ -304,7 +304,7 @@
   color: #94A3B8;
 }
 
-/* ====== 发货弹窗 ====== */
+/* ====== 订单确认弹窗 ====== */
 .ship-popup {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -380,10 +380,14 @@
 }
 
 .popup-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
   font-size: 24rpx;
-  color: #94A3B8;
+  color: #64748B;
   margin-bottom: 40rpx;
-  text-align: center;
+  text-align: left;
+  line-height: 1.5;
 }
 
 .btn-block {

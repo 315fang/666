@@ -1,4 +1,6 @@
-// pages/distribution/workbench.js - 工厂发货工作台
+// pages/distribution/workbench.js - 代理商工作台
+// 业务模型：工厂直接发货，代理商管理云库存
+// 代理商职责：确认订单 + 扣除云库存，不负责实际发货和物流录入
 const { get, post } = require('../../utils/request');
 
 Page({
@@ -8,11 +10,9 @@ Page({
         activeStatus: 'all',
         sliderLeft: 0,  // 滑动条位置
         loading: false,
-        // 发货弹窗
+        // 订单确认弹窗
         showShipPopup: false,
-        shipOrder: {},
-        shipCompany: '',
-        shipTrackingNo: ''
+        shipOrder: {}
     },
 
     // 计算滑动条位置
@@ -20,8 +20,8 @@ Page({
         const statusMap = {
             'all': 0,
             'pending': 1,
-            'shipping_requested': 2,
-            'shipped': 3
+            'shipped': 2,
+            'completed': 3
         };
         const index = statusMap[status] || 0;
         // 使用百分比偏移，每个 tab 占 100% (相对于 slider 宽度)
@@ -100,14 +100,12 @@ Page({
         this.loadOrders();
     },
 
-    // 打开发货弹窗
-    onShipTap(e) {
+    // 打开订单确认弹窗
+    onConfirmTap(e) {
         const order = e.currentTarget.dataset.order;
         this.setData({
             showShipPopup: true,
-            shipOrder: order,
-            shipCompany: '',
-            shipTrackingNo: ''
+            shipOrder: order
         });
     },
 
@@ -115,16 +113,8 @@ Page({
         this.setData({ showShipPopup: false });
     },
 
-    onCompanyInput(e) {
-        this.setData({ shipCompany: e.detail.value });
-    },
-
-    onTrackingInput(e) {
-        this.setData({ shipTrackingNo: e.detail.value });
-    },
-
-    // 确认发货 (Request Platform Ship)
-    async confirmShip() {
+    // 确认订单 - 扣除云库存并通知工厂发货
+    async confirmOrder() {
         const { shipOrder, workbench } = this.data;
 
         // Check Cloud Stock
@@ -142,17 +132,14 @@ Page({
             return;
         }
 
-        wx.showLoading({ title: '提交中...' });
+        wx.showLoading({ title: '确认中...' });
         try {
-            // Note: In Cloud Stock model, Agent does not provide tracking info.
-            // We send empty tracking info or specific flag to backend to indicate "Platform Ship".
-            const res = await post(`/agent/ship/${shipOrder.id}`, {
-                tracking_no: 'WAITING_PLATFORM', // Placeholder or specific flag
-                tracking_company: 'PLATFORM_LOGISTICS'
-            });
+            // 云库存模式：代理商确认订单后，系统自动扣除云库存
+            // 工厂后台会收到发货通知，由工厂负责实际发货和物流录入
+            const res = await post(`/agent/confirm-order/${shipOrder.id}`);
             wx.hideLoading();
             if (res.code === 0) {
-                wx.showToast({ title: '已通知发货', icon: 'success' });
+                wx.showToast({ title: '确认成功，已通知工厂发货', icon: 'success' });
                 this.hideShipPopup();
                 this.loadWorkbench();
                 this.loadOrders();

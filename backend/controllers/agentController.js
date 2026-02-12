@@ -338,6 +338,203 @@ const agentShip = async (req, res) => {
 };
 
 /**
+ * 代理商确认订单（工厂直发模式）
+ * POST /api/agent/confirm-order/:id
+ *
+ * ★ 业务模型：工厂直接发货，代理商管理云库存
+ * ★ 核心流程：
+ * 1. 校验代理商身份和云库存
+ * 2. 扣减代理商云库存
+ * 3. 计算佣金（团队级差 + 代理商发货利润）
+ * 4. 更新订单状态为 agent_confirmed（通知工厂发货）
+ * 5. 工厂后台会看到此订单，负责实际发货和物流录入
+ */
+const confirmOrder = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const userId = req.user.id;
+        const { id } = req.params;
+
+        // 锁定订单
+        const order = await Order.findOne({
+            where: { id, agent_id: userId },
+            transaction: t,
+            lock: t.LOCK.UPDATE
+        });
+
+        if (!order) {
+            await t.rollback();
+            return res.status(404).json({ code: -1, message: '订单不存在或您无权操作' });
+        }
+
+        // 只允许 paid 状态确认订单
+        if (order.status !== 'paid') {
+            await t.rollback();
+            return res.status(400).json({
+                code: -1,
+                message: `当前订单状态(${order.status})不可确认`
+            });
+        }
+
+        // 锁定代理商，校验云库存
+        const agent = await User.findByPk(userId, { transaction: t, lock: t.LOCK.UPDATE });
+        if (agent.stock_count < order.quantity) {
+            await t.rollback();
+            return res.status(400).json({
+                code: -1,
+                message: `云库存不足，当前 ${agent.stock_count} 件，需要 ${order.quantity} 件`
+            });
+        }
+
+        // ★ 扣减代理商云库存
+        await agent.decrement('stock_count', { by: order.quantity, transaction: t });
+
+        // ★★★ 核心：计算团队级差佣金 + 代理商发货利润
+        const buyer = await User.findByPk(order.buyer_id, { transaction: t });
+        const orderProduct = await Product.findByPk(order.product_id, { transaction: t });
+
+        let middleCommissionTotal = 0;
+
+        if (orderProduct && buyer) {
+            const priceMap = {
+                0: parseFloat(orderProduct.retail_price || 0),
+                1: parseFloat(orderProduct.price_member || orderProduct.retail_price || 0),
+                2: parseFloat(orderProduct.price_leader || orderProduct.price_member || orderProduct.retail_price || 0),
+                3: parseFloat(orderProduct.price_agent || orderProduct.price_leader || orderProduct.price_member || orderProduct.retail_price || 0)
+            };
+
+            // ---- 1. 级差分润：向上遍历分销链 ----
+            let currentLevel = buyer.role_level;
+            let lastCost = priceMap[currentLevel] || priceMap[0];
+            let pRef = buyer.parent_id;
+            const visitedIds = new Set();
+            visitedIds.add(buyer.id);
+
+            while (pRef) {
+                if (visitedIds.has(pRef) || visitedIds.size > 50) break;
+                visitedIds.add(pRef);
+
+                const p = await User.findByPk(pRef, { transaction: t });
+                if (!p) break;
+
+                if (p.role_level > currentLevel) {
+                    const parentCost = priceMap[p.role_level];
+                    const gapProfit = (lastCost - parentCost) * order.quantity;
+
+                    if (gapProfit > 0) {
+                        const isOrderAgent = (order.agent_id && order.agent_id === p.id);
+                        if (!isOrderAgent) {
+                            await CommissionLog.create({
+                                order_id: order.id,
+                                user_id: p.id,
+                                amount: gapProfit,
+                                type: 'gap',
+                                status: 'frozen',
+                                available_at: null,
+                                refund_deadline: null,
+                                remark: `团队级差利润 Lv${currentLevel}→Lv${p.role_level}`
+                            }, { transaction: t });
+
+                            middleCommissionTotal += gapProfit;
+
+                            await sendNotification(
+                                p.id,
+                                '收益到账提醒',
+                                `您的下级产生了一笔订单(工厂直发)，您获得级差收益 ¥${gapProfit.toFixed(2)}（需售后期结束+审批后结算）。`,
+                                'commission',
+                                order.id
+                            );
+                        }
+                    }
+
+                    lastCost = parentCost;
+                    currentLevel = p.role_level;
+                }
+
+                pRef = p.parent_id;
+                if (currentLevel >= 3) break;
+            }
+
+            // 记录中间佣金总额到订单
+            order.middle_commission_total = middleCommissionTotal;
+
+            // ---- 2. 代理商发货利润 ----
+            const agentCostPrice = order.locked_agent_cost
+                ? parseFloat(order.locked_agent_cost)
+                : parseFloat(orderProduct.price_agent || orderProduct.price_leader || orderProduct.price_member || orderProduct.retail_price);
+            const agentCost = agentCostPrice * order.quantity;
+            const buyerPaid = parseFloat(order.actual_price);
+            const agentProfit = buyerPaid - agentCost - middleCommissionTotal;
+
+            if (agentProfit > 0) {
+                await CommissionLog.create({
+                    order_id: order.id,
+                    user_id: userId,
+                    amount: agentProfit,
+                    type: 'agent_fulfillment',
+                    status: 'frozen',
+                    available_at: null,
+                    refund_deadline: null,
+                    remark: `代理商发货利润(工厂直发) (进货价${agentCostPrice}×${order.quantity}=${agentCost}, 中间佣金${middleCommissionTotal.toFixed(2)})`
+                }, { transaction: t });
+
+                await sendNotification(
+                    userId,
+                    '订单确认成功',
+                    `您已确认订单，发货利润 ¥${agentProfit.toFixed(2)}（需售后期结束+审批后结算）。工厂将在24小时内发货。`,
+                    'commission',
+                    order.id
+                );
+            } else if (agentProfit < 0) {
+                console.error(`⚠️ [利润异常] 订单 ${order.order_no || order.id} 代理商(ID:${userId})确认订单利润为 ¥${agentProfit.toFixed(2)}，不产生佣金！`);
+                await sendNotification(
+                    0,
+                    '⚠️ 确认订单利润异常告警',
+                    `订单ID:${order.id} 代理商确认订单利润为 ¥${agentProfit.toFixed(2)}（<0），不产生佣金。实付=${buyerPaid}，进货成本=${agentCost}，中间佣金=${middleCommissionTotal}。请检查商品定价！`,
+                    'system_alert',
+                    order.id
+                );
+            }
+        }
+
+        // 更新订单状态：agent_confirmed = 代理商已确认，等待工厂发货
+        order.status = 'agent_confirmed';
+        order.fulfillment_type = 'Platform'; // 工厂直发模式
+        order.fulfillment_partner_id = userId; // 记录确认的代理商
+        order.platform_stock_deducted = true; // 标记已扣库存
+        await order.save({ transaction: t });
+
+        await t.commit();
+
+        // 通知买家（事务外）
+        await sendNotification(
+            order.buyer_id,
+            '订单已确认',
+            `您的订单 ${order.order_no} 已确认，工厂将在24小时内为您发货`,
+            'order',
+            order.id
+        );
+
+        // TODO: 通知工厂后台有新订单待发货
+        // await sendNotification(FACTORY_ADMIN_ID, '新订单待发货', ...);
+
+        res.json({
+            code: 0,
+            message: '确认成功，已通知工厂发货',
+            data: {
+                order_no: order.order_no,
+                status: 'agent_confirmed',
+                stock_remaining: agent.stock_count
+            }
+        });
+    } catch (error) {
+        await t.rollback();
+        console.error('代理商确认订单失败:', error);
+        res.status(500).json({ code: -1, message: '确认失败' });
+    }
+};
+
+/**
  * 代理商采购入仓（补货）
  * POST /api/agent/restock
  * body: { product_id, quantity }
@@ -512,6 +709,7 @@ module.exports = {
     getWorkbench,
     getAgentOrderList,
     agentShip,
+    confirmOrder,
     restockOrder,
     getStockLogs
 };

@@ -25,7 +25,7 @@
       </view>
     </view>
     <view class="stock-actions">
-      <view class="stock-btn" bindtap="goRestock">📦 采购入仓</view>
+      <view class="stock-btn" bindtap="goRestock">📦 云库存补货</view>
       <view class="stock-btn outline" bindtap="goStockLogs">📋 库存明细</view>
     </view>
   </view>
@@ -38,14 +38,14 @@
           <text class="tab-text">全部</text>
         </view>
         <view class="tab-item {{activeStatus === 'pending' ? 'active' : ''}}" data-status="pending" bindtap="onStatusChange">
-          <text class="tab-text">待发货</text>
+          <text class="tab-text">待确认</text>
           <view class="tab-badge" wx:if="{{workbench.pending_ship > 0}}">{{workbench.pending_ship}}</view>
         </view>
-        <view class="tab-item {{activeStatus === 'shipping_requested' ? 'active' : ''}}" data-status="shipping_requested" bindtap="onStatusChange">
-          <text class="tab-text">待确认</text>
-        </view>
         <view class="tab-item {{activeStatus === 'shipped' ? 'active' : ''}}" data-status="shipped" bindtap="onStatusChange">
-          <text class="tab-text">已发货</text>
+          <text class="tab-text">工厂发货中</text>
+        </view>
+        <view class="tab-item {{activeStatus === 'completed' ? 'active' : ''}}" data-status="completed" bindtap="onStatusChange">
+          <text class="tab-text">已完成</text>
         </view>
       </view>
     </scroll-view>
@@ -57,7 +57,7 @@
       <view class="order-header">
         <text class="order-no">{{item.order_no}}</text>
         <text class="order-status status-{{item.status}}">
-          {{item.status === 'paid' ? '待发货' : item.status === 'agent_confirmed' ? '已确认' : item.status === 'shipping_requested' ? '待平台确认' : item.status === 'shipped' ? '已发货' : item.status === 'completed' ? '已完成' : item.status}}
+          {{item.status === 'paid' ? '待确认' : item.status === 'agent_confirmed' ? '已确认-等待发货' : item.status === 'shipping_requested' ? '工厂准备中' : item.status === 'shipped' ? '工厂已发货' : item.status === 'completed' ? '已完成' : item.status}}
         </text>
       </view>
 
@@ -80,13 +80,16 @@
       </view>
 
       <!-- 操作按钮 -->
-      <view class="order-actions" wx:if="{{item.status === 'paid' || item.status === 'agent_confirmed'}}">
-        <view class="action-btn primary" data-id="{{item.id}}" data-order="{{item}}" bindtap="onShipTap">
-          🚀 一键发货
+      <view class="order-actions" wx:if="{{item.status === 'paid'}}">
+        <view class="action-btn primary" data-id="{{item.id}}" data-order="{{item}}" bindtap="onConfirmTap">
+          ✅ 确认订单
         </view>
       </view>
+      <view class="order-actions" wx:if="{{item.status === 'agent_confirmed' || item.status === 'shipping_requested'}}">
+        <text class="tracking-info">⏳ 工厂准备发货中...</text>
+      </view>
       <view class="order-actions" wx:if="{{item.status === 'shipped' || item.status === 'completed'}}">
-        <text class="tracking-info">物流: {{item.tracking_no || '无'}}</text>
+        <text class="tracking-info">📦 物流单号: {{item.tracking_no || '工厂录入中'}}</text>
       </view>
     </view>
 
@@ -102,11 +105,11 @@
     </view>
   </view>
 
-  <!-- 发货确认弹窗 -->
+  <!-- 订单确认弹窗 -->
   <view class="ship-popup {{showShipPopup ? 'show' : ''}}">
     <view class="mask" bindtap="hideShipPopup"></view>
     <view class="popup-content">
-      <view class="popup-title">确认发货</view>
+      <view class="popup-title">确认订单</view>
       <view class="ship-confirm-info" wx:if="{{shipOrder.id}}">
         <view class="info-row">
           <text class="label">收货人:</text>
@@ -117,14 +120,16 @@
           <text class="value">{{shipOrder.product.name}} ×{{shipOrder.quantity}}</text>
         </view>
         <view class="info-row">
-          <text class="label">消耗库存:</text>
+          <text class="label">扣除云库存:</text>
           <text class="value highlight">{{shipOrder.quantity}} 件</text>
         </view>
       </view>
       <view class="popup-tips">
-        <text>💡 确认后将扣除云仓库存，并通知平台发货。</text>
+        <text>⚠️ 确认后将扣除您的云库存数量</text>
+        <text>📦 工厂将在24小时内直接发货给客户</text>
+        <text>🚚 物流信息由工厂统一管理和录入</text>
       </view>
-      <button class="btn btn-primary btn-block" bindtap="confirmShip">确认发货</button>
+      <button class="btn btn-primary btn-block" bindtap="confirmOrder">确认订单</button>
     </view>
   </view>
 </view>
