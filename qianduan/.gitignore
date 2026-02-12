@@ -1,9 +1,30 @@
-node_modules
-miniprogram_npm
-.idea
-.ds_store
-.vscode
+# 依赖目录
+node_modules/
+miniprogram_npm/
+
+# IDE 配置
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# 微信小程序私有配置（包含 appid 等）
 project.private.config.json
+
+# 日志文件
 *.log
-unpackage
-dist
+npm-debug.log*
+
+# 构建输出
+unpackage/
+dist/
+
+# 临时文件
+*.tmp
+*.temp
+.cache/
+
+# 系统文件
+Thumbs.db
+ehthumbs.db

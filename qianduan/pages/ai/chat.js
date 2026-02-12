@@ -6,13 +6,33 @@ Page({
     messages: [],
     inputValue: '',
     toView: '',
-    loading: false
+    loading: false,
+    context: null // 当前页面上下文
   },
 
-  onLoad() {
+  onLoad(options) {
     this.setData({
       userInfo: wx.getStorageSync('userInfo')
     });
+
+    // 接收上下文参数 (从globalData或options获取)
+    // 优先使用 globalData 因为数据可能很大
+    if (app.globalData.aiContext) {
+      this.setData({ context: app.globalData.aiContext });
+      
+      // 如果有上下文，可以自动发送一条消息
+      if (app.globalData.aiContext.type === 'product') {
+        const product = app.globalData.aiContext.data;
+        this.setData({
+          messages: [{
+            role: 'ai',
+            content: `您好！我是您的智能助手。我看您正在浏览【${product.name}】，有什么我可以帮您的吗？` 
+          }]
+        });
+        // Clear it to avoid reuse
+        app.globalData.aiContext = null;
+      }
+    }
   },
 
   onInput(e) {
@@ -74,7 +94,8 @@ Page({
           'Authorization': `Bearer ${wx.getStorageSync('token')}` // Assuming token auth
         },
         data: {
-          messages: payloadMessages
+          messages: payloadMessages,
+          context: this.data.context // 发送上下文到后端
         },
         success: (res) => {
           if (res.data.code === 200) {
