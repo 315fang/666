@@ -4,15 +4,17 @@
   <view class="user-header">
     <view class="user-info-box">
       <!-- Glow Avatar -->
-      <view class="avatar-container" bindtap="onEditNickname">
+      <view class="avatar-container">
         <view class="avatar-glow"></view>
-        <image class="user-avatar" src="{{userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
+        <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+          <image class="user-avatar" src="{{userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
+        </button>
         <view class="edit-icon">✎</view>
       </view>
       <!-- Names & Tags -->
       <view class="user-names">
-        <view class="name-text" bindtap="onLoginTap">
-          {{hasUserInfo ? (userInfo.nickname || '微信用户') : '点击登录'}}
+        <view class="name-text">
+          <input type="nickname" class="nickname-input" placeholder="{{hasUserInfo ? (userInfo.nickname || '微信用户') : '点击登录'}}" bindblur="onNicknameBlur" />
         </view>
         <view class="user-tags" wx:if="{{hasUserInfo}}">
           <view class="tag-pill gold" wx:if="{{userInfo.role !== 'user'}}">
@@ -25,6 +27,11 @@
           </view>
         </view>
       </view>
+    </view>
+    <!-- 消息通知入口 -->
+    <view class="header-notif-btn" bindtap="onNotificationsTap">
+      <text class="notif-icon">🔔</text>
+      <view class="notif-badge" wx:if="{{notificationsCount > 0}}">{{notificationsCount > 99 ? '99+' : notificationsCount}}</view>
     </view>
     <!-- Background Decoration -->
     <view class="header-bg-decoration"></view>
@@ -58,7 +65,7 @@
         <view class="banner-left">
           <text class="material-icon highlight">📊</text>
           <view class="banner-texts">
-            <text class="banner-title">代理商工作台</text>
+            <text class="banner-title">工厂发货工作台</text>
             <text class="banner-sub">管理库存 & 发货</text>
           </view>
         </view>
@@ -113,27 +120,20 @@
     </view>
   </view>
 
-  <!-- 5. My Tools Grid -->
+    <!-- 5. My Tools Grid -->
   <view class="section-card mb-safe">
     <view class="card-header">
       <text class="card-title">常用工具</text>
     </view>
     <view class="tools-grid">
-      <view class="tool-item" bindtap="goTeam">
-        <text class="tool-icon text-blue">👥</text>
-        <text class="tool-text">我的团队</text>
-      </view>
-      <view class="tool-item" bindtap="goWallet">
-        <text class="tool-icon text-orange">💰</text>
-        <text class="tool-text">我的钱包</text>
+      <!-- 分佣中心：整合团队、钱包、邀请码 -->
+      <view class="tool-item" bindtap="goDistributionCenter">
+        <text class="tool-icon text-gold">💎</text>
+        <text class="tool-text">分佣中心</text>
       </view>
       <view class="tool-item" bindtap="goAddress">
         <text class="tool-icon text-green">📍</text>
         <text class="tool-text">地址管理</text>
-      </view>
-      <view class="tool-item" bindtap="onShowInvite">
-        <text class="tool-icon text-purple">🎁</text>
-        <text class="tool-text">邀请码</text>
       </view>
       <button class="tool-item share-btn" open-type="contact">
         <text class="tool-icon text-pink">🎧</text>

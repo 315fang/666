@@ -9,22 +9,31 @@ Page({
         selectAll: false,
         totalPrice: 0,
         totalCount: 0,
-        loading: true
+        loading: true,
+        showEmpty: false,
+        priceAnim: false,
+        countAnim: false,
+        recommendedProducts: [] // 新增：推荐商品
     },
 
     onShow() {
         // 每次显示页面时刷新购物车
         this.loadCart();
+        
+        // 显示空购物车动画
+        setTimeout(() => {
+            this.setData({ showEmpty: true });
+        }, 100);
     },
 
     async loadCart() {
-        this.setData({ loading: true });
+        this.setData({ loading: true, showEmpty: false });
 
         try {
             const res = await get('/cart');
             // 后端返回 { items: [...], summary: {...} }
             const items = res.data?.items || res.data || [];
-            const cartItems = (Array.isArray(items) ? items : []).map(item => {
+            const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
                 // 使用工具函数处理图片
                 const productImages = parseImages(item.product?.images);
                 const skuImage = item.sku?.image || null;
@@ -40,7 +49,9 @@ Page({
                     // 第一张图片（用于显示）
                     firstImage,
                     // 商品名称
-                    productName: item.product?.name || '商品'
+                    productName: item.product?.name || '商品',
+                    // 入场动画标记
+                    animateIn: true
                 };
             });
 
@@ -50,13 +61,59 @@ Page({
                 loading: false
             });
 
+            // 如果是空购物车，加载推荐商品
+            if (cartItems.length === 0) {
+                this.loadRecommended();
+            }
+
+            // 清除入场动画标记
+            setTimeout(() => {
+                const updatedItems = cartItems.map(item => ({ ...item, animateIn: false }));
+                this.setData({ cartItems: updatedItems });
+            }, 800);
+
             this.calculateTotal();
+            
+            // 如果是空购物车，显示动画
+            if (cartItems.length === 0) {
+                setTimeout(() => {
+                    this.setData({ showEmpty: true });
+                }, 100);
+            }
         } catch (err) {
             ErrorHandler.handle(err, {
                 customMessage: '加载购物车失败，请稍后重试'
             });
             this.setData({ loading: false, cartItems: [] });
+            this.loadRecommended();
+            setTimeout(() => {
+                this.setData({ showEmpty: true });
+            }, 100);
         }
+    },
+
+    // 加载推荐商品
+    async loadRecommended() {
+        try {
+            const res = await get('/products', { limit: 6, sort: 'sales_desc' });
+            if (res.code === 0 && res.data) {
+                const products = (res.data.list || res.data || []).map(p => ({
+                    ...p,
+                    firstImage: getFirstImage(p.images)
+                }));
+                this.setData({ recommendedProducts: products });
+            }
+        } catch (err) {
+            console.error('加载推荐商品失败:', err);
+        }
+    },
+
+    // 推荐商品跳转
+    onRecommendedTap(e) {
+        const { id } = e.currentTarget.dataset;
+        wx.navigateTo({
+            url: `/pages/product/detail?id=${id}`
+        });
     },
 
 
@@ -91,6 +148,12 @@ Page({
             [key]: !this.data.cartItems[index].selected
         });
 
+        // 触发价格和数量动画
+        this.setData({ priceAnim: true, countAnim: true });
+        setTimeout(() => {
+            this.setData({ priceAnim: false, countAnim: false });
+        }, 400);
+
         this.calculateTotal();
     },
 
@@ -103,6 +166,13 @@ Page({
         }));
 
         this.setData({ cartItems, selectAll: newSelectAll });
+        
+        // 触发价格和数量动画
+        this.setData({ priceAnim: true, countAnim: true });
+        setTimeout(() => {
+            this.setData({ priceAnim: false, countAnim: false });
+        }, 400);
+        
         this.calculateTotal();
     },
 
@@ -123,8 +193,24 @@ Page({
         try {
             await put(`/cart/${item.id}`, { quantity: newQuantity });
 
-            const key = `cartItems[${index}].quantity`;
-            this.setData({ [key]: newQuantity });
+            // 触发动画
+            const animKey = `cartItems[${index}].quantityAnim`;
+            this.setData({ 
+                [animKey]: true,
+                [`cartItems[${index}].quantity`]: newQuantity
+            });
+            
+            // 清除动画标记
+            setTimeout(() => {
+                this.setData({ [animKey]: false });
+            }, 300);
+            
+            // 触发价格和数量动画
+            this.setData({ priceAnim: true, countAnim: true });
+            setTimeout(() => {
+                this.setData({ priceAnim: false, countAnim: false });
+            }, 400);
+            
             this.calculateTotal();
         } catch (err) {
             console.error('更新数量失败:', err);
@@ -142,12 +228,26 @@ Page({
             success: async (res) => {
                 if (res.confirm) {
                     try {
+                        // 先触发动画
+                        const deleteKey = `cartItems[${index}].deleting`;
+                        this.setData({ [deleteKey]: true });
+                        
                         await del(`/cart/${item.id}`);
 
-                        const cartItems = [...this.data.cartItems];
-                        cartItems.splice(index, 1);
-                        this.setData({ cartItems });
-                        this.calculateTotal();
+                        // 等待动画完成后再删除数据
+                        setTimeout(() => {
+                            const cartItems = [...this.data.cartItems];
+                            cartItems.splice(index, 1);
+                            this.setData({ cartItems });
+                            this.calculateTotal();
+                            
+                            // 如果是空购物车了，显示空状态动画
+                            if (cartItems.length === 0) {
+                                setTimeout(() => {
+                                    this.setData({ showEmpty: true });
+                                }, 100);
+                            }
+                        }, 400);
                     } catch (err) {
                         console.error('删除失败:', err);
                     }

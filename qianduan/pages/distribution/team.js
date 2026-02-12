@@ -1,5 +1,6 @@
 // pages/distribution/team.js
 const { get } = require('../../utils/request');
+const { ROLE_NAMES } = require('../../config/constants');
 
 Page({
     data: {
@@ -72,13 +73,7 @@ Page({
     },
 
     getRoleName(level) {
-        const names = {
-            0: '普通用户',
-            1: '会员',
-            2: '团长',
-            3: '代理商'
-        };
-        return names[level] || '用户';
+        return ROLE_NAMES[level] || '用户';
     },
 
     switchTab(e) {

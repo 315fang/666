@@ -4,7 +4,7 @@
  * 统一管理所有佣金相关的计算逻辑
  */
 
-const { CommissionLog, User, Order, Product, SKU } = require('../models');
+const { CommissionLog, User, Order, Product, SKU, AppConfig } = require('../models');
 const { sequelize } = require('../models');
 const { Op } = require('sequelize');
 
@@ -57,6 +57,53 @@ const DEFAULT_CONFIG = {
 };
 
 class CommissionService {
+    // 缓存配置
+    static _cachedConfig = null;
+    static _lastConfigFetch = 0;
+
+    /**
+     * 获取最新配置 (带缓存)
+     */
+    static async _getConfig() {
+        const now = Date.now();
+        // 缓存 1 分钟
+        if (this._cachedConfig && (now - this._lastConfigFetch < 60000)) {
+            return this._cachedConfig;
+        }
+
+        try {
+            // 从数据库加载配置
+            const configs = await AppConfig.findAll({
+                where: { category: 'COMMISSION_RATES', status: 1 }
+            });
+
+            if (configs.length > 0) {
+                const dbConfig = { ...DEFAULT_CONFIG };
+                
+                configs.forEach(c => {
+                    try {
+                        const val = JSON.parse(c.config_value);
+                        if (c.config_key === 'FIXED_AMOUNTS') {
+                            dbConfig.FIXED_AMOUNTS = { ...dbConfig.FIXED_AMOUNTS, ...val };
+                        } else if (c.config_key === 'PERCENTAGE_RATES') {
+                            dbConfig.PERCENTAGE_RATES = { ...dbConfig.PERCENTAGE_RATES, ...val };
+                        }
+                    } catch (e) {
+                        console.error('解析佣金配置失败:', e);
+                    }
+                });
+
+                this._cachedConfig = dbConfig;
+                this._lastConfigFetch = now;
+                return dbConfig;
+            }
+        } catch (e) {
+            console.error('加载佣金配置失败:', e);
+        }
+
+        return DEFAULT_CONFIG;
+    }
+
     /**
      * 计算订单佣金分配
      * @param {Object} options - 配置选项
@@ -67,6 +114,7 @@ class CommissionService {
      * @param {Object} options.agent - 代理商对象（可选，用于发货）
      * @param {String} options.mode - 计算模式: 'fixed' | 'percentage' | 'auto'
      * @param {Object} options.customRates - 自定义佣金配置（可选）
+     * @param {Object} options.product - 商品对象（可选，用于读取商品级配置）
      * @returns {Promise<Object>} 佣金分配结果
      */
     static async calculateOrderCommissions(options) {
@@ -77,17 +125,25 @@ class CommissionService {
             grandparent = null,
             agent = null,
             mode = 'auto',
-            customRates = null
+            customRates = null,
+            product = null
         } = options;
 
         // 确定使用的佣金配置
-        const config = customRates || DEFAULT_CONFIG;
+        let config = customRates;
+        if (!config) {
+            config = await this._getConfig();
+        }
 
-        // 自动模式：根据商品配置决定使用固定金额还是百分比
-        let calculationMode = mode;
-        if (mode === 'auto') {
-            // 可以从商品或分类配置中读取，这里默认使用固定金额
-            calculationMode = 'fixed';
+        // 优先使用商品级配置
+        let productCommission = null;
+        if (product) {
+            productCommission = {
+                amount1: product.commission_amount_1 ? parseFloat(product.commission_amount_1) : null,
+                amount2: product.commission_amount_2 ? parseFloat(product.commission_amount_2) : null,
+                rate1: product.commission_rate_1 ? parseFloat(product.commission_rate_1) : null,
+                rate2: product.commission_rate_2 ? parseFloat(product.commission_rate_2) : null
+            };
         }
 
         // 计算基础价格信息
@@ -100,52 +156,85 @@ class CommissionService {
 
         let commissions = [];
         let agentProfit = 0;
+        
+        // ----------------------------------------------------------------
+        // 核心计算逻辑：商品配置 > 全局配置
+        // ----------------------------------------------------------------
+        
+        // 1. 直推佣金 (Level 1)
+        if (parent) {
+            let amount = 0;
+            let type = COMMISSION_TYPES.DIRECT;
 
-        if (calculationMode === 'fixed') {
-            // 固定金额模式
-            const result = this._calculateFixedCommissions(
-                buyer,
-                parent,
-                grandparent,
-                agent,
-                profitPool,
-                config.FIXED_AMOUNTS
-            );
-            commissions = result.commissions;
-            agentProfit = result.agentProfit;
-        } else if (calculationMode === 'percentage') {
-            // 百分比模式
-            const result = this._calculatePercentageCommissions(
-                buyer,
-                parent,
-                grandparent,
-                agent,
-                actualPrice,
-                profitPool,
-                config.PERCENTAGE_RATES
-            );
-            commissions = result.commissions;
-            agentProfit = result.agentProfit;
+            // A. 商品固定金额
+            if (productCommission && productCommission.amount1 !== null) {
+                amount = productCommission.amount1;
+            } 
+            // B. 商品百分比
+            else if (productCommission && productCommission.rate1 !== null) {
+                amount = this._round(actualPrice * productCommission.rate1);
+            }
+            // C. 全局配置
+            else {
+                // 根据上级角色读取全局配置
+                // 这里简化处理，直接读取 DEFAULT_CONFIG 中的角色比例
+                // 实际应根据 config.PERCENTAGE_RATES.DIRECT[parent.role_level]
+                const roleRate = config.PERCENTAGE_RATES.DIRECT[parent.role_level] || 0;
+                amount = this._round(actualPrice * roleRate);
+            }
+
+            if (amount > 0 && amount <= profitPool) {
+                commissions.push({
+                    user_id: parent.id,
+                    amount,
+                    type,
+                    level: 1,
+                    description: '直推佣金'
+                });
+            }
         }
 
-        // 计算总佣金
+        // 2. 间接佣金 (Level 2)
+        if (grandparent) {
+            let amount = 0;
+            let type = COMMISSION_TYPES.INDIRECT;
+            const remainingProfit = profitPool - (commissions[0]?.amount || 0);
+
+            // A. 商品固定金额
+            if (productCommission && productCommission.amount2 !== null) {
+                amount = productCommission.amount2;
+            }
+            // B. 商品百分比
+            else if (productCommission && productCommission.rate2 !== null) {
+                amount = this._round(actualPrice * productCommission.rate2);
+            }
+            // C. 全局配置
+            else {
+                const roleRate = config.PERCENTAGE_RATES.INDIRECT[grandparent.role_level] || 0;
+                amount = this._round(actualPrice * roleRate);
+            }
+
+            if (amount > 0 && amount <= remainingProfit) {
+                commissions.push({
+                    user_id: grandparent.id,
+                    amount,
+                    type,
+                    level: 2,
+                    description: '间接佣金'
+                });
+            }
+        }
+
+        // 3. 计算总佣金和代理商利润
         const totalCommission = commissions.reduce((sum, c) => sum + c.amount, 0);
-
-        // 验证：总佣金不应超过利润池
-        if (totalCommission > profitPool) {
-            console.warn('警告: 总佣金超过利润池', {
-                totalCommission,
-                profitPool,
-                orderId: order.id
-            });
-        }
+        agentProfit = Math.max(0, profitPool - totalCommission);
 
         return {
             commissions,
             totalCommission: this._round(totalCommission),
             agentProfit: this._round(agentProfit),
             profitPool: this._round(profitPool),
-            calculationMode,
+            calculationMode: productCommission ? 'product_specific' : 'global_config',
             breakdown: {
                 actualPrice: this._round(actualPrice),
                 wholesalePrice: this._round(wholesalePrice),

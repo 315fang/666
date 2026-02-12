@@ -28,25 +28,29 @@
     </view>
   </view>
 
-  <!-- 4. Category Tabs -->
-  <scroll-view scroll-x class="tab-scroll" enable-flex>
-    <view 
-      class="tab-item {{currentCategory === 0 ? 'active' : ''}}" 
-      bindtap="onCategoryChange" 
-      data-id="{{0}}"
-    >
-      精选推荐
-    </view>
-    <view 
-      class="tab-item {{currentCategory === item.id ? 'active' : ''}}" 
-      wx:for="{{categories}}" 
-      wx:key="id" 
-      bindtap="onCategoryChange" 
-      data-id="{{item.id}}"
-    >
-      {{item.name}}
-    </view>
-  </scroll-view>
+  <!-- 4. Category Tabs - 横向滑动 -->
+  <view class="tab-container">
+    <scroll-view scroll-x scroll-with-animation show-scrollbar="{{false}}" class="tab-scroll-wrapper">
+      <view class="tab-scroll">
+        <view 
+          class="tab-item {{currentCategory === 0 ? 'active' : ''}}" 
+          bindtap="onCategoryChange" 
+          data-id="{{0}}"
+        >
+          <text class="tab-text">精选推荐</text>
+        </view>
+        <view 
+          class="tab-item {{currentCategory === item.id ? 'active' : ''}}" 
+          wx:for="{{categories}}" 
+          wx:key="id" 
+          bindtap="onCategoryChange" 
+          data-id="{{item.id}}"
+        >
+          <text class="tab-text">{{item.name}}</text>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
 
   <!-- 5. Product Waterfall -->
   <view class="product-grid">

@@ -80,6 +80,12 @@ const routes = [
                 meta: { title: '图文管理' }
             },
             {
+                path: 'page-design',
+                name: 'PageDesigner',
+                component: () => import('../views/content/PageDesigner.vue'),
+                meta: { title: '首页装修' }
+            },
+            {
                 path: 'withdrawals',
                 name: 'WithdrawalList',
                 component: () => import('../views/finance/WithdrawalList.vue'),
@@ -96,6 +102,18 @@ const routes = [
                 name: 'Settings',
                 component: () => import('../views/system/Settings.vue'),
                 meta: { title: '系统设置' }
+            },
+            {
+                path: 'themes',
+                name: 'ThemeManager',
+                component: () => import('../views/system/ThemeManager.vue'),
+                meta: { title: '主题管理' }
+            },
+            {
+                path: 'logs',
+                name: 'LogList',
+                component: () => import('../views/system/LogList.vue'),
+                meta: { title: '操作日志' }
             },
             {
                 path: 'admins',

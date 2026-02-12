@@ -10,7 +10,7 @@ Page({
         products: [],
         categories: [],
         topCategories: [], // 快捷入口（金刚区）
-        currentCategory: '',
+        currentCategory: 0, // 默认选中第一个（精选推荐）
         loading: true,
         isScrolled: false,
         statusBarHeight: 20,

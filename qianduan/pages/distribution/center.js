@@ -1,6 +1,7 @@
 // pages/distribution/center.js - 分佣中心（整合钱包、邀请、团队入口）
 const app = getApp();
 const { get, post } = require('../../utils/request');
+const { ROLE_NAMES } = require('../../config/constants');
 
 // 状态字典
 const COMMISSION_STATUS_MAP = {
@@ -43,14 +44,14 @@ Page({
         showWithdraw: false,
         withdrawAmount: '',
         withdrawals: [],
+        // 分享弹窗
+        showShareModal: false,
+        qrCodeUrl: '',
         // 绑定邀请码
         showBindInvite: false,
         bindInviteCode: '',
         hasParent: false,
         parentInfo: null,
-        // 最新通知
-        latestNotifications: [],
-        unreadCount: 0,
         // 代理商专属
         isAgent: false,
         agentStock: 0,
@@ -60,18 +61,12 @@ Page({
     },
 
     onLoad(options) {
-        // 支持从个人中心带 tab 参数跳转，直达佣金明细
-        if (options.tab) {
-            this.setData({ activeTab: options.tab });
-        }
     },
 
     onShow() {
         this.setData({ userInfo: app.globalData.userInfo });
         this.loadStats();
         this.loadWalletInfo();
-        this.loadCommissionLogs();
-        this.loadLatestNotifications();
         this.loadAgentData();
 
         // 如果用户没有上级，且没有提示过，显示提示
@@ -102,13 +97,60 @@ Page({
         });
     },
 
-    // 切换标签
-    onTabChange(e) {
-        const tab = e.currentTarget.dataset.tab;
-        this.setData({ activeTab: tab });
-        if (tab === 'withdraw') {
-            this.loadWithdrawals();
+    // ====== 导航跳转 ======
+    onCommissionLogsTap() {
+        wx.navigateTo({ url: '/pages/distribution/commission-logs' });
+    },
+
+    onWithdrawHistoryTap() {
+        wx.navigateTo({ url: '/pages/distribution/withdraw-history' });
+    },
+
+    onTeamTap() {
+        wx.navigateTo({ url: '/pages/distribution/team' });
+    },
+
+    onOrderTap() {
+        wx.navigateTo({ url: '/pages/order/list?type=distribution' });
+    },
+
+    // ====== 分享弹窗 ======
+    async onShowShareModal() {
+        this.setData({ showShareModal: true });
+        if (!this.data.qrCodeUrl) {
+            this.loadQRCode();
         }
+    },
+
+    hideShareModal() {
+        this.setData({ showShareModal: false });
+    },
+
+    async loadQRCode() {
+        try {
+            // 这里假设后端有一个生成分销二维码的接口
+            // 如果没有，可以先用一个 placeholder 或者提示
+            const res = await get('/share/qrcode', { path: `pages/index/index?share_id=${this.data.inviteCode}` });
+            if (res.code === 0 && res.data.url) {
+                this.setData({ qrCodeUrl: res.data.url });
+            }
+        } catch (err) {
+            console.error('加载二维码失败', err);
+        }
+    },
+
+    onSaveQRCode() {
+        if (!this.data.qrCodeUrl) return;
+        wx.downloadFile({
+            url: this.data.qrCodeUrl,
+            success: (res) => {
+                wx.saveImageToPhotosAlbum({
+                    filePath: res.tempFilePath,
+                    success: () => wx.showToast({ title: '已保存到相册' }),
+                    fail: () => wx.showToast({ title: '保存失败', icon: 'none' })
+                });
+            }
+        });
     },
 
     // ====== 邀请码绑定上级 ======
@@ -149,41 +191,6 @@ Page({
         }
     },
 
-    // ====== 最新通知 ======
-    async loadLatestNotifications() {
-        try {
-            const res = await get('/notifications', { page: 1, limit: 7 });
-            if (res.code === 0 && res.data) {
-                const list = (res.data.list || []).map(item => ({
-                    ...item,
-                    time_format: this.formatTime(item.created_at)
-                }));
-                const unread = list.filter(n => !n.is_read).length;
-                this.setData({
-                    latestNotifications: list,
-                    unreadCount: unread
-                });
-            }
-        } catch (err) {
-            console.error('加载通知失败', err);
-        }
-    },
-
-    formatTime(dateStr) {
-        if (!dateStr) return '';
-        const date = new Date(dateStr);
-        const now = new Date();
-        const diff = now - date;
-        if (diff < 60000) return '刚刚';
-        if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
-        if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
-        return `${date.getMonth() + 1}-${date.getDate()}`;
-    },
-
-    onNotificationsTap() {
-        wx.navigateTo({ url: '/pages/user/notifications' });
-    },
-
     // ====== 退货入口 ======
     onRefundTap() {
         wx.navigateTo({ url: '/pages/order/refund-list' });
@@ -195,13 +202,24 @@ Page({
             const res = await get('/stats/distribution');
             if (res.code === 0 && res.data) {
                 const hasParent = !!(res.data.userInfo && res.data.userInfo.inviter);
+                const userInfo = res.data.userInfo || {};
+                const roleLevel = userInfo.role || 0;
+                
+                // 以全局 userInfo 的 role_name 为主，如果缺失则使用接口返回或常量映射
+                const roleName = app.globalData.userInfo?.role_name || userInfo.role_name || ROLE_NAMES[roleLevel] || '普通用户';
+                
                 this.setData({
                     stats: res.data.stats || this.data.stats,
                     team: res.data.team || this.data.team,
-                    userInfo: res.data.userInfo ? { ...this.data.userInfo, ...res.data.userInfo } : this.data.userInfo,
-                    inviteCode: res.data.userInfo ? (res.data.userInfo.invite_code || String(res.data.userInfo.id)) : '',
+                    userInfo: { 
+                        ...this.data.userInfo, 
+                        ...userInfo,
+                        role: roleLevel,
+                        role_name: roleName
+                    },
+                    inviteCode: userInfo.invite_code || String(userInfo.id) || '',
                     hasParent: hasParent,
-                    parentInfo: res.data.userInfo ? res.data.userInfo.inviter : null
+                    parentInfo: userInfo.inviter || null
                 });
             }
         } catch (err) {
@@ -209,7 +227,7 @@ Page({
         }
     },
 
-    // 加载钱包信息
+    // ====== 钱包信息 ======
     async loadWalletInfo() {
         try {
             const res = await get('/wallet');
@@ -221,68 +239,6 @@ Page({
             }
         } catch (err) {
             console.error('加载钱包失败', err);
-        }
-    },
-
-    // 加载佣金明细
-    async loadCommissionLogs() {
-        try {
-            const res = await get('/wallet/commissions');
-            if (res.code === 0 && res.data) {
-                const list = (res.data.list || []).map(item => {
-                    const statusConfig = COMMISSION_STATUS_MAP[item.status] || { text: item.status, class: '' };
-                    return {
-                        ...item,
-                        statusText: statusConfig.text,
-                        statusClass: statusConfig.class,
-                        typeName: this.getCommissionTypeName(item.type)
-                    };
-                });
-                for (let i = 0; i < list.length; i++) {
-                    // 自动处理日期格式
-                    if (list[i].created_at) list[i].created_at = list[i].created_at.substring(0, 19).replace('T', ' ');
-                }
-                this.setData({
-                    commissionLogs: list
-                });
-            }
-        } catch (err) {
-            console.error('加载佣金明细失败', err);
-        }
-    },
-
-    getCommissionTypeName(type) {
-        const map = {
-            'Direct': '直推佣金',
-            'Indirect': '团队佣金',
-            'Stock_Diff': '级差利润',
-            'agent_fulfillment': '发货利润'
-        };
-        return map[type] || type;
-    },
-
-    // 加载提现记录
-    async loadWithdrawals() {
-        try {
-            const res = await get('/wallet/withdrawals');
-            if (res.code === 0 && res.data) {
-                const list = (res.data.list || []).map(item => {
-                    const statusConfig = WITHDRAW_STATUS_MAP[item.status] || { text: item.status, class: '' };
-                    return {
-                        ...item,
-                        statusText: statusConfig.text,
-                        statusClass: statusConfig.class
-                    };
-                });
-                for (let i = 0; i < list.length; i++) {
-                    if (list[i].created_at) list[i].created_at = list[i].created_at.substring(0, 19).replace('T', ' ');
-                }
-                this.setData({
-                    withdrawals: list
-                });
-            }
-        } catch (err) {
-            console.error('加载提现记录失败', err);
         }
     },
 

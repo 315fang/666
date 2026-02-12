@@ -1,0 +1,27 @@
+<view class="container">
+  <view class="list-section">
+    <view class="withdraw-item" wx:for="{{list}}" wx:key="id">
+      <view class="item-header">
+        <text class="amount">¥{{item.amount}}</text>
+        <text class="status {{item.statusClass}}">{{item.statusText}}</text>
+      </view>
+      <view class="item-info">
+        <text class="time">{{item.created_at}}</text>
+        <text class="actual" wx:if="{{item.actual_amount}}">实到: ¥{{item.actual_amount}}</text>
+      </view>
+      <view class="reject-reason" wx:if="{{item.reject_reason}}">
+        拒绝原因: {{item.reject_reason}}
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty-state" wx:if="{{list.length === 0 && !loading}}">
+      <image src="/assets/images/placeholder.svg" mode="aspectFit" class="empty-img"></image>
+      <text>暂无提现记录</text>
+    </view>
+
+    <!-- 加载中 -->
+    <view class="loading-more" wx:if="{{loading}}">加载中...</view>
+    <view class="no-more" wx:if="{{!hasMore && list.length > 0}}">没有更多了</view>
+  </view>
+</view>

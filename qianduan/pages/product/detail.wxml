@@ -1,7 +1,7 @@
-<!--pages/product/detail.wxml-->
+<!--pages/product/detail.wxml - 成熟电商风格-->
 <view class="container">
-  <!-- 1. Floating Nav Bar (Transparent) -->
-  <view class="nav-float-bar safe-top" style="padding-top: {{statusBarHeight}}px;">
+  <!-- 1. Floating Nav Bar -->
+  <view class="nav-float-bar" style="padding-top: {{statusBarHeight}}px;">
     <view class="nav-actions">
       <view class="nav-btn-circle" bindtap="onBackTap">
         <text class="nav-icon">←</text>
@@ -17,111 +17,144 @@
     </view>
   </view>
 
-  <!-- 2. Fullscreen Carousel -->
-  <view class="hero-carousel">
-    <swiper class="swiper-full" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}" indicator-color="rgba(255,255,255,0.4)" indicator-active-color="#ffffff">
+  <!-- 2. Product Gallery -->
+  <view class="gallery-section">
+    <swiper class="gallery-swiper" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}" indicator-color="rgba(255,255,255,0.4)" indicator-active-color="#ffffff">
       <swiper-item wx:for="{{product.images}}" wx:key="*this">
-        <image src="{{item}}" mode="aspectFill" class="slide-image" bindtap="onPreviewImage" data-src="{{item}}"></image>
+        <image src="{{item}}" mode="aspectFill" class="gallery-image" bindtap="onPreviewImage" data-src="{{item}}"></image>
       </swiper-item>
     </swiper>
+    <view class="gallery-count">{{currentImage + 1}}/{{imageCount}}</view>
   </view>
 
-  <!-- 3. Main Content Card (Overlapping) -->
-  <view class="content-card">
-    <!-- Price & Title -->
-    <view class="header-section">
-      <view class="price-row">
-        <view class="price-main">
-          <text class="currency">¥</text>
-          <text class="amount">{{currentPrice || product.price}}</text>
-        </view>
-        <view class="price-sub" wx:if="{{product.market_price}}">
-          ¥{{product.market_price}}
-        </view>
+  <!-- 3. Product Info Card -->
+  <view class="product-card">
+    <!-- Price Section -->
+    <view class="price-section">
+      <view class="price-main">
+        <text class="price-symbol">¥</text>
+        <text class="price-value">{{currentPrice || product.displayPrice || product.price}}</text>
       </view>
-      
-      <view class="agent-box" wx:if="{{isAgent && commission > 0}}">
-         <view class="agent-tag">
-            <text class="agent-icon">📈</text>
-            <text class="agent-text">代理商特权：分享赚 ¥{{commission}}</text>
-         </view>
-         <text class="agent-arrow">›</text>
-      </view>
-
-      <view class="product-title">{{product.name}}</view>
-      
-      <view class="tags-row">
-         <view class="tag-item">官方正品</view>
-         <view class="tag-item">顺丰包邮</view>
-         <view class="tag-item">七天无理由</view>
+      <view class="price-origin" wx:if="{{product.market_price}}">¥{{product.market_price}}</view>
+      <view class="price-discount" wx:if="{{product.market_price}}">
+        {{discount}}折
       </view>
     </view>
 
-    <!-- Agent Incentive -->
-    <view class="agent-incentive-card" wx:if="{{isAgent && commission > 0}}">
-      <view class="incentive-left">
-        <view class="icon-box">💰</view>
-        <view class="incentive-info">
-          <text class="incentive-title">推广赚 ¥{{commission}}</text>
-          <text class="incentive-sub">分享给好友下单即可获得</text>
-        </view>
-      </view>
-      <view class="incentive-arrow">→</view>
+    <!-- Sales & Favorites -->
+    <view class="stats-row">
+      <text class="stats-item">已售 {{product.sales_count || 0}}件</text>
+      <text class="stats-divider">|</text>
+      <text class="stats-item">{{product.favorite_count || 0}}人收藏</text>
     </view>
 
-    <!-- Service Guarantee -->
-    <view class="service-row">
-      <view class="service-item">
-        <text class="check-icon">✓</text>
-        <text>官方正品</text>
+    <!-- Title -->
+    <view class="product-title">{{product.name}}</view>
+
+    <!-- Tags -->
+    <view class="tags-row">
+      <view class="tag tag-blue">官方正品</view>
+      <view class="tag tag-green">极速发货</view>
+      <view class="tag tag-orange">七天退换</view>
+    </view>
+
+    <!-- Agent Commission -->
+    <view class="commission-bar" wx:if="{{isAgent && commission > 0}}">
+      <view class="commission-left">
+        <text class="commission-icon">💰</text>
+        <text class="commission-text">分享赚 ¥{{commission}}</text>
       </view>
+      <text class="commission-arrow">›</text>
+    </view>
+  </view>
+
+  <!-- 4. Service Section -->
+  <view class="section-card">
+    <view class="service-grid">
       <view class="service-item">
-        <text class="check-icon">✓</text>
-        <text>极速发货</text>
+        <text class="service-icon">✓</text>
+        <text class="service-text">正品保障</text>
       </view>
       <view class="service-item">
-        <text class="check-icon">✓</text>
-        <text>售后无忧</text>
+        <text class="service-icon">✓</text>
+        <text class="service-text">极速发货</text>
       </view>
-    </view>
-
-    <!-- Spec Selector -->
-    <view class="selector-card" bindtap="showSkuModal">
-      <view class="selector-left">
-        <text class="selector-label">已选</text>
-        <text class="selector-value">{{selectedSkuText || '请选择规格'}}</text>
+      <view class="service-item">
+        <text class="service-icon">✓</text>
+        <text class="service-text">售后无忧</text>
       </view>
-      <text class="selector-arrow">›</text>
-    </view>
-
-    <!-- Product Details (Rich Text) -->
-    <view class="detail-block">
-      <view class="block-title">商品详情</view>
-      <view class="rich-content">
-        <rich-text nodes="{{product.detail_html || '暂无详情'}}"></rich-text>
+      <view class="service-item">
+        <text class="service-icon">✓</text>
+        <text class="service-text">运费险</text>
       </view>
     </view>
   </view>
 
-  <!-- Spec Modal -->
+  <!-- 5. Spec Selector -->
+  <view class="section-card spec-selector" bindtap="showSkuModal">
+    <view class="selector-content">
+      <text class="selector-label">规格</text>
+      <text class="selector-value">{{selectedSkuText || '请选择规格数量'}}</text>
+    </view>
+    <text class="selector-arrow">›</text>
+  </view>
+
+  <!-- 6. Reviews Preview -->
+  <view class="section-card reviews-section" wx:if="{{reviews.length > 0}}">
+    <view class="section-header">
+      <view class="section-title">
+        <text>用户评价</text>
+        <text class="review-count">({{reviewTotal}})</text>
+      </view>
+      <view class="section-more" bindtap="goReviews">
+        <text>查看全部</text>
+        <text>›</text>
+      </view>
+    </view>
+    <view class="review-tags" wx:if="{{reviewTags.length > 0}}">
+      <text class="review-tag" wx:for="{{reviewTags}}" wx:key="*this">{{item}}</text>
+    </view>
+    <view class="review-item" wx:for="{{reviews}}" wx:key="id" wx:if="{{index < 2}}">
+      <view class="review-header">
+        <image class="review-avatar" src="{{item.user.avatar_url || '/assets/icons/user.svg'}}"></image>
+        <text class="review-name">{{item.user.nickname}}</text>
+        <view class="review-stars">
+          <text wx:for="{{[1,2,3,4,5]}}" wx:for-item="star" wx:key="*this" class="star {{star <= item.rating ? 'filled' : ''}}">★</text>
+        </view>
+      </view>
+      <text class="review-content">{{item.content}}</text>
+    </view>
+  </view>
+
+  <!-- 7. Product Details -->
+  <view class="section-card detail-section">
+    <view class="section-title-bar">
+      <text class="section-title">商品详情</text>
+    </view>
+    <view class="detail-content">
+      <rich-text nodes="{{product.detail_html || '暂无详情'}}"></rich-text>
+    </view>
+  </view>
+
+  <!-- SKU Modal -->
   <view class="sku-modal {{showSku ? 'show' : ''}}" bindtap="hideSkuModal">
     <view class="sku-content" catchtap="stopP">
       <view class="sku-header">
         <image src="{{selectedSkuImg || product.images[0]}}" mode="aspectFill" class="sku-thumb"></image>
         <view class="sku-info">
-          <view class="sku-price">¥{{currentPrice}}</view>
-          <view class="sku-stock">库存: {{currentStock}}件</view>
-          <view class="sku-selected">已选: {{selectedSkuText}}</view>
+          <view class="sku-price">¥{{currentPrice || product.displayPrice || product.price}}</view>
+          <view class="sku-stock">库存 {{currentStock || product.stock || 999}}件</view>
+          <view class="sku-selected">已选 {{selectedSkuText || '请选择'}}</view>
         </view>
         <view class="close-btn" bindtap="hideSkuModal">✕</view>
       </view>
-      
+
       <scroll-view scroll-y class="sku-scroll">
         <!-- Specs Loop -->
         <view class="spec-group" wx:for="{{product.specs}}" wx:key="name">
           <view class="spec-title">{{item.name}}</view>
-          <view class="spec-values">
-            <view class="spec-chip {{selectedSpecs[item.name] === val ? 'active' : ''}}" 
+          <view class="spec-options">
+            <view class="spec-option {{selectedSpecs[item.name] === val ? 'active' : ''}}"
                   wx:for="{{item.values}}" wx:for-item="val" wx:key="*this"
                   bindtap="onSpecSelect" data-key="{{item.name}}" data-val="{{val}}">
               {{val}}
@@ -130,46 +163,45 @@
         </view>
 
         <!-- Quantity -->
-        <view class="quantity-row">
-          <text class="qty-label">购买数量</text>
+        <view class="qty-section">
+          <text class="qty-label">数量</text>
           <view class="stepper">
-            <view class="step-btn {{quantity <= 1 ? 'disabled' : ''}}" bindtap="onMinus">-</view>
-            <input class="step-input" type="number" value="{{quantity}}" bindinput="onQtyInput" />
-            <view class="step-btn" bindtap="onPlus">+</view>
+            <view class="stepper-btn {{quantity <= 1 ? 'disabled' : ''}}" bindtap="onMinus">−</view>
+            <input class="stepper-input" type="number" value="{{quantity}}" bindinput="onQtyInput" />
+            <view class="stepper-btn" bindtap="onPlus">+</view>
           </view>
         </view>
       </scroll-view>
 
-      <view class="sku-footer safe-bottom">
-        <view class="btn-group">
-          <view class="btn-cart" bindtap="onAddToCart">加入购物车</view>
-          <view class="btn-buy" bindtap="onBuyNow">立即购买</view>
+      <view class="sku-footer">
+        <view class="sku-btn-group">
+          <view class="sku-btn sku-btn-cart" bindtap="onAddToCart">加入购物车</view>
+          <view class="sku-btn sku-btn-buy" bindtap="onBuyNow">立即购买</view>
         </view>
       </view>
     </view>
   </view>
 
   <!-- Bottom Action Bar -->
-  <view class="bottom-action-bar safe-bottom">
-    <view class="bar-icons">
-      <view class="icon-btn" bindtap="goHome">
-        <image src="/assets/icons/home.svg" style="width:40rpx;height:40rpx;" mode="aspectFit"></image>
-        <text class="bar-text">首页</text>
+  <view class="action-bar">
+    <view class="action-icons">
+      <view class="action-icon" bindtap="goHome">
+        <image class="icon-img" src="/assets/icons/home.svg" mode="aspectFit"></image>
+        <text class="icon-label">首页</text>
       </view>
-      <view class="icon-btn" bindtap="goCart">
-        <image src="/assets/icons/cart.svg" style="width:40rpx;height:40rpx;" mode="aspectFit"></image>
-        <text class="bar-text">购物车</text>
-        <view class="cart-badge" wx:if="{{cartCount > 0}}">{{cartCount}}</view>
+      <view class="action-icon" bindtap="goCart">
+        <image class="icon-img" src="/assets/icons/cart.svg" mode="aspectFit"></image>
+        <text class="icon-label">购物车</text>
+        <view class="icon-badge" wx:if="{{cartCount > 0}}">{{cartCount}}</view>
       </view>
-      <button class="icon-btn contact-btn" open-type="contact">
-        <image src="/assets/icons/message.svg" style="width:40rpx;height:40rpx;" mode="aspectFit"></image>
-        <text class="bar-text">客服</text>
+      <button class="action-icon" open-type="contact">
+        <image class="icon-img" src="/assets/icons/message.svg" mode="aspectFit"></image>
+        <text class="icon-label">客服</text>
       </button>
     </view>
-
-    <view class="bar-buttons">
-      <view class="bar-btn secondary" bindtap="onAddToCart">加入购物车</view>
-      <view class="bar-btn primary" bindtap="onBuyNow">立即购买</view>
+    <view class="action-buttons">
+      <view class="action-btn action-btn-secondary" bindtap="onAddToCart">加入购物车</view>
+      <view class="action-btn action-btn-primary" bindtap="onBuyNow">立即购买</view>
     </view>
   </view>
 </view>
