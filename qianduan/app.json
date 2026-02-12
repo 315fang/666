@@ -25,7 +25,8 @@
         "pages/user/notifications",
         "pages/user/preferences",
         "pages/order/logistics",
-        "pages/search/search"
+        "pages/search/search",
+        "pages/ai/chat"
     ],
     "tabBar": {
         "color": "#94A3B8",
