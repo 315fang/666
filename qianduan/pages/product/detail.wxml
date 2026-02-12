@@ -194,9 +194,9 @@
         <text class="icon-label">购物车</text>
         <view class="icon-badge" wx:if="{{cartCount > 0}}">{{cartCount}}</view>
       </view>
-      <button class="action-icon" open-type="contact">
+      <button class="action-icon" bindtap="goAIChat">
         <image class="icon-img" src="/assets/icons/message.svg" mode="aspectFit"></image>
-        <text class="icon-label">客服</text>
+        <text class="icon-label">咨询AI</text>
       </button>
     </view>
     <view class="action-buttons">
