@@ -341,7 +341,7 @@ Page({
         wx.showToast({ title: '请点击客服按钮', icon: 'none' });
     },
 
-    // 工厂采购入仓
+    // 代理商云库存补货
     onAgentRestock() {
         wx.navigateTo({ url: '/pages/distribution/restock' });
     },

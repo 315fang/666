@@ -1,4 +1,4 @@
-<!--pages/distribution/stock-logs.wxml - 工厂库存变动日志-->
+<!--pages/distribution/stock-logs.wxml - 代理商云库存变动日志-->
 <view class="container">
   <!-- 库存概览 -->
   <view class="stock-header">

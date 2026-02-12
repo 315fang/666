@@ -10,6 +10,7 @@ const adminContentController = require('./controllers/adminContentController');
 const adminWithdrawalController = require('./controllers/adminWithdrawalController');
 const adminRefundController = require('./controllers/adminRefundController');
 const adminDealerController = require('./controllers/adminDealerController');
+const factoryController = require('./controllers/factoryController');  // ★新增：工厂发货控制器
 
 // ★ 配置 multer（内存存储，后续传到对象存储）
 const upload = multer({
@@ -55,6 +56,13 @@ router.put('/orders/:id/transfer-agent', checkPermission('orders'), adminOrderCo
 router.put('/orders/:id/force-complete', checkPermission('orders'), adminOrderController.forceCompleteOrder);  // ★新增
 router.put('/orders/:id/force-cancel', checkPermission('orders'), adminOrderController.forceCancelOrder);  // ★新增
 router.post('/orders/batch-ship', checkPermission('orders'), adminOrderController.batchShipOrders);  // ★新增
+
+// ========== 工厂发货管理 (★新增) ==========
+router.get('/factory/dashboard', checkPermission('orders'), factoryController.getFactoryDashboard);
+router.get('/factory/pending-orders', checkPermission('orders'), factoryController.getPendingOrders);
+router.get('/factory/shipped-orders', checkPermission('orders'), factoryController.getShippedOrders);
+router.post('/factory/ship/:id', checkPermission('orders'), factoryController.shipOrder);
+router.post('/factory/batch-ship', checkPermission('orders'), factoryController.batchShipOrders);
 
 // ========== 用户管理 ==========
 router.get('/users', checkPermission('users'), adminUserController.getUsers);

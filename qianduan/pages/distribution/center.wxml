@@ -75,21 +75,21 @@
     </view>
   </view>
 
-  <!-- 4. 工厂专区 (仅工厂/代理可见) -->
+  <!-- 4. 代理商专区 (仅代理可见) -->
   <view class="agent-section" wx:if="{{isAgent}}">
     <view class="section-header">
-      <text class="title">🏭 工厂工作台</text>
-      <text class="badge">工厂专属</text>
+      <text class="title">🏭 代理商工作台</text>
+      <text class="badge">代理商专属</text>
     </view>
     <view class="agent-grid">
       <view class="agent-card main" bindtap="goWorkbench">
-        <text class="card-title">发货工作台</text>
-        <text class="card-desc">处理订单、填写物流</text>
+        <text class="card-title">订单工作台</text>
+        <text class="card-desc">确认订单、管理云库存</text>
         <view class="card-badge" wx:if="{{agentPending > 0}}">{{agentPending}}</view>
       </view>
       <view class="agent-sub-grid">
         <view class="agent-card" bindtap="goRestock">
-          <text class="card-title">采购入仓</text>
+          <text class="card-title">云库存补货</text>
         </view>
         <view class="agent-card" bindtap="goStockLogs">
           <text class="card-title">库存明细</text>

@@ -1,4 +1,4 @@
-<!--pages/distribution/restock.wxml - 工厂采购入仓-->
+<!--pages/distribution/restock.wxml - 代理商云库存补货-->
 <view class="container">
   <!-- 当前库存提示 -->
   <view class="stock-banner">
