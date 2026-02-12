@@ -340,6 +340,15 @@ Page({
         wx.navigateTo({ url: '/pages/address/list' });
     },
 
+    // ======== 智能助手 ========
+    goAIChat() {
+        if (!this.data.isLoggedIn) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: '/pages/ai/chat' });
+    },
+
     // ======== 工作台 ========
     goWorkbench() {
         if (!this.data.isLoggedIn) {

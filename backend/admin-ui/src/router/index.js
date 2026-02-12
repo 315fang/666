@@ -116,6 +116,12 @@ const routes = [
                 meta: { title: '操作日志' }
             },
             {
+                path: 'ai-console',
+                name: 'AIConsole',
+                component: () => import('../views/system/AIConsole.vue'),
+                meta: { title: '智能控制台' }
+            },
+            {
                 path: 'admins',
                 name: 'AdminList',
                 component: () => import('../views/system/AdminList.vue'),

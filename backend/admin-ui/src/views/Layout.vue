@@ -68,6 +68,10 @@
                 <el-icon><Setting /></el-icon>
                 <span>系统管理</span>
             </template>
+            <el-menu-item index="/ai-console">
+                <el-icon><Monitor /></el-icon>
+                <span>智能控制台</span>
+            </el-menu-item>
             <el-menu-item index="/themes">主题管理</el-menu-item>
             <el-menu-item index="/settings">系统设置</el-menu-item>
             <el-menu-item index="/admins">管理员列表</el-menu-item>

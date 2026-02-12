@@ -188,6 +188,9 @@ router.get('/system/status', adminSettingsController.getSystemStatus);
 const adminThemeRoutes = require('./themes');
 router.use('/themes', adminThemeRoutes);
 
+const adminAgentRoutes = require('./ai_agent');
+router.use('/agent', adminAgentRoutes);
+
 // ========== 首页装修 (★新增) ==========
 const adminHomeSectionController = require('./controllers/adminHomeSectionController');
 router.get('/home-sections', checkPermission('content'), adminHomeSectionController.getHomeSections);

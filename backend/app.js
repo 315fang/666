@@ -9,6 +9,7 @@ const constants = require('./config/constants');
 
 // 导入路由
 const authRoutes = require('./routes/auth');
+const aiRoutes = require('./routes/ai');
 const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
 const addressRoutes = require('./routes/addresses');
@@ -118,6 +119,7 @@ if (process.env.NODE_ENV === 'development') {
 
 // API路由
 app.use('/api', authRoutes);
+app.use('/api/ai', aiRoutes);
 app.use('/api', productRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', addressRoutes);

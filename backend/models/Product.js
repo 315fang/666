@@ -98,7 +98,17 @@ const Product = sequelize.define('Product', {
         allowNull: true,
         comment: '二级分销固定金额 (e.g. 5.00), 优先于比例'
     },
-    stock: {
+    ai_review_status: {
+        type: DataTypes.ENUM('pending', 'approved', 'rejected'),
+        defaultValue: 'pending',
+        comment: 'AI审查状态'
+    },
+    ai_review_reason: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+        comment: 'AI审查原因'
+    },
+    status: {
         type: DataTypes.INTEGER,
         defaultValue: 0,
         comment: '公司库存'
