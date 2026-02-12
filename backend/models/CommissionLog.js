@@ -77,6 +77,12 @@ const CommissionLog = sequelize.define('CommissionLog', {
         type: DataTypes.DATE,
         allowNull: true,
         comment: '实际结算到账时间'
+    },
+    // ★ 结算批次ID (★新增)
+    settlement_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: '所属结算批次ID'
     }
 }, {
     tableName: 'commission_logs',

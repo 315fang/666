@@ -8,7 +8,7 @@
  * - 采购入仓（补充云库存）
  * - 库存变动日志
  */
-const { Order, Product, SKU, User, CommissionLog, sequelize } = require('../models');
+const { Order, Product, SKU, User, CommissionLog, StockTransaction, sequelize } = require('../models');
 const { sendNotification } = require('../models/notificationUtil');
 const { Op } = require('sequelize');
 const constants = require('../config/constants');
@@ -387,7 +387,32 @@ const confirmOrder = async (req, res) => {
         }
 
         // ★ 扣减代理商云库存
+        const balance_before = agent.stock_count;
         await agent.decrement('stock_count', { by: order.quantity, transaction: t });
+        await agent.reload({ transaction: t });  // 重新加载获取最新库存
+        const balance_after = agent.stock_count;
+
+        // ★ 记录库存变动审计
+        await StockTransaction.recordTransaction({
+            user_id: userId,
+            product_id: order.product_id,
+            order_id: order.id,
+            type: 'order_confirm',
+            quantity: -order.quantity,  // 负数表示出库
+            balance_before,
+            balance_after,
+            amount: null,
+            operator_id: null,
+            operator_type: 'user',
+            remark: `代理商确认订单 ${order.order_no}，扣减云库存`,
+            metadata: {
+                order_no: order.order_no,
+                buyer_id: order.buyer_id,
+                fulfillment_type: 'Platform'
+            },
+            ip_address: null,
+            transaction: t
+        });
 
         // ★★★ 核心：计算团队级差佣金 + 代理商发货利润
         const buyer = await User.findByPk(order.buyer_id, { transaction: t });

@@ -20,6 +20,9 @@ const QuickEntry = require('./QuickEntry');
 const HomeSection = require('./HomeSection');
 const Theme = require('./Theme');
 const ActivityLog = require('./ActivityLog');
+const StockTransaction = require('./StockTransaction');  // ★新增：库存变动审计
+const CommissionSettlement = require('./CommissionSettlement');  // ★新增：佣金批次结算
+const StockReservation = require('./StockReservation');  // ★新增：库存预留
 
 // ========== 用户相关关联 ==========
 User.hasMany(Order, { foreignKey: 'buyer_id', as: 'orders' });
@@ -99,6 +102,31 @@ Product.hasMany(Material, { foreignKey: 'product_id', as: 'materials' });
 Refund.belongsTo(Admin, { foreignKey: 'admin_id', as: 'admin' });
 Dealer.belongsTo(Admin, { foreignKey: 'approved_by', as: 'approver' });
 
+// ========== 审计表关联 (★新增) ==========
+// 库存变动审计
+User.hasMany(StockTransaction, { foreignKey: 'user_id', as: 'stockTransactions' });
+StockTransaction.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+StockTransaction.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
+Order.hasMany(StockTransaction, { foreignKey: 'order_id', as: 'stockTransactions' });
+
+StockTransaction.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+Product.hasMany(StockTransaction, { foreignKey: 'product_id', as: 'stockTransactions' });
+
+// 佣金结算批次
+CommissionLog.belongsTo(CommissionSettlement, { foreignKey: 'settlement_id', as: 'settlement' });
+CommissionSettlement.hasMany(CommissionLog, { foreignKey: 'settlement_id', as: 'commissions' });
+
+// 库存预留
+User.hasMany(StockReservation, { foreignKey: 'user_id', as: 'stockReservations' });
+StockReservation.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+StockReservation.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
+Order.hasOne(StockReservation, { foreignKey: 'order_id', as: 'stockReservation' });
+
+StockReservation.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+Product.hasMany(StockReservation, { foreignKey: 'product_id', as: 'stockReservations' });
+
 module.exports = {
     sequelize,
     User,
@@ -121,5 +149,8 @@ module.exports = {
     QuickEntry,
     HomeSection,
     Theme,
-    ActivityLog
+    ActivityLog,
+    StockTransaction,  // ★新增
+    CommissionSettlement,  // ★新增
+    StockReservation  // ★新增
 };
