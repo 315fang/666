@@ -21,7 +21,7 @@ const CURRENT_ENV = ENV_TYPES.PRODUCTION;
 const envConfigs = {
   // 开发环境
   [ENV_TYPES.DEVELOPMENT]: {
-    apiBaseUrl: 'https://api.jxalk.cn/api',
+    apiBaseUrl: 'http://localhost:3000/api',
     debug: true,
     enableLog: true,
     enableMock: false,

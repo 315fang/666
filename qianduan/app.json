@@ -19,6 +19,8 @@
         "pages/distribution/workbench",
         "pages/distribution/restock",
         "pages/distribution/stock-logs",
+        "pages/distribution/commission-logs",
+        "pages/distribution/withdraw-history",
         "pages/wallet/index",
         "pages/user/notifications",
         "pages/user/preferences",

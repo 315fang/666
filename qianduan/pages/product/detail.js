@@ -14,9 +14,15 @@ Page({
         imageCount: 1,
         showSku: false,
         cartCount: 0,
-        skuAction: 'cart', // cart or buy
+        skuAction: 'cart',
         isFavorite: false,
-        statusBarHeight: 20 // Default fallback
+        statusBarHeight: 20,
+        // 新增：评价相关
+        reviews: [],
+        reviewTotal: 0,
+        reviewTags: [],
+        // 折扣
+        discount: 10
     },
 
     onLoad(options) {
@@ -59,6 +65,12 @@ Page({
             // 使用统一的价格计算工具
             const displayPrice = calculatePrice(product, null, roleLevel);
 
+            // 计算折扣
+            let discount = 10;
+            if (product.market_price && parseFloat(product.market_price) > 0) {
+                discount = Math.round((parseFloat(displayPrice) / parseFloat(product.market_price)) * 10);
+            }
+
             this.setData({
                 product: {
                     ...product,
@@ -68,20 +80,54 @@ Page({
                 selectedSku: (product.skus && product.skus.length > 0) ? product.skus[0] : null,
                 imageCount: product.images.length || 1,
                 roleLevel,
-                isAgent: roleLevel >= USER_ROLES.LEADER // 团长及以上可查看佣金
+                isAgent: roleLevel >= USER_ROLES.LEADER,
+                discount
             });
+
+            // 加载评价
+            this.loadReviews();
 
             // 加载佣金预览（如果用户是团长或代理商）
             if (roleLevel >= USER_ROLES.LEADER) {
                 this.loadCommissionPreview();
             }
-
-            wx.hideLoading();
         } catch (err) {
-            wx.hideLoading();
             wx.showToast({ title: '加载失败', icon: 'none' });
             console.error('加载商品详情失败:', err);
+        } finally {
+            wx.hideLoading();
         }
+    },
+
+    // 加载评价
+    async loadReviews() {
+        try {
+            const res = await get(`/products/${this.data.id}/reviews`, { limit: 2 }).catch(() => null);
+            if (res && res.data) {
+                const reviews = res.data.list || [];
+                const reviewTotal = res.data.pagination?.total || reviews.length;
+                // 生成评价标签
+                const reviewTags = this.generateReviewTags(reviews);
+                this.setData({ reviews, reviewTotal, reviewTags });
+            }
+        } catch (err) {
+            console.log('暂无评价数据');
+        }
+    },
+
+    // 生成评价标签
+    generateReviewTags(reviews) {
+        const tags = [];
+        const keywords = ['质量好', '物流快', '包装精美', '性价比高', '颜色正', '尺码准'];
+        reviews.forEach((r, i) => {
+            if (i < 3) tags.push(keywords[i % keywords.length]);
+        });
+        return tags;
+    },
+
+    // 跳转评价列表
+    goReviews() {
+        wx.navigateTo({ url: `/pages/product/reviews?id=${this.data.id}` });
     },
 
     // 加载佣金预览
@@ -295,7 +341,7 @@ Page({
         wx.showToast({ title: '请点击客服按钮', icon: 'none' });
     },
 
-    // 代理商采购入仓
+    // 工厂采购入仓
     onAgentRestock() {
         wx.navigateTo({ url: '/pages/distribution/restock' });
     },

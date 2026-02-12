@@ -22,10 +22,33 @@
   <scroll-view class="order-list" scroll-y bindscrolltolower="onLoadMore">
     <!-- 列表容器 -->
     <view class="order-list-container">
-      <view class="order-card" wx:for="{{orders}}" wx:key="id">
+      
+      <!-- 骨架屏 - 加载时显示 -->
+      <view class="skeleton-wrapper" wx:if="{{loading && orders.length === 0}}">
+        <view class="skeleton-card" wx:for="{{[1,2,3]}}" wx:key="index">
+          <view class="skeleton-header">
+            <view class="skeleton-line short"></view>
+            <view class="skeleton-line tiny"></view>
+          </view>
+          <view class="skeleton-body">
+            <view class="skeleton-img"></view>
+            <view class="skeleton-info">
+              <view class="skeleton-line"></view>
+              <view class="skeleton-line short"></view>
+            </view>
+          </view>
+          <view class="skeleton-footer">
+            <view class="skeleton-line short"></view>
+            <view class="skeleton-btn"></view>
+          </view>
+        </view>
+      </view>
+      
+      <!-- 真实订单列表 -->
+      <view class="order-card {{item.animateIn ? 'card-fade-in' : ''}}" wx:for="{{orders}}" wx:key="id" style="animation-delay: {{index * 100}}ms">
       <!-- 订单头部 -->
       <view class="order-header">
-        <text class="order-no">订单号: {{item.order_no}}</text>
+        <text class="order-no">{{item.order_no}}</text>
         <text class="order-status {{item.displayStatus || item.status}} {{item.hasActiveRefund ? 'refunding' : ''}}">{{item.statusText}}</text>
       </view>
 
@@ -34,14 +57,15 @@
         <view class="order-product" wx:if="{{item.product}}">
           <image class="product-image" src="{{item.product.images[0]}}" mode="aspectFill" wx:if="{{item.product.images && item.product.images.length > 0}}"></image>
           <view class="product-image product-image-placeholder" wx:else>
-            <text>暂无图</text>
+            <text>📦</text>
           </view>
           <view class="product-info">
-            <text class="product-name">{{item.product.name || '商品'}}</text>
-          </view>
-          <view class="product-price-qty">
-            <text class="product-price">¥{{item.total_amount}}</text>
-            <text class="product-qty">x{{item.quantity}}</text>
+            <text class="product-name">{{item.product.name || '商品名称'}}</text>
+            <text class="product-spec" wx:if="{{item.sku && item.sku.spec_value}}">{{item.sku.spec_value}}</text>
+            <view class="product-price-qty">
+              <text class="product-price">{{item.price || item.total_amount}}</text>
+              <text class="product-qty">x{{item.quantity}}</text>
+            </view>
           </view>
         </view>
       </view>
@@ -49,9 +73,8 @@
       <!-- 订单底部 -->
       <view class="order-footer">
         <view class="order-total">
-          <text>共{{item.quantity}}件</text>
-          <text class="total-label">实付: </text>
-          <text class="total-amount">¥{{item.total_amount}}</text>
+          <text class="total-label">共{{item.quantity}}件 实付:</text>
+          <text class="total-amount">{{item.total_amount}}</text>
           <text class="fulfillment-tag" wx:if="{{item.fulfillment_type === 'Agent'}}">团队发货</text>
         </view>
         <view class="order-actions">

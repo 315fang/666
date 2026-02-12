@@ -1,7 +1,8 @@
 // pages/user/user.js - 个人中心（全面升级版）
 const app = getApp();
-const { get, put } = require('../../utils/request');
+const { get, put, uploadFile } = require('../../utils/request');
 const { ErrorHandler } = require('../../utils/errorHandler');
+const { ROLE_NAMES } = require('../../config/constants');
 const globalStore = require('../../store/index');
 const { formatMoney } = require('../../utils/dataFormatter');
 
@@ -58,14 +59,20 @@ Page({
             const res = await get('/user/profile');
             if (res.code === 0 && res.data) {
                 const info = res.data;
+                const roleLevel = info.role || 0;
+                const roleName = info.role_name || ROLE_NAMES[roleLevel] || '普通用户';
+                
                 this.setData({
-                    userInfo: info,
+                    userInfo: {
+                        ...info,
+                        role_name: roleName
+                    },
                     hasUserInfo: true,
                     inviteCode: info.invite_code || '',
-                    isAgent: (info.role_level || info.role || 0) >= 2
+                    isAgent: (info.role_level || roleLevel || 0) >= 2
                 });
-                app.globalData.userInfo = info;
-                wx.setStorageSync('userInfo', info);
+                app.globalData.userInfo = this.data.userInfo;
+                wx.setStorageSync('userInfo', this.data.userInfo);
             } else {
                 const cached = app.globalData.userInfo;
                 this.setData({
@@ -124,7 +131,6 @@ Page({
             const res = await get('/distribution/overview');
             if (res.code === 0 && res.data) {
                 const d = res.data;
-                const roleNames = { 0: '普通用户', 1: '会员', 2: '团长', 3: '代理商' };
                 const totalEarnings = d.stats ? d.stats.totalEarnings : '0.00';
                 const availableAmount = d.stats ? d.stats.availableAmount : '0.00';
                 const frozenAmount = d.stats ? (d.stats.frozenAmount || '0.00') : '0.00';
@@ -136,7 +142,7 @@ Page({
                         availableAmount,
                         referee_count: teamCount,
                         role_level: roleLevel,
-                        role_name: d.userInfo ? (d.userInfo.role_name || roleNames[roleLevel]) : '普通用户'
+                        role_name: d.userInfo ? (d.userInfo.role_name || ROLE_NAMES[roleLevel]) : '普通用户'
                     },
                     // 同步 WXML 用到的顶级变量
                     stats: { frozenAmount },
@@ -160,6 +166,50 @@ Page({
             }
         } catch (err) {
             console.error('加载通知计数失败:', err);
+        }
+    },
+
+    // ======== 头像昵称修改（适配微信 2024 最新规则） ========
+    async onChooseAvatar(e) {
+        const { avatarUrl } = e.detail;
+        if (!avatarUrl) return;
+
+        try {
+            // 1. 上传图片到服务器
+            // 确保使用正确的上传接口路径
+            const res = await uploadFile('/user/upload', avatarUrl, 'file');
+            if (res.code === 0 && res.data.url) {
+                const fullUrl = res.data.url;
+                // 2. 更新用户信息
+                const updateRes = await put('/user/profile', { avatar_url: fullUrl });
+                if (updateRes.code === 0) {
+                    this.setData({
+                        'userInfo.avatar_url': fullUrl
+                    });
+                    wx.showToast({ title: '头像更新成功', icon: 'success' });
+                }
+            }
+        } catch (err) {
+            console.error('更新头像失败:', err);
+            wx.showToast({ title: '更新头像失败', icon: 'none' });
+        }
+    },
+
+    async onNicknameBlur(e) {
+        const nickname = e.detail.value.trim();
+        if (!nickname || nickname === (this.data.userInfo?.nickname)) return;
+
+        try {
+            const res = await put('/user/profile', { nickname });
+            if (res.code === 0) {
+                this.setData({
+                    'userInfo.nickname': nickname
+                });
+                wx.showToast({ title: '昵称更新成功', icon: 'success' });
+            }
+        } catch (err) {
+            console.error('更新昵称失败:', err);
+            wx.showToast({ title: '更新昵称失败', icon: 'none' });
         }
     },
 
@@ -309,8 +359,8 @@ Page({
             wx.showToast({ title: '请先登录', icon: 'none' });
             return;
         }
-        const status = e.currentTarget.dataset.status;
-        wx.navigateTo({ url: '/pages/order/list?status=' + status });
+        const type = e.currentTarget.dataset.type;
+        wx.navigateTo({ url: '/pages/order/list?status=' + type });
     },
 
     // ======== ★ 售后/退款入口 ========
@@ -415,6 +465,15 @@ Page({
     },
     // WXML 绑定别名
     copyInviteCode() { this.onCopyInviteCode(); },
+
+    // ======== ★ 分佣中心（整合团队、钱包、邀请码） ========
+    goDistributionCenter() {
+        if (!this.data.isLoggedIn) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: '/pages/distribution/center' });
+    },
 
     // ======== ★ 分享邀请 ========
     onShareTap() {

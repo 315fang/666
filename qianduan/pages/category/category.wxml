@@ -8,46 +8,45 @@
     </view>
   </view>
 
-  <!-- 2. Scenario Navigation (Horizontal Image Cards) -->
-  <view class="scenario-section">
-    <scroll-view scroll-x class="scenario-scroll" enable-flex>
-      <!-- Active Item -->
-      <view class="scenario-item {{currentCategory === 0 ? 'active' : ''}}" bindtap="onCategoryTap" data-id="{{0}}">
-        <view class="scenario-img-box">
-          <image src="/assets/images/category-all.svg" class="scenario-img" mode="aspectFill"></image> <!-- Placeholder -->
+  <!-- 2. Category Tabs - 方形滑动标签栏 -->
+  <view class="category-tab-container">
+    <scroll-view scroll-x scroll-with-animation show-scrollbar="{{false}}" class="category-tab-wrapper">
+      <view class="category-tab-scroll">
+        <view class="category-tab-item {{currentCategory === 0 ? 'active' : ''}}" 
+              bindtap="onCategoryTap" data-id="{{0}}">
+          <text class="category-tab-text">全部</text>
         </view>
-        <text class="scenario-text">全部</text>
-      </view>
-      <!-- List Items -->
-      <view class="scenario-item {{currentCategory === item.id ? 'active' : ''}}" 
-            wx:for="{{categories}}" wx:key="id" 
-            bindtap="onCategoryTap" data-id="{{item.id}}">
-        <view class="scenario-img-box">
-          <image src="{{item.icon || '/assets/images/placeholder.svg'}}" class="scenario-img" mode="aspectFill"></image>
+        <view class="category-tab-item {{currentCategory === item.id ? 'active' : ''}}" 
+              wx:for="{{categories}}" wx:key="id" 
+              bindtap="onCategoryTap" data-id="{{item.id}}">
+          <text class="category-tab-text">{{item.name}}</text>
         </view>
-        <text class="scenario-text">{{item.name}}</text>
       </view>
     </scroll-view>
   </view>
 
-  <!-- 3. Filter Bar (Sticky below header) -->
-  <view class="filter-sticky-bar">
-    <view class="filter-row">
-      <view class="filter-item {{sortBy === 'default' ? 'active' : ''}}" bindtap="onSortChange" data-sort="default">
-        综合
-        <view class="active-indicator" wx:if="{{sortBy === 'default'}}"></view>
-      </view>
-      <view class="filter-item {{sortBy === 'sales' ? 'active' : ''}}" bindtap="onSortChange" data-sort="sales">
-        销量
-      </view>
-      <view class="filter-item {{sortBy === 'price' ? 'active' : ''}}" bindtap="onSortChange" data-sort="price">
-        价格
-        <view class="sort-arrows">
-          <text class="arrow up {{sortOrder === 'asc' ? 'on' : ''}}">▲</text>
-          <text class="arrow down {{sortOrder === 'desc' ? 'on' : ''}}">▼</text>
+  <!-- 3. Filter Bar - 方形滑动标签栏 -->
+  <view class="filter-tab-container">
+    <scroll-view scroll-x scroll-with-animation show-scrollbar="{{false}}" class="filter-tab-wrapper">
+      <view class="filter-tab-scroll">
+        <view class="filter-tab-item {{sortBy === 'default' ? 'active' : ''}}" 
+              bindtap="onSortChange" data-sort="default">
+          <text class="filter-tab-text">综合</text>
+        </view>
+        <view class="filter-tab-item {{sortBy === 'sales' ? 'active' : ''}}" 
+              bindtap="onSortChange" data-sort="sales">
+          <text class="filter-tab-text">销量</text>
+        </view>
+        <view class="filter-tab-item {{sortBy === 'price' ? 'active' : ''}}" 
+              bindtap="onSortChange" data-sort="price">
+          <text class="filter-tab-text">价格</text>
+          <view class="sort-arrows">
+            <text class="arrow up {{sortOrder === 'asc' ? 'on' : ''}}">▲</text>
+            <text class="arrow down {{sortOrder === 'desc' ? 'on' : ''}}">▼</text>
+          </view>
         </view>
       </view>
-    </view>
+    </scroll-view>
     <view class="filter-icon-btn">
       <image src="/assets/icons/settings.svg" style="width:32rpx;height:32rpx;" mode="aspectFit"></image>
     </view>

@@ -1,11 +1,12 @@
-// pages/distribution/workbench.js - 代理商发货工作台
+// pages/distribution/workbench.js - 工厂发货工作台
 const { get, post } = require('../../utils/request');
 
 Page({
     data: {
         workbench: {},
         orders: [],
-        activeStatus: 'pending',
+        activeStatus: 'all',
+        sliderLeft: 0,  // 滑动条位置
         loading: false,
         // 发货弹窗
         showShipPopup: false,
@@ -14,7 +15,23 @@ Page({
         shipTrackingNo: ''
     },
 
+    // 计算滑动条位置
+    calcSliderLeft(status) {
+        const statusMap = {
+            'all': 0,
+            'pending': 1,
+            'shipping_requested': 2,
+            'shipped': 3
+        };
+        const index = statusMap[status] || 0;
+        // 使用百分比偏移，每个 tab 占 100% (相对于 slider 宽度)
+        return index * 100;
+    },
+
     onShow() {
+        // 初始化滑动条位置
+        const sliderLeft = this.calcSliderLeft(this.data.activeStatus);
+        this.setData({ sliderLeft: sliderLeft });
         this.loadWorkbench();
         this.loadOrders();
     },
@@ -75,7 +92,11 @@ Page({
     // 切换状态 Tab
     onStatusChange(e) {
         const status = e.currentTarget.dataset.status;
-        this.setData({ activeStatus: status });
+        const sliderLeft = this.calcSliderLeft(status);
+        this.setData({
+            activeStatus: status,
+            sliderLeft: sliderLeft
+        });
         this.loadOrders();
     },
 

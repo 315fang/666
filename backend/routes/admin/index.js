@@ -33,6 +33,10 @@ router.get('/products/:id', checkPermission('products'), adminProductController.
 router.post('/products', checkPermission('products'), adminProductController.createProduct);
 router.put('/products/:id', checkPermission('products'), adminProductController.updateProduct);
 router.put('/products/:id/status', checkPermission('products'), adminProductController.updateProductStatus);
+// ★ 批量设置商品佣金
+const adminProductBatchController = require('./controllers/adminProductBatchController');
+router.post('/products/batch-commission', checkPermission('products'), adminProductBatchController.batchSetCommission);
+
 router.get('/categories', checkPermission('products'), adminProductController.getCategories);
 router.post('/categories', checkPermission('products'), adminProductController.createCategory);
 router.put('/categories/:id', checkPermission('products'), adminProductController.updateCategory);
@@ -180,6 +184,15 @@ const adminSettingsController = require('./controllers/adminSettingsController')
 router.get('/settings', adminSettingsController.getSettings);
 router.put('/settings', adminSettingsController.updateSettings);
 router.get('/system/status', adminSettingsController.getSystemStatus);
+
+const adminThemeRoutes = require('./themes');
+router.use('/themes', adminThemeRoutes);
+
+// ========== 首页装修 (★新增) ==========
+const adminHomeSectionController = require('./controllers/adminHomeSectionController');
+router.get('/home-sections', checkPermission('content'), adminHomeSectionController.getHomeSections);
+router.put('/home-sections/:id', checkPermission('content'), adminHomeSectionController.updateHomeSection);
+router.post('/home-sections/sort', checkPermission('content'), adminHomeSectionController.updateSortOrder);
 
 // ========== 操作日志（★新增） ==========
 const adminLogController = require('./controllers/adminLogController');

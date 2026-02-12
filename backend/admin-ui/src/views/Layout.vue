@@ -48,6 +48,7 @@
                 <el-icon><Picture /></el-icon>
                 <span>内容管理</span>
             </template>
+            <el-menu-item index="/page-design">首页装修</el-menu-item>
             <el-menu-item index="/banners">轮播图</el-menu-item>
             <el-menu-item index="/materials">素材库</el-menu-item>
             <el-menu-item index="/contents">图文管理</el-menu-item>
@@ -67,8 +68,10 @@
                 <el-icon><Setting /></el-icon>
                 <span>系统管理</span>
             </template>
+            <el-menu-item index="/themes">主题管理</el-menu-item>
             <el-menu-item index="/settings">系统设置</el-menu-item>
             <el-menu-item index="/admins">管理员列表</el-menu-item>
+            <el-menu-item index="/logs">操作日志</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>

@@ -30,7 +30,7 @@
     </view>
     <view class="extra-item" wx:if="{{agentStockInfo}}">
       <text class="extra-icon">📦</text>
-      <text class="extra-label">代理商库存</text>
+      <text class="extra-label">工厂库存</text>
       <text class="extra-val">{{agentStockInfo.stock_count}}件</text>
     </view>
   </view>

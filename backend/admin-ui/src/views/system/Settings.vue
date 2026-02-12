@@ -9,6 +9,67 @@
       </template>
 
       <el-tabs v-model="activeTab">
+        <!-- 存储配置 (新增) -->
+        <el-tab-pane label="存储配置" name="storage">
+            <el-form :model="storageConfig" label-width="150px" v-loading="storageLoading">
+                <el-form-item label="存储提供商">
+                    <el-select v-model="storageConfig.provider">
+                        <el-option label="本地存储" value="local"></el-option>
+                        <el-option label="阿里云 OSS" value="aliyun"></el-option>
+                        <el-option label="腾讯云 COS" value="tencent"></el-option>
+                        <el-option label="七牛云" value="qiniu"></el-option>
+                        <el-option label="MinIO" value="minio"></el-option>
+                    </el-select>
+                </el-form-item>
+
+                <!-- 阿里云配置 -->
+                <div v-if="storageConfig.provider === 'aliyun'">
+                    <el-divider content-position="left">阿里云 OSS 配置</el-divider>
+                    <el-form-item label="AccessKey ID">
+                        <el-input v-model="storageConfig.aliyun.accessKeyId" show-password></el-input>
+                    </el-form-item>
+                    <el-form-item label="AccessKey Secret">
+                        <el-input v-model="storageConfig.aliyun.accessKeySecret" show-password></el-input>
+                    </el-form-item>
+                    <el-form-item label="Bucket">
+                        <el-input v-model="storageConfig.aliyun.bucket"></el-input>
+                    </el-form-item>
+                    <el-form-item label="Region">
+                        <el-input v-model="storageConfig.aliyun.region" placeholder="oss-cn-hangzhou"></el-input>
+                    </el-form-item>
+                     <el-form-item label="Endpoint">
+                        <el-input v-model="storageConfig.aliyun.endpoint"></el-input>
+                    </el-form-item>
+                    <el-form-item label="自定义域名">
+                        <el-input v-model="storageConfig.aliyun.customDomain"></el-input>
+                    </el-form-item>
+                </div>
+
+                <!-- 腾讯云配置 -->
+                <div v-if="storageConfig.provider === 'tencent'">
+                    <el-divider content-position="left">腾讯云 COS 配置</el-divider>
+                    <el-form-item label="SecretId">
+                        <el-input v-model="storageConfig.tencent.secretId" show-password></el-input>
+                    </el-form-item>
+                    <el-form-item label="SecretKey">
+                        <el-input v-model="storageConfig.tencent.secretKey" show-password></el-input>
+                    </el-form-item>
+                    <el-form-item label="Bucket">
+                        <el-input v-model="storageConfig.tencent.bucket"></el-input>
+                    </el-form-item>
+                    <el-form-item label="Region">
+                        <el-input v-model="storageConfig.tencent.region" placeholder="ap-guangzhou"></el-input>
+                    </el-form-item>
+                </div>
+
+                <!-- 按钮 -->
+                <el-form-item>
+                    <el-button type="primary" @click="saveStorageConfig">保存存储配置</el-button>
+                    <el-button @click="testStorageConfig">测试连接</el-button>
+                </el-form-item>
+            </el-form>
+        </el-tab-pane>
+
         <el-tab-pane label="订单配置" name="order">
           <el-form :model="settings.ORDER" label-width="180px">
             <el-form-item label="自动取消时间 (分钟)">
@@ -69,7 +130,7 @@ import { ref, onMounted } from 'vue'
 import request from '@/utils/request'
 import { ElMessage } from 'element-plus'
 
-const activeTab = ref('order')
+const activeTab = ref('storage')
 const settings = ref({
     ORDER: {},
     WITHDRAWAL: {},
@@ -79,35 +140,94 @@ const settings = ref({
     STOCK: {}
 })
 
+// 存储配置
+const storageLoading = ref(false)
+const storageConfig = ref({
+    provider: 'local',
+    aliyun: {},
+    tencent: {},
+    qiniu: {},
+    minio: {}
+})
+
+onMounted(() => {
+    fetchSettings()
+    fetchStorageConfig()
+})
+
 const fetchSettings = async () => {
     try {
         const res = await request.get('/settings')
-        settings.value = res // request interceptor returns res.data
+        if (res.code === 0) {
+            settings.value = res.data
+        }
     } catch (error) {
         console.error(error)
     }
 }
 
-const saveSetting = async (category) => {
-    // Currently the backend only supports updating key by key or logic needs to be adapted
-    // But adminSettingsController.js seems to expect { category, key, value }
-    // Let's implement a loop or adapt based on backend implementation
-    // For now, just show a message that persistence might require backend support
-    
-    // Backend: adminSettingsController.js updateSettings expects { category, key, value }
-    // We will simulate saving one by one or just alert user
-    ElMessage.info('演示环境：配置保存功能需后端配合数据库持久化开启')
+const fetchStorageConfig = async () => {
+    storageLoading.value = true
+    try {
+        const res = await request.get('/storage/config')
+        if (res.code === 0) {
+            storageConfig.value = res.data
+        }
+    } catch (error) {
+        console.error(error)
+    } finally {
+        storageLoading.value = false
+    }
 }
 
-onMounted(() => {
-    fetchSettings()
-})
+const saveSetting = async (category) => {
+    try {
+        const data = {
+            category,
+            settings: settings.value[category]
+        }
+        const res = await request.put('/settings', data)
+        if (res.code === 0) {
+            ElMessage.success('配置已保存')
+        }
+    } catch (error) {
+        ElMessage.error('保存失败')
+    }
+}
+
+const saveStorageConfig = async () => {
+    try {
+        const res = await request.put('/storage/config', storageConfig.value)
+        if (res.code === 0) {
+            ElMessage.success('存储配置已保存')
+        }
+    } catch (error) {
+        ElMessage.error('保存失败')
+    }
+}
+
+const testStorageConfig = async () => {
+    try {
+        const res = await request.post('/storage/test', storageConfig.value)
+        if (res.code === 0) {
+            ElMessage.success('连接测试成功')
+        }
+    } catch (error) {
+        ElMessage.error(error.message || '连接测试失败')
+    }
+}
 </script>
 
 <style scoped>
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
 .tip {
-    font-size: 12px;
-    color: #999;
-    margin-left: 10px;
+  font-size: 12px;
+  color: #999;
+  line-height: 1.5;
+  margin-top: 5px;
 }
 </style>

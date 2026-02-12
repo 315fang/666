@@ -1,18 +1,66 @@
 <!--pages/cart/cart.wxml - 购物车-->
 <view class="container">
   <!-- 空购物车 -->
-  <view class="empty-cart" wx:if="{{!loading && cartItems.length === 0}}">
-      <image class="empty-icon-img" src="/assets/icons/cart.svg" mode="aspectFit"></image>
-    <text class="empty-title">购物车是空的</text>
-    <text class="empty-desc">快去挑选心仪的商品吧</text>
-    <navigator url="/pages/index/index" open-type="switchTab" class="btn btn-primary">
-      去逛逛
-    </navigator>
+  <view class="empty-cart-container {{showEmpty ? 'fade-in' : ''}}" wx:if="{{!loading && cartItems.length === 0}}">
+    <!-- 背景装饰 -->
+    <view class="empty-bg-decoration">
+      <view class="blob blob-1"></view>
+      <view class="blob blob-2"></view>
+      <view class="blob blob-3"></view>
+    </view>
+
+    <view class="empty-cart-content">
+      <view class="empty-icon-wrapper">
+        <view class="empty-icon-pulse"></view>
+        <image class="empty-icon-img" src="/assets/icons/cart.svg" mode="aspectFit"></image>
+      </view>
+      <text class="empty-title">购物车是空的</text>
+      <text class="empty-desc">快去挑选心仪的商品吧</text>
+      <navigator url="/pages/index/index" open-type="switchTab" class="btn-go-shopping">
+        <text>去逛逛</text>
+        <view class="btn-glow"></view>
+      </navigator>
+    </view>
+
+    <!-- 猜你喜欢 -->
+    <view class="recommended-section" wx:if="{{recommendedProducts.length > 0}}">
+      <view class="section-header">
+        <view class="header-line"></view>
+        <text class="header-title">猜你喜欢</text>
+        <view class="header-line"></view>
+      </view>
+      
+      <view class="recommended-grid">
+        <view class="product-card" 
+              wx:for="{{recommendedProducts}}" 
+              wx:key="id" 
+              bindtap="onRecommendedTap" 
+              data-id="{{item.id}}">
+          <view class="product-img-box">
+            <image src="{{item.firstImage}}" mode="aspectFill"></image>
+            <view class="sales-tag" wx:if="{{item.sales_count > 0}}">热销 {{item.sales_count}}</view>
+          </view>
+          <view class="product-info-box">
+            <text class="product-title">{{item.name}}</text>
+            <view class="product-price-row">
+              <text class="currency">¥</text>
+              <text class="price">{{item.retail_price}}</text>
+              <view class="add-cart-btn">
+                <text>+</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 
   <!-- 购物车列表 -->
   <view class="cart-list" wx:if="{{cartItems.length > 0}}">
-    <view class="cart-item" wx:for="{{cartItems}}" wx:key="id">
+    <view class="cart-item {{item.deleting ? 'slide-out' : ''}} {{item.animateIn ? 'slide-in' : ''}}" 
+          wx:for="{{cartItems}}" 
+          wx:key="id"
+          style="animation-delay: {{index * 80}}ms">
       <!-- 选择框 -->
       <view class="checkbox-wrapper" bindtap="onToggleSelect" data-index="{{index}}">
         <view class="checkbox {{item.selected ? 'checked' : ''}}">
@@ -45,7 +93,9 @@
                   bindtap="onQuantityChange" 
                   data-index="{{index}}" 
                   data-type="minus">−</view>
-            <text class="qty-num">{{item.quantity}}</text>
+            <view class="qty-num-wrapper">
+              <text class="qty-num {{item.quantityAnim ? 'num-pop' : ''}}">{{item.quantity}}</text>
+            </view>
             <view class="qty-btn" 
                   bindtap="onQuantityChange" 
                   data-index="{{index}}" 
@@ -68,7 +118,7 @@
   </view>
 
   <!-- 底部结算栏 -->
-  <view class="checkout-bar" wx:if="{{cartItems.length > 0}}">
+  <view class="checkout-bar {{cartItems.length > 0 ? 'bar-slide-up' : ''}}" wx:if="{{cartItems.length > 0}}">
     <view class="select-all" bindtap="onToggleSelectAll">
       <view class="checkbox {{selectAll ? 'checked' : ''}}">
         <text wx:if="{{selectAll}}">✓</text>
@@ -79,13 +129,16 @@
     <view class="total-section">
       <view class="total-label">
         <text>合计：</text>
-        <text class="total-price">{{totalPrice}}</text>
+        <view class="price-wrapper">
+          <text class="total-price {{priceAnim ? 'price-flip' : ''}}">{{totalPrice}}</text>
+        </view>
       </view>
-      <text class="total-count">共{{totalCount}}件</text>
+      <text class="total-count {{countAnim ? 'count-bounce' : ''}}">共{{totalCount}}件</text>
     </view>
 
     <view class="checkout-btn {{totalCount > 0 ? '' : 'disabled'}}" bindtap="onCheckout">
       <text>去结算</text>
+      <view class="btn-shine"></view>
     </view>
   </view>
 </view>

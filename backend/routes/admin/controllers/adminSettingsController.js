@@ -2,83 +2,60 @@
  * 后台系统设置控制器
  * 
  * 提供动态配置业务参数的功能
- * 注意：部分核心参数仍需通过 constants.js 或环境变量配置
+ * 支持将配置持久化到 app_configs 表
  */
-const { sequelize } = require('../../../models');
-
-// 使用内存缓存系统配置，后续可改为数据库存储
-let systemSettings = {
-    // 订单配置
-    ORDER: {
-        AUTO_CANCEL_MINUTES: 30,
-        AUTO_CONFIRM_DAYS: 15,
-        AGENT_TIMEOUT_HOURS: 24
-    },
-    // 佣金配置
-    COMMISSION: {
-        FREEZE_DAYS: 15
-    },
-    // 提现配置
-    WITHDRAWAL: {
-        MIN_AMOUNT: 10,
-        MAX_SINGLE_AMOUNT: 50000,
-        MAX_DAILY_COUNT: 3,
-        FEE_RATE: 0
-    },
-    // 售后配置
-    REFUND: {
-        MAX_REFUND_DAYS: 15
-    },
-    // 升级条件
-    UPGRADE_RULES: {
-        MEMBER_TO_LEADER_REFEREE: 2,
-        LEADER_TO_AGENT_ORDERS: 10,
-        LEADER_TO_AGENT_RECHARGE: 3000
-    },
-    // 库存预警
-    STOCK: {
-        LOW_THRESHOLD: 10
-    }
-};
+const { AppConfig } = require('../../../models');
+const constants = require('../../../config/constants');
 
 /**
  * 获取所有系统设置
  */
 const getSettings = async (req, res) => {
     try {
-        const constants = require('../../../config/constants');
+        // 1. 获取所有配置
+        const configs = await AppConfig.findAll({
+            where: { status: 1 }
+        });
 
-        // 合并文件配置和动态配置
+        // 2. 将配置转换为对象结构
+        const dbSettings = {};
+        configs.forEach(config => {
+            if (!dbSettings[config.category]) {
+                dbSettings[config.category] = {};
+            }
+            
+            let value = config.config_value;
+            // 类型转换
+            if (config.config_type === 'number') value = parseFloat(value);
+            if (config.config_type === 'boolean') value = (value === 'true');
+            if (config.config_type === 'json') {
+                try { value = JSON.parse(value); } catch(e) {}
+            }
+
+            dbSettings[config.category][config.config_key] = value;
+        });
+
+        // 3. 与默认常量合并 (DB配置优先)
         const settings = {
-            ORDER: {
-                AUTO_CANCEL_MINUTES: constants.ORDER.AUTO_CANCEL_MINUTES,
-                AUTO_CONFIRM_DAYS: constants.ORDER.AUTO_CONFIRM_DAYS,
-                AGENT_TIMEOUT_HOURS: constants.ORDER.AGENT_TIMEOUT_HOURS
-            },
-            COMMISSION: {
-                FREEZE_DAYS: constants.COMMISSION.FREEZE_DAYS
-            },
-            WITHDRAWAL: {
-                MIN_AMOUNT: constants.WITHDRAWAL.MIN_AMOUNT,
-                MAX_SINGLE_AMOUNT: constants.WITHDRAWAL.MAX_SINGLE_AMOUNT,
-                MAX_DAILY_COUNT: constants.WITHDRAWAL.MAX_DAILY_COUNT,
-                FEE_RATE: constants.WITHDRAWAL.FEE_RATE
-            },
-            REFUND: {
-                MAX_REFUND_DAYS: constants.REFUND.MAX_REFUND_DAYS
-            },
-            UPGRADE_RULES: {
+            ORDER: { ...constants.ORDER, ...(dbSettings.ORDER || {}) },
+            COMMISSION: { ...constants.COMMISSION, ...(dbSettings.COMMISSION || {}) },
+            WITHDRAWAL: { ...constants.WITHDRAWAL, ...(dbSettings.WITHDRAWAL || {}) },
+            REFUND: { ...constants.REFUND, ...(dbSettings.REFUND || {}) },
+            UPGRADE_RULES: { 
                 MEMBER_TO_LEADER_REFEREE: constants.UPGRADE_RULES.MEMBER_TO_LEADER.referee_count,
                 LEADER_TO_AGENT_ORDERS: constants.UPGRADE_RULES.LEADER_TO_AGENT.order_count,
-                LEADER_TO_AGENT_RECHARGE: constants.UPGRADE_RULES.LEADER_TO_AGENT.recharge_amount
+                LEADER_TO_AGENT_RECHARGE: constants.UPGRADE_RULES.LEADER_TO_AGENT.recharge_amount,
+                ...(dbSettings.UPGRADE_RULES || {})
             },
-            STOCK: systemSettings.STOCK
+            STOCK: {
+                LOW_THRESHOLD: 10,
+                ...(dbSettings.STOCK || {})
+            }
         };
 
         res.json({
             code: 0,
-            data: settings,
-            message: '注意：当前配置来自 constants.js 文件，修改需要重启服务生效'
+            data: settings
         });
     } catch (error) {
         console.error('获取系统设置失败:', error);
@@ -87,28 +64,44 @@ const getSettings = async (req, res) => {
 };
 
 /**
- * 更新系统设置（仅更新内存中的配置，重启后失效）
- * 生产环境建议将配置持久化到数据库
+ * 更新系统设置 (持久化到数据库)
  */
 const updateSettings = async (req, res) => {
     try {
-        const { category, key, value } = req.body;
+        const { category, settings } = req.body;
 
-        if (!category || !key || value === undefined) {
+        if (!category || !settings) {
             return res.status(400).json({ code: -1, message: '参数不完整' });
         }
 
-        if (!systemSettings[category]) {
-            return res.status(400).json({ code: -1, message: '无效的配置类别' });
+        // 遍历设置项并更新/创建
+        const operations = [];
+        for (const [key, value] of Object.entries(settings)) {
+            // 确定数据类型
+            let type = 'string';
+            if (typeof value === 'number') type = 'number';
+            if (typeof value === 'boolean') type = 'boolean';
+            if (typeof value === 'object') type = 'json';
+
+            let stringValue = value;
+            if (type === 'json') stringValue = JSON.stringify(value);
+            else stringValue = String(value);
+
+            operations.push(AppConfig.upsert({
+                config_key: key,
+                config_value: stringValue,
+                config_type: type,
+                category: category,
+                is_public: false, // 默认后端配置不公开给前端
+                status: 1
+            }));
         }
 
-        // 更新内存配置
-        systemSettings[category][key] = value;
+        await Promise.all(operations);
 
         res.json({
             code: 0,
-            message: `设置已更新（仅内存生效，重启后需重新配置）。如需永久生效，请修改 .env 文件`,
-            data: { [category]: systemSettings[category] }
+            message: '配置已更新'
         });
     } catch (error) {
         console.error('更新系统设置失败:', error);
@@ -120,43 +113,14 @@ const updateSettings = async (req, res) => {
  * 获取系统状态
  */
 const getSystemStatus = async (req, res) => {
-    try {
-        // 数据库连接检查
-        let dbStatus = 'unknown';
-        try {
-            await sequelize.authenticate();
-            dbStatus = 'connected';
-        } catch (e) {
-            dbStatus = 'disconnected';
-        }
-
-        // 系统信息
-        const systemInfo = {
-            nodeVersion: process.version,
-            platform: process.platform,
+    res.json({
+        code: 0,
+        data: {
+            status: 'online',
             uptime: process.uptime(),
-            memoryUsage: process.memoryUsage(),
-            env: process.env.NODE_ENV || 'development'
-        };
-
-        // 服务状态
-        const serviceStatus = {
-            database: dbStatus,
-            api: 'running'
-        };
-
-        res.json({
-            code: 0,
-            data: {
-                system: systemInfo,
-                services: serviceStatus,
-                startTime: new Date(Date.now() - process.uptime() * 1000).toISOString()
-            }
-        });
-    } catch (error) {
-        console.error('获取系统状态失败:', error);
-        res.status(500).json({ code: -1, message: '获取失败' });
-    }
+            timestamp: new Date()
+        }
+    });
 };
 
 module.exports = {

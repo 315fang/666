@@ -16,15 +16,19 @@ Page({
 
     onLoad(options) {
         if (options.status) {
-            this.setData({ currentStatus: options.status });
+            this.setData({ currentStatus: options.status }, () => {
+                this.loadOrders();
+            });
+        } else {
+            this.loadOrders();
         }
-        this.loadOrders();
     },
 
     onShow() {
         // 每次显示时刷新（从详情页/退款页返回后应看到最新状态）
-        this.setData({ page: 1, hasMore: true });
-        this.loadOrders();
+        this.setData({ page: 1, hasMore: true }, () => {
+            this.loadOrders();
+        });
     },
 
     onPullDownRefresh() {
@@ -92,11 +96,28 @@ Page({
                 return order;
             });
 
+            // 为新订单添加入场动画标记
+            const ordersWithAnim = newOrders.map((order, index) => ({
+                ...order,
+                animateIn: !append  // 首次加载时添加动画
+            }));
+
             this.setData({
-                orders: append ? [...this.data.orders, ...newOrders] : newOrders,
+                orders: append ? [...this.data.orders, ...ordersWithAnim] : ordersWithAnim,
                 hasMore: newOrders.length >= limit,
                 loading: false
             });
+
+            // 清除动画标记
+            if (!append) {
+                setTimeout(() => {
+                    const clearedOrders = this.data.orders.map(order => ({
+                        ...order,
+                        animateIn: false
+                    }));
+                    this.setData({ orders: clearedOrders });
+                }, 800);
+            }
         } catch (err) {
             ErrorHandler.handle(err, {
                 customMessage: '加载订单失败，请稍后重试'
@@ -132,11 +153,28 @@ Page({
                 };
             });
 
+            // 为新订单添加入场动画标记
+            const ordersWithAnim = newOrders.map((order, index) => ({
+                ...order,
+                animateIn: !append
+            }));
+
             this.setData({
-                orders: append ? [...this.data.orders, ...newOrders] : newOrders,
+                orders: append ? [...this.data.orders, ...ordersWithAnim] : ordersWithAnim,
                 hasMore: refundList.length >= limit,
                 loading: false
             });
+
+            // 清除动画标记
+            if (!append) {
+                setTimeout(() => {
+                    const clearedOrders = this.data.orders.map(order => ({
+                        ...order,
+                        animateIn: false
+                    }));
+                    this.setData({ orders: clearedOrders });
+                }, 800);
+            }
         } catch (err) {
             console.error('加载退款列表失败:', err);
             this.setData({ loading: false });
@@ -161,9 +199,11 @@ Page({
         this.setData({
             currentStatus: status,
             page: 1,
-            hasMore: true
+            hasMore: true,
+            orders: []  // 清空旧数据，触发骨架屏
+        }, () => {
+            this.loadOrders();
         });
-        this.loadOrders();
     },
 
     // 加载更多

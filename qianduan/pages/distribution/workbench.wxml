@@ -1,4 +1,4 @@
-<!--pages/distribution/workbench.wxml - 代理商发货工作台-->
+<!--pages/distribution/workbench.wxml - 工厂发货工作台-->
 <view class="container">
   <!-- 云仓状态卡片 -->
   <view class="stock-card">
@@ -30,21 +30,25 @@
     </view>
   </view>
 
-  <!-- 订单筛选 Tab -->
-  <view class="tab-bar">
-    <view class="tab-item {{activeStatus === 'pending' ? 'active' : ''}}" data-status="pending" bindtap="onStatusChange">
-      待发货
-      <view class="tab-badge" wx:if="{{workbench.pending_ship > 0}}">{{workbench.pending_ship}}</view>
-    </view>
-    <view class="tab-item {{activeStatus === 'shipping_requested' ? 'active' : ''}}" data-status="shipping_requested" bindtap="onStatusChange">
-      待确认
-    </view>
-    <view class="tab-item {{activeStatus === 'shipped' ? 'active' : ''}}" data-status="shipped" bindtap="onStatusChange">
-      已发货
-    </view>
-    <view class="tab-item {{activeStatus === 'all' ? 'active' : ''}}" data-status="all" bindtap="onStatusChange">
-      全部
-    </view>
+  <!-- 订单筛选 Tab - 蓝色滑动条 -->
+  <view class="tab-container">
+    <scroll-view scroll-x scroll-with-animation show-scrollbar="{{false}}" class="tab-scroll-wrapper">
+      <view class="tab-scroll">
+        <view class="tab-item {{activeStatus === 'all' ? 'active' : ''}}" data-status="all" bindtap="onStatusChange">
+          <text class="tab-text">全部</text>
+        </view>
+        <view class="tab-item {{activeStatus === 'pending' ? 'active' : ''}}" data-status="pending" bindtap="onStatusChange">
+          <text class="tab-text">待发货</text>
+          <view class="tab-badge" wx:if="{{workbench.pending_ship > 0}}">{{workbench.pending_ship}}</view>
+        </view>
+        <view class="tab-item {{activeStatus === 'shipping_requested' ? 'active' : ''}}" data-status="shipping_requested" bindtap="onStatusChange">
+          <text class="tab-text">待确认</text>
+        </view>
+        <view class="tab-item {{activeStatus === 'shipped' ? 'active' : ''}}" data-status="shipped" bindtap="onStatusChange">
+          <text class="tab-text">已发货</text>
+        </view>
+      </view>
+    </scroll-view>
   </view>
 
   <!-- 订单列表 -->
