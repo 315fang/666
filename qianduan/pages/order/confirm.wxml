@@ -18,7 +18,7 @@
 
   <!-- 无地址提示 -->
   <view class="section address-empty" bindtap="onAddAddress" wx:else>
-    <text class="empty-icon">📍</text>
+    <image class="empty-icon-img" src="/assets/icons/map-pin.svg" mode="aspectFit"/>
     <text class="empty-text">请添加收货地址</text>
     <text class="arrow">›</text>
   </view>
@@ -64,7 +64,7 @@
     <view class="success-mask"></view>
     <view class="success-content">
       <view class="success-icon">
-        <text>🎉</text>
+        <image class="success-icon-img" src="/assets/icons/check-circle.svg" mode="aspectFit"/>
       </view>
       <text class="success-title">下单成功</text>
       <text class="success-desc">感谢您的信任，我们会尽快发货</text>

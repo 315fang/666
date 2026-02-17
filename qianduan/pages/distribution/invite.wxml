@@ -38,18 +38,20 @@
 
   <!-- 邀请奖励说明 -->
   <view class="reward-info">
-    <view class="info-title">🎁 邀请奖励</view>
+    <view class="info-title">
+      <image class="title-icon" src="/assets/icons/gift.svg" mode="aspectFit"/> 邀请奖励
+    </view>
     <view class="info-list">
       <view class="info-item">
-        <text class="info-icon">✅</text>
+        <image class="info-icon-img" src="/assets/icons/check.svg" mode="aspectFit"/>
         <text class="info-text">好友首单返佣：订单金额的 10%</text>
       </view>
       <view class="info-item">
-        <text class="info-icon">✅</text>
+        <image class="info-icon-img" src="/assets/icons/check.svg" mode="aspectFit"/>
         <text class="info-text">团队持续收益：间接推荐 5%</text>
       </view>
       <view class="info-item">
-        <text class="info-icon">✅</text>
+        <image class="info-icon-img" src="/assets/icons/check.svg" mode="aspectFit"/>
         <text class="info-text">邀请越多，等级越高，佣金越多</text>
       </view>
     </view>
@@ -57,7 +59,9 @@
 
   <!-- 如何邀请步骤 -->
   <view class="how-to">
-    <view class="info-title">📱 如何邀请</view>
+    <view class="info-title">
+      <image class="title-icon" src="/assets/icons/clipboard.svg" mode="aspectFit"/> 如何邀请
+    </view>
     <view class="step-list">
       <view class="step-item">
         <view class="step-number">1</view>

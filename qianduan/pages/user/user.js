@@ -38,7 +38,37 @@ Page({
         newNickname: '',
         // 邀请码弹窗
         showInvite: false,
-        inviteCode: ''
+        inviteCode: '',
+        // 卡片下拉效果
+        cardTransform: 0,
+        isPulling: false
+    },
+
+    // 触摸开始
+    onCardTouchStart(e) {
+        this.startY = e.touches[0].clientY;
+        this.setData({ isPulling: true });
+    },
+
+    // 触摸移动 - 实现卡片下拉效果
+    onCardTouchMove(e) {
+        const moveY = e.touches[0].clientY;
+        const diff = moveY - this.startY;
+        
+        // 只有向下拖动时才响应，且限制最大下拉距离
+        if (diff > 0 && diff < 150) {
+            // 添加阻尼效果
+            const dampedDiff = diff * 0.6;
+            this.setData({ cardTransform: dampedDiff });
+        }
+    },
+
+    // 触摸结束 - 卡片回弹
+    onCardTouchEnd(e) {
+        this.setData({ 
+            cardTransform: 0,
+            isPulling: false 
+        });
     },
 
     onShow() {
@@ -364,12 +394,18 @@ Page({
     },
 
     onOrderTap(e) {
+        console.log('[User] onOrderTap clicked, dataset:', e.currentTarget.dataset);
         if (!this.data.isLoggedIn) {
             wx.showToast({ title: '请先登录', icon: 'none' });
             return;
         }
         const type = e.currentTarget.dataset.type;
-        wx.navigateTo({ url: '/pages/order/list?status=' + type });
+        let url = '/pages/order/list';
+        if (type && type !== 'all') {
+            url += '?status=' + type;
+        }
+        console.log('[User] Navigating to:', url);
+        wx.navigateTo({ url: url });
     },
 
     // ======== ★ 售后/退款入口 ========

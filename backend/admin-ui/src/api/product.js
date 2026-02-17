@@ -65,6 +65,14 @@ export function updateCategory(id, data) {
     })
 }
 
+export function updateCategoryStatus(id, status) {
+    return request({
+        url: `/categories/${id}`,
+        method: 'put',
+        data: { status }
+    })
+}
+
 export function deleteCategory(id) {
     return request({
         url: `/categories/${id}`,

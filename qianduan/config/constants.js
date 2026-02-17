@@ -22,7 +22,7 @@ const ROLE_NAMES = {
   [USER_ROLES.GUEST]: '普通用户',
   [USER_ROLES.MEMBER]: '会员',
   [USER_ROLES.LEADER]: '团长',
-  [USER_ROLES.AGENT]: '工厂'
+  [USER_ROLES.AGENT]: '代理商'
 };
 
 // ==================== 订单状态 ====================
@@ -41,7 +41,7 @@ const ORDER_STATUS = {
 const ORDER_STATUS_TEXT = {
   [ORDER_STATUS.PENDING]: '待付款',
   [ORDER_STATUS.PAID]: '待发货',
-  [ORDER_STATUS.AGENT_CONFIRMED]: '工厂已确认',
+  [ORDER_STATUS.AGENT_CONFIRMED]: '代理已确认',
   [ORDER_STATUS.SHIPPING_REQUESTED]: '发货申请中',
   [ORDER_STATUS.SHIPPED]: '待收货',
   [ORDER_STATUS.COMPLETED]: '已完成',

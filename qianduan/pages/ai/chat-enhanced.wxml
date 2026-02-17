@@ -1,0 +1,153 @@
+<!--pages/ai/chat-enhanced.wxml-->
+<view class="ai-chat-container">
+  <!-- 顶部导航 -->
+  <view class="chat-header">
+    <view class="header-left" bindtap="onBack">
+      <text class="iconfont icon-back"></text>
+    </view>
+    <view class="header-center">
+      <text class="title">智能助手</text>
+      <text class="subtitle">小臻</text>
+    </view>
+    <view class="header-right" bindtap="onShowQuickActions">
+      <text class="iconfont icon-menu"></text>
+    </view>
+  </view>
+
+  <!-- 聊天列表 -->
+  <scroll-view 
+    class="chat-list" 
+    scroll-y 
+    scroll-into-view="{{toView}}" 
+    scroll-with-animation
+    enable-flex
+  >
+    <!-- 快捷操作区域 -->
+    <view class="quick-actions-panel" wx:if="{{showQuickActions}}">
+      <view class="panel-header">
+        <text class="panel-title">快捷操作</text>
+        <text class="panel-close" bindtap="onShowQuickActions">收起</text>
+      </view>
+      <view class="actions-grid">
+        <view 
+          class="action-item" 
+          wx:for="{{quickActions}}" 
+          wx:key="id"
+          bindtap="onQuickAction"
+          data-action="{{item}}"
+        >
+          <image class="action-icon-img" wx:if="{{item.icon}}" src="{{item.icon}}" mode="aspectFit"/>
+          <image class="action-icon-img" wx:else src="/assets/icons/sparkle.svg" mode="aspectFit"/>
+          <text class="action-label">{{item.label}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 消息列表 -->
+    <view class="messages-container">
+      <view 
+        wx:for="{{messages}}" 
+        wx:key="index" 
+        id="msg-{{index}}"
+        class="message-wrapper {{item.role === 'user' ? 'user' : 'ai'}}"
+      >
+        <!-- AI头像 -->
+        <view class="avatar-box" wx:if="{{item.role === 'ai'}}">
+          <view class="avatar ai">
+            <image class="avatar-icon-img" src="/assets/icons/sparkles.svg" mode="aspectFit"/>
+          </view>
+        </view>
+
+        <!-- 消息内容 -->
+        <view class="message-content">
+          <view class="message-bubble" bindlongpress="onMessageLongPress" data-content="{{item.content}}">
+            <!-- 富文本内容 -->
+            <block wx:if="{{item.richContent}}">
+              <!-- 商品卡片 -->
+              <view class="rich-card product-card" wx:if="{{item.richContent.type === 'products'}}">
+                <view class="card-title">{{item.richContent.title}}</view>
+                <view 
+                  class="product-item" 
+                  wx:for="{{item.richContent.items}}" 
+                  wx:for-item="product"
+                  wx:key="id"
+                  bindtap="onProductTap"
+                  data-id="{{product.id}}"
+                >
+                  <image class="product-image" src="{{product.image}}" mode="aspectFill"/>
+                  <view class="product-info">
+                    <text class="product-name">{{product.name}}</text>
+                    <view class="product-price">
+                      <text class="price">¥{{product.price}}</text>
+                      <text class="sales">已售{{product.sales}}</text>
+                    </view>
+                  </view>
+                </view>
+              </view>
+            </block>
+
+            <!-- 普通文本 -->
+            <block wx:else>
+              <text class="message-text" user-select>{{item.content}}</text>
+            </block>
+          </view>
+          <text class="message-time">{{item.time}}</text>
+        </view>
+
+        <!-- 用户头像 -->
+        <view class="avatar-box" wx:if="{{item.role === 'user'}}">
+          <image class="avatar user" src="{{userInfo.avatar_url || '/assets/icons/user.svg'}}" mode="aspectFill"/>
+        </view>
+      </view>
+
+      <!-- 加载中 -->
+      <view class="message-wrapper ai" wx:if="{{loading}}">
+        <view class="avatar-box">
+          <view class="avatar ai">
+            <image class="avatar-icon-img" src="/assets/icons/sparkles.svg" mode="aspectFit"/>
+          </view>
+        </view>
+        <view class="message-content">
+          <view class="message-bubble loading">
+            <view class="loading-dots">
+              <view class="dot"></view>
+              <view class="dot"></view>
+              <view class="dot"></view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 底部留白 -->
+    <view style="height: 160rpx;"></view>
+  </scroll-view>
+
+  <!-- 输入区域 -->
+  <view class="input-area">
+    <view class="input-toolbar">
+      <view class="toolbar-btn" bindtap="onShowQuickActions">
+        <text class="iconfont icon-apps"></text>
+      </view>
+    </view>
+    <view class="input-box">
+      <input 
+        class="input" 
+        type="text" 
+        value="{{inputValue}}" 
+        bindinput="onInput" 
+        bindconfirm="onSend"
+        placeholder="请输入您的问题..." 
+        confirm-type="send"
+        cursor-spacing="20"
+        adjust-position
+      />
+      <button 
+        class="send-btn {{!inputValue.trim() ? 'disabled' : ''}}" 
+        bindtap="onSend"
+      >
+        <text class="iconfont icon-send"></text>
+      </button>
+    </view>
+  </view>
+</view>

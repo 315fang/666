@@ -9,10 +9,10 @@ const COMMISSION_STATUS_MAP = {
 };
 
 const TYPE_MAP = {
-    'Direct': { name: '直推佣金', icon: '👤' },
-    'Indirect': { name: '团队佣金', icon: '👥' },
-    'Stock_Diff': { name: '级差利润', icon: '📈' },
-    'agent_fulfillment': { name: '发货利润', icon: '🚚' }
+    'Direct': { name: '直推佣金', icon: '/assets/icons/user.svg' },
+    'Indirect': { name: '团队佣金', icon: '/assets/icons/users.svg' },
+    'Stock_Diff': { name: '级差利润', icon: '/assets/icons/bar-chart.svg' },
+    'agent_fulfillment': { name: '发货利润', icon: '/assets/icons/truck.svg' }
 };
 
 Page({
@@ -77,7 +77,7 @@ Page({
             if (res.code === 0) {
                 const list = (res.data.list || []).map(item => {
                     const statusConfig = COMMISSION_STATUS_MAP[item.status] || { text: item.status, class: '' };
-                    const typeConfig = TYPE_MAP[item.type] || { name: item.type, icon: '💰' };
+                    const typeConfig = TYPE_MAP[item.type] || { name: item.type, icon: '/assets/icons/dollar-sign.svg' };
                     return {
                         ...item,
                         statusText: statusConfig.text,

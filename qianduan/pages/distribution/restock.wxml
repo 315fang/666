@@ -1,4 +1,4 @@
-<!--pages/distribution/restock.wxml - 工厂采购入仓-->
+<!--pages/distribution/restock.wxml - 代理商采购入仓-->
 <view class="container">
   <!-- 当前库存提示 -->
   <view class="stock-banner">
@@ -16,12 +16,12 @@
       <view class="product-info">
         <text class="product-name">{{item.name}}</text>
         <view class="product-prices">
-          <text class="agent-price">工厂价 ¥{{item.agent_price}}</text>
+          <text class="agent-price">代理商价 ¥{{item.agent_price}}</text>
           <text class="retail-price">零售价 ¥{{item.retail_price}}</text>
         </view>
         <text class="product-stock">平台库存: {{item.stock}}件</text>
       </view>
-      <view class="check-mark" wx:if="{{selectedProduct && selectedProduct.id === item.id}}">✓</view>
+      <image wx:if="{{selectedProduct && selectedProduct.id === item.id}}" class="check-mark" src="/assets/icons/check-bold.svg" mode="aspectFit"/>
     </view>
 
     <view class="empty" wx:if="{{products.length === 0}}">
@@ -33,7 +33,7 @@
   <view class="quantity-card" wx:if="{{selectedProduct}}">
     <view class="quantity-header">
       <text class="quantity-title">{{selectedProduct.name}}</text>
-      <text class="quantity-price">工厂价: ¥{{selectedProduct.agent_price}}/件</text>
+      <text class="quantity-price">代理商价: ¥{{selectedProduct.agent_price}}/件</text>
     </view>
     <view class="quantity-row">
       <text class="quantity-label">进货数量</text>

@@ -33,7 +33,7 @@
 
     <!-- 空状态 -->
     <view class="empty-state" wx:if="{{!loading && addresses.length === 0}}">
-      <text class="empty-icon">📍</text>
+      <image class="empty-icon-img" src="/assets/icons/map-pin.svg" mode="aspectFit"/>
       <text class="empty-text">暂无收货地址</text>
       <text class="empty-sub">点击下方按钮添加</text>
     </view>

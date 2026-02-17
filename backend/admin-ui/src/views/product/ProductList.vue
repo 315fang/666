@@ -220,12 +220,16 @@
         </div>
         <!-- 文字描述 -->
         <div v-if="previewProduct.description" style="padding: 16px; background: #f5f5f5; border-radius: 8px; margin-bottom: 12px;">
-          <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px;">📝 商品详情</div>
+          <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+            <el-icon><Document /></el-icon> 商品详情
+          </div>
           <div style="font-size: 13px; line-height: 1.8; color: #666; white-space: pre-wrap;" v-html="previewProduct.description"></div>
         </div>
         <!-- 详情图 -->
         <div v-if="previewProduct.detail_images && previewProduct.detail_images.length">
-          <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px;">🖼️ 详情图片</div>
+          <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+            <el-icon><Picture /></el-icon> 详情图片
+          </div>
           <el-image v-for="(img, idx) in previewProduct.detail_images" :key="idx" :src="img" style="width: 100%; margin-bottom: 4px;" fit="contain" />
         </div>
         <el-empty v-if="!previewProduct.description && (!previewProduct.detail_images || previewProduct.detail_images.length === 0)" description="暂无商品详情内容，请编辑添加" />
@@ -239,7 +243,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { getProducts, getProductById, createProduct, updateProduct, getCategories, updateProductStatus } from '@/api/product'
 import request from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Close, Upload } from '@element-plus/icons-vue'
+import { Plus, Close, Upload, Document, Picture } from '@element-plus/icons-vue'
 
 const list = ref([])
 const categories = ref([])

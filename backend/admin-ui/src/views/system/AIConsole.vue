@@ -19,10 +19,18 @@
                         </template>
                         <div class="capabilities">
                             <p>我可以帮您：</p>
-                            <el-tag class="capability-tag" @click="fillInput('检查一下今天的系统报错')">🔍 检查系统日志</el-tag>
-                            <el-tag class="capability-tag" @click="fillInput('现在的服务器负载怎么样？')">💻 监控服务器状态</el-tag>
-                            <el-tag class="capability-tag" @click="fillInput('统计一下今天的订单和销售额')">📊 实时经营数据</el-tag>
-                            <el-tag class="capability-tag" @click="fillInput('查询最近注册的5个用户')">👥 数据库查询</el-tag>
+                            <el-tag class="capability-tag" @click="fillInput('检查一下今天的系统报错')">
+                                <el-icon><Search /></el-icon> 检查系统日志
+                            </el-tag>
+                            <el-tag class="capability-tag" @click="fillInput('现在的服务器负载怎么样？')">
+                                <el-icon><Monitor /></el-icon> 监控服务器状态
+                            </el-tag>
+                            <el-tag class="capability-tag" @click="fillInput('统计一下今天的订单和销售额')">
+                                <el-icon><TrendCharts /></el-icon> 实时经营数据
+                            </el-tag>
+                            <el-tag class="capability-tag" @click="fillInput('查询最近注册的5个用户')">
+                                <el-icon><User /></el-icon> 数据库查询
+                            </el-tag>
                         </div>
                     </el-empty>
                 </div>
@@ -76,7 +84,7 @@
 
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
-import { Monitor, UserFilled, Cpu, Tools } from '@element-plus/icons-vue'
+import { Monitor, UserFilled, Cpu, Tools, Search, TrendCharts, User } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
@@ -212,6 +220,9 @@ const sendCommand = async () => {
 .capability-tag {
     cursor: pointer;
     transition: all 0.3s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .capability-tag:hover {

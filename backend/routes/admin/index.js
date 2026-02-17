@@ -10,6 +10,7 @@ const adminContentController = require('./controllers/adminContentController');
 const adminWithdrawalController = require('./controllers/adminWithdrawalController');
 const adminRefundController = require('./controllers/adminRefundController');
 const adminDealerController = require('./controllers/adminDealerController');
+const { AppConfig } = require('../../models');
 
 // ★ 配置 multer（内存存储，后续传到对象存储）
 const upload = multer({
@@ -185,6 +186,70 @@ router.get('/settings', adminSettingsController.getSettings);
 router.put('/settings', adminSettingsController.updateSettings);
 router.get('/system/status', adminSettingsController.getSystemStatus);
 
+// ========== 规则公告配置（★新增） ==========
+router.get('/rules', async (req, res) => {
+    try {
+        const configs = await AppConfig.findAll({
+            where: { category: 'notice', status: 1 },
+            attributes: ['config_key', 'config_value', 'config_type', 'category']
+        });
+
+        const formatted = {};
+        configs.forEach(config => {
+            let value = config.config_value;
+            if (config.config_type === 'number') value = parseFloat(value);
+            if (config.config_type === 'boolean') value = (value === 'true');
+            if (config.config_type === 'json') {
+                try { value = JSON.parse(value); } catch (e) {}
+            }
+            formatted[config.config_key] = value;
+        });
+
+        res.json({ code: 0, data: formatted });
+    } catch (error) {
+        console.error('获取规则配置失败:', error);
+        res.status(500).json({ code: -1, message: '获取失败' });
+    }
+});
+
+router.put('/rules', async (req, res) => {
+    try {
+        const { settings } = req.body;
+        if (!settings) {
+            return res.status(400).json({ code: -1, message: '参数不完整' });
+        }
+
+        const operations = [];
+        for (const [key, value] of Object.entries(settings)) {
+            let type = 'string';
+            if (typeof value === 'number') type = 'number';
+            if (typeof value === 'boolean') type = 'boolean';
+            if (typeof value === 'object') type = 'json';
+
+            let stringValue = value;
+            if (type === 'json') stringValue = JSON.stringify(value);
+            else stringValue = String(value);
+
+            operations.push(AppConfig.upsert({
+                config_key: key,
+                config_value: stringValue,
+                config_type: type,
+                category: 'notice',
+                description: '发货与佣金规则说明',
+                is_public: true,
+                status: 1
+            }));
+        }
+
+        await Promise.all(operations);
+
+        res.json({ code: 0, message: '配置已更新' });
+    } catch (error) {
+        console.error('更新规则配置失败:', error);
+        res.status(500).json({ code: -1, message: '更新失败' });
+    }
+});
+
 const adminThemeRoutes = require('./themes');
 router.use('/themes', adminThemeRoutes);
 
@@ -220,6 +285,26 @@ router.get('/storage/config', checkPermission('settings'), adminUploadController
 router.put('/storage/config', checkPermission('settings'), adminUploadController.updateStorageConfig);  // 更新存储配置
 router.post('/storage/test', checkPermission('settings'), adminUploadController.testStorageConfig);  // 测试存储配置
 router.get('/storage/signature', adminUploadController.getUploadSignature);  // 获取上传签名（前端直传用）
+
+// ========== AI运维监控中心（★新增） ==========
+const aiOpsRoutes = require('./ai-ops');
+router.use('/ai-ops', aiOpsRoutes);
+
+// ========== AI配置管理（★新增） ==========
+const aiConfigRoutes = require('./ai-config');
+router.use('/ai', aiConfigRoutes);
+
+// ========== 系统配置管理（数据库热更新）（★新增） ==========
+const configRoutes = require('./config');
+router.use('/', configRoutes);
+
+// ========== 环境配置检查（.env只读）（★新增） ==========
+const envCheckRoutes = require('./env-check');
+router.use('/', envCheckRoutes);
+
+// ========== 群发信息管理（★新增） ==========
+const massMessageRoutes = require('./mass-message');
+router.use('/', massMessageRoutes);
 
 module.exports = router;
 

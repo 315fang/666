@@ -122,6 +122,30 @@ const routes = [
                 meta: { title: '智能控制台' }
             },
             {
+                path: 'ai-ops',
+                name: 'AIOpsCenter',
+                component: () => import('../views/system/AIOpsCenter.vue'),
+                meta: { title: 'AI运维监控' }
+            },
+            {
+                path: 'env-config',
+                name: 'EnvConfigCenter',
+                component: () => import('../views/system/EnvConfigCenter.vue'),
+                meta: { title: '环境配置检查' }
+            },
+            {
+                path: 'db-indexes',
+                name: 'DbIndexManager',
+                component: () => import('../views/system/DbIndexManager.vue'),
+                meta: { title: '索引管理' }
+            },
+            {
+                path: 'mass-message',
+                name: 'MassMessage',
+                component: () => import('../views/system/MassMessage.vue'),
+                meta: { title: '群发信息' }
+            },
+            {
                 path: 'admins',
                 name: 'AdminList',
                 component: () => import('../views/system/AdminList.vue'),

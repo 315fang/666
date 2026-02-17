@@ -24,7 +24,7 @@ Page({
         statusDescMap: {
             pending: '请尽快完成支付',
             paid: '已支付成功，等待商家发货',
-            agent_confirmed: '工厂已确认，正在准备发货',
+            agent_confirmed: '代理已确认，正在准备发货',
             shipping_requested: '发货申请已提交，等待仓库处理',
             shipped: '商品已发出，请注意查收快递',
             completed: '交易已完成，佣金将在7天后结算',
