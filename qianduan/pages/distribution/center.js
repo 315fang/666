@@ -57,7 +57,8 @@ Page({
         agentStock: 0,
         agentPending: 0,
         agentMonthProfit: '0.00',
-        agentDebt: 0
+        agentDebt: 0,
+        rulesSummary: ''
     },
 
     onLoad(options) {
@@ -68,6 +69,7 @@ Page({
         this.loadStats();
         this.loadWalletInfo();
         this.loadAgentData();
+        this.loadRulesSummary();
 
         // 如果用户没有上级，且没有提示过，显示提示
         const hasShownInviteTip = wx.getStorageSync('hasShownInviteTip');
@@ -83,7 +85,7 @@ Page({
         if (this.data.hasParent) return;
 
         wx.showModal({
-            title: '👋 欢迎加入',
+            title: '欢迎加入',
             content: '填写邀请人的邀请码，加入团队一起赚收益吧！\n\n没有邀请码？跳过后也可随时填写。',
             confirmText: '填写邀请码',
             cancelText: '暂时跳过',
@@ -242,6 +244,19 @@ Page({
         }
     },
 
+    async loadRulesSummary() {
+        try {
+            const res = await get('/rules');
+            if (res.code === 0 && res.data) {
+                this.setData({
+                    rulesSummary: res.data.summary || ''
+                });
+            }
+        } catch (err) {
+            console.error('加载规则摘要失败', err);
+        }
+    },
+
     // 提现弹窗
     onWithdrawTap() {
         this.setData({ showWithdraw: true, withdrawAmount: '' });
@@ -314,6 +329,10 @@ Page({
 
     goStockLogs() {
         wx.navigateTo({ url: '/pages/distribution/stock-logs' });
+    },
+
+    goRules() {
+        wx.navigateTo({ url: '/pages/rules/index' });
     },
 
     // 复制邀请码

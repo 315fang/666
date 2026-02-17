@@ -1,4 +1,4 @@
-<!--pages/distribution/stock-logs.wxml - 工厂库存变动日志-->
+<!--pages/distribution/stock-logs.wxml - 代理商库存变动日志-->
 <view class="container">
   <!-- 库存概览 -->
   <view class="stock-header">
@@ -28,8 +28,8 @@
     <view class="log-card {{item.type}}" wx:for="{{logs}}" wx:key="id">
       <view class="log-card-left">
         <view class="log-type-icon {{item.type}}">
-          <text wx:if="{{item.type === 'in'}}">📦</text>
-          <text wx:else>🚚</text>
+          <image wx:if="{{item.type === 'in'}}" class="type-icon-img" src="/assets/icons/package.svg" mode="aspectFit"/>
+          <image wx:else class="type-icon-img" src="/assets/icons/truck.svg" mode="aspectFit"/>
         </view>
         <view class="log-card-info">
           <text class="log-card-label">{{item.label}}</text>
@@ -47,7 +47,7 @@
 
     <!-- 空状态 -->
     <view class="empty-state" wx:if="{{logs.length === 0 && !loading}}">
-      <text class="empty-icon">📋</text>
+      <image class="empty-icon-img" src="/assets/icons/inbox.svg" mode="aspectFit"/>
       <text class="empty-text">暂无库存变动记录</text>
       <view class="empty-btn" bindtap="goRestock">去采购入仓</view>
     </view>

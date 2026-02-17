@@ -1,13 +1,13 @@
 <view class="container">
   <view class="notif-list" wx:if="{{notifications.length > 0}}">
     <view class="notif-item {{item.is_read ? '' : 'unread'}}" wx:for="{{notifications}}" wx:key="id" bindtap="onRead" data-id="{{item.id}}" data-index="{{index}}">
-      <view class="notif-icon-box">
-        <text class="notif-icon upgrade-icon" wx:if="{{item.type === 'upgrade'}}">🚀</text>
-        <text class="notif-icon commission-icon" wx:if="{{item.type === 'commission'}}">💰</text>
-        <text class="notif-icon stock-icon" wx:if="{{item.type === 'stock'}}">⚠️</text>
-        <text class="notif-icon system-icon" wx:if="{{item.type === 'system'}}">⚙️</text>
-        <text class="notif-icon withdrawal-icon" wx:if="{{item.type === 'withdrawal'}}">💳</text>
-        <text class="notif-icon refund-icon" wx:if="{{item.type === 'refund'}}">🔄</text>
+      <view class="notif-icon-box {{item.type}}-bg">
+        <image class="notif-icon-img" wx:if="{{item.type === 'upgrade'}}" src="/assets/icons/rocket.svg" mode="aspectFit"/>
+        <image class="notif-icon-img" wx:if="{{item.type === 'commission'}}" src="/assets/icons/dollar-sign.svg" mode="aspectFit"/>
+        <image class="notif-icon-img" wx:if="{{item.type === 'stock'}}" src="/assets/icons/alert-triangle.svg" mode="aspectFit"/>
+        <image class="notif-icon-img" wx:if="{{item.type === 'system'}}" src="/assets/icons/settings.svg" mode="aspectFit"/>
+        <image class="notif-icon-img" wx:if="{{item.type === 'withdrawal'}}" src="/assets/icons/credit-card.svg" mode="aspectFit"/>
+        <image class="notif-icon-img" wx:if="{{item.type === 'refund'}}" src="/assets/icons/refresh-cw.svg" mode="aspectFit"/>
       </view>
       <view class="notif-content">
         <view class="notif-header">
@@ -21,7 +21,7 @@
 
   <!-- Empty State -->
   <view class="empty" wx:else>
-    <text class="empty-icon">🔔</text>
+    <image class="empty-icon-img" src="/assets/icons/inbox.svg" mode="aspectFit"/>
     <text class="empty-text">暂无消息通知</text>
   </view>
 </view>

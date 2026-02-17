@@ -7,7 +7,7 @@ const { authenticate } = require('../middleware/auth');
 // AI Chat Endpoint for Frontend (User Agent)
 router.post('/chat', authenticate, async (req, res) => {
     try {
-        const { messages } = req.body;
+        const { messages, context } = req.body;
         const userId = req.user.id;
         
         if (!messages || !Array.isArray(messages)) {
@@ -18,7 +18,7 @@ router.post('/chat', authenticate, async (req, res) => {
         const recentMessages = messages.slice(-10);
 
         // Use the new User Agent Service instead of raw chat
-        const reply = await AIUserAgentService.processMessage(recentMessages, userId);
+        const reply = await AIUserAgentService.processMessage(recentMessages, userId, context);
         
         res.json({
             code: 200,

@@ -78,7 +78,7 @@ Page({
         } catch (err) {
             console.error('加载库存日志失败:', err);
             if (err.statusCode === 403) {
-                wx.showToast({ title: '仅工厂可访问', icon: 'none' });
+                wx.showToast({ title: '仅代理商可访问', icon: 'none' });
                 setTimeout(() => wx.navigateBack(), 1500);
             }
         }

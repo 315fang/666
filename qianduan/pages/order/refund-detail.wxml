@@ -2,11 +2,11 @@
 <view class="container" wx:if="{{refund}}">
   <!-- 状态卡片 -->
   <view class="status-card status-{{refund.status}}">
-    <text class="status-icon" wx:if="{{refund.status === 'pending'}}">⏳</text>
-    <text class="status-icon" wx:if="{{refund.status === 'approved'}}">✅</text>
-    <text class="status-icon" wx:if="{{refund.status === 'rejected'}}">❌</text>
-    <text class="status-icon" wx:if="{{refund.status === 'completed'}}">🎉</text>
-    <text class="status-icon" wx:if="{{refund.status === 'cancelled'}}">🚫</text>
+    <image class="status-icon-img" wx:if="{{refund.status === 'pending'}}" src="/assets/icons/clock.svg" mode="aspectFit"/>
+    <image class="status-icon-img" wx:if="{{refund.status === 'approved'}}" src="/assets/icons/check-circle.svg" mode="aspectFit"/>
+    <image class="status-icon-img" wx:if="{{refund.status === 'rejected'}}" src="/assets/icons/x.svg" mode="aspectFit"/>
+    <image class="status-icon-img" wx:if="{{refund.status === 'completed'}}" src="/assets/icons/check.svg" mode="aspectFit"/>
+    <image class="status-icon-img" wx:if="{{refund.status === 'cancelled'}}" src="/assets/icons/minus.svg" mode="aspectFit"/>
     <text class="status-text">{{statusText[refund.status]}}</text>
     <text class="status-desc" wx:if="{{refund.status === 'rejected' && refund.reject_reason}}">
       拒绝原因: {{refund.reject_reason}}

@@ -19,18 +19,18 @@
   <!-- 额外统计 -->
   <view class="extra-stats">
     <view class="extra-item">
-      <text class="extra-icon">📈</text>
+      <image class="extra-icon-img" src="/assets/icons/bar-chart.svg" mode="aspectFit"/>
       <text class="extra-label">团队总业绩</text>
       <text class="extra-val">¥{{totalSales}}</text>
     </view>
     <view class="extra-item">
-      <text class="extra-icon">🆕</text>
+      <image class="extra-icon-img" src="/assets/icons/plus.svg" mode="aspectFit"/>
       <text class="extra-label">本月新增</text>
       <text class="extra-val">{{monthlyNewMembers}}人</text>
     </view>
     <view class="extra-item" wx:if="{{agentStockInfo}}">
-      <text class="extra-icon">📦</text>
-      <text class="extra-label">工厂库存</text>
+      <image class="extra-icon-img" src="/assets/icons/package.svg" mode="aspectFit"/>
+      <text class="extra-label">代理商库存</text>
       <text class="extra-val">{{agentStockInfo.stock_count}}件</text>
     </view>
   </view>
@@ -61,7 +61,7 @@
 
       <!-- 空状态 -->
       <view class="empty-state" wx:if="{{members.length === 0 && !loading}}">
-        <text class="empty-icon">👥</text>
+        <image class="empty-icon-img" src="/assets/icons/users.svg" mode="aspectFit"/>
         <text>暂无团队成员</text>
         <text class="empty-tip">分享邀请码给好友即可建立团队</text>
       </view>

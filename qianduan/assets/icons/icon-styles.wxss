@@ -1,0 +1,146 @@
+/** 图标样式 - 统一所有SVG图标尺寸和颜色 */
+
+/* 基础图标类 */
+.icon {
+  width: 44rpx;
+  height: 44rpx;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.icon-sm {
+  width: 32rpx;
+  height: 32rpx;
+}
+
+.icon-md {
+  width: 44rpx;
+  height: 44rpx;
+}
+
+.icon-lg {
+  width: 56rpx;
+  height: 56rpx;
+}
+
+.icon-xl {
+  width: 72rpx;
+  height: 72rpx;
+}
+
+/* 订单状态图标容器 */
+.icon-circle {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 50%;
+  background: var(--luxury-ivory);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: var(--shadow-sm);
+}
+
+.icon-circle .icon {
+  width: 40rpx;
+  height: 40rpx;
+}
+
+/* 工具图标 */
+.tool-icon-wrap {
+  width: 60rpx;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tool-icon-wrap .icon {
+  width: 44rpx;
+  height: 44rpx;
+}
+
+/* 导航栏图标 */
+.nav-icon-wrap {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-icon-wrap .icon {
+  width: 40rpx;
+  height: 40rpx;
+}
+
+/* 通知图标 */
+.notif-icon-wrap {
+  width: 80rpx;
+  height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notif-icon-wrap .icon {
+  width: 44rpx;
+  height: 44rpx;
+}
+
+/* 编辑图标 */
+.edit-icon-wrap {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 40rpx;
+  height: 40rpx;
+  background: var(--luxury-gold);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx solid var(--luxury-black);
+  z-index: 3;
+}
+
+.edit-icon-wrap .icon {
+  width: 24rpx;
+  height: 24rpx;
+  stroke: var(--luxury-white);
+}
+
+/* 箭头图标 */
+.arrow-icon-wrap {
+  width: 56rpx;
+  height: 56rpx;
+  background: rgba(202, 138, 4, 0.15);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.arrow-icon-wrap .icon {
+  width: 32rpx;
+  height: 32rpx;
+}
+
+/* 金刚区图标 */
+.nav-icon-box .icon {
+  width: 44rpx;
+  height: 44rpx;
+}
+
+/* 颜色变体 */
+.icon-gold {
+  stroke: var(--luxury-gold);
+}
+
+.icon-white {
+  stroke: #FFFFFF;
+}
+
+.icon-muted {
+  stroke: var(--text-muted);
+}

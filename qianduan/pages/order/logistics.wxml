@@ -4,7 +4,7 @@
   <view class="logistics-header">
     <view class="company-info">
       <view class="company-logo">
-        <text class="logo-icon">🚚</text>
+        <image class="logo-icon-img" src="/assets/icons/truck.svg" mode="aspectFit"/>
       </view>
       <view class="company-details">
         <text class="company-name">{{order.express_company || '物流公司'}}</text>
@@ -19,9 +19,9 @@
   <!-- 物流状态卡片 -->
   <view class="status-card" wx:if="{{logistics.status}}">
     <view class="status-icon {{logistics.status}}">
-      <text wx:if="{{logistics.status === 'delivered'}}">✓</text>
-      <text wx:elif="{{logistics.status === 'shipping'}}">📦</text>
-      <text wx:else>⏰</text>
+      <image wx:if="{{logistics.status === 'delivered'}}" class="status-icon-img" src="/assets/icons/check-circle.svg" mode="aspectFit"/>
+      <image wx:elif="{{logistics.status === 'shipping'}}" class="status-icon-img" src="/assets/icons/package.svg" mode="aspectFit"/>
+      <image wx:else class="status-icon-img" src="/assets/icons/clock.svg" mode="aspectFit"/>
     </view>
     <view class="status-info">
       <text class="status-text">{{statusText[logistics.status] || '查询中'}}</text>
@@ -47,7 +47,7 @@
           <view class="timeline-text">{{item.context}}</view>
           <view class="timeline-time">{{item.time}}</view>
           <view class="timeline-location" wx:if="{{item.location}}">
-            📍 {{item.location}}
+            <image class="location-icon" src="/assets/icons/map-pin.svg" mode="aspectFit"/> {{item.location}}
           </view>
         </view>
       </view>
@@ -70,11 +70,11 @@
   <!-- 底部操作区 -->
   <view class="actions-footer">
     <button class="action-btn secondary" bindtap="onRefresh">
-      <text class="btn-icon">🔄</text>
+      <image class="btn-icon-img" src="/assets/icons/refresh-cw.svg" mode="aspectFit"/>
       <text>刷新</text>
     </button>
     <button class="action-btn primary" open-type="contact">
-      <text class="btn-icon">💬</text>
+      <image class="btn-icon-img" src="/assets/icons/message.svg" mode="aspectFit"/>
       <text>联系客服</text>
     </button>
   </view>

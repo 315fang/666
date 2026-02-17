@@ -65,7 +65,7 @@
     <view class="refund-qty-tip">退货数量对应实际退回的商品件数，库存将按此数量恢复</view>
   </view>
   <view class="refund-only-tip" wx:if="{{type === 'refund_only'}}">
-    <text class="tip-icon">💡</text>
+    <image class="tip-icon-img" src="/assets/icons/info.svg" mode="aspectFit"/>
     <text>仅退款不退货，不恢复库存</text>
   </view>
 

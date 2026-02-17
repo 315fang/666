@@ -117,7 +117,7 @@
             <!-- 售后标记 -->
             <el-alert
                 v-if="detailOrder.status === 'refunding' || detailOrder.status === 'refunded'"
-                :title="detailOrder.status === 'refunding' ? '⚠️ 该订单正在售后处理中' : '该订单已退款'"
+                :title="detailOrder.status === 'refunding' ? '该订单正在售后处理中' : '该订单已退款'"
                 :type="detailOrder.status === 'refunding' ? 'warning' : 'error'"
                 :closable="false"
                 style="margin-bottom: 16px;"
@@ -166,14 +166,22 @@
 
             <!-- 收货地址 -->
             <el-card shadow="never" v-if="detailOrder.address" style="margin-bottom: 16px;">
-                <template #header><span style="font-weight: 600;">📦 收货地址</span></template>
+                <template #header>
+                    <span style="font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        <el-icon><Box /></el-icon> 收货地址
+                    </span>
+                </template>
                 <div style="font-weight: 500;">{{ detailOrder.address.receiver_name }}  {{ detailOrder.address.phone }}</div>
                 <div style="color: #666; margin-top: 4px;">{{ detailOrder.address.province }} {{ detailOrder.address.city }} {{ detailOrder.address.district }} {{ detailOrder.address.detail }}</div>
             </el-card>
 
             <!-- 订单时间线 -->
             <el-card shadow="never" style="margin-bottom: 16px;">
-                <template #header><span style="font-weight: 600;">📋 订单流程</span></template>
+                <template #header>
+                    <span style="font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        <el-icon><List /></el-icon> 订单流程
+                    </span>
+                </template>
                 <el-timeline>
                     <el-timeline-item v-if="detailOrder.completed_at" timestamp="" placement="top" type="success">
                         <span style="font-weight: 500;">买家确认收货</span>
@@ -218,6 +226,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { getOrders, getOrderById, shipOrder, updateOrderStatus } from '@/api/order'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Box, List } from '@element-plus/icons-vue'
 
 const list = ref([])
 const total = ref(0)

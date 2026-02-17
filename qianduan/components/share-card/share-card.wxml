@@ -11,7 +11,7 @@
     <view class="invite-label">我的邀请码</view>
     <view class="invite-code-box" bindtap="onCopyInviteCode">
       <text class="invite-code">{{inviteCode}}</text>
-      <text class="copy-icon">📋</text>
+      <image class="copy-icon-img" src="/assets/icons/clipboard.svg" mode="aspectFit"/>
     </view>
   </view>
 
@@ -43,26 +43,26 @@
       class="action-btn btn-copy"
       bindtap="onCopyLink"
     >
-      🔗 复制邀请链接
+      <image class="btn-icon-img" src="/assets/icons/link.svg" mode="aspectFit"/> 复制邀请链接
     </button>
     <button
       wx:if="{{showShare}}"
       class="action-btn btn-share"
       open-type="share"
     >
-      📤 分享给好友
+      <image class="btn-icon-img" src="/assets/icons/share.svg" mode="aspectFit"/> 分享给好友
     </button>
     <button
       wx:if="{{showSaveQR}}"
       class="action-btn btn-save"
       bindtap="onSaveQRCode"
     >
-      💾 保存小程序码
+      <image class="btn-icon-img" src="/assets/icons/download.svg" mode="aspectFit"/> 保存小程序码
     </button>
   </view>
 
   <!-- 额外提示 -->
   <view wx:if="{{tip}}" class="share-tip">
-    <text>💡 {{tip}}</text>
+    <image class="tip-icon-img" src="/assets/icons/info.svg" mode="aspectFit"/> {{tip}}
   </view>
 </view>

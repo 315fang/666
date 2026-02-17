@@ -26,12 +26,13 @@
         "pages/user/preferences",
         "pages/order/logistics",
         "pages/search/search",
-        "pages/ai/chat"
+        "pages/ai/chat",
+        "pages/rules/index"
     ],
     "tabBar": {
-        "color": "#94A3B8",
-        "selectedColor": "#0F172A",
-        "backgroundColor": "#ffffff",
+        "color": "#A8A29E",
+        "selectedColor": "#CA8A04",
+        "backgroundColor": "#FAFAF9",
         "borderStyle": "white",
         "list": [
             {
@@ -61,10 +62,10 @@
         ]
     },
     "window": {
-        "navigationBarBackgroundColor": "#0F172A",
+        "navigationBarBackgroundColor": "#1C1917",
         "navigationBarTitleText": "臻选",
         "navigationBarTextStyle": "white",
-        "backgroundColor": "#F8FAFC"
+        "backgroundColor": "#FAFAF9"
     },
     "style": "v2",
     "sitemapLocation": "sitemap.json",

@@ -57,7 +57,7 @@
         <view class="order-product" wx:if="{{item.product}}">
           <image class="product-image" src="{{item.product.images[0]}}" mode="aspectFill" wx:if="{{item.product.images && item.product.images.length > 0}}"></image>
           <view class="product-image product-image-placeholder" wx:else>
-            <text>📦</text>
+            <image class="placeholder-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
           </view>
           <view class="product-info">
             <text class="product-name">{{item.product.name || '商品名称'}}</text>

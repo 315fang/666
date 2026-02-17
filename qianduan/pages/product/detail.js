@@ -213,8 +213,9 @@ Page({
             }
         };
         wx.navigateTo({ url: '/pages/ai/chat' });
-    }
-});    // Toggle Favorite (Added as placeholder)
+    },
+
+    // Toggle Favorite
     onToggleFavorite() {
         this.setData({ isFavorite: !this.data.isFavorite });
         wx.showToast({
@@ -357,7 +358,7 @@ Page({
         wx.showToast({ title: '请点击客服按钮', icon: 'none' });
     },
 
-    // 工厂采购入仓
+    // 代理商采购入仓
     onAgentRestock() {
         wx.navigateTo({ url: '/pages/distribution/restock' });
     },

@@ -1,156 +1,182 @@
-<!--pages/user/user.wxml-->
+<!--pages/user/user.wxml - 霸王茶姬风格个人中心 -->
 <view class="container">
-  <!-- 1. Deep Midnight Header -->
+  <!-- 1. 顶部红色背景区域 -->
   <view class="user-header">
-    <view class="user-info-box">
-      <!-- Glow Avatar -->
+    <image class="header-bg" src="https://resour.oss-cn-hangzhou.aliyuncs.com/gerenmianban.jpg" mode="aspectFill"></image>
+  </view>
+
+  <!-- 2. 白色卡片区域 - 包含用户信息和资产统计，支持下拉效果 -->
+  <view class="white-card {{isPulling ? 'pulling' : ''}}" 
+        style="transform: translateY({{cardTransform}}rpx);"
+        bindtouchstart="onCardTouchStart"
+        bindtouchmove="onCardTouchMove"
+        bindtouchend="onCardTouchEnd">
+    <!-- 用户信息区 - 左边头像，右边信息 -->
+    <view class="user-info-row">
+      <!-- 头像 -->
       <view class="avatar-container">
-        <view class="avatar-glow"></view>
         <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
           <image class="user-avatar" src="{{userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
         </button>
-        <view class="edit-icon">✎</view>
       </view>
-      <!-- Names & Tags -->
+      
+      <!-- 名字和标签 -->
       <view class="user-names">
-        <view class="name-text">
+        <view class="name-row">
           <input type="nickname" class="nickname-input" placeholder="{{hasUserInfo ? (userInfo.nickname || '微信用户') : '点击登录'}}" bindblur="onNicknameBlur" />
         </view>
-        <view class="user-tags" wx:if="{{hasUserInfo}}">
-          <view class="tag-pill gold" wx:if="{{userInfo.role !== 'user'}}">
-            <text class="icon">👑</text>
-            <text>{{userInfo.role_name}}</text>
-          </view>
-          <view class="tag-pill blue">
-            <text class="icon">🔗</text>
-            <text>分享官</text>
-          </view>
+        <view class="user-level" wx:if="{{hasUserInfo}}">
+          <view class="level-badge">{{userInfo.role_name || '普通会员'}}</view>
+        </view>
+        <view class="complete-info" wx:if="{{hasUserInfo}}">
+          <text class="complete-text">完善信息可获得奖励 ></text>
         </view>
       </view>
     </view>
-    <!-- 消息通知入口 -->
-    <view class="header-notif-btn" bindtap="onNotificationsTap">
-      <text class="notif-icon">🔔</text>
-      <view class="notif-badge" wx:if="{{notificationsCount > 0}}">{{notificationsCount > 99 ? '99+' : notificationsCount}}</view>
-    </view>
-    <!-- Background Decoration -->
-    <view class="header-bg-decoration"></view>
-  </view>
 
-  <!-- 2. Floating Asset Card -->
-  <view class="asset-card-wrapper">
-    <view class="asset-card">
+    <!-- 资产统计 -->
+    <view class="asset-section">
       <view class="asset-item" bindtap="goCommission">
+        <text class="asset-value">{{stats.frozenAmount || '0'}}</text>
         <text class="asset-label">待结算</text>
-        <text class="asset-value">¥{{stats.frozenAmount || '0.00'}}</text>
       </view>
-      <view class="divider"></view>
       <view class="asset-item" bindtap="goWallet">
+        <text class="asset-value highlight">{{balance || '0'}}</text>
         <text class="asset-label">可提现</text>
-        <text class="asset-value highlight">¥{{balance || '0.00'}}</text>
       </view>
-      <view class="divider"></view>
       <view class="asset-item" bindtap="goTeam">
-        <text class="asset-label">团队人数</text>
         <text class="asset-value">{{teamCount || 0}}</text>
+        <text class="asset-label">团队人数</text>
       </view>
     </view>
   </view>
 
-  <!-- 3. Agent Workbench Banner (Texture) -->
-  <view class="banner-wrapper" wx:if="{{isAgent}}" bindtap="goWorkbench">
-    <view class="agent-banner">
-      <view class="banner-overlay"></view>
-      <view class="banner-content">
-        <view class="banner-left">
-          <text class="material-icon highlight">📊</text>
-          <view class="banner-texts">
-            <text class="banner-title">工厂发货工作台</text>
-            <text class="banner-sub">管理库存 & 发货</text>
-          </view>
+  <!-- 3. 会员权益卡片 - 使用原图不调色 -->
+  <view class="vip-card" bindtap="goDistributionCenter">
+    <image class="vip-bg" src="https://resour.oss-cn-hangzhou.aliyuncs.com/ditu.jpg" mode="aspectFill"></image>
+    <view class="vip-content">
+      <view class="vip-left">
+        <view class="vip-icon-wrap">
+          <text class="vip-icon">♔</text>
         </view>
-        <view class="banner-arrow arrow-circle">→</view>
+        <view class="vip-text">
+          <text class="vip-subtitle">会员尊享权益</text>
+          <text class="vip-title">查看你的会员权益</text>
+        </view>
+      </view>
+      <view class="vip-btn">
+        <text>查看权益 ></text>
       </view>
     </view>
   </view>
 
-  <!-- 4. Order Section -->
+  <!-- 4. 我的订单快捷入口 -->
   <view class="section-card">
-    <view class="card-header" bindtap="onOrderTap" data-type="all">
-      <text class="card-title">我的订单</text>
-      <view class="card-more">
+    <view class="section-header" bindtap="onOrderTap" data-type="all">
+      <text class="section-title">我的订单</text>
+      <view class="section-more">
         <text>全部</text>
-        <text class="arrow">›</text>
+        <text class="arrow">></text>
       </view>
     </view>
-    <view class="order-icons">
-      <view class="icon-item" bindtap="onOrderTap" data-type="pending">
-        <view class="icon-circle">
-          <text>💳</text>
-          <view class="badge" wx:if="{{orderStats.pending > 0}}">{{orderStats.pending}}</view>
+    <view class="order-shortcuts">
+      <view class="shortcut-item" bindtap="onOrderTap" data-type="pending">
+        <view class="shortcut-icon">
+          <image class="icon" src="/assets/icons/credit-card.svg" mode="aspectFit"/>
+          <view class="shortcut-badge" wx:if="{{orderStats.pending > 0}}">{{orderStats.pending}}</view>
         </view>
-        <text class="icon-text">待付款</text>
+        <text class="shortcut-text">待付款</text>
       </view>
-      <view class="icon-item" bindtap="onOrderTap" data-type="paid">
-        <view class="icon-circle">
-          <text>📦</text>
-          <view class="badge" wx:if="{{orderStats.paid > 0}}">{{orderStats.paid}}</view>
+      <view class="shortcut-item" bindtap="onOrderTap" data-type="paid">
+        <view class="shortcut-icon">
+          <image class="icon" src="/assets/icons/package.svg" mode="aspectFit"/>
+          <view class="shortcut-badge" wx:if="{{orderStats.paid > 0}}">{{orderStats.paid}}</view>
         </view>
-        <text class="icon-text">待发货</text>
+        <text class="shortcut-text">待发货</text>
       </view>
-      <view class="icon-item" bindtap="onOrderTap" data-type="shipped">
-        <view class="icon-circle">
-          <text>🚚</text>
-          <view class="badge" wx:if="{{orderStats.shipped > 0}}">{{orderStats.shipped}}</view>
+      <view class="shortcut-item" bindtap="onOrderTap" data-type="shipped">
+        <view class="shortcut-icon">
+          <image class="icon" src="/assets/icons/truck.svg" mode="aspectFit"/>
+          <view class="shortcut-badge" wx:if="{{orderStats.shipped > 0}}">{{orderStats.shipped}}</view>
         </view>
-        <text class="icon-text">待收货</text>
+        <text class="shortcut-text">待收货</text>
       </view>
-      <view class="icon-item" bindtap="onOrderTap" data-type="completed">
-        <view class="icon-circle">
-          <text>✨</text>
+      <view class="shortcut-item" bindtap="onOrderTap" data-type="completed">
+        <view class="shortcut-icon">
+          <image class="icon" src="/assets/icons/check-circle.svg" mode="aspectFit"/>
         </view>
-        <text class="icon-text">已完成</text>
+        <text class="shortcut-text">已完成</text>
       </view>
-      <view class="icon-item" bindtap="onRefundTap">
-        <view class="icon-circle">
-          <text>🔄</text>
+      <view class="shortcut-item" bindtap="onRefundTap">
+        <view class="shortcut-icon">
+          <image class="icon" src="/assets/icons/refresh-cw.svg" mode="aspectFit"/>
+          <view class="shortcut-badge" wx:if="{{orderStats.refund > 0}}">{{orderStats.refund}}</view>
         </view>
-        <text class="icon-text">售后</text>
+        <text class="shortcut-text">售后</text>
       </view>
     </view>
   </view>
 
-    <!-- 5. My Tools Grid -->
-  <view class="section-card mb-safe">
-    <view class="card-header">
-      <text class="card-title">常用工具</text>
-    </view>
+  <!-- 5. 我的功能 -->
+  <view class="section-card">
+    <view class="section-title">我的功能</view>
     <view class="tools-grid">
-      <!-- 分佣中心：整合团队、钱包、邀请码 -->
-      <view class="tool-item" bindtap="goDistributionCenter">
-        <text class="tool-icon text-gold">💎</text>
-        <text class="tool-text">分佣中心</text>
-      </view>
       <view class="tool-item" bindtap="goAddress">
-        <text class="tool-icon text-green">📍</text>
+        <view class="tool-icon-wrap red">
+          <image class="icon" src="/assets/icons/map-pin.svg" mode="aspectFit"/>
+        </view>
         <text class="tool-text">地址管理</text>
       </view>
+      <view class="tool-item" bindtap="onOrderTap" data-type="all">
+        <view class="tool-icon-wrap orange">
+          <image class="icon" src="/assets/icons/credit-card.svg" mode="aspectFit"/>
+        </view>
+        <text class="tool-text">我的订单</text>
+      </view>
       <view class="tool-item" bindtap="goAIChat">
-        <text class="tool-icon text-purple">🤖</text>
+        <view class="tool-icon-wrap gold">
+          <image class="icon" src="/assets/icons/sparkles.svg" mode="aspectFit"/>
+        </view>
         <text class="tool-text">智能助手</text>
       </view>
+      <view class="tool-item" bindtap="onNotificationsTap">
+        <view class="tool-icon-wrap purple">
+          <image class="icon" src="/assets/icons/bell.svg" mode="aspectFit"/>
+          <view class="tool-badge" wx:if="{{notificationsCount > 0}}">{{notificationsCount > 99 ? '99+' : notificationsCount}}</view>
+        </view>
+        <text class="tool-text">消息通知</text>
+      </view>
+      <view class="tool-item" bindtap="goTeam">
+        <view class="tool-icon-wrap blue">
+          <image class="icon" src="/assets/icons/users.svg" mode="aspectFit"/>
+        </view>
+        <text class="tool-text">我的团队</text>
+      </view>
       <button class="tool-item share-btn" open-type="contact">
-        <text class="tool-icon text-pink">🎧</text>
-        <text class="tool-text">联系客服</text>
+        <view class="tool-icon-wrap cyan">
+          <image class="icon" src="/assets/icons/headphones.svg" mode="aspectFit"/>
+        </view>
+        <text class="tool-text">在线客服</text>
       </button>
+      <view class="tool-item" bindtap="goDistributionCenter">
+        <view class="tool-icon-wrap pink">
+          <image class="icon" src="/assets/icons/star.svg" mode="aspectFit"/>
+        </view>
+        <text class="tool-text">分佣中心</text>
+      </view>
       <view class="tool-item" bindtap="onSettingsTap">
-        <text class="tool-icon text-gray">⚙️</text>
+        <view class="tool-icon-wrap gray">
+          <image class="icon" src="/assets/icons/settings.svg" mode="aspectFit"/>
+        </view>
         <text class="tool-text">设置</text>
       </view>
     </view>
   </view>
-  
-  <!-- Invite Code Modal -->
+
+  <!-- 底部安全区域 -->
+  <view class="safe-area-bottom"></view>
+
+  <!-- 邀请码弹窗 -->
   <view class="invite-modal {{showInvite ? 'show' : ''}}" bindtap="hideInvite">
     <view class="modal-content" catchtap="stopP">
       <view class="modal-title">我的邀请码</view>

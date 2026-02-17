@@ -437,11 +437,19 @@ const requestShipping = async (req, res) => {
 
         const order = await Order.findOne({ where: { id, agent_id: userId } });
         if (!order) return res.status(404).json({ code: -1, message: '订单不存在或您无权操作' });
-        if (order.status !== 'agent_confirmed') return res.status(400).json({ code: -1, message: '请先确认订单再申请发货' });
+        // 代理商确认为可选：允许 paid 直接申请发货
+        if (!['paid', 'agent_confirmed'].includes(order.status)) {
+            return res.status(400).json({ code: -1, message: '订单状态不允许申请发货' });
+        }
 
         const agent = await User.findByPk(userId);
         if (agent.stock_count < order.quantity) {
             return res.status(400).json({ code: -1, message: '库存不足，无法发货' });
+        }
+
+        // 若未确认，记录一次自动确认时间（用于审计，不阻塞流程）
+        if (!order.agent_confirmed_at) {
+            order.agent_confirmed_at = new Date();
         }
 
         order.status = 'shipping_requested';

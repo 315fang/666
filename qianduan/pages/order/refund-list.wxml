@@ -32,7 +32,7 @@
 
     <!-- 空状态 -->
     <view class="empty" wx:if="{{!loading && refunds.length === 0}}">
-      <text class="empty-icon">🔄</text>
+      <image class="empty-icon-img" src="/assets/icons/refresh-cw.svg" mode="aspectFit"/>
       <text class="empty-text">暂无售后记录</text>
     </view>
 

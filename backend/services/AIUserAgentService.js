@@ -33,7 +33,7 @@ class AIUserAgentService {
         };
     }
 
-    async processMessage(messages, userId) {
+    async processMessage(messages, userId, context = null) {
         try {
             // 1. Construct System Prompt
             const toolDescriptions = Object.entries(this.tools).map(([name, tool]) => {

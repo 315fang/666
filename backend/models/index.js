@@ -20,6 +20,14 @@ const QuickEntry = require('./QuickEntry');
 const HomeSection = require('./HomeSection');
 const Theme = require('./Theme');
 const ActivityLog = require('./ActivityLog');
+const SystemConfig = require('./SystemConfig');
+const SystemConfigHistory = require('./SystemConfigHistory');
+const AIAlert = require('./AIAlert');
+const AIFixSession = require('./AIFixSession');
+const MassMessage = require('./MassMessage');
+const UserMassMessage = require('./UserMassMessage');
+const UserTag = require('./UserTag');
+const UserTagRelation = require('./UserTagRelation');
 
 // ========== 用户相关关联 ==========
 User.hasMany(Order, { foreignKey: 'buyer_id', as: 'orders' });
@@ -99,6 +107,23 @@ Product.hasMany(Material, { foreignKey: 'product_id', as: 'materials' });
 Refund.belongsTo(Admin, { foreignKey: 'admin_id', as: 'admin' });
 Dealer.belongsTo(Admin, { foreignKey: 'approved_by', as: 'approver' });
 
+// ========== 系统配置关联 ==========
+SystemConfig.belongsTo(Admin, { foreignKey: 'updated_by', as: 'updater' });
+SystemConfigHistory.belongsTo(Admin, { foreignKey: 'changed_by', as: 'admin' });
+
+// ========== AI告警关联 ==========
+AIAlert.belongsTo(Admin, { foreignKey: 'resolved_by', as: 'resolver' });
+AIFixSession.belongsTo(AIAlert, { foreignKey: 'alert_id', as: 'alert' });
+AIFixSession.belongsTo(Admin, { foreignKey: 'executed_by', as: 'executor' });
+
+// ========== 群发消息关联 ==========
+MassMessage.belongsTo(Admin, { foreignKey: 'created_by', as: 'creator' });
+UserMassMessage.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+UserMassMessage.belongsTo(MassMessage, { foreignKey: 'mass_message_id', as: 'massMessage' });
+UserTagRelation.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+UserTagRelation.belongsTo(UserTag, { foreignKey: 'tag_id', as: 'tag' });
+UserTag.belongsTo(Admin, { foreignKey: 'created_by', as: 'creator' });
+
 module.exports = {
     sequelize,
     User,
@@ -121,5 +146,13 @@ module.exports = {
     QuickEntry,
     HomeSection,
     Theme,
-    ActivityLog
+    ActivityLog,
+    SystemConfig,
+    SystemConfigHistory,
+    AIAlert,
+    AIFixSession,
+    MassMessage,
+    UserMassMessage,
+    UserTag,
+    UserTagRelation
 };

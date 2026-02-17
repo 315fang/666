@@ -1,4 +1,4 @@
-// pages/distribution/workbench.js - 工厂发货工作台
+// pages/distribution/workbench.js - 代理商工作台
 const { get, post } = require('../../utils/request');
 
 Page({
@@ -123,36 +123,18 @@ Page({
         this.setData({ shipTrackingNo: e.detail.value });
     },
 
-    // 确认发货 (Request Platform Ship)
+    // 申请平台发货（仅通知，不扣代理商库存）
     async confirmShip() {
         const { shipOrder, workbench } = this.data;
 
-        // Check Cloud Stock
-        if ((workbench.stock_count || 0) < (shipOrder.quantity || 1)) {
-            wx.showModal({
-                title: '库存不足',
-                content: `当前云仓库存 ${workbench.stock_count || 0} 件，该订单需要 ${shipOrder.quantity} 件。请先采购入仓。`,
-                showCancel: true,
-                cancelText: '取消',
-                confirmText: '去采购',
-                success: (res) => {
-                    if (res.confirm) this.goRestock();
-                }
-            });
-            return;
-        }
+        // 平台发货不要求代理商库存充足，直接申请即可
 
         wx.showLoading({ title: '提交中...' });
         try {
-            // Note: In Cloud Stock model, Agent does not provide tracking info.
-            // We send empty tracking info or specific flag to backend to indicate "Platform Ship".
-            const res = await post(`/agent/ship/${shipOrder.id}`, {
-                tracking_no: 'WAITING_PLATFORM', // Placeholder or specific flag
-                tracking_company: 'PLATFORM_LOGISTICS'
-            });
+            const res = await post(`/orders/${shipOrder.id}/request-shipping`);
             wx.hideLoading();
             if (res.code === 0) {
-                wx.showToast({ title: '已通知发货', icon: 'success' });
+                wx.showToast({ title: '已通知平台发货', icon: 'success' });
                 this.hideShipPopup();
                 this.loadWorkbench();
                 this.loadOrders();

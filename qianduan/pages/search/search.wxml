@@ -3,7 +3,7 @@
   <!-- 搜索栏 -->
   <view class="search-bar">
     <view class="search-input-wrap">
-      <text class="search-icon">🔍</text>
+      <image class="search-icon-img" src="/assets/icons/search.svg" mode="aspectFit"/>
       <input class="search-input" 
              placeholder="搜索商品名称" 
              value="{{keyword}}" 
@@ -11,7 +11,7 @@
              bindconfirm="onSearch"
              focus="{{true}}"
              confirm-type="search" />
-      <view class="clear-btn" wx:if="{{keyword}}" bindtap="onClear">✕</view>
+      <image wx:if="{{keyword}}" class="clear-btn-img" src="/assets/icons/x.svg" bindtap="onClear" mode="aspectFit"/>
     </view>
     <view class="cancel-btn" bindtap="onCancel">取消</view>
   </view>
@@ -71,7 +71,7 @@
 
     <!-- 空搜索结果 -->
     <view class="empty" wx:if="{{!loading && products.length === 0}}">
-      <text class="empty-icon">🔍</text>
+      <image class="empty-icon-img" src="/assets/icons/search.svg" mode="aspectFit"/>
       <text class="empty-text">未找到相关商品</text>
       <text class="empty-sub">换个关键词试试吧</text>
     </view>
