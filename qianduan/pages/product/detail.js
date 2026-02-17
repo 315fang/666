@@ -125,9 +125,13 @@ Page({
         return tags;
     },
 
-    // 跳转评价列表
+    // 跳转评价列表（功能开发中）
     goReviews() {
-        wx.navigateTo({ url: `/pages/product/reviews?id=${this.data.id}` });
+        wx.showToast({
+            title: '评价功能开发中',
+            icon: 'none',
+            duration: 2000
+        });
     },
 
     // 加载佣金预览

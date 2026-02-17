@@ -1,19 +1,11 @@
-/** pages/index/index.wxss - 重构首页 **/
+/** pages/index/index.wxss - 首页样式 **/
 
-/* ========== 颜色变量 - 保持统一 ========== */
-:root {
-  --chagee-red: #C8102E;
-  --chagee-gold: #D4A84B;
-  --chagee-cream: #F5F0EB;
-  --chagee-white: #FFFFFF;
-  --text-primary: #1A1A1A;
-  --text-secondary: #666666;
-  --text-muted: #999999;
-}
+/* 使用全局设计系统，不重复定义颜色变量 */
+/* 所有颜色已在 app.wxss 中定义 */
 
 .container {
   min-height: 100vh;
-  background-color: #F5F5F5;
+  background-color: var(--luxury-ivory);
   padding-bottom: 40rpx;
 }
 
@@ -44,12 +36,12 @@
 /* ========== 2. Identity Card - 身份信息 (Single Row) ========== */
 .identity-card {
   margin: -60rpx 30rpx 30rpx;
-  background: #FFFFFF;
-  border-radius: 24rpx;
-  padding: 30rpx;
+  background: var(--luxury-white);
+  border-radius: var(--radius-xl);
+  padding: var(--space-lg);
   position: relative;
   z-index: 10;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-lg);
 }
 
 .identity-row {
@@ -68,7 +60,7 @@
 .identity-name {
   font-size: 36rpx;
   font-weight: 700;
-  color: #1A1A1A;
+  color: var(--text-primary);
   max-width: 200rpx;
   overflow: hidden;
   white-space: nowrap;
@@ -78,11 +70,11 @@
 .identity-level {
   display: inline-block;
   padding: 4rpx 16rpx;
-  background: linear-gradient(135deg, #D4A84B 0%, #F0C96A 100%);
-  color: #FFFFFF;
+  background: linear-gradient(135deg, var(--luxury-gold) 0%, var(--luxury-gold-light) 100%);
+  color: var(--luxury-white);
   font-size: 20rpx;
   font-weight: 500;
-  border-radius: 20rpx;
+  border-radius: var(--radius-full);
   white-space: nowrap;
 }
 

@@ -15,11 +15,9 @@ Page({
     },
 
     onLoad(options) {
-        console.log('[OrderList] onLoad options:', options);
         let status = options.status;
         if (status === 'all') status = '';
         if (status) {
-            console.log('[OrderList] Setting status to:', status);
             this.setData({ currentStatus: status }, () => {
                 this.loadOrders();
             });
@@ -50,18 +48,15 @@ Page({
 
         try {
             const { currentStatus, page, limit } = this.data;
-            console.log('[OrderList] Loading orders with status:', currentStatus);
             const params = { page, limit };
 
             // 「退款/售后」Tab 特殊处理：从 /refunds 接口拿
             if (currentStatus === 'refund') {
-                console.log('[OrderList] Loading refund orders');
                 await this._loadRefundOrders(append);
                 return;
             }
 
             if (currentStatus) params.status = currentStatus;
-            console.log('[OrderList] API params:', params);
 
             // ★ 并行加载订单列表 + 用户的活跃退款
             const [ordersRes, refundsRes] = await Promise.all([
@@ -70,8 +65,6 @@ Page({
             ]);
 
             let newOrders = ordersRes.data?.list || ordersRes.data || [];
-            console.log('[OrderList] API response:', ordersRes);
-            console.log('[OrderList] Orders count:', newOrders.length);
             const activeRefunds = (refundsRes.data?.list || [])
                 .filter(r => ['pending', 'approved', 'processing'].includes(r.status));
 
