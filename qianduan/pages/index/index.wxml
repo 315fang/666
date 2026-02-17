@@ -1,76 +1,120 @@
 <!--pages/index/index.wxml-->
 <view class="container">
-  <!-- 1. Custom Header (Removed as per user request) -->
-  
-  <!-- 2. Banner (Figma Style) -->
+  <!-- 1. Banner Section (Keep existing but simplified) -->
   <view class="banner-section">
     <swiper class="banner-swiper" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}" indicator-color="rgba(255,255,255,0.4)" indicator-active-color="#ffffff">
       <swiper-item wx:for="{{banners}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}">
         <view class="banner-item">
           <image src="{{item.image_url}}" mode="aspectFill" class="banner-img"></image>
-          <view class="banner-overlay"></view>
-          <view class="banner-text">
-            <view class="banner-tag">LIMITED EDITION</view>
-            <view class="banner-title">春季高奢秀场<br/>限时鉴赏系列</view>
-          </view>
+          <!-- Text overlay removed as requested "leave empty" -->
         </view>
       </swiper-item>
     </swiper>
   </view>
 
-  <!-- 3. Grid Nav -->
-  <view class="nav-grid">
-    <view class="nav-item" wx:for="{{topCategories}}" wx:key="id" bindtap="onCategoryTap" data-id="{{item.id}}">
-      <view class="nav-icon-box" style="background-color: {{item.bgColor}}">
-        <text class="nav-icon">{{item.icon}}</text>
+  <!-- 2. Identity Info Panel (Single Row Layout) -->
+  <view class="identity-card">
+    <view class="identity-row">
+      <!-- Name & Level -->
+      <view class="identity-left">
+        <view class="identity-name">{{truncatedName || '游客'}}</view>
+        <view class="identity-level" wx:if="{{userInfo.role_name}}">{{userInfo.role_name}}</view>
       </view>
-      <text class="nav-text">{{item.name}}</text>
+      
+      <!-- Stats (Commission & Team) -->
+      <view class="identity-right">
+        <view class="stat-item">
+          <image class="stat-icon" src="/assets/icons/dollar-sign.svg" mode="aspectFit"></image>
+          <text class="stat-value">{{stats.commission || '0.00'}}</text>
+        </view>
+        <view class="stat-item">
+          <image class="stat-icon" src="/assets/icons/users.svg" mode="aspectFit"></image>
+          <text class="stat-value">{{stats.teamCount || '0'}}人</text>
+        </view>
+      </view>
     </view>
   </view>
 
-  <!-- 4. Category Tabs -->
-  <scroll-view scroll-x class="tab-scroll" enable-flex>
-    <view 
-      class="tab-item {{currentCategory === 0 ? 'active' : ''}}" 
-      bindtap="onCategoryChange" 
-      data-id="{{0}}"
-    >
-      精选推荐
+  <!-- 3. Main Entrances (Join Us & About Us) -->
+  <view class="main-entrances">
+    <view class="entrance-card" bindtap="onJoinUsTap">
+      <view class="entrance-bg"></view> <!-- Placeholder for image -->
+      <view class="entrance-content">
+        <text class="entrance-title">加入我们</text>
+        <text class="entrance-subtitle">Join Us</text>
+      </view>
     </view>
-    <view 
-      class="tab-item {{currentCategory === item.id ? 'active' : ''}}" 
-      wx:for="{{categories}}" 
-      wx:key="id" 
-      bindtap="onCategoryChange" 
-      data-id="{{item.id}}"
-    >
-      {{item.name}}
-    </view>
-  </scroll-view>
-
-  <!-- 5. Product Waterfall -->
-  <view class="product-grid">
-    <view class="grid-col">
-      <product-card 
-        wx:for="{{leftProducts}}" 
-        wx:key="id" 
-        product="{{item}}" 
-        bind:click="onProductTap"
-        data-id="{{item.id}}"
-      />
-    </view>
-    <view class="grid-col">
-      <product-card 
-        wx:for="{{rightProducts}}" 
-        wx:key="id" 
-        product="{{item}}" 
-        bind:click="onProductTap"
-        data-id="{{item.id}}"
-      />
+    <view class="entrance-card" bindtap="onAboutUsTap">
+      <view class="entrance-bg"></view> <!-- Placeholder for image -->
+      <view class="entrance-content">
+        <text class="entrance-title">了解我们</text>
+        <text class="entrance-subtitle">About Us</text>
+      </view>
     </view>
   </view>
 
-  <view class="loading-footer" wx:if="{{loading}}">
-    <view class="spinner"></view>
+  <!-- 4. Secondary Entrances -->
+  <view class="secondary-grid">
+    <view class="secondary-item" bindtap="onMirrorMeetupTap">
+      <view class="secondary-icon-box mirror">
+        <!-- Placeholder Icon -->
+        <image class="secondary-icon" src="/assets/icons/users.svg" mode="aspectFit"></image>
+      </view>
+      <text class="secondary-text">镜像见面会</text>
+    </view>
+    <view class="secondary-item" bindtap="onSalesBootcampTap">
+      <view class="secondary-icon-box sales">
+        <image class="secondary-icon" src="/assets/icons/trending-up.svg" mode="aspectFit"></image>
+      </view>
+      <text class="secondary-text">销售实战营</text>
+    </view>
+    <view class="secondary-item" bindtap="onFounderTalkTap">
+      <view class="secondary-icon-box talk">
+        <image class="secondary-icon" src="/assets/icons/message-circle.svg" mode="aspectFit"></image>
+      </view>
+      <text class="secondary-text">创始人对谈</text>
+    </view>
+    <view class="secondary-item" bindtap="onKnowledgePlanetTap">
+      <view class="secondary-icon-box planet">
+        <image class="secondary-icon" src="/assets/icons/globe.svg" mode="aspectFit"></image>
+      </view>
+      <text class="secondary-text">知识星球</text>
+    </view>
   </view>
+
+  <!-- 5. Mini Program User Guide -->
+  <view class="banner-card-section" bindtap="onGuideTap">
+    <view class="banner-card-header">
+      <text class="banner-card-title">小程序使用指南</text>
+      <view class="banner-card-more">
+        <text>点击查看</text>
+        <image class="icon-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
+      </view>
+    </view>
+    <view class="banner-card-body red-theme">
+      <view class="banner-card-content">
+        <text class="card-big-text">GET指南</text>
+        <text class="card-sub-text">最新功能操作攻略</text>
+      </view>
+      <!-- Background decoration circles/lines could be CSS -->
+    </view>
+  </view>
+
+  <!-- 6. Co-creation Info -->
+  <view class="banner-card-section" bindtap="onCoCreationTap">
+    <view class="banner-card-header">
+      <text class="banner-card-title">共创信息</text>
+      <view class="banner-card-more">
+        <text>获取更多不定期的共创机会</text>
+        <image class="icon-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
+      </view>
+    </view>
+    <view class="banner-card-body dark-theme">
+      <view class="banner-card-content">
+        <text class="card-big-text">天马乘风 共创未来</text>
+        <text class="card-sub-text">借一杯岩骨花香，祝你新年骐骥驰骋</text>
+      </view>
+    </view>
+  </view>
+
 </view>

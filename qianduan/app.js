@@ -1,5 +1,6 @@
 // app.js - 小程序入口文件
 const { login } = require('./utils/auth');
+const { getApiBaseUrl } = require('./config/env');
 
 App({
     globalData: {
@@ -7,7 +8,7 @@ App({
         openid: null,
         token: null,
         isLoggedIn: false,
-        baseUrl: 'https://api.jxalk.cn/api' // 你的服务器后端地址
+        baseUrl: getApiBaseUrl() // 从环境配置读取
     },
 
     onLaunch(options) {
@@ -49,15 +50,17 @@ App({
                 return;
             }
 
-            // 没有缓存，执行微信登录
-            await this.wxLogin();
+            // 没有缓存，执行静默微信登录（不收集用户资料）
+            // 用户首次登录时，会在个人中心页面看到"立即登录"按钮
+            // 点击该按钮会调用 wxLogin(null, true) 来收集资料
+            await this.wxLogin(null, false);
         } catch (err) {
             console.error('自动登录失败:', err);
         }
     },
 
-    // 微信登录
-    async wxLogin(distributorId = null) {
+    // 微信登录（支持静默登录和授权登录）
+    async wxLogin(distributorId = null, withProfile = false) {
         try {
             // 获取缓存的推荐人ID
             if (!distributorId) {
@@ -68,14 +71,33 @@ App({
             const { code } = await this.promisify(wx.login)();
             console.log('获取到 code:', code);
 
-            // 2. 发送给后端换取用户信息
+            // 2. 如果需要用户资料，调用 getUserProfile
+            let profileData = {};
+            if (withProfile) {
+                try {
+                    const profile = await this.promisify(wx.getUserProfile)({
+                        desc: '用于完善会员资料'
+                    });
+                    profileData = {
+                        nickName: profile.userInfo.nickName,
+                        avatarUrl: profile.userInfo.avatarUrl
+                    };
+                    console.log('获取用户资料成功:', profileData);
+                } catch (err) {
+                    console.log('用户取消授权或获取资料失败:', err);
+                    // 不阻断登录流程
+                }
+            }
+
+            // 3. 发送给后端换取用户信息
             const result = await login({
                 code,
-                distributor_id: distributorId // 分销员邀请码
+                distributor_id: distributorId,
+                ...profileData // 携带用户资料（如果有）
             });
 
             if (result.success) {
-                // 3. 保存用户信息和 Token
+                // 4. 保存用户信息和 Token
                 this.globalData.userInfo = result.userInfo;
                 this.globalData.openid = result.openid;
                 this.globalData.token = result.token;

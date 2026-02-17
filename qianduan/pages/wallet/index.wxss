@@ -7,13 +7,27 @@
 
 /* 余额卡片 */
 .balance-card {
-  background: var(--color-navy);
-  color: var(--color-white);
-  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #1E3A8A 0%, #172554 100%);
+  color: #ffffff;
+  border-radius: 24rpx;
   padding: 60rpx 40rpx;
   text-align: center;
-  margin-bottom: var(--spacing-lg);
-  box-shadow: var(--shadow-md);
+  margin-bottom: 40rpx;
+  box-shadow: 0 10rpx 30rpx rgba(30, 58, 138, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+.balance-card::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 300rpx;
+  height: 300rpx;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 .balance-label {
@@ -43,6 +57,64 @@
   font-weight: 500;
 }
 
+/* 佣金概览 */
+.commission-overview {
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.overview-title {
+  font-size: var(--font-size-lg);
+  color: var(--color-title);
+  font-weight: 500;
+  margin-bottom: var(--spacing-md);
+}
+
+.overview-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+.overview-item {
+  flex: 1;
+  min-width: 160rpx;
+  background: var(--color-background);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  text-align: center;
+}
+
+.overview-label {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-placeholder);
+  margin-bottom: 8rpx;
+}
+
+.overview-value {
+  display: block;
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  color: var(--color-title);
+  font-family: 'DIN Pro', -apple-system, sans-serif;
+}
+
+.overview-value.freeze {
+  color: #FF9500;
+}
+
+.overview-value.pending {
+  color: #007AFF;
+}
+
+.overview-value.available {
+  color: var(--color-success);
+}
+
 /* 列表 */
 .list-section {
   background: var(--color-white);
@@ -63,23 +135,79 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-md) 0;
-  border-bottom: 1rpx solid var(--color-divider);
+  border-bottom: 2rpx solid #E2E8F0;
+  margin-bottom: 4rpx;
+  transition: background-color 0.2s;
+}
+
+.log-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.log-item:active {
+  background-color: #F8FAFC;
 }
 
 .log-info {
   display: flex;
   flex-direction: column;
+  gap: 4rpx;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
 }
 
 .log-type {
   font-size: var(--font-size-md);
   color: var(--color-text);
-  margin-bottom: 4rpx;
+}
+
+.status-badge {
+  display: inline-block;
+  font-size: 20rpx;
+  padding: 4rpx 12rpx;
+  border-radius: var(--radius-sm);
+  background: var(--color-background);
+  color: var(--color-placeholder);
+}
+
+.status-badge.status-frozen {
+  background: #FFF3E0;
+  color: #FF9500;
+}
+
+.status-badge.status-pending_approval {
+  background: #E3F2FD;
+  color: #007AFF;
+}
+
+.status-badge.status-approved {
+  background: #E8F5E9;
+  color: #4CAF50;
+}
+
+.status-badge.status-settled {
+  background: #F5F5F5;
+  color: #666;
+}
+
+.status-badge.status-cancelled {
+  background: #FFEBEE;
+  color: #F44336;
 }
 
 .log-time {
   font-size: var(--font-size-xs);
   color: var(--color-placeholder);
+}
+
+.log-detail {
+  font-size: var(--font-size-xs);
+  color: #FF9500;
 }
 
 .log-amount {
@@ -91,7 +219,18 @@
 .log-amount.income { color: var(--color-success); }
 .log-amount.expense { color: var(--color-title); }
 
-.empty { padding: 60rpx 0; }
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100rpx 0;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: var(--color-placeholder);
+}
 
 /* 提现弹窗 */
 .withdraw-popup {
@@ -125,7 +264,14 @@
   font-size: var(--font-size-lg);
   color: var(--color-title);
   text-align: center;
-  margin-bottom: 40rpx;
+  margin-bottom: 20rpx;
+}
+
+.available-tip {
+  font-size: var(--font-size-sm);
+  color: var(--color-placeholder);
+  text-align: center;
+  margin-bottom: 20rpx;
 }
 
 .popup-content .input {

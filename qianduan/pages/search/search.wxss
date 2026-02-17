@@ -192,7 +192,17 @@
 
 /* ==================== 空结果 ==================== */
 .empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   padding: 160rpx 0;
+}
+
+.empty-icon {
+  font-size: 80rpx;
+  margin-bottom: 24rpx;
+  opacity: 0.5;
 }
 
 .empty-sub {

@@ -1,44 +1,36 @@
 // pages/index/index.js
 const { get, post } = require('../../utils/request');
+const { parseImages } = require('../../utils/dataFormatter');
+const { DEFAULTS, ROLE_NAMES } = require('../../config/constants');
 const app = getApp();
-
-// Figma Design Colors: Blue-50, Pink-50, Indigo-50
-const NAV_COLORS = ['#EFF6FF', '#FDF2F8', '#EEF2FF'];
-const NAV_ICONS = ['🔥', '👑', '🎁'];
 
 Page({
     data: {
         banners: [],
-        products: [],
-        categories: [],
-        topCategories: [],
-        currentCategory: '',
         loading: true,
-        isScrolled: false, // For header transition
-        statusBarHeight: 20 // Default fallback
+        userInfo: null,
+        isLoggedIn: false,
+        truncatedName: '游客',
+        stats: {
+            commission: '0.00',
+            teamCount: 0
+        },
+        statusBarHeight: 20
     },
 
-    onPageScroll(e) {
-        // Toggle header style on scroll
-        const isScrolled = e.scrollTop > 50;
-        if (isScrolled !== this.data.isScrolled) {
-            this.setData({ isScrolled });
-        }
+    onShow() {
+        this.loadUserInfo();
     },
 
     onLoad(options) {
-        // 获取状态栏高度用于自定义导航栏
         const sysInfo = wx.getSystemInfoSync();
         this.setData({
             statusBarHeight: sysInfo.statusBarHeight
         });
 
-        // 关键：接收分享进来的邀请码
         if (options.share_id) {
             console.log('通过分享进入，邀请人ID:', options.share_id);
             wx.setStorageSync('distributor_id', options.share_id);
-
-            // 如果已登录但还没有上级，尝试绑定
             if (app.globalData.isLoggedIn) {
                 this.tryBindParent(options.share_id);
             }
@@ -47,96 +39,26 @@ Page({
         this.loadData();
     },
 
-    // 尝试绑定上级
     async tryBindParent(parentId) {
         try {
-            await post('/bind-parent', { parent_id: parseInt(parentId) });
-            console.log('绑定上级成功');
+            const res = await post('/bind-parent', { parent_id: parseInt(parentId) });
+            if (res.code === 0) {
+                wx.showToast({ title: '已加入团队', icon: 'success' });
+            }
         } catch (err) {
-            // 已有上级会返回错误，忽略
             console.log('绑定上级:', err.message || '已有上级');
         }
     },
 
-    onPullDownRefresh() {
-        this.loadData().then(() => {
-            wx.stopPullDownRefresh();
-        });
-    },
-
     async loadData() {
         this.setData({ loading: true });
-
         try {
-            const results = await Promise.all([
-                get('/content/banners', { position: 'home' }).catch(() => ({ data: [] })),
-                get('/products', { limit: 10 }).catch(() => ({ data: { list: [] } })),
-                get('/categories').catch(() => ({ data: [] }))
-            ]);
-
-            const categories = results[2].data || [];
-
-            // 金刚区：取前3个分类，不足用默认补齐
-            const defaultNav = [
-                { id: '__hot', name: '热门推荐', icon: '🔥', bgColor: '#FEF3C7' },
-                { id: '__new', name: '新品上市', icon: '✨', bgColor: '#FCE7F3' },
-                { id: '__sale', name: '限时特惠', icon: '🏷️', bgColor: '#DCFCE7' }
-            ];
-            const topCategories = [];
-            for (let i = 0; i < 3; i++) {
-                if (i < categories.length) {
-                    topCategories.push({
-                        id: categories[i].id,
-                        name: categories[i].name,
-                        icon: categories[i].icon || NAV_ICONS[i],
-                        bgColor: NAV_COLORS[i]
-                    });
-                } else {
-                    topCategories.push(defaultNav[i]);
-                }
-            }
-
-            // 处理商品数据
-            const rawProducts = results[1].data && results[1].data.list ? results[1].data.list : (results[1].data || []);
-            const products = rawProducts.map(item => {
-                // 解析图片
-                let images = [];
-                if (item.images) {
-                    if (typeof item.images === 'string') {
-                        try {
-                            images = JSON.parse(item.images);
-                        } catch (e) {
-                            images = [item.images];
-                        }
-                    } else if (Array.isArray(item.images)) {
-                        images = item.images;
-                    }
-                }
-                return {
-                    ...item,
-                    image: images.length > 0 ? images[0] : '/assets/images/placeholder.svg',
-                    price: item.retail_price || item.price || 0
-                };
-            });
-
-            // 分成左右两列（瀑布流）
-            const leftProducts = [];
-            const rightProducts = [];
-            products.forEach((item, index) => {
-                if (index % 2 === 0) {
-                    leftProducts.push(item);
-                } else {
-                    rightProducts.push(item);
-                }
-            });
-
+            // Load Banners
+            const bannerRes = await get('/content/banners', { position: 'home' }).catch(() => ({ data: [] }));
+            const banners = bannerRes.data || [];
+            
             this.setData({
-                banners: results[0].data || [],
-                products,
-                leftProducts,
-                rightProducts,
-                categories,
-                topCategories,
+                banners,
                 loading: false
             });
         } catch (err) {
@@ -145,120 +67,104 @@ Page({
         }
     },
 
-    // 搜索
-    onSearchTap() {
-        wx.navigateTo({ url: '/pages/search/search' });
-    },
+    async loadUserInfo() {
+        const isLoggedIn = app.globalData.isLoggedIn;
+        this.setData({ isLoggedIn });
 
-    // 扫码
-    onScanTap() {
-        wx.scanCode({
-            success: (res) => {
-                console.log('扫码结果:', res);
-                // 尝试跳转商品详情或搜索
-                if (res.path) {
-                    wx.navigateTo({ url: '/' + res.path });
-                } else if (res.result) {
-                    wx.navigateTo({ url: '/pages/search/search?q=' + res.result });
-                }
-            }
-        });
-    },
-
-    // Banner点击
-    onBannerTap(e) {
-        const banner = e.currentTarget.dataset.item;
-        if (banner.link_type === 'product' && banner.link_value) {
-            wx.navigateTo({ url: '/pages/product/detail?id=' + banner.link_value });
-        }
-    },
-
-    // 分类切换（金刚区）
-    onCategoryTap(e) {
-        const categoryId = e.currentTarget.dataset.id;
-        if (typeof categoryId === 'string' && categoryId.startsWith('__')) {
-            wx.switchTab({ url: '/pages/category/category' });
+        if (!isLoggedIn) {
+            this.setData({
+                userInfo: null,
+                truncatedName: '游客',
+                stats: { commission: '0.00', teamCount: 0 }
+            });
             return;
         }
-        this.setData({ currentCategory: categoryId, loading: true });
-        this.loadProducts(categoryId);
-    },
 
-    // 分类Tab切换（胶囊分类栏）
-    onCategoryChange(e) {
-        const categoryId = e.currentTarget.dataset.id;
-        this.setData({ currentCategory: categoryId, loading: true });
-        this.loadProducts(categoryId);
-    },
-
-    // 加载商品
-    async loadProducts(categoryId) {
         try {
-            const params = { limit: 20 };
-            if (categoryId) params.category_id = categoryId;
-
-            const res = await get('/products', params);
-            const rawProducts = res.data && res.data.list ? res.data.list : (res.data || []);
-
-            // 处理商品数据
-            const products = rawProducts.map(item => {
-                let images = [];
-                if (item.images) {
-                    if (typeof item.images === 'string') {
-                        try {
-                            images = JSON.parse(item.images);
-                        } catch (e) {
-                            images = [item.images];
-                        }
-                    } else if (Array.isArray(item.images)) {
-                        images = item.images;
-                    }
+            // 1. Get User Profile
+            const res = await get('/user/profile');
+            if (res.code === 0 && res.data) {
+                const info = res.data;
+                const roleLevel = info.role || 0;
+                const roleName = info.role_name || ROLE_NAMES[roleLevel] || '普通用户';
+                
+                // Truncate nickname to first 3 chars
+                let name = info.nickname || '微信用户';
+                if (name.length > 3) {
+                    name = name.substring(0, 3);
                 }
-                return {
-                    ...item,
-                    image: images.length > 0 ? images[0] : '/assets/images/placeholder.svg',
-                    price: item.retail_price || item.price || 0
-                };
-            });
+                
+                this.setData({
+                    userInfo: { ...info, role_name: roleName },
+                    truncatedName: name
+                });
+            }
 
-            // 分成左右两列
-            const leftProducts = [];
-            const rightProducts = [];
-            products.forEach((item, index) => {
-                if (index % 2 === 0) {
-                    leftProducts.push(item);
-                } else {
-                    rightProducts.push(item);
-                }
-            });
+            // 2. Get Distribution Stats (Commission & Team)
+            const distRes = await get('/distribution/overview');
+            if (distRes.code === 0 && distRes.data) {
+                const d = distRes.data;
+                // Using frozenAmount for "Commission" as per similar logic in user page (Pending Settlement)
+                const commission = d.stats ? (d.stats.frozenAmount || '0.00') : '0.00';
+                const teamCount = d.team ? d.team.totalCount : 0;
 
-            this.setData({
-                products,
-                leftProducts,
-                rightProducts,
-                loading: false
-            });
+                this.setData({
+                    'stats.commission': commission,
+                    'stats.teamCount': teamCount
+                });
+            }
         } catch (err) {
-            console.error('加载商品失败:', err);
-            this.setData({ loading: false });
+            console.error('加载用户信息失败:', err);
         }
     },
 
-    // 商品点击
-    onProductTap(e) {
-        const dataset = e.currentTarget.dataset;
-        const productId = dataset.id || dataset.item?.id;
-        if (productId) {
-            wx.navigateTo({ url: '/pages/product/detail?id=' + productId });
+    // Handlers
+    onBannerTap(e) {
+        const banner = e.currentTarget.dataset.item;
+        if (banner && banner.link_value) {
+            // Basic banner navigation
+             wx.navigateTo({ url: '/pages/product/detail?id=' + banner.link_value });
         }
     },
 
-    // 分享（带邀请码）
+    onJoinUsTap() {
+        wx.showToast({ title: '加入我们 - 即将上线', icon: 'none' });
+    },
+
+    onAboutUsTap() {
+        wx.showToast({ title: '了解我们 - 即将上线', icon: 'none' });
+    },
+
+    onMirrorMeetupTap() {
+        wx.showToast({ title: '镜像见面会 - 即将上线', icon: 'none' });
+    },
+
+    onSalesBootcampTap() {
+        wx.showToast({ title: '销售实战营 - 即将上线', icon: 'none' });
+    },
+
+    onFounderTalkTap() {
+        wx.showToast({ title: '创始人对谈 - 即将上线', icon: 'none' });
+    },
+
+    onKnowledgePlanetTap() {
+        wx.showToast({ title: '知识星球 - 即将上线', icon: 'none' });
+    },
+
+    // New Handlers for Guide and Co-creation
+    onGuideTap() {
+        wx.showToast({ title: '小程序使用指南 - 即将上线', icon: 'none' });
+    },
+
+    onCoCreationTap() {
+        wx.showToast({ title: '共创信息 - 即将上线', icon: 'none' });
+    },
+
     onShareAppMessage() {
-        const userInfo = app.globalData.userInfo;
+        const userInfo = this.data.userInfo;
         const inviteCode = userInfo ? (userInfo.invite_code || userInfo.id) : '';
         return {
-            title: '臻选 · 精选全球好物',
+            title: '加入我们，共创未来',
             path: `/pages/index/index?share_id=${inviteCode}`,
             imageUrl: ''
         };

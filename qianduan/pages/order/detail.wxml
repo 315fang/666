@@ -1,13 +1,13 @@
 <!--pages/order/detail.wxml - 订单详情-->
 <view class="container" wx:if="{{order}}">
-  <!-- 订单状态 -->
-  <view class="status-card status-{{order.status}}">
-    <text class="status-text">{{statusMap[order.status] || order.status}}</text>
-    <text class="status-desc">{{statusDescMap[order.status] || ''}}</text>
+  <!-- 订单状态（如有退款，覆盖为退款状态） -->
+  <view class="status-card status-{{hasActiveRefund ? 'refunding' : order.status}}">
+    <text class="status-text">{{hasActiveRefund ? '退款中' : (statusMap[order.status] || order.status)}}</text>
+    <text class="status-desc">{{hasActiveRefund ? statusDescMap['refunding'] : (statusDescMap[order.status] || '')}}</text>
   </view>
 
   <!-- 订单流程进度 -->
-  <view class="progress-card">
+  <view class="progress-card" wx:if="{{!hasActiveRefund}}">
     <view class="progress-step {{order.paid_at || (order.status !== 'pending' && order.status !== 'cancelled') ? 'done' : (order.status === 'pending' ? 'active' : '')}}">
       <view class="step-dot"></view>
       <text class="step-label">付款</text>
@@ -26,6 +26,26 @@
     <view class="progress-step {{order.completed_at ? 'done' : (order.status === 'shipped' ? 'active' : '')}}">
       <view class="step-dot"></view>
       <text class="step-label">收货</text>
+    </view>
+  </view>
+
+  <!-- ★ 退款信息卡片 -->
+  <view class="card refund-card" wx:if="{{activeRefund}}">
+    <view class="card-title" style="color:#EF4444;">退款信息</view>
+    <view class="info-row">
+      <text class="info-label">退款状态</text>
+      <text class="info-value" style="color:#EF4444;">{{refundStatusText[activeRefund.status] || '处理中'}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">退款金额</text>
+      <text class="info-value" style="color:#EF4444;">¥{{activeRefund.amount}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">退款类型</text>
+      <text class="info-value">{{activeRefund.type === 'return_refund' ? '退货退款' : '仅退款'}}</text>
+    </view>
+    <view class="refund-action" bindtap="onViewRefund">
+      <text style="color:#3B82F6;font-size:28rpx;">查看退款详情 ›</text>
     </view>
   </view>
 
@@ -124,27 +144,36 @@
     </view>
   </view>
 
-  <!-- 底部操作按钮 -->
+  <!-- ★ 底部操作按钮（退款感知） -->
   <view class="bottom-bar">
-    <!-- 待付款：显示取消 + 支付 -->
-    <block wx:if="{{order.status === 'pending'}}">
-      <view class="btn-outline" bindtap="onCancelOrder">取消订单</view>
-      <view class="btn-primary" bindtap="onPayOrder">立即支付 ¥{{order.total_amount}}</view>
+    <!-- 有活跃退款时：只显示查看退款 -->
+    <block wx:if="{{hasActiveRefund}}">
+      <view class="btn-primary" bindtap="onViewRefund">查看退款进度</view>
     </block>
-    <!-- 已发货：显示物流 + 确认收货 -->
-    <block wx:if="{{order.status === 'shipped'}}">
-      <view class="btn-outline" bindtap="onViewLogistics">查看物流</view>
-      <view class="btn-outline" bindtap="onApplyRefund">申请退款</view>
-      <view class="btn-primary" bindtap="onConfirmReceive">确认收货</view>
-    </block>
-    <!-- 已完成：显示物流 + 再次购买 -->
-    <block wx:if="{{order.status === 'completed'}}">
-       <view class="btn-outline" bindtap="onViewLogistics">查看物流</view>
-       <view class="btn-outline" bindtap="onApplyRefund" wx:if="{{!order.refund_status}}">申请售后</view>
-    </block>
-    <!-- 已付款：可申请退款 -->
-    <block wx:if="{{order.status === 'paid'}}">
-      <view class="btn-outline" bindtap="onApplyRefund">申请退款</view>
+
+    <!-- 无活跃退款，正常按钮 -->
+    <block wx:else>
+      <!-- 待付款 -->
+      <block wx:if="{{order.status === 'pending'}}">
+        <view class="btn-outline" bindtap="onCancelOrder">取消订单</view>
+        <view class="btn-primary" bindtap="onPayOrder">立即支付 ¥{{order.total_amount}}</view>
+      </block>
+      <!-- 待发货(paid/agent_confirmed/shipping_requested) -->
+      <block wx:if="{{order.status === 'paid' || order.status === 'agent_confirmed' || order.status === 'shipping_requested'}}">
+        <view class="btn-outline" bindtap="onApplyRefund">申请退款</view>
+      </block>
+      <!-- 已发货 -->
+      <block wx:if="{{order.status === 'shipped'}}">
+        <view class="btn-outline" bindtap="onViewLogistics">查看物流</view>
+        <view class="btn-outline" bindtap="onApplyRefund">申请退款</view>
+        <view class="btn-primary" bindtap="onConfirmReceive">确认收货</view>
+      </block>
+      <!-- 已完成 -->
+      <block wx:if="{{order.status === 'completed'}}">
+         <view class="btn-outline" bindtap="onViewLogistics">查看物流</view>
+         <view class="btn-outline" bindtap="onApplyRefund" wx:if="{{!latestRefund || latestRefund.status === 'rejected' || latestRefund.status === 'cancelled'}}">申请售后</view>
+         <view class="btn-outline" bindtap="onViewRefund" wx:if="{{latestRefund && latestRefund.status !== 'rejected' && latestRefund.status !== 'cancelled'}}">查看退款</view>
+      </block>
     </block>
   </view>
 </view>

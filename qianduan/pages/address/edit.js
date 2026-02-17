@@ -1,5 +1,7 @@
 // pages/address/edit.js - 地址新增/编辑
 const { get, post, put } = require('../../utils/request');
+const { validatePhone, isEmpty } = require('../../utils/helpers');
+const { ErrorHandler, showError, showSuccess } = require('../../utils/errorHandler');
 
 Page({
     data: {
@@ -48,7 +50,9 @@ Page({
                 });
             }
         } catch (err) {
-            console.error('加载地址失败:', err);
+            ErrorHandler.handle(err, {
+                customMessage: '加载地址失败，请稍后重试'
+            });
         }
     },
 
@@ -80,20 +84,20 @@ Page({
     // 表单验证
     validate() {
         const { receiver_name, phone, province, detail } = this.data.form;
-        if (!receiver_name.trim()) {
-            wx.showToast({ title: '请输入收货人姓名', icon: 'none' });
+        if (isEmpty(receiver_name)) {
+            showError('请输入收货人姓名');
             return false;
         }
-        if (!phone.trim() || !/^1\d{10}$/.test(phone.trim())) {
-            wx.showToast({ title: '请输入正确的手机号', icon: 'none' });
+        if (!validatePhone(phone.trim())) {
+            showError('请输入正确的手机号');
             return false;
         }
-        if (!province) {
-            wx.showToast({ title: '请选择所在地区', icon: 'none' });
+        if (isEmpty(province)) {
+            showError('请选择所在地区');
             return false;
         }
-        if (!detail.trim()) {
-            wx.showToast({ title: '请输入详细地址', icon: 'none' });
+        if (isEmpty(detail)) {
+            showError('请输入详细地址');
             return false;
         }
         return true;

@@ -65,10 +65,11 @@ module.exports = {
 
     // ======================== 安全配置 ========================
     SECURITY: {
-        // JWT 密钥（生产环境必须通过 .env 设置强密钥）
-        JWT_SECRET: process.env.JWT_SECRET || 'user-secret-key',
+        // JWT 密钥（所有环境都必须通过 .env 设置强密钥）
+        // 使用弱默认值以便在启动检查时能捕获
+        JWT_SECRET: process.env.JWT_SECRET || 'INSECURE-DEFAULT-user-secret-key',
         JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
-        ADMIN_JWT_SECRET: process.env.ADMIN_JWT_SECRET || 'admin-secret-key',
+        ADMIN_JWT_SECRET: process.env.ADMIN_JWT_SECRET || 'INSECURE-DEFAULT-admin-secret-key',
         ADMIN_JWT_EXPIRES_IN: process.env.ADMIN_JWT_EXPIRES_IN || '8h',
 
         // API限流
@@ -98,11 +99,11 @@ module.exports = {
 
     // ======================== 调试开关 ========================
     DEBUG: {
-        // 是否启用调试路由（生产环境必须关闭）
-        ENABLE_DEBUG_ROUTES: process.env.ENABLE_DEBUG_ROUTES === 'true' || process.env.NODE_ENV === 'development',
-        // 是否启用测试接口
-        ENABLE_TEST_ROUTES: process.env.ENABLE_TEST_ROUTES === 'true' || process.env.NODE_ENV === 'development',
-        // 是否允许 x-openid 直接认证（仅开发环境）
-        ALLOW_OPENID_AUTH: process.env.NODE_ENV === 'development',
+        // 是否启用调试路由（默认关闭，必须显式启用）
+        ENABLE_DEBUG_ROUTES: process.env.ENABLE_DEBUG_ROUTES === 'true',
+        // 是否启用测试接口（默认关闭，必须显式启用）
+        ENABLE_TEST_ROUTES: process.env.ENABLE_TEST_ROUTES === 'true',
+        // 是否允许 x-openid 直接认证（仅开发环境且显式启用）
+        ALLOW_OPENID_AUTH: process.env.NODE_ENV === 'development' && process.env.ALLOW_OPENID_AUTH === 'true',
     },
 };

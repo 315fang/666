@@ -9,21 +9,53 @@
     </view>
   </view>
 
+  <!-- 佣金概览 -->
+  <view class="commission-overview" wx:if="{{commissionOverview}}">
+    <view class="overview-title">佣金统计</view>
+    <view class="overview-items">
+      <view class="overview-item">
+        <text class="overview-label">累计获得</text>
+        <text class="overview-value">¥{{commissionOverview.total}}</text>
+      </view>
+      <view class="overview-item">
+        <text class="overview-label">冻结中</text>
+        <text class="overview-value freeze">¥{{commissionOverview.frozen}}</text>
+      </view>
+      <view class="overview-item" wx:if="{{commissionOverview.pendingApproval > 0}}">
+        <text class="overview-label">待审核</text>
+        <text class="overview-value pending">¥{{commissionOverview.pendingApproval}}</text>
+      </view>
+      <view class="overview-item">
+        <text class="overview-label">已结算</text>
+        <text class="overview-value available">¥{{commissionOverview.available}}</text>
+      </view>
+    </view>
+  </view>
+
   <!-- 资金明细 -->
   <view class="list-section">
-    <view class="section-title">资金明细</view>
+    <view class="section-title">佣金明细</view>
     <view class="log-list">
-      <view class="log-item" wx:for="{{logs}}" wx:key="id">
-        <view class="log-info">
-          <text class="log-type">{{item.type === 'gap' ? '级差利润' : (item.type === 'level1' ? '直推佣金' : (item.type === 'level2' ? '二级佣金' : (item.type === 'withdrawal' ? '提现' : item.type)))}}</text>
-          <text class="log-time">{{item.created_at}}</text>
+      <!-- 列表容器 -->
+      <view class="log-list-container">
+        <view class="log-item" wx:for="{{logs}}" wx:key="id">
+          <view class="log-info">
+            <view class="log-header">
+              <text class="log-type">{{item.typeName || item.type}}</text>
+              <text class="status-badge status-{{item.status}}">{{item.statusText}}</text>
+            </view>
+            <text class="log-time">{{item.created_at}}</text>
+            <text class="log-detail" wx:if="{{item.refund_deadline}}">冻结至: {{item.refund_deadline}}</text>
+          </view>
+          <view class="log-amount {{item.amount > 0 ? 'income' : 'expense'}}">
+            {{item.amount > 0 ? '+' : ''}}{{item.amount}}
+          </view>
         </view>
-        <view class="log-amount {{item.amount > 0 ? 'income' : 'expense'}}">
-          {{item.amount > 0 ? '+' : ''}}{{item.amount}}
+
+        <!-- 空状态 -->
+        <view class="empty" wx:if="{{logs.length === 0}}">
+          <text class="empty-text">暂无明细</text>
         </view>
-      </view>
-      <view class="empty" wx:if="{{logs.length === 0}}">
-        <text class="empty-text">暂无明细</text>
       </view>
     </view>
   </view>
@@ -33,6 +65,7 @@
     <view class="mask" bindtap="hideWithdraw"></view>
     <view class="popup-content">
       <view class="popup-title">申请提现</view>
+      <view class="available-tip">可提现金额: ¥{{balance}}</view>
       <input class="input" type="digit" placeholder="请输入提现金额" model:value="{{withdrawAmount}}" />
       <button class="btn btn-primary btn-block" bindtap="confirmWithdraw">确认提现</button>
     </view>

@@ -1,5 +1,6 @@
 const { Product, Category, SKU } = require('../../../models');
 const { Op } = require('sequelize');
+const AIService = require('../../../services/AIService');
 
 // 获取商品列表
 const getProducts = async (req, res) => {
@@ -92,6 +93,25 @@ const createProduct = async (req, res) => {
         const result = await Product.findByPk(product.id, {
             include: [{ model: SKU, as: 'skus' }]
         });
+
+        // ★ 触发AI审查 (异步执行，不阻塞响应)
+        AIService.reviewContent(`${product.name}\n${product.description}`, 'product')
+            .then(reviewResult => {
+                if (!reviewResult.approved) {
+                    console.warn(`[AI Review] Product ${product.id} flagged: ${reviewResult.reason}`);
+                    product.update({
+                        ai_review_status: 'rejected',
+                        ai_review_reason: reviewResult.reason,
+                        status: 0 // 自动下架违规商品
+                    });
+                } else {
+                    product.update({
+                        ai_review_status: 'approved',
+                        ai_review_reason: 'Passed'
+                    });
+                }
+            })
+            .catch(err => console.error('[AI Review] Error:', err));
 
         res.json({ code: 0, data: result, message: '创建成功' });
     } catch (error) {

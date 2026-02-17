@@ -1,96 +1,214 @@
 <!--pages/category/category.wxml-->
 <view class="container">
-  <!-- 1. Sticky Search Header (White Bg) -->
-  <view class="search-sticky-header">
-    <view class="search-box" bindtap="onSearchTap">
-      <text class="search-icon">🔍</text>
-      <text class="search-text">搜索精选商品</text>
+  <!-- 1. Header (Search Only) -->
+  <view class="header-section">
+    <view class="header-search-bar" bindtap="onSearchTap">
+      <image class="search-icon" src="/assets/icons/search.svg" mode="aspectFit"></image>
+      <text class="search-placeholder">搜索商品</text>
     </view>
   </view>
 
-  <!-- 2. Scenario Navigation (Horizontal Image Cards) -->
-  <view class="scenario-section">
-    <scroll-view scroll-x class="scenario-scroll" enable-flex>
-      <!-- Active Item -->
-      <view class="scenario-item {{currentCategory === 0 ? 'active' : ''}}" bindtap="onCategoryTap" data-id="{{0}}">
-        <view class="scenario-img-box">
-          <image src="/assets/images/category-all.svg" class="scenario-img" mode="aspectFill"></image> <!-- Placeholder -->
-        </view>
-        <text class="scenario-text">全部</text>
+  <!-- 2. Store Info -->
+  <view class="store-info-section">
+    <view class="store-main">
+      <view class="store-name-row">
+        <image class="star-icon" src="/assets/icons/star.svg" mode="aspectFit"></image>
+        <text class="store-name">什间瓦（苏州）文化科技有限公司</text>
+        <image class="arrow-icon" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
       </view>
-      <!-- List Items -->
-      <view class="scenario-item {{currentCategory === item.id ? 'active' : ''}}" 
-            wx:for="{{categories}}" wx:key="id" 
-            bindtap="onCategoryTap" data-id="{{item.id}}">
-        <view class="scenario-img-box">
-          <image src="{{item.icon || '/assets/images/placeholder.svg'}}" class="scenario-img" mode="aspectFill"></image>
-        </view>
-        <text class="scenario-text">{{item.name}}</text>
+      <view class="store-status-row">
+        <image class="location-icon" src="/assets/icons/map-pin.svg" mode="aspectFit"></image>
+        <text class="distance">距离0km</text>
+        <text class="divider">|</text>
+        <text class="status-tag">很荣幸为您服务</text>
       </view>
+    </view>
+  </view>
+
+  <!-- 3. Promo Banner (Moved above Top Nav) -->
+  <view class="promo-banner">
+    <image class="promo-img" src="https://resour.oss-cn-hangzhou.aliyuncs.com/jiaruwomen.jpg" mode="aspectFill"></image>
+  </view>
+
+  <!-- 4. Top Nav Grid (Level 1 Categories - Text Only with Underline) -->
+  <view class="top-nav-grid">
+    <view 
+      class="nav-grid-item {{currentTopCategory === item.id ? 'active' : ''}}" 
+      wx:for="{{topCategories}}" 
+      wx:key="id"
+      bindtap="onTopCategoryTap"
+      data-id="{{item.id}}"
+    >
+      <text class="nav-text">{{item.name}}</text>
+      <view class="active-indicator" wx:if="{{currentTopCategory === item.id}}"></view>
+    </view>
+  </view>
+  
+  <!-- 5. Main Content (Split View: Sidebar = Level 2, Right = Level 3) -->
+  <view class="main-content">
+    <!-- Left Sidebar -->
+    <scroll-view class="left-sidebar" scroll-y show-scrollbar="{{false}}">
+      <view 
+        class="sidebar-item {{currentCategory === item.id ? 'active' : ''}}" 
+        wx:for="{{categories}}" 
+        wx:key="id" 
+        bindtap="onCategoryTap" 
+        data-id="{{item.id}}"
+      >
+        <image wx:if="{{item.icon}}" class="sidebar-icon" src="{{item.icon}}" mode="aspectFit"></image>
+        <text class="sidebar-text">{{item.name}}</text>
+      </view>
+    </scroll-view>
+
+    <!-- Right Product List -->
+    <scroll-view class="right-content" scroll-y bindscrolltolower="onLoadMore">
+      <!-- New Inner Product Area Banner -->
+      <view class="product-area-banner" wx:if="{{currentCategoryBanner}}">
+        <image class="product-area-img" src="{{currentCategoryBanner}}" mode="aspectFill"></image>
+      </view>
+      
+      <view class="section-title">{{currentCategoryName}}</view>
+      
+      <view class="product-list">
+        <view class="product-item" wx:for="{{products}}" wx:key="id" bindtap="onProductTap" data-item="{{item}}">
+          <image class="product-img" src="{{item.image}}" mode="aspectFill"></image>
+          <view class="product-info">
+            <text class="product-name">{{item.name}}</text>
+            <text class="product-desc">{{item.description || '暂无描述'}}</text>
+            <view class="product-bottom">
+              <text class="product-price">¥{{item.price}}</text>
+              <view class="buy-btn" catchtap="onSelectProduct" data-item="{{item}}">选购</view>
+            </view>
+          </view>
+        </view>
+      </view>
+      
+      <view class="loading-footer" wx:if="{{loading}}">
+        <view class="spinner"></view>
+      </view>
+      <view class="empty-state" wx:if="{{!loading && products.length === 0}}">
+        <text>暂无商品</text>
+      </view>
+      <view style="height: 160rpx;"></view> <!-- Spacer for cart -->
     </scroll-view>
   </view>
 
-  <!-- 3. Filter Bar (Sticky below header) -->
-  <view class="filter-sticky-bar">
-    <view class="filter-row">
-      <view class="filter-item {{sortBy === 'default' ? 'active' : ''}}" bindtap="onSortChange" data-sort="default">
-        综合
-        <view class="active-indicator" wx:if="{{sortBy === 'default'}}"></view>
+  <!-- 6. New Quick Cart Bar -->
+  <view class="quick-cart-bar">
+    <view class="cart-left-section" bindtap="onToggleCartPopup">
+      <view class="cart-bag-icon-wrap">
+        <image class="cart-bag-icon" src="/assets/icons/shopping-bag.svg" mode="aspectFit"></image>
+        <view class="cart-count-badge" wx:if="{{cartCount > 0}}">{{cartCount}}</view>
       </view>
-      <view class="filter-item {{sortBy === 'sales' ? 'active' : ''}}" bindtap="onSortChange" data-sort="sales">
-        销量
-      </view>
-      <view class="filter-item {{sortBy === 'price' ? 'active' : ''}}" bindtap="onSortChange" data-sort="price">
-        价格
-        <view class="sort-arrows">
-          <text class="arrow up {{sortOrder === 'asc' ? 'on' : ''}}">▲</text>
-          <text class="arrow down {{sortOrder === 'desc' ? 'on' : ''}}">▼</text>
-        </view>
+      <view class="cart-total-price">
+        <text class="currency">¥</text>
+        <text class="amount">{{cartTotal}}</text>
       </view>
     </view>
-    <view class="filter-icon-btn">
-      <text class="material-icon">⚙️</text>
+    <view class="cart-checkout-btn {{cartCount > 0 ? 'active' : ''}}" bindtap="onCheckout">
+      <text>去结算</text>
     </view>
   </view>
 
-  <!-- 4. Product List (Single Column) -->
-  <scroll-view scroll-y class="product-list-scroll" bindscrolltolower="onLoadMore">
-    <view class="product-list">
-      <view class="product-item" wx:for="{{products}}" wx:key="id" bindtap="onProductTap" data-id="{{item.id}}">
-        <!-- Left Image -->
-        <view class="item-img-box">
-          <image src="{{item.image}}" mode="aspectFill" class="item-img"></image>
-          <view class="item-tag" wx:if="{{item.is_hot}}">HOT</view>
-        </view>
-        
-        <!-- Right Content -->
-        <view class="item-content">
-          <view class="item-info">
-            <view class="item-title line-clamp-2">{{item.name}}</view>
-            <view class="item-desc line-clamp-1">{{item.description || '暂无描述'}}</view>
-          </view>
-          
-          <view class="item-bottom">
-            <view class="item-price">
-              <text class="currency">¥</text>
-              <text class="amount">{{item.price}}</text>
-            </view>
-            <!-- Black Circle Add Btn -->
-            <view class="add-btn-circle" catchtap="onQuickAdd" data-item="{{item}}">
-              <text class="plus-icon">+</text>
-            </view>
+  <!-- 7. Product Detail Service Sheet -->
+  <view class="product-detail-modal" wx:if="{{showDetailModal}}" bindtap="hideDetailModal">
+    <view class="service-popup" catchtap="stopProp">
+      <view class="popup-header">
+        <swiper class="popup-swiper" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}"
+                indicator-color="rgba(255,255,255,0.5)" indicator-active-color="#FFFFFF"
+                bindchange="onImageChange">
+          <swiper-item wx:for="{{selectedProduct.images}}" wx:key="*this">
+            <image src="{{item}}" mode="aspectFill" class="popup-image" bindtap="onPreviewImage" data-src="{{item}}"></image>
+          </swiper-item>
+        </swiper>
+        <view class="popup-actions">
+          <view class="popup-icon-btn" bindtap="hideDetailModal">
+            <image class="popup-icon-img" src="/assets/icons/x.svg" mode="aspectFit"/>
           </view>
         </view>
       </view>
-    </view>
 
-    <!-- Loading / Empty -->
-    <view class="loading-footer" wx:if="{{loading}}">
-      <view class="spinner"></view>
-      <text>Loading...</text>
+      <scroll-view scroll-y class="popup-scroll">
+        <view class="popup-body">
+          <view class="product-info-card">
+            <view class="price-section">
+              <view class="price-main">
+                <text class="price-symbol">¥</text>
+                <text class="price-value">{{currentPrice || selectedProduct.displayPrice || selectedProduct.price}}</text>
+              </view>
+              <view class="price-origin" wx:if="{{selectedProduct.market_price}}">¥{{selectedProduct.market_price}}</view>
+              <view class="price-discount" wx:if="{{selectedProduct.market_price}}">{{discount}}折</view>
+            </view>
+
+            <view class="product-title">{{selectedProduct.name}}</view>
+            <view class="product-desc-simple">{{selectedProduct.description || '暂无描述'}}</view>
+          </view>
+
+          <view class="section-card spec-selector" bindtap="showSkuModal">
+            <view class="selector-left">
+              <text class="selector-label">规格</text>
+              <text class="selector-value">{{selectedSkuText || '请选择规格数量'}}</text>
+            </view>
+            <view class="selector-arrow">
+              <image class="icon-sm" src="/assets/icons/arrow-right.svg" mode="aspectFit"/>
+            </view>
+          </view>
+
+          <view class="popup-safe"></view>
+        </view>
+      </scroll-view>
+
+      <view class="popup-footer">
+        <view class="action-buttons">
+          <view class="action-btn action-btn-cart" bindtap="onAddToCart">加入购物车</view>
+          <view class="action-btn action-btn-buy" bindtap="onBuyNow">立即购买</view>
+        </view>
+      </view>
     </view>
-    <view class="empty-state" wx:if="{{!loading && products.length === 0}}">
-      <text>暂无相关商品</text>
+  </view>
+
+  <!-- SKU Modal -->
+  <view class="sku-modal {{showSku ? 'show' : ''}}" bindtap="hideSkuModal">
+    <view class="sku-content" catchtap="stopProp">
+      <view class="sku-header">
+        <image src="{{selectedSkuImg || selectedProduct.images[0]}}" mode="aspectFill" class="sku-thumb"></image>
+        <view class="sku-info">
+          <view class="sku-price">¥{{currentPrice || selectedProduct.displayPrice || selectedProduct.price}}</view>
+          <view class="sku-stock">库存 {{currentStock || selectedProduct.stock || 999}}件</view>
+          <view class="sku-selected">已选 {{selectedSkuText || '请选择'}}</view>
+        </view>
+        <view class="close-btn" bindtap="hideSkuModal">
+          <image class="icon-md" src="/assets/icons/x.svg" mode="aspectFit"/>
+        </view>
+      </view>
+
+      <scroll-view scroll-y class="sku-scroll">
+        <!-- Mock Specs -->
+        <view class="spec-section">
+          <view class="spec-title">规格</view>
+          <view class="spec-options">
+            <view class="spec-option active">默认规格</view>
+          </view>
+        </view>
+
+        <!-- Quantity -->
+        <view class="qty-section">
+          <view class="qty-label">购买数量</view>
+          <view class="stepper">
+            <view class="stepper-btn minus" bindtap="onModalMinus">-</view>
+            <input class="stepper-input" type="number" value="{{modalQuantity}}" bindinput="onQtyInput"/>
+            <view class="stepper-btn plus" bindtap="onModalPlus">+</view>
+          </view>
+        </view>
+      </scroll-view>
+
+      <view class="sku-footer">
+        <view class="sku-btn-group">
+          <view class="sku-btn sku-btn-cart" bindtap="onConfirmAddCart">加入购物车</view>
+          <view class="sku-btn sku-btn-buy" bindtap="onConfirmBuy">立即购买</view>
+        </view>
+      </view>
     </view>
-  </scroll-view>
+  </view>
+
 </view>

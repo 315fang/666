@@ -1,11 +1,12 @@
-// pages/distribution/workbench.js - 代理商发货工作台
+// pages/distribution/workbench.js - 代理商工作台
 const { get, post } = require('../../utils/request');
 
 Page({
     data: {
         workbench: {},
         orders: [],
-        activeStatus: 'pending',
+        activeStatus: 'all',
+        sliderLeft: 0,  // 滑动条位置
         loading: false,
         // 发货弹窗
         showShipPopup: false,
@@ -14,7 +15,23 @@ Page({
         shipTrackingNo: ''
     },
 
+    // 计算滑动条位置
+    calcSliderLeft(status) {
+        const statusMap = {
+            'all': 0,
+            'pending': 1,
+            'shipping_requested': 2,
+            'shipped': 3
+        };
+        const index = statusMap[status] || 0;
+        // 使用百分比偏移，每个 tab 占 100% (相对于 slider 宽度)
+        return index * 100;
+    },
+
     onShow() {
+        // 初始化滑动条位置
+        const sliderLeft = this.calcSliderLeft(this.data.activeStatus);
+        this.setData({ sliderLeft: sliderLeft });
         this.loadWorkbench();
         this.loadOrders();
     },
@@ -75,7 +92,11 @@ Page({
     // 切换状态 Tab
     onStatusChange(e) {
         const status = e.currentTarget.dataset.status;
-        this.setData({ activeStatus: status });
+        const sliderLeft = this.calcSliderLeft(status);
+        this.setData({
+            activeStatus: status,
+            sliderLeft: sliderLeft
+        });
         this.loadOrders();
     },
 
@@ -102,46 +123,27 @@ Page({
         this.setData({ shipTrackingNo: e.detail.value });
     },
 
-    // 确认发货
+    // 申请平台发货（仅通知，不扣代理商库存）
     async confirmShip() {
-        const { shipOrder, shipTrackingNo, shipCompany, workbench } = this.data;
-        if (!shipTrackingNo.trim()) {
-            wx.showToast({ title: '请填写物流单号', icon: 'none' });
-            return;
-        }
+        const { shipOrder, workbench } = this.data;
 
-        if ((workbench.stock_count || 0) < (shipOrder.quantity || 1)) {
-            wx.showModal({
-                title: '库存不足',
-                content: `当前云仓库存 ${workbench.stock_count || 0} 件，该订单需要 ${shipOrder.quantity} 件。请先采购入仓。`,
-                showCancel: true,
-                cancelText: '取消',
-                confirmText: '去采购',
-                success: (res) => {
-                    if (res.confirm) this.goRestock();
-                }
-            });
-            return;
-        }
+        // 平台发货不要求代理商库存充足，直接申请即可
 
-        wx.showLoading({ title: '发货中...' });
+        wx.showLoading({ title: '提交中...' });
         try {
-            const res = await post(`/agent/ship/${shipOrder.id}`, {
-                tracking_no: shipTrackingNo.trim(),
-                tracking_company: shipCompany.trim()
-            });
+            const res = await post(`/orders/${shipOrder.id}/request-shipping`);
             wx.hideLoading();
             if (res.code === 0) {
-                wx.showToast({ title: '发货成功！', icon: 'success' });
+                wx.showToast({ title: '已通知平台发货', icon: 'success' });
                 this.hideShipPopup();
                 this.loadWorkbench();
                 this.loadOrders();
             } else {
-                wx.showToast({ title: res.message || '发货失败', icon: 'none' });
+                wx.showToast({ title: res.message || '操作失败', icon: 'none' });
             }
         } catch (err) {
             wx.hideLoading();
-            wx.showToast({ title: err.message || '发货失败', icon: 'none' });
+            wx.showToast({ title: err.message || '操作失败', icon: 'none' });
         }
     },
 

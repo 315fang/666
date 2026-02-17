@@ -73,6 +73,11 @@ const Product = sequelize.define('Product', {
         allowNull: true,
         comment: '代理价 ¥150'
     },
+    cost_price: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        comment: '成本价/进货价 - 供应商给平台的价格'
+    },
     commission_rate_1: {
         type: DataTypes.DECIMAL(4, 2),
         allowNull: true,
@@ -83,7 +88,27 @@ const Product = sequelize.define('Product', {
         allowNull: true,
         comment: '二级分销比例 (e.g. 0.10), 空则用默认'
     },
-    stock: {
+    commission_amount_1: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        comment: '一级分销固定金额 (e.g. 10.00), 优先于比例'
+    },
+    commission_amount_2: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        comment: '二级分销固定金额 (e.g. 5.00), 优先于比例'
+    },
+    ai_review_status: {
+        type: DataTypes.ENUM('pending', 'approved', 'rejected'),
+        defaultValue: 'pending',
+        comment: 'AI审查状态'
+    },
+    ai_review_reason: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+        comment: 'AI审查原因'
+    },
+    status: {
         type: DataTypes.INTEGER,
         defaultValue: 0,
         comment: '公司库存'

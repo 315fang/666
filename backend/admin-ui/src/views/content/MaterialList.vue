@@ -3,7 +3,7 @@
     <!-- Material Upload and List -->
      <div style="margin-bottom: 20px;">
         <el-upload
-            action="/admin/api/materials/upload"
+            action="/admin/api/upload"
             :show-file-list="false"
             :on-success="handleUploadSuccess"
             :headers="uploadHeaders"

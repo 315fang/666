@@ -1,0 +1,55 @@
+<!--pages/ai/chat.wxml-->
+<view class="container">
+  <!-- 敬请期待界面 -->
+  <view class="coming-soon-container">
+    <view class="icon-wrapper">
+      <image class="feature-icon" src="/assets/icons/sparkles.svg" mode="aspectFit"></image>
+    </view>
+    
+    <view class="title-box">
+      <text class="main-title">智能助手</text>
+      <text class="sub-title">即将上线</text>
+    </view>
+    
+    <view class="description-box">
+      <text class="desc-text">我们正在为您的臻选体验打造更智能的助手</text>
+      <text class="desc-text">功能开发中，敬请期待！</text>
+    </view>
+    
+    <view class="feature-list">
+      <view class="feature-item">
+        <view class="feature-icon-circle">
+          <image class="feature-icon-sm" src="/assets/icons/message.svg" mode="aspectFit"></image>
+        </view>
+        <view class="feature-texts">
+          <text class="feature-title">智能问答</text>
+          <text class="feature-desc">解答订单、商品问题</text>
+        </view>
+      </view>
+      
+      <view class="feature-item">
+        <view class="feature-icon-circle">
+          <image class="feature-icon-sm" src="/assets/icons/shopping-cart.svg" mode="aspectFit"></image>
+        </view>
+        <view class="feature-texts">
+          <text class="feature-title">购物建议</text>
+          <text class="feature-desc">个性化商品推荐</text>
+        </view>
+      </view>
+      
+      <view class="feature-item">
+        <view class="feature-icon-circle">
+          <image class="feature-icon-sm" src="/assets/icons/headphones.svg" mode="aspectFit"></image>
+        </view>
+        <view class="feature-texts">
+          <text class="feature-title">客服支持</text>
+          <text class="feature-desc">7×24小时在线协助</text>
+        </view>
+      </view>
+    </view>
+    
+    <view class="back-btn-box">
+      <button class="back-btn" bindtap="onBack">返回我的页面</button>
+    </view>
+  </view>
+</view>

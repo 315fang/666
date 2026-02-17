@@ -36,8 +36,34 @@
   flex-shrink: 0;
 }
 
-.notif-icon {
-  font-size: 40rpx;
+/* 不同类型通知的背景色 */
+.notif-icon-box.upgrade-bg {
+  background: linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%);
+}
+
+.notif-icon-box.commission-bg {
+  background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%);
+}
+
+.notif-icon-box.stock-bg {
+  background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+}
+
+.notif-icon-box.system-bg {
+  background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
+}
+
+.notif-icon-box.withdrawal-bg {
+  background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
+}
+
+.notif-icon-box.refund-bg {
+  background: linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 100%);
+}
+
+.notif-icon-img {
+  width: 48rpx;
+  height: 48rpx;
 }
 
 .notif-content {
@@ -72,4 +98,25 @@
 
 .unread .notif-desc {
   color: #334155;
+}
+
+/* Empty State */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 0;
+}
+
+.empty-icon-img {
+  width: 120rpx;
+  height: 120rpx;
+  margin-bottom: 24rpx;
+  opacity: 0.4;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #94A3B8;
 }

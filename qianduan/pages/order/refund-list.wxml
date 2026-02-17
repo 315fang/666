@@ -1,7 +1,9 @@
 <!--pages/order/refund-list.wxml - 退货/退款列表-->
 <view class="container">
   <scroll-view class="refund-list" scroll-y bindscrolltolower="onLoadMore">
-    <view class="refund-card" wx:for="{{refunds}}" wx:key="id" bindtap="onRefundTap" data-id="{{item.id}}">
+    <!-- 列表容器 -->
+    <view class="refund-list-container">
+      <view class="refund-card" wx:for="{{refunds}}" wx:key="id" bindtap="onRefundTap" data-id="{{item.id}}">
       <!-- 头部 -->
       <view class="refund-header">
         <text class="refund-type">{{typeText[item.type] || '退款'}}</text>
@@ -30,7 +32,7 @@
 
     <!-- 空状态 -->
     <view class="empty" wx:if="{{!loading && refunds.length === 0}}">
-      <text class="empty-icon">🔄</text>
+      <image class="empty-icon-img" src="/assets/icons/refresh-cw.svg" mode="aspectFit"/>
       <text class="empty-text">暂无售后记录</text>
     </view>
 
@@ -43,6 +45,7 @@
     <view class="loading" wx:if="{{loading}}">
       <view class="loading-spinner"></view>
       <text>加载中...</text>
+    </view>
     </view>
   </scroll-view>
 </view>

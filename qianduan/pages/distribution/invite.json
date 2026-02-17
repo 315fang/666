@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "邀请好友",
+  "navigationBarBackgroundColor": "#667eea",
+  "navigationBarTextStyle": "white",
+  "usingComponents": {
+    "share-card": "/components/share-card/share-card"
+  }
+}

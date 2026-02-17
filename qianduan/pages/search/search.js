@@ -1,5 +1,8 @@
 // pages/search/search.js
 const { get } = require('../../utils/request');
+const { SEARCH_CONFIG } = require('../../config/constants');
+const { ErrorHandler, showError } = require('../../utils/errorHandler');
+const { processProducts } = require('../../utils/dataFormatter');
 
 Page({
     data: {
@@ -12,8 +15,8 @@ Page({
     },
 
     onLoad() {
-        // 加载搜索历史
-        const history = wx.getStorageSync('searchHistory') || [];
+        // 使用常量配置加载搜索历史
+        const history = wx.getStorageSync(SEARCH_CONFIG.STORAGE_KEY) || [];
         this.setData({ history });
     },
 
@@ -40,7 +43,7 @@ Page({
     onSearch() {
         const keyword = this.data.keyword.trim();
         if (!keyword) {
-            wx.showToast({ title: '请输入搜索内容', icon: 'none' });
+            showError('请输入搜索内容');
             return;
         }
         this.doSearch(keyword);
@@ -48,22 +51,30 @@ Page({
 
     // 执行搜索
     async doSearch(keyword) {
-        // 保存搜索历史（去重，最多10条）
+        // 使用常量配置保存搜索历史（去重，最多配置的条数）
         let history = this.data.history.filter(h => h !== keyword);
         history.unshift(keyword);
-        if (history.length > 10) history = history.slice(0, 10);
+        if (history.length > SEARCH_CONFIG.MAX_HISTORY) {
+            history = history.slice(0, SEARCH_CONFIG.MAX_HISTORY);
+        }
         this.setData({ history });
-        wx.setStorageSync('searchHistory', history);
+        wx.setStorageSync(SEARCH_CONFIG.STORAGE_KEY, history);
 
         // 发起搜索请求
         this.setData({ loading: true, hasSearched: true });
 
         try {
             const res = await get('/products', { keyword, limit: 50 });
-            const products = res.data?.list || res.data || [];
+            const rawProducts = res.data?.list || res.data || [];
+
+            // 使用工具函数处理商品数据
+            const products = processProducts(rawProducts);
+
             this.setData({ products, loading: false });
         } catch (err) {
-            console.error('搜索失败:', err);
+            ErrorHandler.handle(err, {
+                customMessage: '搜索失败，请稍后重试'
+            });
             this.setData({ loading: false, products: [] });
         }
     },
@@ -76,7 +87,7 @@ Page({
             success: (res) => {
                 if (res.confirm) {
                     this.setData({ history: [] });
-                    wx.removeStorageSync('searchHistory');
+                    wx.removeStorageSync(SEARCH_CONFIG.STORAGE_KEY);
                 }
             }
         });

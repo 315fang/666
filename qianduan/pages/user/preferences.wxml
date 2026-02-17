@@ -10,13 +10,13 @@
       <view class="q-title">您偏好的风格是？</view>
       <view class="option-grid">
         <view class="option-item {{style === 'simple' ? 'active' : ''}}" bindtap="onSelectStyle" data-val="simple">
-          <text>🌿 极简自然</text>
+          <text>极简自然</text>
         </view>
         <view class="option-item {{style === 'modern' ? 'active' : ''}}" bindtap="onSelectStyle" data-val="modern">
-          <text>🏙️ 现代都市</text>
+          <text>现代都市</text>
         </view>
         <view class="option-item {{style === 'luxury' ? 'active' : ''}}" bindtap="onSelectStyle" data-val="luxury">
-          <text>💎 轻奢质感</text>
+          <text>轻奢质感</text>
         </view>
       </view>
     </view>
@@ -26,22 +26,25 @@
       <view class="q-title">您主要关注的品类？(多选)</view>
       <view class="option-grid">
         <view class="option-item {{categories.includes('beauty') ? 'active' : ''}}" bindtap="onSelectCategory" data-val="beauty">
-          <text>💄 美妆护肤</text>
+          <text>美妆护肤</text>
         </view>
         <view class="option-item {{categories.includes('home') ? 'active' : ''}}" bindtap="onSelectCategory" data-val="home">
-          <text>🏠 家居生活</text>
+          <text>家居生活</text>
         </view>
         <view class="option-item {{categories.includes('digital') ? 'active' : ''}}" bindtap="onSelectCategory" data-val="digital">
-          <text>📱 数码科技</text>
+          <text>数码科技</text>
         </view>
         <view class="option-item {{categories.includes('gift') ? 'active' : ''}}" bindtap="onSelectCategory" data-val="gift">
-          <text>🎁 节日礼赠</text>
+          <text>节日礼赠</text>
         </view>
       </view>
     </view>
   </view>
 
   <view class="footer">
-    <button class="save-btn" bindtap="onSave">保存偏好</button>
+    <button class="reset-btn" bindtap="onReset">重置</button>
+    <button class="save-btn" bindtap="onSave" loading="{{loading}}">
+      {{loading ? '保存中...' : '保存偏好'}}
+    </button>
   </view>
 </view>

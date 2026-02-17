@@ -1,0 +1,163 @@
+/* 邀请好友页面样式 */
+.invite-page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #667eea 0%, #f7f9fc 40%);
+  padding: 40rpx 32rpx;
+}
+
+/* 分享卡片区域 */
+.share-section {
+  margin-bottom: 40rpx;
+}
+
+/* 团队统计 */
+.team-stats {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 40rpx;
+  margin-bottom: 32rpx;
+  box-shadow: 0 4rpx 16rpx rgba(102, 126, 234, 0.1);
+}
+
+.stats-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 32rpx;
+  text-align: center;
+}
+
+.stats-grid {
+  display: flex;
+  justify-content: space-around;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 48rpx;
+  font-weight: bold;
+  color: #667eea;
+  margin-bottom: 8rpx;
+}
+
+.stat-label {
+  font-size: 24rpx;
+  color: #999;
+}
+
+/* 奖励说明 */
+.reward-info,
+.how-to {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 40rpx;
+  margin-bottom: 32rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+}
+
+.info-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 24rpx;
+}
+
+.info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+
+.info-icon {
+  font-size: 32rpx;
+  flex-shrink: 0;
+}
+
+.info-text {
+  font-size: 28rpx;
+  color: #666;
+  line-height: 1.6;
+}
+
+/* 步骤列表 */
+.step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 32rpx;
+}
+
+.step-item {
+  display: flex;
+  gap: 24rpx;
+}
+
+.step-number {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.step-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.step-title {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.step-desc {
+  font-size: 24rpx;
+  color: #999;
+  line-height: 1.6;
+}
+
+/* 操作按钮区域 */
+.action-area {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+  padding-bottom: 40rpx;
+}
+
+.team-btn,
+.center-btn {
+  width: 100%;
+  height: 88rpx;
+  border-radius: 16rpx;
+  font-size: 32rpx;
+  font-weight: 500;
+  border: none;
+}
+
+.team-btn {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+}
+
+.center-btn {
+  background: #f7f9fc;
+  color: #667eea;
+  border: 2rpx solid #667eea;
+}

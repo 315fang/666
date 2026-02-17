@@ -7,10 +7,12 @@
             <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
        </el-select>
        <el-button type="primary" @click="handleSearch">搜索</el-button>
+       <el-button type="success" plain @click="handleBatchCommission">批量设置佣金</el-button>
        <el-button type="primary" icon="Plus" style="margin-left: auto;" @click="handleCreate">发布商品</el-button>
     </div>
 
-    <el-table :data="list" border v-loading="loading">
+    <el-table :data="list" border v-loading="loading" @selection-change="handleSelectionChange">
+       <el-table-column type="selection" width="55" />
        <el-table-column prop="id" label="ID" width="80" />
        <el-table-column label="商品信息" min-width="300">
            <template #default="{ row }">
@@ -56,6 +58,40 @@
             @current-change="handlePageChange"
         />
     </div>
+
+    <el-dialog v-model="batchCommissionVisible" title="批量设置佣金" width="600px">
+        <el-alert title="固定金额优先级高于百分比比例" type="info" show-icon :closable="false" style="margin-bottom: 20px;" />
+        <el-form :model="batchCommissionForm" label-width="120px">
+            <el-row :gutter="20">
+                <el-col :span="12">
+                    <el-divider content-position="center">百分比模式</el-divider>
+                    <el-form-item label="一级比例">
+                        <el-input-number v-model="batchCommissionForm.commission_rate_1" :min="0" :max="1" :step="0.01" :precision="2" controls-position="right" style="width: 100%" />
+                        <div style="font-size: 12px; color: #999;">如 0.20 = 20%</div>
+                    </el-form-item>
+                    <el-form-item label="二级比例">
+                        <el-input-number v-model="batchCommissionForm.commission_rate_2" :min="0" :max="1" :step="0.01" :precision="2" controls-position="right" style="width: 100%" />
+                        <div style="font-size: 12px; color: #999;">如 0.10 = 10%</div>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-divider content-position="center">固定金额模式 (优先)</el-divider>
+                    <el-form-item label="一级金额">
+                        <el-input-number v-model="batchCommissionForm.commission_amount_1" :min="0" :precision="2" controls-position="right" style="width: 100%" />
+                        <div style="font-size: 12px; color: #999;">单位：元</div>
+                    </el-form-item>
+                    <el-form-item label="二级金额">
+                        <el-input-number v-model="batchCommissionForm.commission_amount_2" :min="0" :precision="2" controls-position="right" style="width: 100%" />
+                        <div style="font-size: 12px; color: #999;">单位：元</div>
+                    </el-form-item>
+                </el-col>
+            </el-row>
+        </el-form>
+        <template #footer>
+            <el-button @click="batchCommissionVisible = false">取消</el-button>
+            <el-button type="primary" @click="submitBatchCommission">确定</el-button>
+        </template>
+    </el-dialog>
 
     <!-- 发布/编辑商品弹窗 -->
     <el-dialog
@@ -184,12 +220,16 @@
         </div>
         <!-- 文字描述 -->
         <div v-if="previewProduct.description" style="padding: 16px; background: #f5f5f5; border-radius: 8px; margin-bottom: 12px;">
-          <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px;">📝 商品详情</div>
+          <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+            <el-icon><Document /></el-icon> 商品详情
+          </div>
           <div style="font-size: 13px; line-height: 1.8; color: #666; white-space: pre-wrap;" v-html="previewProduct.description"></div>
         </div>
         <!-- 详情图 -->
         <div v-if="previewProduct.detail_images && previewProduct.detail_images.length">
-          <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px;">🖼️ 详情图片</div>
+          <div style="font-weight: 600; margin-bottom: 8px; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+            <el-icon><Picture /></el-icon> 详情图片
+          </div>
           <el-image v-for="(img, idx) in previewProduct.detail_images" :key="idx" :src="img" style="width: 100%; margin-bottom: 4px;" fit="contain" />
         </div>
         <el-empty v-if="!previewProduct.description && (!previewProduct.detail_images || previewProduct.detail_images.length === 0)" description="暂无商品详情内容，请编辑添加" />
@@ -201,12 +241,24 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { getProducts, getProductById, createProduct, updateProduct, getCategories, updateProductStatus } from '@/api/product'
+import request from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Close, Upload, Document, Picture } from '@element-plus/icons-vue'
 
 const list = ref([])
 const categories = ref([])
 const total = ref(0)
 const loading = ref(false)
+
+// Batch Commission
+const selectedProducts = ref([])
+const batchCommissionVisible = ref(false)
+const batchCommissionForm = reactive({
+    commission_rate_1: 0,
+    commission_rate_2: 0,
+    commission_amount_1: 0,
+    commission_amount_2: 0
+})
 
 // 图片上传配置
 const uploadUrl = computed(() => {
@@ -368,6 +420,36 @@ const handleSubmit = async () => {
 }
 
 // ========== 列表操作 ==========
+const handleSelectionChange = (val) => {
+    selectedProducts.value = val
+}
+
+const handleBatchCommission = () => {
+    if (selectedProducts.value.length === 0) {
+        ElMessage.warning('请先选择商品')
+        return
+    }
+    batchCommissionVisible.value = true
+}
+
+const submitBatchCommission = async () => {
+    try {
+        const product_ids = selectedProducts.value.map(item => item.id)
+        await request.post('/products/batch-commission', {
+            product_ids,
+            commission_rate_1: batchCommissionForm.commission_rate_1,
+            commission_rate_2: batchCommissionForm.commission_rate_2,
+            commission_amount_1: batchCommissionForm.commission_amount_1,
+            commission_amount_2: batchCommissionForm.commission_amount_2
+        })
+        ElMessage.success('批量设置成功')
+        batchCommissionVisible.value = false
+        loadData()
+    } catch (error) {
+        console.error(error)
+    }
+}
+
 const loadData = async () => {
     loading.value = true
     try {

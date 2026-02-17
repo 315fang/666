@@ -1,5 +1,7 @@
 // pages/product/detail.js
 const { get, post } = require('../../utils/request');
+const { parseImages, calculatePrice } = require('../../utils/dataFormatter');
+const { USER_ROLES } = require('../../config/constants');
 
 Page({
     data: {
@@ -12,9 +14,15 @@ Page({
         imageCount: 1,
         showSku: false,
         cartCount: 0,
-        skuAction: 'cart', // cart or buy
+        skuAction: 'cart',
         isFavorite: false,
-        statusBarHeight: 20 // Default fallback
+        statusBarHeight: 20,
+        // 新增：评价相关
+        reviews: [],
+        reviewTotal: 0,
+        reviewTags: [],
+        // 折扣
+        discount: 10
     },
 
     onLoad(options) {
@@ -46,36 +54,21 @@ Page({
             const res = await get(`/products/${id}`);
             const product = res.data || {};
 
-            // 处理图片
-            if (typeof product.images === 'string') {
-                try {
-                    product.images = JSON.parse(product.images);
-                } catch (e) {
-                    product.images = product.images ? [product.images] : [];
-                }
-            }
-
-            // 处理详情图片
-            if (typeof product.detail_images === 'string') {
-                try {
-                    product.detail_images = JSON.parse(product.detail_images);
-                } catch (e) {
-                    product.detail_images = product.detail_images ? [product.detail_images] : [];
-                }
-            }
-            if (!product.detail_images) product.detail_images = [];
+            // 使用统一的图片解析工具
+            product.images = parseImages(product.images);
+            product.detail_images = parseImages(product.detail_images);
 
             // 获取用户身份计算动态价格
             const user = wx.getStorageSync('userInfo') || {};
-            const roleLevel = user.role_level || 0;
+            const roleLevel = user.role_level || USER_ROLES.GUEST;
 
-            let displayPrice = product.retail_price;
-            if (roleLevel === 1) {
-                displayPrice = product.price_member || product.retail_price;
-            } else if (roleLevel === 2) {
-                displayPrice = product.price_leader || product.price_member || product.retail_price;
-            } else if (roleLevel === 3) {
-                displayPrice = product.price_agent || product.price_leader || product.price_member || product.retail_price;
+            // 使用统一的价格计算工具
+            const displayPrice = calculatePrice(product, null, roleLevel);
+
+            // 计算折扣
+            let discount = 10;
+            if (product.market_price && parseFloat(product.market_price) > 0) {
+                discount = Math.round((parseFloat(displayPrice) / parseFloat(product.market_price)) * 10);
             }
 
             this.setData({
@@ -85,15 +78,90 @@ Page({
                 },
                 skus: product.skus || [],
                 selectedSku: (product.skus && product.skus.length > 0) ? product.skus[0] : null,
-                imageCount: (product.images && product.images.length) || 1,
-                roleLevel
+                imageCount: product.images.length || 1,
+                roleLevel,
+                isAgent: roleLevel >= USER_ROLES.LEADER,
+                discount
             });
 
-            wx.hideLoading();
+            // 加载评价
+            this.loadReviews();
+
+            // 加载佣金预览（如果用户是团长或代理商）
+            if (roleLevel >= USER_ROLES.LEADER) {
+                this.loadCommissionPreview();
+            }
         } catch (err) {
-            wx.hideLoading();
             wx.showToast({ title: '加载失败', icon: 'none' });
             console.error('加载商品详情失败:', err);
+        } finally {
+            wx.hideLoading();
+        }
+    },
+
+    // 加载评价
+    async loadReviews() {
+        try {
+            const res = await get(`/products/${this.data.id}/reviews`, { limit: 2 }).catch(() => null);
+            if (res && res.data) {
+                const reviews = res.data.list || [];
+                const reviewTotal = res.data.pagination?.total || reviews.length;
+                // 生成评价标签
+                const reviewTags = this.generateReviewTags(reviews);
+                this.setData({ reviews, reviewTotal, reviewTags });
+            }
+        } catch (err) {
+            console.log('暂无评价数据');
+        }
+    },
+
+    // 生成评价标签
+    generateReviewTags(reviews) {
+        const tags = [];
+        const keywords = ['质量好', '物流快', '包装精美', '性价比高', '颜色正', '尺码准'];
+        reviews.forEach((r, i) => {
+            if (i < 3) tags.push(keywords[i % keywords.length]);
+        });
+        return tags;
+    },
+
+    // 跳转评价列表
+    goReviews() {
+        wx.navigateTo({ url: `/pages/product/reviews?id=${this.data.id}` });
+    },
+
+    // 加载佣金预览
+    async loadCommissionPreview() {
+        try {
+            const { id, selectedSku, quantity } = this.data;
+            const params = {
+                product_id: id,
+                quantity: quantity || 1
+            };
+
+            if (selectedSku) {
+                params.sku_id = selectedSku.id;
+            }
+
+            const res = await get('/commissions/preview', params);
+
+            if (res.code === 0 && res.data) {
+                const data = res.data;
+
+                // 计算我可以获得的佣金
+                const myCommission = data.commissions
+                    .filter(c => c.level === 0 || c.level === 1)
+                    .reduce((sum, c) => sum + c.amount, 0);
+
+                this.setData({
+                    commission: myCommission.toFixed(2),
+                    commissionDetail: data,
+                    showCommissionTip: true
+                });
+            }
+        } catch (err) {
+            console.error('加载佣金预览失败:', err);
+            // 不影响主流程，静默失败
         }
     },
 
@@ -129,8 +197,25 @@ Page({
     onBackTap() {
         wx.navigateBack();
     },
-    
-    // Toggle Favorite (Added as placeholder)
+
+    // ======== 智能咨询 ========
+    goAIChat() {
+        const app = getApp();
+        // 设置当前商品为上下文
+        app.globalData.aiContext = {
+            type: 'product',
+            data: {
+                id: this.data.product.id,
+                name: this.data.product.name,
+                price: this.data.product.retail_price,
+                displayPrice: this.data.product.displayPrice,
+                description: this.data.product.description
+            }
+        };
+        wx.navigateTo({ url: '/pages/ai/chat' });
+    },
+
+    // Toggle Favorite
     onToggleFavorite() {
         this.setData({ isFavorite: !this.data.isFavorite });
         wx.showToast({

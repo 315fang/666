@@ -1,5 +1,7 @@
 // pages/cart/cart.js
 const { get, post, put, del } = require('../../utils/request');
+const { parseImages, getFirstImage, formatMoney } = require('../../utils/dataFormatter');
+const { ErrorHandler, showError, showSuccess } = require('../../utils/errorHandler');
 
 Page({
     data: {
@@ -7,39 +9,35 @@ Page({
         selectAll: false,
         totalPrice: 0,
         totalCount: 0,
-        loading: true
+        loading: true,
+        showEmpty: false,
+        priceAnim: false,
+        countAnim: false,
+        recommendedProducts: [] // 新增：推荐商品
     },
 
     onShow() {
         // 每次显示页面时刷新购物车
         this.loadCart();
+        
+        // 显示空购物车动画
+        setTimeout(() => {
+            this.setData({ showEmpty: true });
+        }, 100);
     },
 
     async loadCart() {
-        this.setData({ loading: true });
+        this.setData({ loading: true, showEmpty: false });
 
         try {
             const res = await get('/cart');
             // 后端返回 { items: [...], summary: {...} }
             const items = res.data?.items || res.data || [];
-            const cartItems = (Array.isArray(items) ? items : []).map(item => {
-                // 处理商品图片 - 可能是字符串或数组
-                let productImages = [];
-                if (item.product?.images) {
-                    if (typeof item.product.images === 'string') {
-                        try {
-                            productImages = JSON.parse(item.product.images);
-                        } catch (e) {
-                            productImages = [item.product.images];
-                        }
-                    } else if (Array.isArray(item.product.images)) {
-                        productImages = item.product.images;
-                    }
-                }
-
-                // SKU图片优先
+            const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
+                // 使用工具函数处理图片
+                const productImages = parseImages(item.product?.images);
                 const skuImage = item.sku?.image || null;
-                const firstImage = skuImage || (productImages.length > 0 ? productImages[0] : '');
+                const firstImage = skuImage || getFirstImage(item.product?.images);
 
                 return {
                     ...item,
@@ -47,11 +45,13 @@ Page({
                     // 获取价格：优先 SKU 价格，其次商品价格
                     price: parseFloat(item.sku?.retail_price || item.product?.retail_price || 0),
                     // 解析后的图片数组
-                    productImages: productImages,
+                    productImages,
                     // 第一张图片（用于显示）
-                    firstImage: firstImage,
+                    firstImage,
                     // 商品名称
-                    productName: item.product?.name || '商品'
+                    productName: item.product?.name || '商品',
+                    // 入场动画标记
+                    animateIn: true
                 };
             });
 
@@ -61,11 +61,59 @@ Page({
                 loading: false
             });
 
+            // 如果是空购物车，加载推荐商品
+            if (cartItems.length === 0) {
+                this.loadRecommended();
+            }
+
+            // 清除入场动画标记
+            setTimeout(() => {
+                const updatedItems = cartItems.map(item => ({ ...item, animateIn: false }));
+                this.setData({ cartItems: updatedItems });
+            }, 800);
+
             this.calculateTotal();
+            
+            // 如果是空购物车，显示动画
+            if (cartItems.length === 0) {
+                setTimeout(() => {
+                    this.setData({ showEmpty: true });
+                }, 100);
+            }
         } catch (err) {
-            console.error('加载购物车失败:', err);
+            ErrorHandler.handle(err, {
+                customMessage: '加载购物车失败，请稍后重试'
+            });
             this.setData({ loading: false, cartItems: [] });
+            this.loadRecommended();
+            setTimeout(() => {
+                this.setData({ showEmpty: true });
+            }, 100);
         }
+    },
+
+    // 加载推荐商品
+    async loadRecommended() {
+        try {
+            const res = await get('/products', { limit: 6, sort: 'sales_desc' });
+            if (res.code === 0 && res.data) {
+                const products = (res.data.list || res.data || []).map(p => ({
+                    ...p,
+                    firstImage: getFirstImage(p.images)
+                }));
+                this.setData({ recommendedProducts: products });
+            }
+        } catch (err) {
+            console.error('加载推荐商品失败:', err);
+        }
+    },
+
+    // 推荐商品跳转
+    onRecommendedTap(e) {
+        const { id } = e.currentTarget.dataset;
+        wx.navigateTo({
+            url: `/pages/product/detail?id=${id}`
+        });
     },
 
 
@@ -85,7 +133,7 @@ Page({
         const allSelected = cartItems.length > 0 && cartItems.every(item => item.selected);
 
         this.setData({
-            totalPrice: totalPrice.toFixed(2),
+            totalPrice: formatMoney(totalPrice),
             totalCount,
             selectAll: allSelected
         });
@@ -100,6 +148,12 @@ Page({
             [key]: !this.data.cartItems[index].selected
         });
 
+        // 触发价格和数量动画
+        this.setData({ priceAnim: true, countAnim: true });
+        setTimeout(() => {
+            this.setData({ priceAnim: false, countAnim: false });
+        }, 400);
+
         this.calculateTotal();
     },
 
@@ -112,6 +166,13 @@ Page({
         }));
 
         this.setData({ cartItems, selectAll: newSelectAll });
+        
+        // 触发价格和数量动画
+        this.setData({ priceAnim: true, countAnim: true });
+        setTimeout(() => {
+            this.setData({ priceAnim: false, countAnim: false });
+        }, 400);
+        
         this.calculateTotal();
     },
 
@@ -132,8 +193,24 @@ Page({
         try {
             await put(`/cart/${item.id}`, { quantity: newQuantity });
 
-            const key = `cartItems[${index}].quantity`;
-            this.setData({ [key]: newQuantity });
+            // 触发动画
+            const animKey = `cartItems[${index}].quantityAnim`;
+            this.setData({ 
+                [animKey]: true,
+                [`cartItems[${index}].quantity`]: newQuantity
+            });
+            
+            // 清除动画标记
+            setTimeout(() => {
+                this.setData({ [animKey]: false });
+            }, 300);
+            
+            // 触发价格和数量动画
+            this.setData({ priceAnim: true, countAnim: true });
+            setTimeout(() => {
+                this.setData({ priceAnim: false, countAnim: false });
+            }, 400);
+            
             this.calculateTotal();
         } catch (err) {
             console.error('更新数量失败:', err);
@@ -151,12 +228,26 @@ Page({
             success: async (res) => {
                 if (res.confirm) {
                     try {
+                        // 先触发动画
+                        const deleteKey = `cartItems[${index}].deleting`;
+                        this.setData({ [deleteKey]: true });
+                        
                         await del(`/cart/${item.id}`);
 
-                        const cartItems = [...this.data.cartItems];
-                        cartItems.splice(index, 1);
-                        this.setData({ cartItems });
-                        this.calculateTotal();
+                        // 等待动画完成后再删除数据
+                        setTimeout(() => {
+                            const cartItems = [...this.data.cartItems];
+                            cartItems.splice(index, 1);
+                            this.setData({ cartItems });
+                            this.calculateTotal();
+                            
+                            // 如果是空购物车了，显示空状态动画
+                            if (cartItems.length === 0) {
+                                setTimeout(() => {
+                                    this.setData({ showEmpty: true });
+                                }, 100);
+                            }
+                        }, 400);
                     } catch (err) {
                         console.error('删除失败:', err);
                     }

@@ -1,5 +1,6 @@
 // pages/distribution/team.js
 const { get } = require('../../utils/request');
+const { ROLE_NAMES } = require('../../config/constants');
 
 Page({
     data: {
@@ -8,6 +9,7 @@ Page({
         totalCount: 0,
         totalSales: '0.00',
         monthlyNewMembers: 0,
+        agentStockInfo: null,
         members: [],
         currentTab: 'direct',
         page: 1,
@@ -30,6 +32,7 @@ Page({
                 indirectCount: team.indirectCount,
                 totalCount: team.totalCount,
                 monthlyNewMembers: team.monthlyNewMembers || 0,
+                agentStockInfo: team.agentStock || null,
                 totalSales: stats ? stats.totalEarnings : '0.00'
             });
         } catch (err) {
@@ -70,13 +73,7 @@ Page({
     },
 
     getRoleName(level) {
-        const names = {
-            0: '普通用户',
-            1: '会员',
-            2: '团长',
-            3: '代理商'
-        };
-        return names[level] || '用户';
+        return ROLE_NAMES[level] || '用户';
     },
 
     switchTab(e) {
