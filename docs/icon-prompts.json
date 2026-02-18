@@ -1,0 +1,332 @@
+{
+  "meta": {
+    "version": "1.0",
+    "total_icons": 80,
+    "created": "2026-02-18",
+    "style": "Modern Luxury - Linear 2px",
+    "color_palette": {
+      "primary": "#CA8A04",
+      "neutral": "#1C1917",
+      "light": "#FAFAF9",
+      "data_blue": "#3B82F6",
+      "data_green": "#10B981",
+      "data_orange": "#F59E0B",
+      "data_purple": "#8B5CF6"
+    }
+  },
+  "icons": [
+    {
+      "id": "N01",
+      "name": "arrow-left",
+      "category": "navigation",
+      "priority": 3,
+      "usage": "返回按钮、后退",
+      "prompt_en": "Minimalist linear left arrow icon, 2px stroke weight, rounded corners, simple chevron style pointing left, no fill, clean geometric design, 24x24 viewbox, centered composition, suitable for navigation buttons, luxury business aesthetic with deep gray #1C1917 color",
+      "prompt_cn": "极简线性左箭头图标，2像素线条粗细，圆角设计，简洁V字形指向左侧，无填充，简洁几何设计，24x24画布，居中构图，适合导航按钮，轻奢商业美学，深空灰#1C1917配色"
+    },
+    {
+      "id": "N02",
+      "name": "arrow-right",
+      "category": "navigation",
+      "priority": 3,
+      "usage": "下一步、查看更多",
+      "prompt_en": "Minimalist linear right arrow icon, 2px stroke weight, rounded corners, simple chevron style pointing right, no fill, clean geometric design, 24x24 viewbox, for 'view more' and 'next' actions, luxury business style with champagne gold #CA8A04 accent",
+      "prompt_cn": "极简线性右箭头图标，2像素线条粗细，圆角设计，简洁V字形指向右侧，无填充，用于'查看更多'和'下一步'操作，香槟金#CA8A04强调色"
+    },
+    {
+      "id": "N05",
+      "name": "home",
+      "category": "navigation",
+      "priority": 3,
+      "usage": "首页导航、主页按钮",
+      "prompt_en": "Minimalist linear home icon, 2px stroke, simple house outline with pitched roof, no fill, rounded corners, 24x24 viewbox, clean and recognizable, modern business style, suitable for navigation tab bar",
+      "prompt_cn": "极简线性首页图标，2像素线条，简洁房屋轮廓配尖顶屋顶，无填充，圆角设计，24x24画布，简洁易识别，现代商业风格，适合标签栏导航"
+    },
+    {
+      "id": "N06",
+      "name": "search",
+      "category": "navigation",
+      "priority": 3,
+      "usage": "搜索框、搜索按钮",
+      "prompt_en": "Minimalist linear search icon, magnifying glass with circular lens and handle, 2px stroke weight, rounded corners, no fill, 24x24 viewbox, clean and simple, luxury business aesthetic",
+      "prompt_cn": "极简线性搜索图标，放大镜带圆形镜片和手柄，2像素线条粗细，圆角设计，无填充，24x24画布，简洁，轻奢商业美学"
+    },
+    {
+      "id": "N08",
+      "name": "x",
+      "category": "navigation",
+      "priority": 3,
+      "usage": "关闭弹窗、取消操作",
+      "prompt_en": "Minimalist linear close icon, X shape with two diagonal lines crossing, 2px stroke weight, rounded line caps, no fill, 24x24 viewbox, centered, perfect optical balance, neutral gray color",
+      "prompt_cn": "极简线性关闭图标，X形状两条对角线交叉，2像素线条粗细，圆角线帽，无填充，24x24画布，居中，完美视觉平衡，中性灰配色"
+    },
+    {
+      "id": "N13",
+      "name": "settings",
+      "category": "navigation",
+      "priority": 3,
+      "usage": "设置页面、系统配置",
+      "prompt_en": "Minimalist linear settings icon, gear/cog wheel with 6 teeth, 2px stroke weight, circular center hole, rounded corners, no fill, 24x24 viewbox, mechanical precision, luxury business style",
+      "prompt_cn": "极简线性设置图标，6齿齿轮，2像素线条粗细，圆形中心孔，圆角设计，无填充，24x24画布，机械精密感，轻奢商业风格"
+    },
+    {
+      "id": "B01",
+      "name": "shopping-cart",
+      "category": "business",
+      "priority": 3,
+      "usage": "购物车页面、加入购物车",
+      "prompt_en": "Minimalist linear shopping cart icon, simple cart outline with two wheels, handle on left, 2px stroke weight, rounded corners, no fill, 24x24 viewbox, clean e-commerce style, recognizable at small sizes",
+      "prompt_cn": "极简线性购物车图标，简洁购物车轮廓配两个轮子，左侧手柄，2像素线条粗细，圆角设计，无填充，24x24画布，简洁电商风格，小尺寸可识别"
+    },
+    {
+      "id": "B02",
+      "name": "shopping-bag",
+      "category": "business",
+      "priority": 3,
+      "usage": "订单数量、已售统计",
+      "prompt_en": "Minimalist linear shopping bag icon, rectangular bag with two handles on top, 2px stroke weight, rounded corners, no fill, simple and clean, 24x24 viewbox, suitable for order and sales count display",
+      "prompt_cn": "极简线性购物袋图标，矩形袋子顶部两个手柄，2像素线条粗细，圆角设计，无填充，简洁，24x24画布，适合订单和销量显示"
+    },
+    {
+      "id": "B03",
+      "name": "dollar-sign",
+      "category": "business",
+      "priority": 3,
+      "usage": "收益、佣金、提现",
+      "prompt_en": "Luxury linear dollar sign icon, elegant $ symbol with single vertical line, 2px stroke weight, rounded serifs, no fill, 24x24 viewbox, champagne gold #CA8A04 color, represents commission and revenue, sophisticated business style",
+      "prompt_cn": "轻奢线性美元符号图标，优雅$符号配单条竖线，2像素线条粗细，圆角衬线，无填充，24x24画布，香槟金#CA8A04配色，代表佣金和收益，精致商业风格"
+    },
+    {
+      "id": "B04",
+      "name": "wallet",
+      "category": "business",
+      "priority": 3,
+      "usage": "钱包余额、资产管理",
+      "prompt_en": "Minimalist linear wallet icon, rectangular wallet with card slot detail, 2px stroke weight, rounded corners, simple fold line, no fill, 24x24 viewbox, represents balance and withdrawals, clean business style",
+      "prompt_cn": "极简线性钱包图标，矩形钱包配卡槽细节，2像素线条粗细，圆角设计，简洁折线，无填充，24x24画布，代表余额和提现，简洁商业风格"
+    },
+    {
+      "id": "B05",
+      "name": "credit-card",
+      "category": "business",
+      "priority": 3,
+      "usage": "支付方式、订单支付",
+      "prompt_en": "Minimalist linear credit card icon, rectangular card with horizontal stripe and chip detail, 2px stroke weight, rounded corners, no fill, 24x24 viewbox, represents payment methods, clean and recognizable",
+      "prompt_cn": "极简线性信用卡图标，矩形卡片配水平条纹和芯片细节，2像素线条粗细，圆角设计，无填充，24x24画布，代表支付方式，简洁易识别"
+    },
+    {
+      "id": "B07",
+      "name": "gift",
+      "category": "business",
+      "priority": 3,
+      "usage": "佣金奖励、红包、礼品",
+      "prompt_en": "Minimalist linear gift box icon, square box with ribbon bow on top, 2px stroke weight, rounded corners, no fill, 24x24 viewbox, represents commission rewards and bonuses, elegant business style with champagne gold #CA8A04 accent",
+      "prompt_cn": "极简线性礼物盒图标，方形盒子顶部蝴蝶结丝带，2像素线条粗细，圆角设计，无填充，24x24画布，代表佣金奖励和红利，优雅商业风格配香槟金#CA8A04强调"
+    },
+    {
+      "id": "B09",
+      "name": "trending-up",
+      "category": "business",
+      "priority": 3,
+      "usage": "销售增长、业绩上涨",
+      "prompt_en": "Minimalist linear trending up icon, ascending line graph with arrow pointing upward right, 2px stroke weight, rounded corners, no fill, 24x24 viewbox, represents growth and positive trend, green #10B981 color for success",
+      "prompt_cn": "极简线性上升趋势图标，上升折线图配向右上箭头，2像素线条粗细，圆角设计，无填充，24x24画布，代表增长和积极趋势，绿色#10B981成功配色"
+    },
+    {
+      "id": "B11",
+      "name": "package",
+      "category": "business",
+      "priority": 3,
+      "usage": "待发货、物流包裹",
+      "prompt_en": "Minimalist linear package icon, cubic box with tape/seam lines on top, 2px stroke weight, isometric or front view, rounded corners, no fill, 24x24 viewbox, represents shipping and logistics, clean business style",
+      "prompt_cn": "极简线性包裹图标，立方体盒子顶部胶带/缝合线，2像素线条粗细，等轴或正视图，圆角设计，无填充，24x24画布，代表物流配送，简洁商业风格"
+    },
+    {
+      "id": "B12",
+      "name": "truck",
+      "category": "business",
+      "priority": 3,
+      "usage": "物流配送、快速发货",
+      "prompt_en": "Minimalist linear delivery truck icon, simple truck outline with cargo area and two wheels, 2px stroke weight, rounded corners, no fill, side view, 24x24 viewbox, represents fast shipping, clean logistics style",
+      "prompt_cn": "极简线性配送卡车图标，简洁卡车轮廓配货物区和两个轮子，2像素线条粗细，圆角设计，无填充，侧视图，24x24画布，代表快速配送，简洁物流风格"
+    },
+    {
+      "id": "U01",
+      "name": "user",
+      "category": "users",
+      "priority": 3,
+      "usage": "个人中心、用户信息",
+      "prompt_en": "Minimalist linear user icon, simple person silhouette with circular head and shoulders, 2px stroke weight, rounded, no fill, 24x24 viewbox, centered, represents personal center, clean and universal design",
+      "prompt_cn": "极简线性用户图标，简洁人物剪影配圆形头部和肩部，2像素线条粗细，圆角，无填充，24x24画布，居中，代表个人中心，简洁通用设计"
+    },
+    {
+      "id": "U02",
+      "name": "users",
+      "category": "users",
+      "priority": 3,
+      "usage": "团队管理、社群",
+      "prompt_en": "Minimalist linear users icon, two or three person silhouettes overlapping, circular heads and shoulders, 2px stroke weight, rounded, no fill, 24x24 viewbox, represents team and community, clean business style",
+      "prompt_cn": "极简线性多用户图标，两到三个人物剪影重叠，圆形头部和肩部，2像素线条粗细，圆角，无填充，24x24画布，代表团队和社群，简洁商业风格"
+    },
+    {
+      "id": "U06",
+      "name": "share",
+      "category": "users",
+      "priority": 3,
+      "usage": "分享商品、邀请好友",
+      "prompt_en": "Minimalist linear share icon, three dots connected by lines forming network pattern, or traditional share arrow pointing upward, 2px stroke weight, rounded, no fill, 24x24 viewbox, represents social sharing and invitation",
+      "prompt_cn": "极简线性分享图标，三个点通过线条连接形成网络图案，或传统分享箭头向上，2像素线条粗细，圆角，无填充，24x24画布，代表社交分享和邀请"
+    },
+    {
+      "id": "U07",
+      "name": "heart",
+      "category": "users",
+      "priority": 3,
+      "usage": "收藏商品、喜欢",
+      "prompt_en": "Minimalist linear heart icon, classic heart shape with smooth curves, 2px stroke weight, rounded, no fill, 24x24 viewbox, centered, represents favorite and like, can be filled when activated, elegant style",
+      "prompt_cn": "极简线性爱心图标，经典心形配平滑曲线，2像素线条粗细，圆角，无填充，24x24画布，居中，代表收藏和喜欢，激活时可填充，优雅风格"
+    },
+    {
+      "id": "U08",
+      "name": "star",
+      "category": "users",
+      "priority": 3,
+      "usage": "评分、等级、会员",
+      "prompt_en": "Minimalist linear star icon, five-pointed star with sharp angles softened by rounding, 2px stroke weight, no fill, 24x24 viewbox, centered, represents rating and level, can be filled when active, luxury style with champagne gold #CA8A04",
+      "prompt_cn": "极简线性星星图标，五角星配圆角柔化尖角，2像素线条粗细，无填充，24x24画布，居中，代表评分和等级，激活时可填充，轻奢风格配香槟金#CA8A04"
+    },
+    {
+      "id": "U09",
+      "name": "message-circle",
+      "category": "users",
+      "priority": 3,
+      "usage": "消息、对话、聊天",
+      "prompt_en": "Minimalist linear message icon, speech bubble with rounded corners, 2px stroke weight, no fill, simple tail at bottom, 24x24 viewbox, represents chat and conversation, clean communication style",
+      "prompt_cn": "极简线性消息图标，圆角对话气泡，2像素线条粗细，无填充，底部简洁尾巴，24x24画布，代表聊天和对话，简洁沟通风格"
+    },
+    {
+      "id": "U12",
+      "name": "headphones",
+      "category": "users",
+      "priority": 3,
+      "usage": "在线客服、客户服务",
+      "prompt_en": "Minimalist linear headphones icon, headband with two ear cups, 2px stroke weight, rounded shapes, no fill, 24x24 viewbox, represents customer service, clean and recognizable, professional support style",
+      "prompt_cn": "极简线性耳机图标，头带配两个耳罩，2像素线条粗细，圆角形状，无填充，24x24画布，代表客服，简洁易识别，专业支持风格"
+    },
+    {
+      "id": "D01",
+      "name": "bar-chart-2",
+      "category": "data",
+      "priority": 3,
+      "usage": "数据统计、收益趋势",
+      "prompt_en": "Minimalist linear bar chart icon, three or four vertical bars of different heights, 2px stroke weight, rounded tops, no fill, 24x24 viewbox, represents data statistics and revenue trends, clean data viz style with data blue #3B82F6",
+      "prompt_cn": "极简线性柱状图图标，三到四根不同高度垂直柱子，2像素线条粗细，圆角顶部，无填充，24x24画布，代表数据统计和收益趋势，简洁数据可视化风格配蓝色#3B82F6"
+    },
+    {
+      "id": "D06",
+      "name": "zap",
+      "category": "data",
+      "priority": 3,
+      "usage": "今日收益、快速增长",
+      "prompt_en": "Minimalist linear lightning bolt icon, angular zigzag shape with rounded corners, 2px stroke weight, no fill, dynamic and energetic, 24x24 viewbox, represents today's revenue and fast growth, electric style with data orange #F59E0B",
+      "prompt_cn": "极简线性闪电图标，角状之字形配圆角，2像素线条粗细，无填充，动感活力，24x24画布，代表今日收益和快速增长，电力风格配橙色#F59E0B"
+    },
+    {
+      "id": "D09",
+      "name": "calendar",
+      "category": "data",
+      "priority": 3,
+      "usage": "日期选择、周期统计",
+      "prompt_en": "Minimalist linear calendar icon, rectangular page with binding rings on top, date grid or single date, 2px stroke weight, rounded corners, no fill, 24x24 viewbox, represents date and period, clean scheduler style",
+      "prompt_cn": "极简线性日历图标，矩形页面顶部装订环，日期网格或单个日期，2像素线条粗细，圆角设计，无填充，24x24画布，代表日期和周期，简洁日程风格"
+    },
+    {
+      "id": "F01",
+      "name": "map-pin",
+      "category": "functions",
+      "priority": 3,
+      "usage": "地址管理、定位",
+      "prompt_en": "Minimalist linear map pin icon, teardrop shape with circular top and pointed bottom, 2px stroke weight, rounded, no fill, 24x24 viewbox, centered, represents address and location, clean navigation style",
+      "prompt_cn": "极简线性地图定位图标，水滴形状配圆形顶部和尖底，2像素线条粗细，圆角，无填充，24x24画布，居中，代表地址和位置，简洁导航风格"
+    },
+    {
+      "id": "F04",
+      "name": "qr-code",
+      "category": "functions",
+      "priority": 3,
+      "usage": "邀请码、二维码分享",
+      "prompt_en": "Minimalist linear QR code icon, simplified square grid pattern representing QR code structure, 2px stroke weight, rounded corners, no fill, 24x24 viewbox, represents invitation code and sharing, modern tech style",
+      "prompt_cn": "极简线性二维码图标，简化方形网格图案代表二维码结构，2像素线条粗细，圆角，无填充，24x24画布，代表邀请码和分享，现代科技风格"
+    },
+    {
+      "id": "F09",
+      "name": "shield",
+      "category": "functions",
+      "priority": 3,
+      "usage": "官方正品、安全保障",
+      "prompt_en": "Minimalist linear shield icon, classic shield shape with subtle curves, 2px stroke weight, rounded, no fill, optional checkmark inside, 24x24 viewbox, represents official product and security, trust and protection style",
+      "prompt_cn": "极简线性盾牌图标，经典盾牌形状配微妙曲线，2像素线条粗细，圆角，无填充，可选内部打勾，24x24画布，代表官方正品和安全，信任保护风格"
+    },
+    {
+      "id": "F12",
+      "name": "sparkles",
+      "category": "functions",
+      "priority": 3,
+      "usage": "AI助手、智能功能",
+      "prompt_en": "Minimalist linear sparkles icon, multiple star-like sparkle shapes with 4 or 8 points, 2px stroke weight, rounded tips, no fill, 24x24 viewbox, represents AI assistant and smart features, magical tech style with champagne gold #CA8A04",
+      "prompt_cn": "极简线性星光图标，多个4或8角星形闪光形状，2像素线条粗细，圆角尖端，无填充，24x24画布，代表AI助手和智能功能，魔法科技风格配金色#CA8A04"
+    },
+    {
+      "id": "S01",
+      "name": "check",
+      "category": "status",
+      "priority": 3,
+      "usage": "成功、完成、确认",
+      "prompt_en": "Minimalist linear checkmark icon, simple V-shape tick, 2px stroke weight, rounded line caps, no fill, 24x24 viewbox, centered, represents success and completion, clean affirmation style with success green #10B981",
+      "prompt_cn": "极简线性打勾图标，简洁V形勾，2像素线条粗细，圆角线帽，无填充，24x24画布，居中，代表成功和完成，简洁确认风格配绿色#10B981"
+    },
+    {
+      "id": "S02",
+      "name": "check-circle",
+      "category": "status",
+      "priority": 3,
+      "usage": "已完成订单、成功状态",
+      "prompt_en": "Minimalist linear check circle icon, circular outline with checkmark inside, 2px stroke weight, rounded, no fill, 24x24 viewbox, centered, represents completed order, clean success indicator with success green #10B981",
+      "prompt_cn": "极简线性圆形打勾图标，圆形轮廓内部打勾，2像素线条粗细，圆角，无填充，24x24画布，居中，代表已完成订单，简洁成功指示配绿色#10B981"
+    },
+    {
+      "id": "S05",
+      "name": "alert-circle",
+      "category": "status",
+      "priority": 3,
+      "usage": "警告、重要提示",
+      "prompt_en": "Minimalist linear alert circle icon, circular outline with exclamation mark inside, 2px stroke weight, rounded, no fill, 24x24 viewbox, centered, represents warning and important notice, attention style with warning orange #F59E0B",
+      "prompt_cn": "极简线性警告圆圈图标，圆形轮廓内部感叹号，2像素线条粗细，圆角，无填充，24x24画布，居中，代表警告和重要提示，注意风格配橙色#F59E0B"
+    },
+    {
+      "id": "S07",
+      "name": "bell",
+      "category": "status",
+      "priority": 3,
+      "usage": "通知消息、提醒",
+      "prompt_en": "Minimalist linear bell icon, classic bell shape with clapper, 2px stroke weight, rounded curves, no fill, 24x24 viewbox, represents notification messages, can show badge dot for unread, clean alert style",
+      "prompt_cn": "极简线性铃铛图标，经典铃铛形状配铃舌，2像素线条粗细，圆角曲线，无填充，24x24画布，代表通知消息，可显示未读徽章点，简洁提醒风格"
+    }
+  ],
+  "usage_tips": {
+    "tool_recommendations": [
+      "IconifyAI - 专门生成图标，最推荐",
+      "DALL-E 3 (ChatGPT Plus) - 质量最好",
+      "Midjourney - 艺术感强",
+      "Stable Diffusion - 免费开源"
+    ],
+    "optimization_tips": [
+      "如果太复杂：加 'extremely simple, minimal details'",
+      "如果不够清晰：加 'sharp lines, high contrast'",
+      "如果风格不统一：统一添加 'Consistent with Feather Icons style'",
+      "如果尺寸不对：强调 'perfectly centered, optical balance'"
+    ],
+    "file_naming": "kebab-case.svg (例: arrow-left.svg)",
+    "svgoptimization": "使用 svgomg.net 优化SVG文件大小"
+  }
+}
