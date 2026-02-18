@@ -192,6 +192,61 @@ function processProducts(products, roleLevel = USER_ROLES.GUEST) {
   return products.map(product => processProduct(product, roleLevel));
 }
 
+/**
+ * 格式化增长率
+ * @param {number} current - 当前值
+ * @param {number} previous - 前期值
+ * @returns {object} { value: '+28.5', trend: 'up', percentage: 28.5 }
+ */
+function formatGrowth(current, previous) {
+  if (!previous || previous === 0) {
+    return { value: '0.0', trend: 'flat', percentage: 0 };
+  }
+  
+  const growth = ((current - previous) / previous) * 100;
+  const rounded = parseFloat(growth.toFixed(1));
+  const trend = growth > 0 ? 'up' : growth < 0 ? 'down' : 'flat';
+  const value = growth > 0 ? `+${rounded}` : `${rounded}`;
+  
+  return { value, trend, percentage: rounded };
+}
+
+/**
+ * 标准化趋势数据为百分比
+ * @param {array} data - 原始数据数组
+ * @returns {array} 百分比数组 [40, 60, 80, 70, 100]
+ */
+function normalizeTrendData(data) {
+  if (!data || data.length === 0) {
+    return [0, 0, 0, 0, 0];
+  }
+  
+  const max = Math.max(...data);
+  if (max === 0) {
+    return data.map(() => 0);
+  }
+  
+  return data.map(value => Math.round((value / max) * 100));
+}
+
+/**
+ * 格式化大数字（如10000 -> 1万）
+ * @param {number} num - 数字
+ * @returns {string} 格式化后的字符串
+ */
+function formatLargeNumber(num) {
+  if (!num || num === 0) return '0';
+  
+  if (num >= 10000) {
+    return (num / 10000).toFixed(1) + '万';
+  }
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1) + 'k';
+  }
+  
+  return num.toString();
+}
+
 // CommonJS 导出（WeChat Mini Program 兼容）
 module.exports = {
   parseImages,
@@ -202,5 +257,8 @@ module.exports = {
   formatTime,
   formatRelativeTime,
   processProduct,
-  processProducts
+  processProducts,
+  formatGrowth,
+  normalizeTrendData,
+  formatLargeNumber
 };

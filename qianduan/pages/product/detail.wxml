@@ -225,14 +225,11 @@
       </scroll-view>
 
       <view class="sku-footer">
-        <view class="sku-btn-group">
-          <view class="sku-btn sku-btn-cart" bindtap="onAddToCart">
-            <image class="btn-icon" src="/assets/icons/shopping-cart.svg" mode="aspectFit"/>
-            <text>加入购物车</text>
-          </view>
-          <view class="sku-btn sku-btn-buy" bindtap="onBuyNow">
-            <text>立即购买</text>
-          </view>
+        <!-- 优化：单个按钮，根据用户最初的选择（skuAction）动态显示文案和样式 -->
+        <view class="sku-btn-single {{skuAction === 'buy' ? 'sku-btn-buy' : 'sku-btn-cart'}}" 
+              bindtap="onConfirmSku">
+          <image class="btn-icon" src="/assets/icons/shopping-cart.svg" mode="aspectFit" wx:if="{{skuAction === 'cart'}}"/>
+          <text>{{skuAction === 'buy' ? '立即购买' : '加入购物车'}}</text>
         </view>
       </view>
     </view>

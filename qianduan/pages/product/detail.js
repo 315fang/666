@@ -125,9 +125,13 @@ Page({
         return tags;
     },
 
-    // 跳转评价列表
+    // 跳转评价列表（功能开发中）
     goReviews() {
-        wx.navigateTo({ url: `/pages/product/reviews?id=${this.data.id}` });
+        wx.showToast({
+            title: '评价功能开发中',
+            icon: 'none',
+            duration: 2000
+        });
     },
 
     // 加载佣金预览
@@ -281,25 +285,26 @@ Page({
 
     // 加入购物车入口
     onAddToCart() {
+        // 设置 SKU 选择器的行为模式为"加入购物车"
         this.setData({ skuAction: 'cart' });
-        // If sku not showing, show it
-        if (!this.data.showSku) {
-            this.showSkuModal();
-        } else {
-             // Confirm logic
-             this.onConfirmAddCart();
-        }
+        // 显示 SKU 选择器
+        this.showSkuModal();
     },
 
     // 立即购买入口
     onBuyNow() {
+        // 设置 SKU 选择器的行为模式为"立即购买"
         this.setData({ skuAction: 'buy' });
-        // If sku not showing, show it
-        if (!this.data.showSku) {
-            this.showSkuModal();
+        // 显示 SKU 选择器
+        this.showSkuModal();
+    },
+
+    // SKU 确认（根据 skuAction 决定行为）
+    onConfirmSku() {
+        if (this.data.skuAction === 'buy') {
+            this.onConfirmBuy();
         } else {
-             // Confirm logic
-             this.onConfirmBuy();
+            this.onConfirmAddCart();
         }
     },
 

@@ -793,6 +793,40 @@
   flex-shrink: 0;
 }
 
+/* 优化后：单个按钮布局 */
+.sku-btn-single {
+  width: 100%;
+  height: 96rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  font-size: 32rpx;
+  font-weight: 600;
+  gap: 12rpx;
+  transition: all var(--duration-fast);
+}
+
+.sku-btn-single:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+/* 加入购物车样式 */
+.sku-btn-single.sku-btn-cart {
+  background: var(--luxury-gold);
+  color: var(--luxury-white);
+  box-shadow: var(--shadow-gold);
+}
+
+/* 立即购买样式（更醒目的渐变） */
+.sku-btn-single.sku-btn-buy {
+  background: linear-gradient(135deg, var(--luxury-gold) 0%, var(--luxury-gold-light) 100%);
+  color: var(--luxury-white);
+  box-shadow: var(--shadow-gold);
+}
+
+/* 保留旧样式以兼容其他可能的用法 */
 .sku-btn-group {
   display: flex;
   gap: 24rpx;

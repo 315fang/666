@@ -235,6 +235,31 @@ function truncate(str, maxLength, suffix = '...') {
   return str.substring(0, maxLength - suffix.length) + suffix;
 }
 
+/**
+ * 检查用户登录状态并显示提示
+ * @param {Object} pageContext - 页面上下文 (this)
+ * @param {Function} callback - 登录后的回调函数（可选）
+ * @returns {boolean} 是否已登录
+ */
+function checkLogin(pageContext, callback) {
+  const isLoggedIn = pageContext?.data?.isLoggedIn || wx.getStorageSync('token');
+  
+  if (!isLoggedIn) {
+    wx.showToast({
+      title: '请先登录',
+      icon: 'none',
+      duration: 2000
+    });
+    return false;
+  }
+  
+  if (callback && typeof callback === 'function') {
+    callback();
+  }
+  
+  return true;
+}
+
 // CommonJS 导出（WeChat Mini Program 兼容）
 module.exports = {
   debounce,
@@ -251,5 +276,6 @@ module.exports = {
   retry,
   serializeParams,
   parseParams,
-  truncate
+  truncate,
+  checkLogin
 };

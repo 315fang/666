@@ -520,11 +520,6 @@ Page({
         wx.navigateTo({ url: '/pages/distribution/center' });
     },
 
-    // ======== ★ 分享邀请 ========
-    onShareTap() {
-        // 触发转发分享
-    },
-
     // ======== 退出登录 ========
     onLogout() {
         wx.showModal({
