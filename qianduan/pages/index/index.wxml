@@ -12,8 +12,90 @@
     </swiper>
   </view>
 
-  <!-- 2. Identity Info Panel (Single Row Layout) -->
-  <view class="identity-card">
+  <!-- 2. 数据看板 Dashboard (新增) -->
+  <view class="dashboard-card" wx:if="{{isLoggedIn}}">
+    <!-- 1. 主KPI卡片 -->
+    <view class="kpi-primary-card">
+      <view class="kpi-header">
+        <text class="kpi-title">本月收益</text>
+        <view class="kpi-period">
+          <image class="icon-xs" src="/assets/icons/calendar.svg" mode="aspectFit" />
+          <text class="period-text">{{dashboard.currentMonth}}</text>
+        </view>
+      </view>
+      
+      <view class="kpi-main">
+        <text class="kpi-value">¥{{dashboard.monthlyRevenue}}</text>
+        <view class="kpi-badge {{dashboard.growthTrend}}">
+          <image class="trend-icon" src="/assets/icons/trending-{{dashboard.growthTrend}}.svg" mode="aspectFit" />
+          <text class="trend-text">{{dashboard.revenueGrowth}}%</text>
+        </view>
+      </view>
+      
+      <text class="kpi-subtitle">较上月</text>
+    </view>
+    
+    <!-- 2. 次要KPI三栏 -->
+    <view class="kpi-secondary-row">
+      <view class="kpi-item">
+        <view class="kpi-item-icon todayRevenue">
+          <image src="/assets/icons/zap.svg" mode="aspectFit" />
+        </view>
+        <text class="kpi-item-value">¥{{dashboard.todayRevenue}}</text>
+        <text class="kpi-item-label">今日收益</text>
+      </view>
+      
+      <view class="kpi-divider"></view>
+      
+      <view class="kpi-item">
+        <view class="kpi-item-icon teamSize">
+          <image src="/assets/icons/users.svg" mode="aspectFit" />
+        </view>
+        <text class="kpi-item-value">{{dashboard.teamSize}}</text>
+        <text class="kpi-item-label">团队人数</text>
+      </view>
+      
+      <view class="kpi-divider"></view>
+      
+      <view class="kpi-item">
+        <view class="kpi-item-icon orders">
+          <image src="/assets/icons/shopping-bag.svg" mode="aspectFit" />
+        </view>
+        <text class="kpi-item-value">{{dashboard.monthlyOrders}}</text>
+        <text class="kpi-item-label">本月订单</text>
+      </view>
+    </view>
+    
+    <!-- 3. 收益趋势图 -->
+    <view class="revenue-trend-section">
+      <view class="trend-header">
+        <text class="trend-title">收益趋势</text>
+        <text class="trend-subtitle">最近5天</text>
+      </view>
+      <view class="trend-chart">
+        <view class="bar-container" wx:for="{{dashboard.revenueTrend}}" wx:key="index">
+          <view class="bar" style="height: {{item}}%">
+            <view class="bar-fill"></view>
+          </view>
+        </view>
+      </view>
+    </view>
+    
+    <!-- 4. 快捷操作 -->
+    <view class="quick-actions">
+      <view class="action-btn primary" bindtap="onWithdraw">
+        <image class="action-icon" src="/assets/icons/dollar-sign.svg" mode="aspectFit" />
+        <text>提现</text>
+      </view>
+      <view class="action-btn secondary" bindtap="onViewDetails">
+        <image class="action-icon" src="/assets/icons/bar-chart-2.svg" mode="aspectFit" />
+        <text>查看详情</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 2. Identity Info Panel (仅未登录时显示) -->
+  <view class="identity-card" wx:if="{{!isLoggedIn}}">
     <view class="identity-row">
       <!-- Name & Level -->
       <view class="identity-left">

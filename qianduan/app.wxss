@@ -55,6 +55,33 @@ page {
   --color-info: #0369A1;
   --color-info-bg: #F0F9FF;
   
+  /* ==================== 数据可视化色彩（新增）==================== */
+  /* 用于图表、数据面板、统计卡片的颜色系统 */
+  
+  /* 数据蓝 - 团队相关数据 */
+  --data-blue: #3B82F6;
+  --data-blue-light: #60A5FA;
+  --data-blue-dark: #2563EB;
+  --data-blue-bg: #EFF6FF;
+  
+  /* 数据绿 - 销售/增长数据 */
+  --data-green: #10B981;
+  --data-green-light: #34D399;
+  --data-green-dark: #059669;
+  --data-green-bg: #ECFDF5;
+  
+  /* 数据紫 - 库存/产品数据 */
+  --data-purple: #8B5CF6;
+  --data-purple-light: #A78BFA;
+  --data-purple-dark: #7C3AED;
+  --data-purple-bg: #F5F3FF;
+  
+  /* 数据橙 - 订单/交易数据 */
+  --data-orange: #F59E0B;
+  --data-orange-light: #FBBF24;
+  --data-orange-dark: #D97706;
+  --data-orange-bg: #FFFBEB;
+  
   /* ==================== 兼容性变量（统一使用）==================== */
   --color-primary: var(--luxury-gold);
   --color-primary-light: var(--luxury-gold-light);

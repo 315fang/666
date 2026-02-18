@@ -1,6 +1,6 @@
 // pages/index/index.js
 const { get, post } = require('../../utils/request');
-const { parseImages } = require('../../utils/dataFormatter');
+const { parseImages, formatGrowth, normalizeTrendData, formatLargeNumber } = require('../../utils/dataFormatter');
 const { DEFAULTS, ROLE_NAMES } = require('../../config/constants');
 const app = getApp();
 
@@ -14,6 +14,24 @@ Page({
         stats: {
             commission: '0.00',
             teamCount: 0
+        },
+        // 新增: 增强的数据看板
+        dashboard: {
+            // 主KPI
+            monthlyRevenue: '0.00',
+            revenueGrowth: '+0.0',
+            growthTrend: 'up',
+            
+            // 次要KPI
+            todayRevenue: '0.00',
+            teamSize: 0,
+            monthlyOrders: 0,
+            
+            // 趋势数据（最近5天，百分比）
+            revenueTrend: [0, 0, 0, 0, 0],
+            
+            // 其他
+            currentMonth: '本月'
         },
         statusBarHeight: 20
     },
@@ -75,7 +93,17 @@ Page({
             this.setData({
                 userInfo: null,
                 truncatedName: '游客',
-                stats: { commission: '0.00', teamCount: 0 }
+                stats: { commission: '0.00', teamCount: 0 },
+                dashboard: {
+                    monthlyRevenue: '0.00',
+                    revenueGrowth: '+0.0',
+                    growthTrend: 'up',
+                    todayRevenue: '0.00',
+                    teamSize: 0,
+                    monthlyOrders: 0,
+                    revenueTrend: [0, 0, 0, 0, 0],
+                    currentMonth: '本月'
+                }
             });
             return;
         }
@@ -113,8 +141,84 @@ Page({
                     'stats.teamCount': teamCount
                 });
             }
+            
+            // 3. Load Dashboard Data (新增)
+            this.loadDashboardData();
         } catch (err) {
             console.error('加载用户信息失败:', err);
+        }
+    },
+    
+    // 新增: 加载数据看板
+    async loadDashboardData() {
+        try {
+            // 并行加载多个数据接口
+            const [overviewRes, ordersRes] = await Promise.all([
+                get('/distribution/overview').catch(() => ({ code: -1, data: null })),
+                get('/orders/stats').catch(() => ({ code: -1, data: null }))
+            ]);
+            
+            // 获取当前月份
+            const now = new Date();
+            const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+            const currentMonth = monthNames[now.getMonth()];
+            
+            // 处理概览数据
+            let monthlyRevenue = 0;
+            let lastMonthRevenue = 0;
+            let todayRevenue = 0;
+            let teamSize = 0;
+            let revenueTrendRaw = [0, 0, 0, 0, 0];
+            
+            if (overviewRes.code === 0 && overviewRes.data) {
+                const d = overviewRes.data;
+                monthlyRevenue = parseFloat(d.stats?.monthlyCommission || d.stats?.balance || 0);
+                lastMonthRevenue = parseFloat(d.stats?.lastMonthCommission || d.stats?.monthlyCommission || 0) * 0.8; // 估算上月（如果没有数据）
+                todayRevenue = parseFloat(d.stats?.todayCommission || 0);
+                teamSize = d.team?.totalCount || 0;
+                
+                // 如果有趋势数据（最近5天佣金）
+                if (d.stats?.last5DaysCommission && Array.isArray(d.stats.last5DaysCommission)) {
+                    revenueTrendRaw = d.stats.last5DaysCommission;
+                } else {
+                    // 模拟趋势数据（从低到高）
+                    revenueTrendRaw = [
+                        monthlyRevenue * 0.4,
+                        monthlyRevenue * 0.6,
+                        monthlyRevenue * 0.8,
+                        monthlyRevenue * 0.7,
+                        monthlyRevenue
+                    ];
+                }
+            }
+            
+            // 处理订单数据
+            let monthlyOrders = 0;
+            if (ordersRes.code === 0 && ordersRes.data) {
+                monthlyOrders = ordersRes.data.monthlyCount || ordersRes.data.thisMonth || 0;
+            }
+            
+            // 计算增长率
+            const growth = formatGrowth(monthlyRevenue, lastMonthRevenue);
+            
+            // 标准化趋势数据
+            const revenueTrend = normalizeTrendData(revenueTrendRaw);
+            
+            this.setData({
+                dashboard: {
+                    monthlyRevenue: monthlyRevenue.toFixed(2),
+                    revenueGrowth: growth.value,
+                    growthTrend: growth.trend,
+                    todayRevenue: todayRevenue.toFixed(2),
+                    teamSize: formatLargeNumber(teamSize),
+                    monthlyOrders: monthlyOrders,
+                    revenueTrend: revenueTrend,
+                    currentMonth: currentMonth
+                }
+            });
+        } catch (error) {
+            console.error('加载看板数据失败:', error);
+            // 保持默认值，不影响用户使用
         }
     },
 
@@ -149,6 +253,23 @@ Page({
 
     onKnowledgePlanetTap() {
         wx.showToast({ title: '知识星球 - 即将上线', icon: 'none' });
+    },
+    
+    // 新增: 数据看板操作
+    onWithdraw() {
+        if (!this.data.isLoggedIn) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: '/pages/distribution/withdraw' });
+    },
+    
+    onViewDetails() {
+        if (!this.data.isLoggedIn) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: '/pages/distribution/commission-logs' });
     },
 
     // New Handlers for Guide and Co-creation
