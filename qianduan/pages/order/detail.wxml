@@ -181,3 +181,6 @@
 <view class="loading-container" wx:if="{{loading}}">
   <text>加载中...</text>
 </view>
+
+<!-- 品牌动画（复制单号反馈等） -->
+<brand-animation id="brandAnimation"></brand-animation>

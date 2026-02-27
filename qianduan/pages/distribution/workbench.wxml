@@ -127,10 +127,7 @@
 
       <!-- 操作区域 -->
       <view class="order-actions" wx:if="{{item.status === 'paid' || item.status === 'agent_confirmed'}}">
-        <view class="action-btn primary" data-id="{{item.id}}" data-order="{{item}}" bindtap="onShipTap">
-          <image class="btn-icon" src="/assets/icons/truck.svg" mode="aspectFit"/>
-          <text>申请平台发货</text>
-        </view>
+        <text style="color: #999; font-size: 24rpx; padding: 20rpx; text-align: right; display: block; width: 100%;">等待平台发货</text>
       </view>
       <view class="order-actions shipped" wx:if="{{item.status === 'shipped' || item.status === 'completed'}}">
         <view class="tracking-wrap">
@@ -156,54 +153,4 @@
     </view>
   </view>
 
-  <!-- 4. 发货确认弹窗 -->
-  <view class="ship-popup {{showShipPopup ? 'show' : ''}}">
-    <view class="mask" bindtap="hideShipPopup"></view>
-    <view class="popup-content">
-      <view class="popup-header">
-        <view class="header-line"></view>
-        <text class="popup-title">确认发货</text>
-        <view class="header-line"></view>
-      </view>
-      
-      <view class="ship-confirm-info" wx:if="{{shipOrder.id}}">
-        <view class="info-item">
-          <view class="info-label">
-            <image class="label-icon" src="/assets/icons/user.svg" mode="aspectFit"/>
-            <text>收货人</text>
-          </view>
-          <text class="info-value">{{shipOrder.address_snapshot.receiver_name}} {{shipOrder.address_snapshot.phone}}</text>
-        </view>
-        <view class="info-item">
-          <view class="info-label">
-            <image class="label-icon" src="/assets/icons/shopping-bag.svg" mode="aspectFit"/>
-            <text>商品</text>
-          </view>
-          <text class="info-value">{{shipOrder.product.name}} ×{{shipOrder.quantity}}</text>
-        </view>
-        <view class="info-item highlight">
-          <view class="info-label">
-            <image class="label-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
-            <text>消耗库存</text>
-          </view>
-          <text class="info-value stock-cost">{{shipOrder.quantity}} 件</text>
-        </view>
-      </view>
-      
-      <view class="popup-tips">
-        <view class="tips-icon-wrap">
-          <image class="tips-icon" src="/assets/icons/info.svg" mode="aspectFit"/>
-        </view>
-        <text class="tips-text">确认后将扣除云仓库存，并通知平台发货</text>
-      </view>
-      
-      <view class="popup-actions">
-        <view class="btn btn-secondary" bindtap="hideShipPopup">取消</view>
-        <view class="btn btn-primary" bindtap="confirmShip">
-          <image class="btn-icon" src="/assets/icons/check.svg" mode="aspectFit"/>
-          <text>确认发货</text>
-        </view>
-      </view>
-    </view>
-  </view>
-</view>
+

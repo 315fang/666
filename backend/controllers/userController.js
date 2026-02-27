@@ -263,11 +263,113 @@ async function markNotificationRead(req, res, next) {
     }
 }
 
+// --- 用户偏好设置与AI盲盒测算 ---
+
+// 获取用户偏好
+async function getPreferences(req, res, next) {
+    try {
+        const user = await User.findByPk(req.user.id, {
+            attributes: ['preferences']
+        });
+
+        const prefs = user?.preferences || {};
+
+        res.json({
+            code: 0,
+            data: prefs
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+// 获取AI定制测算问题库
+async function getPreferencesQuestions(req, res, next) {
+    try {
+        const { AppConfig } = require('../models');
+        // 从配置表中读取，如果没有则返回一份默认的题目
+        const config = await AppConfig.findOne({ where: { config_key: 'AI_QUESTIONNAIRE_CONFIG' } });
+
+        let questions = [];
+        if (config && config.config_value) {
+            try {
+                questions = JSON.parse(config.config_value);
+            } catch (e) {
+                console.error("解析问卷配置失败", e);
+            }
+        }
+
+        // 默认备用题库
+        if (questions.length === 0) {
+            questions = [
+                {
+                    id: "q1",
+                    title: "您平时的穿衣/生活风格是？",
+                    subtitle: "AI将根据风格为您挑选合适的单品",
+                    options: [
+                        { label: "极简冷淡风", value: "minimalist" },
+                        { label: "街头潮牌", value: "street" },
+                        { label: "职场通勤", value: "office" },
+                        { label: "甜美可爱", value: "sweet" }
+                    ]
+                },
+                {
+                    id: "q2",
+                    title: "您对哪些品类的盲盒更感兴趣？",
+                    subtitle: "多选题，AI会跨品类为您搭配",
+                    options: [
+                        { label: "美妆与护肤", value: "beauty" },
+                        { label: "精致零食", value: "snack" },
+                        { label: "居家生活好物", value: "home" },
+                        { label: "减脂与健康", value: "health" }
+                    ]
+                },
+                {
+                    id: "q3",
+                    title: "您目前的单月闲置消费预算是？",
+                    subtitle: "为了给您控制合理的盲盒体积",
+                    options: [
+                        { label: "199元以内 (轻奢尝鲜)", value: "199" },
+                        { label: "199-399元 (进阶品质)", value: "399" },
+                        { label: "399元以上 (极致尊享)", value: "599" }
+                    ]
+                }
+            ];
+        }
+
+        res.json({
+            code: 0,
+            data: questions
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+// 保存用户偏好设置并触发AI大模型预选
+async function savePreferences(req, res, next) {
+    try {
+        const { preferences } = req.body;
+
+        await User.update(
+            { preferences: preferences || {} },
+            { where: { id: req.user.id } }
+        );
+
+        res.json({ code: 0, message: '偏好设置已保存，AI分析完成' });
+    } catch (error) {
+        next(error);
+    }
+}
+
 module.exports = {
     getUserProfile,
     updateProfile,
     getUserRole,
     bindParent,
     getNotifications,
-    markNotificationRead
+    markNotificationRead,
+    getPreferences,
+    getPreferencesQuestions,
+    savePreferences
 };

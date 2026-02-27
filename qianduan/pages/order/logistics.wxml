@@ -79,3 +79,6 @@
     </button>
   </view>
 </view>
+
+<!-- 品牌动画（复制运单号反馈） -->
+<brand-animation id="brandAnimation"></brand-animation>

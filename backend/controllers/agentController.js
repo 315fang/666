@@ -209,7 +209,18 @@ const agentShip = async (req, res) => {
             visitedIds.add(buyer.id); // 防止自购自佣
 
             while (pRef) {
-                if (visitedIds.has(pRef) || visitedIds.size > 50) break;
+                if (visitedIds.has(pRef) || visitedIds.size > 50) {
+                    console.error(`⚠️ [严重警告] 发现循环绑定或异常深度的代理树！用户ID: ${buyer.id}, 异常节点: ${pRef}`);
+                    // 强制发送异常告警通知给管理员
+                    sendNotification(
+                        0,
+                        '🚨 严重系统告警：代理关系循环',
+                        `系统在计算佣金(订单 ${order.id})时检测到代理关系闭环或深度过深！请立即排查用户 ${buyer.id} 与 ${pRef} 的上下级关系。处理过程已强行切断以保护服务器。`,
+                        'system_alert',
+                        order.id
+                    ).catch(e => console.error(e));
+                    break;
+                }
                 visitedIds.add(pRef);
 
                 const p = await User.findByPk(pRef, { transaction: t });

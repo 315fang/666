@@ -49,6 +49,10 @@ Page({
         }
     },
 
+    onReady() {
+        this.brandAnimation = this.selectComponent('#brandAnimation');
+    },
+
     // ★ 每次显示刷新（从退款申请页返回时需要更新状态）
     onShow() {
         if (this.data.orderId) {
@@ -199,14 +203,18 @@ Page({
         }
     },
 
-    // 复制单号
+    // ★ 复制单号（使用品牌动画反馈）
     onCopyTrackingNo() {
         const { order } = this.data;
         if (order.tracking_no) {
             wx.setClipboardData({
                 data: order.tracking_no,
                 success: () => {
-                    wx.showToast({ title: '单号已复制', icon: 'success' });
+                    if (this.brandAnimation) {
+                        this.brandAnimation.showCopySuccess('单号已复制');
+                    } else {
+                        wx.showToast({ title: '单号已复制', icon: 'success' });
+                    }
                 }
             });
         }

@@ -1,0 +1,132 @@
+.container {
+  min-height: 100vh;
+  background: #111;
+  color: #fff;
+  padding: 40rpx;
+  box-sizing: border-box;
+}
+
+/* Loading State */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 80vh;
+}
+.spinner {
+  width: 80rpx;
+  height: 80rpx;
+  border: 6rpx solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text {
+  margin-top: 40rpx;
+  font-size: 28rpx;
+  color: #aaa;
+  letter-spacing: 2rpx;
+}
+
+/* Result State */
+.animate-fade-in {
+  animation: fadeIn 0.8s ease forwards;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(40rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.header-card {
+  text-align: center;
+  margin-bottom: 60rpx;
+  margin-top: 40rpx;
+}
+.main-title {
+  font-size: 56rpx;
+  font-weight: 800;
+  letter-spacing: 4rpx;
+  background: linear-gradient(135deg, #fff, #888);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.sub-title {
+  font-size: 26rpx;
+  color: #888;
+  margin-top: 20rpx;
+}
+
+.analysis-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  padding: 40rpx;
+  border-radius: 20rpx;
+  margin-bottom: 40rpx;
+}
+.card-title {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #e5e7eb;
+  margin-bottom: 20rpx;
+}
+.analysis-text {
+  font-size: 28rpx;
+  color: #9ca3af;
+  line-height: 1.8;
+  letter-spacing: 1rpx;
+}
+
+.price-card {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20rpx;
+  padding: 40rpx;
+  margin-bottom: 80rpx;
+}
+.price-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 28rpx;
+  color: #bbb;
+  margin-bottom: 20rpx;
+}
+.price-item.total {
+  margin-top: 30rpx;
+  padding-top: 30rpx;
+  border-top: 1rpx solid rgba(255,255,255,0.1);
+}
+.price-item .through {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.price-item .highlight {
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #fff;
+}
+
+.buy-section {
+  position: fixed;
+  bottom: 80rpx;
+  left: 0;
+  width: 100%;
+  padding: 0 40rpx;
+  box-sizing: border-box;
+}
+.tips {
+  font-size: 24rpx;
+  color: #666;
+  text-align: center;
+  margin-bottom: 20rpx;
+}
+.pay-btn {
+  background: #fff;
+  color: #000;
+  font-size: 32rpx;
+  font-weight: bold;
+  border-radius: 100rpx;
+  padding: 24rpx;
+  width: 100%;
+}

@@ -108,15 +108,20 @@ const Product = sequelize.define('Product', {
         allowNull: true,
         comment: 'AI审查原因'
     },
-    status: {
+    stock: {
         type: DataTypes.INTEGER,
         defaultValue: 0,
-        comment: '公司库存'
+        comment: '商品总库存'
     },
     status: {
         type: DataTypes.TINYINT,
         defaultValue: 1,
         comment: '状态: 1-上架, 0-下架'
+    },
+    custom_commissions: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        comment: '段位定制佣金配置，例如 {"fixed": {"MEMBER": 10, "LEADER": 20}, "rate": {"AGENT": 0.15}}'
     }
 }, {
     tableName: 'products',

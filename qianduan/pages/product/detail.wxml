@@ -121,15 +121,33 @@
     </view>
   </view>
 
-  <!-- 5. 规格选择 -->
-  <view class="section-card spec-selector" bindtap="showSkuModal">
-    <view class="selector-left">
-      <text class="selector-label">规格</text>
-      <text class="selector-value">{{selectedSkuText || '请选择规格数量'}}</text>
+  <!-- 5. 规格选择（直接展示在页面） -->
+  <view class="section-card spec-section" wx:if="{{product.specs && product.specs.length > 0}}">
+    <view class="spec-group" wx:for="{{product.specs}}" wx:key="name">
+      <view class="spec-title">{{item.name}}</view>
+      <view class="spec-options">
+        <view class="spec-option {{selectedSpecs[item.name] === val ? 'active' : ''}}"
+              wx:for="{{item.values}}" wx:for-item="val" wx:key="*this"
+              bindtap="onSpecSelect" data-key="{{item.name}}" data-val="{{val}}">
+          {{val}}
+        </view>
+      </view>
     </view>
-    <view class="selector-arrow">
-      <image class="icon-sm" src="/assets/icons/arrow-right.svg" mode="aspectFit"/>
+  </view>
+
+  <!-- 数量选择 -->
+  <view class="section-card qty-section-page">
+    <text class="qty-label">数量</text>
+    <view class="stepper">
+      <view class="stepper-btn {{quantity <= 1 ? 'disabled' : ''}}" bindtap="onMinus">
+        <image class="icon-xs" src="/assets/icons/minus.svg" mode="aspectFit"/>
+      </view>
+      <input class="stepper-input" type="number" value="{{quantity}}" bindinput="onQtyInput" />
+      <view class="stepper-btn" bindtap="onPlus">
+        <image class="icon-xs" src="/assets/icons/plus.svg" mode="aspectFit"/>
+      </view>
     </view>
+    <text class="stock-text">库存 {{currentStock || product.stock || 999}}件</text>
   </view>
 
   <!-- 6. 评价预览 -->
@@ -181,62 +199,7 @@
   <!-- 8. 底部安全区域占位 -->
   <view class="bottom-safe-area"></view>
 
-  <!-- SKU弹窗 -->
-  <view class="sku-modal {{showSku ? 'show' : ''}}" bindtap="hideSkuModal">
-    <view class="sku-content" catchtap="stopP">
-      <view class="sku-header">
-        <image src="{{selectedSkuImg || product.images[0]}}" mode="aspectFill" class="sku-thumb"></image>
-        <view class="sku-info">
-          <view class="sku-price">¥{{currentPrice || product.displayPrice || product.price}}</view>
-          <view class="sku-stock">库存 {{currentStock || product.stock || 999}}件</view>
-          <view class="sku-selected">已选 {{selectedSkuText || '请选择'}}</view>
-        </view>
-        <view class="close-btn" bindtap="hideSkuModal">
-          <image class="icon-md" src="/assets/icons/x.svg" mode="aspectFit"/>
-        </view>
-      </view>
 
-      <scroll-view scroll-y class="sku-scroll">
-        <!-- 规格循环 -->
-        <view class="spec-group" wx:for="{{product.specs}}" wx:key="name">
-          <view class="spec-title">{{item.name}}</view>
-          <view class="spec-options">
-            <view class="spec-option {{selectedSpecs[item.name] === val ? 'active' : ''}}"
-                  wx:for="{{item.values}}" wx:for-item="val" wx:key="*this"
-                  bindtap="onSpecSelect" data-key="{{item.name}}" data-val="{{val}}">
-              {{val}}
-            </view>
-          </view>
-        </view>
-
-        <!-- 数量选择 -->
-        <view class="qty-section">
-          <text class="qty-label">数量</text>
-          <view class="stepper">
-            <view class="stepper-btn {{quantity <= 1 ? 'disabled' : ''}}" bindtap="onMinus">
-              <image class="icon-xs" src="/assets/icons/minus.svg" mode="aspectFit"/>
-            </view>
-            <input class="stepper-input" type="number" value="{{quantity}}" bindinput="onQtyInput" />
-            <view class="stepper-btn" bindtap="onPlus">
-              <image class="icon-xs" src="/assets/icons/plus.svg" mode="aspectFit"/>
-            </view>
-          </view>
-        </view>
-      </scroll-view>
-
-      <view class="sku-footer">
-        <view class="sku-btn-group">
-          <view class="sku-btn sku-btn-cart" bindtap="onAddToCart">
-            <image class="btn-icon" src="/assets/icons/shopping-cart.svg" mode="aspectFit"/>
-            <text>加入购物车</text>
-          </view>
-          <view class="sku-btn sku-btn-buy" bindtap="onBuyNow">
-            <text>立即购买</text>
-          </view>
-        </view>
-      </view>
-    </view>
-  </view>
 
   <!-- 底部操作栏 -->
   <view class="action-bar">
@@ -245,7 +208,7 @@
         <image class="icon-img" src="/assets/icons/home.svg" mode="aspectFit"></image>
         <text class="icon-label">首页</text>
       </view>
-      <view class="action-icon" bindtap="goCart">
+      <view class="action-icon cart-target" bindtap="goCart">
         <image class="icon-img" src="/assets/icons/shopping-cart.svg" mode="aspectFit"></image>
         <text class="icon-label">购物车</text>
         <view class="icon-badge" wx:if="{{cartCount > 0}}">{{cartCount}}</view>
@@ -264,4 +227,7 @@
       </view>
     </view>
   </view>
+
+  <!-- 品牌动画组件 -->
+  <brand-animation id="brandAnimation" fly-image="{{product.images[0]}}"></brand-animation>
 </view>

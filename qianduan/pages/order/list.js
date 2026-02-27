@@ -19,12 +19,8 @@ Page({
         let status = options.status;
         if (status === 'all') status = '';
         if (status) {
-            console.log('[OrderList] Setting status to:', status);
-            this.setData({ currentStatus: status }, () => {
-                this.loadOrders();
-            });
-        } else {
-            this.loadOrders();
+            // 只更新 status，不加载数据 — onShow 会紧接着触发并加载
+            this.setData({ currentStatus: status });
         }
     },
 

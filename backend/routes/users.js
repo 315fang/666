@@ -25,4 +25,9 @@ router.post('/bind-parent', authenticate, userController.bindParent);
 router.get('/notifications', authenticate, userController.getNotifications);
 router.put('/notifications/:id/read', authenticate, userController.markNotificationRead);
 
+// ★ 用户偏好设置（AI盲盒定制）
+router.get('/user/preferences', authenticate, userController.getPreferences);
+router.get('/user/preferences/questions', authenticate, userController.getPreferencesQuestions);
+router.post('/user/preferences/submit', authenticate, userController.savePreferences);
+
 module.exports = router;

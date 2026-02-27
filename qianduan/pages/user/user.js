@@ -36,9 +36,6 @@ Page({
         // 昵称修改弹窗
         showNicknameModal: false,
         newNickname: '',
-        // 邀请码弹窗
-        showInvite: false,
-        inviteCode: '',
         // 卡片下拉效果
         cardTransform: 0,
         isPulling: false
@@ -54,7 +51,7 @@ Page({
     onCardTouchMove(e) {
         const moveY = e.touches[0].clientY;
         const diff = moveY - this.startY;
-        
+
         // 只有向下拖动时才响应，且限制最大下拉距离
         if (diff > 0 && diff < 150) {
             // 添加阻尼效果
@@ -65,9 +62,9 @@ Page({
 
     // 触摸结束 - 卡片回弹
     onCardTouchEnd(e) {
-        this.setData({ 
+        this.setData({
             cardTransform: 0,
-            isPulling: false 
+            isPulling: false
         });
     },
 
@@ -91,14 +88,13 @@ Page({
                 const info = res.data;
                 const roleLevel = info.role || 0;
                 const roleName = info.role_name || ROLE_NAMES[roleLevel] || '普通用户';
-                
+
                 this.setData({
                     userInfo: {
                         ...info,
                         role_name: roleName
                     },
                     hasUserInfo: true,
-                    inviteCode: info.invite_code || '',
                     isAgent: (info.role_level || roleLevel || 0) >= 2
                 });
                 app.globalData.userInfo = this.data.userInfo;
@@ -247,7 +243,7 @@ Page({
     async onLogin() {
         try {
             wx.showLoading({ title: '登录中...' });
-            await app.wxLogin(null, true);
+            await app.wxLogin(true);
             wx.hideLoading();
             this.loadUserInfo();
             wx.showToast({ title: '登录成功', icon: 'success' });
@@ -281,6 +277,14 @@ Page({
                 console.error('授权提示失败:', err);
             }
         }
+    },
+
+    onCompleteInfoTap() {
+        if (!this.data.isLoggedIn) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: '/pages/ai/questionnaire' });
     },
 
     // ======== 修改昵称 ========
@@ -481,35 +485,15 @@ Page({
         }
     },
 
-    // ======== 显示/隐藏邀请码弹窗 ========
+    // ======== 分享邀请问卷 ========
     onShowInvite() {
         if (!this.data.isLoggedIn) {
             wx.showToast({ title: '请先登录', icon: 'none' });
             return;
         }
-        this.setData({ showInvite: true });
+        // 跳转到邀请页面
+        wx.navigateTo({ url: '/pages/distribution/invite' });
     },
-
-    hideInvite() {
-        this.setData({ showInvite: false });
-    },
-
-    // ======== 复制邀请码 ========
-    onCopyInviteCode() {
-        const code = this.data.inviteCode;
-        if (!code) {
-            wx.showToast({ title: '暂无邀请码', icon: 'none' });
-            return;
-        }
-        wx.setClipboardData({
-            data: code,
-            success: () => {
-                wx.showToast({ title: '邀请码已复制', icon: 'success' });
-            }
-        });
-    },
-    // WXML 绑定别名
-    copyInviteCode() { this.onCopyInviteCode(); },
 
     // ======== ★ 分佣中心（整合团队、钱包、邀请码） ========
     goDistributionCenter() {
@@ -544,13 +528,20 @@ Page({
         });
     },
 
-    // ======== 分享功能（关键：带邀请码） ========
+    // ======== 分享功能（新版：邀请问卷） ========
     onShareAppMessage() {
         const userInfo = this.data.userInfo;
-        const inviteCode = userInfo ? (userInfo.invite_code || userInfo.id) : '';
+        const userId = userInfo ? userInfo.id : '';
+        if (!userId) {
+            return {
+                title: '臻选 · 精选全球好物，邀你一起赚',
+                path: '/pages/index/index',
+                imageUrl: ''
+            };
+        }
         return {
             title: '臻选 · 精选全球好物，邀你一起赚',
-            path: `/pages/index/index?share_id=${inviteCode}`,
+            path: `/pages/questionnaire/fill?inviter_id=${userId}`,
             imageUrl: ''
         };
     }

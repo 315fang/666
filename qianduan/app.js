@@ -19,17 +19,17 @@ App({
         this.autoLogin();
     },
 
-    // 检查是否通过分享进入（绑定上下级）
+    // 检查是否通过分享进入（新版：邀请问卷）
+    // 只存标记，由实际落地页（index.js）负责跳转，避免双重导航
     checkShareBind(options) {
-        if (options && options.query && options.query.scene) {
-            // 扫码进入 scene=distributor_id
+        if (options && options.query && options.query.inviter_id) {
+            const inviterId = options.query.inviter_id;
+            console.log('通过邀请问卷进入, inviter_id:', inviterId);
+            this.globalData.pendingInviterId = inviterId;
+        } else if (options && options.query && options.query.scene) {
             const scene = decodeURIComponent(options.query.scene);
             console.log('扫码进入, scene:', scene);
-            wx.setStorageSync('distributor_id', scene);
-        } else if (options && options.query && options.query.share_id) {
-            // 分享链接进入 share_id=distributor_id
-            console.log('分享进入, share_id:', options.query.share_id);
-            wx.setStorageSync('distributor_id', options.query.share_id);
+            this.globalData.pendingInviterId = scene;
         }
     },
 
@@ -52,21 +52,16 @@ App({
 
             // 没有缓存，执行静默微信登录（不收集用户资料）
             // 用户首次登录时，会在个人中心页面看到"立即登录"按钮
-            // 点击该按钮会调用 wxLogin(null, true) 来收集资料
-            await this.wxLogin(null, false);
+            // 点击该按钮会调用 wxLogin(true) 来收集资料
+            await this.wxLogin(false);
         } catch (err) {
             console.error('自动登录失败:', err);
         }
     },
 
     // 微信登录（支持静默登录和授权登录）
-    async wxLogin(distributorId = null, withProfile = false) {
+    async wxLogin(withProfile = false) {
         try {
-            // 获取缓存的推荐人ID
-            if (!distributorId) {
-                distributorId = wx.getStorageSync('distributor_id');
-            }
-
             // 1. 获取微信登录 code
             const { code } = await this.promisify(wx.login)();
             console.log('获取到 code:', code);
@@ -92,7 +87,6 @@ App({
             // 3. 发送给后端换取用户信息
             const result = await login({
                 code,
-                distributor_id: distributorId,
                 ...profileData // 携带用户资料（如果有）
             });
 
@@ -106,6 +100,18 @@ App({
                 wx.setStorageSync('userInfo', result.userInfo);
                 wx.setStorageSync('openid', result.openid);
                 wx.setStorageSync('token', result.token);
+
+                // ★ 首次登录标记 — 用于触发 welcome 品牌动画
+                if (result.is_new_user) {
+                    this.globalData.isNewUser = true;
+                }
+
+                // ★ 等级提升标记 — 用于触发 levelUp 品牌动画
+                if (result.level_up) {
+                    this.globalData.levelUpInfo = {
+                        levelName: result.level_name || ''
+                    };
+                }
 
                 console.log('登录成功:', result.userInfo);
                 return result;

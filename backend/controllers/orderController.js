@@ -114,7 +114,7 @@ const createOrder = async (req, res) => {
         if (agentId) {
             const agent = await User.findByPk(agentId, { transaction: t, lock: t.LOCK.UPDATE });
             if (agent && agent.role_level >= 3 && agent.stock_count > 0) {
-                agentQuantity = Math.min(agent.stock_count, quantity);
+                agentQuantity = 0; // 取消代理商自行发货全部转平台发货
                 platformQuantity = quantity - agentQuantity;
             }
         }
@@ -137,6 +137,7 @@ const createOrder = async (req, res) => {
         };
 
         // 扣减平台库存（整个订单数量都扣平台库存）
+        if(agentQuantity>0 && price<lockedAgentCost){await t.rollback();return res.status(400).json({code:-1,message:'当前商品价格倒挂，由于折扣等原因导致无法作为代理发货，请联系客服处理'});}
         await stockTarget.decrement('stock', { by: quantity, transaction: t });
         if (sku_id) {
             await product.decrement('stock', { by: quantity, transaction: t });

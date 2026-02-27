@@ -28,27 +28,49 @@ Page({
             statusBarHeight: sysInfo.statusBarHeight
         });
 
-        if (options.share_id) {
-            console.log('通过分享进入，邀请人ID:', options.share_id);
-            wx.setStorageSync('distributor_id', options.share_id);
-            if (app.globalData.isLoggedIn) {
-                this.tryBindParent(options.share_id);
-            }
+        // 新版邀请：通过 inviter_id 跳转问卷页
+        // 优先取 options 中的 inviter_id，其次取 app.js 的 pendingInviterId
+        const inviterId = options.inviter_id || app.globalData.pendingInviterId;
+        if (inviterId) {
+            // 消费标记，防止重复跳转
+            app.globalData.pendingInviterId = null;
+            console.log('通过邀请问卷进入，邀请人ID:', inviterId);
+            wx.navigateTo({
+                url: `/pages/questionnaire/fill?inviter_id=${inviterId}`
+            });
         }
 
         this.loadData();
     },
 
-    async tryBindParent(parentId) {
-        try {
-            const res = await post('/bind-parent', { parent_id: parseInt(parentId) });
-            if (res.code === 0) {
-                wx.showToast({ title: '已加入团队', icon: 'success' });
-            }
-        } catch (err) {
-            console.log('绑定上级:', err.message || '已有上级');
+    onReady() {
+        this.brandAnimation = this.selectComponent('#brandAnimation');
+
+        // ★ 首次登录 welcome 动画
+        const hasShownWelcome = wx.getStorageSync('hasShownWelcome');
+        if (!hasShownWelcome && app.globalData.isNewUser) {
+            app.globalData.isNewUser = false;
+            wx.setStorageSync('hasShownWelcome', true);
+            setTimeout(() => {
+                if (this.brandAnimation) {
+                    this.brandAnimation.show('welcome');
+                }
+            }, 800); // 等页面渲染完再播放
+        }
+
+        // ★ 等级提升 levelUp 动画
+        if (app.globalData.levelUpInfo) {
+            const info = app.globalData.levelUpInfo;
+            app.globalData.levelUpInfo = null;
+            setTimeout(() => {
+                if (this.brandAnimation) {
+                    this.brandAnimation.show('levelUp', { levelName: info.levelName });
+                }
+            }, 1000);
         }
     },
+
+
 
     async loadData() {
         this.setData({ loading: true });
@@ -56,7 +78,7 @@ Page({
             // Load Banners
             const bannerRes = await get('/content/banners', { position: 'home' }).catch(() => ({ data: [] }));
             const banners = bannerRes.data || [];
-            
+
             this.setData({
                 banners,
                 loading: false
@@ -87,13 +109,13 @@ Page({
                 const info = res.data;
                 const roleLevel = info.role || 0;
                 const roleName = info.role_name || ROLE_NAMES[roleLevel] || '普通用户';
-                
+
                 // Truncate nickname to first 3 chars
                 let name = info.nickname || '微信用户';
                 if (name.length > 3) {
                     name = name.substring(0, 3);
                 }
-                
+
                 this.setData({
                     userInfo: { ...info, role_name: roleName },
                     truncatedName: name
@@ -123,7 +145,7 @@ Page({
         const banner = e.currentTarget.dataset.item;
         if (banner && banner.link_value) {
             // Basic banner navigation
-             wx.navigateTo({ url: '/pages/product/detail?id=' + banner.link_value });
+            wx.navigateTo({ url: '/pages/product/detail?id=' + banner.link_value });
         }
     },
 
@@ -162,10 +184,18 @@ Page({
 
     onShareAppMessage() {
         const userInfo = this.data.userInfo;
-        const inviteCode = userInfo ? (userInfo.invite_code || userInfo.id) : '';
+        const userId = userInfo ? userInfo.id : '';
+        // 未登录时不带 inviter_id，避免空参数导致问卷提交失败
+        if (!userId) {
+            return {
+                title: '加入我们，共创未来',
+                path: '/pages/index/index',
+                imageUrl: ''
+            };
+        }
         return {
             title: '加入我们，共创未来',
-            path: `/pages/index/index?share_id=${inviteCode}`,
+            path: `/pages/questionnaire/fill?inviter_id=${userId}`,
             imageUrl: ''
         };
     }

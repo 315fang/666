@@ -588,6 +588,24 @@ button::after {
 .hover-scale-105:active { transform: scale(1.05); }
 .hover-shadow-lg:active { box-shadow: var(--shadow-lg); }
 
+/* 按钮点击反馈 */
+.btn-primary:active,
+.btn-secondary:active,
+.btn-outline:active,
+.action-btn:active,
+.submit-btn:active {
+  transform: scale(0.96);
+  opacity: 0.9;
+  transition: transform 0.1s ease;
+}
+
+/* 列表项点击反馈 */
+.list-item:active,
+.menu-item:active,
+.nav-item:active {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
 .cursor-pointer { cursor: pointer; }
 .select-none { user-select: none; }
 .select-text { user-select: text; }
@@ -786,3 +804,129 @@ button::after {
 
 /* ==================== 减少动效 ==================== */
 /* 微信小程序不支持 * 选择器，此媒体查询已禁用 */
+
+/* ==================== 层级三：微交互动画 ==================== */
+/* 这些类可以在任何页面中直接使用，无需额外引入 */
+
+/* ① 金额/价格闪烁 — 数字变化时闪金色 */
+.price-flash {
+  animation: priceFlash 0.6s ease-out;
+}
+
+@keyframes priceFlash {
+  0% { color: inherit; transform: scale(1); }
+  25% { color: #D4A84B; transform: scale(1.08); }
+  50% { color: #CA8A04; transform: scale(1.04); }
+  100% { color: inherit; transform: scale(1); }
+}
+
+/* ② Tab 下划线滑动 */
+.tab-indicator {
+  position: absolute;
+  bottom: 0;
+  height: 4rpx;
+  background: linear-gradient(90deg, #CA8A04, #D4A84B);
+  border-radius: 2rpx;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ③ 卡片入场淡入（配合 wx:for 使用，支持延迟） */
+.card-fade-in {
+  animation: cardFadeIn 0.4s ease-out both;
+}
+
+@keyframes cardFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20rpx);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 延迟入场（用于列表中不同卡片） */
+.card-delay-1 { animation-delay: 50ms; }
+.card-delay-2 { animation-delay: 100ms; }
+.card-delay-3 { animation-delay: 150ms; }
+.card-delay-4 { animation-delay: 200ms; }
+.card-delay-5 { animation-delay: 250ms; }
+
+/* ④ 数字变化色闪 — 用于佣金/余额/计数 */
+.number-flash {
+  animation: numberFlash 0.4s ease-out;
+}
+
+@keyframes numberFlash {
+  0% { opacity: 0.5; transform: translateY(-8rpx); }
+  50% { opacity: 1; color: #CA8A04; }
+  100% { opacity: 1; transform: translateY(0); color: inherit; }
+}
+
+/* ⑤ 图片按压缩放 — 用于商品图预览 */
+.img-pressable:active {
+  transform: scale(0.97);
+  transition: transform 0.15s ease;
+}
+
+/* ⑥ 展开/收起 — 用于可折叠区域 */
+.expandable {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.35s ease-out, opacity 0.25s ease-out, padding 0.35s ease-out;
+}
+
+.expandable.expanded {
+  max-height: 2000rpx;
+  opacity: 1;
+}
+
+/* ⑦ badge 计数脉冲 — 购物车/通知角标 */
+.badge-pulse {
+  animation: badgePulse 0.3s ease-out;
+}
+
+@keyframes badgePulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+/* ⑧ 按钮加载态旋转 */
+.btn-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.btn-loading::after {
+  content: '';
+  position: absolute;
+  right: 24rpx;
+  top: 50%;
+  width: 28rpx;
+  height: 28rpx;
+  margin-top: -14rpx;
+  border: 3rpx solid rgba(255,255,255,0.3);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* ⑨ 成功/失败状态色条 */
+.status-bar-enter {
+  animation: statusSlideDown 0.3s ease-out;
+}
+
+@keyframes statusSlideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -100,53 +100,6 @@ Page({
         this.loadOrders();
     },
 
-    // 打开发货弹窗
-    onShipTap(e) {
-        const order = e.currentTarget.dataset.order;
-        this.setData({
-            showShipPopup: true,
-            shipOrder: order,
-            shipCompany: '',
-            shipTrackingNo: ''
-        });
-    },
-
-    hideShipPopup() {
-        this.setData({ showShipPopup: false });
-    },
-
-    onCompanyInput(e) {
-        this.setData({ shipCompany: e.detail.value });
-    },
-
-    onTrackingInput(e) {
-        this.setData({ shipTrackingNo: e.detail.value });
-    },
-
-    // 申请平台发货（仅通知，不扣代理商库存）
-    async confirmShip() {
-        const { shipOrder, workbench } = this.data;
-
-        // 平台发货不要求代理商库存充足，直接申请即可
-
-        wx.showLoading({ title: '提交中...' });
-        try {
-            const res = await post(`/orders/${shipOrder.id}/request-shipping`);
-            wx.hideLoading();
-            if (res.code === 0) {
-                wx.showToast({ title: '已通知平台发货', icon: 'success' });
-                this.hideShipPopup();
-                this.loadWorkbench();
-                this.loadOrders();
-            } else {
-                wx.showToast({ title: res.message || '操作失败', icon: 'none' });
-            }
-        } catch (err) {
-            wx.hideLoading();
-            wx.showToast({ title: err.message || '操作失败', icon: 'none' });
-        }
-    },
-
     // 跳转采购入仓
     goRestock() {
         wx.navigateTo({ url: '/pages/distribution/restock' });

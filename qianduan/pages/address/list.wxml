@@ -4,7 +4,7 @@
   <view class="address-list-container">
     <!-- 地址列表 -->
     <view class="address-list" wx:if="{{addresses.length > 0}}">
-      <view class="address-card {{selectMode ? 'selectable' : ''}}"
+      <view class="address-card {{selectMode ? 'selectable' : ''}} {{item.deleting ? 'deleting' : ''}}"
             wx:for="{{addresses}}" wx:key="id"
             data-index="{{index}}" bindtap="onSelectAddress">
         <view class="address-main">

@@ -31,7 +31,7 @@ router.get('/system-configs/:key', adminAuth, async (req, res) => {
     try {
         const { key } = req.params;
         const value = await ConfigService.get(key);
-        
+
         res.json({
             code: 0,
             data: {
@@ -53,9 +53,9 @@ router.put('/system-configs/:key', adminAuth, async (req, res) => {
         const { key } = req.params;
         const { value, reason } = req.body;
         const adminId = req.user.id;
-        
+
         const result = await ConfigService.set(key, value, adminId, reason);
-        
+
         res.json({
             code: 0,
             data: result,
@@ -75,20 +75,20 @@ router.post('/system-configs/batch', adminAuth, async (req, res) => {
     try {
         const { updates, reason } = req.body;
         const adminId = req.user.id;
-        
+
         if (!Array.isArray(updates) || updates.length === 0) {
             return res.status(400).json({
                 code: 400,
                 message: '更新列表不能为空'
             });
         }
-        
+
         const results = await ConfigService.setMultiple(updates, adminId, reason);
-        
+
         // 统计结果
         const successCount = results.filter(r => r.success).length;
         const failCount = results.length - successCount;
-        
+
         res.json({
             code: 0,
             data: {
@@ -115,9 +115,9 @@ router.get('/system-configs/:key/history', adminAuth, async (req, res) => {
     try {
         const { key } = req.params;
         const { limit = 20 } = req.query;
-        
+
         const history = await ConfigService.getHistory(key, parseInt(limit));
-        
+
         res.json({
             code: 0,
             data: history
@@ -151,7 +151,7 @@ router.post('/system-configs/refresh-cache', adminAuth, checkPermission('system'
 router.get('/system-configs/health', adminAuth, async (req, res) => {
     try {
         const { SystemConfig } = require('../../models');
-        
+
         // 统计各类配置
         const stats = await SystemConfig.findAll({
             attributes: [
@@ -160,11 +160,11 @@ router.get('/system-configs/health', adminAuth, async (req, res) => {
             ],
             group: ['config_group']
         });
-        
+
         // 计算健康度（简单版本）
         const totalConfigs = await SystemConfig.count();
         const editableConfigs = await SystemConfig.count({ where: { is_editable: true } });
-        
+
         res.json({
             code: 0,
             data: {
@@ -217,7 +217,7 @@ const getTableColumns = async (schema, table) => {
         name: row.COLUMN_NAME,
         type: row.COLUMN_TYPE,
         nullable: row.IS_NULLABLE === 'YES' ? '是' : '否',
-        defaultValue: row.COLUMN_DEFAULT ?? '',
+        defaultValue: (row.COLUMN_DEFAULT !== null && row.COLUMN_DEFAULT !== undefined) ? row.COLUMN_DEFAULT : '',
         comment: row.COLUMN_COMMENT || ''
     }));
 };

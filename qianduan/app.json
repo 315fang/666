@@ -27,7 +27,9 @@
         "pages/order/logistics",
         "pages/search/search",
         "pages/ai/chat",
-        "pages/rules/index"
+        "pages/questionnaire/fill",
+        "pages/rules/index",
+        "pages/ai/questionnaire"
     ],
     "tabBar": {
         "color": "#A8A29E",
@@ -60,6 +62,17 @@
                 "selectedIconPath": "assets/icons/user_active.png"
             }
         ]
+    },
+    "usingComponents": {
+        "brand-animation": "/components/brand-animation/brand-animation",
+        "product-card": "/components/product-card/product-card",
+        "order-card": "/components/order-card/order-card",
+        "address-card": "/components/address-card/address-card",
+        "empty-state": "/components/empty-state/empty-state",
+        "loading-skeleton": "/components/loading-skeleton/loading-skeleton",
+        "share-card": "/components/share-card/share-card",
+        "ui-card": "/components/ui/card/card",
+        "ui-button": "/components/ui/button/button"
     },
     "window": {
         "navigationBarBackgroundColor": "#1C1917",

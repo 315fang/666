@@ -60,6 +60,8 @@
   </view>
 
   <!-- 成功弹窗 -->
+  <brand-animation id="brandAnimation"></brand-animation>
+
   <view class="success-popup {{showSuccess ? 'show' : ''}}">
     <view class="success-mask"></view>
     <view class="success-content">

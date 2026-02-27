@@ -12,47 +12,58 @@ const generateRefundNo = () => {
 
 // 申请售后
 const applyRefund = async (req, res) => {
+    const t = await sequelize.transaction();
     try {
         const userId = req.user.id;
         const { order_id, type, reason, description, images, amount, refund_quantity } = req.body;
 
         if (!order_id || !reason) {
+            await t.rollback();
             return res.status(400).json({ code: -1, message: '订单ID和原因必填' });
         }
 
-        // 检查订单
+        // 检查订单，并对订单行加锁，防止并发提交导致重复退款
         const order = await Order.findOne({
-            where: { id: order_id, buyer_id: userId }
+            where: { id: order_id, buyer_id: userId },
+            lock: t.LOCK.UPDATE,
+            transaction: t
         });
 
         if (!order) {
+            await t.rollback();
             return res.status(404).json({ code: -1, message: '订单不存在' });
         }
 
         if (!['paid', 'shipped', 'completed'].includes(order.status)) {
+            await t.rollback();
             return res.status(400).json({ code: -1, message: '当前订单状态不支持售后' });
         }
 
         // ★ 采购订单不支持普通售后（需要走单独的采购退货流程）
         if (order.fulfillment_type === 'Restock') {
+            await t.rollback();
             return res.status(400).json({ code: -1, message: '采购订单请联系客服处理退货' });
         }
 
         // ★ 退款金额校验：不能超过订单实际支付金额
         const refundAmount = parseFloat(amount) || parseFloat(order.total_amount);
         if (refundAmount <= 0) {
+            await t.rollback();
             return res.status(400).json({ code: -1, message: '退款金额必须大于0' });
         }
         if (refundAmount > parseFloat(order.total_amount)) {
+            await t.rollback();
             return res.status(400).json({ code: -1, message: `退款金额不能超过订单金额 ¥${parseFloat(order.total_amount).toFixed(2)}` });
         }
 
         // ★★★ 累计退款金额校验：防止多次部分退款超过订单总金额
         const refundedAmount = await Refund.sum('amount', {
-            where: { order_id, status: 'completed' }
+            where: { order_id, status: 'completed' },
+            transaction: t
         }) || 0;
         const maxRefundable = parseFloat(order.total_amount) - refundedAmount;
         if (refundAmount > maxRefundable) {
+            await t.rollback();
             return res.status(400).json({
                 code: -1,
                 message: `累计退款不能超过订单金额，已退 ¥${refundedAmount.toFixed(2)}，最多可退 ¥${maxRefundable.toFixed(2)}`
@@ -67,9 +78,11 @@ const applyRefund = async (req, res) => {
             // 退货退款：必须填退货数量，且不能超过订单数量
             actualRefundQty = parseInt(refund_quantity) || 0;
             if (actualRefundQty <= 0) {
+                await t.rollback();
                 return res.status(400).json({ code: -1, message: '退货退款请填写退货数量' });
             }
             if (actualRefundQty > order.quantity) {
+                await t.rollback();
                 return res.status(400).json({ code: -1, message: `退货数量不能超过订单数量(${order.quantity}件)` });
             }
         } else {
@@ -84,6 +97,7 @@ const applyRefund = async (req, res) => {
             const deadline = new Date(order.completed_at);
             deadline.setDate(deadline.getDate() + maxRefundDays);
             if (new Date() > deadline) {
+                await t.rollback();
                 return res.status(400).json({ code: -1, message: `已超过售后期限（确认收货后${maxRefundDays}天内可申请）` });
             }
         }
@@ -93,10 +107,12 @@ const applyRefund = async (req, res) => {
             where: {
                 order_id,
                 status: { [Op.in]: ['pending', 'approved', 'processing'] }
-            }
+            },
+            transaction: t
         });
 
         if (existingRefund) {
+            await t.rollback();
             return res.status(400).json({ code: -1, message: '该订单已有进行中的售后申请' });
         }
 
@@ -111,7 +127,9 @@ const applyRefund = async (req, res) => {
             amount: refundAmount,
             refund_quantity: actualRefundQty,
             status: 'pending'
-        });
+        }, { transaction: t });
+
+        await t.commit(); // 提交事务
 
         // 通知用户
         await sendNotification(
@@ -133,6 +151,7 @@ const applyRefund = async (req, res) => {
 
         res.json({ code: 0, data: refund, message: '售后申请已提交' });
     } catch (error) {
+        if (!t.finished) await t.rollback();
         console.error('申请售后失败:', error);
         res.status(500).json({ code: -1, message: '申请失败' });
     }

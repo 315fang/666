@@ -34,6 +34,10 @@ Page({
     }
   },
 
+  onReady() {
+    this.brandAnimation = this.selectComponent('#brandAnimation');
+  },
+
   /**
    * 加载物流信息
    */
@@ -160,10 +164,12 @@ Page({
     wx.setClipboardData({
       data: tracking_no,
       success: () => {
-        wx.showToast({
-          title: '运单号已复制',
-          icon: 'success'
-        });
+        // ★ 品牌动画复制反馈
+        if (this.brandAnimation) {
+          this.brandAnimation.showCopySuccess('运单号已复制');
+        } else {
+          wx.showToast({ title: '运单号已复制', icon: 'success' });
+        }
       }
     });
   },

@@ -72,14 +72,12 @@ const globalStore = createStore({
         const userInfo = wx.getStorageSync('userInfo');
         const openid = wx.getStorageSync('openid');
         const token = wx.getStorageSync('token');
-        const distributorId = wx.getStorageSync('distributor_id');
 
         if (userInfo && openid && token) {
           commit({
             userInfo,
             openid,
             token,
-            distributorId,
             isLoggedIn: true,
             roleLevel: userInfo.role_level || USER_ROLES.GUEST
           });

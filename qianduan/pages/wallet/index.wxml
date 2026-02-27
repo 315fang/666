@@ -70,4 +70,7 @@
       <button class="btn btn-primary btn-block" bindtap="confirmWithdraw">确认提现</button>
     </view>
   </view>
+
+  <!-- 品牌动画 -->
+  <brand-animation id="brandAnimation"></brand-animation>
 </view>

@@ -1,6 +1,6 @@
-const ToolRegistry = require('./ToolRegistry');
-const AIService = require('../../services/AIService');
-const { User, Product, Order, Cart, AppConfig, Content } = require('../../models');
+const ToolRegistry = require('../ToolRegistry');
+const AIService = require('../../../services/AIService');
+const { User, Product, Order, Cart, AppConfig, Content } = require('../../../models');
 const { Op } = require('sequelize');
 
 /**
@@ -24,7 +24,7 @@ class EnhancedUserAssistant {
      */
     initializeTools() {
         // ========== 查询类工具 ==========
-        
+
         // 1. 搜索商品
         ToolRegistry.register('search_products', {
             description: '搜索商品，支持关键词和价格范围筛选',
@@ -39,7 +39,7 @@ class EnhancedUserAssistant {
             enabled: true
         }, async (args, context) => {
             const where = { status: 1 };
-            
+
             if (args.keyword) {
                 where.name = { [Op.like]: `%${args.keyword}%` };
             }
@@ -89,7 +89,7 @@ class EnhancedUserAssistant {
             enabled: true
         }, async (args, context) => {
             const where = { user_id: context.userId };
-            
+
             if (args.status) {
                 where.status = args.status;
             }
@@ -316,7 +316,7 @@ class EnhancedUserAssistant {
             // 这里调用现有的购物车逻辑
             // 简化示例，实际需要调用CartService
             const { CartService } = require('../../services');
-            
+
             try {
                 const result = await CartService.addToCart({
                     user_id: context.userId,
@@ -415,10 +415,10 @@ class EnhancedUserAssistant {
             if (toolCall && ToolRegistry.isAvailable(toolCall.tool, { role: context.role, userId })) {
                 // 执行工具
                 console.log(`[EnhancedUserAssistant] 执行工具: ${toolCall.tool}`, toolCall.args);
-                
+
                 const toolResult = await ToolRegistry.execute(
-                    toolCall.tool, 
-                    toolCall.args, 
+                    toolCall.tool,
+                    toolCall.args,
                     { userId, role: context.role }
                 );
 
@@ -443,8 +443,8 @@ class EnhancedUserAssistant {
                     const summaryMessages = [
                         ...chatMessages,
                         { role: 'assistant', content: JSON.stringify(toolCall) },
-                        { 
-                            role: 'user', 
+                        {
+                            role: 'user',
                             content: `工具执行结果: ${JSON.stringify(toolResult.data)}\n\n请用友好、口语化的方式总结结果给用户。如果是商品列表，请突出显示价格和销量。`
                         }
                     ];
@@ -490,7 +490,7 @@ class EnhancedUserAssistant {
      */
     buildSystemPrompt(context, userId) {
         const toolsDesc = ToolRegistry.getToolsDescription({ role: context.role });
-        
+
         let prompt = `你是臻选商城的智能购物助手"小臻"。你热情、专业、乐于助人。
 
 可用工具:

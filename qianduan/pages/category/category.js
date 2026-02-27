@@ -23,12 +23,12 @@ Page({
 
         // Level 3 Products
         products: [],
-        
+
         loading: false,
         hasMore: true,
         page: 1,
         limit: 10,
-        
+
         // Cart
         cartCount: 0,
         cartTotal: '0.00',
@@ -40,12 +40,12 @@ Page({
         currentImage: 0,
         imageCount: 1,
         isFavorite: false,
-        
+
         // Reviews in Modal
         reviews: [],
         reviewTotal: 0,
         reviewTags: [],
-        
+
         // SKU in Modal
         showSku: false,
         skuAction: 'cart', // 'cart' or 'buy'
@@ -55,7 +55,15 @@ Page({
         selectedSkuImg: '',
         currentPrice: null,
         currentStock: null,
-        discount: 10
+        discount: 10,
+
+        // 飞入动画
+        flyImage: ''
+    },
+
+    onReady() {
+        // 获取品牌动画组件实例
+        this.brandAnimation = this.selectComponent('#brandAnimation');
     },
 
     onShow() {
@@ -77,6 +85,18 @@ Page({
         });
     },
 
+    // 搜索跳转
+    onSearchTap() {
+        wx.navigateTo({ url: '/pages/search/search' });
+    },
+
+    // 加载更多
+    onLoadMore() {
+        if (!this.data.hasMore || this.data.loading) return;
+        this.setData({ page: this.data.page + 1 });
+        this.loadProducts(true);
+    },
+
     // --- Level 1 Logic ---
     onTopCategoryTap(e) {
         const id = e.currentTarget.dataset.id;
@@ -95,7 +115,7 @@ Page({
             const res = await get('/categories');
             let allCats = res.data || [];
             let filteredCats = [];
-            
+
             if (topId === 1) { // Boutique
                 if (allCats.length > 0) {
                     filteredCats = allCats.map((c, i) => i === 0 ? { ...c, name: '测试', icon: '/assets/icons/gift.svg', image: 'https://resour.oss-cn-hangzhou.aliyuncs.com/jiaruwomen.jpg' } : c);
@@ -178,17 +198,17 @@ Page({
     },
 
     // --- Full Screen Modal Logic ---
-    
+
     // Open Detail Modal (Replaces onQuickAddToCart for "选购")
     async onSelectProduct(e) {
         const item = e.currentTarget.dataset.item;
         if (!item) return;
-        
-        this.setData({ 
+
+        this.setData({
             showDetailModal: true,
             selectedProduct: item // Temporary data while loading full details
         });
-        
+
         this.loadProductDetail(item.id);
     },
 
@@ -225,7 +245,7 @@ Page({
                 discount,
                 modalQuantity: 1
             });
-            
+
             // Load Reviews
             this.loadReviews(id);
 
@@ -243,8 +263,8 @@ Page({
             if (res && res.data) {
                 const reviews = res.data.list || [];
                 const reviewTotal = res.data.pagination?.total || reviews.length;
-                this.setData({ 
-                    reviews, 
+                this.setData({
+                    reviews,
                     reviewTotal,
                     reviewTags: ['质量好', '物流快', '包装精美'] // Mock tags
                 });
@@ -282,22 +302,98 @@ Page({
         this.setData({ showSku: false });
     },
 
-    onAddToCart() {
-        this.setData({ skuAction: 'cart' });
-        if (!this.data.showSku) {
-            this.showSkuModal();
-        } else {
-            this.onConfirmAddCart();
+    // 加入购物车 - 直接执行 + 飞入动画
+    async onAddToCart() {
+        if (!this.data.selectedProduct) return;
+        try {
+            wx.showLoading({ title: '加入中' });
+            await post('/cart', {
+                product_id: this.data.selectedProduct.id,
+                quantity: this.data.modalQuantity
+            });
+            wx.hideLoading();
+
+            // 触发飞入购物车动画
+            this.triggerFlyAnimation();
+
+            // 显示成功提示
+            wx.showToast({ title: '已加入购物车', icon: 'success' });
+            this.hideDetailModal();
+            this.updateCartData();
+        } catch (err) {
+            wx.hideLoading();
+            wx.showToast({ title: '加入失败', icon: 'none' });
         }
     },
 
-    onBuyNow() {
-        this.setData({ skuAction: 'buy' });
-        if (!this.data.showSku) {
-            this.showSkuModal();
-        } else {
-            this.onConfirmBuy();
+    // 触发飞入购物车动画
+    triggerFlyAnimation() {
+        const product = this.data.selectedProduct;
+        if (!product) return;
+
+        // 设置飞入图片
+        this.setData({
+            flyImage: product.images?.[0] || product.image || ''
+        });
+
+        // 使用品牌动画组件
+        if (this.brandAnimation) {
+            // 获取购物车图标位置（底部栏右侧）
+            const query = wx.createSelectorQuery();
+            query.select('.cart-checkout-btn').boundingClientRect();
+            query.exec((res) => {
+                if (res[0]) {
+                    const endX = res[0].left + res[0].width / 2;
+                    const endY = res[0].top;
+                    // 从屏幕中心开始飞
+                    const startX = 375 / 2; // 假设屏幕宽度
+                    const startY = 400;
+                    this.brandAnimation.flyToCart(startX, startY, endX, endY, this.data.flyImage);
+                }
+            });
         }
+    },
+
+    // 立即购买 - 直接执行
+    async onBuyNow() {
+        if (!this.data.selectedProduct) return;
+        try {
+            const product = this.data.selectedProduct;
+            const quantity = this.data.modalQuantity;
+
+            // 存储直接购买信息到缓存
+            const directBuyInfo = {
+                product_id: product.id,
+                sku_id: this.data.selectedSku?.id || null,
+                quantity: quantity,
+                price: product.displayPrice || product.price,
+                name: product.name,
+                image: product.images?.[0] || product.image || '',
+                spec: this.data.selectedSkuText || ''
+            };
+            wx.setStorageSync('directBuyInfo', directBuyInfo);
+
+            this.hideDetailModal();
+            // 跳转到订单确认页面，标记为直接购买
+            wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
+        } catch (err) {
+            wx.showToast({ title: '操作失败', icon: 'none' });
+        }
+    },
+
+    // 弹窗内确认加入购物车
+    onConfirmAddToCart() {
+        this.onConfirmAddCart();
+    },
+
+    // 弹窗内确认立即购买
+    onConfirmBuyNow() {
+        this.onBuyNow();
+    },
+
+    // 规格选择入口（默认显示双按钮）
+    onSpecSelectorTap() {
+        this.setData({ skuAction: 'both', showSku: true });
     },
 
     onModalMinus() {
@@ -342,7 +438,7 @@ Page({
         wx.navigateTo({ url: '/pages/order/confirm' }); // Direct to confirm order
     },
 
-    stopProp() {},
+    stopProp() { },
 
     // --- Global Cart Logic ---
     updateCartData() {
@@ -355,20 +451,16 @@ Page({
                     cartTotal: res.data.total_amount || '0.00'
                 });
             }
-        }).catch(() => {});
+        }).catch(() => { });
     },
 
     onToggleCartPopup() {
-        // Since cart page is now "Welfare Zone", maybe we should show a popup or navigate to Order Confirm?
-        // User said "discard existing cart page".
-        // But checkout usually needs a cart.
-        // For now, let's just toast or navigate to the new Welfare Zone (which is empty)
-        wx.showToast({ title: '购物车功能升级中', icon: 'none' });
+        wx.switchTab({ url: '/pages/cart/cart' });
     },
 
     onCheckout() {
         if (this.data.cartCount > 0) {
-             wx.navigateTo({ url: '/pages/order/confirm' });
+            wx.navigateTo({ url: '/pages/order/confirm' });
         } else {
             wx.showToast({ title: '请先选购商品', icon: 'none' });
         }

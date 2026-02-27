@@ -32,7 +32,6 @@ Page({
             directCount: 0,
             indirectCount: 0
         },
-        inviteCode: '',
         // 钱包
         balance: '0.00',
         walletInfo: null,
@@ -46,10 +45,7 @@ Page({
         withdrawals: [],
         // 分享弹窗
         showShareModal: false,
-        qrCodeUrl: '',
-        // 绑定邀请码
-        showBindInvite: false,
-        bindInviteCode: '',
+        // 绑定上级（通过问卷）
         hasParent: false,
         parentInfo: null,
         // 代理商专属
@@ -62,6 +58,10 @@ Page({
     },
 
     onLoad(options) {
+    },
+
+    onReady() {
+        this.brandAnimation = this.selectComponent('#brandAnimation');
     },
 
     onShow() {
@@ -80,26 +80,29 @@ Page({
         }
     },
 
-    // 显示邀请码提示
+    // 显示加入团队提示
     showInviteTip() {
         if (this.data.hasParent) return;
 
+        // 【逻辑修正】：如果是代理商或以上角色（自身已经是高层节点），则直接免疫“请寻找邀请人”的弹窗
+        if (this.data.userInfo && (this.data.userInfo.role >= 1 || this.data.isAgent)) return;
+
         wx.showModal({
             title: '欢迎加入',
-            content: '填写邀请人的邀请码，加入团队一起赚收益吧！\n\n没有邀请码？跳过后也可随时填写。',
-            confirmText: '填写邀请码',
-            cancelText: '暂时跳过',
-            success: (res) => {
-                if (res.confirm) {
-                    this.onBindInviteTap();
-                }
-                // 标记已提示过
+            content: '您尚未加入任何团队。\n\n请联系您的推荐人，获取邀请问卷链接即可加入团队。',
+            confirmText: '知道了',
+            showCancel: false,
+            success: () => {
                 wx.setStorageSync('hasShownInviteTip', true);
             }
         });
     },
 
     // ====== 导航跳转 ======
+    onProfileTap() {
+        wx.navigateTo({ url: '/pages/user/user' });
+    },
+
     onCommissionLogsTap() {
         wx.navigateTo({ url: '/pages/distribution/commission-logs' });
     },
@@ -119,79 +122,12 @@ Page({
     // ====== 分享弹窗 ======
     async onShowShareModal() {
         this.setData({ showShareModal: true });
-        if (!this.data.qrCodeUrl) {
-            this.loadQRCode();
-        }
     },
 
     hideShareModal() {
         this.setData({ showShareModal: false });
     },
 
-    async loadQRCode() {
-        try {
-            // 这里假设后端有一个生成分销二维码的接口
-            // 如果没有，可以先用一个 placeholder 或者提示
-            const res = await get('/share/qrcode', { path: `pages/index/index?share_id=${this.data.inviteCode}` });
-            if (res.code === 0 && res.data.url) {
-                this.setData({ qrCodeUrl: res.data.url });
-            }
-        } catch (err) {
-            console.error('加载二维码失败', err);
-        }
-    },
-
-    onSaveQRCode() {
-        if (!this.data.qrCodeUrl) return;
-        wx.downloadFile({
-            url: this.data.qrCodeUrl,
-            success: (res) => {
-                wx.saveImageToPhotosAlbum({
-                    filePath: res.tempFilePath,
-                    success: () => wx.showToast({ title: '已保存到相册' }),
-                    fail: () => wx.showToast({ title: '保存失败', icon: 'none' })
-                });
-            }
-        });
-    },
-
-    // ====== 邀请码绑定上级 ======
-    onBindInviteTap() {
-        if (this.data.hasParent) {
-            wx.showToast({ title: '您已绑定上级', icon: 'none' });
-            return;
-        }
-        this.setData({ showBindInvite: true, bindInviteCode: '' });
-    },
-    hideBindInvite() {
-        this.setData({ showBindInvite: false });
-    },
-    onBindInviteInput(e) {
-        this.setData({ bindInviteCode: e.detail.value });
-    },
-    async confirmBindInvite() {
-        const code = this.data.bindInviteCode.trim();
-        if (!code) {
-            wx.showToast({ title: '请输入邀请码', icon: 'none' });
-            return;
-        }
-        if (code === this.data.inviteCode) {
-            wx.showToast({ title: '不能绑定自己', icon: 'none' });
-            return;
-        }
-        try {
-            const res = await post('/bind-parent', { parent_id: code });
-            if (res.code === 0) {
-                wx.showToast({ title: '绑定成功！', icon: 'success' });
-                this.hideBindInvite();
-                this.loadStats(); // 刷新数据
-            } else {
-                wx.showToast({ title: res.message || '绑定失败', icon: 'none' });
-            }
-        } catch (err) {
-            wx.showToast({ title: err.message || '绑定失败', icon: 'none' });
-        }
-    },
 
     // ====== 退货入口 ======
     onRefundTap() {
@@ -206,20 +142,19 @@ Page({
                 const hasParent = !!(res.data.userInfo && res.data.userInfo.inviter);
                 const userInfo = res.data.userInfo || {};
                 const roleLevel = userInfo.role || 0;
-                
+
                 // 以全局 userInfo 的 role_name 为主，如果缺失则使用接口返回或常量映射
                 const roleName = app.globalData.userInfo?.role_name || userInfo.role_name || ROLE_NAMES[roleLevel] || '普通用户';
-                
+
                 this.setData({
                     stats: res.data.stats || this.data.stats,
                     team: res.data.team || this.data.team,
-                    userInfo: { 
-                        ...this.data.userInfo, 
+                    userInfo: {
+                        ...this.data.userInfo,
                         ...userInfo,
                         role: roleLevel,
                         role_name: roleName
                     },
-                    inviteCode: userInfo.invite_code || String(userInfo.id) || '',
                     hasParent: hasParent,
                     parentInfo: userInfo.inviter || null
                 });
@@ -278,10 +213,16 @@ Page({
         try {
             const res = await post('/wallet/withdraw', { amount });
             if (res.code === 0) {
-                wx.showToast({ title: '申请成功', icon: 'success' });
                 this.hideWithdraw();
                 this.loadWalletInfo();
                 this.loadWithdrawals();
+
+                // ★ 触发「提现成功」品牌动画 — 金币弹出
+                if (this.brandAnimation) {
+                    this.brandAnimation.show('withdraw', { amount: amount.toFixed(2) });
+                } else {
+                    wx.showToast({ title: '申请成功', icon: 'success' });
+                }
             } else {
                 wx.showToast({ title: res.message || '申请失败', icon: 'none' });
             }
@@ -290,13 +231,6 @@ Page({
         }
     },
 
-    // 跳转
-    onTeamTap() {
-        wx.navigateTo({ url: '/pages/distribution/team' });
-    },
-    onOrderTap() {
-        wx.navigateTo({ url: '/pages/order/list' });
-    },
 
     // ====== 代理商专属功能 ======
     async loadAgentData() {
@@ -335,33 +269,25 @@ Page({
         wx.navigateTo({ url: '/pages/rules/index' });
     },
 
-    // 复制邀请码
-    onCopyInviteCode() {
-        const code = this.data.inviteCode;
-        if (!code) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        wx.setClipboardData({
-            data: code,
-            success: () => {
-                wx.showToast({ title: '邀请码已复制', icon: 'success' });
-            }
-        });
-    },
-
-    // 跳转到邀请页面（简化分享流程）
+    // 跳转到邀请页面（问卷分享）
     onInviteTap() {
         wx.navigateTo({ url: '/pages/distribution/invite' });
     },
 
-    // 分享邀请
+    // 分享邀请问卷
     onShareAppMessage() {
         const userInfo = this.data.userInfo || {};
-        const inviteCode = this.data.inviteCode || userInfo.invite_code || userInfo.id || '';
+        const userId = userInfo.id || '';
+        if (!userId) {
+            return {
+                title: '臻选 · 精选全球好物',
+                path: '/pages/index/index',
+                imageUrl: ''
+            };
+        }
         return {
             title: `我在用臻选，邀你一起赚`,
-            path: `/pages/index/index?share_id=${inviteCode}`,
+            path: `/pages/questionnaire/fill?inviter_id=${userId}`,
             imageUrl: ''
         };
     }

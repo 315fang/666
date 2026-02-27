@@ -79,9 +79,11 @@ Component({
       wx.setClipboardData({
         data: code,
         success: () => {
+          // 覆盖系统默认提示，使用自定义短提示
           wx.showToast({
-            title: '邀请码已复制',
-            icon: 'success'
+            title: '已复制',
+            icon: 'success',
+            duration: 500
           });
           this.triggerEvent('copycode', { code });
         }

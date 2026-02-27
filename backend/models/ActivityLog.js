@@ -92,7 +92,7 @@ const ActivityLog = sequelize.define('ActivityLog', {
             fields: ['resource']
         },
         {
-            fields: ['createdAt']
+            fields: ['created_at']
         },
         {
             fields: ['platform']

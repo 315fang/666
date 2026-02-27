@@ -28,7 +28,7 @@
         <view class="user-level" wx:if="{{hasUserInfo}}">
           <view class="level-badge">{{userInfo.role_name || '普通会员'}}</view>
         </view>
-        <view class="complete-info" wx:if="{{hasUserInfo}}">
+        <view class="complete-info" wx:if="{{hasUserInfo}}" bindtap="onCompleteInfoTap">
           <text class="complete-text">完善信息可获得奖励 ></text>
         </view>
       </view>
@@ -175,14 +175,5 @@
 
   <!-- 底部安全区域 -->
   <view class="safe-area-bottom"></view>
-
-  <!-- 邀请码弹窗 -->
-  <view class="invite-modal {{showInvite ? 'show' : ''}}" bindtap="hideInvite">
-    <view class="modal-content" catchtap="stopP">
-      <view class="modal-title">我的邀请码</view>
-      <view class="code-display" bindtap="copyInviteCode">{{inviteCode}}</view>
-      <view class="modal-tip">点击复制，分享给好友</view>
-    </view>
-  </view>
 
 </view>

@@ -10,6 +10,10 @@ Page({
         withdrawAmount: ''
     },
 
+    onReady() {
+        this.brandAnimation = this.selectComponent('#brandAnimation');
+    },
+
     onShow() {
         this.loadWalletInfo();
         this.loadLogs();
@@ -106,9 +110,13 @@ Page({
         try {
             const res = await post('/wallet/withdraw', { amount });
             if (res.code === 0) {
-                wx.showToast({ title: '申请成功', icon: 'success' });
                 this.hideWithdraw();
                 this.loadWalletInfo();
+
+                // 触发提现成功动画
+                if (this.brandAnimation) {
+                    this.brandAnimation.show('withdraw', { amount: amount.toFixed(2) });
+                }
             } else {
                 wx.showToast({ title: res.message, icon: 'none' });
             }

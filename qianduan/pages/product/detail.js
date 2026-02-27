@@ -12,9 +12,7 @@ Page({
         quantity: 1,
         currentImage: 0,
         imageCount: 1,
-        showSku: false,
         cartCount: 0,
-        skuAction: 'cart',
         isFavorite: false,
         statusBarHeight: 20,
         // 新增：评价相关
@@ -32,9 +30,25 @@ Page({
             statusBarHeight: sysInfo.statusBarHeight || 20
         });
 
-        // 接收分享参数
-        if (options.share_id) {
-            wx.setStorageSync('distributor_id', options.share_id);
+        // 新版邀请：通过 inviter_id 温和提示（不强制跳走，用户是来看商品的）
+        if (options.inviter_id) {
+            this._pendingInviterId = options.inviter_id;
+            // 延迟弹窗，先让用户看到商品
+            setTimeout(() => {
+                wx.showModal({
+                    title: '邀请加入',
+                    content: '您的好友邀请您加入团队，是否填写邀请问卷？',
+                    confirmText: '去填写',
+                    cancelText: '先逛逛',
+                    success: (res) => {
+                        if (res.confirm) {
+                            wx.navigateTo({
+                                url: `/pages/questionnaire/fill?inviter_id=${this._pendingInviterId}`
+                            });
+                        }
+                    }
+                });
+            }, 2000);
         }
         if (options.id) {
             this.setData({ id: options.id });
@@ -44,6 +58,10 @@ Page({
 
     onShow() {
         this.getCartCount();
+    },
+
+    onReady() {
+        this.brandAnimation = this.selectComponent('#brandAnimation');
     },
 
     // 加载商品详情
@@ -71,13 +89,22 @@ Page({
                 discount = Math.round((parseFloat(displayPrice) / parseFloat(product.market_price)) * 10);
             }
 
+            // 初始化选中第一个SKU
+            const firstSku = (product.skus && product.skus.length > 0) ? product.skus[0] : null;
+            const selectedSpecs = {};
+            if (firstSku && firstSku.spec_name) {
+                selectedSpecs[firstSku.spec_name] = firstSku.spec_value;
+            }
+
             this.setData({
                 product: {
                     ...product,
                     displayPrice: parseFloat(displayPrice).toFixed(2)
                 },
                 skus: product.skus || [],
-                selectedSku: (product.skus && product.skus.length > 0) ? product.skus[0] : null,
+                selectedSku: firstSku,
+                selectedSpecs,
+                selectedSkuText: firstSku ? `${firstSku.spec_name}: ${firstSku.spec_value}` : '默认规格',
                 imageCount: product.images.length || 1,
                 roleLevel,
                 isAgent: roleLevel >= USER_ROLES.LEADER,
@@ -224,35 +251,30 @@ Page({
         });
     },
 
-    // 显示SKU弹窗 (Renamed to match WXML: showSkuModal)
-    showSkuModal() {
-        this.setData({ showSku: true });
-    },
-
-    // 隐藏SKU弹窗 (Renamed to match WXML: hideSkuModal)
-    hideSkuModal() {
-        this.setData({ showSku: false });
-    },
-    
-    // Prevent event propagation
-    stopP() {},
-
-    // 阻止滑动穿透
-    preventMove() { },
-
-    // 选择SKU (Renamed to match WXML: onSpecSelect)
+    // 选择规格
     onSpecSelect(e) {
-        // Since we don't have full spec logic here, we'll just log it or select if simple
-        // For now assuming simple sku selection logic or placeholder
         const { key, val } = e.currentTarget.dataset;
-        // In a real app, you'd filter valid SKUs based on selection.
-        // For this fix, let's just highlight it.
         const selectedSpecs = this.data.selectedSpecs || {};
         selectedSpecs[key] = val;
-        this.setData({ selectedSpecs });
-        
-        // Try to find matching SKU
-        // ... (Logic skipped for brevity, assuming backend returns SKUs)
+
+        // 查找匹配的SKU
+        const { skus, product } = this.data;
+        let selectedSku = null;
+
+        if (skus && skus.length > 0) {
+            selectedSku = skus.find(sku => {
+                const specName = sku.spec_name || '';
+                const specValue = sku.spec_value || '';
+                return selectedSpecs[specName] === specValue;
+            });
+        }
+
+        // 更新选中状态和显示文本
+        this.setData({
+            selectedSpecs,
+            selectedSku,
+            selectedSkuText: selectedSku ? `${selectedSku.spec_name}: ${selectedSku.spec_value}` : '请选择规格'
+        });
     },
 
     // 数量减少 (Renamed to match WXML: onMinus)
@@ -269,7 +291,7 @@ Page({
             this.setData({ quantity: this.data.quantity + 1 });
         }
     },
-    
+
     // Quantity Input (Added)
     onQtyInput(e) {
         let val = parseInt(e.detail.value);
@@ -281,39 +303,12 @@ Page({
 
     // 加入购物车入口
     onAddToCart() {
-        this.setData({ skuAction: 'cart' });
-        // If sku not showing, show it
-        if (!this.data.showSku) {
-            this.showSkuModal();
-        } else {
-             // Confirm logic
-             this.onConfirmAddCart();
-        }
+        this.addToCart();
     },
 
-    // 立即购买入口
     onBuyNow() {
-        this.setData({ skuAction: 'buy' });
-        // If sku not showing, show it
-        if (!this.data.showSku) {
-            this.showSkuModal();
-        } else {
-             // Confirm logic
-             this.onConfirmBuy();
-        }
-    },
-
-    // 确认加入购物车
-    async onConfirmAddCart() {
-        await this.addToCart();
-        this.hideSkuModal();
-    },
-
-    // 确认购买（直接下单，不走购物车）
-    async onConfirmBuy() {
         const { product, selectedSku, quantity } = this.data;
 
-        // 缓存购买信息给订单确认页
         const buyInfo = {
             product_id: product.id,
             sku_id: (selectedSku && selectedSku.id) || null,
@@ -325,7 +320,6 @@ Page({
         };
         wx.setStorageSync('directBuyInfo', buyInfo);
 
-        this.hideSkuModal();
         wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
     },
 
@@ -343,6 +337,10 @@ Page({
             });
 
             wx.hideLoading();
+
+            // 触发飞入动画
+            this.triggerFlyAnim();
+
             wx.showToast({ title: '已加入购物车', icon: 'success' });
 
             this.getCartCount();
@@ -351,6 +349,29 @@ Page({
             wx.showToast({ title: '加入失败', icon: 'none' });
             console.error('加入购物车失败:', err);
         }
+    },
+
+    // 触发飞入购物车动画（使用 brand-animation 组件）
+    triggerFlyAnim() {
+        if (!this.brandAnimation) {
+            this.brandAnimation = this.selectComponent('#brandAnimation');
+        }
+        if (!this.brandAnimation) return;
+
+        const sysInfo = wx.getSystemInfoSync();
+        // 起点：商品图中心
+        const startX = sysInfo.windowWidth / 2;
+        const startY = sysInfo.windowHeight * 0.3;
+
+        // 终点：查询购物车图标位置
+        const query = wx.createSelectorQuery().in(this);
+        query.select('.cart-target').boundingClientRect((rect) => {
+            const endX = rect ? rect.left + rect.width / 2 : sysInfo.windowWidth * 0.35;
+            const endY = rect ? rect.top + rect.height / 2 : sysInfo.windowHeight - 50;
+
+            const image = this.data.product.images && this.data.product.images[0] || '';
+            this.brandAnimation.flyToCart(startX, startY, endX, endY, image);
+        }).exec();
     },
 
     // 联系客服
@@ -362,26 +383,30 @@ Page({
     onAgentRestock() {
         wx.navigateTo({ url: '/pages/distribution/restock' });
     },
-    
+
     // 首页
     goHome() {
         wx.switchTab({ url: '/pages/index/index' });
     },
-    
+
     // 购物车
     goCart() {
         wx.switchTab({ url: '/pages/cart/cart' });
     },
 
-    // 分享（带邀请码）
+    // 分享（带邀请人信息）
     onShareAppMessage() {
         const { product } = this.data;
         const app = getApp();
         const userInfo = app.globalData.userInfo;
-        const inviteCode = userInfo ? (userInfo.invite_code || userInfo.id) : '';
+        const userId = userInfo ? userInfo.id : '';
+        // 未登录时不带 inviter_id
+        const path = userId
+            ? `/pages/product/detail?id=${product.id}&inviter_id=${userId}`
+            : `/pages/product/detail?id=${product.id}`;
         return {
             title: product.name,
-            path: `/pages/product/detail?id=${product.id}&share_id=${inviteCode}`,
+            path,
             imageUrl: (product.images && product.images[0]) || ''
         };
     }

@@ -1,0 +1,50 @@
+<view class="container">
+  <!-- 顶部进度条 -->
+  <view class="progress-bar">
+    <view class="progress-inner" style="width: {{ (currentStep + 1) / questions.length * 100 }}%"></view>
+  </view>
+  <view class="step-text">STEP {{currentStep + 1}} / {{questions.length}}</view>
+
+  <!-- 题目卡片区域 -->
+  <block wx:for="{{questions}}" wx:key="id" wx:if="{{index === currentStep}}">
+    <view class="question-wrap">
+      <view class="question-title animate-fade-in">{{item.title}}</view>
+      <view class="question-subtitle" wx:if="{{item.subtitle}}">{{item.subtitle}}</view>
+
+      <!-- 选项列表 -->
+      <view class="options-list">
+        <view 
+          class="option-item {{answers[item.id] === option.value ? 'selected' : ''}}" 
+          wx:for="{{item.options}}" 
+          wx:for-item="option"
+          wx:key="value"
+          data-question-id="{{item.id}}" 
+          data-option-value="{{option.value}}"
+          bindtap="selectOption"
+        >
+          <text class="option-text">{{option.label}}</text>
+          <view class="option-icon" wx:if="{{answers[item.id] === option.value}}">
+            <icon type="success_no_circle" size="18" color="#fff" />
+          </view>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 最后一题显示提交按钮与协议勾选 -->
+  <view class="submit-area" wx:if="{{currentStep === questions.length - 1}}">
+    <view class="agreement-wrap">
+      <view class="checkbox {{agreed ? 'checked' : ''}}" bindtap="toggleAgreement">
+        <icon type="success_no_circle" size="12" color="{{agreed ? '#fff' : 'transparent'}}" />
+      </view>
+      <view class="ag-text">
+        <text bindtap="toggleAgreement">我已阅读并同意 </text>
+        <text class="ag-link" bindtap="viewAgreement">《AI 盲盒私人定制与不退换声明》</text>
+      </view>
+    </view>
+    <button class="submit-btn {{!agreed || Object.keys(answers).length < questions.length ? 'disabled' : ''}}" bindtap="submitPreferences" loading="{{isSubmitting}}">
+      {{isSubmitting ? 'AI 正在分析您的偏好...' : '生成我的专属盲盒'}}
+    </button>
+  </view>
+  <view class="tips" wx:else>点击选项将自动进入下一题</view>
+</view>

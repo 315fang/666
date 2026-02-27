@@ -53,16 +53,34 @@ Page({
     // 删除地址
     onDeleteAddress(e) {
         const id = e.currentTarget.dataset.id;
+        // 找到索引
+        const index = this.data.addresses.findIndex(item => item.id === id);
+        
         wx.showModal({
             title: '确认删除',
             content: '确定要删除该地址吗？',
             success: async (res) => {
                 if (res.confirm) {
                     try {
+                        // 先触发动画
+                        if (index > -1) {
+                            const key = `addresses[${index}].deleting`;
+                            this.setData({ [key]: true });
+                        }
+                        
                         await require('../../utils/request').del(`/addresses/${id}`);
-                        wx.showToast({ title: '删除成功', icon: 'success' });
-                        this.loadAddresses();
+                        
+                        // 动画结束后刷新列表
+                        setTimeout(() => {
+                            wx.showToast({ title: '删除成功', icon: 'success' });
+                            this.loadAddresses();
+                        }, 300);
                     } catch (err) {
+                        // 恢复状态
+                        if (index > -1) {
+                             const key = `addresses[${index}].deleting`;
+                             this.setData({ [key]: false });
+                        }
                         wx.showToast({ title: '删除失败', icon: 'none' });
                     }
                 }

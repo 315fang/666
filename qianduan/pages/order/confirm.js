@@ -1,5 +1,5 @@
 // pages/order/confirm.js - 订单确认页
-const { get, post, del } = require('../../utils/request');
+const { get, post } = require('../../utils/request');
 
 Page({
     data: {
@@ -15,7 +15,12 @@ Page({
         remark: '',
         // 合计
         totalAmount: '0.00',
-        totalCount: 0
+        totalCount: 0,
+        showSuccess: false
+    },
+
+    onReady() {
+        this.brandAnimation = this.selectComponent('#brandAnimation');
     },
 
     onLoad(options) {
@@ -154,13 +159,20 @@ Page({
             };
 
             // 提交订单
-            const res = await post('/orders/create', orderData);
-            
+            const res = await post('/orders', orderData);
+
             this.setData({ submitting: false });
-            
-            // 显示成功弹窗
-            this.setData({ showSuccess: true });
-            
+
+            // 触发支付成功动画
+            if (this.brandAnimation) {
+                this.brandAnimation.show('payment');
+            }
+
+            // 动画结束后显示成功弹窗
+            setTimeout(() => {
+                this.setData({ showSuccess: true });
+            }, 1500);
+
             // 清除直接购买缓存
             if (this.data.from === 'direct') {
                 wx.removeStorageSync('directBuyInfo');
@@ -171,6 +183,7 @@ Page({
             console.error('提交订单失败:', err);
         }
     },
+
 
     onViewOrder() {
         wx.redirectTo({

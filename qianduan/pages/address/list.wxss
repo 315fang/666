@@ -25,6 +25,16 @@
   background: #F8FAFC;
 }
 
+/* 卡片滑出动画 */
+.address-card.deleting {
+  transform: translateX(-100%);
+  opacity: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  transition: all 0.3s ease;
+}
+
 .address-main {
   margin-bottom: 20rpx;
 }

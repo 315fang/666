@@ -1,6 +1,3 @@
 {
-    "navigationBarTitleText": "商品分类",
-    "usingComponents": {
-        "product-card": "/components/product-card/product-card"
-    }
+    "navigationBarTitleText": "商品分类"
 }

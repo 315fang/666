@@ -1,13 +1,12 @@
-// pages/distribution/invite.js - 邀请好友页面
+// pages/distribution/invite.js - 邀请好友页面（问卷邀请版）
 const app = getApp();
 const { get } = require('../../utils/request');
 
 Page({
   data: {
-    inviteCode: '',
-    shareLink: '',
-    qrCodeUrl: '',
     userInfo: null,
+    canShare: false,
+    loading: true, // 防止 API 返回前闪现"无资格"界面
     team: {
       totalCount: 0,
       directCount: 0,
@@ -17,7 +16,7 @@ Page({
 
   onLoad() {
     this.loadUserData();
-    this.generateQRCode();
+    this.checkShareEligibility();
   },
 
   onShow() {
@@ -37,14 +36,36 @@ Page({
       return;
     }
 
-    const inviteCode = userInfo.invite_code || String(userInfo.id);
-    const shareLink = `/pages/index/index?share_id=${inviteCode}`;
+    this.setData({ userInfo });
+  },
 
-    this.setData({
-      userInfo,
-      inviteCode,
-      shareLink
-    });
+  /**
+   * 检查分享资格（有团队才能分享问卷）
+   */
+  async checkShareEligibility() {
+    try {
+      const res = await get('/questionnaire/share-eligibility');
+      if (res.code === 0) {
+        this.setData({
+          canShare: res.data.eligible,
+          loading: false
+        });
+      } else {
+        this.setData({ loading: false });
+      }
+    } catch (err) {
+      console.error('检查分享资格失败:', err);
+      // 降级：根据本地数据判断
+      const userInfo = app.globalData.userInfo;
+      if (userInfo) {
+        this.setData({
+          canShare: !!(userInfo.parent_id || (userInfo.role_level && userInfo.role_level >= 1)),
+          loading: false
+        });
+      } else {
+        this.setData({ loading: false });
+      }
+    }
   },
 
   /**
@@ -64,45 +85,15 @@ Page({
   },
 
   /**
-   * 生成小程序二维码
+   * 无资格提示
    */
-  async generateQRCode() {
-    try {
-      const userInfo = this.data.userInfo || getApp().globalData.userInfo;
-      if (!userInfo) return;
-
-      const inviteCode = userInfo.invite_code || String(userInfo.id);
-
-      // 使用微信API生成临时二维码
-      // 注意：实际生产环境应该调用后端API生成永久二维码
-      const qrCodeUrl = `/pages/index/index?share_id=${inviteCode}`;
-
-      // 可以调用后端API生成二维码图片
-      // const res = await get('/qrcode/generate', { scene: inviteCode });
-      // this.setData({ qrCodeUrl: res.data.url });
-
-      // 临时方案：使用第三方二维码生成服务
-      const encodedUrl = encodeURIComponent(qrCodeUrl);
-      this.setData({
-        qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodedUrl}`
-      });
-    } catch (err) {
-      console.error('生成二维码失败:', err);
-    }
-  },
-
-  /**
-   * 复制邀请码回调
-   */
-  onCopyCode(e) {
-    console.log('邀请码已复制:', e.detail.code);
-  },
-
-  /**
-   * 复制链接回调
-   */
-  onCopyLink(e) {
-    console.log('链接已复制:', e.detail.link);
+  onNoEligibilityTap() {
+    wx.showModal({
+      title: '暂无分享资格',
+      content: '您尚未加入任何团队，需要先加入一个团队后才能分享邀请问卷。\n\n请联系您的推荐人获取邀请链接。',
+      showCancel: false,
+      confirmText: '知道了'
+    });
   },
 
   /**
@@ -120,13 +111,14 @@ Page({
   },
 
   /**
-   * 分享配置
+   * 分享配置 - 分享邀请问卷
    */
   onShareAppMessage() {
-    const { inviteCode, userInfo } = this.data;
+    const { userInfo } = this.data;
+    const userId = userInfo ? userInfo.id : '';
     return {
-      title: `${userInfo.nickname || '我'}邀你一起赚零花钱`,
-      path: `/pages/index/index?share_id=${inviteCode}`,
+      title: `${userInfo?.nickname || '我'}邀请你加入团队`,
+      path: `/pages/questionnaire/fill?inviter_id=${userId}`,
       imageUrl: ''
     };
   },
@@ -135,10 +127,11 @@ Page({
    * 分享到朋友圈
    */
   onShareTimeline() {
-    const { inviteCode } = this.data;
+    const { userInfo } = this.data;
+    const userId = userInfo ? userInfo.id : '';
     return {
       title: '臻选 · 精选全球好物，邀你一起赚',
-      query: `share_id=${inviteCode}`,
+      query: `inviter_id=${userId}`,
       imageUrl: ''
     };
   }

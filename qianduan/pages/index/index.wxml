@@ -117,4 +117,6 @@
     </view>
   </view>
 
+  <!-- 品牌动画（欢迎/晰级等） -->
+  <brand-animation id="brandAnimation"></brand-animation>
 </view>

@@ -61,7 +61,6 @@ const CACHE_KEYS = {
   USER_INFO: 'userInfo',
   OPENID: 'openid',
   TOKEN: 'token',
-  DISTRIBUTOR_ID: 'distributor_id',
   SEARCH_HISTORY: 'searchHistory',
   DIRECT_BUY_INFO: 'directBuyInfo',
   SELECTED_ADDRESS: 'selectedAddress'
@@ -87,8 +86,7 @@ const PAGES = {
 // ==================== 正则表达式 ====================
 const REGEX = {
   PHONE: /^1[3-9]\d{9}$/,
-  EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-  INVITE_CODE: /^\d{6}$/
+  EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 };
 
 // ==================== 默认值 ====================

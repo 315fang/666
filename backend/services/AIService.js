@@ -17,7 +17,7 @@ class AIService {
             temperature: 0.7,
             timeout: 30000
         };
-        
+
         // 服务商预设配置
         this.providerPresets = {
             zhipu: {
@@ -71,10 +71,10 @@ class AIService {
      */
     async init() {
         if (this.initialized) return;
-        
+
         try {
             const ConfigService = require('./ConfigService');
-            
+
             // 从数据库读取配置，优先级：数据库 > 环境变量
             const dbEnabled = await ConfigService.get('AI_ENABLED');
             const dbProvider = await ConfigService.get('AI_PROVIDER');
@@ -84,7 +84,7 @@ class AIService {
             const dbMaxTokens = await ConfigService.get('AI_MAX_TOKENS');
             const dbTemperature = await ConfigService.get('AI_TEMPERATURE');
             const dbTimeout = await ConfigService.get('AI_TIMEOUT');
-            
+
             // 合并配置
             this.config.enabled = dbEnabled === 'true' || process.env.AI_ENABLED === 'true';
             this.config.provider = dbProvider || process.env.AI_PROVIDER || 'zhipu';
@@ -93,7 +93,7 @@ class AIService {
             this.config.maxTokens = parseInt(dbMaxTokens) || parseInt(process.env.AI_MAX_TOKENS) || 2000;
             this.config.temperature = parseFloat(dbTemperature) || parseFloat(process.env.AI_TEMPERATURE) || 0.7;
             this.config.timeout = parseInt(dbTimeout) || parseInt(process.env.AI_TIMEOUT) || 30000;
-            
+
             // 设置API端点
             if (dbEndpoint) {
                 this.config.apiEndpoint = dbEndpoint;
@@ -104,24 +104,25 @@ class AIService {
                 const preset = this.providerPresets[this.config.provider];
                 this.config.apiEndpoint = preset ? preset.endpoint : '';
             }
-            
+
             // 设置默认模型
             if (!this.config.model) {
                 const preset = this.providerPresets[this.config.provider];
                 this.config.model = preset ? preset.defaultModel : 'gpt-3.5-turbo';
             }
-            
+
             this.initialized = true;
             console.log(`[AIService] 初始化完成 - 服务商: ${this.config.provider}, 模型: ${this.config.model}, 启用: ${this.config.enabled}`);
-            
+
         } catch (error) {
             console.error('[AIService] 初始化失败，使用环境变量配置:', error.message);
             // 回退到环境变量
             this.config.enabled = process.env.AI_ENABLED === 'true';
             this.config.provider = process.env.AI_PROVIDER || 'zhipu';
             this.config.apiKey = process.env.AI_API_KEY || '';
-            this.config.apiEndpoint = process.env.AI_API_ENDPOINT || this.providerPresets[this.config.provider]?.endpoint || '';
-            this.config.model = process.env.AI_MODEL || this.providerPresets[this.config.provider]?.defaultModel || '';
+            const preset = this.providerPresets[this.config.provider] || {};
+            this.config.apiEndpoint = process.env.AI_API_ENDPOINT || preset.endpoint || '';
+            this.config.model = process.env.AI_MODEL || preset.defaultModel || '';
             this.initialized = true;
         }
     }
@@ -175,7 +176,7 @@ class AIService {
      */
     async chat(messages, options = {}) {
         await this.init();
-        
+
         if (!this.isEnabled()) {
             throw new Error('AI功能未启用或未配置API密钥');
         }
@@ -189,8 +190,8 @@ class AIService {
             const payload = {
                 model: options.model || this.config.model,
                 messages: [systemPrompt, ...messages],
-                temperature: options.temperature ?? this.config.temperature,
-                max_tokens: options.maxTokens ?? this.config.maxTokens
+                temperature: options.temperature !== undefined ? options.temperature : this.config.temperature,
+                max_tokens: options.maxTokens !== undefined ? options.maxTokens : this.config.maxTokens
             };
 
             // OpenRouter需要额外的headers
@@ -198,7 +199,7 @@ class AIService {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${this.config.apiKey}`
             };
-            
+
             if (this.config.provider === 'openrouter') {
                 headers['HTTP-Referer'] = 'https://s2b2c-mall.com';
                 headers['X-Title'] = 'S2B2C商城';
@@ -230,7 +231,7 @@ class AIService {
      */
     async reviewContent(text, type) {
         await this.init();
-        
+
         if (!this.isEnabled()) {
             return { approved: true, reason: 'AI审核服务未启用，自动通过' };
         }
@@ -270,20 +271,21 @@ class AIService {
      */
     async testConnection(testConfig = null) {
         const config = testConfig || this.config;
-        
+
         if (!config.apiKey) {
             return { success: false, message: '请先配置API密钥' };
         }
 
         try {
-            const endpoint = config.apiEndpoint || this.providerPresets[config.provider]?.endpoint;
-            const model = config.model || this.providerPresets[config.provider]?.defaultModel;
+            const preset = this.providerPresets[config.provider] || {};
+            const endpoint = config.apiEndpoint || preset.endpoint;
+            const model = config.model || preset.defaultModel;
 
             const headers = {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${config.apiKey}`
             };
-            
+
             if (config.provider === 'openrouter') {
                 headers['HTTP-Referer'] = 'https://s2b2c-mall.com';
                 headers['X-Title'] = 'S2B2C商城';
@@ -317,7 +319,9 @@ class AIService {
                 } else if (error.response.status === 429) {
                     message = 'API调用频率超限，请稍后再试';
                 } else {
-                    message = `API错误: ${error.response.data?.error?.message || error.response.statusText}`;
+                    const errorResponseData = error.response.data || {};
+                    const errorMessage = (errorResponseData.error && errorResponseData.error.message) ? errorResponseData.error.message : error.response.statusText;
+                    message = `API错误: ${errorMessage}`;
                 }
             }
             return { success: false, message };
