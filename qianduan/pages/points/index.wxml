@@ -1,0 +1,154 @@
+<!--pages/points/index.wxml - 积分中心-->
+<view class="container">
+  <!-- 浮动导航 -->
+  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-back" bindtap="onBackTap">
+      <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
+    </view>
+    <text class="nav-title">积分中心</text>
+    <view class="nav-placeholder"/>
+  </view>
+
+  <!-- 主卡片：等级 + 积分 -->
+  <view class="hero-card" wx:if="{{account}}">
+    <!-- 等级徽章 -->
+    <view class="level-badge">
+      <text class="level-text">Lv.{{account.level}}</text>
+      <text class="level-name">{{account.level_name}}</text>
+    </view>
+
+    <!-- 积分数值 -->
+    <view class="points-display">
+      <text class="points-num">{{account.balance_points}}</text>
+      <text class="points-label">可用积分</text>
+    </view>
+
+    <!-- 进度条（到下一级） -->
+    <view class="level-progress" wx:if="{{account.next_level}}">
+      <view class="progress-info">
+        <text class="progress-label">距离 Lv.{{account.next_level.level}} {{account.next_level.name}}</text>
+        <text class="progress-tip">还差 {{account.next_level.points_needed}} 积分</text>
+      </view>
+      <view class="progress-bar">
+        <view class="progress-fill" style="width: {{100 - (account.next_level.points_needed / (account.next_level.points_needed + account.balance_points)) * 100}}%;"/>
+      </view>
+    </view>
+    <view class="level-progress" wx:else>
+      <text class="progress-label">🎉 已达最高等级，感谢您的支持！</text>
+    </view>
+
+    <!-- 当前特权 -->
+    <view class="perks-row">
+      <view class="perk-tag" wx:for="{{account.level_perks}}" wx:key="*this">
+        <image class="perk-icon" src="/assets/icons/check-circle.svg" mode="aspectFit"/>
+        <text>{{item}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 骨架屏 -->
+  <view class="hero-card skeleton" wx:if="{{loading && !account}}">
+    <view class="sk-line sk-wide"/>
+    <view class="sk-line sk-medium" style="margin-top:16rpx;"/>
+  </view>
+
+  <!-- 签到按钮 -->
+  <view class="checkin-section" wx:if="{{tasks.length > 0}}">
+    <view class="checkin-card" bindtap="onCheckin">
+      <view class="checkin-left">
+        <image class="checkin-icon" src="/assets/icons/star.svg" mode="aspectFit"/>
+        <view class="checkin-info">
+          <text class="checkin-title">每日签到</text>
+          <text class="checkin-streak" wx:if="{{tasks[0] && tasks[0].streak > 0}}">
+            已连续签到 {{tasks[0].streak}} 天 🔥
+          </text>
+          <text class="checkin-streak" wx:else>今日未签到</text>
+        </view>
+      </view>
+      <view class="checkin-btn {{tasks[0] && tasks[0].done ? 'done' : ''}}">
+        <text wx:if="{{tasks[0] && tasks[0].done}}">已签到</text>
+        <text wx:else>签到 +{{tasks[0] && tasks[0].points || 5}}分</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- Tab 切换 -->
+  <view class="tab-bar">
+    <view class="tab-item {{activeTab === 'tasks' ? 'active' : ''}}"
+          bindtap="switchTab" data-tab="tasks">任务</view>
+    <view class="tab-item {{activeTab === 'logs' ? 'active' : ''}}"
+          bindtap="switchTab" data-tab="logs">流水</view>
+    <view class="tab-item {{activeTab === 'levels' ? 'active' : ''}}"
+          bindtap="switchTab" data-tab="levels">等级特权</view>
+  </view>
+
+  <!-- 任务列表 -->
+  <view class="tab-content" wx:if="{{activeTab === 'tasks'}}">
+    <view class="task-list">
+      <view class="task-item" wx:for="{{tasks}}" wx:key="id">
+        <view class="task-left">
+          <view class="task-icon-wrap">
+            <image class="task-icon" src="/assets/icons/gift.svg" mode="aspectFit"/>
+          </view>
+          <view class="task-info">
+            <text class="task-title">{{item.title}}</text>
+            <text class="task-desc">{{item.desc}}</text>
+            <!-- 带进度的任务 -->
+            <view class="task-progress-bar" wx:if="{{item.total}}">
+              <view class="task-progress-fill"
+                    style="width: {{(item.current / item.total) * 100}}%;"/>
+              <text class="task-progress-text">{{item.current}}/{{item.total}}</text>
+            </view>
+          </view>
+        </view>
+        <view class="task-reward {{item.done ? 'done' : ''}}">
+          <text wx:if="{{item.done}}">已完成</text>
+          <text wx:else>+{{item.points}}分</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 积分流水 -->
+  <view class="tab-content" wx:if="{{activeTab === 'logs'}}">
+    <view class="empty-tip" wx:if="{{logs.length === 0}}">
+      <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
+      <text>暂无积分记录</text>
+    </view>
+    <view class="log-list" wx:else>
+      <view class="log-item" wx:for="{{logs}}" wx:key="id">
+        <view class="log-left">
+          <text class="log-type">{{item.remark || item.type}}</text>
+          <text class="log-time">{{item.created_at}}</text>
+        </view>
+        <view class="log-points {{item.points >= 0 ? 'positive' : 'negative'}}">
+          {{item.points >= 0 ? '+' : ''}}{{item.points}}
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 等级特权 -->
+  <view class="tab-content" wx:if="{{activeTab === 'levels'}}">
+    <view class="level-card" wx:for="{{levelConfig}}" wx:key="level"
+          class="level-card {{item.level <= (account && account.level || 0) ? 'unlocked' : 'locked'}}">
+      <view class="level-header">
+        <view class="lv-badge lv-{{item.level}}">Lv.{{item.level}}</view>
+        <text class="lv-name">{{item.name}}</text>
+        <text class="lv-req">{{item.min}}分起</text>
+        <view class="lv-status" wx:if="{{item.level <= (account && account.level || 0)}}">
+          <image class="check-icon" src="/assets/icons/check-circle.svg" mode="aspectFit"/>
+          <text>已解锁</text>
+        </view>
+      </view>
+      <view class="level-perks">
+        <view class="perk-item" wx:for="{{item.perks}}" wx:for-item="perk" wx:key="*this">
+          <image class="perk-dot" src="/assets/icons/star.svg" mode="aspectFit"/>
+          <text class="perk-text">{{perk}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view style="height: 60rpx;"/>
+</view>

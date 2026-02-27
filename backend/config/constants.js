@@ -91,10 +91,23 @@ module.exports = {
         AGENT_TIMEOUT_HOURS: parseInt(process.env.AGENT_ORDER_TIMEOUT_HOURS || '24'),
     },
 
+    // ======================== 购物车配置 ========================
+    CART: {
+        // 单个商品最大购买数量
+        MAX_ITEM_QUANTITY: parseInt(process.env.CART_MAX_ITEM_QUANTITY || '99'),
+    },
+
     // ======================== 售后配置 ========================
     REFUND: {
         // 确认收货后可申请售后的天数（★ 必须 <= COMMISSION.FREEZE_DAYS，防止佣金已结算但仍可退款）
         MAX_REFUND_DAYS: parseInt(process.env.REFUND_MAX_DAYS || '15'),
+    },
+
+    // ======================== 管理员配置 ========================
+    ADMIN: {
+        // 管理员用户ID（用于接收系统通知，如退款申请、提现申请）
+        // 数据库中 user_id=0 表示系统/管理员，由此常量统一管理，禁止在代码中硬编码
+        USER_ID: parseInt(process.env.ADMIN_USER_ID || '0'),
     },
 
     // ======================== 调试开关 ========================

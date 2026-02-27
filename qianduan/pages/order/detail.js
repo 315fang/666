@@ -99,29 +99,54 @@ Page({
         }
     },
 
-    // 支付订单（模拟支付）
+    // 支付订单（微信 JSAPI 支付）
     async onPayOrder() {
         const { order } = this.data;
 
         wx.showModal({
             title: '确认支付',
-            content: `确认支付 ¥${order.total_amount}？\n(当前为模拟支付，不会真实扣款)`,
+            content: `确认支付 ¥${order.total_amount}？`,
             success: async (res) => {
                 if (res.confirm) {
+                    wx.showLoading({ title: '支付中...' });
                     try {
-                        wx.showLoading({ title: '支付中...' });
-                        const payRes = await post(`/orders/${order.id}/pay`);
-                        wx.hideLoading();
-
-                        if (payRes.code === 0) {
-                            wx.showToast({ title: '支付成功！', icon: 'success' });
-                            this.loadOrder(order.id);
-                        } else {
-                            wx.showToast({ title: payRes.message || '支付失败', icon: 'none' });
+                        // 1. 调后端预下单，获取 wx.requestPayment 所需参数
+                        const prepayRes = await post(`/orders/${order.id}/prepay`);
+                        if (prepayRes.code !== 0) {
+                            wx.hideLoading();
+                            wx.showToast({ title: prepayRes.message || '预下单失败', icon: 'none' });
+                            return;
                         }
+
+                        const payParams = prepayRes.data;
+
+                        // 2. 调起微信支付收银台
+                        wx.requestPayment({
+                            timeStamp: payParams.timeStamp,
+                            nonceStr:  payParams.nonceStr,
+                            package:   payParams.package,
+                            signType:  payParams.signType || 'MD5',
+                            paySign:   payParams.paySign,
+                            success: () => {
+                                wx.hideLoading();
+                                wx.showToast({ title: '支付成功！', icon: 'success' });
+                                // 延迟刷新，等待后端 notify 处理完成
+                                setTimeout(() => { this.loadOrder(order.id); }, 1500);
+                            },
+                            fail: (err) => {
+                                wx.hideLoading();
+                                if (err.errMsg && err.errMsg.includes('cancel')) {
+                                    wx.showToast({ title: '已取消支付', icon: 'none' });
+                                } else {
+                                    wx.showToast({ title: '支付失败，请重试', icon: 'none' });
+                                    console.error('wx.requestPayment fail:', err);
+                                }
+                            }
+                        });
                     } catch (err) {
                         wx.hideLoading();
-                        wx.showToast({ title: '支付失败', icon: 'none' });
+                        wx.showToast({ title: err.message || '支付失败', icon: 'none' });
+                        console.error('支付流程异常:', err);
                     }
                 }
             }

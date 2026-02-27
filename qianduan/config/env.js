@@ -13,7 +13,7 @@ const ENV_TYPES = {
 // 当前环境配置
 // WeChat小程序不支持process.env，这里手动配置环境
 // 部署时修改此值：开发环境用 DEVELOPMENT，生产环境用 PRODUCTION
-const CURRENT_ENV = ENV_TYPES.PRODUCTION;
+const CURRENT_ENV = ENV_TYPES.DEVELOPMENT;
 
 /**
  * 环境配置
@@ -21,7 +21,7 @@ const CURRENT_ENV = ENV_TYPES.PRODUCTION;
 const envConfigs = {
   // 开发环境
   [ENV_TYPES.DEVELOPMENT]: {
-    apiBaseUrl: 'http://localhost:3000/api',
+    apiBaseUrl: 'http://192.168.1.4:3000/api',
     debug: true,
     enableLog: true,
     enableMock: false,

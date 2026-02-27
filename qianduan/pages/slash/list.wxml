@@ -1,0 +1,92 @@
+<!--pages/slash/list.wxml - 砍一刀活动列表-->
+<view class="container">
+  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-back" bindtap="onBack">
+      <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
+    </view>
+    <text class="nav-title">砍一刀</text>
+    <view class="nav-placeholder"/>
+  </view>
+
+  <!-- 说明卡 -->
+  <view class="intro-card">
+    <view class="intro-left">
+      <text class="intro-badge">全员可参与</text>
+      <text class="intro-title">发起砍价，好友帮砍</text>
+      <text class="intro-desc">分享给好友，每人帮你砍一刀，最低可砍到底价</text>
+    </view>
+    <image class="intro-icon" src="/assets/icons/tag.svg" mode="aspectFit"/>
+  </view>
+
+  <!-- Tab: 活动列表 / 我的砍价 -->
+  <view class="tab-row">
+    <view class="tab-item {{activeTab === 'activities' ? 'active' : ''}}" bindtap="switchTab" data-tab="activities">砍价商品</view>
+    <view class="tab-item {{activeTab === 'my' ? 'active' : ''}}" bindtap="switchTab" data-tab="my">我的砍价</view>
+  </view>
+
+  <!-- 活动列表 -->
+  <view class="scroll-area" wx:if="{{activeTab === 'activities'}}">
+    <view class="empty-wrap" wx:if="{{!activities.length && !loading}}">
+      <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
+      <text class="empty-text">暂无砍价活动</text>
+    </view>
+    <view class="product-list">
+      <view class="product-card" wx:for="{{activities}}" wx:key="id" bindtap="onStartSlash" data-activity="{{item}}">
+        <image class="product-img" src="{{item.product && item.product.images && item.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
+        <view class="product-info">
+          <text class="product-name">{{item.product && item.product.name || '商品'}}</text>
+          <view class="price-row">
+            <view class="price-from">
+              <text class="price-label">原价</text>
+              <text class="price-val strikethrough">¥{{item.original_price}}</text>
+            </view>
+            <view class="price-arrow">→</view>
+            <view class="price-to">
+              <text class="price-label">底价</text>
+              <text class="price-val floor">¥{{item.floor_price}}</text>
+            </view>
+          </view>
+          <view class="action-row">
+            <text class="helpers-hint">最多{{item.max_helpers === -1 ? '不限' : item.max_helpers}}人帮砍 · {{item.expire_hours}}h有效</text>
+            <view class="start-btn">发起砍价</view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 我的砍价记录 -->
+  <view class="scroll-area" wx:if="{{activeTab === 'my'}}">
+    <view class="empty-wrap" wx:if="{{!myRecords.length && !loading}}">
+      <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
+      <text class="empty-text">还没有砍价记录\n去砍价商品页发起第一刀吧</text>
+    </view>
+    <view class="record-list">
+      <view class="record-card" wx:for="{{myRecords}}" wx:key="id" bindtap="onViewRecord" data-no="{{item.slash_no}}">
+        <image class="record-img" src="{{item.product && item.product.images && item.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
+        <view class="record-info">
+          <text class="record-name">{{item.product && item.product.name || '商品'}}</text>
+          <view class="record-price-row">
+            <text class="record-current">¥{{item.current_price}}</text>
+            <text class="record-floor">底价 ¥{{item.floor_price}}</text>
+          </view>
+          <view class="record-progress-wrap">
+            <view class="record-progress-bar">
+              <view class="record-progress-fill" style="width: {{(1 - (item.current_price - item.floor_price) / (item.original_price - item.floor_price)) * 100}}%;"/>
+            </view>
+            <text class="record-helper-count">{{item.helper_count}}人已帮砍</text>
+          </view>
+          <view class="record-status-row">
+            <view class="slash-status {{item.status}}">
+              <text wx:if="{{item.status === 'active'}}">进行中</text>
+              <text wx:elif="{{item.status === 'success'}}">已到底价</text>
+              <text wx:elif="{{item.status === 'expired'}}">已过期</text>
+              <text wx:else>已购买</text>
+            </view>
+            <text class="share-hint" wx:if="{{item.status === 'active'}}">分享好友来帮砍</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

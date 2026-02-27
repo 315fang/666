@@ -19,6 +19,10 @@ const COMMISSION_CONFIG = {
 };
 
 /**
+ * @deprecated 此函数为旧版遗留，使用固定金额分配逻辑，与当前系统的差价体系（price gap）不符。
+ * 实际佣金计算已在 orderController.js 的 shipOrder() 中内联实现（动态差价分润）。
+ * 保留此函数仅供历史参考，禁止在新业务中调用。
+ *
  * 计算订单佣金分配
  * @param {Object} params
  * @param {number} params.retailPrice - 零售价
@@ -133,8 +137,64 @@ function checkRoleUpgrade(user) {
     return null;
 }
 
+/**
+ * ★ Phase 3：同级直推机制
+ *
+ * 场景：下线用户正常升级到与上线相同级别后触发
+ * 效果：上线得到一笔「同级直推奖金」，立即到账余额
+ *
+ * 奖金配置（元）：
+ *   会员升至会员  → 上线 +20 元
+ *   团长升至团长  → 上线 +50 元
+ *   代理商升至代理商 → 上线 +100 元
+ *
+ * @param {object} upline    上线用户 { id, role_level }
+ * @param {object} newPeer   升级用户 { id, role_level（升级后）}
+ * @param {object} [t]       外部事务（可选，不传则自建事务）
+ */
+async function handleSameLevelReferral(upline, newPeer, t = null) {
+    const SAME_LEVEL_BONUS = {
+        1: 20,   // 会员 -> 会员
+        2: 50,   // 团长 -> 团长
+        3: 100   // 代理商 -> 代理商
+    };
+
+    const bonus = SAME_LEVEL_BONUS[newPeer.role_level];
+    // 上线必须存在且为同级，才触发奖励
+    if (!bonus || !upline || upline.role_level !== newPeer.role_level) return;
+
+    try {
+        const { User, CommissionLog, sequelize } = require('../models');
+        const ownTx = !t;
+        if (ownTx) t = await sequelize.transaction();
+
+        const freshUpline = await User.findByPk(upline.id, { transaction: t, lock: t.LOCK.UPDATE });
+        if (!freshUpline) {
+            if (ownTx) await t.rollback();
+            return;
+        }
+
+        await freshUpline.increment('balance', { by: bonus, transaction: t });
+        await CommissionLog.create({
+            user_id: upline.id,
+            order_id: null,
+            amount: bonus,
+            type: 'Peer_Direct',
+            status: 'settled',
+            settled_at: new Date(),
+            remark: `同级直推奖金：下线用户(ID:${newPeer.id})升级至${newPeer.role_level}级`
+        }, { transaction: t });
+
+        if (ownTx) await t.commit();
+        console.log(`[Phase3-同级直推] 用户${upline.id} 得 ¥${bonus}，触发人: 用户${newPeer.id}`);
+    } catch (err) {
+        console.error('[Phase3-同级直推] 奖金发放失败:', err.message);
+    }
+}
+
 module.exports = {
     COMMISSION_CONFIG,
     calculateCommission,
-    checkRoleUpgrade
+    checkRoleUpgrade,
+    handleSameLevelReferral
 };

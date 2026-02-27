@@ -27,9 +27,14 @@ App({
             console.log('通过邀请问卷进入, inviter_id:', inviterId);
             this.globalData.pendingInviterId = inviterId;
         } else if (options && options.query && options.query.scene) {
-            const scene = decodeURIComponent(options.query.scene);
-            console.log('扫码进入, scene:', scene);
-            this.globalData.pendingInviterId = scene;
+            const rawScene = decodeURIComponent(options.query.scene || '');
+            console.log('扫码进入, scene (raw):', rawScene);
+            // ★ 安全校验：scene 只接受纯数字格式（用户ID），防止注入
+            if (/^\d+$/.test(rawScene)) {
+                this.globalData.pendingInviterId = rawScene;
+            } else {
+                console.warn('scene 参数格式非法，已忽略:', rawScene);
+            }
         }
     },
 

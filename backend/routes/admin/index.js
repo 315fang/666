@@ -103,11 +103,6 @@ router.put('/commissions/:id/reject', checkPermission('commissions'), adminCommi
 router.post('/commissions/batch-approve', checkPermission('commissions'), adminCommissionController.batchApproveCommissions);
 router.post('/commissions/batch-reject', checkPermission('commissions'), adminCommissionController.batchRejectCommissions);
 
-// ========== 统计分析（★增强） ==========
-const adminStatsController = require('./controllers/adminStatsController');
-router.get('/statistics/overview', adminStatsController.getDashboardOverview);
-router.get('/statistics/agent-ranking', adminStatsController.getAgentRanking);
-
 // ========== 经销商管理 ==========
 router.get('/dealers', checkPermission('dealers'), adminDealerController.getDealers);
 router.get('/dealers/:id', checkPermission('dealers'), adminDealerController.getDealerById);

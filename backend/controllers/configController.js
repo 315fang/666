@@ -228,13 +228,70 @@ const getHomePageConfig = async (req, res) => {
             configs[config.config_key] = value;
         });
 
+        // 特色卡片：优先从 AppConfig（config_key = feature_cards）读取，否则使用默认值
+        const defaultFeatureCards = [
+            {
+                id: 1,
+                name: '镜像见面会',
+                description: '全国各地线下见面会，零距离交流',
+                icon_url: '/assets/icons/map-pin.svg',
+                bg_gradient: 'linear-gradient(145deg, #0F2027, #203A43, #2C5364)',
+                tag: '线下活动',
+                link_type: 'page',
+                link_value: '/pages/feature/meetup',
+                sort_order: 4
+            },
+            {
+                id: 2,
+                name: '创始人对谈',
+                description: '每周六腾讯会议，1对1答疑解惑',
+                icon_url: '/assets/icons/mic.svg',
+                bg_gradient: 'linear-gradient(145deg, #1a1a2e, #16213e)',
+                tag: '每周六',
+                link_type: 'page',
+                link_value: '/pages/feature/founder-talk',
+                sort_order: 3
+            },
+            {
+                id: 3,
+                name: '知识星球',
+                description: '分级制社群，持续进阶成长',
+                icon_url: '/assets/icons/star.svg',
+                bg_gradient: 'linear-gradient(145deg, #2d1b69, #11998e)',
+                tag: '社群',
+                link_type: 'copy',
+                link_value: '',
+                sort_order: 2
+            },
+            {
+                id: 4,
+                name: '销售实战营',
+                description: '实战训练，快速提升销售力',
+                icon_url: '/assets/icons/target.svg',
+                bg_gradient: 'linear-gradient(145deg, #c31432, #240b36)',
+                tag: '训练营',
+                link_type: 'page',
+                link_value: '/pages/feature/sales-camp',
+                sort_order: 1
+            }
+        ];
+
+        // 从 configs 中提取或使用默认值
+        let featureCards = defaultFeatureCards;
+        if (configs.feature_cards && Array.isArray(configs.feature_cards)) {
+            featureCards = configs.feature_cards;
+        }
+        // 按 sort_order 降序排列
+        featureCards.sort((a, b) => (b.sort_order || 0) - (a.sort_order || 0));
+
         res.json({
             code: 0,
             data: {
                 configs,
                 quickEntries,
                 sections: homeSections,
-                banners
+                banners,
+                featureCards
             }
         });
     } catch (error) {

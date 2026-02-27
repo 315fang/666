@@ -44,7 +44,12 @@ const Refund = sequelize.define('Refund', {
         comment: '凭证图片URLs（JSON数组）',
         get() {
             const rawValue = this.getDataValue('images');
-            return rawValue ? JSON.parse(rawValue) : [];
+            if (!rawValue) return [];
+            try {
+                return JSON.parse(rawValue);
+            } catch (e) {
+                return [];
+            }
         },
         set(value) {
             this.setDataValue('images', JSON.stringify(value));

@@ -1,6 +1,5 @@
-const { User, CommissionLog, Order, Product } = require('../models');
+const { User, CommissionLog, Order, Product, sequelize } = require('../models');
 const { Op } = require('sequelize');
-const sequelize = require('sequelize');
 
 /**
  * 获取分销统计数据

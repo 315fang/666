@@ -112,7 +112,7 @@
   padding-top: 8rpx;
 }
 
-.address-card__arrow image {
+.address-card__arrow-icon {
   width: 28rpx;
   height: 28rpx;
   opacity: 0.3;

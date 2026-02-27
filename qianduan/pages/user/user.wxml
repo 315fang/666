@@ -28,7 +28,7 @@
         <view class="user-level" wx:if="{{hasUserInfo}}">
           <view class="level-badge">{{userInfo.role_name || '普通会员'}}</view>
         </view>
-        <view class="complete-info" wx:if="{{hasUserInfo}}" bindtap="onCompleteInfoTap">
+        <view class="complete-info" wx:if="{{hasUserInfo}}">
           <text class="complete-text">完善信息可获得奖励 ></text>
         </view>
       </view>
@@ -43,6 +43,11 @@
       <view class="asset-item" bindtap="goWallet">
         <text class="asset-value highlight">{{balance || '0'}}</text>
         <text class="asset-label">可提现</text>
+      </view>
+      <!-- ★ 积分显示入口 -->
+      <view class="asset-item" bindtap="goPoints">
+        <text class="asset-value" style="color:#F59E0B;">{{pointBalance || 0}}</text>
+        <text class="asset-label">我的积分</text>
       </view>
       <view class="asset-item" bindtap="goTeam">
         <text class="asset-value">{{teamCount || 0}}</text>
@@ -163,6 +168,41 @@
           <image class="icon" src="/assets/icons/star.svg" mode="aspectFit"/>
         </view>
         <text class="tool-text">分佣中心</text>
+      </view>
+      <!-- ★ 积分中心入口 -->
+      <view class="tool-item" bindtap="goPoints">
+        <view class="tool-icon-wrap" style="background:rgba(245,158,11,0.15);">
+          <image class="icon" src="/assets/icons/gift.svg" mode="aspectFit"/>
+        </view>
+        <text class="tool-text">积分中心</text>
+      </view>
+      <!-- ★ 全部商品（从首页迁移） -->
+      <view class="tool-item" bindtap="goAllProducts">
+        <view class="tool-icon-wrap" style="background:rgba(59,130,246,0.12);">
+          <image class="icon" src="/assets/icons/shopping-bag.svg" mode="aspectFit"/>
+        </view>
+        <text class="tool-text">全部商品</text>
+      </view>
+      <!-- ★ 购物车（从首页迁移） -->
+      <view class="tool-item" bindtap="goCart">
+        <view class="tool-icon-wrap" style="background:rgba(16,185,129,0.12);">
+          <image class="icon" src="/assets/icons/shopping-cart.svg" mode="aspectFit"/>
+        </view>
+        <text class="tool-text">购物车</text>
+      </view>
+      <!-- ★ 我的优惠券 -->
+      <view class="tool-item" bindtap="goCoupons">
+        <view class="tool-icon-wrap" style="background:rgba(239,68,68,0.12);">
+          <image class="icon" src="/assets/icons/tag.svg" mode="aspectFit"/>
+        </view>
+        <text class="tool-text">优惠券</text>
+      </view>
+      <!-- ★ 积分抽奖 -->
+      <view class="tool-item" bindtap="goLottery">
+        <view class="tool-icon-wrap" style="background:rgba(168,85,247,0.12);">
+          <image class="icon" src="/assets/icons/star.svg" mode="aspectFit"/>
+        </view>
+        <text class="tool-text">积分抽奖</text>
       </view>
       <view class="tool-item" bindtap="onSettingsTap">
         <view class="tool-icon-wrap gray">

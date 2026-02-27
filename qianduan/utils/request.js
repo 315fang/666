@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 网络请求封装（改进版）
  * 统一处理请求头、错误处理、Loading、重试等
  */
@@ -57,22 +57,24 @@ function generateRequestKey(url, method, data) {
  * @param {number} options.retryCount - 当前重试次数（内部使用）
  */
 function request(options) {
-    return new Promise(async (resolve, reject) => {
-        const {
-            url,
-            method = 'GET',
-            data = {},
-            showLoading = false,
-            showError = true,
-            preventDuplicate = false,
-            retryCount = 0
-        } = options;
+    const {
+        url,
+        method = 'GET',
+        data = {},
+        showLoading = false,
+        showError = true,
+        preventDuplicate = false,
+        retryCount = 0
+    } = options;
 
-        // 防止重复请求
-        const requestKey = generateRequestKey(url, method, data);
-        if (preventDuplicate && pendingRequests.has(requestKey)) {
-            return pendingRequests.get(requestKey);
-        }
+    // ★ 防止重复请求：检查必须在 Promise 构造函数外面，才能返回已有的 Promise
+    const requestKey = generateRequestKey(url, method, data);
+    if (preventDuplicate && pendingRequests.has(requestKey)) {
+        return pendingRequests.get(requestKey);
+    }
+
+    return new Promise(async (resolve, reject) => {
+        // 已在外层解构，此处保持引用
 
         // 执行请求拦截器
         let requestConfig = { url, method, data, showLoading, showError };
@@ -130,7 +132,7 @@ function request(options) {
                     // HTTP 状态码检查
                     if (response.statusCode >= 200 && response.statusCode < 300) {
                         // 业务状态码检查（统一为 code === 0 表示成功）
-                        if (response.data && (response.data.code === 0 || response.data.success === true || (response.data.success !== false && response.data.code !== -1))) {
+                        if (response.data && response.data.code === 0) { // ★ 只接受 code===0 为成功，防掩盖错误
                             resolveRequest(response.data);
                         } else {
                             // 业务错误

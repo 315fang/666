@@ -19,7 +19,7 @@ Page({
     onShow() {
         // 每次显示页面时刷新购物车
         this.loadCart();
-        
+
         // 显示空购物车动画
         setTimeout(() => {
             this.setData({ showEmpty: true });
@@ -42,8 +42,10 @@ Page({
                 return {
                     ...item,
                     selected: item.selected !== false,
-                    // 获取价格：优先 SKU 价格，其次商品价格
-                    price: parseFloat(item.sku?.retail_price || item.product?.retail_price || 0),
+                    // 获取价格：优先用后端按用户等级计算的 effective_price，
+                    // 再 fallback 到 SKU 零售价，最后是商品零售价
+                    // ★ 与 confirm.js 保持一致，避免用户看到的价格和结算价不同
+                    price: parseFloat(item.effective_price || item.sku?.retail_price || item.product?.retail_price || 0),
                     // 解析后的图片数组
                     productImages,
                     // 第一张图片（用于显示）
@@ -73,7 +75,7 @@ Page({
             }, 800);
 
             this.calculateTotal();
-            
+
             // 如果是空购物车，显示动画
             if (cartItems.length === 0) {
                 setTimeout(() => {
@@ -166,13 +168,13 @@ Page({
         }));
 
         this.setData({ cartItems, selectAll: newSelectAll });
-        
+
         // 触发价格和数量动画
         this.setData({ priceAnim: true, countAnim: true });
         setTimeout(() => {
             this.setData({ priceAnim: false, countAnim: false });
         }, 400);
-        
+
         this.calculateTotal();
     },
 
@@ -195,22 +197,22 @@ Page({
 
             // 触发动画
             const animKey = `cartItems[${index}].quantityAnim`;
-            this.setData({ 
+            this.setData({
                 [animKey]: true,
                 [`cartItems[${index}].quantity`]: newQuantity
             });
-            
+
             // 清除动画标记
             setTimeout(() => {
                 this.setData({ [animKey]: false });
             }, 300);
-            
+
             // 触发价格和数量动画
             this.setData({ priceAnim: true, countAnim: true });
             setTimeout(() => {
                 this.setData({ priceAnim: false, countAnim: false });
             }, 400);
-            
+
             this.calculateTotal();
         } catch (err) {
             console.error('更新数量失败:', err);
@@ -231,7 +233,7 @@ Page({
                         // 先触发动画
                         const deleteKey = `cartItems[${index}].deleting`;
                         this.setData({ [deleteKey]: true });
-                        
+
                         await del(`/cart/${item.id}`);
 
                         // 等待动画完成后再删除数据
@@ -240,7 +242,7 @@ Page({
                             cartItems.splice(index, 1);
                             this.setData({ cartItems });
                             this.calculateTotal();
-                            
+
                             // 如果是空购物车了，显示空状态动画
                             if (cartItems.length === 0) {
                                 setTimeout(() => {

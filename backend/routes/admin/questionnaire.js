@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { adminAuth } = require('../../middleware/adminAuth');
 const {
     adminListQuestionnaires,
     adminSaveQuestionnaire,
@@ -8,6 +9,9 @@ const {
     adminListSubmissions,
     adminGetSubmissionDetail
 } = require('../../controllers/questionnaireController');
+
+// 所有管理端问卷接口均需管理员登录
+router.use(adminAuth);
 
 // 问卷模板管理
 router.get('/questionnaires', adminListQuestionnaires);

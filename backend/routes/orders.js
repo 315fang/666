@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const {
-    createOrder, payOrder, shipOrder, confirmOrder, cancelOrder,
+    createOrder, payOrder, prepayOrder, wechatPayNotify,
+    shipOrder, confirmOrder, cancelOrder,
     getOrders, getOrderById,
     agentConfirmOrder, requestShipping, settleCommissions, getAgentOrders
 } = require('../controllers/orderController');
@@ -20,8 +21,15 @@ router.get('/orders/agent/list', authenticate, getAgentOrders);
 // GET /api/orders/:id - 获取订单详情
 router.get('/orders/:id', authenticate, getOrderById);
 
-// POST /api/orders/:id/pay - 支付订单
+// POST /api/orders/:id/prepay - 微信支付预下单（返回 wx.requestPayment 参数）
+router.post('/orders/:id/prepay', authenticate, prepayOrder);
+
+// POST /api/orders/:id/pay - 支付订单（内部/测试用，正式支付通过 wechat notify 触发）
 router.post('/orders/:id/pay', authenticate, payOrder);
+
+// POST /wechat/pay/notify - 微信支付回调（无需鉴权，用签名验证）
+// ★ 使用 express.text 解析 text/xml 请求体
+router.post('/wechat/pay/notify', express.text({ type: 'text/xml' }), wechatPayNotify);
 
 // POST /api/orders/:id/agent-confirm - 代理人确认订单
 router.post('/orders/:id/agent-confirm', authenticate, agentConfirmOrder);

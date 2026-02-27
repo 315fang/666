@@ -36,10 +36,12 @@ async function startServer() {
             criticalChecks.push('WECHAT_APPID / WECHAT_SECRET 未配置');
         }
 
-        // 数据库密码验证
-        if (!process.env.DB_PASSWORD || process.env.DB_PASSWORD === 'your_mysql_password') {
+        // ★ 数据库密码验证（修复空字符串检测）
+        const dbPwd = process.env.DB_PASSWORD || '';
+        const dbPwdBadValues = ['your_mysql_password', 'password', '123456', '请填入你的MySQL数据库密码', ''];
+        if (dbPwdBadValues.includes(dbPwd) || dbPwd.length < 6) {
             if (isProduction) {
-                criticalChecks.push('DB_PASSWORD 未设置或使用了默认值');
+                criticalChecks.push('DB_PASSWORD 未设置或使用了占位符默认值，请在 .env 中填入真实数据库密码');
             } else {
                 console.warn('⚠️  警告: DB_PASSWORD 未设置或使用默认值');
             }
@@ -69,7 +71,7 @@ async function startServer() {
             process.exit(1);
         }
 
-        // 同步数据库模型（开发环境）
+        // 同步数据库模型（仅开发环境）
         if (process.env.NODE_ENV === 'development') {
             console.log('同步数据库模型...');
             await sequelize.sync({ alter: true });
@@ -108,7 +110,6 @@ async function startServer() {
         }, 60 * 60 * 1000);
 
         // ★ 定时任务：售后期结束处理（每10分钟检查一次）
-        // 将冻结佣金转为待审批状态，同时处理升级逻辑
         setInterval(async () => {
             await executeWithLock('processRefundDeadline', async () => {
                 await processRefundDeadlineExpired();
@@ -125,6 +126,41 @@ async function startServer() {
                 console.error('[定时任务] 代理商订单超时转平台异常:', err);
             });
         }, 30 * 60 * 1000);
+
+        // ★ 定时任务：拼团超时未成团处理（每5分钟检查一次）
+        const { checkExpiredGroups } = require('./controllers/groupController');
+        setInterval(async () => {
+            await executeWithLock('checkExpiredGroups', async () => {
+                const mockReqRes = {
+                    req: {},
+                    res: { json: () => { } }
+                };
+                // 直接调用业务逻辑
+                const { GroupOrder, GroupMember, sequelize: db } = require('./models');
+                const { Op } = require('sequelize');
+                const now = new Date();
+                const expired = await GroupOrder.findAll({
+                    where: { status: 'open', expire_at: { [Op.lt]: now } }
+                });
+                for (const g of expired) {
+                    const t2 = await db.transaction();
+                    try {
+                        await g.update({ status: 'fail', failed_at: now }, { transaction: t2 });
+                        await GroupMember.update(
+                            { status: 'refunded' },
+                            { where: { group_order_id: g.id, status: 'joined' }, transaction: t2 }
+                        );
+                        await t2.commit();
+                        console.log(`[拼团定时] 团次 ${g.group_no} 超时失败处理完成`);
+                    } catch (e) {
+                        await t2.rollback();
+                        console.error(`[拼团定时] 处理团次 ${g.group_no} 失败:`, e.message);
+                    }
+                }
+            }, { timeout: 3 * 60 * 1000 }).catch(err => {
+                console.error('[定时任务] 拼团超时处理异常:', err);
+            });
+        }, 5 * 60 * 1000);
 
         // 启动时也执行一次（使用锁机制）
         executeWithLock('settleCommissions', async () => {

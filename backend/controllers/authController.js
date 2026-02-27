@@ -3,6 +3,7 @@ const { User } = require('../models');
 const { code2Session } = require('../utils/wechat');
 const constants = require('../config/constants');
 const { logAuth, error: logError } = require('../utils/logger');
+const PointService = require('../services/PointService');  // ★ 积分服务
 
 // 生成用户 JWT Token
 function generateUserToken(user) {
@@ -71,12 +72,18 @@ async function login(req, res, next) {
                 userId: user.id,
                 openid: user.openid
             });
+
+            // ★ 新用户自动初始化积分账户（Lv1，享全场包邮特权）
+            PointService.initForNewUser(user.id).catch(e => {
+                console.error('积分账户初始化失败（不影响注册）:', e.message);
+            });
         }
 
         // 签发 JWT Token
         const token = generateUserToken(user);
 
         res.json({
+            code: 0,  // ★ 统一返回格式，前端检查 code === 0
             success: true,
             token,
             openid,

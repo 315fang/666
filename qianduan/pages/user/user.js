@@ -33,6 +33,7 @@ Page({
             role_name: '普通用户'
         },
         notificationsCount: 0,
+        pointBalance: 0,  // ★ 积分余额
         // 昵称修改弹窗
         showNicknameModal: false,
         newNickname: '',
@@ -122,6 +123,7 @@ Page({
         this.loadOrderCounts();
         this.loadDistributionInfo();
         this.loadNotificationsCount();
+        this.loadPointBalance();  // ★ 加载积分
     },
 
     // ====== 订单数量（含退款） ======
@@ -277,14 +279,6 @@ Page({
                 console.error('授权提示失败:', err);
             }
         }
-    },
-
-    onCompleteInfoTap() {
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        wx.navigateTo({ url: '/pages/ai/questionnaire' });
     },
 
     // ======== 修改昵称 ========
@@ -493,6 +487,55 @@ Page({
         }
         // 跳转到邀请页面
         wx.navigateTo({ url: '/pages/distribution/invite' });
+    },
+
+    // ★ 积分余额加载
+    async loadPointBalance() {
+        try {
+            const res = await get('/points/account').catch(() => null);
+            if (res && res.code === 0 && res.data) {
+                this.setData({ pointBalance: res.data.balance_points || 0 });
+            }
+        } catch (e) {
+            // 静默失败，不影响主界面
+        }
+    },
+
+    // ★ 跳转积分中心
+    goPoints() {
+        if (!this.data.isLoggedIn) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: '/pages/points/index' });
+    },
+
+    // ★ 全部商品（从首页迁移迁移）
+    goAllProducts() {
+        wx.switchTab({ url: '/pages/category/category' });
+    },
+
+    // ★ 购物车（从首页迁移）
+    goCart() {
+        wx.navigateTo({ url: '/pages/cart/cart' });
+    },
+
+    // Phase 2: 我的优惠券
+    goCoupons() {
+        if (!this.data.isLoggedIn) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: '/pages/coupon/list' });
+    },
+
+    // Phase 2: 积分抽奖
+    goLottery() {
+        if (!this.data.isLoggedIn) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: '/pages/lottery/lottery' });
     },
 
     // ======== ★ 分佣中心（整合团队、钱包、邀请码） ========

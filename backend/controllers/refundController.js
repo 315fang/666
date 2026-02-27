@@ -1,7 +1,9 @@
-const { Refund, Order, Product, CommissionLog } = require('../models');
+const { Refund, Order, Product, CommissionLog, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const { sendNotification } = require('../models/notificationUtil');
 const constants = require('../config/constants');
+
+const ADMIN_USER_ID = constants.ADMIN.USER_ID;
 
 // 生成售后单号
 const generateRefundNo = () => {
@@ -142,7 +144,7 @@ const applyRefund = async (req, res) => {
 
         // 通知管理员
         await sendNotification(
-            0,
+            ADMIN_USER_ID,
             '新退款申请',
             `用户申请退款 ¥${refundAmount.toFixed(2)}，订单号 ${order.order_no}，请及时审核。`,
             'refund_admin',
@@ -222,27 +224,35 @@ const getRefundById = async (req, res) => {
 
 // 取消售后申请
 const cancelRefund = async (req, res) => {
+    const t = await sequelize.transaction();
     try {
         const userId = req.user.id;
         const { id } = req.params;
 
+        // ★ 使用事务 + 行锁，防止用户疯狂连点导致重复取消
         const refund = await Refund.findOne({
-            where: { id, user_id: userId }
+            where: { id, user_id: userId },
+            lock: t.LOCK.UPDATE,
+            transaction: t
         });
 
         if (!refund) {
+            await t.rollback();
             return res.status(404).json({ code: -1, message: '售后单不存在' });
         }
 
         if (refund.status !== 'pending') {
+            await t.rollback();
             return res.status(400).json({ code: -1, message: '当前状态不支持取消' });
         }
 
         refund.status = 'cancelled';
-        await refund.save();
+        await refund.save({ transaction: t });
+        await t.commit();
 
         res.json({ code: 0, message: '已取消' });
     } catch (error) {
+        await t.rollback();
         console.error('取消售后失败:', error);
         res.status(500).json({ code: -1, message: '取消失败' });
     }

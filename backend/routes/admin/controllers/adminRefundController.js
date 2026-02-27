@@ -1,6 +1,7 @@
 const { Refund, Order, User, Product, SKU, CommissionLog, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
 const { sendNotification } = require('../../../models/notificationUtil');
+const { refundOrder } = require('../../../utils/wechat');
 
 // 获取售后列表
 const getRefunds = async (req, res) => {
@@ -164,8 +165,22 @@ const completeRefund = async (req, res) => {
 
         // 更新订单状态
         const order = refund.order;
-        // ★ 判断是否全额退款（退款金额 = 订单总额），全额退才改订单状态为 refunded
-        const isFullRefund = parseFloat(refund.amount) >= parseFloat(order.total_amount);
+        const totalFee = Math.round(parseFloat(order.actual_price) * 100);
+        const refundFee = Math.round(parseFloat(refund.amount) * 100);
+        if (!totalFee || !refundFee || refundFee > totalFee) {
+            await t.rollback();
+            return res.status(400).json({ code: -1, message: '退款金额不合法' });
+        }
+
+        await refundOrder({
+            orderNo: order.order_no,
+            refundNo: refund.refund_no,
+            totalFee,
+            refundFee
+        });
+        // ★ 判断是否全额退款（退款金额 >= 实际支付金额），全额退才改订单状态为 refunded
+        // 使用 actual_price（实际支付金额），而非 total_amount（原始订单金额，可能包含未支付的差额）
+        const isFullRefund = parseFloat(refund.amount) >= parseFloat(order.actual_price);
         if (isFullRefund) {
             await Order.update(
                 { status: 'refunded' },

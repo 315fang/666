@@ -25,7 +25,7 @@ Page({
             if (res.code === 0) {
                 const overview = res.data.commission || {};
                 this.setData({
-                    balance: res.data.balance.toFixed(2),
+                    balance: (res.data.balance || 0).toFixed(2),
                     commissionOverview: {
                         total: overview.total ? overview.total.toFixed(2) : '0.00',
                         frozen: overview.frozen ? overview.frozen.toFixed(2) : '0.00',

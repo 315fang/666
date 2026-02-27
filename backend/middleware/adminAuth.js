@@ -30,7 +30,7 @@ const adminAuth = async (req, res, next) => {
         next();
     } catch (error) {
         console.error('管理员认证错误:', error);
-        res.status(500).json({ code: -1, message: '认证失败: ' + error.message });
+        res.status(500).json({ code: -1, message: '认证服务异常，请稍后重试' });
     }
 };
 

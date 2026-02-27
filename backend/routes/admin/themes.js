@@ -26,7 +26,7 @@ router.put('/:id', authenticateAdmin, themeController.updateTheme);
 // 删除主题
 router.delete('/:id', authenticateAdmin, themeController.deleteTheme);
 
-// 自动切换主题（由定时任务调用）
-router.post('/auto-switch', themeController.autoSwitchTheme);
+// 自动切换主题（由定时任务调用，需管理员权限）
+router.post('/auto-switch', authenticateAdmin, themeController.autoSwitchTheme);
 
 module.exports = router;

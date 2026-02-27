@@ -1,4 +1,5 @@
 const { Cart, Product, SKU, User } = require('../models');
+const constants = require('../config/constants');
 
 /**
  * ★ 根据用户角色等级获取商品实际价格
@@ -82,9 +83,15 @@ const addToCart = async (req, res) => {
     try {
         const userId = req.user.id;
         const { product_id, sku_id = null, quantity = 1 } = req.body;
+        const MAX_QTY = constants.CART.MAX_ITEM_QUANTITY;
 
         if (!product_id) {
             return res.status(400).json({ code: -1, message: '商品ID不能为空' });
+        }
+
+        const qty = parseInt(quantity);
+        if (!Number.isInteger(qty) || qty < 1) {
+            return res.status(400).json({ code: -1, message: '数量必须为正整数' });
         }
 
         // 检查商品是否存在
@@ -96,7 +103,7 @@ const addToCart = async (req, res) => {
         // 检查SKU库存
         if (sku_id) {
             const sku = await SKU.findByPk(sku_id);
-            if (!sku || sku.stock < quantity) {
+            if (!sku || sku.stock < qty) {
                 return res.status(400).json({ code: -1, message: 'SKU不存在或库存不足' });
             }
         }
@@ -111,17 +118,33 @@ const addToCart = async (req, res) => {
         });
 
         if (existingItem) {
-            // 更新数量
-            existingItem.quantity += quantity;
-            await existingItem.save();
-            res.json({ code: 0, data: existingItem, message: '已更新购物车数量' });
+            // ★ 原子性自增，防止并发竞态；同时校验上限
+            const newQty = existingItem.quantity + qty;
+            if (newQty > MAX_QTY) {
+                return res.status(400).json({ code: -1, message: `单个商品最多购买 ${MAX_QTY} 件` });
+            }
+            // 使用 Model.increment 进行原子 SQL UPDATE，防止 read-modify-write 竞态
+            await Cart.increment('quantity', {
+                by: qty,
+                where: {
+                    id: existingItem.id,
+                    user_id: userId,
+                    // 原子上限检查：仅当当前数量 + qty <= MAX_QTY 时才更新
+                    quantity: { [require('sequelize').Op.lte]: MAX_QTY - qty }
+                }
+            });
+            const updated = await Cart.findByPk(existingItem.id);
+            res.json({ code: 0, data: updated, message: '已更新购物车数量' });
         } else {
             // 新增购物车项
+            if (qty > MAX_QTY) {
+                return res.status(400).json({ code: -1, message: `单个商品最多购买 ${MAX_QTY} 件` });
+            }
             const newItem = await Cart.create({
                 user_id: userId,
                 product_id,
                 sku_id,
-                quantity,
+                quantity: qty,
                 selected: true
             });
             res.json({ code: 0, data: newItem, message: '已添加到购物车' });

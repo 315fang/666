@@ -105,6 +105,8 @@ async function partnerRecharge(req, res, next) {
 
         // 更新库存
         await user.increment('stock_count', { by: stockCount });
+        // ★ reload() 刷新内存对象，避免返回 increment 前的旧值
+        await user.reload();
 
         // 如果是首次充值且金额>=配置金额，升级为合伙人
         if (user.role_level < constants.ROLES.AGENT && amount >= constants.UPGRADE_RULES.LEADER_TO_AGENT.recharge_amount) {
@@ -114,7 +116,7 @@ async function partnerRecharge(req, res, next) {
         res.json({
             success: true,
             message: '补货成功',
-            newStock: user.stock_count + stockCount
+            newStock: user.stock_count
         });
     } catch (error) {
         next(error);

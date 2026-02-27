@@ -1,4 +1,4 @@
-const { Product, Category, SKU } = require('../../../models');
+const { Product, Category, SKU, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
 const AIService = require('../../../services/AIService');
 
@@ -122,27 +122,32 @@ const createProduct = async (req, res) => {
 
 // 更新商品
 const updateProduct = async (req, res) => {
+    const t = await sequelize.transaction();
     try {
         const { id } = req.params;
         const updates = req.body;
 
-        const product = await Product.findByPk(id);
+        const product = await Product.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
         if (!product) {
+            await t.rollback();
             return res.status(404).json({ code: -1, message: '商品不存在' });
         }
 
-        await product.update(updates);
+        await product.update(updates, { transaction: t });
 
-        // 更新SKU（如果有）
+        // ★ 更新SKU — 在事务内执行删除+重建，防止部分失败导致商品无SKU
         if (updates.skus) {
-            await SKU.destroy({ where: { product_id: id } });
+            await SKU.destroy({ where: { product_id: id }, transaction: t });
             for (const sku of updates.skus) {
-                await SKU.create({ ...sku, product_id: id });
+                await SKU.create({ ...sku, product_id: id }, { transaction: t });
             }
         }
 
+        await t.commit();
+
         res.json({ code: 0, data: product, message: '更新成功' });
     } catch (error) {
+        await t.rollback();
         console.error('更新商品失败:', error);
         res.status(500).json({ code: -1, message: '更新商品失败' });
     }

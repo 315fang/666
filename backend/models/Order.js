@@ -67,6 +67,11 @@ const Order = sequelize.define('Order', {
         allowNull: true,
         comment: '物流单号'
     },
+    logistics_company: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        comment: '物流公司代码（SF/YTO/ZTO/YD/EMS等）'
+    },
     status: {
         type: DataTypes.STRING(20),
         defaultValue: 'pending',
@@ -159,6 +164,60 @@ const Order = sequelize.define('Order', {
         type: DataTypes.INTEGER,
         allowNull: true,
         comment: '父订单ID（拆单时子订单指向父订单）'
+    },
+    // ★ Phase 2：优惠券字段
+    coupon_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: '使用的优惠券ID（user_coupons.id）'
+    },
+    coupon_discount: {
+        type: DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+        comment: '优惠券抵扣金额'
+    },
+    // ★ Phase 2：积分抵扣字段
+    points_used: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        comment: '本单消耗积分数量'
+    },
+    points_discount: {
+        type: DataTypes.DECIMAL(10, 2),
+        defaultValue: 0.00,
+        comment: '积分抵扣金额（points_used × 0.1 元/积分）'
+    },
+    // ★ Phase 2：成长值折扣（下单时锁定，防止后续等级变化影响历史订单）
+    member_discount_rate: {
+        type: DataTypes.DECIMAL(4, 2),
+        defaultValue: 1.00,
+        comment: '下单时锁定的会员折扣比例'
+    },
+    // ★ Phase 4：自提核销字段
+    delivery_type: {
+        type: DataTypes.ENUM('express', 'pickup'),
+        defaultValue: 'express',
+        comment: '配送方式: express=快递, pickup=到店自提'
+    },
+    pickup_station_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: '自提服务站点ID'
+    },
+    pickup_code: {
+        type: DataTypes.STRING(16),
+        allowNull: true,
+        comment: '16位大写字母数字核销码（工人手动输入用）'
+    },
+    pickup_qr_token: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+        comment: '二维码扫码颞面token（SHA256）'
+    },
+    verified_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: '自提核销完成时间'
     }
 }, {
     tableName: 'orders',

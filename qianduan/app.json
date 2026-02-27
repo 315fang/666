@@ -2,8 +2,16 @@
     "pages": [
         "pages/index/index",
         "pages/category/category",
+        "pages/activity/activity",
         "pages/cart/cart",
         "pages/user/user",
+        "pages/lottery/lottery",
+        "pages/coupon/list",
+        "pages/slash/list",
+        "pages/group/list",
+        "pages/pickup/pickup",
+        "pages/station/map",
+        "pages/logistics/tracking",
         "pages/product/detail",
         "pages/order/list",
         "pages/order/detail",
@@ -29,7 +37,10 @@
         "pages/ai/chat",
         "pages/questionnaire/fill",
         "pages/rules/index",
-        "pages/ai/questionnaire"
+        "pages/ai/questionnaire",
+        "pages/feed/index",
+        "pages/privacy/privacy",
+        "pages/points/index"
     ],
     "tabBar": {
         "color": "#A8A29E",
@@ -45,15 +56,15 @@
             },
             {
                 "pagePath": "pages/category/category",
-                "text": "分类",
+                "text": "商品",
                 "iconPath": "assets/icons/category.png",
                 "selectedIconPath": "assets/icons/category_active.png"
             },
             {
-                "pagePath": "pages/cart/cart",
-                "text": "购物车",
-                "iconPath": "assets/icons/cart.png",
-                "selectedIconPath": "assets/icons/cart_active.png"
+                "pagePath": "pages/activity/activity",
+                "text": "活动",
+                "iconPath": "assets/icons/activity.png",
+                "selectedIconPath": "assets/icons/activity_active.png"
             },
             {
                 "pagePath": "pages/user/user",

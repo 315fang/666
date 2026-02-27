@@ -2,12 +2,19 @@ const express = require('express');
 const router = express.Router();
 const { sequelize, User } = require('../models');
 const axios = require('axios');
+const { authenticate } = require('../middleware/auth');
 
 /**
  * 深度诊断接口 - 检查后端健康状况
  * 访问路径: /api/debug/diagnostic
+ * ★ 已加管理员鉴权：仅限登录用户且 role_level >= 3（管理员）可访问
  */
-router.get('/diagnostic', async (req, res) => {
+router.get('/diagnostic', authenticate, async (req, res) => {
+    // 仅允许管理员访问（role_level >= 3 或 admin 标记）
+    if (!req.user || req.user.role_level < 3) {
+        return res.status(403).json({ code: -1, message: '无权访问' });
+    }
+
     const report = {
         timestamp: new Date().toISOString(),
         env: {

@@ -1,6 +1,7 @@
 const { Withdrawal, User, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
 const { sendNotification } = require('../../../models/notificationUtil');
+const { transferToWallet } = require('../../../utils/wechat');
 
 // 获取提现列表
 const getWithdrawals = async (req, res) => {
@@ -119,25 +120,65 @@ const rejectWithdrawal = async (req, res) => {
 
 // 完成打款
 const completeWithdrawal = async (req, res) => {
+    const t = await sequelize.transaction();
     try {
         const { id } = req.params;
         const { remark } = req.body;
 
-        const withdrawal = await Withdrawal.findByPk(id);
+        const withdrawal = await Withdrawal.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
         if (!withdrawal) {
+            await t.rollback();
             return res.status(404).json({ code: -1, message: '提现记录不存在' });
         }
 
         if (withdrawal.status !== 'approved') {
+            await t.rollback();
             return res.status(400).json({ code: -1, message: '请先审核通过' });
+        }
+
+        if (withdrawal.method !== 'wechat') {
+            await t.rollback();
+            return res.status(400).json({ code: -1, message: '该提现方式不支持自动打款' });
+        }
+
+        const user = await User.findByPk(withdrawal.user_id, { transaction: t, lock: t.LOCK.UPDATE });
+        if (!user || !user.openid) {
+            await t.rollback();
+            return res.status(400).json({ code: -1, message: '用户openid缺失' });
+        }
+
+        const amount = Math.round(parseFloat(withdrawal.actual_amount) * 100);
+        if (!amount || amount <= 0) {
+            await t.rollback();
+            return res.status(400).json({ code: -1, message: '打款金额不合法' });
+        }
+
+        const clientIp = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '127.0.0.1')
+            .split(',')[0].trim().replace(/^::ffff:/, '');
+
+        try {
+            await transferToWallet({
+                partnerTradeNo: withdrawal.withdrawal_no,
+                openid: user.openid,
+                amount,
+                desc: remark || '佣金提现',
+                spbillCreateIp: clientIp
+            });
+        } catch (err) {
+            withdrawal.status = 'failed';
+            withdrawal.remark = (withdrawal.remark ? withdrawal.remark + ' | ' : '') + `自动打款失败: ${err.message}`;
+            await withdrawal.save({ transaction: t });
+            await t.commit();
+            return res.status(500).json({ code: -1, message: '自动打款失败' });
         }
 
         withdrawal.status = 'completed';
         withdrawal.completed_at = new Date();
         if (remark) withdrawal.remark = remark;
-        await withdrawal.save();
+        await withdrawal.save({ transaction: t });
 
-        // 通知用户
+        await t.commit();
+
         await sendNotification(
             withdrawal.user_id,
             '提现到账通知',
@@ -148,6 +189,7 @@ const completeWithdrawal = async (req, res) => {
 
         res.json({ code: 0, message: '打款完成' });
     } catch (error) {
+        await t.rollback();
         console.error('完成打款失败:', error);
         res.status(500).json({ code: -1, message: '操作失败' });
     }

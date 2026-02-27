@@ -22,6 +22,11 @@ const User = sequelize.define('User', {
         field: 'avatar_url',
         comment: '头像URL'
     },
+    phone: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        comment: '手机号码'
+    },
     role_level: {
         type: DataTypes.TINYINT,
         defaultValue: 0,
@@ -93,6 +98,18 @@ const User = sequelize.define('User', {
         type: DataTypes.DECIMAL(10, 2),
         defaultValue: 0.00,
         comment: '欠款金额（佣金追回余额不足时的待还金额）'
+    },
+    // ★ 成长值：消费打款累计（只增不减），用于计算会员折扣
+    growth_value: {
+        type: DataTypes.DECIMAL(12, 2),
+        defaultValue: 0.00,
+        comment: '消费成长值（累计消费金额，不减不清零）'
+    },
+    // ★ 折扣比例：由成长值阶梯自动计算（1.00=无折扣，0.85=8.5折）
+    discount_rate: {
+        type: DataTypes.DECIMAL(4, 2),
+        defaultValue: 1.00,
+        comment: '当前会员折扣比例，由成长值阶梯自动更新'
     }
 }, {
     tableName: 'users',

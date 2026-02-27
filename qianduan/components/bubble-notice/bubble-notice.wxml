@@ -1,0 +1,7 @@
+<!--components/bubble-notice/bubble-notice.wxml-->
+<view class="bubble-wrap {{visible ? 'visible' : ''}}">
+  <view class="bubble-inner">
+    <view class="bubble-dot"></view>
+    <text class="bubble-text">{{text}}</text>
+  </view>
+</view>

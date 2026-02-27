@@ -17,7 +17,7 @@ function login(params) {
  * 获取用户信息
  */
 function getUserInfo() {
-    return require('./request').get('/user/info');
+    return require('./request').get('/user/profile');
 }
 
 /**
@@ -25,7 +25,7 @@ function getUserInfo() {
  * @param {Object} data - 用户信息 { nickName, avatarUrl }
  */
 function updateUserInfo(data) {
-    return require('./request').put('/user/info', data);
+    return require('./request').put('/user/profile', data);
 }
 
 module.exports = {

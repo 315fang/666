@@ -22,6 +22,7 @@ router.post('/user/upload', authenticate, upload.single('file'), adminUploadCont
 
 router.get('/role', authenticate, userController.getUserRole);
 router.post('/bind-parent', authenticate, userController.bindParent);
+router.post('/bind-phone', authenticate, userController.bindPhone);
 router.get('/notifications', authenticate, userController.getNotifications);
 router.put('/notifications/:id/read', authenticate, userController.markNotificationRead);
 

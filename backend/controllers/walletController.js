@@ -3,6 +3,8 @@ const { Op } = require('sequelize');
 const { sendNotification } = require('../models/notificationUtil');
 const constants = require('../config/constants');
 
+const ADMIN_USER_ID = constants.ADMIN.USER_ID;
+
 // 生成提现单号
 const generateWithdrawalNo = () => {
     const timestamp = Date.now().toString();
@@ -231,10 +233,10 @@ const applyWithdrawal = async (req, res) => {
             return res.status(400).json({ code: -1, message: `每日最多提现${constants.WITHDRAWAL.MAX_DAILY_COUNT}次` });
         }
 
-        // 计算手续费（从集中配置读取费率）
+        // 计算手续费（从集中配置读取费率，使用 toFixed+parseFloat 防浮点误差）
         const feeRate = constants.WITHDRAWAL.FEE_RATE;
-        const fee = parseFloat(amount) * feeRate;
-        const actualAmount = parseFloat(amount) - fee;
+        const fee = parseFloat((parseFloat(amount) * feeRate).toFixed(2));
+        const actualAmount = parseFloat((parseFloat(amount) - fee).toFixed(2));
 
         // 创建提现记录
         const withdrawal = await Withdrawal.create({
@@ -265,7 +267,7 @@ const applyWithdrawal = async (req, res) => {
         );
 
         await sendNotification(
-            0,
+            ADMIN_USER_ID,
             '新提现申请',
             `用户 ${user.nickname || '未知'} 申请提现 ¥${parseFloat(amount).toFixed(2)}，请及时审核。`,
             'withdrawal_admin',

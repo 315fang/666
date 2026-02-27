@@ -1,0 +1,82 @@
+/** pages/lottery/lottery.wxss **/
+
+.container { min-height: 100vh; background: #0F0F0F; }
+
+/* Nav */
+.nav-bar { display: flex; align-items: center; justify-content: space-between; padding: 12rpx 24rpx; background: #0F0F0F; }
+.nav-back { width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; }
+.nav-icon { width: 32rpx; height: 32rpx; filter: invert(1); }
+.nav-title { font-size: 32rpx; font-weight: 700; color: #F0C96A; }
+.nav-placeholder { width: 56rpx; }
+
+/* Points header */
+.points-header { display: flex; flex-direction: column; align-items: center; padding: 20rpx 0 30rpx; gap: 12rpx; }
+.pts-badge { display: flex; align-items: baseline; gap: 10rpx; background: rgba(212, 168, 75, 0.15); border: 1rpx solid rgba(212, 168, 75, 0.4); padding: 14rpx 32rpx; border-radius: 50rpx; }
+.pts-icon { width: 28rpx; height: 28rpx; filter: saturate(100%) sepia(100%) hue-rotate(10deg); }
+.pts-num { font-size: 52rpx; font-weight: 800; color: #F0C96A; }
+.pts-label { font-size: 22rpx; color: rgba(240, 201, 106, 0.7); }
+.pts-cost { font-size: 22rpx; color: rgba(255, 255, 255, 0.4); }
+
+/* Wheel */
+.wheel-section { display: flex; flex-direction: column; align-items: center; gap: 30rpx; margin: 10rpx 0 30rpx; }
+.wheel-wrap { position: relative; width: 280rpx; height: 280rpx; }
+.wheel-canvas { width: 280rpx; height: 280rpx; border-radius: 50%; box-shadow: 0 0 40rpx rgba(212, 168, 75, 0.4); }
+.wheel-pointer { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10; }
+.pointer-inner { width: 52rpx; height: 52rpx; background: #D4A84B; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.4); }
+.pointer-img { width: 28rpx; height: 28rpx; filter: invert(1); }
+
+/* Blindbox */
+.blindbox-section { display: flex; flex-direction: column; align-items: center; gap: 30rpx; margin: 20rpx 0 30rpx; }
+.blindbox-wrap { position: relative; }
+.blindbox-card { width: 240rpx; height: 240rpx; background: linear-gradient(135deg, #D4A84B, #78350F); border-radius: 24rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16rpx; cursor: pointer; transition: transform 0.3s ease; box-shadow: 0 0 40rpx rgba(212, 168, 75, 0.3); }
+.blindbox-card.opening { animation: shake 0.5s ease; }
+.box-img { width: 80rpx; height: 80rpx; filter: invert(1); }
+.box-text { font-size: 28rpx; color: rgba(255,255,255,0.8); font-weight: 600; }
+.blindbox-result { text-align: center; }
+.result-emoji { font-size: 48rpx; }
+.result-name { display: block; font-size: 26rpx; color: #FFF; margin-top: 8rpx; font-weight: 600; }
+@keyframes shake {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-8deg); }
+  75% { transform: rotate(8deg); }
+}
+
+/* Draw button */
+.draw-btn { background: linear-gradient(135deg, #D4A84B 0%, #F0C96A 100%); color: #1C1917; font-size: 30rpx; font-weight: 700; padding: 22rpx 70rpx; border-radius: 50rpx; text-align: center; cursor: pointer; transition: opacity 0.2s ease; }
+.draw-btn.disabled { opacity: 0.5; }
+.draw-btn:not(.disabled):active { opacity: 0.85; transform: scale(0.98); }
+
+/* Prize grid */
+.prize-tip { text-align: center; font-size: 22rpx; color: rgba(255,255,255,0.4); margin: 20rpx 0 16rpx; }
+.prize-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16rpx; padding: 0 24rpx; margin-bottom: 30rpx; }
+.prize-item { background: rgba(255,255,255,0.06); border-radius: 16rpx; padding: 20rpx 10rpx; display: flex; flex-direction: column; align-items: center; gap: 10rpx; }
+.prize-icon-wrap { width: 48rpx; height: 48rpx; display: flex; align-items: center; justify-content: center; }
+.prize-img { width: 40rpx; height: 40rpx; }
+.prize-emoji { font-size: 36rpx; }
+.prize-name { font-size: 18rpx; color: rgba(255,255,255,0.7); text-align: center; word-break: break-all; }
+
+/* Records */
+.section-title { font-size: 26rpx; font-weight: 700; color: rgba(255,255,255,0.6); padding: 0 24rpx 16rpx; }
+.records-list { padding: 0 24rpx 60rpx; display: flex; flex-direction: column; gap: 12rpx; }
+.empty-tip { text-align: center; color: rgba(255,255,255,0.3); font-size: 24rpx; padding: 30rpx 0; display: flex; flex-direction: column; align-items: center; gap: 12rpx; }
+.empty-icon { width: 60rpx; height: 60rpx; opacity: 0.3; filter: invert(1); }
+.record-item { background: rgba(255,255,255,0.05); border-radius: 16rpx; padding: 20rpx 24rpx; display: flex; justify-content: space-between; align-items: center; }
+.record-prize { font-size: 26rpx; color: #FFF; font-weight: 600; }
+.record-time { font-size: 20rpx; color: rgba(255,255,255,0.4); margin-top: 6rpx; }
+.record-status { font-size: 22rpx; font-weight: 600; border-radius: 8rpx; padding: 8rpx 14rpx; }
+.record-status.pending { background: rgba(212, 168, 75, 0.2); color: #F0C96A; }
+.record-status.claimed { background: rgba(16, 185, 129, 0.2); color: #10B981; }
+.record-status.expired { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.4); }
+
+/* Result Modal */
+.result-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 999; display: flex; align-items: center; justify-content: center; }
+.result-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); }
+.result-card { position: relative; z-index: 2; background: #1C1917; border-radius: 32rpx; padding: 50rpx 40rpx; min-width: 560rpx; text-align: center; border: 1rpx solid rgba(212,168,75,0.3); box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.5); }
+.result-type { font-size: 34rpx; font-weight: 700; }
+.result-type.win { color: #F0C96A; }
+.result-type.miss { color: rgba(255,255,255,0.5); }
+.result-prize-name { font-size: 44rpx; font-weight: 800; color: #FFF; margin: 20rpx 0 36rpx; }
+.result-actions { display: flex; gap: 16rpx; justify-content: center; }
+.result-btn { padding: 18rpx 40rpx; border-radius: 50rpx; font-size: 26rpx; font-weight: 600; cursor: pointer; }
+.result-btn.primary { background: linear-gradient(135deg, #D4A84B, #F0C96A); color: #1C1917; }
+.result-btn:not(.primary) { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); }

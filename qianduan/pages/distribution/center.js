@@ -167,7 +167,7 @@ Page({
     // ====== 钱包信息 ======
     async loadWalletInfo() {
         try {
-            const res = await get('/wallet');
+            const res = await get('/wallet/info');
             if (res.code === 0 && res.data) {
                 this.setData({
                     balance: (res.data.balance || 0).toFixed(2),

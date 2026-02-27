@@ -86,6 +86,37 @@ async function updateProfile(req, res, next) {
 }
 
 /**
+ * 绑定手机号 (微信小程序 getPhoneNumber)
+ */
+async function bindPhone(req, res, next) {
+    try {
+        const user = req.user;
+        const { code } = req.body;
+
+        if (!code) {
+            return res.status(400).json({ code: -1, message: '缺少code参数' });
+        }
+
+        const { getPhoneNumber } = require('../utils/wechat');
+        const phoneInfo = await getPhoneNumber(code);
+
+        if (phoneInfo && phoneInfo.purePhoneNumber) {
+            user.phone = phoneInfo.purePhoneNumber;
+            await user.save();
+            return res.json({
+                code: 0,
+                data: { phone: user.phone },
+                message: '绑定手机号成功'
+            });
+        } else {
+            return res.status(400).json({ code: -1, message: '解析手机号失败' });
+        }
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
  * 获取用户角色信息
  */
 async function getUserRole(req, res, next) {
@@ -371,5 +402,6 @@ module.exports = {
     markNotificationRead,
     getPreferences,
     getPreferencesQuestions,
-    savePreferences
+    savePreferences,
+    bindPhone
 };

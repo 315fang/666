@@ -120,6 +120,11 @@ async function getProductById(req, res, next) {
         // 缓存商品信息（30分钟）
         await CacheService.cacheProduct(id, plainProduct, CacheService.TTL.LONG);
 
+        // ★ Phase 5：异步增加浏览次数（不阻塞响应）
+        setImmediate(() => {
+            Product.increment('view_count', { where: { id }, by: 1 }).catch(() => { });
+        });
+
         res.json({
             code: 0,
             data: plainProduct,

@@ -1,0 +1,63 @@
+/** pages/station/map.wxss **/
+.container { min-height: 100vh; background: #F7F8FA; }
+.nav-bar { display: flex; align-items: center; justify-content: space-between; padding: 12rpx 24rpx; background: #FFFFFF; border-bottom: 1rpx solid #F0F0F0; }
+.nav-back { width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; }
+.nav-icon { width: 32rpx; height: 32rpx; }
+.nav-title { font-size: 32rpx; font-weight: 700; color: #1A1A1A; }
+.nav-placeholder { width: 56rpx; }
+
+/* Stats */
+.stats-row { display: flex; background: #FFFFFF; border-bottom: 1rpx solid #F0F0F0; }
+.stat-item { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 24rpx 0; gap: 6rpx; }
+.stat-num { font-size: 40rpx; font-weight: 800; color: #6366F1; }
+.stat-label { font-size: 20rpx; color: #888; }
+.stat-divider { width: 1rpx; background: #F0F0F0; margin: 16rpx 0; }
+
+/* Map */
+.map-container { position: relative; height: 500rpx; background: #EEF2FF; overflow: hidden; }
+.map-canvas { width: 100%; height: 100%; }
+.map-tip { position: absolute; bottom: 12rpx; right: 16rpx; font-size: 20rpx; color: rgba(0,0,0,0.4); background: rgba(255,255,255,0.8); padding: 6rpx 12rpx; border-radius: 16rpx; }
+
+/* Section */
+.section-title { display: flex; align-items: center; gap: 12rpx; padding: 24rpx 24rpx 12rpx; font-size: 28rpx; font-weight: 700; color: #1A1A1A; }
+.title-accent { width: 6rpx; height: 28rpx; background: #6366F1; border-radius: 3rpx; }
+
+/* Station list */
+.station-list { padding: 0 24rpx 60rpx; display: flex; flex-direction: column; gap: 16rpx; }
+.station-card { background: #FFFFFF; border-radius: 20rpx; padding: 20rpx 24rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06); display: flex; flex-direction: column; gap: 8rpx; cursor: pointer; }
+.station-card:active { opacity: 0.85; }
+
+.station-header { display: flex; align-items: center; gap: 10rpx; }
+.station-status-dot { width: 12rpx; height: 12rpx; border-radius: 50%; flex-shrink: 0; }
+.station-status-dot.active { background: #10B981; }
+.station-status-dot.pending { background: #F59E0B; }
+.station-status-dot.inactive { background: #D1D5DB; }
+.station-name { font-size: 28rpx; font-weight: 700; color: #1A1A1A; flex: 1; }
+.pickup-badge { font-size: 18rpx; font-weight: 700; color: #6366F1; background: rgba(99,102,241,0.1); padding: 4rpx 12rpx; border-radius: 20rpx; flex-shrink: 0; }
+
+.station-location { font-size: 22rpx; color: #999; }
+.station-addr { font-size: 22rpx; color: #777; }
+
+.station-bottom { display: flex; align-items: center; justify-content: space-between; margin-top: 4rpx; }
+.claimant-info { display: flex; align-items: center; gap: 10rpx; }
+.claimant-avatar { width: 36rpx; height: 36rpx; border-radius: 50%; }
+.claimant-name { font-size: 22rpx; color: #888; }
+.no-claimant { font-size: 22rpx; color: #CCC; }
+.claim-btn { font-size: 22rpx; font-weight: 700; color: #6366F1; background: rgba(99,102,241,0.1); padding: 8rpx 20rpx; border-radius: 50rpx; cursor: pointer; }
+
+.station-data { border-top: 1rpx solid #F8F8F8; padding-top: 8rpx; margin-top: 4rpx; }
+.data-item { font-size: 20rpx; color: #BBB; }
+
+/* Claim modal */
+.claim-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 999; display: flex; align-items: center; justify-content: center; }
+.claim-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); }
+.claim-card { position: relative; z-index: 2; background: #FFFFFF; border-radius: 24rpx; padding: 40rpx 32rpx; width: 84%; }
+.claim-title { font-size: 32rpx; font-weight: 700; color: #1A1A1A; display: block; text-align: center; margin-bottom: 30rpx; }
+.form-group { display: flex; flex-direction: column; gap: 8rpx; margin-bottom: 20rpx; }
+.form-label { font-size: 24rpx; color: #888; }
+.form-input { background: #F7F8FA; border-radius: 12rpx; padding: 16rpx 20rpx; font-size: 26rpx; color: #1A1A1A; border: 1rpx solid #E5E7EB; }
+.form-textarea { background: #F7F8FA; border-radius: 12rpx; padding: 16rpx 20rpx; font-size: 26rpx; color: #1A1A1A; border: 1rpx solid #E5E7EB; height: 120rpx; width: 100%; box-sizing: border-box; }
+.form-actions { display: flex; gap: 16rpx; margin-top: 24rpx; }
+.form-btn { flex: 1; text-align: center; padding: 20rpx 0; border-radius: 50rpx; font-size: 26rpx; font-weight: 700; cursor: pointer; }
+.form-btn.cancel { background: #F3F4F6; color: #888; }
+.form-btn.submit { background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #FFF; }

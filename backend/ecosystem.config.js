@@ -3,9 +3,10 @@ module.exports = {
         name: 's2b2c-backend',
         script: 'server.js',
 
-        // 进程数：max 表示根据服务器 CPU 核数自动开启对应数量的进程，利用多核性能
-        instances: 'max',
-        exec_mode: 'cluster',
+        // ★ 单进程模式：避免集群模式下内存锁失效，导致佣金结算等定时任务被多个进程重复执行
+        // 如需多核性能，请先将 taskLock.js 改为数据库锁或 Redis 锁，再改回 'max' + 'cluster'
+        instances: 1,
+        exec_mode: 'fork',
 
         // 生产环境配置
         env_production: {

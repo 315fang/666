@@ -137,6 +137,18 @@
   font-size: 24rpx;
 }
 
+.clear-btn {
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+  line-height: inherit;
+  border-radius: 0;
+  text-align: left;
+}
+.clear-btn::after {
+  display: none;
+}
+
 /* 资产统计 */
 .asset-section {
   display: flex;
@@ -409,6 +421,39 @@ button.tool-item::after {
 .shortcut-text {
   font-size: 24rpx;
   color: #666666;
+}
+
+/* ========== 法律与隐私区块 ========== */
+.legal-card {
+  padding: 0 30rpx;
+}
+
+.legal-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 96rpx;
+}
+
+.legal-item:active {
+  background: #F9FAFB;
+}
+
+.legal-text {
+  font-size: 28rpx;
+  color: #44403C;
+}
+
+.legal-arrow {
+  font-size: 28rpx;
+  color: #A8A29E;
+}
+
+.legal-divider {
+  height: 1rpx;
+  background: #F5F5F4;
+  margin: 0 -30rpx;
+  padding: 0 30rpx;
 }
 
 /* ========== 底部安全区域 ========== */

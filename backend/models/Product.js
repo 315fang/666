@@ -122,6 +122,32 @@ const Product = sequelize.define('Product', {
         type: DataTypes.JSON,
         allowNull: true,
         comment: '段位定制佣金配置，例如 {"fixed": {"MEMBER": 10, "LEADER": 20}, "rate": {"AGENT": 0.15}}'
+    },
+    // ★ Phase 5：热度管理
+    view_count: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        comment: '商品展示页访问次数'
+    },
+    purchase_count: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        comment: '近30天内购买单数（定期刷新）'
+    },
+    heat_score: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        comment: '热度分（purchase×40+view×10+manual×50，呢单排行用）'
+    },
+    manual_weight: {
+        type: DataTypes.TINYINT,
+        defaultValue: 0,
+        comment: '后台手动热度权重 0-100，运营可干预榜单'
+    },
+    heat_updated_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        comment: '热度最近刷新时间'
     }
 }, {
     tableName: 'products',

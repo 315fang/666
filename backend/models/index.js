@@ -30,6 +30,24 @@ const UserTag = require('./UserTag');
 const UserTagRelation = require('./UserTagRelation');
 const Questionnaire = require('./Questionnaire');
 const QuestionnaireSubmission = require('./QuestionnaireSubmission');
+// ★ 新增：积分体系 + 拼团系统
+const PointAccount = require('./PointAccount');
+const PointLog = require('./PointLog');
+const GroupActivity = require('./GroupActivity');
+const GroupOrder = require('./GroupOrder');
+const GroupMember = require('./GroupMember');
+// ★ Phase 2：抖奖系统 + 优惠券系统
+const LotteryPrize = require('./LotteryPrize');
+const LotteryRecord = require('./LotteryRecord');
+const Coupon = require('./Coupon');
+const UserCoupon = require('./UserCoupon');
+// ★ Phase 3：砍价系统
+const SlashActivity = require('./SlashActivity');
+const SlashRecord = require('./SlashRecord');
+const SlashHelper = require('./SlashHelper');
+// ★ Phase 4：自提核销 + 服务站点
+const ServiceStation = require('./ServiceStation');
+const StationClaim = require('./StationClaim');
 
 // ========== 用户相关关联 ==========
 User.hasMany(Order, { foreignKey: 'buyer_id', as: 'orders' });
@@ -132,6 +150,62 @@ QuestionnaireSubmission.belongsTo(Questionnaire, { foreignKey: 'questionnaire_id
 QuestionnaireSubmission.belongsTo(User, { foreignKey: 'inviter_id', as: 'inviter' });
 QuestionnaireSubmission.belongsTo(User, { foreignKey: 'submitter_id', as: 'submitter' });
 
+// ========== 积分体系关联 ==========
+User.hasOne(PointAccount, { foreignKey: 'user_id', as: 'pointAccount' });
+PointAccount.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(PointLog, { foreignKey: 'user_id', as: 'pointLogs' });
+PointLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// ========== 拼团系统关联 ==========
+GroupActivity.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+Product.hasMany(GroupActivity, { foreignKey: 'product_id', as: 'groupActivities' });
+
+GroupOrder.belongsTo(GroupActivity, { foreignKey: 'activity_id', as: 'activity' });
+GroupActivity.hasMany(GroupOrder, { foreignKey: 'activity_id', as: 'groupOrders' });
+GroupOrder.belongsTo(User, { foreignKey: 'leader_id', as: 'leader' });
+GroupOrder.belongsTo(User, { foreignKey: 'inviter_id', as: 'inviter' });
+GroupOrder.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+GroupOrder.hasMany(GroupMember, { foreignKey: 'group_order_id', as: 'members' });
+
+GroupMember.belongsTo(GroupOrder, { foreignKey: 'group_order_id', as: 'groupOrder' });
+GroupMember.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+GroupMember.belongsTo(User, { foreignKey: 'inviter_id', as: 'inviter' });
+GroupMember.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
+
+// ========== Phase 2: 抽奖系统关联 ==========
+LotteryRecord.belongsTo(LotteryPrize, { foreignKey: 'prize_id', as: 'prize' });
+LotteryPrize.hasMany(LotteryRecord, { foreignKey: 'prize_id', as: 'records' });
+LotteryRecord.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(LotteryRecord, { foreignKey: 'user_id', as: 'lotteryRecords' });
+
+// ========== Phase 2: 优惠券系统关联 ==========
+UserCoupon.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(UserCoupon, { foreignKey: 'user_id', as: 'coupons' });
+UserCoupon.belongsTo(Coupon, { foreignKey: 'coupon_id', as: 'couponTemplate' });
+Coupon.hasMany(UserCoupon, { foreignKey: 'coupon_id', as: 'issuedCoupons' });
+Order.belongsTo(UserCoupon, { foreignKey: 'coupon_id', as: 'coupon' });
+
+// ========== Phase 3: 砍价系统关联 ==========
+SlashRecord.belongsTo(SlashActivity, { foreignKey: 'activity_id', as: 'activity' });
+SlashActivity.hasMany(SlashRecord, { foreignKey: 'activity_id', as: 'records' });
+SlashRecord.belongsTo(User, { foreignKey: 'user_id', as: 'initiator' });
+User.hasMany(SlashRecord, { foreignKey: 'user_id', as: 'slashRecords' });
+SlashRecord.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+SlashHelper.belongsTo(SlashRecord, { foreignKey: 'slash_record_id', as: 'slashRecord' });
+SlashRecord.hasMany(SlashHelper, { foreignKey: 'slash_record_id', as: 'helpers' });
+SlashHelper.belongsTo(User, { foreignKey: 'helper_user_id', as: 'helper' });
+SlashActivity.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+
+// ========== Phase 4: 自提 + 服务站点关联 ==========
+ServiceStation.belongsTo(User, { foreignKey: 'claimant_id', as: 'claimant' });
+User.hasMany(ServiceStation, { foreignKey: 'claimant_id', as: 'claimedStations' });
+StationClaim.belongsTo(ServiceStation, { foreignKey: 'station_id', as: 'station' });
+StationClaim.belongsTo(User, { foreignKey: 'applicant_id', as: 'applicant' });
+ServiceStation.hasMany(StationClaim, { foreignKey: 'station_id', as: 'claims' });
+User.hasMany(StationClaim, { foreignKey: 'applicant_id', as: 'stationClaims' });
+Order.belongsTo(ServiceStation, { foreignKey: 'pickup_station_id', as: 'pickupStation' });
+ServiceStation.hasMany(Order, { foreignKey: 'pickup_station_id', as: 'pickupOrders' });
+
 module.exports = {
     sequelize,
     User,
@@ -164,5 +238,25 @@ module.exports = {
     UserTag,
     UserTagRelation,
     Questionnaire,
-    QuestionnaireSubmission
+    QuestionnaireSubmission,
+    // 积分体系
+    PointAccount,
+    PointLog,
+    // 拼团系统
+    GroupActivity,
+    GroupOrder,
+    GroupMember,
+    // Phase 2: 抽奖系统
+    LotteryPrize,
+    LotteryRecord,
+    // Phase 2: 优惠券系统
+    Coupon,
+    UserCoupon,
+    // Phase 3: 砍价系统
+    SlashActivity,
+    SlashRecord,
+    SlashHelper,
+    // Phase 4: 自提核销 + 服务站点
+    ServiceStation,
+    StationClaim
 };

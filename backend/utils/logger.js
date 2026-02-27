@@ -187,11 +187,27 @@ function requestLogger(req, res, next) {
  * Error tracking middleware
  */
 function errorTracker(err, req, res, next) {
+    // ★ 隐私保护：对请求体进行脱敏，避免手机号、地址等个人信息写入日志
+    const sensitiveFields = ['phone', 'mobile', 'password', 'secret', 'token', 'card_no', 'account_no', 'id_card'];
+    let sanitizedBody = {};
+    if (req.body && typeof req.body === 'object') {
+        sanitizedBody = Object.keys(req.body).reduce((acc, key) => {
+            if (sensitiveFields.some(f => key.toLowerCase().includes(f))) {
+                acc[key] = '[REDACTED]';
+            } else if (typeof req.body[key] === 'string' && req.body[key].length > 200) {
+                acc[key] = req.body[key].substring(0, 50) + '...[TRUNCATED]';
+            } else {
+                acc[key] = req.body[key];
+            }
+            return acc;
+        }, {});
+    }
+
     error('ERROR', err.message, {
         stack: err.stack,
         path: req.path,
         method: req.method,
-        body: req.body,
+        body: sanitizedBody,
         query: req.query,
         user: req.user ? req.user.id : 'anonymous'
     });

@@ -1,0 +1,109 @@
+<!--pages/lottery/lottery.wxml - 积分抽奖（转盘+盲盒双模式）-->
+<view class="container">
+  <!-- 导航 -->
+  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-back" bindtap="onBack">
+      <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
+    </view>
+    <text class="nav-title">积分抽奖</text>
+    <view class="nav-placeholder"/>
+  </view>
+
+  <!-- 积分余额 -->
+  <view class="points-header">
+    <view class="pts-badge">
+      <image class="pts-icon" src="/assets/icons/star.svg" mode="aspectFit"/>
+      <text class="pts-num">{{pointBalance}}</text>
+      <text class="pts-label">积分</text>
+    </view>
+    <text class="pts-cost">每次消耗 {{costPoints}} 积分</text>
+  </view>
+
+  <!-- ===== 转盘模式 ===== -->
+  <view class="wheel-section" wx:if="{{mode === 'spin'}}">
+    <view class="wheel-wrap">
+      <!-- 8格转盘 -->
+      <canvas canvas-id="wheelCanvas" class="wheel-canvas" id="wheelCanvas"/>
+      <!-- 指针 -->
+      <view class="wheel-pointer">
+        <view class="pointer-inner">
+          <image class="pointer-img" src="/assets/icons/star.svg" mode="aspectFit"/>
+        </view>
+      </view>
+    </view>
+    <view class="draw-btn {{spinning || !prizes.length ? 'disabled' : ''}}" bindtap="onDraw">
+      <text wx:if="{{spinning}}">转动中...</text>
+      <text wx:elif="{{!prizes.length}}">奖品加载中</text>
+      <text wx:else>立即抽奖</text>
+    </view>
+  </view>
+
+  <!-- ===== 盲盒模式 ===== -->
+  <view class="blindbox-section" wx:if="{{mode === 'blindbox'}}">
+    <view class="blindbox-wrap" bindtap="onDraw">
+      <view class="blindbox-card {{opening ? 'opening' : ''}}">
+        <view class="blindbox-front">
+          <image class="box-img" src="/assets/icons/gift.svg" mode="aspectFit"/>
+          <text class="box-text">点击开</text>
+        </view>
+        <view class="blindbox-result" wx:if="{{lastPrize}}">
+          <text class="result-emoji">🎁</text>
+          <text class="result-name">{{lastPrize.name}}</text>
+        </view>
+      </view>
+    </view>
+    <view class="draw-btn {{opening ? 'disabled' : ''}}" bindtap="onDraw">
+      <text wx:if="{{opening}}">开启中...</text>
+      <text wx:else>开启盲盒 ({{costPoints}}积分)</text>
+    </view>
+  </view>
+
+  <!-- 奖品列表 -->
+  <view class="prize-tip">可获得的奖品</view>
+  <view class="prize-grid">
+    <view class="prize-item" wx:for="{{prizes}}" wx:key="id">
+      <view class="prize-icon-wrap">
+        <image wx:if="{{item.image_url}}" class="prize-img" src="{{item.image_url}}" mode="aspectFit"/>
+        <text wx:else class="prize-emoji">{{prizeEmoji[item.type] || '🎁'}}</text>
+      </view>
+      <text class="prize-name">{{item.name}}</text>
+    </view>
+  </view>
+
+  <!-- 中奖记录 -->
+  <view class="section-title">我的中奖记录</view>
+  <view class="records-list">
+    <view class="empty-tip" wx:if="{{!records.length}}">
+      <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
+      <text>暂无记录，快来抽奖吧</text>
+    </view>
+    <view class="record-item" wx:for="{{records}}" wx:key="id">
+      <view class="record-left">
+        <text class="record-prize">{{item.prize_name}}</text>
+        <text class="record-time">{{item.created_at}}</text>
+      </view>
+      <view class="record-status {{item.status}}">
+        <text wx:if="{{item.status === 'pending'}}">待领取</text>
+        <text wx:elif="{{item.status === 'claimed'}}">已领取</text>
+        <text wx:else>已过期</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 奖品结果弹窗 -->
+  <view class="result-modal" wx:if="{{showResult}}">
+    <view class="result-overlay" bindtap="closeResult"/>
+    <view class="result-card">
+      <view class="result-header">
+        <text class="result-type {{lastPrize && lastPrize.type === 'miss' ? 'miss' : 'win'}}">
+          {{lastPrize && lastPrize.type === 'miss' ? '很遗憾...' : '恭喜中奖！'}}
+        </text>
+      </view>
+      <view class="result-prize-name">{{lastPrize && lastPrize.name}}</view>
+      <view class="result-actions">
+        <view class="result-btn primary" bindtap="closeResult">确定</view>
+        <view class="result-btn" bindtap="onDraw" wx:if="{{lastPrize && lastPrize.type === 'miss'}}">再抽一次</view>
+      </view>
+    </view>
+  </view>
+</view>

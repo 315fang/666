@@ -3,6 +3,12 @@ const { sendNotification } = require('../models/notificationUtil');
 const { Op } = require('sequelize');
 const constants = require('../config/constants');
 const { logOrder, logCommission, error: logError } = require('../utils/logger');
+const { createUnifiedOrder, buildJsApiParams, parseXml, verifyNotifySign } = require('../utils/wechat');
+// Phase 2: 积分 + 成长値
+const PointService = require('../services/PointService');
+// Phase 4: 自提核销 + 地区分成
+const { generatePickupCredentials } = require('./pickupController');
+const { attributeRegionalProfit } = require('./stationController');
 
 // 自增序列（进程内唯一），防止同毫秒碰撞
 let _orderSeq = 0;
@@ -25,196 +31,224 @@ const generateOrderNo = () => {
 
 /**
  * 创建订单（含库存校验 + 数据库事务）
+ * ★★★ 支持多商品：对 items 中每个商品分别走完整下单逻辑，共享同一事务
  */
 const createOrder = async (req, res) => {
     const t = await sequelize.transaction();
     try {
         const userId = req.user.id;
-        const { product_id, sku_id, quantity, address_id, remark, cart_id } = req.body;
+        // ★ 兼容两种下单格式:
+        // 1. 前端标准: { items:[{product_id,sku_id,quantity,cart_id}], address_id, remark }
+        // 2. 历史格式: { product_id, sku_id, quantity, address_id, remark, cart_id }
+        let items = req.body.items;
+        const address_id = req.body.address_id;
+        const remark = req.body.remark;
 
-        // 参数校验
-        if (!product_id || !quantity || quantity < 1) {
-            await t.rollback();
-            return res.status(400).json({ code: -1, message: '缺少必要参数' });
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            const { product_id: pid, sku_id: sid, quantity: qty, cart_id: cid } = req.body;
+            if (!pid || !qty || qty < 1) {
+                await t.rollback();
+                return res.status(400).json({ code: -1, message: '缺少必要参数（product_id/quantity 或 items[]）' });
+            }
+            items = [{ product_id: pid, sku_id: sid, quantity: qty, cart_id: cid }];
         }
+
+        for (const item of items) {
+            if (!item.product_id || !item.quantity || item.quantity < 1) {
+                await t.rollback();
+                return res.status(400).json({ code: -1, message: 'items 中每项都需要 product_id 和 quantity' });
+            }
+        }
+
         if (!address_id) {
             await t.rollback();
             return res.status(400).json({ code: -1, message: '请选择收货地址' });
         }
 
-        // 查询商品（锁定行，防止并发超卖）
-        const product = await Product.findByPk(product_id, { transaction: t, lock: t.LOCK.UPDATE });
-        if (!product || product.status !== 1) {
-            await t.rollback();
-            return res.status(404).json({ code: -1, message: '商品不存在或已下架' });
-        }
-
-        // 获取用户身份计算动态价格
+        // 获取用户身份（所有商品共用同一个用户）
         const user = await User.findByPk(userId, { transaction: t });
         const roleLevel = user.role_level || 0;
-
-        let price;
-        let stockTarget = product; // 默认用商品库存
-
-        // 如果有 SKU，用 SKU 的价格和库存
-        if (sku_id) {
-            const sku = await SKU.findOne({
-                where: { id: sku_id, product_id, status: 1 },
-                transaction: t,
-                lock: t.LOCK.UPDATE
-            });
-            if (!sku) {
-                await t.rollback();
-                return res.status(404).json({ code: -1, message: '商品规格不存在' });
-            }
-            price = parseFloat(sku.retail_price);
-            if (roleLevel >= 1 && sku.member_price) price = parseFloat(sku.member_price);
-            if (roleLevel >= 2 && sku.wholesale_price) price = parseFloat(sku.wholesale_price);
-            stockTarget = sku;
-        } else {
-            price = parseFloat(product.retail_price);
-            if (roleLevel === 1) price = parseFloat(product.price_member || product.retail_price);
-            else if (roleLevel === 2) price = parseFloat(product.price_leader || product.price_member || product.retail_price);
-            else if (roleLevel === 3) price = parseFloat(product.price_agent || product.price_leader || product.price_member || product.retail_price);
-        }
-
-        // ★★★ 库存校验：只检查平台（工厂）库存，代理商库存不限制下单
         let agentId = user.agent_id || null;
 
-        if (stockTarget.stock < quantity) {
-            await t.rollback();
-            return res.status(400).json({ code: -1, message: `库存不足，当前仅剩 ${stockTarget.stock} 件` });
-        }
-
-        // ★ 获取地址快照（冻结收货信息，不受后续修改/删除影响）
+        // 获取地址快照（所有商品共用同一个地址）
         let addressSnapshot = null;
-        if (address_id) {
-            const addr = await Address.findByPk(address_id, { transaction: t });
-            if (addr) {
-                addressSnapshot = {
-                    receiver_name: addr.receiver_name,
-                    phone: addr.phone,
-                    province: addr.province,
-                    city: addr.city,
-                    district: addr.district,
-                    detail: addr.detail
-                };
+        const addr = await Address.findByPk(address_id, { transaction: t });
+        if (addr) {
+            addressSnapshot = {
+                receiver_name: addr.receiver_name,
+                phone: addr.phone,
+                province: addr.province,
+                city: addr.city,
+                district: addr.district,
+                detail: addr.detail
+            };
+        }
+
+        const distributorRole = user.parent_id
+            ? (await User.findByPk(user.parent_id, { attributes: ['role_level'], transaction: t }))?.role_level || 0
+            : null;
+
+        const allOrders = []; // 收集所有创建的订单
+        let totalAmountSum = 0;
+
+        // ★★★ 对每个商品分别处理（多商品循环）
+        for (const item of items) {
+            const { product_id, sku_id, quantity, cart_id } = item;
+
+            // 查询商品（行锁防并发超卖）
+            const product = await Product.findByPk(product_id, { transaction: t, lock: t.LOCK.UPDATE });
+            if (!product || product.status !== 1) {
+                await t.rollback();
+                return res.status(404).json({ code: -1, message: `商品 ${product_id} 不存在或已下架` });
             }
-        }
 
-        // ★★★ 锁定下单时的代理商进货价
-        const lockedAgentCost = parseFloat(product.price_agent || product.price_leader || product.price_member || product.retail_price);
-        const distributorRole = user.parent_id ? (await User.findByPk(user.parent_id, { attributes: ['role_level'], transaction: t }))?.role_level || 0 : null;
+            let price;
+            let stockTarget = product;
 
-        // ★★★ 拆单逻辑：根据代理商云库存决定发货方式
-        // 有代理商 → 检查代理商库存 → 够就全部代理商发，不够就拆单，没有代理商就全平台发
-        let agentQuantity = 0; // 代理商发货数量
-        let platformQuantity = quantity; // 平台发货数量
-
-        if (agentId) {
-            const agent = await User.findByPk(agentId, { transaction: t, lock: t.LOCK.UPDATE });
-            if (agent && agent.role_level >= 3 && agent.stock_count > 0) {
-                agentQuantity = 0; // 取消代理商自行发货全部转平台发货
-                platformQuantity = quantity - agentQuantity;
+            if (sku_id) {
+                const sku = await SKU.findOne({
+                    where: { id: sku_id, product_id, status: 1 },
+                    transaction: t,
+                    lock: t.LOCK.UPDATE
+                });
+                if (!sku) {
+                    await t.rollback();
+                    return res.status(404).json({ code: -1, message: `商品 ${product_id} 的规格 ${sku_id} 不存在` });
+                }
+                price = parseFloat(sku.retail_price);
+                if (roleLevel >= 1 && sku.member_price) price = parseFloat(sku.member_price);
+                if (roleLevel >= 2 && sku.wholesale_price) price = parseFloat(sku.wholesale_price);
+                stockTarget = sku;
+            } else {
+                price = parseFloat(product.retail_price);
+                if (roleLevel === 1) price = parseFloat(product.price_member || product.retail_price);
+                else if (roleLevel === 2) price = parseFloat(product.price_leader || product.price_member || product.retail_price);
+                else if (roleLevel === 3) price = parseFloat(product.price_agent || product.price_leader || product.price_member || product.retail_price);
             }
-        }
 
-        const orders = []; // 收集创建的所有订单
+            // 库存校验
+            if (stockTarget.stock < quantity) {
+                await t.rollback();
+                return res.status(400).json({ code: -1, message: `商品「${product.name}」库存不足，当前仅剩 ${stockTarget.stock} 件` });
+            }
 
-        // 公共订单字段
-        const commonFields = {
-            buyer_id: userId,
-            product_id,
-            sku_id: sku_id || null,
-            address_id,
-            address_snapshot: addressSnapshot,
-            remark,
-            status: 'pending',
-            agent_id: agentId,
-            distributor_id: user.parent_id || null,
-            distributor_role: distributorRole,
-            locked_agent_cost: lockedAgentCost,
-        };
+            // 锁定代理成本价
+            const lockedAgentCost = parseFloat(product.price_agent || product.price_leader || product.price_member || product.retail_price);
 
-        // 扣减平台库存（整个订单数量都扣平台库存）
-        if(agentQuantity>0 && price<lockedAgentCost){await t.rollback();return res.status(400).json({code:-1,message:'当前商品价格倒挂，由于折扣等原因导致无法作为代理发货，请联系客服处理'});}
-        await stockTarget.decrement('stock', { by: quantity, transaction: t });
-        if (sku_id) {
-            await product.decrement('stock', { by: quantity, transaction: t });
-        }
+            // 拆单逻辑（代理商云库存判断）
+            let agentQuantity = 0;
+            let platformQuantity = quantity;
 
-        if (agentQuantity > 0 && platformQuantity > 0) {
-            // ★★★ 拆单：代理商发一部分 + 平台发一部分
-            const parentOrder = await Order.create({
-                ...commonFields,
-                order_no: generateOrderNo(),
-                quantity: agentQuantity,
-                total_amount: price * agentQuantity,
-                actual_price: price * agentQuantity,
-                fulfillment_type: 'Agent_Pending',
-                platform_stock_deducted: 1,
-            }, { transaction: t });
+            if (agentId) {
+                const agent = await User.findByPk(agentId, { transaction: t, lock: t.LOCK.UPDATE });
+                if (agent && agent.role_level >= 3 && agent.stock_count > 0) {
+                    agentQuantity = 0; // 当前策略：全部转平台发货
+                    platformQuantity = quantity - agentQuantity;
+                }
+            }
 
-            const childOrder = await Order.create({
-                ...commonFields,
-                order_no: generateOrderNo(),
-                quantity: platformQuantity,
-                total_amount: price * platformQuantity,
-                actual_price: price * platformQuantity,
-                fulfillment_type: 'Company',
-                platform_stock_deducted: 1,
-                parent_order_id: parentOrder.id,
-            }, { transaction: t });
+            // 公共订单字段
+            const commonFields = {
+                buyer_id: userId,
+                product_id,
+                sku_id: sku_id || null,
+                address_id,
+                address_snapshot: addressSnapshot,
+                remark,
+                status: 'pending',
+                agent_id: agentId,
+                distributor_id: user.parent_id || null,
+                distributor_role: distributorRole,
+                locked_agent_cost: lockedAgentCost,
+            };
 
-            orders.push(parentOrder, childOrder);
-        } else if (agentQuantity > 0 && platformQuantity === 0) {
-            // ★ 全部代理商发货
-            const order = await Order.create({
-                ...commonFields,
-                order_no: generateOrderNo(),
-                quantity,
-                total_amount: price * quantity,
-                actual_price: price * quantity,
-                fulfillment_type: 'Agent_Pending',
-                platform_stock_deducted: 1,
-            }, { transaction: t });
-            orders.push(order);
-        } else {
-            // ★ 全部平台发货（无代理商或代理商库存为0）
-            const order = await Order.create({
-                ...commonFields,
-                order_no: generateOrderNo(),
-                quantity,
-                total_amount: price * quantity,
-                actual_price: price * quantity,
-                fulfillment_type: 'Company',
-                platform_stock_deducted: 1,
-            }, { transaction: t });
-            orders.push(order);
-        }
+            // 价格倒挂保护
+            if (agentQuantity > 0 && price < lockedAgentCost) {
+                await t.rollback();
+                return res.status(400).json({ code: -1, message: `商品「${product.name}」价格倒挂，无法作为代理发货，请联系客服` });
+            }
 
-        // ★ 如果来自购物车，自动删除对应购物车项
-        if (cart_id) {
-            await Cart.destroy({ where: { id: cart_id, user_id: userId }, transaction: t });
+            // 扣减库存
+            await stockTarget.decrement('stock', { by: quantity, transaction: t });
+            if (sku_id) {
+                await product.decrement('stock', { by: quantity, transaction: t });
+            }
+
+            const itemOrders = [];
+
+            if (agentQuantity > 0 && platformQuantity > 0) {
+                const parentOrder = await Order.create({
+                    ...commonFields,
+                    order_no: generateOrderNo(),
+                    quantity: agentQuantity,
+                    total_amount: price * agentQuantity,
+                    actual_price: price * agentQuantity,
+                    fulfillment_type: 'Agent_Pending',
+                    platform_stock_deducted: 1,
+                }, { transaction: t });
+
+                const childOrder = await Order.create({
+                    ...commonFields,
+                    order_no: generateOrderNo(),
+                    quantity: platformQuantity,
+                    total_amount: price * platformQuantity,
+                    actual_price: price * platformQuantity,
+                    fulfillment_type: 'Company',
+                    platform_stock_deducted: 1,
+                    parent_order_id: parentOrder.id,
+                }, { transaction: t });
+
+                itemOrders.push(parentOrder, childOrder);
+            } else if (agentQuantity > 0) {
+                const order = await Order.create({
+                    ...commonFields,
+                    order_no: generateOrderNo(),
+                    quantity,
+                    total_amount: price * quantity,
+                    actual_price: price * quantity,
+                    fulfillment_type: 'Agent_Pending',
+                    platform_stock_deducted: 1,
+                }, { transaction: t });
+                itemOrders.push(order);
+            } else {
+                const order = await Order.create({
+                    ...commonFields,
+                    order_no: generateOrderNo(),
+                    quantity,
+                    total_amount: price * quantity,
+                    actual_price: price * quantity,
+                    fulfillment_type: 'Company',
+                    platform_stock_deducted: 1,
+                }, { transaction: t });
+                itemOrders.push(order);
+            }
+
+            // 删除对应购物车项
+            if (cart_id) {
+                await Cart.destroy({ where: { id: cart_id, user_id: userId }, transaction: t });
+            }
+
+            allOrders.push(...itemOrders);
+            totalAmountSum += price * quantity;
         }
 
         await t.commit();
 
-        // Log order creation
         logOrder('订单创建', {
             userId,
-            orderIds: orders.map(o => o.id),
-            orderNos: orders.map(o => o.order_no),
-            totalAmount: orders.reduce((sum, o) => sum + parseFloat(o.total_amount), 0),
-            splitOrders: orders.length > 1,
-            agentQuantity,
-            platformQuantity
+            orderIds: allOrders.map(o => o.id),
+            orderNos: allOrders.map(o => o.order_no),
+            totalAmount: totalAmountSum,
+            itemCount: items.length,
+            splitOrders: allOrders.length > items.length,
         });
 
+        // 返回：单商品返回对象，多商品或拆单返回数组
+        const returnData = allOrders.length === 1 ? allOrders[0] : allOrders;
         res.json({
             code: 0,
-            data: orders.length === 1 ? orders[0] : orders,
-            message: orders.length > 1 ? `订单已拆分为 ${orders.length} 笔（代理商发 ${agentQuantity} 件，平台发 ${platformQuantity} 件）` : '订单创建成功'
+            data: returnData,
+            message: items.length > 1 ? `订单创建成功，共 ${items.length} 件商品` : '订单创建成功'
         });
     } catch (error) {
         await t.rollback();
@@ -229,6 +263,236 @@ const createOrder = async (req, res) => {
 };
 
 /**
+ * ★ 内部函数：将订单标记为已支付（供 payOrder 和 wechatPayNotify 复用）
+ * 必须在外部已开启的事务 t 中调用。
+ * @param {Order} order  - 已加行锁的订单实例
+ * @param {Transaction} t
+ */
+const _markOrderAsPaid = async (order, t) => {
+    order.status = 'paid';
+    order.paid_at = new Date();
+    await order.save({ transaction: t });
+
+    // ★ 同步支付子订单（拆单场景）
+    const childOrders = await Order.findAll({
+        where: { parent_order_id: order.id },
+        transaction: t,
+        lock: t.LOCK.UPDATE
+    });
+    for (const child of childOrders) {
+        if (child.status !== 'pending') {
+            throw new Error(`关联子订单(ID:${child.id})状态异常(${child.status})，请联系客服`);
+        }
+        child.status = 'paid';
+        child.paid_at = new Date();
+        await child.save({ transaction: t });
+    }
+
+    // 身份升级：普通用户首单 → 会员
+    const buyer = await User.findByPk(order.buyer_id, { transaction: t });
+    if (buyer.role_level === constants.ROLES.GUEST) {
+        buyer.role_level = constants.ROLES.MEMBER;
+        await buyer.save({ transaction: t });
+        await sendNotification(
+            buyer.id,
+            '身份升级成功',
+            '恭喜！您已成功下单，系统已为您升级为"尊享会员"，邀请好友下单可赚取丰厚回报！',
+            'upgrade'
+        );
+    }
+    await buyer.increment('total_sales', { by: parseFloat(order.total_amount), transaction: t });
+
+    logOrder('订单支付', {
+        userId: order.buyer_id,
+        orderId: order.id,
+        orderNo: order.order_no,
+        amount: parseFloat(order.total_amount),
+        childOrders: childOrders.length,
+    });
+
+    // ★ Phase 2：支付成功后异步发积分 + 成长値（不阻塞支付事务）
+    setImmediate(async () => {
+        try {
+            const amount = parseFloat(order.total_amount);
+            const earnedPoints = Math.floor(amount); // 消费 1 元得 1 积分
+            if (earnedPoints > 0) {
+                await PointService.addPoints(
+                    order.buyer_id, earnedPoints, 'purchase',
+                    order.id, `订单消费积分（订单号：${order.order_no}）`
+                );
+                await PointService.addGrowthValue(order.buyer_id, amount);
+                console.log(`[Phase2] 积分发放: 用户${order.buyer_id} +${earnedPoints}积分, +${amount}成长値`);
+            }
+        } catch (e) {
+            // 静默失败，不影响支付结果
+            console.error('[Phase2] 积分/成长値发放失败:', e.message);
+        }
+    });
+
+    // ★ Phase 4a：地区成交利润归因（异步，不阻塞）
+    setImmediate(async () => {
+        try {
+            const buyer = await User.findByPk(order.buyer_id, { attributes: ['city'] });
+            if (buyer?.city) {
+                await attributeRegionalProfit(order.id, buyer.city, parseFloat(order.total_amount));
+            }
+        } catch (e) {
+            console.error('[Phase4] 地区分成失败:', e.message);
+        }
+    });
+
+    // ★ Phase 4b：自提订单——生成核销凭证（事务内同步）
+    if (order.delivery_type === 'pickup' && !order.pickup_code) {
+        try {
+            const creds = generatePickupCredentials(order.id);
+            await Order.update(
+                { pickup_code: creds.pickup_code, pickup_qr_token: creds.pickup_qr_token },
+                { where: { id: order.id } }
+            );
+            console.log(`[Phase4] 自提凭证生成: 订单${order.id} 码=${creds.pickup_code}`);
+        } catch (e) {
+            console.error('[Phase4] 自提凭证生成失败:', e.message);
+        }
+    }
+
+    return { order, childOrders };
+};
+
+/**
+ * 预下单（统一下单）：生成 wx.requestPayment() 所需参数
+ * POST /api/orders/:id/prepay
+ */
+const prepayOrder = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { id } = req.params;
+
+        // 查询订单并验证归属
+        const order = await Order.findOne({ where: { id, buyer_id: userId } });
+        if (!order) {
+            return res.status(404).json({ code: -1, message: '订单不存在' });
+        }
+        if (order.status !== 'pending') {
+            return res.status(400).json({ code: -1, message: '订单状态不正确，无法发起支付' });
+        }
+
+        // 获取用户 openid
+        const user = await User.findByPk(userId, { attributes: ['id', 'openid'] });
+        if (!user || !user.openid) {
+            return res.status(400).json({ code: -1, message: '用户 openid 缺失，请重新登录后重试' });
+        }
+
+        // 获取客户端 IP
+        const clientIp = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '127.0.0.1')
+            .split(',')[0].trim().replace(/^::ffff:/, '');
+
+        // 调用微信统一下单
+        const prepayId = await createUnifiedOrder({
+            orderNo: order.order_no,
+            amount: parseFloat(order.total_amount),
+            openid: user.openid,
+            clientIp,
+            body: '商品购买',
+        });
+
+        // 生成前端支付参数
+        const jsApiParams = buildJsApiParams(prepayId);
+
+        res.json({ code: 0, data: jsApiParams });
+    } catch (error) {
+        logError('ORDER', '预下单失败', { error: error.message, userId: req.user?.id, orderId: req.params?.id });
+        console.error('预下单失败:', error);
+        res.status(500).json({ code: -1, message: error.message || '预下单失败' });
+    }
+};
+
+/**
+ * 微信支付回调（notify）
+ * POST /wechat/pay/notify  ← 无需鉴权，由签名验证保障安全
+ * 请求体格式：text/xml（由路由层中间件 express.text({ type: 'text/xml' }) 解析）
+ */
+const wechatPayNotify = async (req, res) => {
+    // 统一返回 XML 响应的辅助函数
+    const replyXml = (returnCode, returnMsg = 'OK') => {
+        res.set('Content-Type', 'text/xml');
+        res.send(`<xml><return_code><![CDATA[${returnCode}]]></return_code><return_msg><![CDATA[${returnMsg}]]></return_msg></xml>`);
+    };
+
+    try {
+        const rawBody = req.body; // express.text() 中间件已将 body 解析为字符串
+        if (!rawBody || typeof rawBody !== 'string') {
+            return replyXml('FAIL', 'empty body');
+        }
+
+        const notifyData = parseXml(rawBody);
+
+        // 1. 通信层校验
+        if (notifyData.return_code !== 'SUCCESS') {
+            console.error('[WechatNotify] return_code FAIL:', notifyData.return_msg);
+            return replyXml('SUCCESS'); // 仍返回 SUCCESS，避免微信重复推送
+        }
+
+        // 2. 验签
+        const apiKey = process.env.WECHAT_API_KEY;
+        if (!verifyNotifySign(notifyData, apiKey)) {
+            console.error('[WechatNotify] 签名验证失败');
+            return replyXml('FAIL', 'sign error');
+        }
+
+        // 3. 业务层校验
+        if (notifyData.result_code !== 'SUCCESS') {
+            console.error('[WechatNotify] 支付失败:', notifyData.err_code, notifyData.err_code_des);
+            return replyXml('SUCCESS');
+        }
+
+        const orderNo = notifyData.out_trade_no;
+        const paidFee = parseInt(notifyData.total_fee, 10); // 分
+
+        const t = await sequelize.transaction();
+        try {
+            const order = await Order.findOne({
+                where: { order_no: orderNo },
+                transaction: t,
+                lock: t.LOCK.UPDATE
+            });
+
+            if (!order) {
+                await t.rollback();
+                console.error('[WechatNotify] 订单不存在:', orderNo);
+                return replyXml('FAIL', 'order not found');
+            }
+
+            // 幂等处理：已支付则直接返回成功
+            if (order.status !== 'pending') {
+                await t.rollback();
+                return replyXml('SUCCESS');
+            }
+
+            // 金额一致性校验（误差容忍 1 分，防止浮点精度问题）
+            const expectedFee = Math.round(parseFloat(order.total_amount) * 100);
+            if (Math.abs(paidFee - expectedFee) > 1) {
+                await t.rollback();
+                console.error(`[WechatNotify] 金额不一致: 预期${expectedFee}分, 实收${paidFee}分, 订单${orderNo}`);
+                return replyXml('FAIL', 'amount mismatch');
+            }
+
+            await _markOrderAsPaid(order, t);
+            await t.commit();
+
+            console.log(`[WechatNotify] 订单支付成功: ${orderNo}`);
+            return replyXml('SUCCESS');
+        } catch (innerErr) {
+            await t.rollback();
+            console.error('[WechatNotify] 事务失败:', innerErr);
+            return replyXml('FAIL', 'server error');
+        }
+    } catch (error) {
+        console.error('[WechatNotify] 处理异常:', error);
+        return replyXml('FAIL', 'server error');
+    }
+};
+
+/**
  * 支付订单
  * 
  * ★★★ 核心改动：支付时不再计算佣金！
@@ -236,7 +500,7 @@ const createOrder = async (req, res) => {
  * - 代理商发货 → 团队产生级差佣金 + 代理商发货利润
  * - 平台发货   → 利润归平台，团队无佣金
  * 
- * TODO: 上线前必须接入微信支付，当前为模拟流程
+ * ★ 此接口保留供内部测试/后台使用，正式支付流程通过 prepayOrder + wechatPayNotify 完成
  */
 const payOrder = async (req, res) => {
     const t = await sequelize.transaction();
@@ -260,71 +524,17 @@ const payOrder = async (req, res) => {
             return res.status(400).json({ code: -1, message: '订单状态不正确' });
         }
 
-        // 更新订单状态
-        order.status = 'paid';
-        order.paid_at = new Date();
-        await order.save({ transaction: t });
-
-        // ★ 如果是拆单的主订单，同步支付子订单
-        // 查询所有子订单（不限状态），确保不会遗漏
-        const childOrders = await Order.findAll({
-            where: { parent_order_id: order.id },
-            transaction: t,
-            lock: t.LOCK.UPDATE
-        });
-        for (const child of childOrders) {
-            if (child.status !== 'pending') {
-                // 子订单状态异常，回滚整个事务
-                await t.rollback();
-                return res.status(400).json({
-                    code: -1,
-                    message: `关联子订单(ID:${child.id})状态异常(${child.status})，请联系客服`
-                });
-            }
-            child.status = 'paid';
-            child.paid_at = new Date();
-            await child.save({ transaction: t });
+        let allOrders;
+        try {
+            const result = await _markOrderAsPaid(order, t);
+            allOrders = [result.order, ...result.childOrders];
+        } catch (innerErr) {
+            await t.rollback();
+            return res.status(400).json({ code: -1, message: innerErr.message });
         }
-
-        // ---------------------- 身份升级逻辑 ----------------------
-        // ★★★ 重要改动：只有"普通用户首单升会员"在支付时立即生效
-        // 更高级别的升级（会员→团长→代理商）延迟到订单售后期结束后才检查
-        // 这样可以防止"下单就升级，然后退款"的刷等级行为
-        const buyer = await User.findByPk(userId, { transaction: t });
-
-        // 身份自动升级：普通用户购买后 → 升级为会员（首单即会员，不可逆）
-        if (buyer.role_level === constants.ROLES.GUEST) {
-            buyer.role_level = constants.ROLES.MEMBER;
-            await buyer.save({ transaction: t });
-
-            await sendNotification(
-                buyer.id,
-                '身份升级成功',
-                '恭喜！您已成功下单，系统已为您升级为\"尊享会员\"，邀请好友下单可赚取丰厚回报！',
-                'upgrade'
-            );
-        }
-
-        // ★ 注意：更高等级的升级检查已移至 checkAndUpgradeRoles() 定时任务
-        // 在订单售后期结束且无退款时才会检查升级条件
-
-        // 更新用户临时统计（实际有效订单数在售后期结束后才确认）
-        // 这里记录的是"已支付订单数"，升级判断用的是"已完结订单数"
-        await buyer.increment('total_sales', { by: parseFloat(order.total_amount), transaction: t });
 
         await t.commit();
 
-        // Log payment
-        logOrder('订单支付', {
-            userId,
-            orderId: order.id,
-            orderNo: order.order_no,
-            amount: parseFloat(order.total_amount),
-            childOrders: childOrders.length,
-            userUpgraded: buyer.role_level === constants.ROLES.MEMBER
-        });
-
-        const allOrders = [order, ...childOrders];
         res.json({
             code: 0,
             data: allOrders.length === 1 ? allOrders[0] : allOrders,
@@ -407,20 +617,34 @@ const confirmOrder = async (req, res) => {
  * POST /api/orders/:id/agent-confirm
  */
 const agentConfirmOrder = async (req, res) => {
+    const t = await sequelize.transaction();
     try {
         const userId = req.user.id;
         const { id } = req.params;
 
-        const order = await Order.findOne({ where: { id, agent_id: userId } });
-        if (!order) return res.status(404).json({ code: -1, message: '订单不存在或您无权操作' });
-        if (order.status !== 'paid') return res.status(400).json({ code: -1, message: '订单需为已支付状态' });
+        // ★ 事务 + 行锁，防止并发竞态
+        const order = await Order.findOne({
+            where: { id, agent_id: userId },
+            transaction: t,
+            lock: t.LOCK.UPDATE
+        });
+        if (!order) {
+            await t.rollback();
+            return res.status(404).json({ code: -1, message: '订单不存在或您无权操作' });
+        }
+        if (order.status !== 'paid') {
+            await t.rollback();
+            return res.status(400).json({ code: -1, message: '订单需为已支付状态' });
+        }
 
         order.status = 'agent_confirmed';
         order.agent_confirmed_at = new Date();
-        await order.save();
+        await order.save({ transaction: t });
+        await t.commit();
 
         res.json({ code: 0, data: order, message: '代理人已确认订单' });
     } catch (error) {
+        await t.rollback();
         console.error('代理人确认订单失败:', error);
         res.status(500).json({ code: -1, message: '确认失败' });
     }
@@ -431,21 +655,32 @@ const agentConfirmOrder = async (req, res) => {
  * POST /api/orders/:id/request-shipping
  */
 const requestShipping = async (req, res) => {
+    const t = await sequelize.transaction();
     try {
         const userId = req.user.id;
         const { id } = req.params;
         const { tracking_no } = req.body;
 
-        const order = await Order.findOne({ where: { id, agent_id: userId } });
+        // ★ 事务 + 行锁
+        const order = await Order.findOne({
+            where: { id, agent_id: userId },
+            transaction: t,
+            lock: t.LOCK.UPDATE
+        });
         if (!order) return res.status(404).json({ code: -1, message: '订单不存在或您无权操作' });
         // 代理商确认为可选：允许 paid 直接申请发货
         if (!['paid', 'agent_confirmed'].includes(order.status)) {
             return res.status(400).json({ code: -1, message: '订单状态不允许申请发货' });
         }
 
-        const agent = await User.findByPk(userId);
-        if (agent.stock_count < order.quantity) {
-            return res.status(400).json({ code: -1, message: '库存不足，无法发货' });
+        // ★ 锁住代理商行，防止并发库存校验不准确
+        const agent = await User.findByPk(userId, { transaction: t, lock: t.LOCK.UPDATE });
+        if (!agent || agent.stock_count < order.quantity) {
+            await t.rollback();
+            return res.status(400).json({
+                code: -1,
+                message: `库存不足，当前 ${agent?.stock_count || 0} 件，需要 ${order.quantity} 件`
+            });
         }
 
         // 若未确认，记录一次自动确认时间（用于审计，不阻塞流程）
@@ -457,10 +692,12 @@ const requestShipping = async (req, res) => {
         order.shipping_requested_at = new Date();
         order.tracking_no = tracking_no || null;
         order.fulfillment_partner_id = userId;
-        await order.save();
+        await order.save({ transaction: t });
+        await t.commit();
 
         res.json({ code: 0, data: order, message: '已申请发货，等待后台确认' });
     } catch (error) {
+        await t.rollback();
         console.error('申请发货失败:', error);
         res.status(500).json({ code: -1, message: '申请失败' });
     }
@@ -668,6 +905,8 @@ const processOrderCompletion = async (orderId) => {
             return;
         }
 
+        const orderAmount = parseFloat(order.actual_price || order.total_amount || 0);
+
         // ★ 售后期结束，此订单确认为"有效订单"，计入升级统计
         await buyer.increment('order_count', { transaction: t });
         order.remark = (order.remark || '') + ' [已计入有效订单]';
@@ -701,6 +940,12 @@ const processOrderCompletion = async (orderId) => {
         if (buyer.parent_id) {
             const parent = await User.findByPk(buyer.parent_id, { transaction: t, lock: t.LOCK.UPDATE });
             if (parent) {
+                await parent.increment('order_count', { transaction: t });
+                if (!Number.isNaN(orderAmount) && orderAmount > 0) {
+                    await parent.increment('total_sales', { by: orderAmount, transaction: t });
+                }
+                await parent.reload({ transaction: t });
+
                 const parentNewRole = checkRoleUpgrade(parent);
                 if (parentNewRole && parentNewRole > parent.role_level) {
                     const roleNames = { 2: '团长', 3: '代理商' };
@@ -1215,41 +1460,37 @@ const shipOrder = async (req, res) => {
                     : parseFloat(orderProduct.price_agent || orderProduct.price_leader || orderProduct.price_member || orderProduct.retail_price);
                 const agentCost = agentCostPrice * order.quantity;
                 const buyerPaid = parseFloat(order.actual_price);
-                const agentProfit = buyerPaid - agentCost - middleCommissionTotal;
+                const agentSettlementAmount = buyerPaid - middleCommissionTotal;
 
-                if (agentProfit > 0) {
-                    // 代理商自购时也可以获得利润（自己的库存发自己的货，利润 = 价差）
+                if (agentSettlementAmount > 0) {
                     await CommissionLog.create({
                         order_id: order.id,
                         user_id: agentId,
-                        amount: agentProfit,
+                        amount: agentSettlementAmount,
                         type: 'agent_fulfillment',
                         status: 'frozen',
                         available_at: null,
                         refund_deadline: null, // 确认收货后设置
-                        remark: `代理商发货利润 (进货价${agentCostPrice}×${order.quantity}=${agentCost}, 中间佣金${middleCommissionTotal.toFixed(2)})`
+                        remark: `代理商发货结算(含成本) (进货价${agentCostPrice}×${order.quantity}=${agentCost}, 中间佣金${middleCommissionTotal.toFixed(2)})`
                     }, { transaction: t });
 
                     await sendNotification(
                         agentId,
                         '发货收益提醒',
-                        `您的团队产生了一笔发货订单，发货利润 ¥${agentProfit.toFixed(2)}（需售后期结束+审批后结算）。`,
+                        `您的团队产生了一笔发货订单，结算金额 ¥${agentSettlementAmount.toFixed(2)}（需售后期结束+审批后结算）。`,
                         'commission',
                         order.id
                     );
-                } else if (agentProfit < 0) {
-                    // ★★★ 佣金负数保护：不产生佣金记录，只告警
-                    // 可能原因：商品定价错误、促销价低于成本等
-                    console.error(`⚠️ [利润异常] 订单 ${order.order_no || order.id} 代理商(ID:${agentId})发货利润为 ¥${agentProfit.toFixed(2)}，不产生佣金！`);
+                } else {
+                    console.error(`⚠️ [结算异常] 订单 ${order.order_no || order.id} 代理商(ID:${agentId})发货结算金额为 ¥${agentSettlementAmount.toFixed(2)}，不产生佣金！`);
                     await sendNotification(
                         0,
-                        '⚠️ 发货利润异常告警',
-                        `订单ID:${order.id} 代理商发货利润为 ¥${agentProfit.toFixed(2)}（<0），不产生佣金。实付=${buyerPaid}，进货成本=${agentCost}，中间佣金=${middleCommissionTotal}。请检查商品定价！`,
+                        '⚠️ 发货结算异常告警',
+                        `订单ID:${order.id} 代理商发货结算金额为 ¥${agentSettlementAmount.toFixed(2)}（<=0），买家实付=${buyerPaid}，进货成本=${agentCost}，中间佣金=${middleCommissionTotal}。请检查商品定价！`,
                         'system_alert',
                         order.id
                     );
                 }
-                // agentProfit === 0 时不产生佣金记录，但也不告警
             }
         } else {
             // ==================== 平台发货 ====================
@@ -1363,6 +1604,8 @@ const getOrderById = async (req, res) => {
 module.exports = {
     createOrder,
     payOrder,
+    prepayOrder,
+    wechatPayNotify,
     shipOrder,
     confirmOrder,
     cancelOrder,

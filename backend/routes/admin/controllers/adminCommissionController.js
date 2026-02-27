@@ -237,9 +237,13 @@ const batchApproveCommissions = async (req, res) => {
             }
         );
 
-        // 批量通知用户
+        // ★ 批量通知用户（仅通知本次被实际审批通过的记录，排除已是approved的历史记录）
         const approvedLogs = await CommissionLog.findAll({
-            where: { id: { [Op.in]: ids }, status: 'approved' }
+            where: {
+                id: { [Op.in]: ids },
+                status: 'approved',
+                approved_at: { [Op.gte]: now }  // 仅本次刚审批的
+            }
         });
 
         for (const log of approvedLogs) {

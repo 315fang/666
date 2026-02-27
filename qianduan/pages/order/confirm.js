@@ -15,8 +15,7 @@ Page({
         remark: '',
         // 合计
         totalAmount: '0.00',
-        totalCount: 0,
-        showSuccess: false
+        totalCount: 0
     },
 
     onReady() {
@@ -163,27 +162,35 @@ Page({
 
             this.setData({ submitting: false });
 
-            // 触发支付成功动画
-            if (this.brandAnimation) {
-                this.brandAnimation.show('payment');
-            }
-
-            // 动画结束后显示成功弹窗
-            setTimeout(() => {
-                this.setData({ showSuccess: true });
-            }, 1500);
-
             // 清除直接购买缓存
             if (this.data.from === 'direct') {
                 wx.removeStorageSync('directBuyInfo');
             }
+
+            // 获取返回的订单 ID（支持单订单或拆单返回数组取第一个）
+            const orderResult = Array.isArray(res.data) ? res.data[0] : res.data;
+            const orderId = orderResult && orderResult.id;
+
+            // 触发下单成功动画
+            if (this.brandAnimation) {
+                this.brandAnimation.show('success');
+            }
+
+            // 动画结束后跳转到订单详情页（用户在详情页完成支付）
+            setTimeout(() => {
+                if (orderId) {
+                    wx.redirectTo({ url: `/pages/order/detail?id=${orderId}` });
+                } else {
+                    // 兜底：跳转到待付款列表
+                    wx.redirectTo({ url: '/pages/order/list?status=pending' });
+                }
+            }, 1500);
         } catch (err) {
             this.setData({ submitting: false });
             wx.showToast({ title: err.message || '下单失败', icon: 'none' });
             console.error('提交订单失败:', err);
         }
     },
-
 
     onViewOrder() {
         wx.redirectTo({

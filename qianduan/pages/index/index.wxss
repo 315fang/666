@@ -1,228 +1,570 @@
-/** pages/index/index.wxss - 重构首页 **/
+/** pages/index/index.wxss - 首页重构版 **/
 
-/* ========== 颜色变量 - 保持统一 ========== */
-:root {
-  --chagee-red: #C8102E;
-  --chagee-gold: #D4A84B;
-  --chagee-cream: #F5F0EB;
-  --chagee-white: #FFFFFF;
-  --text-primary: #1A1A1A;
-  --text-secondary: #666666;
-  --text-muted: #999999;
+/* ===== 气泡浮层 ===== */
+.bubble-float {
+  position: fixed;
+  top: 110rpx;
+  left: 24rpx;
+  z-index: 999;
+  pointer-events: none;
+  transition: opacity 0.35s ease, transform 0.35s ease;
 }
 
+.bubble-show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.bubble-hide {
+  opacity: 0;
+  transform: translateY(-16rpx);
+}
+
+.bubble-inner {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  background: rgba(26, 26, 26, 0.82);
+  border-radius: 50rpx;
+  padding: 14rpx 26rpx;
+  max-width: 580rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.2);
+}
+
+.bubble-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #D4A84B;
+  flex-shrink: 0;
+  animation: bdot-pulse 1.5s ease infinite;
+}
+
+@keyframes bdot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.75); }
+}
+
+.bubble-text {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 500rpx;
+}
+
+/* ===== 页面容器 ===== */
 .container {
   min-height: 100vh;
   background-color: #F5F5F5;
   padding-bottom: 40rpx;
 }
 
-/* ========== 1. Banner - 轮播图 ========== */
-.banner-section {
-  position: relative;
+/* ===== 1. 固定海报区 ===== */
+.poster-section {
   width: 100%;
-  height: 500rpx;
-}
-
-.banner-swiper {
-  width: 100%;
-  height: 100%;
-}
-
-.banner-item {
-  width: 100%;
-  height: 100%;
-  background-color: #e0e0e0;
-}
-
-.banner-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-/* ========== 2. Identity Card - 身份信息 (Single Row) ========== */
-.identity-card {
-  margin: -60rpx 30rpx 30rpx;
-  background: #FFFFFF;
-  border-radius: 24rpx;
-  padding: 30rpx;
-  position: relative;
-  z-index: 10;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.08);
-}
-
-.identity-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.identity-left {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  flex: 1;
-}
-
-.identity-name {
-  font-size: 36rpx;
-  font-weight: 700;
-  color: #1A1A1A;
-  max-width: 200rpx;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.identity-level {
-  display: inline-block;
-  padding: 4rpx 16rpx;
-  background: linear-gradient(135deg, #D4A84B 0%, #F0C96A 100%);
-  color: #FFFFFF;
-  font-size: 20rpx;
-  font-weight: 500;
-  border-radius: 20rpx;
-  white-space: nowrap;
-}
-
-.identity-right {
-  display: flex;
-  align-items: center;
-  gap: 24rpx;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-}
-
-.stat-icon {
-  width: 32rpx;
-  height: 32rpx;
-}
-
-.stat-value {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #1A1A1A;
-}
-
-/* ========== 3. Main Entrances - 主要入口 ========== */
-.main-entrances {
-  display: flex;
-  justify-content: space-between;
-  padding: 0 30rpx;
-  margin-bottom: 30rpx;
-  gap: 20rpx;
-}
-
-.entrance-card {
-  flex: 1;
-  height: 180rpx;
-  background: #FFFFFF;
-  border-radius: 20rpx;
+  height: 360rpx;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
 }
 
-.entrance-bg {
+.poster-img {
+  width: 100%;
+  height: 100%;
+}
+
+.poster-fallback {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(145deg, #1C1917 0%, #3D2B1F 50%, #78350F 100%);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.poster-deco-circle {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: #F5F5F5;
-  z-index: 1;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
 }
 
-.entrance-content {
+.p1 {
+  width: 500rpx;
+  height: 500rpx;
+  top: -180rpx;
+  right: -120rpx;
+}
+
+.p2 {
+  width: 300rpx;
+  height: 300rpx;
+  bottom: -120rpx;
+  left: -60rpx;
+}
+
+.poster-content {
   position: relative;
   z-index: 2;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding-left: 30rpx;
-}
-
-.entrance-title {
-  font-size: 32rpx;
-  font-weight: 700;
-  color: #1A1A1A;
-  margin-bottom: 8rpx;
-}
-
-.entrance-subtitle {
-  font-size: 24rpx;
-  color: #999999;
-  font-family: 'Helvetica Neue', Helvetica, sans-serif;
-  font-weight: 500;
-}
-
-/* ========== 4. Secondary Entrances - 次要入口 ========== */
-.secondary-grid {
-  margin: 0 30rpx 30rpx;
-  background: #FFFFFF;
-  border-radius: 24rpx;
-  padding: 30rpx;
-  display: flex;
-  justify-content: space-between;
-  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
-}
-
-.secondary-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16rpx;
-  width: 25%;
-}
-
-.secondary-icon-box {
-  width: 88rpx;
-  height: 88rpx;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-
-.secondary-icon-box.mirror { background: linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%); }
-.secondary-icon-box.sales { background: linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%); }
-.secondary-icon-box.talk { background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%); }
-.secondary-icon-box.planet { background: linear-gradient(135deg, #F3E8FF 0%, #E9D5FF 100%); }
-
-.secondary-icon {
-  width: 44rpx;
-  height: 44rpx;
-}
-
-.secondary-text {
-  font-size: 24rpx;
-  color: #333333;
-  font-weight: 500;
   text-align: center;
 }
 
-/* ========== 5 & 6. Banner Card Sections ========== */
-.banner-card-section {
-  margin: 0 30rpx 30rpx;
+.poster-brand {
+  display: block;
+  font-size: 72rpx;
+  font-weight: 800;
+  color: #D4A84B;
+  letter-spacing: 16rpx;
+  font-family: serif;
+}
+
+.poster-slogan {
+  display: block;
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 12rpx;
+  letter-spacing: 4rpx;
+}
+
+/* ===== 2. 会员等级卡 ===== */
+.member-card {
+  margin: -40rpx 24rpx 20rpx;
   background: #FFFFFF;
   border-radius: 24rpx;
-  padding: 30rpx 30rpx 0; /* Padding bottom handled by body height or internal padding */
+  padding: 28rpx 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  z-index: 10;
+  box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.10);
+  cursor: pointer;
+}
+
+.member-card:active {
+  opacity: 0.95;
+  transform: scale(0.99);
+}
+
+.member-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.member-level-badge {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  background: linear-gradient(135deg, #D4A84B 0%, #F0C96A 100%);
+  padding: 6rpx 18rpx;
+  border-radius: 20rpx;
+  width: fit-content;
+}
+
+.level-icon {
+  width: 28rpx;
+  height: 28rpx;
+  filter: brightness(0) invert(1);
+}
+
+.level-name {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #FFFFFF;
+}
+
+.member-name {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #1A1A1A;
+}
+
+.member-right {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.growth-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  min-width: 200rpx;
+}
+
+.growth-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4rpx;
+}
+
+.growth-label {
+  font-size: 20rpx;
+  color: #999;
+}
+
+.growth-value {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #D4A84B;
+}
+
+.growth-target {
+  font-size: 20rpx;
+  color: #BBB;
+}
+
+.growth-bar-bg {
+  width: 100%;
+  height: 8rpx;
+  background: #F0EDE8;
+  border-radius: 4rpx;
+  overflow: hidden;
+}
+
+.growth-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #D4A84B 0%, #F0C96A 100%);
+  border-radius: 4rpx;
+  transition: width 0.5s ease;
+}
+
+.member-arrow {
+  width: 28rpx;
+  height: 28rpx;
+  opacity: 0.4;
+  flex-shrink: 0;
+}
+
+/* ===== 3. 积分卡 ===== */
+.points-row {
+  margin: 0 24rpx 20rpx;
+}
+
+.points-card {
+  background: linear-gradient(135deg, #1C1917 0%, #292524 100%);
+  border-radius: 24rpx;
+  padding: 28rpx 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 6rpx 24rpx rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+}
+
+.points-card:active {
+  opacity: 0.95;
+}
+
+.points-left {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.points-icon {
+  width: 52rpx;
+  height: 52rpx;
+  filter: brightness(0) saturate(100%) invert(80%) sepia(50%) saturate(500%) hue-rotate(5deg);
+}
+
+.points-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.points-num {
+  font-size: 44rpx;
+  font-weight: 800;
+  color: #F0C96A;
+  line-height: 1;
+}
+
+.points-label {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.points-actions {
+  display: flex;
+  gap: 16rpx;
+}
+
+.pts-btn {
+  padding: 14rpx 28rpx;
+  border-radius: 50rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sign-btn {
+  background: linear-gradient(135deg, #D4A84B 0%, #F0C96A 100%);
+  color: #1C1917;
+}
+
+.exchange-btn {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+  border: 1rpx solid rgba(255, 255, 255, 0.2);
+}
+
+/* ===== 4. 活动预告卡 ===== */
+.activity-preview-card {
+  margin: 0 24rpx 24rpx;
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  padding: 24rpx 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+}
+
+.activity-preview-card:active {
+  background: #FAFAF9;
+}
+
+.ap-left {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  flex: 1;
+}
+
+.ap-icon-wrap {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 18rpx;
+  background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ap-icon {
+  width: 38rpx;
+  height: 38rpx;
+}
+
+.ap-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.ap-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1A1A1A;
+}
+
+.ap-desc {
+  font-size: 22rpx;
+  color: #888;
+}
+
+.ap-right {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  flex-shrink: 0;
+}
+
+.ap-cta {
+  font-size: 24rpx;
+  color: #D4A84B;
+  font-weight: 600;
+}
+
+.ap-arrow {
+  width: 24rpx;
+  height: 24rpx;
+  opacity: 0.5;
+}
+
+/* ===== 5. 特色卡片区 (继承原有样式) ===== */
+.feature-section {
+  margin: 0 0 24rpx;
+  padding: 0 24rpx;
+}
+
+.feature-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.feature-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.feature-title-bar {
+  width: 6rpx;
+  height: 32rpx;
+  border-radius: 3rpx;
+  background: linear-gradient(180deg, #D4A84B 0%, #F0C96A 100%);
+}
+
+.feature-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1A1A1A;
+}
+
+.feature-subtitle {
+  font-size: 22rpx;
+  color: #BBBBBB;
+  font-family: 'Helvetica Neue', Helvetica, sans-serif;
+  font-weight: 500;
+  letter-spacing: 1rpx;
+}
+
+.feature-scroll {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.feature-list {
+  display: inline-flex;
+  gap: 20rpx;
+  padding-right: 24rpx;
+}
+
+.feature-card {
+  position: relative;
+  width: 210rpx;
+  height: 256rpx;
+  border-radius: 20rpx;
+  padding: 22rpx 20rpx;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 6rpx 24rpx rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s ease;
+}
+
+.feature-card:active {
+  transform: scale(0.95);
+}
+
+.fc-deco-circle {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.08;
+  background: #FFFFFF;
+}
+
+.fc-circle-1 {
+  width: 200rpx;
+  height: 200rpx;
+  top: -60rpx;
+  right: -40rpx;
+}
+
+.fc-circle-2 {
+  width: 120rpx;
+  height: 120rpx;
+  bottom: -30rpx;
+  left: -20rpx;
+}
+
+.fc-icon-wrap {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fc-icon {
+  width: 34rpx;
+  height: 34rpx;
+}
+
+.fc-icon-text {
+  font-size: 36rpx;
+}
+
+.fc-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  position: relative;
+  z-index: 2;
+}
+
+.fc-name {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #FFFFFF;
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.3;
+}
+
+.fc-desc {
+  font-size: 18rpx;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fc-tag {
+  position: relative;
+  z-index: 2;
+  align-self: flex-start;
+  padding: 6rpx 16rpx;
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.fc-tag-text {
+  font-size: 18rpx;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+/* ===== 6 & 7. 功能卡片区 ===== */
+.banner-card-section {
+  margin: 0 24rpx 24rpx;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 28rpx 28rpx 0;
   box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
   overflow: hidden;
+  cursor: pointer;
+}
+
+.banner-card-section:active {
+  opacity: 0.95;
 }
 
 .banner-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20rpx;
+  margin-bottom: 18rpx;
 }
 
 .banner-card-title {
@@ -234,7 +576,7 @@
 .banner-card-more {
   display: flex;
   align-items: center;
-  font-size: 24rpx;
+  font-size: 22rpx;
   color: #999999;
 }
 
@@ -247,10 +589,10 @@
 .banner-card-body {
   height: 160rpx;
   border-radius: 16rpx;
-  padding: 30rpx;
+  padding: 28rpx;
   position: relative;
   overflow: hidden;
-  margin-bottom: 30rpx; /* Add bottom margin inside the white card */
+  margin-bottom: 28rpx;
 }
 
 .banner-card-body.red-theme {
