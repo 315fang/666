@@ -2,10 +2,15 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 const path = require('path');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 const { requestLogger, errorTracker } = require('./utils/logger');
 const constants = require('./config/constants');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
+
+const SERVER_START_TIME = Date.now();
 
 // ★ 启动安全检查：生产环境禁止使用弱默认 JWT 密钥
 if (process.env.NODE_ENV === 'production') {
@@ -76,6 +81,17 @@ const corsOptions = {
     credentials: process.env.CORS_ORIGINS ? true : false
 };
 app.use(cors(corsOptions));
+
+// gzip 压缩（跳过小于 1KB 的响应和图片请求）
+app.use(compression({
+    filter: (req, res) => {
+        const type = res.getHeader('Content-Type') || '';
+        if (/image\//.test(type)) return false; // 图片已经压缩过，无需重复压缩
+        return compression.filter(req, res);
+    },
+    threshold: 1024 // 小于 1KB 不压缩
+}));
+
 app.use(bodyParser.json({ limit: constants.SECURITY.BODY_SIZE_LIMIT }));
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -141,12 +157,25 @@ app.get('/', (req, res) => {
     res.redirect('/admin/');
 });
 
-// 请求日志（开发环境）
-if (process.env.NODE_ENV === 'development') {
-    app.use((req, res, next) => {
-        console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
-        next();
+// API 文档（/api/docs - 生产环境隐藏或见 SWAGGER_ENABLED 配置）
+const swaggerEnabled = process.env.SWAGGER_ENABLED === 'true' || process.env.NODE_ENV !== 'production';
+if (swaggerEnabled) {
+    // Swagger JSON 端点（供自定义工具集成）
+    app.get('/api/docs/swagger.json', (req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.send(swaggerSpec);
     });
+    // Swagger UI
+    app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+        customSiteTitle: 'S2B2C API 文档',
+        swaggerOptions: {
+            persistAuthorization: true,   // 刺测 token 不丢失
+            docExpansion: 'list',         // 默认展开所有 tag
+            filter: true,                 // 支持搜索配置项
+            tagsSorter: 'alpha'
+        }
+    }));
+    console.info(`📖 Swagger API 文档地址: http://localhost:${process.env.PORT || 3000}/api/docs`);
 }
 
 // API路由
@@ -196,9 +225,30 @@ if (constants.DEBUG.ENABLE_DEBUG_ROUTES) {
     console.log('⚠️  调试路由已启用 (/api/debug)');
 }
 
-// 健康检查（不暴露内部信息）
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// 健康检查（增强版 — 包含版本、运行时长、内存）
+app.get('/health', async (req, res) => {
+    const uptime = Math.floor((Date.now() - SERVER_START_TIME) / 1000);
+    const memMB = Math.round(process.memoryUsage().rss / 1024 / 1024);
+    const heapUsedMB = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+
+    // 快速检测数据库连接状态
+    let dbStatus = 'ok';
+    try {
+        const { sequelize } = require('./config/database');
+        await sequelize.authenticate();
+    } catch {
+        dbStatus = 'error';
+    }
+
+    res.json({
+        status: dbStatus === 'ok' ? 'ok' : 'degraded',
+        timestamp: new Date().toISOString(),
+        uptime: `${uptime}s`,
+        version: process.env.npm_package_version || '1.0.0',
+        node: process.version,
+        memory: { rss: `${memMB}MB`, heapUsed: `${heapUsedMB}MB` },
+        services: { database: dbStatus }
+    });
 });
 
 // 404处理

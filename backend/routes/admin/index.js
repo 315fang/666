@@ -303,3 +303,6 @@ router.use('/', massMessageRoutes);
 
 module.exports = router;
 
+
+// ========== 注销（使当前 Token 立即失效） ==========
+router.post('/logout', adminAuth, adminAuthController.logout);

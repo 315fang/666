@@ -1,231 +1,178 @@
 /**
- * Structured logging utility
- * Provides consistent logging format for critical flows
+ * 结构化日志模块（Winston 升级版）
+ * 
+ * 特性：
+ * - 分级：error / warn / info / http / debug
+ * - 文件按天轮转，保留 30 天，超 50MB 自动分片
+ * - 生产环境不输出 debug，仅 warn+ 输出到控制台
+ * - JSON 格式便于 ELK / Loki 等日志系统接入
+ * - 向后兼容原有 API（requestLogger, errorTracker, logAuth 等）
  */
 
-const fs = require('fs');
+const { createLogger, format, transports } = require('winston');
+const DailyRotateFile = require('winston-daily-rotate-file');
 const path = require('path');
 
-// Log levels
-const LOG_LEVELS = {
-    ERROR: 'ERROR',
-    WARN: 'WARN',
-    INFO: 'INFO',
-    DEBUG: 'DEBUG'
-};
-
-// Current environment
-const isProduction = process.env.NODE_ENV === 'production';
-const isDevelopment = process.env.NODE_ENV === 'development';
-
-// Log directory
+const isProd = process.env.NODE_ENV === 'production';
 const LOG_DIR = path.join(__dirname, '../logs');
 
-// Ensure log directory exists
-if (!fs.existsSync(LOG_DIR)) {
-    fs.mkdirSync(LOG_DIR, { recursive: true });
-}
+// ============================================================
+// 格式定义
+// ============================================================
+const jsonFormat = format.combine(
+    format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
+    format.errors({ stack: true }),
+    format.json()
+);
 
-/**
- * Format log message
- */
-function formatLog(level, category, message, meta = {}) {
-    const timestamp = new Date().toISOString();
-    const logEntry = {
-        timestamp,
+const prettyFormat = format.combine(
+    format.colorize(),
+    format.timestamp({ format: 'HH:mm:ss' }),
+    format.printf(({ level, message, timestamp, category, ...meta }) => {
+        const metaStr = Object.keys(meta).length
+            ? ' ' + JSON.stringify(meta)
+            : '';
+        const cat = category ? `[${category}] ` : '';
+        return `${timestamp} [${level}] ${cat}${message}${metaStr}`;
+    })
+);
+
+// ============================================================
+// 轮转文件配置工厂
+// ============================================================
+function rotateTransport(filename, level = 'debug', maxDays = '30d') {
+    return new DailyRotateFile({
+        dirname: LOG_DIR,
+        filename: `${filename}-%DATE%.log`,
+        datePattern: 'YYYY-MM-DD',
         level,
-        category,
-        message,
-        ...meta
-    };
-
-    // In production, output JSON for easier parsing
-    if (isProduction) {
-        return JSON.stringify(logEntry);
-    }
-
-    // In development, output readable format
-    const metaStr = Object.keys(meta).length > 0 ? ` ${JSON.stringify(meta)}` : '';
-    return `[${timestamp}] ${level} [${category}] ${message}${metaStr}`;
-}
-
-/**
- * Write log to file
- */
-function writeToFile(level, content) {
-    if (!isProduction) return; // Only write to files in production
-
-    const date = new Date().toISOString().split('T')[0];
-    const filename = `${date}-${level.toLowerCase()}.log`;
-    const filepath = path.join(LOG_DIR, filename);
-
-    fs.appendFile(filepath, content + '\n', (err) => {
-        if (err) {
-            console.error('Failed to write log:', err);
-        }
+        maxFiles: maxDays,
+        maxSize: '50m',
+        zippedArchive: true
     });
 }
 
-/**
- * Base logging function
- */
-function log(level, category, message, meta = {}) {
-    const formattedLog = formatLog(level, category, message, meta);
+// ============================================================
+// 创建 Winston logger
+// ============================================================
+const winstonLogger = createLogger({
+    level: isProd ? 'info' : 'debug',
+    format: jsonFormat,
+    defaultMeta: { service: 's2b2c-backend' },
+    transports: [
+        rotateTransport('combined', 'debug', '30d'),     // 所有日志
+        rotateTransport('error', 'error', '30d'),        // 仅错误
+        rotateTransport('http', 'http', '14d')           // HTTP 访问
+    ]
+});
 
-    // Console output
-    switch (level) {
-        case LOG_LEVELS.ERROR:
-            console.error(formattedLog);
-            break;
-        case LOG_LEVELS.WARN:
-            console.warn(formattedLog);
-            break;
-        default:
-            console.log(formattedLog);
-    }
-
-    // File output (production only)
-    if (level === LOG_LEVELS.ERROR || level === LOG_LEVELS.WARN) {
-        writeToFile(level, formattedLog);
-    }
+// 控制台输出
+if (!isProd) {
+    winstonLogger.add(new transports.Console({ format: prettyFormat, level: 'debug' }));
+} else {
+    winstonLogger.add(new transports.Console({ format: prettyFormat, level: 'warn' }));
 }
 
-/**
- * Error logging
- */
-function error(category, message, meta = {}) {
-    log(LOG_LEVELS.ERROR, category, message, meta);
-}
+// ============================================================
+// 公共 API（向后兼容）
+// ============================================================
+const logger = {
+    // 基础日志方法
+    error: (category, message, meta = {}) =>
+        winstonLogger.error(message, { category, ...meta }),
+    warn: (category, message, meta = {}) =>
+        winstonLogger.warn(message, { category, ...meta }),
+    info: (category, message, meta = {}) =>
+        winstonLogger.info(message, { category, ...meta }),
+    debug: (category, message, meta = {}) =>
+        winstonLogger.debug(message, { category, ...meta }),
 
-/**
- * Warning logging
- */
-function warn(category, message, meta = {}) {
-    log(LOG_LEVELS.WARN, category, message, meta);
-}
+    // 业务快捷方法
+    logAuth: (action, meta = {}) =>
+        winstonLogger.info(action, { category: 'AUTH', ...meta }),
+    logOrder: (action, meta = {}) =>
+        winstonLogger.info(action, { category: 'ORDER', ...meta }),
+    logCommission: (action, meta = {}) =>
+        winstonLogger.info(action, { category: 'COMMISSION', ...meta }),
+    logPayment: (action, meta = {}) =>
+        winstonLogger.info(action, { category: 'PAYMENT', ...meta }),
 
-/**
- * Info logging
- */
-function info(category, message, meta = {}) {
-    log(LOG_LEVELS.INFO, category, message, meta);
-}
+    // 定时任务
+    cronLog: (taskName, result = {}) =>
+        winstonLogger.info(taskName, { category: 'CRON', ...result }),
 
-/**
- * Debug logging (only in development)
- */
-function debug(category, message, meta = {}) {
-    if (isDevelopment) {
-        log(LOG_LEVELS.DEBUG, category, message, meta);
-    }
-}
+    // ============================================================
+    // Express 中间件：HTTP 请求日志
+    // ============================================================
+    requestLogger(req, res, next) {
+        const startTime = Date.now();
+        res.on('finish', () => {
+            const duration = Date.now() - startTime;
+            const level = res.statusCode >= 500 ? 'error'
+                : res.statusCode >= 400 ? 'warn'
+                    : 'http';
+            winstonLogger.log(level, `${req.method} ${req.originalUrl}`, {
+                category: 'HTTP',
+                statusCode: res.statusCode,
+                responseTime: `${duration}ms`,
+                ip: req.ip || req.headers['x-forwarded-for'],
+                userId: req.user?.id || null
+            });
+        });
+        next();
+    },
 
-/**
- * Log authentication events
- */
-function logAuth(action, meta = {}) {
-    info('AUTH', action, meta);
-}
-
-/**
- * Log order events
- */
-function logOrder(action, meta = {}) {
-    info('ORDER', action, meta);
-}
-
-/**
- * Log commission settlement events
- */
-function logCommission(action, meta = {}) {
-    info('COMMISSION', action, meta);
-}
-
-/**
- * Log payment events
- */
-function logPayment(action, meta = {}) {
-    info('PAYMENT', action, meta);
-}
-
-/**
- * Log API request/response
- */
-function logRequest(req, res, duration) {
-    const meta = {
-        method: req.method,
-        path: req.path,
-        statusCode: res.statusCode,
-        duration: `${duration}ms`,
-        ip: req.ip,
-        userAgent: req.get('user-agent')
-    };
-
-    if (res.statusCode >= 400) {
-        warn('API', `${req.method} ${req.path}`, meta);
-    } else if (isDevelopment) {
-        debug('API', `${req.method} ${req.path}`, meta);
-    }
-}
-
-/**
- * Express middleware for request logging
- */
-function requestLogger(req, res, next) {
-    const startTime = Date.now();
-
-    // Capture response finish event
-    res.on('finish', () => {
-        const duration = Date.now() - startTime;
-        logRequest(req, res, duration);
-    });
-
-    next();
-}
-
-/**
- * Error tracking middleware
- */
-function errorTracker(err, req, res, next) {
-    // ★ 隐私保护：对请求体进行脱敏，避免手机号、地址等个人信息写入日志
-    const sensitiveFields = ['phone', 'mobile', 'password', 'secret', 'token', 'card_no', 'account_no', 'id_card'];
-    let sanitizedBody = {};
-    if (req.body && typeof req.body === 'object') {
-        sanitizedBody = Object.keys(req.body).reduce((acc, key) => {
-            if (sensitiveFields.some(f => key.toLowerCase().includes(f))) {
-                acc[key] = '[REDACTED]';
-            } else if (typeof req.body[key] === 'string' && req.body[key].length > 200) {
-                acc[key] = req.body[key].substring(0, 50) + '...[TRUNCATED]';
-            } else {
-                acc[key] = req.body[key];
+    // ============================================================
+    // Express 错误中间件（数据脱敏）
+    // ============================================================
+    errorTracker(err, req, res, next) {
+        const SENSITIVE_FIELDS = [
+            'phone', 'mobile', 'password', 'secret', 'token',
+            'card_no', 'account_no', 'id_card'
+        ];
+        let sanitizedBody = {};
+        if (req.body && typeof req.body === 'object') {
+            for (const [key, val] of Object.entries(req.body)) {
+                if (SENSITIVE_FIELDS.some(f => key.toLowerCase().includes(f))) {
+                    sanitizedBody[key] = '[REDACTED]';
+                } else if (typeof val === 'string' && val.length > 200) {
+                    sanitizedBody[key] = val.substring(0, 50) + '...[TRUNCATED]';
+                } else {
+                    sanitizedBody[key] = val;
+                }
             }
-            return acc;
-        }, {});
+        }
+        winstonLogger.error(err.message, {
+            category: 'UNCAUGHT',
+            stack: err.stack,
+            path: req.path,
+            method: req.method,
+            body: sanitizedBody,
+            userId: req.user?.id || 'anonymous'
+        });
+        next(err);
+    },
+
+    // ============================================================
+    // 全局进程异常捕获
+    // ============================================================
+    setupGlobalHandlers() {
+        process.on('unhandledRejection', (reason) => {
+            winstonLogger.error('UnhandledRejection', {
+                category: 'PROCESS',
+                reason: reason instanceof Error ? reason.message : String(reason),
+                stack: reason instanceof Error ? reason.stack : undefined
+            });
+        });
+        process.on('uncaughtException', (error) => {
+            winstonLogger.error('UncaughtException', {
+                category: 'PROCESS',
+                message: error.message,
+                stack: error.stack
+            });
+            setTimeout(() => process.exit(1), 2000);
+        });
     }
-
-    error('ERROR', err.message, {
-        stack: err.stack,
-        path: req.path,
-        method: req.method,
-        body: sanitizedBody,
-        query: req.query,
-        user: req.user ? req.user.id : 'anonymous'
-    });
-
-    next(err);
-}
-
-module.exports = {
-    LOG_LEVELS,
-    error,
-    warn,
-    info,
-    debug,
-    logAuth,
-    logOrder,
-    logCommission,
-    logPayment,
-    logRequest,
-    requestLogger,
-    errorTracker
 };
+
+module.exports = logger;

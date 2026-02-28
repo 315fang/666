@@ -416,3 +416,40 @@ export const getLogs = (params) => {
     params
   })
 }
+
+// ========== 佣金管理 ==========
+export const getCommissions = (params) => request({ url: '/commissions', method: 'get', params })
+export const approveCommissionItem = (id) => request({ url: `/commissions/${id}/approve`, method: 'put' })
+export const rejectCommissionItem = (id, data) => request({ url: `/commissions/${id}/reject`, method: 'put', data })
+export const batchApproveCommissions = (data) => request({ url: '/commissions/batch-approve', method: 'post', data })
+export const batchRejectCommissions = (data) => request({ url: '/commissions/batch-reject', method: 'post', data })
+
+// ========== 经销商管理 ==========
+export const getDealers = (params) => request({ url: '/dealers', method: 'get', params })
+export const approveDealer = (id) => request({ url: `/dealers/${id}/approve`, method: 'put' })
+export const rejectDealer = (id, data) => request({ url: `/dealers/${id}/reject`, method: 'put', data })
+export const updateDealerLevel = (id, data) => request({ url: `/dealers/${id}/level`, method: 'put', data })
+
+// ========== 管理员账号管理 ==========
+export const getAdmins = () => request({ url: '/admins', method: 'get' })
+export const createAdmin = (data) => request({ url: '/admins', method: 'post', data })
+export const updateAdmin = (id, data) => request({ url: `/admins/${id}`, method: 'put', data })
+export const resetAdminPassword = (id, data) => request({ url: `/admins/${id}/password`, method: 'put', data })
+export const deleteAdmin = (id) => request({ url: `/admins/${id}`, method: 'delete' })
+
+// ========== 素材管理 ==========
+export const getMaterials = (params) => request({ url: '/materials', method: 'get', params })
+export const createMaterial = (data) => request({ url: '/materials', method: 'post', data })
+export const updateMaterial = (id, data) => request({ url: `/materials/${id}`, method: 'put', data })
+export const deleteMaterial = (id) => request({ url: `/materials/${id}`, method: 'delete' })
+
+// ========== 群发消息 ==========
+export const getMassMessages = (params) => request({ url: '/mass-messages', method: 'get', params })
+export const createMassMessage = (data) => request({ url: '/mass-messages', method: 'post', data })
+export const sendMassMessage = (id) => request({ url: `/mass-messages/${id}/send`, method: 'post' })
+export const deleteMassMessage = (id) => request({ url: `/mass-messages/${id}`, method: 'delete' })
+
+// ========== 图文内容 ==========
+export const getContents = (params) => request({ url: '/contents', method: 'get', params })
+export const createContent = (data) => request({ url: '/contents', method: 'post', data })
+export const updateContent = (id, data) => request({ url: `/contents/${id}`, method: 'put', data })

@@ -512,11 +512,54 @@ async function checkExpiredGroups(req, res, next) {
     }
 }
 
+// ============================================================
+// ★ 纯业务函数：供定时任务调用（无 req/res）
+// ============================================================
+async function processExpiredGroups() {
+    const now = new Date();
+    const expiredGroups = await GroupOrder.findAll({
+        where: { status: 'open', expire_at: { [Op.lt]: now } },
+        include: [{ model: GroupMember, as: 'members' }]
+    });
+
+    let processedCount = 0;
+    for (const group of expiredGroups) {
+        const t = await sequelize.transaction();
+        try {
+            await group.update({ status: 'fail', failed_at: now }, { transaction: t });
+            await GroupMember.update(
+                { status: 'refunded' },
+                { where: { group_order_id: group.id, status: 'joined' }, transaction: t }
+            );
+            await t.commit();
+
+            // 通知成员
+            for (const member of group.members) {
+                sendNotification(
+                    member.user_id,
+                    '拼团未成功，已自动退款',
+                    `很遗憾，您参与的拼团未在规定时间内凑齐人数，已自动退款至原支付账户。`,
+                    'group',
+                    String(group.id)
+                ).catch(() => { });
+            }
+
+            console.log(`[拼团定时] 团次 ${group.group_no} 超时失败处理完成`);
+            processedCount++;
+        } catch (e) {
+            await t.rollback();
+            console.error(`[拼团定时] 处理团次 ${group.group_no} 失败:`, e.message);
+        }
+    }
+    return processedCount;
+}
+
 module.exports = {
     getActivitiesByProduct,
     getGroupOrderDetail,
     startGroupOrder,
     joinGroupOrder,
     getMyGroups,
-    checkExpiredGroups
+    checkExpiredGroups,
+    processExpiredGroups
 };

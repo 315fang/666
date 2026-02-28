@@ -51,6 +51,6 @@
 
   <!-- 右侧箭头 -->
   <view wx:if="{{showArrow}}" class="address-card__arrow">
-    <image class="address-card__arrow-icon" src="/assets/images/arrow-right.svg" mode="aspectFit"></image>
+    <image class="address-card__arrow-icon" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
   </view>
 </view>

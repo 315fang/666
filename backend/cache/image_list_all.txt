@@ -1,0 +1,149 @@
+/assets/icons/alert-triangle.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\notifications.wxml
+
+/assets/icons/arrow-left.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\coupon\list.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\group\list.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\logistics\tracking.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\lottery\lottery.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\pickup\pickup.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\points\index.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\slash\list.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\station\map.wxml
+
+/assets/icons/arrow-right.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\activity\activity.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\category\category.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\index\index.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml
+
+/assets/icons/bar-chart.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\team.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\workbench.wxml
+
+/assets/icons/bell.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/box.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\feed\index.wxml
+
+/assets/icons/check-bold.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\restock.wxml
+
+/assets/icons/check-circle.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\workbench.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\confirm.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\logistics.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\refund-detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\points\index.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/check.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\invite.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\refund-detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\questionnaire\fill.wxml
+
+/assets/icons/clipboard.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\components\share-card\share-card.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\invite.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\list.wxml
+
+/assets/icons/clock.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\workbench.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\logistics.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\refund-detail.wxml
+
+/assets/icons/credit-card.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\notifications.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/crown.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\index\index.wxml
+
+/assets/icons/dollar-sign.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\center.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\notifications.wxml
+
+/assets/icons/done.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\feed\index.wxml
+
+/assets/icons/download.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\components\share-card\share-card.wxml
+
+/assets/icons/gift.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\activity\activity.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\coupon\list.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\invite.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\index\index.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\lottery\lottery.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\points\index.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/headphones.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\ai\chat.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/heart.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml
+
+/assets/icons/home.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml
+
+/assets/icons/hot.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\index\index.wxml
+
+/assets/icons/inbox.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\stock-logs.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\workbench.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\notifications.wxml
+
+/assets/icons/info.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\components\share-card\share-card.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\center.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\refund-apply.wxml
+
+/assets/icons/link.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\components\share-card\share-card.wxml
+
+/assets/icons/list.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\center.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\workbench.wxml
+
+/assets/icons/map-pin.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\address\list.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\category\category.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\workbench.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\confirm.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\logistics.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\pickup\pickup.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/message.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\ai\chat.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\center.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\logistics.wxml
+
+/assets/icons/minus.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\refund-detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml
+
+/assets/icons/navigation.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\workbench.wxml
+
+/assets/icons/package.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\center.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\stock-logs.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\team.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\workbench.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\group\list.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\logistics\tracking.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\lottery\lottery.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\list.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\logistics.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\points\index.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\slash\list.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/plus.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\team.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\workbench.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml
+
+/assets/icons/refresh-cw.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\logistics.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\refund-list.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\notifications.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/rocket.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\notifications.wxml
+
+/assets/icons/search.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\category\category.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\search\search.wxml
+
+/assets/icons/settings.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\notifications.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/share.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\components\share-card\share-card.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\center.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml
+
+/assets/icons/shield.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml
+
+/assets/icons/shopping-bag.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\cart\cart.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\category\category.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\center.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\workbench.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/shopping-cart.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\ai\chat.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\category\category.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/sparkle.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\ai\chat-enhanced.wxml
+
+/assets/icons/sparkles.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\ai\chat-enhanced.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\ai\chat.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/star.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\category\category.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\group\list.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\lottery\lottery.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\points\index.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/tag.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\activity\activity.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\slash\list.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/truck.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\center.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\stock-logs.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\workbench.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\logistics.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\product\detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/user.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\workbench.wxml
+
+/assets/icons/users.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\activity\activity.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\center.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\team.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\group\list.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\user\user.wxml
+
+/assets/icons/x.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\category\category.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\refund-detail.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\search\search.wxml
+
+/assets/images/arrow-right.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\components\address-card\address-card.wxml
+
+/assets/images/empty-logistics.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\order\logistics.wxml
+
+/assets/images/placeholder.svg
+  -> c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\commission-logs.wxml, c:\Users\21963\WeChatProjects\zz\qianduan\pages\distribution\withdraw-history.wxml

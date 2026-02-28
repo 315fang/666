@@ -5,6 +5,7 @@ const { settleCommissions, autoCancelExpiredOrders, autoConfirmOrders, processRe
 const constants = require('./config/constants');
 const { executeWithLock } = require('./utils/taskLock');
 const AIOpsService = require('./services/AIOpsService');
+const logger = require('./utils/logger');
 
 const PORT = process.env.PORT || 3000;
 
@@ -19,7 +20,7 @@ async function startServer() {
             if (isProduction) {
                 criticalChecks.push('JWT_SECRET 未设置、使用了不安全的默认值或长度不足32字符');
             } else {
-                console.warn('⚠️  警告: JWT_SECRET 未设置或不安全，建议在 .env 文件中配置强密钥（至少32字符）');
+                logger.warn('STARTUP', 'JWT_SECRET 未设置或不安全，建议在 .env 文件中配置强密钥（至少32字符）');
             }
         }
 
@@ -27,7 +28,7 @@ async function startServer() {
             if (isProduction) {
                 criticalChecks.push('ADMIN_JWT_SECRET 未设置、使用了不安全的默认值或长度不足32字符');
             } else {
-                console.warn('⚠️  警告: ADMIN_JWT_SECRET 未设置或不安全，建议在 .env 文件中配置强密钥（至少32字符）');
+                logger.warn('STARTUP', 'ADMIN_JWT_SECRET 未设置或不安全，建议在 .env 文件中配置强密钥（至少32字符）');
             }
         }
 
@@ -43,13 +44,12 @@ async function startServer() {
             if (isProduction) {
                 criticalChecks.push('DB_PASSWORD 未设置或使用了占位符默认值，请在 .env 中填入真实数据库密码');
             } else {
-                console.warn('⚠️  警告: DB_PASSWORD 未设置或使用默认值');
+                logger.warn('STARTUP', 'DB_PASSWORD 未设置或使用默认值');
             }
         }
 
         // 在生产环境，任何检查失败都要终止启动
         if (isProduction && criticalChecks.length > 0) {
-            console.error('\n⛔ 生产环境安全检查失败:');
             criticalChecks.forEach(msg => console.error(`  ✗ ${msg}`));
             console.error('请在 .env 文件中正确配置以上变量后重新启动。\n');
             process.exit(1);
@@ -128,39 +128,15 @@ async function startServer() {
         }, 30 * 60 * 1000);
 
         // ★ 定时任务：拼团超时未成团处理（每5分钟检查一次）
-        const { checkExpiredGroups } = require('./controllers/groupController');
+        const { processExpiredGroups } = require('./controllers/groupController');
         setInterval(async () => {
             await executeWithLock('checkExpiredGroups', async () => {
-                const mockReqRes = {
-                    req: {},
-                    res: { json: () => { } }
-                };
-                // 直接调用业务逻辑
-                const { GroupOrder, GroupMember, sequelize: db } = require('./models');
-                const { Op } = require('sequelize');
-                const now = new Date();
-                const expired = await GroupOrder.findAll({
-                    where: { status: 'open', expire_at: { [Op.lt]: now } }
-                });
-                for (const g of expired) {
-                    const t2 = await db.transaction();
-                    try {
-                        await g.update({ status: 'fail', failed_at: now }, { transaction: t2 });
-                        await GroupMember.update(
-                            { status: 'refunded' },
-                            { where: { group_order_id: g.id, status: 'joined' }, transaction: t2 }
-                        );
-                        await t2.commit();
-                        console.log(`[拼团定时] 团次 ${g.group_no} 超时失败处理完成`);
-                    } catch (e) {
-                        await t2.rollback();
-                        console.error(`[拼团定时] 处理团次 ${g.group_no} 失败:`, e.message);
-                    }
-                }
+                await processExpiredGroups();
             }, { timeout: 3 * 60 * 1000 }).catch(err => {
                 console.error('[定时任务] 拼团超时处理异常:', err);
             });
         }, 5 * 60 * 1000);
+
 
         // 启动时也执行一次（使用锁机制）
         executeWithLock('settleCommissions', async () => {

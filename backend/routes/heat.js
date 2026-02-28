@@ -5,7 +5,7 @@
  */
 const express = require('express');
 const router = express.Router();
-const { requireAdmin } = require('../middleware/auth');
+const { authenticateAdmin: requireAdmin } = require('../middleware/auth');
 const ctrl = require('../controllers/adminHeatController');
 
 // 后台管理（需要 Admin 权限）

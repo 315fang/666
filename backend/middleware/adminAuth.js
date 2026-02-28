@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const { Admin } = require('../models');
 const constants = require('../config/constants');
+const tokenBlacklist = require('../utils/tokenBlacklist');
+const logger = require('../utils/logger');
 
 // 管理员认证中间件
 const adminAuth = async (req, res, next) => {
@@ -17,7 +19,15 @@ const adminAuth = async (req, res, next) => {
         try {
             decoded = jwt.verify(token, constants.SECURITY.ADMIN_JWT_SECRET);
         } catch (err) {
-            return res.status(401).json({ code: -1, message: '令牌无效或已过期' });
+            if (err.name === 'TokenExpiredError') {
+                return res.status(401).json({ code: 401, message: 'Token 已过期，请重新登录' });
+            }
+            return res.status(401).json({ code: 401, message: '令牌无效，请重新登录' });
+        }
+
+        // ★ 黑名单检查：注销后 Token 即刻失效
+        if (decoded.jti && tokenBlacklist.isBlocked(decoded.jti)) {
+            return res.status(401).json({ code: 401, message: 'Token 已失效，请重新登录' });
         }
 
         const admin = await Admin.findByPk(decoded.id);
@@ -27,9 +37,11 @@ const adminAuth = async (req, res, next) => {
         }
 
         req.admin = admin;
+        req.user = { id: admin.id, role: admin.role }; // 兼容日志中的 userId
+        req._tokenDecoded = decoded; // 保存 decoded 供注销使用
         next();
     } catch (error) {
-        console.error('管理员认证错误:', error);
+        logger.error('ADMIN_AUTH', '管理员认证错误', { message: error.message });
         res.status(500).json({ code: -1, message: '认证服务异常，请稍后重试' });
     }
 };
@@ -69,10 +81,13 @@ const checkPermission = (...requiredPermissions) => {
     };
 };
 
-// 生成管理员Token
+// 生成管理员 Token
 const generateAdminToken = (admin) => {
+    // jti = JWT ID，用于黑名单机制
+    const jti = `${admin.id}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     return jwt.sign(
         {
+            jti,
             id: admin.id,
             username: admin.username,
             role: admin.role
