@@ -1,7 +1,9 @@
 // pages/product/detail.js
 const { get, post } = require('../../utils/request');
-const { parseImages, calculatePrice } = require('../../utils/dataFormatter');
+const { processProduct, calculatePrice } = require('../../utils/dataFormatter');
+const { ErrorHandler } = require('../../utils/errorHandler');
 const { USER_ROLES } = require('../../config/constants');
+const app = getApp();
 
 Page({
     data: {
@@ -20,14 +22,19 @@ Page({
         reviewTotal: 0,
         reviewTags: [],
         // 折扣
-        discount: 10
+        discount: 10,
+        // 当前显示的价格和库存
+        currentPrice: '',
+        currentStock: 0
     },
 
     onLoad(options) {
         // Get status bar height for nav
-        const sysInfo = wx.getSystemInfoSync();
+        const roleLevel = app.globalData.userInfo?.role_level || 0;
+
         this.setData({
-            statusBarHeight: sysInfo.statusBarHeight || 20
+            statusBarHeight: app.globalData.statusBarHeight,
+            roleLevel
         });
 
         // 新版邀请：通过 inviter_id 温和提示（不强制跳走，用户是来看商品的）
@@ -76,6 +83,30 @@ Page({
             product.images = parseImages(product.images);
             product.detail_images = parseImages(product.detail_images);
 
+            // 将 skus 转换为 specs 格式用于页面展示
+            let specs = [];
+            if (product.skus && product.skus.length > 0) {
+                // 提取所有规格名称和值
+                const specMap = {};
+                product.skus.forEach(sku => {
+                    if (sku.spec_name && sku.spec_value) {
+                        if (!specMap[sku.spec_name]) {
+                            specMap[sku.spec_name] = new Set();
+                        }
+                        specMap[sku.spec_name].add(sku.spec_value);
+                    }
+                });
+                
+                // 转换为数组格式
+                specs = Object.keys(specMap).map(name => ({
+                    name: name,
+                    values: Array.from(specMap[name])
+                }));
+            }
+            
+            // 将 specs 添加到 product 对象
+            product.specs = specs;
+
             // 获取用户身份计算动态价格
             const user = wx.getStorageSync('userInfo') || {};
             const roleLevel = user.role_level || USER_ROLES.GUEST;
@@ -96,6 +127,10 @@ Page({
                 selectedSpecs[firstSku.spec_name] = firstSku.spec_value;
             }
 
+            // 设置当前价格和库存
+            const currentPrice = firstSku ? firstSku.retail_price : parseFloat(displayPrice).toFixed(2);
+            const currentStock = firstSku ? firstSku.stock : (product.stock || 999);
+
             this.setData({
                 product: {
                     ...product,
@@ -108,7 +143,9 @@ Page({
                 imageCount: product.images.length || 1,
                 roleLevel,
                 isAgent: roleLevel >= USER_ROLES.LEADER,
-                discount
+                discount,
+                currentPrice,
+                currentStock
             });
 
             // 加载评价
@@ -119,7 +156,7 @@ Page({
                 this.loadCommissionPreview();
             }
         } catch (err) {
-            wx.showToast({ title: '加载失败', icon: 'none' });
+            ErrorHandler.handle(err, { customMessage: '商品加载失败' });
             console.error('加载商品详情失败:', err);
         } finally {
             wx.hideLoading();
@@ -269,11 +306,16 @@ Page({
             });
         }
 
-        // 更新选中状态和显示文本
+        // 更新选中状态和显示文本，同时更新价格和库存
+        const currentPrice = selectedSku ? selectedSku.retail_price : product.displayPrice;
+        const currentStock = selectedSku ? selectedSku.stock : (product.stock || 999);
+
         this.setData({
             selectedSpecs,
             selectedSku,
-            selectedSkuText: selectedSku ? `${selectedSku.spec_name}: ${selectedSku.spec_value}` : '请选择规格'
+            selectedSkuText: selectedSku ? `${selectedSku.spec_name}: ${selectedSku.spec_value}` : '请选择规格',
+            currentPrice,
+            currentStock
         });
     },
 

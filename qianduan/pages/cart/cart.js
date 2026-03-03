@@ -1,7 +1,8 @@
 // pages/cart/cart.js
 const { get, post, put, del } = require('../../utils/request');
-const { parseImages, getFirstImage, formatMoney } = require('../../utils/dataFormatter');
+const { parseImages, getFirstImage, formatMoney, processProducts } = require('../../utils/dataFormatter');
 const { ErrorHandler, showError, showSuccess } = require('../../utils/errorHandler');
+const app = getApp();
 
 Page({
     data: {
@@ -13,10 +14,15 @@ Page({
         showEmpty: false,
         priceAnim: false,
         countAnim: false,
-        recommendedProducts: [] // 新增：推荐商品
+        recommendedProducts: [], // 新增：推荐商品
+        roleLevel: 0
     },
 
     onShow() {
+        // 获取当前用户角色等级
+        const roleLevel = app.globalData.userInfo?.role_level || 0;
+        this.setData({ roleLevel });
+
         // 每次显示页面时刷新购物车
         this.loadCart();
 
@@ -28,31 +34,26 @@ Page({
 
     async loadCart() {
         this.setData({ loading: true, showEmpty: false });
+        const { roleLevel } = this.data;
 
         try {
             const res = await get('/cart');
             // 后端返回 { items: [...], summary: {...} }
             const items = res.data?.items || res.data || [];
             const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
-                // 使用工具函数处理图片
-                const productImages = parseImages(item.product?.images);
-                const skuImage = item.sku?.image || null;
-                const firstImage = skuImage || getFirstImage(item.product?.images);
+                // 使用统一工具函数处理商品
+                const processed = processProducts([item.product], roleLevel)[0];
 
                 return {
                     ...item,
                     selected: item.selected !== false,
                     // 获取价格：优先用后端按用户等级计算的 effective_price，
-                    // 再 fallback 到 SKU 零售价，最后是商品零售价
-                    // ★ 与 confirm.js 保持一致，避免用户看到的价格和结算价不同
-                    price: parseFloat(item.effective_price || item.sku?.retail_price || item.product?.retail_price || 0),
-                    // 解析后的图片数组
-                    productImages,
-                    // 第一张图片（用于显示）
-                    firstImage,
-                    // 商品名称
-                    productName: item.product?.name || '商品',
-                    // 入场动画标记
+                    // 再 fallback 到工具函数计算出的等级价
+                    price: parseFloat(item.effective_price || processed.displayPrice || 0),
+                    // 使用处理后的商品信息
+                    productImages: processed.images,
+                    firstImage: item.sku?.image || processed.firstImage,
+                    productName: processed.name || '商品',
                     animateIn: true
                 };
             });

@@ -1,0 +1,104 @@
+<!--pages/activity/goddess-day.wxml - 问兰镜像女神节活动页 -->
+<view class="goddess-container">
+  
+  <!-- 1. 顶部海报区 (适配沉浸式背景) -->
+  <view class="hero-section">
+    <image class="hero-bg" src="https://resour.oss-cn-hangzhou.aliyuncs.com/goddess_poster_top.jpg" mode="aspectFill"></image>
+    <view class="confetti-container">
+      <!-- 纸屑动画占位 -->
+    </view>
+    <view class="hero-content">
+      <view class="brand-logo-wrap">
+        <text class="brand-name">LL问兰 | JINGXIANG</text>
+      </view>
+      <view class="hero-titles">
+        <text class="title-main">女神节</text>
+        <text class="title-sub">和明星那样美</text>
+        <view class="hero-tag">解锁 <text class="tag-highlight">38</text> 惊喜礼遇</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="main-body">
+    <!-- 2. 【三人成团】模块 -->
+    <view class="group-buy-card">
+      <view class="card-header">
+        <text class="num-badge">1</text>
+        <text class="header-text">【三人成团】299元/套（原价399）</text>
+      </view>
+      
+      <view class="coupon-grid">
+        <view class="coupon-item {{activeCoupon === 0 ? 'active' : ''}}" bindtap="onSelectCoupon" data-index="0">
+          <view class="cp-type">黄金券</view>
+          <view class="cp-val"><text class="unit">¥</text>50</view>
+          <view class="cp-btn">抵扣券三选一</view>
+        </view>
+        <view class="coupon-item {{activeCoupon === 1 ? 'active' : ''}}" bindtap="onSelectCoupon" data-index="1">
+          <view class="cp-type">铂金券</view>
+          <view class="cp-val"><text class="unit">¥</text>100</view>
+          <view class="cp-btn">抵扣券三选一</view>
+        </view>
+        <view class="coupon-item {{activeCoupon === 2 ? 'active' : ''}}" bindtap="onSelectCoupon" data-index="2">
+          <view class="cp-type">钻石券</view>
+          <view class="cp-val"><text class="unit">¥</text>150</view>
+          <view class="cp-btn">抵扣券三选一</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 3. 实战特权模块 -->
+    <view class="privilege-card">
+      <view class="card-header">
+        <text class="num-badge">2</text>
+        <text class="header-text">实战特权</text>
+      </view>
+      <view class="privilege-content">
+        <view class="privilege-text">
+          <text class="heart-icon">❤</text>
+          买<text class="bold">399</text> 送 <text class="highlight">分销权</text>
+          <text class="small-desc">(含销售培训加赋能)</text>
+        </view>
+        <view class="action-btn-wrap">
+          <view class="btn-primary" bindtap="onJoinDistribution">立即行动 ></view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 4. 素材与抵扣券 -->
+    <view class="material-card">
+      <view class="card-header">
+        <text class="num-badge">3</text>
+        <text class="header-text">成长素材包 美礼赠不停</text>
+      </view>
+      <view class="sub-coupons">
+        <view class="sub-cp-item">
+          <text class="cp-title">见面会 <text class="val">50</text> 元抵扣券</text>
+          <text class="cp-desc">(线上线下通用)</text>
+        </view>
+        <view class="sub-cp-item">
+          <text class="cp-title">问兰&知识星球 <text class="val">40</text> 元抵扣券</text>
+          <text class="cp-desc">(手续费抵扣券)</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 5. 底部成团说明 -->
+    <view class="group-bottom-info">
+      <view class="bottom-title">三人成团 立省100</view>
+      <view class="qr-box-wrap">
+        <view class="qr-left">
+          <image class="qr-img" src="/assets/images/placeholder.svg" mode="aspectFit"></image>
+        </view>
+        <view class="qr-right">
+          <text class="time-text">活动时间：3.3-3.8</text>
+          <text class="group-text">扫码进群，一起拼单</text>
+          <view class="btn-buy-now" bindtap="onQuickOrder">即刻下单</view>
+        </view>
+      </view>
+      <text class="disclaimer">*最终解释权归问兰和镜像案例库所有</text>
+    </view>
+
+  </view>
+
+  <view class="safe-area-bottom"></view>
+</view>

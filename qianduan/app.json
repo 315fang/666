@@ -5,47 +5,163 @@
         "pages/activity/activity",
         "pages/cart/cart",
         "pages/user/user",
-        "pages/lottery/lottery",
-        "pages/coupon/list",
-        "pages/slash/list",
-        "pages/group/list",
-        "pages/pickup/pickup",
-        "pages/station/map",
-        "pages/logistics/tracking",
         "pages/product/detail",
-        "pages/order/list",
-        "pages/order/detail",
-        "pages/order/confirm",
-        "pages/order/refund-apply",
-        "pages/order/refund-list",
-        "pages/order/refund-detail",
-        "pages/address/list",
-        "pages/address/edit",
-        "pages/distribution/center",
-        "pages/distribution/team",
-        "pages/distribution/invite",
-        "pages/distribution/workbench",
-        "pages/distribution/restock",
-        "pages/distribution/stock-logs",
-        "pages/distribution/commission-logs",
-        "pages/distribution/withdraw-history",
-        "pages/wallet/index",
-        "pages/user/notifications",
-        "pages/user/preferences",
-        "pages/order/logistics",
         "pages/search/search",
-        "pages/ai/chat",
-        "pages/questionnaire/fill",
-        "pages/rules/index",
-        "pages/ai/questionnaire",
-        "pages/feed/index",
         "pages/privacy/privacy",
-        "pages/points/index"
+        "pages/questionnaire/fill"
     ],
+    "subPackages": [
+        {
+            "root": "pages/order",
+            "name": "packageOrder",
+            "pages": [
+                "list",
+                "detail",
+                "confirm",
+                "refund-apply",
+                "refund-list",
+                "refund-detail",
+                "logistics"
+            ]
+        },
+        {
+            "root": "pages/address",
+            "name": "packageOrder",
+            "pages": [
+                "list",
+                "edit"
+            ]
+        },
+        {
+            "root": "pages/logistics",
+            "name": "packageOrder",
+            "pages": [
+                "tracking"
+            ]
+        },
+        {
+            "root": "pages/distribution",
+            "name": "packageDistribution",
+            "pages": [
+                "center",
+                "team",
+                "invite",
+                "workbench",
+                "restock",
+                "stock-logs",
+                "commission-logs",
+                "withdraw-history"
+            ]
+        },
+        {
+            "root": "pages/wallet",
+            "name": "packageDistribution",
+            "pages": [
+                "index"
+            ]
+        },
+        {
+            "root": "pages/points",
+            "name": "packageDistribution",
+            "pages": [
+                "index"
+            ]
+        },
+        {
+            "root": "pages/lottery",
+            "name": "packageActivity",
+            "pages": [
+                "lottery"
+            ]
+        },
+        {
+            "root": "pages/coupon",
+            "name": "packageActivity",
+            "pages": [
+                "list"
+            ]
+        },
+        {
+            "root": "pages/slash",
+            "name": "packageActivity",
+            "pages": [
+                "list"
+            ]
+        },
+        {
+            "root": "pages/group",
+            "name": "packageActivity",
+            "pages": [
+                "list"
+            ]
+        },
+        {
+            "root": "pages/pickup",
+            "name": "packageOther",
+            "pages": [
+                "pickup"
+            ]
+        },
+        {
+            "root": "pages/station",
+            "name": "packageOther",
+            "pages": [
+                "map"
+            ]
+        },
+        {
+            "root": "pages/ai",
+            "name": "packageOther",
+            "pages": [
+                "chat",
+                "questionnaire"
+            ]
+        },
+        {
+            "root": "pages/rules",
+            "name": "packageOther",
+            "pages": [
+                "index"
+            ]
+        },
+        {
+            "root": "pages/feed",
+            "name": "packageOther",
+            "pages": [
+                "index"
+            ]
+        },
+        {
+            "root": "pages/user",
+            "name": "packageOther",
+            "pages": [
+                "notifications",
+                "preferences"
+            ]
+        }
+    ],
+    "preloadRule": {
+        "pages/index/index": {
+            "network": "all",
+            "packages": ["packageOrder", "packageActivity"]
+        },
+        "pages/cart/cart": {
+            "network": "all",
+            "packages": ["packageOrder"]
+        },
+        "pages/activity/activity": {
+            "network": "all",
+            "packages": ["packageActivity"]
+        },
+        "pages/user/user": {
+            "network": "all",
+            "packages": ["packageDistribution"]
+        }
+    },
     "tabBar": {
-        "color": "#A8A29E",
-        "selectedColor": "#CA8A04",
-        "backgroundColor": "#FAFAF9",
+        "color": "#333333",
+        "selectedColor": "#1A1A1A",
+        "backgroundColor": "#FFFFFF",
         "borderStyle": "white",
         "list": [
             {
@@ -83,7 +199,9 @@
         "loading-skeleton": "/components/loading-skeleton/loading-skeleton",
         "share-card": "/components/share-card/share-card",
         "ui-card": "/components/ui/card/card",
-        "ui-button": "/components/ui/button/button"
+        "ui-button": "/components/ui/button/button",
+        "hot-activities": "/components/hot-activities/hot-activities",
+        "new-arrivals": "/components/new-arrivals/new-arrivals"
     },
     "window": {
         "navigationBarBackgroundColor": "#1C1917",

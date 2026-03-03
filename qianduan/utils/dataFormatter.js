@@ -6,6 +6,25 @@
 const { USER_ROLES } = require('../config/constants.js');
 
 /**
+ * OSS 图片处理：自动附加 WebP 压缩 + 缩放参数
+ * 只对阿里云 OSS 域名（.aliyuncs.com / .myqcloud.com）生效，其他 URL 原样返回
+ * @param {string} url - 原始图片 URL
+ * @param {number} width - 目标宽度（px），默认 750
+ * @param {number} quality - 压缩质量 1-100，默认 75
+ * @returns {string} 处理后的 URL
+ */
+function toOssUrl(url, width = 750, quality = 75) {
+  if (!url || typeof url !== 'string') return url;
+  // 跳过本地路径、data URL、非 OSS 域名
+  if (url.startsWith('/') || url.startsWith('data:')) return url;
+  const ossReg = /\.aliyuncs\.com|.myqcloud\.com/;
+  if (!ossReg.test(url)) return url;
+  // 移除已有的处理参数，避免重复叠加
+  const baseUrl = url.split('?')[0];
+  return `${baseUrl}?x-oss-process=image/format,webp/quality,q_${quality}/resize,m_lfit,w_${width}`;
+}
+
+/**
  * 解析图片字段（统一处理字符串 JSON 和数组）
  * @param {string|Array} images - 图片数据
  * @returns {Array} 图片数组
@@ -172,10 +191,11 @@ function formatRelativeTime(timestamp) {
 function processProduct(product, roleLevel = USER_ROLES.GUEST) {
   if (!product) return null;
 
+  const rawFirstImage = getFirstImage(product.images || product.image);
   return {
     ...product,
     images: parseImages(product.images),
-    firstImage: getFirstImage(product.images),
+    firstImage: toOssUrl(rawFirstImage, 400), // 列表卡片宽度按 400 处理
     displayPrice: formatMoney(calculatePrice(product, null, roleLevel)),
     formattedRetailPrice: formatMoney(product.retail_price || 0)
   };
@@ -194,6 +214,7 @@ function processProducts(products, roleLevel = USER_ROLES.GUEST) {
 
 // CommonJS 导出（WeChat Mini Program 兼容）
 module.exports = {
+  toOssUrl,
   parseImages,
   getFirstImage,
   calculatePrice,

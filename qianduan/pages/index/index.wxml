@@ -1,164 +1,162 @@
-<!--pages/index/index.wxml - 首页重构：固定海报 + 真实组件卡片-->
+<!--pages/index/index.wxml - 问兰镜像首页 -->
 <view class="container">
 
-  <!-- 气泡通告浮层 -->
-  <view class="bubble-float {{bubbleVisible ? 'bubble-show' : 'bubble-hide'}}">
-    <view class="bubble-inner">
-      <view class="bubble-dot"></view>
-      <text class="bubble-text">{{currentBubble}}</text>
-    </view>
-  </view>
-
-  <!-- 1. 固定海报区 -->
-  <view class="poster-section">
-    <image
-      class="poster-img"
-      src="{{homeConfigs.home_poster_url || '/assets/images/default-poster.svg'}}"
-      mode="aspectFill"
-      wx:if="{{homeConfigs.home_poster_url}}"
-    ></image>
-    <view class="poster-fallback" wx:else>
-      <view class="poster-deco-circle p1"></view>
-      <view class="poster-deco-circle p2"></view>
-      <view class="poster-content">
-        <text class="poster-brand">臻 选</text>
-        <text class="poster-slogan">遇见品质，遇见美好</text>
+  <!-- ① 自定义导航栏：适配毛玻璃效果 -->
+  <view class="custom-nav {{navScrolled ? 'nav-scrolled' : 'nav-transparent'}}"
+        style="padding-top: {{statusBarHeight}}px">
+    <view class="nav-inner">
+      <!-- 初始态：Logo + 欢迎语 -->
+      <view class="nav-welcome-box {{navScrolled ? 'nav-hidden' : 'nav-visible'}}">
+        <image class="nav-logo" src="/assets/icons/home.svg" mode="aspectFit"></image>
+        <text class="welcome-text">欢迎光临问兰镜像商城</text>
       </view>
-    </view>
-  </view>
-
-  <!-- 2. 会员等级卡 -->
-  <view class="member-card" bindtap="onMemberCardTap">
-    <view class="member-left">
-      <view class="member-level-badge">
-        <image class="level-icon" src="/assets/icons/crown.svg" mode="aspectFit"></image>
-        <text class="level-name">{{userInfo.role_name || '普通会员'}}</text>
-      </view>
-      <text class="member-name">{{truncatedName || '点击登录'}}</text>
-    </view>
-    <view class="member-right">
-      <view class="growth-info">
-        <view class="growth-row">
-          <text class="growth-label">成长值</text>
-          <text class="growth-value">{{growthValue || 0}}</text>
-          <text class="growth-target"> / {{nextLevelThreshold || '--'}}</text>
-        </view>
-        <view class="growth-bar-bg">
-          <view class="growth-bar-fill" style="width: {{growthPercent || 0}}%"></view>
+      
+      <!-- 滚动态：Logo + 搜索栏 -->
+      <view class="nav-search-box {{navScrolled ? 'nav-visible' : 'nav-hidden'}}">
+        <image class="nav-logo" src="/assets/icons/home.svg" mode="aspectFit"></image>
+        <view class="nav-divider"></view>
+        <view class="nav-search-bar" bindtap="onSearchTap">
+          <image class="search-icon" src="/assets/icons/search.svg" mode="aspectFit"></image>
+          <text class="search-placeholder">素颜三部曲</text>
         </view>
       </view>
-      <image class="member-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
     </view>
   </view>
 
-  <!-- 3. 积分卡 -->
-  <view class="points-row">
-    <view class="points-card" bindtap="onPointsTap">
-      <view class="points-left">
-        <image class="points-icon" src="/assets/icons/gift.svg" mode="aspectFit"></image>
-        <view class="points-text">
-          <text class="points-num">{{pointBalance || 0}}</text>
-          <text class="points-label">我的积分</text>
-        </view>
+  <!-- ② 主海报区：全屏 Swiper -->
+  <swiper class="poster-swiper"
+          autoplay="{{posterList.length > 1}}"
+          circular="{{posterList.length > 1}}"
+          interval="5000"
+          duration="800"
+          indicator-dots="{{posterList.length > 1}}"
+          indicator-color="rgba(255,255,255,0.3)"
+          indicator-active-color="#D4A84B">
+    <swiper-item wx:for="{{posterList}}" wx:key="index">
+      <view class="poster-item">
+        <image class="poster-img" src="{{item}}" mode="aspectFill" lazy-load></image>
       </view>
-      <view class="points-actions">
-        <view class="pts-btn sign-btn" bindtap="onSignInTap" catchtap="catchtap">
-          {{todaySigned ? '已签到' : '签  到'}}
-        </view>
-        <view class="pts-btn exchange-btn" bindtap="onExchangeTap" catchtap="catchtap">兑  换</view>
-      </view>
-    </view>
-  </view>
+    </swiper-item>
+  </swiper>
 
-  <!-- 4. 活动预告卡 -->
-  <view class="activity-preview-card" bindtap="onActivityTap">
-    <view class="ap-left">
-      <view class="ap-icon-wrap">
-        <image class="ap-icon" src="/assets/icons/hot.svg" mode="aspectFit"></image>
-      </view>
-      <view class="ap-text">
-        <text class="ap-title">{{latestActivity.name || '活动即将开启'}}</text>
-        <text class="ap-desc">{{latestActivity.desc || '拼团·砍价·抽奖 敬请期待'}}</text>
-      </view>
+  <!-- ③ 会员臻享模块 (重构为多 Banner 轮播 + 海报) -->
+  <view class="section-container">
+    <view class="section-title-box">
+      <text class="en-title-serif">MEMBER COURTESY</text>
+      <text class="cn-title-bold">会员臻享 奢宠好礼</text>
     </view>
-    <view class="ap-right">
-      <text class="ap-cta">查看</text>
-      <image class="ap-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
-    </view>
-  </view>
 
-  <!-- 5. 特色活动卡片 -->
-  <view class="feature-section" wx:if="{{featureCards.length > 0}}">
-    <view class="feature-header">
-      <view class="feature-title-wrap">
-        <view class="feature-title-bar"></view>
-        <text class="feature-title">我们的特色</text>
-      </view>
-      <text class="feature-subtitle">Our Features</text>
-    </view>
-    <scroll-view class="feature-scroll" scroll-x="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
-      <view class="feature-list">
-        <view
-          class="feature-card"
-          wx:for="{{featureCards}}"
-          wx:key="id"
-          bindtap="onFeatureCardTap"
-          data-item="{{item}}"
-          style="background: {{item.bg_gradient || 'linear-gradient(145deg,#1a1a2e,#16213e)'}}"
-        >
-          <view class="fc-deco-circle fc-circle-1"></view>
-          <view class="fc-deco-circle fc-circle-2"></view>
-          <view class="fc-icon-wrap">
-            <image class="fc-icon" src="{{item.icon_url}}" mode="aspectFit" wx:if="{{item.icon_url}}"></image>
-            <text class="fc-icon-text" wx:else>{{item.icon_emoji || '⭐'}}</text>
+    <!-- 1. 满减 Banner 轮播 -->
+    <view class="member-banner-wrap">
+      <swiper class="member-swiper" autoplay="true" circular="true" interval="4000" indicator-dots="true" indicator-color="rgba(0,0,0,0.1)" indicator-active-color="#1A1A1A">
+        <swiper-item wx:for="{{memberBanners}}" wx:key="id">
+          <view class="member-banner-card" bindtap="onPosterTap" data-type="gift">
+            <image class="banner-bg" src="{{item.image}}" mode="aspectFill"></image>
+            <view class="banner-overlay">
+              <view class="banner-text-right">
+                <text class="b-label">{{item.label}}</text>
+                <view class="b-price-row">
+                  <text class="b-unit">满</text>
+                  <text class="b-value">{{item.price}}</text>
+                  <text class="b-unit">元 赠</text>
+                </view>
+                <view class="b-capsule-btn">立即选购 <text class="btn-arrow">▶</text></view>
+              </view>
+            </view>
           </view>
-          <view class="fc-content">
-            <text class="fc-name">{{item.name}}</text>
-            <text class="fc-desc">{{item.description}}</text>
-          </view>
-          <view class="fc-tag" wx:if="{{item.tag}}">
-            <text class="fc-tag-text">{{item.tag}}</text>
+        </swiper-item>
+      </swiper>
+    </view>
+
+    <!-- 2. 美肤方案海报 (单张或轮播) -->
+    <view class="scheme-poster-wrap" wx:for="{{schemePosters}}" wx:key="id">
+      <view class="scheme-full-card">
+        <view class="scheme-left-content">
+          <text class="s-en-small">{{item.en}}</text>
+          <text class="s-cn-large">{{item.cn}}</text>
+          <view class="s-capsule-btn-black">{{item.btn}} <text class="btn-arrow">▶</text></view>
+        </view>
+        <view class="scheme-right-img">
+          <view class="img-inner-box">
+            <image src="{{item.image}}" mode="aspectFit"></image>
           </view>
         </view>
       </view>
-    </scroll-view>
-  </view>
-
-  <!-- 6. 使用指南卡 -->
-  <view class="banner-card-section" bindtap="onGuideTap">
-    <view class="banner-card-header">
-      <text class="banner-card-title">小程序使用指南</text>
-      <view class="banner-card-more">
-        <text>点击查看</text>
-        <image class="icon-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
-      </view>
-    </view>
-    <view class="banner-card-body red-theme" style="{{homeConfigs.guide_bg ? 'background-image: url(' + homeConfigs.guide_bg + '); background-size: cover; background-position: center;' : ''}}">
-      <view class="banner-card-content">
-        <text class="card-big-text">GET指南</text>
-        <text class="card-sub-text">最新功能操作攻略</text>
-      </view>
     </view>
   </view>
 
-  <!-- 7. 共创信息卡 -->
-  <view class="banner-card-section" bindtap="onCoCreationTap">
-    <view class="banner-card-header">
-      <text class="banner-card-title">共创信息</text>
-      <view class="banner-card-more">
-        <text>获取更多不定期的共创机会</text>
-        <image class="icon-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
+  <!-- ④ 星品挚选 (多组大型海报) -->
+  <view class="star-sections-container">
+    <view class="star-section-item" wx:for="{{starSections}}" wx:key="id" wx:for-index="sIdx">
+      <view class="section-title-box">
+        <text class="en-title-serif">{{item.titleEn}}</text>
+        <text class="cn-title-bold">{{item.titleCn}}</text>
       </view>
-    </view>
-    <view class="banner-card-body dark-theme" style="{{homeConfigs.cocreation_bg ? 'background-image: url(' + homeConfigs.cocreation_bg + '); background-size: cover; background-position: center;' : ''}}">
-      <view class="banner-card-content">
-        <text class="card-big-text">天马乘风 共创未来</text>
-        <text class="card-sub-text">携手同行，共建美好未来</text>
+
+      <view class="star-full-poster">
+        <!-- 规格切换 -->
+        <view class="poster-tabs">
+          <view 
+            wx:for="{{item.specs}}" 
+            wx:key="name" 
+            wx:for-index="spIdx"
+            class="p-tab {{item.activeSpecIndex === spIdx ? 'active' : ''}}"
+            bindtap="onSpecTabTap"
+            data-section-index="{{sIdx}}"
+            data-spec-index="{{spIdx}}"
+          >{{item.name}}</view>
+        </view>
+
+        <!-- 海报内容区 -->
+        <view class="poster-main-body">
+          <view class="poster-left-info">
+            <text class="p-slogan">{{item.specs[item.activeSpecIndex].slogan}}</text>
+            <text class="p-desc">{{item.specs[item.activeSpecIndex].desc}}</text>
+            
+            <!-- 勋章装饰 -->
+            <view class="p-awards-box" wx:if="{{item.specs[item.activeSpecIndex].awards}}">
+              <view class="award-circle">
+                <text class="award-text">{{item.specs[item.activeSpecIndex].awards}}</text>
+              </view>
+            </view>
+
+            <view class="p-sales-badge" wx:if="{{item.specs[item.activeSpecIndex].sales}}">
+              <text class="sales-label">全网热销</text>
+              <text class="sales-val">{{item.specs[item.activeSpecIndex].sales}}瓶</text>
+            </view>
+          </view>
+
+          <!-- 产品大图 -->
+          <image class="p-product-img" src="{{item.specs[item.activeSpecIndex].image}}" mode="aspectFit"></image>
+        </view>
+
+        <!-- 底部购买条 -->
+        <view class="poster-footer-bar" bindtap="onStarProductBuy" data-section-index="{{sIdx}}">
+          <view class="p-price-tag">
+            <text class="p-currency">¥</text>
+            <text class="p-amount">{{item.specs[item.activeSpecIndex].price}}</text>
+          </view>
+          <view class="p-buy-btn-black">立即购买 <text class="btn-arrow">▶</text></view>
+        </view>
       </view>
     </view>
   </view>
 
-  <!-- 品牌动画 -->
+  <!-- ⑤ 底部惊喜彩蛋 -->
+  <view class="bottom-surprise-section">
+    <view class="surprise-inner" bindlongpress="onSurpriseTap">
+      <view class="surprise-icon">✨</view>
+      <text class="surprise-text">长按开启隐藏美学</text>
+      <view class="surprise-hidden-content {{showSurprise ? 'show' : ''}}">
+        <view class="mirror-seal">
+          <text class="seal-text">问兰镜像\n臻选美学</text>
+        </view>
+        <text class="surprise-msg">遇见，是为了更好的绽放</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 品牌动画（保留） -->
   <brand-animation id="brandAnimation"></brand-animation>
 
 </view>

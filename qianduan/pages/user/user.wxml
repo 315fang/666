@@ -56,25 +56,6 @@
     </view>
   </view>
 
-  <!-- 3. 会员权益卡片 - 使用原图不调色 -->
-  <view class="vip-card" bindtap="goDistributionCenter">
-    <image class="vip-bg" src="https://resour.oss-cn-hangzhou.aliyuncs.com/ditu.jpg" mode="aspectFill"></image>
-    <view class="vip-content">
-      <view class="vip-left">
-        <view class="vip-icon-wrap">
-          <text class="vip-icon">♔</text>
-        </view>
-        <view class="vip-text">
-          <text class="vip-subtitle">会员尊享权益</text>
-          <text class="vip-title">查看你的会员权益</text>
-        </view>
-      </view>
-      <view class="vip-btn">
-        <text>查看权益 ></text>
-      </view>
-    </view>
-  </view>
-
   <!-- 4. 我的订单快捷入口 -->
   <view class="section-card">
     <view class="section-header" bindtap="onOrderTap" data-type="all">
@@ -122,9 +103,9 @@
     </view>
   </view>
 
-  <!-- 5. 我的功能 -->
+  <!-- 5. 我的功能 (精简为两行 4+4 布局) -->
   <view class="section-card">
-    <view class="section-title">我的功能</view>
+    <view class="section-title">我的服务</view>
     <view class="tools-grid">
       <view class="tool-item" bindtap="goAddress">
         <view class="tool-icon-wrap red">
@@ -132,17 +113,17 @@
         </view>
         <text class="tool-text">地址管理</text>
       </view>
-      <view class="tool-item" bindtap="onOrderTap" data-type="all">
+      <view class="tool-item" bindtap="goCoupons">
         <view class="tool-icon-wrap orange">
-          <image class="icon" src="/assets/icons/credit-card.svg" mode="aspectFit"/>
+          <image class="icon" src="/assets/icons/tag.svg" mode="aspectFit"/>
         </view>
-        <text class="tool-text">我的订单</text>
+        <text class="tool-text">优惠券</text>
       </view>
-      <view class="tool-item" bindtap="goAIChat">
+      <view class="tool-item" bindtap="goPoints">
         <view class="tool-icon-wrap gold">
-          <image class="icon" src="/assets/icons/sparkles.svg" mode="aspectFit"/>
+          <image class="icon" src="/assets/icons/gift.svg" mode="aspectFit"/>
         </view>
-        <text class="tool-text">智能助手</text>
+        <text class="tool-text">积分中心</text>
       </view>
       <view class="tool-item" bindtap="onNotificationsTap">
         <view class="tool-icon-wrap purple">
@@ -168,41 +149,6 @@
           <image class="icon" src="/assets/icons/star.svg" mode="aspectFit"/>
         </view>
         <text class="tool-text">分佣中心</text>
-      </view>
-      <!-- ★ 积分中心入口 -->
-      <view class="tool-item" bindtap="goPoints">
-        <view class="tool-icon-wrap" style="background:rgba(245,158,11,0.15);">
-          <image class="icon" src="/assets/icons/gift.svg" mode="aspectFit"/>
-        </view>
-        <text class="tool-text">积分中心</text>
-      </view>
-      <!-- ★ 全部商品（从首页迁移） -->
-      <view class="tool-item" bindtap="goAllProducts">
-        <view class="tool-icon-wrap" style="background:rgba(59,130,246,0.12);">
-          <image class="icon" src="/assets/icons/shopping-bag.svg" mode="aspectFit"/>
-        </view>
-        <text class="tool-text">全部商品</text>
-      </view>
-      <!-- ★ 购物车（从首页迁移） -->
-      <view class="tool-item" bindtap="goCart">
-        <view class="tool-icon-wrap" style="background:rgba(16,185,129,0.12);">
-          <image class="icon" src="/assets/icons/shopping-cart.svg" mode="aspectFit"/>
-        </view>
-        <text class="tool-text">购物车</text>
-      </view>
-      <!-- ★ 我的优惠券 -->
-      <view class="tool-item" bindtap="goCoupons">
-        <view class="tool-icon-wrap" style="background:rgba(239,68,68,0.12);">
-          <image class="icon" src="/assets/icons/tag.svg" mode="aspectFit"/>
-        </view>
-        <text class="tool-text">优惠券</text>
-      </view>
-      <!-- ★ 积分抽奖 -->
-      <view class="tool-item" bindtap="goLottery">
-        <view class="tool-icon-wrap" style="background:rgba(168,85,247,0.12);">
-          <image class="icon" src="/assets/icons/star.svg" mode="aspectFit"/>
-        </view>
-        <text class="tool-text">积分抽奖</text>
       </view>
       <view class="tool-item" bindtap="onSettingsTap">
         <view class="tool-icon-wrap gray">

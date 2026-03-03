@@ -1,6 +1,7 @@
 // app.js - 小程序入口文件
 const { login } = require('./utils/auth');
 const { getApiBaseUrl } = require('./config/env');
+const { get } = require('./utils/request');
 
 App({
     globalData: {
@@ -8,15 +9,26 @@ App({
         openid: null,
         token: null,
         isLoggedIn: false,
-        baseUrl: getApiBaseUrl() // 从环境配置读取
+        baseUrl: getApiBaseUrl(), // 从环境配置读取
+        statusBarHeight: 20
     },
 
     onLaunch(options) {
+        // 获取系统信息
+        const sysInfo = wx.getSystemInfoSync();
+        this.globalData.statusBarHeight = sysInfo.statusBarHeight || 20;
+
         // 检查分享绑定
         this.checkShareBind(options);
 
         // 小程序启动时自动登录
         this.autoLogin();
+
+        // ★ 并行预拉取首页数据（登录前就开始，首页 onLoad 直接读缓存）
+        this.prefetchHomeData();
+
+        // ★ 静默/强制版本更新检测
+        this.checkUpdate();
     },
 
     // 检查是否通过分享进入（新版：邀请问卷）
@@ -138,6 +150,65 @@ App({
         wx.removeStorageSync('userInfo');
         wx.removeStorageSync('openid');
         wx.removeStorageSync('token');
+    },
+
+    /**
+     * ★ 首页数据预拉取 + 持久化双层缓存
+     * 冷启动时立即发起请求，结果存 globalData + Storage
+     * 首页 onLoad 优先读 globalData.homePageData，没有再读 Storage，都没有才发新请求
+     * 缓存有效期：30 分钟（homePageConfig 变化慢）
+     */
+    prefetchHomeData() {
+        const CACHE_KEY = 'home_config_cache';
+        const CACHE_TTL = 30 * 60 * 1000; // 30 分钟
+        const now = Date.now();
+
+        // 先读持久化缓存（冷启动命中）
+        try {
+            const stored = wx.getStorageSync(CACHE_KEY);
+            if (stored && stored.expireAt > now) {
+                this.globalData.homePageData = stored.data;
+                console.log('[Prefetch] 首页配置命中持久化缓存');
+                return;
+            }
+        } catch (e) { /* 读缓存失败不阻断 */ }
+
+        // 缓存未命中，发起预拉取
+        get('/homepage-config').then(res => {
+            if (res && res.data) {
+                this.globalData.homePageData = res.data;
+                wx.setStorageSync(CACHE_KEY, {
+                    data: res.data,
+                    expireAt: now + CACHE_TTL
+                });
+                console.log('[Prefetch] 首页配置预拉取完成并缓存');
+            }
+        }).catch(err => {
+            console.warn('[Prefetch] 首页配置预拉取失败（不影响首页兜底渲染）', err);
+        });
+    },
+
+    /**
+     * ★ 版本更新检测
+     * 有新版本时：小版本静默等用户下次启动；逻辑层（需后端控制）可强制重启
+     */
+    checkUpdate() {
+        if (!wx.canIUse('getUpdateManager')) return;
+        const updateManager = wx.getUpdateManager();
+        updateManager.onUpdateReady(() => {
+            wx.showModal({
+                title: '更新提示',
+                content: '新版本已准备好，重启即可体验最新功能～',
+                showCancel: false,
+                confirmText: '立即重启',
+                success() {
+                    updateManager.applyUpdate();
+                }
+            });
+        });
+        updateManager.onUpdateFailed(() => {
+            console.warn('[UpdateManager] 新版本下载失败');
+        });
     },
 
     // 工具方法：将回调风格 API 转为 Promise

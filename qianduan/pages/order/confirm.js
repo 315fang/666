@@ -1,5 +1,9 @@
 // pages/order/confirm.js - 订单确认页
 const { get, post } = require('../../utils/request');
+const { processProduct } = require('../../utils/dataFormatter');
+const { ErrorHandler } = require('../../utils/errorHandler');
+const { getDefaultAddress, navigateToAddressList, navigateToAddressEdit } = require('../../utils/address');
+const app = getApp();
 
 Page({
     data: {
@@ -15,7 +19,8 @@ Page({
         remark: '',
         // 合计
         totalAmount: '0.00',
-        totalCount: 0
+        totalCount: 0,
+        roleLevel: 0
     },
 
     onReady() {
@@ -23,7 +28,11 @@ Page({
     },
 
     onLoad(options) {
-        this.setData({ from: options.from || 'cart' });
+        const roleLevel = app.globalData.userInfo?.role_level || 0;
+        this.setData({ 
+            from: options.from || 'cart',
+            roleLevel
+        });
 
         if (options.from === 'direct') {
             // 直接购买 - 从缓存读取购买信息
@@ -62,13 +71,11 @@ Page({
     // 加载默认收货地址
     async loadDefaultAddress() {
         try {
-            const res = await get('/addresses');
-            const addresses = res.list || res.data || [];
-            // 优先用默认地址，没有则用第一个
-            const defaultAddr = addresses.find(a => a.is_default) || addresses[0] || null;
-            this.setData({ address: defaultAddr });
+            const address = await getDefaultAddress();
+            this.setData({ address });
         } catch (err) {
-            console.error('加载地址失败:', err);
+            ErrorHandler.handle(err, { showToast: false });
+            console.error('加载默认地址失败:', err);
         }
     },
 
@@ -78,20 +85,24 @@ Page({
             const res = await get('/cart');
             const allItems = res.data?.items || res.data || [];
             const ids = cartIds.split(',').map(Number);
+            const { roleLevel } = this.data;
 
             const selectedItems = allItems
                 .filter(item => ids.includes(item.id))
-                .map(item => ({
-                    cart_id: item.id,
-                    product_id: item.product_id,
-                    sku_id: item.sku_id,
-                    quantity: item.quantity,
-                    // ★ 使用后端返回的等级价格（effective_price），而非固定 retail_price
-                    price: parseFloat(item.effective_price || item.sku?.retail_price || item.product?.retail_price || 0),
-                    name: item.product?.name || '商品',
-                    image: (item.product?.images && item.product.images[0]) || '',
-                    spec: item.sku ? `${item.sku.spec_name}: ${item.sku.spec_value}` : ''
-                }));
+                .map(item => {
+                    const processed = processProduct(item.product, roleLevel);
+                    return {
+                        cart_id: item.id,
+                        product_id: item.product_id,
+                        sku_id: item.sku_id,
+                        quantity: item.quantity,
+                        // ★ 优先使用后端返回的等级价格，fallback 到工具函数计算出的等级价
+                        price: parseFloat(item.effective_price || processed.displayPrice || 0),
+                        name: processed.name || '商品',
+                        image: item.sku?.image || processed.firstImage,
+                        spec: item.sku ? `${item.sku.spec_name}: ${item.sku.spec_value}` : ''
+                    };
+                });
 
             let totalAmount = 0;
             let totalCount = 0;
@@ -114,12 +125,12 @@ Page({
 
     // 选择地址
     onSelectAddress() {
-        wx.navigateTo({ url: '/pages/address/list?select=true' });
+        navigateToAddressList();
     },
 
     // 新增地址
     onAddAddress() {
-        wx.navigateTo({ url: '/pages/address/edit' });
+        navigateToAddressEdit();
     },
 
     // 备注输入
@@ -187,7 +198,7 @@ Page({
             }, 1500);
         } catch (err) {
             this.setData({ submitting: false });
-            wx.showToast({ title: err.message || '下单失败', icon: 'none' });
+            ErrorHandler.handle(err, { customMessage: '下单失败，请稍后重试' });
             console.error('提交订单失败:', err);
         }
     },

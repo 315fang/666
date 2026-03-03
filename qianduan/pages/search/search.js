@@ -3,6 +3,8 @@ const { get } = require('../../utils/request');
 const { SEARCH_CONFIG } = require('../../config/constants');
 const { ErrorHandler, showError } = require('../../utils/errorHandler');
 const { processProducts } = require('../../utils/dataFormatter');
+const { debounce } = require('../../utils/helpers');
+const { cachedGet, CACHE_STRATEGIES } = require('../../utils/requestCache');
 
 Page({
     data: {
@@ -18,10 +20,16 @@ Page({
         // 使用常量配置加载搜索历史
         const history = wx.getStorageSync(SEARCH_CONFIG.STORAGE_KEY) || [];
         this.setData({ history });
+        // 初始化防抖搜索（300ms）
+        this._debouncedSearch = debounce((keyword) => {
+            if (keyword && keyword.trim()) this.doSearch(keyword.trim());
+        }, 300);
     },
 
     onInput(e) {
-        this.setData({ keyword: e.detail.value });
+        const val = e.detail.value;
+        this.setData({ keyword: val });
+        this._debouncedSearch(val);
     },
 
     onClear() {
@@ -51,7 +59,7 @@ Page({
 
     // 执行搜索
     async doSearch(keyword) {
-        // 使用常量配置保存搜索历史（去重，最多配置的条数）
+        // 搜索历史（去重，最多配置的条数）
         let history = this.data.history.filter(h => h !== keyword);
         history.unshift(keyword);
         if (history.length > SEARCH_CONFIG.MAX_HISTORY) {
@@ -60,16 +68,18 @@ Page({
         this.setData({ history });
         wx.setStorageSync(SEARCH_CONFIG.STORAGE_KEY, history);
 
-        // 发起搜索请求
+        // 发起搜索请求（内存缓存 2 分钟，重复搜关键词零请求）
         this.setData({ loading: true, hasSearched: true });
 
         try {
-            const res = await get('/products', { keyword, limit: 50 });
+            const res = await cachedGet(
+                (url, params) => get(url, params),
+                '/products',
+                { keyword, limit: 50 },
+                { cacheTTL: CACHE_STRATEGIES.search }
+            );
             const rawProducts = res.data?.list || res.data || [];
-
-            // 使用工具函数处理商品数据
             const products = processProducts(rawProducts);
-
             this.setData({ products, loading: false });
         } catch (err) {
             ErrorHandler.handle(err, {

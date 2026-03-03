@@ -1,31 +1,29 @@
-/** pages/user/user.wxss - 霸王茶姬风格个人中心 **/
+/** pages/user/user.wxss - 镜像商城个人中心 **/
 
-/* ========== 颜色变量 - 红色主题 ========== */
+/* ========== 颜色变量 - 问兰品牌主题 ========== */
 :root {
-  --chagee-red: #C8102E;
-  --chagee-red-dark: #A00C24;
-  --chagee-red-light: #E31B3C;
-  --chagee-gold: #D4A84B;
-  --chagee-gold-light: #F0C96A;
-  --chagee-cream: #F5F0EB;
-  --chagee-white: #FFFFFF;
-  --text-primary: #1A1A1A;
-  --text-secondary: #666666;
-  --text-muted: #999999;
+  --brand-red: #D44E4E;
+  --brand-gold: #D4A84B;
+  --brand-gold-light: #F0C96A;
+  --bg-gray: #F8F8F8;
+  --text-main: #333333;
+  --text-sub: #999999;
 }
 
 /* ========== 容器基础 ========== */
 .container {
   min-height: 100vh;
-  background-color: #F5F5F5;
+  background-color: #F8F8F8;
   position: relative;
+  padding-bottom: 40rpx;
 }
 
-/* ========== 1. 顶部红色背景区域 ========== */
+/* ========== 1. 顶部背景区域 ========== */
 .user-header {
   position: relative;
-  height: 280rpx;
+  height: 320rpx;
   overflow: hidden;
+  background: #1C1917;
 }
 
 .header-bg {
@@ -39,13 +37,13 @@
 
 /* ========== 2. 白色卡片区域 ========== */
 .white-card {
-  margin: -60rpx 30rpx 0;
+  margin: -80rpx 32rpx 0;
   background: #FFFFFF;
-  border-radius: 24rpx;
-  padding: 30rpx;
+  border-radius: 32rpx;
+  padding: 40rpx 32rpx;
   position: relative;
   z-index: 10;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8rpx 40rpx rgba(0, 0, 0, 0.04);
   transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
 }
 
@@ -149,31 +147,31 @@
   display: none;
 }
 
-/* 资产统计 */
 .asset-section {
   display: flex;
   justify-content: space-around;
+  padding-top: 10rpx;
 }
 
 .asset-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8rpx;
+  gap: 4rpx;
 }
 
 .asset-value {
-  font-size: 40rpx;
+  font-size: 36rpx;
   font-weight: 700;
-  color: #1A1A1A;
+  color: #333333;
 }
 
 .asset-value.highlight {
-  color: #D4A84B;
+  color: #D44E4E;
 }
 
 .asset-label {
-  font-size: 24rpx;
+  font-size: 22rpx;
   color: #999999;
 }
 
@@ -257,25 +255,27 @@
   color: #FFFFFF;
 }
 
-/* ========== 4. 功能区块 ========== */
+/* ========== 功能区块 ========== */
 .section-card {
-  margin: 0 30rpx 30rpx;
+  margin: 0 32rpx 24rpx;
   background: #FFFFFF;
-  border-radius: 24rpx;
-  padding: 30rpx;
+  border-radius: 32rpx;
+  padding: 32rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.02);
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30rpx;
+  margin-bottom: 32rpx;
+  padding: 0 8rpx;
 }
 
 .section-title {
-  font-size: 32rpx;
+  font-size: 30rpx;
   font-weight: 600;
-  color: #1A1A1A;
+  color: #333333;
 }
 
 .section-more {
@@ -300,54 +300,51 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20rpx 0;
+  padding: 24rpx 0;
   background: transparent;
   border: none;
   box-sizing: border-box;
 }
 
 .tool-item:active {
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 button.tool-item {
   width: 25%;
   background-color: transparent !important;
-  padding: 20rpx 0 !important;
+  padding: 24rpx 0 !important;
   margin: 0 !important;
   border: none !important;
   font-size: inherit;
   line-height: inherit;
 }
 
-button.tool-item::after {
-  display: none !important;
-  border: none !important;
-}
-
 .tool-icon-wrap {
-  width: 88rpx;
-  height: 88rpx;
-  border-radius: 50%;
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 28rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  margin-bottom: 12rpx;
+  margin-bottom: 16rpx;
+  transition: all 0.2s;
 }
 
-.tool-icon-wrap.red { background: linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%); }
-.tool-icon-wrap.orange { background: linear-gradient(135deg, #FFEDD5 0%, #FED7AA 100%); }
-.tool-icon-wrap.gold { background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%); }
-.tool-icon-wrap.purple { background: linear-gradient(135deg, #F3E8FF 0%, #E9D5FF 100%); }
-.tool-icon-wrap.blue { background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%); }
-.tool-icon-wrap.cyan { background: linear-gradient(135deg, #CFFAFE 0%, #A5F3FC 100%); }
-.tool-icon-wrap.pink { background: linear-gradient(135deg, #FCE7F3 0%, #FBCFE8 100%); }
-.tool-icon-wrap.gray { background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%); }
+.tool-icon-wrap.red { background: #FFF5F5; }
+.tool-icon-wrap.orange { background: #FFF7ED; }
+.tool-icon-wrap.gold { background: #FFFBEB; }
+.tool-icon-wrap.purple { background: #FAF5FF; }
+.tool-icon-wrap.blue { background: #EFF6FF; }
+.tool-icon-wrap.cyan { background: #ECFEFF; }
+.tool-icon-wrap.pink { background: #FDF2F8; }
+.tool-icon-wrap.gray { background: #F9FAFB; }
 
 .tool-icon-wrap .icon {
   width: 44rpx;
   height: 44rpx;
+  opacity: 0.8;
 }
 
 .tool-badge {
@@ -376,20 +373,19 @@ button.tool-item::after {
 .order-shortcuts {
   display: flex;
   justify-content: space-around;
+  padding: 10rpx 0;
 }
 
 .shortcut-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12rpx;
+  gap: 16rpx;
 }
 
 .shortcut-icon {
-  width: 80rpx;
-  height: 80rpx;
-  background: #F9FAFB;
-  border-radius: 50%;
+  width: 60rpx;
+  height: 60rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -397,8 +393,9 @@ button.tool-item::after {
 }
 
 .shortcut-icon .icon {
-  width: 40rpx;
-  height: 40rpx;
+  width: 48rpx;
+  height: 48rpx;
+  opacity: 0.7;
 }
 
 .shortcut-badge {

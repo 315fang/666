@@ -7,27 +7,18 @@ const app = getApp();
 
 Page({
     data: {
-        // Level 1 Categories
-        topCategories: [
-            { id: 1, name: '精品好物', icon: '/assets/icons/gift.svg' },
-            { id: 2, name: '甄选套餐', icon: '/assets/icons/package.svg' },
-            { id: 3, name: '镜像原创', icon: '/assets/icons/sparkles.svg' }
-        ],
-        currentTopCategory: 1,
-
-        // Level 2 Categories
+        // 分类与产品数据
         categories: [],
         currentCategory: '',
-        currentCategoryName: '',
-        currentCategoryBanner: '',
-
-        // Level 3 Products
-        products: [],
-
+        
+        // 滚动联动相关
+        toView: '',
+        leftToView: '',
+        categoryHeights: [], 
+        isManualClick: false, // 标记是否为手动点击左侧菜单，防止滚动监听冲突
+        
         loading: false,
-        hasMore: true,
-        page: 1,
-        limit: 10,
+        statusBarHeight: 20,
 
         // Cart
         cartCount: 0,
@@ -36,19 +27,13 @@ Page({
         // Detail Modal
         showDetailModal: false,
         selectedProduct: null,
-        statusBarHeight: 20,
         currentImage: 0,
         imageCount: 1,
         isFavorite: false,
 
-        // Reviews in Modal
-        reviews: [],
-        reviewTotal: 0,
-        reviewTags: [],
-
         // SKU in Modal
         showSku: false,
-        skuAction: 'cart', // 'cart' or 'buy'
+        skuAction: 'cart',
         modalQuantity: 1,
         selectedSku: null,
         selectedSkuText: '',
@@ -62,7 +47,6 @@ Page({
     },
 
     onReady() {
-        // 获取品牌动画组件实例
         this.brandAnimation = this.selectComponent('#brandAnimation');
     },
 
@@ -75,126 +59,130 @@ Page({
         this.setData({
             statusBarHeight: sysInfo.statusBarHeight || 20
         });
-        this.loadSidebarCategories(this.data.currentTopCategory);
+        this.initCategoryData();
     },
 
-    onPullDownRefresh() {
-        this.setData({ page: 1, hasMore: true });
-        this.loadProducts().then(() => {
-            wx.stopPullDownRefresh();
-        });
-    },
-
-    // 搜索跳转
-    onSearchTap() {
-        wx.navigateTo({ url: '/pages/search/search' });
-    },
-
-    // 加载更多
-    onLoadMore() {
-        if (!this.data.hasMore || this.data.loading) return;
-        this.setData({ page: this.data.page + 1 });
-        this.loadProducts(true);
-    },
-
-    // --- Level 1 Logic ---
-    onTopCategoryTap(e) {
-        const id = e.currentTarget.dataset.id;
-        if (id === this.data.currentTopCategory) return;
-
-        this.setData({
-            currentTopCategory: id,
-            categories: [],
-            products: []
-        });
-        this.loadSidebarCategories(id);
-    },
-
-    async loadSidebarCategories(topId) {
-        try {
-            const res = await get('/categories');
-            let allCats = res.data || [];
-            let filteredCats = [];
-
-            if (topId === 1) { // Boutique
-                if (allCats.length > 0) {
-                    filteredCats = allCats.map((c, i) => i === 0 ? { ...c, name: '测试', icon: '/assets/icons/gift.svg', image: 'https://resour.oss-cn-hangzhou.aliyuncs.com/jiaruwomen.jpg' } : c);
-                } else {
-                    filteredCats = [{ id: 'test_cat', name: '测试', icon: '/assets/icons/gift.svg', image: 'https://resour.oss-cn-hangzhou.aliyuncs.com/jiaruwomen.jpg' }];
-                }
-            } else if (topId === 2) {
-                filteredCats = allCats.length > 1 ? allCats.slice(1) : allCats;
-            } else {
-                filteredCats = allCats;
-            }
-
-            if (filteredCats.length > 0) {
-                const firstCat = filteredCats[0];
-                this.setData({
-                    categories: filteredCats,
-                    currentCategory: firstCat.id,
-                    currentCategoryName: firstCat.name,
-                    currentCategoryBanner: firstCat.image || ''
-                });
-                this.loadProducts();
-            } else {
-                this.setData({ categories: [] });
-            }
-        } catch (err) {
-            ErrorHandler.handle(err, { customMessage: '加载分类失败' });
-        }
-    },
-
-    // --- Level 2 Logic ---
-    onCategoryTap(e) {
-        const categoryId = e.currentTarget.dataset.id;
-        if (categoryId === this.data.currentCategory) return;
-        const category = this.data.categories.find(c => c.id === categoryId);
-        this.setData({
-            currentCategory: categoryId,
-            currentCategoryName: category?.name || '',
-            currentCategoryBanner: category?.image || '',
-            page: 1,
-            hasMore: true,
-            products: []
-        });
-        this.loadProducts();
-    },
-
-    // --- Level 3 Logic ---
-    onProductTap(e) {
-        this.onSelectProduct(e);
-    },
-
-    async loadProducts(append = false) {
-        if (this.data.loading) return;
+    // 初始化分类及商品数据（连贯排列逻辑）
+    async initCategoryData() {
         this.setData({ loading: true });
-
         try {
-            const { currentCategory, page, limit } = this.data;
-            const params = { page, limit };
-            if (currentCategory && currentCategory !== 'test_cat') {
-                params.category_id = currentCategory;
-            }
-
-            const res = await get('/products', params);
-            const rawProducts = res.data?.list || res.data || [];
-
-            const newProducts = rawProducts.map(item => ({
-                ...item,
-                image: getFirstImage(item.images),
-                price: item.retail_price || item.price || 0
-            }));
+            // 这里通常是获取分类列表，然后获取每个分类下的商品
+            // 问兰镜像：构造 Mock 数据演示连贯滚动
+            const mockData = [
+                { 
+                    id: 'makeup', 
+                    name: '彩妆系列', 
+                    products: this.getMockCategoryProducts('彩妆系列') 
+                },
+                { 
+                    id: 'skincare', 
+                    name: '护肤正装', 
+                    products: [
+                        { id: 301, name: '精华水', description: '深度补水，锁住营养', image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=400' },
+                        { id: 302, name: '修护乳', description: '强韧屏障，温和修护', image: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=400' }
+                    ] 
+                },
+                { 
+                    id: 'perfume', 
+                    name: '香水系列', 
+                    products: [
+                        { id: 401, name: '晨曦之光', description: '清晨的第一缕阳光', image: 'https://images.unsplash.com/photo-1541643600914-78b084683601?w=400' }
+                    ] 
+                },
+                { 
+                    id: 'mask', 
+                    name: '面膜产品', 
+                    products: [
+                        { id: 501, name: '补水面膜', description: '密集补水，透亮如新', image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=400' }
+                    ] 
+                }
+            ];
 
             this.setData({
-                products: append ? [...this.data.products, ...newProducts] : newProducts,
-                hasMore: newProducts.length >= limit,
+                categories: mockData,
+                currentCategory: mockData[0].id,
                 loading: false
             });
+
+            // 数据渲染后计算各分类高度
+            setTimeout(() => {
+                this.calculateCategoryHeights();
+            }, 500);
+
         } catch (err) {
-            console.error('加载商品失败:', err);
+            console.error('初始化分类数据失败:', err);
             this.setData({ loading: false });
         }
+    },
+
+    // 计算右侧各分类区域的高度，用于滚动监听
+    calculateCategoryHeights() {
+        const query = wx.createSelectorQuery();
+        query.selectAll('.cat-section').boundingClientRect();
+        query.exec((res) => {
+            let top = 0;
+            const heights = res[0].map(rect => {
+                const range = [top, top + rect.height];
+                top += rect.height;
+                return range;
+            });
+            this.setData({ categoryHeights: heights });
+        });
+    },
+
+    // 左侧菜单点击
+    onCategoryTap(e) {
+        const id = e.currentTarget.dataset.id;
+        this.setData({
+            currentCategory: id,
+            toView: `cat-${id}`,
+            leftToView: `left-${id}`,
+            isManualClick: true
+        });
+        
+        // 动画结束后释放标记
+        setTimeout(() => {
+            this.setData({ isManualClick: false });
+        }, 800);
+    },
+
+    // 右侧滚动监听
+    onRightScroll(e) {
+        if (this.data.isManualClick) return; // 手动点击中，不执行监听逻辑
+
+        const scrollTop = e.detail.scrollTop;
+        const { categoryHeights, categories } = this.data;
+        
+        // 增加 100rpx 的偏移量，当标题接近顶部时即切换
+        const offset = 50; 
+        
+        for (let i = 0; i < categoryHeights.length; i++) {
+            if (scrollTop + offset >= categoryHeights[i][0] && scrollTop + offset < categoryHeights[i][1]) {
+                const catId = categories[i].id;
+                if (this.data.currentCategory !== catId) {
+                    this.setData({ 
+                        currentCategory: catId,
+                        leftToView: `left-${catId}` // 同步滚动左侧菜单
+                    });
+                }
+                break;
+            }
+        }
+    },
+
+    getMockCategoryProducts(categoryName) {
+        const mocks = {
+            '彩妆系列': [
+                { id: 201, name: '化妆工具', description: '化妆工具', image: 'https://images.unsplash.com/photo-1522338242992-e1a54906a8da?w=400' },
+                { id: 202, name: '自然底妆', description: '尽享素颜之美', image: 'https://images.unsplash.com/photo-1612817288484-6f916006741a?w=400' },
+                { id: 203, name: '面部彩妆', description: '尽享素颜之美', image: 'https://images.unsplash.com/photo-1512496015851-a90fb38ba796?w=400' },
+                { id: 204, name: '精致眼妆', description: '尽享素颜之美', image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=400' },
+                { id: 205, name: '高级唇妆', description: '尽享素颜之美', image: 'https://images.unsplash.com/photo-1586495777744-4413f21062fa?w=400' }
+            ]
+        };
+        return mocks[categoryName] || [
+            { id: 999, name: '甄选单品', description: '尽享素颜之美', image: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=400' }
+        ];
     },
 
     // --- Full Screen Modal Logic ---
@@ -441,28 +429,49 @@ Page({
     stopProp() { },
 
     // --- Global Cart Logic ---
-    updateCartData() {
-        get('/cart').then(res => {
+    async updateCartData() {
+        try {
+            const res = await get('/cart');
             if (res.code === 0) {
-                const list = res.data.list || [];
-                const count = list.reduce((s, i) => s + i.quantity, 0);
+                // 适配后端 items 结构
+                const items = res.data?.items || res.data || [];
+                const count = items.reduce((s, i) => s + i.quantity, 0);
+                
+                // 计算总价（如果是后端直接返回 summary.total_amount 更好，此处做前端汇总兜底）
+                let total = res.data?.summary?.total_amount || 0;
+                if (!total && items.length > 0) {
+                    total = items.reduce((s, i) => s + (parseFloat(i.effective_price || i.sku?.retail_price || 0) * i.quantity), 0);
+                }
+
                 this.setData({
                     cartCount: count,
-                    cartTotal: res.data.total_amount || '0.00'
+                    cartTotal: parseFloat(total).toFixed(2),
+                    _cartItemIds: items.map(item => item.id).join(',') // 记录 ID 用于结算
                 });
             }
-        }).catch(() => { });
+        } catch (err) {
+            console.error('更新购物车失败:', err);
+        }
     },
 
     onToggleCartPopup() {
+        // 跳转到购物车 Tab 页
         wx.switchTab({ url: '/pages/cart/cart' });
     },
 
     onCheckout() {
-        if (this.data.cartCount > 0) {
-            wx.navigateTo({ url: '/pages/order/confirm' });
+        const { cartCount, _cartItemIds } = this.data;
+        if (cartCount > 0 && _cartItemIds) {
+            // 直接带上当前购物车内所有商品的 ID 跳转结算
+            wx.navigateTo({ 
+                url: `/pages/order/confirm?from=cart&cart_ids=${_cartItemIds}` 
+            });
         } else {
             wx.showToast({ title: '请先选购商品', icon: 'none' });
         }
+    },
+
+    onSearchTap() {
+        wx.navigateTo({ url: '/pages/search/search' });
     }
 });

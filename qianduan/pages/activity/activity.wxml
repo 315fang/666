@@ -1,82 +1,113 @@
-<!--pages/activity/activity.wxml-->
+<!--pages/activity/activity.wxml - 活动中心：常驻活动 + 节日动态主题-->
 <view class="container">
-  <!-- 气泡通告区（由组件注入） -->
-  <view class="bubble-placeholder" id="bubbleArea"></view>
 
-  <!-- 页面标题 -->
-  <view class="page-header">
-    <view class="header-title-wrap">
-      <view class="header-accent-bar"></view>
-      <text class="header-title">活动中心</text>
+  <!-- 1. 自定义导航栏 -->
+  <view class="custom-nav" style="padding-top: {{statusBarHeight}}px">
+    <view class="nav-inner">
+      <text class="nav-title">活动中心</text>
     </view>
-    <text class="header-subtitle">限时优惠，不容错过</text>
   </view>
 
-  <!-- 拼团入口卡 -->
-  <view class="activity-card group-buy-card" bindtap="onGroupBuyTap">
-    <view class="card-deco-circle c1"></view>
-    <view class="card-deco-circle c2"></view>
-    <view class="card-content">
-      <view class="card-icon-wrap">
-        <image class="card-icon" src="/assets/icons/users.svg" mode="aspectFit"></image>
+  <!-- 2. 节日活动卡（后端 active=true 时出现，顶替常规 Banner）-->
+  <view class="festival-hero" wx:if="{{festivalActive}}" style="{{festThemeStyle}}">
+    <image class="fest-bg" src="{{festival.banner}}" mode="aspectFill" lazy-load/>
+    <view class="fest-overlay">
+      <!-- 节日标签 -->
+      <view class="fest-tag-pill" wx:if="{{festival.tag}}">{{festival.tag}}</view>
+      <!-- 标题 -->
+      <text class="fest-title-main">{{festival.title}}</text>
+      <text class="fest-subtitle" wx:if="{{festival.subtitle}}">{{festival.subtitle}}</text>
+      <!-- 倒计时 -->
+      <view class="fest-countdown-row" wx:if="{{countdown}}">
+        <view class="cdown-block">
+          <text class="cdown-num">{{countdown.days}}</text>
+          <text class="cdown-unit">天</text>
+        </view>
+        <text class="cdown-sep">:</text>
+        <view class="cdown-block">
+          <text class="cdown-num">{{countdown.hours}}</text>
+          <text class="cdown-unit">时</text>
+        </view>
+        <text class="cdown-sep">:</text>
+        <view class="cdown-block">
+          <text class="cdown-num">{{countdown.mins}}</text>
+          <text class="cdown-unit">分</text>
+        </view>
+        <text class="cdown-sep">:</text>
+        <view class="cdown-block">
+          <text class="cdown-num">{{countdown.secs}}</text>
+          <text class="cdown-unit">秒</text>
+        </view>
       </view>
-      <view class="card-text">
-        <text class="card-name">拼团专区</text>
-        <text class="card-desc">邀请好友组团，享受超低折扣</text>
-        <view class="card-tag member-only">会员可发起</view>
-      </view>
-    </view>
-    <image class="card-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
-  </view>
-
-  <!-- 砍一刀入口卡 -->
-  <view class="activity-card slash-card" bindtap="onSlashTap">
-    <view class="card-deco-circle c1"></view>
-    <view class="card-deco-circle c2"></view>
-    <view class="card-content">
-      <view class="card-icon-wrap">
-        <image class="card-icon" src="/assets/icons/tag.svg" mode="aspectFit"></image>
-      </view>
-      <view class="card-text">
-        <text class="card-name">砍一刀</text>
-        <text class="card-desc">分享给好友帮你砍价，低至底价</text>
-        <view class="card-tag open">全员可参与</view>
-      </view>
-    </view>
-    <image class="card-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
-  </view>
-
-  <!-- 积分抽奖入口卡 -->
-  <view class="activity-card lottery-card" bindtap="onLotteryTap">
-    <view class="card-deco-circle c1"></view>
-    <view class="card-deco-circle c2"></view>
-    <view class="card-content">
-      <view class="card-icon-wrap">
-        <image class="card-icon" src="/assets/icons/gift.svg" mode="aspectFit"></image>
-      </view>
-      <view class="card-text">
-        <text class="card-name">积分抽奖</text>
-        <text class="card-desc">消耗积分参与抽奖，好礼等你拿</text>
-        <view class="card-tag open">全员可参与</view>
+      <!-- CTA 按钮 -->
+      <view class="fest-cta-btn" bindtap="onFestivalTap">
+        {{festival.ctaText || '立即参与'}} ▶
       </view>
     </view>
-    <image class="card-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
   </view>
 
-  <!-- 近期动态（气泡来源数据展示） -->
-  <view class="recent-section" wx:if="{{recentActivities.length > 0}}">
+  <!-- 常规 Banner（无节日时显示）-->
+  <view class="banner-section" wx:else>
+    <swiper class="banner-swiper"
+            autoplay="true" circular="true"
+            interval="5000" duration="800"
+            indicator-dots="true"
+            indicator-color="rgba(255,255,255,0.3)"
+            indicator-active-color="#FFFFFF">
+      <swiper-item wx:for="{{cardPosters}}" wx:key="id">
+        <image class="banner-img" src="{{item.image}}" mode="aspectFill" lazy-load/>
+      </swiper-item>
+    </swiper>
+  </view>
+
+  <!-- 3. 快捷入口（常驻，永远显示）-->
+  <view class="quick-entry-grid">
+    <view class="entry-item"
+          wx:for="{{quickEntries}}" wx:key="id"
+          bindtap="onEntryTap" data-item="{{item}}">
+      <view class="entry-icon-wrap" style="background: {{item.color}}18">
+        <image class="entry-icon" src="{{item.icon}}" mode="aspectFit"/>
+      </view>
+      <text class="entry-name">{{item.name}}</text>
+    </view>
+  </view>
+
+  <!-- 4. 热门推荐卡片（常驻）-->
+  <view class="section-container">
     <view class="section-header">
-      <view class="header-accent-bar"></view>
-      <text class="section-title">实时动态</text>
+      <text class="section-title">热门推荐</text>
     </view>
-    <view class="recent-list">
-      <view class="recent-item" wx:for="{{recentActivities}}" wx:key="index">
-        <view class="recent-dot"></view>
-        <text class="recent-text">{{item.text}}</text>
-        <text class="recent-time">{{item.time}}</text>
+    <scroll-view class="card-poster-scroll" scroll-x show-scrollbar="{{false}}">
+      <view class="poster-card"
+            wx:for="{{cardPosters}}" wx:key="id"
+            bindtap="onPosterTap" data-item="{{item}}">
+        <image class="poster-bg" src="{{item.image}}" mode="aspectFill" lazy-load/>
+        <view class="poster-mask"/>
+        <view class="poster-content">
+          <text class="poster-title">{{item.title}}</text>
+          <text class="poster-sub">{{item.subTitle}}</text>
+          <view class="poster-btn">立即前往</view>
+        </view>
       </view>
+    </scroll-view>
+  </view>
+
+  <!-- 5. 实时动态 -->
+  <view class="recent-activities-section" wx:if="{{recentActivities.length > 0}}">
+    <view class="activity-msg-bar">
+      <view class="msg-icon-wrap">
+        <image class="msg-icon" src="/assets/icons/bell.svg" mode="aspectFit"/>
+      </view>
+      <swiper class="msg-swiper" vertical="true" autoplay="true" circular="true" interval="3000">
+        <swiper-item wx:for="{{recentActivities}}" wx:key="index">
+          <view class="msg-item">
+            <text class="msg-text">{{item.text}}</text>
+            <text class="msg-time">{{item.time}}</text>
+          </view>
+        </swiper-item>
+      </swiper>
     </view>
   </view>
 
-  <view class="safe-area-bottom"></view>
+  <view class="bottom-spacer"/>
 </view>

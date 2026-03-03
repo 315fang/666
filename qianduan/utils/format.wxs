@@ -1,0 +1,74 @@
+/**
+ * WXS 视图层格式化工具
+ * 在 WXML 中 <wxs src="../../utils/format.wxs" module="fmt"/> 引用
+ * 所有计算在视图层执行，不走 setData，列表渲染性能更好
+ */
+
+/**
+ * 价格格式化：分转元，保留两位小数
+ * @param {number} amount - 分为单位的金额 或 已是元的浮点数
+ * @param {boolean} isFen - 是否是分为单位，默认 false（已是元）
+ */
+var formatPrice = function(amount, isFen) {
+  if (!amount && amount !== 0) return '0.00';
+  var num = isFen ? amount / 100 : amount;
+  var str = num + '';
+  var dot = str.indexOf('.');
+  if (dot === -1) return str + '.00';
+  var dec = str.substring(dot + 1);
+  if (dec.length === 1) return str + '0';
+  return str.substring(0, dot + 3);
+};
+
+/**
+ * 截断文本
+ * @param {string} str - 原始字符串
+ * @param {number} max - 最大长度
+ */
+var truncate = function(str, max) {
+  if (!str) return '';
+  if (str.length <= max) return str;
+  return str.substring(0, max) + '...';
+};
+
+/**
+ * 数字单位简化：超过1万显示"x.x万"
+ * @param {number} num
+ */
+var formatCount = function(num) {
+  if (!num) return '0';
+  if (num >= 10000) {
+    return (Math.floor(num / 1000) / 10) + '万+';
+  }
+  return num + '';
+};
+
+/**
+ * 判断是否有折扣（originalPrice > price）
+ * @param {number|string} price
+ * @param {number|string} originalPrice
+ */
+var hasDiscount = function(price, originalPrice) {
+  var p = parseFloat(price);
+  var o = parseFloat(originalPrice);
+  return o > 0 && o > p;
+};
+
+/**
+ * 计算折扣率，返回如 "8.5折"
+ */
+var discountLabel = function(price, originalPrice) {
+  var p = parseFloat(price);
+  var o = parseFloat(originalPrice);
+  if (!o || o <= p) return '';
+  var rate = Math.round((p / o) * 10 * 10) / 10;
+  return rate + '\u6298';
+};
+
+module.exports = {
+  formatPrice: formatPrice,
+  truncate: truncate,
+  formatCount: formatCount,
+  hasDiscount: hasDiscount,
+  discountLabel: discountLabel
+};

@@ -55,7 +55,12 @@
     </view>
 
     <!-- 商品标题 -->
-    <view class="product-title">{{product.name}}</view>
+    <view class="product-title-area">
+      <view class="product-tags-head" wx:if="{{product.grants_membership}}">
+        <text class="tag-member-gift">🎁 购后送小店店长</text>
+      </view>
+      <view class="product-title">{{product.name}}</view>
+    </view>
 
     <!-- 服务标签 -->
     <view class="tags-row">
@@ -74,7 +79,7 @@
     </view>
 
     <!-- 代理佣金条 -->
-    <view class="commission-bar" wx:if="{{isAgent && commission > 0}}" bindtap="onShareAppMessage">
+    <button class="commission-bar" wx:if="{{isAgent && commission > 0}}" open-type="share">
       <view class="commission-left">
         <view class="commission-icon-wrap">
           <image class="commission-icon" src="/assets/icons/gift.svg" mode="aspectFit"/>
@@ -87,7 +92,7 @@
       <view class="commission-arrow">
         <image class="icon-sm" src="/assets/icons/arrow-right.svg" mode="aspectFit"/>
       </view>
-    </view>
+    </button>
   </view>
 
   <!-- 4. 服务保障 -->
@@ -172,7 +177,7 @@
           <view class="review-user-info">
             <text class="review-name">{{item.user.nickname}}</text>
             <view class="review-stars">
-              <image wx:for="{{[1,2,3,4,5]}}" wx:for-item="star" wx:key="*this" 
+              <image wx:for="{{[1,2,3,4,5]}}" wx:for-item="star" wx:key="star" 
                      class="star-icon {{star <= item.rating ? 'filled' : ''}}" 
                      src="/assets/icons/star.svg" mode="aspectFit"/>
             </view>

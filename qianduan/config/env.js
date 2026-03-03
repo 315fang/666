@@ -11,9 +11,14 @@ const ENV_TYPES = {
 };
 
 // 当前环境配置
-// WeChat小程序不支持process.env，这里手动配置环境
-// 部署时修改此值：开发环境用 DEVELOPMENT，生产环境用 PRODUCTION
-const CURRENT_ENV = ENV_TYPES.DEVELOPMENT;
+// 通过微信官方 API 自动识别运行环境，无需手动修改
+// develop = 开发者工具, trial = 体验版, release = 正式版
+const { envVersion } = wx.getAccountInfoSync().miniProgram;
+const CURRENT_ENV = {
+  develop: ENV_TYPES.DEVELOPMENT,
+  trial:   ENV_TYPES.STAGING,
+  release: ENV_TYPES.PRODUCTION
+}[envVersion] || ENV_TYPES.DEVELOPMENT;
 
 /**
  * 环境配置
