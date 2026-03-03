@@ -82,6 +82,14 @@ Page({
         this.loadUserInfo();
     },
 
+    async onPullDownRefresh() {
+        try {
+            await Promise.all([this.loadData(), this.loadUserInfo(), this.loadBubbles()]);
+        } finally {
+            wx.stopPullDownRefresh();
+        }
+    },
+
     onLoad(options) {
         const sysInfo = wx.getSystemInfoSync();
         this.setData({ statusBarHeight: sysInfo.statusBarHeight });
@@ -135,11 +143,11 @@ Page({
             this.setData({
                 featureCards,
                 homeConfigs: data.configs || {},
-                latestActivity: data.latestActivity || {},
-                loading: false
+                latestActivity: data.latestActivity || {}
             });
         } catch (err) {
             console.error('加载首页配置失败:', err);
+        } finally {
             this.setData({ loading: false });
         }
     },
@@ -160,8 +168,12 @@ Page({
         }
 
         try {
-            // 用户基本信息
-            const res = await get('/user/profile');
+            const [res, ptRes, signRes] = await Promise.all([
+                get('/user/profile'),
+                get('/points/balance').catch(() => ({ data: { balance: 0 } })),
+                get('/points/sign-in/status').catch(() => ({ data: { signed: false } }))
+            ]);
+
             if (res.code === 0 && res.data) {
                 const info = res.data;
                 const roleName = info.role_name || ROLE_NAMES[info.role || 0] || '普通用户';
@@ -182,14 +194,10 @@ Page({
                 });
             }
 
-            // 积分余额
-            const ptRes = await get('/points/balance').catch(() => ({ data: { balance: 0 } }));
             if (ptRes.code === 0 && ptRes.data) {
                 this.setData({ pointBalance: ptRes.data.balance || 0 });
             }
 
-            // 今日是否已签到
-            const signRes = await get('/points/sign-in/status').catch(() => ({ data: { signed: false } }));
             if (signRes.code === 0 && signRes.data) {
                 this.setData({ todaySigned: !!signRes.data.signed });
             }

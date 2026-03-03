@@ -15,6 +15,7 @@
       class="poster-img"
       src="{{homeConfigs.home_poster_url || '/assets/images/default-poster.svg'}}"
       mode="aspectFill"
+      lazy-load="{{true}}"
       wx:if="{{homeConfigs.home_poster_url}}"
     ></image>
     <view class="poster-fallback" wx:else>
@@ -109,7 +110,7 @@
           <view class="fc-deco-circle fc-circle-1"></view>
           <view class="fc-deco-circle fc-circle-2"></view>
           <view class="fc-icon-wrap">
-            <image class="fc-icon" src="{{item.icon_url}}" mode="aspectFit" wx:if="{{item.icon_url}}"></image>
+            <image class="fc-icon" src="{{item.icon_url}}" mode="aspectFit" lazy-load="{{true}}" wx:if="{{item.icon_url}}"></image>
             <text class="fc-icon-text" wx:else>{{item.icon_emoji || '⭐'}}</text>
           </view>
           <view class="fc-content">
