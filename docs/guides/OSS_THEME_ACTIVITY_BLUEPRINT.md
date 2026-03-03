@@ -48,9 +48,70 @@
   - `GET /api/pages/{page_key}` 返回 `sections[] + themeOverride + assets`。
   - `POST /admin/pages/publish`：写入/更新并触发缓存失效。
 - 前端渲染：
-  - 页面通用 `renderer` 根据 `type` 映射到已存在的组件（banner、grid、coupon、countdown）。未知 `type` 兜底为自定义富文本。
-  - 路由：新增活动仅需在后台创建 `page_key`，无需发版；跳转使用 `/pages/activity/index?key=mid_autumn_2025`。
-  - 样式调节：`payload.style` 允许配置圆角、间距、阴影强度；主题覆盖通过 `page_theme_override` 注入到 `themeStyle`。
+- 页面通用 `renderer` 根据 `type` 映射到已存在的组件（banner、grid、coupon、countdown）。未知 `type` 兜底为自定义富文本。
+- 路由：新增活动仅需在后台创建 `page_key`，无需发版；跳转使用 `/pages/activity/index?key=mid_autumn_2025`。
+- 样式调节：`payload.style` 允许配置圆角、间距、阴影强度；主题覆盖通过 `page_theme_override` 注入到 `themeStyle`。
+
+### 推荐 JSON Schema（后端一键生成页面）
+```json
+{
+  "page_key": "mid_autumn_2025",
+  "title": "中秋礼遇",
+  "schema_version": "1.0",
+  "theme_override": {
+    "--color-primary": "#B5812A",
+    "--luxury-cream": "#FFF7E6"
+  },
+  "sections": [
+    {
+      "id": "hero",
+      "type": "banner",
+      "payload": {
+        "autoplay": true,
+        "interval": 3000,
+        "items": [
+          {
+            "image": "https://bucket.oss-cn-hangzhou.aliyuncs.com/2025/hero.webp?x-oss-process=image/format,webp/quality,Q_75",
+            "lqip": "https://bucket/.../hero_lqip.jpg",
+            "link": { "type": "product", "value": "123" }
+          }
+        ]
+      },
+      "style": { "radius": 24, "shadow": "lg", "marginBottom": 24 }
+    },
+    {
+      "id": "quick",
+      "type": "grid",
+      "payload": {
+        "columns": 4,
+        "items": [
+          { "title": "爆款", "icon": "https://.../hot.svg", "link": { "type": "action", "value": "hot" } }
+        ]
+      },
+      "style": { "gap": 12, "padding": 16 }
+    },
+    {
+      "id": "products",
+      "type": "product_list",
+      "payload": {
+        "data_source": "/api/products?tag=mid_autumn_2025",
+        "layout": "card",
+        "show_sold": true
+      },
+      "style": { "cardRadius": 16 }
+    },
+    {
+      "id": "rich",
+      "type": "rich_text",
+      "payload": { "html": "<p>会员专享券</p>" }
+    }
+  ],
+  "version": "2025-08-01T10:00:00Z"
+}
+```
+- 必填字段：`page_key`、`sections[]`、`type`、`payload`。
+- 渲染约定：`type` → 前端组件；`style` 字段仅允许白名单（圆角、间距、阴影、背景、对齐）。
+- 兼容策略：前端 renderer 遇到未知 `type` 时使用 `rich_text` 兜底，以免发布失败。
 
 ## 4) 一键操作流
 - 换肤：后台切换 `theme_active` → 写入 tokens → 清理 `/theme` 缓存 → 前端下次冷启动或手动下拉刷新即生效。
