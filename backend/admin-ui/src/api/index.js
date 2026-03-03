@@ -363,18 +363,22 @@ export const getSystemStatus = () => {
 }
 
 // ========== 文件上传 ==========
-export const uploadFile = (file) => {
+export const uploadFile = (file, folder = 'products') => {
   const formData = new FormData()
   formData.append('file', file)
+  if (folder) formData.append('folder', folder)
   return request({
     url: '/upload',
     method: 'post',
     data: formData,
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
+    headers: { 'Content-Type': 'multipart/form-data' }
   })
 }
+
+// ========== 存储配置 ==========
+export const getStorageConfig = () => request({ url: '/storage/config', method: 'get' })
+export const updateStorageConfig = (data) => request({ url: '/storage/config', method: 'put', data })
+export const testStorageConfig = (data) => request({ url: '/storage/test', method: 'post', data })
 
 // ========== 内容管理 ==========
 export const getBanners = (params) => {

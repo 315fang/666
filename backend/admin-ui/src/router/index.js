@@ -102,6 +102,12 @@ const routes = [
       },
       // ===== 系统管理 =====
       {
+        path: 'storage',
+        name: 'Storage',
+        component: () => import('@/views/storage/index.vue'),
+        meta: { title: '存储配置', icon: 'Upload', group: '系统管理' }
+      },
+      {
         path: 'admins',
         name: 'Admins',
         component: () => import('@/views/admins/index.vue'),

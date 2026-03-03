@@ -7,6 +7,7 @@ import 'element-plus/theme-chalk/dark/css-vars.css'
 import App from './App.vue'
 import router from './router'
 import './style.css'
+import CosUpload from './components/StorageUpload.vue'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -15,6 +16,9 @@ const pinia = createPinia()
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
+
+// 全局注册 StorageUpload 组件（自动上传到配置的对象存储，支持 COS/OSS/七牛/MinIO/本地）
+app.component('StorageUpload', CosUpload)
 
 app.use(pinia)
 app.use(router)
