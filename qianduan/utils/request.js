@@ -167,7 +167,6 @@ function request(options) {
 
                     // 网络错误，尝试重试
                     if (retryCount < config.maxRetries) {
-                        console.log(`请求失败，${config.retryDelay}ms 后重试 (${retryCount + 1}/${config.maxRetries})`);
                         setTimeout(() => {
                             request({ ...options, retryCount: retryCount + 1 })
                                 .then(resolveRequest)

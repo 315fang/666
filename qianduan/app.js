@@ -23,17 +23,12 @@ App({
     // 只存标记，由实际落地页（index.js）负责跳转，避免双重导航
     checkShareBind(options) {
         if (options && options.query && options.query.inviter_id) {
-            const inviterId = options.query.inviter_id;
-            console.log('通过邀请问卷进入, inviter_id:', inviterId);
-            this.globalData.pendingInviterId = inviterId;
+            this.globalData.pendingInviterId = options.query.inviter_id;
         } else if (options && options.query && options.query.scene) {
             const rawScene = decodeURIComponent(options.query.scene || '');
-            console.log('扫码进入, scene (raw):', rawScene);
             // ★ 安全校验：scene 只接受纯数字格式（用户ID），防止注入
             if (/^\d+$/.test(rawScene)) {
                 this.globalData.pendingInviterId = rawScene;
-            } else {
-                console.warn('scene 参数格式非法，已忽略:', rawScene);
             }
         }
     },
@@ -51,7 +46,6 @@ App({
                 this.globalData.openid = openid;
                 this.globalData.token = token;
                 this.globalData.isLoggedIn = true;
-                console.log('从缓存恢复登录状态');
                 return;
             }
 
@@ -60,7 +54,7 @@ App({
             // 点击该按钮会调用 wxLogin(true) 来收集资料
             await this.wxLogin(false);
         } catch (err) {
-            console.error('自动登录失败:', err);
+            // 自动登录失败时静默处理，不影响用户体验
         }
     },
 
@@ -69,7 +63,6 @@ App({
         try {
             // 1. 获取微信登录 code
             const { code } = await this.promisify(wx.login)();
-            console.log('获取到 code:', code);
 
             // 2. 如果需要用户资料，调用 getUserProfile
             let profileData = {};
@@ -82,10 +75,8 @@ App({
                         nickName: profile.userInfo.nickName,
                         avatarUrl: profile.userInfo.avatarUrl
                     };
-                    console.log('获取用户资料成功:', profileData);
                 } catch (err) {
-                    console.log('用户取消授权或获取资料失败:', err);
-                    // 不阻断登录流程
+                    // 用户取消授权时不阻断登录流程
                 }
             }
 
@@ -118,13 +109,11 @@ App({
                     };
                 }
 
-                console.log('登录成功:', result.userInfo);
                 return result;
             } else {
                 throw new Error(result.message || '登录失败');
             }
         } catch (err) {
-            console.error('微信登录失败:', err);
             throw err;
         }
     },

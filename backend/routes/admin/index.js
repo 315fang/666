@@ -297,6 +297,12 @@ router.use('/', configRoutes);
 const envCheckRoutes = require('./env-check');
 router.use('/', envCheckRoutes);
 
+// ========== 自定义页面管理（页面装修）==========
+const customPageController = require('../../controllers/customPageController');
+router.get('/custom-pages', checkPermission('content'), customPageController.listCustomPages);
+router.put('/custom-pages/:key', checkPermission('content'), customPageController.saveCustomPage);
+router.delete('/custom-pages/:key', checkPermission('content'), customPageController.deleteCustomPage);
+
 // ========== 群发信息管理（★新增） ==========
 const massMessageRoutes = require('./mass-message');
 router.use('/', massMessageRoutes);

@@ -449,7 +449,16 @@ export const createMassMessage = (data) => request({ url: '/mass-messages', meth
 export const sendMassMessage = (id) => request({ url: `/mass-messages/${id}/send`, method: 'post' })
 export const deleteMassMessage = (id) => request({ url: `/mass-messages/${id}`, method: 'delete' })
 
-// ========== 图文内容 ==========
-export const getContents = (params) => request({ url: '/contents', method: 'get', params })
-export const createContent = (data) => request({ url: '/contents', method: 'post', data })
-export const updateContent = (id, data) => request({ url: `/contents/${id}`, method: 'put', data })
+// ========== 主题管理 ==========
+export const getThemes = () => request({ url: '/themes', method: 'get' })
+export const getActiveTheme = () => request({ url: '/themes/active', method: 'get' })
+export const switchTheme = (data) => request({ url: '/themes/switch', method: 'post', data })
+export const createTheme = (data) => request({ url: '/themes', method: 'post', data })
+export const updateTheme = (id, data) => request({ url: `/themes/${id}`, method: 'put', data })
+export const deleteTheme = (id) => request({ url: `/themes/${id}`, method: 'delete' })
+
+// ========== 自定义页面 ==========
+export const getCustomPages = () => request({ url: '/custom-pages', method: 'get' })
+export const getCustomPage = (key) => request({ url: `/custom-pages/${key}`, method: 'get' })
+export const saveCustomPage = (key, data) => request({ url: `/custom-pages/${key}`, method: 'put', data })
+export const deleteCustomPage = (key) => request({ url: `/custom-pages/${key}`, method: 'delete' })

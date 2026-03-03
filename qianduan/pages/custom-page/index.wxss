@@ -1,0 +1,69 @@
+/* 后端自定义页面样式 */
+.custom-page {
+  min-height: 100vh;
+  background: var(--luxury-cream);
+  padding-bottom: 32rpx;
+}
+
+/* Banner 轮播 */
+.block-banner {
+  width: 100%;
+}
+.banner-img {
+  width: 100%;
+}
+
+/* 富文本 */
+.block-richtext {
+  padding: 24rpx 32rpx;
+  background: var(--luxury-white);
+  font-size: 28rpx;
+  line-height: 1.8;
+  color: var(--text-primary);
+}
+
+/* 商品列表 */
+.block-products {
+  padding: 24rpx 24rpx 0;
+}
+.block-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 20rpx;
+}
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16rpx;
+}
+
+/* 单图 */
+.block-image {
+  width: 100%;
+}
+.single-img {
+  width: 100%;
+  display: block;
+}
+
+/* 公告 */
+.block-notice {
+  margin: 16rpx 24rpx;
+}
+
+/* 分割线 */
+.block-divider {
+  padding: 16rpx 32rpx;
+}
+.divider-line {
+  height: 1rpx;
+  background: var(--luxury-warm-gray);
+}
+
+/* 按钮 */
+.block-button {
+  padding: 24rpx 32rpx;
+  display: flex;
+  justify-content: center;
+}

@@ -40,7 +40,8 @@
         "pages/ai/questionnaire",
         "pages/feed/index",
         "pages/privacy/privacy",
-        "pages/points/index"
+        "pages/points/index",
+        "pages/custom-page/index"
     ],
     "tabBar": {
         "color": "#A8A29E",
@@ -82,6 +83,7 @@
         "empty-state": "/components/empty-state/empty-state",
         "loading-skeleton": "/components/loading-skeleton/loading-skeleton",
         "share-card": "/components/share-card/share-card",
+        "bubble-notice": "/components/bubble-notice/bubble-notice",
         "ui-card": "/components/ui/card/card",
         "ui-button": "/components/ui/button/button"
     },
