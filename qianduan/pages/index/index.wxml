@@ -1,4 +1,4 @@
-<!--pages/index/index.wxml - 问兰镜像首页 -->
+<!--pages/index/index.wxml - 问兰镜像首页 V2 组件化重构 -->
 <view class="container">
 
   <!-- ① 自定义导航栏：适配毛玻璃效果 -->
@@ -23,126 +23,17 @@
     </view>
   </view>
 
-  <!-- ② 主海报区：全屏 Swiper -->
-  <swiper class="poster-swiper"
-          autoplay="{{posterList.length > 1}}"
-          circular="{{posterList.length > 1}}"
-          interval="5000"
-          duration="800"
-          indicator-dots="{{posterList.length > 1}}"
-          indicator-color="rgba(255,255,255,0.3)"
-          indicator-active-color="#D4A84B">
-    <swiper-item wx:for="{{posterList}}" wx:key="index">
-      <view class="poster-item">
-        <image class="poster-img" src="{{item}}" mode="aspectFill" lazy-load></image>
-      </view>
-    </swiper-item>
-  </swiper>
-
-  <!-- ③ 会员臻享模块 (重构为多 Banner 轮播 + 海报) -->
-  <view class="section-container">
-    <view class="section-title-box">
-      <text class="en-title-serif">MEMBER COURTESY</text>
-      <text class="cn-title-bold">会员臻享 奢宠好礼</text>
-    </view>
-
-    <!-- 1. 满减 Banner 轮播 -->
-    <view class="member-banner-wrap">
-      <swiper class="member-swiper" autoplay="true" circular="true" interval="4000" indicator-dots="true" indicator-color="rgba(0,0,0,0.1)" indicator-active-color="#1A1A1A">
-        <swiper-item wx:for="{{memberBanners}}" wx:key="id">
-          <view class="member-banner-card" bindtap="onPosterTap" data-type="gift">
-            <image class="banner-bg" src="{{item.image}}" mode="aspectFill"></image>
-            <view class="banner-overlay">
-              <view class="banner-text-right">
-                <text class="b-label">{{item.label}}</text>
-                <view class="b-price-row">
-                  <text class="b-unit">满</text>
-                  <text class="b-value">{{item.price}}</text>
-                  <text class="b-unit">元 赠</text>
-                </view>
-                <view class="b-capsule-btn">立即选购 <text class="btn-arrow">▶</text></view>
-              </view>
-            </view>
-          </view>
-        </swiper-item>
-      </swiper>
-    </view>
-
-    <!-- 2. 美肤方案海报 (单张或轮播) -->
-    <view class="scheme-poster-wrap" wx:for="{{schemePosters}}" wx:key="id">
-      <view class="scheme-full-card">
-        <view class="scheme-left-content">
-          <text class="s-en-small">{{item.en}}</text>
-          <text class="s-cn-large">{{item.cn}}</text>
-          <view class="s-capsule-btn-black">{{item.btn}} <text class="btn-arrow">▶</text></view>
-        </view>
-        <view class="scheme-right-img">
-          <view class="img-inner-box">
-            <image src="{{item.image}}" mode="aspectFit"></image>
-          </view>
-        </view>
-      </view>
-    </view>
+  <!-- ② 动态区块渲染引擎（全新低代码架构） -->
+  <view class="home-sections">
+    <section-renderer 
+      wx:for="{{sections}}" 
+      wx:key="id" 
+      section="{{item}}"
+      bind:sectiontap="onSectionTap"
+    />
   </view>
 
-  <!-- ④ 星品挚选 (多组大型海报) -->
-  <view class="star-sections-container">
-    <view class="star-section-item" wx:for="{{starSections}}" wx:key="id" wx:for-index="sIdx">
-      <view class="section-title-box">
-        <text class="en-title-serif">{{item.titleEn}}</text>
-        <text class="cn-title-bold">{{item.titleCn}}</text>
-      </view>
-
-      <view class="star-full-poster">
-        <!-- 规格切换 -->
-        <view class="poster-tabs">
-          <view 
-            wx:for="{{item.specs}}" 
-            wx:key="name" 
-            wx:for-index="spIdx"
-            class="p-tab {{item.activeSpecIndex === spIdx ? 'active' : ''}}"
-            bindtap="onSpecTabTap"
-            data-section-index="{{sIdx}}"
-            data-spec-index="{{spIdx}}"
-          >{{item.name}}</view>
-        </view>
-
-        <!-- 海报内容区 -->
-        <view class="poster-main-body">
-          <view class="poster-left-info">
-            <text class="p-slogan">{{item.specs[item.activeSpecIndex].slogan}}</text>
-            <text class="p-desc">{{item.specs[item.activeSpecIndex].desc}}</text>
-            
-            <!-- 勋章装饰 -->
-            <view class="p-awards-box" wx:if="{{item.specs[item.activeSpecIndex].awards}}">
-              <view class="award-circle">
-                <text class="award-text">{{item.specs[item.activeSpecIndex].awards}}</text>
-              </view>
-            </view>
-
-            <view class="p-sales-badge" wx:if="{{item.specs[item.activeSpecIndex].sales}}">
-              <text class="sales-label">全网热销</text>
-              <text class="sales-val">{{item.specs[item.activeSpecIndex].sales}}瓶</text>
-            </view>
-          </view>
-
-          <!-- 产品大图 -->
-          <image class="p-product-img" src="{{item.specs[item.activeSpecIndex].image}}" mode="aspectFit"></image>
-        </view>
-
-        <!-- 底部购买条 -->
-        <view class="poster-footer-bar" bindtap="onStarProductBuy" data-section-index="{{sIdx}}">
-          <view class="p-price-tag">
-            <text class="p-currency">¥</text>
-            <text class="p-amount">{{item.specs[item.activeSpecIndex].price}}</text>
-          </view>
-          <view class="p-buy-btn-black">立即购买 <text class="btn-arrow">▶</text></view>
-        </view>
-      </view>
-    </view>
-  </view>
-
-  <!-- ⑤ 底部惊喜彩蛋 -->
+  <!-- ③ 底部惊喜彩蛋 -->
   <view class="bottom-surprise-section">
     <view class="surprise-inner" bindlongpress="onSurpriseTap">
       <view class="surprise-icon">✨</view>
@@ -155,8 +46,5 @@
       </view>
     </view>
   </view>
-
-  <!-- 品牌动画（保留） -->
-  <brand-animation id="brandAnimation"></brand-animation>
 
 </view>

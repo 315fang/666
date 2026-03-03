@@ -195,7 +195,7 @@ router.get('/rules', async (req, res) => {
             if (config.config_type === 'number') value = parseFloat(value);
             if (config.config_type === 'boolean') value = (value === 'true');
             if (config.config_type === 'json') {
-                try { value = JSON.parse(value); } catch (e) {}
+                try { value = JSON.parse(value); } catch (e) { }
             }
             formatted[config.config_key] = value;
         });
@@ -254,8 +254,13 @@ router.use('/agent', adminAgentRoutes);
 // ========== 首页装修 (★新增) ==========
 const adminHomeSectionController = require('./controllers/adminHomeSectionController');
 router.get('/home-sections', checkPermission('content'), adminHomeSectionController.getHomeSections);
+router.get('/home-sections/schemas', adminHomeSectionController.getSectionSchemas);
+router.post('/home-sections', checkPermission('content'), adminHomeSectionController.createHomeSection);
 router.put('/home-sections/:id', checkPermission('content'), adminHomeSectionController.updateHomeSection);
+router.put('/home-sections/:id/toggle', checkPermission('content'), adminHomeSectionController.toggleSectionVisible);
+router.delete('/home-sections/:id', checkPermission('content'), adminHomeSectionController.deleteHomeSection);
 router.post('/home-sections/sort', checkPermission('content'), adminHomeSectionController.updateSortOrder);
+
 
 // ========== 操作日志（★新增） ==========
 const adminLogController = require('./controllers/adminLogController');

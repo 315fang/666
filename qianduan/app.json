@@ -143,19 +143,28 @@
     "preloadRule": {
         "pages/index/index": {
             "network": "all",
-            "packages": ["packageOrder", "packageActivity"]
+            "packages": [
+                "packageOrder",
+                "packageActivity"
+            ]
         },
         "pages/cart/cart": {
             "network": "all",
-            "packages": ["packageOrder"]
+            "packages": [
+                "packageOrder"
+            ]
         },
         "pages/activity/activity": {
             "network": "all",
-            "packages": ["packageActivity"]
+            "packages": [
+                "packageActivity"
+            ]
         },
         "pages/user/user": {
             "network": "all",
-            "packages": ["packageDistribution"]
+            "packages": [
+                "packageDistribution"
+            ]
         }
     },
     "tabBar": {
@@ -201,7 +210,8 @@
         "ui-card": "/components/ui/card/card",
         "ui-button": "/components/ui/button/button",
         "hot-activities": "/components/hot-activities/hot-activities",
-        "new-arrivals": "/components/new-arrivals/new-arrivals"
+        "new-arrivals": "/components/new-arrivals/new-arrivals",
+        "section-renderer": "/components/section-renderer/section-renderer"
     },
     "window": {
         "navigationBarBackgroundColor": "#1C1917",

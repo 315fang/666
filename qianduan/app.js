@@ -29,6 +29,9 @@ App({
 
         // ★ 静默/强制版本更新检测
         this.checkUpdate();
+
+        // ★ 拉取并应用激活主题（一键换肤）
+        this.applyActiveTheme();
     },
 
     // 检查是否通过分享进入（新版：邀请问卷）
@@ -150,6 +153,67 @@ App({
         wx.removeStorageSync('userInfo');
         wx.removeStorageSync('openid');
         wx.removeStorageSync('token');
+    },
+
+    /**
+     * ★ 拉取并应用激活主题（一键换肤阅环）
+     * 缓存策略：评 Storage 30分钟，邏辑层可强制刷新
+     */
+    applyActiveTheme() {
+        const THEME_CACHE_KEY = 'active_theme_cache';
+        const CACHE_TTL = 30 * 60 * 1000;
+        const now = Date.now();
+
+        // 先读缓存
+        try {
+            const cached = wx.getStorageSync(THEME_CACHE_KEY);
+            if (cached && cached.expireAt > now) {
+                this.injectThemeCssVars(cached.theme);
+                console.log('[Theme] 命中缓存，应用主题:', cached.theme.theme_name);
+                return;
+            }
+        } catch (e) { /* 读缓存失败不阻断 */ }
+
+        // 拉取激活主题
+        get('/themes/active').then(res => {
+            if (res && res.data) {
+                const theme = res.data;
+                this.injectThemeCssVars(theme);
+                wx.setStorageSync(THEME_CACHE_KEY, { theme, expireAt: now + CACHE_TTL });
+                console.log('[Theme] 拉取并应用主题:', theme.theme_name);
+            }
+        }).catch(err => {
+            console.warn('[Theme] 主题担取失败，保持默认样式', err);
+        });
+    },
+
+    /**
+     * ★ 注入主题 CSS 变量到 page 根节点
+     * 小程序无法直接操作 DOM，用 wx.setPageStyle 注入 CSS 变量
+     * 所有使用 var(--color-primary) 的组件全部自动生效
+     */
+    injectThemeCssVars(theme) {
+        if (!theme) return;
+        try {
+            const styles = {};
+            if (theme.primary_color) {
+                styles['--luxury-gold'] = theme.primary_color;
+                styles['--color-primary'] = theme.primary_color;
+            }
+            if (theme.secondary_color) {
+                styles['--luxury-black'] = theme.secondary_color;
+                styles['--color-text-primary'] = theme.secondary_color;
+            }
+            // 如果主题有自定义扩展变量（theme.css_vars 字段）
+            if (theme.css_vars && typeof theme.css_vars === 'object') {
+                Object.assign(styles, theme.css_vars);
+            }
+            if (Object.keys(styles).length > 0) {
+                wx.setPageStyle({ style: styles });
+            }
+        } catch (e) {
+            console.warn('[Theme] 注入 CSS 变量失败:', e);
+        }
     },
 
     /**
