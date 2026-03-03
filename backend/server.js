@@ -151,6 +151,10 @@ async function startServer() {
         // ★ 初始化AI运维监控服务
         await AIOpsService.initialize();
 
+        // ★ 加载对象存储配置（从数据库恢复，优先级低于环境变量）
+        const { loadStorageConfigFromDB } = require('./routes/admin/controllers/adminUploadController');
+        await loadStorageConfigFromDB().catch(() => {});  // 静默处理
+
         // 启动服务器
         app.listen(PORT, () => {
             console.log(`\n========================================`);

@@ -1,9 +1,9 @@
 /**
  * 文件上传控制器
- * 
- * 支持多种对象存储服务：
+ *
+ * 支持多种对象存储服务（配置持久化到数据库，重启后自动恢复）：
+ * - 腾讯云 COS（推荐，机器在腾讯云）
  * - 阿里云 OSS
- * - 腾讯云 COS
  * - 七牛云 Qiniu
  * - MinIO (自建)
  * - 本地存储 (开发/备用)
@@ -12,9 +12,21 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
-// 存储配置（可从数据库读取）
+// DB 持久化键
+const STORAGE_CONFIG_DB_KEY = 'storage_config';
+
+// 存储配置（运行时内存，启动时从 DB 或环境变量加载）
 let storageConfig = {
     provider: process.env.STORAGE_PROVIDER || 'local',  // local | aliyun | tencent | qiniu | minio
+
+    // 腾讯云 COS（推荐）
+    tencent: {
+        secretId: process.env.TENCENT_SECRET_ID || '',
+        secretKey: process.env.TENCENT_SECRET_KEY || '',
+        bucket: process.env.TENCENT_COS_BUCKET || '',
+        region: process.env.TENCENT_COS_REGION || 'ap-guangzhou',
+        customDomain: process.env.TENCENT_COS_CUSTOM_DOMAIN || ''
+    },
 
     // 阿里云 OSS
     aliyun: {
@@ -24,15 +36,6 @@ let storageConfig = {
         region: process.env.ALIYUN_OSS_REGION || 'oss-cn-hangzhou',
         endpoint: process.env.ALIYUN_OSS_ENDPOINT || '',
         customDomain: process.env.ALIYUN_OSS_CUSTOM_DOMAIN || ''
-    },
-
-    // 腾讯云 COS
-    tencent: {
-        secretId: process.env.TENCENT_SECRET_ID || '',
-        secretKey: process.env.TENCENT_SECRET_KEY || '',
-        bucket: process.env.TENCENT_COS_BUCKET || '',
-        region: process.env.TENCENT_COS_REGION || 'ap-guangzhou',
-        customDomain: process.env.TENCENT_COS_CUSTOM_DOMAIN || ''
     },
 
     // 七牛云
@@ -58,6 +61,59 @@ let storageConfig = {
         uploadDir: process.env.LOCAL_UPLOAD_DIR || 'uploads',
         baseUrl: process.env.LOCAL_BASE_URL || '/uploads'
     }
+};
+
+/**
+ * 从数据库加载存储配置（启动时调用，DB 配置覆盖环境变量中的空值）
+ */
+const loadStorageConfigFromDB = async () => {
+    try {
+        const { AppConfig } = require('../../../models');
+        const record = await AppConfig.findOne({
+            where: { config_key: STORAGE_CONFIG_DB_KEY, status: 1 }
+        });
+        if (record && record.config_value) {
+            const saved = JSON.parse(record.config_value);
+            if (saved.provider) storageConfig.provider = saved.provider;
+            ['tencent', 'aliyun', 'qiniu', 'minio', 'local'].forEach(p => {
+                if (saved[p] && storageConfig[p]) {
+                    Object.keys(saved[p]).forEach(k => {
+                        // 环境变量已设置的字段优先，DB 只填充空字段
+                        if (!storageConfig[p][k]) {
+                            storageConfig[p][k] = saved[p][k];
+                        }
+                    });
+                }
+            });
+        }
+    } catch (e) {
+        // 启动阶段 DB 可能未就绪，静默处理
+    }
+};
+
+// server.js 中 DB 同步完成后会显式调用 loadStorageConfigFromDB()
+// 这里保留一个延迟加载作为备用，用于模块被直接 require 的场景
+if (process.env.NODE_ENV !== 'test') {
+    setTimeout(loadStorageConfigFromDB, 5000);
+}
+
+// 敏感字段脱敏占位符（前端返回该值时不覆盖真实密钥）
+const MASKED_PLACEHOLDER = '••••••••';
+
+/**
+ * 将存储配置持久化到数据库（is_public=false 确保不暴露给前端）
+ */
+const saveStorageConfigToDB = async () => {
+    const { AppConfig } = require('../../../models');
+    await AppConfig.upsert({
+        config_key: STORAGE_CONFIG_DB_KEY,
+        config_value: JSON.stringify(storageConfig),
+        config_type: 'json',
+        category: 'storage',
+        description: '对象存储配置（含 COS/OSS 密钥，仅后台可见）',
+        is_public: false,
+        status: 1
+    });
 };
 
 /**
@@ -384,11 +440,8 @@ const uploadMultiple = async (req, res) => {
  */
 const getStorageConfig = async (req, res) => {
     try {
-        // 脱敏处理：隐藏敏感信息中间部分
-        const maskSecret = (str) => {
-            if (!str || str.length < 8) return str ? '***' : '';
-            return str.slice(0, 4) + '****' + str.slice(-4);
-        };
+        // 脱敏处理：用固定占位符替换敏感字段，前端收到 MASKED_PLACEHOLDER 时不得回传覆盖真实值
+        const maskSecret = (str) => str ? MASKED_PLACEHOLDER : '';
 
         const safeConfig = {
             provider: storageConfig.provider,
@@ -436,7 +489,7 @@ const getStorageConfig = async (req, res) => {
 };
 
 /**
- * 更新存储配置
+ * 更新存储配置（持久化到数据库，重启后自动恢复）
  * PUT /admin/api/storage/config
  */
 const updateStorageConfig = async (req, res) => {
@@ -450,26 +503,29 @@ const updateStorageConfig = async (req, res) => {
             storageConfig.provider = provider;
         }
 
-        // 更新各服务商配置
-        if (aliyun) {
-            Object.assign(storageConfig.aliyun, aliyun);
-        }
-        if (tencent) {
-            Object.assign(storageConfig.tencent, tencent);
-        }
-        if (qiniu) {
-            Object.assign(storageConfig.qiniu, qiniu);
-        }
-        if (minio) {
-            Object.assign(storageConfig.minio, minio);
-        }
-        if (local) {
-            Object.assign(storageConfig.local, local);
-        }
+        // 更新各服务商配置（空字符串表示"留空"，保留原值中非空部分）
+        const mergeConfig = (target, source) => {
+            if (!source) return;
+            Object.keys(source).forEach(k => {
+                // 仅当传入值非空且不是前端脱敏占位符时才覆盖（避免覆盖真实密钥）
+                if (source[k] !== undefined && source[k] !== null && source[k] !== MASKED_PLACEHOLDER) {
+                    target[k] = source[k];
+                }
+            });
+        };
+
+        mergeConfig(storageConfig.aliyun, aliyun);
+        mergeConfig(storageConfig.tencent, tencent);
+        mergeConfig(storageConfig.qiniu, qiniu);
+        mergeConfig(storageConfig.minio, minio);
+        mergeConfig(storageConfig.local, local);
+
+        // 持久化到数据库
+        await saveStorageConfigToDB();
 
         res.json({
             code: 0,
-            message: '存储配置更新成功（仅内存生效，重启后需重新配置。如需持久化请配置环境变量）'
+            message: '存储配置已保存，重启后自动恢复'
         });
     } catch (error) {
         console.error('更新存储配置失败:', error);
@@ -478,7 +534,7 @@ const updateStorageConfig = async (req, res) => {
 };
 
 /**
- * 测试存储配置
+ * 测试存储配置（上传一个 1x1 白色 PNG 验证连通性）
  * POST /admin/api/storage/test
  */
 const testStorageConfig = async (req, res) => {
@@ -486,15 +542,21 @@ const testStorageConfig = async (req, res) => {
         const { provider } = req.body;
         const testProvider = provider || storageConfig.provider;
 
-        // 创建测试文件
+        // 1x1 白色 PNG（最小合法图片文件）
+        const pngBuffer = Buffer.from(
+            '89504e470d0a1a0a0000000d49484452000000010000000108020000009001' +
+            '2e00000000c4944415478016360f8cfc00000000200015e186cb60000000049454e44ae426082',
+            'hex'
+        );
+
         const testFile = {
-            originalname: 'test.txt',
-            buffer: Buffer.from('Storage test file - ' + new Date().toISOString()),
-            size: 50,
-            mimetype: 'text/plain'
+            originalname: 'connection_test.png',
+            buffer: pngBuffer,
+            size: pngBuffer.length,
+            mimetype: 'image/png'
         };
 
-        // 临时切换provider测试
+        // 临时切换 provider 进行测试（不影响正在进行的上传）
         const originalProvider = storageConfig.provider;
         storageConfig.provider = testProvider;
 
@@ -504,8 +566,8 @@ const testStorageConfig = async (req, res) => {
 
             res.json({
                 code: 0,
-                message: `${testProvider} 配置测试成功`,
-                data: result
+                message: `${testProvider} 连接测试成功`,
+                data: { url: result.url, provider: result.provider }
             });
         } catch (e) {
             storageConfig.provider = originalProvider;
@@ -589,5 +651,6 @@ module.exports = {
     getUploadSignature,
     // 供其他模块调用的上传函数
     uploadFile,
-    storageConfig
+    storageConfig,
+    loadStorageConfigFromDB
 };

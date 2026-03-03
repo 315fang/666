@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const configController = require('../controllers/configController');
 const noticeController = require('../controllers/noticeController');
+const customPageController = require('../controllers/customPageController');
 
 // 获取公开配置
 router.get('/configs', configController.getPublicConfigs);
@@ -17,5 +18,8 @@ router.get('/homepage-config', configController.getHomePageConfig);
 
 // 获取发货与佣金规则说明
 router.get('/rules', noticeController.getRules);
+
+// 获取自定义页面（公开）
+router.get('/custom-pages/:key', customPageController.getCustomPage);
 
 module.exports = router;

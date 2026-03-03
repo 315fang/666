@@ -1,0 +1,88 @@
+<!-- 后端自定义页面渲染器 -->
+<view class="custom-page">
+  <!-- 加载骨架屏 -->
+  <loading-skeleton wx:if="{{loading}}" type="list" />
+
+  <!-- 页面内容区 -->
+  <block wx:if="{{!loading && blocks.length}}">
+    <block wx:for="{{blocks}}" wx:key="id">
+      <!-- Banner 轮播组件 -->
+      <view wx:if="{{item.type === 'banner'}}" class="block-banner">
+        <swiper
+          indicator-dots="{{item.config.indicatorDots !== false}}"
+          autoplay="{{item.config.autoplay !== false}}"
+          interval="{{item.config.interval || 3000}}"
+          circular
+        >
+          <swiper-item wx:for="{{item.config.images}}" wx:key="index" wx:for-item="img">
+            <image
+              src="{{img.url}}"
+              mode="widthFix"
+              class="banner-img"
+              lazy-load
+              bindtap="onBannerTap"
+              data-link="{{img.link}}"
+            />
+          </swiper-item>
+        </swiper>
+      </view>
+
+      <!-- 富文本/文章组件 -->
+      <view wx:elif="{{item.type === 'rich_text'}}" class="block-richtext">
+        <rich-text nodes="{{item.config.content}}" />
+      </view>
+
+      <!-- 商品列表组件 -->
+      <view wx:elif="{{item.type === 'product_list'}}" class="block-products">
+        <view wx:if="{{item.config.title}}" class="block-title">
+          <text>{{item.config.title}}</text>
+        </view>
+        <view class="product-grid">
+          <product-card
+            wx:for="{{item.config.products}}"
+            wx:key="id"
+            wx:for-item="product"
+            product="{{product}}"
+            bindtap="onProductTap"
+            data-id="{{product.id}}"
+          />
+        </view>
+      </view>
+
+      <!-- 图片单图组件 -->
+      <view wx:elif="{{item.type === 'image'}}" class="block-image">
+        <image
+          src="{{item.config.url}}"
+          mode="{{item.config.mode || 'widthFix'}}"
+          class="single-img"
+          lazy-load
+          bindtap="onImageTap"
+          data-link="{{item.config.link}}"
+        />
+      </view>
+
+      <!-- 公告/文本组件 -->
+      <view wx:elif="{{item.type === 'notice'}}" class="block-notice">
+        <bubble-notice content="{{item.config.content}}" />
+      </view>
+
+      <!-- 分割线 -->
+      <view wx:elif="{{item.type === 'divider'}}" class="block-divider">
+        <view class="divider-line" />
+      </view>
+
+      <!-- 按钮组件 -->
+      <view wx:elif="{{item.type === 'button'}}" class="block-button">
+        <ui-button
+          text="{{item.config.text}}"
+          type="{{item.config.style || 'primary'}}"
+          bindtap="onButtonTap"
+          data-link="{{item.config.link}}"
+        />
+      </view>
+    </block>
+  </block>
+
+  <!-- 空状态 -->
+  <empty-state wx:if="{{!loading && !blocks.length}}" text="页面内容暂未配置" />
+</view>

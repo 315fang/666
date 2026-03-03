@@ -77,6 +77,18 @@ const routes = [
         meta: { title: '首页装修', icon: 'Grid', group: '内容运营' }
       },
       {
+        path: 'page-builder',
+        name: 'PageBuilder',
+        component: () => import('@/views/page-builder/index.vue'),
+        meta: { title: '页面装修', icon: 'Files', group: '内容运营' }
+      },
+      {
+        path: 'theme',
+        name: 'Theme',
+        component: () => import('@/views/theme/index.vue'),
+        meta: { title: '主题换肤', icon: 'MagicStick', group: '内容运营' }
+      },
+      {
         path: 'materials',
         name: 'Materials',
         component: () => import('@/views/materials/index.vue'),
@@ -89,6 +101,12 @@ const routes = [
         meta: { title: '群发消息', icon: 'Message', group: '内容运营' }
       },
       // ===== 系统管理 =====
+      {
+        path: 'storage',
+        name: 'Storage',
+        component: () => import('@/views/storage/index.vue'),
+        meta: { title: '存储配置', icon: 'Upload', group: '系统管理' }
+      },
       {
         path: 'admins',
         name: 'Admins',
