@@ -1,6 +1,7 @@
 const { Order, User, Product, Address, SKU, CommissionLog, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
 const { sendNotification } = require('../../../models/notificationUtil');
+const AdminOrderService = require('../../../services/AdminOrderService');
 
 // 获取订单列表
 const getOrders = async (req, res) => {
@@ -136,140 +137,15 @@ const updateOrderStatus = async (req, res) => {
     }
 };
 
-// 发货（★ 使用事务，代理商发货时扣减云仓库存并计算发货利润）
+// 发货（提取至 AdminOrderService）
 const shipOrder = async (req, res) => {
-    const t = await sequelize.transaction();
     try {
         const { id } = req.params;
-        const { tracking_company, tracking_number, tracking_no: trackingNoAlt, logistics_company, fulfillment_type } = req.body;
-
-        const order = await Order.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
-        if (!order) {
-            await t.rollback();
-            return res.status(404).json({ code: -1, message: '订单不存在' });
-        }
-
-        // 允许 paid / agent_confirmed / shipping_requested 状态发货
-        const allowedStatuses = ['paid', 'agent_confirmed', 'shipping_requested'];
-        if (!allowedStatuses.includes(order.status)) {
-            await t.rollback();
-            return res.status(400).json({ code: -1, message: `当前订单状态(${order.status})不可发货` });
-        }
-
-        // ★★★ 修复"撞单"风险：如果代理商已进入发货流程，管理员却要用平台发货，给予拦截
-        if (fulfillment_type !== 'agent' && order.agent_id &&
-            ['agent_confirmed', 'shipping_requested'].includes(order.status)) {
-            await t.rollback();
-            return res.status(400).json({
-                code: -1,
-                message: `该订单代理商(ID:${order.agent_id})已在处理中（状态: ${order.status}），如需平台发货请先将状态回退为 paid，或联系代理商取消操作`
-            });
-        }
-
-        // ★ 如果是代理商发货，扣减代理商云仓库存 + 计算发货利润
-        if (fulfillment_type === 'agent' && order.agent_id) {
-            const agent = await User.findByPk(order.agent_id, { transaction: t, lock: t.LOCK.UPDATE });
-            if (!agent || agent.role_level < 3) {
-                await t.rollback();
-                return res.status(400).json({ code: -1, message: '代理商信息异常' });
-            }
-
-            // ★ 检查是否在 requestShipping 阶段已预扣库存
-            const alreadyDeducted = order.status === 'shipping_requested' && order.remark && order.remark.includes('[库存已预扣]');
-
-            if (!alreadyDeducted) {
-                if (agent.stock_count < order.quantity) {
-                    await t.rollback();
-                    return res.status(400).json({ code: -1, message: `代理商云库存不足（当前${agent.stock_count}，需要${order.quantity}）` });
-                }
-                await agent.decrement('stock_count', { by: order.quantity, transaction: t });
-            }
-
-            // ★★★ 修复"库存双重扣除"：仅当 createOrder 阶段扣了平台库存时才补回
-            // 如果下单时走的是代理商云库存兜底（platform_stock_deducted=0），则不需要补回
-            const platformDeducted = parseInt(order.platform_stock_deducted) !== 0;
-            if (platformDeducted) {
-                const orderProduct = await Product.findByPk(order.product_id, { transaction: t });
-                if (orderProduct) {
-                    await orderProduct.increment('stock', { by: order.quantity, transaction: t });
-                }
-                if (order.sku_id) {
-                    const orderSku = await SKU.findByPk(order.sku_id, { transaction: t });
-                    if (orderSku) {
-                        await orderSku.increment('stock', { by: order.quantity, transaction: t });
-                    }
-                }
-            }
-
-            order.fulfillment_type = 'Agent';
-            order.fulfillment_partner_id = order.agent_id;
-
-            // ★★★ 在实际发货时计算代理商利润（使用下单时锁定的进货价）
-            const orderProduct2 = await Product.findByPk(order.product_id, { transaction: t });
-            if (orderProduct2) {
-                const agentCostPrice = order.locked_agent_cost
-                    ? parseFloat(order.locked_agent_cost)
-                    : parseFloat(orderProduct2.price_agent || orderProduct2.price_leader || orderProduct2.price_member || orderProduct2.retail_price);
-                const agentCost = agentCostPrice * order.quantity;
-                const buyerPaid = parseFloat(order.actual_price);
-                const middleCommission = parseFloat(order.middle_commission_total) || 0;
-                const agentProfit = buyerPaid - agentCost - middleCommission;
-
-                // ★ 代理商自购不产生发货利润
-                if (agentProfit > 0 && order.buyer_id !== order.agent_id) {
-                    await CommissionLog.create({
-                        order_id: order.id,
-                        user_id: order.agent_id,
-                        amount: agentProfit,
-                        type: 'agent_fulfillment',
-                        status: 'frozen',
-                        available_at: null, // 确认收货后才设置
-                        remark: `代理商发货利润 (锁定进货价${agentCostPrice}×${order.quantity}=${agentCost}, 中间佣金${middleCommission.toFixed(2)})`
-                    }, { transaction: t });
-
-                    await sendNotification(
-                        order.agent_id,
-                        '发货收益提醒',
-                        `您的团队产生了一笔发货订单，发货利润 ¥${agentProfit.toFixed(2)}（确认收货后T+7结算）。`,
-                        'commission',
-                        order.id
-                    );
-                } else {
-                    // ★★★ 利润 <= 0 告警：通知管理员人工核查
-                    console.error(`⚠️ [利润异常] 订单 ${order.order_no || order.id} 代理商(ID:${order.agent_id})发货利润为 ¥${agentProfit.toFixed(2)}，请人工核查！`);
-                    await sendNotification(
-                        0,
-                        '⚠️ 发货利润异常',
-                        `订单ID:${order.id} 代理商发货利润为 ¥${agentProfit.toFixed(2)}（<=0），买家实付=${buyerPaid}，进货成本=${agentCost}，中间佣金=${middleCommission}。请人工核查！`,
-                        'system_alert',
-                        order.id
-                    );
-                }
-            }
-        } else {
-            order.fulfillment_type = 'Company';
-        }
-
-        // 兼容不同字段名
-        const finalTrackingNo = tracking_number || trackingNoAlt || '';
-        const finalCompany = tracking_company || logistics_company || '';
-
-        order.status = 'shipped';
-        order.shipped_at = new Date();
-        order.tracking_no = finalTrackingNo;
-        // 将物流公司存入 remark（如有独立字段可替换）
-        if (finalCompany) {
-            order.remark = (order.remark ? order.remark + ' | ' : '') + `物流: ${finalCompany} ${finalTrackingNo}`;
-        }
-        await order.save({ transaction: t });
-
-        await t.commit();
-
-        res.json({ code: 0, message: '发货成功', data: { tracking_no: finalTrackingNo, logistics_company: finalCompany } });
+        const result = await AdminOrderService.shipOrder(id, req.body);
+        res.json({ code: 0, message: '发货成功', data: result });
     } catch (error) {
-        await t.rollback();
         console.error('发货失败:', error);
-        res.status(500).json({ code: -1, message: '发货失败: ' + error.message });
+        res.status(500).json({ code: -1, message: error.message || '发货失败' });
     }
 };
 
@@ -405,82 +281,25 @@ const addOrderRemark = async (req, res) => {
 };
 
 /**
- * ★ 转移订单归属代理商
+ * ★ 转移订单归属代理商 (提取至 AdminOrderService)
  * PUT /admin/api/orders/:id/transfer-agent
- * body: { new_agent_id: 123, reason: '说明' }
  */
 const transferOrderAgent = async (req, res) => {
-    const t = await sequelize.transaction();
     try {
         const { id } = req.params;
         const { new_agent_id, reason } = req.body;
         const adminName = req.admin?.username || 'unknown';
 
-        const order = await Order.findByPk(id, { transaction: t });
-        if (!order) {
-            await t.rollback();
-            return res.status(404).json({ code: -1, message: '订单不存在' });
-        }
-
-        // 仅允许待发货的订单转移
-        if (!['paid', 'agent_confirmed', 'shipping_requested'].includes(order.status)) {
-            await t.rollback();
-            return res.status(400).json({ code: -1, message: '仅待发货订单可以转移' });
-        }
-
-        const oldAgentId = order.agent_id;
-
-        // 转为平台发货：new_agent_id 为 null 或 0
-        if (!new_agent_id || new_agent_id === 0) {
-            await order.update({
-                agent_id: null,
-                fulfillment_type: 'Company',
-                status: 'paid',
-                remark: (order.remark || '') + ` [管理员${adminName}转平台发货 原因:${reason || '-'}]`
-            }, { transaction: t });
-
-            await t.commit();
-            return res.json({
-                code: 0,
-                message: '订单已转为平台发货',
-                data: { old_agent_id: oldAgentId, new_agent_id: null }
-            });
-        }
-
-        // 转给新代理商
-        const newAgent = await User.findByPk(new_agent_id, { transaction: t });
-        if (!newAgent || newAgent.role_level < 3) {
-            await t.rollback();
-            return res.status(404).json({ code: -1, message: '目标用户不存在或不是代理商' });
-        }
-
-        await order.update({
-            agent_id: newAgent.id,
-            fulfillment_type: 'Agent_Pending',
-            status: 'paid',
-            remark: (order.remark || '') + ` [管理员${adminName}转代理商${newAgent.nickname}(${newAgent.id}) 原因:${reason || '-'}]`
-        }, { transaction: t });
-
-        await t.commit();
-
-        // 通知新代理商
-        await sendNotification(
-            newAgent.id,
-            '新订单分配',
-            `管理员转移给您一笔订单 ${order.order_no}，请及时处理发货。`,
-            'order',
-            order.id
-        );
+        const result = await AdminOrderService.transferOrderAgent(id, new_agent_id, reason, adminName);
 
         res.json({
             code: 0,
-            message: '订单转移成功',
-            data: { old_agent_id: oldAgentId, new_agent_id: newAgent.id }
+            message: '订单转移操作成功',
+            data: result
         });
     } catch (error) {
-        await t.rollback();
         console.error('转移订单失败:', error);
-        res.status(500).json({ code: -1, message: '转移失败' });
+        res.status(500).json({ code: -1, message: error.message || '转移失败' });
     }
 };
 
@@ -522,66 +341,25 @@ const forceCompleteOrder = async (req, res) => {
 };
 
 /**
- * ★ 强制取消订单（退款+恢复库存）
+ * ★ 强制取消订单（退款+恢复库存）(提取至 AdminOrderService)
  * PUT /admin/api/orders/:id/force-cancel
- * body: { reason: '说明' }
  */
 const forceCancelOrder = async (req, res) => {
-    const t = await sequelize.transaction();
     try {
         const { id } = req.params;
         const { reason } = req.body;
         const adminName = req.admin?.username || 'unknown';
 
         if (!reason) {
-            await t.rollback();
             return res.status(400).json({ code: -1, message: '请说明取消原因' });
         }
 
-        const order = await Order.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
-        if (!order) {
-            await t.rollback();
-            return res.status(404).json({ code: -1, message: '订单不存在' });
-        }
-
-        if (['completed', 'cancelled', 'refunded'].includes(order.status)) {
-            await t.rollback();
-            return res.status(400).json({ code: -1, message: '该订单状态不允许取消' });
-        }
-
-        // 恢复库存
-        const product = await Product.findByPk(order.product_id, { transaction: t });
-        if (product && order.status !== 'pending') {
-            await product.increment('stock', { by: order.quantity, transaction: t });
-        }
-
-        // 撤销相关佣金
-        await CommissionLog.update(
-            { status: 'cancelled', remark: `[管理员${adminName}取消订单] ${reason}` },
-            { where: { order_id: id, status: { [Op.in]: ['frozen', 'pending_approval'] } }, transaction: t }
-        );
-
-        await order.update({
-            status: 'cancelled',
-            remark: (order.remark || '') + ` [管理员${adminName}强制取消 原因:${reason}]`
-        }, { transaction: t });
-
-        await t.commit();
-
-        // 通知买家
-        await sendNotification(
-            order.buyer_id,
-            '订单取消通知',
-            `您的订单 ${order.order_no} 已被取消，如有疑问请联系客服。`,
-            'order',
-            order.id
-        );
+        await AdminOrderService.forceCancelOrder(id, reason, adminName);
 
         res.json({ code: 0, message: '订单已取消' });
     } catch (error) {
-        await t.rollback();
         console.error('取消订单失败:', error);
-        res.status(500).json({ code: -1, message: '取消失败' });
+        res.status(500).json({ code: -1, message: error.message || '取消失败' });
     }
 };
 

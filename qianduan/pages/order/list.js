@@ -101,28 +101,7 @@ Page({
                 return order;
             });
 
-            // 为新订单添加入场动画标记
-            const ordersWithAnim = newOrders.map((order, index) => ({
-                ...order,
-                animateIn: !append  // 首次加载时添加动画
-            }));
-
-            this.setData({
-                orders: append ? [...this.data.orders, ...ordersWithAnim] : ordersWithAnim,
-                hasMore: newOrders.length >= limit,
-                loading: false
-            });
-
-            // 清除动画标记
-            if (!append) {
-                setTimeout(() => {
-                    const clearedOrders = this.data.orders.map(order => ({
-                        ...order,
-                        animateIn: false
-                    }));
-                    this.setData({ orders: clearedOrders });
-                }, 800);
-            }
+            this._applyAnimAndSet(newOrders, append, newOrders.length >= limit);
         } catch (err) {
             ErrorHandler.handle(err, {
                 customMessage: '加载订单失败，请稍后重试'
@@ -141,8 +120,8 @@ Page({
             // 将退款记录转换为类订单结构（便于复用同一个模板）
             const newOrders = refundList.map(refund => {
                 const order = refund.order || {};
-                if (order.product && typeof order.product.images === 'string') {
-                    try { order.product.images = JSON.parse(order.product.images); } catch (e) { order.product.images = []; }
+                if (order.product) {
+                    order.product.images = parseImages(order.product.images); // ★ 统一使用 dataFormatter.parseImages
                 }
 
                 return {
@@ -158,31 +137,32 @@ Page({
                 };
             });
 
-            // 为新订单添加入场动画标记
-            const ordersWithAnim = newOrders.map((order, index) => ({
-                ...order,
-                animateIn: !append
-            }));
-
-            this.setData({
-                orders: append ? [...this.data.orders, ...ordersWithAnim] : ordersWithAnim,
-                hasMore: refundList.length >= limit,
-                loading: false
-            });
-
-            // 清除动画标记
-            if (!append) {
-                setTimeout(() => {
-                    const clearedOrders = this.data.orders.map(order => ({
-                        ...order,
-                        animateIn: false
-                    }));
-                    this.setData({ orders: clearedOrders });
-                }, 800);
-            }
+            this._applyAnimAndSet(newOrders, append, refundList.length >= limit);
         } catch (err) {
             console.error('加载退款列表失败:', err);
             this.setData({ loading: false });
+        }
+    },
+
+    /**
+     * ★ 私有方法：添加入场动画标记并更新 data，动画结束后自动清除标记
+     * @param {Array} orders - 订单/退款列表
+     * @param {boolean} append - 是否追加（加载更多
+     * @param {boolean} hasMore - 是否还有更多
+     */
+    _applyAnimAndSet(orders, append, hasMore) {
+        const ordersWithAnim = orders.map(order => ({ ...order, animateIn: !append }));
+        this.setData({
+            orders: append ? [...this.data.orders, ...ordersWithAnim] : ordersWithAnim,
+            hasMore,
+            loading: false
+        });
+        if (!append) {
+            setTimeout(() => {
+                this.setData({
+                    orders: this.data.orders.map(o => ({ ...o, animateIn: false }))
+                });
+            }, 800);
         }
     },
 

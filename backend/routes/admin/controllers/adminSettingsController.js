@@ -6,6 +6,7 @@
  */
 const { AppConfig } = require('../../../models');
 const constants = require('../../../config/constants');
+const { clearHomepageCache } = require('../../../controllers/configController');
 
 /**
  * 获取所有系统设置
@@ -23,13 +24,13 @@ const getSettings = async (req, res) => {
             if (!dbSettings[config.category]) {
                 dbSettings[config.category] = {};
             }
-            
+
             let value = config.config_value;
             // 类型转换
             if (config.config_type === 'number') value = parseFloat(value);
             if (config.config_type === 'boolean') value = (value === 'true');
             if (config.config_type === 'json') {
-                try { value = JSON.parse(value); } catch(e) {}
+                try { value = JSON.parse(value); } catch (e) { }
             }
 
             dbSettings[config.category][config.config_key] = value;
@@ -41,7 +42,7 @@ const getSettings = async (req, res) => {
             COMMISSION: { ...constants.COMMISSION, ...(dbSettings.COMMISSION || {}) },
             WITHDRAWAL: { ...constants.WITHDRAWAL, ...(dbSettings.WITHDRAWAL || {}) },
             REFUND: { ...constants.REFUND, ...(dbSettings.REFUND || {}) },
-            UPGRADE_RULES: { 
+            UPGRADE_RULES: {
                 MEMBER_TO_LEADER_REFEREE: constants.UPGRADE_RULES.MEMBER_TO_LEADER.referee_count,
                 LEADER_TO_AGENT_ORDERS: constants.UPGRADE_RULES.LEADER_TO_AGENT.order_count,
                 LEADER_TO_AGENT_RECHARGE: constants.UPGRADE_RULES.LEADER_TO_AGENT.recharge_amount,
@@ -98,6 +99,9 @@ const updateSettings = async (req, res) => {
         }
 
         await Promise.all(operations);
+
+        // ★ 配置项可能涉及首页 Feature Cards，因此清除缓存
+        clearHomepageCache();
 
         res.json({
             code: 0,

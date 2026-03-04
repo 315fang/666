@@ -1,7 +1,7 @@
 require('dotenv').config();
 const app = require('./app');
 const { sequelize, testConnection } = require('./config/database');
-const { settleCommissions, autoCancelExpiredOrders, autoConfirmOrders, processRefundDeadlineExpired, autoTransferAgentOrders } = require('./controllers/orderController');
+const OrderJobService = require('./services/OrderJobService');
 const constants = require('./config/constants');
 const { executeWithLock } = require('./utils/taskLock');
 const AIOpsService = require('./services/AIOpsService');
@@ -82,7 +82,7 @@ async function startServer() {
         const settleInterval = constants.COMMISSION.SETTLE_INTERVAL_MS;
         setInterval(async () => {
             await executeWithLock('settleCommissions', async () => {
-                const count = await settleCommissions();
+                const count = await OrderJobService.settleCommissions();
                 if (count > 0) {
                     console.log(`[定时任务] 佣金结算完成: ${count} 条记录`);
                 }
@@ -94,7 +94,7 @@ async function startServer() {
         // ★ 定时任务：自动取消超时未支付订单（每分钟检查一次）
         setInterval(async () => {
             await executeWithLock('autoCancelOrders', async () => {
-                await autoCancelExpiredOrders();
+                await OrderJobService.autoCancelExpiredOrders();
             }, { timeout: 2 * 60 * 1000 }).catch(err => {
                 console.error('[定时任务] 自动取消订单异常:', err);
             });
@@ -103,7 +103,7 @@ async function startServer() {
         // ★ 定时任务：自动确认收货（每小时检查一次）
         setInterval(async () => {
             await executeWithLock('autoConfirmOrders', async () => {
-                await autoConfirmOrders();
+                await OrderJobService.autoConfirmOrders();
             }, { timeout: 10 * 60 * 1000 }).catch(err => {
                 console.error('[定时任务] 自动确认收货异常:', err);
             });
@@ -112,7 +112,7 @@ async function startServer() {
         // ★ 定时任务：售后期结束处理（每10分钟检查一次）
         setInterval(async () => {
             await executeWithLock('processRefundDeadline', async () => {
-                await processRefundDeadlineExpired();
+                await OrderJobService.processRefundDeadlineExpired();
             }, { timeout: 10 * 60 * 1000 }).catch(err => {
                 console.error('[定时任务] 售后期结束处理异常:', err);
             });
@@ -121,7 +121,7 @@ async function startServer() {
         // ★ 定时任务：代理商订单超时自动转平台（每30分钟检查一次）
         setInterval(async () => {
             await executeWithLock('autoTransferAgentOrders', async () => {
-                await autoTransferAgentOrders();
+                await OrderJobService.autoTransferAgentOrders();
             }, { timeout: 10 * 60 * 1000 }).catch(err => {
                 console.error('[定时任务] 代理商订单超时转平台异常:', err);
             });
@@ -140,13 +140,13 @@ async function startServer() {
 
         // 启动时也执行一次（使用锁机制）
         executeWithLock('settleCommissions', async () => {
-            const count = await settleCommissions();
+            const count = await OrderJobService.settleCommissions();
             if (count > 0) console.log(`[启动结算] 佣金结算完成: ${count} 条记录`);
         }).catch(() => { });
-        executeWithLock('autoCancelOrders', autoCancelExpiredOrders).catch(() => { });
-        executeWithLock('autoConfirmOrders', autoConfirmOrders).catch(() => { });
-        executeWithLock('processRefundDeadline', processRefundDeadlineExpired).catch(() => { });
-        executeWithLock('autoTransferAgentOrders', autoTransferAgentOrders).catch(() => { });
+        executeWithLock('autoCancelOrders', OrderJobService.autoCancelExpiredOrders).catch(() => { });
+        executeWithLock('autoConfirmOrders', OrderJobService.autoConfirmOrders).catch(() => { });
+        executeWithLock('processRefundDeadline', OrderJobService.processRefundDeadlineExpired).catch(() => { });
+        executeWithLock('autoTransferAgentOrders', OrderJobService.autoTransferAgentOrders).catch(() => { });
 
         // ★ 初始化AI运维监控服务
         await AIOpsService.initialize();

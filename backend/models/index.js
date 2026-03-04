@@ -48,6 +48,7 @@ const SlashHelper = require('./SlashHelper');
 // ★ Phase 4：自提核销 + 服务站点
 const ServiceStation = require('./ServiceStation');
 const StationClaim = require('./StationClaim');
+const MaterialGroup = require('./MaterialGroup');
 
 // ========== 用户相关关联 ==========
 User.hasMany(Order, { foreignKey: 'buyer_id', as: 'orders' });
@@ -122,6 +123,10 @@ Order.belongsTo(SKU, { foreignKey: 'sku_id', as: 'sku' });
 // ========== 素材关联 ==========
 Material.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 Product.hasMany(Material, { foreignKey: 'product_id', as: 'materials' });
+
+// ========== 素材库关联 ==========
+MaterialGroup.hasMany(Material, { foreignKey: 'group_id', as: 'materials' });
+Material.belongsTo(MaterialGroup, { foreignKey: 'group_id', as: 'group' });
 
 // ========== 管理员关联 ==========
 Refund.belongsTo(Admin, { foreignKey: 'admin_id', as: 'admin' });
@@ -258,5 +263,7 @@ module.exports = {
     SlashHelper,
     // Phase 4: 自提核销 + 服务站点
     ServiceStation,
-    StationClaim
+    StationClaim,
+    // 素材库分组
+    MaterialGroup
 };

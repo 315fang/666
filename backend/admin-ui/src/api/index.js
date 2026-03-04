@@ -453,3 +453,12 @@ export const deleteMassMessage = (id) => request({ url: `/mass-messages/${id}`, 
 export const getContents = (params) => request({ url: '/contents', method: 'get', params })
 export const createContent = (data) => request({ url: '/contents', method: 'post', data })
 export const updateContent = (id, data) => request({ url: `/contents/${id}`, method: 'put', data })
+
+// ========== 首页装修 (Low Code Block Editor) ==========
+export const getHomeSections = () => request({ url: '/home-sections', method: 'get' })
+export const getSectionSchemas = () => request({ url: '/home-sections/schemas', method: 'get' })
+export const createHomeSection = (data) => request({ url: '/home-sections', method: 'post', data })
+export const updateHomeSection = (id, data) => request({ url: `/home-sections/${id}`, method: 'put', data })
+export const toggleSectionVisible = (id) => request({ url: `/home-sections/${id}/toggle`, method: 'put' })
+export const deleteHomeSection = (id) => request({ url: `/home-sections/${id}`, method: 'delete' })
+export const updateSectionSort = (data) => request({ url: '/home-sections/sort', method: 'post', data })

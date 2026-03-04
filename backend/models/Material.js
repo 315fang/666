@@ -37,6 +37,11 @@ const Material = sequelize.define('Material', {
         allowNull: true,
         comment: '关联商品ID'
     },
+    group_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: '所属分组ID，null=未分组，关联 material_groups 表'
+    },
     category: {
         type: DataTypes.STRING(50),
         allowNull: true,

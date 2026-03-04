@@ -100,17 +100,22 @@ if (process.env.NODE_ENV !== 'test') {
     app.use(requestLogger);
 }
 
-// ★ 安全头中间件（防 XSS、点击劫持等）
-app.use((req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    if (process.env.NODE_ENV === 'production') {
-        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    }
-    next();
-});
+// ★ 安全头中间件（防 XSS、点击劫持、跨站等）
+const helmet = require('helmet');
+const xssClean = require('xss-clean');
+const hpp = require('hpp'); // 防 HTTP 参数污染
+
+// 配置 helmet，放行跨域资源（主要是图片静态资源）
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: false // 若后续前端有限制，可以按需开启
+}));
+
+// 对 req.body, req.query, req.params 进行 XSS 净化
+app.use(xssClean());
+
+// 防御 HTTP 参数污染（放在 urlencoded 之后）
+app.use(hpp());
 
 // 接口请求频率限制 - 防止恶意刷接口
 const apiLimiter = rateLimit({

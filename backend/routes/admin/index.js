@@ -110,8 +110,15 @@ router.put('/dealers/:id/approve', checkPermission('dealers'), adminDealerContro
 router.put('/dealers/:id/reject', checkPermission('dealers'), adminDealerController.rejectDealer);
 router.put('/dealers/:id/level', checkPermission('dealers'), adminDealerController.updateDealerLevel);
 
-// ========== 素材管理 ==========
+// ========== 素材库管理 ==========
 const adminMaterialController = require('./controllers/adminMaterialController');
+// 素材分组
+router.get('/material-groups', checkPermission('content'), adminMaterialController.getGroups);
+router.post('/material-groups', checkPermission('content'), adminMaterialController.createGroup);
+router.put('/material-groups/:id', checkPermission('content'), adminMaterialController.updateGroup);
+router.delete('/material-groups/:id', checkPermission('content'), adminMaterialController.deleteGroup);
+router.post('/material-groups/move', checkPermission('content'), adminMaterialController.moveMaterials);
+// 素材（支持 ?group_id=xxx 过滤）
 router.get('/materials', checkPermission('content'), adminMaterialController.getMaterials);
 router.get('/materials/:id', checkPermission('content'), adminMaterialController.getMaterialById);
 router.post('/materials', checkPermission('content'), adminMaterialController.createMaterial);
@@ -286,9 +293,13 @@ router.put('/storage/config', checkPermission('settings'), adminUploadController
 router.post('/storage/test', checkPermission('settings'), adminUploadController.testStorageConfig);  // 测试存储配置
 router.get('/storage/signature', adminUploadController.getUploadSignature);  // 获取上传签名（前端直传用）
 
-// ========== AI运维监控中心（★新增） ==========
-const aiOpsRoutes = require('./ai-ops');
-router.use('/ai-ops', aiOpsRoutes);
+// ========== 轻量调试入口（替代 AIOps，仅管理员可访问）==========
+// GET /admin/api/debug/logs     - 读最新错误日志
+// GET /admin/api/debug/process  - Node 进程内存/运行时状态
+// GET /admin/api/debug/anomalies - 近期异常订单速览
+// GET /admin/api/debug/db-ping  - 数据库连接延迟测试
+const debugRoutes = require('./debug');
+router.use('/debug', debugRoutes);
 
 // ========== AI配置管理（★新增） ==========
 const aiConfigRoutes = require('./ai-config');

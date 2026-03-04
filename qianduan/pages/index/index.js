@@ -77,7 +77,7 @@ Page({
 
                 // 2. 没拿到就读持久化 Storage
                 if (!data) {
-                    const CACHE_KEY = 'home_page_data_cache';
+                    const CACHE_KEY = 'home_config_cache'; // ★ 与 app.js prefetchHomeData 写入时的 key 保持一致
                     const cached = wx.getStorageSync(CACHE_KEY);
                     if (cached && cached.expireAt > Date.now()) {
                         data = cached.data;

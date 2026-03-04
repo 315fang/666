@@ -4,6 +4,8 @@
  */
 
 const { getApiBaseUrl, isLogEnabled } = require('../config/env');
+const { ErrorHandler } = require('./errorHandler');
+
 
 // 请求配置
 const config = {
@@ -222,46 +224,27 @@ function addRefreshSubscriber(callback) {
  * 登录过期处理（带防重复刷新机制）
  */
 function handleLoginExpired() {
-    // 如果正在刷新 token，直接返回
+    // 如果正在刷新 token，直接加入等待队列
     if (isRefreshingToken) {
         return new Promise((resolve) => {
-            addRefreshSubscriber(() => {
-                resolve();
-            });
+            addRefreshSubscriber(() => resolve());
         });
     }
 
     isRefreshingToken = true;
 
-    // 清除本地登录信息
-    wx.removeStorageSync('token');
-    wx.removeStorageSync('openid');
-    wx.removeStorageSync('userInfo');
+    // ★ 统一调用 ErrorHandler.handleLoginExpired() 处理清除 + 提示 + 重新登录
+    //    避免在 request.js 和 errorHandler.js 中重复相同的清除逻辑
+    ErrorHandler.handleLoginExpired();
 
-    // 显示提示
-    wx.showToast({
-        title: '登录已过期，正在重新登录...',
-        icon: 'none',
-        duration: 2500
+    return new Promise((resolve, reject) => {
+        // 等待 handleLoginExpired 内的 wxLogin 完成后通知等待队列
+        setTimeout(() => {
+            isRefreshingToken = false;
+            onTokenRefreshed();
+            resolve();
+        }, 1500);
     });
-
-    // 尝试自动重新登录
-    const appInstance = getApp();
-    if (appInstance && appInstance.wxLogin) {
-        return appInstance.wxLogin()
-            .then(() => {
-                isRefreshingToken = false;
-                onTokenRefreshed();
-            })
-            .catch((error) => {
-                isRefreshingToken = false;
-                refreshSubscribers = [];
-                console.error('自动登录失败:', error);
-            });
-    } else {
-        isRefreshingToken = false;
-        return Promise.reject(new Error('无法自动登录'));
-    }
 }
 
 // 快捷方法
@@ -295,7 +278,7 @@ function uploadFile(url, filePath, name = 'file', formData = {}, options = {}) {
                 let data = res.data;
                 try {
                     data = JSON.parse(res.data);
-                } catch (e) {}
+                } catch (e) { }
 
                 if (res.statusCode >= 200 && res.statusCode < 300) {
                     if (data && (data.code === 0 || data.success === true)) {

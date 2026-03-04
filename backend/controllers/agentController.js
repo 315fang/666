@@ -12,6 +12,7 @@ const { Order, Product, SKU, User, CommissionLog, sequelize } = require('../mode
 const { sendNotification } = require('../models/notificationUtil');
 const { Op } = require('sequelize');
 const constants = require('../config/constants');
+const CommissionService = require('../services/CommissionService');
 
 /**
  * 获取代理商工作台数据
@@ -188,126 +189,20 @@ const agentShip = async (req, res) => {
         // ★ 扣减代理商云库存
         await agent.decrement('stock_count', { by: order.quantity, transaction: t });
 
-        // ★★★ 核心：计算团队级差佣金 + 代理商发货利润（与 shipOrder 逻辑统一）
+        // ★★★ 核心：调用统一方法计算团队级差佣金 + 代理商发货利润
+        //   原来190-310行重复逻辑已提取到 CommissionService.calculateGapAndFulfillmentCommissions
         const buyer = await User.findByPk(order.buyer_id, { transaction: t });
         const orderProduct = await Product.findByPk(order.product_id, { transaction: t });
 
         if (orderProduct && buyer) {
-            const priceMap = {
-                0: parseFloat(orderProduct.retail_price || 0),
-                1: parseFloat(orderProduct.price_member || orderProduct.retail_price || 0),
-                2: parseFloat(orderProduct.price_leader || orderProduct.price_member || orderProduct.retail_price || 0),
-                3: parseFloat(orderProduct.price_agent || orderProduct.price_leader || orderProduct.price_member || orderProduct.retail_price || 0)
-            };
-
-            // ---- 1. 级差分润：向上遍历分销链 ----
-            let currentLevel = buyer.role_level;
-            let lastCost = priceMap[currentLevel] || priceMap[0];
-            let pRef = buyer.parent_id;
-            let middleCommissionTotal = 0;
-            const visitedIds = new Set();
-            visitedIds.add(buyer.id); // 防止自购自佣
-
-            while (pRef) {
-                if (visitedIds.has(pRef) || visitedIds.size > 50) {
-                    console.error(`⚠️ [严重警告] 发现循环绑定或异常深度的代理树！用户ID: ${buyer.id}, 异常节点: ${pRef}`);
-                    // 强制发送异常告警通知给管理员
-                    sendNotification(
-                        0,
-                        '🚨 严重系统告警：代理关系循环',
-                        `系统在计算佣金(订单 ${order.id})时检测到代理关系闭环或深度过深！请立即排查用户 ${buyer.id} 与 ${pRef} 的上下级关系。处理过程已强行切断以保护服务器。`,
-                        'system_alert',
-                        order.id
-                    ).catch(e => console.error(e));
-                    break;
-                }
-                visitedIds.add(pRef);
-
-                const p = await User.findByPk(pRef, { transaction: t });
-                if (!p) break;
-
-                if (p.role_level > currentLevel) {
-                    const parentCost = priceMap[p.role_level];
-                    const gapProfit = (lastCost - parentCost) * order.quantity;
-
-                    if (gapProfit > 0) {
-                        // 如果该上级就是代理商本人，不发级差佣金（代理商利润在下面统一算）
-                        const isOrderAgent = (order.agent_id && order.agent_id === p.id);
-                        if (!isOrderAgent) {
-                            await CommissionLog.create({
-                                order_id: order.id,
-                                user_id: p.id,
-                                amount: gapProfit,
-                                type: 'gap',
-                                status: 'frozen',
-                                available_at: null,
-                                refund_deadline: null, // 确认收货后设置
-                                remark: `团队级差利润 Lv${currentLevel}→Lv${p.role_level}`
-                            }, { transaction: t });
-
-                            middleCommissionTotal += gapProfit;
-
-                            await sendNotification(
-                                p.id,
-                                '收益到账提醒',
-                                `您的下级产生了一笔订单(代理商发货)，您获得级差收益 ¥${gapProfit.toFixed(2)}（需售后期结束+审批后结算）。`,
-                                'commission',
-                                order.id
-                            );
-                        }
-                    }
-
-                    lastCost = parentCost;
-                    currentLevel = p.role_level;
-                }
-
-                pRef = p.parent_id;
-                if (currentLevel >= 3) break;
-            }
-
-            // 记录中间佣金总额到订单
-            order.middle_commission_total = middleCommissionTotal;
-
-            // ---- 2. 代理商发货利润 ----
-            const agentCostPrice = order.locked_agent_cost
-                ? parseFloat(order.locked_agent_cost)
-                : parseFloat(orderProduct.price_agent || orderProduct.price_leader || orderProduct.price_member || orderProduct.retail_price);
-            const agentCost = agentCostPrice * order.quantity;
-            const buyerPaid = parseFloat(order.actual_price);
-            const agentProfit = buyerPaid - agentCost - middleCommissionTotal;
-
-            // ★ 代理商自购也能获得利润（自己库存发自己的货，利润 = 价差）
-            if (agentProfit > 0) {
-                await CommissionLog.create({
-                    order_id: order.id,
-                    user_id: userId,
-                    amount: agentProfit,
-                    type: 'agent_fulfillment',
-                    status: 'frozen',
-                    available_at: null,
-                    refund_deadline: null, // 确认收货后设置
-                    remark: `代理商发货利润 (进货价${agentCostPrice}×${order.quantity}=${agentCost}, 中间佣金${middleCommissionTotal.toFixed(2)})`
-                }, { transaction: t });
-
-                await sendNotification(
-                    userId,
-                    '发货收益提醒',
-                    `您的团队产生了一笔发货订单，发货利润 ¥${agentProfit.toFixed(2)}（需售后期结束+审批后结算）。`,
-                    'commission',
-                    order.id
-                );
-            } else if (agentProfit < 0) {
-                // ★★★ 佣金负数保护：不产生佣金记录，只告警
-                console.error(`⚠️ [利润异常] 订单 ${order.order_no || order.id} 代理商(ID:${userId})发货利润为 ¥${agentProfit.toFixed(2)}，不产生佣金！`);
-                await sendNotification(
-                    0,
-                    '⚠️ 发货利润异常告警',
-                    `订单ID:${order.id} 代理商发货利润为 ¥${agentProfit.toFixed(2)}（<0），不产生佣金。实付=${buyerPaid}，进货成本=${agentCost}，中间佣金=${middleCommissionTotal}。请检查商品定价！`,
-                    'system_alert',
-                    order.id
-                );
-            }
-            // agentProfit === 0 时不产生佣金记录，但也不告警
+            await CommissionService.calculateGapAndFulfillmentCommissions({
+                order,
+                buyer,
+                product: orderProduct,
+                agentId: userId,
+                transaction: t,
+                notifySource: '代理商自行发货'
+            });
         }
 
         // 更新订单
@@ -449,7 +344,7 @@ const getStockLogs = async (req, res) => {
         const { page = 1, limit = 20 } = req.query;
         const offset = (parseInt(page) - 1) * parseInt(limit);
 
-        // 采购入仓记录（Restock 订单）
+        // 采购入仓记录（Restock 订单）- 查全量用于精确分页
         const restockOrders = await Order.findAll({
             where: {
                 buyer_id: userId,
@@ -457,11 +352,10 @@ const getStockLogs = async (req, res) => {
             },
             attributes: ['id', 'order_no', 'quantity', 'total_amount', 'created_at'],
             include: [{ model: Product, as: 'product', attributes: ['id', 'name'] }],
-            order: [['created_at', 'DESC']],
-            limit: 50
+            order: [['created_at', 'DESC']]
         });
 
-        // 发货扣减记录（Agent 发货）
+        // 发货扣减记录（Agent 发货）- 查全量用于精确分页
         const shipOrders = await Order.findAll({
             where: {
                 fulfillment_partner_id: userId,
@@ -473,8 +367,7 @@ const getStockLogs = async (req, res) => {
                 { model: Product, as: 'product', attributes: ['id', 'name'] },
                 { model: User, as: 'buyer', attributes: ['id', 'nickname'] }
             ],
-            order: [['shipped_at', 'DESC']],
-            limit: 50
+            order: [['shipped_at', 'DESC']]
         });
 
         // 合并并按时间排序
@@ -501,7 +394,7 @@ const getStockLogs = async (req, res) => {
             }))
         ].sort((a, b) => new Date(b.time) - new Date(a.time));
 
-        // 分页
+        // 精确分页（合并后全量切片，total 准确）
         const total = logs.length;
         const paginatedLogs = logs.slice(offset, offset + parseInt(limit));
 

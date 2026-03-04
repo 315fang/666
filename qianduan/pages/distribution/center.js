@@ -2,6 +2,7 @@
 const app = getApp();
 const { get, post } = require('../../utils/request');
 const { ROLE_NAMES } = require('../../config/constants');
+const { showError } = require('../../utils/errorHandler');
 
 // 状态字典
 const COMMISSION_STATUS_MAP = {
@@ -161,6 +162,7 @@ Page({
             }
         } catch (err) {
             console.error('加载分销统计失败', err);
+            showError('加载分销数据失败，请稍后重试');
         }
     },
 
@@ -176,6 +178,7 @@ Page({
             }
         } catch (err) {
             console.error('加载钱包失败', err);
+            showError('加载钱包信息失败，请稍后重试');
         }
     },
 
@@ -188,7 +191,8 @@ Page({
                 });
             }
         } catch (err) {
-            console.error('加载规则摘要失败', err);
+            // 规则摘要非关键信息，静默失败，不戋扰用户
+            console.warn('加载规则摘要失败', err);
         }
     },
 
