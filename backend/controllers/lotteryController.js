@@ -65,7 +65,7 @@ exports.draw = async (req, res, next) => {
                 // 回滚不处理，直接降级
                 const record = await LotteryRecord.create({
                     user_id: userId,
-                    prize_id: missprintf.id,
+                    prize_id: missprize.id,
                     prize_name: '感谢参与',
                     prize_type: 'miss',
                     cost_points: costPoints,

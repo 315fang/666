@@ -211,9 +211,7 @@ app.use('/api/slash', slashRoutes);       // Phase 3: 砍价系统
 app.use('/api/pickup', pickupRoutes);     // Phase 4: 自提核销
 app.use('/api/stations', stationRoutes);  // Phase 4: 服务站点地图
 app.use('/api/logistics', logisticsRoutes); // Phase 5: 物流查询
-app.use('/api/products/hot', heatRoutes);   // Phase 5: 热门商品列表
-// 后台热度管理（在 /admin/api 后挂载）
-app.use('/admin/api/heat', heatRoutes);     // Phase 5: 商品热度管理
+app.use('/admin/api/heat', heatRoutes);     // Phase 5: 商品热度管理（仅后台）
 app.use('/api/splash', splashRoutes);       // Phase 6: 开屏动画（小程序端公开接口）
 
 // 后台管理API (使用 /admin/api 避免与静态文件冲突)

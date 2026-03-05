@@ -221,7 +221,7 @@ Page({
         const { order } = this.data;
         if (order.tracking_no) {
             wx.navigateTo({
-                url: `/pages/order/logistics?id=${order.id}`
+                url: `/pages/logistics/tracking?order_id=${order.id}`
             });
         } else {
             wx.showToast({ title: '暂无物流信息', icon: 'none' });

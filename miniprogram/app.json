@@ -1,7 +1,7 @@
 {
     "pages": [
-        "pages/splash/splash",
         "pages/index/index",
+        "pages/splash/splash",
         "pages/category/category",
         "pages/activity/activity",
         "pages/cart/cart",
@@ -23,8 +23,7 @@
                 "confirm",
                 "refund-apply",
                 "refund-list",
-                "refund-detail",
-                "logistics"
+                "refund-detail"
             ]
         },
         {

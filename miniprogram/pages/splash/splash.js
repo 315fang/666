@@ -309,7 +309,7 @@ Page({
     const config = this.data.splashConfig;
     if (config) markSplashSeen(config.show_mode);
 
-    wx.redirectTo({ url: '/pages/index/index' });
+    wx.switchTab({ url: '/pages/index/index' });
   },
 
   // ── 跳过按钮 ──────────────────────────────────────────────

@@ -49,6 +49,12 @@ const StationClaim = require('./StationClaim');
 const MaterialGroup = require('./MaterialGroup');
 // ★ Phase 6: 开屏动画
 const SplashScreen = require('./SplashScreen');
+// 库存管理（审计/预留）+ 佣金结算
+const StockTransaction = require('./StockTransaction');
+const StockReservation = require('./StockReservation');
+const CommissionSettlement = require('./CommissionSettlement');
+// 管理员操作日志
+const AdminLog = require('./AdminLog');
 
 // ========== 用户相关关联 ==========
 User.hasMany(Order, { foreignKey: 'buyer_id', as: 'orders' });
@@ -260,5 +266,11 @@ module.exports = {
     // 素材库分组
     MaterialGroup,
     // Phase 6: 开屏动画
-    SplashScreen
+    SplashScreen,
+    // 库存管理 + 佣金结算
+    StockTransaction,
+    StockReservation,
+    CommissionSettlement,
+    // 管理员操作日志
+    AdminLog
 };

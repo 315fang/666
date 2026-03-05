@@ -1,5 +1,5 @@
 {
-  "navigationBarHidden": true,
+  "navigationStyle": "custom",
   "disableScroll": true,
   "pageOrientation": "portrait"
 }

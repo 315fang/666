@@ -350,8 +350,7 @@ router.get('/logistics/order/:id', checkPermission('orders'), async (req, res) =
     }
 });
 
-module.exports = router;
-
-
 // ========== 注销（使当前 Token 立即失效） ==========
 router.post('/logout', adminAuth, adminAuthController.logout);
+
+module.exports = router;

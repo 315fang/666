@@ -9,6 +9,8 @@ const PointService = require('../services/PointService');
 // Phase 4: 自提核销 + 地区分成
 const { generatePickupCredentials } = require('./pickupController');
 const { attributeRegionalProfit } = require('./stationController');
+// ★ 核心订单服务（事务/库存/佣金一体化）
+const OrderCoreService = require('../services/OrderCoreService');
 
 // 自增序列（进程内唯一），防止同毫秒碰撞
 
