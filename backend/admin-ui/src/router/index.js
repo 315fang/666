@@ -33,10 +33,22 @@ const routes = [
         meta: { title: '订单管理', icon: 'ShoppingCart', group: '核心运营' }
       },
       {
+        path: 'group-buys',
+        name: 'GroupBuys',
+        component: () => import('@/views/group-buy/index.vue'),
+        meta: { title: '拼团参与活动', icon: 'Present', group: '核心运营' }
+      },
+      {
         path: 'users',
         name: 'Users',
         component: () => import('@/views/users/index.vue'),
         meta: { title: '用户管理', icon: 'User', group: '核心运营' }
+      },
+      {
+        path: 'coupons',
+        name: 'Coupons',
+        component: () => import('@/views/coupons/index.vue'),
+        meta: { title: '优惠券管理', icon: 'Ticket', group: '核心运营' }
       },
       // ===== 审核管理 =====
       {

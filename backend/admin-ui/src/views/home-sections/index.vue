@@ -169,6 +169,7 @@
   </div>
 </template>
 
+<script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'

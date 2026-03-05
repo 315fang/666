@@ -1,6 +1,6 @@
-const { CommissionLog, sequelize } = require('../../models');
+const { CommissionLog, sequelize } = require('../models');
 const { Op } = require('sequelize');
-const { sendNotification } = require('../../models/notificationUtil');
+const { sendNotification } = require('../models/notificationUtil');
 
 class AdminCommissionService {
 

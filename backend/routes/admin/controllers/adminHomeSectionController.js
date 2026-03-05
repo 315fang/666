@@ -98,6 +98,49 @@ const SECTION_SCHEMAS = {
             showLine: { type: 'boolean', label: '显示分隔线', default: false },
             color: { type: 'color', label: '线条颜色', default: '#E7E5E4' }
         }
+    },
+    // ★ 以下为新增的魔方图与专场促销大图 (参考美妆版块)
+    'magic-cube': {
+        label: '魔方橱窗 (类目导航)',
+        icon: '🎛️',
+        configSchema: {
+            style: { type: 'select', label: '排列风格', options: ['1-left-2-right', '1-top-2-bottom', '2-col-grid', 'list-with-button'], default: 'list-with-button' },
+            blocks: {
+                type: 'array',
+                label: '魔方模块配置',
+                default: [],
+                itemSchema: {
+                    mainTitle: { type: 'string', label: '主标题(如:自然底妆)', default: '' },
+                    subTitle: { type: 'string', label: '副标题(如:尽享素颜)', default: '' },
+                    imageUrl: { type: 'string', label: '展示图 URL', default: '' },
+                    actionText: { type: 'string', label: '按钮文字', default: '了解更多' },
+                    link: { type: 'string', label: '跳转链接', default: '' },
+                    titleColor: { type: 'color', label: '主标题颜色', default: '#333333' }
+                }
+            }
+        }
+    },
+    'promotion-hero': {
+        label: '品牌推介专场 (大面积卡片)',
+        icon: '🎁',
+        configSchema: {
+            themeColor: { type: 'color', label: '主题背景底色', default: '#B19069' },
+            bgImageUrl: { type: 'string', label: '全屏大背景图 (可选)', default: '' },
+            headerTitle: { type: 'string', label: '英文大标题 (如:MEMBER COURTESY)', default: '' },
+            headerSubTitle: { type: 'string', label: '中文主标题 (如:会员臻享)', default: '' },
+            items: {
+                type: 'array',
+                label: '活动卡片配置',
+                default: [],
+                itemSchema: {
+                    cardImageUrl: { type: 'string', label: '卡片主视觉图 URL', default: '' },
+                    promoTitle: { type: 'string', label: '促销标题(如:满600元赠)', default: '' },
+                    promoSubtitle: { type: 'string', label: '补充文案(如:立即选购)', default: '' },
+                    buttonText: { type: 'string', label: '黑色行动按钮文字', default: '立即选购 >' },
+                    link: { type: 'string', label: '跳转链接', default: '' }
+                }
+            }
+        }
     }
 };
 

@@ -258,6 +258,23 @@ router.use('/themes', adminThemeRoutes);
 const adminAgentRoutes = require('./ai_agent');
 router.use('/agent', adminAgentRoutes);
 
+// ========== 拼团管理 (★新增) ==========
+const adminGroupBuyController = require('./controllers/adminGroupBuyController');
+router.get('/group-buys', checkPermission('product'), adminGroupBuyController.getGroupActivities);
+router.get('/group-buys/:id', checkPermission('product'), adminGroupBuyController.getGroupActivityById);
+router.post('/group-buys', checkPermission('product'), adminGroupBuyController.createGroupActivity);
+router.put('/group-buys/:id', checkPermission('product'), adminGroupBuyController.updateGroupActivity);
+router.delete('/group-buys/:id', checkPermission('product'), adminGroupBuyController.deleteGroupActivity);
+
+// ========== 优惠券管理 (★新增) ==========
+const adminCouponController = require('./controllers/adminCouponController');
+router.get('/coupons', checkPermission('product'), adminCouponController.getCoupons);
+router.get('/coupons/:id', checkPermission('product'), adminCouponController.getCouponById);
+router.post('/coupons', checkPermission('product'), adminCouponController.createCoupon);
+router.put('/coupons/:id', checkPermission('product'), adminCouponController.updateCoupon);
+router.delete('/coupons/:id', checkPermission('product'), adminCouponController.deleteCoupon);
+router.post('/coupons/:id/issue', checkPermission('product'), adminCouponController.issueCoupon);
+
 // ========== 首页装修 (★新增) ==========
 const adminHomeSectionController = require('./controllers/adminHomeSectionController');
 router.get('/home-sections', checkPermission('content'), adminHomeSectionController.getHomeSections);

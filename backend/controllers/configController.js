@@ -251,15 +251,49 @@ const getHomePageConfig = async (req, res) => {
             { id: 3, name: '知识星球', description: '分级制社群，持续进阶成长', icon_url: '/assets/icons/star.svg', bg_gradient: 'linear-gradient(145deg, #2d1b69, #11998e)', tag: '社群', link_type: 'copy', link_value: '', sort_order: 2 },
             { id: 4, name: '销售实战营', description: '实战训练，快速提升销售力', icon_url: '/assets/icons/target.svg', bg_gradient: 'linear-gradient(145deg, #c31432, #240b36)', tag: '训练营', link_type: 'page', link_value: '/pages/feature/sales-camp', sort_order: 1 }
         ];
-
-        // 按 sort_order 降序排列
         featureCards.sort((a, b) => (b.sort_order || 0) - (a.sort_order || 0));
+
+        // ★ 核心：后端组装完整 sections，前端只负责渲染，不再做数据拼接
+        const plainQuickEntries = quickEntries.map(e => e.toJSON());
+        const bannerImages = banners.map(b => b.image_url).filter(Boolean);
+
+        const sections = homeSections.map(s => {
+            const section = s.toJSON();
+            section.config = section.config || {};
+
+            switch (section.section_type) {
+                case 'banner':
+                    // DB config.images 优先；为空则用 Banner 表数据
+                    if (!section.config.images || section.config.images.length === 0) {
+                        section.config.images = bannerImages;
+                    }
+                    break;
+
+                case 'quick-entry':
+                    // 入口数据始终来自 QuickEntry 表，config 只保留样式参数
+                    section.config.entries = plainQuickEntries;
+                    break;
+
+                case 'feature-cards':
+                    // DB config.cards 优先；为空则用默认卡片
+                    if (!section.config.cards || section.config.cards.length === 0) {
+                        section.config.cards = featureCards;
+                    }
+                    break;
+
+                // product-grid / notice-bar / text-block / countdown / divider:
+                // config 完全由 DB 中的 JSON 字段控制，无需注入动态数据
+            }
+
+            return section;
+        });
 
         const responseData = {
             configs,
-            quickEntries,
-            sections: homeSections,
+            sections,
+            // 以下字段保留，供前端降级兜底（sections 为空时使用）
             banners,
+            quickEntries: plainQuickEntries,
             featureCards
         };
 

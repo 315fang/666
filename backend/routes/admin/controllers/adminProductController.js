@@ -65,21 +65,38 @@ const getProductById = async (req, res) => {
 // 创建商品
 const createProduct = async (req, res) => {
     try {
-        const { name, description, images, detail_images, category_id, retail_price, member_price, wholesale_price, price_member, price_leader, price_agent, stock, skus } = req.body;
+        const {
+            name, description, images, detail_images, category_id,
+            retail_price, member_price, wholesale_price, price_member, price_leader, price_agent, cost_price, stock, skus,
+            enable_coupon, enable_group_buy, custom_commissions,
+            commission_rate_1, commission_rate_2, commission_amount_1, commission_amount_2, manual_weight
+        } = req.body;
 
-        if (!name || !retail_price) {
+        if (!name || retail_price === undefined || retail_price === null) {
             return res.status(400).json({ code: -1, message: '名称和零售价必填' });
         }
 
         const product = await Product.create({
-            name, description, images, detail_images: detail_images || [], category_id,
+            name, description,
+            images: images || [],
+            detail_images: detail_images || [],
+            category_id: category_id || null,
             retail_price,
             member_price: member_price || price_member || null,
             wholesale_price: wholesale_price || null,
             price_member: price_member || member_price || null,
             price_leader: price_leader || null,
             price_agent: price_agent || null,
-            stock,
+            cost_price: cost_price || null,
+            stock: stock || 0,
+            enable_coupon: enable_coupon ? 1 : 0,
+            enable_group_buy: enable_group_buy ? 1 : 0,
+            custom_commissions: custom_commissions ? 1 : 0,
+            commission_rate_1: commission_rate_1 || 0,
+            commission_rate_2: commission_rate_2 || 0,
+            commission_amount_1: commission_amount_1 || 0,
+            commission_amount_2: commission_amount_2 || 0,
+            manual_weight: manual_weight || 0,
             status: 1
         });
 
@@ -131,6 +148,16 @@ const updateProduct = async (req, res) => {
         if (!product) {
             await t.rollback();
             return res.status(404).json({ code: -1, message: '商品不存在' });
+        }
+
+        // 统一处理可能存在 null 的数据
+        if (updates.enable_coupon !== undefined) updates.enable_coupon = updates.enable_coupon ? 1 : 0;
+        if (updates.enable_group_buy !== undefined) updates.enable_group_buy = updates.enable_group_buy ? 1 : 0;
+        if (updates.custom_commissions !== undefined) updates.custom_commissions = updates.custom_commissions ? 1 : 0;
+
+        // 确保 price_member 和 member_price 逻辑兼容
+        if (updates.price_member !== undefined && updates.member_price === undefined) {
+            updates.member_price = updates.price_member;
         }
 
         await product.update(updates, { transaction: t });

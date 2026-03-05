@@ -51,6 +51,13 @@ async function login(req, res, next) {
         } else {
             isNewUser = true;
 
+            // 生成唯一会员编号：M + 年月(6位) + 注册序号(5位)
+            const now = new Date();
+            const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+            const userCount = await User.count();
+            const seq = String(userCount + 1).padStart(5, '0');
+            const memberNo = `M${ym}${seq}`;
+
             // 用户不存在，创建新用户（不再自动绑定团队，团队绑定通过问卷提交完成）
             user = await User.create({
                 openid,
@@ -60,6 +67,7 @@ async function login(req, res, next) {
                 parent_id: null,
                 parent_openid: null,
                 agent_id: null,
+                member_no: memberNo,
                 last_login: new Date()
             });
 

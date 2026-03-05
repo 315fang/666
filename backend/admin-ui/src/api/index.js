@@ -126,6 +126,21 @@ export const deleteCategory = (id) => {
   })
 }
 
+// ========== 拼团管理 ==========
+export const getGroupBuys = (params) => request({ url: '/group-buys', method: 'get', params })
+export const getGroupBuyById = (id) => request({ url: `/group-buys/${id}`, method: 'get' })
+export const createGroupBuy = (data) => request({ url: '/group-buys', method: 'post', data })
+export const updateGroupBuy = (id, data) => request({ url: `/group-buys/${id}`, method: 'put', data })
+export const deleteGroupBuy = (id) => request({ url: `/group-buys/${id}`, method: 'delete' })
+
+// ========== 优惠券管理 ==========
+export const getCoupons = (params) => request({ url: '/coupons', method: 'get', params })
+export const getCouponById = (id) => request({ url: `/coupons/${id}`, method: 'get' })
+export const createCoupon = (data) => request({ url: '/coupons', method: 'post', data })
+export const updateCoupon = (id, data) => request({ url: `/coupons/${id}`, method: 'put', data })
+export const deleteCoupon = (id) => request({ url: `/coupons/${id}`, method: 'delete' })
+export const issueCoupon = (id, data) => request({ url: `/coupons/${id}/issue`, method: 'post', data })
+
 // ========== 订单管理 ==========
 export const getOrders = (params) => {
   return request({

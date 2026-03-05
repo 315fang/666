@@ -4,23 +4,38 @@ const { Op } = require('sequelize');
 // 获取用户列表（含邀请码、库存信息）
 const getUsers = async (req, res) => {
     try {
-        const { role_level, keyword, page = 1, limit = 20 } = req.query;
+        const { role_level, keyword, member_no, phone, page = 1, limit = 20 } = req.query;
         const where = {};
 
-        if (role_level !== undefined) where.role_level = parseInt(role_level);
-        if (keyword) {
+        if (role_level !== undefined && role_level !== '') where.role_level = parseInt(role_level);
+
+        // member_no 精确或模糊匹配
+        if (member_no) {
+            where.member_no = { [Op.like]: `${member_no}%` };
+        } else if (keyword) {
             where[Op.or] = [
                 { nickname: { [Op.like]: `%${keyword}%` } },
-                { openid: { [Op.like]: `%${keyword}%` } },
-                { invite_code: { [Op.like]: `%${keyword}%` } }
+                { phone: { [Op.like]: `%${keyword}%` } },
+                { invite_code: { [Op.like]: `%${keyword}%` } },
+                { member_no: { [Op.like]: `%${keyword}%` } }
             ];
+        }
+        if (phone) {
+            where.phone = { [Op.like]: `%${phone}%` };
         }
 
         const offset = (parseInt(page) - 1) * parseInt(limit);
 
         const { count, rows } = await User.findAndCountAll({
             where,
-            attributes: ['id', 'openid', 'nickname', 'avatar_url', 'role_level', 'balance', 'order_count', 'total_sales', 'stock_count', 'invite_code', 'parent_id', 'agent_id', 'created_at', 'joined_team_at'],
+            attributes: [
+                'id', 'openid', 'nickname', 'avatar_url', 'phone',
+                'role_level', 'balance', 'order_count', 'total_sales',
+                'stock_count', 'invite_code', 'member_no',
+                'parent_id', 'agent_id', 'status', 'remark',
+                'referee_count', 'growth_value', 'debt_amount',
+                'created_at', 'joined_team_at', 'last_login'
+            ],
             include: [
                 { model: User, as: 'parent', attributes: ['id', 'nickname'], required: false }
             ],
