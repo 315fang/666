@@ -36,7 +36,7 @@ Page({
     async loadDetail(slashNo) {
         this.setData({ loading: true });
         try {
-            const res = await get(`/slash/orders/${slashNo}`);
+            const res = await get(`/slash/${slashNo}`);
             if (res.code === 0 && res.data) {
                 const d = res.data;
                 // 计算砍价进度百分比

@@ -122,7 +122,7 @@ Page({
                     id: 'mock_banner',
                     section_type: 'banner',
                     is_visible: true,
-                    config: { images: (data.banners && data.banners.length > 0) ? data.banners.map(b => b.image_url) : ['https://images.unsplash.com/photo-1612817288484-6f916006741a?w=1000'] }
+                    config: { images: (data.banners && data.banners.length > 0) ? data.banners.map(b => b.image_url) : [] }
                 },
                 {
                     id: 'mock_quick',

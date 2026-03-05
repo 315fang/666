@@ -1,5 +1,6 @@
 
 const { Order, Product, SKU, User, Cart, CommissionLog, Address, Notification, sequelize } = require('../models');
+const { UserCoupon } = require('../models');
 const { sendNotification } = require('../models/notificationUtil');
 const { Op } = require('sequelize');
 const constants = require('../config/constants');
@@ -9,6 +10,7 @@ const PointService = require('./PointService');
 const CommissionService = require('./CommissionService');
 const { generatePickupCredentials } = require('../controllers/pickupController');
 const { attributeRegionalProfit } = require('../controllers/stationController');
+const { calcCouponDiscount } = require('../controllers/couponController');
 
 let _orderSeq = 0;
 const generateOrderNo = () => {
@@ -98,6 +100,7 @@ class OrderCoreService {
             let items = req.body.items;
             const address_id = req.body.address_id;
             const remark = req.body.remark;
+            const user_coupon_id = req.body.user_coupon_id || null;
 
             if (!items || !Array.isArray(items) || items.length === 0) {
                 const { product_id: pid, sku_id: sid, quantity: qty, cart_id: cid } = req.body;
@@ -285,6 +288,71 @@ class OrderCoreService {
 
                 allOrders.push(...itemOrders);
                 totalAmountSum += price * quantity;
+            }
+
+            // ★ 优惠券抵扣（整单级别）
+            let couponDiscount = 0;
+            let appliedUserCoupon = null;
+            if (user_coupon_id) {
+                const uc = await UserCoupon.findOne({
+                    where: { id: user_coupon_id, user_id: userId },
+                    transaction: t,
+                    lock: t.LOCK.UPDATE
+                });
+                if (!uc) {
+                    await t.rollback();
+                    throw new Error('优惠券不存在或不属于当前用户');
+                }
+                if (uc.status !== 'unused') {
+                    await t.rollback();
+                    throw new Error('优惠券已使用或已过期');
+                }
+                if (new Date(uc.expire_at) < new Date()) {
+                    await t.rollback();
+                    throw new Error('优惠券已过期');
+                }
+                if (parseFloat(uc.min_purchase) > totalAmountSum) {
+                    await t.rollback();
+                    throw new Error(`订单金额未满足优惠券最低消费 ${uc.min_purchase} 元`);
+                }
+                couponDiscount = calcCouponDiscount(uc, totalAmountSum);
+                appliedUserCoupon = uc;
+            }
+
+            // 将优惠券信息写入首个主订单（单商品场景）或按比例分摊到各订单（多商品）
+            // 当前策略：将折扣信息记录在第一个非子订单上，total_amount 减去折扣
+            if (couponDiscount > 0 && allOrders.length > 0) {
+                // 找出所有根订单（无 parent_order_id 的）
+                const rootOrders = allOrders.filter(o => !o.parent_order_id);
+                if (rootOrders.length === 1) {
+                    // 单根订单：全额抵扣
+                    const o = rootOrders[0];
+                    o.coupon_id = appliedUserCoupon.id;
+                    o.coupon_discount = couponDiscount;
+                    o.total_amount = Math.max(0, parseFloat(o.total_amount) - couponDiscount).toFixed(2);
+                    await o.save({ transaction: t });
+                } else {
+                    // 多根订单：按各订单金额比例分摊折扣
+                    const rootTotal = rootOrders.reduce((s, o) => s + parseFloat(o.total_amount), 0);
+                    let remainDiscount = couponDiscount;
+                    for (let i = 0; i < rootOrders.length; i++) {
+                        const o = rootOrders[i];
+                        const ratio = parseFloat(o.total_amount) / rootTotal;
+                        const share = i < rootOrders.length - 1
+                            ? parseFloat((couponDiscount * ratio).toFixed(2))
+                            : remainDiscount; // 最后一个收尾，避免浮点累计误差
+                        remainDiscount = parseFloat((remainDiscount - share).toFixed(2));
+                        o.coupon_id = appliedUserCoupon.id;
+                        o.coupon_discount = share;
+                        o.total_amount = Math.max(0, parseFloat(o.total_amount) - share).toFixed(2);
+                        await o.save({ transaction: t });
+                    }
+                }
+
+                // 标记优惠券为已使用
+                appliedUserCoupon.status = 'used';
+                appliedUserCoupon.used_at = new Date();
+                await appliedUserCoupon.save({ transaction: t });
             }
 
             await t.commit();

@@ -83,9 +83,8 @@ Page({
       this.setData({ loading: true });
       wx.showLoading({ title: '保存中...' });
 
-      await post('/user/preferences', {
-        style,
-        categories
+      await post('/user/preferences/submit', {
+        preferences: { style, categories }
       });
 
       wx.hideLoading();

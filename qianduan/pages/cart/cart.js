@@ -98,7 +98,7 @@ Page({
     // 加载推荐商品
     async loadRecommended() {
         try {
-            const res = await get('/products', { limit: 6, sort: 'sales_desc' });
+            const res = await get('/products', { limit: 6 });
             if (res.code === 0 && res.data) {
                 const products = (res.data.list || res.data || []).map(p => ({
                     ...p,

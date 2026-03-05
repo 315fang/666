@@ -48,12 +48,7 @@ Page({
     },
 
     onUse(e) {
-        const coupon = e.currentTarget.dataset.coupon;
-        // 跳转到商品页，带上优惠券ID参数
-        wx.switchTab({ url: '/pages/category/category' });
-        // 把选中的券存到全局，结算页会读取
-        app.globalData.selectedCoupon = coupon;
-        wx.showToast({ title: '已选择优惠券，去下单时使用', icon: 'none', duration: 2500 });
+        wx.showToast({ title: '下单时可在结算页直接选择优惠券', icon: 'none', duration: 2500 });
     },
 
     onBack() {

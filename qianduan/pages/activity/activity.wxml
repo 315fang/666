@@ -55,7 +55,13 @@
             indicator-color="rgba(255,255,255,0.3)"
             indicator-active-color="#FFFFFF">
       <swiper-item wx:for="{{cardPosters}}" wx:key="id">
-        <image class="banner-img" src="{{item.image}}" mode="aspectFill" lazy-load/>
+        <view class="banner-slide" style="background: {{item.gradient}}">
+          <image class="banner-img" src="{{item.image}}" mode="aspectFill" lazy-load wx:if="{{item.image}}"/>
+          <view class="banner-slide-content">
+            <text class="banner-slide-title">{{item.title}}</text>
+            <text class="banner-slide-sub">{{item.subTitle}}</text>
+          </view>
+        </view>
       </swiper-item>
     </swiper>
   </view>
@@ -80,8 +86,9 @@
     <scroll-view class="card-poster-scroll" scroll-x show-scrollbar="{{false}}">
       <view class="poster-card"
             wx:for="{{cardPosters}}" wx:key="id"
+            style="background: {{item.gradient}}"
             bindtap="onPosterTap" data-item="{{item}}">
-        <image class="poster-bg" src="{{item.image}}" mode="aspectFill" lazy-load/>
+        <image class="poster-bg" src="{{item.image}}" mode="aspectFill" lazy-load wx:if="{{item.image}}"/>
         <view class="poster-mask"/>
         <view class="poster-content">
           <text class="poster-title">{{item.title}}</text>

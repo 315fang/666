@@ -87,7 +87,7 @@ Page({
             const res = await get('/user/profile');
             if (res.code === 0 && res.data) {
                 const info = res.data;
-                const roleLevel = info.role || 0;
+                const roleLevel = info.role_level || 0;
                 const roleName = info.role_name || ROLE_NAMES[roleLevel] || '普通用户';
 
                 this.setData({

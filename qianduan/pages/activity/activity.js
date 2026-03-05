@@ -15,9 +15,9 @@ Page({
         ],
         // 卡片海报（常驻推荐位，可由后端覆盖）
         cardPosters: [
-            { id: 1, title: '限时秒杀', subTitle: '每天10点开启',    image: 'https://images.unsplash.com/photo-1612817288484-6f916006741a?w=600', link: '' },
-            { id: 2, title: '新品首发', subTitle: '独家新品抢先看',  image: 'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=600', link: '' },
-            { id: 3, title: '积分兑换', subTitle: '好物0元拿',       image: 'https://images.unsplash.com/photo-1601049541289-9b1b7abc7194?w=600', link: '' }
+            { id: 1, title: '限时秒杀', subTitle: '每天10点开启',    image: '', gradient: 'linear-gradient(135deg, #7F1D1D 0%, #B45309 100%)', link: '' },
+            { id: 2, title: '新品首发', subTitle: '独家新品抢先看',  image: '', gradient: 'linear-gradient(135deg, #0F172A 0%, #1E3A5F 100%)', link: '' },
+            { id: 3, title: '积分兑换', subTitle: '好物0元拿',       image: '', gradient: 'linear-gradient(135deg, #3B0764 0%, #6D28D9 100%)', link: '' }
         ],
         recentActivities: [],
         statusBarHeight: 20,

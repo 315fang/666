@@ -175,7 +175,7 @@ App({
         } catch (e) { /* 读缓存失败不阻断 */ }
 
         // 拉取激活主题
-        get('/themes/active').then(res => {
+        get('/admin/api/themes/active').then(res => {
             if (res && res.data) {
                 const theme = res.data;
                 this.injectThemeCssVars(theme);

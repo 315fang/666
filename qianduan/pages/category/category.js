@@ -66,41 +66,39 @@ Page({
     async initCategoryData() {
         this.setData({ loading: true });
         try {
-            // 这里通常是获取分类列表，然后获取每个分类下的商品
-            // 问兰镜像：构造 Mock 数据演示连贯滚动
-            const mockData = [
-                { 
-                    id: 'makeup', 
-                    name: '彩妆系列', 
-                    products: this.getMockCategoryProducts('彩妆系列') 
-                },
-                { 
-                    id: 'skincare', 
-                    name: '护肤正装', 
-                    products: [
-                        { id: 301, name: '精华水', description: '深度补水，锁住营养', image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=400' },
-                        { id: 302, name: '修护乳', description: '强韧屏障，温和修护', image: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=400' }
-                    ] 
-                },
-                { 
-                    id: 'perfume', 
-                    name: '香水系列', 
-                    products: [
-                        { id: 401, name: '晨曦之光', description: '清晨的第一缕阳光', image: 'https://images.unsplash.com/photo-1541643600914-78b084683601?w=400' }
-                    ] 
-                },
-                { 
-                    id: 'mask', 
-                    name: '面膜产品', 
-                    products: [
-                        { id: 501, name: '补水面膜', description: '密集补水，透亮如新', image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=400' }
-                    ] 
-                }
-            ];
+            // 1. 获取分类树
+            const catRes = await get('/categories/tree');
+            const rawCats = (catRes.data || catRes || []);
+            // 取一级分类（或直接平铺，取决于后端返回结构）
+            const topCats = Array.isArray(rawCats) ? rawCats : [];
+
+            if (topCats.length === 0) {
+                this.setData({ loading: false });
+                return;
+            }
+
+            // 2. 并行拉取每个分类下的商品（最多取前 20 个分类）
+            const slice = topCats.slice(0, 20);
+            const productResults = await Promise.all(
+                slice.map(cat =>
+                    get('/products', { category_id: cat.id, limit: 10 })
+                        .then(r => (r.data && r.data.list) ? r.data.list : (Array.isArray(r.data) ? r.data : []))
+                        .catch(() => [])
+                )
+            );
+
+            const categories = slice.map((cat, idx) => ({
+                id: String(cat.id),
+                name: cat.name,
+                products: productResults[idx].map(p => ({
+                    ...p,
+                    image: getFirstImage(p.images)
+                }))
+            }));
 
             this.setData({
-                categories: mockData,
-                currentCategory: mockData[0].id,
+                categories,
+                currentCategory: categories[0] ? String(categories[0].id) : '',
                 loading: false
             });
 
@@ -168,21 +166,6 @@ Page({
                 break;
             }
         }
-    },
-
-    getMockCategoryProducts(categoryName) {
-        const mocks = {
-            '彩妆系列': [
-                { id: 201, name: '化妆工具', description: '化妆工具', image: 'https://images.unsplash.com/photo-1522338242992-e1a54906a8da?w=400' },
-                { id: 202, name: '自然底妆', description: '尽享素颜之美', image: 'https://images.unsplash.com/photo-1612817288484-6f916006741a?w=400' },
-                { id: 203, name: '面部彩妆', description: '尽享素颜之美', image: 'https://images.unsplash.com/photo-1512496015851-a90fb38ba796?w=400' },
-                { id: 204, name: '精致眼妆', description: '尽享素颜之美', image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=400' },
-                { id: 205, name: '高级唇妆', description: '尽享素颜之美', image: 'https://images.unsplash.com/photo-1586495777744-4413f21062fa?w=400' }
-            ]
-        };
-        return mocks[categoryName] || [
-            { id: 999, name: '甄选单品', description: '尽享素颜之美', image: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=400' }
-        ];
     },
 
     // --- Full Screen Modal Logic ---

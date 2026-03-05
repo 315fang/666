@@ -48,11 +48,67 @@
            maxlength="100" />
   </view>
 
+  <!-- 优惠券 -->
+  <view class="section coupon-section" bindtap="onCouponTap">
+    <text class="coupon-label">优惠券</text>
+    <view class="coupon-right">
+      <text class="coupon-selected" wx:if="{{selectedCoupon}}">
+        -¥{{couponDiscount}}（{{selectedCoupon.coupon_name}}）
+      </text>
+      <text class="coupon-none" wx:elif="{{availableCoupons.length > 0}}">
+        {{availableCoupons.length}}张可用
+      </text>
+      <text class="coupon-none" wx:else>暂无可用优惠券</text>
+      <text class="arrow" wx:if="{{availableCoupons.length > 0}}">›</text>
+    </view>
+  </view>
+
+  <!-- 优惠券选择弹窗 -->
+  <view class="coupon-picker {{showCouponPicker ? 'show' : ''}}" wx:if="{{showCouponPicker}}">
+    <view class="coupon-picker-mask" bindtap="onCloseCouponPicker"></view>
+    <view class="coupon-picker-panel">
+      <view class="coupon-picker-title">选择优惠券</view>
+      <view class="coupon-list">
+        <view 
+          class="coupon-card {{selectedCoupon && selectedCoupon.id === item.id ? 'active' : ''}}"
+          wx:for="{{availableCoupons}}"
+          wx:key="id"
+          data-coupon="{{item}}"
+          bindtap="onSelectCoupon"
+        >
+          <view class="coupon-card-left">
+            <text class="coupon-value">
+              <text wx:if="{{item.coupon_type === 'fixed'}}">¥{{item.coupon_value}}</text>
+              <text wx:else>{{item.coupon_value * 10}}折</text>
+            </text>
+            <text class="coupon-min">满{{item.min_purchase}}元可用</text>
+          </view>
+          <view class="coupon-card-right">
+            <text class="coupon-name-text">{{item.coupon_name}}</text>
+            <text class="coupon-expire">{{item.expire_at}}</text>
+          </view>
+          <view class="coupon-check" wx:if="{{selectedCoupon && selectedCoupon.id === item.id}}">✓</view>
+        </view>
+        <view class="coupon-no-use" wx:if="{{selectedCoupon}}" bindtap="onClearCoupon">
+          不使用优惠券
+        </view>
+      </view>
+    </view>
+  </view>
+
   <!-- 底部结算栏 -->
   <view class="bottom-bar">
     <view class="total-info">
-      <text class="total-label">共 {{totalCount}} 件，合计：</text>
-      <text class="total-price">¥{{totalAmount}}</text>
+      <view class="total-lines">
+        <view class="total-row" wx:if="{{selectedCoupon}}">
+          <text class="discount-label">优惠：</text>
+          <text class="discount-amount">-¥{{couponDiscount}}</text>
+        </view>
+        <view class="total-row">
+          <text class="total-label">共 {{totalCount}} 件，合计：</text>
+          <text class="total-price">¥{{finalAmount}}</text>
+        </view>
+      </view>
     </view>
     <view class="submit-btn {{submitting ? 'disabled' : ''}}" bindtap="onSubmit">
       <text>{{submitting ? '提交中...' : '提交订单'}}</text>

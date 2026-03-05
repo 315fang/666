@@ -5,6 +5,8 @@
         "pages/activity/activity",
         "pages/cart/cart",
         "pages/user/user",
+        "pages/user/notifications",
+        "pages/user/preferences",
         "pages/product/detail",
         "pages/search/search",
         "pages/privacy/privacy",
@@ -55,35 +57,35 @@
         },
         {
             "root": "pages/wallet",
-            "name": "packageDistribution",
+            "name": "packageWallet",
             "pages": [
                 "index"
             ]
         },
         {
             "root": "pages/points",
-            "name": "packageDistribution",
+            "name": "packagePoints",
             "pages": [
                 "index"
             ]
         },
         {
             "root": "pages/lottery",
-            "name": "packageActivity",
+            "name": "packageLottery",
             "pages": [
                 "lottery"
             ]
         },
         {
             "root": "pages/coupon",
-            "name": "packageActivity",
+            "name": "packageCoupon",
             "pages": [
                 "list"
             ]
         },
         {
             "root": "pages/slash",
-            "name": "packageActivity",
+            "name": "packageSlash",
             "pages": [
                 "list",
                 "detail"
@@ -91,7 +93,7 @@
         },
         {
             "root": "pages/group",
-            "name": "packageActivity",
+            "name": "packageGroup",
             "pages": [
                 "list",
                 "detail"
@@ -99,38 +101,30 @@
         },
         {
             "root": "pages/pickup",
-            "name": "packageOther",
+            "name": "packagePickup",
             "pages": [
                 "pickup"
             ]
         },
         {
             "root": "pages/station",
-            "name": "packageOther",
+            "name": "packageStation",
             "pages": [
                 "map"
             ]
         },
         {
             "root": "pages/rules",
-            "name": "packageOther",
+            "name": "packageRules",
             "pages": [
                 "index"
             ]
         },
         {
             "root": "pages/feed",
-            "name": "packageOther",
+            "name": "packageFeed",
             "pages": [
                 "index"
-            ]
-        },
-        {
-            "root": "pages/user",
-            "name": "packageOther",
-            "pages": [
-                "notifications",
-                "preferences"
             ]
         }
     ],
@@ -139,7 +133,10 @@
             "network": "all",
             "packages": [
                 "packageOrder",
-                "packageActivity"
+                "packageLottery",
+                "packageCoupon",
+                "packageSlash",
+                "packageGroup"
             ]
         },
         "pages/cart/cart": {
@@ -151,13 +148,18 @@
         "pages/activity/activity": {
             "network": "all",
             "packages": [
-                "packageActivity"
+                "packageLottery",
+                "packageCoupon",
+                "packageSlash",
+                "packageGroup"
             ]
         },
         "pages/user/user": {
             "network": "all",
             "packages": [
-                "packageDistribution"
+                "packageDistribution",
+                "packageWallet",
+                "packagePoints"
             ]
         }
     },

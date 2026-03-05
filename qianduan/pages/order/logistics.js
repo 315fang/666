@@ -62,7 +62,7 @@ Page({
 
       // 查询物流轨迹
       try {
-        const logisticsRes = await get(`/logistics/track/${orderId}`);
+        const logisticsRes = await get(`/logistics/order/${orderId}`);
         const logisticsData = logisticsRes.data || logisticsRes;
 
         // 处理物流数据

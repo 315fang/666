@@ -1,5 +1,4 @@
 // pages/feed/index.js
-const { get, post } = require('../../utils/request');
 const app = getApp();
 
 Page({
@@ -24,11 +23,13 @@ Page({
         likeOpacity: 0,
 
         isDragging: false,
-        loading: false
+        loading: false,
+
+        // AI 功能已下线
+        aiUnavailable: true
     },
 
     onLoad() {
-        this.refreshFeed();
         // 模拟获取用户信息
         const userInfo = wx.getStorageSync('userInfo');
         if (userInfo && userInfo.nickname) {
@@ -37,22 +38,120 @@ Page({
     },
 
     onShow() {
-        // 每次显示页面更新右上的“定见箱”数量 (演示用)
+        // 每次显示页面更新右上的"定见箱"数量
         this.setData({ boxCount: wx.getStorageSync('boxList')?.length || 0 });
     },
 
-    // ========= 1. 数据加载 =========
+    // ========= 1. 数据加载（AI 已下线，展示空状态） =========
     async refreshFeed() {
-        this.setData({ loading: true, currentIndex: 0 });
-        wx.showLoading({ title: 'AI 极速测算中' });
+        // AI 推荐功能已下线，展示提示即可
+        this.setData({ cards: [], loading: false });
+    },
 
-        try {
-            const res = await get('/v2/ai/feed/products');
-            if (res.code === 0 && res.data) {
-                this.setData({
-                    cards: res.data,
-                    loading: false
-                });
+    // ========= 2. Tinder 级丝滑滑动引擎 =========
+    touchStart(e) {
+        if (this.data.currentIndex >= this.data.cards.length) return;
+        this.setData({
+            isDragging: true,
+            startX: e.touches[0].clientX,
+            startY: e.touches[0].clientY
+        });
+    },
+
+    touchMove(e) {
+        if (!this.data.isDragging) return;
+        const currentX = e.touches[0].clientX;
+        const currentY = e.touches[0].clientY;
+        const deltaX = currentX - this.data.startX;
+        const deltaY = currentY - this.data.startY;
+
+        const rotate = deltaX * 0.05;
+        const opacityDrop = Math.abs(deltaX) / 150 > 1 ? 1 : Math.abs(deltaX) / 150;
+
+        this.setData({
+            currentX: deltaX,
+            cardTransform: `transform: translateX(${deltaX}px) translateY(${deltaY}px) rotate(${rotate}deg);`,
+            nopeOpacity: deltaX < 0 ? opacityDrop : 0,
+            likeOpacity: deltaX > 0 ? opacityDrop : 0
+        });
+    },
+
+    touchEnd(e) {
+        if (!this.data.isDragging) return;
+        this.setData({ isDragging: false });
+        const deltaX = this.data.currentX;
+
+        if (deltaX > 90) {
+            this.handleSwipeAction('right');
+        } else if (deltaX < -90) {
+            this.handleSwipeAction('left');
+        } else {
+            this.resetCardPosition();
+        }
+    },
+
+    forceSwipeLeft() { this.handleSwipeAction('left', true); },
+    forceSwipeRight() { this.handleSwipeAction('right', true); },
+
+    // ========= 3. 核心：切卡 =========
+    handleSwipeAction(direction, isButtonClick = false) {
+        if (this.data.currentIndex >= this.data.cards.length) return;
+
+        const card = this.data.cards[this.data.currentIndex];
+
+        if (isButtonClick) {
+            const flyX = direction === 'right' ? 500 : -500;
+            this.setData({
+                cardTransform: `transform: translateX(${flyX}px) translateY(50px) rotate(${direction === 'right' ? 20 : -20}deg); transition: transform 0.4s ease-out;`,
+                nopeOpacity: direction === 'left' ? 1 : 0,
+                likeOpacity: direction === 'right' ? 1 : 0
+            });
+        }
+
+        wx.vibrateShort({ type: 'medium' });
+
+        setTimeout(() => {
+            if (direction === 'right') {
+                this.addToBox(card);
+            }
+
+            this.setData({
+                currentIndex: this.data.currentIndex + 1,
+                cardTransform: '',
+                nopeOpacity: 0,
+                likeOpacity: 0,
+                currentX: 0
+            });
+        }, 300);
+    },
+
+    resetCardPosition() {
+        this.setData({
+            cardTransform: 'transform: translateX(0) translateY(0) rotate(0); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);',
+            nopeOpacity: 0,
+            likeOpacity: 0,
+            currentX: 0
+        });
+        setTimeout(() => {
+            this.setData({ cardTransform: '' });
+        }, 300);
+    },
+
+    // ======== 4. 业务逻辑接口 ========
+    addToBox(product) {
+        let list = wx.getStorageSync('boxList') || [];
+        if (!list.find(item => item.id === product.id)) {
+            list.push(product);
+            wx.setStorageSync('boxList', list);
+            wx.showToast({ title: '已入定见箱', icon: 'none' });
+            this.setData({ boxCount: list.length });
+        }
+    },
+
+    goToBox() {
+        wx.navigateTo({ url: '/pages/cart/cart' });
+    }
+});
             } else {
                 wx.showToast({ title: '没有更多商品了', icon: 'none' });
                 this.setData({ loading: false });

@@ -20,7 +20,13 @@ Page({
         // 合计
         totalAmount: '0.00',
         totalCount: 0,
-        roleLevel: 0
+        roleLevel: 0,
+        // 优惠券
+        availableCoupons: [],
+        selectedCoupon: null,
+        showCouponPicker: false,
+        couponDiscount: '0.00',
+        finalAmount: '0.00'
     },
 
     onReady() {
@@ -38,12 +44,15 @@ Page({
             // 直接购买 - 从缓存读取购买信息
             const directBuy = wx.getStorageSync('directBuyInfo');
             if (directBuy) {
+                const amt = (parseFloat(directBuy.price) * directBuy.quantity).toFixed(2);
                 this.setData({
                     orderItems: [directBuy],
-                    totalAmount: (parseFloat(directBuy.price) * directBuy.quantity).toFixed(2),
+                    totalAmount: amt,
+                    finalAmount: amt,
                     totalCount: directBuy.quantity,
                     loading: false
                 });
+                this.loadAvailableCoupons();
             } else {
                 wx.showToast({ title: '商品信息丢失', icon: 'none' });
                 this.setData({ loading: false });
@@ -114,13 +123,80 @@ Page({
             this.setData({
                 orderItems: selectedItems,
                 totalAmount: totalAmount.toFixed(2),
+                finalAmount: totalAmount.toFixed(2),
                 totalCount,
                 loading: false
             });
+            this.loadAvailableCoupons();
         } catch (err) {
             console.error('加载购物车失败:', err);
             this.setData({ loading: false });
         }
+    },
+
+    // 重新计算最终价格
+    _recalcFinal() {
+        const total = parseFloat(this.data.totalAmount);
+        const discount = parseFloat(this.data.couponDiscount);
+        const final = Math.max(0, total - discount).toFixed(2);
+        this.setData({ finalAmount: final });
+    },
+
+    // 加载可用优惠券
+    async loadAvailableCoupons() {
+        if (!app.globalData.isLoggedIn) return;
+        try {
+            const amount = this.data.totalAmount;
+            const res = await get(`/coupons/available?amount=${amount}`);
+            if (res.code === 0) {
+                this.setData({ availableCoupons: res.data || [] });
+            }
+        } catch (e) {
+            // 静默失败，不影响下单
+        }
+    },
+
+    // 点击优惠券行，打开选择器
+    onCouponTap() {
+        this.setData({ showCouponPicker: true });
+    },
+
+    // 关闭选择器（点遮罩）
+    onCloseCouponPicker() {
+        this.setData({ showCouponPicker: false });
+    },
+
+    // 选择一张优惠券
+    onSelectCoupon(e) {
+        const coupon = e.currentTarget.dataset.coupon;
+        // 若点击已选中的券则取消
+        if (this.data.selectedCoupon && this.data.selectedCoupon.id === coupon.id) {
+            this.onClearCoupon();
+            return;
+        }
+        const total = parseFloat(this.data.totalAmount);
+        let discount = 0;
+        if (coupon.coupon_type === 'fixed') {
+            discount = Math.min(parseFloat(coupon.coupon_value), total);
+        } else if (coupon.coupon_type === 'percent') {
+            discount = parseFloat((total * (1 - parseFloat(coupon.coupon_value))).toFixed(2));
+        }
+        this.setData({
+            selectedCoupon: coupon,
+            couponDiscount: discount.toFixed(2),
+            showCouponPicker: false
+        });
+        this._recalcFinal();
+    },
+
+    // 清除已选优惠券
+    onClearCoupon() {
+        this.setData({
+            selectedCoupon: null,
+            couponDiscount: '0.00',
+            showCouponPicker: false
+        });
+        this._recalcFinal();
     },
 
     // 选择地址
@@ -140,7 +216,7 @@ Page({
 
     // 提交订单
     async onSubmit() {
-        const { address, orderItems, remark, submitting } = this.data;
+        const { address, orderItems, remark, submitting, selectedCoupon } = this.data;
 
         if (submitting) return;
 
@@ -167,6 +243,10 @@ Page({
                     cart_id: item.cart_id || null
                 }))
             };
+
+            if (selectedCoupon) {
+                orderData.user_coupon_id = selectedCoupon.id;
+            }
 
             // 提交订单
             const res = await post('/orders', orderData);
