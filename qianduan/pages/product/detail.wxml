@@ -162,10 +162,6 @@
         <text class="section-title">用户评价</text>
         <text class="review-count">({{reviewTotal}})</text>
       </view>
-      <view class="section-more" bindtap="goReviews">
-        <text>查看全部</text>
-        <image class="icon-xs" src="/assets/icons/arrow-right.svg" mode="aspectFit"/>
-      </view>
     </view>
     <view class="review-tags" wx:if="{{reviewTags.length > 0}}">
       <view class="review-tag" wx:for="{{reviewTags}}" wx:key="*this">{{item}}</view>

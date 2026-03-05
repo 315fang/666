@@ -102,9 +102,8 @@ Page({
         }
     },
 
-    onStationTap(e) {
-        const id = e.currentTarget.dataset.id;
-        wx.navigateTo({ url: `/pages/station/detail?id=${id}` });
+    onStationTap() {
+        wx.showToast({ title: '服务站详情即将上线', icon: 'none' });
     },
 
     onClaimTap(e) {

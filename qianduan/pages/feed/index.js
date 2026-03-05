@@ -189,6 +189,6 @@ Page({
     },
 
     goToBox() {
-        wx.switchTab({ url: '/pages/cart/cart' });
+        wx.navigateTo({ url: '/pages/cart/cart' });
     }
 });

@@ -101,7 +101,7 @@ Page({
 
     // ====== 导航跳转 ======
     onProfileTap() {
-        wx.navigateTo({ url: '/pages/user/user' });
+        wx.switchTab({ url: '/pages/user/user' });
     },
 
     onCommissionLogsTap() {

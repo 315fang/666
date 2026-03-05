@@ -26,7 +26,7 @@
         },
         {
             "root": "pages/address",
-            "name": "packageOrder",
+            "name": "packageAddress",
             "pages": [
                 "list",
                 "edit"
@@ -34,7 +34,7 @@
         },
         {
             "root": "pages/logistics",
-            "name": "packageOrder",
+            "name": "packageLogistics",
             "pages": [
                 "tracking"
             ]
@@ -85,14 +85,16 @@
             "root": "pages/slash",
             "name": "packageActivity",
             "pages": [
-                "list"
+                "list",
+                "detail"
             ]
         },
         {
             "root": "pages/group",
             "name": "packageActivity",
             "pages": [
-                "list"
+                "list",
+                "detail"
             ]
         },
         {

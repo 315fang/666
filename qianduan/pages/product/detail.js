@@ -189,11 +189,6 @@ Page({
         return tags;
     },
 
-    // 跳转评价列表
-    goReviews() {
-        wx.navigateTo({ url: `/pages/product/reviews?id=${this.data.id}` });
-    },
-
     // 加载佣金预览
     async loadCommissionPreview() {
         try {
