@@ -327,6 +327,29 @@ router.use('/', envCheckRoutes);
 const massMessageRoutes = require('./mass-message');
 router.use('/', massMessageRoutes);
 
+// ========== 开屏动画配置（Phase 6） ==========
+const splashController = require('../../controllers/splashController');
+router.get('/splash', splashController.getConfig);
+router.put('/splash', checkPermission('content'), splashController.updateConfig);
+
+// ========== 物流查询（管理员专用，绕过买家归属验证） ==========
+router.get('/logistics/order/:id', checkPermission('orders'), async (req, res) => {
+    try {
+        const { Order } = require('../../models');
+        const { queryLogistics } = require('../../services/LogisticsService');
+        const order = await Order.findByPk(req.params.id, {
+            attributes: ['id', 'order_no', 'tracking_no', 'logistics_company']
+        });
+        if (!order || !order.tracking_no) {
+            return res.status(404).json({ code: -1, message: '订单不存在或未填写运单号' });
+        }
+        const data = await queryLogistics(order.tracking_no, order.logistics_company, req.query.refresh === '1');
+        res.json({ code: 0, data });
+    } catch (err) {
+        res.status(500).json({ code: -1, message: err.message });
+    }
+});
+
 module.exports = router;
 
 

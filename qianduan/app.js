@@ -10,7 +10,8 @@ App({
         token: null,
         isLoggedIn: false,
         baseUrl: getApiBaseUrl(), // 从环境配置读取
-        statusBarHeight: 20
+        statusBarHeight: 20,
+        splashConfig: null       // 开屏动画配置（onLaunch prefetch）
     },
 
     onLaunch(options) {
@@ -26,6 +27,9 @@ App({
 
         // ★ 并行预拉取首页数据（登录前就开始，首页 onLoad 直接读缓存）
         this.prefetchHomeData();
+
+        // ★ 预拉取开屏动画配置（splash 页 onLoad 时直接读 globalData，零延迟）
+        this.prefetchSplashConfig();
 
         // ★ 静默/强制版本更新检测
         this.checkUpdate();
@@ -272,6 +276,41 @@ App({
         });
         updateManager.onUpdateFailed(() => {
             console.warn('[UpdateManager] 新版本下载失败');
+        });
+    },
+
+    /**
+     * ★ 预拉取开屏动画配置
+     * 缓存策略：15 分钟（配置改动后下次启动生效即可）
+     * splash 页 onLoad 直接读 globalData.splashConfig，不等网络
+     */
+    prefetchSplashConfig() {
+        const CACHE_KEY = 'splash_config_cache';
+        const CACHE_TTL = 15 * 60 * 1000;
+        const now = Date.now();
+
+        // 先读缓存
+        try {
+            const cached = wx.getStorageSync(CACHE_KEY);
+            if (cached && cached.expireAt > now) {
+                this.globalData.splashConfig = cached.config;
+                console.log('[Splash] 命中缓存:', cached.config.show_mode);
+                return;
+            }
+        } catch (e) { /* 读缓存失败不阻断 */ }
+
+        // 缓存未命中，拉取
+        get('/api/splash/active').then(res => {
+            if (res && res.data) {
+                this.globalData.splashConfig = res.data;
+                wx.setStorageSync(CACHE_KEY, {
+                    config: res.data,
+                    expireAt: now + CACHE_TTL
+                });
+                console.log('[Splash] 配置拉取完成:', res.data.show_mode);
+            }
+        }).catch(err => {
+            console.warn('[Splash] 配置拉取失败（不影响启动）', err);
         });
     },
 

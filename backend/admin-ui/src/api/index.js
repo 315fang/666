@@ -477,3 +477,28 @@ export const updateHomeSection = (id, data) => request({ url: `/home-sections/${
 export const toggleSectionVisible = (id) => request({ url: `/home-sections/${id}/toggle`, method: 'put' })
 export const deleteHomeSection = (id) => request({ url: `/home-sections/${id}`, method: 'delete' })
 export const updateSectionSort = (data) => request({ url: '/home-sections/sort', method: 'post', data })
+
+// ========== 物流管理（后台管理员调用，绕过买家归属验证）==========
+// 通过订单ID查物流（admin端，直接用 admin API 代理调用 logistics service）
+export const getAdminOrderLogistics = (orderId, forceRefresh = false) =>
+  request({ url: `/logistics/order/${orderId}${forceRefresh ? '?refresh=1' : ''}`, method: 'get' })
+// 强制刷新（admin端）
+export const refreshAdminLogistics = (orderId) =>
+  request({ url: `/logistics/order/${orderId}?refresh=1`, method: 'get' })
+// 按运单号直接查
+export const getLogisticsByTrackingNo = (trackingNo, company = '') =>
+  request({ url: `/logistics/tracking/${trackingNo}${company ? '?company=' + company : ''}`, method: 'get' })
+
+// ========== 开屏动画配置 ==========
+export const getSplashConfig = () => request({ url: '/splash', method: 'get' })
+export const updateSplashConfig = (data) => request({ url: '/splash', method: 'put', data })
+export const uploadSplashImage = (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: '/upload',
+    method: 'post',
+    data: formData,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}

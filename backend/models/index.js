@@ -47,6 +47,8 @@ const SlashHelper = require('./SlashHelper');
 const ServiceStation = require('./ServiceStation');
 const StationClaim = require('./StationClaim');
 const MaterialGroup = require('./MaterialGroup');
+// ★ Phase 6: 开屏动画
+const SplashScreen = require('./SplashScreen');
 
 // ========== 用户相关关联 ==========
 User.hasMany(Order, { foreignKey: 'buyer_id', as: 'orders' });
@@ -256,5 +258,7 @@ module.exports = {
     ServiceStation,
     StationClaim,
     // 素材库分组
-    MaterialGroup
+    MaterialGroup,
+    // Phase 6: 开屏动画
+    SplashScreen
 };

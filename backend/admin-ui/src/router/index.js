@@ -33,6 +33,12 @@ const routes = [
         meta: { title: '订单管理', icon: 'ShoppingCart', group: '核心运营' }
       },
       {
+        path: 'logistics',
+        name: 'Logistics',
+        component: () => import('@/views/logistics/index.vue'),
+        meta: { title: '物流管理', icon: 'Van', group: '核心运营' }
+      },
+      {
         path: 'group-buys',
         name: 'GroupBuys',
         component: () => import('@/views/group-buy/index.vue'),
@@ -99,6 +105,12 @@ const routes = [
         name: 'MassMessage',
         component: () => import('@/views/mass-message/index.vue'),
         meta: { title: '群发消息', icon: 'Message', group: '内容运营' }
+      },
+      {
+        path: 'splash',
+        name: 'Splash',
+        component: () => import('@/views/splash/index.vue'),
+        meta: { title: '开屏动画', icon: 'Sunrise', group: '内容运营' }
       },
       // ===== 系统管理 =====
       {

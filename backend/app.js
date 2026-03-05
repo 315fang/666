@@ -64,6 +64,8 @@ const stationRoutes = require('./routes/station');
 const logisticsRoutes = require('./routes/logistics');
 // Phase 5: 热度管理
 const heatRoutes = require('./routes/heat');
+// Phase 6: 开屏动画
+const splashRoutes = require('./routes/splash');
 
 const app = express();
 
@@ -212,6 +214,7 @@ app.use('/api/logistics', logisticsRoutes); // Phase 5: 物流查询
 app.use('/api/products/hot', heatRoutes);   // Phase 5: 热门商品列表
 // 后台热度管理（在 /admin/api 后挂载）
 app.use('/admin/api/heat', heatRoutes);     // Phase 5: 商品热度管理
+app.use('/api/splash', splashRoutes);       // Phase 6: 开屏动画（小程序端公开接口）
 
 // 后台管理API (使用 /admin/api 避免与静态文件冲突)
 app.use('/admin/api', adminRoutes);
