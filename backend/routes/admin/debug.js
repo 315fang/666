@@ -1,7 +1,7 @@
 /**
  * 轻量调试入口（仅管理员可用，生产安全）
  * 替代原 AIOpsService 复杂监控模块
- * 提供：错误日志读取、进程状态、近期数据库异常订单速览
+ * 提供：错误日志读取、进程状态、近期数据库异常订单速览、定时任务状态
  */
 const express = require('express');
 const router = express.Router();
@@ -9,6 +9,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
 const { sequelize } = require('../../models');
+const { getTaskStats } = require('../../utils/taskLock');
 
 // ★ 读取最近 N 行错误日志（直接读文件，无 AI 分析）
 router.get('/logs', async (req, res) => {
@@ -148,6 +149,40 @@ router.get('/db-ping', async (req, res) => {
     } catch (error) {
         res.json({ code: -1, data: { ok: false, error: error.message } });
     }
+});
+
+// ★ 定时任务运行状态（最近执行时间、成功/失败次数）
+router.get('/cron-status', (req, res) => {
+    const stats = getTaskStats();
+
+    // 补充任务说明（人类可读）
+    const META = {
+        settleCommissions:       { label: '佣金自动结算',           interval: '配置动态' },
+        autoCancelOrders:        { label: '超时订单自动取消',        interval: '1 分钟' },
+        autoConfirmOrders:       { label: '自动确认收货',            interval: '60 分钟' },
+        processRefundDeadline:   { label: '售后期到期处理',          interval: '10 分钟' },
+        autoTransferAgentOrders: { label: '代理商订单超时转平台',    interval: '30 分钟' },
+        checkExpiredGroups:      { label: '拼团超时未成团处理',      interval: '5 分钟' }
+    };
+
+    const tasks = Object.entries(META).map(([name, meta]) => {
+        const s = stats[name] || {};
+        return {
+            name,
+            ...meta,
+            run_count:      s.runCount      || 0,
+            error_count:    s.errorCount    || 0,
+            last_run_at:    s.lastRunAt     || null,
+            last_success_at: s.lastSuccessAt || null,
+            last_error:     s.lastError     || null,
+            // 若任务启动后从未执行，提示尚未触发
+            status: s.lastRunAt
+                ? (s.lastError && s.lastSuccessAt < s.lastRunAt ? 'error' : 'ok')
+                : 'pending'
+        };
+    });
+
+    res.json({ code: 0, data: { tasks, snapshot_at: new Date().toISOString() } });
 });
 
 module.exports = router;

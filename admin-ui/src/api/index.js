@@ -502,3 +502,16 @@ export const uploadSplashImage = (file) => {
     headers: { 'Content-Type': 'multipart/form-data' }
   })
 }
+
+// ========== 运维监控 ==========
+export const getDebugProcess  = () => request({ url: '/debug/process',     method: 'get' })
+export const getDebugAnomalies = () => request({ url: '/debug/anomalies',   method: 'get' })
+export const getDebugDbPing   = () => request({ url: '/debug/db-ping',     method: 'get' })
+export const getCronStatus    = () => request({ url: '/debug/cron-status', method: 'get' })
+export const getDebugLogs     = (lines = 100) =>
+  request({ url: `/debug/logs?lines=${lines}`, method: 'get' })
+
+// ========== 告警配置 ==========
+export const getAlertConfig  = () => request({ url: '/alert-config', method: 'get' })
+export const saveAlertConfig = (data) => request({ url: '/alert-config', method: 'put', data })
+export const testAlertWebhook = (data) => request({ url: '/alert-config/test', method: 'post', data })

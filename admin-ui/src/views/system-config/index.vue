@@ -168,7 +168,7 @@
     </el-tabs>
 
     <!-- 配置历史对话框 -->
-    <el-dialog v-model="historyDialogVisible" title="配置修改历史" width="600px">
+    <el-dialog v-model="historyDialogVisible" title="配置修改历史" width="640px">
       <el-timeline v-if="configHistory.length">
         <el-timeline-item
           v-for="h in configHistory"
@@ -176,9 +176,21 @@
           :timestamp="formatDate(h.created_at)"
           placement="top"
         >
-          <div><strong>{{ h.config_key }}</strong>: {{ h.old_value }} → {{ h.new_value }}</div>
-          <div style="font-size:12px;color:#909399">操作人: {{ h.admin_id }}</div>
-          <div v-if="h.reason" style="font-size:12px;color:#909399">原因: {{ h.reason }}</div>
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+            <div style="flex:1;min-width:0">
+              <div><strong>{{ h.config_key }}</strong>: {{ h.old_value }} → {{ h.new_value }}</div>
+              <div style="font-size:12px;color:#909399">操作人: {{ h.changed_by }}</div>
+              <div v-if="h.change_reason" style="font-size:12px;color:#909399">原因: {{ h.change_reason }}</div>
+            </div>
+            <el-button
+              size="small"
+              type="warning"
+              plain
+              style="flex-shrink:0;margin-top:2px"
+              :loading="rollingBack === h.id"
+              @click="handleRollback(h)"
+            >回滚到此版本</el-button>
+          </div>
         </el-timeline-item>
       </el-timeline>
       <el-empty v-else description="暂无修改记录" />
@@ -226,6 +238,7 @@ const historyDialogVisible = ref(false)
 const configHistory = ref([])
 const allConfigs = ref([])
 const pendingChanges = ref([])
+const rollingBack = ref(null)   // 正在回滚的 history id
 
 const groupedConfigs = computed(() => {
   const groups = {}
@@ -307,6 +320,33 @@ const showHistory = async (row) => {
     historyDialogVisible.value = true
   } catch (e) {
     console.error('获取历史失败:', e)
+  }
+}
+
+const handleRollback = async (h) => {
+  try {
+    await ElMessageBox.confirm(
+      `确认将 <strong>${h.config_key}</strong> 回滚到：<br><code>${h.old_value}</code>？`,
+      '回滚配置',
+      { type: 'warning', dangerouslyUseHTMLString: true, confirmButtonText: '确认回滚', cancelButtonText: '取消' }
+    )
+  } catch {
+    return  // 用户取消
+  }
+  rollingBack.value = h.id
+  try {
+    const res = await request({
+      url: `/system-configs/${h.config_key}/rollback`,
+      method: 'post',
+      data: { history_id: h.id }
+    })
+    ElMessage.success(res.message || '回滚成功，配置已即时生效')
+    historyDialogVisible.value = false
+    fetchConfigs()
+  } catch (e) {
+    console.error('回滚失败:', e)
+  } finally {
+    rollingBack.value = null
   }
 }
 

@@ -24,7 +24,9 @@ const getGroups = async (req, res) => {
             description: g.description,
             cover_url: g.cover_url,
             sort_order: g.sort_order,
-            count: g.materials?.length || 0
+            count: g.materials?.length || 0,
+            // "临时素材"为系统内置分组，前端据此禁止删除/重命名
+            is_system: g.name === '临时素材'
         }));
 
         // 在最前面插入"全部素材"虚拟分组
@@ -63,6 +65,11 @@ const updateGroup = async (req, res) => {
         const group = await MaterialGroup.findByPk(id);
         if (!group) return res.status(404).json({ code: -1, message: '分组不存在' });
 
+        // 系统内置分组不允许重命名
+        if (group.name === '临时素材' && req.body.name && req.body.name !== '临时素材') {
+            return res.status(403).json({ code: -1, message: '系统内置分组名称不可修改' });
+        }
+
         await group.update(req.body);
         res.json({ code: 0, data: group, message: '更新成功' });
     } catch (error) {
@@ -77,6 +84,11 @@ const deleteGroup = async (req, res) => {
         const { id } = req.params;
         const group = await MaterialGroup.findByPk(id);
         if (!group) return res.status(404).json({ code: -1, message: '分组不存在' });
+
+        // 系统内置分组不允许删除
+        if (group.name === '临时素材') {
+            return res.status(403).json({ code: -1, message: '系统内置分组不可删除' });
+        }
 
         // 组内素材移到未分组
         await Material.update({ group_id: null }, { where: { group_id: id } });

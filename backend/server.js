@@ -136,6 +136,42 @@ async function startServer() {
             });
         }, 5 * 60 * 1000);
 
+        // ★ 定时任务：业务异常告警检测（每5分钟检查一次）
+        const AlertService = require('./services/AlertService');
+        setInterval(async () => {
+            try {
+                const cfg = await AlertService.loadAlertConfig();
+                if (!cfg.alert_enabled) return;
+
+                const { Order, Refund, Withdrawal } = require('./models');
+                const { Op } = require('sequelize');
+                const issues = [];
+
+                // 检测长时间待支付订单（超过2小时）
+                const longPending = await Order.count({
+                    where: {
+                        status: 'pending',
+                        created_at: { [Op.lt]: new Date(Date.now() - 2 * 60 * 60 * 1000) }
+                    }
+                });
+                if (longPending > 5) issues.push(`超时未支付订单：${longPending} 单（>2h）`);
+
+                // 检测待审核退款堆积（>10单）
+                const pendingRefunds = await Refund.count({ where: { status: 'pending' } });
+                if (pendingRefunds > 10) issues.push(`待审核退款积压：${pendingRefunds} 单`);
+
+                // 检测待审核提现堆积（>20单）
+                const pendingWithdrawals = await Withdrawal.count({ where: { status: 'pending' } });
+                if (pendingWithdrawals > 20) issues.push(`待审核提现积压：${pendingWithdrawals} 笔`);
+
+                if (issues.length > 0) {
+                    const content = issues.map(i => `- ${i}`).join('\n');
+                    await AlertService.send('业务异常告警', content, 'warning', 'business_anomaly');
+                }
+            } catch (err) {
+                console.error('[定时任务] 告警检测异常:', err.message);
+            }
+        }, 5 * 60 * 1000);
 
         // 启动时也执行一次（使用锁机制）
         executeWithLock('settleCommissions', async () => {

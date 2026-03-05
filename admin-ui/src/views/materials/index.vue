@@ -19,10 +19,14 @@
           <span class="group-name">{{ g.name }}</span>
           <el-badge :value="g.count" :max="999" class="group-count" type="info" />
 
-          <!-- 非虚拟分组才显示操作 -->
-          <span v-if="!g._virtual" class="group-actions">
+          <!-- 非虚拟分组才显示操作；系统内置分组只读 -->
+          <span v-if="!g._virtual && !g.is_system" class="group-actions">
             <el-icon size="13" @click.stop="showGroupDialog(g)"><Edit /></el-icon>
             <el-icon size="13" @click.stop="handleDeleteGroup(g)"><Delete /></el-icon>
+          </span>
+          <!-- 系统内置分组：锁定图标，不可操作 -->
+          <span v-if="g.is_system" class="group-actions">
+            <el-icon size="13" color="#c0c4cc" title="系统内置分组，不可删除"><Lock /></el-icon>
           </span>
         </li>
       </ul>
@@ -186,12 +190,28 @@
           </el-select>
         </el-form-item>
         <el-form-item label="素材文件" v-if="form.type !== 'text'">
-          <el-upload :show-file-list="false" :http-request="handleUpload" :before-upload="beforeUpload">
-            <img v-if="form.url && ['image','poster'].includes(form.type)" :src="form.url" style="max-width:200px;max-height:120px;border-radius:4px;" />
-            <audio v-else-if="form.url && form.type === 'audio'" :src="form.url" controls style="width:200px" />
-            <el-button v-else :type="form.url ? 'success' : 'default'">
-              {{ form.url ? '✓ 已上传，点击替换' : '点击上传文件' }}
-            </el-button>
+          <el-upload
+            drag
+            :show-file-list="false"
+            :http-request="handleUpload"
+            :before-upload="beforeUpload"
+            class="material-uploader"
+          >
+            <!-- 已上传预览 -->
+            <template v-if="form.url">
+              <img v-if="['image','poster'].includes(form.type)" :src="form.url" class="upload-preview-img" />
+              <audio v-else-if="form.type === 'audio'" :src="form.url" controls style="width:220px;margin:12px 0" />
+              <div v-else class="upload-done-tip">
+                <el-icon size="22" color="#67c23a"><Check /></el-icon>
+                <span>已上传，拖入新文件可替换</span>
+              </div>
+            </template>
+            <!-- 未上传引导 -->
+            <template v-else>
+              <el-icon class="upload-drag-icon"><UploadFilled /></el-icon>
+              <div class="upload-drag-text">拖拽文件到此处，或 <em>点击选择</em></div>
+              <div class="upload-drag-hint">支持 JPG / PNG / GIF / WebP，最大 50MB</div>
+            </template>
           </el-upload>
         </el-form-item>
         <el-form-item label="文案内容" v-if="form.type === 'text'">
@@ -212,7 +232,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Edit, Delete, Folder, FolderOpened, Check, Document, Microphone, CopyDocument } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Folder, FolderOpened, Check, Document, Microphone, CopyDocument, Lock, UploadFilled } from '@element-plus/icons-vue'
 import { uploadFile } from '@/api'
 import request from '@/utils/request'
 
@@ -379,10 +399,20 @@ const handleSubmit = async () => {
 }
 
 const handleUpload = async ({ file }) => {
-  const data = await uploadFile(file)
+  // 素材库内部上传：skip_library=1，避免与后续手动保存重复入库
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('skip_library', '1')
+  formData.append('folder', 'materials')
+  const data = await request({
+    url: '/upload',
+    method: 'post',
+    data: formData,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
   form.url = data.url
   if (!form.title) form.title = file.name.replace(/\.[^.]+$/, '')
-  ElMessage.success('上传成功')
+  ElMessage.success('文件已上传')
 }
 
 const beforeUpload = (file) => {
@@ -572,5 +602,53 @@ onMounted(async () => {
   border-top: 1px solid #f0f0f0;
   justify-content: flex-end;
   gap: 0;
+}
+
+/* 拖拽上传区 */
+.material-uploader :deep(.el-upload-dragger) {
+  width: 360px;
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.upload-drag-icon {
+  font-size: 40px;
+  color: #c0c4cc;
+}
+
+.upload-drag-text {
+  font-size: 14px;
+  color: #606266;
+}
+
+.upload-drag-text em {
+  color: #409eff;
+  font-style: normal;
+}
+
+.upload-drag-hint {
+  font-size: 12px;
+  color: #909399;
+}
+
+.upload-preview-img {
+  max-width: 320px;
+  max-height: 160px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.upload-done-tip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #67c23a;
 }
 </style>

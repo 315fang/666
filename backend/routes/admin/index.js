@@ -350,6 +350,60 @@ router.get('/logistics/order/:id', checkPermission('orders'), async (req, res) =
     }
 });
 
+// ========== 告警推送配置（★新增） ==========
+const AlertService = require('../../services/AlertService');
+const { SystemConfig } = require('../../models');
+
+// 读取告警配置
+router.get('/alert-config', checkPermission('settings'), async (req, res) => {
+    try {
+        const cfg = await AlertService.loadAlertConfig();
+        res.json({ code: 0, data: cfg });
+    } catch (e) {
+        res.status(500).json({ code: 500, message: e.message });
+    }
+});
+
+// 保存告警配置（批量 upsert notification 分组）
+router.put('/alert-config', checkPermission('settings'), async (req, res) => {
+    try {
+        const fields = [
+            { key: 'alert_enabled',              type: 'boolean' },
+            { key: 'alert_webhook_type',          type: 'string'  },
+            { key: 'alert_dingtalk_webhook',      type: 'string'  },
+            { key: 'alert_wecom_webhook',         type: 'string'  },
+            { key: 'alert_min_interval_minutes',  type: 'number'  }
+        ];
+        const body = req.body || {};
+        await Promise.all(fields.map(f => {
+            if (body[f.key] === undefined) return Promise.resolve();
+            return SystemConfig.upsert({
+                config_key:   f.key,
+                config_value: String(body[f.key]),
+                config_type:  f.type,
+                config_group: 'notification',
+                description:  f.key,
+                is_editable:  true
+            });
+        }));
+        res.json({ code: 0, message: '告警配置已保存' });
+    } catch (e) {
+        res.status(500).json({ code: 500, message: e.message });
+    }
+});
+
+// 测试 Webhook
+router.post('/alert-config/test', checkPermission('settings'), async (req, res) => {
+    try {
+        const { type, url } = req.body || {};
+        if (!type || !url) return res.status(400).json({ code: 400, message: '缺少 type 或 url' });
+        const result = await AlertService.testWebhook(type, url);
+        res.json({ code: result.ok ? 0 : 1, data: result, message: result.message });
+    } catch (e) {
+        res.status(500).json({ code: 500, message: e.message });
+    }
+});
+
 // ========== 注销（使当前 Token 立即失效） ==========
 router.post('/logout', adminAuth, adminAuthController.logout);
 

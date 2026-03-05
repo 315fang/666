@@ -1,16 +1,52 @@
 /**
  * 文件上传控制器
- * 
+ *
  * 支持多种对象存储服务：
  * - 阿里云 OSS
  * - 腾讯云 COS
  * - 七牛云 Qiniu
  * - MinIO (自建)
  * - 本地存储 (开发/备用)
+ *
+ * 上传成功后自动将素材记录写入素材库（临时素材分组），
+ * 管理员可在素材库中统一整理归档。
+ * 若调用方不希望入库（如素材库内部上传），可在请求体中
+ * 传递 skip_library=1 跳过自动入库。
  */
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+
+// 懒加载：避免循环依赖（模型文件在服务启动后才完全初始化）
+let _Material = null;
+let _MaterialGroup = null;
+const getModels = () => {
+    if (!_Material) _Material = require('../../../models/Material');
+    if (!_MaterialGroup) _MaterialGroup = require('../../../models/MaterialGroup');
+    return { Material: _Material, MaterialGroup: _MaterialGroup };
+};
+
+/** 获取或创建"临时素材"系统分组（首次调用自动建立） */
+const getOrCreateTempGroup = async () => {
+    const { MaterialGroup } = getModels();
+    const [group] = await MaterialGroup.findOrCreate({
+        where: { name: '临时素材' },
+        defaults: {
+            name: '临时素材',
+            description: '系统自动归档 — 各页面上传后未分类的素材，可在此整理移入正式分组',
+            sort_order: -999,   // 固定排最后
+            status: 1
+        }
+    });
+    return group;
+};
+
+/** 根据 MIME 类型推断素材类型 */
+const inferMaterialType = (mimetype = '') => {
+    if (mimetype.startsWith('video/')) return 'video';
+    if (mimetype.startsWith('audio/')) return 'audio';
+    return 'image';
+};
 
 // 存储配置（可从数据库读取）
 let storageConfig = {
@@ -327,9 +363,31 @@ const upload = async (req, res) => {
         const folder = req.body.folder || 'products';
         const result = await uploadFile(req.file, folder);
 
+        // ── 自动入素材库（临时素材分组）──────────────────────────
+        // skip_library=1 时跳过（素材库内部上传自行处理，避免重复写入）
+        let materialId = null;
+        if (req.body.skip_library !== '1') {
+            try {
+                const { Material } = getModels();
+                const tempGroup = await getOrCreateTempGroup();
+                const title = path.parse(req.file.originalname).name || 'untitled';
+                const mat = await Material.create({
+                    type: inferMaterialType(req.file.mimetype),
+                    title,
+                    url: result.url,
+                    group_id: tempGroup.id,
+                    status: 1
+                });
+                materialId = mat.id;
+            } catch (libErr) {
+                // 入库失败不影响上传响应，记录日志即可
+                console.warn('[Upload] 素材自动入库失败:', libErr.message);
+            }
+        }
+
         res.json({
             code: 0,
-            data: result,
+            data: { ...result, material_id: materialId },
             message: '上传成功'
         });
     } catch (error) {
@@ -352,6 +410,13 @@ const uploadMultiple = async (req, res) => {
         const results = [];
         const errors = [];
 
+        // 是否跳过自动入库
+        const skipLibrary = req.body.skip_library === '1';
+        let tempGroup = null;
+        if (!skipLibrary) {
+            try { tempGroup = await getOrCreateTempGroup(); } catch (_) {}
+        }
+
         for (const file of req.files) {
             try {
                 // 校验每个文件
@@ -361,7 +426,27 @@ const uploadMultiple = async (req, res) => {
                 }
 
                 const result = await uploadFile(file, folder);
-                results.push(result);
+
+                // 自动入库
+                let materialId = null;
+                if (tempGroup) {
+                    try {
+                        const { Material } = getModels();
+                        const title = path.parse(file.originalname).name || 'untitled';
+                        const mat = await Material.create({
+                            type: inferMaterialType(file.mimetype),
+                            title,
+                            url: result.url,
+                            group_id: tempGroup.id,
+                            status: 1
+                        });
+                        materialId = mat.id;
+                    } catch (libErr) {
+                        console.warn('[Upload] 批量素材入库失败:', libErr.message);
+                    }
+                }
+
+                results.push({ ...result, material_id: materialId });
             } catch (e) {
                 errors.push({ name: file.originalname, error: e.message });
             }

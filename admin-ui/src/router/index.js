@@ -120,6 +120,12 @@ const routes = [
         meta: { title: '账号管理', icon: 'Avatar', group: '系统管理' }
       },
       {
+        path: 'ops-monitor',
+        name: 'OpsMonitor',
+        component: () => import('@/views/ops-monitor/index.vue'),
+        meta: { title: '运维监控', icon: 'Monitor', group: '系统管理' }
+      },
+      {
         path: 'logs',
         name: 'Logs',
         component: () => import('@/views/logs/index.vue'),

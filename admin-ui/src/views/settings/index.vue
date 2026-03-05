@@ -76,6 +76,86 @@
             </el-form-item>
           </el-form>
         </el-tab-pane>
+
+        <!-- 告警通知 -->
+        <el-tab-pane label="告警通知" name="alert">
+          <el-form
+            :model="alertForm"
+            label-width="180px"
+            style="max-width: 700px;"
+            v-loading="alertLoading"
+          >
+            <el-divider content-position="left">告警总开关</el-divider>
+            <el-form-item label="启用告警推送">
+              <el-switch v-model="alertForm.alert_enabled" />
+              <span style="margin-left:12px;font-size:12px;color:#909399">
+                关闭后所有渠道均停止推送
+              </span>
+            </el-form-item>
+
+            <el-divider content-position="left">推送渠道</el-divider>
+            <el-form-item label="推送渠道">
+              <el-radio-group v-model="alertForm.alert_webhook_type">
+                <el-radio value="dingtalk">仅钉钉</el-radio>
+                <el-radio value="wecom">仅企业微信</el-radio>
+                <el-radio value="both">两者都推</el-radio>
+              </el-radio-group>
+            </el-form-item>
+
+            <el-form-item
+              label="钉钉 Webhook 地址"
+              v-if="alertForm.alert_webhook_type === 'dingtalk' || alertForm.alert_webhook_type === 'both'"
+            >
+              <el-input
+                v-model="alertForm.alert_dingtalk_webhook"
+                placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."
+                clearable
+                style="width:420px"
+              />
+              <el-button
+                style="margin-left:8px"
+                :loading="testingDing"
+                @click="handleTestWebhook('dingtalk')"
+              >测试</el-button>
+            </el-form-item>
+
+            <el-form-item
+              label="企业微信 Webhook 地址"
+              v-if="alertForm.alert_webhook_type === 'wecom' || alertForm.alert_webhook_type === 'both'"
+            >
+              <el-input
+                v-model="alertForm.alert_wecom_webhook"
+                placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
+                clearable
+                style="width:420px"
+              />
+              <el-button
+                style="margin-left:8px"
+                :loading="testingWecom"
+                @click="handleTestWebhook('wecom')"
+              >测试</el-button>
+            </el-form-item>
+
+            <el-divider content-position="left">推送策略</el-divider>
+            <el-form-item label="同类告警最小间隔 (分钟)">
+              <el-input-number
+                v-model="alertForm.alert_min_interval_minutes"
+                :min="1"
+                :max="1440"
+                :step="5"
+              />
+              <span style="margin-left:10px;font-size:12px;color:#909399">
+                相同类型告警在此时间内不重复推送
+              </span>
+            </el-form-item>
+
+            <el-form-item>
+              <el-button type="primary" @click="handleSaveAlert" :loading="alertSaving">
+                保存告警配置
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
       </el-tabs>
     </el-card>
   </div>
@@ -86,6 +166,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/store/user'
 import { getSettings, updateSettings, getSystemStatus } from '@/api'
+import request from '@/utils/request'
 
 const userStore = useUserStore()
 const activeTab = ref('basic')
@@ -107,6 +188,68 @@ const accountForm = reactive({
   role: ''
 })
 
+// ========== 告警配置 ==========
+const alertLoading = ref(false)
+const alertSaving  = ref(false)
+const testingDing  = ref(false)
+const testingWecom = ref(false)
+
+const alertForm = reactive({
+  alert_enabled: false,
+  alert_webhook_type: 'dingtalk',
+  alert_dingtalk_webhook: '',
+  alert_wecom_webhook: '',
+  alert_min_interval_minutes: 10
+})
+
+const fetchAlertConfig = async () => {
+  alertLoading.value = true
+  try {
+    const res = await request({ url: '/alert-config', method: 'get' })
+    const d = res.data || res
+    if (d.alert_enabled !== undefined) alertForm.alert_enabled = !!d.alert_enabled
+    if (d.alert_webhook_type)          alertForm.alert_webhook_type = d.alert_webhook_type
+    if (d.alert_dingtalk_webhook)      alertForm.alert_dingtalk_webhook = d.alert_dingtalk_webhook
+    if (d.alert_wecom_webhook)         alertForm.alert_wecom_webhook = d.alert_wecom_webhook
+    if (d.alert_min_interval_minutes)  alertForm.alert_min_interval_minutes = Number(d.alert_min_interval_minutes)
+  } catch (e) {
+    console.error('获取告警配置失败:', e)
+  } finally {
+    alertLoading.value = false
+  }
+}
+
+const handleSaveAlert = async () => {
+  alertSaving.value = true
+  try {
+    await request({ url: '/alert-config', method: 'put', data: { ...alertForm } })
+    ElMessage.success('告警配置已保存')
+  } catch (e) {
+    console.error('保存告警配置失败:', e)
+  } finally {
+    alertSaving.value = false
+  }
+}
+
+const handleTestWebhook = async (type) => {
+  const url = type === 'dingtalk' ? alertForm.alert_dingtalk_webhook : alertForm.alert_wecom_webhook
+  if (!url) { ElMessage.warning('请先填写 Webhook 地址'); return }
+  if (type === 'dingtalk') testingDing.value = true
+  else testingWecom.value = true
+  try {
+    const res = await request({ url: '/alert-config/test', method: 'post', data: { type, url } })
+    const d = res.data || res
+    if (d.ok || res.code === 0) ElMessage.success('测试消息发送成功，请检查对应群')
+    else ElMessage.error(`发送失败：${d.message || '未知错误'}`)
+  } catch (e) {
+    ElMessage.error('发送失败：' + (e.message || '请求错误'))
+  } finally {
+    testingDing.value = false
+    testingWecom.value = false
+  }
+}
+
+// ========== 其余逻辑 ==========
 const fetchSettings = async () => {
   settingsLoading.value = true
   try {
@@ -147,8 +290,6 @@ const handleSaveSettings = async () => {
 }
 
 const handleChangePassword = () => {
-  // 触发父组件 layout 中的修改密码对话框
-  // 通过事件总线或直接操作
   ElMessage.info('请点击右上角用户菜单中的"修改密码"')
 }
 
@@ -157,6 +298,7 @@ onMounted(() => {
   accountForm.role = userStore.role === 'super_admin' ? '超级管理员' : '管理员'
   fetchSettings()
   fetchSystemStatus()
+  fetchAlertConfig()
 })
 </script>
 
