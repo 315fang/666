@@ -27,8 +27,6 @@ if (process.env.NODE_ENV === 'production') {
 
 // 导入路由
 const authRoutes = require('./routes/auth');
-const aiRoutes = require('./routes/ai');
-const aiV2Routes = require('./routes/ai-v2');  // ★ 新版AI路由
 const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
 const addressRoutes = require('./routes/addresses');
@@ -185,8 +183,6 @@ if (swaggerEnabled) {
 
 // API路由
 app.use('/api', authRoutes);
-app.use('/api/ai', aiRoutes);                    // 旧版AI接口（保持兼容）
-app.use('/api/v2/ai', aiV2Routes);               // ★ 新版AI接口（推荐）
 app.use('/api', productRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', addressRoutes);

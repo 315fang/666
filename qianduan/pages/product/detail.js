@@ -262,23 +262,6 @@ Page({
         wx.navigateBack();
     },
 
-    // ======== 智能咨询 ========
-    goAIChat() {
-        const app = getApp();
-        // 设置当前商品为上下文
-        app.globalData.aiContext = {
-            type: 'product',
-            data: {
-                id: this.data.product.id,
-                name: this.data.product.name,
-                price: this.data.product.retail_price,
-                displayPrice: this.data.product.displayPrice,
-                description: this.data.product.description
-            }
-        };
-        wx.navigateTo({ url: '/pages/ai/chat' });
-    },
-
     // Toggle Favorite
     onToggleFavorite() {
         this.setData({ isFavorite: !this.data.isFavorite });

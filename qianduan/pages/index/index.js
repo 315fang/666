@@ -100,10 +100,22 @@ Page({
 
     _renderHomeData(data) {
         if (!data) return;
-        // sections 由后端完整组装，前端直接使用
         let finalSections = data.sections || [];
 
-        if (finalSections.length === 0) {
+        // 数据注水：给 quick-entry / banner / feature-cards 塞入对应数据
+        if (finalSections.length > 0) {
+            finalSections.forEach(sec => {
+                if (sec.section_type === 'quick-entry' && sec.config) {
+                    sec.config.entries = data.quickEntries || [];
+                }
+                if (sec.section_type === 'feature-cards' && sec.config && (!sec.config.cards || sec.config.cards.length === 0)) {
+                    sec.config.cards = data.featureCards || [];
+                }
+                if (sec.section_type === 'banner' && sec.config && (!sec.config.images || sec.config.images.length === 0)) {
+                    sec.config.images = (data.banners || []).map(b => b.image_url);
+                }
+            });
+        } else {
             // 默认降级兜底：无配置时生成默认骨架
             finalSections = [
                 {

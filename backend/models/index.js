@@ -22,8 +22,6 @@ const Theme = require('./Theme');
 const ActivityLog = require('./ActivityLog');
 const SystemConfig = require('./SystemConfig');
 const SystemConfigHistory = require('./SystemConfigHistory');
-const AIAlert = require('./AIAlert');
-const AIFixSession = require('./AIFixSession');
 const MassMessage = require('./MassMessage');
 const UserMassMessage = require('./UserMassMessage');
 const UserTag = require('./UserTag');
@@ -136,11 +134,6 @@ Dealer.belongsTo(Admin, { foreignKey: 'approved_by', as: 'approver' });
 SystemConfig.belongsTo(Admin, { foreignKey: 'updated_by', as: 'updater' });
 SystemConfigHistory.belongsTo(Admin, { foreignKey: 'changed_by', as: 'admin' });
 
-// ========== AI告警关联 ==========
-AIAlert.belongsTo(Admin, { foreignKey: 'resolved_by', as: 'resolver' });
-AIFixSession.belongsTo(AIAlert, { foreignKey: 'alert_id', as: 'alert' });
-AIFixSession.belongsTo(Admin, { foreignKey: 'executed_by', as: 'executor' });
-
 // ========== 群发消息关联 ==========
 MassMessage.belongsTo(Admin, { foreignKey: 'created_by', as: 'creator' });
 UserMassMessage.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -236,8 +229,6 @@ module.exports = {
     ActivityLog,
     SystemConfig,
     SystemConfigHistory,
-    AIAlert,
-    AIFixSession,
     MassMessage,
     UserMassMessage,
     UserTag,

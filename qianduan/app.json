@@ -110,14 +110,6 @@
             ]
         },
         {
-            "root": "pages/ai",
-            "name": "packageOther",
-            "pages": [
-                "chat",
-                "questionnaire"
-            ]
-        },
-        {
             "root": "pages/rules",
             "name": "packageOther",
             "pages": [

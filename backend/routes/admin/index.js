@@ -255,9 +255,6 @@ router.put('/rules', async (req, res) => {
 const adminThemeRoutes = require('./themes');
 router.use('/themes', adminThemeRoutes);
 
-const adminAgentRoutes = require('./ai_agent');
-router.use('/agent', adminAgentRoutes);
-
 // ========== 拼团管理 (★新增) ==========
 const adminGroupBuyController = require('./controllers/adminGroupBuyController');
 router.get('/group-buys', checkPermission('product'), adminGroupBuyController.getGroupActivities);
@@ -317,10 +314,6 @@ router.get('/storage/signature', adminUploadController.getUploadSignature);  // 
 // GET /admin/api/debug/db-ping  - 数据库连接延迟测试
 const debugRoutes = require('./debug');
 router.use('/debug', debugRoutes);
-
-// ========== AI配置管理（★新增） ==========
-const aiConfigRoutes = require('./ai-config');
-router.use('/ai', aiConfigRoutes);
 
 // ========== 系统配置管理（数据库热更新）（★新增） ==========
 const configRoutes = require('./config');

@@ -4,7 +4,6 @@ const { sequelize, testConnection } = require('./config/database');
 const OrderJobService = require('./services/OrderJobService');
 const constants = require('./config/constants');
 const { executeWithLock } = require('./utils/taskLock');
-const AIOpsService = require('./services/AIOpsService');
 const logger = require('./utils/logger');
 
 const PORT = process.env.PORT || 3000;
@@ -148,9 +147,6 @@ async function startServer() {
         executeWithLock('processRefundDeadline', OrderJobService.processRefundDeadlineExpired).catch(() => { });
         executeWithLock('autoTransferAgentOrders', OrderJobService.autoTransferAgentOrders).catch(() => { });
 
-        // ★ 初始化AI运维监控服务
-        await AIOpsService.initialize();
-
         // 启动服务器
         app.listen(PORT, () => {
             console.log(`\n========================================`);
@@ -162,7 +158,6 @@ async function startServer() {
             console.log(`  佣金冻结天数: T+${constants.COMMISSION.FREEZE_DAYS}`);
             console.log(`  调试路由: ${constants.DEBUG.ENABLE_DEBUG_ROUTES ? '开启' : '关闭'}`);
             console.log(`  测试接口: ${constants.DEBUG.ENABLE_TEST_ROUTES ? '开启' : '关闭'}`);
-            console.log(`  AI运维监控: ${AIOpsService.isRunning ? '运行中' : '已禁用'}`);
             console.log(`========================================\n`);
         });
     } catch (error) {
