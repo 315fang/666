@@ -135,8 +135,8 @@ const loginLimiter = rateLimit({
 });
 app.use('/api/login', loginLimiter);
 
-// 静态文件 - 管理后台 (Vite 构建版)
-app.use('/admin', express.static(path.join(__dirname, 'admin-ui/dist')));
+// 静态文件 - 管理后台 (Vite 构建版)  [admin-ui/ 在项目根目录，backend/ 的上一层]
+app.use('/admin', express.static(path.join(__dirname, '../admin-ui/dist')));
 
 // SPA 兜底 - 管理后台所有非 API、非静态资源路由都返回 index.html
 app.get('/admin/*', (req, res, next) => {
@@ -144,7 +144,7 @@ app.get('/admin/*', (req, res, next) => {
     if (req.path.startsWith('/admin/api')) return next();
     // 跳过有扩展名的静态资源请求（.js, .css, .png 等）
     if (path.extname(req.path)) return next();
-    res.sendFile(path.join(__dirname, 'admin-ui/dist/index.html'));
+    res.sendFile(path.join(__dirname, '../admin-ui/dist/index.html'));
 });
 
 // ★ 静态文件 - 本地上传目录（图片等资源）
