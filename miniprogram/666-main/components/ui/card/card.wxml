@@ -1,0 +1,4 @@
+<!-- components/ui/card/card.wxml -->
+<view class="card {{className}}" style="{{customStyle}}" bindtap="onTap">
+  <slot></slot>
+</view>

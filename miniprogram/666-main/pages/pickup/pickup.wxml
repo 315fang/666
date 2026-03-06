@@ -1,0 +1,67 @@
+<!--pages/pickup/pickup.wxml - 自提凭证页-->
+<view class="container" style="padding-top: {{statusBarHeight}}px">
+  <view class="nav-bar">
+    <view class="nav-back" bindtap="onBack">
+      <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
+    </view>
+    <text class="nav-title">自提凭证</text>
+    <view class="nav-placeholder"/>
+  </view>
+
+  <!-- 状态卡 -->
+  <view class="status-card">
+    <view class="status-icon-wrap {{info.verified_at ? 'verified' : 'pending'}}">
+      <image class="status-icon" src="{{info.verified_at ? '/assets/icons/check.svg' : '/assets/icons/package.svg'}}" mode="aspectFit"/>
+    </view>
+    <text class="status-text" wx:if="{{info.verified_at}}">已完成核销</text>
+    <text class="status-text pending" wx:else>待核销</text>
+    <text class="order-no">订单号 {{info.order_no}}</text>
+  </view>
+
+  <!-- 站点信息 -->
+  <view class="station-card" wx:if="{{info.pickupStation}}">
+    <image class="station-icon" src="/assets/icons/map-pin.svg" mode="aspectFit"/>
+    <view class="station-info">
+      <text class="station-name">{{info.pickupStation.name}}</text>
+      <text class="station-addr">{{info.pickupStation.address}}</text>
+      <text class="station-contact" wx:if="{{info.pickupStation.pickup_contact}}">联系人：{{info.pickupStation.pickup_contact}}</text>
+    </view>
+  </view>
+
+  <!-- 二维码区域（未核销时展示）-->
+  <view class="qr-section" wx:if="{{!info.verified_at}}">
+    <view class="qr-wrap">
+      <!-- 使用 canvas 绘制二维码 -->
+      <canvas canvas-id="qrCanvas" class="qr-canvas" id="qrCanvas"/>
+    </view>
+    <text class="qr-hint">请让工作人员扫描二维码</text>
+  </view>
+
+  <!-- 分隔线 -->
+  <view class="divider-row" wx:if="{{!info.verified_at}}">
+    <view class="divider-line"/>
+    <text class="divider-text">或报出以下数字码</text>
+    <view class="divider-line"/>
+  </view>
+
+  <!-- 16位数字核销码 -->
+  <view class="code-section" wx:if="{{!info.verified_at}}">
+    <view class="code-display">
+      <text class="code-text">{{codeFormatted}}</text>
+    </view>
+    <view class="code-copy-btn" bindtap="copyCode">复制核销码</view>
+  </view>
+
+  <!-- 已核销显示 -->
+  <view class="verified-info" wx:if="{{info.verified_at}}">
+    <text class="verified-time">核销时间：{{info.verified_at}}</text>
+  </view>
+
+  <!-- 说明 -->
+  <view class="tip-section">
+    <text class="tip-title">使用说明</text>
+    <text class="tip-item">· 到达服务站点后，向工作人员出示本页面</text>
+    <text class="tip-item">· 支持扫描二维码或手动输入16位核销码</text>
+    <text class="tip-item">· 核销前请勿关闭此页面</text>
+  </view>
+</view>

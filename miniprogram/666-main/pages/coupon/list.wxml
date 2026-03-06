@@ -1,0 +1,66 @@
+<!--pages/coupon/list.wxml - 我的优惠券-->
+<view class="container">
+  <!-- 导航 -->
+  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-back" bindtap="onBack">
+      <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
+    </view>
+    <text class="nav-title">我的优惠券</text>
+    <view class="nav-placeholder"/>
+  </view>
+
+  <!-- Tab 切换 -->
+  <view class="tab-row">
+    <view class="tab-item {{activeTab === 'unused' ? 'active' : ''}}" bindtap="switchTab" data-tab="unused">
+      未使用
+      <text class="tab-count" wx:if="{{unusedCount > 0}}">{{unusedCount}}</text>
+    </view>
+    <view class="tab-item {{activeTab === 'used' ? 'active' : ''}}" bindtap="switchTab" data-tab="used">已使用</view>
+    <view class="tab-item {{activeTab === 'expired' ? 'active' : ''}}" bindtap="switchTab" data-tab="expired">已过期</view>
+  </view>
+
+  <!-- 券列表 -->
+  <scroll-view scroll-y class="coupon-scroll">
+    <view class="empty-wrap" wx:if="{{!loading && !coupons.length}}">
+      <image src="/assets/icons/gift.svg" class="empty-icon" mode="aspectFit"/>
+      <text class="empty-text" wx:if="{{activeTab === 'unused'}}">暂无可用优惠券\n快去参与活动领券吧</text>
+      <text class="empty-text" wx:elif="{{activeTab === 'used'}}">暂无已使用记录</text>
+      <text class="empty-text" wx:else>暂无已过期记录</text>
+    </view>
+
+    <view class="coupon-list">
+      <view class="coupon-card {{activeTab}}" wx:for="{{coupons}}" wx:key="id">
+        <!-- 左侧：面值 -->
+        <view class="coupon-left">
+          <view class="coupon-value-wrap">
+            <text class="coupon-currency" wx:if="{{item.coupon_type === 'fixed'}}">¥</text>
+            <text class="coupon-value">
+              {{item.coupon_type === 'fixed' ? item.coupon_value : (item.coupon_value * 10 + '折')}}
+            </text>
+          </view>
+          <text class="coupon-min" wx:if="{{item.min_purchase > 0}}">满{{item.min_purchase}}元可用</text>
+          <text class="coupon-min" wx:else>无门槛</text>
+        </view>
+        <!-- 锯齿分割线 -->
+        <view class="coupon-divider">
+          <view class="dent top"/>
+          <view class="dashed-line"/>
+          <view class="dent bottom"/>
+        </view>
+        <!-- 右侧：信息 -->
+        <view class="coupon-right">
+          <text class="coupon-name">{{item.coupon_name}}</text>
+          <text class="coupon-scope" wx:if="{{item.scope === 'all'}}">全场通用</text>
+          <text class="coupon-scope" wx:else>指定商品可用</text>
+          <text class="coupon-expire">{{item.expire_at | date}}到期</text>
+          <!-- 操作 -->
+          <view class="coupon-action" wx:if="{{activeTab === 'unused'}}" bindtap="onUse" data-coupon="{{item}}">
+            立即使用
+          </view>
+          <view class="coupon-used-tag" wx:elif="{{activeTab === 'used'}}">已使用</view>
+          <view class="coupon-expire-tag" wx:else>已过期</view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+</view>

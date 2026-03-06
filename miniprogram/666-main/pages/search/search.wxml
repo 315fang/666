@@ -1,0 +1,84 @@
+<!--pages/search/search.wxml - 搜索页-->
+<view class="container">
+  <!-- 搜索栏 -->
+  <view class="search-bar">
+    <view class="search-input-wrap">
+      <image class="search-icon-img" src="/assets/icons/search.svg" mode="aspectFit"/>
+      <input class="search-input" 
+             placeholder="搜索商品名称" 
+             value="{{keyword}}" 
+             bindinput="onInput" 
+             bindconfirm="onSearch"
+             focus="{{true}}"
+             confirm-type="search" />
+      <image wx:if="{{keyword}}" class="clear-btn-img" src="/assets/icons/x.svg" bindtap="onClear" mode="aspectFit"/>
+    </view>
+    <view class="cancel-btn" bindtap="onCancel">取消</view>
+  </view>
+
+  <!-- 搜索历史 -->
+  <view class="history-section" wx:if="{{!hasSearched && history.length > 0}}">
+    <view class="section-header">
+      <text class="section-title">搜索历史</text>
+      <text class="section-action" bindtap="onClearHistory">清空</text>
+    </view>
+    <view class="history-tags">
+      <view class="history-tag" wx:for="{{history}}" wx:key="*this" bindtap="onHistoryTap" data-keyword="{{item}}">
+        <text>{{item}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 热门搜索 -->
+  <view class="hot-section" wx:if="{{!hasSearched && hotKeywords.length > 0}}">
+    <view class="section-header">
+      <text class="section-title">热门搜索</text>
+    </view>
+    <view class="hot-tags">
+      <view class="hot-tag" wx:for="{{hotKeywords}}" wx:key="*this" bindtap="onHistoryTap" data-keyword="{{item}}">
+        <text class="hot-rank" wx:if="{{index < 3}}">{{index + 1}}</text>
+        <text>{{item}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 搜索结果 -->
+  <view class="result-section" wx:if="{{hasSearched}}">
+    <view class="result-header" wx:if="{{products.length > 0}}">
+      <text class="result-count">找到 {{products.length}} 件商品</text>
+    </view>
+
+    <!-- 商品列表 -->
+    <view class="product-grid">
+      <view class="product-card" 
+            wx:for="{{products}}" wx:key="id"
+            bindtap="onProductTap" data-item="{{item}}">
+        <view class="product-image-wrap">
+          <image class="product-image" src="{{item.images[0]}}" mode="aspectFill"></image>
+        </view>
+        <view class="product-info">
+          <text class="product-name">{{item.name}}</text>
+          <view class="product-bottom">
+            <view class="price-box">
+              <text class="currency">¥</text>
+              <text class="price-num">{{item.retail_price}}</text>
+            </view>
+            <text class="sales-text" wx:if="{{item.sales_count > 0}}">已售{{item.sales_count}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 空搜索结果 -->
+    <view class="empty" wx:if="{{!loading && products.length === 0}}">
+      <image class="empty-icon-img" src="/assets/icons/search.svg" mode="aspectFit"/>
+      <text class="empty-text">未找到相关商品</text>
+      <text class="empty-sub">换个关键词试试吧</text>
+    </view>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
+  </view>
+</view>

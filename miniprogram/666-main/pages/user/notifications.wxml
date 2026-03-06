@@ -1,0 +1,27 @@
+<view class="container">
+  <view class="notif-list" wx:if="{{notifications.length > 0}}">
+    <view class="notif-item {{item.is_read ? '' : 'unread'}}" wx:for="{{notifications}}" wx:key="id" bindtap="onRead" data-id="{{item.id}}" data-index="{{index}}">
+      <view class="notif-icon-box {{item.type}}-bg">
+        <image class="notif-icon-img" wx:if="{{item.type === 'upgrade'}}" src="/assets/icons/rocket.svg" mode="aspectFit"/>
+        <image class="notif-icon-img" wx:if="{{item.type === 'commission'}}" src="/assets/icons/dollar-sign.svg" mode="aspectFit"/>
+        <image class="notif-icon-img" wx:if="{{item.type === 'stock'}}" src="/assets/icons/alert-triangle.svg" mode="aspectFit"/>
+        <image class="notif-icon-img" wx:if="{{item.type === 'system'}}" src="/assets/icons/settings.svg" mode="aspectFit"/>
+        <image class="notif-icon-img" wx:if="{{item.type === 'withdrawal'}}" src="/assets/icons/credit-card.svg" mode="aspectFit"/>
+        <image class="notif-icon-img" wx:if="{{item.type === 'refund'}}" src="/assets/icons/refresh-cw.svg" mode="aspectFit"/>
+      </view>
+      <view class="notif-content">
+        <view class="notif-header">
+          <text class="notif-title">{{item.title}}</text>
+          <text class="notif-time">{{item.created_at_format}}</text>
+        </view>
+        <text class="notif-desc">{{item.content}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- Empty State -->
+  <view class="empty" wx:else>
+    <image class="empty-icon-img" src="/assets/icons/inbox.svg" mode="aspectFit"/>
+    <text class="empty-text">暂无消息通知</text>
+  </view>
+</view>

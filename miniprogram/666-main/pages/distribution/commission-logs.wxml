@@ -1,0 +1,69 @@
+<view class="container">
+  <!-- 顶部概览 -->
+  <view class="stats-header">
+    <view class="stat-card">
+      <text class="label">累计佣金</text>
+      <text class="amount">¥{{totalEarnings || '0.00'}}</text>
+    </view>
+    <view class="stat-card">
+      <text class="label">待结算</text>
+      <text class="amount sub">¥{{frozenAmount || '0.00'}}</text>
+    </view>
+  </view>
+
+  <!-- 筛选栏 -->
+  <view class="filter-bar">
+    <scroll-view scroll-x class="filter-scroll">
+      <view 
+        class="filter-item {{currentType === 'all' ? 'active' : ''}}" 
+        bindtap="onTypeChange" 
+        data-type="all"
+      >全部</view>
+      <view 
+        class="filter-item {{currentType === 'Direct' ? 'active' : ''}}" 
+        bindtap="onTypeChange" 
+        data-type="Direct"
+      >直推佣金</view>
+      <view 
+        class="filter-item {{currentType === 'Indirect' ? 'active' : ''}}" 
+        bindtap="onTypeChange" 
+        data-type="Indirect"
+      >团队佣金</view>
+      <view 
+        class="filter-item {{currentType === 'Stock_Diff' ? 'active' : ''}}" 
+        bindtap="onTypeChange" 
+        data-type="Stock_Diff"
+      >级差利润</view>
+    </scroll-view>
+  </view>
+
+  <!-- 列表 -->
+  <view class="list-section">
+    <view class="log-item" wx:for="{{logs}}" wx:key="id">
+      <view class="log-left">
+        <view class="type-icon {{item.type}}">{{item.typeIcon}}</view>
+        <view class="info">
+          <text class="title">{{item.typeName}}</text>
+          <text class="time">{{item.created_at}}</text>
+        </view>
+      </view>
+      <view class="log-right">
+        <text class="amount">+{{item.amount}}</text>
+        <text class="status {{item.statusClass}}">{{item.statusText}}</text>
+      </view>
+      <view class="remark" wx:if="{{item.remark}}">
+        <text class="remark-text">{{item.remark}}</text>
+      </view>
+    </view>
+
+    <!-- 加载状态 -->
+    <view class="loading-more" wx:if="{{loading}}">加载中...</view>
+    <view class="no-more" wx:if="{{!hasMore && logs.length > 0}}">没有更多了</view>
+    
+    <!-- 空状态 -->
+    <view class="empty-state" wx:if="{{logs.length === 0 && !loading}}">
+      <image src="/assets/images/placeholder.svg" mode="aspectFit" class="empty-img"></image>
+      <text>暂无佣金明细</text>
+    </view>
+  </view>
+</view>

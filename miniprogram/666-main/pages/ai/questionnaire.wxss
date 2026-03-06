@@ -1,0 +1,193 @@
+.container {
+  padding: 40rpx;
+  background: #fafafa;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+/* 进度条 */
+.progress-bar {
+  width: 100%;
+  height: 8rpx;
+  background: #eee;
+  border-radius: 4rpx;
+  overflow: hidden;
+  margin-top: 20rpx;
+}
+.progress-inner {
+  height: 100%;
+  background: #000;
+  transition: width 0.4s ease;
+}
+.step-text {
+  font-size: 24rpx;
+  color: #999;
+  margin-top: 20rpx;
+  letter-spacing: 2rpx;
+  text-align: center;
+}
+
+/* 题目进场包裹器：丝滑侧滑 */
+.question-wrap {
+  animation: slideInRight 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+}
+@keyframes slideInRight {
+  from { transform: translateX(60rpx); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.question-title {
+  font-size: 44rpx;
+  font-weight: bold;
+  color: #333;
+  margin-top: 80rpx;
+  text-align: center;
+}
+.question-subtitle {
+  font-size: 28rpx;
+  color: #666;
+  text-align: center;
+  margin-top: 20rpx;
+}
+
+/* 选项列表（阶梯瀑布流出现） */
+.options-list {
+  margin-top: 60rpx;
+}
+.option-item {
+  background: #fff;
+  border: 2rpx solid #eaeaea;
+  border-radius: 16rpx;
+  padding: 36rpx 40rpx;
+  margin-bottom: 30rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* 带有一点回弹的过渡 */
+  opacity: 0;
+  animation: floatUp 0.5s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+}
+
+/* 选项进场错峰延迟 */
+.option-item:nth-child(1) { animation-delay: 0.1s; }
+.option-item:nth-child(2) { animation-delay: 0.2s; }
+.option-item:nth-child(3) { animation-delay: 0.3s; }
+.option-item:nth-child(4) { animation-delay: 0.4s; }
+.option-item:nth-child(5) { animation-delay: 0.5s; }
+
+/* 选项按下时的微重力推背感反馈 */
+.option-item:active {
+  transform: scale(0.96) !important;
+  opacity: 0.8;
+  box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.05);
+}
+
+/* 选中状态UI */
+.option-item.selected {
+  border-color: #000;
+  background: #000;
+  color: #fff;
+  transform: scale(1.02);
+  box-shadow: 0 12rpx 30rpx rgba(0,0,0,0.2) !important;
+}
+.option-text {
+  font-size: 32rpx;
+  font-weight: 500;
+}
+
+/* 对号图标的弹簧进场 */
+.option-icon {
+  animation: bounceIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+@keyframes bounceIn {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* 通用上浮动效 */
+.animate-fade-in {
+  animation: floatUp 0.6s ease forwards;
+}
+@keyframes floatUp {
+  from { opacity: 0; transform: translateY(30rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 底部提示区 */
+.tips {
+  position: fixed;
+  bottom: 80rpx;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 24rpx;
+  color: #b3b3b3;
+  line-height: 1.6;
+  animation: fadeIn 1s ease forwards;
+  animation-delay: 1s;
+  opacity: 0;
+}
+@keyframes fadeIn {
+  to { opacity: 1; }
+}
+
+/* 提交按钮区域 */
+.submit-area {
+  margin-top: 80rpx;
+  animation: floatUp 0.5s ease forwards;
+}
+
+.submit-btn {
+  background: #000;
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: bold;
+  border-radius: 100rpx; /* 更圆润的处理 */
+  padding: 24rpx;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* 催眠呼吸动效 */
+  animation: buttonBreathe 2.5s infinite ease-in-out;
+}
+.submit-btn.disabled {
+  background: #ccc;
+  animation: none; /* 禁用时不呼吸 */
+}
+@keyframes buttonBreathe {
+  0% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+  50% { transform: scale(1.02); box-shadow: 0 12rpx 30rpx rgba(0,0,0,0.25); }
+  100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+}
+
+/* 协议区 */
+.agreement-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 40rpx;
+  font-size: 24rpx;
+  color: #666;
+}
+.checkbox {
+  width: 32rpx; /* 稍微放大更容易点 */
+  height: 32rpx;
+  border: 2rpx solid #ccc;
+  border-radius: 8rpx;
+  margin-right: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.checkbox.checked {
+  background: #000;
+  border-color: #000;
+  transform: scale(1.05);
+}
+.ag-link {
+  color: #000;
+  font-weight: bold;
+  text-decoration: underline;
+}

@@ -1,4 +1,7 @@
-// pages/category/category.js
+// pages/category/category.js - 分类页合并版
+// 结构：666-main 三级分类（顶部 Tab → 侧边栏 → 商品列表）+ 分页加载
+// 联动：当前版本 scroll sync（calculateCategoryHeights + onRightScroll + leftToView）
+// 购物车：当前版本改进逻辑（items / summary.total_amount + cart_ids 结算）
 const { get, post } = require('../../utils/request');
 const { getFirstImage, formatMoney, parseImages, calculatePrice } = require('../../utils/dataFormatter');
 const { ErrorHandler } = require('../../utils/errorHandler');
@@ -7,31 +10,52 @@ const app = getApp();
 
 Page({
     data: {
-        // 分类与产品数据
+        // 一级分类（顶部 Tab）
+        topCategories: [
+            { id: 1, name: '精品好物', icon: '/assets/icons/gift.svg' },
+            { id: 2, name: '甄选套餐', icon: '/assets/icons/package.svg' },
+            { id: 3, name: '镜像原创', icon: '/assets/icons/sparkles.svg' }
+        ],
+        currentTopCategory: 1,
+
+        // 二级分类（侧边栏）
         categories: [],
         currentCategory: '',
-        
-        // 滚动联动相关
+        currentCategoryName: '',
+        currentCategoryBanner: '',
+
+        // 滚动联动（来自当前版本）
         toView: '',
         leftToView: '',
-        categoryHeights: [], 
-        isManualClick: false, // 标记是否为手动点击左侧菜单，防止滚动监听冲突
-        
-        loading: false,
-        statusBarHeight: 20,
+        categoryHeights: [],
+        isManualClick: false,
 
-        // Cart
+        // 三级商品
+        products: [],
+        loading: false,
+        hasMore: true,
+        page: 1,
+        limit: 10,
+
+        // 购物车
         cartCount: 0,
         cartTotal: '0.00',
+        _cartItemIds: '',
 
-        // Detail Modal
+        // 详情弹窗
         showDetailModal: false,
         selectedProduct: null,
+        statusBarHeight: 20,
         currentImage: 0,
         imageCount: 1,
         isFavorite: false,
 
-        // SKU in Modal
+        // 评价（用于弹窗内展示）
+        reviews: [],
+        reviewTotal: 0,
+        reviewTags: [],
+
+        // SKU 弹窗
         showSku: false,
         skuAction: 'cart',
         modalQuantity: 1,
@@ -59,65 +83,139 @@ Page({
         this.setData({
             statusBarHeight: sysInfo.statusBarHeight || 20
         });
-        this.initCategoryData();
+        this.loadSidebarCategories(this.data.currentTopCategory);
     },
 
-    // 初始化分类及商品数据（连贯排列逻辑）
-    async initCategoryData() {
-        this.setData({ loading: true });
-        try {
-            // 1. 获取分类树
-            const catRes = await get('/categories/tree');
-            const rawCats = (catRes.data || catRes || []);
-            // 取一级分类（或直接平铺，取决于后端返回结构）
-            const topCats = Array.isArray(rawCats) ? rawCats : [];
+    onPullDownRefresh() {
+        this.setData({ page: 1, hasMore: true });
+        this.loadProducts().then(() => {
+            wx.stopPullDownRefresh();
+        });
+    },
 
-            if (topCats.length === 0) {
-                this.setData({ loading: false });
-                return;
+    onSearchTap() {
+        wx.navigateTo({ url: '/pages/search/search' });
+    },
+
+    // 上拉加载更多
+    onLoadMore() {
+        if (!this.data.hasMore || this.data.loading) return;
+        this.setData({ page: this.data.page + 1 });
+        this.loadProducts(true);
+    },
+
+    // ===== 一级分类 =====
+
+    onTopCategoryTap(e) {
+        const id = e.currentTarget.dataset.id;
+        if (id === this.data.currentTopCategory) return;
+
+        this.setData({
+            currentTopCategory: id,
+            categories: [],
+            products: [],
+            page: 1,
+            hasMore: true
+        });
+        this.loadSidebarCategories(id);
+    },
+
+    async loadSidebarCategories(topId) {
+        try {
+            const res = await get('/categories');
+            let allCats = res.data || [];
+            let filteredCats = [];
+
+            if (topId === 1) {
+                if (allCats.length > 0) {
+                    filteredCats = allCats.map((c, i) => i === 0
+                        ? { ...c, name: c.name || '测试', icon: c.icon || '/assets/icons/gift.svg', image: c.image || '' }
+                        : c
+                    );
+                } else {
+                    filteredCats = [{ id: 'test_cat', name: '精品好物', icon: '/assets/icons/gift.svg', image: '' }];
+                }
+            } else if (topId === 2) {
+                filteredCats = allCats.length > 1 ? allCats.slice(1) : allCats;
+            } else {
+                filteredCats = allCats;
             }
 
-            // 2. 并行拉取每个分类下的商品（最多取前 20 个分类）
-            const slice = topCats.slice(0, 20);
-            const productResults = await Promise.all(
-                slice.map(cat =>
-                    get('/products', { category_id: cat.id, limit: 10 })
-                        .then(r => (r.data && r.data.list) ? r.data.list : (Array.isArray(r.data) ? r.data : []))
-                        .catch(() => [])
-                )
-            );
-
-            const categories = slice.map((cat, idx) => ({
-                id: String(cat.id),
-                name: cat.name,
-                products: productResults[idx].map(p => ({
-                    ...p,
-                    image: getFirstImage(p.images)
-                }))
-            }));
-
-            this.setData({
-                categories,
-                currentCategory: categories[0] ? String(categories[0].id) : '',
-                loading: false
-            });
-
-            // 数据渲染后计算各分类高度
-            setTimeout(() => {
-                this.calculateCategoryHeights();
-            }, 500);
-
+            if (filteredCats.length > 0) {
+                const firstCat = filteredCats[0];
+                this.setData({
+                    categories: filteredCats,
+                    currentCategory: firstCat.id,
+                    currentCategoryName: firstCat.name,
+                    currentCategoryBanner: firstCat.image || ''
+                });
+                this.loadProducts();
+            } else {
+                this.setData({ categories: [] });
+            }
         } catch (err) {
-            console.error('初始化分类数据失败:', err);
-            this.setData({ loading: false });
+            ErrorHandler.handle(err, { customMessage: '加载分类失败' });
         }
     },
 
-    // 计算右侧各分类区域的高度，用于滚动监听
+    // ===== 二级分类（侧边栏点击）=====
+
+    onCategoryTap(e) {
+        const categoryId = e.currentTarget.dataset.id;
+        if (categoryId === this.data.currentCategory) return;
+        const category = this.data.categories.find(c => c.id === categoryId);
+        this.setData({
+            currentCategory: categoryId,
+            currentCategoryName: category?.name || '',
+            currentCategoryBanner: category?.image || '',
+            page: 1,
+            hasMore: true,
+            products: [],
+            // 联动：滚动右侧到顶部（来自 666-main）
+            toView: '',
+            // 联动：高亮左侧对应项（来自当前版本）
+            leftToView: `left-${categoryId}`,
+            isManualClick: true
+        });
+        this.loadProducts();
+
+        // 动画完成后释放手动点击标记
+        setTimeout(() => {
+            this.setData({ isManualClick: false });
+        }, 800);
+    },
+
+    // ===== 右侧滚动联动左侧菜单（来自当前版本）=====
+
+    onRightScroll(e) {
+        if (this.data.isManualClick) return;
+
+        const scrollTop = e.detail.scrollTop;
+        const { categoryHeights, categories } = this.data;
+        const offset = 50;
+
+        for (let i = 0; i < categoryHeights.length; i++) {
+            if (scrollTop + offset >= categoryHeights[i][0] && scrollTop + offset < categoryHeights[i][1]) {
+                const catId = categories[i]?.id;
+                if (catId && this.data.currentCategory !== catId) {
+                    this.setData({
+                        currentCategory: catId,
+                        leftToView: `left-${catId}`
+                    });
+                }
+                break;
+            }
+        }
+    },
+
+    // 计算右侧各分类区域高度（来自当前版本）
+    // 注意：当前版本用于连贯滚动架构；本版本商品列表是单分类展示（切换分类重新加载）
+    // 保留此方法以备扩展（如未来切换为连贯滚动）
     calculateCategoryHeights() {
         const query = wx.createSelectorQuery();
         query.selectAll('.cat-section').boundingClientRect();
         query.exec((res) => {
+            if (!res[0] || res[0].length === 0) return;
             let top = 0;
             const heights = res[0].map(rect => {
                 const range = [top, top + rect.height];
@@ -128,56 +226,52 @@ Page({
         });
     },
 
-    // 左侧菜单点击
-    onCategoryTap(e) {
-        const id = e.currentTarget.dataset.id;
-        this.setData({
-            currentCategory: id,
-            toView: `cat-${id}`,
-            leftToView: `left-${id}`,
-            isManualClick: true
-        });
-        
-        // 动画结束后释放标记
-        setTimeout(() => {
-            this.setData({ isManualClick: false });
-        }, 800);
+    // ===== 三级商品加载 =====
+
+    onProductTap(e) {
+        this.onSelectProduct(e);
     },
 
-    // 右侧滚动监听
-    onRightScroll(e) {
-        if (this.data.isManualClick) return; // 手动点击中，不执行监听逻辑
+    async loadProducts(append = false) {
+        if (this.data.loading) return;
+        this.setData({ loading: true });
 
-        const scrollTop = e.detail.scrollTop;
-        const { categoryHeights, categories } = this.data;
-        
-        // 增加 100rpx 的偏移量，当标题接近顶部时即切换
-        const offset = 50; 
-        
-        for (let i = 0; i < categoryHeights.length; i++) {
-            if (scrollTop + offset >= categoryHeights[i][0] && scrollTop + offset < categoryHeights[i][1]) {
-                const catId = categories[i].id;
-                if (this.data.currentCategory !== catId) {
-                    this.setData({ 
-                        currentCategory: catId,
-                        leftToView: `left-${catId}` // 同步滚动左侧菜单
-                    });
-                }
-                break;
+        try {
+            const { currentCategory, page, limit } = this.data;
+            const params = { page, limit };
+            if (currentCategory && currentCategory !== 'test_cat') {
+                params.category_id = currentCategory;
             }
+
+            const res = await get('/products', params);
+            const rawProducts = res.data?.list || res.data || [];
+
+            const newProducts = rawProducts.map(item => ({
+                ...item,
+                image: getFirstImage(item.images),
+                price: item.retail_price || item.price || 0
+            }));
+
+            this.setData({
+                products: append ? [...this.data.products, ...newProducts] : newProducts,
+                hasMore: newProducts.length >= limit,
+                loading: false
+            });
+        } catch (err) {
+            console.error('加载商品失败:', err);
+            this.setData({ loading: false });
         }
     },
 
-    // --- Full Screen Modal Logic ---
+    // ===== 详情弹窗逻辑（来自 666-main，与当前版本一致）=====
 
-    // Open Detail Modal (Replaces onQuickAddToCart for "选购")
     async onSelectProduct(e) {
         const item = e.currentTarget.dataset.item;
         if (!item) return;
 
         this.setData({
             showDetailModal: true,
-            selectedProduct: item // Temporary data while loading full details
+            selectedProduct: item
         });
 
         this.loadProductDetail(item.id);
@@ -217,7 +311,6 @@ Page({
                 modalQuantity: 1
             });
 
-            // Load Reviews
             this.loadReviews(id);
 
         } catch (err) {
@@ -237,7 +330,7 @@ Page({
                 this.setData({
                     reviews,
                     reviewTotal,
-                    reviewTags: ['质量好', '物流快', '包装精美'] // Mock tags
+                    reviewTags: ['质量好', '物流快', '包装精美']
                 });
             } else {
                 this.setData({ reviews: [], reviewTotal: 0 });
@@ -264,7 +357,8 @@ Page({
         wx.showToast({ title: this.data.isFavorite ? '已收藏' : '取消收藏', icon: 'none' });
     },
 
-    // SKU Modal Logic
+    // ===== SKU 弹窗 =====
+
     showSkuModal() {
         this.setData({ showSku: true });
     },
@@ -273,7 +367,7 @@ Page({
         this.setData({ showSku: false });
     },
 
-    // 加入购物车 - 直接执行 + 飞入动画
+    // 加入购物车 + 飞入动画
     async onAddToCart() {
         if (!this.data.selectedProduct) return;
         try {
@@ -284,10 +378,7 @@ Page({
             });
             wx.hideLoading();
 
-            // 触发飞入购物车动画
             this.triggerFlyAnimation();
-
-            // 显示成功提示
             wx.showToast({ title: '已加入购物车', icon: 'success' });
             this.hideDetailModal();
             this.updateCartData();
@@ -297,27 +388,23 @@ Page({
         }
     },
 
-    // 触发飞入购物车动画
+    // 飞入购物车动画
     triggerFlyAnimation() {
         const product = this.data.selectedProduct;
         if (!product) return;
 
-        // 设置飞入图片
         this.setData({
             flyImage: product.images?.[0] || product.image || ''
         });
 
-        // 使用品牌动画组件
         if (this.brandAnimation) {
-            // 获取购物车图标位置（底部栏右侧）
             const query = wx.createSelectorQuery();
             query.select('.cart-checkout-btn').boundingClientRect();
             query.exec((res) => {
                 if (res[0]) {
                     const endX = res[0].left + res[0].width / 2;
                     const endY = res[0].top;
-                    // 从屏幕中心开始飞
-                    const startX = 375 / 2; // 假设屏幕宽度
+                    const startX = 375 / 2;
                     const startY = 400;
                     this.brandAnimation.flyToCart(startX, startY, endX, endY, this.data.flyImage);
                 }
@@ -325,14 +412,13 @@ Page({
         }
     },
 
-    // 立即购买 - 直接执行
+    // 立即购买
     async onBuyNow() {
         if (!this.data.selectedProduct) return;
         try {
             const product = this.data.selectedProduct;
             const quantity = this.data.modalQuantity;
 
-            // 存储直接购买信息到缓存
             const directBuyInfo = {
                 product_id: product.id,
                 sku_id: this.data.selectedSku?.id || null,
@@ -345,24 +431,20 @@ Page({
             wx.setStorageSync('directBuyInfo', directBuyInfo);
 
             this.hideDetailModal();
-            // 跳转到订单确认页面，标记为直接购买
             wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
         } catch (err) {
             wx.showToast({ title: '操作失败', icon: 'none' });
         }
     },
 
-    // 弹窗内确认加入购物车
     onConfirmAddToCart() {
         this.onConfirmAddCart();
     },
 
-    // 弹窗内确认立即购买
     onConfirmBuyNow() {
         this.onBuyNow();
     },
 
-    // 规格选择入口（默认显示双按钮）
     onSpecSelectorTap() {
         this.setData({ skuAction: 'both', showSku: true });
     },
@@ -394,7 +476,6 @@ Page({
             wx.hideLoading();
             wx.showToast({ title: '已加入', icon: 'success' });
             this.hideSkuModal();
-            // this.hideDetailModal(); // Optional: Keep detail open? User usually wants to continue shopping.
             this.updateCartData();
         } catch (err) {
             wx.hideLoading();
@@ -404,14 +485,14 @@ Page({
 
     async onConfirmBuy() {
         if (!this.data.selectedProduct) return;
-        // Proceed to checkout logic (usually add to cart then jump to confirm order)
         await this.onConfirmAddCart();
-        wx.navigateTo({ url: '/pages/order/confirm' }); // Direct to confirm order
+        wx.navigateTo({ url: '/pages/order/confirm' });
     },
 
     stopProp() { },
 
-    // --- Global Cart Logic ---
+    // ===== 购物车逻辑（来自当前版本，适配 items + summary.total_amount）=====
+
     async updateCartData() {
         try {
             const res = await get('/cart');
@@ -419,8 +500,8 @@ Page({
                 // 适配后端 items 结构
                 const items = res.data?.items || res.data || [];
                 const count = items.reduce((s, i) => s + i.quantity, 0);
-                
-                // 计算总价（如果是后端直接返回 summary.total_amount 更好，此处做前端汇总兜底）
+
+                // 优先使用后端汇总金额，其次前端计算
                 let total = res.data?.summary?.total_amount || 0;
                 if (!total && items.length > 0) {
                     total = items.reduce((s, i) => s + (parseFloat(i.effective_price || i.sku?.retail_price || 0) * i.quantity), 0);
@@ -429,7 +510,7 @@ Page({
                 this.setData({
                     cartCount: count,
                     cartTotal: parseFloat(total).toFixed(2),
-                    _cartItemIds: items.map(item => item.id).join(',') // 记录 ID 用于结算
+                    _cartItemIds: items.map(item => item.id).join(',')
                 });
             }
         } catch (err) {
@@ -438,23 +519,18 @@ Page({
     },
 
     onToggleCartPopup() {
-        // 跳转到购物车 Tab 页
         wx.switchTab({ url: '/pages/cart/cart' });
     },
 
     onCheckout() {
         const { cartCount, _cartItemIds } = this.data;
         if (cartCount > 0 && _cartItemIds) {
-            // 直接带上当前购物车内所有商品的 ID 跳转结算
-            wx.navigateTo({ 
-                url: `/pages/order/confirm?from=cart&cart_ids=${_cartItemIds}` 
+            // 带上购物车商品 ID 结算（来自当前版本）
+            wx.navigateTo({
+                url: `/pages/order/confirm?from=cart&cart_ids=${_cartItemIds}`
             });
         } else {
             wx.showToast({ title: '请先选购商品', icon: 'none' });
         }
-    },
-
-    onSearchTap() {
-        wx.navigateTo({ url: '/pages/search/search' });
     }
 });

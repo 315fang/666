@@ -1,0 +1,82 @@
+<!--pages/activity/activity.wxml-->
+<view class="container">
+  <!-- 气泡通告区（由组件注入） -->
+  <view class="bubble-placeholder" id="bubbleArea"></view>
+
+  <!-- 页面标题 -->
+  <view class="page-header">
+    <view class="header-title-wrap">
+      <view class="header-accent-bar"></view>
+      <text class="header-title">活动中心</text>
+    </view>
+    <text class="header-subtitle">限时优惠，不容错过</text>
+  </view>
+
+  <!-- 拼团入口卡 -->
+  <view class="activity-card group-buy-card" bindtap="onGroupBuyTap">
+    <view class="card-deco-circle c1"></view>
+    <view class="card-deco-circle c2"></view>
+    <view class="card-content">
+      <view class="card-icon-wrap">
+        <image class="card-icon" src="/assets/icons/users.svg" mode="aspectFit"></image>
+      </view>
+      <view class="card-text">
+        <text class="card-name">拼团专区</text>
+        <text class="card-desc">邀请好友组团，享受超低折扣</text>
+        <view class="card-tag member-only">会员可发起</view>
+      </view>
+    </view>
+    <image class="card-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
+  </view>
+
+  <!-- 砍一刀入口卡 -->
+  <view class="activity-card slash-card" bindtap="onSlashTap">
+    <view class="card-deco-circle c1"></view>
+    <view class="card-deco-circle c2"></view>
+    <view class="card-content">
+      <view class="card-icon-wrap">
+        <image class="card-icon" src="/assets/icons/tag.svg" mode="aspectFit"></image>
+      </view>
+      <view class="card-text">
+        <text class="card-name">砍一刀</text>
+        <text class="card-desc">分享给好友帮你砍价，低至底价</text>
+        <view class="card-tag open">全员可参与</view>
+      </view>
+    </view>
+    <image class="card-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
+  </view>
+
+  <!-- 积分抽奖入口卡 -->
+  <view class="activity-card lottery-card" bindtap="onLotteryTap">
+    <view class="card-deco-circle c1"></view>
+    <view class="card-deco-circle c2"></view>
+    <view class="card-content">
+      <view class="card-icon-wrap">
+        <image class="card-icon" src="/assets/icons/gift.svg" mode="aspectFit"></image>
+      </view>
+      <view class="card-text">
+        <text class="card-name">积分抽奖</text>
+        <text class="card-desc">消耗积分参与抽奖，好礼等你拿</text>
+        <view class="card-tag open">全员可参与</view>
+      </view>
+    </view>
+    <image class="card-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
+  </view>
+
+  <!-- 近期动态（气泡来源数据展示） -->
+  <view class="recent-section" wx:if="{{recentActivities.length > 0}}">
+    <view class="section-header">
+      <view class="header-accent-bar"></view>
+      <text class="section-title">实时动态</text>
+    </view>
+    <view class="recent-list">
+      <view class="recent-item" wx:for="{{recentActivities}}" wx:key="index">
+        <view class="recent-dot"></view>
+        <text class="recent-text">{{item.text}}</text>
+        <text class="recent-time">{{item.time}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="safe-area-bottom"></view>
+</view>

@@ -1,0 +1,34 @@
+<view class="container">
+  <view class="loading-state" wx:if="{{loading}}">
+    <view class="spinner"></view>
+    <view class="loading-text">{{resultDesc}}</view>
+  </view>
+
+  <view class="result-state animate-fade-in" wx:else>
+    <view class="header-card">
+      <view class="main-title">AI 私人测算完成</view>
+      <view class="sub-title">1 个包裹 · 包含 {{itemsCount}} 件单品惊喜组合</view>
+    </view>
+
+    <view class="analysis-card">
+      <view class="card-title">✨ AI买手分析报告</view>
+      <view class="analysis-text">{{analysisText}}</view>
+    </view>
+
+    <view class="price-card">
+      <view class="price-item">
+        <text class="label">内装商品预估零售总价</text>
+        <text class="value through">¥ {{estimatedValue}}</text>
+      </view>
+      <view class="price-item total">
+        <text class="label">首月AI盲盒订金款</text>
+        <text class="value highlight">¥ {{payPrice}}</text>
+      </view>
+    </view>
+
+    <view class="buy-section">
+      <view class="tips">⚠️此商品不支持7天无理由退换</view>
+      <button class="pay-btn" bindtap="payNow">支付 ￥{{payPrice}} 获取盲盒</button>
+    </view>
+  </view>
+</view>

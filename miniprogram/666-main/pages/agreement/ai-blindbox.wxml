@@ -1,0 +1,34 @@
+<view class="agreement-container">
+  <view class="title">AI 盲盒私人定制与不退换声明</view>
+  <view class="content">
+    <view class="section">
+      <view class="sec-title">1. 本服务特殊性说明</view>
+      <text>本盲盒服务通过领先的 AI 人工智能大模型，结合您提交的偏好问卷档案，从本平台百万级供应链商品中为您深度匹配合适的单品组合。内含商品的市场总零售指导价将「绝对大于或等于」您的实付金额，主打高性价比盲享体验。</text>
+    </view>
+
+    <view class="section">
+      <view class="sec-title">2. 数据授权与隐私说明</view>
+      <text>为提供高匹配度的专属盲盒，您知晓并同意本平台采集、加密存储您在本问卷中的各项体貌特征、喜好选择及购物预选偏好。平台承诺该敏感画像数据仅用于「内部 AI 算法选品推演」，绝不对外泄露或售卖。</text>
+    </view>
+
+    <view class="section danger">
+      <view class="sec-title">3. 拆封不退换条款（★核心条款★）</view>
+      <text>因盲盒类（定制属性）组合商品的特殊属性及惊喜解锁体验，包裹一经发货并由您拆除盲盒外发快递箱封条，即视为该“解锁未知惊喜服务”已履约完成。</text>
+      <text class="bold-text" style="display:block;margin-top:20rpx;">除由于暴力物流导致商品本身存在严重且明显的质量缺陷（漏发、损坏等情形，经售后核实通过）外，本平台概不支持因「款式不喜欢」、「超出预想审美差」、「尺码不合适」等主观不满意理由发起的全额或部分退款及无理由退换货请求。请您在购买前切勿冲动消费。</text>
+    </view>
+
+    <view class="section">
+      <view class="sec-title">4. AI 选品审美免责说明</view>
+      <text>虽然我们引入了行业顶尖的大模型为您搭配单品组合，但由于服饰搭配、零食口味、家居陈设属于极具主观差异化的人类审美范畴，AI 在模型推理中仍存在审美壁垒及概率性偏差。无法向您提供100%完美契合您审美的绝对承诺，希望您理解这亦是“盲盒未知感”的特有乐趣。</text>
+    </view>
+
+    <view class="section">
+      <view class="sec-title">5. 代理分销合规声明</view>
+      <text>平台严禁分销推广客/合伙人利用「躺赚、拉人头」等极度夸张诱导方式去推销本服务以谋取佣金。推广本盲盒系统所产生的合法佣金属商业信息技术服务费。任何违规宣传产生一切法律后果自负，平台有权单边冻结违纪经销商的所有未结资产的权利。</text>
+    </view>
+    
+    <view class="footer-tips">
+      <text>臻选商城平台运营团队 & AI 实验室 联合发布</text>
+    </view>
+  </view>
+</view>

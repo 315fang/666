@@ -1,0 +1,17 @@
+<!--pages/rules/index.wxml - 规则说明-->
+<view class="container">
+  <view class="card">
+    <text class="title">{{rules.title}}</text>
+    <text class="summary" wx:if="{{rules.summary}}">{{rules.summary}}</text>
+    <view class="list" wx:if="{{rules.details.length > 0}}">
+      <view class="item" wx:for="{{rules.details}}" wx:key="index">
+        <text class="dot">•</text>
+        <text class="text">{{item}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{!rules.details.length && !rules.summary}}">
+    <text class="empty">暂无规则说明</text>
+  </view>
+</view>
