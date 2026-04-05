@@ -4,6 +4,24 @@
  */
 
 const { USER_ROLES } = require('../config/constants.js');
+const { getApiBaseUrl } = require('../config/env.js');
+
+function getApiOrigin() {
+  const apiBaseUrl = getApiBaseUrl ? getApiBaseUrl() : '';
+  return apiBaseUrl ? apiBaseUrl.replace(/\/api\/?$/, '') : '';
+}
+
+function normalizeImageUrl(url) {
+  if (!url || typeof url !== 'string') return url;
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
+  if (url.startsWith('//')) return `https:${url}`;
+  if (url.startsWith('/assets/')) return url;
+  if (url.startsWith('/')) {
+    const apiOrigin = getApiOrigin();
+    return apiOrigin ? `${apiOrigin}${url}` : url;
+  }
+  return url;
+}
 
 /**
  * OSS 图片处理：自动附加 WebP 压缩 + 缩放参数
@@ -33,16 +51,16 @@ function parseImages(images) {
   if (!images) return [];
 
   if (Array.isArray(images)) {
-    return images;
+    return images.map(normalizeImageUrl).filter(Boolean);
   }
 
   if (typeof images === 'string') {
     try {
       const parsed = JSON.parse(images);
-      return Array.isArray(parsed) ? parsed : [parsed];
+      return (Array.isArray(parsed) ? parsed : [parsed]).map(normalizeImageUrl).filter(Boolean);
     } catch (e) {
       // 如果解析失败，当作单个 URL
-      return [images];
+      return [normalizeImageUrl(images)].filter(Boolean);
     }
   }
 
@@ -57,7 +75,7 @@ function parseImages(images) {
  */
 function getFirstImage(images, defaultImg = '/assets/images/placeholder.svg') {
   const imageList = parseImages(images);
-  return imageList.length > 0 ? imageList[0] : defaultImg;
+  return imageList.length > 0 ? imageList[0] : normalizeImageUrl(defaultImg);
 }
 
 /**
@@ -215,6 +233,7 @@ function processProducts(products, roleLevel = USER_ROLES.GUEST) {
 // CommonJS 导出（WeChat Mini Program 兼容）
 module.exports = {
   toOssUrl,
+  normalizeImageUrl,
   parseImages,
   getFirstImage,
   calculatePrice,

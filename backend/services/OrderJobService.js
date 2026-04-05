@@ -451,14 +451,14 @@ class OrderJobService {
 
                     freshOrder.status = 'completed';
                     freshOrder.completed_at = new Date();
-                    const settlementDate = new Date();
-                    settlementDate.setDate(settlementDate.getDate() + constants.COMMISSION.FREEZE_DAYS);
-                    freshOrder.settlement_at = settlementDate;
+                    const refundDeadline = new Date();
+                    refundDeadline.setDate(refundDeadline.getDate() + constants.COMMISSION.FREEZE_DAYS);
+                    freshOrder.settlement_at = refundDeadline;
                     freshOrder.remark = (freshOrder.remark || '') + ` [系统自动确认收货：发货${confirmDays}天后]`;
                     await freshOrder.save({ transaction: t });
 
                     await CommissionLog.update(
-                        { available_at: settlementDate },
+                        { refund_deadline: refundDeadline },
                         { where: { order_id: freshOrder.id, status: 'frozen' }, transaction: t }
                     );
 

@@ -28,7 +28,7 @@
 ### 1. 安装依赖
 
 ```bash
-cd backend/admin-ui
+cd admin-ui
 npm install
 ```
 

@@ -1,6 +1,8 @@
 const { Order, User, Product, Address, SKU, CommissionLog, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const { sendNotification } = require('../models/notificationUtil');
+const CommissionService = require('./CommissionService');
+const { normalizeCompanyCode, getCompanyDisplayName } = require('./LogisticsService');
 
 class AdminOrderService {
     /**
@@ -8,6 +10,7 @@ class AdminOrderService {
      */
     async shipOrder(id, shipData) {
         const { tracking_company, tracking_number, tracking_no: trackingNoAlt, logistics_company, fulfillment_type } = shipData;
+        const requestedFulfillmentType = String(fulfillment_type || '').toLowerCase();
         const t = await sequelize.transaction();
         try {
             const order = await Order.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
@@ -24,14 +27,14 @@ class AdminOrderService {
             }
 
             // 防撞单风险：如果代理商已进入发货流程，拦截平台发货
-            if (fulfillment_type !== 'agent' && order.agent_id &&
+            if (requestedFulfillmentType !== 'agent' && order.agent_id &&
                 ['agent_confirmed', 'shipping_requested'].includes(order.status)) {
                 await t.rollback();
                 throw new Error(`该订单代理商(ID:${order.agent_id})已在处理中（状态: ${order.status}），如需平台发货请先将状态回退为 paid`);
             }
 
             // 代理商发货处理
-            if (fulfillment_type === 'agent' && order.agent_id) {
+            if (requestedFulfillmentType === 'agent' && order.agent_id) {
                 const agent = await User.findByPk(order.agent_id, { transaction: t, lock: t.LOCK.UPDATE });
                 if (!agent || agent.role_level < 3) {
                     await t.rollback();
@@ -67,58 +70,34 @@ class AdminOrderService {
                 order.fulfillment_type = 'Agent';
                 order.fulfillment_partner_id = order.agent_id;
 
-                // 计算代理商发货利润
-                const orderProduct2 = await Product.findByPk(order.product_id, { transaction: t });
-                if (orderProduct2) {
-                    const agentCostPrice = order.locked_agent_cost
-                        ? parseFloat(order.locked_agent_cost)
-                        : parseFloat(orderProduct2.price_agent || orderProduct2.price_leader || orderProduct2.price_member || orderProduct2.retail_price);
-                    const agentCost = agentCostPrice * order.quantity;
-                    const buyerPaid = parseFloat(order.actual_price);
-                    const middleCommission = parseFloat(order.middle_commission_total) || 0;
-                    const agentProfit = buyerPaid - agentCost - middleCommission;
-
-                    if (agentProfit > 0 && order.buyer_id !== order.agent_id) {
-                        await CommissionLog.create({
-                            order_id: order.id,
-                            user_id: order.agent_id,
-                            amount: agentProfit,
-                            type: 'agent_fulfillment',
-                            status: 'frozen',
-                            available_at: null,
-                            remark: `代理商发货利润 (锁定进货价${agentCostPrice}×${order.quantity}=${agentCost}, 中间佣金${middleCommission.toFixed(2)})`
-                        }, { transaction: t });
-
-                        await sendNotification(
-                            order.agent_id,
-                            '发货收益提醒',
-                            `您的团队产生了一笔发货订单，发货利润 ¥${agentProfit.toFixed(2)}（确认收货后T+7结算）。`,
-                            'commission',
-                            order.id
-                        );
-                    } else if (agentProfit <= 0) {
-                        console.error(`⚠️ [利润异常] 订单 ${order.order_no || order.id} 代理商(ID:${order.agent_id})发货利润为 ¥${agentProfit.toFixed(2)}，请人工核查！`);
-                        await sendNotification(
-                            0, // Admin
-                            '⚠️ 发货利润异常',
-                            `订单ID:${order.id} 代理商发货利润为 ¥${agentProfit.toFixed(2)}（<=0），买家实付=${buyerPaid}，进货成本=${agentCost}，中间佣金=${middleCommission}。请人工核查！`,
-                            'system_alert',
-                            order.id
-                        );
-                    }
+                const buyer = await User.findByPk(order.buyer_id, { transaction: t });
+                const orderProduct = await Product.findByPk(order.product_id, { transaction: t });
+                if (orderProduct && buyer) {
+                    await CommissionService.calculateGapAndFulfillmentCommissions({
+                        order,
+                        buyer,
+                        product: orderProduct,
+                        agentId: order.agent_id,
+                        transaction: t,
+                        notifySource: '后台确认代理商发货'
+                    });
                 }
             } else {
                 order.fulfillment_type = 'Company';
+                order.middle_commission_total = 0;
             }
 
             const finalTrackingNo = tracking_number || trackingNoAlt || '';
-            const finalCompany = tracking_company || logistics_company || '';
+            const finalCompany = normalizeCompanyCode(tracking_company || logistics_company || order.logistics_company || '');
+            const finalCompanyLabel = tracking_company || getCompanyDisplayName(finalCompany) || finalCompany;
 
             order.status = 'shipped';
             order.shipped_at = new Date();
             order.tracking_no = finalTrackingNo;
-            if (finalCompany) {
-                order.remark = (order.remark ? order.remark + ' | ' : '') + `物流: ${finalCompany} ${finalTrackingNo}`;
+            order.logistics_company = finalCompany || null;
+            if (finalCompanyLabel || finalTrackingNo) {
+                const logisticsSummary = [finalCompanyLabel, finalTrackingNo].filter(Boolean).join(' ');
+                order.remark = (order.remark ? order.remark + ' | ' : '') + `物流: ${logisticsSummary}`;
             }
             await order.save({ transaction: t });
 

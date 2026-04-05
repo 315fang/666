@@ -13,6 +13,26 @@ const config = {
     retryDelay: 1000 // 重试延迟（毫秒）
 };
 
+function getApiOrigin() {
+    return config.baseUrl.replace(/\/api\/?$/, '');
+}
+
+function joinUrl(baseUrl, path) {
+    return `${baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+}
+
+function resolveRequestUrl(url) {
+    if (/^https?:\/\//.test(url)) {
+        return url;
+    }
+
+    if (url.startsWith('/admin/') || url.startsWith('/api/')) {
+        return joinUrl(getApiOrigin(), url);
+    }
+
+    return joinUrl(config.baseUrl, url);
+}
+
 // 正在进行的请求（用于防止重复请求）
 const pendingRequests = new Map();
 
@@ -102,7 +122,7 @@ function request(options) {
 
         const requestPromise = new Promise((resolveRequest, rejectRequest) => {
             wx.request({
-                url: config.baseUrl + requestConfig.url,
+                url: resolveRequestUrl(requestConfig.url),
                 method: requestConfig.method,
                 data: requestConfig.data,
                 header: {

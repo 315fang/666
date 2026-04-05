@@ -8,13 +8,13 @@ Page({
     tracks: [],
     loading: true,
     statusText: {
-      pending: '待揽件',
-      picked: '已揽件',
-      shipping: '运输中',
-      arrived: '已到达',
-      delivering: '派送中',
+      collecting: '待揽件',
+      in_transit: '运输中',
+      dispatching: '派送中',
       delivered: '已签收',
-      failed: '派送失败'
+      failed: '派送失败',
+      problem: '物流异常',
+      returned: '已退回'
     }
   },
 
@@ -62,16 +62,25 @@ Page({
 
       // 查询物流轨迹
       try {
-        const logisticsRes = await get(`/logistics/track/${orderId}`);
+        const logisticsRes = await get(`/logistics/order/${orderId}`);
         const logisticsData = logisticsRes.data || logisticsRes;
 
         // 处理物流数据
-        const tracks = Array.isArray(logisticsData.tracks) ? logisticsData.tracks : [];
+        const traces = Array.isArray(logisticsData.traces) ? logisticsData.traces : [];
+        const tracks = traces.map(item => ({
+          time: item.time,
+          context: item.desc,
+          location: item.location || ''
+        }));
         const latestUpdate = tracks.length > 0 ? tracks[0].time : '';
 
         this.setData({
+          order: {
+            ...order,
+            express_company: logisticsData.company || order.logistics_company || order.express_company || ''
+          },
           logistics: {
-            status: logisticsData.status || 'shipping',
+            status: logisticsData.status || 'in_transit',
             latestUpdate
           },
           tracks,

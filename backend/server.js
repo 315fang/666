@@ -13,9 +13,25 @@ async function startServer() {
         // ★ 启动安全检查：所有环境都要验证关键配置
         const criticalChecks = [];
         const isProduction = process.env.NODE_ENV === 'production';
+        const insecureJwtValues = [
+            'INSECURE-DEFAULT-user-secret-key',
+            'INSECURE-DEFAULT-admin-secret-key',
+            'your-user-jwt-secret-key',
+            'your-admin-jwt-secret-key',
+            'your_super_secret_key_at_least_32_chars_long_change_this_in_production',
+            'your_admin_secret_key_at_least_32_chars_change_this_in_production'
+        ];
+        const placeholderWechatAppIds = ['wx1234567890abcdef', 'your_app_id_here', '你的小程序AppID'];
+        const placeholderWechatSecrets = ['your_wechat_secret', 'your_app_secret_here', '你的小程序AppSecret'];
 
         // JWT密钥验证
-        if (!process.env.JWT_SECRET || process.env.JWT_SECRET.includes('INSECURE-DEFAULT') || process.env.JWT_SECRET.length < 32) {
+        if (
+            !process.env.JWT_SECRET ||
+            process.env.JWT_SECRET.includes('INSECURE-DEFAULT') ||
+            process.env.JWT_SECRET.includes('change_this_in_production') ||
+            insecureJwtValues.includes(process.env.JWT_SECRET) ||
+            process.env.JWT_SECRET.length < 32
+        ) {
             if (isProduction) {
                 criticalChecks.push('JWT_SECRET 未设置、使用了不安全的默认值或长度不足32字符');
             } else {
@@ -23,7 +39,13 @@ async function startServer() {
             }
         }
 
-        if (!process.env.ADMIN_JWT_SECRET || process.env.ADMIN_JWT_SECRET.includes('INSECURE-DEFAULT') || process.env.ADMIN_JWT_SECRET.length < 32) {
+        if (
+            !process.env.ADMIN_JWT_SECRET ||
+            process.env.ADMIN_JWT_SECRET.includes('INSECURE-DEFAULT') ||
+            process.env.ADMIN_JWT_SECRET.includes('change_this_in_production') ||
+            insecureJwtValues.includes(process.env.ADMIN_JWT_SECRET) ||
+            process.env.ADMIN_JWT_SECRET.length < 32
+        ) {
             if (isProduction) {
                 criticalChecks.push('ADMIN_JWT_SECRET 未设置、使用了不安全的默认值或长度不足32字符');
             } else {
@@ -32,13 +54,18 @@ async function startServer() {
         }
 
         // 微信配置验证（所有环境都需要）
-        if (!process.env.WECHAT_APPID || !process.env.WECHAT_SECRET) {
+        if (
+            !process.env.WECHAT_APPID ||
+            !process.env.WECHAT_SECRET ||
+            placeholderWechatAppIds.includes(process.env.WECHAT_APPID) ||
+            placeholderWechatSecrets.includes(process.env.WECHAT_SECRET)
+        ) {
             criticalChecks.push('WECHAT_APPID / WECHAT_SECRET 未配置');
         }
 
         // ★ 数据库密码验证（修复空字符串检测）
         const dbPwd = process.env.DB_PASSWORD || '';
-        const dbPwdBadValues = ['your_mysql_password', 'password', '123456', '请填入你的MySQL数据库密码', ''];
+        const dbPwdBadValues = ['your_password', 'your_mysql_password', 'password', '123456', '请填入你的MySQL数据库密码', ''];
         if (dbPwdBadValues.includes(dbPwd) || dbPwd.length < 6) {
             if (isProduction) {
                 criticalChecks.push('DB_PASSWORD 未设置或使用了占位符默认值，请在 .env 中填入真实数据库密码');

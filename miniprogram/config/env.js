@@ -26,7 +26,7 @@ const CURRENT_ENV = {
 const envConfigs = {
   // 开发环境
   [ENV_TYPES.DEVELOPMENT]: {
-    apiBaseUrl: 'http://192.168.1.4:3000/api',
+    apiBaseUrl: 'http://127.0.0.1:3000/api',
     debug: true,
     enableLog: true,
     enableMock: false,

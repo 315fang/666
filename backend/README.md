@@ -32,7 +32,7 @@
 - **框架**: Express 4.x
 - **ORM**: Sequelize 6.x
 - **数据库**: MySQL 8.0
-- **语言**: Node.js 14+
+- **语言**: Node.js 16+
 - **认证**: JWT (jsonwebtoken)
 
 ---
@@ -42,7 +42,7 @@
 ### 1. 环境准备
 
 确保已安装：
-- Node.js >= 14.0
+- Node.js >= 16.0
 - MySQL >= 8.0
 
 ### 2. 安装依赖
@@ -121,7 +121,7 @@ node scripts/create-admin.js
 
 或手动插入（密码需自行加密）：
 ```sql
-INSERT INTO admins (username, password_hash, salt, name, role, status, createdAt, updatedAt) 
+INSERT INTO admins (username, password_hash, salt, name, role, status, created_at, updated_at)
 VALUES ('admin', '加密后的密码', '盐值', '超级管理员', 'super_admin', 1, NOW(), NOW());
 ```
 
@@ -132,7 +132,7 @@ VALUES ('admin', '加密后的密码', '盐值', '超级管理员', 'super_admin
 curl http://localhost:3000/health
 
 # 管理员登录
-curl -X POST http://localhost:3000/admin/login \
+curl -X POST http://localhost:3000/admin/api/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"your_password"}'
 ```
@@ -170,7 +170,7 @@ curl -X POST http://localhost:3000/admin/login \
 | 经销商 | `POST /dealer/apply` | 申请经销商 |
 | 经销商 | `GET /dealer/stats` | 经销商统计 |
 
-### 管理后台 `/admin`
+### 管理后台 `/admin/api`
 
 | 模块 | 端点 | 说明 |
 |------|------|------|

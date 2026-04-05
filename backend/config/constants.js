@@ -8,6 +8,38 @@
  */
 require('dotenv').config();
 
+function getEnvValue(keys, fallback) {
+    for (const key of keys) {
+        const value = process.env[key];
+        if (value !== undefined && value !== '') {
+            return value;
+        }
+    }
+    return fallback;
+}
+
+function getIntEnv(keys, fallback) {
+    return parseInt(getEnvValue(keys, fallback), 10);
+}
+
+function getFloatEnv(keys, fallback) {
+    return parseFloat(getEnvValue(keys, fallback));
+}
+
+function getIntervalMsEnv(msKeys, hourKeys, fallbackMs) {
+    const directMs = getEnvValue(msKeys, '');
+    if (directMs !== '') {
+        return parseInt(directMs, 10);
+    }
+
+    const hours = getEnvValue(hourKeys, '');
+    if (hours !== '') {
+        return parseInt(hours, 10) * 60 * 60 * 1000;
+    }
+
+    return fallbackMs;
+}
+
 module.exports = {
 
     // ======================== 角色体系 ========================
@@ -42,10 +74,14 @@ module.exports = {
     COMMISSION: {
         // T+N 天后佣金可结算（冻结天数）
         // ★ 必须 >= REFUND.MAX_REFUND_DAYS，否则佣金已结算但用户仍可申请退款导致坏账
-        FREEZE_DAYS: parseInt(process.env.COMMISSION_FREEZE_DAYS || '15'),
+        FREEZE_DAYS: getIntEnv(['COMMISSION_FREEZE_DAYS'], '15'),
 
         // 定时结算间隔（毫秒），默认1小时
-        SETTLE_INTERVAL_MS: parseInt(process.env.COMMISSION_SETTLE_INTERVAL || String(60 * 60 * 1000)),
+        SETTLE_INTERVAL_MS: getIntervalMsEnv(
+            ['COMMISSION_SETTLE_INTERVAL'],
+            ['COMMISSION_SETTLEMENT_INTERVAL_HOURS'],
+            60 * 60 * 1000
+        ),
 
         // 佣金精度：保留小数位数
         DECIMAL_PLACES: 2,
@@ -54,13 +90,13 @@ module.exports = {
     // ======================== 提现配置 ========================
     WITHDRAWAL: {
         // 最低提现金额
-        MIN_AMOUNT: parseFloat(process.env.MIN_WITHDRAWAL_AMOUNT || '10'),
+        MIN_AMOUNT: getFloatEnv(['MIN_WITHDRAWAL_AMOUNT', 'WITHDRAWAL_MIN_AMOUNT'], '10'),
         // 提现手续费比例 (0.006 = 0.6%)
-        FEE_RATE: parseFloat(process.env.WITHDRAWAL_FEE_RATE || '0'),
+        FEE_RATE: getFloatEnv(['WITHDRAWAL_FEE_RATE'], '0'),
         // 单日最大提现次数
-        MAX_DAILY_COUNT: parseInt(process.env.MAX_DAILY_WITHDRAWAL || '3'),
+        MAX_DAILY_COUNT: getIntEnv(['MAX_DAILY_WITHDRAWAL', 'WITHDRAWAL_MAX_DAILY_COUNT'], '3'),
         // 单次最大提现金额
-        MAX_SINGLE_AMOUNT: parseFloat(process.env.MAX_WITHDRAWAL_AMOUNT || '50000'),
+        MAX_SINGLE_AMOUNT: getFloatEnv(['MAX_WITHDRAWAL_AMOUNT', 'WITHDRAWAL_MAX_SINGLE_AMOUNT'], '50000'),
     },
 
     // ======================== 安全配置 ========================
@@ -73,9 +109,9 @@ module.exports = {
         ADMIN_JWT_EXPIRES_IN: process.env.ADMIN_JWT_EXPIRES_IN || '8h',
 
         // API限流
-        API_RATE_LIMIT: parseInt(process.env.API_RATE_LIMIT || '100'),       // 每分钟每IP
-        LOGIN_RATE_LIMIT: parseInt(process.env.LOGIN_RATE_LIMIT || '10'),    // 登录每分钟每IP
-        WITHDRAWAL_RATE_LIMIT: parseInt(process.env.WITHDRAWAL_RATE_LIMIT || '5'), // 提现每分钟
+        API_RATE_LIMIT: getIntEnv(['API_RATE_LIMIT'], '100'),       // 每分钟每IP
+        LOGIN_RATE_LIMIT: getIntEnv(['LOGIN_RATE_LIMIT'], '10'),    // 登录每分钟每IP
+        WITHDRAWAL_RATE_LIMIT: getIntEnv(['WITHDRAWAL_RATE_LIMIT'], '5'), // 提现每分钟
 
         // 请求体大小限制
         BODY_SIZE_LIMIT: process.env.BODY_SIZE_LIMIT || '10mb',
@@ -84,30 +120,30 @@ module.exports = {
     // ======================== 订单配置 ========================
     ORDER: {
         // 未支付自动取消时间（分钟）
-        AUTO_CANCEL_MINUTES: parseInt(process.env.ORDER_AUTO_CANCEL_MINUTES || '30'),
+        AUTO_CANCEL_MINUTES: getIntEnv(['ORDER_AUTO_CANCEL_MINUTES'], '30'),
         // 自动确认收货天数
-        AUTO_CONFIRM_DAYS: parseInt(process.env.ORDER_AUTO_CONFIRM_DAYS || '15'),
+        AUTO_CONFIRM_DAYS: getIntEnv(['ORDER_AUTO_CONFIRM_DAYS'], '15'),
         // ★ 代理商订单超时时间（小时）：超时未处理自动转为平台发货
-        AGENT_TIMEOUT_HOURS: parseInt(process.env.AGENT_ORDER_TIMEOUT_HOURS || '24'),
+        AGENT_TIMEOUT_HOURS: getIntEnv(['AGENT_ORDER_TIMEOUT_HOURS'], '24'),
     },
 
     // ======================== 购物车配置 ========================
     CART: {
         // 单个商品最大购买数量
-        MAX_ITEM_QUANTITY: parseInt(process.env.CART_MAX_ITEM_QUANTITY || '99'),
+        MAX_ITEM_QUANTITY: getIntEnv(['CART_MAX_ITEM_QUANTITY'], '99'),
     },
 
     // ======================== 售后配置 ========================
     REFUND: {
         // 确认收货后可申请售后的天数（★ 必须 <= COMMISSION.FREEZE_DAYS，防止佣金已结算但仍可退款）
-        MAX_REFUND_DAYS: parseInt(process.env.REFUND_MAX_DAYS || '15'),
+        MAX_REFUND_DAYS: getIntEnv(['REFUND_MAX_DAYS'], '15'),
     },
 
     // ======================== 管理员配置 ========================
     ADMIN: {
         // 管理员用户ID（用于接收系统通知，如退款申请、提现申请）
         // 数据库中 user_id=0 表示系统/管理员，由此常量统一管理，禁止在代码中硬编码
-        USER_ID: parseInt(process.env.ADMIN_USER_ID || '0'),
+        USER_ID: getIntEnv(['ADMIN_USER_ID'], '0'),
     },
 
     // ======================== 调试开关 ========================

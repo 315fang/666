@@ -61,11 +61,11 @@
 - **日志**：Winston
 - **API 文档**：Swagger
 
-### 管理后台（React）
-- **框架**：React 18
-- **UI 库**：Ant Design
+### 管理后台（Vue）
+- **框架**：Vue 3
+- **UI 库**：Element Plus
 - **构建工具**：Vite
-- **状态管理**：Vuex
+- **状态管理**：Pinia
 
 ---
 
@@ -107,25 +107,25 @@ npm run dev
 # 1. 使用微信开发者工具打开项目
 # - 打开微信开发者工具
 # - 选择「导入项目」
-# - 选择 qianduan 目录
+# - 选择 miniprogram 目录
 # - 输入 AppID（或使用测试 AppID）
 
 # 2. 配置 API 地址
-# 编辑 qianduan/utils/request.js 中的 baseUrl
+# 编辑 miniprogram/config/env.js 中对应环境的 apiBaseUrl
 ```
 
 ### 管理后台安装
 
 ```bash
 # 1. 进入管理后台目录
-cd backend/admin-ui
+cd admin-ui
 
 # 2. 安装依赖
 npm install
 
 # 3. 启动开发服务器
-npm start
-# 访问 http://localhost:3001
+npm run dev
+# 访问 http://localhost:5173/admin/
 ```
 
 ---
@@ -134,8 +134,13 @@ npm start
 
 ```
 666/
+├── admin-ui/                # 管理后台（Vue 3 + Vite）
+│   ├── src/                # 页面、路由、状态、接口
+│   ├── index.html
+│   ├── vite.config.js
+│   └── package.json
+│
 ├── backend/                 # 后端服务
-│   ├── admin-ui/           # 管理后台（React + Vite）
 │   ├── cache/              # 缓存文件
 │   ├── config/             # 配置文件
 │   ├── controllers/        # 控制器（40+）
@@ -154,7 +159,7 @@ npm start
 │   ├── server.js           # 服务器入口
 │   └── package.json
 │
-├── qianduan/                # 前端小程序
+├── miniprogram/             # 前端小程序
 │   ├── assets/             # 静态资源
 │   │   ├── icons/          # 图标
 │   │   └── images/         # 图片
@@ -176,7 +181,6 @@ npm start
 │   │   ├── user/           # 个人中心
 │   │   ├── order/          # 订单
 │   │   ├── distribution/   # 分销中心
-│   │   ├── ai/             # AI 助手
 │   │   └── ...
 │   ├── store/              # 状态管理
 │   │   └── index.js        # 全局 Store
@@ -278,7 +282,7 @@ npm start
 - **系统配置**：参数配置、权限管理
 
 ### 访问地址
-- 开发环境：`http://localhost:3001`
+- 开发环境：`http://localhost:5173/admin/`
 - 生产环境：`http://your-domain.com/admin`
 
 ---
@@ -432,17 +436,14 @@ Page({
 ### 后端部署
 
 ```bash
-# 1. 构建（如需要）
-npm run build
+# 1. 配置生产环境变量
+vi .env
 
-# 2. 配置生产环境变量
-vi .env.production
-
-# 3. 启动服务
+# 2. 启动服务
 npm start
 
 # 或使用 PM2
-pm2 start app.js --name "mini-program-api"
+pm2 start server.js --name "mini-program-api"
 ```
 
 ### 前端部署
@@ -479,7 +480,7 @@ server {
 
 ### 认证接口
 
-#### POST /auth/login
+#### POST /api/login
 微信登录
 
 **请求参数：**

@@ -8,6 +8,7 @@ const { logOrder, logCommission, error: logError } = require('../utils/logger');
 const { createUnifiedOrder, buildJsApiParams, parseXml, verifyNotifySign } = require('../utils/wechat');
 const PointService = require('./PointService');
 const CommissionService = require('./CommissionService');
+const { normalizeCompanyCode, getCompanyDisplayName } = require('./LogisticsService');
 const { generatePickupCredentials } = require('../controllers/pickupController');
 const { attributeRegionalProfit } = require('../controllers/stationController');
 const { calcCouponDiscount } = require('../controllers/couponController');
@@ -25,6 +26,33 @@ const generateOrderNo = () => {
     const seq = String(_orderSeq).padStart(4, '0');
     const random = String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
     return "ORD" + year + month + day + hour + min + sec + seq + random;
+};
+
+const sumOrderField = (orders, field) => orders.reduce((sum, current) => {
+    const value = parseFloat(current?.[field]);
+    return sum + (Number.isFinite(value) ? value : 0);
+}, 0);
+
+const loadRelatedOrders = async (order, buyerId, transaction, lock) => {
+    const rootOrderId = order.parent_order_id || order.id;
+    const relatedOrders = await Order.findAll({
+        where: {
+            buyer_id: buyerId,
+            [Op.or]: [{ id: rootOrderId }, { parent_order_id: rootOrderId }]
+        },
+        transaction,
+        lock
+    });
+
+    if (!relatedOrders.length) {
+        return [order];
+    }
+
+    return relatedOrders.sort((a, b) => {
+        if (a.id === rootOrderId) return -1;
+        if (b.id === rootOrderId) return 1;
+        return a.id - b.id;
+    });
 };
 
 const _markOrderAsPaid = async (order, t) => {
@@ -46,24 +74,27 @@ const _markOrderAsPaid = async (order, t) => {
         await child.save({ transaction: t });
     }
 
+    const paidOrders = [order, ...childOrders];
+    const totalPaidAmount = sumOrderField(paidOrders, 'total_amount');
+
     const buyer = await User.findByPk(order.buyer_id, { transaction: t });
     if (buyer.role_level === constants.ROLES.GUEST) {
         buyer.role_level = constants.ROLES.MEMBER;
         await buyer.save({ transaction: t });
         await sendNotification(buyer.id, '身份升级成功', '恭喜！您已成功下单，系统已为您升级为"尊享会员"', 'upgrade');
     }
-    await buyer.increment('total_sales', { by: parseFloat(order.total_amount), transaction: t });
+    await buyer.increment('total_sales', { by: totalPaidAmount, transaction: t });
 
     logOrder('订单支付', {
         userId: order.buyer_id,
         orderId: order.id,
         orderNo: order.order_no,
-        amount: parseFloat(order.total_amount)
+        amount: totalPaidAmount
     });
 
     setImmediate(async () => {
         try {
-            const amount = parseFloat(order.total_amount);
+            const amount = totalPaidAmount;
             const earnedPoints = Math.floor(amount);
             if (earnedPoints > 0) {
                 await PointService.addPoints(order.buyer_id, earnedPoints, 'purchase', order.id, "消费积分");
@@ -75,7 +106,7 @@ const _markOrderAsPaid = async (order, t) => {
     setImmediate(async () => {
         try {
             const b = await User.findByPk(order.buyer_id, { attributes: ['city'] });
-            if (b?.city) await attributeRegionalProfit(order.id, b.city, parseFloat(order.total_amount));
+            if (b?.city) await attributeRegionalProfit(order.id, b.city, totalPaidAmount);
         } catch (e) { }
     });
 
@@ -577,31 +608,53 @@ class OrderCoreService {
                 await t.rollback();
                 throw new Error('订单不存在');
             }
-            if (order.status !== 'shipped') {
+            if (!['shipped', 'completed'].includes(order.status)) {
                 await t.rollback();
                 throw new Error('订单状态不正确');
             }
 
-            order.status = 'completed';
-            order.completed_at = new Date();
+            const relatedOrders = await loadRelatedOrders(order, userId, t, t.LOCK.UPDATE);
+            const blockedOrder = relatedOrders.find(item => !['shipped', 'completed'].includes(item.status));
+            if (blockedOrder) {
+                await t.rollback();
+                throw new Error('订单仍有未发货的拆单包裹，请全部发货后再确认收货');
+            }
+
+            const pendingConfirmOrders = relatedOrders.filter(item => item.status === 'shipped');
+            if (pendingConfirmOrders.length === 0) {
+                await t.rollback();
+                throw new Error('订单已确认收货');
+            }
 
             // ★ 设置售后期结束时间（从配置读取，默认15天）
             const refundDeadline = new Date();
             refundDeadline.setDate(refundDeadline.getDate() + (constants.REFUND?.MAX_REFUND_DAYS || constants.COMMISSION.FREEZE_DAYS));
-            order.settlement_at = refundDeadline; // 复用此字段表示售后期结束
-            await order.save({ transaction: t });
+            const completedAt = new Date();
+            for (const item of pendingConfirmOrders) {
+                item.status = 'completed';
+                item.completed_at = completedAt;
+                item.settlement_at = refundDeadline; // 复用此字段表示售后期结束
+                await item.save({ transaction: t });
+            }
 
             // ★ 确认收货后，设置该订单所有冻结佣金的 refund_deadline（售后期结束时间）
             // 注意：不是 available_at，佣金需要等售后期结束 + 无退款 + 管理员审批后才能结算
             await CommissionLog.update(
                 { refund_deadline: refundDeadline },
-                { where: { order_id: order.id, status: 'frozen' }, transaction: t }
+                {
+                    where: {
+                        order_id: { [Op.in]: pendingConfirmOrders.map(item => item.id) },
+                        status: 'frozen'
+                    },
+                    transaction: t
+                }
             );
 
             await t.commit();
 
             const remainDays = constants.REFUND?.MAX_REFUND_DAYS || constants.COMMISSION.FREEZE_DAYS;
-            return { message: `确认收货成功！售后期${remainDays}天后，佣金将进入审批流程。` };
+            const splitOrderTip = pendingConfirmOrders.length > 1 ? `已同步确认 ${pendingConfirmOrders.length} 个拆单包裹，` : '';
+            return { message: `确认收货成功！${splitOrderTip}售后期${remainDays}天后，佣金将进入审批流程。` };
         } catch (error) {
             await t.rollback();
             console.error('确认收货失败:', error);
@@ -762,7 +815,7 @@ class OrderCoreService {
         const t = await sequelize.transaction();
         try {
             const { id } = req.params;
-            const { fulfillment_type, tracking_no } = req.body;
+            const { fulfillment_type, tracking_no, tracking_company, logistics_company } = req.body;
             // fulfillment_type: 'agent'（代理商发） 或 'platform'（平台发）
 
             const order = await Order.findOne({
@@ -842,9 +895,18 @@ class OrderCoreService {
                 order.middle_commission_total = 0;
             }
 
+            const finalCompany = normalizeCompanyCode(tracking_company || logistics_company || order.logistics_company || '');
+            const finalCompanyLabel = tracking_company || getCompanyDisplayName(finalCompany) || finalCompany;
+            const finalTrackingNo = tracking_no || order.tracking_no || null;
+
             order.status = 'shipped';
             order.shipped_at = new Date();
-            order.tracking_no = tracking_no || null;
+            order.tracking_no = finalTrackingNo;
+            order.logistics_company = finalCompany || null;
+            if (finalCompanyLabel || finalTrackingNo) {
+                const logisticsSummary = [finalCompanyLabel, finalTrackingNo].filter(Boolean).join(' ');
+                order.remark = (order.remark ? order.remark + ' | ' : '') + `物流: ${logisticsSummary}`;
+            }
             await order.save({ transaction: t });
 
             await t.commit();

@@ -13,6 +13,7 @@ const { sendNotification } = require('../models/notificationUtil');
 const { Op } = require('sequelize');
 const constants = require('../config/constants');
 const CommissionService = require('../services/CommissionService');
+const { normalizeCompanyCode, getCompanyDisplayName } = require('../services/LogisticsService');
 
 /**
  * 获取代理商工作台数据
@@ -151,7 +152,7 @@ const agentShip = async (req, res) => {
     try {
         const userId = req.user.id;
         const { id } = req.params;
-        const { tracking_no, tracking_company } = req.body;
+        const { tracking_no, tracking_company, logistics_company } = req.body;
 
         if (!tracking_no) {
             await t.rollback();
@@ -206,13 +207,17 @@ const agentShip = async (req, res) => {
         }
 
         // 更新订单
+        const finalCompany = normalizeCompanyCode(logistics_company || tracking_company || order.logistics_company || '');
+        const finalCompanyLabel = tracking_company || getCompanyDisplayName(finalCompany) || finalCompany;
         order.status = 'shipped';
         order.shipped_at = new Date();
         order.tracking_no = tracking_no;
+        order.logistics_company = finalCompany || null;
         order.fulfillment_type = 'Agent';
         order.fulfillment_partner_id = userId;
-        if (tracking_company) {
-            order.remark = (order.remark ? order.remark + ' | ' : '') + `物流: ${tracking_company} ${tracking_no}`;
+        if (finalCompanyLabel || tracking_no) {
+            const logisticsSummary = [finalCompanyLabel, tracking_no].filter(Boolean).join(' ');
+            order.remark = (order.remark ? order.remark + ' | ' : '') + `物流: ${logisticsSummary}`;
         }
         await order.save({ transaction: t });
 
@@ -233,6 +238,7 @@ const agentShip = async (req, res) => {
             data: {
                 order_no: order.order_no,
                 tracking_no,
+                logistics_company: finalCompany,
                 stock_remaining: agent.stock_count - order.quantity
             }
         });

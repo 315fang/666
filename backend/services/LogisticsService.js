@@ -29,19 +29,107 @@ const _memCache = new Map();
 
 // 快递公司 code 映射（对照阿里云文档 type 缩写列，见 物流.md）
 // key = 订单表里存的 logistics_company 值，value = 阿里云 API type 参数
+const COMPANY_DISPLAY_MAP = {
+    SF: '顺丰速运',
+    STO: '申通快递',
+    ZTO: '中通快递',
+    YTO: '圆通速递',
+    YD: '韵达快递',
+    EMS: '邮政 EMS',
+    CHINAPOST: '中国邮政',
+    JD: '京东物流',
+    HTKY: '百世快递',
+    JTSD: '极兔速递',
+    CNSD: '菜鸟速运',
+    DEPPON: '德邦物流',
+    ANE: '安能物流',
+    ZJS: '宅急送',
+    GTO: '国通快递',
+    DHL: 'DHL',
+    FEDEX: 'FedEx',
+    UPS: 'UPS',
+    TNT: 'TNT'
+};
+
+const COMPANY_ALIAS_MAP = {
+    AUTO: 'AUTO',
+    auto: 'AUTO',
+    自动: 'AUTO',
+    SF: 'SF',
+    SFEXPRESS: 'SF',
+    顺丰: 'SF',
+    顺丰速运: 'SF',
+    STO: 'STO',
+    申通: 'STO',
+    申通快递: 'STO',
+    ZTO: 'ZTO',
+    中通: 'ZTO',
+    中通快递: 'ZTO',
+    YTO: 'YTO',
+    圆通: 'YTO',
+    圆通速递: 'YTO',
+    YD: 'YD',
+    YUNDA: 'YD',
+    YUNDA56: 'YD',
+    韵达: 'YD',
+    韵达快递: 'YD',
+    韵达速递: 'YD',
+    EMS: 'EMS',
+    邮政EMS: 'EMS',
+    中国邮政EMS: 'EMS',
+    CHINAPOST: 'CHINAPOST',
+    邮政: 'CHINAPOST',
+    中国邮政: 'CHINAPOST',
+    JD: 'JD',
+    京东: 'JD',
+    京东快递: 'JD',
+    京东物流: 'JD',
+    HTKY: 'HTKY',
+    BEST: 'HTKY',
+    百世: 'HTKY',
+    百世快递: 'HTKY',
+    JTSD: 'JTSD',
+    JITU: 'JTSD',
+    极兔: 'JTSD',
+    极兔速递: 'JTSD',
+    CNSD: 'CNSD',
+    CAINIAO: 'CNSD',
+    菜鸟: 'CNSD',
+    菜鸟速运: 'CNSD',
+    DEPPON: 'DEPPON',
+    德邦: 'DEPPON',
+    德邦快递: 'DEPPON',
+    德邦物流: 'DEPPON',
+    ANE: 'ANE',
+    安能: 'ANE',
+    安能物流: 'ANE',
+    ZJS: 'ZJS',
+    宅急送: 'ZJS',
+    GTO: 'GTO',
+    国通: 'GTO',
+    国通快递: 'GTO',
+    DHL: 'DHL',
+    FEDEX: 'FEDEX',
+    UPS: 'UPS',
+    TNT: 'TNT'
+};
+
 const COMPANY_CODE_MAP = {
     // 国内主流
     SF: 'SFEXPRESS',     // 顺丰速运
     STO: 'STO',          // 申通快递
     ZTO: 'ZTO',          // 中通快递
     YTO: 'YTO',          // 圆通速递
+    YD: 'YUNDA',         // 韵达快递
     YUNDA: 'YUNDA',      // 韵达快递
     YUNDA56: 'YUNDA56',  // 韵达快运
     EMS: 'EMS',          // 中国邮政EMS
     CHINAPOST: 'CHINAPOST', // 邮政包裹
     JD: 'JD',            // 京东快递
     HTKY: 'HTKY',        // 百世快递
+    JTSD: 'JITU',        // 极兔速递
     JITU: 'JITU',        // 极兔速递
+    CNSD: 'CAINIAO',     // 菜鸟快递
     CAINIAO: 'CAINIAO',  // 菜鸟快递
     DEPPON: 'DEPPON',    // 德邦快递
     ANE: 'ANE',          // 安能快递
@@ -55,6 +143,19 @@ const COMPANY_CODE_MAP = {
     TNT: 'TNT',
 };
 
+function normalizeCompanyCode(companyCode = '') {
+    const rawValue = String(companyCode || '').trim();
+    if (!rawValue) return '';
+
+    const upperValue = rawValue.toUpperCase();
+    return COMPANY_ALIAS_MAP[rawValue] || COMPANY_ALIAS_MAP[upperValue] || upperValue;
+}
+
+function getCompanyDisplayName(companyCode = '') {
+    const normalizedCode = normalizeCompanyCode(companyCode);
+    return COMPANY_DISPLAY_MAP[normalizedCode] || normalizedCode;
+}
+
 /**
  * 查询物流轨迹
  * @param {string} trackingNo  - 运单号
@@ -63,7 +164,8 @@ const COMPANY_CODE_MAP = {
  * @returns {Promise<object>}  - { company, tracking_no, status, traces[] }
  */
 async function queryLogistics(trackingNo, companyCode = 'auto', forceRefresh = false) {
-    const cacheKey = `${companyCode}:${trackingNo}`;
+    const normalizedCompanyCode = normalizeCompanyCode(companyCode) || 'AUTO';
+    const cacheKey = `${normalizedCompanyCode}:${trackingNo}`;
 
     // ── 检查缓存（不强制刷新时）──
     if (!forceRefresh) {
@@ -75,7 +177,7 @@ async function queryLogistics(trackingNo, companyCode = 'auto', forceRefresh = f
 
     // ── 调用阿里云 API ──
     try {
-        const result = await _callAliyunApi(trackingNo, companyCode);
+        const result = await _callAliyunApi(trackingNo, normalizedCompanyCode);
         _setCache(cacheKey, result);
         return { ...result, fromCache: false };
     } catch (err) {
@@ -104,7 +206,7 @@ function _callAliyunApi(trackingNo, companyCode) {
         }
 
         // 将内部 code 转换为阿里云 type 参数（不区分大小写，转小写发送）
-        const upperCode = (companyCode || '').toUpperCase();
+        const upperCode = normalizeCompanyCode(companyCode);
         const aliType = (COMPANY_CODE_MAP[upperCode] || (upperCode !== 'AUTO' ? upperCode : ''));
         const typeParam = aliType ? `&type=${aliType.toLowerCase()}` : '';
 
@@ -121,7 +223,7 @@ function _callAliyunApi(trackingNo, companyCode) {
             timeout: 10000
         };
 
-        console.log(`[Logistics] 查询: ${trackingNo}${aliType ? ` (${aliType})` : ' (自动识别)'}`);
+        console.log(`[Logistics] 查询: ${trackingNo}${aliType ? ` (${upperCode}/${aliType})` : ' (自动识别)'}`);
 
         const req = https.request(options, (res) => {
             let data = '';
@@ -155,7 +257,7 @@ function _parseAliyunResponse(json, trackingNo, companyCode) {
     })).reverse(); // 最新的在前
 
     return {
-        company: data.expName || companyCode,
+        company: data.expName || getCompanyDisplayName(companyCode) || companyCode,
         company_type: data.type || '',
         tracking_no: data.number || trackingNo,
         status: _mapStatus(data.deliverystatus),
@@ -199,7 +301,7 @@ function _mapStatusText(deliverystatus) {
 function _getMockData(trackingNo, companyCode) {
     const now = new Date();
     return {
-        company: companyCode || 'SF',
+        company: getCompanyDisplayName(companyCode) || '顺丰速运',
         tracking_no: trackingNo,
         status: 'in_transit',
         status_text: '运输中',
@@ -252,7 +354,8 @@ function _setCache(key, data) {
  * 清除指定运单缓存（用户主动刷新时调用）
  */
 function clearCache(trackingNo, companyCode = '') {
-    const key = `${companyCode}:${trackingNo}`;
+    const normalizedCompanyCode = normalizeCompanyCode(companyCode) || '';
+    const key = `${normalizedCompanyCode}:${trackingNo}`;
     _memCache.delete(key);
     const file = _getCacheFile(key);
     if (fs.existsSync(file)) fs.unlinkSync(file);
@@ -282,4 +385,11 @@ function cleanExpiredCache() {
 // 每小时清理一次过期缓存
 setInterval(cleanExpiredCache, 60 * 60 * 1000);
 
-module.exports = { queryLogistics, clearCache, cleanExpiredCache, COMPANY_CODE_MAP };
+module.exports = {
+    queryLogistics,
+    clearCache,
+    cleanExpiredCache,
+    COMPANY_CODE_MAP,
+    normalizeCompanyCode,
+    getCompanyDisplayName
+};

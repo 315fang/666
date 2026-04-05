@@ -152,6 +152,8 @@
         <!-- 物流信息 -->
         <el-divider content-position="left" v-if="detailData.tracking_no">物流信息</el-divider>
         <div v-if="detailData.tracking_no" style="margin-bottom:20px">
+          快递公司: {{ formatCompanyLabel(detailData.logistics_company) || '未填写' }}
+          <br />
           单号: {{ detailData.tracking_no }}
         </div>
 
@@ -172,7 +174,7 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="快递公司">
-          <el-input v-model="shipForm.tracking_company" placeholder="如：顺丰速运" />
+          <el-input v-model="shipForm.tracking_company" placeholder="如：顺丰速运 / SF" />
         </el-form-item>
         <el-form-item label="快递单号">
           <el-input v-model="shipForm.tracking_no" placeholder="输入快递单号" />
@@ -239,6 +241,26 @@ import {
   getOrders, getOrderDetail, shipOrder, adjustOrderAmount, addOrderRemark,
   forceCompleteOrder, forceCancelOrder
 } from '@/api'
+
+const COMPANY_LABELS = {
+  SF: '顺丰速运',
+  STO: '申通快递',
+  ZTO: '中通快递',
+  YTO: '圆通速递',
+  YD: '韵达快递',
+  EMS: '邮政 EMS',
+  CHINAPOST: '中国邮政',
+  JD: '京东物流',
+  HTKY: '百世快递',
+  JTSD: '极兔速递',
+  CNSD: '菜鸟速运',
+  DEPPON: '德邦物流'
+}
+
+const formatCompanyLabel = (company) => {
+  if (!company) return ''
+  return COMPANY_LABELS[company] || company
+}
 
 // ===== 列表 =====
 const loading = ref(false)

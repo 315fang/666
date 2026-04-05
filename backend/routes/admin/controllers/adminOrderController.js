@@ -2,6 +2,7 @@ const { Order, User, Product, Address, SKU, CommissionLog, sequelize } = require
 const { Op } = require('sequelize');
 const { sendNotification } = require('../../../models/notificationUtil');
 const AdminOrderService = require('../../../services/AdminOrderService');
+const { normalizeCompanyCode, getCompanyDisplayName } = require('../../../services/LogisticsService');
 
 // 获取订单列表
 const getOrders = async (req, res) => {
@@ -156,9 +157,9 @@ const shipOrder = async (req, res) => {
 const updateShippingInfo = async (req, res) => {
     try {
         const { id } = req.params;
-        const { tracking_no, tracking_company } = req.body;
+        const { tracking_no, tracking_company, logistics_company } = req.body;
 
-        if (!tracking_no && !tracking_company) {
+        if (!tracking_no && !tracking_company && !logistics_company) {
             return res.status(400).json({ code: -1, message: '请提供要修改的物流单号或物流公司' });
         }
 
@@ -179,8 +180,14 @@ const updateShippingInfo = async (req, res) => {
         if (tracking_no !== undefined) {
             order.tracking_no = tracking_no;
         }
-        if (tracking_company) {
-            order.remark = (order.remark ? order.remark + ' | ' : '') + `物流更新: ${tracking_company} ${tracking_no || order.tracking_no}`;
+        const finalCompany = normalizeCompanyCode(logistics_company || tracking_company || order.logistics_company || '');
+        const finalCompanyLabel = tracking_company || getCompanyDisplayName(finalCompany) || finalCompany;
+        if (tracking_company || logistics_company !== undefined) {
+            order.logistics_company = finalCompany || null;
+        }
+        if (finalCompanyLabel || tracking_no || order.tracking_no) {
+            const logisticsSummary = [finalCompanyLabel, tracking_no || order.tracking_no].filter(Boolean).join(' ');
+            order.remark = (order.remark ? order.remark + ' | ' : '') + `物流更新: ${logisticsSummary}`;
         }
         await order.save();
 
@@ -189,7 +196,8 @@ const updateShippingInfo = async (req, res) => {
             message: '物流信息更新成功',
             data: {
                 old_tracking_no: oldTrackingNo,
-                new_tracking_no: order.tracking_no
+                new_tracking_no: order.tracking_no,
+                logistics_company: order.logistics_company
             }
         });
     } catch (error) {
@@ -378,32 +386,22 @@ const batchShipOrders = async (req, res) => {
 
         let successCount = 0;
         let failedIds = [];
+        let failedItems = [];
 
         for (const item of orders) {
             try {
-                const order = await Order.findByPk(item.id);
-                if (!order || !['paid', 'agent_confirmed', 'shipping_requested'].includes(order.status)) {
-                    failedIds.push(item.id);
-                    continue;
-                }
-
-                await order.update({
-                    status: 'shipped',
-                    shipped_at: new Date(),
-                    tracking_no: item.tracking_no || '',
-                    fulfillment_type: 'Company'
-                });
-
+                await AdminOrderService.shipOrder(item.id, item);
                 successCount++;
             } catch (e) {
                 failedIds.push(item.id);
+                failedItems.push({ id: item.id, message: e.message || '发货失败' });
             }
         }
 
         res.json({
             code: 0,
             message: `批量发货完成: 成功 ${successCount} 笔，失败 ${failedIds.length} 笔`,
-            data: { success_count: successCount, failed_ids: failedIds }
+            data: { success_count: successCount, failed_ids: failedIds, failed_items: failedItems }
         });
     } catch (error) {
         console.error('批量发货失败:', error);

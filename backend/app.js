@@ -14,12 +14,17 @@ const SERVER_START_TIME = Date.now();
 
 // ★ 启动安全检查：生产环境禁止使用弱默认 JWT 密钥
 if (process.env.NODE_ENV === 'production') {
-    const weakSecrets = ['INSECURE-DEFAULT-user-secret-key', 'INSECURE-DEFAULT-admin-secret-key'];
-    if (weakSecrets.includes(constants.SECURITY.JWT_SECRET)) {
+    const weakSecrets = [
+        'INSECURE-DEFAULT-user-secret-key',
+        'INSECURE-DEFAULT-admin-secret-key',
+        'your_super_secret_key_at_least_32_chars_long_change_this_in_production',
+        'your_admin_secret_key_at_least_32_chars_change_this_in_production'
+    ];
+    if (weakSecrets.includes(constants.SECURITY.JWT_SECRET) || constants.SECURITY.JWT_SECRET.includes('change_this_in_production')) {
         console.error('❌ 致命错误：JWT_SECRET 使用了不安全的默认值，生产环境必须在 .env 中设置强密钥');
         process.exit(1);
     }
-    if (weakSecrets.includes(constants.SECURITY.ADMIN_JWT_SECRET)) {
+    if (weakSecrets.includes(constants.SECURITY.ADMIN_JWT_SECRET) || constants.SECURITY.ADMIN_JWT_SECRET.includes('change_this_in_production')) {
         console.error('❌ 致命错误：ADMIN_JWT_SECRET 使用了不安全的默认值，生产环境必须在 .env 中设置强密钥');
         process.exit(1);
     }

@@ -89,7 +89,7 @@
         </el-table-column>
         <el-table-column label="快递公司" width="110">
           <template #default="{ row }">
-            {{ row.logistics_company || '-' }}
+            {{ formatCompanyLabel(row.logistics_company) }}
           </template>
         </el-table-column>
         <el-table-column label="运单号" width="160">
@@ -171,7 +171,7 @@
         <!-- 基本信息 -->
         <el-descriptions :column="1" border size="small" style="margin-bottom:20px">
           <el-descriptions-item label="订单号">{{ currentOrder.order_no }}</el-descriptions-item>
-          <el-descriptions-item label="快递公司">{{ currentOrder.logistics_company || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="快递公司">{{ formatCompanyLabel(currentOrder.logistics_company) }}</el-descriptions-item>
           <el-descriptions-item label="运单号">{{ currentOrder.tracking_no }}</el-descriptions-item>
           <el-descriptions-item label="收件人">
             {{ currentOrder.address?.name }} · {{ currentOrder.address?.phone }}
@@ -227,6 +227,26 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getOrders, getAdminOrderLogistics, refreshAdminLogistics } from '@/api/index'
+
+const COMPANY_LABELS = {
+  SF: '顺丰速运',
+  STO: '申通快递',
+  ZTO: '中通快递',
+  YTO: '圆通速递',
+  YD: '韵达快递',
+  EMS: '邮政 EMS',
+  CHINAPOST: '中国邮政',
+  JD: '京东物流',
+  HTKY: '百世快递',
+  JTSD: '极兔速递',
+  CNSD: '菜鸟速运',
+  DEPPON: '德邦物流'
+}
+
+const formatCompanyLabel = (company) => {
+  if (!company) return '-'
+  return COMPANY_LABELS[company] || company
+}
 
 // ── 搜索表单 ──────────────────────────────────────
 const searchForm = reactive({
