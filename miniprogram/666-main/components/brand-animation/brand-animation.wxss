@@ -1,0 +1,789 @@
+/* components/brand-animation/brand-animation.wxss */
+/* 臻选 - 品牌动画系统 V2.0 */
+/* 层级一：核心品牌动画 | 层级二：重要反馈动画 */
+
+/* ========================================== */
+/*         全局：全屏遮罩 + 容器              */
+/* ========================================== */
+.brand-animation-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8rpx);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease-out;
+}
+
+.brand-animation-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.animation-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transform: scale(0.8);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.brand-animation-overlay.show .animation-container {
+  transform: scale(1);
+}
+
+.anim-scene {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60rpx 80rpx;
+  position: relative;
+}
+
+.anim-title {
+  font-size: 48rpx;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-top: 40rpx;
+  letter-spacing: 4rpx;
+  text-shadow: 0 2rpx 8rpx rgba(0,0,0,0.3);
+}
+
+.anim-subtitle {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 16rpx;
+  letter-spacing: 2rpx;
+}
+
+.anim-amount {
+  font-size: 72rpx;
+  font-weight: 700;
+  color: #D4A84B;
+  margin-top: 20rpx;
+  font-family: 'DIN Alternate', sans-serif;
+  text-shadow: 0 4rpx 16rpx rgba(212, 168, 75, 0.5);
+}
+
+/* ========================================== */
+/*    层级一 ① 提现成功 - 金币从布袋弹出       */
+/* ========================================== */
+.withdraw-success .coin-bag {
+  position: relative;
+  width: 200rpx;
+  height: 200rpx;
+}
+
+.bag-body {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 130rpx;
+  height: 130rpx;
+  background: linear-gradient(145deg, #D4A84B 0%, #B8860B 60%, #8B6914 100%);
+  border-radius: 50% 50% 50% 50% / 35% 35% 65% 65%;
+  box-shadow: 
+    0 10rpx 30rpx rgba(212, 168, 75, 0.5),
+    inset 0 -10rpx 20rpx rgba(0,0,0,0.15);
+}
+
+/* 袋口绑绳 */
+.bag-body::before {
+  content: '';
+  position: absolute;
+  top: -8rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80rpx;
+  height: 16rpx;
+  background: #A16207;
+  border-radius: 8rpx;
+}
+
+/* 袋子「¥」标志 */
+.bag-body::after {
+  content: '¥';
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 52rpx;
+  color: rgba(255,255,255,0.85);
+  font-weight: 800;
+}
+
+.coin {
+  position: absolute;
+  width: 52rpx;
+  height: 52rpx;
+  background: linear-gradient(145deg, #FFD700 0%, #FFA500 50%, #FF8C00 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  color: #8B4513;
+  font-weight: 800;
+  box-shadow: 
+    0 4rpx 12rpx rgba(255, 215, 0, 0.6),
+    inset 0 2rpx 4rpx rgba(255,255,255,0.4);
+  opacity: 0;
+}
+
+.brand-animation-overlay.show .coin {
+  animation: coinPop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.coin-1 { left: 5%;  top: 55%; animation-delay: 0.1s; }
+.coin-2 { right: 5%; top: 50%; animation-delay: 0.17s; }
+.coin-3 { left: 15%; top: 20%; animation-delay: 0.24s; }
+.coin-4 { right: 15%;top: 25%; animation-delay: 0.31s; }
+.coin-5 { left: 50%; top: -5%; transform: translateX(-50%); animation-delay: 0.38s; }
+
+@keyframes coinPop {
+  0% {
+    opacity: 0;
+    transform: scale(0) translateY(60rpx) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.3) translateY(-40rpx) rotate(180deg);
+  }
+  80% {
+    transform: scale(0.95) translateY(-20rpx) rotate(300deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(-25rpx) rotate(360deg);
+  }
+}
+
+/* ========================================== */
+/*    层级一 ② 支付成功 - 打勾 + 金色粒子      */
+/* ========================================== */
+.payment-success .check-circle {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 
+    0 10rpx 40rpx rgba(16, 185, 129, 0.4),
+    0 0 0 0 rgba(16, 185, 129, 0.3);
+}
+
+.brand-animation-overlay.show .check-circle {
+  animation: checkPulse 1s ease-out;
+}
+
+@keyframes checkPulse {
+  0% { box-shadow: 0 10rpx 40rpx rgba(16,185,129,0.4), 0 0 0 0 rgba(16,185,129,0.4); }
+  50% { box-shadow: 0 10rpx 40rpx rgba(16,185,129,0.4), 0 0 0 30rpx rgba(16,185,129,0); }
+  100% { box-shadow: 0 10rpx 40rpx rgba(16,185,129,0.4), 0 0 0 0 rgba(16,185,129,0); }
+}
+
+.check-mark {
+  width: 60rpx;
+  height: 36rpx;
+  border-left: 8rpx solid #FFFFFF;
+  border-bottom: 8rpx solid #FFFFFF;
+  transform: rotate(-45deg) scale(0);
+  transform-origin: left bottom;
+}
+
+.brand-animation-overlay.show .check-mark {
+  animation: checkDraw 0.4s 0.2s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+
+@keyframes checkDraw {
+  0% { transform: rotate(-45deg) scale(0); }
+  100% { transform: rotate(-45deg) scale(1); }
+}
+
+.particles {
+  position: absolute;
+  width: 300rpx;
+  height: 300rpx;
+}
+
+.particle {
+  position: absolute;
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  opacity: 0;
+}
+
+.brand-animation-overlay.show .particle {
+  animation: particleExplode 1s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.p1 { background: #D4A84B; animation-delay: 0.3s; }
+.p2 { background: #10B981; animation-delay: 0.35s; }
+.p3 { background: #F59E0B; animation-delay: 0.4s; }
+.p4 { background: #EF4444; animation-delay: 0.45s; }
+.p5 { background: #8B5CF6; animation-delay: 0.5s; }
+.p6 { background: #EC4899; animation-delay: 0.55s; }
+.p7 { background: #3B82F6; animation-delay: 0.6s; }
+.p8 { background: #D4A84B; animation-delay: 0.65s; }
+
+@keyframes particleExplode {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--tx, 100rpx)), calc(-50% + var(--ty, -100rpx))) scale(1);
+  }
+}
+
+.p1 { --tx: 120rpx; --ty: -80rpx; }
+.p2 { --tx: -100rpx; --ty: -100rpx; }
+.p3 { --tx: 80rpx; --ty: 120rpx; }
+.p4 { --tx: -120rpx; --ty: 60rpx; }
+.p5 { --tx: 60rpx; --ty: -120rpx; }
+.p6 { --tx: -80rpx; --ty: 100rpx; }
+.p7 { --tx: 140rpx; --ty: 40rpx; }
+.p8 { --tx: -40rpx; --ty: -140rpx; }
+
+/* ========================================== */
+/*    层级一 ③ 加入团队 - 握手 + 礼花          */
+/* ========================================== */
+.join-team .handshake {
+  position: relative;
+  width: 180rpx;
+  height: 140rpx;
+}
+
+.hand {
+  position: absolute;
+  width: 80rpx;
+  height: 100rpx;
+  border-radius: 20rpx 20rpx 40rpx 40rpx;
+  top: 20rpx;
+}
+
+.hand-left {
+  left: 0;
+  background: linear-gradient(145deg, #FCD34D 0%, #F59E0B 100%);
+  transform: rotate(-15deg) translateX(-30rpx);
+  box-shadow: 0 4rpx 12rpx rgba(245,158,11,0.3);
+}
+
+.hand-right {
+  right: 0;
+  background: linear-gradient(145deg, #D4A84B 0%, #CA8A04 100%);
+  transform: rotate(15deg) translateX(30rpx);
+  box-shadow: 0 4rpx 12rpx rgba(202,138,4,0.3);
+}
+
+.brand-animation-overlay.show .hand-left {
+  animation: handShakeLeft 0.6s 0.2s ease-out forwards;
+}
+
+.brand-animation-overlay.show .hand-right {
+  animation: handShakeRight 0.6s 0.2s ease-out forwards;
+}
+
+@keyframes handShakeLeft {
+  0% { transform: rotate(-15deg) translateX(-30rpx); }
+  30% { transform: rotate(-5deg) translateX(10rpx); }
+  60% { transform: rotate(-8deg) translateX(5rpx); }
+  100% { transform: rotate(-10deg) translateX(0); }
+}
+
+@keyframes handShakeRight {
+  0% { transform: rotate(15deg) translateX(30rpx); }
+  30% { transform: rotate(5deg) translateX(-10rpx); }
+  60% { transform: rotate(8deg) translateX(-5rpx); }
+  100% { transform: rotate(10deg) translateX(0); }
+}
+
+.confetti {
+  position: absolute;
+  width: 350rpx;
+  height: 350rpx;
+  pointer-events: none;
+}
+
+.conf {
+  position: absolute;
+  width: 16rpx;
+  height: 24rpx;
+  left: 50%;
+  top: 50%;
+  opacity: 0;
+}
+
+.brand-animation-overlay.show .conf {
+  animation: confettiFall 1.2s ease-out forwards;
+}
+
+.c1 { background: #D4A84B; animation-delay: 0.2s; border-radius: 4rpx; }
+.c2 { background: #EC4899; animation-delay: 0.25s; border-radius: 50%; }
+.c3 { background: #10B981; animation-delay: 0.3s; border-radius: 4rpx; }
+.c4 { background: #3B82F6; animation-delay: 0.35s; border-radius: 50%; }
+.c5 { background: #F59E0B; animation-delay: 0.4s; border-radius: 4rpx; }
+.c6 { background: #8B5CF6; animation-delay: 0.45s; border-radius: 50%; }
+
+@keyframes confettiFall {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(0deg) scale(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--cx, 80rpx)), calc(-50% + var(--cy, 150rpx))) rotate(720deg) scale(1);
+  }
+}
+
+.c1 { --cx: 120rpx; --cy: -140rpx; }
+.c2 { --cx: -90rpx; --cy: -120rpx; }
+.c3 { --cx: 70rpx; --cy: 160rpx; }
+.c4 { --cx: -140rpx; --cy: 90rpx; }
+.c5 { --cx: 140rpx; --cy: -70rpx; }
+.c6 { --cx: -70rpx; --cy: 140rpx; }
+
+/* ========================================== */
+/*    层级一 ④ 首次登录 - 星花 + 礼花          */
+/*    （替代emoji，使用纯CSS星花）              */
+/* ========================================== */
+.first-login .welcome-icon {
+  width: 160rpx;
+  height: 160rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.welcome-star-burst {
+  position: relative;
+  width: 120rpx;
+  height: 120rpx;
+}
+
+/* 四条射线组成星花 */
+.star-ray {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8rpx;
+  height: 50rpx;
+  background: linear-gradient(180deg, #FFD700, transparent);
+  border-radius: 4rpx;
+  transform-origin: center top;
+  opacity: 0;
+}
+
+.brand-animation-overlay.show .star-ray {
+  animation: rayBurst 0.8s ease-out forwards;
+}
+
+.ray-1 { transform: translate(-50%, 0) rotate(0deg);   animation-delay: 0.1s; }
+.ray-2 { transform: translate(-50%, 0) rotate(90deg);  animation-delay: 0.15s; }
+.ray-3 { transform: translate(-50%, 0) rotate(45deg);  animation-delay: 0.2s; }
+.ray-4 { transform: translate(-50%, 0) rotate(-45deg); animation-delay: 0.25s; }
+
+@keyframes rayBurst {
+  0% {
+    opacity: 0;
+    height: 0;
+    transform: translate(-50%, 0) rotate(var(--r, 0deg)) scaleY(0);
+  }
+  50% {
+    opacity: 1;
+    height: 50rpx;
+    transform: translate(-50%, 0) rotate(var(--r, 0deg)) scaleY(1.2);
+  }
+  100% {
+    opacity: 0.6;
+    height: 40rpx;
+    transform: translate(-50%, 0) rotate(var(--r, 0deg)) scaleY(1);
+  }
+}
+
+.ray-1 { --r: 0deg; }
+.ray-2 { --r: 90deg; }
+.ray-3 { --r: 45deg; }
+.ray-4 { --r: -45deg; }
+
+/* 中心圆点 */
+.star-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 40rpx;
+  height: 40rpx;
+  background: radial-gradient(circle, #FFD700 30%, #D4A84B 70%, transparent 100%);
+  border-radius: 50%;
+  box-shadow: 0 0 30rpx 10rpx rgba(255, 215, 0, 0.5);
+  opacity: 0;
+}
+
+.brand-animation-overlay.show .star-center {
+  animation: starGlow 0.6s 0.1s ease-out forwards;
+}
+
+@keyframes starGlow {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0); }
+  60% { opacity: 1; transform: translate(-50%, -50%) scale(1.3); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* 烟花（与原设计一致） */
+.fireworks {
+  position: absolute;
+  width: 400rpx;
+  height: 400rpx;
+  pointer-events: none;
+}
+
+.fw {
+  position: absolute;
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  opacity: 0;
+}
+
+.brand-animation-overlay.show .fw {
+  animation: firework 1s ease-out forwards;
+}
+
+.fw1 { background: #D4A84B; animation-delay: 0.1s; }
+.fw2 { background: #EC4899; animation-delay: 0.2s; }
+.fw3 { background: #10B981; animation-delay: 0.3s; }
+.fw4 { background: #3B82F6; animation-delay: 0.15s; }
+.fw5 { background: #F59E0B; animation-delay: 0.25s; }
+
+@keyframes firework {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 20rpx 10rpx currentColor;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--fx, 80rpx)), calc(-50% + var(--fy, -80rpx))) scale(0);
+    box-shadow: 0 0 0 0 currentColor;
+  }
+}
+
+.fw1 { --fx: 150rpx; --fy: -100rpx; }
+.fw2 { --fx: -130rpx; --fy: -120rpx; }
+.fw3 { --fx: 100rpx; --fy: 140rpx; }
+.fw4 { --fx: -160rpx; --fy: 80rpx; }
+.fw5 { --fx: 0; --fy: -180rpx; }
+
+/* ========================================== */
+/*    层级一 ⑤ 等级提升 - 皇冠 + 光环          */
+/* ========================================== */
+.level-up .crown-container {
+  position: relative;
+  width: 200rpx;
+  height: 180rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 光环 */
+.crown-glow {
+  position: absolute;
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212,168,75,0.4) 0%, transparent 70%);
+  opacity: 0;
+}
+
+.brand-animation-overlay.show .crown-glow {
+  animation: crownGlow 1.5s ease-out forwards;
+}
+
+@keyframes crownGlow {
+  0% { opacity: 0; transform: scale(0.5); }
+  30% { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 0.6; transform: scale(1); }
+}
+
+/* 皇冠主体 */
+.crown {
+  position: relative;
+  width: 140rpx;
+  height: 120rpx;
+  opacity: 0;
+}
+
+.brand-animation-overlay.show .crown {
+  animation: crownAppear 0.6s 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes crownAppear {
+  0% { opacity: 0; transform: scale(0) translateY(40rpx); }
+  60% { opacity: 1; transform: scale(1.1) translateY(-10rpx); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.crown-base {
+  position: absolute;
+  bottom: 0;
+  left: 10%;
+  width: 80%;
+  height: 40rpx;
+  background: linear-gradient(135deg, #D4A84B 0%, #B8860B 100%);
+  border-radius: 0 0 10rpx 10rpx;
+  box-shadow: 0 4rpx 12rpx rgba(212,168,75,0.4);
+}
+
+.crown-peak {
+  position: absolute;
+  bottom: 30rpx;
+  width: 24rpx;
+  height: 60rpx;
+  background: linear-gradient(180deg, #FFD700 0%, #D4A84B 100%);
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+
+.peak-1 { left: 15%; }
+.peak-2 { left: 50%; transform: translateX(-50%); height: 70rpx; }
+.peak-3 { right: 15%; }
+
+/* 宝石 */
+.crown-gem {
+  position: absolute;
+  bottom: 48rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16rpx;
+  height: 16rpx;
+  background: radial-gradient(circle, #FF6B6B, #EF4444);
+  border-radius: 50%;
+  box-shadow: 0 0 12rpx 4rpx rgba(239,68,68,0.5);
+}
+
+/* 等级文字 */
+.anim-level {
+  font-size: 56rpx;
+  font-weight: 800;
+  color: #D4A84B;
+  margin-top: 16rpx;
+  letter-spacing: 4rpx;
+  text-shadow: 0 4rpx 16rpx rgba(212,168,75,0.5);
+}
+
+/* 晋级星光 */
+.level-sparkle {
+  position: absolute;
+  width: 400rpx;
+  height: 400rpx;
+  pointer-events: none;
+}
+
+.sparkle {
+  position: absolute;
+  width: 6rpx;
+  height: 6rpx;
+  background: #FFD700;
+  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  opacity: 0;
+}
+
+.brand-animation-overlay.show .sparkle {
+  animation: sparkleFloat 1.5s ease-out forwards;
+}
+
+.s1 { animation-delay: 0.2s; }
+.s2 { animation-delay: 0.35s; }
+.s3 { animation-delay: 0.5s; }
+.s4 { animation-delay: 0.25s; }
+.s5 { animation-delay: 0.4s; }
+.s6 { animation-delay: 0.55s; }
+
+@keyframes sparkleFloat {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--sx, 0rpx)), calc(-50% + var(--sy, 0rpx))) scale(1.5);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--sx, 0rpx) * 2), calc(-50% + var(--sy, 0rpx) * 2)) scale(0);
+  }
+}
+
+.s1 { --sx: 140rpx; --sy: -90rpx; }
+.s2 { --sx: -120rpx;--sy: -110rpx; }
+.s3 { --sx: 90rpx;  --sy: 130rpx; }
+.s4 { --sx: -150rpx;--sy: 70rpx; }
+.s5 { --sx: 60rpx;  --sy: -150rpx; }
+.s6 { --sx: -80rpx; --sy: 120rpx; }
+
+
+/* ========================================== */
+/*    层级二 ① 飞入购物车 - 抛物线             */
+/* ========================================== */
+.fly-to-cart {
+  position: fixed;
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 16rpx;
+  overflow: hidden;
+  z-index: 9998;
+  pointer-events: none;
+  box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.15);
+  animation: flyToCart 0.5s cubic-bezier(0.55, 0, 0.85, 0.36) forwards;
+}
+
+.fly-image {
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes flyToCart {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(0.8) translateY(-80rpx);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.2) translateY(100rpx);
+  }
+}
+
+/* ========================================== */
+/*    层级二 ② 复制成功（带文字标签）           */
+/* ========================================== */
+.toast-check {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 28rpx 40rpx;
+  background: rgba(28, 25, 23, 0.85);
+  backdrop-filter: blur(8rpx);
+  border-radius: 20rpx;
+  z-index: 9999;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.2s ease-out;
+}
+
+.toast-check.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.check-icon-mini {
+  width: 48rpx;
+  height: 32rpx;
+  border-left: 6rpx solid #10B981;
+  border-bottom: 6rpx solid #10B981;
+  transform: rotate(-45deg) scale(0);
+  animation: miniCheckDraw 0.3s 0.1s ease-out forwards;
+}
+
+@keyframes miniCheckDraw {
+  0% { transform: rotate(-45deg) scale(0); }
+  60% { transform: rotate(-45deg) scale(1.15); }
+  100% { transform: rotate(-45deg) scale(1); }
+}
+
+.toast-label {
+  font-size: 24rpx;
+  color: rgba(255,255,255,0.9);
+  letter-spacing: 2rpx;
+}
+
+/* ========================================== */
+/*    层级二 ③ 卡片滑出消失                    */
+/* ========================================== */
+.slide-out-card {
+  transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+.slide-out-card.out {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+/* ========================================== */
+/*    层级二 ④ 购物车 badge 弹跳               */
+/* ========================================== */
+.cart-badge-bounce {
+  position: fixed;
+  bottom: 30rpx;
+  right: 30rpx;
+  z-index: 9990;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.cart-badge-bounce.bounce {
+  animation: badgeBounceUp 0.6s ease-out forwards;
+}
+
+.badge-plus {
+  display: inline-block;
+  padding: 6rpx 16rpx;
+  background: linear-gradient(135deg, #D4A84B, #CA8A04);
+  color: #FFFFFF;
+  font-size: 24rpx;
+  font-weight: 700;
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(202,138,4,0.4);
+}
+
+@keyframes badgeBounceUp {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.5);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-30rpx) scale(1.2);
+  }
+  60% {
+    transform: translateY(-50rpx) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-80rpx) scale(0.8);
+  }
+}

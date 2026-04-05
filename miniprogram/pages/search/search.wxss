@@ -1,0 +1,290 @@
+/* pages/search/search.wxss - 问兰镜像搜索页样式重塑 */
+
+.container {
+  min-height: 100vh;
+  background: #FFFFFF;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 1. 顶部搜索栏 */
+.search-header {
+  padding: 20rpx 32rpx;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  background: #FFFFFF;
+  border-bottom: 1rpx solid #F5F5F5;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.search-input-box {
+  flex: 1;
+  height: 80rpx;
+  background: #F8F8F8;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  padding: 0 30rpx;
+  gap: 16rpx;
+}
+
+.icon-search {
+  width: 32rpx;
+  height: 32rpx;
+  opacity: 0.4;
+}
+
+.input-main {
+  flex: 1;
+  font-size: 28rpx;
+  color: #333333;
+}
+
+.input-placeholder {
+  color: #BBBBBB;
+}
+
+.clear-wrap {
+  padding: 10rpx;
+}
+
+.icon-clear {
+  width: 32rpx;
+  height: 32rpx;
+  opacity: 0.3;
+}
+
+.btn-cancel {
+  font-size: 28rpx;
+  color: #666666;
+  white-space: nowrap;
+}
+
+/* 2. 内容区域 */
+.search-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+.section-box {
+  padding: 48rpx 32rpx 20rpx;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32rpx;
+}
+
+.section-title-serif {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1A1A1A;
+  letter-spacing: 2rpx;
+}
+
+.icon-delete {
+  width: 32rpx;
+  height: 32rpx;
+  opacity: 0.3;
+}
+
+/* 热门推荐 Grid */
+.hot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24rpx;
+}
+
+.hot-item {
+  background: #F9F9F9;
+  padding: 24rpx 20rpx;
+  border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.hot-num {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #CCCCCC;
+  width: 36rpx;
+}
+
+.hot-num.top-three {
+  color: #B8965D;
+}
+
+.hot-text {
+  flex: 1;
+  font-size: 26rpx;
+  color: #333333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icon-trend {
+  width: 24rpx;
+  height: 24rpx;
+  opacity: 0.6;
+}
+
+/* 搜索历史 List */
+.history-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+}
+
+.history-item {
+  padding: 12rpx 32rpx;
+  background: #F5F5F5;
+  border-radius: 100rpx;
+  font-size: 24rpx;
+  color: #666666;
+}
+
+/* 3. 搜索结果 */
+.result-area {
+  padding: 0 32rpx;
+}
+
+.result-summary {
+  padding: 30rpx 0;
+  font-size: 24rpx;
+  color: #999999;
+}
+
+.product-list-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 32rpx;
+}
+
+.prod-card {
+  display: flex;
+  gap: 24rpx;
+  background: #FFFFFF;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #F5F5F5;
+}
+
+.prod-img {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 12rpx;
+  background: #F8F8F8;
+}
+
+.prod-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10rpx 0;
+}
+
+.prod-name {
+  font-size: 28rpx;
+  color: #333333;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.prod-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
+}
+
+.price-unit {
+  font-size: 24rpx;
+  color: #1A1A1A;
+  font-weight: 600;
+}
+
+.price-val {
+  font-size: 36rpx;
+  color: #1A1A1A;
+  font-weight: 700;
+}
+
+.sales-val {
+  font-size: 22rpx;
+  color: #BBBBBB;
+  margin-left: 10rpx;
+}
+
+/* 4. 空状态 */
+.empty-state {
+  padding: 160rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.empty-icon-wrap {
+  width: 160rpx;
+  height: 160rpx;
+  background: #F8F8F8;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 40rpx;
+}
+
+.empty-icon {
+  width: 64rpx;
+  height: 64rpx;
+  opacity: 0.15;
+}
+
+.empty-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333333;
+  margin-bottom: 12rpx;
+}
+
+.empty-desc {
+  font-size: 26rpx;
+  color: #BBBBBB;
+}
+
+/* 5. 加载动画 */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.loading-ring {
+  width: 60rpx;
+  height: 60rpx;
+  border: 4rpx solid #F3F3F3;
+  border-top: 4rpx solid #B8965D;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

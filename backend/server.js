@@ -1,10 +1,9 @@
 require('dotenv').config();
 const app = require('./app');
 const { sequelize, testConnection } = require('./config/database');
-const { settleCommissions, autoCancelExpiredOrders, autoConfirmOrders, processRefundDeadlineExpired, autoTransferAgentOrders } = require('./controllers/orderController');
+const OrderJobService = require('./services/OrderJobService');
 const constants = require('./config/constants');
 const { executeWithLock } = require('./utils/taskLock');
-const AIOpsService = require('./services/AIOpsService');
 const logger = require('./utils/logger');
 
 const PORT = process.env.PORT || 3000;
@@ -82,7 +81,7 @@ async function startServer() {
         const settleInterval = constants.COMMISSION.SETTLE_INTERVAL_MS;
         setInterval(async () => {
             await executeWithLock('settleCommissions', async () => {
-                const count = await settleCommissions();
+                const count = await OrderJobService.settleCommissions();
                 if (count > 0) {
                     console.log(`[定时任务] 佣金结算完成: ${count} 条记录`);
                 }
@@ -94,7 +93,7 @@ async function startServer() {
         // ★ 定时任务：自动取消超时未支付订单（每分钟检查一次）
         setInterval(async () => {
             await executeWithLock('autoCancelOrders', async () => {
-                await autoCancelExpiredOrders();
+                await OrderJobService.autoCancelExpiredOrders();
             }, { timeout: 2 * 60 * 1000 }).catch(err => {
                 console.error('[定时任务] 自动取消订单异常:', err);
             });
@@ -103,7 +102,7 @@ async function startServer() {
         // ★ 定时任务：自动确认收货（每小时检查一次）
         setInterval(async () => {
             await executeWithLock('autoConfirmOrders', async () => {
-                await autoConfirmOrders();
+                await OrderJobService.autoConfirmOrders();
             }, { timeout: 10 * 60 * 1000 }).catch(err => {
                 console.error('[定时任务] 自动确认收货异常:', err);
             });
@@ -112,7 +111,7 @@ async function startServer() {
         // ★ 定时任务：售后期结束处理（每10分钟检查一次）
         setInterval(async () => {
             await executeWithLock('processRefundDeadline', async () => {
-                await processRefundDeadlineExpired();
+                await OrderJobService.processRefundDeadlineExpired();
             }, { timeout: 10 * 60 * 1000 }).catch(err => {
                 console.error('[定时任务] 售后期结束处理异常:', err);
             });
@@ -121,7 +120,7 @@ async function startServer() {
         // ★ 定时任务：代理商订单超时自动转平台（每30分钟检查一次）
         setInterval(async () => {
             await executeWithLock('autoTransferAgentOrders', async () => {
-                await autoTransferAgentOrders();
+                await OrderJobService.autoTransferAgentOrders();
             }, { timeout: 10 * 60 * 1000 }).catch(err => {
                 console.error('[定时任务] 代理商订单超时转平台异常:', err);
             });
@@ -137,19 +136,52 @@ async function startServer() {
             });
         }, 5 * 60 * 1000);
 
+        // ★ 定时任务：业务异常告警检测（每5分钟检查一次）
+        const AlertService = require('./services/AlertService');
+        setInterval(async () => {
+            try {
+                const cfg = await AlertService.loadAlertConfig();
+                if (!cfg.alert_enabled) return;
+
+                const { Order, Refund, Withdrawal } = require('./models');
+                const { Op } = require('sequelize');
+                const issues = [];
+
+                // 检测长时间待支付订单（超过2小时）
+                const longPending = await Order.count({
+                    where: {
+                        status: 'pending',
+                        created_at: { [Op.lt]: new Date(Date.now() - 2 * 60 * 60 * 1000) }
+                    }
+                });
+                if (longPending > 5) issues.push(`超时未支付订单：${longPending} 单（>2h）`);
+
+                // 检测待审核退款堆积（>10单）
+                const pendingRefunds = await Refund.count({ where: { status: 'pending' } });
+                if (pendingRefunds > 10) issues.push(`待审核退款积压：${pendingRefunds} 单`);
+
+                // 检测待审核提现堆积（>20单）
+                const pendingWithdrawals = await Withdrawal.count({ where: { status: 'pending' } });
+                if (pendingWithdrawals > 20) issues.push(`待审核提现积压：${pendingWithdrawals} 笔`);
+
+                if (issues.length > 0) {
+                    const content = issues.map(i => `- ${i}`).join('\n');
+                    await AlertService.send('业务异常告警', content, 'warning', 'business_anomaly');
+                }
+            } catch (err) {
+                console.error('[定时任务] 告警检测异常:', err.message);
+            }
+        }, 5 * 60 * 1000);
 
         // 启动时也执行一次（使用锁机制）
         executeWithLock('settleCommissions', async () => {
-            const count = await settleCommissions();
+            const count = await OrderJobService.settleCommissions();
             if (count > 0) console.log(`[启动结算] 佣金结算完成: ${count} 条记录`);
         }).catch(() => { });
-        executeWithLock('autoCancelOrders', autoCancelExpiredOrders).catch(() => { });
-        executeWithLock('autoConfirmOrders', autoConfirmOrders).catch(() => { });
-        executeWithLock('processRefundDeadline', processRefundDeadlineExpired).catch(() => { });
-        executeWithLock('autoTransferAgentOrders', autoTransferAgentOrders).catch(() => { });
-
-        // ★ 初始化AI运维监控服务
-        await AIOpsService.initialize();
+        executeWithLock('autoCancelOrders', OrderJobService.autoCancelExpiredOrders).catch(() => { });
+        executeWithLock('autoConfirmOrders', OrderJobService.autoConfirmOrders).catch(() => { });
+        executeWithLock('processRefundDeadline', OrderJobService.processRefundDeadlineExpired).catch(() => { });
+        executeWithLock('autoTransferAgentOrders', OrderJobService.autoTransferAgentOrders).catch(() => { });
 
         // 启动服务器
         app.listen(PORT, () => {
@@ -162,7 +194,6 @@ async function startServer() {
             console.log(`  佣金冻结天数: T+${constants.COMMISSION.FREEZE_DAYS}`);
             console.log(`  调试路由: ${constants.DEBUG.ENABLE_DEBUG_ROUTES ? '开启' : '关闭'}`);
             console.log(`  测试接口: ${constants.DEBUG.ENABLE_TEST_ROUTES ? '开启' : '关闭'}`);
-            console.log(`  AI运维监控: ${AIOpsService.isRunning ? '运行中' : '已禁用'}`);
             console.log(`========================================\n`);
         });
     } catch (error) {

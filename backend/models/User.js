@@ -13,6 +13,12 @@ const User = sequelize.define('User', {
         allowNull: false,
         comment: '微信openid'
     },
+    member_no: {
+        type: DataTypes.STRING(20),
+        unique: true,
+        allowNull: true,
+        comment: '会员编号，格式 M+年月+流水号，如 M202600001，注册时自动生成'
+    },
     nickname: {
         type: DataTypes.STRING(100),
         comment: '昵称'
@@ -110,6 +116,21 @@ const User = sequelize.define('User', {
         type: DataTypes.DECIMAL(4, 2),
         defaultValue: 1.00,
         comment: '当前会员折扣比例，由成长值阶梯自动更新'
+    },
+    status: {
+        type: DataTypes.TINYINT,
+        defaultValue: 1,
+        comment: '账号状态: 1-正常 0-封禁'
+    },
+    remark: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+        comment: '内部备注（管理员可编辑）'
+    },
+    tags: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        comment: '内部标签 JSON数组字符串，如 ["VIP","高活跃"]'
     }
 }, {
     tableName: 'users',

@@ -1,0 +1,137 @@
+/* 分享卡片样式 */
+.share-card {
+  padding: 40rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 24rpx;
+  color: #fff;
+}
+
+.share-header {
+  text-align: center;
+  margin-bottom: 40rpx;
+}
+
+.share-title {
+  display: block;
+  font-size: 36rpx;
+  font-weight: bold;
+  margin-bottom: 12rpx;
+}
+
+.share-desc {
+  display: block;
+  font-size: 28rpx;
+  opacity: 0.9;
+}
+
+/* 邀请码区域 */
+.invite-code-section {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 32rpx;
+  backdrop-filter: blur(10px);
+}
+
+.invite-label {
+  font-size: 24rpx;
+  opacity: 0.8;
+  margin-bottom: 12rpx;
+}
+
+.invite-code-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 12rpx;
+  padding: 20rpx 24rpx;
+}
+
+.invite-code {
+  font-size: 48rpx;
+  font-weight: bold;
+  letter-spacing: 8rpx;
+  font-family: 'Courier New', monospace;
+}
+
+.copy-icon {
+  font-size: 40rpx;
+  opacity: 0.8;
+}
+
+/* QR码区域 */
+.qr-section {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 32rpx;
+  margin-bottom: 32rpx;
+  text-align: center;
+}
+
+.qr-label {
+  color: #333;
+  font-size: 28rpx;
+  margin-bottom: 20rpx;
+}
+
+.qr-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 24rpx 0;
+}
+
+.qr-canvas,
+.qr-image {
+  border-radius: 12rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+}
+
+.qr-tip {
+  display: block;
+  color: #999;
+  font-size: 24rpx;
+  margin-top: 16rpx;
+}
+
+/* 操作按钮 */
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.action-btn {
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  border: none;
+  padding: 24rpx;
+}
+
+.btn-copy {
+  background: rgba(255, 255, 255, 0.9);
+  color: #667eea;
+}
+
+.btn-share {
+  background: rgba(255, 255, 255, 0.8);
+  color: #764ba2;
+}
+
+.btn-save {
+  background: rgba(255, 255, 255, 0.7);
+  color: #667eea;
+}
+
+/* 提示文字 */
+.share-tip {
+  margin-top: 24rpx;
+  padding: 20rpx;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12rpx;
+  text-align: center;
+  font-size: 24rpx;
+  opacity: 0.9;
+}

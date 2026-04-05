@@ -110,8 +110,15 @@ router.put('/dealers/:id/approve', checkPermission('dealers'), adminDealerContro
 router.put('/dealers/:id/reject', checkPermission('dealers'), adminDealerController.rejectDealer);
 router.put('/dealers/:id/level', checkPermission('dealers'), adminDealerController.updateDealerLevel);
 
-// ========== 素材管理 ==========
+// ========== 素材库管理 ==========
 const adminMaterialController = require('./controllers/adminMaterialController');
+// 素材分组
+router.get('/material-groups', checkPermission('content'), adminMaterialController.getGroups);
+router.post('/material-groups', checkPermission('content'), adminMaterialController.createGroup);
+router.put('/material-groups/:id', checkPermission('content'), adminMaterialController.updateGroup);
+router.delete('/material-groups/:id', checkPermission('content'), adminMaterialController.deleteGroup);
+router.post('/material-groups/move', checkPermission('content'), adminMaterialController.moveMaterials);
+// 素材（支持 ?group_id=xxx 过滤）
 router.get('/materials', checkPermission('content'), adminMaterialController.getMaterials);
 router.get('/materials/:id', checkPermission('content'), adminMaterialController.getMaterialById);
 router.post('/materials', checkPermission('content'), adminMaterialController.createMaterial);
@@ -195,7 +202,7 @@ router.get('/rules', async (req, res) => {
             if (config.config_type === 'number') value = parseFloat(value);
             if (config.config_type === 'boolean') value = (value === 'true');
             if (config.config_type === 'json') {
-                try { value = JSON.parse(value); } catch (e) {}
+                try { value = JSON.parse(value); } catch (e) { }
             }
             formatted[config.config_key] = value;
         });
@@ -248,14 +255,33 @@ router.put('/rules', async (req, res) => {
 const adminThemeRoutes = require('./themes');
 router.use('/themes', adminThemeRoutes);
 
-const adminAgentRoutes = require('./ai_agent');
-router.use('/agent', adminAgentRoutes);
+// ========== 拼团管理 (★新增) ==========
+const adminGroupBuyController = require('./controllers/adminGroupBuyController');
+router.get('/group-buys', checkPermission('product'), adminGroupBuyController.getGroupActivities);
+router.get('/group-buys/:id', checkPermission('product'), adminGroupBuyController.getGroupActivityById);
+router.post('/group-buys', checkPermission('product'), adminGroupBuyController.createGroupActivity);
+router.put('/group-buys/:id', checkPermission('product'), adminGroupBuyController.updateGroupActivity);
+router.delete('/group-buys/:id', checkPermission('product'), adminGroupBuyController.deleteGroupActivity);
+
+// ========== 优惠券管理 (★新增) ==========
+const adminCouponController = require('./controllers/adminCouponController');
+router.get('/coupons', checkPermission('product'), adminCouponController.getCoupons);
+router.get('/coupons/:id', checkPermission('product'), adminCouponController.getCouponById);
+router.post('/coupons', checkPermission('product'), adminCouponController.createCoupon);
+router.put('/coupons/:id', checkPermission('product'), adminCouponController.updateCoupon);
+router.delete('/coupons/:id', checkPermission('product'), adminCouponController.deleteCoupon);
+router.post('/coupons/:id/issue', checkPermission('product'), adminCouponController.issueCoupon);
 
 // ========== 首页装修 (★新增) ==========
 const adminHomeSectionController = require('./controllers/adminHomeSectionController');
 router.get('/home-sections', checkPermission('content'), adminHomeSectionController.getHomeSections);
+router.get('/home-sections/schemas', adminHomeSectionController.getSectionSchemas);
+router.post('/home-sections', checkPermission('content'), adminHomeSectionController.createHomeSection);
 router.put('/home-sections/:id', checkPermission('content'), adminHomeSectionController.updateHomeSection);
+router.put('/home-sections/:id/toggle', checkPermission('content'), adminHomeSectionController.toggleSectionVisible);
+router.delete('/home-sections/:id', checkPermission('content'), adminHomeSectionController.deleteHomeSection);
 router.post('/home-sections/sort', checkPermission('content'), adminHomeSectionController.updateSortOrder);
+
 
 // ========== 操作日志（★新增） ==========
 const adminLogController = require('./controllers/adminLogController');
@@ -281,13 +307,13 @@ router.put('/storage/config', checkPermission('settings'), adminUploadController
 router.post('/storage/test', checkPermission('settings'), adminUploadController.testStorageConfig);  // 测试存储配置
 router.get('/storage/signature', adminUploadController.getUploadSignature);  // 获取上传签名（前端直传用）
 
-// ========== AI运维监控中心（★新增） ==========
-const aiOpsRoutes = require('./ai-ops');
-router.use('/ai-ops', aiOpsRoutes);
-
-// ========== AI配置管理（★新增） ==========
-const aiConfigRoutes = require('./ai-config');
-router.use('/ai', aiConfigRoutes);
+// ========== 轻量调试入口（替代 AIOps，仅管理员可访问）==========
+// GET /admin/api/debug/logs     - 读最新错误日志
+// GET /admin/api/debug/process  - Node 进程内存/运行时状态
+// GET /admin/api/debug/anomalies - 近期异常订单速览
+// GET /admin/api/debug/db-ping  - 数据库连接延迟测试
+const debugRoutes = require('./debug');
+router.use('/debug', debugRoutes);
 
 // ========== 系统配置管理（数据库热更新）（★新增） ==========
 const configRoutes = require('./config');
@@ -301,8 +327,84 @@ router.use('/', envCheckRoutes);
 const massMessageRoutes = require('./mass-message');
 router.use('/', massMessageRoutes);
 
-module.exports = router;
+// ========== 开屏动画配置（Phase 6） ==========
+const splashController = require('../../controllers/splashController');
+router.get('/splash', splashController.getConfig);
+router.put('/splash', checkPermission('content'), splashController.updateConfig);
 
+// ========== 物流查询（管理员专用，绕过买家归属验证） ==========
+router.get('/logistics/order/:id', checkPermission('orders'), async (req, res) => {
+    try {
+        const { Order } = require('../../models');
+        const { queryLogistics } = require('../../services/LogisticsService');
+        const order = await Order.findByPk(req.params.id, {
+            attributes: ['id', 'order_no', 'tracking_no', 'logistics_company']
+        });
+        if (!order || !order.tracking_no) {
+            return res.status(404).json({ code: -1, message: '订单不存在或未填写运单号' });
+        }
+        const data = await queryLogistics(order.tracking_no, order.logistics_company, req.query.refresh === '1');
+        res.json({ code: 0, data });
+    } catch (err) {
+        res.status(500).json({ code: -1, message: err.message });
+    }
+});
+
+// ========== 告警推送配置（★新增） ==========
+const AlertService = require('../../services/AlertService');
+const { SystemConfig } = require('../../models');
+
+// 读取告警配置
+router.get('/alert-config', checkPermission('settings'), async (req, res) => {
+    try {
+        const cfg = await AlertService.loadAlertConfig();
+        res.json({ code: 0, data: cfg });
+    } catch (e) {
+        res.status(500).json({ code: 500, message: e.message });
+    }
+});
+
+// 保存告警配置（批量 upsert notification 分组）
+router.put('/alert-config', checkPermission('settings'), async (req, res) => {
+    try {
+        const fields = [
+            { key: 'alert_enabled',              type: 'boolean' },
+            { key: 'alert_webhook_type',          type: 'string'  },
+            { key: 'alert_dingtalk_webhook',      type: 'string'  },
+            { key: 'alert_wecom_webhook',         type: 'string'  },
+            { key: 'alert_min_interval_minutes',  type: 'number'  }
+        ];
+        const body = req.body || {};
+        await Promise.all(fields.map(f => {
+            if (body[f.key] === undefined) return Promise.resolve();
+            return SystemConfig.upsert({
+                config_key:   f.key,
+                config_value: String(body[f.key]),
+                config_type:  f.type,
+                config_group: 'notification',
+                description:  f.key,
+                is_editable:  true
+            });
+        }));
+        res.json({ code: 0, message: '告警配置已保存' });
+    } catch (e) {
+        res.status(500).json({ code: 500, message: e.message });
+    }
+});
+
+// 测试 Webhook
+router.post('/alert-config/test', checkPermission('settings'), async (req, res) => {
+    try {
+        const { type, url } = req.body || {};
+        if (!type || !url) return res.status(400).json({ code: 400, message: '缺少 type 或 url' });
+        const result = await AlertService.testWebhook(type, url);
+        res.json({ code: result.ok ? 0 : 1, data: result, message: result.message });
+    } catch (e) {
+        res.status(500).json({ code: 500, message: e.message });
+    }
+});
 
 // ========== 注销（使当前 Token 立即失效） ==========
 router.post('/logout', adminAuth, adminAuthController.logout);
+
+module.exports = router;

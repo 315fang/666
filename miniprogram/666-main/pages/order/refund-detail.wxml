@@ -1,0 +1,77 @@
+<!--pages/order/refund-detail.wxml - 退款详情-->
+<view class="container" wx:if="{{refund}}">
+  <!-- 状态卡片 -->
+  <view class="status-card status-{{refund.status}}">
+    <image class="status-icon-img" wx:if="{{refund.status === 'pending'}}" src="/assets/icons/clock.svg" mode="aspectFit"/>
+    <image class="status-icon-img" wx:if="{{refund.status === 'approved'}}" src="/assets/icons/check-circle.svg" mode="aspectFit"/>
+    <image class="status-icon-img" wx:if="{{refund.status === 'rejected'}}" src="/assets/icons/x.svg" mode="aspectFit"/>
+    <image class="status-icon-img" wx:if="{{refund.status === 'completed'}}" src="/assets/icons/check.svg" mode="aspectFit"/>
+    <image class="status-icon-img" wx:if="{{refund.status === 'cancelled'}}" src="/assets/icons/minus.svg" mode="aspectFit"/>
+    <text class="status-text">{{statusText[refund.status]}}</text>
+    <text class="status-desc" wx:if="{{refund.status === 'rejected' && refund.reject_reason}}">
+      拒绝原因: {{refund.reject_reason}}
+    </text>
+    <text class="status-desc" wx:if="{{refund.status === 'approved' && refund.type === 'return_refund'}}">
+      请尽快寄回商品并填写物流单号
+    </text>
+  </view>
+
+  <!-- 退款金额 -->
+  <view class="amount-card">
+    <text class="amount-label">退款金额</text>
+    <text class="amount-value">¥{{refund.amount}}</text>
+  </view>
+
+  <!-- 商品信息 -->
+  <view class="card" wx:if="{{refund.order && refund.order.product}}">
+    <view class="card-title">商品信息</view>
+    <view class="product-row">
+      <image class="product-img" src="{{refund.order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{refund.order.product.images && refund.order.product.images.length > 0}}"></image>
+      <view class="product-info">
+        <text class="product-name">{{refund.order.product.name}}</text>
+        <text class="product-price">订单金额: ¥{{refund.order.total_amount}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 退款信息 -->
+  <view class="card">
+    <view class="card-title">退款信息</view>
+    <view class="info-row">
+      <text class="info-label">退款单号</text>
+      <text class="info-value">{{refund.refund_no}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">退款类型</text>
+      <text class="info-value">{{typeText[refund.type]}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">退款原因</text>
+      <text class="info-value">{{reasonText[refund.reason] || refund.reason}}</text>
+    </view>
+    <view class="info-row" wx:if="{{refund.description}}">
+      <text class="info-label">问题描述</text>
+      <text class="info-value">{{refund.description}}</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">申请时间</text>
+      <text class="info-value">{{refund.createdAt || refund.created_at}}</text>
+    </view>
+    <view class="info-row" wx:if="{{refund.processed_at}}">
+      <text class="info-label">处理时间</text>
+      <text class="info-value">{{refund.processed_at}}</text>
+    </view>
+    <view class="info-row" wx:if="{{refund.completed_at}}">
+      <text class="info-label">完成时间</text>
+      <text class="info-value">{{refund.completed_at}}</text>
+    </view>
+    <view class="info-row" wx:if="{{refund.admin_remark}}">
+      <text class="info-label">客服备注</text>
+      <text class="info-value">{{refund.admin_remark}}</text>
+    </view>
+  </view>
+</view>
+
+<view class="loading-container" wx:if="{{loading}}">
+  <text>加载中...</text>
+</view>

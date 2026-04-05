@@ -14,3 +14,35 @@ pnpm-debug.log*
 .env.test.local
 .env.production.local
 nul
+
+# 环境变量 & 敏感配置
+backend/env
+backend/.env
+*.pem
+*.key
+*.crt
+*.p12
+*.cert
+backend/certs/
+
+# 临时 / 部署目录
+backend-upload/
+backend-upload-bundle/
+deploy-packages/
+deploy-upload-*.zip
+admin-ui-dist-for-server.zip
+upload-overlay-*/
+session-changes-bundle/
+server-patch-station-geocode/
+
+# AI / 编辑器配置
+.worktrees/
+.agent/
+.cursor/
+.opencode/
+skill/
+
+# 临时文件
+.git-rewrite/
+.nul
+*.tmp

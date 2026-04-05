@@ -131,6 +131,45 @@ router.get('/system-configs/:key/history', adminAuth, async (req, res) => {
     }
 });
 
+// 回滚到指定历史版本
+router.post('/system-configs/:key/rollback', adminAuth, async (req, res) => {
+    try {
+        const { key } = req.params;
+        const { history_id } = req.body;
+        const adminId = req.user.id;
+
+        if (!history_id) {
+            return res.status(400).json({ code: 400, message: '缺少 history_id' });
+        }
+
+        const { SystemConfigHistory } = require('../../models');
+        const record = await SystemConfigHistory.findByPk(history_id);
+
+        if (!record || record.config_key !== key) {
+            return res.status(404).json({ code: 404, message: '历史记录不存在或 key 不匹配' });
+        }
+
+        const result = await ConfigService.set(
+            key,
+            record.old_value,
+            adminId,
+            `回滚到历史版本 #${history_id}（原值: ${record.old_value}）`
+        );
+
+        res.json({
+            code: 0,
+            data: result,
+            message: result.changed ? `已回滚到 ${record.old_value}` : '目标值与当前值相同，无需回滚'
+        });
+    } catch (error) {
+        console.error('[Config] 回滚配置失败:', error);
+        res.status(400).json({
+            code: 400,
+            message: error.message
+        });
+    }
+});
+
 // 刷新配置缓存
 router.post('/system-configs/refresh-cache', adminAuth, checkPermission('system'), async (req, res) => {
     try {

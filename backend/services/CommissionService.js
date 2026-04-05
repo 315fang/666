@@ -7,6 +7,10 @@
 const { CommissionLog, User, Order, Product, SKU, AppConfig } = require('../models');
 const { sequelize } = require('../models');
 const { Op } = require('sequelize');
+const cacheService = require('./CacheService');
+
+// 佣金配置缓存 Key（使用 CacheService 替代静态变量，支持多进程一致性）
+const COMMISSION_CONFIG_CACHE_KEY = 'commission:config';
 
 // 用户角色常量
 const USER_ROLES = {
@@ -57,29 +61,22 @@ const DEFAULT_CONFIG = {
 };
 
 class CommissionService {
-    // 缓存配置
-    static _cachedConfig = null;
-    static _lastConfigFetch = 0;
-
     /**
-     * 获取最新配置 (带缓存)
+     * 获取最新佣金配置 (带 CacheService 缓存，支持多进程）
      */
     static async _getConfig() {
-        const now = Date.now();
-        // 缓存 1 分钟
-        if (this._cachedConfig && (now - this._lastConfigFetch < 60000)) {
-            return this._cachedConfig;
-        }
+        // 先从 CacheService 读（TTL 60s，多进程共享）
+        const cached = await cacheService.getCache(COMMISSION_CONFIG_CACHE_KEY);
+        if (cached) return cached;
 
         try {
-            // 从数据库加载配置
             const configs = await AppConfig.findAll({
                 where: { category: 'COMMISSION_RATES', status: 1 }
             });
 
             if (configs.length > 0) {
                 const dbConfig = { ...DEFAULT_CONFIG };
-                
+
                 configs.forEach(c => {
                     try {
                         const val = JSON.parse(c.config_value);
@@ -93,8 +90,7 @@ class CommissionService {
                     }
                 });
 
-                this._cachedConfig = dbConfig;
-                this._lastConfigFetch = now;
+                await cacheService.setCache(COMMISSION_CONFIG_CACHE_KEY, dbConfig, 60);
                 return dbConfig;
             }
         } catch (e) {
@@ -156,11 +152,11 @@ class CommissionService {
 
         let commissions = [];
         let agentProfit = 0;
-        
+
         // ----------------------------------------------------------------
         // 核心计算逻辑：商品配置 > 全局配置
         // ----------------------------------------------------------------
-        
+
         // 1. 直推佣金 (Level 1)
         if (parent) {
             let amount = 0;
@@ -169,7 +165,7 @@ class CommissionService {
             // A. 商品固定金额
             if (productCommission && productCommission.amount1 !== null) {
                 amount = productCommission.amount1;
-            } 
+            }
             // B. 商品百分比
             else if (productCommission && productCommission.rate1 !== null) {
                 amount = this._round(actualPrice * productCommission.rate1);
@@ -644,6 +640,138 @@ class CommissionService {
             COMMISSION_TYPES,
             DEFAULT_CONFIG
         };
+    }
+    /**
+     * ★★★ 核心统一方法：代理商发货时的级差佣金 + 发货利润计算
+     *
+     * 替代原先散落在 agentController.agentShip 和 OrderCoreService.shipOrder 的
+     * 200+ 行重复逻辑，统一由此方法处理。
+     *
+     * @param {Object} options
+     * @param {Object} options.order          - 订单实例（含 id, agent_id, quantity, actual_price, locked_agent_cost）
+     * @param {Object} options.buyer          - 买家实例（含 id, role_level, parent_id）
+     * @param {Object} options.product        - 商品实例（含各级价格字段）
+     * @param {number} options.agentId        - 发货代理商 ID
+     * @param {Object} options.transaction    - Sequelize 事务
+     * @param {string} options.notifySource   - 通知来源描述（用于 remark，'代理商发货'/'平台代发'）
+     * @returns {{ middleCommissionTotal: number }}
+     */
+    static async calculateGapAndFulfillmentCommissions({ order, buyer, product, agentId, transaction: t, notifySource = '代理商发货' }) {
+        const { sendNotification } = require('../models/notificationUtil');
+
+        const priceMap = {
+            0: parseFloat(product.retail_price || 0),
+            1: parseFloat(product.price_member || product.retail_price || 0),
+            2: parseFloat(product.price_leader || product.price_member || product.retail_price || 0),
+            3: parseFloat(product.price_agent || product.price_leader || product.price_member || product.retail_price || 0)
+        };
+
+        // ---- 1. 级差分润：向上遍历分销链 ----
+        let currentLevel = buyer.role_level;
+        let lastCost = priceMap[currentLevel] || priceMap[0];
+        let pRef = buyer.parent_id;
+        let middleCommissionTotal = 0;
+        const visitedIds = new Set([buyer.id]); // 防止自购自佣 + 循环引用
+
+        while (pRef) {
+            // 循环引用或超深保护
+            if (visitedIds.has(pRef) || visitedIds.size > 50) {
+                console.error(`⚠️ [严重警告] 代理关系循环或深度过深！用户ID: ${buyer.id}, 异常节点: ${pRef}`);
+                sendNotification(
+                    0,
+                    '🚨 严重系统告警：代理关系循环',
+                    `系统在计算佣金(订单 ${order.id})时检测到代理关系闭环或深度过深！请立即排查用户 ${buyer.id} 与 ${pRef} 的上下级关系。`,
+                    'system_alert',
+                    order.id
+                ).catch(e => console.error(e));
+                break;
+            }
+            visitedIds.add(pRef);
+
+            const p = await User.findByPk(pRef, { transaction: t });
+            if (!p) break;
+
+            if (p.role_level > currentLevel) {
+                const parentCost = priceMap[p.role_level];
+                const gapProfit = (lastCost - parentCost) * order.quantity;
+
+                if (gapProfit > 0) {
+                    const isOrderAgent = (agentId && agentId === p.id);
+                    if (!isOrderAgent) {
+                        await CommissionLog.create({
+                            order_id: order.id,
+                            user_id: p.id,
+                            amount: gapProfit,
+                            type: 'gap',
+                            status: 'frozen',
+                            available_at: null,
+                            refund_deadline: null,
+                            remark: `团队级差利润 Lv${currentLevel}→Lv${p.role_level} (${notifySource})`
+                        }, { transaction: t });
+
+                        middleCommissionTotal += gapProfit;
+
+                        await sendNotification(
+                            p.id,
+                            '收益到账提醒',
+                            `您的下级产生了一笔${notifySource}订单，您获得级差收益 ¥${gapProfit.toFixed(2)}（需售后期结束+审批后结算）。`,
+                            'commission',
+                            order.id
+                        );
+                    }
+                }
+
+                lastCost = parentCost;
+                currentLevel = p.role_level;
+            }
+
+            pRef = p.parent_id;
+            if (currentLevel >= 3) break;
+        }
+
+        // 记录中间佣金总额到订单（调用方负责保存）
+        order.middle_commission_total = middleCommissionTotal;
+
+        // ---- 2. 代理商发货利润 ----
+        const agentCostPrice = order.locked_agent_cost
+            ? parseFloat(order.locked_agent_cost)
+            : parseFloat(product.price_agent || product.price_leader || product.price_member || product.retail_price);
+        const agentCost = agentCostPrice * order.quantity;
+        const buyerPaid = parseFloat(order.actual_price);
+        const agentProfit = buyerPaid - agentCost - middleCommissionTotal;
+
+        if (agentProfit > 0) {
+            await CommissionLog.create({
+                order_id: order.id,
+                user_id: agentId,
+                amount: agentProfit,
+                type: 'agent_fulfillment',
+                status: 'frozen',
+                available_at: null,
+                refund_deadline: null,
+                remark: `代理商发货利润 (进货价${agentCostPrice}×${order.quantity}=${agentCost.toFixed(2)}, 中间佣金${middleCommissionTotal.toFixed(2)})`
+            }, { transaction: t });
+
+            await sendNotification(
+                agentId,
+                '发货收益提醒',
+                `您的团队产生了一笔${notifySource}订单，发货利润 ¥${agentProfit.toFixed(2)}（需售后期结束+审批后结算）。`,
+                'commission',
+                order.id
+            );
+        } else if (agentProfit < 0) {
+            console.error(`⚠️ [利润异常] 订单 ${order.order_no || order.id} 代理商(ID:${agentId})发货利润为 ¥${agentProfit.toFixed(2)}，不产生佣金！`);
+            await sendNotification(
+                0,
+                '⚠️ 发货利润异常告警',
+                `订单ID:${order.id} 代理商发货利润为 ¥${agentProfit.toFixed(2)}（<0），实付=${buyerPaid}，成本=${agentCost}，中间佣金=${middleCommissionTotal}。`,
+                'system_alert',
+                order.id
+            );
+        }
+        // agentProfit === 0 不产生佣金也不告警
+
+        return { middleCommissionTotal };
     }
 }
 

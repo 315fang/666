@@ -221,7 +221,15 @@ const Order = sequelize.define('Order', {
     }
 }, {
     tableName: 'orders',
-    timestamps: true
+    timestamps: true,
+    indexes: [
+        {
+            fields: ['buyer_id', 'status']
+        },
+        {
+            fields: ['agent_id', 'status']
+        }
+    ]
 });
 
 module.exports = Order;

@@ -22,8 +22,6 @@ const Theme = require('./Theme');
 const ActivityLog = require('./ActivityLog');
 const SystemConfig = require('./SystemConfig');
 const SystemConfigHistory = require('./SystemConfigHistory');
-const AIAlert = require('./AIAlert');
-const AIFixSession = require('./AIFixSession');
 const MassMessage = require('./MassMessage');
 const UserMassMessage = require('./UserMassMessage');
 const UserTag = require('./UserTag');
@@ -48,6 +46,15 @@ const SlashHelper = require('./SlashHelper');
 // ★ Phase 4：自提核销 + 服务站点
 const ServiceStation = require('./ServiceStation');
 const StationClaim = require('./StationClaim');
+const MaterialGroup = require('./MaterialGroup');
+// ★ Phase 6: 开屏动画
+const SplashScreen = require('./SplashScreen');
+// 库存管理（审计/预留）+ 佣金结算
+const StockTransaction = require('./StockTransaction');
+const StockReservation = require('./StockReservation');
+const CommissionSettlement = require('./CommissionSettlement');
+// 管理员操作日志
+const AdminLog = require('./AdminLog');
 
 // ========== 用户相关关联 ==========
 User.hasMany(Order, { foreignKey: 'buyer_id', as: 'orders' });
@@ -123,6 +130,10 @@ Order.belongsTo(SKU, { foreignKey: 'sku_id', as: 'sku' });
 Material.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 Product.hasMany(Material, { foreignKey: 'product_id', as: 'materials' });
 
+// ========== 素材库关联 ==========
+MaterialGroup.hasMany(Material, { foreignKey: 'group_id', as: 'materials' });
+Material.belongsTo(MaterialGroup, { foreignKey: 'group_id', as: 'group' });
+
 // ========== 管理员关联 ==========
 Refund.belongsTo(Admin, { foreignKey: 'admin_id', as: 'admin' });
 Dealer.belongsTo(Admin, { foreignKey: 'approved_by', as: 'approver' });
@@ -130,11 +141,6 @@ Dealer.belongsTo(Admin, { foreignKey: 'approved_by', as: 'approver' });
 // ========== 系统配置关联 ==========
 SystemConfig.belongsTo(Admin, { foreignKey: 'updated_by', as: 'updater' });
 SystemConfigHistory.belongsTo(Admin, { foreignKey: 'changed_by', as: 'admin' });
-
-// ========== AI告警关联 ==========
-AIAlert.belongsTo(Admin, { foreignKey: 'resolved_by', as: 'resolver' });
-AIFixSession.belongsTo(AIAlert, { foreignKey: 'alert_id', as: 'alert' });
-AIFixSession.belongsTo(Admin, { foreignKey: 'executed_by', as: 'executor' });
 
 // ========== 群发消息关联 ==========
 MassMessage.belongsTo(Admin, { foreignKey: 'created_by', as: 'creator' });
@@ -231,8 +237,6 @@ module.exports = {
     ActivityLog,
     SystemConfig,
     SystemConfigHistory,
-    AIAlert,
-    AIFixSession,
     MassMessage,
     UserMassMessage,
     UserTag,
@@ -258,5 +262,15 @@ module.exports = {
     SlashHelper,
     // Phase 4: 自提核销 + 服务站点
     ServiceStation,
-    StationClaim
+    StationClaim,
+    // 素材库分组
+    MaterialGroup,
+    // Phase 6: 开屏动画
+    SplashScreen,
+    // 库存管理 + 佣金结算
+    StockTransaction,
+    StockReservation,
+    CommissionSettlement,
+    // 管理员操作日志
+    AdminLog
 };

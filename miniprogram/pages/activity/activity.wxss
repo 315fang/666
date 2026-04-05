@@ -1,0 +1,271 @@
+/* pages/activity/activity.wxss - 活动中心：常驻 + 节日动态主题 */
+
+.container {
+  min-height: 100vh;
+  background: #F8F8F8;
+  padding-bottom: 60rpx;
+}
+
+/* 1. 导航栏 */
+.custom-nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 1000;
+  background: #FFFFFF;
+}
+.nav-inner {
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 32rpx;
+}
+.nav-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333333;
+  letter-spacing: 2rpx;
+}
+
+/* 2a. 节日活动卡 ------------------------------------------------ */
+/* CSS 变量由 JS 通过 style="{{festThemeStyle}}" 注入             */
+/* 前端只定义变量的"消费"位置，具体颜色全部来自后端配置            */
+.festival-hero {
+  position: relative;
+  margin-top: calc(88rpx + var(--status-bar, 20px));
+  width: 100%;
+  height: 480rpx;
+  overflow: hidden;
+  background: var(--fest-bg, #F0F4FF);
+}
+.fest-bg {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  opacity: 0.85;
+}
+.fest-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(0,0,0,0.45) 0%,
+    rgba(0,0,0,0.10) 100%
+  );
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 40rpx 40rpx 48rpx;
+  gap: 16rpx;
+}
+
+/* 标签胶囊 */
+.fest-tag-pill {
+  width: fit-content;
+  font-size: 20rpx;
+  font-weight: 700;
+  color: #FFFFFF;
+  background: var(--fest-primary, #6366F1);
+  padding: 6rpx 20rpx;
+  border-radius: 100rpx;
+  letter-spacing: 1rpx;
+}
+
+/* 标题 */
+.fest-title-main {
+  font-size: 52rpx;
+  font-weight: 900;
+  color: #FFFFFF;
+  line-height: 1.15;
+  letter-spacing: 2rpx;
+}
+.fest-subtitle {
+  font-size: 26rpx;
+  color: rgba(255,255,255,0.85);
+  font-weight: 400;
+}
+
+/* 倒计时 */
+.fest-countdown-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin: 4rpx 0 8rpx;
+}
+.cdown-block {
+  display: flex;
+  align-items: baseline;
+  gap: 4rpx;
+}
+.cdown-num {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #FFFFFF;
+  font-variant-numeric: tabular-nums;
+}
+.cdown-unit {
+  font-size: 20rpx;
+  color: rgba(255,255,255,0.75);
+}
+.cdown-sep {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: rgba(255,255,255,0.6);
+  margin: 0 2rpx;
+}
+
+/* CTA 按钮 */
+.fest-cta-btn {
+  width: fit-content;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #FFFFFF;
+  background: var(--fest-btn, #6366F1);
+  padding: 16rpx 48rpx;
+  border-radius: 100rpx;
+  letter-spacing: 1rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.25);
+}
+.fest-cta-btn:active {
+  opacity: 0.85;
+  transform: scale(0.97);
+}
+
+/* 2b. 常规 Banner ------------------------------------------------ */
+.banner-section {
+  padding: calc(88rpx + var(--status-bar, 20px)) 32rpx 30rpx;
+}
+.banner-swiper {
+  width: 100%;
+  height: 320rpx;
+  border-radius: 24rpx;
+  overflow: hidden;
+  box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.05);
+}
+.banner-img { width: 100%; height: 100%; }
+
+.banner-slide {
+  width: 100%; height: 100%;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding: 32rpx;
+  box-sizing: border-box;
+}
+.banner-slide .banner-img {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+}
+.banner-slide-content {
+  position: relative;
+  z-index: 1;
+}
+.banner-slide-title {
+  display: block;
+  font-size: 40rpx;
+  font-weight: 800;
+  color: #FFF;
+  letter-spacing: 2rpx;
+}
+.banner-slide-sub {
+  display: block;
+  font-size: 24rpx;
+  color: rgba(255,255,255,0.75);
+  margin-top: 8rpx;
+}
+
+/* 3. 快捷入口 */
+.quick-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 20rpx 32rpx 40rpx;
+  background: #FFFFFF;
+  margin: 0 32rpx 30rpx;
+  border-radius: 24rpx;
+}
+.entry-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16rpx;
+}
+.entry-icon-wrap {
+  width: 90rpx; height: 90rpx;
+  border-radius: 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+.entry-item:active .entry-icon-wrap { transform: scale(0.9); }
+.entry-icon { width: 48rpx; height: 48rpx; }
+.entry-name { font-size: 24rpx; color: #666; font-weight: 500; }
+
+/* 4. 热门推荐 */
+.section-container { margin-bottom: 40rpx; }
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 40rpx 24rpx;
+}
+.section-title { font-size: 34rpx; font-weight: 700; color: #333; }
+
+.card-poster-scroll {
+  white-space: nowrap;
+  padding: 0 32rpx;
+  width: 100%;
+  box-sizing: border-box;
+}
+.poster-card {
+  display: inline-block;
+  width: 440rpx; height: 280rpx;
+  border-radius: 24rpx;
+  overflow: hidden;
+  position: relative;
+  margin-right: 24rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0,0,0,0.06);
+}
+.poster-bg { width: 100%; height: 100%; }
+.poster-mask {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.4), transparent);
+}
+.poster-content {
+  position: absolute;
+  bottom: 24rpx; left: 24rpx; right: 24rpx;
+  display: flex; flex-direction: column; gap: 8rpx;
+}
+.poster-title { font-size: 32rpx; font-weight: 700; color: #FFF; }
+.poster-sub   { font-size: 22rpx; color: rgba(255,255,255,0.8); }
+.poster-btn {
+  width: fit-content;
+  margin-top: 12rpx;
+  background: rgba(255,255,255,0.2);
+  backdrop-filter: blur(10px);
+  color: #FFF;
+  font-size: 20rpx;
+  padding: 8rpx 24rpx;
+  border-radius: 100rpx;
+  border: 1rpx solid rgba(255,255,255,0.3);
+}
+
+/* 5. 实时动态 */
+.recent-activities-section { padding: 0 32rpx; }
+.activity-msg-bar {
+  display: flex; align-items: center;
+  background: #FFFFFF;
+  padding: 20rpx 30rpx;
+  border-radius: 100rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.03);
+}
+.msg-icon-wrap { width: 40rpx; height: 40rpx; margin-right: 20rpx; flex-shrink: 0; }
+.msg-icon { width: 100%; height: 100%; filter: opacity(0.5); }
+.msg-swiper { flex: 1; height: 40rpx; }
+.msg-item { display: flex; align-items: center; justify-content: space-between; height: 100%; }
+.msg-text { font-size: 24rpx; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 400rpx; }
+.msg-time { font-size: 20rpx; color: #CCC; }
+
+.bottom-spacer { height: 60rpx; }

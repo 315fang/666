@@ -1,5 +1,6 @@
 const { Banner, Content } = require('../../../models');
 const { Op } = require('sequelize');
+const { clearHomepageCache } = require('../../../controllers/configController');
 
 // 获取轮播图列表
 const getBanners = async (req, res) => {
@@ -34,6 +35,7 @@ const createBanner = async (req, res) => {
             title, image_url, link_type, link_value, position, sort_order, start_time, end_time, status: 1
         });
 
+        clearHomepageCache();
         res.json({ code: 0, data: banner, message: '创建成功' });
     } catch (error) {
         console.error('创建轮播图失败:', error);
@@ -53,6 +55,7 @@ const updateBanner = async (req, res) => {
         }
 
         await banner.update(updates);
+        clearHomepageCache();
         res.json({ code: 0, data: banner, message: '更新成功' });
     } catch (error) {
         console.error('更新轮播图失败:', error);
@@ -65,6 +68,7 @@ const deleteBanner = async (req, res) => {
     try {
         const { id } = req.params;
         await Banner.destroy({ where: { id } });
+        clearHomepageCache();
         res.json({ code: 0, message: '删除成功' });
     } catch (error) {
         console.error('删除轮播图失败:', error);
@@ -105,6 +109,7 @@ const createContent = async (req, res) => {
             type, slug, title, subtitle, cover_image, content, extra_data, sort_order, status: 1
         });
 
+        clearHomepageCache();
         res.json({ code: 0, data: newContent, message: '创建成功' });
     } catch (error) {
         console.error('创建内容失败:', error);
@@ -124,6 +129,7 @@ const updateContent = async (req, res) => {
         }
 
         await contentItem.update(updates);
+        clearHomepageCache();
         res.json({ code: 0, data: contentItem, message: '更新成功' });
     } catch (error) {
         console.error('更新内容失败:', error);

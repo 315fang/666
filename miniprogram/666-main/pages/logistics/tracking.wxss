@@ -1,0 +1,57 @@
+/** pages/logistics/tracking.wxss **/
+.container { min-height: 100vh; background: #F7F8FA; }
+.nav-bar { display: flex; align-items: center; justify-content: space-between; padding: 12rpx 24rpx; background: #FFFFFF; border-bottom: 1rpx solid #F0F0F0; }
+.nav-back { width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; }
+.nav-icon { width: 32rpx; height: 32rpx; }
+.nav-title { font-size: 32rpx; font-weight: 700; color: #1A1A1A; }
+.refresh-btn { font-size: 26rpx; color: #6366F1; font-weight: 600; cursor: pointer; }
+
+/* Loading */
+.loading-wrap { display: flex; flex-direction: column; align-items: center; padding: 100rpx 0; gap: 20rpx; }
+.loading-spinner { width: 60rpx; height: 60rpx; border: 4rpx solid #E5E7EB; border-top-color: #6366F1; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 26rpx; color: #888; }
+
+/* Error */
+.error-wrap { display: flex; flex-direction: column; align-items: center; padding: 100rpx 24rpx; gap: 20rpx; }
+.error-icon { width: 80rpx; height: 80rpx; opacity: 0.25; }
+.error-text { font-size: 26rpx; color: #888; text-align: center; }
+.retry-btn { background: rgba(99,102,241,0.1); color: #6366F1; font-size: 26rpx; font-weight: 700; padding: 16rpx 40rpx; border-radius: 50rpx; cursor: pointer; }
+
+/* Status header */
+.status-header { display: flex; align-items: center; gap: 16rpx; padding: 28rpx 24rpx; margin: 16rpx 24rpx; border-radius: 20rpx; position: relative; }
+.status-header.in_transit { background: linear-gradient(135deg, #6366F1, #8B5CF6); }
+.status-header.delivered { background: linear-gradient(135deg, #10B981, #059669); }
+.status-header.dispatching { background: linear-gradient(135deg, #F59E0B, #D97706); }
+.status-header.collecting { background: linear-gradient(135deg, #94A3B8, #64748B); }
+.status-header.failed { background: linear-gradient(135deg, #EF4444, #DC2626); }
+.status-icon-wrap { width: 72rpx; height: 72rpx; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.status-icon { width: 40rpx; height: 40rpx; filter: invert(1); }
+.status-info { flex: 1; }
+.status-text { display: block; font-size: 30rpx; font-weight: 800; color: #FFFFFF; }
+.tracking-no, .company { display: block; font-size: 20rpx; color: rgba(255,255,255,0.8); margin-top: 4rpx; }
+.cache-badge { font-size: 16rpx; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.15); padding: 4rpx 10rpx; border-radius: 20rpx; }
+
+/* Order bar */
+.order-bar { margin: 0 24rpx 16rpx; background: #FFFFFF; border-radius: 12rpx; padding: 16rpx 20rpx; }
+.order-bar-text { font-size: 22rpx; color: #888; }
+
+/* Timeline */
+.timeline { margin: 0 24rpx; background: #FFFFFF; border-radius: 20rpx; padding: 16rpx 20rpx; }
+.trace-item { display: flex; gap: 16rpx; min-height: 70rpx; }
+.trace-left { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; width: 24rpx; }
+.trace-dot { width: 20rpx; height: 20rpx; border-radius: 50%; background: #D1D5DB; margin-top: 8rpx; flex-shrink: 0; }
+.trace-dot.active { background: #6366F1; box-shadow: 0 0 0 4rpx rgba(99,102,241,0.2); }
+.trace-line { flex: 1; width: 2rpx; background: #E5E7EB; margin: 4rpx 0; }
+.trace-right { flex: 1; padding-bottom: 16rpx; }
+.trace-time { display: block; font-size: 20rpx; color: #AAA; margin-bottom: 4rpx; }
+.trace-desc { display: block; font-size: 26rpx; color: #1A1A1A; font-weight: 500; }
+.trace-item.active .trace-desc { color: #6366F1; font-weight: 700; }
+.trace-loc { display: block; font-size: 20rpx; color: #888; margin-top: 4rpx; }
+
+/* Empty trace */
+.empty-trace { text-align: center; padding: 40rpx; font-size: 24rpx; color: #AAA; }
+
+/* Query time */
+.query-time { text-align: center; padding: 20rpx; font-size: 20rpx; color: #CCC; display: flex; align-items: center; justify-content: center; gap: 10rpx; }
+.mock-badge { background: rgba(245, 158, 11, 0.1); color: #D97706; font-size: 18rpx; padding: 4rpx 10rpx; border-radius: 20rpx; }

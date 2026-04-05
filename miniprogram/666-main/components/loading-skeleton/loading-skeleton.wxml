@@ -1,0 +1,50 @@
+<view class="loading-skeleton" wx:if="{{loading}}">
+  <!-- 商品卡片骨架屏 -->
+  <view wx:if="{{type === 'product-card'}}" class="skeleton-product-card">
+    <view class="skeleton-image"></view>
+    <view class="skeleton-content">
+      <view class="skeleton-line skeleton-line--title"></view>
+      <view class="skeleton-line skeleton-line--subtitle"></view>
+      <view class="skeleton-line skeleton-line--price"></view>
+    </view>
+  </view>
+
+  <!-- 列表项骨架屏 -->
+  <view wx:if="{{type === 'list-item'}}" class="skeleton-list-item">
+    <view class="skeleton-avatar"></view>
+    <view class="skeleton-content">
+      <view class="skeleton-line skeleton-line--title"></view>
+      <view class="skeleton-line skeleton-line--subtitle"></view>
+    </view>
+  </view>
+
+  <!-- 订单卡片骨架屏 -->
+  <view wx:if="{{type === 'order-card'}}" class="skeleton-order-card">
+    <view class="skeleton-header">
+      <view class="skeleton-line skeleton-line--short"></view>
+      <view class="skeleton-line skeleton-line--badge"></view>
+    </view>
+    <view class="skeleton-divider"></view>
+    <view class="skeleton-order-item">
+      <view class="skeleton-image"></view>
+      <view class="skeleton-content">
+        <view class="skeleton-line skeleton-line--title"></view>
+        <view class="skeleton-line skeleton-line--price"></view>
+      </view>
+    </view>
+    <view class="skeleton-divider"></view>
+    <view class="skeleton-footer">
+      <view class="skeleton-line skeleton-line--price"></view>
+    </view>
+  </view>
+
+  <!-- 自定义骨架屏 -->
+  <view wx:if="{{type === 'custom'}}" class="skeleton-custom">
+    <slot></slot>
+  </view>
+</view>
+
+<!-- 加载完成显示实际内容 -->
+<view wx:else>
+  <slot></slot>
+</view>

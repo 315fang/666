@@ -27,8 +27,6 @@ if (process.env.NODE_ENV === 'production') {
 
 // 导入路由
 const authRoutes = require('./routes/auth');
-const aiRoutes = require('./routes/ai');
-const aiV2Routes = require('./routes/ai-v2');  // ★ 新版AI路由
 const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
 const addressRoutes = require('./routes/addresses');
@@ -66,6 +64,8 @@ const stationRoutes = require('./routes/station');
 const logisticsRoutes = require('./routes/logistics');
 // Phase 5: 热度管理
 const heatRoutes = require('./routes/heat');
+// Phase 6: 开屏动画
+const splashRoutes = require('./routes/splash');
 
 const app = express();
 
@@ -100,17 +100,22 @@ if (process.env.NODE_ENV !== 'test') {
     app.use(requestLogger);
 }
 
-// ★ 安全头中间件（防 XSS、点击劫持等）
-app.use((req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    if (process.env.NODE_ENV === 'production') {
-        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    }
-    next();
-});
+// ★ 安全头中间件（防 XSS、点击劫持、跨站等）
+const helmet = require('helmet');
+const xssClean = require('xss-clean');
+const hpp = require('hpp'); // 防 HTTP 参数污染
+
+// 配置 helmet，放行跨域资源（主要是图片静态资源）
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: false // 若后续前端有限制，可以按需开启
+}));
+
+// 对 req.body, req.query, req.params 进行 XSS 净化
+app.use(xssClean());
+
+// 防御 HTTP 参数污染（放在 urlencoded 之后）
+app.use(hpp());
 
 // 接口请求频率限制 - 防止恶意刷接口
 const apiLimiter = rateLimit({
@@ -130,8 +135,8 @@ const loginLimiter = rateLimit({
 });
 app.use('/api/login', loginLimiter);
 
-// 静态文件 - 管理后台 (Vite 构建版)
-app.use('/admin', express.static(path.join(__dirname, 'admin-ui/dist')));
+// 静态文件 - 管理后台 (Vite 构建版)  [admin-ui/ 在项目根目录，backend/ 的上一层]
+app.use('/admin', express.static(path.join(__dirname, '../admin-ui/dist')));
 
 // SPA 兜底 - 管理后台所有非 API、非静态资源路由都返回 index.html
 app.get('/admin/*', (req, res, next) => {
@@ -139,7 +144,7 @@ app.get('/admin/*', (req, res, next) => {
     if (req.path.startsWith('/admin/api')) return next();
     // 跳过有扩展名的静态资源请求（.js, .css, .png 等）
     if (path.extname(req.path)) return next();
-    res.sendFile(path.join(__dirname, 'admin-ui/dist/index.html'));
+    res.sendFile(path.join(__dirname, '../admin-ui/dist/index.html'));
 });
 
 // ★ 静态文件 - 本地上传目录（图片等资源）
@@ -180,8 +185,6 @@ if (swaggerEnabled) {
 
 // API路由
 app.use('/api', authRoutes);
-app.use('/api/ai', aiRoutes);                    // 旧版AI接口（保持兼容）
-app.use('/api/v2/ai', aiV2Routes);               // ★ 新版AI接口（推荐）
 app.use('/api', productRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', addressRoutes);
@@ -208,9 +211,8 @@ app.use('/api/slash', slashRoutes);       // Phase 3: 砍价系统
 app.use('/api/pickup', pickupRoutes);     // Phase 4: 自提核销
 app.use('/api/stations', stationRoutes);  // Phase 4: 服务站点地图
 app.use('/api/logistics', logisticsRoutes); // Phase 5: 物流查询
-app.use('/api/products/hot', heatRoutes);   // Phase 5: 热门商品列表
-// 后台热度管理（在 /admin/api 后挂载）
-app.use('/admin/api/heat', heatRoutes);     // Phase 5: 商品热度管理
+app.use('/admin/api/heat', heatRoutes);     // Phase 5: 商品热度管理（仅后台）
+app.use('/api/splash', splashRoutes);       // Phase 6: 开屏动画（小程序端公开接口）
 
 // 后台管理API (使用 /admin/api 避免与静态文件冲突)
 app.use('/admin/api', adminRoutes);

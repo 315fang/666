@@ -1,0 +1,76 @@
+/* pages/privacy/privacy.wxss */
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #FAFAF9;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  padding: 56rpx 32rpx 24rpx;
+  background: #1C1917;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16rpx;
+}
+
+.back-icon {
+  font-size: 40rpx;
+  color: #FAFAF9;
+  font-weight: 300;
+}
+
+.title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #FAFAF9;
+}
+
+.content {
+  flex: 1;
+  padding: 0 32rpx;
+}
+
+.section {
+  padding: 40rpx 0;
+  border-bottom: 1rpx solid #E7E5E4;
+}
+
+.section:last-child {
+  border-bottom: none;
+}
+
+.update-time {
+  font-size: 26rpx;
+  color: #78716C;
+}
+
+.section-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1C1917;
+  margin-bottom: 20rpx;
+}
+
+.section-body {
+  display: block;
+  font-size: 28rpx;
+  color: #44403C;
+  line-height: 1.8;
+}
+
+.footer-space {
+  height: 80rpx;
+}

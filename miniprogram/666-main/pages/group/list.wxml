@@ -1,0 +1,95 @@
+<!--pages/group/list.wxml - 拼团专区-->
+<view class="container">
+  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-back" bindtap="onBack">
+      <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
+    </view>
+    <text class="nav-title">拼团专区</text>
+    <view class="nav-placeholder"/>
+  </view>
+
+  <!-- 说明卡 -->
+  <view class="intro-card">
+    <view class="intro-left">
+      <text class="intro-badge">会员可发起</text>
+      <text class="intro-title">组团买，享折扣</text>
+      <text class="intro-desc">会员发起拼团，好友参团，凑够人数即成团享超低价</text>
+    </view>
+    <image class="intro-icon" src="/assets/icons/users.svg" mode="aspectFit"/>
+  </view>
+
+  <!-- 会员提示（未登录/非会员） -->
+  <view class="member-tip" wx:if="{{showMemberTip}}">
+    <image class="tip-icon" src="/assets/icons/star.svg" mode="aspectFit"/>
+    <text class="tip-text">您当前未达到会员等级\n完成首单消费即可升级为会员，解锁发起拼团权限</text>
+  </view>
+
+  <!-- Tab -->
+  <view class="tab-row">
+    <view class="tab-item {{tab === 'activities' ? 'active' : ''}}" bindtap="switchTab" data-tab="activities">拼团商品</view>
+    <view class="tab-item {{tab === 'my' ? 'active' : ''}}" bindtap="switchTab" data-tab="my">我的拼团</view>
+  </view>
+
+  <!-- 拼团活动列表 -->
+  <view wx:if="{{tab === 'activities'}}">
+    <view class="empty-wrap" wx:if="{{!activities.length && !loading}}">
+      <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
+      <text class="empty-text">暂无拼团活动</text>
+    </view>
+    <view class="activity-list">
+      <view class="activity-card" wx:for="{{activities}}" wx:key="id" bindtap="onStartGroup" data-activity="{{item}}">
+        <image class="product-img" src="{{item.product && item.product.images && item.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
+        <view class="activity-info">
+          <text class="product-name">{{item.product && item.product.name || '商品'}}</text>
+          <view class="price-row">
+            <view class="group-price">
+              <text class="price-label">拼团价</text>
+              <text class="group-price-val">¥{{item.group_price}}</text>
+            </view>
+            <view class="original-price">
+              <text>原价 ¥{{item.original_price || (item.product && item.product.retail_price) || '-'}}</text>
+            </view>
+          </view>
+          <view class="meta-row">
+            <text class="meta-item">{{item.min_members}}人成团</text>
+            <text class="meta-dot">·</text>
+            <text class="meta-item">{{item.expire_hours}}h有效</text>
+            <view class="start-btn">{{isMember ? '发起拼团' : '需要会员'}}</view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 我参与的拼团 -->
+  <view wx:if="{{tab === 'my'}}">
+    <view class="empty-wrap" wx:if="{{!myGroups.length && !loading}}">
+      <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
+      <text class="empty-text">还没有参与拼团\n快去发起一个吧</text>
+    </view>
+    <view class="group-list">
+      <view class="group-record" wx:for="{{myGroups}}" wx:key="id" bindtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}">
+        <image class="record-img" src="{{item.groupOrder && item.groupOrder.product && item.groupOrder.product.images && item.groupOrder.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
+        <view class="record-info">
+          <text class="record-name">{{item.groupOrder && item.groupOrder.product && item.groupOrder.product.name || '商品'}}</text>
+          <view class="member-progress">
+            <view class="member-avatars">
+              <view class="avatar-placeholder" wx:for="{{item.groupOrder && item.groupOrder.current_members > 3 ? 3 : item.groupOrder.current_members}}" wx:key="*this"/>
+              <view class="avatar-more" wx:if="{{item.groupOrder && item.groupOrder.current_members > 3}}">+{{item.groupOrder.current_members - 3}}</view>
+            </view>
+            <text class="member-text">{{item.groupOrder && item.groupOrder.current_members || 0}}/{{item.groupOrder && item.groupOrder.min_members || 2}}人</text>
+          </view>
+          <view class="group-status {{item.groupOrder && item.groupOrder.status}}">
+            <text wx:if="{{item.groupOrder && item.groupOrder.status === 'open'}}">进行中</text>
+            <text wx:elif="{{item.groupOrder && item.groupOrder.status === 'success'}}">已成团</text>
+            <text wx:else>已失败</text>
+          </view>
+          <view class="share-row" wx:if="{{item.groupOrder && item.groupOrder.status === 'open'}}" catchtap="onShare" data-no="{{item.groupOrder.group_no}}">
+            <image class="share-icon" src="/assets/icons/users.svg" mode="aspectFit"/>
+            <text>分享给好友参团</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

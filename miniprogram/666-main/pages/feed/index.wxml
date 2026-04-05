@@ -1,0 +1,78 @@
+<!--pages/feed/index.wxml-->
+<view class="feed-container">
+  
+  <!-- 顶部状态栏区 -->
+  <view class="top-nav">
+    <view class="user-greeting">
+      <text class="greeting-text">Hi, {{userName}}</text>
+      <text class="greeting-sub">今日 AI 已为您筛选 10 件好物</text>
+    </view>
+    <view class="action-icons" bindtap="goToBox">
+      <image class="icon" src="/assets/icons/box.svg" mode="aspectFit"></image>
+      <view class="badge" wx:if="{{boxCount > 0}}">{{boxCount}}</view>
+    </view>
+  </view>
+
+  <!-- 卡片滑动区（Tinder风格） -->
+  <view class="card-stack" 
+        bindtouchstart="touchStart" 
+        bindtouchmove="touchMove" 
+        bindtouchend="touchEnd">
+    
+    <block wx:for="{{cards}}" wx:key="id">
+      <!-- 仅渲染最上面的三张卡片以提升性能 -->
+      <view class="tinder-card" 
+            wx:if="{{index >= currentIndex && index < currentIndex + 3}}"
+            style="z-index: {{100 - index}}; {{index === currentIndex ? cardTransform : ''}} opacity: {{index === currentIndex ? 1 : 1 - (index - currentIndex) * 0.2}}; transform: scale({{index === currentIndex ? 1 : 1 - (index - currentIndex) * 0.05}}) translateY({{index === currentIndex ? 0 : (index - currentIndex) * 30}}rpx) {{index === currentIndex ? cardRotate : ''}};">
+        
+        <!-- 大图展示区 -->
+        <image class="card-image" src="{{item.image_url}}" mode="aspectFill"></image>
+        
+        <!-- 渐变遮罩 -->
+        <view class="card-gradient"></view>
+        
+        <!-- 标签与文案区 -->
+        <view class="card-content">
+          <view class="tags-row">
+            <text class="tag" wx:for="{{item.tags}}" wx:key="*this" wx:for-item="tag">{{tag}}</text>
+          </view>
+          
+          <view class="product-title">{{item.name}}</view>
+          
+          <!-- AI 专属推荐语 (带有打字机效果或者渐出) -->
+          <view class="ai-reason">
+            <text class="ai-badge">AI 甄选</text>
+            <text class="reason-text">{{item.ai_reason}}</text>
+          </view>
+        </view>
+
+        <!-- 滑动时的水印反馈 (NOPE / LIKE) -->
+        <view class="feedback-stamp nope" style="opacity: {{nopeOpacity}}">跳过</view>
+        <view class="feedback-stamp like" style="opacity: {{likeOpacity}}">放入定见箱</view>
+
+      </view>
+    </block>
+    
+    <!-- 卡片刷完的空状态 -->
+    <view class="empty-state" wx:if="{{currentIndex >= cards.length && !loading}}">
+      <image src="/assets/icons/done.svg" class="empty-icon"></image>
+      <view class="empty-title">今日推荐已阅毕</view>
+      <view class="empty-sub">您的喜好 AI 已经记录，明天同一时间见</view>
+      <button class="refresh-btn" bindtap="refreshFeed">再测算一组</button>
+    </view>
+  </view>
+
+  <!-- 底部操作按钮 -->
+  <view class="action-buttons" wx:if="{{currentIndex < cards.length}}">
+    <!-- 左边：不喜欢跳过 -->
+    <view class="btn-circle btn-dislike" bindtap="forceSwipeLeft">
+      <text class="btn-icon">✕</text>
+    </view>
+    
+    <!-- 右边：喜欢放入定见箱 -->
+    <view class="btn-circle btn-like" bindtap="forceSwipeRight">
+      <text class="btn-icon">♥</text>
+    </view>
+  </view>
+
+</view>

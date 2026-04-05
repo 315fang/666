@@ -1,0 +1,52 @@
+<!--pages/privacy/privacy.wxml-->
+<view class="page">
+  <view class="header">
+    <view class="back-btn" bind:tap="onBack">
+      <text class="back-icon">←</text>
+    </view>
+    <text class="title">隐私政策</text>
+  </view>
+
+  <scroll-view class="content" scroll-y>
+    <view class="section">
+      <text class="update-time">更新日期：2026年2月22日</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">一、我们收集的信息</text>
+      <text class="section-body">为了向您提供正常的商品购买和分销服务，我们会收集以下信息：\n\n1. 微信授权信息：当您使用微信登录时，我们获取您的微信唯一标识（openid），用于账号认证。\n\n2. 用户资料：您主动提供的昵称、头像，用于展示您的个人主页。\n\n3. 收货地址：您填写的姓名、手机号、收货地址，仅用于订单配送，不会用于其他目的。\n\n4. 订单信息：包括您购买的商品、金额、时间等，用于订单管理和售后服务。\n\n5. 设备信息：您的设备型号、操作系统版本，用于优化应用性能和排查问题。</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">二、信息的使用目的</text>
+      <text class="section-body">我们使用收集的信息用于：\n\n• 完成商品交易和物流配送\n• 计算和发放分销佣金\n• 提供客户服务和售后支持\n• 改善产品功能和用户体验\n• 向您推送与您相关的商品信息（您可随时关闭）</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">三、信息的存储与保护</text>
+      <text class="section-body">• 您的信息存储在位于中国境内的服务器上\n• 我们采用加密传输（HTTPS）和安全存储技术保护您的数据\n• 我们不会向无关第三方出售、共享或披露您的个人信息\n• 仅在物流配送时，会将您的姓名、手机号、地址提供给承运方</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">四、您的权利</text>
+      <text class="section-body">您有权：\n\n• 查阅和更正您的个人信息（在"我的"页面操作）\n• 删除您的账户及相关数据\n• 撤回您的授权同意\n• 拒绝接收营销信息\n\n如需行使上述权利，请联系我们的客服。</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">五、未成年人保护</text>
+      <text class="section-body">本平台不面向18岁以下未成年人提供服务。如果您是未成年人，请在监护人的陪同下使用。</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">六、政策变更</text>
+      <text class="section-body">当本隐私政策发生变更时，我们将通过小程序内通知的方式告知您。继续使用本服务即表示您同意更新后的隐私政策。</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">七、联系我们</text>
+      <text class="section-body">如您对本隐私政策有任何疑问，请通过小程序内的客服功能联系我们。</text>
+    </view>
+
+    <view class="footer-space"></view>
+  </scroll-view>
+</view>

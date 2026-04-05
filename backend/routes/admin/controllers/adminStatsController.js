@@ -252,10 +252,10 @@ const getOrderStatistics = async (timeRange) => {
  * 获取商品统计
  */
 const getProductStatistics = async (timeRange) => {
-    // 库存告警商品
+    // 库存告警商品（库存 <= 10 视为低库存）
     const lowStockProducts = await Product.count({
         where: {
-            stock: { [Op.lte]: sequelize.col('min_stock') },
+            stock: { [Op.lte]: 10 },
             status: 1
         }
     });

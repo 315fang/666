@@ -1,0 +1,70 @@
+<!--pages/logistics/tracking.wxml - 物流跟踪页面-->
+<view class="container">
+  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-back" bindtap="onBack">
+      <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
+    </view>
+    <text class="nav-title">物流跟踪</text>
+    <view class="refresh-btn" bindtap="onRefresh">刷新</view>
+  </view>
+
+  <!-- 加载中 -->
+  <view class="loading-wrap" wx:if="{{loading}}">
+    <view class="loading-spinner"/>
+    <text class="loading-text">查询物流中...</text>
+  </view>
+
+  <!-- 错误提示 -->
+  <view class="error-wrap" wx:elif="{{error}}">
+    <image src="/assets/icons/package.svg" class="error-icon" mode="aspectFit"/>
+    <text class="error-text">{{error}}</text>
+    <view class="retry-btn" bindtap="onRefresh">重新查询</view>
+  </view>
+
+  <!-- 物流信息 -->
+  <view wx:elif="{{info}}">
+    <!-- 状态头部 -->
+    <view class="status-header {{info.status}}">
+      <view class="status-icon-wrap">
+        <image class="status-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
+      </view>
+      <view class="status-info">
+        <text class="status-text">{{info.status_text}}</text>
+        <text class="tracking-no">运单：{{info.tracking_no}}</text>
+        <text class="company">承运：{{info.company}}</text>
+      </view>
+      <view class="cache-badge" wx:if="{{info.fromCache}}">缓存</view>
+    </view>
+
+    <!-- 订单信息 -->
+    <view class="order-bar" wx:if="{{info.order_no}}">
+      <text class="order-bar-text">订单号：{{info.order_no}}</text>
+    </view>
+
+    <!-- 物流轨迹时间线 -->
+    <view class="timeline">
+      <view class="trace-item {{index === 0 ? 'active' : ''}}" wx:for="{{info.traces}}" wx:key="*this">
+        <view class="trace-left">
+          <view class="trace-dot {{index === 0 ? 'active' : ''}}"/>
+          <view class="trace-line" wx:if="{{index < info.traces.length - 1}}"/>
+        </view>
+        <view class="trace-right">
+          <text class="trace-time">{{item.time}}</text>
+          <text class="trace-desc">{{item.desc}}</text>
+          <text class="trace-loc" wx:if="{{item.location}}">📍 {{item.location}}</text>
+        </view>
+      </view>
+
+      <!-- 空轨迹 -->
+      <view class="empty-trace" wx:if="{{!info.traces.length}}">
+        <text>暂无跟踪信息，请稍后查询</text>
+      </view>
+    </view>
+
+    <!-- 查询时间 -->
+    <view class="query-time">
+      <text>查询时间：{{info.query_time}}</text>
+      <text wx:if="{{info.is_mock}}" class="mock-badge">测试数据</text>
+    </view>
+  </view>
+</view>

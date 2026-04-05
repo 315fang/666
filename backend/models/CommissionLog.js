@@ -80,7 +80,15 @@ const CommissionLog = sequelize.define('CommissionLog', {
     }
 }, {
     tableName: 'commission_logs',
-    timestamps: true
+    timestamps: true,
+    indexes: [
+        {
+            fields: ['user_id', 'status']
+        },
+        {
+            fields: ['order_id', 'status']
+        }
+    ]
 });
 
 module.exports = CommissionLog;

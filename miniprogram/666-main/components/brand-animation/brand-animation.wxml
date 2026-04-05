@@ -1,0 +1,123 @@
+<!--components/brand-animation/brand-animation.wxml-->
+<!-- 全屏品牌动画容器 -->
+<view class="brand-animation-overlay {{show ? 'show' : ''}}" wx:if="{{show}}" bindtap="onTap">
+  <view class="animation-container" catchtap="stopProp">
+    
+    <!-- ★ 提现成功 - 金币弹出 -->
+    <view class="anim-scene withdraw-success" wx:if="{{type === 'withdraw'}}">
+      <view class="coin-bag">
+        <view class="bag-body"></view>
+        <view class="coin coin-1">¥</view>
+        <view class="coin coin-2">¥</view>
+        <view class="coin coin-3">¥</view>
+        <view class="coin coin-4">¥</view>
+        <view class="coin coin-5">¥</view>
+      </view>
+      <text class="anim-title">提现成功</text>
+      <text class="anim-amount">¥{{amount}}</text>
+      <text class="anim-subtitle">预计1-3个工作日到账</text>
+    </view>
+
+    <!-- ★ 支付成功 - 打勾+金色粒子 -->
+    <view class="anim-scene payment-success" wx:if="{{type === 'payment'}}">
+      <view class="check-circle">
+        <view class="check-mark"></view>
+      </view>
+      <view class="particles">
+        <view class="particle p1"></view>
+        <view class="particle p2"></view>
+        <view class="particle p3"></view>
+        <view class="particle p4"></view>
+        <view class="particle p5"></view>
+        <view class="particle p6"></view>
+        <view class="particle p7"></view>
+        <view class="particle p8"></view>
+      </view>
+      <text class="anim-title">支付成功</text>
+      <text class="anim-subtitle">感谢您的购买</text>
+    </view>
+
+    <!-- ★ 加入团队 - 握手+礼花 -->
+    <view class="anim-scene join-team" wx:if="{{type === 'joinTeam'}}">
+      <view class="handshake">
+        <view class="hand hand-left"></view>
+        <view class="hand hand-right"></view>
+      </view>
+      <view class="confetti">
+        <view class="conf c1"></view>
+        <view class="conf c2"></view>
+        <view class="conf c3"></view>
+        <view class="conf c4"></view>
+        <view class="conf c5"></view>
+        <view class="conf c6"></view>
+      </view>
+      <text class="anim-title">欢迎加入</text>
+      <text class="anim-subtitle">{{teamName || '臻选大家庭'}}</text>
+    </view>
+
+    <!-- ★ 首次登录 - 欢迎+礼花（SVG星花替代emoji） -->
+    <view class="anim-scene first-login" wx:if="{{type === 'welcome'}}">
+      <view class="welcome-icon">
+        <!-- SVG星花，不用emoji -->
+        <view class="welcome-star-burst">
+          <view class="star-ray ray-1"></view>
+          <view class="star-ray ray-2"></view>
+          <view class="star-ray ray-3"></view>
+          <view class="star-ray ray-4"></view>
+          <view class="star-center"></view>
+        </view>
+      </view>
+      <view class="fireworks">
+        <view class="fw fw1"></view>
+        <view class="fw fw2"></view>
+        <view class="fw fw3"></view>
+        <view class="fw fw4"></view>
+        <view class="fw fw5"></view>
+      </view>
+      <text class="anim-title">欢迎来到臻选</text>
+      <text class="anim-subtitle">精选全球好物</text>
+    </view>
+
+    <!-- ★ 等级提升 - 皇冠+光环 -->
+    <view class="anim-scene level-up" wx:if="{{type === 'levelUp'}}">
+      <view class="crown-container">
+        <view class="crown-glow"></view>
+        <view class="crown">
+          <view class="crown-peak peak-1"></view>
+          <view class="crown-peak peak-2"></view>
+          <view class="crown-peak peak-3"></view>
+          <view class="crown-base"></view>
+          <view class="crown-gem"></view>
+        </view>
+      </view>
+      <view class="level-sparkle">
+        <view class="sparkle s1"></view>
+        <view class="sparkle s2"></view>
+        <view class="sparkle s3"></view>
+        <view class="sparkle s4"></view>
+        <view class="sparkle s5"></view>
+        <view class="sparkle s6"></view>
+      </view>
+      <text class="anim-title">恭喜晋级</text>
+      <text class="anim-level">{{levelName || ''}}</text>
+      <text class="anim-subtitle">解锁更多专属权益</text>
+    </view>
+
+  </view>
+</view>
+
+<!-- ====== 层级二：飞入购物车动画 ====== -->
+<view class="fly-to-cart" wx:if="{{flyToCart}}" style="left: {{flyX}}px; top: {{flyY}}px;">
+  <image class="fly-image" src="{{flyImage}}" mode="aspectFill"></image>
+</view>
+
+<!-- ====== 层级二：复制成功提示（带文字） ====== -->
+<view class="toast-check {{showToastCheck ? 'show' : ''}}" wx:if="{{showToastCheck}}">
+  <view class="check-icon-mini"></view>
+  <text class="toast-label">{{toastText || '已复制'}}</text>
+</view>
+
+<!-- ====== 层级二：购物车 badge 弹跳 ====== -->
+<view class="cart-badge-bounce {{cartBounce ? 'bounce' : ''}}" wx:if="{{cartBounce}}">
+  <text class="badge-plus">+{{addCount || 1}}</text>
+</view>

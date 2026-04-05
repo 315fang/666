@@ -1,0 +1,330 @@
+/* 邀请问卷填写页样式 */
+.questionnaire-page {
+    min-height: 100vh;
+    background: linear-gradient(180deg, #667eea 0%, #f0f2f7 35%);
+    padding: 32rpx;
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ====== 加载状态 ====== */
+.loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+}
+
+.loading-spinner {
+    width: 64rpx;
+    height: 64rpx;
+    border: 4rpx solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-text {
+    color: #fff;
+    font-size: 28rpx;
+    margin-top: 24rpx;
+}
+
+/* ====== 成功状态 ====== */
+.success-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 160rpx;
+}
+
+.success-icon-box {
+    width: 128rpx;
+    height: 128rpx;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 40rpx;
+    box-shadow: 0 12rpx 40rpx rgba(102, 126, 234, 0.3);
+}
+
+.success-icon {
+    width: 64rpx;
+    height: 64rpx;
+}
+
+.success-title {
+    font-size: 40rpx;
+    font-weight: bold;
+    color: #1a1a2e;
+    margin-bottom: 16rpx;
+}
+
+.success-desc {
+    font-size: 28rpx;
+    color: #666;
+    text-align: center;
+    line-height: 1.6;
+    padding: 0 40rpx;
+    margin-bottom: 60rpx;
+}
+
+.success-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 24rpx;
+    width: 100%;
+    padding: 0 40rpx;
+}
+
+/* ====== 表单容器 ====== */
+.form-container {
+    background: #fff;
+    border-radius: 24rpx;
+    overflow: hidden;
+    box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.08);
+}
+
+.form-header {
+    padding: 48rpx 40rpx 32rpx;
+    position: relative;
+}
+
+.form-header-deco {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 8rpx;
+    background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+}
+
+.form-title {
+    display: block;
+    font-size: 36rpx;
+    font-weight: bold;
+    color: #1a1a2e;
+    margin-bottom: 12rpx;
+}
+
+.form-desc {
+    display: block;
+    font-size: 26rpx;
+    color: #888;
+    line-height: 1.6;
+}
+
+/* ====== 表单主体 ====== */
+.form-body {
+    padding: 0 40rpx;
+}
+
+.field-group {
+    margin-bottom: 36rpx;
+}
+
+.field-label {
+    display: flex;
+    align-items: center;
+    gap: 6rpx;
+    margin-bottom: 16rpx;
+}
+
+.label-text {
+    font-size: 28rpx;
+    color: #333;
+    font-weight: 500;
+}
+
+.label-required {
+    color: #ef4444;
+    font-size: 28rpx;
+}
+
+.field-input {
+    width: 100%;
+    height: 88rpx;
+    border: 2rpx solid #e5e7eb;
+    border-radius: 16rpx;
+    padding: 0 24rpx;
+    font-size: 28rpx;
+    color: #333;
+    background: #fafbfc;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.field-input:focus {
+    border-color: #667eea;
+    background: #fff;
+}
+
+.field-textarea {
+    width: 100%;
+    min-height: 160rpx;
+    border: 2rpx solid #e5e7eb;
+    border-radius: 16rpx;
+    padding: 20rpx 24rpx;
+    font-size: 28rpx;
+    color: #333;
+    background: #fafbfc;
+    box-sizing: border-box;
+    line-height: 1.6;
+}
+
+.field-picker {
+    height: 88rpx;
+    line-height: 88rpx;
+    border: 2rpx solid #e5e7eb;
+    border-radius: 16rpx;
+    padding: 0 24rpx;
+    font-size: 28rpx;
+    color: #333;
+    background: #fafbfc;
+}
+
+.field-picker.placeholder {
+    color: #c0c4cc;
+}
+
+/* 单选/多选 */
+.radio-group,
+.checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16rpx;
+}
+
+.radio-label,
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8rpx;
+    padding: 12rpx 24rpx;
+    background: #fafbfc;
+    border: 2rpx solid #e5e7eb;
+    border-radius: 12rpx;
+    font-size: 26rpx;
+    color: #555;
+    transition: all 0.2s;
+}
+
+.radio-text,
+.checkbox-text {
+    font-size: 26rpx;
+}
+
+/* ====== 表单底部 ====== */
+.form-footer {
+    padding: 32rpx 40rpx 48rpx;
+}
+
+.submit-btn {
+    width: 100%;
+    height: 96rpx;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    font-size: 32rpx;
+    font-weight: 600;
+    border: none;
+    border-radius: 16rpx;
+    letter-spacing: 2rpx;
+    box-shadow: 0 8rpx 24rpx rgba(102, 126, 234, 0.3);
+}
+
+.submit-btn.disabled {
+    opacity: 0.6;
+}
+
+.form-tip {
+    display: block;
+    text-align: center;
+    font-size: 24rpx;
+    color: #999;
+    margin-top: 20rpx;
+}
+
+/* ====== 通用按钮 ====== */
+.btn-primary {
+    width: 100%;
+    height: 96rpx;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    font-size: 32rpx;
+    font-weight: 600;
+    border: none;
+    border-radius: 16rpx;
+}
+
+.btn-secondary {
+    width: 100%;
+    height: 96rpx;
+    background: #f7f9fc;
+    color: #667eea;
+    font-size: 32rpx;
+    border: 2rpx solid #667eea;
+    border-radius: 16rpx;
+}
+
+/* ====== 空状态 ====== */
+.empty-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 200rpx;
+    gap: 40rpx;
+}
+
+.empty-text {
+    font-size: 32rpx;
+    color: #999;
+}
+
+/* ====== 隐私协议 ====== */
+.privacy-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16rpx;
+    margin-bottom: 32rpx;
+    padding: 0 8rpx;
+}
+
+.privacy-checkbox {
+    flex-shrink: 0;
+    width: 36rpx;
+    height: 36rpx;
+    border: 2rpx solid #ccc;
+    border-radius: 8rpx;
+    margin-top: 4rpx;
+    transition: all 0.2s;
+}
+
+.privacy-checkbox.checked {
+    background: #667eea;
+    border-color: #667eea;
+    position: relative;
+}
+
+.privacy-checkbox.checked::after {
+    content: '';
+    position: absolute;
+    left: 10rpx;
+    top: 4rpx;
+    width: 12rpx;
+    height: 20rpx;
+    border: solid #fff;
+    border-width: 0 3rpx 3rpx 0;
+    transform: rotate(45deg);
+}
+
+.privacy-text {
+    font-size: 24rpx;
+    color: #666;
+    line-height: 1.5;
+}

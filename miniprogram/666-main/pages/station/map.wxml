@@ -1,0 +1,86 @@
+<!--pages/station/map.wxml - 服务站点地图-->
+<view class="container">
+  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-back" bindtap="onBack">
+      <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
+    </view>
+    <text class="nav-title">服务网络</text>
+    <view class="nav-placeholder"/>
+  </view>
+
+  <!-- 统计栏 -->
+  <view class="stats-row">
+    <view class="stat-item">
+      <text class="stat-num">{{stations.length}}</text>
+      <text class="stat-label">覆盖城市</text>
+    </view>
+    <view class="stat-divider"/>
+    <view class="stat-item">
+      <text class="stat-num">{{claimedCount}}</text>
+      <text class="stat-label">运营站点</text>
+    </view>
+    <view class="stat-divider"/>
+    <view class="stat-item">
+      <text class="stat-num">{{pickupCount}}</text>
+      <text class="stat-label">自提站点</text>
+    </view>
+  </view>
+
+  <!-- eCharts 地图容器 -->
+  <view class="map-container">
+    <ec-canvas id="mapCanvas" canvas-id="mapCanvas" ec="{{ec}}" class="map-canvas"/>
+    <view class="map-tip">点击站点查看详情</view>
+  </view>
+
+  <!-- 站点列表 -->
+  <view class="section-title">
+    <view class="title-accent"/>
+    <text>站点列表</text>
+  </view>
+  <view class="station-list">
+    <view class="station-card" wx:for="{{stations}}" wx:key="id" bindtap="onStationTap" data-id="{{item.id}}">
+      <view class="station-header">
+        <view class="station-status-dot {{item.status}}"/>
+        <text class="station-name">{{item.name}}</text>
+        <view class="pickup-badge" wx:if="{{item.is_pickup_point}}">自提</view>
+      </view>
+      <text class="station-location">{{item.province}} {{item.city}} {{item.district || ''}}</text>
+      <text class="station-addr" wx:if="{{item.address}}">{{item.address}}</text>
+      <view class="station-bottom">
+        <view class="claimant-info" wx:if="{{item.claimant}}">
+          <image class="claimant-avatar" src="{{item.claimant.avatar_url || '/assets/icons/user.svg'}}" mode="aspectFill"/>
+          <text class="claimant-name">{{item.claimant.nickname}}</text>
+        </view>
+        <text class="no-claimant" wx:else>暂无认领人</text>
+        <view class="claim-btn" wx:if="{{!item.claimant && item.status === 'active'}}" bindtap="onClaimTap" data-id="{{item.id}}" catchtap="stopPropagation">申请认领</view>
+      </view>
+      <view class="station-data">
+        <text class="data-item">累计成交 {{item.total_orders}} 单</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 认领表单弹窗 -->
+  <view class="claim-modal" wx:if="{{showClaimModal}}">
+    <view class="claim-overlay" bindtap="closeClaimModal"/>
+    <view class="claim-card">
+      <text class="claim-title">申请认领服务站点</text>
+      <view class="form-group">
+        <text class="form-label">真实姓名 *</text>
+        <input class="form-input" placeholder="请输入真实姓名" bindinput="onRealNameInput"/>
+      </view>
+      <view class="form-group">
+        <text class="form-label">联系电话 *</text>
+        <input class="form-input" type="number" placeholder="请输入手机号码" bindinput="onPhoneInput"/>
+      </view>
+      <view class="form-group">
+        <text class="form-label">申请理由</text>
+        <textarea class="form-textarea" placeholder="简单介绍一下您的情况..." bindinput="onIntroInput"/>
+      </view>
+      <view class="form-actions">
+        <view class="form-btn cancel" bindtap="closeClaimModal">取消</view>
+        <view class="form-btn submit" bindtap="submitClaim">提交申请</view>
+      </view>
+    </view>
+  </view>
+</view>

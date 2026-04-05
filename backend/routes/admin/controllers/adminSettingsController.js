@@ -6,6 +6,7 @@
  */
 const { AppConfig } = require('../../../models');
 const constants = require('../../../config/constants');
+const { clearHomepageCache } = require('../../../controllers/configController');
 
 /**
  * 获取所有系统设置
@@ -23,13 +24,13 @@ const getSettings = async (req, res) => {
             if (!dbSettings[config.category]) {
                 dbSettings[config.category] = {};
             }
-            
+
             let value = config.config_value;
             // 类型转换
             if (config.config_type === 'number') value = parseFloat(value);
             if (config.config_type === 'boolean') value = (value === 'true');
             if (config.config_type === 'json') {
-                try { value = JSON.parse(value); } catch(e) {}
+                try { value = JSON.parse(value); } catch (e) { }
             }
 
             dbSettings[config.category][config.config_key] = value;
@@ -41,7 +42,7 @@ const getSettings = async (req, res) => {
             COMMISSION: { ...constants.COMMISSION, ...(dbSettings.COMMISSION || {}) },
             WITHDRAWAL: { ...constants.WITHDRAWAL, ...(dbSettings.WITHDRAWAL || {}) },
             REFUND: { ...constants.REFUND, ...(dbSettings.REFUND || {}) },
-            UPGRADE_RULES: { 
+            UPGRADE_RULES: {
                 MEMBER_TO_LEADER_REFEREE: constants.UPGRADE_RULES.MEMBER_TO_LEADER.referee_count,
                 LEADER_TO_AGENT_ORDERS: constants.UPGRADE_RULES.LEADER_TO_AGENT.order_count,
                 LEADER_TO_AGENT_RECHARGE: constants.UPGRADE_RULES.LEADER_TO_AGENT.recharge_amount,
@@ -99,6 +100,9 @@ const updateSettings = async (req, res) => {
 
         await Promise.all(operations);
 
+        // ★ 配置项可能涉及首页 Feature Cards，因此清除缓存
+        clearHomepageCache();
+
         res.json({
             code: 0,
             message: '配置已更新'
@@ -110,15 +114,56 @@ const updateSettings = async (req, res) => {
 };
 
 /**
- * 获取系统状态
+ * 获取系统状态（增强版）
+ * 整合进程、内存、操作系统、数据库连接状态
  */
 const getSystemStatus = async (req, res) => {
+    const mem = process.memoryUsage();
+    const uptimeSec = Math.floor(process.uptime());
+    const h = Math.floor(uptimeSec / 3600);
+    const m = Math.floor((uptimeSec % 3600) / 60);
+
+    // 检测数据库连通性
+    let dbStatus = 'ok';
+    let dbLatencyMs = null;
+    try {
+        const { sequelize } = require('../../../models');
+        const t0 = Date.now();
+        await sequelize.authenticate();
+        dbLatencyMs = Date.now() - t0;
+    } catch (e) {
+        dbStatus = 'error';
+    }
+
+    const os = require('os');
+    const overall = dbStatus === 'ok' ? 'online' : 'degraded';
+
     res.json({
         code: 0,
         data: {
-            status: 'online',
-            uptime: process.uptime(),
-            timestamp: new Date()
+            status: overall,
+            timestamp: new Date().toISOString(),
+            process: {
+                node_version: process.version,
+                pid: process.pid,
+                uptime_seconds: uptimeSec,
+                uptime_human: `${h}h ${m}m`
+            },
+            memory: {
+                heap_used_mb:  +(mem.heapUsed  / 1024 / 1024).toFixed(1),
+                heap_total_mb: +(mem.heapTotal / 1024 / 1024).toFixed(1),
+                heap_percent:  Math.round(mem.heapUsed / mem.heapTotal * 100),
+                rss_mb:        +(mem.rss / 1024 / 1024).toFixed(1)
+            },
+            os: {
+                platform:     os.platform(),
+                free_mem_mb:  +(os.freemem()  / 1024 / 1024).toFixed(0),
+                total_mem_mb: +(os.totalmem() / 1024 / 1024).toFixed(0),
+                load_avg:     os.loadavg().map(v => +v.toFixed(2))
+            },
+            services: {
+                database: { status: dbStatus, latency_ms: dbLatencyMs }
+            }
         }
     });
 };

@@ -8,6 +8,43 @@
 
 const locks = new Map();
 
+// ── 任务运行统计（运维可观测性）──────────────────────────────────
+// 记录每个任务的最近一次运行时间、成功/失败次数、最近错误信息
+const taskStats = new Map();
+
+/**
+ * 内部：更新任务统计
+ */
+function _recordRun(taskName, success, error = null) {
+    const existing = taskStats.get(taskName) || {
+        runCount: 0,
+        errorCount: 0,
+        lastRunAt: null,
+        lastSuccessAt: null,
+        lastError: null
+    };
+    existing.runCount += 1;
+    existing.lastRunAt = new Date().toISOString();
+    if (success) {
+        existing.lastSuccessAt = existing.lastRunAt;
+    } else {
+        existing.errorCount += 1;
+        existing.lastError = error ? String(error).slice(0, 200) : '未知错误';
+    }
+    taskStats.set(taskName, existing);
+}
+
+/**
+ * 获取所有任务的运行统计（供运维面板调用）
+ */
+function getTaskStats() {
+    const result = {};
+    for (const [name, stats] of taskStats.entries()) {
+        result[name] = { ...stats };
+    }
+    return result;
+}
+
 /**
  * Acquire a lock for a task
  * @param {string} taskName - Name of the task
@@ -89,9 +126,11 @@ async function executeWithLock(taskName, taskFn, options = {}) {
     try {
         console.log(`[TaskLock] 获取锁: ${taskName}`);
         const result = await taskFn();
+        _recordRun(taskName, true);
         return result;
     } catch (error) {
         console.error(`[TaskLock] 任务 "${taskName}" 执行失败:`, error);
+        _recordRun(taskName, false, error.message);
         throw error;
     } finally {
         releaseLock(taskName);
@@ -119,5 +158,6 @@ module.exports = {
     releaseLock,
     isLocked,
     executeWithLock,
-    cleanupExpiredLocks
+    cleanupExpiredLocks,
+    getTaskStats
 };
