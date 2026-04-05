@@ -125,6 +125,8 @@ module.exports = {
         AUTO_CONFIRM_DAYS: getIntEnv(['ORDER_AUTO_CONFIRM_DAYS'], '15'),
         // ★ 代理商订单超时时间（小时）：超时未处理自动转为平台发货
         AGENT_TIMEOUT_HOURS: getIntEnv(['AGENT_ORDER_TIMEOUT_HOURS'], '24'),
+        // 代理商申请发货时的库存预扣标记
+        STOCK_RESERVE_MARKER: '[库存已预扣]',
     },
 
     // ======================== 购物车配置 ========================

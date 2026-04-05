@@ -3,14 +3,45 @@ const { Op } = require('sequelize');
 const { sendNotification } = require('../models/notificationUtil');
 const CommissionService = require('./CommissionService');
 const { normalizeCompanyCode, getCompanyDisplayName } = require('./LogisticsService');
+const { hasReservedStockMarker, removeReservedStockMarker } = require('../utils/orderStock');
+
+async function restoreReservedAgentStock(order, transaction, reason = '') {
+    if (!order || order.status !== 'shipping_requested' || !hasReservedStockMarker(order)) {
+        return false;
+    }
+
+    const restoreAgentId = order.fulfillment_partner_id || order.agent_id;
+    if (!restoreAgentId) {
+        return false;
+    }
+
+    const agent = await User.findByPk(restoreAgentId, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!agent) {
+        return false;
+    }
+
+    await agent.increment('stock_count', { by: order.quantity, transaction });
+    order.remark = removeReservedStockMarker(order.remark);
+    if (reason) {
+        order.remark = (order.remark ? `${order.remark} | ` : '') + reason;
+    }
+    return true;
+}
 
 class AdminOrderService {
     /**
      * 发货逻辑（代理商发货扣除库存并计算利润，平台发货直接改状态）
      */
     async shipOrder(id, shipData) {
-        const { tracking_company, tracking_number, tracking_no: trackingNoAlt, logistics_company, fulfillment_type } = shipData;
-        const requestedFulfillmentType = String(fulfillment_type || '').toLowerCase();
+        const {
+            tracking_company,
+            tracking_number,
+            tracking_no: trackingNoAlt,
+            logistics_company,
+            fulfillment_type,
+            type
+        } = shipData;
+        const requestedFulfillmentType = String(fulfillment_type || type || '').toLowerCase();
         const t = await sequelize.transaction();
         try {
             const order = await Order.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
@@ -26,15 +57,22 @@ class AdminOrderService {
                 throw new Error(`当前订单状态(${order.status})不可发货`);
             }
 
+            let actualFulfillmentType = requestedFulfillmentType;
+            if (order.status === 'shipping_requested' && order.agent_id) {
+                actualFulfillmentType = 'agent';
+            } else if (order.fulfillment_type && ['Agent_Pending', 'Agent'].includes(order.fulfillment_type)) {
+                actualFulfillmentType = 'agent';
+            }
+
             // 防撞单风险：如果代理商已进入发货流程，拦截平台发货
-            if (requestedFulfillmentType !== 'agent' && order.agent_id &&
+            if (actualFulfillmentType !== 'agent' && order.agent_id &&
                 ['agent_confirmed', 'shipping_requested'].includes(order.status)) {
                 await t.rollback();
                 throw new Error(`该订单代理商(ID:${order.agent_id})已在处理中（状态: ${order.status}），如需平台发货请先将状态回退为 paid`);
             }
 
             // 代理商发货处理
-            if (requestedFulfillmentType === 'agent' && order.agent_id) {
+            if (actualFulfillmentType === 'agent' && order.agent_id) {
                 const agent = await User.findByPk(order.agent_id, { transaction: t, lock: t.LOCK.UPDATE });
                 if (!agent || agent.role_level < 3) {
                     await t.rollback();
@@ -42,7 +80,7 @@ class AdminOrderService {
                 }
 
                 // 检查是否在 requestShipping 阶段已预扣库存
-                const alreadyDeducted = order.status === 'shipping_requested' && order.remark && order.remark.includes('[库存已预扣]');
+                const alreadyDeducted = order.status === 'shipping_requested' && hasReservedStockMarker(order);
 
                 if (!alreadyDeducted) {
                     if (agent.stock_count < order.quantity) {
@@ -65,6 +103,11 @@ class AdminOrderService {
                             await orderSku.increment('stock', { by: order.quantity, transaction: t });
                         }
                     }
+                    order.platform_stock_deducted = 0;
+                }
+
+                if (alreadyDeducted) {
+                    order.remark = removeReservedStockMarker(order.remark);
                 }
 
                 order.fulfillment_type = 'Agent';
@@ -87,7 +130,7 @@ class AdminOrderService {
                 order.middle_commission_total = 0;
             }
 
-            const finalTrackingNo = tracking_number || trackingNoAlt || '';
+            const finalTrackingNo = tracking_number || trackingNoAlt || order.tracking_no || '';
             const finalCompany = normalizeCompanyCode(tracking_company || logistics_company || order.logistics_company || '');
             const finalCompanyLabel = tracking_company || getCompanyDisplayName(finalCompany) || finalCompany;
 
@@ -115,7 +158,7 @@ class AdminOrderService {
     async transferOrderAgent(id, newAgentId, reason, adminName) {
         const t = await sequelize.transaction();
         try {
-            const order = await Order.findByPk(id, { transaction: t });
+            const order = await Order.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
             if (!order) {
                 await t.rollback();
                 throw new Error('订单不存在');
@@ -127,13 +170,27 @@ class AdminOrderService {
             }
 
             const oldAgentId = order.agent_id;
+            const resetShippingFields = {
+                status: 'paid',
+                tracking_no: null,
+                logistics_company: null,
+                shipping_requested_at: null,
+                fulfillment_partner_id: null,
+                agent_confirmed_at: null
+            };
+
+            await restoreReservedAgentStock(
+                order,
+                t,
+                `转单前已返还代理库存${order.quantity}件`
+            );
 
             // 转为平台发货
             if (!newAgentId || newAgentId === 0) {
                 await order.update({
+                    ...resetShippingFields,
                     agent_id: null,
                     fulfillment_type: 'Company',
-                    status: 'paid',
                     remark: (order.remark || '') + ` [管理员${adminName}转平台发货 原因:${reason || '-'}]`
                 }, { transaction: t });
 
@@ -149,9 +206,9 @@ class AdminOrderService {
             }
 
             await order.update({
+                ...resetShippingFields,
                 agent_id: newAgent.id,
                 fulfillment_type: 'Agent_Pending',
-                status: 'paid',
                 remark: (order.remark || '') + ` [管理员${adminName}转代理商${newAgent.nickname}(${newAgent.id}) 原因:${reason || '-'}]`
             }, { transaction: t });
 
@@ -189,10 +246,22 @@ class AdminOrderService {
                 throw new Error('该订单状态不允许取消');
             }
 
+            await restoreReservedAgentStock(
+                order,
+                t,
+                `管理员${adminName}取消订单返还代理库存${order.quantity}件`
+            );
+
             // 恢复库存
-            const product = await Product.findByPk(order.product_id, { transaction: t });
+            const product = await Product.findByPk(order.product_id, { transaction: t, lock: t.LOCK.UPDATE });
             if (product && order.status !== 'pending') {
                 await product.increment('stock', { by: order.quantity, transaction: t });
+            }
+            if (order.sku_id && order.status !== 'pending') {
+                const sku = await SKU.findByPk(order.sku_id, { transaction: t, lock: t.LOCK.UPDATE });
+                if (sku) {
+                    await sku.increment('stock', { by: order.quantity, transaction: t });
+                }
             }
 
             // 撤销相关佣金

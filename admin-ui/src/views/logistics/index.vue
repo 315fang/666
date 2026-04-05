@@ -29,9 +29,9 @@
         <el-form-item label="物流状态">
           <el-select v-model="searchForm.logistics_status" placeholder="全部" clearable style="width:120px">
             <el-option label="运输中" value="in_transit" />
-            <el-option label="派送中" value="delivering" />
+            <el-option label="派送中" value="dispatching" />
             <el-option label="已签收" value="delivered" />
-            <el-option label="异常" value="exception" />
+            <el-option label="异常" value="problem" />
             <el-option label="未查到" value="unknown" />
           </el-select>
         </el-form-item>
@@ -54,7 +54,7 @@
           </el-statistic>
         </el-col>
         <el-col :span="6">
-          <el-statistic title="派送中" :value="stats.delivering">
+          <el-statistic title="派送中" :value="stats.dispatching">
             <template #suffix>
               <el-icon color="#e6a23c"><Location /></el-icon>
             </template>
@@ -83,8 +83,8 @@
         </el-table-column>
         <el-table-column label="收件人" width="110">
           <template #default="{ row }">
-            <div>{{ row.address?.name || row.buyer?.nickname || '-' }}</div>
-            <div style="font-size:12px; color:#909399;">{{ row.address?.phone }}</div>
+            <div>{{ getReceiverName(row) }}</div>
+            <div style="font-size:12px; color:#909399;">{{ getReceiverPhone(row) }}</div>
           </template>
         </el-table-column>
         <el-table-column label="快递公司" width="110">
@@ -154,8 +154,8 @@
           :total="pagination.total"
           :page-sizes="[20, 50, 100]"
           layout="total, sizes, prev, pager, next"
-          @size-change="fetchOrders"
-          @current-change="fetchOrders"
+          @size-change="handlePageSizeChange"
+          @current-change="handlePageChange"
         />
       </div>
     </el-card>
@@ -174,10 +174,10 @@
           <el-descriptions-item label="快递公司">{{ formatCompanyLabel(currentOrder.logistics_company) }}</el-descriptions-item>
           <el-descriptions-item label="运单号">{{ currentOrder.tracking_no }}</el-descriptions-item>
           <el-descriptions-item label="收件人">
-            {{ currentOrder.address?.name }} · {{ currentOrder.address?.phone }}
+            {{ getReceiverName(currentOrder) }} · {{ getReceiverPhone(currentOrder) }}
           </el-descriptions-item>
           <el-descriptions-item label="收货地址">
-            {{ currentOrder.address?.province }}{{ currentOrder.address?.city }}{{ currentOrder.address?.district }}{{ currentOrder.address?.detail }}
+            {{ getReceiverAddress(currentOrder) }}
           </el-descriptions-item>
           <el-descriptions-item label="物流状态">
             <el-tag
@@ -243,6 +243,8 @@ const COMPANY_LABELS = {
   DEPPON: '德邦物流'
 }
 
+const FETCH_LIMIT = 100
+
 const formatCompanyLabel = (company) => {
   if (!company) return '-'
   return COMPANY_LABELS[company] || company
@@ -257,13 +259,15 @@ const searchForm = reactive({
 
 // ── 分页 ──────────────────────────────────────────
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
+const rawTotal = ref(0)
 
 // ── 表格数据 ──────────────────────────────────────
+const rawTableData = ref([])
 const loading = ref(false)
 const tableData = ref([])
 
 // ── 统计 ──────────────────────────────────────────
-const stats = reactive({ total: 0, in_transit: 0, delivering: 0, delivered: 0 })
+const stats = reactive({ total: 0, in_transit: 0, dispatching: 0, delivered: 0 })
 
 // ── 抽屉 ──────────────────────────────────────────
 const drawerVisible = ref(false)
@@ -271,28 +275,109 @@ const drawerLoading = ref(false)
 const drawerLogistics = ref(null)
 const currentOrder = ref(null)
 
+const LOGISTICS_STATUS_TEXT = {
+  collecting: '待揽件',
+  in_transit: '运输中',
+  dispatching: '派送中',
+  delivered: '已签收',
+  failed: '派送失败',
+  problem: '物流异常',
+  returned: '已退回',
+  unknown: '未查到'
+}
+
+const normalizeLogistics = (logistics = {}) => {
+  const status = logistics.status || 'unknown'
+  return {
+    ...logistics,
+    status,
+    statusText: logistics.statusText || logistics.status_text || LOGISTICS_STATUS_TEXT[status] || status,
+    traces: logistics.traces || []
+  }
+}
+
+function getReceiverName(order) {
+  return order?.address_snapshot?.receiver_name || order?.address?.receiver_name || order?.buyer?.nickname || '-'
+}
+
+function getReceiverPhone(order) {
+  return order?.address_snapshot?.phone || order?.address?.phone || '-'
+}
+
+function getReceiverAddress(order) {
+  const address = order?.address_snapshot || order?.address || {}
+  return [address.province, address.city, address.district, address.detail].filter(Boolean).join('')
+}
+
+function syncTableData() {
+  const logisticsStatus = searchForm.logistics_status
+  const filteredData = rawTableData.value.filter(order => {
+    if (!logisticsStatus) return true
+    return order._logistics?.status === logisticsStatus
+  })
+  const maxPage = Math.max(1, Math.ceil(filteredData.length / pagination.pageSize))
+  if (pagination.page > maxPage) {
+    pagination.page = maxPage
+  }
+  const start = (pagination.page - 1) * pagination.pageSize
+  tableData.value = filteredData.slice(start, start + pagination.pageSize)
+  pagination.total = filteredData.length
+  updateStats()
+}
+
+function buildQueryParams(page, limit = FETCH_LIMIT) {
+  const params = {
+    status: 'shipped',
+    page,
+    limit
+  }
+  if (searchForm.keyword) params.keyword = searchForm.keyword
+  if (searchForm.company) params.company = searchForm.company
+  return params
+}
+
+async function fetchAllOrdersByQuery() {
+  const firstRes = await getOrders(buildQueryParams(1))
+  if (firstRes.code !== 0) {
+    throw new Error(firstRes.message || '获取订单列表失败')
+  }
+
+  const firstList = firstRes.data.list || []
+  const total = firstRes.data.pagination?.total || firstList.length
+  const totalPages = Math.ceil(total / FETCH_LIMIT)
+  const allOrders = [...firstList]
+
+  for (let page = 2; page <= totalPages; page += 1) {
+    const pageRes = await getOrders(buildQueryParams(page))
+    if (pageRes.code !== 0) {
+      throw new Error(pageRes.message || '获取订单列表失败')
+    }
+    allOrders.push(...(pageRes.data.list || []))
+  }
+
+  return { list: allOrders, total }
+}
+
 // ── 获取已发货订单列表 ─────────────────────────────
 async function fetchOrders() {
   loading.value = true
   try {
-    const params = {
-      status: 'shipped',
-      page: pagination.page,
-      page_size: pagination.pageSize
-    }
-    if (searchForm.keyword) params.keyword = searchForm.keyword
-    if (searchForm.company) params.company = searchForm.company
+    const { list, total } = await fetchAllOrdersByQuery()
+    rawTableData.value = list.map(order => ({ ...order, _logistics: null, _refreshing: false }))
+    rawTotal.value = total
 
-    const res = await getOrders(params)
-    if (res.code === 0) {
-      tableData.value = (res.data.list || []).map(o => ({ ...o, _logistics: null, _refreshing: false }))
-      pagination.total = res.data.total || 0
-      stats.total = res.data.total || 0
-
-      // 后台批量查一下物流状态（只查运单号存在的）
-      await batchQueryLogistics()
-    }
+    // 拉全量订单后本地分页，保证物流状态筛选和分页一致
+    await batchQueryLogistics()
+    syncTableData()
   } catch (e) {
+    rawTableData.value = []
+    tableData.value = []
+    rawTotal.value = 0
+    pagination.total = 0
+    stats.total = 0
+    stats.in_transit = 0
+    stats.dispatching = 0
+    stats.delivered = 0
     ElMessage.error('获取订单列表失败')
   } finally {
     loading.value = false
@@ -301,38 +386,33 @@ async function fetchOrders() {
 
 // ── 批量查物流（并发，最多10个） ───────────────────
 async function batchQueryLogistics() {
-  const withTracking = tableData.value.filter(o => o.tracking_no)
+  const withTracking = rawTableData.value.filter(o => o.tracking_no)
   if (!withTracking.length) return
 
-  const chunk = withTracking.slice(0, 10) // 避免并发过多
-  const results = await Promise.allSettled(
-    chunk.map(order => getAdminOrderLogistics(order.id))
-  )
+  for (let start = 0; start < withTracking.length; start += 10) {
+    const chunk = withTracking.slice(start, start + 10)
+    const results = await Promise.allSettled(
+      chunk.map(order => getAdminOrderLogistics(order.id))
+    )
 
-  results.forEach((result, idx) => {
-    const order = chunk[idx]
-    if (result.status === 'fulfilled' && result.value?.code === 0) {
-      const logistics = result.value.data
-      // 找到 tableData 中的对应项更新
-      const found = tableData.value.find(o => o.id === order.id)
-      if (found) {
-        found._logistics = {
-          status: logistics.status,
-          statusText: logistics.statusText,
-          traces: logistics.traces || []
+    results.forEach((result, idx) => {
+      const order = chunk[idx]
+      if (result.status === 'fulfilled' && result.value?.code === 0) {
+        const logistics = normalizeLogistics(result.value.data)
+        const found = rawTableData.value.find(o => o.id === order.id)
+        if (found) {
+          found._logistics = logistics
         }
       }
-    }
-  })
-
-  // 更新统计
-  updateStats()
+    })
+  }
 }
 
 function updateStats() {
-  const withLogistics = tableData.value.filter(o => o._logistics)
+  const withLogistics = rawTableData.value.filter(o => o._logistics)
+  stats.total = rawTotal.value || rawTableData.value.length
   stats.in_transit = withLogistics.filter(o => o._logistics.status === 'in_transit').length
-  stats.delivering = withLogistics.filter(o => o._logistics.status === 'delivering').length
+  stats.dispatching = withLogistics.filter(o => o._logistics.status === 'dispatching').length
   stats.delivered = withLogistics.filter(o => o._logistics.status === 'delivered').length
 }
 
@@ -348,6 +428,17 @@ function handleReset() {
   searchForm.logistics_status = ''
   pagination.page = 1
   fetchOrders()
+}
+
+function handlePageChange(page) {
+  pagination.page = page
+  syncTableData()
+}
+
+function handlePageSizeChange(size) {
+  pagination.pageSize = size
+  pagination.page = 1
+  syncTableData()
 }
 
 // ── 复制运单号 ─────────────────────────────────────
@@ -379,10 +470,11 @@ async function loadDrawerLogistics(order, forceRefresh = false) {
       res = await getAdminOrderLogistics(order.id)
     }
     if (res.code === 0) {
-      drawerLogistics.value = res.data
+      drawerLogistics.value = normalizeLogistics(res.data)
       // 同步到表格行
-      const found = tableData.value.find(o => o.id === order.id)
-      if (found) found._logistics = res.data
+      const found = rawTableData.value.find(o => o.id === order.id)
+      if (found) found._logistics = normalizeLogistics(res.data)
+      syncTableData()
       if (forceRefresh) ElMessage.success('物流信息已刷新')
     } else {
       ElMessage.warning(res.message || '物流查询失败')
@@ -400,7 +492,8 @@ async function handleRefresh(row) {
   try {
     const res = await refreshAdminLogistics(row.id)
     if (res.code === 0) {
-      row._logistics = res.data
+      row._logistics = normalizeLogistics(res.data)
+      syncTableData()
       ElMessage.success('已刷新')
     } else {
       ElMessage.warning(res.message || '刷新失败')
@@ -416,9 +509,11 @@ async function handleRefresh(row) {
 function getLogisticsTagType(status) {
   const map = {
     in_transit: 'primary',
-    delivering: 'warning',
+    dispatching: 'warning',
     delivered: 'success',
-    exception: 'danger',
+    problem: 'danger',
+    failed: 'danger',
+    returned: 'info',
     unknown: 'info'
   }
   return map[status] || 'info'

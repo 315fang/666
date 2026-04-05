@@ -12,6 +12,7 @@ const { normalizeCompanyCode, getCompanyDisplayName } = require('./LogisticsServ
 const { generatePickupCredentials } = require('../controllers/pickupController');
 const { attributeRegionalProfit } = require('../controllers/stationController');
 const { calcCouponDiscount } = require('../controllers/couponController');
+const { appendReservedStockMarker, hasReservedStockMarker, removeReservedStockMarker } = require('../utils/orderStock');
 
 let _orderSeq = 0;
 const generateOrderNo = () => {
@@ -725,6 +726,9 @@ class OrderCoreService {
                 throw new Error(`库存不足，当前 ${agent?.stock_count || 0} 件，需要 ${order.quantity} 件`);
             }
 
+            // 申请发货即预扣代理商库存，避免多个订单并发超卖
+            await agent.decrement('stock_count', { by: order.quantity, transaction: t });
+
             // 若未确认，记录一次自动确认时间（用于审计，不阻塞流程）
             if (!order.agent_confirmed_at) {
                 order.agent_confirmed_at = new Date();
@@ -734,6 +738,7 @@ class OrderCoreService {
             order.shipping_requested_at = new Date();
             order.tracking_no = tracking_no || null;
             order.fulfillment_partner_id = userId;
+            order.remark = appendReservedStockMarker(order.remark);
             await order.save({ transaction: t });
             await t.commit();
 
@@ -815,7 +820,7 @@ class OrderCoreService {
         const t = await sequelize.transaction();
         try {
             const { id } = req.params;
-            const { fulfillment_type, tracking_no, tracking_company, logistics_company } = req.body;
+            const { fulfillment_type, type, tracking_no, tracking_company, logistics_company } = req.body;
             // fulfillment_type: 'agent'（代理商发） 或 'platform'（平台发）
 
             const order = await Order.findOne({
@@ -839,13 +844,22 @@ class OrderCoreService {
             // - Agent_Pending / Agent：代理商发货
             // - Company / Platform / null：平台发货
             // 如果前端传了参数且与订单标记不一致，以订单标记为准
+            const requestedFulfillmentType = String(fulfillment_type || type || '').toLowerCase();
             let actualFulfillmentType = 'platform'; // 默认平台发
-            if (order.fulfillment_type && ['Agent_Pending', 'Agent'].includes(order.fulfillment_type)) {
+            if (order.status === 'shipping_requested' && order.agent_id) {
+                actualFulfillmentType = 'agent';
+            } else if (order.fulfillment_type && ['Agent_Pending', 'Agent'].includes(order.fulfillment_type)) {
                 actualFulfillmentType = 'agent';
             }
             // 仅当订单没有明确标记时，才参考前端参数（兼容旧数据）
-            if (!order.fulfillment_type && fulfillment_type === 'agent' && order.agent_id) {
+            if (requestedFulfillmentType === 'agent' && order.agent_id) {
                 actualFulfillmentType = 'agent';
+            }
+
+            if (actualFulfillmentType !== 'agent' && order.agent_id &&
+                ['agent_confirmed', 'shipping_requested'].includes(order.status)) {
+                await t.rollback();
+                throw new Error(`该订单代理商(ID:${order.agent_id})已在处理中（状态: ${order.status}），如需平台发货请先将状态回退为 paid`);
             }
 
             if (actualFulfillmentType === 'agent') {
@@ -862,13 +876,35 @@ class OrderCoreService {
                     throw new Error('代理商信息异常');
                 }
 
-                if (agent.stock_count < order.quantity) {
-                    await t.rollback();
-                    throw new Error(`代理商云库存不足，当前库存 ${agent.stock_count}，需要 ${order.quantity}`);
+                const alreadyDeducted = order.status === 'shipping_requested' && hasReservedStockMarker(order);
+                if (!alreadyDeducted) {
+                    if (agent.stock_count < order.quantity) {
+                        await t.rollback();
+                        throw new Error(`代理商云库存不足，当前库存 ${agent.stock_count}，需要 ${order.quantity}`);
+                    }
+
+                    // 扣减代理商云库存
+                    await agent.decrement('stock_count', { by: order.quantity, transaction: t });
                 }
 
-                // 扣减代理商云库存
-                await agent.decrement('stock_count', { by: order.quantity, transaction: t });
+                const platformDeducted = parseInt(order.platform_stock_deducted) !== 0;
+                if (platformDeducted) {
+                    const orderProductSku = await Product.findByPk(order.product_id, { transaction: t, lock: t.LOCK.UPDATE });
+                    if (orderProductSku) {
+                        await orderProductSku.increment('stock', { by: order.quantity, transaction: t });
+                    }
+                    if (order.sku_id) {
+                        const orderSku = await SKU.findByPk(order.sku_id, { transaction: t, lock: t.LOCK.UPDATE });
+                        if (orderSku) {
+                            await orderSku.increment('stock', { by: order.quantity, transaction: t });
+                        }
+                    }
+                    order.platform_stock_deducted = 0;
+                }
+
+                if (alreadyDeducted) {
+                    order.remark = removeReservedStockMarker(order.remark);
+                }
 
                 order.fulfillment_type = 'Agent';
                 order.fulfillment_partner_id = agentId;

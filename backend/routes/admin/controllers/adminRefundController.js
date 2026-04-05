@@ -1,6 +1,7 @@
 const { Refund, Order, User, Product, SKU, CommissionLog, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
 const { sendNotification } = require('../../../models/notificationUtil');
+const { hasReservedStockMarker } = require('../../../utils/orderStock');
 const { refundOrder } = require('../../../utils/wechat');
 
 // 获取售后列表
@@ -217,12 +218,18 @@ const completeRefund = async (req, res) => {
             // 判断代理商是否实际扣过库存：
             // 1. 已发货(shipped/completed) → shipped_at 存在，说明 shipOrder 扣过
             // 2. shipping_requested + 标记了[库存已预扣] → requestShipping 预扣过
-            const agentDeductedStock = (
-                order.fulfillment_type === 'Agent' &&
-                order.fulfillment_partner_id &&
+            const restoreAgentId = order.fulfillment_partner_id || order.agent_id;
+            const agentDeductedStock = Boolean(
+                restoreAgentId &&
                 (
-                    order.shipped_at || // 已发货，shipOrder 扣过
-                    (order.status === 'shipping_requested' && order.remark && order.remark.includes('[库存已预扣]')) // 预扣过
+                    (
+                        ['Agent', 'Agent_Pending'].includes(order.fulfillment_type) &&
+                        order.shipped_at
+                    ) ||
+                    (
+                        order.status === 'shipping_requested' &&
+                        hasReservedStockMarker(order)
+                    )
                 )
             );
 
@@ -230,18 +237,18 @@ const completeRefund = async (req, res) => {
                 // ★★★ 修复：全额退款时，仅"退货退款"才退还代理商云库存
                 // "仅退款"意味着货已发出且不退回，退还库存会导致云库存虚高
                 if (refund.type === 'return_refund') {
-                    const agent = await User.findByPk(order.fulfillment_partner_id, { transaction: t, lock: t.LOCK.UPDATE });
+                    const agent = await User.findByPk(restoreAgentId, { transaction: t, lock: t.LOCK.UPDATE });
                     if (agent) {
                         await agent.increment('stock_count', { by: order.quantity, transaction: t });
                         console.log(`[退款] 代理商(ID:${agent.id})云库存退还 ${order.quantity} 件（全额退货退款）`);
                     }
                 } else {
                     // 仅退款（不退货）：不退还代理商云库存，但记录日志
-                    console.log(`[退款] 订单(ID:${order.id})为仅退款，不退还代理商(ID:${order.fulfillment_partner_id})云库存（货未退回）`);
+                    console.log(`[退款] 订单(ID:${order.id})为仅退款，不退还代理商(ID:${restoreAgentId})云库存（货未退回）`);
                 }
             } else if (agentDeductedStock && restoreProductQty > 0) {
                 // 部分退货退款：按退货数量退还代理商云库存
-                const agent = await User.findByPk(order.fulfillment_partner_id, { transaction: t, lock: t.LOCK.UPDATE });
+                const agent = await User.findByPk(restoreAgentId, { transaction: t, lock: t.LOCK.UPDATE });
                 if (agent) {
                     await agent.increment('stock_count', { by: restoreProductQty, transaction: t });
                     console.log(`[退款] 代理商(ID:${agent.id})云库存退还 ${restoreProductQty} 件（部分退货）`);

@@ -7,10 +7,23 @@ const { normalizeCompanyCode, getCompanyDisplayName } = require('../../../servic
 // 获取订单列表
 const getOrders = async (req, res) => {
     try {
-        const { status, order_no, keyword, buyer_keyword, start_date, end_date, page = 1, limit = 20 } = req.query;
+        const {
+            status,
+            order_no,
+            keyword,
+            buyer_keyword,
+            company,
+            start_date,
+            end_date,
+            page = 1,
+            limit,
+            page_size
+        } = req.query;
         const where = {};
+        const resolvedLimit = parseInt(limit || page_size || 20, 10);
 
         if (status) where.status = status;
+        if (company) where.logistics_company = normalizeCompanyCode(company);
         // 支持 order_no 精确搜索 + keyword 模糊搜索
         const searchTerm = keyword || order_no;
         if (searchTerm) where.order_no = { [Op.like]: `%${searchTerm}%` };
@@ -25,17 +38,18 @@ const getOrders = async (req, res) => {
             delete where.order_no; // 改为搜索买家
         }
 
-        const offset = (parseInt(page) - 1) * parseInt(limit);
+        const offset = (parseInt(page, 10) - 1) * resolvedLimit;
 
         const { count, rows } = await Order.findAndCountAll({
             where,
             include: [
                 { model: User, as: 'buyer', attributes: ['id', 'nickname', 'openid'], where: buyerWhere, required: !!buyerWhere },
-                { model: Product, as: 'product', attributes: ['id', 'name', 'images'] }
+                { model: Product, as: 'product', attributes: ['id', 'name', 'images'] },
+                { model: Address, as: 'address', attributes: ['id', 'receiver_name', 'phone', 'province', 'city', 'district', 'detail'], required: false }
             ],
             order: [['created_at', 'DESC']],
             offset,
-            limit: parseInt(limit)
+            limit: resolvedLimit
         });
 
         // 计算今日销售额（仪表盘统计）
@@ -58,7 +72,7 @@ const getOrders = async (req, res) => {
             code: 0,
             data: {
                 list: rows,
-                pagination: { total: count, page: parseInt(page), limit: parseInt(limit) },
+                pagination: { total: count, page: parseInt(page, 10), limit: resolvedLimit },
                 todaySales: todaySalesResult || 0,
                 pendingShip: pendingShipCount || 0
             }

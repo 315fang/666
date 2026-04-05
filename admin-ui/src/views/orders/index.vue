@@ -12,6 +12,8 @@
           <el-select v-model="searchForm.status" placeholder="全部状态" clearable style="width:120px">
             <el-option label="待支付" value="pending" />
             <el-option label="待发货" value="paid" />
+            <el-option label="代理已确认" value="agent_confirmed" />
+            <el-option label="待后台确认发货" value="shipping_requested" />
             <el-option label="已发货" value="shipped" />
             <el-option label="已完成" value="completed" />
             <el-option label="已取消" value="cancelled" />
@@ -124,7 +126,7 @@
             <el-tag :type="getStatusType(detailData.status)">{{ getStatusText(detailData.status) }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="发货类型">
-            {{ detailData.fulfillment_type === 'Company' ? '云仓发货' : (detailData.fulfillment_type === 'Agent' ? '代理商发货' : '自提/其他') }}
+            {{ getFulfillmentText(detailData.fulfillment_type) }}
           </el-descriptions-item>
           <el-descriptions-item label="买家昵称">{{ detailData.buyer?.nickname }}</el-descriptions-item>
           <el-descriptions-item label="买家层级">
@@ -140,12 +142,12 @@
 
         <!-- 收货信息 -->
         <el-divider content-position="left">收货信息</el-divider>
-        <div v-if="detailData.address" style="background:#f8f9fa; padding:12px; border-radius:6px; margin-bottom:20px">
-          <div style="font-weight:bold; margin-bottom:6px">{{ detailData.address.name }} - {{ detailData.address.phone }}</div>
+        <div v-if="hasOrderAddress(detailData)" style="background:#f8f9fa; padding:12px; border-radius:6px; margin-bottom:20px">
+          <div style="font-weight:bold; margin-bottom:6px">{{ getReceiverName(detailData) }} - {{ getReceiverPhone(detailData) }}</div>
           <div style="color:#606266; font-size:13px">
-            {{ detailData.address.province }} {{ detailData.address.city }} {{ detailData.address.district }}
+            {{ getReceiverRegion(detailData) }}
             <br />
-            {{ detailData.address.detail }}
+            {{ getReceiverDetail(detailData) }}
           </div>
         </div>
 
@@ -169,9 +171,13 @@
     <el-dialog v-model="shipDialogVisible" title="订单发货" width="400px">
       <el-form :model="shipForm" label-width="80px">
         <el-form-item label="发货方式">
-          <el-radio-group v-model="shipForm.type">
-            <el-radio label="Company">云仓直发</el-radio>
+          <el-radio-group v-model="shipForm.fulfillment_type">
+            <el-radio label="Company" :disabled="isAgentLockedOrder(currentOrder)">云仓直发</el-radio>
+            <el-radio v-if="currentOrder?.agent_id" label="Agent">代理商发货</el-radio>
           </el-radio-group>
+          <div v-if="isAgentLockedOrder(currentOrder)" style="font-size:12px; color:#909399; margin-top:6px;">
+            该订单已进入代理商处理流程，请按代理商发货确认。
+          </div>
         </el-form-item>
         <el-form-item label="快递公司">
           <el-input v-model="shipForm.tracking_company" placeholder="如：顺丰速运 / SF" />
@@ -262,6 +268,35 @@ const formatCompanyLabel = (company) => {
   return COMPANY_LABELS[company] || company
 }
 
+const getOrderAddress = (order) => order?.address_snapshot || order?.address || {}
+const hasOrderAddress = (order) => Object.values(getOrderAddress(order)).some(Boolean)
+const getReceiverName = (order) => getOrderAddress(order).receiver_name || ''
+const getReceiverPhone = (order) => getOrderAddress(order).phone || ''
+const getReceiverRegion = (order) => {
+  const address = getOrderAddress(order)
+  return [address.province, address.city, address.district].filter(Boolean).join(' ')
+}
+const getReceiverDetail = (order) => getOrderAddress(order).detail || ''
+const getFulfillmentText = (type) => ({
+  Company: '云仓发货',
+  Agent: '代理商发货',
+  Agent_Pending: '待代理发货',
+  Restock: '采购入仓'
+}[type] || '自提/其他')
+const isAgentFlowOrder = (order) => Boolean(
+  order?.agent_id && (
+    ['agent_confirmed', 'shipping_requested'].includes(order.status) ||
+    ['Agent_Pending', 'Agent'].includes(order.fulfillment_type)
+  )
+)
+const isAgentLockedOrder = (order) => Boolean(
+  order?.agent_id && (
+    ['agent_confirmed', 'shipping_requested'].includes(order.status) ||
+    ['Agent_Pending', 'Agent'].includes(order.fulfillment_type)
+  )
+)
+const getDefaultFulfillmentType = (order) => (isAgentFlowOrder(order) ? 'Agent' : 'Company')
+
 // ===== 列表 =====
 const loading = ref(false)
 const tableData = ref([])
@@ -315,16 +350,17 @@ const handleDetail = async (row) => {
 // ===== 发货 =====
 const shipDialogVisible = ref(false)
 const currentOrder = ref(null)
-const shipForm = reactive({ type: 'Company', tracking_no: '', tracking_company: '' })
+const shipForm = reactive({ fulfillment_type: 'Company', tracking_no: '', tracking_company: '' })
 
 const handleShip = (row) => {
   currentOrder.value = row
-  shipForm.tracking_no = ''
-  shipForm.tracking_company = ''
+  shipForm.fulfillment_type = getDefaultFulfillmentType(row)
+  shipForm.tracking_no = row.tracking_no || ''
+  shipForm.tracking_company = row.logistics_company || ''
   shipDialogVisible.value = true
 }
 const submitShip = async () => {
-  if (shipForm.type !== 'Agent' && !shipForm.tracking_no) {
+  if (!shipForm.tracking_no.trim()) {
     return ElMessage.warning('请输入快递单号')
   }
   submitting.value = true
@@ -415,9 +451,22 @@ const handleDropdown = (cmd, row) => {
 // ===== 工具 =====
 const roleText = (r) => (['普通用户', '会员', '团长', '代理商'][r] ?? '未知')
 const roleTagType = (r) => (['', 'success', 'warning', 'danger'][r] ?? '')
-const getStatusType = (s) => (['pending'].includes(s) ? 'warning' : ['paid','shipped'].includes(s) ? 'primary' : ['completed'].includes(s) ? 'success' : 'info')
+const getStatusType = (s) => (
+  ['pending'].includes(s) ? 'warning' :
+  ['paid', 'agent_confirmed', 'shipping_requested', 'shipped'].includes(s) ? 'primary' :
+  ['completed'].includes(s) ? 'success' :
+  ['cancelled', 'refunded'].includes(s) ? 'info' :
+  'info'
+)
 const getStatusText = (s) => ({
-  pending: '待付款', paid: '待发货', shipping_requested: '请求发货', shipped: '已发货', completed: '已完成', cancelled: '已取消', refunded: '已退款'
+  pending: '待付款',
+  paid: '待发货',
+  agent_confirmed: '代理已确认',
+  shipping_requested: '待后台确认发货',
+  shipped: '已发货',
+  completed: '已完成',
+  cancelled: '已取消',
+  refunded: '已退款'
 }[s] || s)
 const formatDateTime = (d) => d ? dayjs(d).format('YYYY-MM-DD HH:mm:ss') : '-'
 
