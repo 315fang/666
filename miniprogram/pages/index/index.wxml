@@ -1,200 +1,143 @@
-<!--pages/index/index.wxml - 首页合并版：666-main 设计 + 毛玻璃滚动导航栏 -->
 <view class="container">
-
-  <!-- ① 自定义导航栏：毛玻璃效果（来自当前版本） -->
-  <view class="custom-nav {{navScrolled ? 'nav-scrolled' : 'nav-transparent'}}"
-        style="padding-top: {{statusBarHeight}}px">
-    <view class="nav-inner">
-      <!-- 初始态：Logo + 欢迎语 -->
-      <view class="nav-welcome-box {{navScrolled ? 'nav-hidden' : 'nav-visible'}}">
-        <image class="nav-logo" src="/assets/icons/home.svg" mode="aspectFit"></image>
-        <text class="welcome-text">欢迎光临问兰镜像商城</text>
+  <page-loading show="{{loading && featuredProducts.length === 0}}" text="首页加载中..."></page-loading>
+  <view class="custom-nav {{navScrolled ? 'nav-scrolled' : 'nav-transparent'}}" style="padding-top: {{navTopPadding}}px">
+    <view class="nav-inner" style="height: {{navBarHeight}}px;">
+      <!-- 气泡足迹：替换品牌 Logo 区，暂不展示 Logo/品牌甄选 -->
+      <view class="nav-bubble-bar {{navScrolled ? 'nav-hidden' : 'nav-visible'}}" wx:if="{{bubbles.length > 0}}">
+        <view class="nav-bubble-icon">🔥</view>
+        <view class="nav-bubble-scroll">
+          <view class="nav-bubble-item" animation="{{bubbleAnim}}">
+            <text class="nav-bubble-text">{{currentBubble}}</text>
+          </view>
+        </view>
+        <view class="nav-search-icon" bindtap="onSearchTap">
+          <image class="search-icon" src="/assets/icons/search.svg" mode="aspectFit"></image>
+        </view>
+      </view>
+      <!-- 若无气泡数据时保留搜索入口，避免右上角操作栏孤立 -->
+      <view class="nav-search-icon-solo nav-visible" wx:if="{{!bubbles.length && !navScrolled}}" bindtap="onSearchTap">
+        <image class="search-icon" src="/assets/icons/search.svg" mode="aspectFit"></image>
       </view>
 
-      <!-- 滚动态：Logo + 搜索栏 -->
       <view class="nav-search-box {{navScrolled ? 'nav-visible' : 'nav-hidden'}}">
-        <image class="nav-logo" src="/assets/icons/home.svg" mode="aspectFit"></image>
-        <view class="nav-divider"></view>
         <view class="nav-search-bar" bindtap="onSearchTap">
           <image class="search-icon" src="/assets/icons/search.svg" mode="aspectFit"></image>
-          <text class="search-placeholder">素颜三部曲</text>
+          <text class="search-placeholder">搜索商品</text>
         </view>
       </view>
     </view>
   </view>
 
-  <!-- ② 气泡通告浮层（来自 666-main） -->
-  <view class="bubble-float {{bubbleVisible ? 'bubble-show' : 'bubble-hide'}}">
-    <view class="bubble-inner">
-      <view class="bubble-dot"></view>
-      <text class="bubble-text">{{currentBubble}}</text>
-    </view>
-  </view>
-
-  <!-- ③ 固定海报区（来自 666-main，360rpx 高度 + fallback） -->
-  <view class="poster-section">
-    <image
-      class="poster-img"
-      src="{{homeConfigs.home_poster_url || '/assets/images/default-poster.svg'}}"
-      mode="aspectFill"
-      wx:if="{{homeConfigs.home_poster_url}}"
-    ></image>
-    <view class="poster-fallback" wx:else>
-      <view class="poster-deco-circle p1"></view>
-      <view class="poster-deco-circle p2"></view>
-      <view class="poster-content">
-        <text class="poster-brand">臻 选</text>
-        <text class="poster-slogan">遇见品质，遇见美好</text>
-      </view>
-    </view>
-  </view>
-
-  <!-- ④ 会员等级卡（来自 666-main） -->
-  <view class="member-card" bindtap="onMemberCardTap">
-    <view class="member-left">
-      <view class="member-level-badge">
-        <image class="level-icon" src="/assets/icons/crown.svg" mode="aspectFit"></image>
-        <text class="level-name">{{userInfo.role_name || '普通会员'}}</text>
-      </view>
-      <text class="member-name">{{truncatedName || '点击登录'}}</text>
-    </view>
-    <view class="member-right">
-      <view class="growth-info">
-        <view class="growth-row">
-          <text class="growth-label">成长值</text>
-          <text class="growth-value">{{growthValue || 0}}</text>
-          <text class="growth-target"> / {{nextLevelThreshold || '--'}}</text>
-        </view>
-        <view class="growth-bar-bg">
-          <view class="growth-bar-fill" style="width: {{growthPercent || 0}}%"></view>
-        </view>
-      </view>
-      <image class="member-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
-    </view>
-  </view>
-
-  <!-- ⑤ 积分卡（来自 666-main，黑金风格） -->
-  <view class="points-row">
-    <view class="points-card" bindtap="onPointsTap">
-      <view class="points-left">
-        <image class="points-icon" src="/assets/icons/gift.svg" mode="aspectFit"></image>
-        <view class="points-text">
-          <text class="points-num">{{pointBalance || 0}}</text>
-          <text class="points-label">我的积分</text>
-        </view>
-      </view>
-      <view class="points-actions">
-        <view class="pts-btn sign-btn" bindtap="onSignInTap" catchtap="catchtap">
-          {{todaySigned ? '已签到' : '签  到'}}
-        </view>
-        <view class="pts-btn exchange-btn" bindtap="onExchangeTap" catchtap="catchtap">兑  换</view>
-      </view>
-    </view>
-  </view>
-
-  <!-- ⑥ 活动预告卡（来自 666-main） -->
-  <view class="activity-preview-card" bindtap="onActivityTap">
-    <view class="ap-left">
-      <view class="ap-icon-wrap">
-        <image class="ap-icon" src="/assets/icons/hot.svg" mode="aspectFit"></image>
-      </view>
-      <view class="ap-text">
-        <text class="ap-title">{{latestActivity.name || '活动即将开启'}}</text>
-        <text class="ap-desc">{{latestActivity.desc || '拼团·砍价·抽奖 敬请期待'}}</text>
-      </view>
-    </view>
-    <view class="ap-right">
-      <text class="ap-cta">查看</text>
-      <image class="ap-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
-    </view>
-  </view>
-
-  <!-- ⑦ 特色活动卡片横向滚动（来自 666-main） -->
-  <view class="feature-section" wx:if="{{featureCards.length > 0}}">
-    <view class="feature-header">
-      <view class="feature-title-wrap">
-        <view class="feature-title-bar"></view>
-        <text class="feature-title">我们的特色</text>
-      </view>
-      <text class="feature-subtitle">Our Features</text>
-    </view>
-    <scroll-view class="feature-scroll" scroll-x="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
-      <view class="feature-list">
-        <view
-          class="feature-card"
-          wx:for="{{featureCards}}"
-          wx:key="id"
-          bindtap="onFeatureCardTap"
-          data-item="{{item}}"
-          style="background: {{item.bg_gradient || 'linear-gradient(145deg,#1a1a2e,#16213e)'}}"
-        >
-          <view class="fc-deco-circle fc-circle-1"></view>
-          <view class="fc-deco-circle fc-circle-2"></view>
-          <view class="fc-icon-wrap">
-            <image class="fc-icon" src="{{item.icon_url}}" mode="aspectFit" wx:if="{{item.icon_url}}"></image>
-            <text class="fc-icon-text" wx:else>{{item.icon_emoji || '⭐'}}</text>
+  <!-- 全屏 Hero 轮播（第一屏，对标麦吉丽全屏大图） -->
+  <view class="hero-editorial">
+    <swiper class="hero-swiper" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}" interval="5000" duration="600" indicator-color="rgba(255,255,255,0.25)" indicator-active-color="#FFFFFF">
+      <swiper-item wx:for="{{heroBanners}}" wx:key="id">
+        <view class="hero-slide" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
+          <image class="hero-image" src="{{item.image}}" mode="aspectFill" wx:if="{{item.image}}"></image>
+          <view class="hero-fallback" wx:else>
+            <view class="hero-orb orb-a"></view>
+            <view class="hero-orb orb-b"></view>
+            <view class="hero-orb orb-c"></view>
           </view>
-          <view class="fc-content">
-            <text class="fc-name">{{item.name}}</text>
-            <text class="fc-desc">{{item.description}}</text>
+          <view class="hero-mask"></view>
+          <view class="hero-copy">
+            <text class="hero-title">{{item.title}}</text>
+            <text class="hero-subtitle">{{item.subtitle}}</text>
           </view>
-          <view class="fc-tag" wx:if="{{item.tag}}">
-            <text class="fc-tag-text">{{item.tag}}</text>
+        </view>
+      </swiper-item>
+    </swiper>
+  </view>
+
+  <!-- 中部海报区（后端 banners position=home_mid，对标麦吉丽的多海报铺排） -->
+  <view class="poster-section" wx:if="{{midPosters.length > 0}}">
+    <view class="poster-card" wx:for="{{midPosters}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
+      <image class="poster-image" src="{{item.image}}" mode="widthFix"></image>
+      <view class="poster-overlay" wx:if="{{item.title}}">
+        <text class="poster-title">{{item.title}}</text>
+        <text class="poster-sub" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 精选单品 -->
+  <view class="products-section">
+    <view class="section-head">
+      <text class="section-intro-title">精选单品</text>
+      <view class="section-link" bindtap="onGoCategory">更多 ›</view>
+    </view>
+
+    <view class="products-grid" wx:if="{{loading && featuredProducts.length === 0}}">
+      <view class="product-card-skeleton" wx:for="{{[1,2,3,4]}}" wx:key="index">
+        <view class="psk-img"></view>
+        <view class="psk-info">
+          <view class="psk-line psk-long"></view>
+          <view class="psk-line psk-short"></view>
+        </view>
+      </view>
+    </view>
+
+    <view class="products-grid" wx:if="{{featuredProducts.length > 0}}">
+      <view class="product-card" wx:for="{{featuredProducts}}" wx:key="id" bindtap="onProductTap" data-id="{{item.id}}" hover-class="press">
+        <view class="product-card-img-wrap">
+          <image class="product-card-img" src="{{item.cover_image || item.images[0]}}" mode="aspectFill" lazy-load="{{true}}"></image>
+          <view class="product-card-badge" wx:if="{{item.market_price && item.market_price > item.retail_price && item.discount_label}}">
+            {{item.discount_label}}
+          </view>
+          <view class="product-card-soldout" wx:if="{{item.stock === 0}}">已售罄</view>
+        </view>
+        <!-- 信息层悬浮在图片底部 -->
+        <view class="product-card-info">
+          <view>
+            <text class="product-card-name">{{item.name}}</text>
+            <view class="heat-tag" wx:if="{{item.heat_label}}">
+              <text class="heat-icon">🔥</text>
+              <text class="heat-text">{{item.heat_label}}</text>
+            </view>
+          </view>
+          <view class="product-card-price-row">
+            <view class="product-card-price">
+              <text class="price-sym">¥</text>
+              <text class="price-num">{{item.retail_price || item.price}}</text>
+            </view>
           </view>
         </view>
       </view>
-    </scroll-view>
-  </view>
-
-  <!-- ⑧ 使用指南卡（来自 666-main） -->
-  <view class="banner-card-section" bindtap="onGuideTap">
-    <view class="banner-card-header">
-      <text class="banner-card-title">小程序使用指南</text>
-      <view class="banner-card-more">
-        <text>点击查看</text>
-        <image class="icon-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
-      </view>
     </view>
-    <view class="banner-card-body red-theme" style="{{homeConfigs.guide_bg ? 'background-image: url(' + homeConfigs.guide_bg + '); background-size: cover; background-position: center;' : ''}}">
-      <view class="banner-card-content">
-        <text class="card-big-text">GET指南</text>
-        <text class="card-sub-text">最新功能操作攻略</text>
-      </view>
+
+    <view class="products-empty" wx:if="{{!loading && featuredProducts.length === 0}}">
+      <text>暂无商品，请稍后查看</text>
     </view>
   </view>
 
-  <!-- ⑨ 共创信息卡（来自 666-main） -->
-  <view class="banner-card-section" bindtap="onCoCreationTap">
-    <view class="banner-card-header">
-      <text class="banner-card-title">共创信息</text>
-      <view class="banner-card-more">
-        <text>获取更多不定期的共创机会</text>
-        <image class="icon-arrow" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
-      </view>
-    </view>
-    <view class="banner-card-body dark-theme" style="{{homeConfigs.cocreation_bg ? 'background-image: url(' + homeConfigs.cocreation_bg + '); background-size: cover; background-position: center;' : ''}}">
-      <view class="banner-card-content">
-        <text class="card-big-text">天马乘风 共创未来</text>
-        <text class="card-sub-text">携手同行，共建美好未来</text>
+  <!-- 底部海报区（后端 banners position=home_bottom） -->
+  <view class="poster-section" wx:if="{{bottomPosters.length > 0}}">
+    <view class="poster-card" wx:for="{{bottomPosters}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
+      <image class="poster-image" src="{{item.image}}" mode="widthFix"></image>
+      <view class="poster-overlay" wx:if="{{item.title}}">
+        <text class="poster-title">{{item.title}}</text>
+        <text class="poster-sub" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
       </view>
     </view>
   </view>
 
-  <!-- ⑩ 底部惊喜彩蛋（来自当前版本） -->
-  <view class="bottom-surprise-section">
-    <view class="surprise-inner" bindlongpress="onSurpriseTap">
-      <view class="surprise-icon">✨</view>
-      <text class="surprise-text">长按开启隐藏美学</text>
-      <view class="surprise-hidden-content {{showSurprise ? 'show' : ''}}">
-        <view class="mirror-seal">
-          <text class="seal-text">问兰镜像\n臻选美学</text>
-        </view>
-        <text class="surprise-msg">遇见，是为了更好的绽放</text>
-      </view>
-    </view>
-  </view>
-
-  <!-- 品牌动画组件 -->
   <brand-animation id="brandAnimation"></brand-animation>
 
+  <!-- 弹窗广告 -->
+  <view class="popup-ad-overlay" wx:if="{{showPopupAd}}" bindtap="onClosePopupAd">
+    <view class="popup-ad-card" catchtap="onPopupAdTap">
+      <image class="popup-ad-image" src="{{popupAd.image_url}}" mode="widthFix" wx:if="{{popupAd.image_url}}"/>
+      <view class="popup-ad-btn" wx:if="{{popupAd.button_text}}">
+        {{popupAd.button_text}}
+      </view>
+    </view>
+    <view class="popup-ad-close" catchtap="onClosePopupAd">×</view>
+  </view>
+
+  <light-tip-modal
+    show="{{regLightTipShow}}"
+    title="{{regLightTipTitle}}"
+    content="{{regLightTipContent}}"
+    bind:close="onRegLightTipClose"
+  />
 </view>

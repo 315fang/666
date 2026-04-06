@@ -2,14 +2,54 @@
 .container {
   padding: 20rpx 24rpx;
   padding-bottom: 140rpx;
-  background: #f5f5f5;
+  background: linear-gradient(180deg, #E3EDF4 0%, #F4F8FA 30%, #EDF5F2 100%);
   min-height: 100vh;
+}
+
+.order-bubble {
+  position: sticky;
+  top: 12rpx;
+  z-index: 20;
+  margin-bottom: 18rpx;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.order-bubble-show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.order-bubble-hide {
+  opacity: 0;
+  transform: translateY(-10rpx);
+}
+
+.order-bubble-inner {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  background: rgba(30, 74, 109, 0.92);
+  border-radius: 999rpx;
+  padding: 14rpx 22rpx;
+  box-shadow: 0 10rpx 24rpx rgba(30, 74, 109, 0.2);
+}
+
+.order-bubble-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #C6A16E;
+}
+
+.order-bubble-text {
+  font-size: 22rpx;
+  color: rgba(255,255,255,0.88);
 }
 
 /* 状态卡片 */
 .status-card {
-  background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
-  border-radius: 16rpx;
+  background: linear-gradient(135deg, #1E4A6D 0%, #2E6B94 100%);
+  border-radius: 28rpx;
   padding: 40rpx 30rpx;
   margin-bottom: 20rpx;
 }
@@ -28,28 +68,33 @@
   margin-top: 8rpx;
 }
 
-.status-pending { background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); }
-.status-paid { background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); }
-.status-shipped { background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%); }
-.status-completed { background: linear-gradient(135deg, #10B981 0%, #059669 100%); }
-.status-agent_confirmed { background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%); }
-.status-shipping_requested { background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); }
+.status-pending { background: linear-gradient(135deg, #C6A16E 0%, #9A7348 100%); }
+.status-paid { background: linear-gradient(135deg, #2E6B94 0%, #1E4A6D 100%); }
+.status-shipped { background: linear-gradient(135deg, #0F766E 0%, #14B8A6 100%); }
+.status-completed { background: linear-gradient(135deg, #047857 0%, #10B981 100%); }
+.status-agent_confirmed { background: linear-gradient(135deg, #334155 0%, #475569 100%); }
+.status-shipping_requested { background: linear-gradient(135deg, #CA8A04 0%, #D4A84B 100%); }
+.status-cancelled { background: linear-gradient(135deg, #64748B 0%, #475569 100%); }
+.status-refunding { background: linear-gradient(135deg, #B45309 0%, #D97706 100%); }
+.status-refund_completed { background: linear-gradient(135deg, #0D9488 0%, #0F766E 100%); }
+.status-refund_rejected { background: linear-gradient(135deg, #B91C1C 0%, #DC2626 100%); }
 
 /* 卡片 */
 .card {
-  background: #fff;
-  border-radius: 16rpx;
+  background: rgba(255,255,255,0.94);
+  border-radius: 28rpx;
   padding: 24rpx 30rpx;
   margin-bottom: 20rpx;
+  box-shadow: 0 10rpx 24rpx rgba(30, 74, 109, 0.08);
 }
 
 .card-title {
-  font-size: 28rpx;
-  font-weight: 500;
-  color: #0F172A;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #241D18;
   margin-bottom: 20rpx;
   padding-bottom: 16rpx;
-  border-bottom: 1rpx solid #F1F5F9;
+  border-bottom: 1rpx solid rgba(117, 105, 95, 0.08);
 }
 
 /* 商品行 */
@@ -81,27 +126,31 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
+  min-width: 0;
 }
 
 .product-name {
   font-size: 28rpx;
-  color: #334155;
+  color: #241D18;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  line-height: 1.55;
+  margin-bottom: 12rpx;
 }
 
 .product-price {
-  font-size: 32rpx;
+  font-size: 36rpx;
   font-weight: 600;
-  color: #EF4444;
+  color: #B95E46;
+  margin-bottom: 6rpx;
 }
 
 .product-qty {
   font-size: 24rpx;
-  color: #94A3B8;
+  color: #9A8D80;
 }
 
 /* 信息行 */
@@ -114,14 +163,21 @@
 
 .info-label {
   font-size: 26rpx;
-  color: #94A3B8;
+  color: #9A8D80;
   flex-shrink: 0;
 }
 
 .info-value {
   font-size: 26rpx;
-  color: #334155;
+  color: #2C241D;
   text-align: right;
+  max-width: 420rpx;
+  line-height: 1.7;
+}
+
+.info-value.info-muted {
+  color: #A09080;
+  font-size: 24rpx;
 }
 
 .info-value-row {
@@ -132,16 +188,22 @@
 
 .copy-btn {
   font-size: 22rpx;
-  color: #3B82F6;
-  background: #EFF6FF;
+  color: #8A6A4E;
+  background: #F6EEE6;
   padding: 4rpx 16rpx;
-  border-radius: 8rpx;
-  border: 1rpx solid #DBEAFE;
+  border-radius: 999rpx;
+  border: 1rpx solid #E7DDD2;
 }
 
-.info-value.price {
-  color: #EF4444;
-  font-weight: 600;
+.price-value-strong {
+  color: #B95E46;
+  font-weight: 700;
+  font-size: 34rpx;
+}
+
+.product-card,
+.info-card {
+  overflow: hidden;
 }
 
 /* 底部操作栏 */
@@ -150,17 +212,17 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: #fff;
+  background: rgba(255,255,255,0.96);
   padding: 20rpx 30rpx;
   padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
   display: flex;
   justify-content: flex-end;
   gap: 20rpx;
-  box-shadow: 0 -2rpx 10rpx rgba(0,0,0,0.05);
+  box-shadow: 0 -8rpx 24rpx rgba(31, 25, 20, 0.06);
 }
 
 .btn-primary {
-  background: #0F172A;
+  background: #241D18;
   color: #fff;
   padding: 20rpx 40rpx;
   border-radius: 40rpx;
@@ -170,22 +232,43 @@
 
 .btn-outline {
   background: #fff;
-  color: #64748B;
+  color: #6D6258;
   padding: 20rpx 40rpx;
   border-radius: 40rpx;
   font-size: 28rpx;
-  border: 2rpx solid #E2E8F0;
+  border: 2rpx solid #E7DDD2;
 }
 
-/* 加载 */
+/* 商品图片占位 icon */
+.placeholder-icon { width: 56rpx; height: 56rpx; opacity: 0.3; }
+
+/* 加载/失败容器 */
 .loading-container {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 400rpx;
-  color: #94A3B8;
-  font-size: 28rpx;
+  height: 60vh;
+  gap: 16rpx;
 }
+
+.loading-spinner {
+  width: 48rpx;
+  height: 48rpx;
+  border: 4rpx solid #F0EBE3;
+  border-top-color: #C6903A;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.loading-text { font-size: 26rpx; color: #9A8D80; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.error-container { gap: 20rpx; }
+.error-icon { width: 80rpx; height: 80rpx; opacity: 0.4; }
+.error-text { font-size: 28rpx; color: #9A8D80; }
+.retry-btn { background: #241D18; color: #fff; font-size: 26rpx; padding: 16rpx 48rpx; border-radius: 40rpx; margin-top: 8rpx; }
 
 /* 订单进度条 */
 .progress-card {
@@ -193,11 +276,11 @@
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  background: #fff;
-  border-radius: 16rpx;
+  background: rgba(255,255,255,0.94);
+  border-radius: 28rpx;
   padding: 30rpx 24rpx;
   margin-bottom: 20rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 10rpx 24rpx rgba(30, 74, 109, 0.08);
 }
 
 .progress-step {
@@ -213,21 +296,21 @@
   width: 28rpx;
   height: 28rpx;
   border-radius: 50%;
-  background: #E2E8F0;
-  border: 4rpx solid #E2E8F0;
+  background: #E7E5E4;
+  border: 4rpx solid #E7E5E4;
   transition: all 0.3s ease;
 }
 
 .progress-step.active .step-dot {
-  background: #2563EB;
-  border-color: #2563EB;
-  box-shadow: 0 0 0 6rpx rgba(37, 99, 235, 0.2);
+  background: #C6903A;
+  border-color: #C6903A;
+  box-shadow: 0 0 0 6rpx rgba(198, 144, 58, 0.2);
   transform: scale(1.1);
 }
 
 .progress-step.done .step-dot {
-  background: #10B981;
-  border-color: #10B981;
+  background: #B98B58;
+  border-color: #B98B58;
 }
 
 .step-label {
@@ -237,12 +320,12 @@
 }
 
 .progress-step.active .step-label {
-  color: #2563EB;
+  color: #C6903A;
   font-weight: 600;
 }
 
 .progress-step.done .step-label {
-  color: #10B981;
+  color: #B98B58;
   font-weight: 500;
 }
 
@@ -250,7 +333,7 @@
   flex: 1;
   min-width: 20rpx;
   height: 4rpx;
-  background: #E2E8F0;
+  background: #E7E5E4;
   margin: 0 8rpx;
   margin-bottom: 32rpx;
   position: relative;
@@ -258,13 +341,13 @@
 }
 
 .progress-line.done {
-  background: #10B981;
+  background: #B98B58;
 }
 
 /* 佣金结算卡片 */
 .settlement-card {
-  background: #FFFBEB !important;
-  border: 1rpx solid #FDE68A;
+  background: #F8F3ED !important;
+  border: 1rpx solid rgba(185, 139, 88, 0.25);
 }
 
 .settlement-info {
@@ -279,5 +362,24 @@
 
 .settlement-text {
   font-size: 26rpx;
-  color: #92400E;
+  color: #B98B58;
+}
+
+/* 退款信息样式 */
+.card-title-danger { color: #DC2626; }
+.info-value-danger { color: #DC2626; }
+.refund-link { color: #B98B58; font-size: 28rpx; }
+
+.pickup-hint {
+  font-size: 26rpx;
+  color: #78716c;
+  line-height: 1.5;
+  display: block;
+  margin-bottom: 20rpx;
+}
+.pickup-btn {
+  background: #1c1917;
+  color: #fff;
+  font-size: 28rpx;
+  border-radius: 12rpx;
 }

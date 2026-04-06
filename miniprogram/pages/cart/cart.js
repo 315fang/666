@@ -23,10 +23,10 @@ Page({
         const roleLevel = app.globalData.userInfo?.role_level || 0;
         this.setData({ roleLevel });
 
-        // 每次显示页面时刷新购物车
+        // 每次显示页面时刷新购物袋
         this.loadCart();
 
-        // 显示空购物车动画
+        // 显示空购物袋动画
         setTimeout(() => {
             this.setData({ showEmpty: true });
         }, 100);
@@ -64,7 +64,7 @@ Page({
                 loading: false
             });
 
-            // 如果是空购物车，加载推荐商品
+            // 如果是空购物袋，加载推荐商品
             if (cartItems.length === 0) {
                 this.loadRecommended();
             }
@@ -77,7 +77,7 @@ Page({
 
             this.calculateTotal();
 
-            // 如果是空购物车，显示动画
+            // 如果是空购物袋，显示动画
             if (cartItems.length === 0) {
                 setTimeout(() => {
                     this.setData({ showEmpty: true });
@@ -85,7 +85,7 @@ Page({
             }
         } catch (err) {
             ErrorHandler.handle(err, {
-                customMessage: '加载购物车失败，请稍后重试'
+                customMessage: '加载购物袋失败，请稍后重试'
             });
             this.setData({ loading: false, cartItems: [] });
             this.loadRecommended();
@@ -111,24 +111,26 @@ Page({
         }
     },
 
-    // 推荐商品跳转
+    onGoProductDetail(e) {
+        const { id } = e.currentTarget.dataset;
+        if (id) wx.navigateTo({ url: `/pages/product/detail?id=${id}` });
+    },
+
     onRecommendedTap(e) {
         const { id } = e.currentTarget.dataset;
-        wx.navigateTo({
-            url: `/pages/product/detail?id=${id}`
-        });
+        if (id) wx.navigateTo({ url: `/pages/product/detail?id=${id}` });
     },
 
 
-    // 计算总价
+    // 计算总价（整数分运算，避免浮点误差）
     calculateTotal() {
         const { cartItems } = this.data;
-        let totalPrice = 0;
+        let totalPriceFen = 0;
         let totalCount = 0;
 
         cartItems.forEach(item => {
             if (item.selected) {
-                totalPrice += item.price * item.quantity;
+                totalPriceFen += Math.round(item.price * 100) * item.quantity;
                 totalCount += item.quantity;
             }
         });
@@ -136,7 +138,7 @@ Page({
         const allSelected = cartItems.length > 0 && cartItems.every(item => item.selected);
 
         this.setData({
-            totalPrice: formatMoney(totalPrice),
+            totalPrice: formatMoney(totalPriceFen / 100),
             totalCount,
             selectAll: allSelected
         });
@@ -160,22 +162,18 @@ Page({
         this.calculateTotal();
     },
 
-    // 全选/取消全选
+    // 全选/取消全选（用路径更新替代全量 map，避免整个数组传输）
     onToggleSelectAll() {
         const newSelectAll = !this.data.selectAll;
-        const cartItems = this.data.cartItems.map(item => ({
-            ...item,
-            selected: newSelectAll
-        }));
-
-        this.setData({ cartItems, selectAll: newSelectAll });
-
-        // 触发价格和数量动画
-        this.setData({ priceAnim: true, countAnim: true });
-        setTimeout(() => {
-            this.setData({ priceAnim: false, countAnim: false });
-        }, 400);
-
+        const updates = {};
+        this.data.cartItems.forEach((_, i) => {
+            updates[`cartItems[${i}].selected`] = newSelectAll;
+        });
+        updates.selectAll = newSelectAll;
+        updates.priceAnim = true;
+        updates.countAnim = true;
+        this.setData(updates);
+        setTimeout(() => { this.setData({ priceAnim: false, countAnim: false }); }, 400);
         this.calculateTotal();
     },
 
@@ -191,31 +189,34 @@ Page({
             newQuantity += 1;
         }
 
+        const stockLimit = Number(item.sku?.stock ?? item.product?.stock ?? 0);
+        if (type === 'plus' && stockLimit > 0 && newQuantity > stockLimit) {
+            wx.showToast({ title: '库存不足', icon: 'none' });
+            return;
+        }
+
         if (newQuantity === item.quantity) return;
+
+        // 乐观更新：先改 UI，请求失败再回滚
+        const oldQuantity = item.quantity;
+        this.setData({ [`cartItems[${index}].quantity`]: newQuantity });
+        this.calculateTotal();
 
         try {
             await put(`/cart/${item.id}`, { quantity: newQuantity });
 
             // 触发动画
             const animKey = `cartItems[${index}].quantityAnim`;
-            this.setData({
-                [animKey]: true,
-                [`cartItems[${index}].quantity`]: newQuantity
-            });
+            this.setData({ [animKey]: true });
+            setTimeout(() => { this.setData({ [animKey]: false }); }, 300);
 
-            // 清除动画标记
-            setTimeout(() => {
-                this.setData({ [animKey]: false });
-            }, 300);
-
-            // 触发价格和数量动画
             this.setData({ priceAnim: true, countAnim: true });
-            setTimeout(() => {
-                this.setData({ priceAnim: false, countAnim: false });
-            }, 400);
-
-            this.calculateTotal();
+            setTimeout(() => { this.setData({ priceAnim: false, countAnim: false }); }, 400);
         } catch (err) {
+            // 请求失败：回滚数量和总价
+            this.setData({ [`cartItems[${index}].quantity`]: oldQuantity });
+            this.calculateTotal();
+            wx.showToast({ title: '更新数量失败，请重试', icon: 'none' });
             console.error('更新数量失败:', err);
         }
     },
@@ -231,27 +232,24 @@ Page({
             success: async (res) => {
                 if (res.confirm) {
                     try {
-                        // 先触发动画
+                        await del(`/cart/${item.id}`);
+
+                        // 请求成功后再触发删除动画
                         const deleteKey = `cartItems[${index}].deleting`;
                         this.setData({ [deleteKey]: true });
 
-                        await del(`/cart/${item.id}`);
-
-                        // 等待动画完成后再删除数据
                         setTimeout(() => {
                             const cartItems = [...this.data.cartItems];
                             cartItems.splice(index, 1);
                             this.setData({ cartItems });
                             this.calculateTotal();
 
-                            // 如果是空购物车了，显示空状态动画
                             if (cartItems.length === 0) {
-                                setTimeout(() => {
-                                    this.setData({ showEmpty: true });
-                                }, 100);
+                                setTimeout(() => { this.setData({ showEmpty: true }); }, 100);
                             }
                         }, 400);
                     } catch (err) {
+                        wx.showToast({ title: '删除失败，请重试', icon: 'none' });
                         console.error('删除失败:', err);
                     }
                 }
@@ -271,11 +269,5 @@ Page({
         // 将选中的商品 ID 传递给订单确认页
         const ids = selectedItems.map(item => item.id).join(',');
         wx.navigateTo({ url: `/pages/order/confirm?cart_ids=${ids}` });
-    },
-
-    // 商品点击
-    onProductTap(e) {
-        const item = e.currentTarget.dataset.item;
-        wx.navigateTo({ url: `/pages/product/detail?id=${item.product_id}` });
     }
 });

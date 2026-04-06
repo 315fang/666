@@ -1,5 +1,12 @@
 <!--pages/order/detail.wxml - 订单详情-->
 <view class="container" wx:if="{{order}}">
+  <view class="order-bubble {{orderBubbleVisible ? 'order-bubble-show' : 'order-bubble-hide'}}">
+    <view class="order-bubble-inner">
+      <view class="order-bubble-dot"></view>
+      <text class="order-bubble-text">{{orderBubbleText}}</text>
+    </view>
+  </view>
+
   <!-- 订单状态（如有退款，覆盖为退款状态） -->
   <view class="status-card status-{{hasActiveRefund ? 'refunding' : order.status}}">
     <text class="status-text">{{hasActiveRefund ? '退款中' : (statusMap[order.status] || order.status)}}</text>
@@ -29,23 +36,23 @@
     </view>
   </view>
 
-  <!-- ★ 退款信息卡片 -->
+  <!-- 退款信息 -->
   <view class="card refund-card" wx:if="{{activeRefund}}">
-    <view class="card-title" style="color:#EF4444;">退款信息</view>
+    <view class="card-title card-title-danger">退款信息</view>
     <view class="info-row">
       <text class="info-label">退款状态</text>
-      <text class="info-value" style="color:#EF4444;">{{refundStatusText[activeRefund.status] || '处理中'}}</text>
+      <text class="info-value info-value-danger">{{refundStatusText[activeRefund.status] || '处理中'}}</text>
     </view>
     <view class="info-row">
       <text class="info-label">退款金额</text>
-      <text class="info-value" style="color:#EF4444;">¥{{activeRefund.amount}}</text>
+      <text class="info-value info-value-danger">¥{{activeRefund.amount}}</text>
     </view>
     <view class="info-row">
       <text class="info-label">退款类型</text>
       <text class="info-value">{{activeRefund.type === 'return_refund' ? '退货退款' : '仅退款'}}</text>
     </view>
     <view class="refund-action" bindtap="onViewRefund">
-      <text style="color:#3B82F6;font-size:28rpx;">查看退款详情 ›</text>
+      <text class="refund-link">查看退款详情 ›</text>
     </view>
   </view>
 
@@ -62,24 +69,31 @@
     </view>
   </view>
 
+  <!-- 到店自提凭证入口 -->
+  <view class="card pickup-card" wx:if="{{order.delivery_type === 'pickup' && order.status !== 'pending' && order.status !== 'cancelled'}}">
+    <view class="card-title">到店自提</view>
+    <text class="pickup-hint">查看核销码与二维码；商家发货后可到店核销。</text>
+    <button class="pickup-btn" bindtap="onPickupCredentialTap">查看自提凭证</button>
+  </view>
+
   <!-- 商品信息 -->
-  <view class="card">
+  <view class="card product-card">
     <view class="card-title">商品信息</view>
     <view class="product-row" wx:if="{{order.product}}">
       <image class="product-img" src="{{order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{order.product.images && order.product.images.length > 0}}"></image>
       <view class="product-img-placeholder" wx:else>
-        <text>暂无图</text>
+        <image class="placeholder-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
       </view>
       <view class="product-info">
         <text class="product-name">{{order.product.name || '商品'}}</text>
-        <text class="product-price">¥{{order.total_amount}}</text>
+        <text class="product-price">合计 ¥{{order.total_amount}}</text>
         <text class="product-qty">×{{order.quantity}}</text>
       </view>
     </view>
   </view>
 
   <!-- 订单信息 -->
-  <view class="card">
+  <view class="card info-card">
     <view class="card-title">订单信息</view>
     <view class="info-row">
       <text class="info-label">订单编号</text>
@@ -103,7 +117,7 @@
     </view>
     <view class="info-row">
       <text class="info-label">订单金额</text>
-      <text class="info-value price">¥{{order.total_amount}}</text>
+      <text class="info-value price-value-strong">¥{{order.total_amount}}</text>
     </view>
     <view class="info-row" wx:if="{{order.tracking_no}}">
       <text class="info-label">物流单号</text>
@@ -111,6 +125,14 @@
         <text class="info-value">{{order.tracking_no}}</text>
         <text class="copy-btn">复制</text>
       </view>
+    </view>
+    <view class="info-row" wx:if="{{(order.status === 'shipped' || order.status === 'completed') && !order.tracking_no && order.delivery_type !== 'pickup'}}">
+      <text class="info-label">物流单号</text>
+      <text class="info-value info-muted">暂未录入，请稍后在「查看物流」重试或联系客服</text>
+    </view>
+    <view class="info-row" wx:if="{{order.logistics_company}}">
+      <text class="info-label">快递公司</text>
+      <text class="info-value">{{order.logistics_company_label || order.logistics_company}}</text>
     </view>
     <view class="info-row">
       <text class="info-label">发货方式</text>
@@ -144,7 +166,7 @@
     </view>
   </view>
 
-  <!-- ★ 底部操作按钮（退款感知） -->
+  <!-- 底部操作按钮 -->
   <view class="bottom-bar">
     <!-- 有活跃退款时：只显示查看退款 -->
     <block wx:if="{{hasActiveRefund}}">
@@ -156,21 +178,23 @@
       <!-- 待付款 -->
       <block wx:if="{{order.status === 'pending'}}">
         <view class="btn-outline" bindtap="onCancelOrder">取消订单</view>
-        <view class="btn-primary" bindtap="onPayOrder">立即支付 ¥{{order.total_amount}}</view>
+        <view class="btn-primary" bindtap="onPayOrder">立即支付</view>
       </block>
-      <!-- 待发货(paid/agent_confirmed/shipping_requested) -->
-      <block wx:if="{{order.status === 'paid' || order.status === 'agent_confirmed' || order.status === 'shipping_requested'}}">
+      <!-- 待发货：仅已支付未进入代理履约流程时可申请退款 -->
+      <block wx:if="{{order.status === 'paid'}}">
         <view class="btn-outline" bindtap="onApplyRefund">申请退款</view>
       </block>
       <!-- 已发货 -->
       <block wx:if="{{order.status === 'shipped'}}">
-        <view class="btn-outline" bindtap="onViewLogistics">查看物流</view>
+        <view class="btn-outline" bindtap="onViewLogistics" wx:if="{{canViewLogistics}}">查看物流</view>
+        <view class="btn-outline" bindtap="onGoReview" wx:if="{{!reviewed}}">评价</view>
         <view class="btn-outline" bindtap="onApplyRefund">申请退款</view>
         <view class="btn-primary" bindtap="onConfirmReceive">确认收货</view>
       </block>
       <!-- 已完成 -->
       <block wx:if="{{order.status === 'completed'}}">
-         <view class="btn-outline" bindtap="onViewLogistics">查看物流</view>
+         <view class="btn-outline" bindtap="onViewLogistics" wx:if="{{canViewLogistics}}">查看物流</view>
+         <view class="btn-primary" bindtap="onGoReview" wx:if="{{!reviewed}}">评价</view>
          <view class="btn-outline" bindtap="onApplyRefund" wx:if="{{!latestRefund || latestRefund.status === 'rejected' || latestRefund.status === 'cancelled'}}">申请售后</view>
          <view class="btn-outline" bindtap="onViewRefund" wx:if="{{latestRefund && latestRefund.status !== 'rejected' && latestRefund.status !== 'cancelled'}}">查看退款</view>
       </block>
@@ -178,8 +202,17 @@
   </view>
 </view>
 
-<view class="loading-container" wx:if="{{loading}}">
-  <text>加载中...</text>
+<!-- 加载中 -->
+<view class="loading-container" wx:if="{{loading && !loadError}}">
+  <view class="loading-spinner"></view>
+  <text class="loading-text">加载中...</text>
+</view>
+
+<!-- 加载失败 -->
+<view class="loading-container error-container" wx:if="{{loadError}}">
+  <image class="error-icon" src="/assets/icons/alert-circle.svg" mode="aspectFit"/>
+  <text class="error-text">加载失败</text>
+  <view class="retry-btn" bindtap="onRetryLoad">点击重试</view>
 </view>
 
 <!-- 品牌动画（复制单号反馈等） -->

@@ -1,41 +1,203 @@
-const { Order, User, Product, Address, SKU, CommissionLog, sequelize } = require('../../../models');
+const { Order, User, Product, Address, SKU, CommissionLog, AppConfig, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
 const { sendNotification } = require('../../../models/notificationUtil');
 const AdminOrderService = require('../../../services/AdminOrderService');
+const OrderCoreService = require('../../../services/OrderCoreService');
+const { queryLogistics } = require('../../../services/LogisticsService');
+const { loadMiniProgramConfig } = require('../../../utils/miniprogramConfig');
+const { scheduleUploadShippingInfoAfterShip } = require('../../../services/WechatShippingInfoService');
+const { isManualStatusBypassRisk } = require('../../../utils/orderGuards');
+
+async function loadLogisticsConfig() {
+    const config = await loadMiniProgramConfig(AppConfig);
+    return config.logistics_config || {};
+}
+
+function buildManualTrackingPayload(order, logisticsConfig = {}) {
+    return {
+        order_no: order.order_no,
+        tracking_no: order.tracking_no,
+        company: order.logistics_company || '手工发货',
+        status: 'manual',
+        statusText: logisticsConfig.manual_status_text || '商家已手工发货',
+        traces: [
+            {
+                time: order.shipped_at || new Date().toISOString(),
+                desc: logisticsConfig.manual_status_desc || '当前订单走手工发货模式，可查看单号和发货时间'
+            }
+        ],
+        manual_mode: true,
+        query_time: new Date().toISOString()
+    };
+}
+
+/**
+ * 管理端订单列表/导出共用筛选条件
+ * @returns {{ where: object, buyerWhere?: object, productWhere?: object, addressWhere?: object, buyerRequired: boolean }}
+ */
+function buildAdminOrderListFilters(query) {
+    const {
+        status,
+        status_group,
+        order_no,
+        keyword,
+        search_field,
+        search_value,
+        product_name,
+        buyer_keyword,
+        payment_method,
+        delivery_type,
+        start_date,
+        end_date,
+        include_suborders
+    } = query;
+
+    const where = {};
+
+    if (include_suborders !== '1' && include_suborders !== 'true') {
+        where.parent_order_id = { [Op.is]: null };
+    }
+
+    if (status) {
+        where.status = status;
+    } else if (status_group && String(status_group) !== 'all') {
+        const g = String(status_group);
+        if (g === 'pending_pay') where.status = 'pending';
+        else if (g === 'pending_ship') {
+            where.status = { [Op.in]: ['paid', 'agent_confirmed', 'shipping_requested'] };
+        } else if (g === 'pending_receive') where.status = 'shipped';
+        else if (g === 'completed') where.status = 'completed';
+        else if (g === 'closed') where.status = { [Op.in]: ['cancelled', 'refunded'] };
+    }
+
+    if (start_date && end_date) {
+        const start = new Date(start_date);
+        const end = new Date(end_date);
+        end.setHours(23, 59, 59, 999);
+        where.created_at = { [Op.between]: [start, end] };
+    }
+
+    if (payment_method) where.payment_method = payment_method;
+    if (delivery_type) where.delivery_type = delivery_type;
+
+    const sv = String(search_value || keyword || '').trim();
+    const sf = sv ? String(search_field || 'auto') : null;
+
+    let buyerWhere = undefined;
+    let addressWhere = undefined;
+    const productWhereObj = {};
+
+    if (product_name && String(product_name).trim()) {
+        productWhereObj.name = { [Op.like]: `%${String(product_name).trim()}%` };
+    }
+
+    if (sf) {
+        switch (sf) {
+            case 'order_no':
+                where.order_no = { [Op.like]: `%${sv}%` };
+                break;
+            case 'buyer_nickname':
+                buyerWhere = { nickname: { [Op.like]: `%${sv}%` } };
+                break;
+            case 'buyer_phone':
+                buyerWhere = { phone: { [Op.like]: `%${sv}%` } };
+                break;
+            case 'member_no':
+                buyerWhere = { member_no: { [Op.like]: `%${sv}%` } };
+                break;
+            case 'receiver_name':
+                addressWhere = { receiver_name: { [Op.like]: `%${sv}%` } };
+                break;
+            case 'receiver_phone':
+                addressWhere = { phone: { [Op.like]: `%${sv}%` } };
+                break;
+            case 'product_name':
+                productWhereObj.name = { [Op.like]: `%${sv}%` };
+                break;
+            case 'auto':
+            default:
+                where[Op.or] = [
+                    { order_no: { [Op.like]: `%${sv}%` } },
+                    { '$buyer.nickname$': { [Op.like]: `%${sv}%` } },
+                    { '$buyer.phone$': { [Op.like]: `%${sv}%` } },
+                    { '$buyer.member_no$': { [Op.like]: `%${sv}%` } }
+                ];
+                break;
+        }
+    } else if (order_no && String(order_no).trim()) {
+        where.order_no = { [Op.like]: `%${String(order_no).trim()}%` };
+    }
+
+    if (buyer_keyword && String(buyer_keyword).trim() && !sv) {
+        buyerWhere = { nickname: { [Op.like]: `%${String(buyer_keyword).trim()}%` } };
+    }
+
+    const productWhere = Object.keys(productWhereObj).length ? productWhereObj : undefined;
+    const buyerRequired = !!buyerWhere;
+
+    return { where, buyerWhere, productWhere, addressWhere, buyerRequired };
+}
+
+const orderListInclude = (buyerWhere, productWhere, addressWhere, buyerRequired, exportMode = false) => [
+    {
+        model: User,
+        as: 'buyer',
+        attributes: exportMode
+            ? ['id', 'nickname', 'openid', 'member_no', 'phone']
+            : ['id', 'nickname', 'openid', 'role_level', 'member_no', 'phone', 'avatar_url'],
+        where: buyerWhere,
+        required: buyerRequired
+    },
+    {
+        model: Product,
+        as: 'product',
+        attributes: exportMode ? ['id', 'name'] : ['id', 'name', 'images'],
+        where: productWhere,
+        required: !!productWhere
+    },
+    {
+        model: SKU,
+        as: 'sku',
+        attributes: ['id', 'spec_name', 'spec_value', 'sku_code'],
+        required: false
+    },
+    {
+        model: Address,
+        as: 'address',
+        attributes: exportMode
+            ? ['receiver_name', 'phone', 'province', 'city', 'district', 'detail']
+            : ['id', 'receiver_name', 'phone'],
+        where: addressWhere,
+        required: !!addressWhere
+    }
+];
 
 // 获取订单列表
 const getOrders = async (req, res) => {
     try {
-        const { status, order_no, keyword, buyer_keyword, start_date, end_date, page = 1, limit = 20 } = req.query;
-        const where = {};
+        const { page = 1, limit = 20 } = req.query;
+        const { where, buyerWhere, productWhere, addressWhere, buyerRequired } = buildAdminOrderListFilters(req.query);
 
-        if (status) where.status = status;
-        // 支持 order_no 精确搜索 + keyword 模糊搜索
-        const searchTerm = keyword || order_no;
-        if (searchTerm) where.order_no = { [Op.like]: `%${searchTerm}%` };
-        if (start_date && end_date) {
-            where.created_at = { [Op.between]: [new Date(start_date), new Date(end_date)] };
-        }
+        const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+        const include = orderListInclude(buyerWhere, productWhere, addressWhere, buyerRequired);
 
-        // 如果搜索关键字也可能是买家昵称
-        let buyerWhere = undefined;
-        if (keyword && !/^ORD/.test(keyword)) {
-            buyerWhere = { nickname: { [Op.like]: `%${keyword}%` } };
-            delete where.order_no; // 改为搜索买家
-        }
-
-        const offset = (parseInt(page) - 1) * parseInt(limit);
-
-        const { count, rows } = await Order.findAndCountAll({
-            where,
-            include: [
-                { model: User, as: 'buyer', attributes: ['id', 'nickname', 'openid'], where: buyerWhere, required: !!buyerWhere },
-                { model: Product, as: 'product', attributes: ['id', 'name', 'images'] }
-            ],
-            order: [['created_at', 'DESC']],
-            offset,
-            limit: parseInt(limit)
-        });
+        // 拆成 count + findAll。注意：col 必须是字符串，不能传 sequelize.col() 对象，否则 MySQL 会出现
+        // Unknown column 'Order.[object Object]' in 'field list'
+        const [count, rows] = await Promise.all([
+            Order.count({
+                where,
+                distinct: true,
+                col: 'id',
+                include
+            }),
+            Order.findAll({
+                where,
+                include,
+                order: [['created_at', 'DESC']],
+                offset,
+                limit: parseInt(limit, 10)
+            })
+        ]);
 
         // 计算今日销售额（仪表盘统计）
         const today = new Date();
@@ -63,8 +225,17 @@ const getOrders = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('获取订单列表失败:', error);
-        res.status(500).json({ code: -1, message: '获取订单列表失败: ' + error.message });
+        const sqlMsg = error?.parent?.sqlMessage || error?.original?.sqlMessage;
+        console.error('获取订单列表失败:', sqlMsg || error.message, {
+            method: req.method,
+            path: req.originalUrl || req.url,
+            query: req.query,
+            stack: error.stack
+        });
+        res.status(500).json({
+            code: -1,
+            message: '获取订单列表失败: ' + (sqlMsg || error.message)
+        });
     }
 };
 
@@ -74,10 +245,12 @@ const getOrderById = async (req, res) => {
         const { id } = req.params;
         const order = await Order.findByPk(id, {
             include: [
-                { model: User, as: 'buyer', attributes: ['id', 'nickname', 'openid', 'role_level'] },
+                { model: User, as: 'buyer', attributes: ['id', 'nickname', 'openid', 'role_level', 'member_no', 'phone', 'avatar_url', 'invite_code', 'parent_id'] },
                 { model: User, as: 'distributor', attributes: ['id', 'nickname'] },
                 { model: Product, as: 'product' },
-                { model: Address, as: 'address' }
+                { model: Address, as: 'address' },
+                { model: SKU, as: 'sku', attributes: ['id', 'spec_name', 'spec_value', 'sku_code', 'image'] },
+                { model: CommissionLog, as: 'commissions', attributes: ['id', 'user_id', 'amount', 'type', 'status', 'available_at', 'remark', 'created_at'], required: false }
             ]
         });
 
@@ -106,18 +279,33 @@ const ORDER_STATUS_TRANSITIONS = {
 
 // 更新订单状态（★ 加入状态机校验，防止非法状态流转）
 const updateOrderStatus = async (req, res) => {
+    let t;
     try {
         const { id } = req.params;
         const { status, remark } = req.body;
 
-        const order = await Order.findByPk(id);
+        if (isManualStatusBypassRisk(status)) {
+            return res.status(400).json({
+                code: -1,
+                message: '请使用专用流程：发货请走“发货接口”，退款请走“售后退款接口”'
+            });
+        }
+
+        t = await sequelize.transaction();
+
+        const order = await Order.findByPk(id, {
+            transaction: t,
+            lock: t.LOCK.UPDATE
+        });
         if (!order) {
+            await t.rollback();
             return res.status(404).json({ code: -1, message: '订单不存在' });
         }
 
         // ★ 校验状态流转是否合法
         const allowedNext = ORDER_STATUS_TRANSITIONS[order.status] || [];
         if (!allowedNext.includes(status)) {
+            await t.rollback();
             return res.status(400).json({
                 code: -1,
                 message: `状态流转不合法: ${order.status} → ${status}（允许: ${allowedNext.join(', ') || '无'}）`
@@ -125,13 +313,24 @@ const updateOrderStatus = async (req, res) => {
         }
 
         order.status = status;
-        if (status === 'completed') order.completed_at = new Date();
+        if (status === 'completed') {
+            await OrderCoreService._completeShippedOrder(order, t);
+        }
         if (status === 'shipped') order.shipped_at = new Date();
         if (remark) order.remark = (order.remark ? order.remark + ' | ' : '') + remark;
-        await order.save();
+        await order.save({ transaction: t });
+
+        await t.commit();
+
+        if (status === 'shipped') {
+            scheduleUploadShippingInfoAfterShip(order.id);
+        }
 
         res.json({ code: 0, message: '状态更新成功' });
     } catch (error) {
+        if (t && !t.finished) {
+            await t.rollback();
+        }
         console.error('更新订单状态失败:', error);
         res.status(500).json({ code: -1, message: '更新失败: ' + error.message });
     }
@@ -180,9 +379,12 @@ const updateShippingInfo = async (req, res) => {
             order.tracking_no = tracking_no;
         }
         if (tracking_company) {
+            order.logistics_company = tracking_company;
             order.remark = (order.remark ? order.remark + ' | ' : '') + `物流更新: ${tracking_company} ${tracking_no || order.tracking_no}`;
         }
         await order.save();
+
+        scheduleUploadShippingInfoAfterShip(order.id);
 
         res.json({
             code: 0,
@@ -195,6 +397,43 @@ const updateShippingInfo = async (req, res) => {
     } catch (error) {
         console.error('修改物流信息失败:', error);
         res.status(500).json({ code: -1, message: '修改物流信息失败: ' + error.message });
+    }
+};
+
+const getAdminOrderLogistics = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const logisticsConfig = await loadLogisticsConfig();
+        const order = await Order.findByPk(id, {
+            attributes: ['id', 'order_no', 'tracking_no', 'logistics_company', 'delivery_type', 'shipped_at', 'status']
+        });
+
+        if (!order) {
+            return res.status(404).json({ code: -1, message: '订单不存在' });
+        }
+        if (order.delivery_type === 'pickup') {
+            return res.status(400).json({ code: -1, message: '该订单为自提订单，无物流信息' });
+        }
+        if (!order.tracking_no) {
+            return res.status(400).json({ code: -1, message: '订单尚未录入物流单号' });
+        }
+
+        if (logisticsConfig.shipping_mode === 'manual') {
+            return res.json({ code: 0, data: buildManualTrackingPayload(order, logisticsConfig) });
+        }
+
+        const forceRefresh = req.query.refresh === '1';
+        const data = await queryLogistics(order.tracking_no, order.logistics_company, forceRefresh);
+        return res.json({
+            code: 0,
+            data: {
+                ...data,
+                statusText: data.status_text
+            }
+        });
+    } catch (error) {
+        console.error('后台查询物流失败:', error);
+        res.status(500).json({ code: -1, message: error.message || '物流查询失败' });
     }
 };
 
@@ -220,9 +459,9 @@ const adjustOrderAmount = async (req, res) => {
             return res.status(404).json({ code: -1, message: '订单不存在' });
         }
 
-        // 仅允许未完成订单修改金额
-        if (['completed', 'cancelled', 'refunded'].includes(order.status)) {
-            return res.status(400).json({ code: -1, message: '已完成/取消/退款的订单不允许修改金额' });
+        // 仅允许待支付订单修改金额，避免已支付订单与支付/退款/佣金口径不一致
+        if (order.status !== 'pending') {
+            return res.status(400).json({ code: -1, message: '仅待支付订单允许修改金额' });
         }
 
         const oldAmount = parseFloat(order.actual_price);
@@ -233,6 +472,7 @@ const adjustOrderAmount = async (req, res) => {
         }
 
         await order.update({
+            total_amount: adjustAmount,
             actual_price: adjustAmount,
             remark: (order.remark || '') + ` [管理员${adminName}调价: ¥${oldAmount.toFixed(2)}→¥${adjustAmount.toFixed(2)} 原因:${reason}]`
         });
@@ -318,22 +558,12 @@ const forceCompleteOrder = async (req, res) => {
             return res.status(400).json({ code: -1, message: '请说明强制完成的原因' });
         }
 
-        const order = await Order.findByPk(id);
-        if (!order) {
-            return res.status(404).json({ code: -1, message: '订单不存在' });
-        }
+        const result = await OrderCoreService.forceCompleteOrderByAdmin(id, adminName, reason);
 
-        if (!['shipped'].includes(order.status)) {
-            return res.status(400).json({ code: -1, message: '仅已发货订单可以强制完成' });
-        }
-
-        await order.update({
-            status: 'completed',
-            completed_at: new Date(),
-            remark: (order.remark || '') + ` [管理员${adminName}强制完成 原因:${reason}]`
+        res.json({
+            code: 0,
+            message: `订单已强制完成，售后期${result.refundDays}天后佣金将进入审批流程`
         });
-
-        res.json({ code: 0, message: '订单已强制完成' });
     } catch (error) {
         console.error('强制完成订单失败:', error);
         res.status(500).json({ code: -1, message: '操作失败' });
@@ -381,17 +611,14 @@ const batchShipOrders = async (req, res) => {
 
         for (const item of orders) {
             try {
-                const order = await Order.findByPk(item.id);
-                if (!order || !['paid', 'agent_confirmed', 'shipping_requested'].includes(order.status)) {
+                if (!item?.id) {
                     failedIds.push(item.id);
                     continue;
                 }
-
-                await order.update({
-                    status: 'shipped',
-                    shipped_at: new Date(),
+                await AdminOrderService.shipOrder(item.id, {
                     tracking_no: item.tracking_no || '',
-                    fulfillment_type: 'Company'
+                    tracking_company: item.tracking_company || item.logistics_company || '',
+                    fulfillment_type: item.fulfillment_type || 'platform'
                 });
 
                 successCount++;
@@ -417,23 +644,14 @@ const batchShipOrders = async (req, res) => {
  */
 const exportOrders = async (req, res) => {
     try {
-        const { status, start_date, end_date, limit = 1000 } = req.query;
-        const where = {};
-
-        if (status) where.status = status;
-        if (start_date && end_date) {
-            where.created_at = { [Op.between]: [new Date(start_date), new Date(end_date + ' 23:59:59')] };
-        }
+        const { limit = 1000 } = req.query;
+        const { where, buyerWhere, productWhere, addressWhere, buyerRequired } = buildAdminOrderListFilters(req.query);
 
         const orders = await Order.findAll({
             where,
-            include: [
-                { model: User, as: 'buyer', attributes: ['id', 'nickname', 'openid'] },
-                { model: Product, as: 'product', attributes: ['id', 'name'] },
-                { model: Address, as: 'address', attributes: ['name', 'phone', 'province', 'city', 'district', 'detail'] }
-            ],
+            include: orderListInclude(buyerWhere, productWhere, addressWhere, buyerRequired, true),
             order: [['created_at', 'DESC']],
-            limit: parseInt(limit)
+            limit: parseInt(limit, 10)
         });
 
         res.json({
@@ -453,6 +671,7 @@ module.exports = {
     updateOrderStatus,
     shipOrder,
     updateShippingInfo,
+    getAdminOrderLogistics,
     // ★ 新增高级管理功能
     adjustOrderAmount,
     addOrderRemark,

@@ -1,0 +1,27 @@
+<view class="wrap">
+  <view class="card" wx:if="{{loaded && !hasAny}}">
+    <text class="tip">暂未配置客服方式，请稍后在后台「系统设置 → 小程序配置 → 客服通道」中填写。</text>
+  </view>
+
+  <block wx:if="{{channel_service_phone}}">
+    <view class="card phone-card" bindtap="onCallChannel" hover-class="phone-card-hover">
+      <text class="label">渠道服务电话</text>
+      <text class="value">{{channel_service_phone}}</text>
+      <text class="action">拨打 ›</text>
+    </view>
+  </block>
+
+  <block wx:if="{{product_service_phone}}">
+    <view class="card phone-card" bindtap="onCallProduct" hover-class="phone-card-hover">
+      <text class="label">产品服务电话</text>
+      <text class="value">{{product_service_phone}}</text>
+      <text class="action">拨打 ›</text>
+    </view>
+  </block>
+
+  <view class="card qr-card" wx:if="{{qr_code_url}}">
+    <text class="label">联系我们（二维码）</text>
+    <text class="qr-hint">长按图片可识别或保存</text>
+    <image class="qr-img" src="{{qr_code_url}}" mode="widthFix" show-menu-by-longpress />
+  </view>
+</view>

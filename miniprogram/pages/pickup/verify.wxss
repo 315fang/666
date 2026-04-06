@@ -1,0 +1,51 @@
+.wrap {
+  padding: 28rpx;
+  min-height: 100vh;
+  background: #fafaf9;
+}
+.tip {
+  font-size: 26rpx;
+  color: #57534e;
+  line-height: 1.5;
+  margin-bottom: 32rpx;
+  display: block;
+}
+.block {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+}
+.label {
+  font-size: 26rpx;
+  color: #1c1917;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 16rpx;
+}
+.inp {
+  border: 1px solid #e7e5e4;
+  border-radius: 10rpx;
+  padding: 20rpx;
+  font-size: 28rpx;
+  margin-bottom: 20rpx;
+}
+.inp.mt {
+  margin-top: 16rpx;
+}
+.btn {
+  background: #1c1917;
+  color: #fff;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+}
+.btn.secondary {
+  background: #e7e5e4;
+  color: #1c1917;
+}
+.divider {
+  text-align: center;
+  color: #a8a29e;
+  font-size: 24rpx;
+  margin: 16rpx 0;
+}

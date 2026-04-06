@@ -1,26 +1,68 @@
 // pages/points/index.js
-const { get, post } = require('../../utils/request');
+const { get } = require('../../utils/request');
+const { safeBack } = require('../../utils/navigator');
+const { fetchPointSummary, checkinPoints } = require('../../utils/points');
+const { getLightPromptModals } = require('../../utils/miniProgramConfig');
+const { shouldShowDaily, markDailyShown } = require('../../utils/lightPrompt');
 
 Page({
     data: {
         account: null,
         logs: [],
-        levelConfig: [],
         tasks: [],
         loading: true,
         checkinLoading: false,
-        activeTab: 'tasks',  // tasks | logs | levels
-        statusBarHeight: 20
+        activeTab: 'tasks',  // tasks | logs | redeem
+        statusBarHeight: 20,
+        navTopPadding: 20,
+        navBarHeight: 44,
+        lightTipShow: false,
+        lightTipTitle: '',
+        lightTipContent: ''
     },
 
     onLoad() {
-        const sys = wx.getSystemInfoSync();
-        this.setData({ statusBarHeight: sys.statusBarHeight || 20 });
+        const app = getApp();
+        this.setData({
+            statusBarHeight: app.globalData.statusBarHeight || 20,
+            navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
+            navBarHeight: app.globalData.navBarHeight || 44
+        });
         this.loadAll();
     },
 
-    onShow() {
-        this.loadAccount();
+    async onShow() {
+        await this.loadAccount();
+        this._tryPointsCheckinPrompt();
+    },
+
+    _tryPointsCheckinPrompt() {
+        const mod = getLightPromptModals().points_checkin;
+        if (!mod || !mod.enabled) return;
+        if (!shouldShowDaily('light_tip_points_checkin')) return;
+        markDailyShown('light_tip_points_checkin');
+        this.setData({
+            lightTipShow: true,
+            lightTipTitle: mod.title || '签到与积分',
+            lightTipContent: mod.body || ''
+        });
+    },
+
+    onPointsTipTap() {
+        const mod = getLightPromptModals().points_checkin;
+        if (!mod || !mod.enabled) {
+            wx.showToast({ title: '暂无可展示说明', icon: 'none' });
+            return;
+        }
+        this.setData({
+            lightTipShow: true,
+            lightTipTitle: mod.title || '签到与积分',
+            lightTipContent: mod.body || ''
+        });
+    },
+
+    onLightTipClose() {
+        this.setData({ lightTipShow: false });
     },
 
     async loadAll() {
@@ -34,10 +76,8 @@ Page({
 
     async loadAccount() {
         try {
-            const res = await get('/points/account');
-            if (res.code === 0) {
-                this.setData({ account: res.data });
-            }
+            const { account } = await fetchPointSummary();
+            this.setData({ account });
         } catch (e) {
             console.error('加载积分账户失败', e);
         }
@@ -48,8 +88,15 @@ Page({
             const res = await get('/points/tasks');
             if (res.code === 0) {
                 this.setData({
-                    tasks: res.data.tasks,
-                    levelConfig: res.data.level_config
+                    tasks: (res.data.tasks || []).map((task) => ({
+                        ...task,
+                        name: task.title,
+                        description: task.desc,
+                        points_reward: task.points,
+                        completed: !!task.done,
+                        progress: task.current || (task.done ? 1 : 0),
+                        max_progress: task.total || 1
+                    }))
                 });
             }
         } catch (e) {
@@ -61,7 +108,12 @@ Page({
         try {
             const res = await get('/points/logs', { page: 1, limit: 30 });
             if (res.code === 0) {
-                this.setData({ logs: res.data.list });
+                this.setData({
+                    logs: (res.data.list || []).map((log) => ({
+                        ...log,
+                        amount: log.points
+                    }))
+                });
             }
         } catch (e) {
             console.error('加载流水失败', e);
@@ -74,7 +126,7 @@ Page({
         this.setData({ checkinLoading: true });
         try {
             wx.showLoading({ title: '签到中...' });
-            const res = await post('/points/checkin');
+            const res = await checkinPoints();
             wx.hideLoading();
             if (res.code === 0) {
                 wx.showToast({
@@ -82,7 +134,8 @@ Page({
                     icon: 'none',
                     duration: 2500
                 });
-                this.loadAll();
+                await this.loadAccount();
+                await Promise.all([this.loadTasks(), this.loadLogs()]);
             } else {
                 wx.showToast({ title: res.message || '今日已签到', icon: 'none' });
             }
@@ -102,25 +155,15 @@ Page({
     },
 
     onBackTap() {
-        wx.navigateBack();
+        safeBack();
     },
 
-    // 积分流水的描述文字
-    formatPointType(type) {
-        const map = {
-            register: '注册升级体验官',
-            purchase: '消费获积分',
-            share: '分享商品',
-            review: '写评价',
-            review_image: '图文评价',
-            checkin: '每日签到',
-            checkin_streak: '连续签到奖励',
-            invite_success: '邀请新用户',
-            group_start: '发起拼团',
-            group_success: '拼团成功',
-            redeem: '积分兑换',
-            expire: '积分过期'
-        };
-        return map[type] || type;
+    onOpenLottery() {
+        wx.navigateTo({ url: '/pages/lottery/lottery' });
+    },
+
+    /** 活动 Tab：限时活动卡片、积分专享等 */
+    onOpenActivityMall() {
+        wx.switchTab({ url: '/pages/activity/activity' });
     }
 });

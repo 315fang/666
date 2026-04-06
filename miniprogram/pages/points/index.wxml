@@ -1,154 +1,157 @@
-<!--pages/points/index.wxml - 积分中心-->
+<!-- pages/points/index.wxml -->
 <view class="container">
-  <!-- 浮动导航 -->
-  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
-    <view class="nav-back" bindtap="onBackTap">
-      <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
-    </view>
-    <text class="nav-title">积分中心</text>
-    <view class="nav-placeholder"/>
-  </view>
 
-  <!-- 主卡片：等级 + 积分 -->
-  <view class="hero-card" wx:if="{{account}}">
-    <!-- 等级徽章 -->
-    <view class="level-badge">
-      <text class="level-text">Lv.{{account.level}}</text>
-      <text class="level-name">{{account.level_name}}</text>
-    </view>
-
-    <!-- 积分数值 -->
-    <view class="points-display">
-      <text class="points-num">{{account.balance_points}}</text>
-      <text class="points-label">可用积分</text>
-    </view>
-
-    <!-- 进度条（到下一级） -->
-    <view class="level-progress" wx:if="{{account.next_level}}">
-      <view class="progress-info">
-        <text class="progress-label">距离 Lv.{{account.next_level.level}} {{account.next_level.name}}</text>
-        <text class="progress-tip">还差 {{account.next_level.points_needed}} 积分</text>
+  <!-- 导航栏 -->
+  <view class="nav-bar" style="padding-top: {{navTopPadding}}px;">
+    <view class="nav-inner" style="height: {{navBarHeight}}px;">
+      <view class="nav-back" bindtap="onBackTap">
+        <image src="/assets/icons/arrow-left.svg" mode="aspectFit" class="back-icon"></image>
       </view>
-      <view class="progress-bar">
-        <view class="progress-fill" style="width: {{100 - (account.next_level.points_needed / (account.next_level.points_needed + account.balance_points)) * 100}}%;"/>
-      </view>
-    </view>
-    <view class="level-progress" wx:else>
-      <text class="progress-label">🎉 已达最高等级，感谢您的支持！</text>
-    </view>
-
-    <!-- 当前特权 -->
-    <view class="perks-row">
-      <view class="perk-tag" wx:for="{{account.level_perks}}" wx:key="*this">
-        <image class="perk-icon" src="/assets/icons/check-circle.svg" mode="aspectFit"/>
-        <text>{{item}}</text>
-      </view>
+      <text class="nav-title">我的积分</text>
     </view>
   </view>
 
-  <!-- 骨架屏 -->
-  <view class="hero-card skeleton" wx:if="{{loading && !account}}">
-    <view class="sk-line sk-wide"/>
-    <view class="sk-line sk-medium" style="margin-top:16rpx;"/>
-  </view>
+  <!-- 主内容区 -->
+  <scroll-view scroll-y class="main-scroll">
 
-  <!-- 签到按钮 -->
-  <view class="checkin-section" wx:if="{{tasks.length > 0}}">
-    <view class="checkin-card" bindtap="onCheckin">
-      <view class="checkin-left">
-        <image class="checkin-icon" src="/assets/icons/star.svg" mode="aspectFit"/>
-        <view class="checkin-info">
-          <text class="checkin-title">每日签到</text>
-          <text class="checkin-streak" wx:if="{{tasks[0] && tasks[0].streak > 0}}">
-            已连续签到 {{tasks[0].streak}} 天 🔥
-          </text>
-          <text class="checkin-streak" wx:else>今日未签到</text>
+    <!-- 积分资产卡 -->
+    <view class="asset-card">
+      <view class="asset-card-inner">
+        <view class="asset-level-row">
+          <text class="asset-level-name">{{account.level_name || '普通用户'}}</text>
+          <view class="asset-streak" wx:if="{{account.streak > 0}}">
+            <text class="asset-streak-text">连签 {{account.streak}} 天</text>
+          </view>
+        </view>
+        <view class="asset-balance-row">
+          <text class="asset-balance-num">{{account.total_points || 0}}</text>
+          <text class="asset-balance-unit">累计积分</text>
+        </view>
+        <view class="asset-balance-sub" wx:if="{{account.balance_points != null}}">
+          <text class="asset-balance-sub-text">可用 {{account.balance_points || 0}} 积分</text>
+        </view>
+        <!-- 成长值进度 -->
+        <view class="asset-progress-wrap" wx:if="{{account.next_level && (account.growth_needed > 0 || account.next_level_threshold)}}">
+          <view class="asset-progress-label">
+            <text class="asset-progress-text">成长值 {{account.growth_value || 0}}</text>
+            <text class="asset-progress-text">距 {{account.next_level_name || '下一等级'}} 还差 {{account.growth_needed || 0}} 成长值</text>
+          </view>
+          <view class="asset-progress-bar">
+            <view class="asset-progress-fill" style="width: {{account.growth_progress || 0}}%"></view>
+          </view>
         </view>
       </view>
-      <view class="checkin-btn {{tasks[0] && tasks[0].done ? 'done' : ''}}">
-        <text wx:if="{{tasks[0] && tasks[0].done}}">已签到</text>
-        <text wx:else>签到 +{{tasks[0] && tasks[0].points || 5}}分</text>
+    </view>
+
+    <!-- 每日签到卡 -->
+    <view class="checkin-card">
+      <view class="checkin-left">
+        <view class="checkin-title-row">
+          <text class="checkin-title">每日签到</text>
+          <text class="checkin-tip-link" catchtap="onPointsTipTap">说明</text>
+        </view>
+        <text class="checkin-desc">签到可获得积分奖励，连签有惊喜</text>
+      </view>
+      <view class="checkin-btn {{account.today_signed ? 'signed' : ''}}" bindtap="onCheckin">
+        <text class="checkin-btn-text">{{checkinLoading ? '签到中' : (account.today_signed ? '已签到' : '签 到')}}</text>
       </view>
     </view>
-  </view>
 
-  <!-- Tab 切换 -->
-  <view class="tab-bar">
-    <view class="tab-item {{activeTab === 'tasks' ? 'active' : ''}}"
-          bindtap="switchTab" data-tab="tasks">任务</view>
-    <view class="tab-item {{activeTab === 'logs' ? 'active' : ''}}"
-          bindtap="switchTab" data-tab="logs">流水</view>
-    <view class="tab-item {{activeTab === 'levels' ? 'active' : ''}}"
-          bindtap="switchTab" data-tab="levels">等级特权</view>
-  </view>
+    <!-- Tab 选项卡 -->
+    <view class="tab-bar">
+      <view class="tab-item {{activeTab === 'tasks' ? 'active' : ''}}" bindtap="switchTab" data-tab="tasks">
+        <text class="tab-text">积分任务</text>
+      </view>
+      <view class="tab-item {{activeTab === 'logs' ? 'active' : ''}}" bindtap="switchTab" data-tab="logs">
+        <text class="tab-text">积分流水</text>
+      </view>
+      <view class="tab-item {{activeTab === 'redeem' ? 'active' : ''}}" bindtap="switchTab" data-tab="redeem">
+        <text class="tab-text">积分兑换</text>
+      </view>
+    </view>
 
-  <!-- 任务列表 -->
-  <view class="tab-content" wx:if="{{activeTab === 'tasks'}}">
-    <view class="task-list">
+    <!-- 任务列表 -->
+    <view class="tab-panel" wx:if="{{activeTab === 'tasks'}}">
       <view class="task-item" wx:for="{{tasks}}" wx:key="id">
         <view class="task-left">
           <view class="task-icon-wrap">
-            <image class="task-icon" src="/assets/icons/gift.svg" mode="aspectFit"/>
+            <image src="/assets/icons/star.svg" mode="aspectFit" class="task-icon"></image>
           </view>
           <view class="task-info">
-            <text class="task-title">{{item.title}}</text>
-            <text class="task-desc">{{item.desc}}</text>
-            <!-- 带进度的任务 -->
-            <view class="task-progress-bar" wx:if="{{item.total}}">
-              <view class="task-progress-fill"
-                    style="width: {{(item.current / item.total) * 100}}%;"/>
-              <text class="task-progress-text">{{item.current}}/{{item.total}}</text>
+            <text class="task-name">{{item.name}}</text>
+            <text class="task-desc">{{item.description}}</text>
+            <view class="task-progress-bar" wx:if="{{item.max_progress > 1}}">
+              <view class="task-progress-fill" style="width: {{(item.progress || 0) / item.max_progress * 100}}%"></view>
             </view>
           </view>
         </view>
-        <view class="task-reward {{item.done ? 'done' : ''}}">
-          <text wx:if="{{item.done}}">已完成</text>
-          <text wx:else>+{{item.points}}分</text>
+        <view class="task-right">
+          <text class="task-reward">+{{item.points_reward}}</text>
+          <text class="task-done" wx:if="{{item.completed}}">已完成</text>
+          <text class="task-progress-text" wx:elif="{{item.max_progress > 1}}">{{item.progress || 0}}/{{item.max_progress}}</text>
         </view>
       </view>
+      <view class="list-empty" wx:if="{{tasks.length === 0 && !loading}}">
+        <text class="list-empty-text">暂无可用任务</text>
+      </view>
     </view>
-  </view>
 
-  <!-- 积分流水 -->
-  <view class="tab-content" wx:if="{{activeTab === 'logs'}}">
-    <view class="empty-tip" wx:if="{{logs.length === 0}}">
-      <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
-      <text>暂无积分记录</text>
-    </view>
-    <view class="log-list" wx:else>
+    <!-- 积分流水 -->
+    <view class="tab-panel" wx:if="{{activeTab === 'logs'}}">
       <view class="log-item" wx:for="{{logs}}" wx:key="id">
         <view class="log-left">
-          <text class="log-type">{{item.remark || item.type}}</text>
+          <text class="log-remark">{{item.remark || item.type}}</text>
           <text class="log-time">{{item.created_at}}</text>
         </view>
-        <view class="log-points {{item.points >= 0 ? 'positive' : 'negative'}}">
-          {{item.points >= 0 ? '+' : ''}}{{item.points}}
+        <view class="log-right">
+          <text class="log-amount {{item.amount > 0 ? 'positive' : 'negative'}}">{{item.amount > 0 ? '+' : ''}}{{item.amount}}</text>
+          <text class="log-balance">余额 {{item.balance_after}}</text>
+        </view>
+      </view>
+      <view class="list-empty" wx:if="{{logs.length === 0 && !loading}}">
+        <text class="list-empty-text">暂无积分记录</text>
+      </view>
+    </view>
+
+    <!-- 积分兑换：抽奖 + 活动页专享/限时商品 -->
+    <view class="tab-panel redeem-panel" wx:if="{{activeTab === 'redeem'}}">
+      <view class="redeem-hint">使用积分参与抽奖，或在活动页购买积分/现金专享商品</view>
+      <view class="redeem-card redeem-card-lottery" bindtap="onOpenLottery" hover-class="redeem-card-hover">
+        <view class="redeem-card-icon">🎰</view>
+        <view class="redeem-card-body">
+          <text class="redeem-card-title">积分抽奖</text>
+          <text class="redeem-card-desc">消耗积分转动奖池，好礼兑不停</text>
+        </view>
+        <text class="redeem-card-arrow">›</text>
+      </view>
+      <view class="redeem-card redeem-card-activity" bindtap="onOpenActivityMall" hover-class="redeem-card-hover">
+        <view class="redeem-card-icon">🎁</view>
+        <view class="redeem-card-body">
+          <text class="redeem-card-title">活动商品</text>
+          <text class="redeem-card-desc">限时活动专享价，支持积分抵扣购买</text>
+        </view>
+        <text class="redeem-card-arrow">›</text>
+      </view>
+    </view>
+
+    <!-- 骨架屏 -->
+    <view class="skeleton-wrap" wx:if="{{loading}}">
+      <view class="sk-task" wx:for="{{[1,2,3,4]}}" wx:key="index">
+        <view class="sk-icon"></view>
+        <view class="sk-info">
+          <view class="sk-line sk-long"></view>
+          <view class="sk-line sk-short"></view>
         </view>
       </view>
     </view>
-  </view>
 
-  <!-- 等级特权 -->
-  <view class="tab-content" wx:if="{{activeTab === 'levels'}}">
-    <view class="level-card" wx:for="{{levelConfig}}" wx:key="level"
-          class="level-card {{item.level <= (account && account.level || 0) ? 'unlocked' : 'locked'}}">
-      <view class="level-header">
-        <view class="lv-badge lv-{{item.level}}">Lv.{{item.level}}</view>
-        <text class="lv-name">{{item.name}}</text>
-        <text class="lv-req">{{item.min}}分起</text>
-        <view class="lv-status" wx:if="{{item.level <= (account && account.level || 0)}}">
-          <image class="check-icon" src="/assets/icons/check-circle.svg" mode="aspectFit"/>
-          <text>已解锁</text>
-        </view>
-      </view>
-      <view class="level-perks">
-        <view class="perk-item" wx:for="{{item.perks}}" wx:for-item="perk" wx:key="*this">
-          <image class="perk-dot" src="/assets/icons/star.svg" mode="aspectFit"/>
-          <text class="perk-text">{{perk}}</text>
-        </view>
-      </view>
-    </view>
-  </view>
+    <view style="height: 60rpx;"></view>
+  </scroll-view>
 
-  <view style="height: 60rpx;"/>
+  <light-tip-modal
+    show="{{lightTipShow}}"
+    title="{{lightTipTitle}}"
+    content="{{lightTipContent}}"
+    bind:close="onLightTipClose"
+  />
 </view>

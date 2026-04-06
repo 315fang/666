@@ -1,6 +1,6 @@
-<!--pages/slash/list.wxml - 砍一刀活动列表-->
+<!-- pages/slash/list.wxml -->
 <view class="container">
-  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+  <view class="nav-bar" style="padding-top: {{navTopPadding}}px;">
     <view class="nav-back" bindtap="onBack">
       <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
     </view>
@@ -25,16 +25,29 @@
   </view>
 
   <!-- 活动列表 -->
-  <view class="scroll-area" wx:if="{{activeTab === 'activities'}}">
+  <scroll-view scroll-y class="scroll-area" wx:if="{{activeTab === 'activities'}}">
+    <view class="state-loading" wx:if="{{loading && !activities.length}}">
+      <view class="skeleton-block" style="width:100%;height:160rpx;margin-bottom:20rpx;border-radius:24rpx;"></view>
+      <view class="skeleton-block" style="width:100%;height:160rpx;margin-bottom:20rpx;border-radius:24rpx;"></view>
+      <view class="skeleton-block" style="width:100%;height:160rpx;border-radius:24rpx;"></view>
+    </view>
     <view class="empty-wrap" wx:if="{{!activities.length && !loading}}">
       <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
       <text class="empty-text">暂无砍价活动</text>
     </view>
     <view class="product-list">
       <view class="product-card" wx:for="{{activities}}" wx:key="id" bindtap="onStartSlash" data-activity="{{item}}">
-        <image class="product-img" src="{{item.product && item.product.images && item.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
+        <view class="img-wrap">
+          <image class="product-img" src="{{item.product && item.product.images && item.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
+          <view class="corner-badge">砍价</view>
+        </view>
         <view class="product-info">
-          <text class="product-name">{{item.product && item.product.name || '商品'}}</text>
+          <text class="product-name line-2">{{item.product && item.product.name || '商品'}}</text>
+          <view class="tag-row">
+            <text class="tag tag-hot" wx:if="{{item._saveNum > 0}}">立省¥{{item._saveYuan}}</text>
+            <text class="tag">好友帮砍</text>
+            <text class="tag tag-muted">{{item.expire_hours}}小时有效</text>
+          </view>
           <view class="price-row">
             <view class="price-from">
               <text class="price-label">原价</text>
@@ -42,21 +55,36 @@
             </view>
             <view class="price-arrow">→</view>
             <view class="price-to">
-              <text class="price-label">底价</text>
+              <text class="price-label">可砍至</text>
               <text class="price-val floor">¥{{item.floor_price}}</text>
             </view>
           </view>
+          <view class="meta-line" wx:if="{{item._retailHint}}">
+            <text class="meta-muted">零售价参考 ¥{{item._retailHint}}</text>
+          </view>
+          <view class="stock-row" wx:if="{{item.stock_limit > 0}}">
+            <view class="stock-bar">
+              <view class="stock-fill" style="width: {{item._soldPct}}%;"/>
+            </view>
+            <text class="stock-text">已砍成{{item._soldCount}}件 · 仅剩{{item._stockRemain}}件</text>
+          </view>
+          <text class="one-line-desc" wx:if="{{item._summary}}">{{item._summary}}</text>
           <view class="action-row">
-            <text class="helpers-hint">最多{{item.max_helpers === -1 ? '不限' : item.max_helpers}}人帮砍 · {{item.expire_hours}}h有效</text>
+            <text class="helpers-hint">最多{{item.max_helpers === -1 ? '不限' : item.max_helpers}}人帮砍 · 单笔随机砍 ¥{{item.min_slash_per_helper}}~{{item.max_slash_per_helper}}</text>
             <view class="start-btn">发起砍价</view>
           </view>
         </view>
       </view>
     </view>
-  </view>
+  </scroll-view>
 
   <!-- 我的砍价记录 -->
-  <view class="scroll-area" wx:if="{{activeTab === 'my'}}">
+  <scroll-view scroll-y class="scroll-area" wx:if="{{activeTab === 'my'}}">
+    <view class="state-loading" wx:if="{{loading && !myRecords.length}}">
+      <view class="skeleton-block" style="width:100%;height:160rpx;margin-bottom:20rpx;border-radius:24rpx;"></view>
+      <view class="skeleton-block" style="width:100%;height:160rpx;margin-bottom:20rpx;border-radius:24rpx;"></view>
+      <view class="skeleton-block" style="width:100%;height:160rpx;border-radius:24rpx;"></view>
+    </view>
     <view class="empty-wrap" wx:if="{{!myRecords.length && !loading}}">
       <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
       <text class="empty-text">还没有砍价记录\n去砍价商品页发起第一刀吧</text>
@@ -72,7 +100,7 @@
           </view>
           <view class="record-progress-wrap">
             <view class="record-progress-bar">
-              <view class="record-progress-fill" style="width: {{(1 - (item.current_price - item.floor_price) / (item.original_price - item.floor_price)) * 100}}%;"/>
+              <view class="record-progress-fill" style="width: {{item.original_price > item.floor_price ? (1 - (item.current_price - item.floor_price) / (item.original_price - item.floor_price)) * 100 : 0}}%;"/>
             </view>
             <text class="record-helper-count">{{item.helper_count}}人已帮砍</text>
           </view>
@@ -88,5 +116,5 @@
         </view>
       </view>
     </view>
-  </view>
+  </scroll-view>
 </view>

@@ -192,7 +192,7 @@ function getCacheStrategy(url) {
  * @returns {Promise} 请求结果
  */
 function cachedGet(requestFn, url, params = {}, options = {}) {
-  const { useCache = true, cacheTTL, ...restOptions } = options;
+  const { useCache = true, cacheTTL, debugCache = false, ...restOptions } = options;
 
   // 如果不使用缓存，直接发起请求
   if (!useCache) {
@@ -205,12 +205,16 @@ function cachedGet(requestFn, url, params = {}, options = {}) {
   // 尝试从缓存获取
   const cachedData = requestCache.get(cacheKey);
   if (cachedData) {
-    console.log('[RequestCache] 命中缓存:', url);
+    if (debugCache) {
+      console.log('[RequestCache] 命中缓存:', url);
+    }
     return Promise.resolve(cachedData);
   }
 
-  // 缓存未命中，发起请求
-  console.log('[RequestCache] 缓存未命中，发起请求:', url);
+  // 首次请求或缓存已过期都属于正常路径，默认不打印，避免开发时误判成异常。
+  if (debugCache) {
+    console.log('[RequestCache] 发起请求（首次或缓存过期）:', url);
+  }
   return requestFn(url, params, restOptions).then(data => {
     // 获取缓存策略
     const ttl = cacheTTL || getCacheStrategy(url);

@@ -1,14 +1,18 @@
 /**
- * 订单与佣金后台定时任务服务
- * 剥离自原 orderController.js
+ * 订单与佣金后台定时任务（自动确认收货、取消超时单、佣金结算、订单完成后的升级统计等）。
+ * 订单完成统计幂等使用 orders.completion_processed（见 migrations/20260321_order_completion_processed.sql）。
  */
 
-const { Order, Product, SKU, User, CommissionLog, Refund, sequelize } = require('../models');
+const { Order, Product, SKU, User, CommissionLog, Refund, UserCoupon, sequelize } = require('../models');
 const { sendNotification } = require('../models/notificationUtil');
 const { checkRoleUpgrade } = require('../utils/commission');
 const { Op } = require('sequelize');
 const constants = require('../config/constants');
 const { logCommission, error: logError } = require('../utils/logger');
+const PointService = require('./PointService');
+const { toMoney, subMoney } = require('../utils/money');
+const { getOrderRuntimeConfig } = require('../utils/runtimeBusinessConfig');
+const { shouldRestoreCoupon } = require('../utils/orderGuards');
 
 class OrderJobService {
 
@@ -43,18 +47,17 @@ class OrderJobService {
                     freshLog.settled_at = new Date();
                     await freshLog.save({ transaction: t });
 
-                    // 欠款优先抵扣
-                    const commissionAmount = parseFloat(freshLog.amount);
+                    const commissionAmount = toMoney(freshLog.amount);
                     const commUser = await User.findByPk(freshLog.user_id, { transaction: t, lock: t.LOCK.UPDATE });
                     if (commUser) {
-                        const currentDebt = parseFloat(commUser.debt_amount) || 0;
+                        const currentDebt = toMoney(commUser.debt_amount);
                         if (currentDebt > 0) {
                             if (currentDebt >= commissionAmount) {
                                 await commUser.decrement('debt_amount', { by: commissionAmount, transaction: t });
                                 freshLog.remark = (freshLog.remark || '') + ` [全额抵扣欠款¥${commissionAmount.toFixed(2)}]`;
                                 await freshLog.save({ transaction: t });
                             } else {
-                                const remaining = parseFloat((commissionAmount - currentDebt).toFixed(2));
+                                const remaining = subMoney(commissionAmount, currentDebt);
                                 await commUser.update({ debt_amount: 0 }, { transaction: t });
                                 await commUser.increment('balance', { by: remaining, transaction: t });
                                 freshLog.remark = (freshLog.remark || '') + ` [抵扣欠款¥${currentDebt.toFixed(2)}, 入账¥${remaining}]`;
@@ -129,6 +132,22 @@ class OrderJobService {
                         continue;
                     }
 
+                    if (freshLog.order_id) {
+                        const order = await Order.findByPk(freshLog.order_id, {
+                            attributes: ['id', 'status'],
+                            transaction: t,
+                            lock: t.LOCK.UPDATE
+                        });
+
+                        if (!order || ['cancelled', 'refunded'].includes(order.status)) {
+                            freshLog.status = 'cancelled';
+                            freshLog.remark = (freshLog.remark || '') + ' [订单已取消/退款，佣金自动撤销]';
+                            await freshLog.save({ transaction: t });
+                            await t.commit();
+                            continue;
+                        }
+                    }
+
                     // 检查该订单是否有进行中的退款申请
                     const pendingRefund = await Refund.findOne({
                         where: {
@@ -187,13 +206,15 @@ class OrderJobService {
                 return;
             }
 
-            // ★ 幂等保护：避免同一订单被重复计入有效订单统计
-            // TODO: 建议在 Order 表添加 completion_processed TINYINT(1) DEFAULT 0 字段
-            //       用数据库字段做幂等标记，比用 remark 字符串可靠（remark 管理员可编辑）
-            //       迁移 SQL: ALTER TABLE Orders ADD completion_processed TINYINT(1) DEFAULT 0;
-            //       启用后将下面 remark 检查改为: if (order.completion_processed) {
-            if (order.remark && order.remark.includes('[已计入有效订单]')) {
+            // ★ 幂等：优先读 completion_processed；历史数据若仅有 remark 标记则补写字段后退出（避免重复统计）
+            const legacyRemarkDone = order.remark && order.remark.includes('[已计入有效订单]');
+            if (Number(order.completion_processed) === 1) {
                 await t.rollback();
+                return;
+            }
+            if (legacyRemarkDone) {
+                await order.update({ completion_processed: 1 }, { transaction: t });
+                await t.commit();
                 return;
             }
 
@@ -207,14 +228,29 @@ class OrderJobService {
 
             // 售后期结束，此订单确认为"有效订单"，计入升级统计
             await buyer.increment('order_count', { transaction: t });
-            order.remark = (order.remark || '') + ' [已计入有效订单]';
+            order.completion_processed = 1;
             await order.save({ transaction: t });
 
             // 刷新 buyer 数据
             await buyer.reload({ transaction: t });
 
-            // 检查买家是否应该升级
-            const buyerNewRole = checkRoleUpgrade(buyer);
+            // 查询买家直推下线的等级分布，供升级判断使用
+            const buyerReferees = await User.findAll({
+                where: { parent_id: buyer.id },
+                attributes: ['role_level'],
+                transaction: t
+            });
+            const buyerRefByLevel = {};
+            for (const r of buyerReferees) {
+                const lv = r.role_level || 0;
+                buyerRefByLevel[lv] = (buyerRefByLevel[lv] || 0) + 1;
+                // 高等级也计入低等级统计（C2 同时满足"C1 以上"的要求）
+                for (let i = 0; i < lv; i++) {
+                    buyerRefByLevel[i] = (buyerRefByLevel[i] || 0);
+                }
+            }
+
+            const buyerNewRole = checkRoleUpgrade(buyer, buyerRefByLevel);
             if (buyerNewRole && buyerNewRole > buyer.role_level) {
                 const roleNames = { 2: '团长', 3: '代理商' };
                 const oldRole = buyer.role_level;
@@ -244,7 +280,22 @@ class OrderJobService {
                     }
                     await parent.reload({ transaction: t });
 
-                    const parentNewRole = checkRoleUpgrade(parent);
+                    // 查询上级直推下线的等级分布
+                    const parentReferees = await User.findAll({
+                        where: { parent_id: parent.id },
+                        attributes: ['role_level'],
+                        transaction: t
+                    });
+                    const parentRefByLevel = {};
+                    for (const r of parentReferees) {
+                        const lv = r.role_level || 0;
+                        parentRefByLevel[lv] = (parentRefByLevel[lv] || 0) + 1;
+                        for (let i = 0; i < lv; i++) {
+                            parentRefByLevel[i] = (parentRefByLevel[i] || 0);
+                        }
+                    }
+
+                    const parentNewRole = checkRoleUpgrade(parent, parentRefByLevel);
                     if (parentNewRole && parentNewRole > parent.role_level) {
                         const roleNames = { 2: '团长', 3: '代理商' };
                         parent.role_level = parentNewRole;
@@ -355,7 +406,8 @@ class OrderJobService {
      */
     static async autoCancelExpiredOrders() {
         try {
-            const expireMinutes = constants.ORDER.AUTO_CANCEL_MINUTES;
+            const orderConfig = await getOrderRuntimeConfig();
+            const expireMinutes = orderConfig.AUTO_CANCEL_MINUTES;
             const expireTime = new Date();
             expireTime.setMinutes(expireTime.getMinutes() - expireMinutes);
 
@@ -405,6 +457,48 @@ class OrderJobService {
                         await child.save({ transaction: t });
                     }
 
+                    // 自动取消时同步回滚优惠券和积分，避免资产被“吞”
+                    const orderGroup = [freshOrder, ...childOrders];
+                    const couponId = orderGroup.map(o => o.coupon_id).find(Boolean);
+                    if (couponId) {
+                        const uc = await UserCoupon.findOne({
+                            where: { id: couponId, user_id: freshOrder.buyer_id },
+                            transaction: t,
+                            lock: t.LOCK.UPDATE
+                        });
+                        const otherActiveOrderCount = await Order.count({
+                            where: {
+                                buyer_id: freshOrder.buyer_id,
+                                coupon_id: couponId,
+                                id: { [Op.notIn]: orderGroup.map(o => o.id) },
+                                status: { [Op.notIn]: ['cancelled', 'refunded'] }
+                            },
+                            transaction: t
+                        });
+
+                        if (uc && uc.status === 'used' && shouldRestoreCoupon({ otherActiveOrderCount })) {
+                            uc.status = 'unused';
+                            uc.used_at = null;
+                            uc.used_order_id = null;
+                            await uc.save({ transaction: t });
+                        }
+                    }
+
+                    const pointsToRestore = orderGroup.reduce((sum, o) => sum + (parseInt(o.points_used, 10) || 0), 0);
+                    if (pointsToRestore > 0) {
+                        await PointService.addPoints(
+                            freshOrder.buyer_id,
+                            pointsToRestore,
+                            'refund',
+                            `order_timeout_cancel_${freshOrder.id}`,
+                            '超时取消订单退回积分',
+                            t
+                        );
+                    }
+
+                    const LimitedSpotService = require('./LimitedSpotService');
+                    await LimitedSpotService.onOrderPendingCancelled(freshOrder, freshOrder.buyer_id, t);
+
                     await t.commit();
                     cancelledCount++;
                 } catch (err) {
@@ -428,7 +522,8 @@ class OrderJobService {
      */
     static async autoConfirmOrders() {
         try {
-            const confirmDays = constants.ORDER.AUTO_CONFIRM_DAYS;
+            const orderConfig = await getOrderRuntimeConfig();
+            const confirmDays = orderConfig.AUTO_CONFIRM_DAYS;
             const expireTime = new Date();
             expireTime.setDate(expireTime.getDate() - confirmDays);
 
@@ -458,7 +553,7 @@ class OrderJobService {
                     await freshOrder.save({ transaction: t });
 
                     await CommissionLog.update(
-                        { available_at: settlementDate },
+                        { refund_deadline: settlementDate },
                         { where: { order_id: freshOrder.id, status: 'frozen' }, transaction: t }
                     );
 

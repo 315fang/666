@@ -1,0 +1,6 @@
+<view wx:if="{{show}}" class="page-loading {{fullscreen ? 'fullscreen' : ''}}">
+  <view class="loading-card">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">{{text}}</text>
+  </view>
+</view>

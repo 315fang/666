@@ -1,3 +1,8 @@
 {
-  "navigationStyle": "custom"
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "brand-animation": "/components/brand-animation/brand-animation",
+    "page-loading": "/components/page-loading/page-loading",
+    "light-tip-modal": "/components/light-tip-modal/light-tip-modal"
+  }
 }

@@ -1,120 +1,96 @@
-<!--pages/activity/activity.wxml - 活动中心：常驻活动 + 节日动态主题-->
-<view class="container">
+<view class="container {{wallpaperClass}}">
 
-  <!-- 1. 自定义导航栏 -->
-  <view class="custom-nav" style="padding-top: {{statusBarHeight}}px">
-    <view class="nav-inner">
-      <text class="nav-title">活动中心</text>
-    </view>
-  </view>
+  <!-- ══ 顶部 Banner 轮播 ══ -->
+  <view class="banner-wrap">
+    <!-- 状态栏占位 -->
+    <view style="height: {{statusBarHeight}}px; background: transparent;"></view>
 
-  <!-- 2. 节日活动卡（后端 active=true 时出现，顶替常规 Banner）-->
-  <view class="festival-hero" wx:if="{{festivalActive}}" style="{{festThemeStyle}}">
-    <image class="fest-bg" src="{{festival.banner}}" mode="aspectFill" lazy-load/>
-    <view class="fest-overlay">
-      <!-- 节日标签 -->
-      <view class="fest-tag-pill" wx:if="{{festival.tag}}">{{festival.tag}}</view>
-      <!-- 标题 -->
-      <text class="fest-title-main">{{festival.title}}</text>
-      <text class="fest-subtitle" wx:if="{{festival.subtitle}}">{{festival.subtitle}}</text>
-      <!-- 倒计时 -->
-      <view class="fest-countdown-row" wx:if="{{countdown}}">
-        <view class="cdown-block">
-          <text class="cdown-num">{{countdown.days}}</text>
-          <text class="cdown-unit">天</text>
-        </view>
-        <text class="cdown-sep">:</text>
-        <view class="cdown-block">
-          <text class="cdown-num">{{countdown.hours}}</text>
-          <text class="cdown-unit">时</text>
-        </view>
-        <text class="cdown-sep">:</text>
-        <view class="cdown-block">
-          <text class="cdown-num">{{countdown.mins}}</text>
-          <text class="cdown-unit">分</text>
-        </view>
-        <text class="cdown-sep">:</text>
-        <view class="cdown-block">
-          <text class="cdown-num">{{countdown.secs}}</text>
-          <text class="cdown-unit">秒</text>
-        </view>
-      </view>
-      <!-- CTA 按钮 -->
-      <view class="fest-cta-btn" bindtap="onFestivalTap">
-        {{festival.ctaText || '立即参与'}} ▶
-      </view>
-    </view>
-  </view>
-
-  <!-- 常规 Banner（无节日时显示）-->
-  <view class="banner-section" wx:else>
-    <swiper class="banner-swiper"
-            autoplay="true" circular="true"
-            interval="5000" duration="800"
-            indicator-dots="true"
-            indicator-color="rgba(255,255,255,0.3)"
-            indicator-active-color="#FFFFFF">
-      <swiper-item wx:for="{{cardPosters}}" wx:key="id">
-        <view class="banner-slide" style="background: {{item.gradient}}">
-          <image class="banner-img" src="{{item.image}}" mode="aspectFill" lazy-load wx:if="{{item.image}}"/>
-          <view class="banner-slide-content">
-            <text class="banner-slide-title">{{item.title}}</text>
-            <text class="banner-slide-sub">{{item.subTitle}}</text>
+    <swiper
+      class="banner-swiper"
+      autoplay
+      interval="4000"
+      duration="400"
+      circular
+      indicator-dots="{{false}}"
+      current="{{bannerIndex}}"
+      bindchange="onBannerChange"
+    >
+      <swiper-item
+        wx:for="{{bannerSlides}}"
+        wx:key="id"
+        bindtap="onBannerTap"
+        data-item="{{item}}"
+      >
+        <image
+          wx:if="{{item.image}}"
+          class="banner-img"
+          src="{{item.image}}"
+          mode="aspectFill"
+          lazy-load
+        ></image>
+        <view
+          wx:else
+          class="banner-fallback"
+          style="background: {{item.gradient || 'linear-gradient(135deg,#3D2F22,#5A4535)'}};"
+        ></view>
+        <view class="banner-overlay" wx:if="{{item.title || item.tag || item.subtitle || item.countdown}}">
+          <view class="banner-tag-row">
+            <view class="banner-tag-pill" wx:if="{{item.tag}}">{{item.tag}}</view>
+            <view class="banner-countdown" wx:if="{{item.countdown}}">
+              <text class="banner-countdown-text">⏱ {{item.countdown.days}}天 {{item.countdown.hours}}:{{item.countdown.mins}}:{{item.countdown.secs}}</text>
+            </view>
           </view>
+          <text class="banner-title" wx:if="{{item.title}}">{{item.title}}</text>
+          <text class="banner-subtitle" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
         </view>
       </swiper-item>
     </swiper>
+
+    <!-- 自定义指示点 -->
+    <view class="banner-dots" wx:if="{{bannerSlides.length > 1}}">
+      <view
+        wx:for="{{bannerSlides}}"
+        wx:key="index"
+        class="banner-dot {{index === bannerIndex ? 'active' : ''}}"
+      ></view>
+    </view>
   </view>
 
-  <!-- 3. 快捷入口（常驻，永远显示）-->
-  <view class="quick-entry-grid">
-    <view class="entry-item"
-          wx:for="{{quickEntries}}" wx:key="id"
-          bindtap="onEntryTap" data-item="{{item}}">
-      <view class="entry-icon-wrap" style="background: {{item.color}}18">
-        <image class="entry-icon" src="{{item.icon}}" mode="aspectFit"/>
+  <!-- ══ 主内容区：品牌新闻 ══ -->
+  <view class="content-area">
+
+    <view class="news-section" wx:if="{{brandNews.length}}">
+      <view class="section-header">
+        <text class="section-title">{{brandNewsSectionTitle}}</text>
       </view>
-      <text class="entry-name">{{item.name}}</text>
-    </view>
-  </view>
-
-  <!-- 4. 热门推荐卡片（常驻）-->
-  <view class="section-container">
-    <view class="section-header">
-      <text class="section-title">热门推荐</text>
-    </view>
-    <scroll-view class="card-poster-scroll" scroll-x show-scrollbar="{{false}}">
-      <view class="poster-card"
-            wx:for="{{cardPosters}}" wx:key="id"
-            style="background: {{item.gradient}}"
-            bindtap="onPosterTap" data-item="{{item}}">
-        <image class="poster-bg" src="{{item.image}}" mode="aspectFill" lazy-load wx:if="{{item.image}}"/>
-        <view class="poster-mask"/>
-        <view class="poster-content">
-          <text class="poster-title">{{item.title}}</text>
-          <text class="poster-sub">{{item.subTitle}}</text>
-          <view class="poster-btn">立即前往</view>
+      <view class="news-list">
+        <view
+          class="news-card"
+          wx:for="{{brandNews}}"
+          wx:key="id"
+          bindtap="onBrandNewsTap"
+          data-id="{{item.id}}"
+          hover-class="card-press"
+        >
+          <image wx:if="{{item.cover_image}}" class="news-card-cover" src="{{item.cover_image}}" mode="aspectFill" lazy-load />
+          <view wx:else class="news-card-cover news-card-cover-placeholder"></view>
+          <view class="news-card-body">
+            <text class="news-card-title">{{item.title}}</text>
+            <text class="news-card-summary">{{item.summary}}</text>
+          </view>
+          <text class="news-card-arrow">›</text>
         </view>
       </view>
-    </scroll-view>
-  </view>
-
-  <!-- 5. 实时动态 -->
-  <view class="recent-activities-section" wx:if="{{recentActivities.length > 0}}">
-    <view class="activity-msg-bar">
-      <view class="msg-icon-wrap">
-        <image class="msg-icon" src="/assets/icons/bell.svg" mode="aspectFit"/>
-      </view>
-      <swiper class="msg-swiper" vertical="true" autoplay="true" circular="true" interval="3000">
-        <swiper-item wx:for="{{recentActivities}}" wx:key="index">
-          <view class="msg-item">
-            <text class="msg-text">{{item.text}}</text>
-            <text class="msg-time">{{item.time}}</text>
-          </view>
-        </swiper-item>
-      </swiper>
     </view>
+
+    <!-- 加载失败 -->
+    <view class="state-error" wx:if="{{loadError}}">
+      <text class="state-icon-text">!</text>
+      <text class="state-title">加载失败</text>
+      <button class="state-action" bindtap="onRetryLoad">重新加载</button>
+    </view>
+
+    <view class="safe-bottom"></view>
   </view>
 
-  <view class="bottom-spacer"/>
 </view>

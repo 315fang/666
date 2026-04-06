@@ -1,15 +1,36 @@
 // pages/order/confirm.js - 订单确认页
-const { get, post } = require('../../utils/request');
-const { processProduct } = require('../../utils/dataFormatter');
-const { ErrorHandler } = require('../../utils/errorHandler');
-const { getDefaultAddress, navigateToAddressList, navigateToAddressEdit } = require('../../utils/address');
+const { get } = require('../../utils/request');
 const app = getApp();
+const { getLightPromptModals } = require('../../utils/miniProgramConfig');
+const { shouldShowDaily, markDailyShown } = require('../../utils/lightPrompt');
+const {
+    navigateToAddressList,
+    refreshPickupAllowed,
+    loadPickupStations,
+    locateForPickupSort,
+    chooseRefLocation,
+    loadDefaultAddress,
+    loadCartItems
+} = require('./orderConfirmAddress');
+const {
+    recalcFinal,
+    loadAvailableCoupons,
+    selectCoupon,
+    clearCoupon
+} = require('./orderConfirmPricing');
+const { submitOrder } = require('./orderConfirmSubmission');
+const {
+    loadPointBalance,
+    togglePoints,
+    loadWalletBalance,
+    toggleWallet
+} = require('./orderConfirmAccount');
 
 Page({
     data: {
         loading: true,
         submitting: false,
-        // 来源：cart（购物车）或 direct（直接购买）
+        // 来源：cart（购物袋）或 direct（直接购买）
         from: 'cart',
         // 收货地址
         address: null,
@@ -26,7 +47,33 @@ Page({
         selectedCoupon: null,
         showCouponPicker: false,
         couponDiscount: '0.00',
-        finalAmount: '0.00'
+        finalAmount: '0.00',
+        shippingFee: 0,
+        // 积分抵扣
+        pointBalance: 0,
+        usePoints: false,
+        pointsToUse: 0,
+        pointsDeduction: '0.00',
+        // 活动单号
+        slashNo: null,
+        groupNo: null,
+        // B端货款余额支付
+        walletBalance: 0,
+        useWallet: false,
+        isAgent: false,
+        // 到店自提（需商品 supports_pickup + 后台维护自提门店）
+        pickupAllowed: false,
+        deliveryType: 'express',
+        pickupStations: [],
+        pickupStation: null,
+        refLat: null,
+        refLng: null,
+        refLocationName: '',
+        /** 无参考坐标时列表不展示距离，用于提示用户可定位 */
+        pickupDistanceHint: false,
+        lightTipShow: false,
+        lightTipTitle: '',
+        lightTipContent: ''
     },
 
     onReady() {
@@ -41,7 +88,6 @@ Page({
         });
 
         if (options.from === 'direct') {
-            // 直接购买 - 从缓存读取购买信息
             const directBuy = wx.getStorageSync('directBuyInfo');
             if (directBuy) {
                 const amt = (parseFloat(directBuy.price) * directBuy.quantity).toFixed(2);
@@ -50,15 +96,18 @@ Page({
                     totalAmount: amt,
                     finalAmount: amt,
                     totalCount: directBuy.quantity,
+                    slashNo: directBuy.slash_no || null,
+                    groupNo: directBuy.group_no || null,
                     loading: false
                 });
+                this._refreshPickupAllowed();
                 this.loadAvailableCoupons();
             } else {
                 wx.showToast({ title: '商品信息丢失', icon: 'none' });
                 this.setData({ loading: false });
             }
         } else if (options.cart_ids) {
-            // 购物车结算 - 加载选中的购物车项
+            // 购物袋结算 - 加载选中的购物袋项
             this.loadCartItems(options.cart_ids);
         } else {
             this.setData({ loading: false });
@@ -66,6 +115,10 @@ Page({
 
         // 加载默认地址
         this.loadDefaultAddress();
+        // 加载积分余额
+        this.loadPointBalance();
+        // 加载B端货款余额
+        this.loadWalletBalance();
     },
 
     onShow() {
@@ -74,86 +127,118 @@ Page({
         if (selectedAddress) {
             this.setData({ address: selectedAddress });
             wx.removeStorageSync('selectedAddress');
+            if (this.data.deliveryType === 'pickup') {
+                this.loadPickupStations();
+            }
+            this._tryAutoCouponUsagePrompt();
+            return;
         }
+        if (!this.data.address) {
+            this.loadDefaultAddress();
+        }
+        this._tryAutoCouponUsagePrompt();
+    },
+
+    _tryAutoCouponUsagePrompt() {
+        if (!app.globalData.isLoggedIn) return;
+        const cu = getLightPromptModals().coupon_usage;
+        if (!cu || !cu.enabled) return;
+        if (!shouldShowDaily('light_tip_coupon')) return;
+        markDailyShown('light_tip_coupon');
+        this.setData({
+            lightTipShow: true,
+            lightTipTitle: cu.title || '优惠券说明',
+            lightTipContent: cu.body || ''
+        });
+    },
+
+    onCouponHelpTap(e) {
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        const cu = getLightPromptModals().coupon_usage;
+        if (!cu || !cu.enabled) {
+            wx.showToast({ title: '暂无可展示说明', icon: 'none' });
+            return;
+        }
+        this.setData({
+            lightTipShow: true,
+            lightTipTitle: cu.title || '优惠券说明',
+            lightTipContent: cu.body || ''
+        });
+    },
+
+    onLightTipClose() {
+        this.setData({ lightTipShow: false });
+    },
+
+    /** 当前购物袋/直购是否全部支持自提 */
+    _refreshPickupAllowed() {
+        return refreshPickupAllowed(this);
+    },
+
+    onDeliveryTypeChange(e) {
+        const v = e.currentTarget.dataset.type;
+        if (v !== 'express' && v !== 'pickup') return;
+        if (v === 'pickup' && !this.data.pickupAllowed) {
+            wx.showToast({ title: '当前商品不支持到店自提', icon: 'none' });
+            return;
+        }
+        this.setData({ deliveryType: v, pickupStation: v === 'pickup' ? this.data.pickupStation : null });
+        if (v === 'pickup') {
+            this.loadPickupStations();
+        }
+    },
+
+    async loadPickupStations() {
+        return loadPickupStations(this);
+    },
+
+    /**
+     * 方案 A：仅 wx.getFuzzyLocation + wx.chooseLocation，不传 wx.getLocation（易过审）。
+     * 模糊坐标 → pickup-options 展示距离并由近到远排序；更准请用 onChooseRefLocation。
+     */
+    async onLocateForPickupSort() {
+        return locateForPickupSort(this);
+    },
+
+    onSelectPickupStation(e) {
+        const id = e.currentTarget.dataset.id;
+        const station = (this.data.pickupStations || []).find((s) => s.id === id);
+        if (station) this.setData({ pickupStation: station });
+    },
+
+    /** 用地图选点（微信原生能力，不产生腾讯位置服务按次计费） */
+    onChooseRefLocation() {
+        return chooseRefLocation(this);
+    },
+
+    clearRefLocation() {
+        this.setData({ refLat: null, refLng: null, refLocationName: '' });
+        this.loadPickupStations();
+    },
+
+    /** 全量服务站点地图（分包页），未登录也可浏览 */
+    onOpenStationsMap() {
+        wx.navigateTo({ url: '/pages/stations/map' });
     },
 
     // 加载默认收货地址
     async loadDefaultAddress() {
-        try {
-            const address = await getDefaultAddress();
-            this.setData({ address });
-        } catch (err) {
-            ErrorHandler.handle(err, { showToast: false });
-            console.error('加载默认地址失败:', err);
-        }
+        return loadDefaultAddress(this);
     },
 
-    // 加载购物车选中项
+    // 加载购物袋选中项
     async loadCartItems(cartIds) {
-        try {
-            const res = await get('/cart');
-            const allItems = res.data?.items || res.data || [];
-            const ids = cartIds.split(',').map(Number);
-            const { roleLevel } = this.data;
-
-            const selectedItems = allItems
-                .filter(item => ids.includes(item.id))
-                .map(item => {
-                    const processed = processProduct(item.product, roleLevel);
-                    return {
-                        cart_id: item.id,
-                        product_id: item.product_id,
-                        sku_id: item.sku_id,
-                        quantity: item.quantity,
-                        // ★ 优先使用后端返回的等级价格，fallback 到工具函数计算出的等级价
-                        price: parseFloat(item.effective_price || processed.displayPrice || 0),
-                        name: processed.name || '商品',
-                        image: item.sku?.image || processed.firstImage,
-                        spec: item.sku ? `${item.sku.spec_name}: ${item.sku.spec_value}` : ''
-                    };
-                });
-
-            let totalAmount = 0;
-            let totalCount = 0;
-            selectedItems.forEach(item => {
-                totalAmount += item.price * item.quantity;
-                totalCount += item.quantity;
-            });
-
-            this.setData({
-                orderItems: selectedItems,
-                totalAmount: totalAmount.toFixed(2),
-                finalAmount: totalAmount.toFixed(2),
-                totalCount,
-                loading: false
-            });
-            this.loadAvailableCoupons();
-        } catch (err) {
-            console.error('加载购物车失败:', err);
-            this.setData({ loading: false });
-        }
+        return loadCartItems(this, cartIds);
     },
 
-    // 重新计算最终价格
+    // 重新计算最终价格（全程用整数分运算，避免浮点误差）
     _recalcFinal() {
-        const total = parseFloat(this.data.totalAmount);
-        const discount = parseFloat(this.data.couponDiscount);
-        const final = Math.max(0, total - discount).toFixed(2);
-        this.setData({ finalAmount: final });
+        return recalcFinal(this);
     },
 
     // 加载可用优惠券
     async loadAvailableCoupons() {
-        if (!app.globalData.isLoggedIn) return;
-        try {
-            const amount = this.data.totalAmount;
-            const res = await get(`/coupons/available?amount=${amount}`);
-            if (res.code === 0) {
-                this.setData({ availableCoupons: res.data || [] });
-            }
-        } catch (e) {
-            // 静默失败，不影响下单
-        }
+        return loadAvailableCoupons(this, app.globalData.isLoggedIn);
     },
 
     // 点击优惠券行，打开选择器
@@ -169,34 +254,12 @@ Page({
     // 选择一张优惠券
     onSelectCoupon(e) {
         const coupon = e.currentTarget.dataset.coupon;
-        // 若点击已选中的券则取消
-        if (this.data.selectedCoupon && this.data.selectedCoupon.id === coupon.id) {
-            this.onClearCoupon();
-            return;
-        }
-        const total = parseFloat(this.data.totalAmount);
-        let discount = 0;
-        if (coupon.coupon_type === 'fixed') {
-            discount = Math.min(parseFloat(coupon.coupon_value), total);
-        } else if (coupon.coupon_type === 'percent') {
-            discount = parseFloat((total * (1 - parseFloat(coupon.coupon_value))).toFixed(2));
-        }
-        this.setData({
-            selectedCoupon: coupon,
-            couponDiscount: discount.toFixed(2),
-            showCouponPicker: false
-        });
-        this._recalcFinal();
+        return selectCoupon(this, coupon);
     },
 
     // 清除已选优惠券
     onClearCoupon() {
-        this.setData({
-            selectedCoupon: null,
-            couponDiscount: '0.00',
-            showCouponPicker: false
-        });
-        this._recalcFinal();
+        return clearCoupon(this);
     },
 
     // 选择地址
@@ -206,7 +269,7 @@ Page({
 
     // 新增地址
     onAddAddress() {
-        navigateToAddressEdit();
+        navigateToAddressList();
     },
 
     // 备注输入
@@ -216,71 +279,7 @@ Page({
 
     // 提交订单
     async onSubmit() {
-        const { address, orderItems, remark, submitting, selectedCoupon } = this.data;
-
-        if (submitting) return;
-
-        if (!address) {
-            wx.showToast({ title: '请选择收货地址', icon: 'none' });
-            return;
-        }
-
-        if (orderItems.length === 0) {
-            wx.showToast({ title: '没有可提交的商品', icon: 'none' });
-            return;
-        }
-
-        this.setData({ submitting: true });
-
-        try {
-            const orderData = {
-                address_id: address.id,
-                remark,
-                items: orderItems.map(item => ({
-                    product_id: item.product_id,
-                    sku_id: item.sku_id || null,
-                    quantity: item.quantity,
-                    cart_id: item.cart_id || null
-                }))
-            };
-
-            if (selectedCoupon) {
-                orderData.user_coupon_id = selectedCoupon.id;
-            }
-
-            // 提交订单
-            const res = await post('/orders', orderData);
-
-            this.setData({ submitting: false });
-
-            // 清除直接购买缓存
-            if (this.data.from === 'direct') {
-                wx.removeStorageSync('directBuyInfo');
-            }
-
-            // 获取返回的订单 ID（支持单订单或拆单返回数组取第一个）
-            const orderResult = Array.isArray(res.data) ? res.data[0] : res.data;
-            const orderId = orderResult && orderResult.id;
-
-            // 触发下单成功动画
-            if (this.brandAnimation) {
-                this.brandAnimation.show('success');
-            }
-
-            // 动画结束后跳转到订单详情页（用户在详情页完成支付）
-            setTimeout(() => {
-                if (orderId) {
-                    wx.redirectTo({ url: `/pages/order/detail?id=${orderId}` });
-                } else {
-                    // 兜底：跳转到待付款列表
-                    wx.redirectTo({ url: '/pages/order/list?status=pending' });
-                }
-            }, 1500);
-        } catch (err) {
-            this.setData({ submitting: false });
-            ErrorHandler.handle(err, { customMessage: '下单失败，请稍后重试' });
-            console.error('提交订单失败:', err);
-        }
+        return submitOrder(this, app, this.brandAnimation);
     },
 
     onViewOrder() {
@@ -293,5 +292,21 @@ Page({
         wx.switchTab({
             url: '/pages/index/index'
         });
+    },
+
+    async loadPointBalance() {
+        return loadPointBalance(this);
+    },
+
+    onTogglePoints(e) {
+        return togglePoints(this, e.detail.value);
+    },
+
+    async loadWalletBalance() {
+        return loadWalletBalance(this, app);
+    },
+
+    onToggleWallet(e) {
+        return toggleWallet(this, e.detail.value);
     }
 });

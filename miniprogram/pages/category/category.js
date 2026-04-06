@@ -1,155 +1,209 @@
-// pages/category/category.js - 分类页合并版
-// 结构：666-main 三级分类（顶部 Tab → 侧边栏 → 商品列表）+ 分页加载
+// pages/category/category.js - 分类页
+// 结构：二级商城（侧边栏分类 → 商品列表）+ 分页加载
 // 联动：当前版本 scroll sync（calculateCategoryHeights + onRightScroll + leftToView）
-// 购物车：当前版本改进逻辑（items / summary.total_amount + cart_ids 结算）
+// 购物袋：当前版本改进逻辑（items / summary.total_amount + cart_ids 结算）
 const { get, post } = require('../../utils/request');
-const { getFirstImage, formatMoney, parseImages, calculatePrice } = require('../../utils/dataFormatter');
+const { cachedGet } = require('../../utils/requestCache');
+const { normalizeProductId } = require('../../utils/dataFormatter');
 const { ErrorHandler } = require('../../utils/errorHandler');
-const { USER_ROLES } = require('../../config/constants');
-const app = getApp();
+const { requireLogin } = require('../../utils/auth');
+const { getApiBaseUrl } = require('../../config/env');
+const navigator = require('../../utils/navigator');
+const { syncPageTabBar, restorePageTabBar } = require('../../utils/tabBarHelper');
+const {
+    loadCategoryProductsBatch,
+    queueRemainingCategoryLoads,
+    ensureCategoryProductsLoaded,
+    refreshPricePreviewHints
+} = require('./categoryProductLoader');
+const {
+    updateCartData,
+    openCartPopup,
+    closeCartPopup,
+    toggleCartPopupItem,
+    calcCartPopupTotal,
+    popupCheckout,
+    syncPopupSelection,
+    togglePopupSelectAll,
+    clearCartPopup,
+    changeCartItemQty
+} = require('./categoryCart');
+
+function normalizeAssetUrl(url = '') {
+    const raw = String(url || '');
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (raw.startsWith('/')) {
+        const apiBase = getApiBaseUrl().replace(/\/api\/?$/, '');
+        return `${apiBase}${raw}`;
+    }
+    return raw;
+}
+
+const CATEGORY_INITIAL_BATCH_SIZE = 2;
+const CATEGORY_PRICE_PREVIEW_TTL = 60 * 1000;
 
 Page({
     data: {
-        // 一级分类（顶部 Tab）
-        topCategories: [
-            { id: 1, name: '精品好物', icon: '/assets/icons/gift.svg' },
-            { id: 2, name: '甄选套餐', icon: '/assets/icons/package.svg' },
-            { id: 3, name: '镜像原创', icon: '/assets/icons/sparkles.svg' }
-        ],
-        currentTopCategory: 1,
-
-        // 二级分类（侧边栏）
         categories: [],
         currentCategory: '',
-        currentCategoryName: '',
-        currentCategoryBanner: '',
+        headerTopPadding: 20,
 
-        // 滚动联动（来自当前版本）
+        // 连续滚动联动
         toView: '',
         leftToView: '',
         categoryHeights: [],
         isManualClick: false,
 
-        // 三级商品
-        products: [],
+        // 全分类商品（categoryId -> product[]）
+        allProducts: {},
+        loadedCategories: {},
         loading: false,
-        hasMore: true,
-        page: 1,
-        limit: 10,
 
-        // 购物车
+        // 购物袋
         cartCount: 0,
         cartTotal: '0.00',
         _cartItemIds: '',
+        userPointBalance: 0,
+        userBestCoupon: 0,
+        pricePreviewEnabled: false,
+        showCartPopup: false,
+        cartPopupItems: [],
+        cartPopupSelectedIds: [],
+        cartPopupTotal: '0.00',
+        cartPopupAllSelected: true,
 
-        // 详情弹窗
-        showDetailModal: false,
-        selectedProduct: null,
         statusBarHeight: 20,
-        currentImage: 0,
-        imageCount: 1,
-        isFavorite: false,
 
-        // 评价（用于弹窗内展示）
-        reviews: [],
-        reviewTotal: 0,
-        reviewTags: [],
-
-        // SKU 弹窗
-        showSku: false,
-        skuAction: 'cart',
-        modalQuantity: 1,
-        selectedSku: null,
-        selectedSkuText: '',
-        selectedSkuImg: '',
-        currentPrice: null,
-        currentStock: null,
-        discount: 10,
-
-        // 飞入动画
-        flyImage: ''
-    },
-
-    onReady() {
-        this.brandAnimation = this.selectComponent('#brandAnimation');
+        // 顶部广告轮播（后台 position=category）
+        categoryBanners: []
     },
 
     onShow() {
         this.updateCartData();
+        this._loadPricePreviewData();
+        this._syncOverlayTabBar();
+        this._applyPendingCategoryFocus();
+    },
+
+    onHide() {
+        this._restoreNativeTabBar();
+        this._clearCategoryTimers();
+    },
+
+    onUnload() {
+        this._restoreNativeTabBar();
+        this._clearCategoryTimers();
     },
 
     onLoad() {
-        const sysInfo = wx.getSystemInfoSync();
+        const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+        const headerTopPadding = (windowInfo.statusBarHeight || 20) + 6;
         this.setData({
-            statusBarHeight: sysInfo.statusBarHeight || 20
+            statusBarHeight: windowInfo.statusBarHeight || 20,
+            headerTopPadding
         });
-        this.loadSidebarCategories(this.data.currentTopCategory);
+        this.loadCategoryBanners();
+        this.loadSidebarCategories();
     },
 
     onPullDownRefresh() {
-        this.setData({ page: 1, hasMore: true });
-        this.loadProducts().then(() => {
+        Promise.all([
+            this.loadCategoryBanners(),
+            this.loadAllProducts({
+                forceRefresh: true,
+                initialCategoryId: this.data.currentCategory
+            })
+        ]).finally(() => {
             wx.stopPullDownRefresh();
         });
     },
 
-    onSearchTap() {
-        wx.navigateTo({ url: '/pages/search/search' });
-    },
-
-    // 上拉加载更多
-    onLoadMore() {
-        if (!this.data.hasMore || this.data.loading) return;
-        this.setData({ page: this.data.page + 1 });
-        this.loadProducts(true);
-    },
-
-    // ===== 一级分类 =====
-
-    onTopCategoryTap(e) {
-        const id = e.currentTarget.dataset.id;
-        if (id === this.data.currentTopCategory) return;
-
-        this.setData({
-            currentTopCategory: id,
-            categories: [],
-            products: [],
-            page: 1,
-            hasMore: true
-        });
-        this.loadSidebarCategories(id);
-    },
-
-    async loadSidebarCategories(topId) {
+    /** 后台「内容管理 → Banner → 分类页」对应接口 GET /api/banners?position=category */
+    async loadCategoryBanners() {
+        const mapBanners = (list) => (list || [])
+            .map((b) => ({
+                id: b.id,
+                image: normalizeAssetUrl(b.image_url),
+                link_type: b.link_type || 'none',
+                link_value: b.link_value != null ? String(b.link_value) : ''
+            }))
+            .filter((b) => !!b.image);
         try {
-            const res = await get('/categories');
-            let allCats = res.data || [];
-            let filteredCats = [];
+            const res = await cachedGet(get, '/banners', { position: 'category' }, {
+                cacheTTL: 3 * 60 * 1000,
+                showError: false,
+                maxRetries: 0,
+                timeout: 10000
+            });
+            const raw = res?.data ?? res?.list ?? [];
+            const list = Array.isArray(raw) ? raw : [];
+            this.setData({ categoryBanners: mapBanners(list) });
+        } catch (e) {
+            console.log('[Category] 分类页 Banner 加载失败', e);
+            this.setData({ categoryBanners: [] });
+        }
+    },
 
-            if (topId === 1) {
-                if (allCats.length > 0) {
-                    filteredCats = allCats.map((c, i) => i === 0
-                        ? { ...c, name: c.name || '测试', icon: c.icon || '/assets/icons/gift.svg', image: c.image || '' }
-                        : c
-                    );
-                } else {
-                    filteredCats = [{ id: 'test_cat', name: '精品好物', icon: '/assets/icons/gift.svg', image: '' }];
-                }
-            } else if (topId === 2) {
-                filteredCats = allCats.length > 1 ? allCats.slice(1) : allCats;
-            } else {
-                filteredCats = allCats;
-            }
+    onCategoryBannerTap(e) {
+        const item = e.currentTarget.dataset.item;
+        if (!item) return;
+        navigator.navigate(item.link_type, item.link_value);
+    },
+
+    /**
+     * Banner 跳转类型 category：navigator 写入 category_focus_id 后 switchTab，此处选中对应左侧分类
+     */
+    _applyPendingCategoryFocus() {
+        let id = '';
+        try {
+            id = wx.getStorageSync('category_focus_id');
+        } catch (e) {
+            return;
+        }
+        if (!id) return;
+        const categories = this.data.categories || [];
+        if (!categories.length) return;
+        const exists = categories.some((c) => String(c.id) === String(id));
+        if (!exists) return;
+        try {
+            wx.removeStorageSync('category_focus_id');
+        } catch (e) { /* ignore */ }
+        this.setData({
+            currentCategory: id,
+            toView: 'cat-' + id,
+            leftToView: 'left-' + id,
+            isManualClick: true
+        });
+        this.ensureCategoryProductsLoaded(id);
+        setTimeout(() => {
+            this.setData({ isManualClick: false });
+        }, 800);
+    },
+
+    async loadSidebarCategories() {
+        try {
+            const catRes = await cachedGet(get, '/categories', {}, {
+                cacheTTL: 5 * 60 * 1000,
+                showError: false,
+                maxRetries: 0,
+                timeout: 10000
+            });
+            let allCats = catRes.data || [];
+            const filteredCats = Array.isArray(allCats) && allCats.length > 0 ? allCats : [];
 
             if (filteredCats.length > 0) {
-                const firstCat = filteredCats[0];
-                this.setData({
+                await new Promise((resolve) => this.setData({
                     categories: filteredCats,
-                    currentCategory: firstCat.id,
-                    currentCategoryName: firstCat.name,
-                    currentCategoryBanner: firstCat.image || ''
+                    currentCategory: filteredCats[0].id,
+                    loadedCategories: {},
+                    allProducts: {}
+                }, resolve));
+                this._applyPendingCategoryFocus();
+                await this.loadAllProducts({
+                    forceRefresh: true,
+                    initialCategoryId: this.data.currentCategory || filteredCats[0].id
                 });
-                this.loadProducts();
             } else {
                 this.setData({ categories: [] });
             }
@@ -158,49 +212,113 @@ Page({
         }
     },
 
-    // ===== 二级分类（侧边栏点击）=====
+    async loadAllProducts(options = {}) {
+        const { forceRefresh = false, initialCategoryId } = options;
+        const categories = this.data.categories || [];
+
+        if (!categories.length) {
+            this.setData({ allProducts: {}, loadedCategories: {}, loading: false });
+            return;
+        }
+
+        const loadToken = Date.now();
+        this._categoryLoadToken = loadToken;
+        this._pendingCategoryLoadIds = new Set();
+
+        await new Promise((resolve) => this.setData({
+            loading: true,
+            allProducts: forceRefresh ? {} : (this.data.allProducts || {}),
+            loadedCategories: forceRefresh ? {} : (this.data.loadedCategories || {})
+        }, resolve));
+
+        const orderedIds = categories.map(cat => cat.id);
+        const firstBatchIds = [];
+        const preferredId = initialCategoryId || this.data.currentCategory || orderedIds[0];
+
+        if (preferredId) {
+            firstBatchIds.push(preferredId);
+        }
+
+        orderedIds.forEach((categoryId) => {
+            if (firstBatchIds.length < CATEGORY_INITIAL_BATCH_SIZE && !firstBatchIds.includes(categoryId)) {
+                firstBatchIds.push(categoryId);
+            }
+        });
+
+        try {
+            await this._loadCategoryProductsBatch(firstBatchIds, loadToken, { setLoadingFalse: true });
+            const remainingIds = orderedIds.filter(categoryId => !firstBatchIds.includes(categoryId));
+            this._queueRemainingCategoryLoads(remainingIds, loadToken);
+        } catch (err) {
+            console.error('加载商品失败:', err);
+            if (this._categoryLoadToken === loadToken) {
+                this.setData({ loading: false });
+            }
+        }
+    },
+
+    async _loadCategoryProductsBatch(categoryIds, loadToken, options = {}) {
+        return loadCategoryProductsBatch(this, categoryIds, loadToken, options);
+    },
+
+    async _fetchCategoryProducts(categoryId) {
+        return loadCategoryProductsBatch(this, [categoryId], this._categoryLoadToken || Date.now())
+            .then((results) => Array.isArray(results) && results[0] ? results[0] : { catId: categoryId, products: [] });
+    },
+
+    _mapProductsForCategory(list) {
+        const { mapProductsForCategory } = require('./categoryProductLoader');
+        return mapProductsForCategory(this, list);
+    },
+
+    _queueRemainingCategoryLoads(categoryIds, loadToken) {
+        return queueRemainingCategoryLoads(this, categoryIds, loadToken);
+    },
+
+    ensureCategoryProductsLoaded(categoryId) {
+        return ensureCategoryProductsLoaded(this, categoryId);
+    },
+
+    _scheduleHeightCalc() {
+        clearTimeout(this._heightCalcTimer);
+        this._heightCalcTimer = setTimeout(() => {
+            this.calculateCategoryHeights();
+        }, 120);
+    },
+
+    _clearCategoryTimers() {
+        clearTimeout(this._heightCalcTimer);
+    },
+
+    // ===== 侧边栏点击 =====
 
     onCategoryTap(e) {
         const categoryId = e.currentTarget.dataset.id;
-        if (categoryId === this.data.currentCategory) return;
-        const category = this.data.categories.find(c => c.id === categoryId);
         this.setData({
             currentCategory: categoryId,
-            currentCategoryName: category?.name || '',
-            currentCategoryBanner: category?.image || '',
-            page: 1,
-            hasMore: true,
-            products: [],
-            // 联动：滚动右侧到顶部（来自 666-main）
-            toView: '',
-            // 联动：高亮左侧对应项（来自当前版本）
-            leftToView: `left-${categoryId}`,
+            toView: 'cat-' + categoryId,
+            leftToView: 'left-' + categoryId,
             isManualClick: true
         });
-        this.loadProducts();
-
-        // 动画完成后释放手动点击标记
-        setTimeout(() => {
-            this.setData({ isManualClick: false });
-        }, 800);
+        this.ensureCategoryProductsLoaded(categoryId);
+        setTimeout(() => { this.setData({ isManualClick: false }); }, 800);
     },
 
     // ===== 右侧滚动联动左侧菜单（来自当前版本）=====
 
     onRightScroll(e) {
         if (this.data.isManualClick) return;
-
         const scrollTop = e.detail.scrollTop;
         const { categoryHeights, categories } = this.data;
-        const offset = 50;
+        if (!categoryHeights || categoryHeights.length === 0) return;
 
-        for (let i = 0; i < categoryHeights.length; i++) {
-            if (scrollTop + offset >= categoryHeights[i][0] && scrollTop + offset < categoryHeights[i][1]) {
+        for (let i = categoryHeights.length - 1; i >= 0; i--) {
+            if (scrollTop >= categoryHeights[i] - 50) {
                 const catId = categories[i]?.id;
                 if (catId && this.data.currentCategory !== catId) {
                     this.setData({
                         currentCategory: catId,
-                        leftToView: `left-${catId}`
+                        leftToView: 'left-' + catId
                     });
                 }
                 break;
@@ -208,329 +326,185 @@ Page({
         }
     },
 
-    // 计算右侧各分类区域高度（来自当前版本）
-    // 注意：当前版本用于连贯滚动架构；本版本商品列表是单分类展示（切换分类重新加载）
-    // 保留此方法以备扩展（如未来切换为连贯滚动）
     calculateCategoryHeights() {
-        const query = wx.createSelectorQuery();
+        const query = wx.createSelectorQuery().in(this);
         query.selectAll('.cat-section').boundingClientRect();
+        query.select('.right-content').scrollOffset();
         query.exec((res) => {
             if (!res[0] || res[0].length === 0) return;
-            let top = 0;
-            const heights = res[0].map(rect => {
-                const range = [top, top + rect.height];
-                top += rect.height;
-                return range;
-            });
+            const scrollTop = res[1]?.scrollTop || 0;
+            const heights = res[0].map(rect => rect.top + scrollTop - res[0][0].top);
             this.setData({ categoryHeights: heights });
         });
     },
 
-    // ===== 三级商品加载 =====
-
-    onProductTap(e) {
-        this.onSelectProduct(e);
+    _syncOverlayTabBar() {
+        const shouldHide = !!this.data.showCartPopup;
+        syncPageTabBar(this, shouldHide);
     },
 
-    async loadProducts(append = false) {
-        if (this.data.loading) return;
-        this.setData({ loading: true });
+    _restoreNativeTabBar() {
+        restorePageTabBar(this);
+    },
 
-        try {
-            const { currentCategory, page, limit } = this.data;
-            const params = { page, limit };
-            if (currentCategory && currentCategory !== 'test_cat') {
-                params.category_id = currentCategory;
-            }
-
-            const res = await get('/products', params);
-            const rawProducts = res.data?.list || res.data || [];
-
-            const newProducts = rawProducts.map(item => ({
-                ...item,
-                image: getFirstImage(item.images),
-                price: item.retail_price || item.price || 0
-            }));
-
-            this.setData({
-                products: append ? [...this.data.products, ...newProducts] : newProducts,
-                hasMore: newProducts.length >= limit,
-                loading: false
-            });
-        } catch (err) {
-            console.error('加载商品失败:', err);
-            this.setData({ loading: false });
+    onOpenProductDetail(e) {
+        const rawId = e.currentTarget.dataset.id;
+        const id = normalizeProductId(rawId);
+        if (id === null || id === undefined || id === '') {
+            wx.showToast({ title: '商品信息异常', icon: 'none' });
+            return;
         }
-    },
-
-    // ===== 详情弹窗逻辑（来自 666-main，与当前版本一致）=====
-
-    async onSelectProduct(e) {
-        const item = e.currentTarget.dataset.item;
-        if (!item) return;
-
-        this.setData({
-            showDetailModal: true,
-            selectedProduct: item
+        wx.navigateTo({
+            url: `/pages/product/detail?id=${encodeURIComponent(String(id))}`
         });
-
-        this.loadProductDetail(item.id);
-    },
-
-    hideDetailModal() {
-        this.setData({ showDetailModal: false, showSku: false });
-    },
-
-    async loadProductDetail(id) {
-        wx.showLoading({ title: '加载详情...' });
-        try {
-            const res = await get(`/products/${id}`);
-            const product = res.data || {};
-
-            product.images = parseImages(product.images);
-            product.detail_images = parseImages(product.detail_images);
-
-            const user = wx.getStorageSync('userInfo') || {};
-            const roleLevel = user.role_level || USER_ROLES.GUEST;
-            const displayPrice = calculatePrice(product, null, roleLevel);
-
-            let discount = 10;
-            if (product.market_price && parseFloat(product.market_price) > 0) {
-                discount = Math.round((parseFloat(displayPrice) / parseFloat(product.market_price)) * 10);
-            }
-
-            this.setData({
-                selectedProduct: {
-                    ...product,
-                    displayPrice: parseFloat(displayPrice).toFixed(2)
-                },
-                skus: product.skus || [],
-                selectedSku: (product.skus && product.skus.length > 0) ? product.skus[0] : null,
-                imageCount: product.images.length || 1,
-                discount,
-                modalQuantity: 1
-            });
-
-            this.loadReviews(id);
-
-        } catch (err) {
-            console.error('加载详情失败', err);
-            wx.showToast({ title: '加载失败', icon: 'none' });
-        } finally {
-            wx.hideLoading();
-        }
-    },
-
-    async loadReviews(id) {
-        try {
-            const res = await get(`/products/${id}/reviews`, { limit: 2 }).catch(() => null);
-            if (res && res.data) {
-                const reviews = res.data.list || [];
-                const reviewTotal = res.data.pagination?.total || reviews.length;
-                this.setData({
-                    reviews,
-                    reviewTotal,
-                    reviewTags: ['质量好', '物流快', '包装精美']
-                });
-            } else {
-                this.setData({ reviews: [], reviewTotal: 0 });
-            }
-        } catch (err) {
-            console.log('No reviews');
-        }
-    },
-
-    onImageChange(e) {
-        this.setData({ currentImage: e.detail.current });
-    },
-
-    onPreviewImage(e) {
-        const src = e.currentTarget.dataset.src;
-        wx.previewImage({
-            current: src,
-            urls: this.data.selectedProduct.images
-        });
-    },
-
-    onToggleFavorite() {
-        this.setData({ isFavorite: !this.data.isFavorite });
-        wx.showToast({ title: this.data.isFavorite ? '已收藏' : '取消收藏', icon: 'none' });
-    },
-
-    // ===== SKU 弹窗 =====
-
-    showSkuModal() {
-        this.setData({ showSku: true });
-    },
-
-    hideSkuModal() {
-        this.setData({ showSku: false });
-    },
-
-    // 加入购物车 + 飞入动画
-    async onAddToCart() {
-        if (!this.data.selectedProduct) return;
-        try {
-            wx.showLoading({ title: '加入中' });
-            await post('/cart', {
-                product_id: this.data.selectedProduct.id,
-                quantity: this.data.modalQuantity
-            });
-            wx.hideLoading();
-
-            this.triggerFlyAnimation();
-            wx.showToast({ title: '已加入购物车', icon: 'success' });
-            this.hideDetailModal();
-            this.updateCartData();
-        } catch (err) {
-            wx.hideLoading();
-            wx.showToast({ title: '加入失败', icon: 'none' });
-        }
-    },
-
-    // 飞入购物车动画
-    triggerFlyAnimation() {
-        const product = this.data.selectedProduct;
-        if (!product) return;
-
-        this.setData({
-            flyImage: product.images?.[0] || product.image || ''
-        });
-
-        if (this.brandAnimation) {
-            const query = wx.createSelectorQuery();
-            query.select('.cart-checkout-btn').boundingClientRect();
-            query.exec((res) => {
-                if (res[0]) {
-                    const endX = res[0].left + res[0].width / 2;
-                    const endY = res[0].top;
-                    const startX = 375 / 2;
-                    const startY = 400;
-                    this.brandAnimation.flyToCart(startX, startY, endX, endY, this.data.flyImage);
-                }
-            });
-        }
-    },
-
-    // 立即购买
-    async onBuyNow() {
-        if (!this.data.selectedProduct) return;
-        try {
-            const product = this.data.selectedProduct;
-            const quantity = this.data.modalQuantity;
-
-            const directBuyInfo = {
-                product_id: product.id,
-                sku_id: this.data.selectedSku?.id || null,
-                quantity: quantity,
-                price: product.displayPrice || product.price,
-                name: product.name,
-                image: product.images?.[0] || product.image || '',
-                spec: this.data.selectedSkuText || ''
-            };
-            wx.setStorageSync('directBuyInfo', directBuyInfo);
-
-            this.hideDetailModal();
-            wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
-        } catch (err) {
-            wx.showToast({ title: '操作失败', icon: 'none' });
-        }
-    },
-
-    onConfirmAddToCart() {
-        this.onConfirmAddCart();
-    },
-
-    onConfirmBuyNow() {
-        this.onBuyNow();
-    },
-
-    onSpecSelectorTap() {
-        this.setData({ skuAction: 'both', showSku: true });
-    },
-
-    onModalMinus() {
-        if (this.data.modalQuantity > 1) {
-            this.setData({ modalQuantity: this.data.modalQuantity - 1 });
-        }
-    },
-
-    onModalPlus() {
-        this.setData({ modalQuantity: this.data.modalQuantity + 1 });
-    },
-
-    onQtyInput(e) {
-        let val = parseInt(e.detail.value);
-        if (isNaN(val) || val < 1) val = 1;
-        this.setData({ modalQuantity: val });
-    },
-
-    async onConfirmAddCart() {
-        if (!this.data.selectedProduct) return;
-        try {
-            wx.showLoading({ title: '加入中' });
-            await post('/cart', {
-                product_id: this.data.selectedProduct.id,
-                quantity: this.data.modalQuantity
-            });
-            wx.hideLoading();
-            wx.showToast({ title: '已加入', icon: 'success' });
-            this.hideSkuModal();
-            this.updateCartData();
-        } catch (err) {
-            wx.hideLoading();
-            wx.showToast({ title: '失败', icon: 'none' });
-        }
-    },
-
-    async onConfirmBuy() {
-        if (!this.data.selectedProduct) return;
-        await this.onConfirmAddCart();
-        wx.navigateTo({ url: '/pages/order/confirm' });
     },
 
     stopProp() { },
 
-    // ===== 购物车逻辑（来自当前版本，适配 items + summary.total_amount）=====
+    // ===== 购物袋逻辑（来自当前版本，适配 items + summary.total_amount）=====
 
-    async updateCartData() {
-        try {
-            const res = await get('/cart');
-            if (res.code === 0) {
-                // 适配后端 items 结构
-                const items = res.data?.items || res.data || [];
-                const count = items.reduce((s, i) => s + i.quantity, 0);
+    // 私有方法：统一解析后端购物袋响应中的商品列表
+    _parseCartItems(res) {
+        return require('./categoryCart').parseCartItems(res);
+    },
 
-                // 优先使用后端汇总金额，其次前端计算
-                let total = res.data?.summary?.total_amount || 0;
-                if (!total && items.length > 0) {
-                    total = items.reduce((s, i) => s + (parseFloat(i.effective_price || i.sku?.retail_price || 0) * i.quantity), 0);
-                }
-
-                this.setData({
-                    cartCount: count,
-                    cartTotal: parseFloat(total).toFixed(2),
-                    _cartItemIds: items.map(item => item.id).join(',')
-                });
-            }
-        } catch (err) {
-            console.error('更新购物车失败:', err);
-        }
+    async updateCartData(forceRefresh = false) {
+        return updateCartData(this, forceRefresh);
     },
 
     onToggleCartPopup() {
-        wx.switchTab({ url: '/pages/cart/cart' });
+        if (this.data.cartCount <= 0) {
+            wx.showToast({ title: '先挑选几件好物', icon: 'none' });
+            return;
+        }
+        this.openCartPopup();
     },
 
     onCheckout() {
         const { cartCount, _cartItemIds } = this.data;
         if (cartCount > 0 && _cartItemIds) {
-            // 带上购物车商品 ID 结算（来自当前版本）
+            // 带上购物袋商品 ID 结算（来自当前版本）
             wx.navigateTo({
                 url: `/pages/order/confirm?from=cart&cart_ids=${_cartItemIds}`
             });
         } else {
             wx.showToast({ title: '请先选购商品', icon: 'none' });
         }
+    },
+
+    async openCartPopup() {
+        return openCartPopup(this);
+    },
+
+    closeCartPopup() {
+        return closeCartPopup(this);
+    },
+
+    onToggleCartPopupItem(e) {
+        const index = e.currentTarget.dataset.index;
+        return toggleCartPopupItem(this, index);
+    },
+
+    calcCartPopupTotal() {
+        return calcCartPopupTotal(this);
+    },
+
+    onPopupCheckout() {
+        return popupCheckout(this);
+    },
+
+    _syncPopupSelection() {
+        return syncPopupSelection(this);
+    },
+
+    onPopupToggleAll() {
+        return togglePopupSelectAll(this);
+    },
+
+    onPopupClearAll() {
+        return clearCartPopup(this);
+    },
+
+    async onPopupMinus(e) {
+        const index = e.currentTarget.dataset.index;
+        const item = this.data.cartPopupItems[index];
+        if (!item) return;
+        return changeCartItemQty(this, index, item.quantity - 1);
+    },
+
+    async onPopupPlus(e) {
+        const index = e.currentTarget.dataset.index;
+        const item = this.data.cartPopupItems[index];
+        if (!item) return;
+        return changeCartItemQty(this, index, item.quantity + 1);
+    },
+
+    async _loadPricePreviewData(forceRefresh = false) {
+        if (!forceRefresh && this._pricePreviewPromise) {
+            return this._pricePreviewPromise;
+        }
+
+        if (!forceRefresh && this._lastPricePreviewLoadedAt && (Date.now() - this._lastPricePreviewLoadedAt) < CATEGORY_PRICE_PREVIEW_TTL) {
+            return;
+        }
+
+        this._pricePreviewPromise = (async () => {
+            const [toggleRes, pointRes, couponRes] = await Promise.all([
+                get('/configs').catch(() => null),
+                get('/points/account').catch(() => null),
+                get('/coupons/available?amount=0').catch(() => null)
+            ]);
+            let enabled = false;
+            let couponEnabled = true;
+            if (toggleRes && toggleRes.code === 0 && toggleRes.data) {
+                const toggles = toggleRes.data.feature_toggles || toggleRes.data;
+                if (Array.isArray(toggles)) {
+                    const t = toggles.find(f => f.key === 'price_preview');
+                    enabled = t ? t.enabled : false;
+                    const c = toggles.find(f => f.key === 'coupon');
+                    couponEnabled = c ? c.enabled : true;
+                } else if (typeof toggles === 'object') {
+                    enabled = !!toggles.price_preview;
+                    couponEnabled = toggles.coupon !== undefined ? !!toggles.coupon : true;
+                }
+            }
+            const pb = (pointRes && pointRes.code === 0 && pointRes.data) ? (pointRes.data.balance_points || 0) : 0;
+            let bestCoupon = 0;
+            if (couponEnabled && couponRes && couponRes.code === 0 && couponRes.data) {
+                const coupons = couponRes.data || [];
+                coupons.forEach(c => {
+                    if (c.coupon_type === 'fixed' || c.coupon_type === 'no_threshold') {
+                        bestCoupon = Math.max(bestCoupon, parseFloat(c.coupon_value || 0));
+                    }
+                });
+            }
+            const shouldRefreshTips = enabled !== this.data.pricePreviewEnabled
+                || pb !== this.data.userPointBalance
+                || bestCoupon !== this.data.userBestCoupon;
+
+            await new Promise((resolve) => this.setData({
+                pricePreviewEnabled: enabled,
+                userPointBalance: pb,
+                userBestCoupon: bestCoupon
+            }, resolve));
+
+            if (shouldRefreshTips) {
+                this._refreshPricePreviewHints();
+            }
+
+            this._lastPricePreviewLoadedAt = Date.now();
+        })().catch(() => {
+            // 静默失败
+        }).finally(() => {
+            this._pricePreviewPromise = null;
+        });
+
+        return this._pricePreviewPromise;
+    },
+
+    _refreshPricePreviewHints() {
+        return refreshPricePreviewHints(this);
     }
 });
+
+

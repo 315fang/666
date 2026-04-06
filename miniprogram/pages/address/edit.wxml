@@ -15,12 +15,13 @@
   <!-- 省市区 -->
   <view class="form-group">
     <text class="form-label">所在地区</text>
-    <picker mode="region" bindchange="onRegionChange" value="{{[form.province, form.city, form.district]}}">
-      <view class="form-picker">
-        <text class="{{regionText ? '' : 'placeholder'}}">{{regionText || '请选择省/市/区'}}</text>
-        <text class="arrow">›</text>
-      </view>
-    </picker>
+    <view class="form-picker" bindtap="openRegionPanel">
+      <text class="{{regionText ? '' : 'placeholder'}}">{{regionText || '请选择省/市/区'}}</text>
+      <text class="arrow">›</text>
+    </view>
+    <view class="wechat-address-entry" bindtap="onChooseWechatAddress">
+      从微信收货地址快速填充
+    </view>
   </view>
 
   <!-- 详细地址 -->
@@ -39,6 +40,29 @@
   <view class="save-section">
     <view class="save-btn {{submitting ? 'disabled' : ''}}" bindtap="onSave">
       {{submitting ? '保存中...' : '保存地址'}}
+    </view>
+  </view>
+
+  <!-- 三级地区选择弹层 -->
+  <view class="region-panel {{showRegionPanel ? 'show' : ''}}">
+    <view class="region-mask" bindtap="closeRegionPanel"></view>
+    <view class="region-sheet">
+      <view class="region-toolbar">
+        <text class="region-action" bindtap="closeRegionPanel">取消</text>
+        <text class="region-title">请选择所在地区</text>
+        <text class="region-action confirm" bindtap="confirmRegionPanel">确定</text>
+      </view>
+      <picker-view indicator-style="height: 72rpx;" value="{{regionIndexes}}" bindchange="onRegionPickerChange" class="region-picker-view">
+        <picker-view-column>
+          <view class="region-option" wx:for="{{provinceOptions}}" wx:key="*this">{{item}}</view>
+        </picker-view-column>
+        <picker-view-column>
+          <view class="region-option" wx:for="{{cityOptions}}" wx:key="*this">{{item}}</view>
+        </picker-view-column>
+        <picker-view-column>
+          <view class="region-option" wx:for="{{districtOptions}}" wx:key="*this">{{item}}</view>
+        </picker-view-column>
+      </picker-view>
     </view>
   </view>
 </view>

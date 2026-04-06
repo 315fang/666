@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 网络请求封装（改进版）
  * 统一处理请求头、错误处理、Loading、重试等
  */
@@ -14,6 +14,32 @@ const config = {
     maxRetries: 1, // 最大重试次数
     retryDelay: 1000 // 重试延迟（毫秒）
 };
+
+/**
+ * 规范化 URL，避免出现 /api/api 重复拼接
+ * 兼容两类路径：
+ * 1) 业务 API：/xxx （baseUrl 已包含 /api）
+ * 2) 管理端公开接口：/admin/api/xxx（需回退到域名根）
+ */
+function buildRequestUrl(path) {
+    const rawBase = String(config.baseUrl || '').replace(/\/+$/, '');
+    const rawPath = String(path || '');
+    if (/^https?:\/\//i.test(rawPath)) return rawPath;
+
+    let normalizedPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+
+    // baseUrl = .../api 且 path 误写为 /api/xxx 时，去重为 /xxx
+    if (rawBase.endsWith('/api') && normalizedPath.startsWith('/api/')) {
+        normalizedPath = normalizedPath.replace(/^\/api/, '');
+    }
+
+    // 若访问 /admin/api/*，应拼到域名根而非 /api 前缀下
+    if (rawBase.endsWith('/api') && normalizedPath.startsWith('/admin/api/')) {
+        return `${rawBase.slice(0, -4)}${normalizedPath}`;
+    }
+
+    return `${rawBase}${normalizedPath}`;
+}
 
 // 正在进行的请求（用于防止重复请求）
 const pendingRequests = new Map();
@@ -65,7 +91,11 @@ function request(options) {
         data = {},
         showLoading = false,
         showError = true,
+        ignore401 = false,
         preventDuplicate = false,
+        timeout = config.timeout,
+        maxRetries = config.maxRetries,
+        retryDelay = config.retryDelay,
         retryCount = 0
     } = options;
 
@@ -79,7 +109,7 @@ function request(options) {
         // 已在外层解构，此处保持引用
 
         // 执行请求拦截器
-        let requestConfig = { url, method, data, showLoading, showError };
+        let requestConfig = { url, method, data, showLoading, showError, ignore401 };
         for (const interceptor of requestInterceptors) {
             if (interceptor.fulfilled) {
                 try {
@@ -104,7 +134,7 @@ function request(options) {
 
         const requestPromise = new Promise((resolveRequest, rejectRequest) => {
             wx.request({
-                url: config.baseUrl + requestConfig.url,
+                url: buildRequestUrl(requestConfig.url),
                 method: requestConfig.method,
                 data: requestConfig.data,
                 header: {
@@ -112,7 +142,7 @@ function request(options) {
                     'Authorization': token ? `Bearer ${token}` : '',
                     'x-openid': openid
                 },
-                timeout: config.timeout,
+                timeout,
                 success: async (res) => {
                     if (requestConfig.showLoading) wx.hideLoading();
 
@@ -133,8 +163,11 @@ function request(options) {
 
                     // HTTP 状态码检查
                     if (response.statusCode >= 200 && response.statusCode < 300) {
-                        // 业务状态码检查（统一为 code === 0 表示成功）
-                        if (response.data && response.data.code === 0) { // ★ 只接受 code===0 为成功，防掩盖错误
+                        // 业务状态码检查：
+                        // 兼容两类后端返回：
+                        // 1) { code: 0, ... }
+                        // 2) { success: true, ... }（历史接口，如地址模块）
+                        if (response.data && (response.data.code === 0 || response.data.success === true)) {
                             resolveRequest(response.data);
                         } else {
                             // 业务错误
@@ -149,11 +182,14 @@ function request(options) {
                         }
                     } else if (response.statusCode === 401) {
                         // 登录过期处理
-                        handleLoginExpired();
+                        if (!requestConfig.ignore401) {
+                            handleLoginExpired();
+                        }
                         rejectRequest({ code: 401, message: '登录已过期' });
                     } else {
-                        // 其他 HTTP 错误
-                        const errorMessage = `请求错误 (${response.statusCode})`;
+                        // 其他 HTTP 错误，优先透传服务端 message，避免丢失关键排障信息
+                        const serverMessage = response.data && response.data.message;
+                        const errorMessage = serverMessage || `请求错误 (${response.statusCode})`;
                         if (requestConfig.showError) {
                             wx.showToast({
                                 title: errorMessage,
@@ -168,13 +204,13 @@ function request(options) {
                     if (requestConfig.showLoading) wx.hideLoading();
 
                     // 网络错误，尝试重试
-                    if (retryCount < config.maxRetries) {
-                        console.log(`请求失败，${config.retryDelay}ms 后重试 (${retryCount + 1}/${config.maxRetries})`);
+                    if (retryCount < maxRetries) {
+                        console.log(`请求失败，${retryDelay}ms 后重试 (${retryCount + 1}/${maxRetries})`);
                         setTimeout(() => {
                             request({ ...options, retryCount: retryCount + 1 })
                                 .then(resolveRequest)
                                 .catch(rejectRequest);
-                        }, config.retryDelay);
+                        }, retryDelay);
                     } else {
                         if (requestConfig.showError) {
                             wx.showToast({
@@ -265,7 +301,7 @@ function uploadFile(url, filePath, name = 'file', formData = {}, options = {}) {
 
     return new Promise((resolve, reject) => {
         wx.uploadFile({
-            url: config.baseUrl + url,
+            url: buildRequestUrl(url),
             filePath,
             name,
             formData,

@@ -1,3 +1,8 @@
 {
-    "navigationBarTitleText": "个人中心"
+    "navigationBarTitleText": "个人中心",
+    "navigationBarBackgroundColor": "#2d241c",
+    "navigationBarTextStyle": "white",
+    "usingComponents": {
+        "light-tip-modal": "/components/light-tip-modal/light-tip-modal"
+    }
 }

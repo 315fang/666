@@ -1,75 +1,139 @@
-<!--pages/distribution/team.wxml-->
+<!-- pages/distribution/team.wxml -->
 <view class="container">
-  <!-- 统计概览 -->
-  <view class="stats-card">
-    <view class="stats-item">
-      <text class="stats-val">{{directCount || 0}}</text>
-      <text class="stats-label">直推成员</text>
-    </view>
-    <view class="stats-item">
-      <text class="stats-val">{{indirectCount || 0}}</text>
-      <text class="stats-label">二代成员</text>
-    </view>
-    <view class="stats-item">
-      <text class="stats-val">{{totalCount || 0}}</text>
-      <text class="stats-label">团队总数</text>
+
+  <!-- 自定义导航栏 -->
+  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-inner" style="height: {{navBarHeight}}px;">
+      <view class="nav-back" bindtap="onBack">
+        <image class="back-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"></image>
+      </view>
+      <text class="nav-title">我的团队</text>
+      <view class="nav-right" bindtap="goInvitePosterPage">
+        <image class="nav-share-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
+      </view>
     </view>
   </view>
 
-  <!-- 额外统计 -->
-  <view class="extra-stats">
-    <view class="extra-item">
-      <image class="extra-icon-img" src="/assets/icons/bar-chart.svg" mode="aspectFit"/>
-      <text class="extra-label">团队总业绩</text>
-      <text class="extra-val">¥{{totalSales}}</text>
-    </view>
-    <view class="extra-item">
-      <image class="extra-icon-img" src="/assets/icons/plus.svg" mode="aspectFit"/>
-      <text class="extra-label">本月新增</text>
-      <text class="extra-val">{{monthlyNewMembers}}人</text>
-    </view>
-    <view class="extra-item" wx:if="{{agentStockInfo}}">
-      <image class="extra-icon-img" src="/assets/icons/package.svg" mode="aspectFit"/>
-      <text class="extra-label">代理商库存</text>
-      <text class="extra-val">{{agentStockInfo.stock_count}}件</text>
+  <!-- 统计头部 -->
+  <view class="header-section">
+    <view class="header-inner">
+
+      <!-- 邀请码行 -->
+      <view class="invite-row" wx:if="{{inviteCode}}">
+        <view class="invite-code-left">
+          <text class="invite-code-label">我的邀请码</text>
+          <text class="invite-code-value">{{inviteCode}}</text>
+        </view>
+        <view class="invite-actions">
+          <view class="invite-action-btn" bindtap="onCopyCode">
+            <text class="invite-action-text">复制</text>
+          </view>
+          <button class="invite-action-btn invite-action-share" open-type="share">
+            <text class="invite-action-text">分享</text>
+          </button>
+        </view>
+      </view>
+
+      <!-- 三列统计 -->
+      <view class="stat-row">
+        <view class="stat-block">
+          <text class="stat-val">{{directCount}}</text>
+          <text class="stat-label">直推成员</text>
+        </view>
+        <view class="stat-divider"></view>
+        <view class="stat-block">
+          <text class="stat-val">{{indirectCount}}</text>
+          <text class="stat-label">二级成员</text>
+        </view>
+        <view class="stat-divider"></view>
+        <view class="stat-block">
+          <text class="stat-val">{{totalCount}}</text>
+          <text class="stat-label">团队总人数</text>
+        </view>
+      </view>
+
+      <!-- 次要统计 -->
+      <view class="sub-stat-row">
+        <view class="sub-stat-item">
+          <text class="sub-stat-label">累计业绩</text>
+          <text class="sub-stat-val">¥{{totalSales}}</text>
+        </view>
+        <view class="sub-stat-sep"></view>
+        <view class="sub-stat-item">
+          <text class="sub-stat-label">本月新增</text>
+          <text class="sub-stat-val">{{monthlyNewMembers}} 人</text>
+        </view>
+      </view>
     </view>
   </view>
 
-  <!-- 搜索筛选 -->
-  <view class="tab-header">
-    <view class="tab-item {{currentTab === 'direct' ? 'active' : ''}}" bindtap="switchTab" data-tab="direct">直推成员</view>
-    <view class="tab-item {{currentTab === 'indirect' ? 'active' : ''}}" bindtap="switchTab" data-tab="indirect">下级团队</view>
+  <!-- Tab 切换 -->
+  <view class="tab-bar">
+    <view class="tab-item {{currentTab === 'direct' ? 'active' : ''}}" bindtap="switchTab" data-tab="direct">
+      <text class="tab-text">直推成员</text>
+    </view>
+    <view class="tab-item {{currentTab === 'indirect' ? 'active' : ''}}" bindtap="switchTab" data-tab="indirect">
+      <text class="tab-text">二级团队</text>
+    </view>
+  </view>
+
+  <view class="poster-entry-banner" bindtap="goInvitePosterPage">
+    <image class="poster-entry-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
+    <view class="poster-entry-mid">
+      <text class="poster-entry-title">邀请海报</text>
+      <text class="poster-entry-sub">邀请语 / 官方码 / 创意版</text>
+    </view>
+    <text class="poster-entry-arrow">›</text>
   </view>
 
   <!-- 成员列表 -->
-  <scroll-view class="member-list" scroll-y bindscrolltolower="onLoadMore">
-    <!-- 列表容器 -->
-    <view class="member-list-container">
-      <view class="member-item" wx:for="{{members}}" wx:key="id">
-        <image class="member-avatar" src="{{item.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
-        <view class="member-info">
-          <view class="member-top">
-            <text class="member-name">{{item.nickname}}</text>
-            <text class="member-tag">{{item.role_name}}</text>
-          </view>
-          <view class="member-bottom">
-            <text>加入: {{item.joined_at_format}}</text>
-            <text class="member-sales">订单: {{item.order_count || 0}} | 业绩: ¥{{item.total_sales_format}}</text>
+  <scroll-view class="member-scroll" scroll-y bindscrolltolower="onLoadMore">
+    <view class="member-list">
+
+      <view class="skeleton-wrap" wx:if="{{loading && members.length === 0}}">
+        <view class="sk-member" wx:for="{{[1,2,3,4,5]}}" wx:key="index">
+          <view class="sk-avatar"></view>
+          <view class="sk-info">
+            <view class="sk-line sk-long"></view>
+            <view class="sk-line sk-short"></view>
           </view>
         </view>
       </view>
 
-      <!-- 空状态 -->
-      <view class="empty-state" wx:if="{{members.length === 0 && !loading}}">
-        <image class="empty-icon-img" src="/assets/icons/users.svg" mode="aspectFit"/>
-        <text>暂无团队成员</text>
-        <text class="empty-tip">分享邀请码给好友即可建立团队</text>
+      <view class="member-item" wx:for="{{members}}" wx:key="id">
+        <view class="member-avatar-wrap">
+          <image class="member-avatar" src="{{item.avatar_url || '/assets/icons/user.svg'}}" mode="aspectFill"></image>
+        </view>
+        <view class="member-info">
+          <view class="member-name-row">
+            <text class="member-name">{{item.nickname || '用户' + item.id}}</text>
+            <view class="member-tag">{{item.role_name}}</view>
+          </view>
+          <view class="member-meta-row">
+            <text class="member-meta">加入 {{item.joined_at_format}}</text>
+            <text class="member-sep">·</text>
+            <text class="member-meta">业绩 ¥{{item.total_sales_format}}</text>
+          </view>
+        </view>
       </view>
 
-      <!-- 加载中 -->
-      <view class="loading" wx:if="{{loading}}">
-        <view class="spinner"></view>
+      <view class="load-footer" wx:if="{{members.length > 0}}">
+        <view class="loading-row" wx:if="{{loading}}">
+          <view class="loading-spinner"></view>
+          <text class="loading-text">加载中</text>
+        </view>
+        <text class="no-more" wx:elif="{{!hasMore}}">没有更多了</text>
+      </view>
+
+      <view class="empty-state" wx:if="{{!loading && members.length === 0}}">
+        <image src="/assets/icons/users.svg" mode="aspectFit" class="empty-icon"></image>
+        <text class="empty-title">暂无成员</text>
+        <text class="empty-desc">通过邀请码或分享链接邀请好友加入</text>
+        <button class="empty-invite-btn" open-type="share">立即邀请好友</button>
       </view>
     </view>
+
+    <view style="height: 60rpx;"></view>
   </scroll-view>
+
 </view>

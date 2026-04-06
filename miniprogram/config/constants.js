@@ -5,7 +5,7 @@
 
 // ==================== API 配置 ====================
 const API_CONFIG = {
-  BASE_URL: 'https://api.jxalk.cn/api',
+  BASE_URL: 'https://api.wenlan.store/api',
   TIMEOUT: 15000,
   RETRY_COUNT: 3
 };
@@ -13,16 +13,20 @@ const API_CONFIG = {
 // ==================== 用户角色 ====================
 const USER_ROLES = {
   GUEST: 0,
-  MEMBER: 1,
-  LEADER: 2,
-  AGENT: 3
+  MEMBER: 1,      // C1 初级代理
+  LEADER: 2,      // C2 高级代理
+  AGENT: 3,       // B1 推广合伙人
+  PARTNER: 4,     // B2 运营合伙人
+  REGIONAL: 5     // B3 区域合伙人
 };
 
 const ROLE_NAMES = {
   [USER_ROLES.GUEST]: '普通用户',
-  [USER_ROLES.MEMBER]: '会员',
-  [USER_ROLES.LEADER]: '团长',
-  [USER_ROLES.AGENT]: '代理商'
+  [USER_ROLES.MEMBER]: '初级代理',
+  [USER_ROLES.LEADER]: '高级代理',
+  [USER_ROLES.AGENT]: '推广合伙人',
+  [USER_ROLES.PARTNER]: '运营合伙人',
+  [USER_ROLES.REGIONAL]: '区域合伙人'
 };
 
 // ==================== 订单状态 ====================

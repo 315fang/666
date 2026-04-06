@@ -1,5 +1,8 @@
 const { User, CommissionLog, Order, Product, sequelize } = require('../models');
 const { Op } = require('sequelize');
+const MemberTierService = require('../services/MemberTierService');
+const AgentWalletService = require('../services/AgentWalletService');
+const { getWxaCodeUnlimited } = require('../utils/wechat');
 
 /**
  * 获取分销统计数据
@@ -23,14 +26,9 @@ async function getDistributionStats(req, res, next) {
             }
         }
 
-        // 获取等级名称
-        const roleNames = {
-            0: '普通会员',
-            1: '初级分销员',
-            2: '中级分销员',
-            3: '高级合伙人'
-        };
-        const roleName = roleNames[user.role_level] || '普通会员';
+        // 获取动态等级名称
+        const roleName = await MemberTierService.getRoleName(user.role_level);
+        const growthProgress = await MemberTierService.getGrowthProgress(user.growth_value || 0);
 
         // 直推成员数
         const directCount = await User.count({
@@ -64,7 +62,9 @@ async function getDistributionStats(req, res, next) {
 
         commissionStats.forEach(item => {
             const amount = parseFloat(item.total) || 0;
-            totalEarnings += amount;
+            if (item.status !== 'cancelled') {
+                totalEarnings += amount;
+            }
             if (item.status === 'frozen') frozenAmount += amount;
             if (item.status === 'settled' || item.status === 'available') availableAmount += amount;
         });
@@ -81,18 +81,19 @@ async function getDistributionStats(req, res, next) {
             }
         });
 
-        // 查找团队中的代理商库存（递归向上查找）
-        let agentStockInfo = null;
+        // 查找团队中的代理商货款账户信息（递归向上查找）
+        let agentGoodsFundInfo = null;
         let currentUser = user;
         let maxDepth = 10; // 防止无限循环
 
         while (maxDepth > 0 && currentUser) {
             if (currentUser.role_level >= 3) {
                 // 找到代理商
-                agentStockInfo = {
+                const walletAccount = await AgentWalletService.getAccount(currentUser.id);
+                agentGoodsFundInfo = {
                     agent_id: currentUser.id,
                     agent_nickname: currentUser.nickname,
-                    stock_count: currentUser.stock_count || 0
+                    goods_fund_balance: parseFloat(walletAccount.balance || 0).toFixed(2)
                 };
                 break;
             }
@@ -115,8 +116,10 @@ async function getDistributionStats(req, res, next) {
                     avatar_url: user.avatar_url,
                     role: user.role_level,
                     role_name: roleName,
+                    growth_value: parseFloat(user.growth_value || 0),
+                    discount_rate: parseFloat(user.discount_rate || 1),
+                    growth_progress: growthProgress,
                     invite_code: user.invite_code,
-                    stock_count: user.stock_count || 0,
                     inviter: inviter
                 },
                 stats: {
@@ -129,7 +132,7 @@ async function getDistributionStats(req, res, next) {
                     indirectCount,
                     totalCount: directCount + indirectCount,
                     monthlyNewMembers,
-                    agentStock: agentStockInfo
+                    agentGoodsFund: agentGoodsFundInfo
                 }
             }
         });
@@ -144,33 +147,56 @@ async function getDistributionStats(req, res, next) {
 async function getTeamMembers(req, res, next) {
     try {
         const user = req.user;
-        const { level = 'direct', page = 1, limit = 20 } = req.query;
+        const { level = '', keyword = '', role_level = '', page = 1, limit = 20 } = req.query;
         const offset = (parseInt(page) - 1) * parseInt(limit);
 
-        let whereCondition = {};
+        const directMembers = await User.findAll({
+            where: { parent_id: user.id },
+            attributes: ['id'],
+            raw: true
+        });
+        const directIds = directMembers.map(item => item.id);
+        const normalizedLevel = level === '1' ? 'direct' : level === '2' ? 'indirect' : level;
 
-        if (level === 'direct') {
-            // 直推成员
+        let whereCondition = {};
+        if (normalizedLevel === 'direct') {
             whereCondition.parent_id = user.id;
-        } else if (level === 'indirect') {
-            // 间接成员（二级）
-            const directIds = await User.findAll({
-                where: { parent_id: user.id },
-                attributes: ['id'],
-                raw: true
-            });
+        } else if (normalizedLevel === 'indirect') {
             if (directIds.length === 0) {
                 return res.json({
                     code: 0,
                     data: { list: [], pagination: { total: 0, page: 1, limit: parseInt(limit), totalPages: 0 } }
                 });
             }
-            whereCondition.parent_id = { [Op.in]: directIds.map(d => d.id) };
+            whereCondition.parent_id = { [Op.in]: directIds };
+        } else if (directIds.length > 0) {
+            whereCondition[Op.or] = [
+                { parent_id: user.id },
+                { parent_id: { [Op.in]: directIds } }
+            ];
+        } else {
+            whereCondition.parent_id = user.id;
+        }
+
+        if (role_level !== undefined && role_level !== '') {
+            whereCondition.role_level = parseInt(role_level);
+        }
+        if (keyword) {
+            whereCondition[Op.and] = [
+                ...(whereCondition[Op.and] || []),
+                {
+                    [Op.or]: [
+                        { nickname: { [Op.like]: `%${keyword}%` } },
+                        { phone: { [Op.like]: `%${keyword}%` } },
+                        { member_no: { [Op.like]: `%${keyword}%` } }
+                    ]
+                }
+            ];
         }
 
         const { count, rows } = await User.findAndCountAll({
             where: whereCondition,
-            attributes: ['id', 'nickname', 'avatar_url', 'role_level', 'order_count', 'total_sales', 'created_at'],
+            attributes: ['id', 'nickname', 'avatar_url', 'role_level', 'order_count', 'total_sales', 'created_at', 'member_no', 'parent_id', 'phone'],
             order: [['created_at', 'DESC']],
             offset,
             limit: parseInt(limit)
@@ -184,7 +210,10 @@ async function getTeamMembers(req, res, next) {
             role_level: member.role_level,
             order_count: member.order_count,
             total_sales: member.total_sales,
-            joined_at: member.created_at
+            member_no: member.member_no,
+            level: member.parent_id === user.id ? 1 : 2,
+            joined_at: member.created_at,
+            created_at: member.created_at
         }));
 
         res.json({
@@ -299,10 +328,41 @@ async function getWorkbenchStats(req, res, next) {
     return getDistributionStats(req, res, next);
 }
 
+/**
+ * 无限量小程序码：scene 与小程序首页解析约定一致（i=6位邀请码），新用户扫码打开小程序注册时自动绑定上级
+ * GET /api/distribution/wxacode-invite  → image/png
+ */
+async function getInviteWxaCode(req, res, next) {
+    try {
+        const user = await User.findByPk(req.user.id, { attributes: ['id', 'invite_code'] });
+        if (!user || !user.invite_code) {
+            return res.status(400).json({
+                code: -1,
+                message: '暂无邀请码，请在管理后台分配邀请码后再试'
+            });
+        }
+        const scene = `i=${user.invite_code}`;
+        const png = await getWxaCodeUnlimited({
+            scene,
+            page: 'pages/index/index',
+            width: 430
+        });
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Cache-Control', 'private, max-age=120');
+        return res.send(png);
+    } catch (err) {
+        console.error('[getInviteWxaCode]', err.message);
+        return res.status(502).json({
+            code: -1,
+            message: err.message || '小程序码生成失败，请检查服务端微信配置与小程序是否已发布'
+        });
+    }
+}
+
 module.exports = {
     getDistributionStats,
     getWorkbenchStats,
     getTeamMembers,
-    getPromotionOrders
+    getPromotionOrders,
+    getInviteWxaCode
 };
-

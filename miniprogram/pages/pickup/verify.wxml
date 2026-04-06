@@ -1,0 +1,18 @@
+<view class="wrap">
+  <text class="tip">须为认领的运营中站点账号；可在任意已认领门店核销（不必与顾客下单门店一致）。订单须已发货；若账号认领多站需传 station_id。</text>
+
+  <view class="block">
+    <text class="label">16 位核销码</text>
+    <input class="inp" value="{{code}}" bindinput="onCodeInput" placeholder="请输入顾客出示的核销码" maxlength="16" />
+    <button class="btn" loading="{{loading}}" bindtap="onVerifyCode">确认核销</button>
+  </view>
+
+  <view class="divider">或</view>
+
+  <view class="block">
+    <text class="label">扫码核销（扫描顾客二维码）</text>
+    <button class="btn secondary" bindtap="onScan">扫一扫</button>
+    <input class="inp mt" value="{{qrToken}}" bindinput="onTokenInput" placeholder="也可手动粘贴二维码内容" />
+    <button class="btn" loading="{{loadingQr}}" bindtap="onVerifyQr">核销二维码</button>
+  </view>
+</view>

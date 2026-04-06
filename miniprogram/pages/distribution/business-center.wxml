@@ -1,0 +1,90 @@
+<view class="container">
+
+  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-inner" style="height: {{navBarHeight}}px;">
+      <view class="nav-back" bindtap="onBack">
+        <image class="back-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"></image>
+      </view>
+      <text class="nav-title">商务中心</text>
+    </view>
+  </view>
+
+  <scroll-view scroll-y class="main-scroll">
+
+    <view class="section-card wallet-card">
+      <text class="section-eyebrow">账户资金</text>
+
+      <block wx:if="{{showGoodsWallet}}">
+        <view class="wallet-block">
+          <text class="wallet-kind">货款余额</text>
+          <text class="wallet-amount">¥{{goodsBalanceDisplay}}</text>
+          <text class="wallet-desc">代理商货款，可用于符合条件的订单支付</text>
+          <view class="primary-pill" bindtap="onAgentWalletTap">查看货款明细与充值</view>
+        </view>
+        <view class="wallet-inner-divider"></view>
+      </block>
+
+      <view class="wallet-block {{showGoodsWallet ? 'wallet-block-tight' : ''}}">
+        <text class="wallet-kind">钱包金额</text>
+        <text class="wallet-amount {{showGoodsWallet ? 'wallet-amount-secondary' : ''}}">¥{{purseBalanceDisplay}}</text>
+        <text class="wallet-desc">购物可用余额，下单结算时可抵扣</text>
+        <view class="secondary-pill" bindtap="onPurseWalletTap">钱包充值与明细</view>
+      </view>
+    </view>
+
+    <view class="section-card actions-card">
+      <text class="section-eyebrow">团队与邀请</text>
+
+      <view class="action-row" bindtap="goInvitePoster">
+        <view class="action-ico action-ico-g">
+          <image class="action-img" src="/assets/icons/users.svg" mode="aspectFit"></image>
+        </view>
+        <view class="action-txt">
+          <text class="action-t">邀请海报</text>
+          <text class="action-s">生成海报保存或分享</text>
+        </view>
+        <text class="action-arr">›</text>
+      </view>
+
+      <view class="hr"></view>
+
+      <view class="action-row" bindtap="goTeam">
+        <view class="action-ico action-ico-br">
+          <image class="action-img" src="/assets/icons/share.svg" mode="aspectFit"></image>
+        </view>
+        <view class="action-txt">
+          <text class="action-t">我的团队</text>
+          <text class="action-s">查看直推与二级成员</text>
+        </view>
+        <text class="action-arr">›</text>
+      </view>
+    </view>
+
+    <view class="section-card" wx:if="{{participateDistribution}}">
+      <view class="action-row" bindtap="goDistributionCenter">
+        <view class="action-ico action-ico-br">
+          <image class="action-img" src="/assets/icons/bar-chart.svg" mode="aspectFit"></image>
+        </view>
+        <view class="action-txt">
+          <text class="action-t">推广与佣金</text>
+          <text class="action-s">佣金、提现、业绩看板</text>
+        </view>
+        <text class="action-arr">›</text>
+      </view>
+    </view>
+
+    <view class="section-card tips-card">
+      <text class="section-eyebrow">说明</text>
+      <view class="tip-line">
+        <text class="tip-bullet">·</text>
+        <text class="tip-body">货款余额与钱包金额为两类资金：货款用于代理订货支付；钱包为购物余额，下单抵扣。规则以平台为准。</text>
+      </view>
+      <view class="tip-line">
+        <text class="tip-bullet">·</text>
+        <text class="tip-body">好友通过邀请码或分享链接注册后，将加入你的团队；佣金以平台规则结算。</text>
+      </view>
+    </view>
+
+    <view class="scroll-pad"></view>
+  </scroll-view>
+</view>

@@ -1,69 +1,78 @@
+<!-- pages/distribution/commission-logs.wxml -->
 <view class="container">
-  <!-- 顶部概览 -->
-  <view class="stats-header">
-    <view class="stat-card">
-      <text class="label">累计佣金</text>
-      <text class="amount">¥{{totalEarnings || '0.00'}}</text>
-    </view>
-    <view class="stat-card">
-      <text class="label">待结算</text>
-      <text class="amount sub">¥{{frozenAmount || '0.00'}}</text>
+
+  <!-- 概览卡 -->
+  <view class="overview-card">
+    <view class="overview-inner">
+      <view class="overview-block">
+        <text class="overview-label">累计佣金</text>
+        <text class="overview-amount">¥{{totalEarnings}}</text>
+      </view>
+      <view class="overview-divider"></view>
+      <view class="overview-block">
+        <text class="overview-label">待结算</text>
+        <text class="overview-amount sub">¥{{frozenAmount}}</text>
+      </view>
     </view>
   </view>
 
-  <!-- 筛选栏 -->
+  <!-- 筛选 Tab -->
   <view class="filter-bar">
-    <scroll-view scroll-x class="filter-scroll">
-      <view 
-        class="filter-item {{currentType === 'all' ? 'active' : ''}}" 
-        bindtap="onTypeChange" 
-        data-type="all"
-      >全部</view>
-      <view 
-        class="filter-item {{currentType === 'Direct' ? 'active' : ''}}" 
-        bindtap="onTypeChange" 
-        data-type="Direct"
-      >直推佣金</view>
-      <view 
-        class="filter-item {{currentType === 'Indirect' ? 'active' : ''}}" 
-        bindtap="onTypeChange" 
-        data-type="Indirect"
-      >团队佣金</view>
-      <view 
-        class="filter-item {{currentType === 'Stock_Diff' ? 'active' : ''}}" 
-        bindtap="onTypeChange" 
-        data-type="Stock_Diff"
-      >级差利润</view>
-    </scroll-view>
+    <view class="filter-item {{currentType === 'all' ? 'active' : ''}}" bindtap="onTypeChange" data-type="all">全部</view>
+    <view class="filter-item {{currentType === 'Direct' ? 'active' : ''}}" bindtap="onTypeChange" data-type="Direct">直推佣金</view>
+    <view class="filter-item {{currentType === 'Indirect' ? 'active' : ''}}" bindtap="onTypeChange" data-type="Indirect">团队佣金</view>
+    <view class="filter-item {{currentType === 'Stock_Diff' ? 'active' : ''}}" bindtap="onTypeChange" data-type="Stock_Diff">级差利润</view>
   </view>
 
-  <!-- 列表 -->
-  <view class="list-section">
-    <view class="log-item" wx:for="{{logs}}" wx:key="id">
-      <view class="log-left">
-        <view class="type-icon {{item.type}}">{{item.typeIcon}}</view>
-        <view class="info">
-          <text class="title">{{item.typeName}}</text>
-          <text class="time">{{item.created_at}}</text>
+  <!-- 明细列表 -->
+  <scroll-view class="log-scroll" scroll-y bindscrolltolower="onReachBottom">
+    <view class="log-list">
+
+      <!-- 骨架屏 -->
+      <view class="skeleton-wrap" wx:if="{{loading && logs.length === 0}}">
+        <view class="sk-log" wx:for="{{[1,2,3,4,5]}}" wx:key="index">
+          <view class="sk-icon"></view>
+          <view class="sk-info">
+            <view class="sk-line sk-long"></view>
+            <view class="sk-line sk-short"></view>
+          </view>
+          <view class="sk-amount-box"></view>
         </view>
       </view>
-      <view class="log-right">
-        <text class="amount">+{{item.amount}}</text>
-        <text class="status {{item.statusClass}}">{{item.statusText}}</text>
+
+      <!-- 列表项 -->
+      <view class="log-item" wx:for="{{logs}}" wx:key="id">
+        <view class="log-icon-wrap log-icon-{{item.type}}">
+          <image src="{{item.typeIcon}}" mode="aspectFit" class="log-icon"></image>
+        </view>
+        <view class="log-info">
+          <text class="log-type-name">{{item.typeName}}</text>
+          <text class="log-time">{{item.created_at}}</text>
+          <text class="log-remark" wx:if="{{item.remark}}">{{item.remark}}</text>
+        </view>
+        <view class="log-right">
+          <text class="log-amount">+¥{{item.amount}}</text>
+          <view class="log-status {{item.statusClass}}">{{item.statusText}}</view>
+        </view>
       </view>
-      <view class="remark" wx:if="{{item.remark}}">
-        <text class="remark-text">{{item.remark}}</text>
+
+      <!-- 底部状态 -->
+      <view class="load-footer" wx:if="{{logs.length > 0}}">
+        <view class="loading-row" wx:if="{{loading}}">
+          <view class="loading-spinner"></view>
+          <text class="loading-text">加载中</text>
+        </view>
+        <text class="no-more" wx:elif="{{!hasMore}}">没有更多了</text>
+      </view>
+
+      <!-- 空状态 -->
+      <view class="empty-state" wx:if="{{!loading && logs.length === 0}}">
+        <image src="/assets/icons/dollar-sign.svg" mode="aspectFit" class="empty-icon"></image>
+        <text class="empty-title">暂无佣金记录</text>
+        <text class="empty-desc">分享商品或发展团队即可获得佣金</text>
       </view>
     </view>
 
-    <!-- 加载状态 -->
-    <view class="loading-more" wx:if="{{loading}}">加载中...</view>
-    <view class="no-more" wx:if="{{!hasMore && logs.length > 0}}">没有更多了</view>
-    
-    <!-- 空状态 -->
-    <view class="empty-state" wx:if="{{logs.length === 0 && !loading}}">
-      <image src="/assets/images/placeholder.svg" mode="aspectFit" class="empty-img"></image>
-      <text>暂无佣金明细</text>
-    </view>
-  </view>
+    <view style="height: 60rpx;"></view>
+  </scroll-view>
 </view>

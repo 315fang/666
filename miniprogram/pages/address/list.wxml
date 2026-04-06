@@ -1,5 +1,11 @@
 <!--pages/address/list.wxml - 收货地址列表-->
 <view class="container">
+  <!-- 选择模式顶部提示条 -->
+  <view class="select-tip" wx:if="{{selectMode}}">
+    <image class="select-tip-icon" src="/assets/icons/map-pin.svg" mode="aspectFit"/>
+    <text class="select-tip-text">请选择收货地址</text>
+  </view>
+
   <!-- 地址列表容器 -->
   <view class="address-list-container">
     <!-- 地址列表 -->
@@ -7,6 +13,8 @@
       <view class="address-card {{selectMode ? 'selectable' : ''}} {{item.deleting ? 'deleting' : ''}}"
             wx:for="{{addresses}}" wx:key="id"
             data-index="{{index}}" bindtap="onSelectAddress">
+        <!-- 选择模式右侧箭头 -->
+        <view class="select-arrow" wx:if="{{selectMode}}">›</view>
         <view class="address-main">
           <view class="address-top">
             <text class="address-name">{{item.receiver_name}}</text>

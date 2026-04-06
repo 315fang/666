@@ -4,14 +4,38 @@
 
 const app = getApp();
 
-// ── 颜色渐变系统（与 React 版完全一致）──────────────────────
-const GRAD = [
+// ── 颜色渐变系统 ──────────────────────────────────────────
+const DEFAULT_GRAD = [
   { at: 0.00, c: [38,  6,  80] },
   { at: 0.25, c: [72, 30, 120] },
   { at: 0.50, c: [140,100,185] },
   { at: 0.72, c: [210,185,230] },
   { at: 1.00, c: [247,244,239] }
 ];
+
+let GRAD = DEFAULT_GRAD;
+
+function hexToRgb(hex) {
+  hex = hex.replace('#', '');
+  if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+  const n = parseInt(hex, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function buildGradFromConfig(startColor, endColor) {
+  try {
+    const s = hexToRgb(startColor);
+    const e = hexToRgb(endColor);
+    const mid = s.map((v, i) => Math.round(v + (e[i] - v) * 0.5));
+    return [
+      { at: 0.00, c: s },
+      { at: 0.50, c: mid },
+      { at: 1.00, c: e }
+    ];
+  } catch (_) {
+    return DEFAULT_GRAD;
+  }
+}
 
 function sampleColor(p) {
   p = Math.max(0, Math.min(1, p));
@@ -99,7 +123,8 @@ Page({
     countdown: 0,
 
     splashConfig: null,
-    layers: [],          // 包含 single 层 + reveal 层
+    splashBgImage: '',
+    layers: [],
     TOTAL: 3
   },
 
@@ -114,24 +139,59 @@ Page({
   _countdownTimer: null,
 
   onLoad() {
-    // 读取开屏配置（优先 globalData 缓存）
-    const config = app.globalData.splashConfig;
-    if (config && config.is_active && config.show_mode !== 'disabled') {
-      this._init(config);
-    } else {
-      // 没有缓存，直接跳过（app.js 会在 onLaunch 时 prefetch）
-      this._redirect();
+    if (app.globalData.splashConfig) {
+      this._bootWithConfig(app.globalData.splashConfig);
+      return;
     }
+
+    const splashPromise = app.prefetchSplashConfig ? app.prefetchSplashConfig() : app.globalData.splashConfigPromise;
+    if (splashPromise && typeof splashPromise.then === 'function') {
+      // 最多等 2s，超时直接跳首页，防止接口慢或本地无服务时卡在紫屏
+      let done = false;
+      const guard = setTimeout(() => {
+        if (!done && !this._destroyed) { done = true; this._redirect(); }
+      }, 2000);
+
+      splashPromise.then((config) => {
+        if (done || this._destroyed || this.data.splashConfig) return;
+        done = true;
+        clearTimeout(guard);
+        this._bootWithConfig(config);
+      }).catch(() => {
+        if (done || this._destroyed) return;
+        done = true;
+        clearTimeout(guard);
+        this._redirect();
+      });
+      return;
+    }
+
+    this._redirect();
+  },
+
+  _bootWithConfig(config) {
+    if (!config || !shouldShowSplash(config)) {
+      this._redirect();
+      return;
+    }
+    this._init(config);
   },
 
   _init(config) {
+    // 应用后台配置的渐变色（若有）
+    if (config.bg_color_start && config.bg_color_end) {
+      GRAD = buildGradFromConfig(config.bg_color_start, config.bg_color_end);
+    } else {
+      GRAD = DEFAULT_GRAD;
+    }
+
     const singleLayers = (config.layers || []).map(l => ({ ...l, type: 'single' }));
     const revealLayer = {
       type: 'reveal',
-      title: config.title || '盒美美',
+      title: config.title || app.globalData.brandName || '问兰',
       sub: config.subtitle || '',
       credit: config.credit || '',
-      en: config.en_title || 'HEMEIMEI'
+      en: config.en_title || 'WENLAN'
     };
     const layers = [...singleLayers, revealLayer];
     const TOTAL = layers.length;
@@ -142,12 +202,12 @@ Page({
     this._STEP = STEP;
     this._THRESH = 0.30;
 
-    // 构造进度点（只显示 single 层数量的点）
     const dotCount = singleLayers.length;
     const progressDots = Array.from({ length: dotCount }, (_, i) => ({ active: i === 0 }));
 
     this.setData({
       splashConfig: config,
+      splashBgImage: config.image_url || '',
       layers,
       TOTAL,
       skipText: config.skip_text || '跳过',
@@ -377,6 +437,7 @@ Page({
   },
 
   onUnload() {
+    this._destroyed = true;
     clearTimeout(this._rafTimer);
     clearTimeout(this._wordTimer);
     clearInterval(this._countdownTimer);

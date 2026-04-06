@@ -15,8 +15,10 @@ Page({
     },
 
     onLoad(options) {
-        console.log('[OrderList] onLoad options:', options);
         let status = options.status;
+        if (!status && options.type === 'distribution') {
+            status = 'all';
+        }
         if (status === 'all') status = '';
         if (status) {
             // 只更新 status，不加载数据 — onShow 会紧接着触发并加载
@@ -25,6 +27,11 @@ Page({
     },
 
     onShow() {
+        const latestCreatedOrderHint = wx.getStorageSync('latestCreatedOrderHint');
+        if (latestCreatedOrderHint) {
+            wx.removeStorageSync('latestCreatedOrderHint');
+            wx.showToast({ title: latestCreatedOrderHint, icon: 'none', duration: 2500 });
+        }
         // 每次显示时刷新（从详情页/退款页返回后应看到最新状态）
         this.setData({ page: 1, hasMore: true }, () => {
             this.loadOrders();
@@ -46,30 +53,33 @@ Page({
 
         try {
             const { currentStatus, page, limit } = this.data;
-            console.log('[OrderList] Loading orders with status:', currentStatus);
             const params = { page, limit };
 
-            // 「退款/售后」Tab 特殊处理：从 /refunds 接口拿
             if (currentStatus === 'refund') {
-                console.log('[OrderList] Loading refund orders');
                 await this._loadRefundOrders(append);
                 return;
             }
 
             if (currentStatus) params.status = currentStatus;
-            console.log('[OrderList] API params:', params);
 
-            // ★ 并行加载订单列表 + 用户的活跃退款
-            const [ordersRes, refundsRes] = await Promise.all([
-                get('/orders', params),
-                get('/refunds', { page: 1, limit: 100 }).catch(() => ({ data: { list: [] } }))
-            ]);
+            // 普通 Tab：只加载订单；退款角标数量通过 user.js 的 loadOrderCounts 已有，
+            // 这里按需拉取活跃退款用于在列表中标注"退款中"状态
+            const ordersRes = await get('/orders', params);
 
             let newOrders = ordersRes.data?.list || ordersRes.data || [];
-            console.log('[OrderList] API response:', ordersRes);
-            console.log('[OrderList] Orders count:', newOrders.length);
-            const activeRefunds = (refundsRes.data?.list || [])
-                .filter(r => ['pending', 'approved', 'processing'].includes(r.status));
+
+            // 只有订单列表包含"已发货/已完成"状态时才需要查退款角标，
+            // 避免在"待付款""待发货"等Tab造成无意义的额外请求
+            let activeRefunds = [];
+            const statusNeedsRefundCheck = !currentStatus || currentStatus === 'shipped' || currentStatus === 'completed' || currentStatus === 'pending_review';
+            if (statusNeedsRefundCheck && newOrders.length > 0) {
+                try {
+                    // 只传 order_ids 过滤（若后端支持），否则限量拉取并在前端过滤
+                    const refundsRes = await get('/refunds', { page: 1, limit: 20 }).catch(() => ({ data: { list: [] } }));
+                    activeRefunds = (refundsRes.data?.list || [])
+                        .filter(r => ['pending', 'approved', 'processing'].includes(r.status));
+                } catch (_) { /* 退款状态查询失败不影响主列表 */ }
+            }
 
             // 建立 order_id → refund 映射
             const refundMap = {};
@@ -82,6 +92,8 @@ Page({
                 if (order.product && order.product.images) {
                     order.product.images = parseImages(order.product.images);
                 }
+                const quantity = Number(order.quantity || 1);
+                order.price = order.price || order.unit_price || Number(((parseFloat(order.actual_price || order.total_amount || 0)) / Math.max(quantity, 1)).toFixed(2));
 
                 // ★ 检查该订单是否有活跃退款
                 const activeRefund = refundMap[order.id];
@@ -191,11 +203,16 @@ Page({
         });
     },
 
-    // 加载更多
-    onLoadMore() {
+    // 加载更多（先加载再自增page，防止失败时跳页）
+    async onLoadMore() {
         if (!this.data.hasMore || this.data.loading) return;
-        this.setData({ page: this.data.page + 1 });
-        this.loadOrders(true);
+        const nextPage = this.data.page + 1;
+        this.setData({ page: nextPage });
+        try {
+            await this.loadOrders(true);
+        } catch (_) {
+            this.setData({ page: nextPage - 1 });
+        }
     },
 
     // 订单点击
@@ -249,6 +266,16 @@ Page({
                     }
                 }
             }
+        });
+    },
+
+    // 去评价（与详情页一致：已发货/已完成均可提交，以服务端校验为准）
+    onGoReview(e) {
+        const order = e.currentTarget.dataset.order;
+        if (!order?.id) return;
+        const pid = order.product_id || (order.product && order.product.id) || '';
+        wx.navigateTo({
+            url: `/pages/order/review?order_id=${order.id}&product_id=${pid}`
         });
     },
 

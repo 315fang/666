@@ -5,12 +5,16 @@ Page({
     data: {
         addresses: [],
         loading: true,
-        selectMode: false // 是否为选择模式（从订单确认页进入）
+        selectMode: false, // 是否为选择模式（从订单确认页进入）
+        pickSource: '' // order | limited_spot
     },
 
     onLoad(options) {
-        if (options.select === 'true') {
-            this.setData({ selectMode: true });
+        if (options.select === 'true' || options.from === 'limited_spot') {
+            this.setData({
+                selectMode: true,
+                pickSource: options.from === 'limited_spot' ? 'limited_spot' : 'order'
+            });
         }
     },
 
@@ -35,7 +39,12 @@ Page({
         if (!this.data.selectMode) return;
         const index = e.currentTarget.dataset.index;
         const address = this.data.addresses[index];
-        wx.setStorageSync('selectedAddress', address);
+        if (this.data.pickSource === 'limited_spot') {
+            const summary = `${address.receiver_name} ${address.phone} ${address.province || ''}${address.city || ''}${address.district || ''}${address.detail || ''}`;
+            wx.setStorageSync('limited_spot_pick_address', { id: address.id, summary });
+        } else {
+            wx.setStorageSync('selectedAddress', address);
+        }
         wx.navigateBack();
     },
 

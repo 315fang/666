@@ -6,6 +6,8 @@
   bindtouchmove="onTouchMove"
   bindtouchend="onTouchEnd"
 >
+  <!-- 后台配置的背景图（覆盖渐变） -->
+  <image wx:if="{{splashBgImage}}" class="splash-bg-image" src="{{splashBgImage}}" mode="aspectFill" />
   <!-- flood阶段：深紫从底部涌入 -->
   <block wx:if="{{phase === 'flood'}}">
     <view class="flood-overlay" style="height: {{floodP * 100}}%; border-radius: {{floodP < 0.96 ? '50% 50% 0 0 / 16px 16px 0 0' : '0'}};">

@@ -1,7 +1,7 @@
 <!--pages/coupon/list.wxml - 我的优惠券-->
 <view class="container">
   <!-- 导航 -->
-  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+  <view class="nav-bar" style="padding-top: {{navTopPadding}}px;">
     <view class="nav-back" bindtap="onBack">
       <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
     </view>
@@ -21,21 +21,45 @@
 
   <!-- 券列表 -->
   <scroll-view scroll-y class="coupon-scroll">
-    <view class="empty-wrap" wx:if="{{!loading && !coupons.length}}">
+
+    <!-- 未登录提示 -->
+    <view class="empty-wrap" wx:if="{{notLoggedIn}}">
+      <image src="/assets/icons/user.svg" class="empty-icon" mode="aspectFit"/>
+      <text class="empty-text">请先登录</text>
+      <text class="empty-sub">登录后查看您的专属优惠券</text>
+      <view class="empty-btn" bindtap="onGoLogin">去登录</view>
+    </view>
+
+    <!-- 骨架屏 loading -->
+    <view class="skeleton-list" wx:elif="{{loading}}">
+      <view class="skeleton-coupon" wx:for="{{[1,2,3]}}" wx:key="index">
+        <view class="sk-left"></view>
+        <view class="sk-right">
+          <view class="sk-line sk-long"></view>
+          <view class="sk-line sk-short"></view>
+          <view class="sk-line sk-tiny"></view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty-wrap" wx:elif="{{!coupons.length}}">
       <image src="/assets/icons/gift.svg" class="empty-icon" mode="aspectFit"/>
-      <text class="empty-text" wx:if="{{activeTab === 'unused'}}">暂无可用优惠券\n快去参与活动领券吧</text>
+      <text class="empty-text" wx:if="{{activeTab === 'unused'}}">暂无可用优惠券</text>
+      <text class="empty-sub" wx:if="{{activeTab === 'unused'}}">快去参与活动领券吧</text>
       <text class="empty-text" wx:elif="{{activeTab === 'used'}}">暂无已使用记录</text>
       <text class="empty-text" wx:else>暂无已过期记录</text>
     </view>
 
-    <view class="coupon-list">
+    <!-- 真实券列表 -->
+    <view class="coupon-list" wx:else>
       <view class="coupon-card {{activeTab}}" wx:for="{{coupons}}" wx:key="id">
         <!-- 左侧：面值 -->
         <view class="coupon-left">
           <view class="coupon-value-wrap">
-            <text class="coupon-currency" wx:if="{{item.coupon_type === 'fixed'}}">¥</text>
+            <text class="coupon-currency" wx:if="{{item.coupon_type === 'fixed' || item.coupon_type === 'no_threshold'}}">¥</text>
             <text class="coupon-value">
-              {{item.coupon_type === 'fixed' ? item.coupon_value : (item.coupon_value * 10 + '折')}}
+              {{item.coupon_type === 'percent' ? item.discount_text : item.coupon_value}}
             </text>
           </view>
           <text class="coupon-min" wx:if="{{item.min_purchase > 0}}">满{{item.min_purchase}}元可用</text>
@@ -50,12 +74,13 @@
         <!-- 右侧：信息 -->
         <view class="coupon-right">
           <text class="coupon-name">{{item.coupon_name}}</text>
-          <text class="coupon-scope" wx:if="{{item.scope === 'all'}}">全场通用</text>
-          <text class="coupon-scope" wx:else>指定商品可用</text>
-          <text class="coupon-expire">{{item.expire_at | date}}到期</text>
+          <!-- 使用 JS 格式化后的字段，不使用管道过滤器 -->
+          <text class="coupon-expire">{{item.expire_at_formatted}} 到期</text>
+          <text class="coupon-scope scope-limit" wx:if="{{item.scope !== 'all'}}">限该店铺内指定商品使用</text>
+          <text class="coupon-scope scope-all" wx:else>全场通用</text>
           <!-- 操作 -->
           <view class="coupon-action" wx:if="{{activeTab === 'unused'}}" bindtap="onUse" data-coupon="{{item}}">
-            立即使用
+            使用
           </view>
           <view class="coupon-used-tag" wx:elif="{{activeTab === 'used'}}">已使用</view>
           <view class="coupon-expire-tag" wx:else>已过期</view>

@@ -1,0 +1,60 @@
+<view class="page">
+  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-inner" style="height: {{navBarHeight}}px;">
+      <view class="nav-back" bindtap="onBack">
+        <image class="back-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"></image>
+      </view>
+      <text class="nav-title">限时专享</text>
+    </view>
+  </view>
+
+  <scroll-view scroll-y class="scroll" wx:if="{{!loading && card}}">
+    <view class="hero">
+      <text class="hero-title">{{card.title}}</text>
+      <text class="hero-sub" wx:if="{{card.subtitle}}">{{card.subtitle}}</text>
+    </view>
+
+    <view class="addr-bar" bindtap="onChooseAddress">
+      <text class="addr-label">收货地址</text>
+      <text class="addr-val">{{addressSummary || '请选择地址'}}</text>
+      <text class="addr-arrow">›</text>
+    </view>
+
+    <view class="list-title">活动商品</view>
+    <view class="empty" wx:if="{{!products.length}}">暂未配置专享商品</view>
+
+    <view class="goods-card" wx:for="{{products}}" wx:key="offer_id">
+      <image class="goods-img" src="{{item.product.images[0] || '/assets/images/placeholder.svg'}}" mode="aspectFill"></image>
+      <view class="goods-body">
+        <text class="goods-name">{{item.product.name}}</text>
+        <view class="goods-meta">
+          <text class="goods-remain">剩余 {{item.remaining}} / {{item.stock_limit}}</text>
+        </view>
+        <view class="price-row">
+          <text class="p-points" wx:if="{{item.enable_points}}">{{item.points_price}} 积分</text>
+          <text class="p-sep" wx:if="{{item.enable_points && item.enable_money}}">或</text>
+          <text class="p-money" wx:if="{{item.enable_money}}">¥{{item.money_price}}</text>
+        </view>
+        <view class="btn-row">
+          <view
+            class="btn btn-points {{item.remaining < 1 || !item.enable_points ? 'disabled' : ''}}"
+            wx:if="{{item.enable_points}}"
+            data-offer-id="{{item.offer_id}}"
+            bindtap="onRedeemPoints"
+          >积分兑换</view>
+          <view
+            class="btn btn-money {{item.remaining < 1 || !item.enable_money ? 'disabled' : ''}}"
+            wx:if="{{item.enable_money}}"
+            data-offer-id="{{item.offer_id}}"
+            bindtap="onPayMoney"
+          >现金购买</view>
+        </view>
+      </view>
+    </view>
+    <view class="safe-bottom"></view>
+  </scroll-view>
+
+  <view class="state-loading" wx:if="{{loading}}">
+    <text>加载中…</text>
+  </view>
+</view>

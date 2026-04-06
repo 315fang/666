@@ -1,0 +1,172 @@
+<view class="container">
+
+  <!-- 顶部导航 -->
+  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-inner" style="height: {{navBarHeight}}px;">
+      <view class="nav-back" bindtap="onBack">
+        <image src="/assets/icons/arrow-left.svg" mode="aspectFit" class="back-icon"></image>
+      </view>
+      <text class="nav-title">货款余额</text>
+    </view>
+  </view>
+
+  <!-- ══ 非代理商提示页 ══ -->
+  <view class="no-access-page" wx:if="{{!loading && !isAgent}}">
+    <view class="no-access-icon">🔒</view>
+    <text class="no-access-title">仅代理商可使用</text>
+    <text class="no-access-sub">货款余额功能仅开放给代理商等级及以上用户</text>
+    <text class="no-access-sub">当前等级：{{roleLevel >= 2 ? '团长' : (roleLevel >= 1 ? '会员' : '普通用户')}}</text>
+    <view class="no-access-btn" bindtap="onBack">返回</view>
+  </view>
+
+  <!-- ══ 代理商正常页面 ══ -->
+  <block wx:if="{{isAgent || loading}}">
+
+    <scroll-view scroll-y class="main-scroll" enable-back-to-top>
+
+      <!-- 余额卡 -->
+      <view class="balance-hero">
+        <text class="balance-label">可用货款余额（元）</text>
+        <view class="balance-amount-row">
+          <text class="balance-sym">¥</text>
+          <text class="balance-num">{{balance}}</text>
+        </view>
+        <view class="balance-sub-row">
+          <view class="balance-sub-item">
+            <text class="balance-sub-value">¥{{frozenBalance}}</text>
+            <text class="balance-sub-label">冻结中</text>
+          </view>
+          <view class="balance-sub-sep"></view>
+          <view class="balance-sub-item">
+            <text class="balance-sub-value">¥{{totalRecharge}}</text>
+            <text class="balance-sub-label">累计充值</text>
+          </view>
+          <view class="balance-sub-sep"></view>
+          <view class="balance-sub-item">
+            <text class="balance-sub-value">¥{{totalDeduct}}</text>
+            <text class="balance-sub-label">累计扣减</text>
+          </view>
+        </view>
+
+        <!-- 充值按钮：代理商高亮，否则灰色 -->
+        <view
+          class="recharge-btn {{isAgent ? '' : 'recharge-btn-disabled'}}"
+          bindtap="onRecharge"
+        >
+          <text class="recharge-btn-text">{{isAgent ? '充值货款' : '充值货款（仅代理商）'}}</text>
+        </view>
+      </view>
+
+      <!-- 流水区 -->
+      <view class="logs-section">
+        <view class="logs-header">
+          <text class="logs-title">货款流水</text>
+          <view class="filter-tabs">
+            <view class="filter-tab {{activeFilter === 'all' ? 'active' : ''}}" bindtap="onFilterChange" data-filter="all">全部</view>
+            <view class="filter-tab {{activeFilter === 'in' ? 'active' : ''}}" bindtap="onFilterChange" data-filter="in">充值</view>
+            <view class="filter-tab {{activeFilter === 'out' ? 'active' : ''}}" bindtap="onFilterChange" data-filter="out">扣款</view>
+          </view>
+        </view>
+
+        <!-- 骨架屏 -->
+        <view class="sk-list" wx:if="{{loading}}">
+          <view class="sk-item" wx:for="{{[1,2,3,4,5]}}" wx:key="index">
+            <view class="sk-left">
+              <view class="sk-line sk-long"></view>
+              <view class="sk-line sk-short"></view>
+            </view>
+            <view class="sk-right"></view>
+          </view>
+        </view>
+
+        <!-- 流水列表 -->
+        <view wx:if="{{!loading}}">
+          <view class="log-item" wx:for="{{logs}}" wx:key="id">
+            <view class="log-icon-wrap {{item.isOut ? 'icon-out' : 'icon-in'}}">
+              <text class="log-icon-text">{{item.isOut ? '-' : '+'}}</text>
+            </view>
+            <view class="log-info">
+              <text class="log-type">{{item.changeLabel}}</text>
+              <text class="log-time">{{item.timeText}}</text>
+              <text class="log-remark" wx:if="{{item.remark}}">{{item.remark}}</text>
+            </view>
+            <view class="log-amount-wrap">
+              <text class="log-amount {{item.isOut ? 'amount-out' : 'amount-in'}}">{{item.amountSign}}¥{{item.amount}}</text>
+              <text class="log-balance">余额 ¥{{item.balance_after}}</text>
+            </view>
+          </view>
+
+          <view class="load-more" wx:if="{{logsLoading}}">
+            <text class="load-more-text">加载中...</text>
+          </view>
+          <view class="load-more" wx:elif="{{!hasMore && logs.length > 0}}">
+            <text class="load-more-text">— 已加载全部 —</text>
+          </view>
+
+          <view class="empty-state" wx:if="{{!logsLoading && logs.length === 0}}">
+            <text class="empty-icon">📋</text>
+            <text class="empty-title">暂无货款流水</text>
+            <text class="empty-sub">充值后可在此查看流水记录</text>
+          </view>
+        </view>
+      </view>
+
+      <view style="height: 60rpx;"></view>
+    </scroll-view>
+
+    <!-- ══ 充值面板（半屏弹出） ══ -->
+    <view class="panel-mask" wx:if="{{showRechargePanel}}" bindtap="onCloseRecharge">
+      <view class="recharge-panel" catchtap="onPanelTap">
+
+        <view class="panel-header">
+          <text class="panel-title">货款充值</text>
+          <view class="panel-close" bindtap="onCloseRecharge">×</view>
+        </view>
+
+        <view class="panel-tip">充值金额将进入货款余额，可用于发货扣款</view>
+
+        <!-- 预设金额 -->
+        <view class="amount-grid">
+          <view
+            class="amount-item {{!useCustom && selectedIdx === index ? 'amount-selected' : ''}}"
+            wx:for="{{presetAmounts}}"
+            wx:key="index"
+            bindtap="onSelectPreset"
+            data-amount="{{item}}"
+            data-idx="{{index}}"
+          >
+            <text class="amount-item-value">¥{{item}}</text>
+          </view>
+        </view>
+
+        <!-- 满赠提示 -->
+        <view class="bonus-hint" wx:if="{{currentBonusHint}}">
+          <text class="bonus-hint-text">{{currentBonusHint}}</text>
+        </view>
+
+        <!-- 自定义金额 -->
+        <view class="custom-amount-wrap {{useCustom ? 'custom-active' : ''}}">
+          <text class="custom-prefix">¥</text>
+          <input
+            class="custom-input"
+            type="digit"
+            placeholder="自定义金额"
+            value="{{customAmount}}"
+            bindinput="onCustomAmountInput"
+            bindfocus="onCustomAmountFocus"
+            placeholder-class="custom-placeholder"
+          />
+        </view>
+
+        <view class="panel-fee-tip">最低充值 ¥10 · 单次上限 ¥100,000</view>
+
+        <view class="confirm-btn {{recharging ? 'confirm-loading' : ''}}" bindtap="onConfirmRecharge">
+          <text class="confirm-btn-text">{{recharging ? '支付中...' : '确认充值 ¥' + (useCustom ? (customAmount || '0') : (selectedAmount || '0'))}}</text>
+        </view>
+
+      </view>
+    </view>
+
+  </block>
+
+</view>

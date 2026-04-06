@@ -1,3 +1,6 @@
 {
-    "navigationBarTitleText": "分销中心"
+    "navigationBarTitleText": "分销中心",
+    "usingComponents": {
+        "brand-animation": "/components/brand-animation/brand-animation"
+    }
 }

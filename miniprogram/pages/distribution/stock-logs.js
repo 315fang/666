@@ -1,9 +1,9 @@
-// pages/distribution/stock-logs.js - 代理商库存变动日志
+// pages/distribution/stock-logs.js - 代理商货款流水
 const { get } = require('../../utils/request');
 
 Page({
     data: {
-        currentStock: 0,
+        currentBalance: '0.00',
         logs: [],
         activeFilter: 'all', // all / in / out
         page: 1,
@@ -40,19 +40,36 @@ Page({
         this.loadLogs();
     },
 
-    // 加载库存日志
+    // 加载货款流水
     async loadLogs() {
         if (this.data.loading) return;
         this.setData({ loading: true });
 
         try {
-            const res = await get('/agent/stock-logs', {
+            const accountRes = await get('/agent/wallet');
+            if (accountRes.code === 0 && accountRes.data) {
+                this.setData({
+                    currentBalance: accountRes.data.balance || '0.00'
+                });
+            }
+
+            const res = await get('/agent/wallet/logs', {
                 page: this.data.page,
                 limit: this.data.limit
             });
 
             if (res.code === 0 && res.data) {
-                let list = res.data.list || [];
+                let list = (res.data.list || []).map(item => {
+                    const isIn = item.change_type === 'recharge' || item.change_type === 'refund';
+                    return {
+                        id: item.id,
+                        type: isIn ? 'in' : 'out',
+                        label: isIn ? '货款增加' : '货款扣减',
+                        product_name: item.remark || (item.ref_type || '系统流水'),
+                        amount: parseFloat(item.amount || 0),
+                        time: item.created_at
+                    };
+                });
 
                 // 前端筛选
                 if (this.data.activeFilter !== 'all') {
@@ -70,13 +87,12 @@ Page({
 
                 this.setData({
                     logs: [...oldLogs, ...list],
-                    currentStock: res.data.current_stock || 0,
                     hasMore: (this.data.page * this.data.limit) < (pagination.total || 0),
                     page: this.data.page + 1
                 });
             }
         } catch (err) {
-            console.error('加载库存日志失败:', err);
+            console.error('加载货款流水失败:', err);
             if (err.statusCode === 403) {
                 wx.showToast({ title: '仅代理商可访问', icon: 'none' });
                 setTimeout(() => wx.navigateBack(), 1500);
@@ -101,8 +117,9 @@ Page({
         return `${month}-${day} ${hour}:${minute}`;
     },
 
-    // 跳转采购入仓
-    goRestock() {
-        wx.navigateTo({ url: '/pages/distribution/restock' });
+    // 快捷充值
+    onRecharge() {
+        wx.showToast({ title: '请在货款账户页完成支付充值', icon: 'none' });
+        wx.navigateTo({ url: '/pages/wallet/agent-wallet' });
     }
 });

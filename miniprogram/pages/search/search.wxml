@@ -26,18 +26,18 @@
       <view class="section-head">
         <text class="section-title-serif">热门推荐</text>
       </view>
-      <view class="hot-grid">
-        <view class="hot-item" 
-              wx:for="{{hotKeywords}}" 
-              wx:key="*this" 
-              bindtap="onHistoryTap" 
-              data-keyword="{{item}}">
-          <text class="hot-num {{index < 3 ? 'top-three' : ''}}">{{index + 1}}</text>
-          <text class="hot-text">{{item}}</text>
-          <image class="icon-trend" src="/assets/icons/trending-up.svg" mode="aspectFit" wx:if="{{index < 2}}"></image>
+          <view class="hot-grid">
+            <view class="hot-item" 
+                  wx:for="{{hotKeywords}}" 
+                  wx:key="*this" 
+                  bindtap="onHistoryTap" 
+                  data-keyword="{{item}}">
+              <text class="hot-num {{index < 3 ? 'top-three' : ''}}">{{index + 1}}</text>
+              <text class="hot-text">{{item}}</text>
+              <image class="icon-trend" src="/assets/icons/arrow-up-circle.svg" mode="aspectFit" wx:if="{{index < 2}}"></image>
+            </view>
+          </view>
         </view>
-      </view>
-    </view>
 
     <!-- 3. 搜索历史 (极简列表) -->
     <view class="section-box" wx:if="{{!hasSearched && history.length > 0}}">

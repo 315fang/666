@@ -1,0 +1,9 @@
+<view class="ltm-mask" wx:if="{{show}}" catchtouchmove="noop" bindtap="onMaskTap">
+  <view class="ltm-panel" catchtap="noop">
+    <text class="ltm-title" wx:if="{{title}}">{{title}}</text>
+    <scroll-view scroll-y class="ltm-scroll" wx:if="{{content}}">
+      <text class="ltm-body" user-select>{{content}}</text>
+    </scroll-view>
+    <view class="ltm-btn" bindtap="onOk">知道了</view>
+  </view>
+</view>

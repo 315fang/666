@@ -1,76 +1,106 @@
-<!--pages/wallet/index.wxml - 我的钱包-->
+<!-- pages/wallet/index.wxml -->
 <view class="container">
-  <!-- 余额卡片 -->
-  <view class="balance-card">
-    <view class="balance-label">账户余额(元)</view>
-    <view class="balance-amount">{{balance || '0.00'}}</view>
-    <view class="balance-actions">
-      <view class="action-btn" bindtap="onWithdrawTap">提现</view>
-    </view>
-  </view>
+  <scroll-view class="main-scroll" scroll-y>
 
-  <!-- 佣金概览 -->
-  <view class="commission-overview" wx:if="{{commissionOverview}}">
-    <view class="overview-title">佣金统计</view>
-    <view class="overview-items">
-      <view class="overview-item">
-        <text class="overview-label">累计获得</text>
-        <text class="overview-value">¥{{commissionOverview.total}}</text>
-      </view>
-      <view class="overview-item">
-        <text class="overview-label">冻结中</text>
-        <text class="overview-value freeze">¥{{commissionOverview.frozen}}</text>
-      </view>
-      <view class="overview-item" wx:if="{{commissionOverview.pendingApproval > 0}}">
-        <text class="overview-label">待审核</text>
-        <text class="overview-value pending">¥{{commissionOverview.pendingApproval}}</text>
-      </view>
-      <view class="overview-item">
-        <text class="overview-label">已结算</text>
-        <text class="overview-value available">¥{{commissionOverview.available}}</text>
-      </view>
-    </view>
-  </view>
-
-  <!-- 资金明细 -->
-  <view class="list-section">
-    <view class="section-title">佣金明细</view>
-    <view class="log-list">
-      <!-- 列表容器 -->
-      <view class="log-list-container">
-        <view class="log-item" wx:for="{{logs}}" wx:key="id">
-          <view class="log-info">
-            <view class="log-header">
-              <text class="log-type">{{item.typeName || item.type}}</text>
-              <text class="status-badge status-{{item.status}}">{{item.statusText}}</text>
-            </view>
-            <text class="log-time">{{item.created_at}}</text>
-            <text class="log-detail" wx:if="{{item.refund_deadline}}">冻结至: {{item.refund_deadline}}</text>
-          </view>
-          <view class="log-amount {{item.amount > 0 ? 'income' : 'expense'}}">
-            {{item.amount > 0 ? '+' : ''}}{{item.amount}}
+    <!-- 余额卡 -->
+    <view class="balance-card">
+      <view class="balance-card-inner">
+        <text class="balance-label">可提现余额（元）</text>
+        <view class="balance-amount-row">
+          <text class="balance-symbol">¥</text>
+          <text class="balance-amount">{{balance}}</text>
+        </view>
+        <view class="balance-action-row">
+          <view class="withdraw-btn" bindtap="onWithdrawTap">
+            <text class="withdraw-btn-text">立即提现</text>
           </view>
         </view>
+      </view>
+    </view>
 
-        <!-- 空状态 -->
-        <view class="empty" wx:if="{{logs.length === 0}}">
-          <text class="empty-text">暂无明细</text>
+    <!-- 佣金概览 -->
+    <view class="section-card" wx:if="{{commissionOverview}}">
+      <text class="section-title">佣金概览</text>
+      <view class="overview-grid">
+        <view class="overview-item">
+          <text class="overview-val">¥{{commissionOverview.total}}</text>
+          <text class="overview-key">累计佣金</text>
+        </view>
+        <view class="overview-item">
+          <text class="overview-val overview-frozen">¥{{commissionOverview.frozen}}</text>
+          <text class="overview-key">冻结中</text>
+        </view>
+        <view class="overview-item">
+          <text class="overview-val overview-pending">¥{{commissionOverview.pendingApproval}}</text>
+          <text class="overview-key">待审核</text>
+        </view>
+        <view class="overview-item">
+          <text class="overview-val overview-settled">¥{{commissionOverview.approved}}</text>
+          <text class="overview-key">待结算</text>
         </view>
       </view>
     </view>
-  </view>
+
+    <!-- 佣金明细 -->
+    <view class="section-card">
+      <text class="section-title">佣金明细</text>
+
+      <!-- 骨架屏 -->
+      <view class="skeleton-wrap" wx:if="{{logs.length === 0}}">
+        <view class="sk-log" wx:for="{{[1,2,3,4,5]}}" wx:key="index">
+          <view class="sk-info">
+            <view class="sk-line sk-long"></view>
+            <view class="sk-line sk-short"></view>
+          </view>
+          <view class="sk-amount"></view>
+        </view>
+      </view>
+
+      <!-- 流水列表 -->
+      <view class="log-item" wx:for="{{logs}}" wx:key="id">
+        <view class="log-left">
+          <view class="log-type-row">
+            <text class="log-type">{{item.typeName}}</text>
+            <view class="log-status-badge log-status-{{item.status}}">{{item.statusText}}</view>
+          </view>
+          <text class="log-time">{{item.created_at}}</text>
+          <text class="log-deadline" wx:if="{{item.refund_deadline}}">冻结至 {{item.refund_deadline}}</text>
+        </view>
+        <view class="log-right">
+          <text class="log-amount log-positive" wx:if="{{item.type !== 'withdrawal'}}">+¥{{item.amount}}</text>
+          <text class="log-amount log-negative" wx:else>-¥{{item.amount}}</text>
+        </view>
+      </view>
+
+      <!-- 空状态 -->
+      <view class="empty-state" wx:if="{{logs.length === 0}}">
+        <text class="empty-text">暂无佣金明细</text>
+        <text class="empty-sub">分享商品或发展团队即可获得佣金</text>
+      </view>
+    </view>
+
+    <view style="height: 80rpx;"></view>
+  </scroll-view>
 
   <!-- 提现弹窗 -->
-  <view class="withdraw-popup {{showWithdraw ? 'show' : ''}}">
-    <view class="mask" bindtap="hideWithdraw"></view>
-    <view class="popup-content">
-      <view class="popup-title">申请提现</view>
-      <view class="available-tip">可提现金额: ¥{{balance}}</view>
-      <input class="input" type="digit" placeholder="请输入提现金额" model:value="{{withdrawAmount}}" />
-      <button class="btn btn-primary btn-block" bindtap="confirmWithdraw">确认提现</button>
+  <view class="popup-mask" wx:if="{{showWithdraw}}" bindtap="hideWithdraw">
+    <view class="popup-panel" catchtap="">
+      <text class="popup-title">申请提现</text>
+      <view class="popup-balance-tip">可用余额 ¥{{balance}}</view>
+      <view class="popup-input-wrap">
+        <text class="popup-input-symbol">¥</text>
+        <input class="popup-input" type="digit" placeholder="输入提现金额" value="{{withdrawAmount}}" bindinput="onWithdrawInput" focus="{{showWithdraw}}"></input>
+      </view>
+      <view class="popup-btn-row">
+        <view class="popup-cancel" bindtap="hideWithdraw">
+          <text class="popup-cancel-text">取消</text>
+        </view>
+        <view class="popup-confirm" bindtap="confirmWithdraw">
+          <text class="popup-confirm-text">确认提现</text>
+        </view>
+      </view>
     </view>
   </view>
 
-  <!-- 品牌动画 -->
   <brand-animation id="brandAnimation"></brand-animation>
 </view>

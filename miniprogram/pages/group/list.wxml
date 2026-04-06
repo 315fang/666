@@ -1,6 +1,6 @@
-<!--pages/group/list.wxml - 拼团专区-->
+<!-- pages/group/list.wxml -->
 <view class="container">
-  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+  <view class="nav-bar" style="padding-top: {{navTopPadding}}px;">
     <view class="nav-back" bindtap="onBack">
       <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
     </view>
@@ -32,28 +32,56 @@
 
   <!-- 拼团活动列表 -->
   <view wx:if="{{tab === 'activities'}}">
+    <!-- 骨架屏 -->
+    <view class="skeleton-list" wx:if="{{loading && !activities.length}}">
+      <view class="skeleton-card" wx:for="{{[1,2,3]}}" wx:key="*this">
+        <view class="skeleton-img"></view>
+        <view class="skeleton-body">
+          <view class="skeleton-line skeleton-line-title"></view>
+          <view class="skeleton-line skeleton-line-price"></view>
+          <view class="skeleton-line skeleton-line-meta"></view>
+        </view>
+      </view>
+    </view>
+
     <view class="empty-wrap" wx:if="{{!activities.length && !loading}}">
       <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
       <text class="empty-text">暂无拼团活动</text>
     </view>
     <view class="activity-list">
       <view class="activity-card" wx:for="{{activities}}" wx:key="id" bindtap="onStartGroup" data-activity="{{item}}">
-        <image class="product-img" src="{{item.product && item.product.images && item.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
+        <view class="img-wrap">
+          <image class="product-img" src="{{item.product && item.product.images && item.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
+          <view class="corner-badge">拼团</view>
+        </view>
         <view class="activity-info">
-          <text class="product-name">{{item.product && item.product.name || '商品'}}</text>
+          <text class="product-name line-2">{{item.product && item.product.name || '商品'}}</text>
+          <view class="tag-row">
+            <text class="tag tag-hot" wx:if="{{item._saveNum > 0}}">拼团省¥{{item._saveYuan}}</text>
+            <text class="tag">{{item.min_members}}人起拼</text>
+            <text class="tag tag-muted">最多{{item._maxCap}}人</text>
+          </view>
           <view class="price-row">
             <view class="group-price">
               <text class="price-label">拼团价</text>
               <text class="group-price-val">¥{{item.group_price}}</text>
             </view>
             <view class="original-price">
-              <text>原价 ¥{{item.original_price || (item.product && item.product.retail_price) || '-'}}</text>
+              <text wx:if="{{item._linePrice}}">¥{{item._linePrice}}</text>
+              <text wx:else>¥{{item.original_price || (item.product && item.product.retail_price) || '-'}}</text>
             </view>
           </view>
+          <view class="stock-row" wx:if="{{item.stock_limit > 0}}">
+            <view class="stock-bar">
+              <view class="stock-fill" style="width: {{item._soldPct}}%;"/>
+            </view>
+            <text class="stock-text">全网已拼{{item._soldCount}}件 · 库存剩{{item._stockRemain}}件</text>
+          </view>
+          <text class="one-line-desc" wx:if="{{item._summary}}">{{item._summary}}</text>
           <view class="meta-row">
             <text class="meta-item">{{item.min_members}}人成团</text>
             <text class="meta-dot">·</text>
-            <text class="meta-item">{{item.expire_hours}}h有效</text>
+            <text class="meta-item">开团后{{item.expire_hours}}h有效</text>
             <view class="start-btn">{{isMember ? '发起拼团' : '需要会员'}}</view>
           </view>
         </view>
@@ -63,6 +91,18 @@
 
   <!-- 我参与的拼团 -->
   <view wx:if="{{tab === 'my'}}">
+    <!-- 骨架屏 -->
+    <view class="skeleton-list" wx:if="{{loading && !myGroups.length}}">
+      <view class="skeleton-card" wx:for="{{[1,2,3]}}" wx:key="*this">
+        <view class="skeleton-img"></view>
+        <view class="skeleton-body">
+          <view class="skeleton-line skeleton-line-title"></view>
+          <view class="skeleton-line skeleton-line-price"></view>
+          <view class="skeleton-line skeleton-line-meta"></view>
+        </view>
+      </view>
+    </view>
+
     <view class="empty-wrap" wx:if="{{!myGroups.length && !loading}}">
       <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
       <text class="empty-text">还没有参与拼团\n快去发起一个吧</text>
@@ -74,7 +114,9 @@
           <text class="record-name">{{item.groupOrder && item.groupOrder.product && item.groupOrder.product.name || '商品'}}</text>
           <view class="member-progress">
             <view class="member-avatars">
-              <view class="avatar-placeholder" wx:for="{{item.groupOrder && item.groupOrder.current_members > 3 ? 3 : item.groupOrder.current_members}}" wx:key="*this"/>
+              <view class="avatar-placeholder" wx:for="{{item.groupOrder && item.groupOrder.current_members > 3 ? 3 : item.groupOrder.current_members}}" wx:key="*this">
+                <text class="avatar-letter">团</text>
+              </view>
               <view class="avatar-more" wx:if="{{item.groupOrder && item.groupOrder.current_members > 3}}">+{{item.groupOrder.current_members - 3}}</view>
             </view>
             <text class="member-text">{{item.groupOrder && item.groupOrder.current_members || 0}}/{{item.groupOrder && item.groupOrder.min_members || 2}}人</text>

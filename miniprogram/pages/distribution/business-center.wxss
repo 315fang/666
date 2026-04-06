@@ -1,0 +1,225 @@
+.container {
+  min-height: 100vh;
+  background: #f0ebe5;
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-bar {
+  background: #2a2118;
+  flex-shrink: 0;
+}
+.nav-inner {
+  display: flex;
+  align-items: center;
+  padding: 0 28rpx;
+  position: relative;
+}
+.nav-back {
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.back-icon {
+  width: 36rpx;
+  height: 36rpx;
+  opacity: 0.95;
+}
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #fff8f0;
+}
+
+.main-scroll {
+  flex: 1;
+  height: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* 通用白卡片 */
+.section-card {
+  margin: 20rpx 24rpx 0;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 28rpx 28rpx 24rpx;
+  box-shadow: 0 8rpx 28rpx rgba(37, 29, 21, 0.06);
+}
+.section-eyebrow {
+  display: block;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #9a8b7c;
+  letter-spacing: 2rpx;
+  text-transform: uppercase;
+  margin-bottom: 20rpx;
+}
+
+/* 资金区 */
+.wallet-card {
+  padding-bottom: 32rpx;
+}
+.wallet-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12rpx;
+}
+.wallet-kind {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1e1710;
+}
+.wallet-amount {
+  font-size: 52rpx;
+  font-weight: 700;
+  color: #a07840;
+  letter-spacing: 1rpx;
+  line-height: 1.1;
+}
+.wallet-desc {
+  font-size: 24rpx;
+  color: #8a7a6e;
+  line-height: 1.5;
+  margin-bottom: 8rpx;
+}
+.primary-pill {
+  width: 100%;
+  min-height: 104rpx;
+  padding: 26rpx 24rpx;
+  line-height: 1.35;
+  text-align: center;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #fff8f0;
+  background: linear-gradient(135deg, #c8a258 0%, #8f6230 100%);
+  border-radius: 52rpx;
+  margin-top: 8rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.wallet-inner-divider {
+  height: 1rpx;
+  background: #eee8e2;
+  margin: 28rpx 0 24rpx;
+}
+
+.wallet-block-tight {
+  padding-top: 0;
+}
+
+.wallet-amount-secondary {
+  font-size: 44rpx;
+  color: #6b5c4c;
+}
+
+.secondary-pill {
+  width: 100%;
+  height: 76rpx;
+  line-height: 76rpx;
+  text-align: center;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #4a3f35;
+  background: #f3ede6;
+  border: 2rpx solid #e5dcd2;
+  border-radius: 38rpx;
+  margin-top: 8rpx;
+  box-sizing: border-box;
+}
+
+/* 团队与邀请（仅海报 + 我的团队） */
+.actions-card {
+  padding-bottom: 8rpx;
+}
+.action-row {
+  display: flex;
+  align-items: center;
+  padding: 22rpx 4rpx;
+  gap: 20rpx;
+}
+.action-row:active {
+  background: #faf7f3;
+  border-radius: 12rpx;
+}
+.action-ico {
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.action-ico-g {
+  background: rgba(60, 140, 90, 0.12);
+}
+.action-ico-br {
+  background: rgba(160, 120, 80, 0.14);
+}
+.action-img {
+  width: 38rpx;
+  height: 38rpx;
+  opacity: 0.72;
+}
+.action-txt {
+  flex: 1;
+  min-width: 0;
+}
+.action-t {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1e1710;
+  margin-bottom: 4rpx;
+}
+.action-s {
+  display: block;
+  font-size: 22rpx;
+  color: #9a8a7a;
+  line-height: 1.45;
+}
+.action-arr {
+  font-size: 32rpx;
+  color: #c8bcb0;
+  flex-shrink: 0;
+}
+.hr {
+  height: 1rpx;
+  background: #f0ebe5;
+  margin: 0 8rpx;
+}
+
+/* 说明 */
+.tips-card {
+  margin-bottom: 8rpx;
+}
+.tip-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10rpx;
+  margin-bottom: 14rpx;
+}
+.tip-bullet {
+  font-size: 28rpx;
+  color: #c8a258;
+  flex-shrink: 0;
+  line-height: 1.55;
+}
+.tip-body {
+  font-size: 24rpx;
+  color: #8a7a6e;
+  line-height: 1.65;
+}
+
+.scroll-pad {
+  height: 48rpx;
+}

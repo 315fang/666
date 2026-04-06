@@ -1,7 +1,10 @@
-const { Refund, Order, User, Product, SKU, CommissionLog, sequelize } = require('../../../models');
+const { Refund, Order, User, Product, SKU, CommissionLog, UserCoupon, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
 const { sendNotification } = require('../../../models/notificationUtil');
 const { refundOrder } = require('../../../utils/wechat');
+const PointService = require('../../../services/PointService');
+const AgentWalletService = require('../../../services/AgentWalletService');
+const { getSafeRestoreQuantity, shouldRestoreCoupon } = require('../../../utils/orderGuards');
 
 // 获取售后列表
 const getRefunds = async (req, res) => {
@@ -165,39 +168,164 @@ const completeRefund = async (req, res) => {
 
         // 更新订单状态
         const order = refund.order;
-        const totalFee = Math.round(parseFloat(order.actual_price) * 100);
-        const refundFee = Math.round(parseFloat(refund.amount) * 100);
+        if (!order) {
+            await t.rollback();
+            return res.status(400).json({ code: -1, message: '关联订单不存在' });
+        }
+
+        const refundableStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
+        if (!refundableStatuses.includes(order.status)) {
+            await t.rollback();
+            return res.status(400).json({ code: -1, message: `当前订单状态(${order.status})不支持退款完成` });
+        }
+
+        /** 元 → 分，避免浮点误差导致「实付与累计退款」差 1 分而不视为全额退 */
+        const yuanToCents = (v) => {
+            const n = parseFloat(v);
+            if (!Number.isFinite(n) || n <= 0) return 0;
+            return Math.round(n * 100 + 1e-6);
+        };
+        const totalFee = yuanToCents(order.actual_price || order.total_amount);
+        const refundFee = yuanToCents(refund.amount);
         if (!totalFee || !refundFee || refundFee > totalFee) {
             await t.rollback();
             return res.status(400).json({ code: -1, message: '退款金额不合法' });
         }
 
-        await refundOrder({
-            orderNo: order.order_no,
-            refundNo: refund.refund_no,
-            totalFee,
-            refundFee
-        });
-        // ★ 判断是否全额退款（退款金额 >= 实际支付金额），全额退才改订单状态为 refunded
-        // 使用 actual_price（实际支付金额），而非 total_amount（原始订单金额，可能包含未支付的差额）
-        const isFullRefund = parseFloat(refund.amount) >= parseFloat(order.actual_price);
+        // 根据支付方式分流退款
+        if (order.payment_method === 'wallet') {
+            // 货款余额支付 → 退回货款钱包
+            const refundYuan = parseFloat((refundFee / 100).toFixed(2));
+            await AgentWalletService.recharge({
+                userId: order.buyer_id,
+                amount: refundYuan,
+                refType: 'order_refund',
+                refId: order.order_no,
+                remark: `订单退款 ${order.order_no} ¥${refundYuan}`,
+                transaction: t
+            });
+        } else {
+            // 微信支付 → 调用微信退款 API
+            await refundOrder({
+                orderNo: order.order_no,
+                refundNo: refund.refund_no,
+                totalFee,
+                refundFee
+            });
+        }
+
+        // ★ 是否已全额退款（按「历史已完成退款 + 本次退款」累计，避免多次部分退款永远不把订单标为 refunded）
+        const orderPaidAmount = parseFloat(order.actual_price || order.total_amount);
+        const paidCents = yuanToCents(orderPaidAmount);
+        const prevCompletedYuan = parseFloat(
+            (await Refund.sum('amount', {
+                where: { order_id: refund.order_id, status: 'completed' },
+                transaction: t
+            })) || 0
+        );
+        const prevCompletedCents = yuanToCents(prevCompletedYuan);
+        const totalRefundedCents = prevCompletedCents + refundFee;
+        // 允许 1 分容差（各端四舍五入/ DECIMAL 串转数字）
+        const isFullRefund = paidCents > 0 && totalRefundedCents + 1 >= paidCents;
+
         if (isFullRefund) {
             await Order.update(
                 { status: 'refunded' },
                 { where: { id: refund.order_id }, transaction: t }
             );
-            // ★ 重新加载订单状态（后续逻辑需要用到最新状态判断）
+
+            // ★ 拆单（parent/child）：券与积分往往只在父单上；须整簇订单均已 refunded/cancelled 后再退券、退积分（与超时取消订单组一致）
+            const pivotRow = await Order.findByPk(refund.order_id, {
+                attributes: ['id', 'parent_order_id', 'buyer_id'],
+                transaction: t,
+                lock: t.LOCK.UPDATE
+            });
+            if (!pivotRow) {
+                await t.rollback();
+                return res.status(400).json({ code: -1, message: '关联订单不存在' });
+            }
+            const rootId = pivotRow.parent_order_id || pivotRow.id;
+            const cluster = await Order.findAll({
+                where: { [Op.or]: [{ id: rootId }, { parent_order_id: rootId }] },
+                transaction: t,
+                lock: t.LOCK.UPDATE
+            });
+            const terminalStatuses = ['refunded', 'cancelled'];
+            const clusterReadyForAssetRestore =
+                cluster.length > 0 && cluster.every(o => terminalStatuses.includes(o.status));
+
+            if (clusterReadyForAssetRestore) {
+                const ucPk = cluster.map(o => o.coupon_id).find(Boolean);
+                if (ucPk) {
+                    const uc = await UserCoupon.findOne({
+                        where: { id: ucPk, user_id: pivotRow.buyer_id || order.buyer_id },
+                        transaction: t,
+                        lock: t.LOCK.UPDATE
+                    });
+                    const usedOnCluster =
+                        !uc?.used_order_id
+                        || cluster.some(c => Number(c.id) === Number(uc.used_order_id));
+                    const otherActiveOrderCount = await Order.count({
+                        where: {
+                            buyer_id: pivotRow.buyer_id || order.buyer_id,
+                            coupon_id: ucPk,
+                            id: { [Op.notIn]: cluster.map(c => c.id) },
+                            status: { [Op.notIn]: ['cancelled', 'refunded'] }
+                        },
+                        transaction: t
+                    });
+
+                    if (uc && uc.status === 'used' && usedOnCluster && shouldRestoreCoupon({ otherActiveOrderCount })) {
+                        uc.status = 'unused';
+                        uc.used_at = null;
+                        uc.used_order_id = null;
+                        await uc.save({ transaction: t });
+                    }
+                }
+                const pointsToRestore = cluster.reduce(
+                    (s, o) => s + (parseInt(o.points_used, 10) || 0),
+                    0
+                );
+                if (pointsToRestore > 0) {
+                    await PointService.addPoints(
+                        pivotRow.buyer_id || order.buyer_id,
+                        pointsToRestore,
+                        'refund',
+                        `order_refund_cluster_${rootId}`,
+                        '订单退款退回积分',
+                        t
+                    );
+                }
+            }
+
             await order.reload({ transaction: t });
         }
 
-        // ★★★ 修复漏洞: 库存恢复逻辑 ★★★
+        // ★★★ 库存恢复逻辑 ★★★
         // 规则 1: 仅退款 (refund_only) → 不退货 → 不恢复平台物理库存
         // 规则 2: 退货退款 (return_refund) → 按 refund_quantity 恢复平台物理库存
-        // 规则 3: 代理商云库存恢复 → 看代理商是否实际扣过库存（已发货 或 已预扣）
-        // 规则 4: 全额退款时，即使是仅退款，也要退还代理商已扣的云库存（代理商不应承担损失）
+        // 注：代理商“云库存”体系已下线，发货改为扣货款，不再处理代理库存回滚
         if (order) {
             const shouldRestoreProductStock = refund.type === 'return_refund' && (refund.refund_quantity || 0) > 0;
-            const restoreProductQty = shouldRestoreProductStock ? refund.refund_quantity : 0;
+            let restoreProductQty = 0;
+
+            if (shouldRestoreProductStock) {
+                const completedReturnedQty = await Refund.sum('refund_quantity', {
+                    where: {
+                        order_id: order.id,
+                        status: 'completed',
+                        type: 'return_refund',
+                        id: { [Op.ne]: refund.id }
+                    },
+                    transaction: t
+                }) || 0;
+
+                restoreProductQty = getSafeRestoreQuantity({
+                    orderQuantity: order.quantity,
+                    requestedQuantity: refund.refund_quantity,
+                    completedReturnRefundQuantity: completedReturnedQty
+                });
+            }
 
             // 恢复平台商品物理库存（仅退货退款场景）
             if (restoreProductQty > 0) {
@@ -212,48 +340,15 @@ const completeRefund = async (req, res) => {
                     }
                 }
             }
-
-            // ★★★ 代理商云库存恢复（核心修复）★★★
-            // 判断代理商是否实际扣过库存：
-            // 1. 已发货(shipped/completed) → shipped_at 存在，说明 shipOrder 扣过
-            // 2. shipping_requested + 标记了[库存已预扣] → requestShipping 预扣过
-            const agentDeductedStock = (
-                order.fulfillment_type === 'Agent' &&
-                order.fulfillment_partner_id &&
-                (
-                    order.shipped_at || // 已发货，shipOrder 扣过
-                    (order.status === 'shipping_requested' && order.remark && order.remark.includes('[库存已预扣]')) // 预扣过
-                )
-            );
-
-            if (agentDeductedStock && isFullRefund) {
-                // ★★★ 修复：全额退款时，仅"退货退款"才退还代理商云库存
-                // "仅退款"意味着货已发出且不退回，退还库存会导致云库存虚高
-                if (refund.type === 'return_refund') {
-                    const agent = await User.findByPk(order.fulfillment_partner_id, { transaction: t, lock: t.LOCK.UPDATE });
-                    if (agent) {
-                        await agent.increment('stock_count', { by: order.quantity, transaction: t });
-                        console.log(`[退款] 代理商(ID:${agent.id})云库存退还 ${order.quantity} 件（全额退货退款）`);
-                    }
-                } else {
-                    // 仅退款（不退货）：不退还代理商云库存，但记录日志
-                    console.log(`[退款] 订单(ID:${order.id})为仅退款，不退还代理商(ID:${order.fulfillment_partner_id})云库存（货未退回）`);
-                }
-            } else if (agentDeductedStock && restoreProductQty > 0) {
-                // 部分退货退款：按退货数量退还代理商云库存
-                const agent = await User.findByPk(order.fulfillment_partner_id, { transaction: t, lock: t.LOCK.UPDATE });
-                if (agent) {
-                    await agent.increment('stock_count', { by: restoreProductQty, transaction: t });
-                    console.log(`[退款] 代理商(ID:${agent.id})云库存退还 ${restoreProductQty} 件（部分退货）`);
-                }
-            }
         }
 
         // ★★★ 修复漏洞: 佣金撤销逻辑 ★★★
         // 全额退款 → 撤销所有佣金
         // 部分退款 → 按退款比例撤销佣金（避免退1元就撤销全部佣金的漏洞）
-        const refundRatio = parseFloat(refund.amount) / parseFloat(order.total_amount);
-        const isFullRefundForCommission = refundRatio >= 0.99; // 99%以上视为全额退款（防浮点误差）
+        const orderBaseAmount = parseFloat(order.actual_price || order.total_amount);
+        const refundRatio = orderBaseAmount > 0 ? parseFloat(refund.amount) / orderBaseAmount : 1;
+        // 单笔接近全额，或「累计退款」刚达实付全额（与 isFullRefund 一致）时走全额佣金撤销
+        const isFullRefundForCommission = isFullRefund || refundRatio >= 0.99;
 
         if (isFullRefundForCommission) {
             // 全额退款：撤销所有未结算的佣金（frozen/pending_approval/approved）

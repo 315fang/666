@@ -21,7 +21,7 @@ Component({
             type: String,
             value: ''
         },
-        // 飞入购物车的图片
+        // 飞入购物袋的图片
         flyImage: {
             type: String,
             value: ''
@@ -30,6 +30,7 @@ Component({
 
     data: {
         show: false,
+        brandName: '问兰',
         flyToCart: false,
         flyX: 0,
         flyY: 0,
@@ -39,6 +40,13 @@ Component({
         slideOutCard: false,
         cartBounce: false,
         addCount: 1
+    },
+
+    attached() {
+        const app = getApp();
+        if (app && app.globalData.brandName) {
+            this.setData({ brandName: app.globalData.brandName });
+        }
     },
 
     methods: {
@@ -84,12 +92,12 @@ Component({
 
         stopProp() { },
 
-        // ====== 层级二：飞入购物车动画 ======
+        // ====== 层级二：飞入购物袋动画 ======
         /**
-         * 商品图片飞向购物车
+         * 商品图片飞向购物袋
          * @param {number} startX - 起始X
          * @param {number} startY - 起始Y
-         * @param {number} endX   - 目标X（购物车图标位置）
+         * @param {number} endX   - 目标X（购物袋图标位置）
          * @param {number} endY   - 目标Y
          * @param {string} image  - 商品图片URL
          * @returns {Promise}
@@ -111,14 +119,14 @@ Component({
 
                 // 阶段1：先上抛
                 animation.translateY(-80).scale(0.8).step({ duration: 200 });
-                // 阶段2：落向购物车
+                // 阶段2：落向购物袋
                 animation.translate(endX - startX, endY - startY).scale(0.2).opacity(0.3).step({ duration: 300 });
 
                 this.setData({ flyAnimation: animation.export() });
 
                 setTimeout(() => {
                     this.setData({ flyToCart: false });
-                    // 触发购物车 badge 弹跳
+                    // 触发购物袋 badge 弹跳
                     this.showCartBounce(1);
                     resolve();
                 }, 550);
@@ -149,9 +157,9 @@ Component({
             }, 300);
         },
 
-        // ====== 层级二：购物车 badge 弹跳 ======
+        // ====== 层级二：购物袋 badge 弹跳 ======
         /**
-         * 购物车图标上方显示 +N 弹跳效果
+         * 购物袋图标上方显示 +N 弹跳效果
          * @param {number} count - 添加的数量
          */
         showCartBounce(count) {

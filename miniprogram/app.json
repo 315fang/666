@@ -4,14 +4,21 @@
         "pages/splash/splash",
         "pages/category/category",
         "pages/activity/activity",
+        "pages/activity/brand-news-detail",
+        "pages/activity/limited-spot",
         "pages/cart/cart",
         "pages/user/user",
+        "pages/user/footprints",
+        "pages/user/favorites",
+        "pages/user/favorites-footprints",
         "pages/user/notifications",
         "pages/user/preferences",
+        "pages/user/portal-password",
+        "pages/user/customer-service",
+        "pages/user/growth-privileges",
         "pages/product/detail",
         "pages/search/search",
-        "pages/privacy/privacy",
-        "pages/questionnaire/fill"
+        "pages/privacy/privacy"
     ],
     "subPackages": [
         {
@@ -21,9 +28,25 @@
                 "list",
                 "detail",
                 "confirm",
+                "review",
                 "refund-apply",
                 "refund-list",
-                "refund-detail"
+                "refund-detail",
+                "pickup-credential"
+            ]
+        },
+        {
+            "root": "pages/stations",
+            "name": "packageStations",
+            "pages": [
+                "map"
+            ]
+        },
+        {
+            "root": "pages/pickup",
+            "name": "packagePickup",
+            "pages": [
+                "verify"
             ]
         },
         {
@@ -47,9 +70,8 @@
             "pages": [
                 "center",
                 "team",
-                "invite",
-                "workbench",
-                "restock",
+                "invite-poster",
+                "business-center",
                 "stock-logs",
                 "commission-logs",
                 "withdraw-history"
@@ -59,7 +81,8 @@
             "root": "pages/wallet",
             "name": "packageWallet",
             "pages": [
-                "index"
+                "index",
+                "agent-wallet"
             ]
         },
         {
@@ -98,45 +121,13 @@
                 "list",
                 "detail"
             ]
-        },
-        {
-            "root": "pages/pickup",
-            "name": "packagePickup",
-            "pages": [
-                "pickup"
-            ]
-        },
-        {
-            "root": "pages/station",
-            "name": "packageStation",
-            "pages": [
-                "map"
-            ]
-        },
-        {
-            "root": "pages/rules",
-            "name": "packageRules",
-            "pages": [
-                "index"
-            ]
-        },
-        {
-            "root": "pages/feed",
-            "name": "packageFeed",
-            "pages": [
-                "index"
-            ]
         }
     ],
     "preloadRule": {
         "pages/index/index": {
             "network": "all",
             "packages": [
-                "packageOrder",
-                "packageLottery",
-                "packageCoupon",
-                "packageSlash",
-                "packageGroup"
+                "packageOrder"
             ]
         },
         "pages/cart/cart": {
@@ -144,78 +135,56 @@
             "packages": [
                 "packageOrder"
             ]
-        },
-        "pages/activity/activity": {
-            "network": "all",
-            "packages": [
-                "packageLottery",
-                "packageCoupon",
-                "packageSlash",
-                "packageGroup"
-            ]
-        },
-        "pages/user/user": {
-            "network": "all",
-            "packages": [
-                "packageDistribution",
-                "packageWallet",
-                "packagePoints"
-            ]
         }
     },
     "tabBar": {
-        "color": "#333333",
-        "selectedColor": "#1A1A1A",
-        "backgroundColor": "#FFFFFF",
+        "color": "#64748B",
+        "selectedColor": "#C6A16E",
+        "backgroundColor": "#F8FCFD",
         "borderStyle": "white",
         "list": [
             {
                 "pagePath": "pages/index/index",
-                "text": "首页",
-                "iconPath": "assets/icons/home.png",
-                "selectedIconPath": "assets/icons/home_active.png"
+                "text": "商城首页",
+                "iconPath": "assets/tabbar-icons/home.png",
+                "selectedIconPath": "assets/tabbar-icons/home-active.png"
             },
             {
                 "pagePath": "pages/category/category",
-                "text": "商品",
-                "iconPath": "assets/icons/category.png",
-                "selectedIconPath": "assets/icons/category_active.png"
+                "text": "全部商品",
+                "iconPath": "assets/tabbar-icons/category.png",
+                "selectedIconPath": "assets/tabbar-icons/category-active.png"
             },
             {
                 "pagePath": "pages/activity/activity",
-                "text": "活动",
-                "iconPath": "assets/icons/activity.png",
-                "selectedIconPath": "assets/icons/activity_active.png"
+                "text": "热门活动",
+                "iconPath": "assets/tabbar-icons/activity.png",
+                "selectedIconPath": "assets/tabbar-icons/activity-active.png"
             },
             {
                 "pagePath": "pages/user/user",
-                "text": "我的",
-                "iconPath": "assets/icons/user.png",
-                "selectedIconPath": "assets/icons/user_active.png"
+                "text": "我的会员",
+                "iconPath": "assets/tabbar-icons/user.png",
+                "selectedIconPath": "assets/tabbar-icons/user-active.png"
             }
         ]
     },
-    "usingComponents": {
-        "brand-animation": "/components/brand-animation/brand-animation",
-        "product-card": "/components/product-card/product-card",
-        "order-card": "/components/order-card/order-card",
-        "address-card": "/components/address-card/address-card",
-        "empty-state": "/components/empty-state/empty-state",
-        "loading-skeleton": "/components/loading-skeleton/loading-skeleton",
-        "share-card": "/components/share-card/share-card",
-        "ui-card": "/components/ui/card/card",
-        "ui-button": "/components/ui/button/button",
-        "hot-activities": "/components/hot-activities/hot-activities",
-        "new-arrivals": "/components/new-arrivals/new-arrivals",
-        "section-renderer": "/components/section-renderer/section-renderer"
-    },
     "window": {
-        "navigationBarBackgroundColor": "#1C1917",
+        "navigationBarBackgroundColor": "#1E4A6D",
         "navigationBarTitleText": "臻选",
         "navigationBarTextStyle": "white",
-        "backgroundColor": "#FAFAF9"
+        "backgroundColor": "#F4F8FA"
     },
     "style": "v2",
     "sitemapLocation": "sitemap.json",
-    "lazyCodeLoading": "requiredComponents"
+    "lazyCodeLoading": "requiredComponents",
+    "requiredPrivateInfos": ["chooseLocation", "getFuzzyLocation", "chooseAddress"],
+    "permission": {
+        "scope.userLocation": {
+            "desc": "用于您主动在地图选点（chooseLocation），不参与自动精确定位"
+        },
+        "scope.userFuzzyLocation": {
+            "desc": "用于微信模糊定位，展示附近站点与自提排序（不使用精确地理位置接口）"
+        }
+    }
 }

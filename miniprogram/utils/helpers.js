@@ -251,5 +251,40 @@ module.exports = {
   retry,
   serializeParams,
   parseParams,
-  truncate
+  truncate,
+  copyAgentPortalLink
 };
+
+/**
+ * 复制代理网页端链接（含 Token）到剪贴板
+ * 两种反馈模式：
+ *   toast  — 轻提示（默认，适合工作台）
+ *   modal  — 弹窗说明（适合分佣中心首次引导）
+ *
+ * @param {{ mode?: 'toast'|'modal' }} options
+ */
+function copyAgentPortalLink(options) {
+    const { mode = 'toast' } = options || {};
+    const token = wx.getStorageSync('token') || '';
+    const app = getApp();
+    const baseUrl = (app && app.globalData && app.globalData.baseUrl) || '';
+    const h5Base = baseUrl.replace('/api', '').replace('/miniapi', '');
+    const portalUrl = `${h5Base}/agent/`;
+    const linkWithToken = token ? `${portalUrl}?token=${encodeURIComponent(token)}` : portalUrl;
+
+    wx.setClipboardData({
+        data: linkWithToken,
+        success: () => {
+            if (mode === 'modal') {
+                wx.showModal({
+                    title: '已复制网页端链接',
+                    content: '请在浏览器打开该链接进入代理网页端。',
+                    showCancel: false,
+                    confirmText: '知道了'
+                });
+            } else {
+                wx.showToast({ title: '网页端链接已复制', icon: 'none' });
+            }
+        }
+    });
+}

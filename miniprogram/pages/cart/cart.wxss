@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #F7F7F7;
+  background: linear-gradient(180deg, #E3EDF4 0%, #F4F8FA 100%);
 }
 
 .cart-header {
@@ -30,7 +30,7 @@
   width: 48rpx;
   height: 48rpx;
   border: 4rpx solid #EAEAEA;
-  border-top: 4rpx solid #C8102E;
+  border-top: 4rpx solid #2E6B94;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -41,6 +41,8 @@
 
 .cart-list {
   flex: 1;
+  /* iOS scroll-view 需要显式高度，否则滚动区域可能为 0 */
+  height: calc(100vh - 120rpx - 120rpx);
   padding: 16rpx 24rpx 0;
 }
 
@@ -49,7 +51,7 @@
   align-items: center;
   background: #FFFFFF;
   padding: 20rpx;
-  border-radius: 20rpx;
+  border-radius: 24rpx;
   margin-bottom: 16rpx;
   position: relative;
   transition: transform 0.2s ease, opacity 0.2s ease;
@@ -65,27 +67,27 @@
 }
 
 .select-box {
-  width: 36rpx;
-  height: 36rpx;
-  border-radius: 18rpx;
-  border: 2rpx solid #D0D0D0;
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 24rpx;
+  border: 2rpx solid #E7E5E4;
   margin-right: 16rpx;
   position: relative;
   flex-shrink: 0;
 }
 
 .select-box.checked {
-  border-color: #C8102E;
-  background: #C8102E;
+  border-color: #B98B58;
+  background: #B98B58;
 }
 
 .select-box.checked::after {
   content: '';
   position: absolute;
-  left: 10rpx;
-  top: 4rpx;
-  width: 10rpx;
-  height: 18rpx;
+  left: 13rpx;
+  top: 6rpx;
+  width: 12rpx;
+  height: 22rpx;
   border: 3rpx solid #FFFFFF;
   border-top: 0;
   border-left: 0;
@@ -96,7 +98,7 @@
   width: 140rpx;
   height: 140rpx;
   border-radius: 16rpx;
-  background: #F3F3F3;
+  background: linear-gradient(180deg, #E3EDF4 0%, #F4F8FA 100%);
   margin-right: 16rpx;
   flex-shrink: 0;
 }
@@ -134,7 +136,7 @@
 .qty-stepper {
   display: flex;
   align-items: center;
-  border: 1rpx solid #E5E5E5;
+  border: 1rpx solid #E7E5E4;
   border-radius: 999rpx;
   overflow: hidden;
 }
@@ -157,12 +159,12 @@
 
 .delete-btn {
   font-size: 24rpx;
-  color: #C8102E;
+  color: #B95E46;
   margin-left: 12rpx;
 }
 
 .list-safe {
-  height: 140rpx;
+  height: calc(140rpx + env(safe-area-inset-bottom, 0rpx));
 }
 
 .empty-wrap {
@@ -203,7 +205,7 @@
 
 .recommend-item {
   background: #FFFFFF;
-  border-radius: 16rpx;
+  border-radius: 24rpx;
   padding: 16rpx;
   display: flex;
   flex-direction: column;
@@ -214,7 +216,7 @@
   width: 100%;
   height: 180rpx;
   border-radius: 12rpx;
-  background: #F3F3F3;
+  background: linear-gradient(180deg, #E3EDF4 0%, #F4F8FA 100%);
 }
 
 .recommend-name {
@@ -225,7 +227,7 @@
 .recommend-price {
   font-size: 26rpx;
   font-weight: 700;
-  color: #C8102E;
+  color: #B95E46;
 }
 
 .cart-footer {
@@ -268,7 +270,7 @@
 .total-price {
   font-size: 30rpx;
   font-weight: 700;
-  color: #C8102E;
+  color: #B95E46;
 }
 
 .total-count {
@@ -277,7 +279,7 @@
 }
 
 .checkout-btn {
-  background: #C8102E;
+  background: linear-gradient(135deg, #B98B58, #D4B896);
   color: #FFFFFF;
   padding: 14rpx 36rpx;
   border-radius: 999rpx;

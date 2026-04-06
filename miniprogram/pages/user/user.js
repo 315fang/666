@@ -1,16 +1,68 @@
 // pages/user/user.js - 个人中心（全面升级版）
 const app = getApp();
-const { get, put, uploadFile } = require('../../utils/request');
-const { ErrorHandler } = require('../../utils/errorHandler');
-const { ROLE_NAMES } = require('../../config/constants');
-const globalStore = require('../../store/index');
-const { formatMoney } = require('../../utils/dataFormatter');
+const { requireLogin } = require('../../utils/auth');
+const { getConfigSection, getFeatureFlags } = require('../../utils/miniProgramConfig');
+const QUAD_PLACEHOLDER = '/assets/images/placeholder.svg';
+const {
+    applyGrowthDisplay,
+    loadAssetRow,
+    loadDistributionInfo,
+    loadNotificationsCount,
+    loadOrderCounts,
+    loadPageLayoutConfig,
+    loadQuadPreviews,
+    loadUserInfo,
+    refreshBusinessCenterVisibility,
+    scheduleSecondaryLoads
+} = require('./userDashboard');
+const {
+    onCancelAvatarPick: handleCancelAvatarPick,
+    onCancelNickname: handleCancelNickname,
+    onChooseAvatar: handleChooseAvatar,
+    onConfirmNickname: handleConfirmNickname,
+    onEditNickname: handleEditNickname,
+    onLogin: handleLogin,
+    onNicknameInput: handleNicknameInput,
+    onTapEditProfile: handleTapEditProfile
+} = require('./userProfileActions');
+const {
+    buildSharePayload,
+    goBusinessCenter: navigateBusinessCenter,
+    goAllProducts: navigateAllProducts,
+    goCart: navigateCart,
+    goCustomerService: navigateCustomerService,
+    goFavoritesFootprints: navigateFavoritesFootprints,
+    goLottery: navigateLottery,
+    goPrivacy: navigatePrivacy,
+    goShoppingBag: navigateShoppingBag,
+    navigateIfLoggedIn,
+    onAboutTap: showAboutModal,
+    onLogout: handleLogout,
+    onMenuTap: handleMenuTap,
+    onOrderTap: handleOrderTap,
+    onQuadExpressTap: handleQuadExpressTap,
+    onQuadFavoriteTap: handleQuadFavoriteTap,
+    onQuadFootprintTap: handleQuadFootprintTap,
+    onQuadRecentTap: handleQuadRecentTap,
+    onSettingsTap: handleSettingsTap
+} = require('./userNavigation');
+const {
+    onCardTouchEnd: handleCardTouchEnd,
+    onCardTouchMove: handleCardTouchMove,
+    onCardTouchStart: handleCardTouchStart,
+    onLightTipClose: handleLightTipClose,
+    onShareTap: handleShareTap,
+    preventTap: handlePreventTap,
+    stopP: handleStopP,
+    tryPendingRegisterLightTip: handlePendingRegisterLightTip
+} = require('./userPageInteractions');
 
 Page({
     data: {
         userInfo: null,
         isLoggedIn: false,
         hasUserInfo: false,
+        statusBarHeight: 20,
         // 资产卡数据（WXML 绑定用）
         stats: { frozenAmount: '0.00' },
         balance: '0.00',
@@ -20,7 +72,20 @@ Page({
             pending: 0,
             paid: 0,
             shipped: 0,
+            pendingReview: 0,
             refund: 0
+        },
+        unusedCouponCount: 0,
+        pointsBalanceDisplay: '0',
+        quadExpress: { sub: '暂无在途订单', image: QUAD_PLACEHOLDER, orderId: null },
+        quadFavorite: { sub: '暂无收藏', image: QUAD_PLACEHOLDER, count: 0 },
+        quadFootprint: { sub: '看过的商品', image: QUAD_PLACEHOLDER, count: 0 },
+        quadRecent: {
+            title: '会员',
+            sub: '查看权益与等级',
+            image: QUAD_PLACEHOLDER,
+            mode: 'benefit',
+            orderId: null
         },
         // 角色相关
         isAgent: false,
@@ -33,550 +98,377 @@ Page({
             role_name: '普通用户'
         },
         notificationsCount: 0,
-        pointBalance: 0,  // ★ 积分余额
+        pageLayout: null,
+        featureFlags: {
+            enable_lottery_entry: true
+        },
+        loginAgreementHint: '登录后查看订单、积分、佣金等信息',
+        showBusinessCenter: false,
+        showPickupVerify: false,
+        /** 我的页成长值条（真实后端 growth_progress） */
+        growthDisplay: null,
         // 昵称修改弹窗
         showNicknameModal: false,
         newNickname: '',
+        /** 从「编辑 → 修改头像」进入后展示，内含 chooseAvatar 按钮 */
+        showAvatarPickSheet: false,
         // 卡片下拉效果
         cardTransform: 0,
-        isPulling: false
+        isPulling: false,
+        lightTipShow: false,
+        lightTipTitle: '',
+        lightTipContent: ''
     },
 
     // 触摸开始
     onCardTouchStart(e) {
-        this.startY = e.touches[0].clientY;
-        this.setData({ isPulling: true });
+        return handleCardTouchStart(this, e);
     },
 
     // 触摸移动 - 实现卡片下拉效果
     onCardTouchMove(e) {
-        const moveY = e.touches[0].clientY;
-        const diff = moveY - this.startY;
-
-        // 只有向下拖动时才响应，且限制最大下拉距离
-        if (diff > 0 && diff < 150) {
-            // 添加阻尼效果
-            const dampedDiff = diff * 0.6;
-            this.setData({ cardTransform: dampedDiff });
-        }
+        return handleCardTouchMove(this, e);
     },
 
     // 触摸结束 - 卡片回弹
     onCardTouchEnd(e) {
-        this.setData({
-            cardTransform: 0,
-            isPulling: false
-        });
+        return handleCardTouchEnd(this, e);
     },
 
     onShow() {
+        const featureFlags = getFeatureFlags();
+        const membershipConfig = getConfigSection('membership_config');
+        this.setData({ statusBarHeight: app.globalData.statusBarHeight || 20 });
+        this.setData({
+            featureFlags,
+            loginAgreementHint: membershipConfig.login_agreement_hint || '登录后查看订单、积分、佣金等信息'
+        });
+        this.loadPageLayoutConfig();
         this.loadUserInfo();
+        this._refreshBusinessCenterVisibility();
+        this._tryPendingRegisterLightTip();
+    },
+
+    _tryPendingRegisterLightTip() {
+        return handlePendingRegisterLightTip(this);
+    },
+
+    onLightTipClose() {
+        return handleLightTipClose(this);
+    },
+
+    onHide() {
+        clearTimeout(this._secondaryLoadTimer);
+    },
+
+    onUnload() {
+        clearTimeout(this._secondaryLoadTimer);
+    },
+
+    async loadPageLayoutConfig() {
+        return loadPageLayoutConfig(this);
     },
 
     // 从服务端加载用户最新信息
-    async loadUserInfo() {
-        const isLoggedIn = app.globalData.isLoggedIn;
-        this.setData({ isLoggedIn });
+    async loadUserInfo(forceRefresh = false) {
+        return loadUserInfo(this, forceRefresh);
+    },
 
-        if (!isLoggedIn) {
-            this.setData({ userInfo: app.globalData.userInfo });
-            return;
-        }
+    _applyGrowthDisplay(info) {
+        return applyGrowthDisplay(this, info);
+    },
 
-        try {
-            const res = await get('/user/profile');
-            if (res.code === 0 && res.data) {
-                const info = res.data;
-                const roleLevel = info.role_level || 0;
-                const roleName = info.role_name || ROLE_NAMES[roleLevel] || '普通用户';
+    onGrowthPrivilegesTap() {
+        if (!requireLogin()) return;
+        wx.navigateTo({ url: '/pages/user/growth-privileges' });
+    },
 
-                this.setData({
-                    userInfo: {
-                        ...info,
-                        role_name: roleName
-                    },
-                    hasUserInfo: true,
-                    isAgent: (info.role_level || roleLevel || 0) >= 2
-                });
-                app.globalData.userInfo = this.data.userInfo;
-                wx.setStorageSync('userInfo', this.data.userInfo);
-            } else {
-                const cached = app.globalData.userInfo;
-                this.setData({
-                    userInfo: cached,
-                    hasUserInfo: !!cached
-                });
-            }
-        } catch (err) {
-            ErrorHandler.handle(err, {
-                customMessage: '加载用户信息失败',
-                showToast: false
-            });
-            const cached = app.globalData.userInfo;
-            this.setData({
-                userInfo: cached,
-                hasUserInfo: !!cached
-            });
-        }
+    /** 商务中心入口：由后台 membership_config.business_center_min_role_level 控制（默认 1 = C1/初级代理） */
+    _refreshBusinessCenterVisibility() {
+        return refreshBusinessCenterVisibility(this);
+    },
 
-        // 并行加载所有数据
-        this.loadOrderCounts();
-        this.loadDistributionInfo();
-        this.loadNotificationsCount();
-        this.loadPointBalance();  // ★ 加载积分
+    _scheduleSecondaryLoads(forceRefresh = false) {
+        return scheduleSecondaryLoads(this, forceRefresh);
+    },
+
+    async loadAssetRow() {
+        return loadAssetRow(this);
+    },
+
+    async loadQuadPreviews() {
+        return loadQuadPreviews(this);
+    },
+
+    onAssetCouponsTap() {
+        this.goCoupons();
+    },
+
+    onAssetPointsTap() {
+        this.goPoints();
+    },
+
+    onAssetBalanceTap() {
+        this.onWalletTap();
+    },
+
+    onQuadExpressTap() {
+        return handleQuadExpressTap(this);
+    },
+
+    onQuadFavoriteTap() {
+        return handleQuadFavoriteTap();
+    },
+
+    onQuadFootprintTap() {
+        return handleQuadFootprintTap();
+    },
+
+    onQuadRecentTap() {
+        return handleQuadRecentTap(this);
     },
 
     // ====== 订单数量（含退款） ======
     async loadOrderCounts() {
-        try {
-            const results = await Promise.all([
-                get('/orders', { status: 'pending', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
-                get('/orders', { status: 'paid', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
-                get('/orders', { status: 'shipped', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
-                // ★ 退款数量从 /refunds 接口获取活跃退款数
-                get('/refunds', { page: 1, limit: 1 }).catch(() => ({ data: { list: [] } }))
-            ]);
-            const pending = (results[0].data && results[0].data.pagination && results[0].data.pagination.total) || 0;
-            const paid = (results[1].data && results[1].data.pagination && results[1].data.pagination.total) || 0;
-            const shipped = (results[2].data && results[2].data.pagination && results[2].data.pagination.total) || 0;
-            // ★ 退款列表的总数
-            const refundList = results[3].data?.list || [];
-            const refundTotal = results[3].data?.pagination?.total || refundList.length;
-            this.setData({
-                'orderStats.pending': pending,
-                'orderStats.paid': paid,
-                'orderStats.shipped': shipped,
-                'orderStats.refund': refundTotal
-            });
-        } catch (err) {
-            console.error('加载订单数量失败:', err);
-        }
+        return loadOrderCounts(this);
     },
 
     // ====== 分销信息 ======
     async loadDistributionInfo() {
-        try {
-            const res = await get('/distribution/overview');
-            if (res.code === 0 && res.data) {
-                const d = res.data;
-                const totalEarnings = d.stats ? d.stats.totalEarnings : '0.00';
-                const availableAmount = d.stats ? d.stats.availableAmount : '0.00';
-                const frozenAmount = d.stats ? (d.stats.frozenAmount || '0.00') : '0.00';
-                const teamCount = d.team ? d.team.totalCount : 0;
-                const roleLevel = d.userInfo ? d.userInfo.role : 0;
-                this.setData({
-                    distributionInfo: {
-                        totalEarnings,
-                        availableAmount,
-                        referee_count: teamCount,
-                        role_level: roleLevel,
-                        role_name: d.userInfo ? (d.userInfo.role_name || ROLE_NAMES[roleLevel]) : '普通用户'
-                    },
-                    // 同步 WXML 用到的顶级变量
-                    stats: { frozenAmount },
-                    balance: availableAmount,
-                    teamCount,
-                    isAgent: roleLevel >= 2
-                });
-            }
-        } catch (err) {
-            console.error('加载分销信息失败:', err);
-        }
+        return loadDistributionInfo(this);
     },
 
     // ====== ★ 通知未读数 ======
     async loadNotificationsCount() {
-        try {
-            const res = await get('/notifications', { page: 1, limit: 1 });
-            if (res.code === 0 && res.data) {
-                const unreadCount = res.data.unread_count || 0;
-                this.setData({ notificationsCount: unreadCount });
-            }
-        } catch (err) {
-            console.error('加载通知计数失败:', err);
-        }
+        return loadNotificationsCount(this);
     },
 
-    // ======== 头像昵称修改（适配微信 2024 最新规则） ========
+    // ======== 编辑资料：先选「头像 / 昵称」 ========
+    onTapEditProfile() {
+        if (!requireLogin()) return;
+        return handleTapEditProfile(this);
+    },
+
+    onCancelAvatarPick() {
+        return handleCancelAvatarPick(this);
+    },
+
+    // ======== 头像（仅通过「编辑 → 修改头像 → 选择头像」进入） ========
     async onChooseAvatar(e) {
-        const { avatarUrl } = e.detail;
-        if (!avatarUrl) return;
-
-        try {
-            // 1. 上传图片到服务器
-            // 确保使用正确的上传接口路径
-            const res = await uploadFile('/user/upload', avatarUrl, 'file');
-            if (res.code === 0 && res.data.url) {
-                const fullUrl = res.data.url;
-                // 2. 更新用户信息
-                const updateRes = await put('/user/profile', { avatar_url: fullUrl });
-                if (updateRes.code === 0) {
-                    this.setData({
-                        'userInfo.avatar_url': fullUrl
-                    });
-                    wx.showToast({ title: '头像更新成功', icon: 'success' });
-                }
-            }
-        } catch (err) {
-            console.error('更新头像失败:', err);
-            wx.showToast({ title: '更新头像失败', icon: 'none' });
-        }
+        return handleChooseAvatar(this, e);
     },
 
-    async onNicknameBlur(e) {
-        const nickname = e.detail.value.trim();
-        if (!nickname || nickname === (this.data.userInfo?.nickname)) return;
-
-        try {
-            const res = await put('/user/profile', { nickname });
-            if (res.code === 0) {
-                this.setData({
-                    'userInfo.nickname': nickname
-                });
-                wx.showToast({ title: '昵称更新成功', icon: 'success' });
-            }
-        } catch (err) {
-            console.error('更新昵称失败:', err);
-            wx.showToast({ title: '更新昵称失败', icon: 'none' });
-        }
+    // ======== 登录（WXML 用 onLoginTap / onLoginBtnTap） ========
+    async confirmLoginAuthorization() {
+        const { confirmLoginAuthorization } = require('./userProfileActions');
+        return confirmLoginAuthorization();
     },
 
-    // ======== 登录（WXML 用 onLoginTap） ========
     async onLogin() {
-        try {
-            wx.showLoading({ title: '登录中...' });
-            await app.wxLogin(true);
-            wx.hideLoading();
-            this.loadUserInfo();
-            wx.showToast({ title: '登录成功', icon: 'success' });
-        } catch (err) {
-            wx.hideLoading();
-            wx.showToast({ title: '登录失败', icon: 'none' });
-        }
+        return handleLogin(this);
+    },
+
+    onLoginBtnTap() {
+        this.onLogin();
     },
 
     // WXML 绑定别名 — 登录/授权
     async onLoginTap() {
         if (!this.data.isLoggedIn) {
             this.onLogin();
-            return;
-        }
-        // 已登录但信息不完整，引导授权
-        if (!this.data.hasUserInfo || !this.data.userInfo || !this.data.userInfo.nickname) {
-            try {
-                wx.showModal({
-                    title: '完善个人信息',
-                    content: '为了更好地为您服务，需要获取您的微信头像和昵称',
-                    confirmText: '去授权',
-                    cancelText: '取消',
-                    success: async (res) => {
-                        if (res.confirm) {
-                            await this.onLogin();
-                        }
-                    }
-                });
-            } catch (err) {
-                console.error('授权提示失败:', err);
-            }
         }
     },
 
-    // ======== 修改昵称 ========
+    // ======== 修改昵称（由「编辑」选「修改昵称」进入） ========
     onEditNickname() {
-        this.setData({
-            showNicknameModal: true,
-            newNickname: this.data.userInfo ? this.data.userInfo.nickname : ''
-        });
+        if (!requireLogin()) return;
+        return handleEditNickname(this);
     },
 
     onNicknameInput(e) {
-        this.setData({ newNickname: e.detail.value });
+        return handleNicknameInput(this, e);
     },
 
     onCancelNickname() {
-        this.setData({ showNicknameModal: false });
+        return handleCancelNickname(this);
     },
 
     preventTap() {
-        // 阻止冒泡
+        return handlePreventTap();
     },
 
     // 阻止事件冒泡（WXML 中 catchtap="stopP"）
-    stopP() { },
+    stopP() {
+        return handleStopP();
+    },
 
     async onConfirmNickname() {
-        if (this._submitting) return;
-        const nickname = this.data.newNickname.trim();
-        if (!nickname) {
-            wx.showToast({ title: '昵称不能为空', icon: 'none' });
-            return;
-        }
-        this._submitting = true;
-        try {
-            const res = await put('/user/profile', { nickname });
-            if (res.code === 0) {
-                wx.showToast({ title: '修改成功', icon: 'success' });
-                this.setData({ showNicknameModal: false });
-                this.loadUserInfo();
-            } else {
-                wx.showToast({ title: res.message || '修改失败', icon: 'none' });
-            }
-        } catch (err) {
-            wx.showToast({ title: '修改失败', icon: 'none' });
-        } finally {
-            this._submitting = false;
-        }
+        return handleConfirmNickname(this);
     },
 
-    // ======== ★ 佣金明细 ========
+    // ======== ★ 佣金中心 ========
     onCommissionTap() {
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        wx.navigateTo({ url: '/pages/distribution/center?tab=logs' });
+        navigateIfLoggedIn('/pages/distribution/commission-logs');
     },
-    // WXML 绑定别名
     goCommission() { this.onCommissionTap(); },
 
     // ======== ★ 钱包/提现 ========
     onWalletTap() {
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        wx.navigateTo({ url: '/pages/wallet/index' });
+        navigateIfLoggedIn('/pages/wallet/index');
     },
     goWallet() { this.onWalletTap(); },
 
+    goGrowthValue() {
+        navigateIfLoggedIn('/pages/user/preferences');
+    },
+
+    goBusinessCenter() {
+        return navigateBusinessCenter(this);
+    },
+
+    /** @deprecated 请使用 goBusinessCenter */
+    goCommerceHub() {
+        this.goBusinessCenter();
+    },
+
     // ======== ★ 团队 ========
     onTeamTap() {
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        wx.navigateTo({ url: '/pages/distribution/team' });
+        navigateIfLoggedIn('/pages/distribution/team');
     },
     goTeam() { this.onTeamTap(); },
 
     // ======== 地址管理 ========
     goAddress() {
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        wx.navigateTo({ url: '/pages/address/list' });
+        navigateIfLoggedIn('/pages/address/list');
     },
 
-    // ======== 工作台 ========
+    goCustomerService() {
+        return navigateCustomerService();
+    },
+
+    /** 收藏 + 浏览足迹（双 Tab 合并页；未登录也可用本地足迹/收藏） */
+    goFavoritesFootprints() {
+        return navigateFavoritesFootprints();
+    },
+
+    goPortalPassword() {
+        navigateIfLoggedIn('/pages/user/portal-password');
+    },
+
+    goStationsMap() {
+        navigateIfLoggedIn('/pages/stations/map');
+    },
+
+    goPickupVerify() {
+        navigateIfLoggedIn('/pages/pickup/verify');
+    },
+
+    // ======== 工作台（已废弃，保留方法避免报错） ========
     goWorkbench() {
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        wx.navigateTo({ url: '/pages/distribution/workbench' });
+        if (!requireLogin()) return;
+        this.goBusinessCenter();
     },
 
     // ======== 订单入口 ========
     onOrderAllTap() {
-        wx.navigateTo({ url: '/pages/order/list' });
+        navigateIfLoggedIn('/pages/order/list');
     },
 
     onOrderTap(e) {
-        console.log('[User] onOrderTap clicked, dataset:', e.currentTarget.dataset);
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        const type = e.currentTarget.dataset.type;
-        let url = '/pages/order/list';
-        if (type && type !== 'all') {
-            url += '?status=' + type;
-        }
-        console.log('[User] Navigating to:', url);
-        wx.navigateTo({ url: url });
+        return handleOrderTap(e);
     },
 
     // ======== ★ 售后/退款入口 ========
     onRefundTap() {
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        wx.navigateTo({ url: '/pages/order/refund-list' });
+        navigateIfLoggedIn('/pages/order/refund-list');
     },
 
     // ======== 通知入口 ========
     onNotificationsTap() {
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        wx.navigateTo({ url: '/pages/user/notifications' });
+        navigateIfLoggedIn('/pages/user/notifications');
+    },
+
+    // ======== 偏好设置入口 ========
+    onPreferencesTap() {
+        navigateIfLoggedIn('/pages/user/preferences');
     },
 
     // ======== 设置 ========
     onSettingsTap() {
-        wx.showActionSheet({
-            itemList: ['清除缓存', '意见反馈'],
-            success: (res) => {
-                if (res.tapIndex === 0) {
-                    wx.clearStorageSync();
-                    wx.showToast({ title: '缓存已清除', icon: 'success' });
-                }
-            }
-        });
+        return handleSettingsTap();
+    },
+
+    // ======== 隐私协议 ========
+    goPrivacy() {
+        return navigatePrivacy();
     },
 
     // ======== 关于 ========
     onAboutTap() {
-        wx.showModal({
-            title: '关于臻选',
-            content: '臻选 v1.0.0\n精选全球好物，让分享更有价值。\n\n客服微信：zhenxuan_service',
-            showCancel: false
-        });
-    },
-
-    // ======== 联系客服 ========
-    onContactTap() {
-        wx.showModal({
-            title: '联系客服',
-            content: '客服微信：zhenxuan_service\n\n工作时间：9:00-21:00\n\n如有问题，请添加客服微信，我们将尽快为您处理。',
-            confirmText: '复制微信号',
-            success: (res) => {
-                if (res.confirm) {
-                    wx.setClipboardData({
-                        data: 'zhenxuan_service',
-                        success: () => {
-                            wx.showToast({ title: '微信号已复制', icon: 'success' });
-                        }
-                    });
-                }
-            }
-        });
+        return showAboutModal();
     },
 
     // ======== 菜单入口 ========
     onMenuTap(e) {
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        const url = e.currentTarget.dataset.url;
-        if (url) {
-            wx.navigateTo({ url: url });
-        } else {
-            wx.showToast({ title: '即将开放', icon: 'none' });
-        }
+        return handleMenuTap(e);
     },
 
-    // ======== 分享邀请问卷 ========
+    // ======== 分享入口 ========
     onShowInvite() {
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        // 跳转到邀请页面
-        wx.navigateTo({ url: '/pages/distribution/invite' });
+        if (!requireLogin()) return;
+        this.goInvitePoster();
     },
 
-    // ★ 积分余额加载
-    async loadPointBalance() {
-        try {
-            const res = await get('/points/account').catch(() => null);
-            if (res && res.code === 0 && res.data) {
-                this.setData({ pointBalance: res.data.balance_points || 0 });
-            }
-        } catch (e) {
-            // 静默失败，不影响主界面
-        }
+    goInvitePoster() {
+        navigateIfLoggedIn('/pages/distribution/invite-poster');
     },
 
     // ★ 跳转积分中心
     goPoints() {
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        wx.navigateTo({ url: '/pages/points/index' });
+        navigateIfLoggedIn('/pages/points/index');
+    },
+
+    goShoppingBag() {
+        return navigateShoppingBag();
     },
 
     // ★ 全部商品（从首页迁移迁移）
     goAllProducts() {
-        wx.switchTab({ url: '/pages/category/category' });
+        return navigateAllProducts();
     },
 
-    // ★ 购物车（从首页迁移）
+    // ★ 购物袋（从首页迁移）
     goCart() {
-        wx.navigateTo({ url: '/pages/cart/cart' });
+        return navigateCart();
     },
 
     // Phase 2: 我的优惠券
     goCoupons() {
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        wx.navigateTo({ url: '/pages/coupon/list' });
+        navigateIfLoggedIn('/pages/coupon/list');
     },
 
     // Phase 2: 积分抽奖
     goLottery() {
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        wx.navigateTo({ url: '/pages/lottery/lottery' });
+        return navigateLottery(this);
     },
 
-    // ======== ★ 分佣中心（整合团队、钱包、邀请码） ========
-    goDistributionCenter() {
-        if (!this.data.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        wx.navigateTo({ url: '/pages/distribution/center' });
+    // ======== 分享入口（跳转团队页邀请海报） ========
+    goShareCenter() {
+        this.goInvitePoster();
     },
 
     // ======== ★ 分享邀请 ========
     onShareTap() {
-        // 触发转发分享
+        return handleShareTap();
     },
 
     // ======== 退出登录 ========
     onLogout() {
-        wx.showModal({
-            title: '提示',
-            content: '确认退出登录吗？',
-            success: (res) => {
-                if (res.confirm) {
-                    app.logout();
-                    this.setData({
-                        userInfo: null,
-                        isLoggedIn: false,
-                        notificationsCount: 0
-                    });
-                    wx.showToast({ title: '已退出', icon: 'success' });
-                }
-            }
-        });
+        return handleLogout(this);
     },
 
-    // ======== 分享功能（新版：邀请问卷） ========
+    // ======== 分享功能 ========
     onShareAppMessage() {
-        const userInfo = this.data.userInfo;
-        const userId = userInfo ? userInfo.id : '';
-        if (!userId) {
-            return {
-                title: '臻选 · 精选全球好物，邀你一起赚',
-                path: '/pages/index/index',
-                imageUrl: ''
-            };
-        }
-        return {
-            title: '臻选 · 精选全球好物，邀你一起赚',
-            path: `/pages/questionnaire/fill?inviter_id=${userId}`,
-            imageUrl: ''
-        };
+        return buildSharePayload(this);
     }
 });

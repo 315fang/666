@@ -37,7 +37,7 @@ Page({
     },
 
     onCancel() {
-        wx.navigateBack();
+        require('../../utils/navigator').safeBack();
     },
 
     // 点击历史/热门标签
@@ -106,6 +106,7 @@ Page({
     // 商品点击
     onProductTap(e) {
         const product = e.currentTarget.dataset.item;
+        if (!product || !product.id) return;
         wx.navigateTo({ url: `/pages/product/detail?id=${product.id}` });
     }
 });

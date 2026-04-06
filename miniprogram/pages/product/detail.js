@@ -1,9 +1,37 @@
 // pages/product/detail.js
-const { get, post } = require('../../utils/request');
-const { processProduct, calculatePrice } = require('../../utils/dataFormatter');
+const { get, post, del } = require('../../utils/request');
+const { parseImages, calculatePrice, normalizeProductId } = require('../../utils/dataFormatter');
+
+/** 优先使用后端下发的 displayPrice（与下单应付单价一致），缺省再本地 calculatePrice */
+function parseApiDisplayPrice(v) {
+    if (v === null || v === undefined || v === '') return null;
+    const x = typeof v === 'number' ? v : parseFloat(String(v).trim());
+    return Number.isFinite(x) && x >= 0 ? x : null;
+}
+
+function resolvePayableUnitPrice(product, sku, roleLevel) {
+    if (sku && parseApiDisplayPrice(sku.displayPrice) != null) {
+        return parseApiDisplayPrice(sku.displayPrice);
+    }
+    if (parseApiDisplayPrice(product.displayPrice) != null) {
+        return parseApiDisplayPrice(product.displayPrice);
+    }
+    return calculatePrice(product, sku, roleLevel);
+}
 const { ErrorHandler } = require('../../utils/errorHandler');
 const { USER_ROLES } = require('../../config/constants');
+const { safeBack } = require('../../utils/navigator');
+const LocalUserContent = require('../../utils/localUserContent');
 const app = getApp();
+
+const PLEDGE_ICONS = {
+    seven_day: '/assets/icons/refresh-cw.svg',
+    return_shipping: '/assets/icons/truck.svg',
+    brand_guarantee: '/assets/icons/shield.svg',
+    authentic: '/assets/icons/shield.svg',
+    shipping_promise: '/assets/icons/truck.svg',
+    after_sale: '/assets/icons/refresh-cw.svg'
+};
 
 Page({
     data: {
@@ -11,21 +39,29 @@ Page({
         product: {},
         skus: [],
         selectedSku: null,
+        selectedSkuText: '',
+        selectedSpecs: {},
         quantity: 1,
         currentImage: 0,
         imageCount: 1,
-        cartCount: 0,
         isFavorite: false,
         statusBarHeight: 20,
-        // 新增：评价相关
+        navTopPadding: 20,
+        navBarHeight: 44,
         reviews: [],
         reviewTotal: 0,
         reviewTags: [],
-        // 折扣
         discount: 10,
-        // 当前显示的价格和库存
         currentPrice: '',
-        currentStock: 0
+        currentStock: 0,
+        isOutOfStock: false,
+        detailImageList: [],
+        hasRichDetail: false,
+        roleLevel: USER_ROLES.GUEST,
+        isAgent: false,
+        commission: '0.00',
+        pageLoading: true,
+        servicePledges: []
     },
 
     onLoad(options) {
@@ -34,42 +70,61 @@ Page({
 
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight,
+            navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
+            navBarHeight: app.globalData.navBarHeight || 44,
             roleLevel
         });
 
-        // 新版邀请：通过 inviter_id 温和提示（不强制跳走，用户是来看商品的）
-        if (options.inviter_id) {
-            this._pendingInviterId = options.inviter_id;
-            // 延迟弹窗，先让用户看到商品
-            setTimeout(() => {
-                wx.showModal({
-                    title: '邀请加入',
-                    content: '您的好友邀请您加入团队，是否填写邀请问卷？',
-                    confirmText: '去填写',
-                    cancelText: '先逛逛',
-                    success: (res) => {
-                        if (res.confirm) {
-                            wx.navigateTo({
-                                url: `/pages/questionnaire/fill?inviter_id=${this._pendingInviterId}`
-                            });
-                        }
+        if (!options.id) {
+            return;
+        }
+
+        const normalizedId = normalizeProductId(options.id);
+
+        // 视频号直播商品、商品橱窗等：apiCategory 为 nativeFunctionalized 时，微信会套一层原生购买壳并出现「查看完整详情」。
+        // 对同一路径 reLaunch 一次，多数环境下可回到全屏自有详情页（仅一次，避免循环）。不处理 embedded，以免误伤「半屏打开小程序」宿主场景。
+        let apiCategory = '';
+        try {
+            if (typeof wx.getEnterOptionsSync === 'function') {
+                apiCategory = wx.getEnterOptionsSync().apiCategory || '';
+            }
+        } catch (_) {
+            /* ignore */
+        }
+
+        if (apiCategory === 'nativeFunctionalized') {
+            const rid = String(normalizedId);
+            const prev = app.globalData.productDetailNfRelaunchKey;
+            if (prev !== rid) {
+                app.globalData.productDetailNfRelaunchKey = rid;
+                wx.reLaunch({
+                    url: `/pages/product/detail?id=${encodeURIComponent(rid)}`,
+                    fail: () => {
+                        app.globalData.productDetailNfRelaunchKey = '';
+                        this.setData({ id: normalizedId });
+                        this.loadProduct(normalizedId);
                     }
                 });
-            }, 2000);
+                return;
+            }
+            app.globalData.productDetailNfRelaunchKey = '';
         }
-        if (options.id) {
-            this.setData({ id: options.id });
-            this.loadProduct(options.id);
-        }
+
+        this.setData({ id: normalizedId });
+        this.loadProduct(normalizedId);
     },
 
     onShow() {
-        this.getCartCount();
+        if (this.data.product && this.data.product.id != null) {
+            this.refreshFavoriteState();
+        }
     },
 
     onReady() {
         this.brandAnimation = this.selectComponent('#brandAnimation');
     },
+
+    onUnload() {},
 
     // 加载商品详情
     async loadProduct(id) {
@@ -107,17 +162,15 @@ Page({
             // 将 specs 添加到 product 对象
             product.specs = specs;
 
-            // 获取用户身份计算动态价格
-            const user = wx.getStorageSync('userInfo') || {};
-            const roleLevel = user.role_level || USER_ROLES.GUEST;
+            // 获取用户身份计算动态价格（从 globalData 读取，不信任可被篡改的 Storage）
+            const roleLevel = app.globalData.userInfo?.role_level || USER_ROLES.GUEST;
 
-            // 使用统一的价格计算工具
-            const displayPrice = calculatePrice(product, null, roleLevel);
+            const displayPrice = resolvePayableUnitPrice(product, null, roleLevel);
 
             // 计算折扣
             let discount = 10;
             if (product.market_price && parseFloat(product.market_price) > 0) {
-                discount = Math.round((parseFloat(displayPrice) / parseFloat(product.market_price)) * 10);
+                discount = Math.round((Number(displayPrice) / parseFloat(product.market_price)) * 10);
             }
 
             // 初始化选中第一个SKU
@@ -127,14 +180,24 @@ Page({
                 selectedSpecs[firstSku.spec_name] = firstSku.spec_value;
             }
 
-            // 设置当前价格和库存
-            const currentPrice = firstSku ? firstSku.retail_price : parseFloat(displayPrice).toFixed(2);
-            const currentStock = firstSku ? firstSku.stock : (product.stock || 999);
+            const currentPrice = Number(
+                resolvePayableUnitPrice(product, firstSku, roleLevel)
+            ).toFixed(2);
+            const currentStock = firstSku ? (firstSku.stock || 0) : (product.stock || 0);
+            const isOutOfStock = currentStock <= 0;
+
+            const pid = normalizeProductId(product.id);
+
+            const rawPledges = Array.isArray(product.service_pledges) ? product.service_pledges : [];
+            const servicePledges = rawPledges.map((p) => ({
+                ...p,
+                icon: PLEDGE_ICONS[p.id] || '/assets/icons/shield.svg'
+            }));
 
             this.setData({
                 product: {
                     ...product,
-                    displayPrice: parseFloat(displayPrice).toFixed(2)
+                    displayPrice: Number(displayPrice).toFixed(2)
                 },
                 skus: product.skus || [],
                 selectedSku: firstSku,
@@ -145,8 +208,22 @@ Page({
                 isAgent: roleLevel >= USER_ROLES.LEADER,
                 discount,
                 currentPrice,
-                currentStock
+                currentStock,
+                isOutOfStock,
+                detailImageList: product.detail_images || [],
+                hasRichDetail: !!product.detail_html,
+                servicePledges,
+                pageLoading: false
             });
+
+            LocalUserContent.recordFootprint({
+                id: pid,
+                name: product.name,
+                image: (product.images && product.images[0]) || '',
+                price: Number(displayPrice).toFixed(2)
+            });
+
+            this.refreshFavoriteState();
 
             // 加载评价
             this.loadReviews();
@@ -158,6 +235,7 @@ Page({
         } catch (err) {
             ErrorHandler.handle(err, { customMessage: '商品加载失败' });
             console.error('加载商品详情失败:', err);
+            this.setData({ pageLoading: false });
         } finally {
             wx.hideLoading();
         }
@@ -224,20 +302,7 @@ Page({
         }
     },
 
-    // 获取购物车数量
-    async getCartCount() {
-        try {
-            const res = await get('/cart').catch(() => null);
-            if (res && res.data) {
-                const items = res.data.items || res.data || [];
-                const count = Array.isArray(items) ? items.reduce((sum, item) => sum + item.quantity, 0) : 0;
-                this.setData({ cartCount: count });
-            }
-        } catch (err) {
-            console.error('获取购物车数量失败:', err);
-        }
-    },
-
+    // 获取购物袋数量
     // 图片切换
     onImageChange(e) {
         this.setData({ currentImage: e.detail.current });
@@ -245,23 +310,85 @@ Page({
 
     // 图片预览
     onPreviewImage(e) {
-        const index = e.currentTarget.dataset.index;
+        const images = this.data.product.images || [];
+        const index = Number(e.currentTarget.dataset.index || 0);
+        if (!images.length) return;
         wx.previewImage({
-            current: this.data.product.images[index],
-            urls: this.data.product.images
+            current: images[index] || images[0],
+            urls: images
+        });
+    },
+
+    onPreviewDetailImage(e) {
+        const images = this.data.detailImageList || [];
+        const index = Number(e.currentTarget.dataset.index || 0);
+        if (!images.length) return;
+        wx.previewImage({
+            current: images[index] || images[0],
+            urls: images
         });
     },
 
     // 返回 (Renamed to match WXML: onBackTap)
     onBackTap() {
-        wx.navigateBack();
+        safeBack();
     },
 
-    // Toggle Favorite
-    onToggleFavorite() {
-        this.setData({ isFavorite: !this.data.isFavorite });
+    async refreshFavoriteState() {
+        const p = this.data.product;
+        if (!p || p.id == null) return;
+        const pid = normalizeProductId(p.id);
+        const token = wx.getStorageSync('token');
+        if (token) {
+            try {
+                const res = await get(
+                    '/user/favorites/status',
+                    { product_id: pid },
+                    { showError: false }
+                );
+                const favorited = !!(res && res.data && res.data.favorited);
+                this.setData({ isFavorite: favorited });
+            } catch (_) {
+                this.setData({ isFavorite: false });
+            }
+        } else {
+            this.setData({ isFavorite: LocalUserContent.isFavorite(pid) });
+        }
+    },
+
+    async onToggleFavorite() {
+        const { product, currentPrice } = this.data;
+        if (!product || product.id == null) return;
+        const pid = normalizeProductId(product.id);
+        const token = wx.getStorageSync('token');
+
+        if (token) {
+            try {
+                if (this.data.isFavorite) {
+                    await del(`/user/favorites/${pid}`, {}, { showError: false });
+                    this.setData({ isFavorite: false });
+                    wx.showToast({ title: '已取消收藏', icon: 'none' });
+                } else {
+                    await post('/user/favorites', { product_id: pid }, { showError: false });
+                    this.setData({ isFavorite: true });
+                    wx.showToast({ title: '已收藏，可在「我的-收藏商品」查看', icon: 'none' });
+                }
+            } catch (err) {
+                const msg = (err && err.message) || '操作失败';
+                wx.showToast({ title: String(msg).slice(0, 20), icon: 'none' });
+            }
+            return;
+        }
+
+        const added = LocalUserContent.toggleFavorite({
+            id: pid,
+            name: product.name,
+            image: (product.images && product.images[0]) || '',
+            price: String(currentPrice || product.displayPrice || '')
+        });
+        this.setData({ isFavorite: added });
         wx.showToast({
-            title: this.data.isFavorite ? '已收藏' : '已取消收藏',
+            title: added ? '已收藏（本机），登录后可云端同步' : '已取消收藏',
             icon: 'none'
         });
     },
@@ -284,17 +411,27 @@ Page({
             });
         }
 
-        // 更新选中状态和显示文本，同时更新价格和库存
-        const currentPrice = selectedSku ? selectedSku.retail_price : product.displayPrice;
-        const currentStock = selectedSku ? selectedSku.stock : (product.stock || 999);
+        const currentPrice = Number(
+            resolvePayableUnitPrice(product, selectedSku, this.data.roleLevel)
+        ).toFixed(2);
+        const currentStock = selectedSku ? (selectedSku.stock || 0) : (product.stock || 0);
+        const isOutOfStock = currentStock <= 0;
+        const nextQuantity = isOutOfStock ? 1 : Math.min(this.data.quantity, currentStock || 1);
 
         this.setData({
             selectedSpecs,
             selectedSku,
             selectedSkuText: selectedSku ? `${selectedSku.spec_name}: ${selectedSku.spec_value}` : '请选择规格',
             currentPrice,
-            currentStock
+            currentStock,
+            isOutOfStock,
+            quantity: nextQuantity
         });
+    },
+
+    getMaxStock() {
+        const stock = Number(this.data.currentStock || 0);
+        return Number.isFinite(stock) && stock > 0 ? stock : 0;
     },
 
     // 数量减少 (Renamed to match WXML: onMinus)
@@ -306,7 +443,7 @@ Page({
 
     // 数量增加 (Renamed to match WXML: onPlus)
     onPlus() {
-        const maxStock = (this.data.selectedSku && this.data.selectedSku.stock) || this.data.product.stock || 999;
+        const maxStock = this.getMaxStock();
         if (this.data.quantity < maxStock) {
             this.setData({ quantity: this.data.quantity + 1 });
         }
@@ -316,62 +453,104 @@ Page({
     onQtyInput(e) {
         let val = parseInt(e.detail.value);
         if (isNaN(val) || val < 1) val = 1;
-        const maxStock = (this.data.selectedSku && this.data.selectedSku.stock) || this.data.product.stock || 999;
-        if (val > maxStock) val = maxStock;
+        const maxStock = this.getMaxStock();
+        if (maxStock > 0 && val > maxStock) val = maxStock;
         this.setData({ quantity: val });
     },
 
-    // 加入购物车入口
+    /** 详情页「到店自提」仅为说明；不支持则提示，支持则引导至下单页切换 */
+    onDeliveryPreviewPickupTap() {
+        const pu = Number(this.data.product && this.data.product.supports_pickup);
+        if (!pu) {
+            wx.showToast({
+                title: '该商品不支持到店自提，将为您快递配送',
+                icon: 'none',
+                duration: 2800
+            });
+            return;
+        }
+        wx.showToast({
+            title: '立即购买或去购物袋结算后，在确认订单页切换为到店自提',
+            icon: 'none',
+            duration: 2800
+        });
+    },
+
+    // 加入购物袋入口（防重复点击）
     onAddToCart() {
+        if (this._addingToCart) return;
+        if (this.data.isOutOfStock) {
+            wx.showToast({ title: '该商品暂时缺货', icon: 'none' });
+            return;
+        }
         this.addToCart();
     },
 
     onBuyNow() {
+        if (this._buyingNow) return;
+        if (this.data.isOutOfStock) {
+            wx.showToast({ title: '该商品暂时缺货', icon: 'none' });
+            return;
+        }
+        this._buyingNow = true;
         const { product, selectedSku, quantity } = this.data;
 
         const buyInfo = {
-            product_id: product.id,
+            product_id: normalizeProductId(product.id),
+            category_id: product.category_id || null,
             sku_id: (selectedSku && selectedSku.id) || null,
             quantity,
-            price: selectedSku ? parseFloat(selectedSku.retail_price) : parseFloat(product.displayPrice || product.retail_price),
+            price: resolvePayableUnitPrice(product, selectedSku, this.data.roleLevel),
             name: product.name,
             image: (product.images && product.images[0]) || '',
-            spec: selectedSku ? `${selectedSku.spec_name}: ${selectedSku.spec_value}` : ''
+            spec: selectedSku ? `${selectedSku.spec_name}: ${selectedSku.spec_value}` : '',
+            supports_pickup: product.supports_pickup ? 1 : 0
         };
         wx.setStorageSync('directBuyInfo', buyInfo);
 
-        wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
+        wx.navigateTo({
+            url: '/pages/order/confirm?from=direct',
+            complete: () => { this._buyingNow = false; }
+        });
     },
 
-    // 加入购物车
+    // 加入购物袋
     async addToCart() {
+        if (this._addingToCart) return;
         const { product, selectedSku, quantity } = this.data;
+        this._addingToCart = true;
+        let loadingShown = false;
 
         try {
-            wx.showLoading({ title: '加入购物车...' });
+            wx.showLoading({ title: '加入购物袋...', mask: true });
+            loadingShown = true;
 
-            await post('/cart', {
-                product_id: product.id,
-                sku_id: (selectedSku && selectedSku.id) || null,
-                quantity
-            });
+            await post(
+                '/cart',
+                {
+                    product_id: normalizeProductId(product.id),
+                    sku_id: (selectedSku && selectedSku.id) || null,
+                    quantity
+                },
+                { showError: false }
+            );
 
             wx.hideLoading();
+            loadingShown = false;
 
-            // 触发飞入动画
             this.triggerFlyAnim();
-
-            wx.showToast({ title: '已加入购物车', icon: 'success' });
-
-            this.getCartCount();
+            wx.showToast({ title: '已加入购物袋', icon: 'success' });
         } catch (err) {
-            wx.hideLoading();
-            wx.showToast({ title: '加入失败', icon: 'none' });
-            console.error('加入购物车失败:', err);
+            const msg = err && err.message ? String(err.message) : '加入失败';
+            wx.showToast({ title: msg, icon: 'none' });
+            console.error('加入购物袋失败:', err);
+        } finally {
+            if (loadingShown) wx.hideLoading();
+            this._addingToCart = false;
         }
     },
 
-    // 触发飞入购物车动画（使用 brand-animation 组件）
+    // 触发飞入购物袋动画（使用 brand-animation 组件）
     triggerFlyAnim() {
         if (!this.brandAnimation) {
             this.brandAnimation = this.selectComponent('#brandAnimation');
@@ -383,9 +562,9 @@ Page({
         const startX = sysInfo.windowWidth / 2;
         const startY = sysInfo.windowHeight * 0.3;
 
-        // 终点：查询购物车图标位置
+        // 终点：查询购物袋图标位置
         const query = wx.createSelectorQuery().in(this);
-        query.select('.cart-target').boundingClientRect((rect) => {
+        query.select('.fly-cart-target').boundingClientRect((rect) => {
             const endX = rect ? rect.left + rect.width / 2 : sysInfo.windowWidth * 0.35;
             const endY = rect ? rect.top + rect.height / 2 : sysInfo.windowHeight - 50;
 
@@ -401,29 +580,13 @@ Page({
 
     // 代理商采购入仓
     onAgentRestock() {
-        wx.navigateTo({ url: '/pages/distribution/restock' });
+        wx.navigateTo({ url: '/pages/distribution/stock-logs' });
     },
 
-    // 首页
-    goHome() {
-        wx.switchTab({ url: '/pages/index/index' });
-    },
-
-    // 购物车
-    goCart() {
-        wx.switchTab({ url: '/pages/cart/cart' });
-    },
-
-    // 分享（带邀请人信息）
+    // 分享商品详情
     onShareAppMessage() {
         const { product } = this.data;
-        const app = getApp();
-        const userInfo = app.globalData.userInfo;
-        const userId = userInfo ? userInfo.id : '';
-        // 未登录时不带 inviter_id
-        const path = userId
-            ? `/pages/product/detail?id=${product.id}&inviter_id=${userId}`
-            : `/pages/product/detail?id=${product.id}`;
+        const path = `/pages/product/detail?id=${product.id}`;
         return {
             title: product.name,
             path,

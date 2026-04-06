@@ -22,6 +22,31 @@
     <text class="amount-value">¥{{refund.amount}}</text>
   </view>
 
+  <view class="card" wx:if="{{refund.type === 'return_refund' && refund.status === 'approved'}}">
+    <view class="card-title">退货物流</view>
+    <view class="form-row">
+      <text class="form-label">快递公司</text>
+      <input
+        class="form-input"
+        placeholder="选填，如顺丰速运"
+        value="{{returnShippingForm.return_company}}"
+        bindinput="onInputReturnCompany"
+      />
+    </view>
+    <view class="form-row">
+      <text class="form-label">物流单号</text>
+      <input
+        class="form-input"
+        placeholder="请填写退货物流单号"
+        value="{{returnShippingForm.return_tracking_no}}"
+        bindinput="onInputReturnTrackingNo"
+      />
+    </view>
+    <button class="submit-btn" loading="{{submittingReturnShipping}}" bindtap="onSubmitReturnShipping">
+      {{refund.return_tracking_no ? '更新退货物流' : '提交退货物流'}}
+    </button>
+  </view>
+
   <!-- 商品信息 -->
   <view class="card" wx:if="{{refund.order && refund.order.product}}">
     <view class="card-title">商品信息</view>
@@ -68,6 +93,14 @@
     <view class="info-row" wx:if="{{refund.admin_remark}}">
       <text class="info-label">客服备注</text>
       <text class="info-value">{{refund.admin_remark}}</text>
+    </view>
+    <view class="info-row" wx:if="{{refund.return_company}}">
+      <text class="info-label">退货快递公司</text>
+      <text class="info-value">{{refund.return_company}}</text>
+    </view>
+    <view class="info-row" wx:if="{{refund.return_tracking_no}}">
+      <text class="info-label">退货物流单号</text>
+      <text class="info-value">{{refund.return_tracking_no}}</text>
     </view>
   </view>
 </view>

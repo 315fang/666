@@ -1,25 +1,25 @@
-<!--pages/distribution/stock-logs.wxml - 代理商库存变动日志-->
+<!--pages/distribution/stock-logs.wxml - 代理商货款流水-->
 <view class="container">
-  <!-- 库存概览 -->
+  <!-- 货款概览 -->
   <view class="stock-header">
     <view class="stock-header-info">
-      <text class="stock-header-label">当前云仓库存</text>
+      <text class="stock-header-label">当前货款余额</text>
       <view class="stock-header-row">
-        <text class="stock-header-value">{{currentStock}}</text>
-        <text class="stock-header-unit">件</text>
+        <text class="stock-header-value">{{currentBalance}}</text>
+        <text class="stock-header-unit">元</text>
       </view>
     </view>
-    <view class="stock-header-btn" bindtap="goRestock">补货</view>
+    <view class="stock-header-btn" bindtap="onRecharge">充值</view>
   </view>
 
   <!-- 筛选 Tab -->
   <view class="filter-bar">
     <view class="filter-item {{activeFilter === 'all' ? 'active' : ''}}" data-filter="all" bindtap="onFilterChange">全部</view>
     <view class="filter-item {{activeFilter === 'in' ? 'active' : ''}}" data-filter="in" bindtap="onFilterChange">
-      <text class="filter-dot in"></text>入库
+      <text class="filter-dot in"></text>增加
     </view>
     <view class="filter-item {{activeFilter === 'out' ? 'active' : ''}}" data-filter="out" bindtap="onFilterChange">
-      <text class="filter-dot out"></text>出库
+      <text class="filter-dot out"></text>扣减
     </view>
   </view>
 
@@ -34,22 +34,21 @@
         <view class="log-card-info">
           <text class="log-card-label">{{item.label}}</text>
           <text class="log-card-product">{{item.product_name}}</text>
-          <text class="log-card-detail" wx:if="{{item.type === 'out' && item.buyer_name}}">买家: {{item.buyer_name}}</text>
-          <text class="log-card-detail" wx:if="{{item.type === 'in' && item.amount}}">金额: ¥{{item.amount}}</text>
+          <text class="log-card-detail" wx:if="{{item.amount}}">变动金额: ¥{{item.amount}}</text>
           <text class="log-card-time">{{item.time_format}}</text>
         </view>
       </view>
       <view class="log-card-right">
-        <text class="log-qty {{item.type}}">{{item.type === 'in' ? '+' : '-'}}{{item.quantity}}</text>
-        <text class="log-qty-unit">件</text>
+        <text class="log-qty {{item.type}}">{{item.type === 'in' ? '+' : '-'}}¥{{item.amount}}</text>
+        <text class="log-qty-unit">货款</text>
       </view>
     </view>
 
     <!-- 空状态 -->
     <view class="empty-state" wx:if="{{logs.length === 0 && !loading}}">
       <image class="empty-icon-img" src="/assets/icons/inbox.svg" mode="aspectFit"/>
-      <text class="empty-text">暂无库存变动记录</text>
-      <view class="empty-btn" bindtap="goRestock">去采购入仓</view>
+      <text class="empty-text">暂无货款流水记录</text>
+      <view class="empty-btn" bindtap="onRecharge">去充值货款</view>
     </view>
 
     <!-- 加载更多 -->

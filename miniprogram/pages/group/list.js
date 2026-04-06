@@ -2,9 +2,41 @@
 const { get, post } = require('../../utils/request');
 const app = getApp();
 
+function plainSummary(html, maxLen = 44) {
+    if (!html) return '';
+    const t = String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!t) return '';
+    return t.length > maxLen ? `${t.slice(0, maxLen)}…` : t;
+}
+
+function enrichGroupActivity(a) {
+    if (!a) return a;
+    const stockLimit = Number(a.stock_limit) || 0;
+    const sold = Number(a.sold_count) || 0;
+    const remain = Math.max(0, stockLimit - sold);
+    const soldPct = stockLimit > 0 ? Math.min(100, Math.round((sold / stockLimit) * 100)) : 0;
+    const gp = parseFloat(a.group_price) || 0;
+    const p = a.product || {};
+    const line = parseFloat(a.original_price) || parseFloat(p.retail_price) || 0;
+    const saveNum = line > gp ? +(line - gp).toFixed(2) : 0;
+    return {
+        ...a,
+        _summary: plainSummary(p.description, 46),
+        _stockRemain: remain,
+        _soldPct: soldPct,
+        _soldCount: sold,
+        _linePrice: line > 0 ? line.toFixed(2) : '',
+        _saveNum: saveNum,
+        _saveYuan: saveNum > 0 ? saveNum.toFixed(2) : '0.00',
+        _maxCap: a.max_members || 10
+    };
+}
+
 Page({
     data: {
-        statusBarHeight: wx.getSystemInfoSync().statusBarHeight,
+        statusBarHeight: 20,
+        navTopPadding: 20,
+        navBarHeight: 44,
         tab: 'activities',
         activities: [],
         myGroups: [],
@@ -13,7 +45,15 @@ Page({
         showMemberTip: false
     },
 
-    onLoad() { this.checkMemberStatus(); this.loadData(); },
+    onLoad() {
+        this.setData({
+            statusBarHeight: app.globalData.statusBarHeight || 20,
+            navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
+            navBarHeight: app.globalData.navBarHeight || 44
+        });
+        this.checkMemberStatus();
+        this.loadData();
+    },
     onShow() { this.loadData(); },
 
     checkMemberStatus() {
@@ -34,7 +74,8 @@ Page({
         if (active === 'activities') {
             try {
                 const res = await get('/group/activities');
-                this.setData({ activities: res.code === 0 ? res.data : [], loading: false });
+                const raw = res.code === 0 ? res.data : [];
+                this.setData({ activities: (raw || []).map(enrichGroupActivity), loading: false });
             } catch { this.setData({ loading: false }); }
         } else {
             if (!app.globalData.isLoggedIn) return this.setData({ loading: false });
@@ -63,7 +104,11 @@ Page({
             return;
         }
         try {
-            const res = await post('/group/orders', { activity_id: activity.id });
+            const payload = { activity_id: activity.id };
+            if (activity.sku_id != null && activity.sku_id !== '') {
+                payload.sku_id = activity.sku_id;
+            }
+            const res = await post('/group/orders', payload);
             if (res.code === 0 || res.code === 1) {
                 const groupNo = res.data?.group_no;
                 wx.navigateTo({ url: `/pages/group/detail?group_no=${groupNo}` });

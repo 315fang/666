@@ -1,50 +1,63 @@
 /**
- * 臻选商城 - 现代轻奢风设计系统 V2.0
- * Modern Luxury Design System
- * 
- * 配色哲学：
- * - 深空灰 #1C1917：沉稳、信任、高端
- * - 香槟金 #CA8A04：价值、收益、奢华
- * - 珍珠白 #FAFAF9：纯净、留白、品质
+ * 臻选商城 — 设计系统（主色：蓝 / 绿 / 金）
+ * - 深海蓝：导航、层次、信息态
+ * - 松石绿：成功、生机、健康关联
+ * - 香槟金：CTA、价位与尊贵强调
+ * - 中性色：冷灰辅色，避免与主色抢戏
  */
 
 page {
   /* ==================== 品牌色彩系统 ==================== */
   
-  /* 主色调 - 深空灰系 */
-  --luxury-black: #1C1917;
-  --luxury-black-light: #292524;
-  --luxury-black-lighter: #44403C;
+  /* 深海蓝系 */
+  --brand-blue-deep: #1E4A6D;
+  --brand-blue: #2E6B94;
+  --brand-blue-soft: #5B8FB8;
+  --brand-blue-muted: #64748B;
+  --brand-blue-bg: #E3EDF4;
+  --brand-blue-bg-light: #F0F6FA;
+
+  /* 松石绿系 */
+  --brand-green: #0F766E;
+  --brand-green-bright: #14B8A6;
+  --brand-green-light: #5EEAD4;
+  --brand-green-bg: #ECFDF8;
+  --brand-green-bg-strong: #CCFBF1;
+
+  /* 主色调 - 深字色（略带蓝调的岩灰） */
+  --luxury-black: #0F172A;
+  --luxury-black-light: #1E293B;
+  --luxury-black-lighter: #334155;
   
-  /* 强调色 - 香槟金系 */
-  --luxury-gold: #CA8A04;
-  --luxury-gold-light: #F59E0B;
-  --luxury-gold-dark: #A16207;
-  --luxury-gold-bg: #FEF3C7;
-  --luxury-gold-bg-light: #FFFBEB;
+  /* 强调色 - 香槟金（与 Tab 选中色一致） */
+  --luxury-gold: #C6A16E;
+  --luxury-gold-light: #DBC08A;
+  --luxury-gold-dark: #9A7348;
+  --luxury-gold-bg: #F5EBD8;
+  --luxury-gold-bg-light: #FCF8F0;
   
-  /* 中性色 - 暖灰系 */
+  /* 中性色 - 冷灰辅色 */
   --luxury-white: #FFFFFF;
-  --luxury-cream: #FAFAF9;
-  --luxury-ivory: #F5F5F4;
-  --luxury-warm-gray: #E7E5E4;
-  --luxury-border: #D6D3D1;
-  --luxury-divider: #A8A29E;
+  --luxury-cream: #F4F8FA;
+  --luxury-ivory: #EDF2F6;
+  --luxury-warm-gray: #CBD5E1;
+  --luxury-border: #CBD5E1;
+  --luxury-divider: #94A3B8;
   
   /* 文字色 */
-  --text-primary: #1C1917;
-  --text-secondary: #57534E;
-  --text-tertiary: #78716C;
-  --text-muted: #A8A29E;
-  --text-placeholder: #D6D3D1;
-  --text-inverse: #FAFAF9;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-tertiary: #64748B;
+  --text-muted: #94A3B8;
+  --text-placeholder: #CBD5E1;
+  --text-inverse: #F8FAFC;
   
-  /* 功能色 - 低饱和度奢华感 */
-  --color-success: #059669;
-  --color-success-bg: #ECFDF5;
-  --color-success-light: #D1FAE5;
+  /* 功能色 */
+  --color-success: #0D9488;
+  --color-success-bg: #ECFDF8;
+  --color-success-light: #CCFBF1;
   
-  --color-warning: #D97706;
+  --color-warning: #CA8A04;
   --color-warning-bg: #FFFBEB;
   --color-warning-light: #FEF3C7;
   
@@ -52,9 +65,21 @@ page {
   --color-error-bg: #FEF2F2;
   --color-error-light: #FEE2E2;
   
-  --color-info: #0369A1;
-  --color-info-bg: #F0F9FF;
+  --color-info: #1E4A6D;
+  --color-info-bg: #E3EDF4;
   
+  /* 兼容：原「暖棕」变量改为蓝灰辅色，供旧样式引用 */
+  --brand-warm: #64748B;
+  --brand-warm-light: #94A3B8;
+  --brand-warm-dark: #475569;
+  --brand-warm-bg: #E8F2F5;
+  --brand-warm-card: rgba(255,255,255,0.92);
+  --brand-price: #B45309;
+  --brand-price-origin: #94A3B8;
+  --brand-accent: #C6A16E;
+  --brand-accent-light: #DBC08A;
+  --brand-kicker: #64748B;
+
   /* ==================== 兼容性变量（统一使用）==================== */
   --color-primary: var(--luxury-gold);
   --color-primary-light: var(--luxury-gold-light);
@@ -90,19 +115,17 @@ page {
   --space-3xl: 96rpx;
   
   /* 阴影 - 精致悬浮感 */
-  --shadow-xs: 0 1rpx 2rpx rgba(28, 25, 23, 0.03);
-  --shadow-sm: 0 2rpx 8rpx rgba(28, 25, 23, 0.04);
-  --shadow-md: 0 4rpx 16rpx rgba(28, 25, 23, 0.06);
-  --shadow-lg: 0 8rpx 32rpx rgba(28, 25, 23, 0.08);
-  --shadow-xl: 0 16rpx 48rpx rgba(28, 25, 23, 0.12);
+  --shadow-xs: 0 1rpx 2rpx rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 2rpx 8rpx rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4rpx 16rpx rgba(15, 23, 42, 0.07);
+  --shadow-lg: 0 8rpx 32rpx rgba(15, 23, 42, 0.09);
+  --shadow-xl: 0 16rpx 48rpx rgba(15, 23, 42, 0.12);
   
-  /* 金色特殊阴影 */
-  --shadow-gold: 0 4rpx 20rpx rgba(202, 138, 4, 0.25);
-  --shadow-gold-lg: 0 8rpx 32rpx rgba(202, 138, 4, 0.3);
+  --shadow-gold: 0 4rpx 20rpx rgba(198, 161, 110, 0.28);
+  --shadow-gold-lg: 0 8rpx 32rpx rgba(198, 161, 110, 0.32);
   
-  /* 黑色特殊阴影 */
-  --shadow-dark: 0 4rpx 20rpx rgba(28, 25, 23, 0.15);
-  --shadow-dark-lg: 0 8rpx 32rpx rgba(28, 25, 23, 0.2);
+  --shadow-dark: 0 4rpx 20rpx rgba(30, 74, 109, 0.18);
+  --shadow-dark-lg: 0 8rpx 32rpx rgba(30, 74, 109, 0.22);
   
   /* ==================== 字体系统 ==================== */
   --font-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -883,7 +906,7 @@ button::after {
   opacity: 1;
 }
 
-/* ⑦ badge 计数脉冲 — 购物车/通知角标 */
+/* ⑦ badge 计数脉冲 — 购物袋/通知角标 */
 .badge-pulse {
   animation: badgePulse 0.3s ease-out;
 }
@@ -930,3 +953,71 @@ button::after {
     transform: translateY(0);
   }
 }
+
+/* ==================== 全局状态样式 ==================== */
+
+.state-loading, .state-error, .state-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 40rpx 80rpx;
+  text-align: center;
+}
+
+.state-icon {
+  width: 120rpx;
+  height: 120rpx;
+  margin-bottom: 24rpx;
+  border-radius: 50%;
+  background: rgba(185,139,88,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.state-icon-text {
+  font-size: 48rpx;
+  color: #B98B58;
+}
+
+.state-title {
+  font-size: 28rpx;
+  color: #57534E;
+  font-weight: 500;
+  margin-bottom: 12rpx;
+}
+
+.state-desc {
+  font-size: 24rpx;
+  color: #A8A29E;
+  line-height: 1.6;
+  margin-bottom: 32rpx;
+}
+
+.state-action {
+  padding: 16rpx 48rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #B98B58, #D4B896);
+  color: #FFFFFF;
+  font-size: 26rpx;
+  font-weight: 500;
+  border: none;
+}
+
+.state-action::after { border: none; }
+
+/* 骨架屏统一样式 */
+.skeleton-block {
+  background: linear-gradient(90deg, #F5F0EB 25%, #EDE8E2 50%, #F5F0EB 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s infinite;
+  border-radius: 12rpx;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.press { opacity: 0.7; transition: opacity 150ms; }

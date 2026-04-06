@@ -1,11 +1,12 @@
 <!--pages/logistics/tracking.wxml - 物流跟踪页面-->
 <view class="container">
-  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+  <view class="nav-bar" style="padding-top: {{navTopPadding}}px;">
     <view class="nav-back" bindtap="onBack">
       <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
     </view>
-    <text class="nav-title">物流跟踪</text>
-    <view class="refresh-btn" bindtap="onRefresh">刷新</view>
+    <text class="nav-title">{{pageTitle}}</text>
+    <view class="refresh-btn" bindtap="onRefresh" wx:if="{{!manualMode}}">刷新</view>
+    <view class="refresh-btn refresh-btn-placeholder" wx:else>手工发货</view>
   </view>
 
   <!-- 加载中 -->
@@ -43,7 +44,7 @@
 
     <!-- 物流轨迹时间线 -->
     <view class="timeline">
-      <view class="trace-item {{index === 0 ? 'active' : ''}}" wx:for="{{info.traces}}" wx:key="*this">
+      <view class="trace-item {{index === 0 ? 'active' : ''}}" wx:for="{{info.traces}}" wx:key="index">
         <view class="trace-left">
           <view class="trace-dot {{index === 0 ? 'active' : ''}}"/>
           <view class="trace-line" wx:if="{{index < info.traces.length - 1}}"/>
@@ -57,14 +58,13 @@
 
       <!-- 空轨迹 -->
       <view class="empty-trace" wx:if="{{!info.traces.length}}">
-        <text>暂无跟踪信息，请稍后查询</text>
+        <text>{{info.manual_mode ? manualEmptyTracesText : '暂无跟踪信息，请稍后查询'}}</text>
       </view>
     </view>
 
     <!-- 查询时间 -->
     <view class="query-time">
       <text>查询时间：{{info.query_time}}</text>
-      <text wx:if="{{info.is_mock}}" class="mock-badge">测试数据</text>
     </view>
   </view>
 </view>

@@ -86,6 +86,10 @@ Page({
         return statusMap[status] || status;
     },
 
+    onWithdrawInput(e) {
+        this.setData({ withdrawAmount: e.detail.value });
+    },
+
     onWithdrawTap() {
         this.setData({ showWithdraw: true });
     },

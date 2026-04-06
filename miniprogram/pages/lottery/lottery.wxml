@@ -1,7 +1,6 @@
-<!--pages/lottery/lottery.wxml - 积分抽奖（转盘+盲盒双模式）-->
+<!--pages/lottery/lottery.wxml-->
 <view class="container">
-  <!-- 导航 -->
-  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+  <view class="nav-bar" style="padding-top: {{navTopPadding}}px;">
     <view class="nav-back" bindtap="onBack">
       <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
     </view>
@@ -9,100 +8,152 @@
     <view class="nav-placeholder"/>
   </view>
 
-  <!-- 积分余额 -->
-  <view class="points-header">
-    <view class="pts-badge">
-      <image class="pts-icon" src="/assets/icons/star.svg" mode="aspectFit"/>
-      <text class="pts-num">{{pointBalance}}</text>
-      <text class="pts-label">积分</text>
+  <view class="hero-card">
+    <view class="hero-copy">
+      <text class="hero-kicker">LUCKY REWARD</text>
+      <text class="hero-title">{{heroTitle}}</text>
+      <text class="hero-subtitle">{{heroSubtitle}}</text>
     </view>
-    <text class="pts-cost">每次消耗 {{costPoints}} 积分</text>
-  </view>
-
-  <!-- ===== 转盘模式 ===== -->
-  <view class="wheel-section" wx:if="{{mode === 'spin'}}">
-    <view class="wheel-wrap">
-      <!-- 8格转盘 -->
-      <canvas canvas-id="wheelCanvas" class="wheel-canvas" id="wheelCanvas"/>
-      <!-- 指针 -->
-      <view class="wheel-pointer">
-        <view class="pointer-inner">
-          <image class="pointer-img" src="/assets/icons/star.svg" mode="aspectFit"/>
-        </view>
+    <view class="hero-stats">
+      <view class="stat-card">
+        <text class="stat-label">当前积分</text>
+        <text class="stat-value">{{pointBalance}}</text>
+      </view>
+      <view class="stat-card highlight">
+        <text class="stat-label">每次消耗</text>
+        <text class="stat-value">{{costPoints}}</text>
       </view>
     </view>
-    <view class="draw-btn {{spinning || !prizes.length ? 'disabled' : ''}}" bindtap="onDraw">
-      <text wx:if="{{spinning}}">转动中...</text>
-      <text wx:elif="{{!prizes.length}}">奖品加载中</text>
-      <text wx:else>立即抽奖</text>
-    </view>
   </view>
 
-  <!-- ===== 盲盒模式 ===== -->
-  <view class="blindbox-section" wx:if="{{mode === 'blindbox'}}">
-    <view class="blindbox-wrap" bindtap="onDraw">
-      <view class="blindbox-card {{opening ? 'opening' : ''}}">
-        <view class="blindbox-front">
-          <image class="box-img" src="/assets/icons/gift.svg" mode="aspectFit"/>
-          <text class="box-text">点击开</text>
+  <view class="wheel-panel" wx:if="{{mode === 'spin'}}">
+    <view class="panel-head">
+      <view>
+        <text class="panel-title">{{panelTitle}}</text>
+        <text class="panel-subtitle">不是简单转盘，改成扭蛋机出奖的体验会更有抽奖氛围</text>
+      </view>
+      <view class="panel-chip">{{prizes.length || 0}} 项奖品</view>
+    </view>
+    <view class="gacha-stage">
+      <view class="gacha-machine {{spinning ? 'is-running' : ''}} {{opening ? 'is-opening' : ''}}">
+        <view class="machine-top">
+          <text class="machine-brand">GACHA LUCK</text>
+          <view class="machine-lights">
+            <view class="machine-light" wx:for="{{[1,2,3,4,5]}}" wx:key="index"></view>
+          </view>
         </view>
-        <view class="blindbox-result" wx:if="{{lastPrize}}">
-          <text class="result-emoji">🎁</text>
-          <text class="result-name">{{lastPrize.name}}</text>
+        <view class="machine-window">
+          <view class="machine-glass"></view>
+          <view class="capsule-cloud">
+            <view
+              class="capsule-sample capsule-pos-{{index % 6}}"
+              wx:for="{{machineCapsules}}"
+              wx:key="index"
+              style="background: linear-gradient(180deg, {{item.theme_color}} 0%, {{item.accent_color}} 100%);"
+            >
+              <text class="capsule-sample-emoji">{{item.display_emoji}}</text>
+            </view>
+          </view>
+        </view>
+        <view class="machine-base">
+          <view class="machine-chute">
+            <view class="result-capsule capsule-placeholder" wx:if="{{!lastPrize}}">
+              <text class="result-capsule-mark">?</text>
+            </view>
+            <view
+              class="result-capsule {{opening ? 'capsule-drop' : 'capsule-ready'}}"
+              wx:if="{{lastPrize}}"
+              style="background: linear-gradient(180deg, {{lastPrize.theme_color}} 0%, {{lastPrize.accent_color}} 100%);"
+            >
+              <view class="capsule-top"></view>
+              <view class="capsule-bottom"></view>
+              <text class="result-capsule-mark">{{lastPrize.display_emoji}}</text>
+            </view>
+          </view>
+          <view class="machine-controls">
+            <view class="machine-dial">
+              <view class="machine-dial-core"></view>
+            </view>
+            <view class="machine-handle">
+              <view class="machine-handle-bar"></view>
+              <view class="machine-handle-knob"></view>
+            </view>
+          </view>
         </view>
       </view>
-    </view>
-    <view class="draw-btn {{opening ? 'disabled' : ''}}" bindtap="onDraw">
-      <text wx:if="{{opening}}">开启中...</text>
-      <text wx:else>开启盲盒 ({{costPoints}}积分)</text>
+      <view class="gacha-tip">扭蛋机会先出球，再揭晓奖品结果</view>
+      <view class="draw-btn {{spinning || !prizes.length ? 'disabled' : ''}}" bindtap="onDraw">
+        <text wx:if="{{opening}}">正在开球...</text>
+        <text wx:elif="{{spinning}}">扭蛋出货中...</text>
+        <text wx:elif="{{!prizes.length}}">奖池加载中</text>
+        <text wx:else>扭一次</text>
+      </view>
     </view>
   </view>
 
-  <!-- 奖品列表 -->
-  <view class="prize-tip">可获得的奖品</view>
+  <view class="section-head">
+    <view>
+      <text class="section-title">奖池预览</text>
+      <text class="section-subtitle">每个奖项都能单独配置 emoji、标签和主色</text>
+    </view>
+  </view>
   <view class="prize-grid">
-    <view class="prize-item" wx:for="{{prizes}}" wx:key="id">
-      <view class="prize-icon-wrap">
+    <view
+      class="prize-item"
+      wx:for="{{prizes}}"
+      wx:key="id"
+      style="background: linear-gradient(180deg, {{item.theme_color}} 0%, #111827 100%); border-color: {{item.accent_color}};"
+    >
+      <view class="prize-item-top">
+        <text class="prize-badge">{{item.badge_text}}</text>
         <image wx:if="{{item.image_url}}" class="prize-img" src="{{item.image_url}}" mode="aspectFit"/>
-        <text wx:else class="prize-emoji">{{prizeEmoji[item.type] || '🎁'}}</text>
+        <text wx:else class="prize-emoji">{{item.display_emoji || prizeEmoji[item.type] || '🎁'}}</text>
       </view>
       <text class="prize-name">{{item.name}}</text>
+      <text class="prize-value">{{item.display_value}}</text>
     </view>
   </view>
 
-  <!-- 中奖记录 -->
-  <view class="section-title">我的中奖记录</view>
+  <view class="section-head">
+    <view>
+      <text class="section-title">我的中奖记录</text>
+      <text class="section-subtitle">抽中过的奖品会在这里持续留档</text>
+    </view>
+  </view>
   <view class="records-list">
     <view class="empty-tip" wx:if="{{!records.length}}">
       <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
-      <text>暂无记录，快来抽奖吧</text>
+      <text>{{emptyRecordText}}</text>
     </view>
     <view class="record-item" wx:for="{{records}}" wx:key="id">
+      <view class="record-icon">{{item.display_emoji}}</view>
       <view class="record-left">
         <text class="record-prize">{{item.prize_name}}</text>
         <text class="record-time">{{item.created_at}}</text>
       </view>
       <view class="record-status {{item.status}}">
         <text wx:if="{{item.status === 'pending'}}">待领取</text>
-        <text wx:elif="{{item.status === 'claimed'}}">已领取</text>
+        <text wx:elif="{{item.status === 'claimed'}}">已发放</text>
         <text wx:else>已过期</text>
       </view>
     </view>
   </view>
 
-  <!-- 奖品结果弹窗 -->
-  <view class="result-modal" wx:if="{{showResult}}">
+  <view class="result-modal" wx:if="{{showResult && lastPrize}}">
     <view class="result-overlay" bindtap="closeResult"/>
     <view class="result-card">
-      <view class="result-header">
-        <text class="result-type {{lastPrize && lastPrize.type === 'miss' ? 'miss' : 'win'}}">
-          {{lastPrize && lastPrize.type === 'miss' ? '很遗憾...' : '恭喜中奖！'}}
-        </text>
+      <view class="result-icon-ring" style="background: linear-gradient(135deg, {{lastPrize.theme_color}} 0%, {{lastPrize.accent_color}} 100%);">
+        <text class="result-emoji">{{lastPrize.display_emoji}}</text>
       </view>
-      <view class="result-prize-name">{{lastPrize && lastPrize.name}}</view>
+      <text class="result-type {{lastPrize.type === 'miss' ? 'miss' : 'win'}}">
+        {{lastPrize.type === 'miss' ? resultMissTitle : resultWinTitle}}
+      </text>
+      <text class="result-prize-name">{{lastPrize.name}}</text>
+      <text class="result-value">{{lastPrize.display_value}}</text>
+      <text class="result-badge">{{lastPrize.badge_text}}</text>
       <view class="result-actions">
-        <view class="result-btn primary" bindtap="closeResult">确定</view>
-        <view class="result-btn" bindtap="onDraw" wx:if="{{lastPrize && lastPrize.type === 'miss'}}">再抽一次</view>
+        <view class="result-btn primary" bindtap="closeResult">收下结果</view>
+        <view class="result-btn" bindtap="onDraw" wx:if="{{lastPrize.type === 'miss'}}">再抽一次</view>
       </view>
     </view>
   </view>

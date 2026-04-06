@@ -1,15 +1,28 @@
 <!--pages/privacy/privacy.wxml-->
 <view class="page">
-  <view class="header">
-    <view class="back-btn" bind:tap="onBack">
-      <text class="back-icon">←</text>
+  <view class="header" style="padding-top: {{statusBarHeight}}px;">
+    <view class="header-inner">
+      <view class="back-btn" bindtap="onBack">
+        <image class="back-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"></image>
+      </view>
+      <text class="title">隐私与用户协议</text>
     </view>
-    <text class="title">隐私政策</text>
   </view>
 
   <scroll-view class="content" scroll-y>
+
+    <view class="meta-row">
+      <text class="update-time">更新日期：2026年3月11日</text>
+    </view>
+
     <view class="section">
-      <text class="update-time">更新日期：2026年2月22日</text>
+      <text class="section-title">登录授权说明</text>
+      <text class="section-body">根据微信平台规则，您在登录前需先获知并确认本《隐私协议》与《用户服务协议》。当您在登录弹窗中点击"同意登录"后，我们才会发起微信登录与后续账号校验流程。</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">用户服务协议（摘要）</text>
+      <text class="section-body">1. 您需确保注册信息真实、合法，不得冒用他人身份。\n\n2. 平台商品、活动、积分、佣金等功能仅限合法合规用途，不得用于任何违规行为。\n\n3. 您应妥善保管自己的账号信息，因账号保管不当导致的风险由您自行承担。\n\n4. 对于恶意刷单、恶意套利、攻击系统等行为，平台有权限制功能、冻结账户并追究责任。\n\n5. 如您继续使用本小程序，即表示您同意遵守平台的最新服务规则与公告。</text>
     </view>
 
     <view class="section">
@@ -29,7 +42,7 @@
 
     <view class="section">
       <text class="section-title">四、您的权利</text>
-      <text class="section-body">您有权：\n\n• 查阅和更正您的个人信息（在"我的"页面操作）\n• 删除您的账户及相关数据\n• 撤回您的授权同意\n• 拒绝接收营销信息\n\n如需行使上述权利，请联系我们的客服。</text>
+      <text class="section-body">您有权：\n\n• 查阅和更正您的个人信息（在"我的"页面操作）\n• 删除您的账户及相关数据\n• 撤回您的授权同意\n• 拒绝接收营销信息\n\n如需行使上述权利，可通过"我的 - 在线客服"获取客服微信并联系我们。</text>
     </view>
 
     <view class="section">
@@ -39,12 +52,18 @@
 
     <view class="section">
       <text class="section-title">六、政策变更</text>
-      <text class="section-body">当本隐私政策发生变更时，我们将通过小程序内通知的方式告知您。继续使用本服务即表示您同意更新后的隐私政策。</text>
+      <text class="section-body">当本隐私协议发生变更时，我们将通过小程序内通知的方式告知您。继续使用本服务即表示您同意更新后的隐私协议。</text>
     </view>
 
     <view class="section">
       <text class="section-title">七、联系我们</text>
-      <text class="section-body">如您对本隐私政策有任何疑问，请通过小程序内的客服功能联系我们。</text>
+      <text class="section-body">如您对本隐私协议有任何疑问，可前往"我的 - 在线客服"复制客服微信联系我们。</text>
+    </view>
+
+    <!-- 底部查看微信官方指引入口 -->
+    <view class="official-entry" bindtap="onOpenOfficialContract">
+      <text class="official-entry-text">查看微信官方隐私保护指引</text>
+      <text class="official-entry-arrow">›</text>
     </view>
 
     <view class="footer-space"></view>

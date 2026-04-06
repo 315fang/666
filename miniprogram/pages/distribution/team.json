@@ -1,3 +1,5 @@
 {
-  "navigationBarTitleText": "我的团队"
+  "navigationStyle": "custom",
+  "backgroundColor": "#F2EDE8",
+  "backgroundTextStyle": "dark"
 }

@@ -128,6 +128,37 @@
   word-break: break-all;
 }
 
+.form-row {
+  margin-bottom: 20rpx;
+}
+
+.form-label {
+  display: block;
+  font-size: 24rpx;
+  color: #64748B;
+  margin-bottom: 10rpx;
+}
+
+.form-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1rpx solid #E2E8F0;
+  border-radius: 12rpx;
+  padding: 20rpx 24rpx;
+  font-size: 26rpx;
+  color: #0F172A;
+  background: #F8FAFC;
+}
+
+.submit-btn {
+  margin-top: 12rpx;
+  background: #4F46E5;
+  color: #fff;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  line-height: 88rpx;
+}
+
 .loading-container {
   display: flex;
   justify-content: center;

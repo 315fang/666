@@ -1,0 +1,41 @@
+<view class="page">
+  <view class="map-banner" wx:if="{{regionBanner}}">
+    <text class="map-banner-text">{{regionBanner}}</text>
+  </view>
+  <view class="map-wrap" wx:if="{{mapLat}}">
+    <map
+      class="map"
+      latitude="{{mapLat}}"
+      longitude="{{mapLng}}"
+      scale="{{scale}}"
+      markers="{{markers}}"
+      include-points="{{includePoints}}"
+      show-location
+      bindmarkertap="onMarkerTap"
+    />
+    <view class="map-choose-btn" bindtap="onChooseMyLocationOnMap">选点查最近店</view>
+  </view>
+  <scroll-view class="list" scroll-y show-scrollbar="{{false}}" scroll-into-view="{{scrollIntoView}}" scroll-with-animation>
+    <view
+      class="item {{selectedId === item.id ? 'item-active' : ''}}"
+      wx:for="{{stations}}"
+      wx:key="id"
+      id="st-{{item.id}}"
+      data-id="{{item.id}}"
+      bindtap="onSelectStation"
+    >
+      <text class="name">{{item.name}}</text>
+      <text class="sub">{{item.province}} {{item.city}} {{item.district || ''}} {{item.address || ''}}</text>
+    </view>
+    <view class="empty" wx:if="{{!loading && stations.length === 0}}">暂无站点数据</view>
+  </scroll-view>
+
+  <view class="sheet-mask" wx:if="{{selectedStation}}" catchtap="onCloseDetail">
+    <view class="sheet" catchtap="noop">
+      <view class="sheet-handle"></view>
+      <text class="sheet-title">{{selectedStation.name}}</text>
+      <text class="sheet-line">{{selectedStation.province}} {{selectedStation.city}} {{selectedStation.district || ''}} {{selectedStation.address || ''}}</text>
+      <button class="sheet-btn" bindtap="onCloseDetail">关闭</button>
+    </view>
+  </view>
+</view>

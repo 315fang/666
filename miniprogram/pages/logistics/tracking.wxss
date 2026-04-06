@@ -5,6 +5,7 @@
 .nav-icon { width: 32rpx; height: 32rpx; }
 .nav-title { font-size: 32rpx; font-weight: 700; color: #1A1A1A; }
 .refresh-btn { font-size: 26rpx; color: #6366F1; font-weight: 600; cursor: pointer; }
+.refresh-btn-placeholder { color: #94A3B8; }
 
 /* Loading */
 .loading-wrap { display: flex; flex-direction: column; align-items: center; padding: 100rpx 0; gap: 20rpx; }
@@ -25,6 +26,10 @@
 .status-header.dispatching { background: linear-gradient(135deg, #F59E0B, #D97706); }
 .status-header.collecting { background: linear-gradient(135deg, #94A3B8, #64748B); }
 .status-header.failed { background: linear-gradient(135deg, #EF4444, #DC2626); }
+.status-header.problem { background: linear-gradient(135deg, #F97316, #EA580C); }
+.status-header.returned { background: linear-gradient(135deg, #64748B, #334155); }
+.status-header.unknown { background: linear-gradient(135deg, #6B7280, #4B5563); }
+.status-header.manual { background: linear-gradient(135deg, #8B5E3C, #B98B58); }
 .status-icon-wrap { width: 72rpx; height: 72rpx; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .status-icon { width: 40rpx; height: 40rpx; filter: invert(1); }
 .status-info { flex: 1; }

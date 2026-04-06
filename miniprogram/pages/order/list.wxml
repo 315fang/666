@@ -1,5 +1,6 @@
 <!--pages/order/list.wxml - 订单列表-->
 <view class="container">
+  <page-loading show="{{loading && orders.length === 0}}" text="订单加载中..."></page-loading>
   <!-- 订单状态Tab -->
   <view class="tabs-wrapper">
     <scroll-view class="tabs-scroll" scroll-x>
@@ -11,6 +12,8 @@
             bindtap="onTabChange" data-status="paid">待发货</view>
       <view class="tab-item {{currentStatus === 'shipped' ? 'active' : ''}}"
             bindtap="onTabChange" data-status="shipped">待收货</view>
+      <view class="tab-item {{currentStatus === 'pending_review' ? 'active' : ''}}"
+            bindtap="onTabChange" data-status="pending_review">待评价</view>
       <view class="tab-item {{currentStatus === 'completed' ? 'active' : ''}}"
             bindtap="onTabChange" data-status="completed">已完成</view>
       <view class="tab-item {{currentStatus === 'refund' ? 'active' : ''}}"
@@ -63,7 +66,7 @@
             <text class="product-name">{{item.product.name || '商品名称'}}</text>
             <text class="product-spec" wx:if="{{item.sku && item.sku.spec_value}}">{{item.sku.spec_value}}</text>
             <view class="product-price-qty">
-              <text class="product-price">{{item.price || item.total_amount}}</text>
+              <text class="product-price">¥{{item.price || item.total_amount}}</text>
               <text class="product-qty">x{{item.quantity}}</text>
             </view>
           </view>
@@ -74,7 +77,7 @@
       <view class="order-footer">
         <view class="order-total">
           <text class="total-label">共{{item.quantity}}件 实付:</text>
-          <text class="total-amount">{{item.total_amount}}</text>
+          <text class="total-amount">¥{{item.total_amount}}</text>
           <text class="fulfillment-tag" wx:if="{{item.fulfillment_type === 'Agent'}}">团队发货</text>
         </view>
         <view class="order-actions">
@@ -92,17 +95,23 @@
             <view class="btn btn-sm btn-primary" wx:if="{{item.status === 'pending'}}"
                   catchtap="onPayOrder" data-order="{{item}}">去付款</view>
             
-            <!-- 待发货(paid/agent_confirmed/shipping_requested)：可申请退款 -->
-            <view class="btn btn-sm btn-ghost" wx:if="{{item.status === 'paid' || item.status === 'agent_confirmed' || item.status === 'shipping_requested'}}"
+            <!-- 待发货：仅已支付未进入代理履约流程时可申请退款 -->
+            <view class="btn btn-sm btn-ghost" wx:if="{{item.status === 'paid'}}"
                   catchtap="onApplyRefund" data-order="{{item}}">申请退款</view>
 
-            <!-- 待收货：确认收货 + 申请退款 -->
+            <!-- 待收货：物流 / 评价 / 退款 / 确认收货 -->
+            <view class="btn btn-sm btn-secondary" wx:if="{{item.status === 'shipped'}}"
+                  catchtap="onViewLogistics" data-order="{{item}}">查看物流</view>
+            <view class="btn btn-sm btn-ghost" wx:if="{{item.status === 'shipped' && !item.reviewed}}"
+                  catchtap="onGoReview" data-order="{{item}}">评价</view>
             <view class="btn btn-sm btn-ghost" wx:if="{{item.status === 'shipped'}}"
                   catchtap="onApplyRefund" data-order="{{item}}">申请退款</view>
             <view class="btn btn-sm btn-secondary" wx:if="{{item.status === 'shipped'}}"
                   catchtap="onConfirmReceive" data-order="{{item}}">确认收货</view>
 
             <!-- 已完成 -->
+            <view class="btn btn-sm btn-secondary" wx:if="{{item.status === 'completed' && !item.reviewed}}"
+                  catchtap="onGoReview" data-order="{{item}}">评价晒单</view>
             <view class="btn btn-sm btn-primary" wx:if="{{item.status === 'completed'}}"
                   catchtap="onBuyAgain" data-order="{{item}}">再次购买</view>
             

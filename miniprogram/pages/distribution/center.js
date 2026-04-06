@@ -1,12 +1,12 @@
 // pages/distribution/center.js - 分佣中心（整合钱包、邀请、团队入口）
 const app = getApp();
 const { get, post } = require('../../utils/request');
-const { ROLE_NAMES } = require('../../config/constants');
-const { showError } = require('../../utils/errorHandler');
+const { ROLE_NAMES, USER_ROLES } = require('../../config/constants');
+const { copyAgentPortalLink } = require('../../utils/helpers');
 
 // 状态字典
 const COMMISSION_STATUS_MAP = {
-    'frozen': { text: '冻结中(T+7)', class: 'status-frozen' },
+    'frozen': { text: '冻结中(T+15)', class: 'status-frozen' },
     'pending_approval': { text: '待审核', class: 'status-pending' },
     'available': { text: '可提现', class: 'status-success' },
     'settled': { text: '已结算', class: 'status-gray' },
@@ -19,6 +19,8 @@ const WITHDRAW_STATUS_MAP = {
     'completed': { text: '已到账', class: 'status-gray' },
     'rejected': { text: '已驳回', class: 'status-fail' }
 };
+
+const DISTRIBUTION_DASHBOARD_TTL = 20 * 1000;
 
 Page({
     data: {
@@ -46,16 +48,21 @@ Page({
         withdrawals: [],
         // 分享弹窗
         showShareModal: false,
-        // 绑定上级（通过问卷）
+        // 绑定上级信息（历史字段，兼容保留）
         hasParent: false,
         parentInfo: null,
         // 代理商专属
         isAgent: false,
-        agentStock: 0,
         agentPending: 0,
         agentMonthProfit: '0.00',
         agentDebt: 0,
-        rulesSummary: ''
+        goodsFundBalance: '0.00',
+        walletSummary: null,
+        // 会员成长
+        growthValue: 0,
+        growthPercent: 0,
+        nextGrowthThreshold: null,
+        growthLoaded: false
     },
 
     onLoad(options) {
@@ -67,10 +74,7 @@ Page({
 
     onShow() {
         this.setData({ userInfo: app.globalData.userInfo });
-        this.loadStats();
-        this.loadWalletInfo();
-        this.loadAgentData();
-        this.loadRulesSummary();
+        this.refreshDashboard();
 
         // 如果用户没有上级，且没有提示过，显示提示
         const hasShownInviteTip = wx.getStorageSync('hasShownInviteTip');
@@ -81,16 +85,46 @@ Page({
         }
     },
 
+    refreshDashboard(forceRefresh = false) {
+        if (!forceRefresh && this._dashboardRefreshPromise) {
+            return this._dashboardRefreshPromise;
+        }
+
+        if (!forceRefresh && this._lastDashboardRefreshAt && (Date.now() - this._lastDashboardRefreshAt) < DISTRIBUTION_DASHBOARD_TTL) {
+            return Promise.resolve();
+        }
+
+        const userInfo = app.globalData.userInfo;
+        const isLikelyAgent = this.data.isAgent || (userInfo && (userInfo.role_level || 0) >= USER_ROLES.LEADER);
+
+        const tasks = [
+            this.loadStats(),
+            this.loadWalletInfo(),
+            this.loadMemberTierMeta()
+        ];
+
+        if (isLikelyAgent) {
+            tasks.push(this.loadAgentData());
+        }
+
+        this._dashboardRefreshPromise = Promise.allSettled(tasks).finally(() => {
+            this._lastDashboardRefreshAt = Date.now();
+            this._dashboardRefreshPromise = null;
+        });
+
+        return this._dashboardRefreshPromise;
+    },
+
     // 显示加入团队提示
     showInviteTip() {
         if (this.data.hasParent) return;
 
         // 【逻辑修正】：如果是代理商或以上角色（自身已经是高层节点），则直接免疫“请寻找邀请人”的弹窗
-        if (this.data.userInfo && (this.data.userInfo.role >= 1 || this.data.isAgent)) return;
+        if (this.data.userInfo && ((this.data.userInfo.role_level || 0) >= USER_ROLES.LEADER || this.data.isAgent)) return;
 
         wx.showModal({
             title: '欢迎加入',
-            content: '您尚未加入任何团队。\n\n请联系您的推荐人，获取邀请问卷链接即可加入团队。',
+            content: '您尚未加入任何团队。\n\n请联系您的推荐人，获取团队邀请链接即可加入团队。',
             confirmText: '知道了',
             showCancel: false,
             success: () => {
@@ -117,7 +151,7 @@ Page({
     },
 
     onOrderTap() {
-        wx.navigateTo({ url: '/pages/order/list?type=distribution' });
+        wx.navigateTo({ url: '/pages/order/list?status=all' });
     },
 
     // ====== 分享弹窗 ======
@@ -157,12 +191,15 @@ Page({
                         role_name: roleName
                     },
                     hasParent: hasParent,
-                    parentInfo: userInfo.inviter || null
+                    parentInfo: userInfo.inviter || null,
+                    growthValue: parseFloat(userInfo.growth_value || 0),
+                    growthPercent: userInfo.growth_progress?.percent || 0,
+                    nextGrowthThreshold: userInfo.growth_progress?.next_threshold || null,
+                    growthLoaded: true
                 });
             }
         } catch (err) {
             console.error('加载分销统计失败', err);
-            showError('加载分销数据失败，请稍后重试');
         }
     },
 
@@ -178,25 +215,9 @@ Page({
             }
         } catch (err) {
             console.error('加载钱包失败', err);
-            showError('加载钱包信息失败，请稍后重试');
         }
     },
 
-    async loadRulesSummary() {
-        try {
-            const res = await get('/rules');
-            if (res.code === 0 && res.data) {
-                this.setData({
-                    rulesSummary: res.data.summary || ''
-                });
-            }
-        } catch (err) {
-            // 规则摘要非关键信息，静默失败，不戋扰用户
-            console.warn('加载规则摘要失败', err);
-        }
-    },
-
-    // 提现弹窗
     onWithdrawTap() {
         this.setData({ showWithdraw: true, withdrawAmount: '' });
     },
@@ -208,18 +229,21 @@ Page({
     },
 
     async confirmWithdraw() {
+        if (this._withdrawing) return;
         const amount = parseFloat(this.data.withdrawAmount);
         if (!amount || amount <= 0) {
             wx.showToast({ title: '请输入有效金额', icon: 'none' });
             return;
         }
 
+        this._withdrawing = true;
+        wx.showLoading({ title: '申请中...' });
         try {
             const res = await post('/wallet/withdraw', { amount });
+            wx.hideLoading();
             if (res.code === 0) {
                 this.hideWithdraw();
                 this.loadWalletInfo();
-                this.loadWithdrawals();
 
                 // ★ 触发「提现成功」品牌动画 — 金币弹出
                 if (this.brandAnimation) {
@@ -231,7 +255,10 @@ Page({
                 wx.showToast({ title: res.message || '申请失败', icon: 'none' });
             }
         } catch (err) {
+            wx.hideLoading();
             wx.showToast({ title: err.message || '申请失败', icon: 'none' });
+        } finally {
+            this._withdrawing = false;
         }
     },
 
@@ -239,59 +266,83 @@ Page({
     // ====== 代理商专属功能 ======
     async loadAgentData() {
         try {
-            const res = await get('/agent/workbench');
+            const res = await get('/agent/workbench', {}, {
+                showError: false,
+                maxRetries: 0,
+                timeout: 8000
+            });
             if (res.code === 0) {
                 this.setData({
                     isAgent: true,
-                    agentStock: res.data.stock_count || 0,
                     agentPending: res.data.pending_ship || 0,
                     agentMonthProfit: res.data.month_profit || '0.00',
-                    agentDebt: parseFloat(res.data.debt_amount || 0)
+                    agentDebt: parseFloat(res.data.debt_amount || 0),
+                    goodsFundBalance: res.data.goods_fund_balance || '0.00'
                 });
+                this.loadAgentWallet();
             } else {
                 this.setData({ isAgent: false });
             }
         } catch (err) {
-            // 非代理商会403，静默处理
             this.setData({ isAgent: false });
         }
     },
 
+    async loadMemberTierMeta() {
+        try {
+            const res = await get('/user/member-tier-meta');
+            if (res.code === 0 && res.data) {
+                // 预留：后续可在页面展示完整等级配置
+                this.setData({ memberLevels: res.data.member_levels || [] });
+            }
+        } catch (err) {
+            console.warn('加载会员等级配置失败', err);
+        }
+    },
+
+    async loadAgentWallet() {
+        try {
+            const res = await get('/agent/wallet');
+            if (res.code === 0) {
+                this.setData({
+                    walletSummary: res.data,
+                    goodsFundBalance: res.data.balance || this.data.goodsFundBalance
+                });
+            }
+        } catch (err) {
+            console.warn('加载代理货款失败', err);
+        }
+    },
+
+    onRechargeGoodsFund() {
+        wx.showToast({ title: '请在货款账户页完成支付充值', icon: 'none' });
+        this.goWorkbench();
+    },
+
     goWorkbench() {
-        wx.navigateTo({ url: '/pages/distribution/workbench' });
+        wx.navigateTo({ url: '/pages/wallet/agent-wallet' });
     },
 
-    goRestock() {
-        wx.navigateTo({ url: '/pages/distribution/restock' });
-    },
-
-    goStockLogs() {
+    goGoodsFundLogs() {
         wx.navigateTo({ url: '/pages/distribution/stock-logs' });
     },
 
-    goRules() {
-        wx.navigateTo({ url: '/pages/rules/index' });
+    goAgentPortal() {
+        copyAgentPortalLink({ mode: 'modal' });
     },
 
-    // 跳转到邀请页面（问卷分享）
+    // 打开分享弹窗
     onInviteTap() {
-        wx.navigateTo({ url: '/pages/distribution/invite' });
+        this.onShowShareModal();
     },
 
-    // 分享邀请问卷
+    // 分享团队邀请入口
     onShareAppMessage() {
-        const userInfo = this.data.userInfo || {};
-        const userId = userInfo.id || '';
-        if (!userId) {
-            return {
-                title: '臻选 · 精选全球好物',
-                path: '/pages/index/index',
-                imageUrl: ''
-            };
-        }
+        const brandName = app.globalData.brandName || '问兰';
+        const shareTitle = app.globalData.shareTitle || (brandName + ' · 品牌甄选');
         return {
-            title: `我在用臻选，邀你一起赚`,
-            path: `/pages/questionnaire/fill?inviter_id=${userId}`,
+            title: shareTitle,
+            path: '/pages/index/index',
             imageUrl: ''
         };
     }

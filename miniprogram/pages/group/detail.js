@@ -2,9 +2,18 @@
 const { get } = require('../../utils/request');
 const app = getApp();
 
+function plainSummary(html, maxLen = 96) {
+    if (!html) return '';
+    const t = String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!t) return '';
+    return t.length > maxLen ? `${t.slice(0, maxLen)}…` : t;
+}
+
 Page({
     data: {
-        statusBarHeight: wx.getSystemInfoSync().statusBarHeight,
+        statusBarHeight: 20,
+        navTopPadding: 20,
+        navBarHeight: 44,
         groupNo: null,
         detail: null,
         loading: true,
@@ -18,6 +27,11 @@ Page({
     },
 
     onLoad(options) {
+        this.setData({
+            statusBarHeight: app.globalData.statusBarHeight || 20,
+            navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
+            navBarHeight: app.globalData.navBarHeight || 44
+        });
         if (options.group_no) {
             this.setData({ groupNo: options.group_no });
             this.loadDetail(options.group_no);
@@ -42,21 +56,48 @@ Page({
             const res = await get(`/group/orders/${groupNo}`);
             if (res.code === 0 && res.data) {
                 const d = res.data;
-                // 剩余时间
-                if (d.expires_at) {
-                    const ms = new Date(d.expires_at) - Date.now();
-                    d._expired = ms <= 0;
-                    d._remainHours = ms > 0 ? Math.floor(ms / 3600000) : 0;
-                    d._remainMins = ms > 0 ? Math.floor((ms % 3600000) / 60000) : 0;
-                }
                 // 成员进度
                 const cur = d.current_members || 0;
                 const min = d.min_members || 2;
                 d._progressPct = Math.min(100, Math.round(cur / min * 100));
                 d._needMore = Math.max(0, min - cur);
+                const act = d.activity || {};
+                const stockLimit = Number(act.stock_limit) || 0;
+                const sold = Number(act.sold_count) || 0;
+                d._stockRemain = Math.max(0, stockLimit - sold);
+                d._soldPct = stockLimit > 0 ? Math.min(100, Math.round((sold / stockLimit) * 100)) : 0;
+                d._soldCount = sold;
+                const gp = parseFloat(d.group_price) || 0;
+                const listP = parseFloat(act.original_price) || parseFloat(d.product?.retail_price) || 0;
+                d._listPriceVal = listP > 0
+                    ? listP.toFixed(2)
+                    : (d.product && d.product.retail_price != null && d.product.retail_price !== ''
+                        ? String(d.product.retail_price)
+                        : '');
+                d._savePerUnit = listP > gp ? (listP - gp).toFixed(2) : '0.00';
+                d._saveNum = listP > gp ? +(listP - gp).toFixed(2) : 0;
+                d._maxCap = d.max_members || act.max_members || 10;
+                d._expireHours = act.expire_hours || 24;
+                d._productSummary = plainSummary(d.product?.description, 120);
+                const rs = typeof d.remain_seconds === 'number' ? d.remain_seconds : null;
+                const exp = d.expire_at || d.expires_at;
+                if (rs != null && rs > 0) {
+                    d._expired = false;
+                    d._remainHours = Math.floor(rs / 3600);
+                    d._remainMins = Math.floor((rs % 3600) / 60);
+                } else if (exp) {
+                    const ms = new Date(exp) - Date.now();
+                    d._expired = ms <= 0;
+                    d._remainHours = ms > 0 ? Math.floor(ms / 3600000) : 0;
+                    d._remainMins = ms > 0 ? Math.floor((ms % 3600000) / 60000) : 0;
+                } else {
+                    d._expired = false;
+                    d._remainHours = 0;
+                    d._remainMins = 0;
+                }
                 // 判断当前用户是否是发起人
                 const myId = app.globalData.userInfo?.id;
-                d._isOwner = d.members && d.members.some(m => m.is_owner && m.user_id === myId);
+                d._isOwner = d.members && d.members.some(m => m.is_leader && m.user_id === myId);
                 this.setData({ detail: d, loading: false });
             } else {
                 wx.showToast({ title: res.message || '加载失败', icon: 'none' });
@@ -76,8 +117,32 @@ Page({
             wx.showToast({ title: '请先登录', icon: 'none' });
             return;
         }
-        if (detail.product && detail.product.id) {
-            wx.navigateTo({ url: `/pages/product/detail?id=${detail.product.id}&group_no=${detail.group_no}` });
+        if (detail.status === 'fail' || detail.status === 'cancelled') {
+            wx.showToast({ title: '拼团已结束', icon: 'none' });
+            return;
+        }
+        if (!detail.product || !detail.product.id) return;
+
+        if (detail.status === 'success') {
+            const actSku = detail.activity && detail.activity.sku_id != null && detail.activity.sku_id !== ''
+                ? detail.activity.sku_id
+                : null;
+            const buyInfo = {
+                product_id: detail.product.id,
+                category_id: detail.product.category_id || null,
+                sku_id: actSku,
+                quantity: 1,
+                price: parseFloat(detail.group_price),
+                name: detail.product.name,
+                image: (detail.product.images && detail.product.images[0]) || '',
+                spec: actSku ? '拼团·指定规格' : '拼团特惠',
+                group_no: detail.group_no,
+                supports_pickup: detail.product.supports_pickup ? 1 : 0
+            };
+            wx.setStorageSync('directBuyInfo', buyInfo);
+            wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
+        } else {
+            wx.navigateTo({ url: `/pages/product/detail?id=${detail.product.id}` });
         }
     },
 
@@ -98,6 +163,6 @@ Page({
     },
 
     onBack() {
-        wx.navigateBack();
+        require('../../utils/navigator').safeBack('/pages/activity/activity');
     }
 });

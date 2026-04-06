@@ -5,9 +5,18 @@
 
 const { USER_ROLES } = require('../config/constants.js');
 
+function getAssetFromConfig(key, fallback) {
+  try {
+    const app = getApp();
+    return app?.globalData?.miniProgramConfig?.asset_map?.[key] || fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
 /**
  * OSS 图片处理：自动附加 WebP 压缩 + 缩放参数
- * 只对阿里云 OSS 域名（.aliyuncs.com / .myqcloud.com）生效，其他 URL 原样返回
+ * 只对阿里云 OSS 域名（.aliyuncs.com）生效，其他 URL 原样返回
  * @param {string} url - 原始图片 URL
  * @param {number} width - 目标宽度（px），默认 750
  * @param {number} quality - 压缩质量 1-100，默认 75
@@ -17,7 +26,7 @@ function toOssUrl(url, width = 750, quality = 75) {
   if (!url || typeof url !== 'string') return url;
   // 跳过本地路径、data URL、非 OSS 域名
   if (url.startsWith('/') || url.startsWith('data:')) return url;
-  const ossReg = /\.aliyuncs\.com|.myqcloud\.com/;
+  const ossReg = /\.aliyuncs\.com/;
   if (!ossReg.test(url)) return url;
   // 移除已有的处理参数，避免重复叠加
   const baseUrl = url.split('?')[0];
@@ -55,7 +64,7 @@ function parseImages(images) {
  * @param {string} defaultImg - 默认图片
  * @returns {string} 图片 URL
  */
-function getFirstImage(images, defaultImg = '/assets/images/placeholder.svg') {
+function getFirstImage(images, defaultImg = getAssetFromConfig('default_product_image', '/assets/images/placeholder.svg')) {
   const imageList = parseImages(images);
   return imageList.length > 0 ? imageList[0] : defaultImg;
 }
@@ -212,6 +221,44 @@ function processProducts(products, roleLevel = USER_ROLES.GUEST) {
   return products.map(product => processProduct(product, roleLevel));
 }
 
+/**
+ * 标准化商品ID（支持 p123 格式和纯数字字符串）
+ * @param {string|number} id
+ * @returns {number|string} 标准化后的ID
+ */
+function normalizeProductId(id) {
+  if (id === null || id === undefined) return id;
+  if (typeof id === 'string') {
+    const m = id.match(/^p(\d+)$/i);
+    if (m) return Number(m[1]);
+    if (/^\d+$/.test(id)) return Number(id);
+  }
+  return id;
+}
+
+/**
+ * 生成商品热度标签文字
+ * @param {Object} product - 商品对象（含 purchase_count/sales_count/view_count/heat_score 字段）
+ * @returns {string} 热度标签，无数据时返回空字符串
+ */
+function genHeatLabel(product) {
+  const sales = Number(product.purchase_count || product.sales_count || 0);
+  const views = Number(product.view_count || 0);
+  const heat = Number(product.heat_score || 0);
+
+  if (sales >= 1000) return `已售${Math.floor(sales / 1000)}k+件`;
+  if (sales >= 100) return `已售${sales}+件`;
+  if (sales >= 10) return `${sales}人已购`;
+
+  if (views >= 1000) return `${Math.floor(views / 100) / 10}k人想买`;
+  if (views >= 100) return `${views}人浏览`;
+
+  if (heat >= 500) return '热卖中';
+  if (heat >= 100) return '人气好物';
+
+  return '';
+}
+
 // CommonJS 导出（WeChat Mini Program 兼容）
 module.exports = {
   toOssUrl,
@@ -223,5 +270,7 @@ module.exports = {
   formatTime,
   formatRelativeTime,
   processProduct,
-  processProducts
+  processProducts,
+  normalizeProductId,
+  genHeatLabel
 };

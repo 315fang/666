@@ -107,55 +107,6 @@ class ErrorHandler {
   }
 
   /**
-   * 网络错误处理
-   * @param {Object} error - 网络错误
-   * @param {Object} options - 配置选项
-   */
-  static handleNetworkError(error, options = {}) {
-    const errorInfo = {
-      code: error.code || -1,
-      message: error.message || ERROR_MESSAGES.NETWORK_ERROR,
-      timestamp: new Date().toISOString()
-    };
-
-    if (options.showToast !== false) {
-      wx.showToast({
-        title: errorInfo.message,
-        icon: 'none',
-        duration: 2500
-      });
-    }
-
-    this.log(errorInfo);
-    return errorInfo;
-  }
-
-  /**
-   * 业务错误处理
-   * @param {Object} response - 响应对象
-   * @param {Object} options - 配置选项
-   */
-  static handleBusinessError(response, options = {}) {
-    const errorInfo = {
-      code: response.code || -1,
-      message: response.message || ERROR_MESSAGES.SERVER_ERROR,
-      data: response.data,
-      timestamp: new Date().toISOString()
-    };
-
-    if (options.showToast !== false) {
-      wx.showToast({
-        title: errorInfo.message,
-        icon: 'none',
-        duration: 2500
-      });
-    }
-
-    this.log(errorInfo);
-    return errorInfo;
-  }
-
-  /**
    * 登录过期处理
    */
   static handleLoginExpired() {
