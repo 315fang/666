@@ -4,10 +4,12 @@
         "pages/splash/splash",
         "pages/category/category",
         "pages/activity/activity",
+        "pages/activity/n-invite",
         "pages/activity/brand-news-detail",
         "pages/activity/limited-spot",
         "pages/cart/cart",
         "pages/user/user",
+        "pages/user/edit-profile",
         "pages/user/footprints",
         "pages/user/favorites",
         "pages/user/favorites-footprints",
@@ -16,7 +18,11 @@
         "pages/user/portal-password",
         "pages/user/customer-service",
         "pages/user/growth-privileges",
+        "pages/user/membership-center",
+        "pages/user/member-levels",
+        "pages/user/ticket-list",
         "pages/product/detail",
+        "pages/product/reviews",
         "pages/search/search",
         "pages/privacy/privacy"
     ],
@@ -82,7 +88,8 @@
             "name": "packageWallet",
             "pages": [
                 "index",
-                "agent-wallet"
+                "agent-wallet",
+                "recharge-order"
             ]
         },
         {
@@ -138,6 +145,7 @@
         }
     },
     "tabBar": {
+        "custom": true,
         "color": "#64748B",
         "selectedColor": "#C6A16E",
         "backgroundColor": "#F8FCFD",

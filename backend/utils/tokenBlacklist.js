@@ -1,53 +1,37 @@
 /**
- * Token 黑名单服务（内存版）
- * 
- * 用途：管理员注销后，使 Token 立即失效，防止 Token 被盗用后复用。
- * 
- * 机制：
- * - 将已注销的 jti（JWT Token ID）存入 Map，并记录过期时间
- * - 过期后自动清理，不占用无限内存
- * - 无需 Redis 依赖，适合单机部署；如需多机部署可替换为 Redis 实现
- * 
- * 使用方式：
- * - 注销时调用 tokenBlacklist.add(jti, exp)
- * - 验证时调用 tokenBlacklist.isBlocked(jti)
+ * 管理员 JWT 注销黑名单
+ *
+ * - memory（默认）：单机内存 Map，进程重启清空
+ * - redis：依赖 CacheService 已连接 Redis（需安装 redis 包并配置连接），多实例共享
+ * - mysql：表 admin_token_blacklist，多实例共享（先执行 migrations/phase9_admin_token_blacklist.js）
+ *
+ * 使用：await tokenBlacklist.add(jti, exp) / await tokenBlacklist.isBlocked(jti)
  */
 
-class TokenBlacklist {
+const CacheService = require('../services/CacheService');
+
+const REDIS_KEY_PREFIX = 'admin_jti_blk:';
+
+class MemoryBlacklist {
     constructor() {
-        /** @type {Map<string, number>} jti -> expireAt 毫秒时间戳 */
+        /** @type {Map<string, number>} jti -> expireAt 毫秒 */
         this._store = new Map();
-
-        // 每小时清理一次过期条目
         this._cleanupInterval = setInterval(() => this._cleanup(), 60 * 60 * 1000);
-
-        // 防止定时器阻止进程退出
         if (this._cleanupInterval.unref) {
             this._cleanupInterval.unref();
         }
     }
 
-    /**
-     * 将 Token 加入黑名单
-     * @param {string} jti - JWT Token ID（建议在 JWT payload 中包含 jti 字段）
-     * @param {number} exp - JWT 过期时间（Unix 时间戳，秒）
-     */
     add(jti, exp) {
         if (!jti) return;
-        const expireAt = (exp || 0) * 1000; // 转为毫秒
+        const expireAt = (exp || 0) * 1000;
         this._store.set(jti, expireAt);
     }
 
-    /**
-     * 判断 Token 是否在黑名单中
-     * @param {string} jti
-     * @returns {boolean}
-     */
     isBlocked(jti) {
         if (!jti) return false;
         const expireAt = this._store.get(jti);
         if (expireAt === undefined) return false;
-        // 如果已过期，顺便清理
         if (Date.now() > expireAt) {
             this._store.delete(jti);
             return false;
@@ -55,23 +39,98 @@ class TokenBlacklist {
         return true;
     }
 
-    /**
-     * 清理所有已过期的黑名单条目
-     */
     _cleanup() {
         const now = Date.now();
         for (const [jti, expireAt] of this._store) {
-            if (now > expireAt) {
-                this._store.delete(jti);
-            }
+            if (now > expireAt) this._store.delete(jti);
         }
-    }
-
-    /** 当前黑名单中的 Token 数量（调试用） */
-    get size() {
-        return this._store.size;
     }
 }
 
-// 单例：全局共享同一个黑名单实例
-module.exports = new TokenBlacklist();
+const memoryStore = new MemoryBlacklist();
+
+let _redisFallbackWarned = false;
+
+function getMode() {
+    return String(process.env.ADMIN_TOKEN_BLACKLIST_STORE || 'memory').toLowerCase();
+}
+
+function getSequelize() {
+    return require('../config/database').sequelize;
+}
+
+/**
+ * @param {string} jti
+ * @param {number} exp - JWT exp，Unix 秒
+ */
+async function add(jti, exp) {
+    if (!jti) return;
+    const mode = getMode();
+
+    if (mode === 'redis') {
+        if (CacheService.useMemory) {
+            if (!_redisFallbackWarned) {
+                console.warn('[tokenBlacklist] ADMIN_TOKEN_BLACKLIST_STORE=redis 但缓存为内存模式，黑名单降级为进程内 Map（多机不共享）');
+                _redisFallbackWarned = true;
+            }
+            memoryStore.add(jti, exp);
+            return;
+        }
+        const ttlSec = Math.max(60, Math.floor((exp || 0) - Date.now() / 1000));
+        await CacheService.setCache(`${REDIS_KEY_PREFIX}${jti}`, 1, ttlSec);
+        return;
+    }
+
+    if (mode === 'mysql') {
+        const sequelize = getSequelize();
+        const safeJti = String(jti).slice(0, 128);
+        await sequelize.query(
+            `INSERT INTO admin_token_blacklist (jti, expires_at)
+             VALUES (:jti, FROM_UNIXTIME(:exp))
+             ON DUPLICATE KEY UPDATE expires_at = VALUES(expires_at)`,
+            { replacements: { jti: safeJti, exp: exp || 0 } }
+        );
+        return;
+    }
+
+    memoryStore.add(jti, exp);
+}
+
+/**
+ * @param {string} jti
+ * @returns {Promise<boolean>}
+ */
+async function isBlocked(jti) {
+    if (!jti) return false;
+    const mode = getMode();
+
+    if (mode === 'redis') {
+        if (CacheService.useMemory) {
+            return memoryStore.isBlocked(jti);
+        }
+        const hit = await CacheService.getCache(`${REDIS_KEY_PREFIX}${jti}`);
+        return hit != null;
+    }
+
+    if (mode === 'mysql') {
+        try {
+            const sequelize = getSequelize();
+            const safeJti = String(jti).slice(0, 128);
+            const [rows] = await sequelize.query(
+                `SELECT 1 AS ok FROM admin_token_blacklist WHERE jti = :jti AND expires_at > NOW() LIMIT 1`,
+                { replacements: { jti: safeJti } }
+            );
+            return Array.isArray(rows) && rows.length > 0;
+        } catch (e) {
+            console.error('[tokenBlacklist] mysql 查询失败，降级为不拦截:', e.message);
+            return false;
+        }
+    }
+
+    return memoryStore.isBlocked(jti);
+}
+
+module.exports = {
+    add,
+    isBlocked
+};

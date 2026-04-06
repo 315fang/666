@@ -8,7 +8,7 @@ const { sendNotification } = require('../models/notificationUtil');
 const { checkRoleUpgrade } = require('../utils/commission');
 const { Op } = require('sequelize');
 const constants = require('../config/constants');
-const { logCommission, error: logError } = require('../utils/logger');
+const { logCommission, error: logError, info: logInfo } = require('../utils/logger');
 const PointService = require('./PointService');
 const { toMoney, subMoney } = require('../utils/money');
 const { getOrderRuntimeConfig } = require('../utils/runtimeBusinessConfig');
@@ -80,7 +80,7 @@ class OrderJobService {
                     settledCount++;
                 } catch (err) {
                     await t.rollback();
-                    console.error(`佣金结算失败(ID:${log.id}):`, err);
+                    logError('ORDER_JOB', `佣金结算失败(ID:${log.id})`, { error: err?.message || err });
                 }
             }
 
@@ -89,7 +89,7 @@ class OrderJobService {
                     settledCount,
                     totalAmount: approvedLogs.reduce((sum, log) => sum + parseFloat(log.amount), 0)
                 });
-                console.log(`[定时任务] 佣金结算完成：${settledCount} 条记录`);
+                // 已通过 logCommission 记录，无需重复
             }
             return settledCount;
         } catch (error) {
@@ -97,7 +97,7 @@ class OrderJobService {
                 error: error.message,
                 stack: error.stack
             });
-            console.error('佣金结算查询失败:', error);
+            // 已通过 logError 记录，无需重复
             return 0;
         }
     }
@@ -175,7 +175,7 @@ class OrderJobService {
                     processedCount++;
                 } catch (err) {
                     await t.rollback();
-                    console.error(`处理售后期结束失败(佣金ID:${log.id}):`, err);
+                    logError('ORDER_JOB', `处理售后期结束失败(佣金ID:${log.id})`, { error: err?.message || err });
                 }
             }
 
@@ -185,11 +185,11 @@ class OrderJobService {
             }
 
             if (processedCount > 0) {
-                console.log(`[定时任务] 售后期结束处理完成：${processedCount} 条佣金转为待审批`);
+                logInfo('ORDER_JOB', `售后期结束处理完成：${processedCount} 条佣金转为待审批`);
             }
             return processedCount;
         } catch (error) {
-            console.error('处理售后期结束查询失败:', error);
+            logError('ORDER_JOB', '处理售后期结束查询失败', { error: error?.message || error });
             return 0;
         }
     }
@@ -318,7 +318,7 @@ class OrderJobService {
             await t.commit();
         } catch (error) {
             await t.rollback();
-            console.error(`处理订单完成失败(订单ID:${orderId}):`, error);
+            logError('ORDER_JOB', `处理订单完成失败(订单ID:${orderId})`, { error: error.message });
         }
     }
 
@@ -328,7 +328,7 @@ class OrderJobService {
     static async handleAgentPromotion(newAgent, transaction) {
         newAgent.agent_id = newAgent.id;
         await newAgent.save({ transaction });
-        console.log(`[升级处理] 用户 ${newAgent.id} 升级为代理商，已独立（下级归属不变）`);
+        logInfo('ORDER_JOB', `用户 ${newAgent.id} 升级为代理商，已独立`);
     }
 
     /**
@@ -387,16 +387,16 @@ class OrderJobService {
                     transferredCount++;
                 } catch (err) {
                     await t.rollback();
-                    console.error(`转移订单失败(${order.id}):`, err);
+                    logError('ORDER_JOB', `转移订单失败(${order.id})`, { error: err.message });
                 }
             }
 
             if (transferredCount > 0) {
-                console.log(`[定时任务] 代理商订单超时转平台: ${transferredCount} 单`);
+                logInfo('ORDER_JOB', `代理商订单超时转平台: ${transferredCount} 单`);
             }
             return transferredCount;
         } catch (error) {
-            console.error('代理商订单超时检查失败:', error);
+            logError('ORDER_JOB', '代理商订单超时检查失败', { error: error?.message || error });
             return 0;
         }
     }
@@ -503,16 +503,16 @@ class OrderJobService {
                     cancelledCount++;
                 } catch (err) {
                     await t.rollback();
-                    console.error(`自动取消订单失败(ID:${order.id}):`, err);
+                    logError('ORDER_JOB', `自动取消订单失败(ID:${order.id})`, { error: err.message });
                 }
             }
 
             if (cancelledCount > 0) {
-                console.log(`[定时任务] 自动取消过期订单: ${cancelledCount} 笔`);
+                logInfo('ORDER_JOB', `自动取消过期订单: ${cancelledCount} 笔`);
             }
             return cancelledCount;
         } catch (error) {
-            console.error('自动取消过期订单查询失败:', error);
+            logError('ORDER_JOB', '自动取消过期订单查询失败', { error: error.message });
             return 0;
         }
     }
@@ -561,16 +561,16 @@ class OrderJobService {
                     confirmedCount++;
                 } catch (err) {
                     await t.rollback();
-                    console.error(`自动确认收货失败(ID:${order.id}):`, err);
+                    logError('ORDER_JOB', `自动确认收货失败(ID:${order.id})`, { error: err.message });
                 }
             }
 
             if (confirmedCount > 0) {
-                console.log(`[定时任务] 自动确认收货: ${confirmedCount} 笔`);
+                logInfo('ORDER_JOB', `自动确认收货: ${confirmedCount} 笔`);
             }
             return confirmedCount;
         } catch (error) {
-            console.error('自动确认收货查询失败:', error);
+            logError('ORDER_JOB', '自动确认收货查询失败', { error: error.message });
             return 0;
         }
     }

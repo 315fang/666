@@ -1,60 +1,23 @@
 require('dotenv').config();
 const app = require('./app');
-const { sequelize, testConnection } = require('./config/database');
-const OrderJobService = require('./services/OrderJobService');
-const constants = require('./config/constants');
-const { executeWithLock } = require('./utils/taskLock');
+const { testConnection } = require('./config/database');
 const logger = require('./utils/logger');
+const { getPaymentHealth } = require('./utils/paymentHealth');
+const CacheService = require('./services/CacheService');
+const StartupService = require('./services/StartupService');
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 async function startServer() {
     try {
-        // ★ 启动安全检查：所有环境都要验证关键配置
-        const criticalChecks = [];
-        const isProduction = process.env.NODE_ENV === 'production';
+        const { criticalChecks, isProduction, storageProvider } = StartupService.validateCriticalConfig();
 
-        // JWT密钥验证
-        if (!process.env.JWT_SECRET || process.env.JWT_SECRET.includes('INSECURE-DEFAULT') || process.env.JWT_SECRET.length < 32) {
-            if (isProduction) {
-                criticalChecks.push('JWT_SECRET 未设置、使用了不安全的默认值或长度不足32字符');
-            } else {
-                logger.warn('STARTUP', 'JWT_SECRET 未设置或不安全，建议在 .env 文件中配置强密钥（至少32字符）');
-            }
-        }
-
-        if (!process.env.ADMIN_JWT_SECRET || process.env.ADMIN_JWT_SECRET.includes('INSECURE-DEFAULT') || process.env.ADMIN_JWT_SECRET.length < 32) {
-            if (isProduction) {
-                criticalChecks.push('ADMIN_JWT_SECRET 未设置、使用了不安全的默认值或长度不足32字符');
-            } else {
-                logger.warn('STARTUP', 'ADMIN_JWT_SECRET 未设置或不安全，建议在 .env 文件中配置强密钥（至少32字符）');
-            }
-        }
-
-        // 微信配置验证（所有环境都需要）
-        if (!process.env.WECHAT_APPID || !process.env.WECHAT_SECRET) {
-            criticalChecks.push('WECHAT_APPID / WECHAT_SECRET 未配置');
-        }
-
-        // ★ 数据库密码验证（修复空字符串检测）
-        const dbPwd = process.env.DB_PASSWORD || '';
-        const dbPwdBadValues = ['your_mysql_password', 'password', '123456', '请填入你的MySQL数据库密码', ''];
-        if (dbPwdBadValues.includes(dbPwd) || dbPwd.length < 6) {
-            if (isProduction) {
-                criticalChecks.push('DB_PASSWORD 未设置或使用了占位符默认值，请在 .env 中填入真实数据库密码');
-            } else {
-                logger.warn('STARTUP', 'DB_PASSWORD 未设置或使用默认值');
-            }
-        }
-
-        // 在生产环境，任何检查失败都要终止启动
         if (isProduction && criticalChecks.length > 0) {
             criticalChecks.forEach(msg => console.error(`  ✗ ${msg}`));
             console.error('请在 .env 文件中正确配置以上变量后重新启动。\n');
             process.exit(1);
         }
 
-        // 在非生产环境，输出警告但允许继续
         if (!isProduction && criticalChecks.length > 0) {
             console.error('\n⚠️  配置问题（非生产环境，允许继续）:');
             criticalChecks.forEach(msg => console.error(`  • ${msg}`));
@@ -70,131 +33,42 @@ async function startServer() {
             process.exit(1);
         }
 
-        // 同步数据库模型（仅开发环境）
-        if (process.env.NODE_ENV === 'development') {
-            console.log('同步数据库模型...');
-            await sequelize.sync({ alter: true });
-            console.log('✓ 数据库模型同步完成');
-        }
+        await StartupService.ensureDatabaseSchema();
+        await StartupService.warmupBusinessData();
+        await CacheService.connect();
+        console.log(`[启动] 通用缓存已就绪: ${CacheService.useMemory ? '内存模式' : 'Redis模式'}`);
+        console.log(`[启动] 定时任务锁: ${process.env.TASK_LOCK_BACKEND || 'memory'} | 管理员 Token 黑名单: ${process.env.ADMIN_TOKEN_BLACKLIST_STORE || 'memory'}`);
 
-        // ★ 定时任务：佣金自动结算（间隔从集中配置读取）
-        const settleInterval = constants.COMMISSION.SETTLE_INTERVAL_MS;
-        setInterval(async () => {
-            await executeWithLock('settleCommissions', async () => {
-                const count = await OrderJobService.settleCommissions();
-                if (count > 0) {
-                    console.log(`[定时任务] 佣金结算完成: ${count} 条记录`);
-                }
-            }, { timeout: 10 * 60 * 1000 }).catch(err => {
-                console.error('[定时任务] 佣金结算异常:', err);
-            });
-        }, settleInterval);
+        const { settleInterval, certRefreshHours } = StartupService.registerScheduledJobs();
+        StartupService.runStartupJobs();
 
-        // ★ 定时任务：自动取消超时未支付订单（每分钟检查一次）
-        setInterval(async () => {
-            await executeWithLock('autoCancelOrders', async () => {
-                await OrderJobService.autoCancelExpiredOrders();
-            }, { timeout: 2 * 60 * 1000 }).catch(err => {
-                console.error('[定时任务] 自动取消订单异常:', err);
-            });
-        }, 60 * 1000);
-
-        // ★ 定时任务：自动确认收货（每小时检查一次）
-        setInterval(async () => {
-            await executeWithLock('autoConfirmOrders', async () => {
-                await OrderJobService.autoConfirmOrders();
-            }, { timeout: 10 * 60 * 1000 }).catch(err => {
-                console.error('[定时任务] 自动确认收货异常:', err);
-            });
-        }, 60 * 60 * 1000);
-
-        // ★ 定时任务：售后期结束处理（每10分钟检查一次）
-        setInterval(async () => {
-            await executeWithLock('processRefundDeadline', async () => {
-                await OrderJobService.processRefundDeadlineExpired();
-            }, { timeout: 10 * 60 * 1000 }).catch(err => {
-                console.error('[定时任务] 售后期结束处理异常:', err);
-            });
-        }, 10 * 60 * 1000);
-
-        // ★ 定时任务：代理商订单超时自动转平台（每30分钟检查一次）
-        setInterval(async () => {
-            await executeWithLock('autoTransferAgentOrders', async () => {
-                await OrderJobService.autoTransferAgentOrders();
-            }, { timeout: 10 * 60 * 1000 }).catch(err => {
-                console.error('[定时任务] 代理商订单超时转平台异常:', err);
-            });
-        }, 30 * 60 * 1000);
-
-        // ★ 定时任务：拼团超时未成团处理（每5分钟检查一次）
-        const { processExpiredGroups } = require('./controllers/groupController');
-        setInterval(async () => {
-            await executeWithLock('checkExpiredGroups', async () => {
-                await processExpiredGroups();
-            }, { timeout: 3 * 60 * 1000 }).catch(err => {
-                console.error('[定时任务] 拼团超时处理异常:', err);
-            });
-        }, 5 * 60 * 1000);
-
-        // ★ 定时任务：业务异常告警检测（每5分钟检查一次）
-        const AlertService = require('./services/AlertService');
-        setInterval(async () => {
-            try {
-                const cfg = await AlertService.loadAlertConfig();
-                if (!cfg.alert_enabled) return;
-
-                const { Order, Refund, Withdrawal } = require('./models');
-                const { Op } = require('sequelize');
-                const issues = [];
-
-                // 检测长时间待支付订单（超过2小时）
-                const longPending = await Order.count({
-                    where: {
-                        status: 'pending',
-                        created_at: { [Op.lt]: new Date(Date.now() - 2 * 60 * 60 * 1000) }
-                    }
-                });
-                if (longPending > 5) issues.push(`超时未支付订单：${longPending} 单（>2h）`);
-
-                // 检测待审核退款堆积（>10单）
-                const pendingRefunds = await Refund.count({ where: { status: 'pending' } });
-                if (pendingRefunds > 10) issues.push(`待审核退款积压：${pendingRefunds} 单`);
-
-                // 检测待审核提现堆积（>20单）
-                const pendingWithdrawals = await Withdrawal.count({ where: { status: 'pending' } });
-                if (pendingWithdrawals > 20) issues.push(`待审核提现积压：${pendingWithdrawals} 笔`);
-
-                if (issues.length > 0) {
-                    const content = issues.map(i => `- ${i}`).join('\n');
-                    await AlertService.send('业务异常告警', content, 'warning', 'business_anomaly');
-                }
-            } catch (err) {
-                console.error('[定时任务] 告警检测异常:', err.message);
-            }
-        }, 5 * 60 * 1000);
-
-        // 启动时也执行一次（使用锁机制）
-        executeWithLock('settleCommissions', async () => {
-            const count = await OrderJobService.settleCommissions();
-            if (count > 0) console.log(`[启动结算] 佣金结算完成: ${count} 条记录`);
-        }).catch(() => { });
-        executeWithLock('autoCancelOrders', OrderJobService.autoCancelExpiredOrders).catch(() => { });
-        executeWithLock('autoConfirmOrders', OrderJobService.autoConfirmOrders).catch(() => { });
-        executeWithLock('processRefundDeadline', OrderJobService.processRefundDeadlineExpired).catch(() => { });
-        executeWithLock('autoTransferAgentOrders', OrderJobService.autoTransferAgentOrders).catch(() => { });
+        // 预热微信平台证书缓存（会自动下载并写入 PEM）
+        const { getPlatformCertAuto } = require('./utils/wechat');
+        getPlatformCertAuto().catch(err => {
+            console.warn('[启动] 预热微信平台证书失败（不影响启动）:', err.message);
+        });
 
         // 启动服务器
         app.listen(PORT, () => {
-            console.log(`\n========================================`);
-            console.log(`  S2B2C Backend Server`);
-            console.log(`  环境: ${process.env.NODE_ENV || 'development'}`);
-            console.log(`  端口: ${PORT}`);
-            console.log(`  URL: http://localhost:${PORT}`);
-            console.log(`  佣金结算间隔: ${settleInterval / 1000}s`);
-            console.log(`  佣金冻结天数: T+${constants.COMMISSION.FREEZE_DAYS}`);
-            console.log(`  调试路由: ${constants.DEBUG.ENABLE_DEBUG_ROUTES ? '开启' : '关闭'}`);
-            console.log(`  测试接口: ${constants.DEBUG.ENABLE_TEST_ROUTES ? '开启' : '关闭'}`);
-            console.log(`========================================\n`);
+            StartupService.printStartupBanner({
+                port: PORT,
+                storageProvider,
+                settleInterval,
+                certRefreshHours
+            });
+        });
+
+        getPaymentHealth().then((health) => {
+            const statusLabel = health.status === 'ok' ? '正常' : health.status === 'warning' ? '警告' : '异常';
+            console.log(`[启动自检] 微信支付状态: ${statusLabel} - ${health.summary}`);
+            health.checks
+                .filter((item) => item.status !== 'ok')
+                .forEach((item) => {
+                    const prefix = item.status === 'error' ? '✗' : '•';
+                    console.log(`[启动自检] ${prefix} ${item.label}: ${item.message}`);
+                });
+        }).catch((error) => {
+            console.warn('[启动自检] 微信支付状态检查失败:', error.message);
         });
     } catch (error) {
         console.error('服务器启动失败:', error);

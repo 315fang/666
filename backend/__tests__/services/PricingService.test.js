@@ -2,210 +2,229 @@
  * PricingService 单元测试
  */
 
+const assert = require('node:assert/strict');
+
 const PricingService = require('../../services/PricingService');
 
-describe('PricingService', () => {
-    describe('calculateDisplayPrice', () => {
-        const mockProduct = {
-            retail_price: 100,
-            price_member: 90,
-            price_leader: 80,
-            price_agent: 70
-        };
+// ==================== calculateDisplayPrice ====================
 
-        const mockSku = {
-            price: 100,
-            price_member: 88,
-            price_leader: 78,
-            price_agent: 68
-        };
+test('calculateDisplayPrice: 应该为普通用户返回零售价', () => {
+    const mockProduct = {
+        retail_price: 100,
+        price_member: 90,
+        price_leader: 80,
+        price_agent: 70
+    };
 
-        test('应该为普通用户返回零售价', () => {
-            const price = PricingService.calculateDisplayPrice(mockProduct, null, 0);
-            expect(price).toBe(100);
-        });
+    const price = PricingService.calculateDisplayPrice(mockProduct, null, 0);
+    assert.equal(price, 100);
+});
 
-        test('应该为会员返回会员价', () => {
-            const price = PricingService.calculateDisplayPrice(mockProduct, null, 1);
-            expect(price).toBe(90);
-        });
+test('calculateDisplayPrice: 应该为会员返回会员价', () => {
+    const mockProduct = {
+        retail_price: 100,
+        price_member: 90,
+        price_leader: 80,
+        price_agent: 70
+    };
 
-        test('应该为团长返回团长价', () => {
-            const price = PricingService.calculateDisplayPrice(mockProduct, null, 2);
-            expect(price).toBe(80);
-        });
+    const price = PricingService.calculateDisplayPrice(mockProduct, null, 1);
+    assert.equal(price, 90);
+});
 
-        test('应该为代理商返回代理商价', () => {
-            const price = PricingService.calculateDisplayPrice(mockProduct, null, 3);
-            expect(price).toBe(70);
-        });
+test('calculateDisplayPrice: 应该为团长返回团长价', () => {
+    const mockProduct = {
+        retail_price: 100,
+        price_member: 90,
+        price_leader: 80,
+        price_agent: 70
+    };
 
-        test('当有SKU时应该优先使用SKU价格', () => {
-            const price = PricingService.calculateDisplayPrice(mockProduct, mockSku, 1);
-            expect(price).toBe(88); // SKU会员价，不是商品会员价
-        });
+    const price = PricingService.calculateDisplayPrice(mockProduct, null, 2);
+    assert.equal(price, 80);
+});
 
-        test('当价格不存在时应该降级到下一级价格', () => {
-            const productWithoutMemberPrice = {
-                retail_price: 100,
-                price_leader: 80
-            };
-            const price = PricingService.calculateDisplayPrice(productWithoutMemberPrice, null, 1);
-            expect(price).toBe(100); // 没有会员价，降级到零售价
-        });
-    });
+test('calculateDisplayPrice: 应该为代理商返回代理商价', () => {
+    const mockProduct = {
+        retail_price: 100,
+        price_member: 90,
+        price_leader: 80,
+        price_agent: 70
+    };
 
-    describe('calculateCommissions', () => {
-        const mockOrderItem = {
-            price: 100,
-            quantity: 2
-        };
+    const price = PricingService.calculateDisplayPrice(mockProduct, null, 3);
+    assert.equal(price, 70);
+});
 
-        const mockBuyer = {
-            id: 1,
-            role_level: 1 // 会员
-        };
+test('calculateDisplayPrice: 当有SKU时应该优先使用SKU价格', () => {
+    const mockProduct = {
+        retail_price: 100,
+        price_member: 90,
+        price_leader: 80,
+        price_agent: 70
+    };
+    const mockSku = {
+        price: 100,
+        price_member: 88,
+        price_leader: 78,
+        price_agent: 68
+    };
 
-        const mockParent = {
-            id: 2,
-            role_level: 2 // 团长
-        };
+    const price = PricingService.calculateDisplayPrice(mockProduct, mockSku, 1);
+    assert.equal(price, 88); // SKU会员价，不是商品会员价
+});
 
-        const mockGrandparent = {
-            id: 3,
-            role_level: 3 // 代理商
-        };
+test('calculateDisplayPrice: 当价格不存在时应该降级到下一级价格', () => {
+    const productWithoutMemberPrice = {
+        retail_price: 100,
+        price_leader: 80
+    };
+    const price = PricingService.calculateDisplayPrice(productWithoutMemberPrice, null, 1);
+    assert.equal(price, 100); // 没有会员价，降级到零售价
+});
 
-        test('应该计算购买者自购返利', () => {
-            const result = PricingService.calculateCommissions(mockOrderItem, mockBuyer);
-            expect(result.commissions).toHaveLength(1);
-            expect(result.commissions[0].user_id).toBe(1);
-            expect(result.commissions[0].type).toBe('self');
-            expect(result.commissions[0].amount).toBe(10); // 200 * 5%
-        });
+// ==================== calculateCommissions ====================
 
-        test('应该计算上级直推佣金', () => {
-            const result = PricingService.calculateCommissions(mockOrderItem, mockBuyer, mockParent);
-            expect(result.commissions).toHaveLength(2);
+test('calculateCommissions: 应该计算购买者自购返利', () => {
+    const mockOrderItem = { price: 100, quantity: 2 };
+    const mockBuyer = { id: 1, role_level: 1 }; // 会员 (MEMBER)
 
-            const parentCommission = result.commissions.find(c => c.user_id === 2);
-            expect(parentCommission).toBeDefined();
-            expect(parentCommission.type).toBe('direct');
-            expect(parentCommission.amount).toBe(16); // 200 * 8%
-        });
+    const result = PricingService.calculateCommissions(mockOrderItem, mockBuyer);
+    assert.equal(result.commissions.length, 1);
+    assert.equal(result.commissions[0].user_id, 1);
+    assert.equal(result.commissions[0].type, 'self');
+    assert.equal(result.commissions[0].amount, 40); // 200 * 20%
+});
 
-        test('应该计算上上级间接佣金', () => {
-            const result = PricingService.calculateCommissions(
-                mockOrderItem,
-                mockBuyer,
-                mockParent,
-                mockGrandparent
-            );
+test('calculateCommissions: 应该计算上级直推佣金', () => {
+    const mockOrderItem = { price: 100, quantity: 2 };
+    const mockBuyer = { id: 1, role_level: 1 }; // 会员
+    const mockParent = { id: 2, role_level: 2 }; // 团长
 
-            expect(result.commissions).toHaveLength(3);
+    const result = PricingService.calculateCommissions(mockOrderItem, mockBuyer, mockParent);
+    assert.equal(result.commissions.length, 2);
 
-            const grandparentCommission = result.commissions.find(c => c.user_id === 3);
-            expect(grandparentCommission).toBeDefined();
-            expect(grandparentCommission.type).toBe('indirect');
-            expect(grandparentCommission.amount).toBe(10); // 200 * 5%
-        });
+    const parentCommission = result.commissions.find(c => c.user_id === 2);
+    assert.ok(parentCommission !== undefined);
+    assert.equal(parentCommission.type, 'direct');
+    assert.equal(parentCommission.amount, 60); // 200 * 30%
+});
 
-        test('应该正确计算总佣金', () => {
-            const result = PricingService.calculateCommissions(
-                mockOrderItem,
-                mockBuyer,
-                mockParent,
-                mockGrandparent
-            );
+test('calculateCommissions: 应该计算上上级间接佣金', () => {
+    const mockOrderItem = { price: 100, quantity: 2 };
+    const mockBuyer = { id: 1, role_level: 1 }; // 会员
+    const mockParent = { id: 2, role_level: 2 }; // 团长
+    const mockGrandparent = { id: 3, role_level: 3 }; // 代理商
 
-            expect(result.totalCommission).toBe(36); // 10 + 16 + 10
-        });
+    const result = PricingService.calculateCommissions(
+        mockOrderItem,
+        mockBuyer,
+        mockParent,
+        mockGrandparent
+    );
 
-        test('普通用户购买不应产生自购返利', () => {
-            const guestBuyer = { id: 1, role_level: 0 };
-            const result = PricingService.calculateCommissions(mockOrderItem, guestBuyer);
+    assert.equal(result.commissions.length, 3);
 
-            expect(result.commissions).toHaveLength(0);
-            expect(result.totalCommission).toBe(0);
-        });
-    });
+    const grandparentCommission = result.commissions.find(c => c.user_id === 3);
+    assert.ok(grandparentCommission !== undefined);
+    assert.equal(grandparentCommission.type, 'indirect');
+    assert.equal(grandparentCommission.amount, 16); // 200 * 8%
+});
 
-    describe('calculateOrderTotalCommission', () => {
-        const mockOrderItems = [
-            { price: 100, quantity: 1 },
-            { price: 50, quantity: 2 }
-        ];
+test('calculateCommissions: 应该正确计算总佣金', () => {
+    const mockOrderItem = { price: 100, quantity: 2 };
+    const mockBuyer = { id: 1, role_level: 1 };
+    const mockParent = { id: 2, role_level: 2 };
+    const mockGrandparent = { id: 3, role_level: 3 };
 
-        const mockBuyer = { id: 1, role_level: 1 };
-        const mockParent = { id: 2, role_level: 2 };
+    const result = PricingService.calculateCommissions(
+        mockOrderItem,
+        mockBuyer,
+        mockParent,
+        mockGrandparent
+    );
 
-        test('应该计算多个订单项的总佣金', () => {
-            const total = PricingService.calculateOrderTotalCommission(
-                mockOrderItems,
-                mockBuyer,
-                mockParent
-            );
+    assert.equal(result.totalCommission, 116); // 40 + 60 + 16
+});
 
-            // 第一项: 100 * 5% + 100 * 8% = 5 + 8 = 13
-            // 第二项: 100 * 5% + 100 * 8% = 5 + 8 = 13
-            // 总计: 26
-            expect(total).toBe(26);
-        });
-    });
+test('calculateCommissions: 普通用户购买不应产生自购返利', () => {
+    const guestBuyer = { id: 1, role_level: 0 };
+    const mockOrderItem = { price: 100, quantity: 2 };
 
-    describe('calculateRefundClawback', () => {
-        const mockOrderItem = {
-            id: 1,
-            price: 100,
-            quantity: 1
-        };
+    const result = PricingService.calculateCommissions(mockOrderItem, guestBuyer);
+    assert.equal(result.commissions.length, 0);
+    assert.equal(result.totalCommission, 0);
+});
 
-        const mockCommissionRecords = [
-            { id: 1, user_id: 1, amount: 5, description: '自购返利' },
-            { id: 2, user_id: 2, amount: 8, description: '直推佣金' }
-        ];
+// ==================== calculateOrderTotalCommission ====================
 
-        test('应该生成正确的追回记录', () => {
-            const clawback = PricingService.calculateRefundClawback(
-                mockOrderItem,
-                mockCommissionRecords
-            );
+test('calculateOrderTotalCommission: 应该计算多个订单项的总佣金', () => {
+    const mockOrderItems = [
+        { price: 100, quantity: 1 },
+        { price: 50, quantity: 2 }
+    ];
+    const mockBuyer = { id: 1, role_level: 1 }; // 会员
+    const mockParent = { id: 2, role_level: 2 }; // 团长
 
-            expect(clawback).toHaveLength(2);
-            expect(clawback[0].amount).toBe(-5);
-            expect(clawback[0].type).toBe('clawback');
-            expect(clawback[1].amount).toBe(-8);
-        });
-    });
+    const total = PricingService.calculateOrderTotalCommission(
+        mockOrderItems,
+        mockBuyer,
+        mockParent
+    );
 
-    describe('isValidPrice', () => {
-        test('应该验证有效价格', () => {
-            expect(PricingService.isValidPrice(0)).toBe(true);
-            expect(PricingService.isValidPrice(100)).toBe(true);
-            expect(PricingService.isValidPrice(99.99)).toBe(true);
-        });
+    // item1 (100元): 自购20 + 直推30 = 50
+    // item2 (200元=50×2): 自购20 + 直推30 = 50
+    // 总计: 100
+    assert.equal(total, 100);
+});
 
-        test('应该拒绝无效价格', () => {
-            expect(PricingService.isValidPrice(-1)).toBe(false);
-            expect(PricingService.isValidPrice('100')).toBe(false);
-            expect(PricingService.isValidPrice(null)).toBe(false);
-            expect(PricingService.isValidPrice(undefined)).toBe(false);
-            expect(PricingService.isValidPrice(Infinity)).toBe(false);
-            expect(PricingService.isValidPrice(NaN)).toBe(false);
-        });
-    });
+// ==================== calculateRefundClawback ====================
 
-    describe('formatPrice', () => {
-        test('应该格式化价格为两位小数', () => {
-            expect(PricingService.formatPrice(100)).toBe('100.00');
-            expect(PricingService.formatPrice(99.9)).toBe('99.90');
-            expect(PricingService.formatPrice(99.999)).toBe('100.00');
-        });
+test('calculateRefundClawback: 应该生成正确的追回记录', () => {
+    const mockOrderItem = { id: 1, price: 100, quantity: 1 };
+    const mockCommissionRecords = [
+        { id: 1, user_id: 1, amount: 5, description: '自购返利' },
+        { id: 2, user_id: 2, amount: 8, description: '直推佣金' }
+    ];
 
-        test('应该处理无效价格', () => {
-            expect(PricingService.formatPrice(null)).toBe('0.00');
-            expect(PricingService.formatPrice(undefined)).toBe('0.00');
-            expect(PricingService.formatPrice('abc')).toBe('0.00');
-        });
-    });
+    const clawback = PricingService.calculateRefundClawback(
+        mockOrderItem,
+        mockCommissionRecords
+    );
+
+    assert.equal(clawback.length, 2);
+    assert.equal(clawback[0].amount, -5);
+    assert.equal(clawback[0].type, 'clawback');
+    assert.equal(clawback[1].amount, -8);
+});
+
+// ==================== isValidPrice ====================
+
+test('isValidPrice: 应该验证有效价格', () => {
+    assert.equal(PricingService.isValidPrice(0), true);
+    assert.equal(PricingService.isValidPrice(100), true);
+    assert.equal(PricingService.isValidPrice(99.99), true);
+});
+
+test('isValidPrice: 应该拒绝无效价格', () => {
+    assert.equal(PricingService.isValidPrice(-1), false);
+    assert.equal(PricingService.isValidPrice('100'), false);
+    assert.equal(PricingService.isValidPrice(null), false);
+    assert.equal(PricingService.isValidPrice(undefined), false);
+    assert.equal(PricingService.isValidPrice(Infinity), false);
+    assert.equal(Number.isNaN(PricingService.isValidPrice(NaN)), false); // NaN != NaN
+});
+
+// ==================== formatPrice ====================
+
+test('formatPrice: 应该格式化价格为两位小数', () => {
+    assert.equal(PricingService.formatPrice(100), '100.00');
+    assert.equal(PricingService.formatPrice(99.9), '99.90');
+    assert.equal(PricingService.formatPrice(99.999), '100.00');
+});
+
+test('formatPrice: 应该处理无效价格', () => {
+    assert.equal(PricingService.formatPrice(null), '0.00');
+    assert.equal(PricingService.formatPrice(undefined), '0.00');
+    assert.equal(PricingService.formatPrice('abc'), '0.00');
 });

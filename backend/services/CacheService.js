@@ -4,12 +4,14 @@
  * 自动降级策略：Redis连接失败或未安装模块 -> 内存缓存
  */
 
+const { info: logInfo, error: logError, warn: logWarn } = require('../utils/logger');
+
 let redis = null;
 try {
     // 尝试加载 redis 模块，如果未安装也不会报错
     redis = require('redis');
 } catch (e) {
-    console.log('提示: 未检测到 redis 模块，将使用内存缓存模式');
+    logInfo('CACHE', '未检测到 redis 模块，将使用内存缓存模式');
 }
 
 const { promisify } = require('util');
@@ -20,6 +22,7 @@ class CacheService {
         this.isConnected = false;
         this.useMemory = true; // 默认优先尝试内存模式
         this.memoryCache = new Map(); // 内存缓存容器
+        this.cleanupTimer = null;
 
         // 缓存键前缀
         this.PREFIX = {
@@ -49,7 +52,11 @@ class CacheService {
      * 内存缓存清理任务
      */
     _startMemoryCleanup() {
-        setInterval(() => {
+        if (this.cleanupTimer) {
+            return;
+        }
+
+        this.cleanupTimer = setInterval(() => {
             const now = Date.now();
             let count = 0;
             for (const [key, item] of this.memoryCache.entries()) {
@@ -62,6 +69,11 @@ class CacheService {
                 // console.log(`[Cache] 内存清理: 移除了 ${count} 个过期键`);
             }
         }, 60 * 1000);
+
+        // Jest / Node 退出时不应被缓存清理定时器阻塞
+        if (typeof this.cleanupTimer.unref === 'function') {
+            this.cleanupTimer.unref();
+        }
     }
 
     /**
@@ -72,7 +84,7 @@ class CacheService {
         if (!redis) {
             this.useMemory = true;
             this.isConnected = true;
-            console.log('✓ 缓存服务已就绪 (内存模式 - 未安装Redis)');
+            logInfo('CACHE', '缓存服务已就绪 (内存模式 - 未安装Redis)');
             return;
         }
 
@@ -80,7 +92,7 @@ class CacheService {
         if (process.env.USE_REDIS === 'false') {
             this.useMemory = true;
             this.isConnected = true;
-            console.log('✓ 缓存服务已就绪 (内存模式 - 配置禁用Redis)');
+            logInfo('CACHE', '缓存服务已就绪 (内存模式 - 配置禁用Redis)');
             return;
         }
 
@@ -97,7 +109,7 @@ class CacheService {
             retry_strategy: (options) => {
                 // 如果连接失败超过3次，降级为内存模式
                 if (options.attempt > 3) {
-                    console.log('⚠️ Redis 连接重试次数过多，自动降级为内存模式');
+                    logWarn('CACHE', 'Redis 连接重试次数过多，自动降级为内存模式');
                     this.useMemory = true;
                     this.isConnected = true;
                     if (this.client) {
@@ -115,7 +127,7 @@ class CacheService {
             this.client = redis.createClient({ ...defaultConfig, ...config });
             
             this.client.on('connect', () => {
-                console.log('✓ Redis 连接成功');
+                logInfo('CACHE', 'Redis 连接成功');
                 this.isConnected = true;
                 this.useMemory = false;
             });
@@ -123,7 +135,7 @@ class CacheService {
             this.client.on('error', (err) => {
                 // 仅在首次连接时报错，后续重试策略会处理
                 if (!this.isConnected && !this.useMemory) {
-                    console.error('✗ Redis 连接错误:', err.message);
+                    logError('CACHE', 'Redis 连接错误', { error: err.message });
                 }
             });
 
@@ -135,7 +147,7 @@ class CacheService {
             this.expireAsync = promisify(this.client.expire).bind(this.client);
 
         } catch (error) {
-            console.error('Redis 初始化异常，降级为内存模式:', error.message);
+            logError('CACHE', 'Redis 初始化异常，降级为内存模式', { error: error.message });
             this.useMemory = true;
             this.isConnected = true;
         }
@@ -172,7 +184,7 @@ class CacheService {
             const value = await this.getAsync(key);
             return value ? JSON.parse(value) : null;
         } catch (error) {
-            console.error(`Redis Get Error [${key}]:`, error.message);
+            logError('CACHE', `Redis Get Error [${key}]`, { error: error.message });
             return null;
         }
     }
@@ -200,7 +212,7 @@ class CacheService {
             }
             return true;
         } catch (error) {
-            console.error(`Redis Set Error [${key}]:`, error.message);
+            logError('CACHE', `Redis Set Error [${key}]`, { error: error.message });
             return false;
         }
     }
@@ -221,7 +233,7 @@ class CacheService {
             await this.delAsync(key);
             return true;
         } catch (error) {
-            console.error(`Redis Del Error [${key}]:`, error.message);
+            logError('CACHE', `Redis Del Error [${key}]`, { error: error.message });
             return false;
         }
     }
@@ -258,9 +270,33 @@ class CacheService {
             }
             return 0;
         } catch (error) {
-            console.error(`Redis Batch Del Error [${pattern}]:`, error.message);
+            logError('CACHE', `Redis Batch Del Error [${pattern}]`, { error: error.message });
             return 0;
         }
+    }
+
+    async getProduct(id) {
+        return this.getCache(this._makeKey(this.PREFIX.PRODUCT, id));
+    }
+
+    async cacheProduct(id, value, ttl = this.TTL.LONG) {
+        return this.setCache(this._makeKey(this.PREFIX.PRODUCT, id), value, ttl);
+    }
+
+    async getUser(id) {
+        return this.getCache(this._makeKey(this.PREFIX.USER, id));
+    }
+
+    async cacheUser(id, value, ttl = this.TTL.MEDIUM) {
+        return this.setCache(this._makeKey(this.PREFIX.USER, id), value, ttl);
+    }
+
+    async deleteProduct(id) {
+        return this.deleteCache(this._makeKey(this.PREFIX.PRODUCT, id));
+    }
+
+    async deleteUser(id) {
+        return this.deleteCache(this._makeKey(this.PREFIX.USER, id));
     }
 }
 

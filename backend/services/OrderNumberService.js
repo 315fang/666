@@ -4,15 +4,16 @@
  */
 
 const crypto = require('crypto');
+const { error: logError } = require('../utils/logger');
 
 class OrderNumberService {
     constructor() {
         // 机器ID（可从环境变量读取，用于分布式系统）
         this.machineId = process.env.MACHINE_ID || this._generateMachineId();
 
-        // 序列号计数器（每毫秒重置）
+        // 序列号计数器（与订单号编码粒度一致，按秒重置）
         this.sequence = 0;
-        this.lastTimestamp = 0;
+        this.lastTimeBucket = '';
 
         // 订单号前缀
         this.PREFIX = 'ORD';
@@ -38,21 +39,19 @@ class OrderNumberService {
      */
     generateOrderNumber() {
         const now = new Date();
-        const timestamp = now.getTime();
+        const timeBucket = this._formatSecondBucket(now);
 
-        // 如果在同一毫秒内，序列号递增
-        if (timestamp === this.lastTimestamp) {
+        // 订单号时间部分只编码到秒，因此序列号也必须按秒递增
+        if (timeBucket === this.lastTimeBucket) {
             this.sequence = (this.sequence + 1) % 10000; // 4位序列号，最大9999
 
             // 如果序列号溢出，等待下一毫秒
             if (this.sequence === 0) {
-                while (Date.now() <= timestamp) {
-                    // 空循环等待
-                }
+                return this.generateOrderNumber();
             }
         } else {
             this.sequence = 0;
-            this.lastTimestamp = timestamp;
+            this.lastTimeBucket = timeBucket;
         }
 
         // 格式化日期时间部分
@@ -84,18 +83,16 @@ class OrderNumberService {
      */
     generateShortOrderNumber() {
         const now = new Date();
-        const timestamp = now.getTime();
+        const timeBucket = this._formatSecondBucket(now);
 
-        if (timestamp === this.lastTimestamp) {
+        if (timeBucket === this.lastTimeBucket) {
             this.sequence = (this.sequence + 1) % 1000;
             if (this.sequence === 0) {
-                while (Date.now() <= timestamp) {
-                    // 等待下一毫秒
-                }
+                return this.generateShortOrderNumber();
             }
         } else {
             this.sequence = 0;
-            this.lastTimestamp = timestamp;
+            this.lastTimeBucket = timeBucket;
         }
 
         const year = now.getFullYear();
@@ -136,14 +133,19 @@ class OrderNumberService {
             const machineId = numPart.substring(14, 16);
             const sequence = numPart.substring(16, 20);
 
+            const ts = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+            if (isNaN(ts.getTime())) {
+                return null;
+            }
+
             return {
-                timestamp: new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`),
+                timestamp: ts.getTime(),
                 machineId,
-                sequence: parseInt(sequence, 10),
+                sequence: parseInt(sequence, 16) || 0,
                 dateString: `${year}-${month}-${day} ${hour}:${minute}:${second}`
             };
         } catch (error) {
-            console.error('解析订单号失败:', error.message);
+            logError('ORDER_NUMBER', '解析订单号失败', { error: error.message });
             return null;
         }
     }
@@ -170,7 +172,7 @@ class OrderNumberService {
 
         // 尝试解析
         const parsed = this.parseOrderNumber(orderNumber);
-        return parsed !== null && !isNaN(parsed.timestamp.getTime());
+        return parsed !== null && typeof parsed.timestamp === 'number' && !isNaN(parsed.timestamp);
     }
 
     /**
@@ -204,6 +206,16 @@ class OrderNumberService {
     generateWithdrawalNumber() {
         const orderNum = this.generateOrderNumber();
         return orderNum.replace(this.PREFIX, 'WDR');
+    }
+
+    _formatSecondBucket(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hour = String(date.getHours()).padStart(2, '0');
+        const minute = String(date.getMinutes()).padStart(2, '0');
+        const second = String(date.getSeconds()).padStart(2, '0');
+        return `${year}${month}${day}${hour}${minute}${second}`;
     }
 }
 

@@ -1,9 +1,12 @@
 const { get } = require('../../utils/request');
-const { ensurePrivacyAuthorization } = require('../../utils/privacy');
-const { getFuzzyCoordinates } = require('./utils/fuzzyLocation');
-
-/** 与数据库 id 不冲突；用于用户参考位置标记 */
-const USER_MARKER_ID = 900000001;
+const { loadStations } = require('./stationMapLoader');
+const {
+    USER_MARKER_ID,
+    onChooseMyLocationOnMap,
+    onMarkerTap,
+    onSelectStation,
+    showStationDetail
+} = require('./stationMapActions');
 
 /** 使用 include-points 框选市区时的兜底 scale（微信会自动缩放到包含各点） */
 const REGION_FIT_SCALE = 11;
@@ -97,10 +100,6 @@ function mergeUserMarker(stationMarkers, userLa, userLo, mode, displayName) {
         }
     });
     return markers;
-}
-
-function tryGetUserFuzzyLocation() {
-    return getFuzzyCoordinates();
 }
 
 function centroidOf(points) {
@@ -219,221 +218,34 @@ Page({
     noop() {},
 
     async loadStations() {
-        this.setData({ loading: true });
-        try {
-            const res = await get('/stations', { status: 'active' }, { showError: true });
-            const payload = res.data || {};
-            const list = payload.list || [];
-            const { stationMarkers, points } = buildStationMarkersFromList(list);
-
-            let userLa = null;
-            let userLo = null;
-            let userMarkerMode = null;
-            let regionObj = null;
-            let geoConfigured = false;
-
-            try {
-                await ensurePrivacyAuthorization({ showDeniedToast: false });
-                const loc = await tryGetUserFuzzyLocation();
-                if (loc) {
-                    userLa = loc.latitude;
-                    userLo = loc.longitude;
-                    userMarkerMode = 'fuzzy';
-                    try {
-                        const geo = await get(
-                            '/stations/region-from-point',
-                            { lat: userLa, lng: userLo },
-                            { showError: false }
-                        );
-                        const pack = geo && geo.data;
-                        regionObj = pack && pack.region ? pack.region : null;
-                        geoConfigured = !!(pack && pack.configured);
-                    } catch (_) {
-                        regionObj = null;
-                    }
-                }
-            } catch (_) {
-                /* 未同意隐私或未开定位 */
-            }
-
-            const markers = mergeUserMarker(stationMarkers, userLa, userLo, userMarkerMode, '');
-
-            let mapLat = 31.3;
-            let mapLng = 121.5;
-            let scale = CITY_LEVEL_SCALE;
-            let includePoints = [];
-            let regionBanner = '';
-
-            if (userLa != null && userLo != null) {
-                const vp = computeFuzzyCityViewport(list, userLa, userLo, regionObj);
-                mapLat = vp.mapLat;
-                mapLng = vp.mapLng;
-                scale = vp.scale;
-                includePoints = vp.includePoints;
-                const label =
-                    regionObj && (regionObj.city || regionObj.district)
-                        ? `${regionObj.city || ''}${regionObj.district || ''}`.trim()
-                        : '';
-                if (label) {
-                    regionBanner = `已按模糊定位框选「${label}」内门店；点右下角选精确位置查看最近店`;
-                } else if (geoConfigured === false) {
-                    regionBanner =
-                        '模糊定位已用于地图视野（服务端未配置腾讯地图 Key 时无法解析行政区）；请用选点查最近店';
-                } else {
-                    regionBanner = '已按模糊定位调整地图；点「选点查最近店」获取精确位置';
-                }
-            } else if (points.length === 1) {
-                mapLat = points[0].latitude;
-                mapLng = points[0].longitude;
-                scale = SINGLE_STATION_SCALE;
-            } else if (points.length > 1) {
-                const c = centroidOf(points);
-                mapLat = c.latitude;
-                mapLng = c.longitude;
-                scale = scaleForStationSpread(points, SINGLE_STATION_SCALE);
-            } else if (list.length > 0) {
-                wx.showToast({
-                    title: '站点未配置地图坐标，请查看下方地址',
-                    icon: 'none',
-                    duration: 2200
-                });
-            }
-
-            this.setData({
-                stations: list,
-                markers,
-                mapLat,
-                mapLng,
-                scale,
-                includePoints,
-                loading: false,
-                selectedId: null,
-                scrollIntoView: '',
-                userMarkerMode,
-                regionBanner
-            });
-        } catch (e) {
-            this.setData({ loading: false });
-        }
+        return loadStations(this, {
+            buildStationMarkersFromList,
+            mergeUserMarker,
+            computeFuzzyCityViewport,
+            centroidOf,
+            scaleForStationSpread
+        });
     },
 
     /** 地图选点：精确位置，计算同城最近门店并弹出详情 */
     onChooseMyLocationOnMap() {
-        wx.chooseLocation({
-            success: (res) => {
-                const list = this.data.stations || [];
-                const { stationMarkers } = buildStationMarkersFromList(list);
-                const markers = mergeUserMarker(
-                    stationMarkers,
-                    res.latitude,
-                    res.longitude,
-                    'choose',
-                    res.name || '已选位置'
-                );
-
-                let nearest = null;
-                let bestKm = Infinity;
-                list.forEach((s) => {
-                    const la = parseFloat(s.latitude);
-                    const lo = parseFloat(s.longitude);
-                    if (!Number.isFinite(la) || !Number.isFinite(lo)) return;
-                    const d = haversineKm(res.latitude, res.longitude, la, lo);
-                    if (d < bestKm) {
-                        bestKm = d;
-                        nearest = s;
-                    }
-                });
-
-                let includePoints = [];
-                let mapLat = res.latitude;
-                let mapLng = res.longitude;
-                let scale = CITY_LEVEL_SCALE;
-                let regionBanner = '已选精确位置';
-
-                if (nearest && Number.isFinite(parseFloat(nearest.latitude))) {
-                    const nla = parseFloat(nearest.latitude);
-                    const nlo = parseFloat(nearest.longitude);
-                    includePoints = [
-                        { latitude: res.latitude, longitude: res.longitude },
-                        { latitude: nla, longitude: nlo }
-                    ];
-                    const c = centroidOf(includePoints);
-                    mapLat = c.latitude;
-                    mapLng = c.longitude;
-                    scale = REGION_FIT_SCALE;
-                    regionBanner = `最近门店：${nearest.name}（直线约 ${bestKm.toFixed(1)} km）`;
-                }
-
-                this.setData({
-                    markers,
-                    mapLat,
-                    mapLng,
-                    scale,
-                    includePoints,
-                    userMarkerMode: 'choose',
-                    regionBanner
-                });
-
-                if (nearest) {
-                    wx.showToast({
-                        title: `最近：${nearest.name} · ${bestKm.toFixed(1)}km`,
-                        icon: 'none',
-                        duration: 2800
-                    });
-                    this.showStationDetail(nearest);
-                } else {
-                    wx.showToast({ title: '暂无带坐标门店', icon: 'none' });
-                }
-            },
-            fail: () => {
-                wx.showToast({ title: '未授权位置或已取消', icon: 'none' });
-            }
+        return onChooseMyLocationOnMap(this, {
+            buildStationMarkersFromList,
+            mergeUserMarker,
+            centroidOf
         });
     },
 
     onMarkerTap(e) {
-        const mid = e.detail.markerId;
-        if (mid === USER_MARKER_ID) {
-            const mode = this.data.userMarkerMode;
-            const msg =
-                mode === 'choose'
-                    ? '此为地图选点的精确位置'
-                    : '此为模糊定位（约市/区级）；请点「选点查最近店」';
-            wx.showToast({ title: msg, icon: 'none', duration: 2600 });
-            return;
-        }
-        const st = this.data.stations.find((x) => x.id === mid);
-        if (st) this.showStationDetail(st);
+        return onMarkerTap(this, e);
     },
 
     onSelectStation(e) {
-        const id = e.currentTarget.dataset.id;
-        const st = this.data.stations.find((x) => x.id === id);
-        if (st) this.showStationDetail(st);
+        return onSelectStation(this, e);
     },
 
     showStationDetail(st) {
-        const la = parseFloat(st.latitude);
-        const lo = parseFloat(st.longitude);
-        const hasCoord = Number.isFinite(la) && Number.isFinite(lo);
-        const patch = {
-            selectedStation: st,
-            selectedId: st.id,
-            scrollIntoView: `st-${st.id}`,
-            includePoints: []
-        };
-        if (hasCoord) {
-            patch.mapLat = la;
-            patch.mapLng = lo;
-            patch.scale = DETAIL_SCALE;
-        } else {
-            wx.showToast({
-                title: '该门店暂无坐标，地图无法定位',
-                icon: 'none',
-                duration: 2200
-            });
-        }
-        this.setData(patch);
+        return showStationDetail(this, st);
     },
 
     onCloseDetail() {

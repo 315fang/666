@@ -1,5 +1,6 @@
 const { Theme, QuickEntry, Banner, AppConfig } = require('../models');
 const { Op } = require('sequelize');
+const logger = require('../utils/logger');
 
 /**
  * 获取所有主题列表
@@ -16,7 +17,7 @@ const getThemes = async (req, res) => {
             data: themes
         });
     } catch (error) {
-        console.error('获取主题列表失败:', error);
+        logger.error('THEME', '获取主题列表失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '获取主题列表失败' });
     }
 };
@@ -48,7 +49,7 @@ const getActiveTheme = async (req, res) => {
             data: theme
         });
     } catch (error) {
-        console.error('获取当前主题失败:', error);
+        logger.error('THEME', '获取当前主题失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '获取当前主题失败' });
     }
 };
@@ -91,7 +92,7 @@ const switchTheme = async (req, res) => {
             data: targetTheme
         });
     } catch (error) {
-        console.error('切换主题失败:', error);
+        logger.error('THEME', '切换主题失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '切换主题失败' });
     }
 };
@@ -149,9 +150,9 @@ async function applyThemeConfig(theme) {
             }
         }
 
-        console.log(`主题 ${theme.theme_name} 配置已应用`);
+        logger.info('THEME', `主题 ${theme.theme_name} 配置已应用`);
     } catch (error) {
-        console.error('应用主题配置失败:', error);
+        logger.error('THEME_CTRL', '应用主题配置失败', { error: error?.message || error });
         throw error;
     }
 }
@@ -171,7 +172,7 @@ const createTheme = async (req, res) => {
             data: theme
         });
     } catch (error) {
-        console.error('创建主题失败:', error);
+        logger.error('THEME', '创建主题失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '创建主题失败' });
     }
 };
@@ -197,7 +198,7 @@ const updateTheme = async (req, res) => {
             data: theme
         });
     } catch (error) {
-        console.error('更新主题失败:', error);
+        logger.error('THEME', '更新主题失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '更新主题失败' });
     }
 };
@@ -225,7 +226,7 @@ const deleteTheme = async (req, res) => {
             message: '删除主题成功'
         });
     } catch (error) {
-        console.error('删除主题失败:', error);
+        logger.error('THEME', '删除主题失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '删除主题失败' });
     }
 };
@@ -249,7 +250,7 @@ const autoSwitchTheme = async () => {
         });
 
         if (theme && !theme.is_active) {
-            console.log(`自动切换到主题: ${theme.theme_name}`);
+            logger.info('THEME', `自动切换到主题: ${theme.theme_name}`);
 
             // 取消所有主题的激活状态
             await Theme.update(
@@ -262,7 +263,7 @@ const autoSwitchTheme = async () => {
             await applyThemeConfig(theme);
         }
     } catch (error) {
-        console.error('自动切换主题失败:', error);
+        logger.error('THEME_CTRL', '自动切换主题失败', { error: error?.message || error });
     }
 };
 

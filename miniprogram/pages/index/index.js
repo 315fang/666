@@ -1,27 +1,22 @@
 const { get, post } = require('../../utils/request');
-const { cachedGet } = require('../../utils/requestCache');
-const { parseImages, processProduct, genHeatLabel } = require('../../utils/dataFormatter');
-const { isDevelopment, getApiBaseUrl } = require('../../config/env');
+const { parseImages } = require('../../utils/dataFormatter');
+const { isDevelopment } = require('../../config/env');
 const navigator = require('../../utils/navigator');
 const { syncPageTabBar, restorePageTabBar } = require('../../utils/tabBarHelper');
 const { fetchUserProfile, truncateNickname, calcGrowthPercent } = require('../../utils/userProfile');
-const { getConfigSection } = require('../../utils/miniProgramConfig');
 const { consumePendingRegisterPrompt } = require('../../utils/lightPrompt');
 const { fetchPointSummary, checkinPoints } = require('../../utils/points');
+const {
+    loadData: loadHomeData,
+    loadFeaturedProducts: loadHomeFeaturedProducts,
+    loadPosters: loadHomePosters,
+    loadBubbles: loadHomeBubbles,
+    applyHomeConfig,
+    normalizeAssetUrl
+} = require('./indexHomeLoader');
 const app = getApp();
 
 const INDEX_USER_INFO_TTL = 15 * 1000;
-
-function normalizeAssetUrl(url = '') {
-    const raw = String(url || '');
-    if (!raw) return '';
-    if (/^https?:\/\//i.test(raw)) return raw;
-    if (raw.startsWith('/')) {
-        const apiBase = getApiBaseUrl().replace(/\/api\/?$/, '');
-        return `${apiBase}${raw}`;
-    }
-    return raw;
-}
 
 Page({
     data: {
@@ -67,23 +62,7 @@ Page({
         });
 
         // 小程序码 scene / 分享链接 invite：写入待绑定会员码，登录时由 app.wxLogin 带给后端
-        try {
-            if (options && options.invite) {
-                wx.setStorageSync('pending_invite_code', String(options.invite).trim().toUpperCase());
-            }
-            if (options && options.scene != null && options.scene !== '') {
-                let raw = options.scene;
-                if (typeof raw === 'number') raw = String(raw);
-                try {
-                    raw = decodeURIComponent(raw);
-                } catch (e) { /* 保持原样 */ }
-                let code = '';
-                const m = String(raw).match(/^i=([23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8})$/i);
-                if (m) code = m[1];
-                else if (/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/i.test(String(raw))) code = String(raw);
-                if (code) wx.setStorageSync('pending_invite_code', code.toUpperCase());
-            }
-        } catch (e) { /* ignore */ }
+        app._captureInviteFromLaunch({ query: options || {} });
 
         if (app.globalData.homeDataPromise) {
             app.globalData.homeDataPromise.then((data) => {
@@ -136,157 +115,19 @@ Page({
     },
 
     async loadData(forceRefresh = false) {
-        this.setData({ loading: true });
-        try {
-            let data = null;
-
-            if (!forceRefresh) {
-                data = app.globalData.homePageData;
-                if (!data) {
-                    const cached = wx.getStorageSync('home_config_cache');
-                    if (cached && cached.expireAt > Date.now()) {
-                        data = cached.data;
-                        app.globalData.homePageData = data;
-                    }
-                }
-                if (!data && app.globalData.homeDataPromise) {
-                    data = await app.globalData.homeDataPromise.catch(() => null);
-                }
-            }
-
-            if (!data || Object.keys(data).length === 0) {
-                const pageRes = await get('/page-content/home').catch(() => null);
-                const unifiedPayload = pageRes?.data?.resources?.legacy_payload || null;
-                if (unifiedPayload && Object.keys(unifiedPayload).length) {
-                    data = unifiedPayload;
-                    this.homeResources = pageRes?.data?.resources || null;
-                    this.setData({ pageLayout: pageRes?.data?.layout || null });
-                } else {
-                    const res = await get('/homepage-config').catch(() => ({ data: {} }));
-                    data = res.data || {};
-                }
-            }
-
-            this._applyHomeConfig(data);
-
-            this.loadFeaturedProducts();
-            this.loadPosters();
-            this.loadBubbles();
-        } catch (err) {
-            console.error('[Index] 获取首页配置失败:', err);
-            this.setData({ loading: false });
-        }
+        return loadHomeData(this, forceRefresh);
     },
 
     async loadFeaturedProducts() {
-        try {
-            const layoutBoardProducts = this.homeResources?.boards?.['home.featuredProducts']?.products;
-            let list = Array.isArray(layoutBoardProducts) ? layoutBoardProducts : [];
-
-            // 优先读取首页精选商品榜；若 page-content 未返回则回退 boards 接口
-            let boardProducts = list;
-            if (!boardProducts.length) {
-                const boardRes = await cachedGet(get, '/boards/map', {
-                    scene: 'home',
-                    keys: 'home.featuredProducts'
-                }, {
-                    cacheTTL: 2 * 60 * 1000,
-                    showError: false,
-                    maxRetries: 0,
-                    timeout: 10000
-                }).catch(() => null);
-                boardProducts = boardRes?.data?.['home.featuredProducts']?.products;
-            }
-            list = Array.isArray(boardProducts) ? boardProducts : [];
-
-            if (!list.length) {
-                const res = await cachedGet(get, '/products', { page: 1, limit: 6, sort: 'hot' }, {
-                    cacheTTL: 2 * 60 * 1000,
-                    showError: false,
-                    maxRetries: 0,
-                    timeout: 10000
-                });
-                const listRaw = res?.list || res?.data?.list || (Array.isArray(res?.data) ? res.data : []);
-                list = Array.isArray(listRaw) ? listRaw : [];
-            }
-
-            const roleLevel = app.globalData.userInfo?.role_level || 0;
-            const products = list.map(p => {
-                const processed = processProduct(p, roleLevel);
-                const discountLabel = (p.market_price && p.retail_price && parseFloat(p.market_price) > parseFloat(p.retail_price))
-                    ? (Math.round(parseFloat(p.retail_price) / parseFloat(p.market_price) * 10)) + '折'
-                    : '';
-                const heatLabel = genHeatLabel(p);
-                return { ...processed, discount_label: discountLabel, heat_label: heatLabel };
-            });
-            this.setData({ featuredProducts: products });
-        } catch (err) {
-            console.error('[Index] 加载精选商品失败:', err);
-        }
+        return loadHomeFeaturedProducts(this);
     },
 
     async loadPosters() {
-        const mapBanners = (list) => (list || []).map(b => ({
-            id: b.id,
-            image: normalizeAssetUrl(b.image_url),
-            title: b.title || '',
-            subtitle: b.subtitle || '',
-            link_type: b.link_type || 'none',
-            link_value: b.link_value || ''
-        }));
-        try {
-            const layoutBanners = this.homeResources?.banners || null;
-            if (layoutBanners) {
-                this.setData({
-                    midPosters: mapBanners(layoutBanners.home_mid || []),
-                    bottomPosters: mapBanners(layoutBanners.home_bottom || [])
-                });
-                return;
-            }
-
-            const [midRes, bottomRes] = await Promise.all([
-                cachedGet(get, '/banners', { position: 'home_mid' }, {
-                    cacheTTL: 5 * 60 * 1000,
-                    showError: false,
-                    maxRetries: 0,
-                    timeout: 10000
-                }).catch(() => ({ data: [] })),
-                cachedGet(get, '/banners', { position: 'home_bottom' }, {
-                    cacheTTL: 5 * 60 * 1000,
-                    showError: false,
-                    maxRetries: 0,
-                    timeout: 10000
-                }).catch(() => ({ data: [] }))
-            ]);
-            this.setData({
-                midPosters: mapBanners(midRes?.data || midRes?.list || []),
-                bottomPosters: mapBanners(bottomRes?.data || bottomRes?.list || [])
-            });
-        } catch (e) {
-            console.log('[Index] 海报加载失败，不影响主页渲染');
-        }
+        return loadHomePosters(this);
     },
 
     async loadBubbles() {
-        try {
-            const res = await cachedGet(get, '/activity/bubbles', { limit: 10 }, {
-                cacheTTL: 60 * 1000,
-                showError: false,
-                maxRetries: 0,
-                timeout: 10000
-            });
-            const list = res?.data || [];
-            if (!Array.isArray(list) || list.length === 0) return;
-            const bubbles = list.map(b => {
-                // 优先使用后端格式化好的 text，降级用本地拼接
-                if (b.text) return b.text;
-                const action = { order: '购买了', group_buy: '拼团了', slash: '砍价了', lottery: '抽中了' }[b.type] || '购买了';
-                return `${b.nickname} ${action} ${b.product_name}`;
-            });
-            this.setData({ bubbles, currentBubble: bubbles[0] });
-            this._bubbleIdx = 0;
-            this._startBubbleRotation();
-        } catch (_) {}
+        return loadHomeBubbles(this);
     },
 
     _startBubbleRotation() {
@@ -341,58 +182,7 @@ Page({
     },
 
     _applyHomeConfig(data) {
-        if (!data) return;
-        app.globalData.homePageData = data;
-        const brandConfig = getConfigSection('brand_config');
-
-        const bannerList = Array.isArray(data.banners)
-            ? data.banners
-            : (Array.isArray(data.banners?.home) ? data.banners.home : []);
-        const dbBanners = bannerList;
-
-        // Banner 兜底：只要有文字配置就能渲染（图走渐变 fallback），不再依赖 mock 占位图
-        const defaultBrandBanners = [
-            {
-                id: '__default_1',
-                image: '',
-                title: '品牌甄选',
-                subtitle: '发现值得信赖的好物',
-                link_type: 'none',
-                link_value: ''
-            }
-        ];
-        const heroBanners = dbBanners.length > 0
-            ? dbBanners.map((b) => ({
-                id: b.id,
-                image: normalizeAssetUrl(b.image_url || ''),
-                title: b.title || '',
-                subtitle: b.subtitle || '',
-                link_type: b.link_type || 'none',
-                link_value: b.link_value || ''
-            }))
-            : defaultBrandBanners;
-
-        const configs = data.configs || {};
-        const showBrandLogo = configs.show_brand_logo !== 'false' && configs.show_brand_logo !== false;
-        this.setData({
-            homeConfigs: configs,
-            showBrandLogo: showBrandLogo,
-            brandLogo: configs.brand_logo || '',
-            navBrandTitle: configs.nav_brand_title || brandConfig.nav_brand_title || '问兰镜像',
-            navBrandSub: configs.nav_brand_sub || brandConfig.nav_brand_sub || '品牌甄选',
-            latestActivity: this._normalizeLatestActivity(data.latestActivity || {}),
-            heroBanners,
-            loading: false
-        });
-
-        // 弹窗广告
-        const popupAd = data.popupAd || {};
-        if (popupAd.enabled && popupAd.image_url) {
-            this._checkAndShowPopupAd({
-                ...popupAd,
-                image_url: normalizeAssetUrl(popupAd.image_url)
-            });
-        }
+        return applyHomeConfig(this, data);
     },
 
     async loadUserInfo(forceRefresh = false) {

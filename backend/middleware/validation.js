@@ -150,6 +150,21 @@ const schemas = {
             required: false,
             type: 'string',
             maxLength: 50
+        },
+        invite_code: {
+            required: false,
+            type: 'string',
+            maxLength: 32
+        },
+        member_no: {
+            required: false,
+            type: 'string',
+            maxLength: 32
+        },
+        member_code: {
+            required: false,
+            type: 'string',
+            maxLength: 32
         }
     },
 
@@ -158,7 +173,16 @@ const schemas = {
         items: {
             required: true,
             type: 'array',
-            minItems: 1
+            minItems: 1,
+            custom(arr) {
+                for (let i = 0; i < arr.length; i++) {
+                    const it = arr[i];
+                    if (!it || typeof it !== 'object') return `items[${i}] 必须是对象`;
+                    if (!Number.isInteger(it.product_id) || it.product_id < 1) return `items[${i}].product_id 无效`;
+                    if (!Number.isInteger(it.quantity) || it.quantity < 1) return `items[${i}].quantity 无效`;
+                }
+                return true;
+            }
         },
         address_id: {
             required: true,
@@ -173,9 +197,44 @@ const schemas = {
         }
     },
 
+    // Product schemas (admin)
+    createProduct: {
+        name: { required: true, type: 'string', minLength: 1, maxLength: 200 },
+        retail_price: { required: true, type: 'number', min: 0.01 },
+        stock: { required: true, type: 'number', integer: true, min: 0 }
+    },
+
+    // Banner schemas (admin)
+    createBanner: {
+        image_url: { required: true, type: 'string', minLength: 1 },
+        link_type: { required: true, type: 'string', enum: ['none', 'product', 'activity', 'group_buy', 'slash', 'lottery', 'page', 'url'] },
+        position: { required: true, type: 'string', minLength: 1 }
+    },
+
+    // Refund schemas
+    applyRefund: {
+        order_id: { required: true, type: 'number', integer: true, min: 1 },
+        type: { required: true, type: 'string', enum: ['refund_only', 'return_refund'] },
+        reason: { required: true, type: 'string', minLength: 1, maxLength: 500 }
+    },
+
+    // Withdrawal schemas
+    applyWithdrawal: {
+        amount: { required: true, type: 'number', min: 1 }
+    },
+
+    // Group buy schemas (admin)
+    createGroupBuy: {
+        product_id: { required: true, type: 'number', integer: true, min: 1 },
+        group_price: { required: true, type: 'number', min: 0.01 },
+        original_price: { required: true, type: 'number', min: 0.01 },
+        min_members: { required: true, type: 'number', integer: true, min: 2 },
+        expire_hours: { required: true, type: 'number', min: 1 }
+    },
+
     // Address schemas
     createAddress: {
-        name: {
+        receiver_name: {
             required: true,
             type: 'string',
             minLength: 1,

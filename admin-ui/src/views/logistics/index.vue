@@ -47,7 +47,7 @@
           <el-statistic title="已发货总数" :value="stats.total" />
         </el-col>
         <el-col :span="6">
-          <el-statistic title="运输中" :value="stats.in_transit">
+          <el-statistic :title="logisticsMode === 'manual' ? '手工发货' : '运输中'" :value="stats.in_transit">
             <template #suffix>
               <el-icon color="#409eff"><Van /></el-icon>
             </template>
@@ -83,7 +83,7 @@
         </el-table-column>
         <el-table-column label="收件人" width="110">
           <template #default="{ row }">
-            <div>{{ row.address?.name || row.buyer?.nickname || '-' }}</div>
+            <div>{{ row.address?.receiver_name || row.address?.name || row.buyer?.nickname || '-' }}</div>
             <div style="font-size:12px; color:#909399;">{{ row.address?.phone }}</div>
           </template>
         </el-table-column>
@@ -136,7 +136,7 @@
               @click="handleViewDetail(row)"
             >查看物流</el-button>
             <el-button
-              v-if="row.tracking_no && row._logistics"
+              v-if="row.tracking_no && row._logistics && logisticsMode !== 'manual'"
               size="small"
               link
               :loading="row._refreshing"
@@ -150,7 +150,7 @@
       <div class="pagination-wrap">
         <el-pagination
           v-model:current-page="pagination.page"
-          v-model:page-size="pagination.pageSize"
+          v-model:page-size="pagination.limit"
           :total="pagination.total"
           :page-sizes="[20, 50, 100]"
           layout="total, sizes, prev, pager, next"
@@ -226,7 +226,8 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getOrders, getAdminOrderLogistics, refreshAdminLogistics } from '@/api/index'
+import { getOrders, getAdminOrderLogistics, refreshAdminLogistics, getMiniProgramConfig } from '@/api/index'
+import { usePagination } from '@/composables/usePagination'
 
 // ── 搜索表单 ──────────────────────────────────────
 const searchForm = reactive({
@@ -236,11 +237,12 @@ const searchForm = reactive({
 })
 
 // ── 分页 ──────────────────────────────────────────
-const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
+const { pagination, resetPage, applyResponse } = usePagination({ defaultLimit: 20 })
 
 // ── 表格数据 ──────────────────────────────────────
 const loading = ref(false)
 const tableData = ref([])
+const logisticsMode = ref('third_party')
 
 // ── 统计 ──────────────────────────────────────────
 const stats = reactive({ total: 0, in_transit: 0, delivering: 0, delivered: 0 })
@@ -258,18 +260,29 @@ async function fetchOrders() {
     const params = {
       status: 'shipped',
       page: pagination.page,
-      page_size: pagination.pageSize
+      limit: pagination.limit
     }
     if (searchForm.keyword) params.keyword = searchForm.keyword
     if (searchForm.company) params.company = searchForm.company
 
     const res = await getOrders(params)
-    if (res.code === 0) {
-      tableData.value = (res.data.list || []).map(o => ({ ...o, _logistics: null, _refreshing: false }))
-      pagination.total = res.data.total || 0
-      stats.total = res.data.total || 0
+    tableData.value = (res?.list || res?.data?.list || []).map(o => ({ ...o, _logistics: null, _refreshing: false }))
+    applyResponse(res)
+    stats.total = pagination.total
 
-      // 后台批量查一下物流状态（只查运单号存在的）
+    // 后台批量查一下物流状态（只查运单号存在的）
+    if (logisticsMode.value === 'manual') {
+      tableData.value.forEach((order) => {
+        if (order.tracking_no) {
+          order._logistics = {
+            status: 'manual',
+            statusText: '手工发货',
+            traces: order.shipped_at ? [{ time: formatDate(order.shipped_at), desc: '当前订单走手工发货模式' }] : []
+          }
+        }
+      })
+      updateStats()
+    } else {
       await batchQueryLogistics()
     }
   } catch (e) {
@@ -281,6 +294,7 @@ async function fetchOrders() {
 
 // ── 批量查物流（并发，最多10个） ───────────────────
 async function batchQueryLogistics() {
+  if (logisticsMode.value === 'manual') return
   const withTracking = tableData.value.filter(o => o.tracking_no)
   if (!withTracking.length) return
 
@@ -291,8 +305,9 @@ async function batchQueryLogistics() {
 
   results.forEach((result, idx) => {
     const order = chunk[idx]
-    if (result.status === 'fulfilled' && result.value?.code === 0) {
-      const logistics = result.value.data
+    if (result.status === 'fulfilled') {
+      const logistics = result.value?.data || result.value
+      if (!logistics) return
       // 找到 tableData 中的对应项更新
       const found = tableData.value.find(o => o.id === order.id)
       if (found) {
@@ -311,14 +326,23 @@ async function batchQueryLogistics() {
 
 function updateStats() {
   const withLogistics = tableData.value.filter(o => o._logistics)
-  stats.in_transit = withLogistics.filter(o => o._logistics.status === 'in_transit').length
+  stats.in_transit = withLogistics.filter(o => ['in_transit', 'manual'].includes(o._logistics.status)).length
   stats.delivering = withLogistics.filter(o => o._logistics.status === 'delivering').length
   stats.delivered = withLogistics.filter(o => o._logistics.status === 'delivered').length
 }
 
+async function fetchMiniProgramConfigData() {
+  try {
+    const data = await getMiniProgramConfig()
+    logisticsMode.value = data?.logistics_config?.shipping_mode || 'third_party'
+  } catch (e) {
+    logisticsMode.value = 'third_party'
+  }
+}
+
 // ── 搜索 / 重置 ────────────────────────────────────
 function handleSearch() {
-  pagination.page = 1
+  resetPage()
   fetchOrders()
 }
 
@@ -326,7 +350,7 @@ function handleReset() {
   searchForm.keyword = ''
   searchForm.company = ''
   searchForm.logistics_status = ''
-  pagination.page = 1
+  resetPage()
   fetchOrders()
 }
 
@@ -352,21 +376,30 @@ async function handleViewDetail(row) {
 async function loadDrawerLogistics(order, forceRefresh = false) {
   drawerLoading.value = true
   try {
+    if (logisticsMode.value === 'manual') {
+      drawerLogistics.value = {
+        status: 'manual',
+        statusText: '手工发货',
+        traces: order.shipped_at ? [{ time: formatDate(order.shipped_at), desc: '当前订单走手工发货模式，可查看单号和发货时间' }] : []
+      }
+      return
+    }
     let res
     if (forceRefresh) {
       res = await refreshAdminLogistics(order.id)
     } else {
       res = await getAdminOrderLogistics(order.id)
     }
-    if (res.code === 0) {
-      drawerLogistics.value = res.data
-      // 同步到表格行
-      const found = tableData.value.find(o => o.id === order.id)
-      if (found) found._logistics = res.data
-      if (forceRefresh) ElMessage.success('物流信息已刷新')
-    } else {
-      ElMessage.warning(res.message || '物流查询失败')
+    const data = res?.data || res
+    if (!data) {
+      ElMessage.warning('物流查询失败')
+      return
     }
+    drawerLogistics.value = data
+    // 同步到表格行
+    const found = tableData.value.find(o => o.id === order.id)
+    if (found) found._logistics = data
+    if (forceRefresh) ElMessage.success('物流信息已刷新')
   } catch (e) {
     ElMessage.error('物流查询异常')
   } finally {
@@ -376,15 +409,16 @@ async function loadDrawerLogistics(order, forceRefresh = false) {
 
 // ── 表格行刷新 ─────────────────────────────────────
 async function handleRefresh(row) {
+  if (logisticsMode.value === 'manual') {
+    return ElMessage.info('手工发货模式无需刷新轨迹')
+  }
   row._refreshing = true
   try {
     const res = await refreshAdminLogistics(row.id)
-    if (res.code === 0) {
-      row._logistics = res.data
-      ElMessage.success('已刷新')
-    } else {
-      ElMessage.warning(res.message || '刷新失败')
-    }
+    const data = res?.data || res
+    if (!data) return ElMessage.warning('刷新失败')
+    row._logistics = data
+    ElMessage.success('已刷新')
   } catch (e) {
     ElMessage.error('刷新异常')
   } finally {
@@ -412,7 +446,10 @@ function formatDate(dateStr) {
   })
 }
 
-onMounted(() => { fetchOrders() })
+onMounted(async () => {
+  await fetchMiniProgramConfigData()
+  fetchOrders()
+})
 </script>
 
 <style scoped>

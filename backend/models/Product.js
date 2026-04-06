@@ -26,7 +26,13 @@ const Product = sequelize.define('Product', {
         comment: '商品图片URLs（JSON数组）',
         get() {
             const rawValue = this.getDataValue('images');
-            return rawValue ? JSON.parse(rawValue) : [];
+            if (rawValue == null || rawValue === '') return [];
+            try {
+                const v = JSON.parse(rawValue);
+                return Array.isArray(v) ? v : [];
+            } catch (_) {
+                return [];
+            }
         },
         set(value) {
             this.setDataValue('images', JSON.stringify(value));
@@ -37,7 +43,13 @@ const Product = sequelize.define('Product', {
         comment: '商品详情图URLs（JSON数组，长图拼接展示）',
         get() {
             const rawValue = this.getDataValue('detail_images');
-            return rawValue ? JSON.parse(rawValue) : [];
+            if (rawValue == null || rawValue === '') return [];
+            try {
+                const v = JSON.parse(rawValue);
+                return Array.isArray(v) ? v : [];
+            } catch (_) {
+                return [];
+            }
         },
         set(value) {
             this.setDataValue('detail_images', value ? JSON.stringify(value) : null);
@@ -98,6 +110,16 @@ const Product = sequelize.define('Product', {
         allowNull: true,
         comment: '二级分销固定金额 (e.g. 5.00), 优先于比例'
     },
+    commission_rate_3: {
+        type: DataTypes.DECIMAL(4, 2),
+        allowNull: true,
+        comment: '三级分销比例 (e.g. 0.05), 空则用默认'
+    },
+    commission_amount_3: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        comment: '三级分销固定金额 (e.g. 3.00), 优先于比例'
+    },
     ai_review_status: {
         type: DataTypes.ENUM('pending', 'approved', 'rejected'),
         defaultValue: 'pending',
@@ -148,6 +170,47 @@ const Product = sequelize.define('Product', {
         type: DataTypes.DATE,
         allowNull: true,
         comment: '热度最近刷新时间'
+    },
+    market_price: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: null,
+        comment: '市场价/原价（划线价）'
+    },
+    discount_exempt: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        comment: '是否免于复购折扣（爆品/折扣商品设为true，下单时不叠加等级折扣）'
+    },
+    product_tag: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        defaultValue: 'normal',
+        comment: '商品标签: normal=普通, hot=爆品, discount=折扣品, new=新品'
+    },
+    supports_pickup: {
+        type: DataTypes.TINYINT,
+        allowNull: false,
+        defaultValue: 0,
+        comment: '是否支持到店自提 0否 1是'
+    },
+    visible_in_mall: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+        comment: '是否在商城列表/搜索/热门等展示；false 时仍可供限时活动、下单详情等使用'
+    },
+    enable_coupon: {
+        type: DataTypes.TINYINT,
+        allowNull: false,
+        defaultValue: 1,
+        comment: '是否允许使用优惠券'
+    },
+    enable_group_buy: {
+        type: DataTypes.TINYINT,
+        allowNull: false,
+        defaultValue: 0,
+        comment: '是否参与拼团（需在拼团活动中关联）'
     }
 }, {
     tableName: 'products',

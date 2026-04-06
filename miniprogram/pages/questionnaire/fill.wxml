@@ -1,40 +1,34 @@
-<!-- 邀请问卷填写页 -->
 <view class="questionnaire-page">
-
-    <!-- 加载中 -->
     <view wx:if="{{loading}}" class="loading-container">
-        <view class="loading-spinner"></view>
-        <text class="loading-text">加载中...</text>
+        <view class="loading-card">
+            <view class="loading-spinner"></view>
+            <text class="loading-title">问卷加载中</text>
+            <text class="loading-desc">正在同步本次邀请所需的信息。</text>
+        </view>
     </view>
 
-    <!-- 提交成功状态 -->
     <view wx:elif="{{submitted}}" class="success-container">
-        <view class="success-icon-box">
-            <image class="success-icon" src="/assets/icons/check.svg" mode="aspectFit"/>
-        </view>
-        <text class="success-title">
-            {{submitResult.bound_team ? '恭喜！已成功加入团队' : '问卷已提交'}}
-        </text>
-        <text class="success-desc">
-            {{submitResult.bound_team ? '您已成功加入邀请人的团队，现在可以开始赚取收益啦！' : (submitResult.already_has_team ? '您已在其他团队中，问卷信息已记录。' : '感谢您的填写！')}}
-        </text>
-        <view class="success-actions">
-            <button class="btn-primary" bindtap="goHome">浏览商品</button>
-            <button wx:if="{{submitResult.bound_team}}" class="btn-secondary" bindtap="goTeam">查看我的团队</button>
+        <view class="success-card">
+            <text class="success-eyebrow">提交完成</text>
+            <text class="success-title">{{submitResult.bound_team ? '已成功加入团队' : '问卷已提交'}}</text>
+            <text class="success-desc">
+                {{submitResult.bound_team ? '资料已经提交成功，后续团队关系会自动生效。' : (submitResult.already_has_team ? '您的资料已记录，但当前已归属其他团队。' : '感谢填写，我们会继续处理您的资料。')}}
+            </text>
+            <view class="success-actions">
+                <button class="btn-primary" bindtap="goHome">浏览商品</button>
+                <button wx:if="{{submitResult.bound_team}}" class="btn-secondary" bindtap="goTeam">查看我的团队</button>
+            </view>
         </view>
     </view>
 
-    <!-- 问卷表单 -->
-    <view wx:elif="{{questionnaire}}" class="form-container">
-        <!-- 头部 -->
-        <view class="form-header">
-            <view class="form-header-deco"></view>
-            <text class="form-title">{{questionnaire.title}}</text>
-            <text class="form-desc" wx:if="{{questionnaire.description}}">{{questionnaire.description}}</text>
+    <view wx:elif="{{questionnaire}}" class="form-shell">
+        <view class="hero-card">
+            <text class="hero-eyebrow">团队邀请问卷</text>
+            <text class="hero-title">{{questionnaire.title}}</text>
+            <text class="hero-desc" wx:if="{{questionnaire.description}}">{{questionnaire.description}}</text>
         </view>
 
-        <!-- 字段列表 -->
-        <view class="form-body">
+        <view class="form-container">
             <block wx:for="{{questionnaire.fields}}" wx:key="key">
                 <view class="field-group">
                     <view class="field-label">
@@ -42,83 +36,46 @@
                         <text wx:if="{{item.required}}" class="label-required">*</text>
                     </view>
 
-                    <!-- 文本框 -->
                     <block wx:if="{{item.type === 'text'}}">
-                        <input
-                            class="field-input"
-                            placeholder="{{item.placeholder || '请输入'}}"
-                            value="{{answers[item.key]}}"
-                            data-key="{{item.key}}"
-                            bindinput="onInput"
-                        />
+                        <input class="field-input" placeholder="{{item.placeholder || '请输入'}}" value="{{answers[item.key]}}" data-key="{{item.key}}" bindinput="onInput"/>
                     </block>
 
-                    <!-- 手机号 -->
                     <block wx:elif="{{item.type === 'phone'}}">
-                        <input
-                            class="field-input"
-                            type="number"
-                            maxlength="11"
-                            placeholder="{{item.placeholder || '请输入手机号'}}"
-                            value="{{answers[item.key]}}"
-                            data-key="{{item.key}}"
-                            bindinput="onInput"
-                        />
+                        <input class="field-input" type="number" maxlength="11" placeholder="{{item.placeholder || '请输入手机号'}}" value="{{answers[item.key]}}" data-key="{{item.key}}" bindinput="onInput"/>
                     </block>
 
-                    <!-- 多行文本 -->
                     <block wx:elif="{{item.type === 'textarea'}}">
-                        <textarea
-                            class="field-textarea"
-                            placeholder="{{item.placeholder || '请输入'}}"
-                            value="{{answers[item.key]}}"
-                            data-key="{{item.key}}"
-                            bindinput="onInput"
-                            maxlength="200"
-                            auto-height
-                        />
+                        <textarea class="field-textarea" placeholder="{{item.placeholder || '请输入'}}" value="{{answers[item.key]}}" data-key="{{item.key}}" bindinput="onInput" maxlength="200" auto-height/>
                     </block>
 
                     <block wx:elif="{{item.type === 'region'}}">
-                        <picker
-                            mode="region"
-                            value="{{regionValues[item.key]}}"
-                            data-key="{{item.key}}"
-                            bindchange="onRegionChange"
-                        >
+                        <picker mode="region" value="{{regionValues[item.key]}}" data-key="{{item.key}}" bindchange="onRegionChange">
                             <view class="field-picker {{answers[item.key] ? '' : 'placeholder'}}">
                                 {{answers[item.key] || item.placeholder || '请选择地区'}}
                             </view>
                         </picker>
                     </block>
 
-                    <!-- 单选 -->
                     <block wx:elif="{{item.type === 'radio'}}">
                         <radio-group data-key="{{item.key}}" bindchange="onRadioChange" class="radio-group">
                             <label wx:for="{{item.options}}" wx:for-item="option" wx:key="*this" class="radio-label">
-                                <radio value="{{option}}" checked="{{answers[item.key] === option}}" color="#667eea"/>
+                                <radio value="{{option}}" checked="{{answers[item.key] === option}}" color="#b97a35"/>
                                 <text class="radio-text">{{option}}</text>
                             </label>
                         </radio-group>
                     </block>
 
-                    <!-- 多选 -->
                     <block wx:elif="{{item.type === 'checkbox'}}">
                         <checkbox-group data-key="{{item.key}}" bindchange="onCheckboxChange" class="checkbox-group">
                             <label wx:for="{{item.options}}" wx:for-item="option" wx:key="*this" class="checkbox-label">
-                                <checkbox value="{{option}}" color="#667eea"/>
+                                <checkbox value="{{option}}" color="#b97a35"/>
                                 <text class="checkbox-text">{{option}}</text>
                             </label>
                         </checkbox-group>
                     </block>
 
-                    <!-- 下拉选择 -->
                     <block wx:elif="{{item.type === 'select'}}">
-                        <picker
-                            range="{{item.options}}"
-                            data-key="{{item.key}}"
-                            bindchange="onSelectChange"
-                        >
+                        <picker range="{{item.options}}" data-key="{{item.key}}" bindchange="onSelectChange">
                             <view class="field-picker {{answers[item.key] ? '' : 'placeholder'}}">
                                 {{answers[item.key] || item.placeholder || '请选择'}}
                             </view>
@@ -128,30 +85,25 @@
             </block>
         </view>
 
-        <!-- 提交区域 -->
-        <view class="form-footer">
-            <!-- 隐私协议 -->
+        <view class="footer-card">
             <view class="privacy-row" bindtap="onPrivacyChange">
                 <view class="privacy-checkbox {{agreedPrivacy ? 'checked' : ''}}"></view>
-                <text class="privacy-text">我已阅读并同意《用户隐私协议》，同意提交个人信息用于团队管理</text>
+                <text class="privacy-text">我已阅读并同意《用户隐私协议》，同意提交个人信息用于团队管理。</text>
             </view>
-            <button
-                class="submit-btn {{submitting || !agreedPrivacy ? 'disabled' : ''}}"
-                bindtap="onSubmit"
-                disabled="{{submitting || !agreedPrivacy}}"
-            >
+            <button class="submit-btn {{submitting || !agreedPrivacy ? 'disabled' : ''}}" bindtap="onSubmit" disabled="{{submitting || !agreedPrivacy}}">
                 {{submitting ? '提交中...' : '提交问卷'}}
             </button>
-            <text class="form-tip">提交后将自动加入邀请人的团队</text>
+            <text class="form-tip">提交完成后，如邀请关系有效，将自动加入邀请人的团队。</text>
         </view>
     </view>
 
-    <!-- 无问卷 -->
     <view wx:else class="empty-container">
-        <text class="empty-text">暂无可用的问卷</text>
-        <button class="btn-secondary" bindtap="goHome">返回首页</button>
+        <view class="empty-card">
+            <text class="empty-title">暂无可用问卷</text>
+            <text class="empty-desc">当前邀请问卷暂未开放，稍后可以再回来看看。</text>
+            <button class="btn-secondary" bindtap="goHome">返回首页</button>
+        </view>
     </view>
 
-    <!-- 品牌动画（joinTeam 等） -->
     <brand-animation id="brandAnimation"></brand-animation>
 </view>

@@ -4,7 +4,8 @@ const {
     getDistributionStats,
     getWorkbenchStats,
     getTeamMembers,
-    getPromotionOrders
+    getPromotionOrders,
+    getInviteWxaCode
 } = require('../controllers/distributionController');
 const { authenticate } = require('../middleware/auth');
 
@@ -22,6 +23,9 @@ router.get('/distribution/team', authenticate, getTeamMembers);
 
 // GET /api/distribution/stats - 团队页面的统计
 router.get('/distribution/stats', authenticate, getDistributionStats);
+
+// GET /api/distribution/wxacode-invite — 带邀请 scene 的无限量小程序码（PNG）
+router.get('/distribution/wxacode-invite', authenticate, getInviteWxaCode);
 
 // GET /api/team - 兼容旧路径
 router.get('/team', authenticate, getTeamMembers);

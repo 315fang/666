@@ -10,6 +10,8 @@
  */
 const { Op } = require('sequelize');
 const { Product, Order, sequelize } = require('../models');
+const { MALL_LIST_WHERE } = require('../utils/productMallVisibility');
+const logger = require('../utils/logger');
 
 /**
  * 热度算法：
@@ -49,7 +51,7 @@ exports.setManualWeight = async (req, res, next) => {
             heat_updated_at: new Date()
         });
 
-        console.log(`[AdminHeat] 商品${id} 热度权重设为 ${manual_weight}，热度分=${newHeat}，原因：${reason || '无'}`);
+        logger.info('ADMIN_HEAT_CTRL', `商品${id} 热度权重设为 ${manual_weight}，热度分=${newHeat}，原因：${reason || '无'}`);
 
         res.json({
             code: 0,
@@ -157,7 +159,7 @@ exports.getHotProducts = async (req, res, next) => {
     try {
         const limit = Math.min(parseInt(req.query.limit) || 10, 20);
         const products = await Product.findAll({
-            where: { status: 1 },
+            where: { status: 1, ...MALL_LIST_WHERE },
             attributes: ['id', 'name', 'images', 'retail_price', 'heat_score', 'purchase_count'],
             order: [['heat_score', 'DESC']],
             limit

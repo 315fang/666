@@ -31,7 +31,7 @@ const PointAccount = sequelize.define('PointAccount', {
     level: {
         type: DataTypes.TINYINT,
         defaultValue: 1,
-        comment: '积分等级: 1=体验官, 2=品质会员, 3=精选达人, 4=首席鉴赏家'
+        comment: '成长值特权档位（与 point_level_config 一致，按 users.growth_value 定级，非积分余额）'
     },
     last_checkin: {
         type: DataTypes.DATEONLY,

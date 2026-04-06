@@ -10,10 +10,10 @@ const Coupon = sequelize.define('Coupon', {
         comment: '优惠券名称'
     },
     type: {
-        type: DataTypes.ENUM('fixed', 'percent'),
+        type: DataTypes.ENUM('fixed', 'percent', 'no_threshold'),
         allowNull: false,
         defaultValue: 'fixed',
-        comment: '类型: fixed满减券, percent折扣券'
+        comment: '类型: fixed满减券, percent折扣券, no_threshold无门槛券'
     },
     value: {
         type: DataTypes.DECIMAL(10, 2),

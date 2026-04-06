@@ -28,10 +28,18 @@ request.interceptors.request.use(
 // 响应拦截器
 request.interceptors.response.use(
   response => {
-    const { code, message, data } = response.data
-    
+    // 文件导出等二进制响应直接透传
+    if (response.config?.responseType === 'blob') {
+      return response.data
+    }
+
+    const { code, message, data, geocode_note: geocodeNote } = response.data
+
     // 后端返回的成功状态码为 0
     if (code === 0) {
+      if (geocodeNote != null && data != null && typeof data === 'object' && !Array.isArray(data)) {
+        return { ...data, geocode_note: geocodeNote }
+      }
       return data
     } else {
       ElMessage.error(message || '请求失败')
@@ -41,10 +49,17 @@ request.interceptors.response.use(
   error => {
     if (error.response) {
       const { status, data } = error.response
+      const reqUrl = error.config?.url || ''
+      const isLoginRequest = typeof reqUrl === 'string' && reqUrl.includes('/login')
       
       switch (status) {
         case 401:
-          ElMessage.error('登录已过期，请重新登录')
+          // 登录接口的 401 多为账号/密码错误，不应提示“登录已过期”
+          if (isLoginRequest) {
+            ElMessage.error(data?.message || '用户名或密码错误')
+            break
+          }
+          ElMessage.error(data?.message || '登录已过期，请重新登录')
           localStorage.removeItem('admin_token')
           localStorage.removeItem('admin_info')
           router.push('/login')

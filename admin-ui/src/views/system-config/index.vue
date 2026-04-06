@@ -225,7 +225,18 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import request from '@/utils/request'
+import {
+  getSystemConfigs,
+  batchUpdateSystemConfigs,
+  refreshSystemConfigCache,
+  getSystemConfigHistory,
+  rollbackSystemConfig,
+  getDbIndexTables,
+  getDbIndexes,
+  getDbIndexColumns,
+  createDbIndex,
+  deleteDbIndex
+} from '@/api'
 import dayjs from 'dayjs'
 
 const activeTab = ref('config')
@@ -253,7 +264,7 @@ const groupedConfigs = computed(() => {
 const fetchConfigs = async () => {
   configLoading.value = true
   try {
-    const res = await request({ url: '/system-configs', method: 'get' })
+    const res = await getSystemConfigs()
     const data = res.data || res.list || []
     allConfigs.value = data.map(c => ({
       ...c,
@@ -290,7 +301,7 @@ const handleBatchSave = async () => {
     const updates = allConfigs.value
       .filter(c => c._modified)
       .map(c => ({ key: c.config_key, value: String(c._editValue) }))
-    await request({ url: '/system-configs/batch', method: 'post', data: { updates, reason: '管理后台批量更新' } })
+    await batchUpdateSystemConfigs({ updates, reason: '管理后台批量更新' })
     ElMessage.success(`已保存 ${updates.length} 项配置，即时生效`)
     allConfigs.value.forEach(c => { c._modified = false; c._originalValue = String(c._editValue) })
     pendingChanges.value = []
@@ -304,7 +315,7 @@ const handleBatchSave = async () => {
 const refreshCache = async () => {
   refreshing.value = true
   try {
-    await request({ url: '/system-configs/refresh-cache', method: 'post' })
+    await refreshSystemConfigCache()
     ElMessage.success('缓存已刷新')
   } catch (e) {
     console.error('刷新缓存失败:', e)
@@ -315,7 +326,7 @@ const refreshCache = async () => {
 
 const showHistory = async (row) => {
   try {
-    const res = await request({ url: `/system-configs/${row.config_key}/history`, method: 'get' })
+    const res = await getSystemConfigHistory(row.config_key)
     configHistory.value = res.data || []
     historyDialogVisible.value = true
   } catch (e) {
@@ -335,11 +346,7 @@ const handleRollback = async (h) => {
   }
   rollingBack.value = h.id
   try {
-    const res = await request({
-      url: `/system-configs/${h.config_key}/rollback`,
-      method: 'post',
-      data: { history_id: h.id }
-    })
+    const res = await rollbackSystemConfig(h.config_key, { history_id: h.id })
     ElMessage.success(res.message || '回滚成功，配置已即时生效')
     historyDialogVisible.value = false
     fetchConfigs()
@@ -376,7 +383,7 @@ const filteredTables = computed(() =>
 const fetchTables = async () => {
   tablesLoading.value = true
   try {
-    const res = await request({ url: '/db-indexes/tables', method: 'get' })
+    const res = await getDbIndexTables()
     dbTables.value = res.data || []
   } catch (e) {
     console.error('获取表列表失败:', e)
@@ -390,8 +397,8 @@ const selectTable = async (tableName) => {
   indexLoading.value = true
   try {
     const [idxRes, colRes] = await Promise.all([
-      request({ url: `/db-indexes/${tableName}`, method: 'get' }),
-      request({ url: `/db-indexes/${tableName}/columns`, method: 'get' })
+      getDbIndexes(tableName),
+      getDbIndexColumns(tableName)
     ])
     tableIndexes.value = idxRes.data || []
     tableColumns.value = colRes.data || []
@@ -411,7 +418,7 @@ const handleAddIndex = async () => {
   if (!indexForm.columns.length) { ElMessage.warning('请选择至少一个字段'); return }
   submitting.value = true
   try {
-    await request({ url: '/db-indexes', method: 'post', data: { table: selectedTable.value, ...indexForm } })
+    await createDbIndex({ table: selectedTable.value, ...indexForm })
     ElMessage.success('索引创建成功')
     addIndexDialogVisible.value = false
     selectTable(selectedTable.value)
@@ -425,7 +432,7 @@ const handleAddIndex = async () => {
 const handleDeleteIndex = async (row) => {
   try {
     await ElMessageBox.confirm(`确认删除索引 "${row.name}"？删除后不可撤销。`, '删除索引', { type: 'warning' })
-    await request({ url: `/db-indexes/${selectedTable.value}/${row.name}`, method: 'delete' })
+    await deleteDbIndex(selectedTable.value, row.name)
     ElMessage.success('索引已删除')
     selectTable(selectedTable.value)
   } catch (e) {

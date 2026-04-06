@@ -4,7 +4,8 @@ const {
     applyRefund,
     getRefunds,
     getRefundById,
-    cancelRefund
+    cancelRefund,
+    submitReturnShipping
 } = require('../controllers/refundController');
 const { authenticate } = require('../middleware/auth');
 
@@ -22,5 +23,8 @@ router.get('/:id', getRefundById);
 
 // PUT /api/refunds/:id/cancel - 取消售后申请
 router.put('/:id/cancel', cancelRefund);
+
+// PUT /api/refunds/:id/return-shipping - 用户提交退货物流
+router.put('/:id/return-shipping', submitReturnShipping);
 
 module.exports = router;

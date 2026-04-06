@@ -3,6 +3,7 @@ const { Admin } = require('../models');
 const constants = require('../config/constants');
 const tokenBlacklist = require('../utils/tokenBlacklist');
 const logger = require('../utils/logger');
+const { ADMIN_ROLE_PRESETS } = require('../config/adminPermissionCatalog');
 
 // 管理员认证中间件
 const adminAuth = async (req, res, next) => {
@@ -25,8 +26,8 @@ const adminAuth = async (req, res, next) => {
             return res.status(401).json({ code: 401, message: '令牌无效，请重新登录' });
         }
 
-        // ★ 黑名单检查：注销后 Token 即刻失效
-        if (decoded.jti && tokenBlacklist.isBlocked(decoded.jti)) {
+        // ★ 黑名单检查：注销后 Token 即刻失效（支持 memory / redis / mysql）
+        if (decoded.jti && (await tokenBlacklist.isBlocked(decoded.jti))) {
             return res.status(401).json({ code: 401, message: 'Token 已失效，请重新登录' });
         }
 
@@ -49,35 +50,55 @@ const adminAuth = async (req, res, next) => {
 // 权限检查中间件
 const checkPermission = (...requiredPermissions) => {
     return (req, res, next) => {
-        const admin = req.admin;
+        try {
+            const admin = req.admin;
 
-        // 超级管理员拥有所有权限
-        if (admin.role === 'super_admin') {
-            return next();
+            // 超级管理员拥有所有权限
+            if (admin.role === 'super_admin') {
+                return next();
+            }
+
+            const rolePermissions = Object.fromEntries(
+                Object.entries(ADMIN_ROLE_PRESETS).map(([k, v]) => [k, v.permissions])
+            );
+
+            const normalizePermission = (perm) => {
+                const aliasMap = {
+                    product: 'products',
+                    // notification 为群发接口独立权限键，勿与 content 合并（与路由 meta、权限目录一致）
+                    settlements: 'commissions',
+                    settings: 'settings_manage',
+                    system: 'settings_manage'
+                };
+                return aliasMap[perm] || perm;
+            };
+
+            const normalizedRequired = requiredPermissions.map(normalizePermission);
+            let extraPerms = [];
+            try {
+                extraPerms = Array.isArray(admin.permissions) ? admin.permissions : [];
+            } catch (permErr) {
+                logger.error('ADMIN_AUTH', '解析管理员 permissions 失败', { id: admin.id, message: permErr.message });
+                extraPerms = [];
+            }
+            const adminPermissions = [
+                ...(rolePermissions[admin.role] || []),
+                ...extraPerms
+            ].map(normalizePermission);
+
+            const hasPermission = normalizedRequired.some(perm =>
+                adminPermissions.includes(perm)
+            );
+
+            if (!hasPermission) {
+                return res.status(403).json({ code: -1, message: '无操作权限' });
+            }
+
+            next();
+        } catch (error) {
+            logger.error('ADMIN_AUTH', '权限中间件异常', { message: error.message });
+            return res.status(500).json({ code: -1, message: '权限校验异常，请检查管理员账号数据或联系运维' });
         }
-
-        // 检查角色级别权限
-        const rolePermissions = {
-            'admin': ['products', 'orders', 'users', 'distribution', 'content', 'materials'],
-            'operator': ['products', 'orders', 'content', 'materials'],
-            'finance': ['orders', 'withdrawals', 'settlements'],
-            'customer_service': ['orders', 'refunds', 'users']
-        };
-
-        const adminPermissions = [
-            ...(rolePermissions[admin.role] || []),
-            ...(admin.permissions || [])
-        ];
-
-        const hasPermission = requiredPermissions.some(perm =>
-            adminPermissions.includes(perm)
-        );
-
-        if (!hasPermission) {
-            return res.status(403).json({ code: -1, message: '无操作权限' });
-        }
-
-        next();
     };
 };
 

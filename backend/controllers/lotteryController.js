@@ -3,8 +3,13 @@
  * 抽奖系统控制器
  * 支持转盘/盲盒两种模式，后台切换
  */
-const { LotteryPrize, LotteryRecord, sequelize } = require('../models');
+const { LotteryPrize, LotteryRecord, AppConfig, sequelize } = require('../models');
 const PointService = require('../services/PointService');
+const {
+    applyLotteryPrizeStyle,
+    loadLotteryPrizeStyleConfig
+} = require('../utils/lotteryPrizeDisplay');
+const { issueUserCouponFromTemplate } = require('../services/UserCouponIssueService');
 
 /**
  * GET /api/lottery/prizes
@@ -12,13 +17,16 @@ const PointService = require('../services/PointService');
  */
 exports.getPrizes = async (req, res, next) => {
     try {
-        const prizes = await LotteryPrize.findAll({
-            where: { is_active: 1 },
-            order: [['sort_order', 'ASC']],
-            attributes: ['id', 'name', 'image_url', 'cost_points', 'type', 'prize_value', 'sort_order']
-            // 注意：probability 不传给前端，防止作弊
-        });
-        res.json({ code: 0, data: prizes });
+        const [prizes, styleConfig] = await Promise.all([
+            LotteryPrize.findAll({
+                where: { is_active: 1 },
+                order: [['sort_order', 'ASC']],
+                attributes: ['id', 'name', 'image_url', 'cost_points', 'type', 'prize_value', 'sort_order']
+                // 注意：probability 不传给前端，防止作弊
+            }),
+            loadLotteryPrizeStyleConfig(AppConfig)
+        ]);
+        res.json({ code: 0, data: prizes.map((prize) => applyLotteryPrizeStyle(prize, styleConfig)) });
     } catch (err) {
         next(err);
     }
@@ -32,6 +40,7 @@ exports.draw = async (req, res, next) => {
     const t = await sequelize.transaction();
     try {
         const userId = req.user.id;
+        const styleConfig = await loadLotteryPrizeStyleConfig(AppConfig);
 
         // 1. 获取启用奖品池
         const prizes = await LotteryPrize.findAll({
@@ -72,7 +81,14 @@ exports.draw = async (req, res, next) => {
                     status: 'claimed'
                 }, { transaction: t });
                 await t.commit();
-                return res.json({ code: 0, data: { prize: { name: '感谢参与', type: 'miss' }, record_id: record.id } });
+                const missPrizeView = applyLotteryPrizeStyle({
+                    id: missprize.id,
+                    name: missprize.name || '感谢参与',
+                    type: 'miss',
+                    prize_value: missprize.prize_value,
+                    image_url: missprize.image_url
+                }, styleConfig);
+                return res.json({ code: 0, data: { prize: missPrizeView, record_id: record.id } });
             }
             // 扣库存  
             await winner.decrement('stock', { by: 1, transaction: t });
@@ -97,24 +113,41 @@ exports.draw = async (req, res, next) => {
             await record.update({ status: 'claimed', claimed_at: new Date() }, { transaction: t });
         }
 
+        // 7. 优惠券奖品：自动发放（与后台发券共用 UserCouponIssueService，失败则整单回滚含积分）
+        if (winner.type === 'coupon') {
+            const couponId = parseInt(winner.prize_value, 10);
+            if (!Number.isFinite(couponId) || couponId <= 0) {
+                throw new Error('奖品优惠券配置错误：未绑定有效券模板ID');
+            }
+            await issueUserCouponFromTemplate({
+                userId,
+                couponId,
+                transaction: t
+            });
+            await record.update({ status: 'claimed', claimed_at: new Date() }, { transaction: t });
+        }
+
         await t.commit();
+        const prizeView = applyLotteryPrizeStyle(winner, styleConfig);
 
         res.json({
             code: 0,
             data: {
-                prize: {
-                    id: winner.id,
-                    name: winner.name,
-                    type: winner.type,
-                    prize_value: winner.prize_value,
-                    image_url: winner.image_url
-                },
+                prize: prizeView,
                 record_id: record.id
             },
             message: winner.type === 'miss' ? '感谢参与，下次再来！' : `恭喜获得：${winner.name}！`
         });
     } catch (err) {
         await t.rollback();
+        const msg = err.message || '';
+        if (
+            msg.includes('优惠券') ||
+            msg.includes('奖品优惠券') ||
+            msg.includes('积分不足')
+        ) {
+            return res.json({ code: 1, message: msg || '抽奖失败' });
+        }
         next(err);
     }
 };

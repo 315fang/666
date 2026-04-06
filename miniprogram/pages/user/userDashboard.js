@@ -109,6 +109,8 @@ async function loadUserInfo(page, forceRefresh = false) {
             growthDisplay: null,
             unusedCouponCount: 0,
             pointsBalanceDisplay: '--',
+            commissionBalance: '0.00',
+            couponBanner: null,
             notificationsCount: 0,
             orderStats: { pending: 0, paid: 0, shipped: 0, pendingReview: 0, refund: 0 }
         });
@@ -177,7 +179,7 @@ async function loadUserInfo(page, forceRefresh = false) {
 
 async function loadAssetRow(page) {
     if (!app.globalData.isLoggedIn) {
-        page.setData({ unusedCouponCount: 0, pointsBalanceDisplay: '--' });
+        page.setData({ unusedCouponCount: 0, pointsBalanceDisplay: '--', couponBanner: null });
         return;
     }
     try {
@@ -185,11 +187,26 @@ async function loadAssetRow(page) {
             get('/coupons/mine', { status: 'unused' }).catch(() => ({ code: -1, data: [] })),
             fetchPointSummary().catch(() => ({ account: {} }))
         ]);
-        const unusedCouponCount = couponResponse.code === 0 ? (couponResponse.data || []).length : 0;
+        const coupons = couponResponse.code === 0 ? (couponResponse.data || []) : [];
+        const unusedCouponCount = coupons.length;
         const balance = pointWrap.account != null ? pointWrap.account.balance_points : 0;
+        let couponBanner = null;
+        if (unusedCouponCount > 0) {
+            const firstCoupon = coupons[0];
+            const minValue = Number(firstCoupon.min_purchase) > 0 ? `满${firstCoupon.min_purchase}元可用` : '无门槛';
+            couponBanner = {
+                id: firstCoupon.id,
+                value: firstCoupon.coupon_type === 'percent'
+                    ? `${(Number(firstCoupon.coupon_value || 0) * 10).toFixed(0)}折`
+                    : `¥${firstCoupon.coupon_value}`,
+                name: firstCoupon.coupon_name || '优惠券',
+                minPurchase: minValue
+            };
+        }
         page.setData({
             unusedCouponCount,
-            pointsBalanceDisplay: balance != null ? String(balance) : '0'
+            pointsBalanceDisplay: balance != null ? String(balance) : '0',
+            couponBanner
         });
     } catch (_) {
         // ignore
@@ -202,25 +219,28 @@ async function loadQuadPreviews(page) {
     let quadFavorite = {
         count: favorites.length,
         sub: favorites.length ? `${favorites.length}件收藏宝贝` : '暂无收藏',
-        image: favorites[0]?.image || QUAD_PLACEHOLDER
+        image: favorites[0]?.image || QUAD_PLACEHOLDER,
+        hasImage: !!favorites[0]?.image
     };
     let quadFootprint = {
         count: footprints.length,
         sub: footprints.length ? `${footprints.length}条浏览足迹` : '看过的商品',
-        image: footprints[0]?.image || QUAD_PLACEHOLDER
+        image: footprints[0]?.image || QUAD_PLACEHOLDER,
+        hasImage: !!footprints[0]?.image
     };
-    let quadExpress = { sub: '暂无在途订单', image: QUAD_PLACEHOLDER, orderId: null };
+    let quadExpress = { sub: '暂无在途订单', image: QUAD_PLACEHOLDER, hasImage: false, orderId: null };
     let quadRecent = {
         title: '会员',
         sub: '查看权益与等级',
         image: QUAD_PLACEHOLDER,
+        hasImage: false,
         mode: 'benefit',
         orderId: null
     };
 
     if (!app.globalData.isLoggedIn) {
-        quadExpress = { sub: '登录后查看物流', image: QUAD_PLACEHOLDER, orderId: null };
-        page.setData({ quadFavorite, quadFootprint, quadExpress, quadRecent });
+        quadExpress = { sub: '登录后查看物流', image: QUAD_PLACEHOLDER, hasImage: false, orderId: null };
+        page.setData({ quadFavorite, quadFootprint, quadExpress, quadRecent, showQuadExpressCard: false });
         return;
     }
 
@@ -239,6 +259,7 @@ async function loadQuadPreviews(page) {
             quadExpress = {
                 sub: shippingTotal > 1 ? `${shippingTotal}件待收货` : name,
                 image: orderFirstThumb(order),
+                hasImage: true,
                 orderId: order.id
             };
         }
@@ -248,7 +269,8 @@ async function loadQuadPreviews(page) {
             quadFavorite = {
                 count: list.length,
                 sub: `${list.length}件收藏宝贝`,
-                image: list[0].image || QUAD_PLACEHOLDER
+                image: list[0].image || QUAD_PLACEHOLDER,
+                hasImage: !!list[0].image
             };
         }
 
@@ -259,6 +281,7 @@ async function loadQuadPreviews(page) {
                 title: '最近订单',
                 sub: order.product && order.product.name ? String(order.product.name).slice(0, 16) : '查看订单详情',
                 image: orderFirstThumb(order),
+                hasImage: true,
                 mode: 'order',
                 orderId: order.id
             };
@@ -267,7 +290,13 @@ async function loadQuadPreviews(page) {
         // keep defaults
     }
 
-    page.setData({ quadFavorite, quadFootprint, quadExpress, quadRecent });
+    page.setData({
+        quadFavorite,
+        quadFootprint,
+        quadExpress,
+        quadRecent,
+        showQuadExpressCard: !!quadExpress.orderId
+    });
 }
 
 async function loadOrderCounts(page) {
@@ -325,6 +354,7 @@ async function loadDistributionInfo(page) {
                 },
                 stats: { frozenAmount },
                 balance: availableAmount,
+                commissionBalance: totalEarnings,
                 teamCount,
                 isAgent: roleLevel >= 2
             });

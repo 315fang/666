@@ -2,7 +2,7 @@
   <div class="commissions-page">
     <!-- 统计卡片 -->
     <el-row :gutter="16" style="margin-bottom: 20px;">
-      <el-col :span="6" v-for="card in statsCards" :key="card.label">
+      <el-col :span="6" :xs="24" :sm="12" v-for="card in statsCards" :key="card.label">
         <el-card shadow="hover" class="stat-card">
           <div class="stat-inner">
             <div>
@@ -38,14 +38,23 @@
         </div>
       </template>
 
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px;"
+        title="列表为系统产生的佣金流水。审批前请核对订单与用户身份；批量操作不可撤销，请谨慎。详细规则见仓库 docs/业务规则.md。"
+      />
+
       <!-- 搜索栏 -->
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="全部状态" clearable style="width:140px">
             <el-option label="冻结中" value="frozen" />
             <el-option label="待审批" value="pending_approval" />
+            <el-option label="已审批" value="approved" />
             <el-option label="已结算" value="settled" />
-            <el-option label="已驳回" value="rejected" />
+            <el-option label="已撤销" value="cancelled" />
           </el-select>
         </el-form-item>
         <el-form-item label="用户ID">
@@ -64,16 +73,16 @@
         stripe
         @selection-change="handleSelectionChange"
       >
-        <el-table-column type="selection" width="50" />
+        <el-table-column type="selection" width="50" :selectable="(row) => row.status === 'pending_approval'" />
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column label="收益人" width="130">
           <template #default="{ row }">
-            {{ row.User?.nickname || row.user_id }}
+            {{ row.user?.nickname || row.user_id }}
           </template>
         </el-table-column>
-        <el-table-column label="来源订单" width="180">
+        <el-table-column label="来源订单" width="180" class-name="hide-mobile">
           <template #default="{ row }">
-            <span class="order-no">{{ row.order_no || row.Order?.order_no || '-' }}</span>
+            <span class="order-no">{{ row.order?.order_no || '-' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="佣金金额" width="120">
@@ -95,12 +104,12 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="创建时间" width="160">
+        <el-table-column label="创建时间" width="160" class-name="hide-mobile">
           <template #default="{ row }">
             {{ formatDate(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="解冻/结算时间" width="160">
+        <el-table-column label="解冻/结算时间" width="160" class-name="hide-mobile">
           <template #default="{ row }">
             {{ formatDate(row.settled_at || row.unfrozen_at) }}
           </template>
@@ -148,8 +157,9 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import request from '@/utils/request'
-import dayjs from 'dayjs'
+import { getCommissions, approveCommissionItem, rejectCommissionItem, batchApproveCommissions, batchRejectCommissions } from '@/api'
+import { formatDate } from '@/utils/format'
+import { usePagination } from '@/composables/usePagination'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -163,30 +173,27 @@ const statsCards = ref([
   { label: '总佣金金额', value: '0.00', icon: 'Money', color: '#409eff' },
   { label: '待审批金额', value: '0.00', icon: 'Clock', color: '#e6a23c' },
   { label: '已结算金额', value: '0.00', icon: 'SuccessFilled', color: '#67c23a' },
-  { label: '本月新增', value: '0.00', icon: 'TrendCharts', color: '#f56c6c' }
+  { label: '已审批金额', value: '0.00', icon: 'TrendCharts', color: '#f56c6c' }
 ])
 
 const searchForm = reactive({ status: '', user_id: '' })
-const pagination = reactive({ page: 1, limit: 10, total: 0 })
+const { pagination, resetPage, applyResponse } = usePagination({ defaultLimit: 10 })
 const tableData = ref([])
 
 const fetchData = async () => {
   loading.value = true
   try {
-    const res = await request({
-      url: '/commissions',
-      method: 'get',
-      params: { ...searchForm, page: pagination.page, limit: pagination.limit }
-    })
-    tableData.value = res.list || res.data?.list || []
-    pagination.total = res.total || res.data?.total || 0
+    const res = await getCommissions({ ...searchForm, page: pagination.page, limit: pagination.limit })
+    tableData.value = res?.list || []
+    applyResponse(res)
 
     // 更新统计卡片
-    if (res.stats) {
-      statsCards.value[0].value = Number(res.stats.total || 0).toFixed(2)
-      statsCards.value[1].value = Number(res.stats.pending || 0).toFixed(2)
-      statsCards.value[2].value = Number(res.stats.settled || 0).toFixed(2)
-      statsCards.value[3].value = Number(res.stats.thisMonth || 0).toFixed(2)
+    const stats = res?.stats || res?.data?.stats
+    if (stats) {
+      statsCards.value[0].value = Number((stats.totalFrozen || 0) + (stats.totalPendingApproval || 0) + (stats.totalApproved || 0) + (stats.totalSettled || 0)).toFixed(2)
+      statsCards.value[1].value = Number(stats.totalPendingApproval || 0).toFixed(2)
+      statsCards.value[2].value = Number(stats.totalSettled || 0).toFixed(2)
+      statsCards.value[3].value = Number(stats.totalApproved || 0).toFixed(2)
     }
   } catch (e) {
     console.error('获取佣金列表失败:', e)
@@ -195,9 +202,9 @@ const fetchData = async () => {
   }
 }
 
-const handleSearch = () => { pagination.page = 1; fetchData() }
+const handleSearch = () => { resetPage(); fetchData() }
 const handleReset = () => { searchForm.status = ''; searchForm.user_id = ''; handleSearch() }
-const handleSelectionChange = (rows) => { selectedIds.value = rows.map(r => r.id) }
+const handleSelectionChange = (rows) => { selectedIds.value = rows.filter(r => r.status === 'pending_approval').map(r => r.id) }
 
 const handleApprove = async (row) => {
   try {
@@ -206,7 +213,7 @@ const handleApprove = async (row) => {
       cancelButtonText: '取消',
       type: 'success'
     })
-    await request({ url: `/commissions/${row.id}/approve`, method: 'put' })
+    await approveCommissionItem(row.id)
     ElMessage.success('审批成功')
     fetchData()
   } catch (e) {
@@ -228,7 +235,7 @@ const handleBatchApprove = async () => {
       cancelButtonText: '取消',
       type: 'success'
     })
-    await request({ url: '/commissions/batch-approve', method: 'post', data: { ids: selectedIds.value } })
+    await batchApproveCommissions({ ids: selectedIds.value })
     ElMessage.success('批量审批成功')
     fetchData()
   } catch (e) {
@@ -250,10 +257,10 @@ const submitReject = async () => {
   submitting.value = true
   try {
     if (isBatchReject.value) {
-      await request({ url: '/commissions/batch-reject', method: 'post', data: { ids: selectedIds.value, reason: rejectReason.value } })
+      await batchRejectCommissions({ ids: selectedIds.value, reason: rejectReason.value })
       ElMessage.success('批量驳回成功')
     } else {
-      await request({ url: `/commissions/${currentRejectId.value}/reject`, method: 'put', data: { reason: rejectReason.value } })
+      await rejectCommissionItem(currentRejectId.value, { reason: rejectReason.value })
       ElMessage.success('驳回成功')
     }
     rejectDialogVisible.value = false
@@ -265,9 +272,8 @@ const submitReject = async () => {
   }
 }
 
-const statusText = (s) => ({ frozen: '冻结中', pending_approval: '待审批', settled: '已结算', rejected: '已驳回' }[s] || s)
-const statusTagType = (s) => ({ frozen: 'info', pending_approval: 'warning', settled: 'success', rejected: 'danger' }[s] || '')
-const formatDate = (d) => d ? dayjs(d).format('YYYY-MM-DD HH:mm') : '-'
+const statusText = (s) => ({ frozen: '冻结中', pending_approval: '待审批', approved: '已审批', settled: '已结算', cancelled: '已撤销' }[s] || s)
+const statusTagType = (s) => ({ frozen: 'info', pending_approval: 'warning', approved: 'primary', settled: 'success', cancelled: 'danger' }[s] || '')
 
 onMounted(fetchData)
 </script>

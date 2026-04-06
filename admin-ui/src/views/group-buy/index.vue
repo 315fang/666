@@ -98,7 +98,10 @@
               <span style="float:right; color:#8492a6; font-size:13px">¥{{ item.retail_price }}</span>
             </el-option>
           </el-select>
-          <div style="font-size:12px;color:#909399;margin-top:4px">关联的商品必须在上架状态，且需要<span style="color:#e6a23c">在“商品列表-营销设置”中开启“参与拼团”</span>才可生效</div>
+          <div style="font-size:12px;color:#909399;margin-top:4px">
+            此处选的是<strong>商品（SPU）</strong>和<strong>统一拼团价</strong>。小程序详情里的「规格」仍要选，因为库存、发货按 SKU 计算；未单独限定 SKU 时，<strong>任一有货规格</strong>都可以走该拼团价下单。
+          </div>
+          <div style="font-size:12px;color:#909399;margin-top:6px">须<strong>上架</strong>，并在商品侧开启<strong>参与拼团</strong>，否则无法保存活动。</div>
         </el-form-item>
         <el-form-item label="拼团秒杀价" prop="group_price">
           <el-input-number v-model="form.group_price" :min="0" :precision="2" style="width:100%" />
@@ -125,11 +128,12 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getGroupBuys, createGroupBuy, updateGroupBuy, deleteGroupBuy, getProducts } from '@/api'
+import { usePagination } from '@/composables/usePagination'
 
 // ====== 列表逻辑 ======
 const loading = ref(false)
 const tableData = ref([])
-const pagination = reactive({ page: 1, limit: 20, total: 0 })
+const { pagination, resetPage, applyResponse } = usePagination()
 const searchForm = reactive({ keyword: '', status: '' })
 
 const fetchData = async () => {
@@ -142,14 +146,14 @@ const fetchData = async () => {
       limit: pagination.limit
     }
     const res = await getGroupBuys(params)
-    tableData.value = res.data?.list || []
-    pagination.total = res.data?.pagination?.total || 0
+    tableData.value = res?.list || []
+    applyResponse(res)
   } finally {
     loading.value = false
   }
 }
 
-const handleSearch = () => { pagination.page = 1; fetchData() }
+const handleSearch = () => { resetPage(); fetchData() }
 const handleReset = () => {
   searchForm.keyword = ''
   searchForm.status = ''
@@ -184,7 +188,7 @@ const searchProducts = async (query) => {
   if (query !== '') {
     try {
       const res = await getProducts({ keyword: query, limit: 50, status: 1 })
-      productOptions.value = res.data?.list || []
+      productOptions.value = res?.list || []
     } catch(e){}
   } else {
     productOptions.value = []

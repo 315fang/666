@@ -2,6 +2,8 @@ const { User, CommissionLog, Withdrawal, Order, sequelize } = require('../models
 const { Op } = require('sequelize');
 const { sendNotification } = require('../models/notificationUtil');
 const constants = require('../config/constants');
+const { getWithdrawalRuntimeConfig } = require('../utils/runtimeBusinessConfig');
+const logger = require('../utils/logger');
 
 const ADMIN_USER_ID = constants.ADMIN.USER_ID;
 
@@ -84,6 +86,8 @@ const getWalletInfo = async (req, res) => {
             data: {
                 balance: parseFloat(user.balance) || 0,
                 totalSales: parseFloat(user.total_sales) || 0,
+                frozen_amount: commissionOverview.frozen,
+                available_amount: commissionOverview.available,
                 commission: commissionOverview,
                 withdrawal: {
                     withdrawn: withdrawnAmount,
@@ -92,7 +96,7 @@ const getWalletInfo = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('获取钱包信息失败:', error);
+        logger.error('WALLET_CTRL', '获取钱包信息失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '获取钱包信息失败' });
     }
 };
@@ -101,10 +105,11 @@ const getWalletInfo = async (req, res) => {
 const getCommissionLogs = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { status, page = 1, limit = 20 } = req.query;
+        const { status, type, page = 1, limit = 20 } = req.query;
 
         const where = { user_id: userId };
         if (status) where.status = status;
+        if (type) where.type = type;
 
         const offset = (parseInt(page) - 1) * parseInt(limit);
 
@@ -133,7 +138,7 @@ const getCommissionLogs = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('获取佣金明细失败:', error);
+        logger.error('WALLET_CTRL', '获取佣金明细失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '获取佣金明细失败' });
     }
 };
@@ -169,7 +174,7 @@ const getWithdrawals = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('获取提现记录失败:', error);
+        logger.error('WALLET_CTRL', '获取提现记录失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '获取提现记录失败' });
     }
 };
@@ -180,6 +185,7 @@ const applyWithdrawal = async (req, res) => {
     try {
         const userId = req.user.id;
         const { amount, method = 'wechat', account_name, account_no, bank_name } = req.body;
+        const withdrawalConfig = await getWithdrawalRuntimeConfig();
 
         // 参数校验
         if (!amount || amount <= 0) {
@@ -188,9 +194,9 @@ const applyWithdrawal = async (req, res) => {
         }
 
         // ★ 最低提现金额校验
-        if (parseFloat(amount) < constants.WITHDRAWAL.MIN_AMOUNT) {
+        if (parseFloat(amount) < withdrawalConfig.MIN_AMOUNT) {
             await t.rollback();
-            return res.status(400).json({ code: -1, message: `最低提现金额为 ¥${constants.WITHDRAWAL.MIN_AMOUNT}` });
+            return res.status(400).json({ code: -1, message: `最低提现金额为 ¥${withdrawalConfig.MIN_AMOUNT}` });
         }
 
         // ★ 单次最大提现金额校验
@@ -233,9 +239,14 @@ const applyWithdrawal = async (req, res) => {
             return res.status(400).json({ code: -1, message: `每日最多提现${constants.WITHDRAWAL.MAX_DAILY_COUNT}次` });
         }
 
-        // 计算手续费（从集中配置读取费率，使用 toFixed+parseFloat 防浮点误差）
-        const feeRate = constants.WITHDRAWAL.FEE_RATE;
-        const fee = parseFloat((parseFloat(amount) * feeRate).toFixed(2));
+        // 计算手续费：按比例计算后再与单笔封顶（元）取较小值；封顶为 0 表示不限制
+        const feeRate = withdrawalConfig.FEE_RATE;
+        const feePct = parseFloat((parseFloat(amount) * feeRate).toFixed(2));
+        const cap = parseFloat(withdrawalConfig.FEE_CAP_MAX) || 0;
+        let fee = feePct;
+        if (cap > 0 && fee > cap) {
+            fee = parseFloat(cap.toFixed(2));
+        }
         const actualAmount = parseFloat((parseFloat(amount) - fee).toFixed(2));
 
         // 创建提现记录
@@ -281,7 +292,7 @@ const applyWithdrawal = async (req, res) => {
         });
     } catch (error) {
         await t.rollback();
-        console.error('申请提现失败:', error);
+        logger.error('WALLET_CTRL', '申请提现失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '申请提现失败' });
     }
 };

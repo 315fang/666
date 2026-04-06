@@ -1,3 +1,6 @@
+/**
+ * 管理端测试接口：造数用户/订单等。仅开发或受控环境开启；与真实微信支付无关。
+ */
 const { User, Product, Order, CommissionLog, sequelize } = require('../../../models');
 
 /**
@@ -83,7 +86,7 @@ const createTestOrder = async (req, res) => {
             quantity,
             total_amount,
             actual_price: total_amount,
-            status: 'paid', // 直接设为已支付，模拟支付完成
+            status: 'paid', // 测试单直接已支付，非微信回调链路
             paid_at: new Date()
         }, { transaction: t });
 

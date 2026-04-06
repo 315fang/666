@@ -1,6 +1,38 @@
-const { Product, Category, SKU, sequelize } = require('../../../models');
+const { Product, Category, SKU, AppConfig, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
 const AIService = require('../../../services/AIService');
+const CacheService = require('../../../services/CacheService');
+const { normalizeProductCommissionRate } = require('../../../utils/commissionRates');
+const { ensureNoTemporaryAssetUrls } = require('../../../utils/assetUrlAudit');
+const { deleteAssetIfUnreferenced } = require('../../../services/AssetReferenceService');
+
+const getProductGrowthReward = async (productId) => {
+    const cfg = await AppConfig.findOne({ where: { config_key: `product_growth_reward_${productId}`, status: 1 } });
+    return cfg ? parseFloat(cfg.config_value || 0) : null;
+};
+
+const setProductGrowthReward = async (productId, reward) => {
+    const value = Number(reward);
+    if (!Number.isFinite(value)) return;
+    await AppConfig.upsert({
+        config_key: `product_growth_reward_${productId}`,
+        config_value: String(Math.max(0, value)),
+        config_type: 'number',
+        category: 'PRODUCT',
+        description: '商品成长值奖励（下单支付后累计）',
+        is_public: false,
+        status: 1
+    });
+};
+
+const invalidateProductDetailCache = async (productId) => {
+    if (!productId) return;
+    try {
+        await CacheService.deleteProduct(productId);
+    } catch (error) {
+        console.warn(`[Cache] 商品详情缓存清理失败(product:${productId}):`, error.message);
+    }
+};
 
 // 获取商品列表
 const getProducts = async (req, res) => {
@@ -27,10 +59,16 @@ const getProducts = async (req, res) => {
             limit: parseInt(limit)
         });
 
+        const list = await Promise.all(rows.map(async (row) => {
+            const item = row.toJSON();
+            item.growth_value_reward = await getProductGrowthReward(item.id);
+            return item;
+        }));
+
         res.json({
             code: 0,
             data: {
-                list: rows,
+                list,
                 pagination: { total: count, page: parseInt(page), limit: parseInt(limit) }
             }
         });
@@ -55,7 +93,9 @@ const getProductById = async (req, res) => {
             return res.status(404).json({ code: -1, message: '商品不存在' });
         }
 
-        res.json({ code: 0, data: product });
+        const data = product.toJSON();
+        data.growth_value_reward = await getProductGrowthReward(data.id);
+        res.json({ code: 0, data });
     } catch (error) {
         console.error('获取商品详情失败:', error);
         res.status(500).json({ code: -1, message: '获取商品详情失败' });
@@ -69,12 +109,22 @@ const createProduct = async (req, res) => {
             name, description, images, detail_images, category_id,
             retail_price, member_price, wholesale_price, price_member, price_leader, price_agent, cost_price, stock, skus,
             enable_coupon, enable_group_buy, custom_commissions,
-            commission_rate_1, commission_rate_2, commission_amount_1, commission_amount_2, manual_weight
+            commission_rate_1, commission_rate_2, commission_amount_1, commission_amount_2, manual_weight, growth_value_reward,
+            market_price, discount_exempt, product_tag, status, supports_pickup, visible_in_mall
         } = req.body;
 
         if (!name || retail_price === undefined || retail_price === null) {
             return res.status(400).json({ code: -1, message: '名称和零售价必填' });
         }
+        if (cost_price === undefined || cost_price === null || Number(cost_price) <= 0) {
+            return res.status(400).json({ code: -1, message: '成本价必填且需大于0' });
+        }
+
+        ensureNoTemporaryAssetUrls(images || [], '商品主图');
+        ensureNoTemporaryAssetUrls(detail_images || [], '商品详情图');
+
+        const cr1 = normalizeProductCommissionRate(commission_rate_1);
+        const cr2 = normalizeProductCommissionRate(commission_rate_2);
 
         const product = await Product.create({
             name, description,
@@ -82,22 +132,27 @@ const createProduct = async (req, res) => {
             detail_images: detail_images || [],
             category_id: category_id || null,
             retail_price,
+            market_price: market_price || null,
             member_price: member_price || price_member || null,
             wholesale_price: wholesale_price || null,
             price_member: price_member || member_price || null,
             price_leader: price_leader || null,
             price_agent: price_agent || null,
-            cost_price: cost_price || null,
+            cost_price: Number(cost_price),
             stock: stock || 0,
             enable_coupon: enable_coupon ? 1 : 0,
             enable_group_buy: enable_group_buy ? 1 : 0,
             custom_commissions: custom_commissions ? 1 : 0,
-            commission_rate_1: commission_rate_1 || 0,
-            commission_rate_2: commission_rate_2 || 0,
+            discount_exempt: !!discount_exempt,
+            product_tag: product_tag || 'normal',
+            commission_rate_1: cr1,
+            commission_rate_2: cr2,
             commission_amount_1: commission_amount_1 || 0,
             commission_amount_2: commission_amount_2 || 0,
             manual_weight: manual_weight || 0,
-            status: 1
+            status: Number(status) === 0 ? 0 : 1,
+            supports_pickup: supports_pickup ? 1 : 0,
+            visible_in_mall: !(visible_in_mall === false || visible_in_mall === 0 || visible_in_mall === '0')
         });
 
         // 创建SKU
@@ -107,9 +162,16 @@ const createProduct = async (req, res) => {
             }
         }
 
+        if (growth_value_reward !== undefined) {
+            await setProductGrowthReward(product.id, growth_value_reward);
+        }
+
         const result = await Product.findByPk(product.id, {
             include: [{ model: SKU, as: 'skus' }]
         });
+        const out = result.toJSON();
+        out.growth_value_reward = await getProductGrowthReward(product.id);
+        await invalidateProductDetailCache(product.id);
 
         // ★ 触发AI审查 (异步执行，不阻塞响应)
         AIService.reviewContent(`${product.name}\n${product.description}`, 'product')
@@ -130,10 +192,10 @@ const createProduct = async (req, res) => {
             })
             .catch(err => console.error('[AI Review] Error:', err));
 
-        res.json({ code: 0, data: result, message: '创建成功' });
+        res.json({ code: 0, data: out, message: '创建成功' });
     } catch (error) {
         console.error('创建商品失败:', error);
-        res.status(500).json({ code: -1, message: '创建商品失败' });
+        res.status(error.statusCode || 500).json({ code: -1, message: error.message || '创建商品失败' });
     }
 };
 
@@ -154,10 +216,38 @@ const updateProduct = async (req, res) => {
         if (updates.enable_coupon !== undefined) updates.enable_coupon = updates.enable_coupon ? 1 : 0;
         if (updates.enable_group_buy !== undefined) updates.enable_group_buy = updates.enable_group_buy ? 1 : 0;
         if (updates.custom_commissions !== undefined) updates.custom_commissions = updates.custom_commissions ? 1 : 0;
+        if (updates.supports_pickup !== undefined) updates.supports_pickup = updates.supports_pickup ? 1 : 0;
+        if (updates.visible_in_mall !== undefined) {
+            const v = updates.visible_in_mall;
+            updates.visible_in_mall = v === true || v === 1 || v === '1';
+        }
+        const growthValueReward = updates.growth_value_reward;
+        delete updates.growth_value_reward;
 
         // 确保 price_member 和 member_price 逻辑兼容
         if (updates.price_member !== undefined && updates.member_price === undefined) {
             updates.member_price = updates.price_member;
+        }
+
+        const finalCostPrice = updates.cost_price !== undefined ? Number(updates.cost_price) : Number(product.cost_price);
+        if (!Number.isFinite(finalCostPrice) || finalCostPrice <= 0) {
+            await t.rollback();
+            return res.status(400).json({ code: -1, message: '成本价必填且需大于0' });
+        }
+        updates.cost_price = finalCostPrice;
+
+        if (updates.images !== undefined) {
+            ensureNoTemporaryAssetUrls(updates.images || [], '商品主图');
+        }
+        if (updates.detail_images !== undefined) {
+            ensureNoTemporaryAssetUrls(updates.detail_images || [], '商品详情图');
+        }
+
+        if (updates.commission_rate_1 !== undefined) {
+            updates.commission_rate_1 = normalizeProductCommissionRate(updates.commission_rate_1);
+        }
+        if (updates.commission_rate_2 !== undefined) {
+            updates.commission_rate_2 = normalizeProductCommissionRate(updates.commission_rate_2);
         }
 
         await product.update(updates, { transaction: t });
@@ -172,11 +262,19 @@ const updateProduct = async (req, res) => {
 
         await t.commit();
 
-        res.json({ code: 0, data: product, message: '更新成功' });
+        if (growthValueReward !== undefined) {
+            await setProductGrowthReward(id, growthValueReward);
+        }
+
+        await invalidateProductDetailCache(id);
+
+        const out = product.toJSON();
+        out.growth_value_reward = await getProductGrowthReward(id);
+        res.json({ code: 0, data: out, message: '更新成功' });
     } catch (error) {
         await t.rollback();
         console.error('更新商品失败:', error);
-        res.status(500).json({ code: -1, message: '更新商品失败' });
+        res.status(error.statusCode || 500).json({ code: -1, message: error.message || '更新商品失败' });
     }
 };
 
@@ -193,6 +291,7 @@ const updateProductStatus = async (req, res) => {
 
         product.status = status;
         await product.save();
+        await invalidateProductDetailCache(id);
 
         res.json({ code: 0, message: status === 1 ? '已上架' : '已下架' });
     } catch (error) {
@@ -284,12 +383,40 @@ const deleteCategory = async (req, res) => {
     }
 };
 
+/**
+ * 删除商品（下架状态才允许删除）
+ */
+const deleteProduct = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const product = await Product.findByPk(id);
+        if (!product) return res.status(404).json({ code: -1, message: '商品不存在' });
+        if (product.status === 1) return res.status(400).json({ code: -1, message: '请先下架商品再删除' });
+
+        const imageUrls = [
+            ...(Array.isArray(product.images) ? product.images : []),
+            ...(Array.isArray(product.detail_images) ? product.detail_images : [])
+        ];
+
+        await product.destroy();
+        for (const url of new Set(imageUrls.filter(Boolean))) {
+            await deleteAssetIfUnreferenced(url);
+        }
+        await invalidateProductDetailCache(id);
+        res.json({ code: 0, message: '删除成功' });
+    } catch (error) {
+        console.error('删除商品失败:', error);
+        res.status(500).json({ code: -1, message: '删除失败' });
+    }
+};
+
 module.exports = {
     getProducts,
     getProductById,
     createProduct,
     updateProduct,
     updateProductStatus,
+    deleteProduct,
     getCategories,
     createCategory,
     updateCategory,

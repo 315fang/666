@@ -10,7 +10,7 @@
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="全部状态" clearable style="width:130px">
             <el-option label="待审批" value="pending" />
-            <el-option label="已激活" value="active" />
+            <el-option label="已通过" value="approved" />
             <el-option label="已拒绝" value="rejected" />
             <el-option label="已暂停" value="suspended" />
           </el-select>
@@ -30,14 +30,14 @@
         <el-table-column label="经销商信息" min-width="180">
           <template #default="{ row }">
             <div class="dealer-info">
-              <div class="dealer-name">{{ row.dealer_name || row.User?.nickname || '-' }}</div>
+              <div class="dealer-name">{{ row.company_name || row.contact_name || row.user?.nickname || '-' }}</div>
               <div class="dealer-code">编号: {{ row.dealer_no || '-' }}</div>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="所属用户" width="130">
+        <el-table-column label="所属用户" width="130" class-name="hide-mobile">
           <template #default="{ row }">
-            {{ row.User?.nickname || row.user_id }}
+            {{ row.user?.nickname || row.user_id }}
           </template>
         </el-table-column>
         <el-table-column label="等级" width="100">
@@ -54,17 +54,17 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="申请时间" width="160">
+        <el-table-column label="申请时间" width="160" class-name="hide-mobile">
           <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button text type="primary" size="small" @click="handleViewDetail(row)">详情</el-button>
             <template v-if="row.status === 'pending'">
-              <el-button text type="success" size="small" @click="handleApprove(row)">审批</el-button>
+              <el-button text type="success" size="small" @click="handleApprove(row)">通过</el-button>
               <el-button text type="danger" size="small" @click="handleReject(row)">拒绝</el-button>
             </template>
-            <el-button v-if="row.status === 'active'" text type="warning" size="small" @click="handleSetLevel(row)">
+            <el-button v-if="row.status === 'approved'" text type="warning" size="small" @click="handleSetLevel(row)">
               调整等级
             </el-button>
           </template>
@@ -85,24 +85,24 @@
     </el-card>
 
     <!-- 详情对话框 -->
-    <el-dialog v-model="detailDialogVisible" title="经销商详情" width="600px">
+    <el-dialog v-model="detailDialogVisible" title="经销商详情" width="min(600px, 94vw)">
       <el-descriptions :column="2" border v-if="currentDealer">
-        <el-descriptions-item label="经销商名称">{{ currentDealer.dealer_name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="经销商名称">{{ currentDealer.company_name || currentDealer.contact_name || '-' }}</el-descriptions-item>
         <el-descriptions-item label="经销商编号">{{ currentDealer.dealer_no || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="所属用户">{{ currentDealer.User?.nickname || currentDealer.user_id }}</el-descriptions-item>
+        <el-descriptions-item label="所属用户">{{ currentDealer.user?.nickname || currentDealer.user_id }}</el-descriptions-item>
         <el-descriptions-item label="等级">{{ levelText(currentDealer.level) }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="statusTagType(currentDealer.status)">{{ statusText(currentDealer.status) }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="申请时间">{{ formatDate(currentDealer.created_at) }}</el-descriptions-item>
         <el-descriptions-item label="审批时间">{{ formatDate(currentDealer.approved_at) }}</el-descriptions-item>
-        <el-descriptions-item label="联系方式">{{ currentDealer.contact_info || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="申请说明" :span="2">{{ currentDealer.apply_reason || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="联系方式">{{ currentDealer.contact_phone || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="联系邮箱" :span="2">{{ currentDealer.contact_email || '-' }}</el-descriptions-item>
       </el-descriptions>
     </el-dialog>
 
     <!-- 调整等级对话框 -->
-    <el-dialog v-model="levelDialogVisible" title="调整经销商等级" width="400px">
+    <el-dialog v-model="levelDialogVisible" title="调整经销商等级" width="min(400px, 94vw)">
       <el-form label-width="80px">
         <el-form-item label="当前等级">
           <el-tag>{{ levelText(currentDealer?.level) }}</el-tag>
@@ -126,8 +126,9 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import request from '@/utils/request'
-import dayjs from 'dayjs'
+import { getDealers, approveDealer, rejectDealer, updateDealerLevel } from '@/api'
+import { formatDate } from '@/utils/format'
+import { usePagination } from '@/composables/usePagination'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -137,19 +138,15 @@ const currentDealer = ref(null)
 const newLevel = ref(1)
 
 const searchForm = reactive({ status: '', keyword: '' })
-const pagination = reactive({ page: 1, limit: 10, total: 0 })
+const { pagination, resetPage, applyResponse } = usePagination({ defaultLimit: 10 })
 const tableData = ref([])
 
 const fetchData = async () => {
   loading.value = true
   try {
-    const res = await request({
-      url: '/dealers',
-      method: 'get',
-      params: { ...searchForm, page: pagination.page, limit: pagination.limit }
-    })
-    tableData.value = res.list || res.data?.list || []
-    pagination.total = res.total || res.data?.total || 0
+    const res = await getDealers({ ...searchForm, page: pagination.page, limit: pagination.limit })
+    tableData.value = res?.list || []
+    applyResponse(res)
   } catch (e) {
     console.error('获取经销商列表失败:', e)
   } finally {
@@ -157,7 +154,7 @@ const fetchData = async () => {
   }
 }
 
-const handleSearch = () => { pagination.page = 1; fetchData() }
+const handleSearch = () => { resetPage(); fetchData() }
 const handleReset = () => { searchForm.status = ''; searchForm.keyword = ''; handleSearch() }
 
 const handleViewDetail = (row) => {
@@ -167,12 +164,12 @@ const handleViewDetail = (row) => {
 
 const handleApprove = async (row) => {
   try {
-    await ElMessageBox.confirm(`确认审批通过 "${row.dealer_name || row.User?.nickname}" 的经销商申请？`, '审批确认', {
+    await ElMessageBox.confirm(`确认审批通过 "${row.company_name || row.contact_name || row.user?.nickname || ''}" 的经销商申请？`, '审批确认', {
       confirmButtonText: '确认审批',
       cancelButtonText: '取消',
       type: 'success'
     })
-    await request({ url: `/dealers/${row.id}/approve`, method: 'put' })
+    await approveDealer(row.id)
     ElMessage.success('已审批通过')
     fetchData()
   } catch (e) {
@@ -188,7 +185,7 @@ const handleReject = async (row) => {
       inputPlaceholder: '请填写拒绝原因...',
       type: 'warning'
     })
-    await request({ url: `/dealers/${row.id}/reject`, method: 'put', data: { reason } })
+    await rejectDealer(row.id, { reason })
     ElMessage.success('已拒绝申请')
     fetchData()
   } catch (e) {
@@ -205,7 +202,7 @@ const handleSetLevel = (row) => {
 const submitLevelChange = async () => {
   submitting.value = true
   try {
-    await request({ url: `/dealers/${currentDealer.value.id}/level`, method: 'put', data: { level: newLevel.value } })
+    await updateDealerLevel(currentDealer.value.id, { level: newLevel.value })
     ElMessage.success('等级调整成功')
     levelDialogVisible.value = false
     fetchData()
@@ -218,9 +215,8 @@ const submitLevelChange = async () => {
 
 const levelText = (l) => ({ 1: 'L1 普通', 2: 'L2 高级', 3: 'L3 白金' }[l] || `L${l}`)
 const levelTagType = (l) => ({ 1: '', 2: 'warning', 3: 'danger' }[l] || '')
-const statusText = (s) => ({ pending: '待审批', active: '已激活', rejected: '已拒绝', suspended: '已暂停' }[s] || s)
-const statusTagType = (s) => ({ pending: 'warning', active: 'success', rejected: 'danger', suspended: 'info' }[s] || '')
-const formatDate = (d) => d ? dayjs(d).format('YYYY-MM-DD HH:mm') : '-'
+const statusText = (s) => ({ pending: '待审批', approved: '已通过', rejected: '已拒绝', suspended: '已暂停' }[s] || s)
+const statusTagType = (s) => ({ pending: 'warning', approved: 'success', rejected: 'danger', suspended: 'info' }[s] || '')
 
 onMounted(fetchData)
 </script>

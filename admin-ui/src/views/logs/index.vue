@@ -51,8 +51,8 @@
 
       <!-- 表格 -->
       <el-table :data="tableData" v-loading="loading" stripe>
-        <el-table-column prop="id" label="ID" width="70" />
-        <el-table-column label="操作人" width="130">
+        <el-table-column prop="id" label="ID" width="70" class-name="hide-mobile" />
+        <el-table-column label="操作人" width="130" class-name="hide-mobile">
           <template #default="{ row }">
             <div>
               <div>{{ row.admin_username || row.admin_id || '-' }}</div>
@@ -70,7 +70,7 @@
             <el-tag type="info" size="small">{{ row.resource_type }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="resource_id" label="资源ID" width="90" />
+        <el-table-column prop="resource_id" label="资源ID" width="90" class-name="hide-mobile" />
         <el-table-column prop="description" label="操作描述" min-width="200" show-overflow-tooltip />
         <el-table-column label="结果" width="80">
           <template #default="{ row }">
@@ -79,7 +79,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="时间" width="160">
+        <el-table-column label="时间" width="160" class-name="hide-mobile">
           <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
         </el-table-column>
         <el-table-column label="详情" width="80">
@@ -112,7 +112,9 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import request from '@/utils/request'
+import { getLogs, exportLogs } from '@/api'
+import { usePagination } from '@/composables/usePagination'
+import { formatDate } from '@/utils/format'
 import dayjs from 'dayjs'
 
 const loading = ref(false)
@@ -121,7 +123,7 @@ const detailDialogVisible = ref(false)
 const currentChanges = ref('')
 
 const searchForm = reactive({ action: '', resource: '', dateRange: [] })
-const pagination = reactive({ page: 1, limit: 20, total: 0 })
+const { pagination, resetPage, applyResponse } = usePagination()
 const tableData = ref([])
 
 const fetchData = async () => {
@@ -137,9 +139,9 @@ const fetchData = async () => {
       params.start_date = searchForm.dateRange[0]
       params.end_date = searchForm.dateRange[1]
     }
-    const res = await request({ url: '/logs', method: 'get', params })
-    tableData.value = res.list || res.data?.list || []
-    pagination.total = res.total || res.data?.total || 0
+    const res = await getLogs(params)
+    tableData.value = res?.list || []
+    applyResponse(res)
   } catch (e) {
     console.error('获取日志失败:', e)
   } finally {
@@ -147,7 +149,7 @@ const fetchData = async () => {
   }
 }
 
-const handleSearch = () => { pagination.page = 1; fetchData() }
+const handleSearch = () => { resetPage(); fetchData() }
 const handleReset = () => {
   searchForm.action = ''
   searchForm.resource = ''
@@ -158,7 +160,7 @@ const handleReset = () => {
 const handleExport = async () => {
   exporting.value = true
   try {
-    const res = await request({ url: '/logs/export', method: 'get', params: searchForm, responseType: 'blob' })
+    const res = await exportLogs(searchForm)
     const url = URL.createObjectURL(res)
     const a = document.createElement('a')
     a.href = url
@@ -188,7 +190,6 @@ const showDetail = (row) => {
 const actionTagType = (a) => ({
   login: 'primary', create: 'success', update: 'warning', delete: 'danger', approve: 'success', ship: 'info'
 }[a] || '')
-const formatDate = (d) => d ? dayjs(d).format('YYYY-MM-DD HH:mm') : '-'
 
 onMounted(fetchData)
 </script>

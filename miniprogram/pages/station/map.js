@@ -23,7 +23,7 @@ Page({
         pickupCount: 0,
         ec: {
             onInit: initChart,
-            lazyLoad: true
+            lazyLoad: false
         },
         // claim modal
         showClaimModal: false,

@@ -192,6 +192,27 @@ function getLightPromptModals() {
   return getConfigSection('light_prompt_modals');
 }
 
+function isActivityCenterEnabled() {
+  const config = getMiniProgramConfig();
+  const featureFlags = config.feature_flags || {};
+  const featureToggles = config.feature_toggles || {};
+  if (featureFlags.enable_activity_entry === false) return false;
+  if (featureToggles.activity_center_enabled === false) return false;
+  if (featureToggles.hide_activity_tab === true) return false;
+  return true;
+}
+
+function syncCustomTabBar(page) {
+  if (!page || typeof page.getTabBar !== 'function') return;
+  const tabBar = page.getTabBar();
+  if (tabBar && typeof tabBar.refresh === 'function') {
+    tabBar.refresh();
+    if (typeof tabBar.setHidden === 'function' && page._nativeTabBarHidden != null) {
+      tabBar.setHidden(!!page._nativeTabBarHidden);
+    }
+  }
+}
+
 module.exports = {
   DEFAULT_CONFIG,
   cloneDefaults,
@@ -201,5 +222,7 @@ module.exports = {
   getConfigSection,
   getFeatureFlags,
   getFeatureToggles,
-  getLightPromptModals
+  getLightPromptModals,
+  isActivityCenterEnabled,
+  syncCustomTabBar
 };

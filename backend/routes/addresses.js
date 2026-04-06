@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
     getAddresses,
+    getAddressById,
     createAddress,
     updateAddress,
     deleteAddress,
@@ -13,6 +14,8 @@ const { validate, schemas } = require('../middleware/validation');
 // GET /api/addresses - 获取地址列表
 router.get('/addresses', authenticate, getAddresses);
 
+// GET /api/addresses/:id - 获取单条地址
+router.get('/addresses/:id', authenticate, getAddressById);
 // POST /api/addresses - 创建地址
 router.post('/addresses', authenticate, validate(schemas.createAddress), createAddress);
 

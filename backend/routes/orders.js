@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const {
-    createOrder, payOrder, prepayOrder, wechatPayNotify,
+    createOrder, payOrder, prepayOrder, syncWechatPayStatus, wechatPayNotify,
     shipOrder, confirmOrder, cancelOrder,
     getOrders, getOrderById,
     agentConfirmOrder, requestShipping, settleCommissions, getAgentOrders
 } = require('../controllers/orderController');
 const { authenticate } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
+const constants = require('../config/constants');
 
 // POST /api/orders - 创建订单
 router.post('/orders', authenticate, validate(schemas.createOrder), createOrder);
@@ -24,12 +25,23 @@ router.get('/orders/:id', authenticate, getOrderById);
 // POST /api/orders/:id/prepay - 微信支付预下单（返回 wx.requestPayment 参数）
 router.post('/orders/:id/prepay', authenticate, prepayOrder);
 
-// POST /api/orders/:id/pay - 支付订单（内部/测试用，正式支付通过 wechat notify 触发）
-router.post('/orders/:id/pay', authenticate, payOrder);
+// POST /api/orders/:id/sync-wechat-pay - 待付款时主动向微信查单并更新为已支付（补 notify）
+router.post('/orders/:id/sync-wechat-pay', authenticate, syncWechatPayStatus);
 
-// POST /wechat/pay/notify - 微信支付回调（无需鉴权，用签名验证）
-// ★ 使用 express.text 解析 text/xml 请求体
-router.post('/wechat/pay/notify', express.text({ type: 'text/xml' }), wechatPayNotify);
+// POST /api/orders/:id/pay — 仅 DEBUG 开启时注册；正式收款以 prepay + POST /wechat/pay/notify 为准
+if (constants.DEBUG.ENABLE_TEST_ROUTES) {
+    router.post('/orders/:id/pay', authenticate, payOrder);
+}
+
+// 微信支付 V3 回调（无需鉴权；POST 体由签名校验）
+// GET：浏览器/商户平台「检测 URL」常用 GET，仅返回说明；正式扣款结果通知一律为 POST JSON
+router.get('/wechat/pay/notify', (req, res) => {
+    res.status(200).type('text/plain; charset=utf-8').send(
+        'OK wenlan wechat pay notify — use POST for payment callbacks'
+    );
+});
+// 原始 JSON 报文由 app.js 的 bodyParser verify 钩子保留到 req.rawBody
+router.post('/wechat/pay/notify', wechatPayNotify);
 
 // POST /api/orders/:id/agent-confirm - 代理人确认订单
 router.post('/orders/:id/agent-confirm', authenticate, agentConfirmOrder);
@@ -45,5 +57,9 @@ router.post('/orders/:id/confirm', authenticate, confirmOrder);
 
 // POST /api/orders/:id/cancel - 取消订单
 router.post('/orders/:id/cancel', authenticate, cancelOrder);
+
+// POST /api/orders/:id/review - 用户提交评价
+const { submitOrderReview } = require('../controllers/orderController');
+router.post('/orders/:id/review', authenticate, submitOrderReview);
 
 module.exports = router;

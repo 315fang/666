@@ -153,20 +153,21 @@ const completeWithdrawal = async (req, res) => {
             return res.status(400).json({ code: -1, message: '打款金额不合法' });
         }
 
-        const clientIp = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '127.0.0.1')
-            .split(',')[0].trim().replace(/^::ffff:/, '');
-
         try {
             await transferToWallet({
                 partnerTradeNo: withdrawal.withdrawal_no,
                 openid: user.openid,
                 amount,
-                desc: remark || '佣金提现',
-                spbillCreateIp: clientIp
+                desc: remark || '佣金提现'
             });
         } catch (err) {
+            await User.increment('balance', {
+                by: parseFloat(withdrawal.amount),
+                where: { id: withdrawal.user_id },
+                transaction: t
+            });
             withdrawal.status = 'failed';
-            withdrawal.remark = (withdrawal.remark ? withdrawal.remark + ' | ' : '') + `自动打款失败: ${err.message}`;
+            withdrawal.remark = (withdrawal.remark ? withdrawal.remark + ' | ' : '') + `自动打款失败: ${err.message}；提现金额已退回余额`;
             await withdrawal.save({ transaction: t });
             await t.commit();
             return res.status(500).json({ code: -1, message: '自动打款失败' });

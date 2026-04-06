@@ -261,9 +261,10 @@ import {
   getDebugAnomalies,
   getDebugDbPing,
   getCronStatus,
-  getDebugLogs
+  getDebugLogs,
+  getStorageConfig,
+  testStorageConfig
 } from '@/api'
-import request from '@/utils/request'
 import dayjs from 'dayjs'
 
 // ── 状态 ──────────────────────────────────────────────
@@ -298,16 +299,15 @@ const checkStorage = async () => {
   storageLatency.value = null
   try {
     // 获取 provider
-    const cfgRes = await request({ url: '/storage/config', method: 'get' })
+    const cfgRes = await getStorageConfig()
     const cfgData = cfgRes.data || cfgRes
     storageProvider.value = cfgData.provider || cfgData.STORAGE_PROVIDER || '--'
 
-    // 测试连通性
     const t0 = Date.now()
-    const testRes = await request({ url: '/storage/test', method: 'post', data: {} })
+    const testRes = await testStorageConfig()
     const elapsed = Date.now() - t0
     const testData = testRes.data || testRes
-    if (testData.success || testData.connected || testRes.code === 0) {
+    if (testData?.url || testData?.provider || testData?.success || testData?.connected) {
       storageStatus.value  = 'ok'
       storageLatency.value = elapsed
     } else {
@@ -348,7 +348,7 @@ const fetchCron = async () => {
   loadingCron.value = true
   try {
     const res = await getCronStatus()
-    cronTasks.value = res.data?.tasks ?? []
+    cronTasks.value = res?.tasks ?? res?.data?.tasks ?? []
   } catch { cronTasks.value = [] } finally {
     loadingCron.value = false
   }

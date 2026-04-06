@@ -20,7 +20,8 @@ const Cart = sequelize.define('Cart', {
     sku_id: {
         type: DataTypes.INTEGER,
         allowNull: true,
-        comment: 'SKU ID，无规格商品可为null'
+        defaultValue: null,
+        comment: 'SKU ID；无规格必须为 null（勿用 0，否则在有外键的生产库会插入失败）'
     },
     quantity: {
         type: DataTypes.INTEGER,

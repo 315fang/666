@@ -16,7 +16,7 @@ async function createAdmin() {
         // 解析命令行参数
         const args = process.argv.slice(2);
         let username = 'admin';
-        let password = 'admin123';
+        let password = process.env.ADMIN_INIT_PASSWORD || '';
         let name = '超级管理员';
 
         for (let i = 0; i < args.length; i++) {
@@ -31,8 +31,13 @@ async function createAdmin() {
             }
         }
 
-        // 同步数据库
-        await sequelize.sync();
+        if (!password || password.length < 12) {
+            console.error('❌ 请通过 --password 或 ADMIN_INIT_PASSWORD 提供至少 12 位密码');
+            process.exit(1);
+        }
+
+        // 同步数据库（仅确保模型可用，不做 alter）
+        await sequelize.authenticate();
 
         // 检查是否已存在
         const existing = await Admin.findOne({ where: { username } });
@@ -56,7 +61,7 @@ async function createAdmin() {
         console.log('');
         console.log('┌────────────────────────────────┐');
         console.log(`│ 用户名: ${username.padEnd(22)} │`);
-        console.log(`│ 密码:   ${password.padEnd(22)} │`);
+        console.log(`│ 密码:   ${'[未回显]'.padEnd(22)} │`);
         console.log(`│ 姓名:   ${name.padEnd(22)} │`);
         console.log(`│ 角色:   super_admin            │`);
         console.log('└────────────────────────────────┘');

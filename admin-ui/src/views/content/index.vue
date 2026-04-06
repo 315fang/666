@@ -1,5 +1,32 @@
 <template>
   <div class="content-page">
+    <el-alert
+      title="内容中心只负责内容资源本身，例如 Banner、图文、素材规范；首页和活动页的最终呈现顺序，请到页面装修或首页内容位里管理。"
+      type="info"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 16px"
+    />
+    <el-card class="image-spec-card">
+      <template #header>
+        <div class="card-header">
+          <span>前端图片组件规范</span>
+        </div>
+      </template>
+      <div class="image-spec-tip">
+        统一策略：前端容器固定比例，图片按对应图位规范上传，前端默认满铺填充展示；不要依赖容器跟随素材自由伸缩。
+      </div>
+      <div class="image-spec-grid">
+        <div v-for="item in imageSpecs" :key="item.key" class="image-spec-item">
+          <div class="image-spec-name">{{ item.name }}</div>
+          <div class="image-spec-meta">推荐比例：{{ item.ratio }}</div>
+          <div class="image-spec-meta">最低分辨率：{{ item.minSize }}</div>
+          <div class="image-spec-desc">{{ item.display }}</div>
+          <div class="image-spec-note">{{ item.note }}</div>
+        </div>
+      </div>
+    </el-card>
+
     <el-tabs v-model="activeTab" @tab-change="handleTabChange">
       <!-- ====== Banner 管理 ====== -->
       <el-tab-pane label="Banner 管理" name="banner">
@@ -14,22 +41,61 @@
             </div>
           </template>
 
+          <div style="margin-bottom:16px;display:flex;gap:12px;align-items:center;">
+            <span style="font-size:14px;color:#606266;">位置筛选：</span>
+            <el-radio-group v-model="bannerFilter" size="small" @change="fetchBanners">
+              <el-radio-button value="">全部</el-radio-button>
+              <el-radio-button value="home">首页轮播</el-radio-button>
+              <el-radio-button value="home_mid">首页中部</el-radio-button>
+              <el-radio-button value="home_bottom">首页底部</el-radio-button>
+              <el-radio-button value="category">分类页</el-radio-button>
+              <el-radio-button value="activity">活动页</el-radio-button>
+            </el-radio-group>
+          </div>
+
+          <el-alert
+            v-if="bannerFilter === 'category'"
+            title="分类页 Banner 当前后端已支持配置，但小程序分类页前端尚未正式接入展示，后续会统一调整分类页广告位逻辑。"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 16px;"
+          />
+
           <el-table :data="banners" v-loading="bannerLoading" stripe>
-            <el-table-column prop="id" label="ID" width="70" />
-            <el-table-column label="图片" width="120">
+            <el-table-column prop="id" label="ID" width="60" />
+            <el-table-column label="图片" width="130">
               <template #default="{ row }">
                 <el-image
-                  :src="row.image_url"
+                  :src="row.image_url || (row.product && row.product.images && row.product.images[0])"
                   fit="cover"
-                  style="width: 80px; height: 40px; border-radius: 4px;"
-                  :preview-src-list="[row.image_url]"
+                  style="width: 90px; height: 45px; border-radius: 4px;"
+                  :preview-src-list="[row.image_url || (row.product && row.product.images && row.product.images[0])]"
                 />
               </template>
             </el-table-column>
-            <el-table-column prop="title" label="标题" min-width="150" />
-            <el-table-column prop="link_url" label="跳转链接" min-width="200" show-overflow-tooltip />
-            <el-table-column prop="sort_order" label="排序" width="80" />
-            <el-table-column label="状态" width="90">
+            <el-table-column prop="title" label="标题" min-width="120" />
+            <el-table-column label="跳转类型" width="120">
+              <template #default="{ row }">
+                <el-tag size="small" :type="linkTypeTagType(row.link_type)">
+                  {{ linkTypeLabel(row.link_type) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="跳转目标" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span v-if="row.link_type === 'product' && row.product">{{ row.product.name }}</span>
+                <span v-else-if="row.link_value">{{ row.link_value }}</span>
+                <span v-else style="color:#ccc">-</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="位置" width="90">
+              <template #default="{ row }">
+                <el-tag size="small" type="info">{{ positionLabel(row.position) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="sort_order" label="排序" width="70" />
+            <el-table-column label="状态" width="80">
               <template #default="{ row }">
                 <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
                   {{ row.status === 1 ? '显示' : '隐藏' }}
@@ -70,9 +136,10 @@
             <el-table-column prop="created_at" label="创建时间" width="160">
               <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="150" fixed="right">
+            <el-table-column label="操作" width="180" fixed="right">
               <template #default="{ row }">
                 <el-button text type="primary" size="small" @click="handleEditContent(row)">编辑</el-button>
+                <el-button text type="danger" size="small" @click="handleDeleteContent(row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -84,32 +151,63 @@
     <el-dialog
       v-model="bannerDialogVisible"
       :title="bannerIsEdit ? '编辑 Banner' : '新增 Banner'"
-      width="600px"
+      width="680px"
     >
       <el-form ref="bannerFormRef" :model="bannerForm" :rules="bannerRules" label-width="100px">
-        <el-form-item label="标题" prop="title">
-          <el-input v-model="bannerForm.title" placeholder="Banner 标题（可选）" />
+        <el-form-item label="展示位置">
+          <el-radio-group v-model="bannerForm.position">
+            <el-radio-button value="home">首页轮播</el-radio-button>
+            <el-radio-button value="home_mid">首页中部</el-radio-button>
+            <el-radio-button value="home_bottom">首页底部</el-radio-button>
+            <el-radio-button value="category">分类页</el-radio-button>
+            <el-radio-button value="activity">活动页</el-radio-button>
+          </el-radio-group>
         </el-form-item>
-        <el-form-item label="图片" prop="image_url">
-          <div class="upload-area">
-            <el-upload
-              class="banner-uploader"
-              :show-file-list="false"
-              :http-request="handleBannerUpload"
-              :before-upload="beforeUpload"
-              accept="image/*"
-            >
-              <img v-if="bannerForm.image_url" :src="bannerForm.image_url" class="banner-preview" />
-              <div v-else class="upload-placeholder">
-                <el-icon :size="28"><Plus /></el-icon>
-                <div>上传图片</div>
-              </div>
-            </el-upload>
-            <div class="upload-tip">推荐尺寸 750×280，支持 JPG/PNG，最大 2MB</div>
+        <el-alert
+          v-if="bannerForm.position === 'category'"
+          title="分类页 Banner 配置会先保存到后台，当前小程序前端尚未完整接入该广告位展示，后续会统一改动。"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px;"
+        />
+        <el-form-item label="标题">
+          <el-input v-model="bannerForm.title" placeholder="Banner 主标题（可选）" />
+        </el-form-item>
+        <el-form-item label="副标题">
+          <el-input v-model="bannerForm.subtitle" placeholder="副标题/描述文字（可选）" />
+        </el-form-item>
+        <el-form-item label="角标文字">
+          <el-input v-model="bannerForm.kicker" placeholder="如：NEW / 限时活动（可选）" style="width:200px" />
+        </el-form-item>
+
+        <el-divider content-position="left">内容配置（选商品自动填入图片和跳转，或上传自定义图，或复用已有Banner）</el-divider>
+        <div class="banner-spec-panel">
+          <div class="banner-spec-title">当前图位要求</div>
+          <div class="banner-spec-line">
+            {{ currentBannerImageSpec.name }} · {{ currentBannerImageSpec.ratio }} · {{ currentBannerImageSpec.minSize }}
           </div>
-        </el-form-item>
-        <el-form-item label="跳转链接">
-          <el-input v-model="bannerForm.link_url" placeholder="小程序页面路径或外部链接" />
+          <div class="banner-spec-note">
+            {{ currentBannerImageSpec.display }}；{{ currentBannerImageSpec.note }}
+          </div>
+        </div>
+        <ContentBlockEditor v-model="bannerBlockData" :fields="['title', 'subtitle']" :image-spec="currentBannerImageSpec" />
+        <el-form-item label="展示时段">
+          <el-date-picker
+            v-model="bannerForm.start_time"
+            type="datetime"
+            placeholder="开始时间（留空=立即）"
+            style="width:200px"
+            value-format="YYYY-MM-DD HH:mm:ss"
+          />
+          <span style="margin:0 8px;color:#909399;">至</span>
+          <el-date-picker
+            v-model="bannerForm.end_time"
+            type="datetime"
+            placeholder="结束时间（留空=永久）"
+            style="width:200px"
+            value-format="YYYY-MM-DD HH:mm:ss"
+          />
         </el-form-item>
         <el-form-item label="排序">
           <el-input-number v-model="bannerForm.sort_order" :min="0" :max="999" />
@@ -138,6 +236,15 @@
             <el-option label="帮助" value="help" />
           </el-select>
         </el-form-item>
+        <div class="banner-spec-panel article-spec-panel">
+          <div class="banner-spec-title">图文正文配图要求</div>
+          <div class="banner-spec-line">
+            {{ articleImageSpec.name }} · {{ articleImageSpec.ratio }} · {{ articleImageSpec.minSize }}
+          </div>
+          <div class="banner-spec-note">
+            {{ articleImageSpec.display }}；{{ articleImageSpec.note }}
+          </div>
+        </div>
         <el-form-item label="正文">
           <el-input v-model="contentForm.content" type="textarea" :rows="8" placeholder="支持 HTML 内容" />
         </el-form-item>
@@ -151,25 +258,203 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getBanners, createBanner, updateBanner, deleteBanner, uploadFile } from '@/api'
-import request from '@/utils/request'
-import dayjs from 'dayjs'
+import ContentBlockEditor from '@/components/ContentBlockEditor.vue'
+import { getBanners, createBanner, updateBanner, deleteBanner, uploadFile, getProducts, deleteContent, getContents, createContent, updateContent } from '@/api'
+import { formatDate } from '@/utils/format'
+import { warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
 
 const activeTab = ref('banner')
 const submitting = ref(false)
 
+const imageSpecs = [
+  {
+    key: 'product_detail',
+    name: '商品详情首图 / 分类弹层大图',
+    ratio: '3:4 竖图',
+    minSize: '1200 x 1600',
+    display: '固定竖图容器，前端满铺填充展示',
+    note: '主体居中，四边预留 8% 安全区，避免边角文案被裁'
+  },
+  {
+    key: 'product_thumb',
+    name: '商品卡缩略图 / 订单商品图',
+    ratio: '1:1 正方图',
+    minSize: '800 x 800',
+    display: '固定正方形容器，前端满铺裁切',
+    note: '商品主体尽量铺满，不要在四角放小字'
+  },
+  {
+    key: 'home',
+    name: '首页轮播主视觉（home）',
+    ratio: '9:16 竖图',
+    minSize: '1242 x 2208',
+    display: '全屏主视觉展示，前端会做沉浸式裁切',
+    note: '标题、人物、商品主体放在中间 70% 安全区'
+  },
+  {
+    key: 'poster',
+    name: '首页中部/底部海报（home_mid / home_bottom）',
+    ratio: '3:4 竖图',
+    minSize: '1080 x 1440',
+    display: '按宽度展示，保持统一画报比例',
+    note: '适合单张活动海报、礼盒图、场景图'
+  },
+  {
+    key: 'category',
+    name: '分类页 Banner（category）',
+    ratio: '3:4 竖图',
+    minSize: '1080 x 1440',
+    display: '与商品详情首图统一，前端满铺裁切',
+    note: '主商品和标题尽量居中，避免贴边'
+  },
+  {
+    key: 'activity',
+    name: '活动页图片条（activity）',
+    ratio: '3:2 横图',
+    minSize: '1500 x 1000',
+    display: '固定横图容器，前端满铺裁切',
+    note: '左右会有轻微裁切，主要信息放中间区域'
+  },
+  {
+    key: 'article',
+    name: '图文正文插图 / 商品详情图',
+    ratio: '3:4 竖图或长图',
+    minSize: '宽度 1080 以上',
+    display: '正文内按宽度自适应显示，不强制裁切',
+    note: '建议单张 2MB 内，长图拆段上传，避免首屏过长'
+  }
+]
+
+const bannerPositionSpecMap = {
+  home: imageSpecs.find(item => item.key === 'home'),
+  home_mid: imageSpecs.find(item => item.key === 'poster'),
+  home_bottom: imageSpecs.find(item => item.key === 'poster'),
+  category: imageSpecs.find(item => item.key === 'category'),
+  activity: imageSpecs.find(item => item.key === 'activity')
+}
+
+const currentBannerImageSpec = computed(() => {
+  return bannerPositionSpecMap[bannerForm.position] || imageSpecs[0]
+})
+
+const articleImageSpec = computed(() => imageSpecs.find(item => item.key === 'article'))
+
 // ===== Banner =====
 const bannerLoading = ref(false)
+const bannerFilter = ref('')
 const banners = ref([])
 const bannerDialogVisible = ref(false)
 const bannerIsEdit = ref(false)
 const bannerFormRef = ref()
-const bannerForm = reactive({ id: null, title: '', image_url: '', link_url: '', sort_order: 0, status: 1 })
-const bannerRules = {
-  image_url: [{ required: true, message: '请上传 Banner 图片', trigger: 'change' }]
+const bannerForm = reactive({
+  id: null, title: '', subtitle: '', kicker: '',
+  image_url: '', link_type: 'none', link_value: '',
+  product_id: null, position: 'home',
+  sort_order: 0, status: 1, start_time: null, end_time: null
+})
+const bannerRules = {}
+
+// 商品搜索
+const productSearchLoading = ref(false)
+const productOptions = ref([])
+const selectedProduct = ref(null)
+
+const autoPreviewUrl = computed(() => {
+  if (bannerForm.link_type === 'product' && selectedProduct.value) {
+    const imgs = selectedProduct.value.images
+    return Array.isArray(imgs) ? imgs[0] : null
+  }
+  return null
+})
+
+const LINK_TYPE_MAP = {
+  none: { label: '无跳转', tagType: 'info' },
+  product: { label: '商品详情', tagType: 'primary' },
+  activity: { label: '活动页面', tagType: 'warning' },
+  category: { label: '分类页定位', tagType: 'success' },
+  group_buy: { label: '拼团活动', tagType: 'success' },
+  slash: { label: '砍价活动', tagType: 'danger' },
+  lottery: { label: '抽奖转盘', tagType: '' },
+  page: { label: '小程序页面', tagType: 'info' },
+  url: { label: '外部链接', tagType: 'info' }
 }
+const POSITION_MAP = { home: '首页轮播', home_mid: '首页中部', home_bottom: '首页底部', category: '分类页', activity: '活动页' }
+
+const linkTypeLabel = (t) => LINK_TYPE_MAP[t]?.label || t
+const linkTypeTagType = (t) => LINK_TYPE_MAP[t]?.tagType || 'info'
+const positionLabel = (p) => POSITION_MAP[p] || p
+
+const linkValuePlaceholder = computed(() => {
+  const map = {
+    activity: '活动ID，如：1',
+    category: '分类ID（与商品分类接口 id 一致），如：2',
+    group_buy: '拼团活动ID，如：5',
+    slash: '砍价活动ID，如：3',
+    lottery: '留空即可（跳转到抽奖页）',
+    page: '小程序页面路径，如：/pages/about/index',
+    url: '完整URL，如：https://example.com'
+  }
+  return map[bannerForm.link_type] || '请输入跳转值'
+})
+
+const linkValueHint = computed(() => {
+  const map = {
+    group_buy: '前端将跳转到 /pages/group/detail?id=<填入ID>',
+    slash: '前端将跳转到 /pages/slash/detail?id=<填入ID>',
+    activity: '前端将跳转到 /pages/activity/activity',
+    category: '小程序将打开分类 Tab 并定位到该分类',
+    lottery: '前端将跳转到 /pages/lottery/lottery'
+  }
+  return map[bannerForm.link_type] || ''
+})
+
+const searchProducts = async (query) => {
+  if (!query) return
+  productSearchLoading.value = true
+  try {
+    const res = await getProducts({ keyword: query, limit: 20, status: 1 })
+    productOptions.value = res?.list || (Array.isArray(res) ? res : [])
+  } catch (e) {
+    console.error('搜索商品失败:', e)
+  } finally {
+    productSearchLoading.value = false
+  }
+}
+
+const handleProductSelect = (id) => {
+  selectedProduct.value = productOptions.value.find(p => p.id === id) || null
+  if (selectedProduct.value) {
+    bannerForm.link_value = String(id)
+  }
+}
+
+const handleLinkTypeChange = () => {
+  bannerForm.link_value = ''
+  bannerForm.product_id = null
+  selectedProduct.value = null
+}
+
+const bannerBlockData = computed({
+  get: () => ({
+    image_url: bannerForm.image_url,
+    title: bannerForm.title,
+    subtitle: bannerForm.subtitle,
+    link_type: bannerForm.link_type,
+    link_value: bannerForm.link_value,
+    product_id: bannerForm.product_id
+  }),
+  set: (v) => {
+    // 只更新真正有值的字段，避免子组件 emit 空值覆盖父组件已有数据
+    if (v.image_url !== undefined) bannerForm.image_url = v.image_url
+    if (v.title !== undefined) bannerForm.title = v.title
+    if (v.subtitle !== undefined) bannerForm.subtitle = v.subtitle
+    if (v.link_type !== undefined) bannerForm.link_type = v.link_type || 'none'
+    if (v.link_value !== undefined) bannerForm.link_value = v.link_value || ''
+    if (v.product_id !== undefined) bannerForm.product_id = v.product_id || null
+  }
+})
 
 // ===== Content =====
 const contentLoading = ref(false)
@@ -181,8 +466,9 @@ const contentForm = reactive({ id: null, title: '', type: 'article', content: ''
 const fetchBanners = async () => {
   bannerLoading.value = true
   try {
-    const res = await getBanners()
-    banners.value = Array.isArray(res) ? res : (res.list || res.data || [])
+    const params = bannerFilter.value ? { position: bannerFilter.value } : {}
+    const res = await getBanners(params)
+    banners.value = Array.isArray(res) ? res : (res?.list || [])
   } catch (e) {
     console.error('获取Banner失败:', e)
   } finally {
@@ -193,8 +479,8 @@ const fetchBanners = async () => {
 const fetchContents = async () => {
   contentLoading.value = true
   try {
-    const res = await request({ url: '/contents', method: 'get' })
-    contents.value = res.list || res.data || []
+    const res = await getContents()
+    contents.value = res?.list || (Array.isArray(res) ? res : [])
   } catch (e) {
     console.error('获取内容列表失败:', e)
   } finally {
@@ -208,36 +494,71 @@ const handleTabChange = (name) => {
 
 const handleAddBanner = () => {
   bannerIsEdit.value = false
-  Object.assign(bannerForm, { id: null, title: '', image_url: '', link_url: '', sort_order: 0, status: 1 })
+  selectedProduct.value = null
+  productOptions.value = []
+  Object.assign(bannerForm, {
+    id: null, title: '', subtitle: '', kicker: '',
+    image_url: '', link_type: 'none', link_value: '',
+    product_id: null, position: 'home',
+    sort_order: 0, status: 1, start_time: null, end_time: null
+  })
   bannerDialogVisible.value = true
 }
 
 const handleEditBanner = (row) => {
   bannerIsEdit.value = true
-  Object.assign(bannerForm, row)
+  selectedProduct.value = null
+  productOptions.value = []
+  Object.assign(bannerForm, {
+    id: row.id,
+    title: row.title || '',
+    subtitle: row.subtitle || '',
+    kicker: row.kicker || '',
+    image_url: row.image_url || '',
+    link_type: row.link_type || 'none',
+    link_value: row.link_value || '',
+    product_id: row.product_id || null,
+    position: row.position || 'home',
+    sort_order: row.sort_order || 0,
+    status: row.status ?? 1,
+    start_time: row.start_time || null,
+    end_time: row.end_time || null
+  })
+  // 恢复商品信息
+  if (row.product_id && row.product) {
+    selectedProduct.value = row.product
+    productOptions.value = [row.product]
+  }
   bannerDialogVisible.value = true
 }
 
 const handleBannerSubmit = async () => {
-  await bannerFormRef.value?.validate(async (valid) => {
-    if (!valid) return
-    submitting.value = true
-    try {
-      if (bannerIsEdit.value) {
-        await updateBanner(bannerForm.id, bannerForm)
-        ElMessage.success('更新成功')
-      } else {
-        await createBanner(bannerForm)
-        ElMessage.success('创建成功')
-      }
-      bannerDialogVisible.value = false
-      fetchBanners()
-    } catch (e) {
-      console.error('提交失败:', e)
-    } finally {
-      submitting.value = false
+  const tempUrlMessage = warnTemporaryAssetUrls(bannerForm.image_url ? [bannerForm.image_url] : [], 'Banner 图片')
+  if (tempUrlMessage) {
+    ElMessage.warning(tempUrlMessage)
+    return
+  }
+  submitting.value = true
+  try {
+    const payload = { ...bannerForm }
+    // product类型时，link_value = product_id
+    if (payload.link_type === 'product' && payload.product_id) {
+      payload.link_value = String(payload.product_id)
     }
-  })
+    if (bannerIsEdit.value) {
+      await updateBanner(bannerForm.id, payload)
+      ElMessage.success('更新成功')
+    } else {
+      await createBanner(payload)
+      ElMessage.success('创建成功')
+    }
+    bannerDialogVisible.value = false
+    fetchBanners()
+  } catch (e) {
+    console.error('提交失败:', e)
+  } finally {
+    submitting.value = false
+  }
 }
 
 const handleDeleteBanner = async (row) => {
@@ -283,10 +604,10 @@ const handleContentSubmit = async () => {
   submitting.value = true
   try {
     if (contentIsEdit.value) {
-      await request({ url: `/contents/${contentForm.id}`, method: 'put', data: contentForm })
+      await updateContent(contentForm.id, contentForm)
       ElMessage.success('更新成功')
     } else {
-      await request({ url: '/contents', method: 'post', data: contentForm })
+      await createContent(contentForm)
       ElMessage.success('创建成功')
     }
     contentDialogVisible.value = false
@@ -298,17 +619,98 @@ const handleContentSubmit = async () => {
   }
 }
 
-const formatDate = (d) => d ? dayjs(d).format('YYYY-MM-DD HH:mm') : '-'
+const handleDeleteContent = async (row) => {
+  try {
+    await ElMessageBox.confirm(`确定删除「${row.title}」？此操作不可恢复。`, '删除确认', {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await deleteContent(row.id)
+    ElMessage.success('删除成功')
+    fetchContents()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败')
+      console.error('删除内容失败:', error)
+    }
+  }
+}
+
 onMounted(fetchBanners)
 </script>
 
 <style scoped>
 .content-page { padding: 0; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+.image-spec-card { margin-bottom: 16px; }
+.image-spec-tip {
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #8b7460;
+}
+.image-spec-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.image-spec-item {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #faf7f2;
+  border: 1px solid #f0e5d8;
+}
+.image-spec-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 6px;
+}
+.image-spec-meta {
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.6;
+}
+.image-spec-desc,
+.image-spec-note {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.image-spec-desc {
+  margin-top: 6px;
+  color: #8b7460;
+}
+.image-spec-note {
+  color: #909399;
+}
+.banner-spec-panel {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #faf7f2;
+  border: 1px solid #f0e5d8;
+}
+.banner-spec-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 6px;
+}
+.banner-spec-line,
+.banner-spec-note {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.banner-spec-line { color: #8b7460; }
+.banner-spec-note { color: #909399; }
+.article-spec-panel { margin-bottom: 18px; }
 .upload-area { display: flex; flex-direction: column; gap: 8px; }
-.banner-uploader { width: 300px; border: 1px dashed #d9d9d9; border-radius: 6px; overflow: hidden; cursor: pointer; }
+.banner-uploader { width: 320px; border: 1px dashed #d9d9d9; border-radius: 6px; overflow: hidden; cursor: pointer; }
 .banner-uploader:hover { border-color: #409eff; }
-.banner-preview { width: 300px; height: 100px; display: block; object-fit: cover; }
-.upload-placeholder { width: 300px; height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #8c939d; gap: 4px; }
+.banner-preview { width: 320px; height: 110px; display: block; object-fit: cover; }
+.banner-preview-wrap { position: relative; width: 320px; height: 110px; }
+.preview-tip { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.45); color: #fff; font-size: 12px; text-align: center; padding: 4px; }
+.upload-placeholder { width: 320px; height: 110px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #8c939d; gap: 4px; }
 .upload-tip { font-size: 12px; color: #909399; }
 </style>

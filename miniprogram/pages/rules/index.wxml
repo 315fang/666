@@ -1,17 +1,18 @@
-<!--pages/rules/index.wxml - 规则说明-->
 <view class="container">
-  <view class="card">
+  <view class="hero-card">
+    <text class="hero-eyebrow">说明中心</text>
     <text class="title">{{rules.title}}</text>
     <text class="summary" wx:if="{{rules.summary}}">{{rules.summary}}</text>
-    <view class="list" wx:if="{{rules.details.length > 0}}">
-      <view class="item" wx:for="{{rules.details}}" wx:key="index">
-        <text class="dot">•</text>
-        <text class="text">{{item}}</text>
-      </view>
+  </view>
+
+  <view class="card" wx:if="{{rules.details.length > 0}}">
+    <view class="item" wx:for="{{rules.details}}" wx:key="index">
+      <text class="index">{{index + 1 < 10 ? '0' + (index + 1) : index + 1}}</text>
+      <text class="text">{{item}}</text>
     </view>
   </view>
 
-  <view class="card" wx:if="{{!rules.details.length && !rules.summary}}">
+  <view class="card empty-card" wx:if="{{!rules.details.length && !rules.summary}}">
     <text class="empty">暂无规则说明</text>
   </view>
 </view>

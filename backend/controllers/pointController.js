@@ -3,6 +3,7 @@
  */
 const { PointLog } = require('../models');
 const PointService = require('../services/PointService');
+const MemberTierService = require('../services/MemberTierService');
 
 /**
  * GET /api/points/account
@@ -99,12 +100,16 @@ async function getTasks(req, res, next) {
             }
         });
 
+        const pr = await MemberTierService.getPointRules();
+        const streakBonus = pr.checkin_streak?.points ?? 50;
+        const reviewImgPts = pr.review_image?.points ?? 20;
+
         const tasks = [
             {
                 id: 'checkin',
                 title: '每日签到',
-                desc: `连续签到7天额外奖励${PointService.POINT_RULES.checkin_streak.points}分`,
-                points: PointService.POINT_RULES.checkin.points,
+                desc: `连续签到7天额外奖励${streakBonus}分`,
+                points: pr.checkin?.points ?? 5,
                 done: checkedIn,
                 streak: account?.checkin_streak || 0
             },
@@ -112,7 +117,7 @@ async function getTasks(req, res, next) {
                 id: 'share',
                 title: '分享商品',
                 desc: '每次分享商品给好友',
-                points: PointService.POINT_RULES.share.points,
+                points: pr.share?.points ?? 5,
                 done: sharedToday >= 3,
                 current: Math.min(sharedToday, 3),
                 total: 3
@@ -120,13 +125,27 @@ async function getTasks(req, res, next) {
             {
                 id: 'review',
                 title: '写商品评价',
-                desc: '图文评价额外获得20分',
-                points: PointService.POINT_RULES.review.points,
+                desc: `图文评价额外获得${reviewImgPts}分`,
+                points: pr.review?.points ?? 10,
                 done: false  // 通过评价完成后触发
             }
         ];
 
-        res.json({ code: 0, data: { tasks, level_config: PointService.LEVEL_CONFIG } });
+        const levelConfig = await MemberTierService.getPointLevels();
+        res.json({
+            code: 0,
+            data: {
+                tasks,
+                level_config: levelConfig.map(lv => ({
+                    level: lv.level,
+                    name: lv.name,
+                    min: lv.min,
+                    min_growth: lv.min,
+                    max: lv.max === null || lv.max === undefined ? null : lv.max,
+                    perks: lv.perks
+                }))
+            }
+        });
     } catch (err) {
         next(err);
     }
@@ -138,11 +157,13 @@ async function getTasks(req, res, next) {
  */
 async function getLevels(req, res, next) {
     try {
+        const levelConfig = await MemberTierService.getPointLevels();
         res.json({
             code: 0,
-            data: PointService.LEVEL_CONFIG.map(lv => ({
+            data: levelConfig.map(lv => ({
                 level: lv.level,
                 name: lv.name,
+                min_growth: lv.min,
                 min_points: lv.min,
                 perks: lv.perks
             }))

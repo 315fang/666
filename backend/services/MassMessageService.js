@@ -1,6 +1,7 @@
 const { MassMessage, User, UserTag, UserTagRelation, Notification } = require('../models');
 const { Op } = require('sequelize');
 const axios = require('axios');
+const { error: logError } = require('../utils/logger');
 
 /**
  * 群发信息服务
@@ -146,7 +147,7 @@ class MassMessageService {
         switch (message.targetType) {
             case 'all':
                 // 所有用户（除了被禁用的）
-                where.status = { [Op.ne]: 'disabled' };
+                where.status = 1;
                 break;
 
             case 'role':
@@ -204,7 +205,7 @@ class MassMessageService {
             try {
                 await this.sendWechatTemplateMessage(user.openid, message);
             } catch (error) {
-                console.error(`发送微信通知失败 [User ${user.id}]:`, error.message);
+                logError('MASS_MESSAGE', `发送微信通知失败 [User ${user.id}]`, { error: error.message });
                 // 微信发送失败不影响整体流程
             }
         }
@@ -281,7 +282,7 @@ class MassMessageService {
 
         const messages = await MassMessage.findAll({
             where,
-            order: [['createdAt', 'DESC']],
+            order: [['created_at', 'DESC']],
             limit: filters.limit || 20,
             offset: filters.offset || 0
         });
@@ -356,7 +357,7 @@ class MassMessageService {
      */
     async getUserTags() {
         return await UserTag.findAll({
-            order: [['createdAt', 'DESC']]
+            order: [['created_at', 'DESC']]
         });
     }
 

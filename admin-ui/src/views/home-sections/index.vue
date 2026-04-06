@@ -1,188 +1,222 @@
 <template>
   <div class="home-sections-page">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span>首页装修 (Low-Code Editor)</span>
-          <div class="header-actions">
-            <el-button type="success" @click="handleAddSection">
-              <el-icon><Plus /></el-icon>
-              新增区块
-            </el-button>
-            <el-button type="primary" @click="handleSaveSort" :loading="savingSortLoading" :disabled="!hasChanges">
-              <el-icon><Check /></el-icon>
-              保存排序
-            </el-button>
-            <el-tooltip content="拖拽左侧 ≡ 图标可调整显示顺序" placement="bottom">
-              <el-icon style="cursor:help;color:#909399;font-size:18px;"><QuestionFilled /></el-icon>
-            </el-tooltip>
-          </div>
-        </div>
-      </template>
-
-      <!-- 说明 -->
-      <el-alert
-        title="拖动每行左侧的「≡」图标来调整首页各区块的显示顺序。点击「编辑」可修改区块标题和可见性。"
-        type="info"
-        :closable="false"
-        show-icon
-        style="margin-bottom: 20px;"
-      />
-
-      <!-- 可拖拽列表 -->
-      <div class="sections-list" v-loading="loading">
-        <div
-          v-for="(section, index) in sections"
-          :key="section.id"
-          class="section-item"
-          :class="{ 'is-hidden': !section.is_visible }"
-          draggable="true"
-          @dragstart="handleDragStart(index)"
-          @dragover.prevent="handleDragOver(index)"
-          @drop="handleDrop(index)"
-          @dragend="handleDragEnd"
-        >
-          <!-- 拖拽手柄 -->
-          <div class="drag-handle">
-            <el-icon color="#aaa"><Grid /></el-icon>
-          </div>
-
-          <!-- 区块信息 -->
-          <div class="section-info">
-            <div class="section-name">{{ section.title || section.section_type }}</div>
-            <div class="section-sub">{{ section.subtitle || sectionTypeText(section.section_type) }}</div>
-          </div>
-
-          <!-- 排序序号 -->
-          <div class="section-order">
-            <el-tag type="info" size="small">#{{ index + 1 }}</el-tag>
-          </div>
-
-          <!-- 可见性开关 -->
-          <div class="section-visibility">
-            <el-switch
-              v-model="section.is_visible"
-              :active-value="1"
-              :inactive-value="0"
-              active-text="显示"
-              inactive-text="隐藏"
-              @change="markChanged"
-            />
-          </div>
-
-          <!-- 编辑按钮 -->
-          <div class="section-actions">
-            <el-button text type="primary" size="small" @click="handleEdit(section)">配置</el-button>
-            <el-button text type="danger" size="small" @click="handleDelete(section.id)">删除</el-button>
-          </div>
-        </div>
-      </div>
-    </el-card>
-
-    <!-- 新建/编辑区块配置对话框 -->
-    <el-dialog v-model="editDialogVisible" :title="editForm.id ? '编辑区块配置' : '新增业务区块'" width="800px" top="5vh">
-      <el-form ref="editFormRef" :model="editForm" label-width="130px" class="dynamic-form">
-        <el-form-item label="区块标识(Key)" required v-if="!editForm.id">
-          <el-input v-model="editForm.section_key" placeholder="如: my_banner_1 (需唯一)" />
-        </el-form-item>
-        <el-form-item label="区块类型" required>
-          <el-select v-model="editForm.section_type" placeholder="选择组件类型" :disabled="!!editForm.id" @change="handleTypeChange" filterable style="width: 100%">
-            <el-option v-for="(schema, type) in sectionSchemas" :key="type" :label="`${schema.icon} ${schema.label} (${type})`" :value="type" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="内部名称(管理用)" required>
-          <el-input v-model="editForm.section_name" placeholder="如: 首页顶部大连版" />
-        </el-form-item>
-        
-        <el-divider>显示设置</el-divider>
-        <el-row>
-          <el-col :span="12">
-            <el-form-item label="大标题">
-              <el-input v-model="editForm.title" placeholder="前端展示的区块标题" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="副标题">
-              <el-input v-model="editForm.subtitle" placeholder="前端展示的副标题" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-divider v-if="currentSchemaKeys.length > 0">组件专属参数装配 (Schema Engine)</el-divider>
-        
-        <!-- 动态配置表单引擎 -->
-        <template v-for="key in currentSchemaKeys" :key="key">
-          <el-form-item :label="currentSchema[key].label || key">
-            
-            <!-- String / Number -->
-            <el-input v-if="currentSchema[key].type === 'string'" v-model="editForm.config[key]" />
-            <el-input-number v-else-if="currentSchema[key].type === 'number'" v-model="editForm.config[key]" />
-            
-            <!-- Textarea -->
-            <el-input v-else-if="currentSchema[key].type === 'textarea'" type="textarea" :rows="3" v-model="editForm.config[key]" />
-            
-            <!-- Boolean -->
-            <el-switch v-else-if="currentSchema[key].type === 'boolean'" v-model="editForm.config[key]" />
-            
-            <!-- Color -->
-            <el-color-picker v-else-if="currentSchema[key].type === 'color'" v-model="editForm.config[key]" show-alpha />
-            
-            <!-- Select -->
-            <el-select v-else-if="currentSchema[key].type === 'select'" v-model="editForm.config[key]" style="width:100%">
-              <el-option v-for="opt in currentSchema[key].options" :key="opt" :label="opt" :value="opt" />
-            </el-select>
-            
-            <!-- Array (String List or Object List) -->
-            <div v-else-if="currentSchema[key].type === 'array'" class="array-container">
-              <div v-for="(item, idx) in editForm.config[key]" :key="idx" class="array-item-card">
-                <div class="array-item-header">
-                  <span>项目 #{{ idx + 1 }}</span>
-                  <el-button type="danger" text icon="Delete" @click="removeArrayItem(key, idx)">删除</el-button>
-                </div>
-                <!-- 纯字符串数组 -->
-                <el-input v-if="!currentSchema[key].itemSchema" v-model="editForm.config[key][idx]" placeholder="请输入URL等值" />
-                
-                <!-- 对象数组 (递归渲染属性) -->
-                <div v-else class="array-object-props">
-                  <div class="prop-row" v-for="(propDef, propName) in currentSchema[key].itemSchema" :key="propName">
-                    <span class="prop-label">{{ propDef.label || propName }}</span>
-                    <el-input v-if="propDef.type === 'string'" v-model="item[propName]" size="small" />
-                    <el-color-picker v-else-if="propDef.type === 'color'" v-model="item[propName]" show-alpha size="small" />
-                    <el-select v-else-if="propDef.type === 'select'" v-model="item[propName]" size="small">
-                      <el-option v-for="o in propDef.options" :key="o" :label="o" :value="o" />
-                    </el-select>
-                  </div>
-                </div>
-              </div>
-              <el-button type="primary" plain size="small" @click="addArrayItem(key, currentSchema[key].itemSchema)">+ 添加项</el-button>
+    <el-tabs v-model="pageTab">
+      <el-tab-pane label="弹窗广告" name="popup">
+        <el-card>
+          <template #header>
+            <div class="card-header">
+              <span>首页弹窗配置</span>
+              <el-button type="primary" :loading="popupSaving" @click="savePopupAd">保存配置</el-button>
             </div>
-            
-          </el-form-item>
-        </template>
-        
-      </el-form>
-      <template #footer>
-        <el-button @click="editDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleEditSubmit" :loading="submitting">保存装配结果</el-button>
-      </template>
-    </el-dialog>
+          </template>
+          <el-alert
+            title="首页当前真正生效的是这一块弹窗配置；原来的区块编排没有实际效果，已从此页移除。"
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 16px"
+          />
+          <el-form label-width="120px" style="max-width:680px;">
+            <el-form-item label="启用弹窗">
+              <el-switch v-model="popupForm.enabled" active-text="开启" inactive-text="关闭" />
+            </el-form-item>
+            <el-form-item label="弹出频率">
+              <el-select v-model="popupForm.frequency" style="width:220px;">
+                <el-option label="每次进入" value="every_time" />
+                <el-option label="每天一次" value="once_daily" />
+                <el-option label="每次会话一次" value="once_session" />
+              </el-select>
+            </el-form-item>
+            <el-divider content-position="left">内容配置（选商品自动填入图片和跳转，或上传自定义图）</el-divider>
+            <ContentBlockEditor v-model="popupBlockData" :fields="['title']" />
+            <el-form-item label="按钮文字">
+              <el-input v-model="popupForm.button_text" placeholder="如：立即查看、马上抢购" style="width:220px;" />
+            </el-form-item>
+          </el-form>
+        </el-card>
+      </el-tab-pane>
+
+      <el-tab-pane label="品牌配置" name="brand">
+        <el-card>
+          <template #header>
+            <div class="card-header">
+              <span>首页品牌标识与热度气泡</span>
+              <el-button type="primary" :loading="brandSaving" @click="saveBrandConfig">保存配置</el-button>
+            </div>
+          </template>
+          <el-alert
+            title="这一页现在负责首页主视觉辅助内容，包括首页弹窗、品牌标识和热度气泡，不再承担历史区块编排职责。"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 16px"
+          />
+          <el-form label-width="140px" style="max-width:680px;">
+            <el-form-item label="显示品牌Logo">
+              <el-switch v-model="brandConfig.show_brand_logo" active-text="显示" inactive-text="隐藏" />
+              <div style="font-size:12px;color:#909399;margin-top:4px;">关闭后首页左上角品牌Logo区域将完全隐藏</div>
+            </el-form-item>
+            <el-form-item label="品牌Logo图片" v-if="brandConfig.show_brand_logo">
+              <el-input v-model="brandConfig.brand_logo" placeholder="Logo图片URL（留空使用默认气泡动画）" />
+              <div v-if="brandConfig.brand_logo" style="margin-top:8px;">
+                <el-image :src="brandConfig.brand_logo" fit="contain" style="width:52px;height:52px;border-radius:12px;border:1px solid #eee;" />
+              </div>
+              <div style="font-size:12px;color:#909399;margin-top:4px;">建议正方形透明底PNG，128x128px</div>
+            </el-form-item>
+            <el-form-item label="品牌名称">
+              <el-input v-model="brandConfig.nav_brand_title" placeholder="如：问兰镜像" style="width:240px;" />
+            </el-form-item>
+            <el-form-item label="品牌副标题">
+              <el-input v-model="brandConfig.nav_brand_sub" placeholder="如：品牌甄选" style="width:240px;" />
+            </el-form-item>
+            <el-divider content-position="left">热度气泡通告</el-divider>
+            <el-form-item label="启用气泡通告">
+              <el-switch v-model="brandConfig.bubble_enabled" active-text="开启" inactive-text="关闭" />
+            </el-form-item>
+            <el-form-item label="展示条数">
+              <el-input-number v-model="brandConfig.bubble_limit" :min="3" :max="20" />
+            </el-form-item>
+            <el-divider content-position="left">气泡动作文案（用 {user} 代表用户昵称，{product} 代表商品名）</el-divider>
+            <el-form-item label="普通下单">
+              <el-input v-model="brandConfig.bubble_copy_order" placeholder="默认：{user} 购买了 {product}" style="width:320px;" />
+            </el-form-item>
+            <el-form-item label="拼团下单">
+              <el-input v-model="brandConfig.bubble_copy_group_buy" placeholder="默认：{user} 拼团了 {product}" style="width:320px;" />
+            </el-form-item>
+            <el-form-item label="砍价下单">
+              <el-input v-model="brandConfig.bubble_copy_slash" placeholder="默认：{user} 砍价了 {product}" style="width:320px;" />
+            </el-form-item>
+          </el-form>
+        </el-card>
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import request from '@/utils/request'
+import ContentBlockEditor from '@/components/ContentBlockEditor.vue'
 import {
+  getPopupAdConfig,
+  updatePopupAdConfig,
   getHomeSections,
   getSectionSchemas,
   createHomeSection,
   updateHomeSection,
   toggleSectionVisible,
   deleteHomeSection,
-  updateSectionSort
+  updateSectionSort,
+  getSettings,
+  updateSettings
 } from '@/api/index'
 
+const pageTab = ref('popup')
+
+// ===== 弹窗广告 =====
+const popupSaving = ref(false)
+const popupForm = reactive({
+  enabled: false,
+  frequency: 'once_daily',
+  image_url: '',
+  link_type: 'none',
+  link_value: '',
+  button_text: '',
+  product_id: null
+})
+
+const loadPopupAd = async () => {
+  try {
+    const data = await getPopupAdConfig()
+    Object.assign(popupForm, data || {})
+  } catch (_) {}
+}
+
+const popupBlockData = computed({
+  get: () => ({
+    image_url: popupForm.image_url,
+    title: popupForm.button_text,
+    link_type: popupForm.link_type,
+    link_value: popupForm.link_value,
+    product_id: popupForm.product_id
+  }),
+  set: (v) => {
+    popupForm.image_url = v.image_url || ''
+    popupForm.button_text = v.title || popupForm.button_text
+    popupForm.link_type = v.link_type || 'none'
+    popupForm.link_value = v.link_value || ''
+    popupForm.product_id = v.product_id || null
+  }
+})
+
+const savePopupAd = async () => {
+  popupSaving.value = true
+  try {
+    await updatePopupAdConfig({ ...popupForm })
+    ElMessage.success('弹窗广告配置已保存')
+  } catch (e) {
+    ElMessage.error('保存失败')
+  } finally {
+    popupSaving.value = false
+  }
+}
+
+// ===== 品牌配置 =====
+const brandSaving = ref(false)
+const brandConfig = reactive({
+  show_brand_logo: true,
+  brand_logo: '',
+  nav_brand_title: '问兰镜像',
+  nav_brand_sub: '品牌甄选',
+  bubble_enabled: true,
+  bubble_limit: 10,
+  bubble_copy_order: '',
+  bubble_copy_group_buy: '',
+  bubble_copy_slash: ''
+})
+
+const loadBrandConfig = async () => {
+  try {
+    const res = await getSettings()
+    const d = res?.data || res || {}
+    brandConfig.show_brand_logo = d.show_brand_logo !== 'false' && d.show_brand_logo !== false
+    brandConfig.brand_logo = d.brand_logo || ''
+    brandConfig.nav_brand_title = d.nav_brand_title || '问兰镜像'
+    brandConfig.nav_brand_sub = d.nav_brand_sub || '品牌甄选'
+    brandConfig.bubble_enabled = d.bubble_enabled !== false
+    brandConfig.bubble_limit = Number(d.bubble_limit || 10)
+    brandConfig.bubble_copy_order = d.bubble_copy_order || ''
+    brandConfig.bubble_copy_group_buy = d.bubble_copy_group_buy || ''
+    brandConfig.bubble_copy_slash = d.bubble_copy_slash || ''
+  } catch (_) {}
+}
+
+const saveBrandConfig = async () => {
+  brandSaving.value = true
+  try {
+    await updateSettings({
+      category: 'homepage',
+      settings: {
+        show_brand_logo: String(brandConfig.show_brand_logo),
+        brand_logo: brandConfig.brand_logo,
+        nav_brand_title: brandConfig.nav_brand_title,
+        nav_brand_sub: brandConfig.nav_brand_sub,
+        bubble_enabled: String(brandConfig.bubble_enabled),
+        bubble_limit: String(brandConfig.bubble_limit),
+        bubble_copy_order: brandConfig.bubble_copy_order,
+        bubble_copy_group_buy: brandConfig.bubble_copy_group_buy,
+        bubble_copy_slash: brandConfig.bubble_copy_slash
+      }
+    })
+    ElMessage.success('品牌配置已保存')
+  } catch (_) {
+    ElMessage.error('保存失败')
+  } finally {
+    brandSaving.value = false
+  }
+}
+
+// ===== 区块编排 =====
 const loading = ref(false)
 const savingSortLoading = ref(false)
 const submitting = ref(false)
@@ -222,7 +256,7 @@ const fetchData = async () => {
       getHomeSections(),
       getSectionSchemas()
     ])
-    sections.value = (res.data || res.list || []).sort((a, b) => b.sort_order - a.sort_order)
+    sections.value = (res?.list || (Array.isArray(res) ? res : [])).sort((a, b) => b.sort_order - a.sort_order)
     sectionSchemas.value = schemaRes.data || {}
   } catch (e) {
     console.error('获取首页配置失败:', e)
@@ -388,7 +422,11 @@ const sectionTypeText = (type) => {
   return type
 }
 
-onMounted(fetchData)
+onMounted(() => {
+  fetchData()
+  loadPopupAd()
+  loadBrandConfig()
+})
 </script>
 
 <style scoped>

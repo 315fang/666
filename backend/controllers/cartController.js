@@ -1,260 +1,85 @@
-const { Cart, Product, SKU, User } = require('../models');
-const constants = require('../config/constants');
-
 /**
- * ★ 根据用户角色等级获取商品实际价格
+ * 购物袋(Cart)控制器 - 薄包装层
+ * 职责：提取参数 → 调用 CartService → res.json() / next(err)
  */
-function getPriceByRole(product, sku, roleLevel) {
-    if (sku) {
-        let price = parseFloat(sku.retail_price);
-        if (roleLevel >= 1 && sku.member_price) price = parseFloat(sku.member_price);
-        if (roleLevel >= 2 && sku.wholesale_price) price = parseFloat(sku.wholesale_price);
-        return price;
-    }
-    let price = parseFloat(product.retail_price);
-    if (roleLevel === 1) price = parseFloat(product.price_member || product.retail_price);
-    else if (roleLevel === 2) price = parseFloat(product.price_leader || product.price_member || product.retail_price);
-    else if (roleLevel === 3) price = parseFloat(product.price_agent || product.price_leader || product.price_member || product.retail_price);
-    return price;
-}
 
-// 获取购物车
-const getCart = async (req, res) => {
+const CartService = require('../services/CartService');
+
+// 获取购物袋
+const getCart = async (req, res, next) => {
     try {
         const userId = req.user.id;
         const roleLevel = req.user.role_level || 0;
+        const purchaseLevelCode = req.user.purchase_level_code;
 
-        const cartItems = await Cart.findAll({
-            where: { user_id: userId },
-            include: [
-                {
-                    model: Product,
-                    as: 'product',
-                    attributes: ['id', 'name', 'images', 'retail_price', 'member_price', 'price_member', 'price_leader', 'price_agent', 'stock', 'status']
-                },
-                {
-                    model: SKU,
-                    as: 'sku',
-                    attributes: ['id', 'spec_name', 'spec_value', 'retail_price', 'member_price', 'wholesale_price', 'stock', 'image']
-                }
-            ],
-            order: [['created_at', 'DESC']]
-        });
-
-        // 计算汇总信息（★ 根据用户角色等级计算价格）
-        let totalCount = 0;
-        let selectedCount = 0;
-        let totalAmount = 0;
-
-        // ★ 为每个 item 附加 effective_price（用户实际等级价格）
-        const itemsWithPrice = cartItems.map(item => {
-            const itemJson = item.toJSON();
-            itemJson.effective_price = getPriceByRole(item.product, item.sku, roleLevel);
-            return itemJson;
-        });
-
-        itemsWithPrice.forEach(item => {
-            totalCount += item.quantity;
-            if (item.selected) {
-                selectedCount += item.quantity;
-                totalAmount += item.effective_price * item.quantity;
-            }
-        });
-
-        res.json({
-            code: 0,
-            data: {
-                items: itemsWithPrice,
-                summary: {
-                    totalCount,
-                    selectedCount,
-                    totalAmount: totalAmount.toFixed(2)
-                }
-            }
-        });
+        const result = await CartService.getCart(userId, roleLevel, purchaseLevelCode);
+        res.json({ code: 0, data: result });
     } catch (error) {
-        console.error('获取购物车失败:', error);
-        res.status(500).json({ code: -1, message: '获取购物车失败' });
+        next(error);
     }
 };
 
-// 添加商品到购物车
-const addToCart = async (req, res) => {
+// 添加商品到购物袋
+const addToCart = async (req, res, next) => {
     try {
         const userId = req.user.id;
-        const { product_id, sku_id = null, quantity = 1 } = req.body;
-        const MAX_QTY = constants.CART.MAX_ITEM_QUANTITY;
+        const result = await CartService.addToCart(userId, req.body);
 
-        if (!product_id) {
-            return res.status(400).json({ code: -1, message: '商品ID不能为空' });
-        }
-
-        const qty = parseInt(quantity);
-        if (!Number.isInteger(qty) || qty < 1) {
-            return res.status(400).json({ code: -1, message: '数量必须为正整数' });
-        }
-
-        // 检查商品是否存在
-        const product = await Product.findByPk(product_id);
-        if (!product || product.status !== 1) {
-            return res.status(400).json({ code: -1, message: '商品不存在或已下架' });
-        }
-
-        // 检查SKU库存
-        if (sku_id) {
-            const sku = await SKU.findByPk(sku_id);
-            if (!sku || sku.stock < qty) {
-                return res.status(400).json({ code: -1, message: 'SKU不存在或库存不足' });
-            }
-        }
-
-        // 查找是否已存在相同商品
-        const existingItem = await Cart.findOne({
-            where: {
-                user_id: userId,
-                product_id,
-                sku_id: sku_id || null
-            }
-        });
-
-        if (existingItem) {
-            // ★ 原子性自增，防止并发竞态；同时校验上限
-            const newQty = existingItem.quantity + qty;
-            if (newQty > MAX_QTY) {
-                return res.status(400).json({ code: -1, message: `单个商品最多购买 ${MAX_QTY} 件` });
-            }
-            // 使用 Model.increment 进行原子 SQL UPDATE，防止 read-modify-write 竞态
-            await Cart.increment('quantity', {
-                by: qty,
-                where: {
-                    id: existingItem.id,
-                    user_id: userId,
-                    // 原子上限检查：仅当当前数量 + qty <= MAX_QTY 时才更新
-                    quantity: { [require('sequelize').Op.lte]: MAX_QTY - qty }
-                }
-            });
-            const updated = await Cart.findByPk(existingItem.id);
-            res.json({ code: 0, data: updated, message: '已更新购物车数量' });
-        } else {
-            // 新增购物车项
-            if (qty > MAX_QTY) {
-                return res.status(400).json({ code: -1, message: `单个商品最多购买 ${MAX_QTY} 件` });
-            }
-            const newItem = await Cart.create({
-                user_id: userId,
-                product_id,
-                sku_id,
-                quantity: qty,
-                selected: true
-            });
-            res.json({ code: 0, data: newItem, message: '已添加到购物车' });
-        }
+        res.json({ code: 0, ...result });
     } catch (error) {
-        console.error('添加购物车失败:', error);
-        res.status(500).json({ code: -1, message: '添加购物车失败' });
+        next(error);
     }
 };
 
-// 更新购物车商品
-const updateCartItem = async (req, res) => {
+// 更新购物袋商品
+const updateCartItem = async (req, res, next) => {
     try {
         const userId = req.user.id;
         const { id } = req.params;
-        const { quantity, selected } = req.body;
+        const result = await CartService.updateCartItem(userId, id, req.body);
 
-        const cartItem = await Cart.findOne({
-            where: { id, user_id: userId }
-        });
-
-        if (!cartItem) {
-            return res.status(404).json({ code: -1, message: '购物车商品不存在' });
-        }
-
-        if (quantity !== undefined) {
-            if (quantity <= 0) {
-                await cartItem.destroy();
-                return res.json({ code: 0, message: '已从购物车移除' });
-            }
-            cartItem.quantity = quantity;
-        }
-
-        if (selected !== undefined) {
-            cartItem.selected = selected;
-        }
-
-        await cartItem.save();
-        res.json({ code: 0, data: cartItem });
+        res.json({ code: 0, ...result });
     } catch (error) {
-        console.error('更新购物车失败:', error);
-        res.status(500).json({ code: -1, message: '更新购物车失败' });
+        next(error);
     }
 };
 
-// 删除购物车商品
-const removeCartItem = async (req, res) => {
+// 删除购物袋商品
+const removeCartItem = async (req, res, next) => {
     try {
         const userId = req.user.id;
         const { id } = req.params;
+        const result = await CartService.removeCartItem(userId, id);
 
-        const deleted = await Cart.destroy({
-            where: { id, user_id: userId }
-        });
-
-        if (!deleted) {
-            return res.status(404).json({ code: -1, message: '购物车商品不存在' });
-        }
-
-        res.json({ code: 0, message: '已从购物车移除' });
+        res.json({ code: 0, ...result });
     } catch (error) {
-        console.error('删除购物车商品失败:', error);
-        res.status(500).json({ code: -1, message: '删除失败' });
+        next(error);
     }
 };
 
-// 清空购物车
-const clearCart = async (req, res) => {
+// 清空购物袋
+const clearCart = async (req, res, next) => {
     try {
         const userId = req.user.id;
-        const { selected_only } = req.query;
+        const selectedOnly = req.query.selected_only === 'true';
+        const result = await CartService.clearCart(userId, selectedOnly);
 
-        const where = { user_id: userId };
-        if (selected_only === 'true') {
-            where.selected = true;
-        }
-
-        await Cart.destroy({ where });
-
-        res.json({ code: 0, message: '购物车已清空' });
+        res.json({ code: 0, ...result });
     } catch (error) {
-        console.error('清空购物车失败:', error);
-        res.status(500).json({ code: -1, message: '清空失败' });
+        next(error);
     }
 };
 
 // 批量选中/取消选中
-const selectCartItems = async (req, res) => {
+const selectCartItems = async (req, res, next) => {
     try {
         const userId = req.user.id;
         const { ids, selected } = req.body;
+        const result = await CartService.selectCartItems(userId, ids, selected);
 
-        if (!Array.isArray(ids) || selected === undefined) {
-            return res.status(400).json({ code: -1, message: '参数错误' });
-        }
-
-        await Cart.update(
-            { selected },
-            {
-                where: {
-                    id: ids,
-                    user_id: userId
-                }
-            }
-        );
-
-        res.json({ code: 0, message: '更新成功' });
+        res.json({ code: 0, ...result });
     } catch (error) {
-        console.error('批量选中失败:', error);
-        res.status(500).json({ code: -1, message: '操作失败' });
+        next(error);
     }
 };
 

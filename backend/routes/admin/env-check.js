@@ -7,8 +7,15 @@ const { adminAuth } = require('../../middleware/adminAuth');
  * 环境配置检查路由（.env文件只读检查）
  */
 
+const requireSuperAdmin = (req, res, next) => {
+    if (req.admin?.role !== 'super_admin') {
+        return res.status(403).json({ code: -1, message: '仅超级管理员可访问环境配置检查' });
+    }
+    next();
+};
+
 // 获取.env配置完整报告
-router.get('/env-report', adminAuth, async (req, res) => {
+router.get('/env-report', adminAuth, requireSuperAdmin, async (req, res) => {
     try {
         const report = EnvConfigService.getConfigReport();
         res.json({
@@ -25,7 +32,7 @@ router.get('/env-report', adminAuth, async (req, res) => {
 });
 
 // 获取配置健康度（简化版）
-router.get('/env-report/health', adminAuth, async (req, res) => {
+router.get('/env-report/health', adminAuth, requireSuperAdmin, async (req, res) => {
     try {
         const report = EnvConfigService.getConfigReport();
         
@@ -51,7 +58,7 @@ router.get('/env-report/health', adminAuth, async (req, res) => {
 });
 
 // 获取原始.env内容（脱敏）
-router.get('/env-content', adminAuth, async (req, res) => {
+router.get('/env-content', adminAuth, requireSuperAdmin, async (req, res) => {
     try {
         const fs = require('fs');
         const path = require('path');
@@ -68,7 +75,7 @@ router.get('/env-content', adminAuth, async (req, res) => {
         const stats = fs.statSync(envPath);
         
         // 对敏感信息进行脱敏
-        const sensitiveKeys = ['PASSWORD', 'SECRET', 'KEY', 'TOKEN', 'API_KEY'];
+        const sensitiveKeys = ['PASSWORD', 'SECRET', 'KEY', 'TOKEN', 'API_KEY', 'PRIVATE', 'CERT'];
         const maskedContent = content.split('\n').map(line => {
             const isSensitive = sensitiveKeys.some(key => 
                 line.toUpperCase().includes(key)
@@ -77,17 +84,7 @@ router.get('/env-content', adminAuth, async (req, res) => {
             if (isSensitive && line.includes('=')) {
                 const equalIndex = line.indexOf('=');
                 const key = line.substring(0, equalIndex);
-                const value = line.substring(equalIndex + 1).trim();
-                
-                if (value) {
-                    // 保留前后几位，中间脱敏
-                    if (value.length > 8) {
-                        const masked = value.substring(0, 3) + '****' + value.substring(value.length - 3);
-                        return `${key}=${masked}`;
-                    } else {
-                        return `${key}=********`;
-                    }
-                }
+                return `${key}=********`;
             }
             return line;
         }).join('\n');
@@ -110,7 +107,7 @@ router.get('/env-content', adminAuth, async (req, res) => {
 });
 
 // 对比.env和.env.example
-router.get('/env-compare', adminAuth, async (req, res) => {
+router.get('/env-compare', adminAuth, requireSuperAdmin, async (req, res) => {
     try {
         const comparison = EnvConfigService.compareWithExample();
         res.json({
@@ -126,7 +123,7 @@ router.get('/env-compare', adminAuth, async (req, res) => {
 });
 
 // 生成.env模板
-router.get('/env-template', adminAuth, async (req, res) => {
+router.get('/env-template', adminAuth, requireSuperAdmin, async (req, res) => {
     try {
         const template = EnvConfigService.generateEnvTemplate();
         res.json({
@@ -145,7 +142,7 @@ router.get('/env-template', adminAuth, async (req, res) => {
 });
 
 // 下载.env模板文件
-router.get('/env-template/download', adminAuth, async (req, res) => {
+router.get('/env-template/download', adminAuth, requireSuperAdmin, async (req, res) => {
     try {
         const template = EnvConfigService.generateEnvTemplate();
         
@@ -161,7 +158,7 @@ router.get('/env-template/download', adminAuth, async (req, res) => {
 });
 
 // 获取配置项详情
-router.get('/env-config/:key', adminAuth, async (req, res) => {
+router.get('/env-config/:key', adminAuth, requireSuperAdmin, async (req, res) => {
     try {
         const { key } = req.params;
         const envData = EnvConfigService.parseEnvFile();
@@ -179,7 +176,7 @@ router.get('/env-config/:key', adminAuth, async (req, res) => {
             code: 0,
             data: {
                 key,
-                value: value || null,
+                value: value ? '********' : null,
                 configured: !!value
             }
         });

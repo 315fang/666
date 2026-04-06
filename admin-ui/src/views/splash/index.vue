@@ -271,9 +271,10 @@ async function fetchConfig() {
   loading.value = true
   try {
     const res = await getSplashConfig()
-    if (res.code === 0 && res.data) {
-      Object.assign(form, res.data)
-      originalForm = JSON.stringify(res.data)
+    const data = res?.data || res
+    if (data) {
+      Object.assign(form, data)
+      originalForm = JSON.stringify(data)
     }
   } catch (e) {
     ElMessage.error('加载配置失败')
@@ -287,12 +288,8 @@ async function handleSave() {
   saving.value = true
   try {
     const res = await updateSplashConfig({ ...form })
-    if (res.code === 0) {
-      ElMessage.success(res.message || '保存成功')
-      originalForm = JSON.stringify(form)
-    } else {
-      ElMessage.error(res.message || '保存失败')
-    }
+    ElMessage.success(res?.message || '保存成功')
+    originalForm = JSON.stringify(form)
   } catch (e) {
     ElMessage.error('保存异常')
   } finally {
@@ -320,12 +317,11 @@ function handleBeforeUpload(file) {
 async function handleUpload({ file }) {
   try {
     const res = await uploadSplashImage(file)
-    if (res.code === 0 && res.data?.url) {
-      form.image_url = res.data.url
-      ElMessage.success('上传成功')
-    } else {
-      ElMessage.error('上传失败')
-    }
+    const data = res?.data || res
+    const url = data?.url
+    if (!url) return ElMessage.error('上传失败')
+    form.image_url = url
+    ElMessage.success('上传成功')
   } catch (e) {
     ElMessage.error('上传异常')
   }

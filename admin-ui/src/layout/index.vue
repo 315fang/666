@@ -1,7 +1,14 @@
 <template>
   <div class="admin-layout">
+    <!-- ===== 手机端遮罩 ===== -->
+    <div
+      v-if="mobileMenuOpen"
+      class="sidebar-overlay"
+      @click="mobileMenuOpen = false"
+    />
+
     <!-- ===== 侧边栏 ===== -->
-    <aside :class="['sidebar', { 'is-collapsed': isCollapse }]">
+    <aside :class="['sidebar', { 'is-collapsed': isCollapse, 'mobile-open': mobileMenuOpen }]">
       <!-- Logo -->
       <div class="sidebar-logo">
         <div class="logo-icon">
@@ -61,18 +68,33 @@
       <header class="topbar">
         <!-- 面包屑 -->
         <div class="topbar-left">
+          <!-- 手机端汉堡按钮 -->
+          <button class="hamburger-btn" @click="mobileMenuOpen = !mobileMenuOpen" aria-label="打开菜单">
+            <span class="hamburger-bar" />
+            <span class="hamburger-bar" />
+            <span class="hamburger-bar" />
+          </button>
           <el-breadcrumb separator="/">
-            <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
+            <el-breadcrumb-item :to="{ path: '/' }">经营看板</el-breadcrumb-item>
             <el-breadcrumb-item v-if="currentTitle">{{ currentTitle }}</el-breadcrumb-item>
           </el-breadcrumb>
+          <div class="topbar-context" v-if="currentGroup">
+            <span class="context-pill">{{ currentGroup }}</span>
+          </div>
         </div>
 
         <!-- 右侧操作区 -->
         <div class="topbar-right">
-          <!-- 通知 -->
-          <button class="icon-btn" title="通知">
-            <el-icon><Bell /></el-icon>
-          </button>
+          <div class="topbar-shortcuts">
+            <button
+              v-for="action in topbarActions"
+              :key="action.path"
+              class="topbar-shortcut"
+              @click="router.push(action.path)"
+            >
+              {{ action.label }}
+            </button>
+          </div>
 
           <!-- 用户信息 -->
           <el-dropdown @command="handleCommand" trigger="click">
@@ -163,19 +185,29 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { changePassword } from '@/api'
-import request from '@/utils/request'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
 const isCollapse = ref(false)
+const mobileMenuOpen = ref(false)
 const passwordDialogVisible = ref(false)
+
+// 路由变化时自动关闭手机端菜单
+watch(route, () => { mobileMenuOpen.value = false })
+
+// 手机端检测：屏幕宽度 >= 768 时确保遮罩关闭
+const handleResize = () => {
+  if (window.innerWidth >= 768) mobileMenuOpen.value = false
+}
+onMounted(() => window.addEventListener('resize', handleResize))
+onUnmounted(() => window.removeEventListener('resize', handleResize))
 const passwordFormRef = ref()
 const changingPwd = ref(false)
 
@@ -210,25 +242,43 @@ const passwordRules = {
 const menuItems = computed(() => {
   const children = router.options.routes.find(r => r.path === '/')?.children || []
   return children
-    .filter(item => item.meta?.title)
+    .filter(item => item.meta?.title && item.meta?.nav !== false && userStore.hasPermission(item.meta?.permission))
     .map(item => ({
       path: '/' + item.path,
       title: item.meta.title,
       icon: item.meta.icon,
-      group: item.meta.group || '其他'
+      group: item.meta.group || '其他',
+      order: Number(item.meta.order || 999)
     }))
 })
 
 const groupedMenuItems = computed(() => {
+  const groupOrder = ['经营概览', '订单与资金', '商品与营销', '内容与设计', '用户与渠道', '业务策略', '平台与运维', '其他']
   const groups = {}
   for (const item of menuItems.value) {
     if (!groups[item.group]) groups[item.group] = []
     groups[item.group].push(item)
   }
-  return groups
+  Object.keys(groups).forEach(groupName => {
+    groups[groupName].sort((a, b) => a.order - b.order || a.title.localeCompare(b.title))
+  })
+  const sorted = {}
+  for (const name of groupOrder) {
+    if (groups[name]) sorted[name] = groups[name]
+  }
+  Object.keys(groups).forEach(name => {
+    if (!sorted[name]) sorted[name] = groups[name]
+  })
+  return sorted
 })
 
 const currentTitle = computed(() => route.meta?.title || '')
+const currentGroup = computed(() => route.meta?.group || '')
+const topbarActions = [
+  { label: '订单待处理', path: '/orders?status=paid' },
+  { label: '首页内容位', path: '/home-sections' },
+  { label: '营销资源', path: '/activities' }
+]
 
 const toggleCollapse = () => { isCollapse.value = !isCollapse.value }
 
@@ -240,11 +290,7 @@ const handleCommand = async (command) => {
         cancelButtonText: '取消',
         type: 'warning'
       })
-      // 调用注销接口
-      try {
-        await request({ url: '/logout', method: 'post', baseURL: '/admin/api' })
-      } catch (e) { /* 忽略注销接口错误，继续清除本地状态 */ }
-      userStore.logout()
+      await userStore.logout()
       router.push('/login')
       ElMessage.success('已安全退出')
     } catch (e) { /* 取消操作 */ }
@@ -270,6 +316,7 @@ const handlePasswordSubmit = async () => {
       router.push('/login')
     } catch (e) {
       console.error('修改密码失败:', e)
+      ElMessage.error(e?.message || '修改密码失败，请重试')
     } finally {
       changingPwd.value = false
     }
@@ -488,6 +535,9 @@ const handlePasswordSubmit = async () => {
 .topbar-left {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .topbar-right {
@@ -496,24 +546,44 @@ const handlePasswordSubmit = async () => {
   gap: 8px;
 }
 
-.icon-btn {
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: transparent;
-  border-radius: 8px;
+.topbar-context {
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: #64748B;
-  font-size: 18px;
+}
+
+.context-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: #4F46E5;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.16);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.topbar-shortcuts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-shortcut {
+  height: 32px;
+  border: 1px solid #E2E8F0;
+  background: white;
+  border-radius: 999px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
   cursor: pointer;
   transition: all 0.15s;
 }
 
-.icon-btn:hover {
-  background: #F1F5F9;
-  color: #1E293B;
+.topbar-shortcut:hover {
+  border-color: #C7D2FE;
+  color: #4338CA;
+  background: #EEF2FF;
 }
 
 .user-avatar {
@@ -632,5 +702,96 @@ const handlePasswordSubmit = async () => {
 }
 .sidebar-nav::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.25);
+}
+
+/* ===== 汉堡按钮（PC 端默认隐藏）===== */
+.hamburger-btn {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.hamburger-btn:hover { background: #F8FAFC; }
+.hamburger-bar {
+  display: block;
+  width: 16px;
+  height: 2px;
+  background: #475569;
+  border-radius: 2px;
+}
+
+/* ===== 手机端蒙层（PC 端隐藏）===== */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 999;
+}
+
+/* ===== 手机端响应式（< 768px）===== */
+@media (max-width: 767px) {
+  /* 侧边栏改为浮层抽屉 */
+  .sidebar {
+    position: fixed !important;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 1000;
+    width: var(--sidebar-w) !important;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0s;
+  }
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+  /* PC 端折叠不影响手机端 */
+  .sidebar.is-collapsed:not(.mobile-open) {
+    transform: translateX(-100%);
+  }
+
+  /* 显示蒙层 */
+  .sidebar-overlay {
+    display: block;
+  }
+
+  /* 显示汉堡按钮，隐藏 PC 端折叠按钮 */
+  .hamburger-btn {
+    display: flex;
+  }
+  .collapse-btn {
+    display: none;
+  }
+
+  /* Topbar 紧凑布局 */
+  .topbar {
+    padding: 0 12px;
+  }
+  .topbar-shortcuts {
+    display: none;
+  }
+  .topbar-context {
+    display: none;
+  }
+  .user-meta {
+    display: none;
+  }
+  .user-avatar {
+    padding: 6px;
+  }
+
+  /* 页面内容缩小 padding */
+  .page-content {
+    padding: 12px;
+  }
 }
 </style>

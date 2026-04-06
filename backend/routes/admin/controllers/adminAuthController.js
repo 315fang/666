@@ -3,6 +3,7 @@ const { generateAdminToken } = require('../../../middleware/adminAuth');
 const tokenBlacklist = require('../../../utils/tokenBlacklist');
 const { validatePassword } = require('../../../utils/passwordPolicy');
 const logger = require('../../../utils/logger');
+const { normalizeClientIp } = require('../../../utils/clientIp');
 
 // ============================================================
 // 管理员登录
@@ -33,7 +34,8 @@ const login = async (req, res) => {
 
         // 更新登录信息
         admin.last_login_at = new Date();
-        admin.last_login_ip = req.ip || req.headers['x-forwarded-for'];
+        const rawIp = req.headers['x-forwarded-for'] || req.ip;
+        admin.last_login_ip = normalizeClientIp(rawIp);
         await admin.save();
 
         const token = generateAdminToken(admin);
@@ -66,7 +68,7 @@ const logout = async (req, res) => {
     try {
         const decoded = req._tokenDecoded;
         if (decoded?.jti) {
-            tokenBlacklist.add(decoded.jti, decoded.exp);
+            await tokenBlacklist.add(decoded.jti, decoded.exp);
         }
         logger.logAuth('admin_logout', { adminId: req.admin?.id });
         res.json({ code: 0, message: '已安全退出' });
@@ -142,7 +144,7 @@ const changePassword = async (req, res) => {
         // ★ 修改密码后，将当前 Token 加入黑名单，强制重新登录
         const decoded = req._tokenDecoded;
         if (decoded?.jti) {
-            tokenBlacklist.add(decoded.jti, decoded.exp);
+            await tokenBlacklist.add(decoded.jti, decoded.exp);
         }
 
         logger.logAuth('admin_password_changed', { adminId: admin.id });

@@ -1,8 +1,14 @@
 // pages/wallet/agent-wallet.js — 代理商货款余额
 const { get, post } = require('../../utils/request');
+const { formatLogItem, groupLogsByDate, formatGroupDate, getChangeLabel } = require('./agentWalletLogs');
+const {
+    DEFAULT_PRESET_AMOUNTS,
+    loadRechargeConfig,
+    getBonusForAmount,
+    getRechargeAmount,
+    updateBonusHint
+} = require('./agentWalletRecharge');
 const app = getApp();
-
-const DEFAULT_PRESET_AMOUNTS = [100, 300, 500, 1000, 2000, 5000];
 
 Page({
     data: {
@@ -16,11 +22,14 @@ Page({
         totalRecharge: '0.00',
         totalDeduct: '0.00',
         logs: [],
+        groupedLogs: [],       // 按日期分组的流水
         page: 1,
         limit: 20,
         hasMore: true,
         logsLoading: false,
+        loadError: '',         // 错误信息
         activeFilter: 'all',
+        activeFilterText: '全部',  // 空状态文案用
         showRechargePanel: false,
         presetAmounts: DEFAULT_PRESET_AMOUNTS,
         selectedAmount: 500,
@@ -90,85 +99,95 @@ Page({
     async loadLogs(reset = false) {
         if (this.data.logsLoading) return;
         const page = reset ? 1 : this.data.page;
-        this.setData({ logsLoading: true });
+        this.setData({ logsLoading: true, loadError: '' });
         try {
-            const res = await get('/agent/wallet/logs', { page, limit: this.data.limit });
+            const params = {
+                page,
+                limit: this.data.limit
+            };
+            if (this.data.activeFilter && this.data.activeFilter !== 'all') {
+                params.filter = this.data.activeFilter;
+            }
+            const res = await get('/agent/wallet/logs', params);
             if (res && res.code === 0) {
-                const newLogs = (res.data.list || []).map(item => ({
-                    ...item,
-                    changeLabel: this._getChangeLabel(item.change_type),
-                    amountSign: item.change_type === 'deduct' || item.change_type === 'manual_deduct' ? '-' : '+',
-                    isOut: item.change_type === 'deduct' || item.change_type === 'manual_deduct',
-                    timeText: (item.created_at || '').replace('T', ' ').slice(0, 16)
-                }));
+                const rawList = res.data.list || [];
+                const newLogs = rawList.map(item => this._formatLogItem(item));
                 const total = res.data.pagination?.total || 0;
                 const logs = reset ? newLogs : [...this.data.logs, ...newLogs];
                 this.setData({
                     logs,
+                    groupedLogs: this._groupLogsByDate(logs),
                     page: page + 1,
                     hasMore: logs.length < total
                 });
+            } else {
+                // API 返回业务错误
+                const msg = (res && res.message) || '加载流水失败';
+                if (reset || this.data.logs.length === 0) {
+                    this.setData({ loadError: msg });
+                }
             }
         } catch (e) {
             console.error('加载流水失败:', e);
+            const msg = e.message || '网络异常，请检查网络连接';
+            if (reset || this.data.logs.length === 0) {
+                this.setData({ loadError: msg });
+            }
         }
         this.setData({ logsLoading: false });
     },
 
+    /** 格式化单条日志 */
+    _formatLogItem(item) {
+        return formatLogItem(this, item);
+    },
+
+    /** 按日期对日志进行分组 */
+    _groupLogsByDate(logs) {
+        return groupLogsByDate(logs);
+    },
+
+    /** 格式化分组日期文案 */
+    _formatGroupDate(dateKey) {
+        return formatGroupDate(dateKey);
+    },
+
     _getChangeLabel(type) {
-        const map = {
-            recharge: '货款充值',
-            deduct: '发货扣款',
-            manual_recharge: '手动充值',
-            manual_deduct: '手动扣减',
-            refund: '退款返还',
-            order_ship: '发货扣款',
-            wx_recharge: '微信支付充值',
-            recharge_pending: '充值处理中'
-        };
-        return map[type] || type || '变动';
+        return getChangeLabel(type);
     },
 
     async loadRechargeConfig() {
-        try {
-            const res = await get('/agent/wallet/recharge-config');
-            if (res?.code === 0 && res.data) {
-                const presets = Array.isArray(res.data.preset_amounts) && res.data.preset_amounts.length > 0
-                    ? res.data.preset_amounts : DEFAULT_PRESET_AMOUNTS;
-                const defIdx = Math.min(2, presets.length - 1);
-                this.setData({
-                    presetAmounts: presets,
-                    selectedAmount: presets[defIdx] || 500,
-                    selectedIdx: defIdx,
-                    bonusEnabled: !!res.data.bonus_enabled,
-                    bonusTiers: Array.isArray(res.data.bonus_tiers) ? res.data.bonus_tiers.sort((a, b) => a.min - b.min) : []
-                });
-                this._updateBonusHint();
-            }
-        } catch (_) {}
+        return loadRechargeConfig(this);
     },
 
     _getBonusForAmount(amount) {
-        if (!this.data.bonusEnabled || !this.data.bonusTiers.length) return 0;
-        let bonus = 0;
-        for (const tier of this.data.bonusTiers) {
-            if (amount >= tier.min) bonus = tier.bonus;
-        }
-        return bonus;
+        return getBonusForAmount(this, amount);
     },
 
     _updateBonusHint() {
-        const amount = this._getRechargeAmount() || 0;
-        const bonus = this._getBonusForAmount(amount);
-        const hint = bonus > 0 ? `充 ¥${amount} 送 ¥${bonus}，实际到账 ¥${amount + bonus}` : '';
-        this.setData({ currentBonusHint: hint });
+        return updateBonusHint(this);
     },
 
     onFilterChange(e) {
         const filter = e.currentTarget.dataset.filter;
         if (filter === this.data.activeFilter) return;
-        this.setData({ activeFilter: filter, logs: [], page: 1, hasMore: true });
+        const filterTextMap = { all: '全部', in: '充值', out: '扣款' };
+        this.setData({
+            activeFilter: filter,
+            activeFilterText: filterTextMap[filter] || '全部',
+            logs: [],
+            groupedLogs: [],
+            page: 1,
+            hasMore: true,
+            loadError: ''
+        });
         this.loadLogs(true);
+    },
+
+    /** 重试加载 */
+    onRetryLoad() {
+        this.setData({ loadError: '', logs: [], groupedLogs: [], page: 1, hasMore: true });
+        this.loadAll();
     },
 
     onRecharge() {
@@ -208,10 +227,7 @@ Page({
     },
 
     _getRechargeAmount() {
-        if (this.data.useCustom && this.data.customAmount) {
-            return parseFloat(this.data.customAmount);
-        }
-        return this.data.selectedAmount;
+        return getRechargeAmount(this);
     },
 
     async onConfirmRecharge() {

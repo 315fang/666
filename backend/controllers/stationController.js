@@ -12,8 +12,83 @@
 const { Op } = require('sequelize');
 const {
     ServiceStation, StationClaim, User,
-    CommissionLog, sequelize
+    CommissionLog, AppConfig, sequelize
 } = require('../models');
+
+const { getBranchAgentPolicy } = require('../utils/branchAgentPolicy');
+const logger = require('../utils/logger');
+const { reverseGeocode } = require('../utils/tencentGeocoder');
+
+function parseStationMeta(station) {
+    const raw = station?.remark;
+    if (!raw) return {};
+    try {
+        return typeof raw === 'string' ? (JSON.parse(raw) || {}) : (raw || {});
+    } catch (_) {
+        return {};
+    }
+}
+
+/** 球面距离（千米），用于自提点排序（前端可传 wx.chooseLocation 的经纬度，无第三方费用） */
+function haversineKm(lat1, lon1, lat2, lon2) {
+    const toRad = (d) => (d * Math.PI) / 180;
+    const R = 6371;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+function buildStationMeta(station, extra = {}) {
+    const oldMeta = parseStationMeta(station);
+    return JSON.stringify({
+        ...oldMeta,
+        ...extra
+    });
+}
+
+async function getClaimedStationsByUser(userId) {
+    const rows = await ServiceStation.findAll({
+        where: { claimant_id: userId, status: 'active' }
+    });
+    return rows.map(st => ({
+        station: st,
+        branchType: parseStationMeta(st).branch_type || 'city'
+    }));
+}
+
+/**
+ * GET /api/stations/region-from-point
+ * 根据坐标逆解析省市区（小程序模糊定位后缩放到「市区」视图；需配置 TENCENT_MAP_KEY）
+ */
+exports.getRegionFromPoint = async (req, res, next) => {
+    try {
+        const lat = parseFloat(req.query.lat);
+        const lng = parseFloat(req.query.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+            res.status(400).json({ code: 400, message: '请提供有效 lat、lng' });
+            return;
+        }
+        let region = null;
+        try {
+            region = await reverseGeocode(lat, lng);
+        } catch (e) {
+            logger.warn('STATION_CTRL', 'region-from-point reverseGeocode', { error: e.message || e });
+        }
+        res.json({
+            code: 0,
+            data: {
+                region,
+                configured: !!(process.env.TENCENT_MAP_KEY || '').trim()
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+};
 
 /**
  * GET /api/stations
@@ -54,17 +129,84 @@ exports.getStations = async (req, res, next) => {
                 province: s.province,
                 status: s.status,
                 is_pickup_point: s.is_pickup_point,
-                claimant: s.claimant ? { nickname: s.claimant.nickname, avatar_url: s.claimant.avatar_url } : null
+                claimant: s.claimant ? { nickname: s.claimant.nickname, avatar_url: s.claimant.avatar_url } : null,
+                branch_type: parseStationMeta(s).branch_type || 'city'
             }));
 
         res.json({
             code: 0,
             data: {
-                list: stations,
+                list: stations.map(s => {
+                    const plain = s.get ? s.get({ plain: true }) : s;
+                    const meta = parseStationMeta(s);
+                    plain.branch_type = meta.branch_type || 'city';
+                    plain.region_name = meta.region_name || '';
+                    return plain;
+                }),
                 echarts: echartsData,
                 total: stations.length
             }
         });
+    } catch (err) { next(err); }
+};
+
+/**
+ * GET /api/stations/pickup-options
+ * 小程序下单：可选自提门店（运营中 + 支持自提）
+ */
+exports.getPickupOptions = async (req, res, next) => {
+    try {
+        const lat = parseFloat(req.query.lat);
+        const lng = parseFloat(req.query.lng);
+        const sortCity = req.query.sort_city ? String(req.query.sort_city).trim() : '';
+
+        const rows = await ServiceStation.findAll({
+            where: { status: 'active', is_pickup_point: 1 },
+            attributes: [
+                'id', 'name', 'province', 'city', 'district', 'address',
+                'longitude', 'latitude', 'logo_url', 'pickup_contact',
+                'contact_name', 'contact_phone', 'business_days',
+                'business_time_start', 'business_time_end', 'intro'
+            ],
+            order: [['name', 'ASC']]
+        });
+
+        const hasRef = Number.isFinite(lat) && Number.isFinite(lng);
+        const list = rows.map((r) => {
+            const plain = r.get ? r.get({ plain: true }) : r;
+            let distance_km = null;
+            if (hasRef && plain.latitude != null && plain.longitude != null) {
+                const la = parseFloat(plain.latitude);
+                const lo = parseFloat(plain.longitude);
+                if (Number.isFinite(la) && Number.isFinite(lo)) {
+                    distance_km = Math.round(haversineKm(lat, lng, la, lo) * 100) / 100;
+                }
+            }
+            return { ...plain, distance_km };
+        });
+
+        const cityHit = (stationCity) => {
+            if (!sortCity || !stationCity) return false;
+            const a = String(stationCity).trim();
+            const b = sortCity.trim();
+            return a === b || a.includes(b) || b.includes(a);
+        };
+
+        list.sort((a, b) => {
+            if (sortCity) {
+                const ac = cityHit(a.city) ? 0 : 1;
+                const bc = cityHit(b.city) ? 0 : 1;
+                if (ac !== bc) return ac - bc;
+            }
+            if (a.distance_km != null && b.distance_km != null) {
+                return a.distance_km - b.distance_km;
+            }
+            if (a.distance_km != null) return -1;
+            if (b.distance_km != null) return 1;
+            return String(a.name || '').localeCompare(String(b.name || ''), 'zh');
+        });
+
+        res.json({ code: 0, data: list });
     } catch (err) { next(err); }
 };
 
@@ -94,13 +236,45 @@ exports.applyClaim = async (req, res, next) => {
         const { id } = req.params;
         const { real_name, phone, id_card, intro } = req.body;
         const userId = req.user.id;
+        const user = await User.findByPk(userId, { attributes: ['id', 'role_level'] });
+        const policy = await getBranchAgentPolicy();
+        const minApplyRoleLevel = Number(policy.min_apply_role_level || 3);
 
         if (!real_name || !phone) {
             return res.json({ code: -1, message: '请填写真实姓名和联系方式' });
         }
+        if (!user || Number(user.role_level || 0) < minApplyRoleLevel) {
+            return res.status(403).json({ code: -1, message: `仅代理商等级及以上可申请（当前最低等级: Lv${minApplyRoleLevel}）` });
+        }
 
         const station = await ServiceStation.findByPk(id);
         if (!station) return res.status(404).json({ code: -1, message: '站点不存在' });
+        const targetBranchType = parseStationMeta(station).branch_type || 'city';
+
+        // 规则1：先学校后市代理
+        // 仅当目标为市代理时，要求当前用户已持有至少一个学校代理据点
+        if (targetBranchType === 'city') {
+            const claimed = await getClaimedStationsByUser(userId);
+            const hasSchool = claimed.some(item => item.branchType === 'school');
+            if (!hasSchool) {
+                return res.status(400).json({
+                    code: -1,
+                    message: '请先认领学校据点，再申请所在市代理'
+                });
+            }
+        }
+
+        // 已是市代理时，不再允许申请学校代理（避免反向降级冲突）
+        if (targetBranchType === 'school') {
+            const claimed = await getClaimedStationsByUser(userId);
+            const hasCity = claimed.some(item => item.branchType === 'city');
+            if (hasCity) {
+                return res.status(400).json({
+                    code: -1,
+                    message: '您已是市代理，无需再申请学校代理'
+                });
+            }
+        }
 
         // 已被认领
         if (station.claimant_id && station.status === 'active') {
@@ -144,47 +318,7 @@ exports.getMyClaims = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
-/**
- * ★ 内部方法：区域成交利润归因
- * 由 orderController._markOrderAsPaid 调用
- * 根据买家所在城市，查找对应 active 站点，发放认领人利润分成
- */
-exports.attributeRegionalProfit = async (orderId, buyerCity, orderAmount) => {
-    try {
-        if (!buyerCity) return;
-
-        const station = await ServiceStation.findOne({
-            where: { city: buyerCity, status: 'active', claimant_id: { [Op.not]: null } }
-        });
-        if (!station || !station.claimant_id) return;
-
-        const commission = parseFloat((orderAmount * parseFloat(station.commission_rate)).toFixed(2));
-        if (commission <= 0) return;
-
-        const t = await sequelize.transaction();
-        try {
-            // 发放利润到认领人余额
-            await User.increment('balance', { by: commission, where: { id: station.claimant_id }, transaction: t });
-            await CommissionLog.create({
-                user_id: station.claimant_id,
-                order_id: orderId,
-                amount: commission,
-                type: 'Regional',
-                status: 'settled',
-                settled_at: new Date(),
-                remark: `地区站点分成：${buyerCity}（${(station.commission_rate * 100).toFixed(1)}%）`
-            }, { transaction: t });
-            await ServiceStation.increment(
-                { total_orders: 1, total_commission: commission },
-                { where: { id: station.id }, transaction: t }
-            );
-            await t.commit();
-            console.log(`[Station] 地区分成: 站点${station.id}(${buyerCity}) 认领人${station.claimant_id} +¥${commission}`);
-        } catch (e) {
-            await t.rollback();
-            console.error('[Station] 地区分成发放失败:', e.message);
-        }
-    } catch (err) {
-        console.error('[Station] attributeRegionalProfit error:', err.message);
-    }
-};
+// 重导出：函数体已提取至 StationProfitService（解除 Service→Controller 反向依赖），保持向后兼容
+// parseStationMeta 保留在当前文件中（controller 内部仍有 6 处使用）
+const { attributeRegionalProfit } = require('../services/StationProfitService');
+exports.attributeRegionalProfit = attributeRegionalProfit;

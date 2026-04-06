@@ -91,7 +91,7 @@ router.get('/process', (req, res) => {
 router.get('/anomalies', async (req, res) => {
     try {
         const [pending] = await sequelize.query(`
-            SELECT COUNT(*) AS count FROM Orders 
+            SELECT COUNT(*) AS count FROM \`orders\`
             WHERE status = 'pending' 
             AND created_at < DATE_SUB(NOW(), INTERVAL 2 HOUR)
         `);
@@ -100,13 +100,13 @@ router.get('/anomalies', async (req, res) => {
             SELECT 
                 COUNT(CASE WHEN status = 'paid' THEN 1 END) AS paid,
                 COUNT(*) AS total
-            FROM Orders
+            FROM \`orders\`
             WHERE created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)
         `);
 
         const [bigCommissions] = await sequelize.query(`
             SELECT id, user_id, amount, type, created_at 
-            FROM CommissionLogs
+            FROM \`commission_logs\`
             WHERE amount > 5000 
             AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
             ORDER BY amount DESC
@@ -152,7 +152,7 @@ router.get('/db-ping', async (req, res) => {
 });
 
 // ★ 定时任务运行状态（最近执行时间、成功/失败次数）
-router.get('/cron-status', (req, res) => {
+router.get('/cron-status', async (req, res) => {
     const stats = getTaskStats();
 
     // 补充任务说明（人类可读）
@@ -182,7 +182,22 @@ router.get('/cron-status', (req, res) => {
         };
     });
 
-    res.json({ code: 0, data: { tasks, snapshot_at: new Date().toISOString() } });
+    // 附加微信平台证书状态
+    const { getCertStatus } = require('../../utils/wechat');
+    const certStatus = getCertStatus();
+
+    res.json({ code: 0, data: { tasks, certStatus, snapshot_at: new Date().toISOString() } });
+});
+
+// 手动触发平台证书刷新
+router.post('/refresh-cert', async (req, res) => {
+    try {
+        const { refreshPlatformCert } = require('../../utils/wechat');
+        await refreshPlatformCert();
+        res.json({ code: 0, message: '平台证书已刷新' });
+    } catch (err) {
+        res.status(500).json({ code: -1, message: err.message });
+    }
 });
 
 module.exports = router;

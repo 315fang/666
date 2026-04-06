@@ -11,13 +11,13 @@ module.exports = {
         // 生产环境配置
         env_production: {
             NODE_ENV: 'production',
-            PORT: 3000
+            PORT: 3001
         },
 
         // 开发环境配置
         env_development: {
             NODE_ENV: 'development',
-            PORT: 3000
+            PORT: 3001
         },
 
         // 内存限制：超过 500M 自动重启，防止内存泄漏导致服务器卡死

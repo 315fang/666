@@ -8,14 +8,16 @@ const {
     sequelize
 } = require('../models');
 const PointService = require('./PointService');
+const MemberTierService = require('./MemberTierService');
 const { sendNotification } = require('../models/notificationUtil');
+const { error: logError, warn: logWarn } = require('../utils/logger');
 const { checkRoleUpgrade, handleSameLevelReferral } = require('../utils/commission');
 
 // 生成团次号
 function genGroupNo() {
     const now = new Date();
     const date = now.toISOString().slice(0, 10).replace(/-/g, '');
-    const rand = String(Math.floor(Math.random() * 100000)).padStart(5, '0');
+    const rand = secureRandomHex(3); // 6位随机十六进制 ≈ 5位十进制随机性
     return `GP${date}${rand}`;
 }
 
@@ -33,8 +35,10 @@ class GroupCoreService {
                 where: {
                     id: activity_id,
                     status: 1,
-                    [Op.or]: [{ start_at: null }, { start_at: { [Op.lte]: now } }],
-                    [Op.or]: [{ end_at: null }, { end_at: { [Op.gt]: now } }]
+                    [Op.and]: [
+                        { [Op.or]: [{ start_at: null }, { start_at: { [Op.lte]: now } }] },
+                        { [Op.or]: [{ end_at: null }, { end_at: { [Op.gt]: now } }] }
+                    ]
                 },
                 transaction: t,
                 lock: t.LOCK.UPDATE
@@ -45,7 +49,37 @@ class GroupCoreService {
                 throw new Error('拼团活动不存在或已结束');
             }
 
-            // 2. 检查发起者是否为会员
+            const product = await Product.findByPk(activity.product_id, {
+                transaction: t,
+                attributes: ['id', 'status', 'enable_group_buy']
+            });
+            if (!product || Number(product.status) !== 1) {
+                await t.rollback();
+                throw new Error('商品已下架，无法发起拼团');
+            }
+            if (Number(product.enable_group_buy) !== 1) {
+                await t.rollback();
+                throw new Error('该商品未在营销设置中开启「参与拼团」');
+            }
+
+            if (activity.sku_id != null && activity.sku_id !== '') {
+                const needSku = parseInt(activity.sku_id, 10);
+                const gotSku = sku_id != null && sku_id !== '' ? parseInt(sku_id, 10) : NaN;
+                if (!Number.isFinite(needSku) || gotSku !== needSku) {
+                    await t.rollback();
+                    throw new Error('该拼团仅限指定规格，请从商品页选择对应规格后再发起');
+                }
+                const skuRow = await SKU.findOne({
+                    where: { id: needSku, product_id: activity.product_id, status: 1 },
+                    transaction: t
+                });
+                if (!skuRow) {
+                    await t.rollback();
+                    throw new Error('拼团活动配置的规格无效或已下架');
+                }
+            }
+
+            // 2. 检查发起者是否为会员（role_level>=1 视为会员，与小程序提示一致）
             const initiator = await User.findByPk(userId, { transaction: t, attributes: ['role_level'] });
             if (!initiator || initiator.role_level < 1) {
                 await t.rollback();
@@ -104,9 +138,20 @@ class GroupCoreService {
             await t.commit();
 
             // 7. 积分奖励（异步）
-            PointService.addPoints(userId, PointService.POINT_RULES.group_start.points, 'group_start',
-                groupOrder.group_no, PointService.POINT_RULES.group_start.remark)
-                .catch(e => console.error('发起拼团积分奖励失败:', e));
+            (async () => {
+                try {
+                    const pr = await MemberTierService.getPointRules();
+                    await PointService.addPoints(
+                        userId,
+                        pr.group_start?.points ?? 10,
+                        'group_start',
+                        groupOrder.group_no,
+                        pr.group_start?.remark
+                    );
+                } catch (e) {
+                    logError('GROUP', '发起拼团积分奖励失败', { error: e?.message || e });
+                }
+            })();
 
             return {
                 group_no: groupOrder.group_no,
@@ -236,7 +281,7 @@ class GroupCoreService {
 
             // 6. 异步通知
             if (justSucceeded) {
-                this._handleGroupSuccess(groupOrder).catch(e => console.error('成团后处理失败:', e));
+                this._handleGroupSuccess(groupOrder).catch(e => logError('GROUP', '成团后处理失败', { error: e?.message || e }));
             } else {
                 sendNotification(
                     groupOrder.leader_id,
@@ -279,16 +324,21 @@ class GroupCoreService {
                     String(groupOrder.id)
                 ).catch(() => { });
 
-                PointService.addPoints(
-                    member.user_id,
-                    PointService.POINT_RULES.group_success.points,
-                    'group_success',
-                    groupOrder.group_no,
-                    PointService.POINT_RULES.group_success.remark
-                ).catch(() => { });
+                (async () => {
+                    try {
+                        const pr = await MemberTierService.getPointRules();
+                        await PointService.addPoints(
+                            member.user_id,
+                            pr.group_success?.points ?? 30,
+                            'group_success',
+                            groupOrder.group_no,
+                            pr.group_success?.remark
+                        );
+                    } catch (_) { /* ignore */ }
+                })();
             }
         } catch (err) {
-            console.error('拼团成功异步处理失败:', err);
+            logError('GROUP', '拼团成功异步处理失败', { error: err?.message || err });
         }
     }
 
@@ -329,7 +379,7 @@ class GroupCoreService {
                 processedCount++;
             } catch (e) {
                 if (!t.finished) await t.rollback();
-                console.error(`处理团次 ${group.group_no} 过期失败:`, e.message);
+                logError('GROUP', `处理团次 ${group.group_no} 过期失败`, { error: e.message });
             }
         }
         return processedCount;

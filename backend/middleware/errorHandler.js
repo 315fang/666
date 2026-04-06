@@ -9,6 +9,7 @@
  * - 通用服务器错误
  */
 const logger = require('../utils/logger');
+const { BusinessError } = require('../utils/errors');
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -85,7 +86,12 @@ function errorHandler(err, req, res, next) {
         return sendError(res, 400, -1, `无效的上传字段: ${err.field}`);
     }
 
-    // ===== 业务错误：自定义 AppError =====
+    // ===== 业务错误：自定义 BusinessError =====
+    if (err instanceof BusinessError) {
+        return sendError(res, err.statusCode, err.code, err.message, err.data);
+    }
+
+    // ===== 业务错误：自定义 AppError（兼容旧代码）=====
     if (err.statusCode && err.statusCode < 500) {
         return sendError(res, err.statusCode, err.code || -1, err.message);
     }

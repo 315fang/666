@@ -135,6 +135,13 @@ const Order = sequelize.define('Order', {
         defaultValue: 0,
         comment: '佣金是否已结算: 0-未结算, 1-已结算'
     },
+    /** 订单完成后的有效单统计/升级逻辑是否已处理（幂等标记，勿依赖 remark） */
+    completion_processed: {
+        type: DataTypes.TINYINT,
+        defaultValue: 0,
+        allowNull: false,
+        comment: '完成处理是否已执行: 0-否, 1-是（processOrderCompletion 幂等）'
+    },
     // ★ 记录支付时中间层级的佣金总额，供发货时计算代理商利润
     middle_commission_total: {
         type: DataTypes.DECIMAL(10, 2),
@@ -185,7 +192,7 @@ const Order = sequelize.define('Order', {
     points_discount: {
         type: DataTypes.DECIMAL(10, 2),
         defaultValue: 0.00,
-        comment: '积分抵扣金额（points_used × 0.1 元/积分）'
+        comment: '积分抵扣金额（points_used × 0.01 元/积分，即100积分=1元）'
     },
     // ★ Phase 2：成长值折扣（下单时锁定，防止后续等级变化影响历史订单）
     member_discount_rate: {
@@ -212,12 +219,18 @@ const Order = sequelize.define('Order', {
     pickup_qr_token: {
         type: DataTypes.STRING(64),
         allowNull: true,
-        comment: '二维码扫码颞面token（SHA256）'
+        comment: '二维码扫码页面token（SHA256）'
     },
     verified_at: {
         type: DataTypes.DATE,
         allowNull: true,
         comment: '自提核销完成时间'
+    },
+    payment_method: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        defaultValue: null,
+        comment: '支付方式: wechat=微信支付, wallet=货款余额支付'
     }
 }, {
     tableName: 'orders',

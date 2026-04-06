@@ -32,7 +32,7 @@ const Admin = sequelize.define('Admin', {
     role: {
         type: DataTypes.STRING(30),
         defaultValue: 'operator',
-        comment: '角色: super_admin/admin/operator/finance/customer_service'
+        comment: '角色: super_admin/admin/operator/finance/customer_service/warehouse/designer'
     },
     permissions: {
         type: DataTypes.TEXT,
@@ -40,7 +40,14 @@ const Admin = sequelize.define('Admin', {
         comment: 'JSON格式权限列表',
         get() {
             const rawValue = this.getDataValue('permissions');
-            return rawValue ? JSON.parse(rawValue) : [];
+            if (rawValue == null || rawValue === '') return [];
+            if (typeof rawValue === 'object') return Array.isArray(rawValue) ? rawValue : [];
+            try {
+                const parsed = JSON.parse(rawValue);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (_) {
+                return [];
+            }
         },
         set(value) {
             this.setDataValue('permissions', JSON.stringify(value));

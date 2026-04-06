@@ -4,3 +4,10 @@ node_modules/
 logs/
 .DS_Store
 .vscode/
+*.pem
+*.p12
+*.key
+certs/
+说明/
+uploads/
+cache/*.txt

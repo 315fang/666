@@ -2,6 +2,7 @@ const { Refund, Order, Product, CommissionLog, sequelize } = require('../models'
 const { Op } = require('sequelize');
 const { sendNotification } = require('../models/notificationUtil');
 const constants = require('../config/constants');
+const logger = require('../utils/logger');
 
 const ADMIN_USER_ID = constants.ADMIN.USER_ID;
 
@@ -47,23 +48,24 @@ const applyRefund = async (req, res) => {
             return res.status(400).json({ code: -1, message: '采购订单请联系客服处理退货' });
         }
 
-        // ★ 退款金额校验：不能超过订单实际支付金额
-        const refundAmount = parseFloat(amount) || parseFloat(order.total_amount);
+        // ★ 退款金额校验：不能超过订单实际支付金额（actual_price 含优惠券/积分抵扣后的真实付款额）
+        const orderPaidAmount = parseFloat(order.actual_price || order.total_amount);
+        const refundAmount = parseFloat(amount) || orderPaidAmount;
         if (refundAmount <= 0) {
             await t.rollback();
             return res.status(400).json({ code: -1, message: '退款金额必须大于0' });
         }
-        if (refundAmount > parseFloat(order.total_amount)) {
+        if (refundAmount > orderPaidAmount) {
             await t.rollback();
-            return res.status(400).json({ code: -1, message: `退款金额不能超过订单金额 ¥${parseFloat(order.total_amount).toFixed(2)}` });
+            return res.status(400).json({ code: -1, message: `退款金额不能超过实付金额 ¥${orderPaidAmount.toFixed(2)}` });
         }
 
-        // ★★★ 累计退款金额校验：防止多次部分退款超过订单总金额
+        // ★★★ 累计退款金额校验：防止多次部分退款超过实付金额
         const refundedAmount = await Refund.sum('amount', {
             where: { order_id, status: 'completed' },
             transaction: t
         }) || 0;
-        const maxRefundable = parseFloat(order.total_amount) - refundedAmount;
+        const maxRefundable = orderPaidAmount - refundedAmount;
         if (refundAmount > maxRefundable) {
             await t.rollback();
             return res.status(400).json({
@@ -154,7 +156,7 @@ const applyRefund = async (req, res) => {
         res.json({ code: 0, data: refund, message: '售后申请已提交' });
     } catch (error) {
         if (!t.finished) await t.rollback();
-        console.error('申请售后失败:', error);
+        logger.error('REFUND', '申请售后失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '申请失败' });
     }
 };
@@ -163,10 +165,11 @@ const applyRefund = async (req, res) => {
 const getRefunds = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { status, page = 1, limit = 20 } = req.query;
+        const { status, order_id, page = 1, limit = 20 } = req.query;
 
         const where = { user_id: userId };
         if (status) where.status = status;
+        if (order_id) where.order_id = order_id;
 
         const offset = (parseInt(page) - 1) * parseInt(limit);
 
@@ -191,7 +194,7 @@ const getRefunds = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('获取售后列表失败:', error);
+        logger.error('REFUND', '获取售后列表失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '获取失败' });
     }
 };
@@ -217,7 +220,7 @@ const getRefundById = async (req, res) => {
 
         res.json({ code: 0, data: refund });
     } catch (error) {
-        console.error('获取售后详情失败:', error);
+        logger.error('REFUND', '获取售后详情失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '获取失败' });
     }
 };
@@ -253,8 +256,61 @@ const cancelRefund = async (req, res) => {
         res.json({ code: 0, message: '已取消' });
     } catch (error) {
         await t.rollback();
-        console.error('取消售后失败:', error);
+        logger.error('REFUND', '取消售后失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '取消失败' });
+    }
+};
+
+// 填写退货物流
+const submitReturnShipping = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const userId = req.user.id;
+        const { id } = req.params;
+        const { return_tracking_no, return_company } = req.body;
+
+        const refund = await Refund.findOne({
+            where: { id, user_id: userId },
+            lock: t.LOCK.UPDATE,
+            transaction: t
+        });
+
+        if (!refund) {
+            await t.rollback();
+            return res.status(404).json({ code: -1, message: '售后单不存在' });
+        }
+        if (refund.type !== 'return_refund') {
+            await t.rollback();
+            return res.status(400).json({ code: -1, message: '当前售后类型无需填写退货物流' });
+        }
+        if (refund.status !== 'approved') {
+            await t.rollback();
+            return res.status(400).json({ code: -1, message: '当前状态暂不支持填写退货物流' });
+        }
+        if (!return_tracking_no) {
+            await t.rollback();
+            return res.status(400).json({ code: -1, message: '请填写退货物流单号' });
+        }
+
+        refund.return_tracking_no = String(return_tracking_no).trim();
+        refund.return_company = return_company ? String(return_company).trim() : null;
+        await refund.save({ transaction: t });
+
+        await t.commit();
+
+        await sendNotification(
+            ADMIN_USER_ID,
+            '用户已填写退货物流',
+            `退款单 ${refund.refund_no} 已补充退货物流${refund.return_company ? `（${refund.return_company}）` : ''}，单号 ${refund.return_tracking_no}。`,
+            'refund_admin',
+            String(refund.id)
+        );
+
+        res.json({ code: 0, data: refund, message: '退货物流已提交' });
+    } catch (error) {
+        if (!t.finished) await t.rollback();
+        logger.error('REFUND_CTRL', '提交退货物流失败', { error: error?.message || error });
+        res.status(500).json({ code: -1, message: '提交失败' });
     }
 };
 
@@ -262,5 +318,6 @@ module.exports = {
     applyRefund,
     getRefunds,
     getRefundById,
-    cancelRefund
+    cancelRefund,
+    submitReturnShipping
 };

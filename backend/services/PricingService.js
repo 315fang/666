@@ -3,26 +3,28 @@
  * 统一管理所有价格相关的计算逻辑
  */
 
+const MemberTierService = require('./MemberTierService');
+
 // 用户角色常量
 const USER_ROLES = {
     GUEST: 0,      // 普通用户
     MEMBER: 1,     // 会员
     LEADER: 2,     // 团长
-    AGENT: 3       // 代理商
+    AGENT: 3,      // 代理商
+    PARTNER: 4,    // 运营合伙人
+    REGIONAL: 5    // 区域合伙人
 };
 
-// 佣金比例配置（可从数据库或配置文件读取）
+// 佣金比例配置 — 与商业计划书4.0对齐
 const COMMISSION_RATES = {
-    // 直推佣金比例
     DIRECT: {
-        [USER_ROLES.MEMBER]: 0.05,   // 会员直推 5%
-        [USER_ROLES.LEADER]: 0.08,   // 团长直推 8%
-        [USER_ROLES.AGENT]: 0.12     // 代理商直推 12%
+        [USER_ROLES.MEMBER]: 0.20,   // C1 直推 20%
+        [USER_ROLES.LEADER]: 0.30,   // C2 直推 30%
+        [USER_ROLES.AGENT]: 0.40     // B1 直推 40%
     },
-    // 间接佣金比例
     INDIRECT: {
-        [USER_ROLES.LEADER]: 0.03,   // 团长间接 3%
-        [USER_ROLES.AGENT]: 0.05     // 代理商间接 5%
+        [USER_ROLES.LEADER]: 0.05,   // C2 间接 5%
+        [USER_ROLES.AGENT]: 0.08     // B1 间接 8%
     }
 };
 
@@ -34,14 +36,152 @@ class PricingService {
      * @param {number} roleLevel - 用户角色等级
      * @returns {number} 显示价格
      */
-    static calculateDisplayPrice(product, sku = null, roleLevel = USER_ROLES.GUEST) {
-        // 如果有 SKU，优先使用 SKU 价格
+    static calculateDisplayPrice(product, sku = null, roleLevel = USER_ROLES.GUEST, purchaseLevel = null) {
+        const purchaseLevelRule = this._normalizePurchaseLevelRule(purchaseLevel);
+        if (purchaseLevelRule) {
+            const basePrice = this._getPriceByTier(product, sku, purchaseLevelRule.priceTier);
+            return this._applyLevelDiscount(basePrice, purchaseLevelRule.discount);
+        }
+
         if (sku) {
             return this._getSkuPrice(sku, roleLevel);
         }
 
-        // 否则使用商品基础价格
         return this._getProductPrice(product, roleLevel);
+    }
+
+    /**
+     * 在档位价基础上应用会员/全场折（与下单一致）；爆品豁免不参与折上折
+     * @param {number} basePrice - calculateDisplayPrice 结果
+     * @param {number} multiplier - getCommerceDiscountMultiplier
+     * @param {boolean} discountExempt - 商品 discount_exempt
+     */
+    static applyCommerceDiscount(basePrice, multiplier, discountExempt) {
+        const base = Number(basePrice);
+        const mult = Number(multiplier);
+        if (!Number.isFinite(base) || base < 0) return 0;
+        if (discountExempt) return Number(base.toFixed(2));
+        if (!Number.isFinite(mult) || mult <= 0) return Number(base.toFixed(2));
+        return Number((base * mult).toFixed(2));
+    }
+
+    /**
+     * 用户看到的应付单价（与创建订单普品路径一致，不含砍价/拼团/活动专享价）
+     */
+    static async calculatePayableUnitPrice(product, sku, roleLevel, purchaseLevel) {
+        const base = this.calculateDisplayPrice(product, sku, roleLevel, purchaseLevel);
+        const mult = await MemberTierService.getCommerceDiscountMultiplier(roleLevel);
+        return this.applyCommerceDiscount(base, mult, !!product?.discount_exempt);
+    }
+
+    static _normalizePurchaseLevelRule(purchaseLevel) {
+        if (!purchaseLevel) return null;
+        const allowedTiers = new Set(['retail', 'member', 'leader', 'agent']);
+
+        if (typeof purchaseLevel === 'string') {
+            const tier = purchaseLevel.trim().toLowerCase();
+            if (!allowedTiers.has(tier)) return null;
+            return { priceTier: tier, discount: 1 };
+        }
+
+        if (typeof purchaseLevel !== 'object') return null;
+        if (purchaseLevel.enabled === false) return null;
+
+        const tier = String(purchaseLevel.price_tier || purchaseLevel.priceTier || '').trim().toLowerCase();
+        if (!allowedTiers.has(tier)) return null;
+
+        const discountRaw = Number(purchaseLevel.discount ?? 1);
+        const discount = Number.isFinite(discountRaw)
+            ? Math.min(1, Math.max(0.01, Number(discountRaw.toFixed(4))))
+            : 1;
+
+        return { priceTier: tier, discount };
+    }
+
+    static _applyLevelDiscount(basePrice, discount = 1) {
+        const normalizedPrice = Number(basePrice || 0);
+        const normalizedDiscount = Number(discount || 1);
+        if (!Number.isFinite(normalizedPrice) || !Number.isFinite(normalizedDiscount)) {
+            return 0;
+        }
+        return Number((normalizedPrice * normalizedDiscount).toFixed(2));
+    }
+
+    static _pickFirstPrice(...candidates) {
+        for (const item of candidates) {
+            if (item === null || item === undefined || item === '') continue;
+            const value = Number(item);
+            if (Number.isFinite(value)) {
+                return value;
+            }
+        }
+        return 0;
+    }
+
+    static _getPriceByTier(product, sku, tier) {
+        if (sku) {
+            return this._getSkuPriceByTier(sku, tier);
+        }
+        return this._getProductPriceByTier(product, tier);
+    }
+
+    static _getSkuPriceByTier(sku, tier) {
+        switch (tier) {
+            case 'agent':
+                return this._pickFirstPrice(
+                    sku.price_agent,
+                    sku.wholesale_price,
+                    sku.price_leader,
+                    sku.member_price,
+                    sku.price_member,
+                    sku.retail_price,
+                    sku.price
+                );
+            case 'leader':
+                return this._pickFirstPrice(
+                    sku.wholesale_price,
+                    sku.price_leader,
+                    sku.member_price,
+                    sku.price_member,
+                    sku.retail_price,
+                    sku.price
+                );
+            case 'member':
+                return this._pickFirstPrice(
+                    sku.member_price,
+                    sku.price_member,
+                    sku.retail_price,
+                    sku.price
+                );
+            case 'retail':
+            default:
+                return this._pickFirstPrice(sku.retail_price, sku.price);
+        }
+    }
+
+    static _getProductPriceByTier(product, tier) {
+        switch (tier) {
+            case 'agent':
+                return this._pickFirstPrice(
+                    product.price_agent,
+                    product.price_leader,
+                    product.price_member,
+                    product.member_price,
+                    product.retail_price
+                );
+            case 'leader':
+                return this._pickFirstPrice(
+                    product.price_leader,
+                    product.price_member,
+                    product.member_price,
+                    product.retail_price
+                );
+            case 'member':
+                return this._pickFirstPrice(product.price_member, product.member_price, product.retail_price);
+            case 'retail':
+            default:
+                return this._pickFirstPrice(product.retail_price);
+        }
     }
 
     /**
@@ -49,15 +189,36 @@ class PricingService {
      * @private
      */
     static _getSkuPrice(sku, roleLevel) {
+        if (roleLevel >= USER_ROLES.AGENT) {
+            return this._pickFirstPrice(
+                sku.price_agent,
+                sku.wholesale_price,
+                sku.price_leader,
+                sku.member_price,
+                sku.price_member,
+                sku.retail_price,
+                sku.price
+            );
+        }
         switch (roleLevel) {
-            case USER_ROLES.AGENT:
-                return parseFloat(sku.price_agent || sku.price_leader || sku.price_member || sku.price);
             case USER_ROLES.LEADER:
-                return parseFloat(sku.price_leader || sku.price_member || sku.price);
+                return this._pickFirstPrice(
+                    sku.wholesale_price,
+                    sku.price_leader,
+                    sku.member_price,
+                    sku.price_member,
+                    sku.retail_price,
+                    sku.price
+                );
             case USER_ROLES.MEMBER:
-                return parseFloat(sku.price_member || sku.price);
+                return this._pickFirstPrice(
+                    sku.member_price,
+                    sku.price_member,
+                    sku.retail_price,
+                    sku.price
+                );
             default:
-                return parseFloat(sku.price); // retail_price
+                return this._pickFirstPrice(sku.retail_price, sku.price);
         }
     }
 
@@ -66,24 +227,31 @@ class PricingService {
      * @private
      */
     static _getProductPrice(product, roleLevel) {
+        if (roleLevel >= USER_ROLES.AGENT) {
+            return this._pickFirstPrice(
+                product.price_agent,
+                product.price_leader,
+                product.price_member,
+                product.member_price,
+                product.retail_price
+            );
+        }
         switch (roleLevel) {
-            case USER_ROLES.AGENT:
-                return parseFloat(
-                    product.price_agent ||
-                    product.price_leader ||
-                    product.price_member ||
-                    product.retail_price
-                );
             case USER_ROLES.LEADER:
-                return parseFloat(
-                    product.price_leader ||
-                    product.price_member ||
+                return this._pickFirstPrice(
+                    product.price_leader,
+                    product.price_member,
+                    product.member_price,
                     product.retail_price
                 );
             case USER_ROLES.MEMBER:
-                return parseFloat(product.price_member || product.retail_price);
+                return this._pickFirstPrice(
+                    product.price_member,
+                    product.member_price,
+                    product.retail_price
+                );
             default:
-                return parseFloat(product.retail_price);
+                return this._pickFirstPrice(product.retail_price);
         }
     }
 
@@ -182,6 +350,8 @@ class PricingService {
 
     /**
      * 计算订单总佣金（用于验证）
+     * 注意：订单主流程发货分润以 CommissionService.calculateGapAndFulfillmentCommissions 为准；
+     * 本方法按行价 × 数量比例估算，未使用订单 actual_price，勿与结算单混用。
      * @param {Array} orderItems - 订单项列表
      * @param {Object} buyer - 购买者对象
      * @param {Object|null} parent - 上级对象

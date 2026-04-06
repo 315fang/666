@@ -36,7 +36,18 @@ const User = sequelize.define('User', {
     role_level: {
         type: DataTypes.TINYINT,
         defaultValue: 0,
-        comment: '角色等级: 0-普通用户, 1-会员, 2-团长, 3-代理商'
+        comment: '角色等级: 0-普通用户, 1-C1初级代理, 2-C2高级代理, 3-B1推广合伙人(¥3000), 4-B2运营合伙人(¥30000), 5-B3区域合伙人(¥198000), 6-小n(N路径代理¥3000), 7-大N(N路径独立代理¥30000)'
+    },
+    purchase_level_code: {
+        type: DataTypes.STRING(32),
+        allowNull: true,
+        comment: '拿货等级编码（仅影响价格）'
+    },
+    agent_level: {
+        type: DataTypes.TINYINT,
+        defaultValue: 1,
+        allowNull: true,
+        comment: '标准路径子等级（role_level 3~5 时有效）: 升级时由 upgradeController 写入 target_level-2，仅用于部分佣金分层计算'
     },
     parent_id: {
         type: DataTypes.INTEGER,
@@ -131,6 +142,18 @@ const User = sequelize.define('User', {
         type: DataTypes.STRING(255),
         allowNull: true,
         comment: '内部标签 JSON数组字符串，如 ["VIP","高活跃"]'
+    },
+    participate_distribution: {
+        type: DataTypes.TINYINT,
+        allowNull: false,
+        defaultValue: 0,
+        comment: '是否参与分销(C端商务中心): 0-否 1-是'
+    },
+    // ── N 路径专用字段（role_level 6/7 时生效）──
+    n_leader_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: 'N路径上级大N的user_id（role_level=6时指向大N，role_level=7时为null）'
     }
 }, {
     tableName: 'users',

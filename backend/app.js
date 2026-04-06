@@ -4,6 +4,21 @@ const bodyParser = require('body-parser');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const path = require('path');
+const fs = require('fs');
+
+/** 管理端构建目录：默认 backend 上一级的 admin-ui/dist；可通过 ADMIN_UI_DIST 覆盖（绝对路径，或相对仓库根，如 admin-ui/dist） */
+function resolveAdminUiDist() {
+    const custom = process.env.ADMIN_UI_DIST;
+    if (custom && String(custom).trim()) {
+        const p = String(custom).trim();
+        return path.isAbsolute(p) ? p : path.join(__dirname, '..', p);
+    }
+    return path.join(__dirname, '../admin-ui/dist');
+}
+const ADMIN_UI_DIST = resolveAdminUiDist();
+if (process.env.NODE_ENV === 'production' && !fs.existsSync(path.join(ADMIN_UI_DIST, 'index.html'))) {
+    console.warn(`[admin-ui] 未找到 ${path.join(ADMIN_UI_DIST, 'index.html')}，请部署完整 dist 或设置 ADMIN_UI_DIST。`);
+}
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 const { requestLogger, errorTracker } = require('./utils/logger');
 const constants = require('./config/constants');
@@ -11,16 +26,38 @@ const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
 
 const SERVER_START_TIME = Date.now();
+const WECHAT_PAY_NOTIFY_PATH = '/api/wechat/pay/notify';
+
+function isWechatPayNotifyRequest(url = '') {
+    return url === WECHAT_PAY_NOTIFY_PATH || url.startsWith(`${WECHAT_PAY_NOTIFY_PATH}?`);
+}
 
 // ★ 启动安全检查：生产环境禁止使用弱默认 JWT 密钥
 if (process.env.NODE_ENV === 'production') {
     const weakSecrets = ['INSECURE-DEFAULT-user-secret-key', 'INSECURE-DEFAULT-admin-secret-key'];
+    const portalInitPassword = process.env.PORTAL_INIT_PASSWORD;
+    const corsOrigins = String(process.env.CORS_ORIGINS || '')
+        .split(',')
+        .map(item => item.trim())
+        .filter(Boolean);
     if (weakSecrets.includes(constants.SECURITY.JWT_SECRET)) {
         console.error('❌ 致命错误：JWT_SECRET 使用了不安全的默认值，生产环境必须在 .env 中设置强密钥');
         process.exit(1);
     }
     if (weakSecrets.includes(constants.SECURITY.ADMIN_JWT_SECRET)) {
         console.error('❌ 致命错误：ADMIN_JWT_SECRET 使用了不安全的默认值，生产环境必须在 .env 中设置强密钥');
+        process.exit(1);
+    }
+    if (!corsOrigins.length || corsOrigins.includes('*')) {
+        console.error('❌ 致命错误：生产环境必须为 CORS_ORIGINS 配置明确域名，不能使用 *');
+        process.exit(1);
+    }
+    if (constants.DEBUG.ENABLE_DEBUG_ROUTES || constants.DEBUG.ENABLE_TEST_ROUTES) {
+        console.error('❌ 致命错误：生产环境禁止开启调试路由或测试接口');
+        process.exit(1);
+    }
+    if (!portalInitPassword || portalInitPassword === 'X123456') {
+        console.error('❌ 致命错误：生产环境必须设置安全的 PORTAL_INIT_PASSWORD');
         process.exit(1);
     }
 }
@@ -31,7 +68,6 @@ const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
 const addressRoutes = require('./routes/addresses');
 const distributionRoutes = require('./routes/distribution');
-const partnerRoutes = require('./routes/partner');
 const userRoutes = require('./routes/users');
 const categoryRoutes = require('./routes/categories');
 const cartRoutes = require('./routes/cart');
@@ -41,13 +77,12 @@ const walletRoutes = require('./routes/wallet');
 const refundRoutes = require('./routes/refunds');
 const dealerRoutes = require('./routes/dealer');
 const agentRoutes = require('./routes/agent');
+const upgradeRoutes = require('./routes/upgrade');
 const commissionRoutes = require('./routes/commissions');
 const adminRoutes = require('./routes/admin');
 const configRoutes = require('./routes/config');
 const adminThemeRoutes = require('./routes/admin/themes');
 const adminLogRoutes = require('./routes/admin/logs');
-const questionnaireRoutes = require('./routes/questionnaire');
-const adminQuestionnaireRoutes = require('./routes/admin/questionnaire');
 // 新增：积分体系 + 拼团系统 + 活动系统
 const pointRoutes = require('./routes/points');
 const groupRoutes = require('./routes/group');
@@ -66,19 +101,44 @@ const logisticsRoutes = require('./routes/logistics');
 const heatRoutes = require('./routes/heat');
 // Phase 6: 开屏动画
 const splashRoutes = require('./routes/splash');
+const boardRoutes = require('./routes/boards');
+const pageContentRoutes = require('./routes/page-content');
+const portalAuthRoutes = require('./routes/portal/auth');
+const portalRoutes = require('./routes/portal');
+// N 路径独立代理体系
+const nSystemRoutes = require('./routes/n-system');
 
 const app = express();
 
+// 反代（Nginx/Caddy）会在请求头带 X-Forwarded-For；不信任时 express-rate-limit 会抛 ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+// TRUST_PROXY_HOPS=0 或 false：显式关闭；未设置且 NODE_ENV=production 时默认信任 1 层反代
+{
+    const raw = process.env.TRUST_PROXY_HOPS;
+    if (raw === '0' || raw === 'false') {
+        app.set('trust proxy', false);
+    } else {
+        const n = Number(raw);
+        if (Number.isFinite(n) && n >= 0) {
+            app.set('trust proxy', n);
+        } else if (process.env.NODE_ENV === 'production') {
+            app.set('trust proxy', 1);
+        }
+    }
+}
+
 // 中间件
 // CORS 配置 - 生产环境限制来源
+const configuredCorsOrigins = String(process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+const allowAllOrigins = configuredCorsOrigins.length === 0 || (configuredCorsOrigins.length === 1 && configuredCorsOrigins[0] === '*');
 const corsOptions = {
-    origin: process.env.CORS_ORIGINS
-        ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
-        : '*',
+    origin: allowAllOrigins ? '*' : configuredCorsOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-openid'],
     // 只有在配置了具体origin时才启用credentials
-    credentials: process.env.CORS_ORIGINS ? true : false
+    credentials: !allowAllOrigins
 };
 app.use(cors(corsOptions));
 
@@ -92,7 +152,14 @@ app.use(compression({
     threshold: 1024 // 小于 1KB 不压缩
 }));
 
-app.use(bodyParser.json({ limit: constants.SECURITY.BODY_SIZE_LIMIT }));
+app.use(bodyParser.json({
+    limit: constants.SECURITY.BODY_SIZE_LIMIT,
+    verify: (req, res, buf) => {
+        if (isWechatPayNotifyRequest(req.originalUrl)) {
+            req.rawBody = buf.toString('utf8');
+        }
+    }
+}));
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Request logging middleware
@@ -118,12 +185,14 @@ app.use(xssClean());
 app.use(hpp());
 
 // 接口请求频率限制 - 防止恶意刷接口
+// 微信支付 V3 回调由签名校验保障安全，不参与全局限流，避免微信侧集中 IP 触发 429
 const apiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: constants.SECURITY.API_RATE_LIMIT,
     message: { code: -1, message: '请求过于频繁，请稍后再试' },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    skip: (req) => isWechatPayNotifyRequest(req.originalUrl)
 });
 app.use('/api', apiLimiter);
 
@@ -134,9 +203,11 @@ const loginLimiter = rateLimit({
     message: { code: -1, message: '登录尝试过于频繁' }
 });
 app.use('/api/login', loginLimiter);
+app.use('/admin/api/login', loginLimiter);
+app.use('/api/portal/auth/login', loginLimiter);
 
-// 静态文件 - 管理后台 (Vite 构建版)  [admin-ui/ 在项目根目录，backend/ 的上一层]
-app.use('/admin', express.static(path.join(__dirname, '../admin-ui/dist')));
+// 静态文件 - 管理后台 (Vite 构建版)；须与当前 index.html 为同一次 build，否则 assets 带 hash 会 404
+app.use('/admin', express.static(ADMIN_UI_DIST));
 
 // SPA 兜底 - 管理后台所有非 API、非静态资源路由都返回 index.html
 app.get('/admin/*', (req, res, next) => {
@@ -144,7 +215,7 @@ app.get('/admin/*', (req, res, next) => {
     if (req.path.startsWith('/admin/api')) return next();
     // 跳过有扩展名的静态资源请求（.js, .css, .png 等）
     if (path.extname(req.path)) return next();
-    res.sendFile(path.join(__dirname, '../admin-ui/dist/index.html'));
+    res.sendFile(path.join(ADMIN_UI_DIST, 'index.html'));
 });
 
 // ★ 静态文件 - 本地上传目录（图片等资源）
@@ -180,7 +251,7 @@ if (swaggerEnabled) {
             tagsSorter: 'alpha'
         }
     }));
-    console.info(`📖 Swagger API 文档地址: http://localhost:${process.env.PORT || 3000}/api/docs`);
+    console.info(`📖 Swagger API 文档地址: http://localhost:${process.env.PORT || 3001}/api/docs`);
 }
 
 // API路由
@@ -189,7 +260,6 @@ app.use('/api', productRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', addressRoutes);
 app.use('/api', distributionRoutes);
-app.use('/api', partnerRoutes);
 app.use('/api', userRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/cart', cartRoutes);
@@ -199,9 +269,11 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/refunds', refundRoutes);
 app.use('/api/dealer', dealerRoutes);
 app.use('/api/agent', agentRoutes);
+app.use('/api/upgrade', upgradeRoutes);
+app.use('/api/n', nSystemRoutes);
 app.use('/api/commissions', commissionRoutes);
 app.use('/api', configRoutes);
-app.use('/api', questionnaireRoutes);
+app.use('/api/themes', adminThemeRoutes);      // 主题公开查询（active）+ 管理接口复用
 app.use('/api/points', pointRoutes);      // 积分体系
 app.use('/api/group', groupRoutes);       // 拼团系统
 app.use('/api/activity', activityRoutes); // 活动系统（气泡通告等）
@@ -213,12 +285,15 @@ app.use('/api/stations', stationRoutes);  // Phase 4: 服务站点地图
 app.use('/api/logistics', logisticsRoutes); // Phase 5: 物流查询
 app.use('/admin/api/heat', heatRoutes);     // Phase 5: 商品热度管理（仅后台）
 app.use('/api/splash', splashRoutes);       // Phase 6: 开屏动画（小程序端公开接口）
+app.use('/api/boards', boardRoutes);        // 榜单化图文管理（公开）
+app.use('/api/page-content', pageContentRoutes); // 页面编排聚合读口
+app.use('/api/portal/auth', portalAuthRoutes);
+app.use('/api/portal', portalRoutes);
 
 // 后台管理API (使用 /admin/api 避免与静态文件冲突)
 app.use('/admin/api', adminRoutes);
 app.use('/admin/api/themes', adminThemeRoutes);
 app.use('/admin/api/logs', adminLogRoutes);
-app.use('/admin/api', adminQuestionnaireRoutes);
 
 // ★ 调试接口 - 生产环境自动关闭，防止信息泄露
 if (constants.DEBUG.ENABLE_DEBUG_ROUTES) {

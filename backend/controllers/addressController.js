@@ -22,6 +22,25 @@ async function getAddresses(req, res, next) {
 }
 
 /**
+ * 获取单条地址
+ */
+async function getAddressById(req, res, next) {
+    try {
+        const user = req.user;
+        const { id } = req.params;
+        const address = await Address.findOne({
+            where: { id, user_id: user.id }
+        });
+        if (!address) {
+            return res.status(404).json({ success: false, message: '地址不存在' });
+        }
+        res.json({ success: true, data: address });
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
  * 创建地址
  */
 async function createAddress(req, res, next) {
@@ -180,6 +199,7 @@ async function setDefaultAddress(req, res, next) {
 
 module.exports = {
     getAddresses,
+    getAddressById,
     createAddress,
     updateAddress,
     deleteAddress,

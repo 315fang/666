@@ -16,6 +16,7 @@ const {
     ensureCategoryProductsLoaded,
     refreshPricePreviewHints
 } = require('./categoryProductLoader');
+const { loadPricePreviewData } = require('./categoryPricePreview');
 const {
     updateCartData,
     openCartPopup,
@@ -440,71 +441,11 @@ Page({
     },
 
     async _loadPricePreviewData(forceRefresh = false) {
-        if (!forceRefresh && this._pricePreviewPromise) {
-            return this._pricePreviewPromise;
-        }
-
-        if (!forceRefresh && this._lastPricePreviewLoadedAt && (Date.now() - this._lastPricePreviewLoadedAt) < CATEGORY_PRICE_PREVIEW_TTL) {
-            return;
-        }
-
-        this._pricePreviewPromise = (async () => {
-            const [toggleRes, pointRes, couponRes] = await Promise.all([
-                get('/configs').catch(() => null),
-                get('/points/account').catch(() => null),
-                get('/coupons/available?amount=0').catch(() => null)
-            ]);
-            let enabled = false;
-            let couponEnabled = true;
-            if (toggleRes && toggleRes.code === 0 && toggleRes.data) {
-                const toggles = toggleRes.data.feature_toggles || toggleRes.data;
-                if (Array.isArray(toggles)) {
-                    const t = toggles.find(f => f.key === 'price_preview');
-                    enabled = t ? t.enabled : false;
-                    const c = toggles.find(f => f.key === 'coupon');
-                    couponEnabled = c ? c.enabled : true;
-                } else if (typeof toggles === 'object') {
-                    enabled = !!toggles.price_preview;
-                    couponEnabled = toggles.coupon !== undefined ? !!toggles.coupon : true;
-                }
-            }
-            const pb = (pointRes && pointRes.code === 0 && pointRes.data) ? (pointRes.data.balance_points || 0) : 0;
-            let bestCoupon = 0;
-            if (couponEnabled && couponRes && couponRes.code === 0 && couponRes.data) {
-                const coupons = couponRes.data || [];
-                coupons.forEach(c => {
-                    if (c.coupon_type === 'fixed' || c.coupon_type === 'no_threshold') {
-                        bestCoupon = Math.max(bestCoupon, parseFloat(c.coupon_value || 0));
-                    }
-                });
-            }
-            const shouldRefreshTips = enabled !== this.data.pricePreviewEnabled
-                || pb !== this.data.userPointBalance
-                || bestCoupon !== this.data.userBestCoupon;
-
-            await new Promise((resolve) => this.setData({
-                pricePreviewEnabled: enabled,
-                userPointBalance: pb,
-                userBestCoupon: bestCoupon
-            }, resolve));
-
-            if (shouldRefreshTips) {
-                this._refreshPricePreviewHints();
-            }
-
-            this._lastPricePreviewLoadedAt = Date.now();
-        })().catch(() => {
-            // 静默失败
-        }).finally(() => {
-            this._pricePreviewPromise = null;
-        });
-
-        return this._pricePreviewPromise;
+        return loadPricePreviewData(this, forceRefresh, CATEGORY_PRICE_PREVIEW_TTL);
     },
 
     _refreshPricePreviewHints() {
         return refreshPricePreviewHints(this);
     }
 });
-
 

@@ -18,7 +18,7 @@ const { URL } = require('url');
 const cooldownMap = new Map();
 
 /**
- * 从 SystemConfig 读取告警配置（不走 ConfigService 缓存以保证实时性）
+ * 从 SystemConfig 表读取告警配置（直接读库）
  */
 async function loadAlertConfig() {
     try {

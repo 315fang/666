@@ -10,12 +10,13 @@
  *
  * 实际接入步骤：
  * 1. 在阿里云市场购买「快递鸟」或「快递100」API
- * 2. 配置 .env: LOGISTICS_API_KEY, LOGISTICS_CUSTOMER_ID
- * 3. 若使用快递鸟接口，RSIGN = MD5(RequestData+EBusinessID+ApiKey)
+ * 2. 配置 .env: LOGISTICS_API_KEY（阿里云 APPCODE）
+ * 3. 当前实现使用 APPCODE 鉴权，不需要额外 customerId 字段
  */
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const { warn: logWarn, info: logInfo } = require('../utils/logger');
 
 // ── 缓存目录 ──
 const CACHE_DIR = path.join(__dirname, '../cache/logistics');
@@ -97,9 +98,12 @@ function _callAliyunApi(trackingNo, companyCode) {
         const apiKey = process.env.LOGISTICS_API_KEY || '';
         const host = 'wuliu.market.alicloudapi.com';
 
-        // 如果没配置 API Key，返回 mock 数据（开发环境用）
+        // 如果没配置 API Key，开发环境返回 mock，生产环境直接报错，避免线上展示假轨迹
         if (!apiKey) {
-            console.warn('[Logistics] LOGISTICS_API_KEY 未配置，返回 mock 数据');
+            if (process.env.NODE_ENV === 'production') {
+                return reject(new Error('LOGISTICS_API_KEY 未配置，无法查询物流轨迹'));
+            }
+            logWarn('LOGISTICS', 'LOGISTICS_API_KEY 未配置，返回 mock 数据');
             return resolve(_getMockData(trackingNo, companyCode));
         }
 
@@ -121,7 +125,7 @@ function _callAliyunApi(trackingNo, companyCode) {
             timeout: 10000
         };
 
-        console.log(`[Logistics] 查询: ${trackingNo}${aliType ? ` (${aliType})` : ' (自动识别)'}`);
+        logInfo('LOGISTICS', `查询: ${trackingNo}${aliType ? ` (${aliType})` : ' (自动识别)'}`);
 
         const req = https.request(options, (res) => {
             let data = '';

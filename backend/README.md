@@ -1,261 +1,84 @@
-# S2B2C 数字加盟系统 - 后端API
+# 后端 API（Node + Express + Sequelize + MySQL）
 
-基于 Node.js + Express + MySQL + Sequelize 的微信小程序后端服务。
-
-## 功能特性
-
-### 用户端 API
-- ✅ 用户认证（微信登录）
-- ✅ 商品管理（含SKU规格、类目）
-- ✅ 购物车系统
-- ✅ 订单系统（创建、支付、物流）
-- ✅ 售后退款
-- ✅ 地址管理
-- ✅ 分销中心（团队、推广订单）
-- ✅ 钱包与提现
-- ✅ 素材中心
-- ✅ 内容管理（轮播图、图文页）
-- ✅ 合伙人功能
-- ✅ 经销商功能
-
-### 管理后台 API
-- ✅ 管理员认证（JWT + RBAC权限）
-- ✅ 商品/类目管理
-- ✅ 订单管理与发货
-- ✅ 用户管理
-- ✅ 内容管理
-- ✅ 提现审核
-- ✅ 售后处理
-
-## 技术栈
-
-- **框架**: Express 4.x
-- **ORM**: Sequelize 6.x
-- **数据库**: MySQL 8.0
-- **语言**: Node.js 14+
-- **认证**: JWT (jsonwebtoken)
+全栈说明、接口总表、发版检查见仓库 **[docs/手册.md](../docs/手册.md)**；业务术语与佣金见 **[docs/业务规则.md](../docs/业务规则.md)**。
 
 ---
 
 ## 快速开始
 
-### 1. 环境准备
-
-确保已安装：
-- Node.js >= 14.0
-- MySQL >= 8.0
-
-### 2. 安装依赖
-
 ```bash
 cd backend
 npm install
-```
-
-### 3. 配置环境变量
-
-复制示例配置文件：
-
-```bash
 cp .env.example .env
-```
-
-编辑 `.env` 文件：
-
-```env
-# 服务器配置
-PORT=3000
-NODE_ENV=development
-
-# 数据库配置
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=s2b2c_db
-DB_USER=root
-DB_PASSWORD=your_mysql_password
-
-# 微信小程序配置
-WECHAT_APPID=你的小程序AppID
-WECHAT_SECRET=你的小程序AppSecret
-
-# JWT配置（用户端）
-JWT_SECRET=your-user-jwt-secret-key
-JWT_EXPIRES_IN=7d
-
-# 管理后台JWT配置
-ADMIN_JWT_SECRET=your-admin-jwt-secret-key
-ADMIN_JWT_EXPIRES_IN=8h
-
-# 提现配置
-MIN_WITHDRAWAL_AMOUNT=10
-WITHDRAWAL_FEE_RATE=0.006
-```
-
-### 4. 创建数据库
-
-```sql
-CREATE DATABASE s2b2c_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
-
-### 5. 启动服务器
-
-**开发模式**（自动重启）：
-```bash
+# 编辑 .env：DB_*、JWT_SECRET、ADMIN_JWT_SECRET、WECHAT_*、支付 V3 等
 npm run dev
+# 默认 http://localhost:3001
 ```
 
-**生产模式**：
+- 健康检查：`GET http://localhost:3001/health`  
+- API 文档（默认非生产开启）：`GET /api/docs`  
+- 创建管理员：`node scripts/create-admin.js`（或按你们种子脚本）
+
+数据库：创建库 `utf8mb4` 后启动；未跑过的 SQL 在 **`migrations/`**，发版清单见 `docs/手册.md` §5。
+
+---
+
+## 环境变量（必看）
+
+完整示例：**`.env.example`**。生产环境注意：
+
+| 类别 | 要求 |
+|------|------|
+| `JWT_SECRET` / `ADMIN_JWT_SECRET` | 各 ≥32 字符随机串，且互不相同；禁用仓库默认占位值 |
+| `NODE_ENV=production` | 配合 `app.js` 启动校验（CORS 不可 `*`、调试路由关闭等） |
+| 数据库 | 强密码 |
+| `CORS_ORIGINS` | 实际管理端与门户域名，逗号分隔 |
+| 微信 / 支付 V3 | `WECHAT_APPID`、`WECHAT_SECRET`、`WECHAT_MCH_ID`、`WECHAT_PAY_SERIAL_NO`、`WECHAT_PAY_API_V3_KEY`（32 位）、私钥路径、`WECHAT_PAY_NOTIFY_URL` |
+| 小程序购物订单 | 公众平台签协议并开通能力后：`npm run wechat:order-path` 同步订单详情 path；支付成功后会异步调用「上传购物详情」（`WechatShoppingOrderService`），可用 `WECHAT_SHOPPING_ORDER_UPLOAD=false` 关闭；无 https 商品图时可配 `WECHAT_SHOPPING_PLACEHOLDER_IMAGE` |
+| 多实例（可选） | `TASK_LOCK_BACKEND=mysql`；`ADMIN_TOKEN_BLACKLIST_STORE=redis|mysql`（MySQL 方案先 `npm run migrate:phase9`） |
+
+**安全说明（摘要）**：生产禁止 `ENABLE_DEBUG_ROUTES`、`ENABLE_TEST_ROUTES`；请求体验证见 `middleware/validation`；支付回调 `POST /api/wechat/pay/notify` 不参与全局限流，依赖签名校验与业务金额校验；任务锁与黑名单见上文。更细的英文说明若需可自行在 Git 历史中检索已删除的 `SECURITY.md` 版本。
+
+---
+
+## 服务层（`services/`）
+
+订单与支付、佣金、价格、积分、定时任务等主要逻辑在 **`services/`** 下，例如：
+
+- `OrderCoreService.js` — 下单、支付预下单、微信回调、取消、履约相关  
+- `WechatShoppingOrderService.js` — 支付成功后上传微信购物详情（账单/订单中心）  
+- `CommissionService.js` — 佣金创建与级差等  
+- `PricingService.js` — 展示价、佣金试算工具方法  
+- `OrderJobService.js` — 自动确认收货、超时取消、佣金结算、完成单统计等  
+
+改业务优先打开对应 Service 与 `controllers/` 薄层。
+
+---
+
+## 部署（摘要）
+
+**进程**：`npm install --production && npm start`，或用 PM2：`pm2 start server.js --name s2b2c-api`。  
+**反向代理**：Nginx/Caddy 将 HTTPS 转到本机 `PORT`（默认 3001）；需支持 Webhook 的 `POST` 体与原样路径 **`/api/wechat/pay/notify`**。  
+**静态管理端**：同一 Node 进程托管 `../admin-ui/dist` 到 `/admin`（见 `app.js`）。  
+**1Panel / 面板部署**：将代码与 `admin-ui/dist` 置于服务器，终端内 `npm install`、`node server.js` 或 PM2；配置网站反代到 Node 端口；环境变量与证书路径与线上一致。细节随面板版本略有差异，按主机商文档操作即可。
+
+**对象存储**：多机部署时上传走 OSS/COS（`STORAGE_PROVIDER` 等），勿依赖单机 `uploads/`。
+
+---
+
+## 常用自测命令
+
 ```bash
-npm start
-```
+# 历史用户补全邀请码（登录也会自动生成，此脚本用于一次性刷库）
+npm run invite:backfill
 
-服务器将在 `http://localhost:3000` 启动
-
-### 6. 初始化管理员账号
-
-首次使用需创建管理员：
-
-```bash
-node scripts/create-admin.js
-```
-
-或手动插入（密码需自行加密）：
-```sql
-INSERT INTO admins (username, password_hash, salt, name, role, status, createdAt, updatedAt) 
-VALUES ('admin', '加密后的密码', '盐值', '超级管理员', 'super_admin', 1, NOW(), NOW());
-```
-
-### 7. 测试API
-
-```bash
-# 健康检查
-curl http://localhost:3000/health
-
-# 管理员登录
-curl -X POST http://localhost:3000/admin/login \
+curl -s http://localhost:3001/health
+curl -s -X POST http://localhost:3001/admin/api/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"your_password"}'
+  -d '{"username":"admin","password":"你的密码"}'
 ```
 
 ---
-
-## API 端点汇总
-
-### 用户端 `/api`
-
-| 模块 | 端点 | 说明 |
-|------|------|------|
-| 认证 | `POST /login` | 微信登录 |
-| 商品 | `GET /products` | 商品列表（支持分页/搜索） |
-| 商品 | `GET /products/:id` | 商品详情（含SKU） |
-| 类目 | `GET /categories` | 类目列表 |
-| 类目 | `GET /categories/tree` | 类目树形结构 |
-| 购物车 | `GET /cart` | 购物车列表 |
-| 购物车 | `POST /cart` | 添加商品 |
-| 购物车 | `PUT /cart/:id` | 更新数量 |
-| 购物车 | `DELETE /cart/:id` | 移除商品 |
-| 订单 | `GET /orders` | 订单列表 |
-| 订单 | `POST /orders` | 创建订单 |
-| 订单 | `POST /orders/:id/pay` | 支付订单 |
-| 售后 | `GET /refunds` | 售后列表 |
-| 售后 | `POST /refunds` | 申请售后 |
-| 钱包 | `GET /wallet` | 钱包概览 |
-| 钱包 | `GET /wallet/commissions` | 佣金明细 |
-| 钱包 | `POST /wallet/withdraw` | 申请提现 |
-| 分销 | `GET /team` | 团队成员 |
-| 分销 | `GET /promotion/orders` | 推广订单 |
-| 素材 | `GET /materials` | 素材列表 |
-| 内容 | `GET /content/banners` | 轮播图 |
-| 内容 | `GET /content/page/:slug` | 图文页 |
-| 经销商 | `POST /dealer/apply` | 申请经销商 |
-| 经销商 | `GET /dealer/stats` | 经销商统计 |
-
-### 管理后台 `/admin`
-
-| 模块 | 端点 | 说明 |
-|------|------|------|
-| 认证 | `POST /login` | 管理员登录 |
-| 商品 | `GET /products` | 商品列表 |
-| 商品 | `POST /products` | 创建商品 |
-| 商品 | `PUT /products/:id` | 更新商品 |
-| 类目 | `GET /categories` | 类目管理 |
-| 订单 | `GET /orders` | 订单列表 |
-| 订单 | `PUT /orders/:id/ship` | 发货 |
-| 用户 | `GET /users` | 用户列表 |
-| 用户 | `PUT /users/:id/role` | 修改角色 |
-| 内容 | `GET /banners` | 轮播图管理 |
-| 内容 | `POST /banners` | 创建轮播图 |
-| 提现 | `GET /withdrawals` | 提现列表 |
-| 提现 | `PUT /withdrawals/:id/approve` | 审核通过 |
-| 提现 | `PUT /withdrawals/:id/reject` | 拒绝 |
-| 售后 | `GET /refunds` | 售后列表 |
-| 售后 | `PUT /refunds/:id/approve` | 审核通过 |
-
----
-
-## 数据库模型
-
-| 模型 | 表名 | 说明 |
-|------|------|------|
-| User | users | 用户 |
-| Product | products | 商品 |
-| Category | categories | 类目 |
-| SKU | product_skus | 商品规格 |
-| Order | orders | 订单 |
-| Cart | cart_items | 购物车 |
-| Address | addresses | 收货地址 |
-| CommissionLog | commission_logs | 佣金记录 |
-| Withdrawal | withdrawals | 提现记录 |
-| Refund | refunds | 售后记录 |
-| Banner | banners | 轮播图 |
-| Content | contents | 图文内容 |
-| Material | materials | 素材库 |
-| Admin | admins | 管理员 |
-| Dealer | dealers | 经销商 |
-
----
-
-## 部署
-
-### PM2部署
-
-```bash
-npm install -g pm2
-pm2 start server.js --name s2b2c-api
-pm2 save
-pm2 startup
-```
-
-### Nginx反向代理
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name api.yourdomain.com;
-
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
----
-
-## 常见问题
-
-**Q: 数据库连接失败？**  
-A: 检查 `.env` 配置和MySQL服务状态
-
-**Q: 管理员登录失败？**  
-A: 确认已创建管理员账号，且密码正确
-
-**Q: 微信登录失败？**  
-A: 确认WECHAT_APPID和WECHAT_SECRET配置正确
 
 ## License
 

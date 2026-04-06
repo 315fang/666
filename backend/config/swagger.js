@@ -1,7 +1,7 @@
 /**
  * Swagger / OpenAPI 配置
  * 
- * 访问地址：http://localhost:3000/api/docs
+ * 访问地址：http://localhost:3001/api/docs
  */
 const swaggerJsdoc = require('swagger-jsdoc');
 
@@ -35,7 +35,7 @@ S2B2C 数字化加盟小程序后端 API 文档
         },
         servers: [
             {
-                url: process.env.API_BASE_URL || 'http://localhost:3000',
+                url: process.env.API_BASE_URL || 'http://localhost:3001',
                 description: process.env.NODE_ENV === 'production' ? '生产环境' : '开发环境'
             }
         ],
@@ -197,7 +197,6 @@ S2B2C 数字化加盟小程序后端 API 文档
     // 扫描路由文件（JSDoc 注释来源）
     apis: [
         './routes/admin/index.js',
-        './routes/admin/config.js',
         './routes/auth.js',
         './routes/products.js',
         './routes/orders.js',

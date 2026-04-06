@@ -52,7 +52,42 @@ const ServiceStation = sequelize.define('ServiceStation', {
     pickup_contact: {
         type: DataTypes.STRING(100),
         allowNull: true,
-        comment: '自提联系人&电话'
+        comment: '自提联系人&电话（兼容旧数据，可与 contact_* 同步）'
+    },
+    logo_url: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+        comment: '门店LOGO URL'
+    },
+    contact_name: {
+        type: DataTypes.STRING(50),
+        allowNull: true,
+        comment: '自提联系人'
+    },
+    contact_phone: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        comment: '自提联系电话'
+    },
+    business_days: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        comment: '营业周天 1-7（周一=1）JSON 数组'
+    },
+    business_time_start: {
+        type: DataTypes.STRING(12),
+        allowNull: true,
+        comment: '营业开始时间'
+    },
+    business_time_end: {
+        type: DataTypes.STRING(12),
+        allowNull: true,
+        comment: '营业结束时间'
+    },
+    intro: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: '门店简介'
     },
     // ── 运营数据 ──
     total_orders: {

@@ -1,6 +1,8 @@
 node_modules/
 .DS_Store
 dist/
+# 管理端 Vite 构建产物：勿提交，部署时在目标环境 build
+admin-ui/dist/
 unpackage/
 .idea/
 .vscode/
@@ -14,35 +16,28 @@ pnpm-debug.log*
 .env.test.local
 .env.production.local
 nul
-
-# 环境变量 & 敏感配置
-backend/env
-backend/.env
 *.pem
-*.key
-*.crt
 *.p12
-*.cert
+*.key
+backend/说明/
 backend/certs/
-
-# 临时 / 部署目录
-backend-upload/
-backend-upload-bundle/
-deploy-packages/
-deploy-upload-*.zip
-admin-ui-dist-for-server.zip
-upload-overlay-*/
-session-changes-bundle/
-server-patch-station-geocode/
-
-# AI / 编辑器配置
 .worktrees/
 .agent/
+.codebuddy/
 .cursor/
 .opencode/
 skill/
 
-# 临时文件
-.git-rewrite/
-.nul
-*.tmp
+# 仓库内历史快照/重复副本（避免误改错目录；若确需纳入版本可删去对应行）
+zz/zz/
+server-update-package/
+update-package-*/
+xiufu/
+
+# 本地打包/临时分发（勿提交）
+*.tgz
+*.rar
+final_test.txt
+
+# 本地技能扫描日志
+skill/**/logs/

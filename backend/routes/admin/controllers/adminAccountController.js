@@ -5,13 +5,14 @@
  */
 const { Admin, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
+const { ADMIN_ROLE_PRESETS, PERMISSION_CATALOG } = require('../../../config/adminPermissionCatalog');
 
 /**
  * 获取管理员列表
  */
 const getAdmins = async (req, res) => {
     try {
-        const { page = 1, limit = 20, keyword } = req.query;
+        const { page = 1, limit = 20, keyword, role } = req.query;
         const offset = (parseInt(page) - 1) * parseInt(limit);
 
         const where = {};
@@ -21,10 +22,11 @@ const getAdmins = async (req, res) => {
                 { name: { [Op.like]: `%${keyword}%` } }
             ];
         }
+        if (role) where.role = role;
 
         const { count, rows } = await Admin.findAndCountAll({
             where,
-            attributes: ['id', 'username', 'name', 'role', 'phone', 'email', 'status', 'last_login_at', 'last_login_ip', 'created_at'],
+            attributes: ['id', 'username', 'name', 'role', 'permissions', 'phone', 'email', 'status', 'last_login_at', 'last_login_ip', 'created_at'],
             order: [['created_at', 'DESC']],
             offset,
             limit: parseInt(limit)
@@ -142,7 +144,7 @@ const updateAdmin = async (req, res) => {
 const resetAdminPassword = async (req, res) => {
     try {
         const { id } = req.params;
-        const { new_password } = req.body;
+        const new_password = req.body.new_password || req.body.password;
         const currentAdmin = req.admin;
 
         // 只有超级管理员可以重置密码
@@ -212,56 +214,25 @@ const deleteAdmin = async (req, res) => {
 const getRolePermissions = async (req, res) => {
     try {
         const rolePermissions = {
-            'super_admin': {
+            super_admin: {
                 name: '超级管理员',
                 description: '拥有系统所有权限',
                 permissions: ['*']
-            },
-            'admin': {
-                name: '管理员',
-                description: '商品、订单、用户、分销、内容管理',
-                permissions: ['products', 'orders', 'users', 'distribution', 'content', 'materials', 'dealers', 'commissions']
-            },
-            'operator': {
-                name: '运营',
-                description: '商品、订单、内容管理',
-                permissions: ['products', 'orders', 'content', 'materials']
-            },
-            'finance': {
-                name: '财务',
-                description: '订单、提现、结算管理',
-                permissions: ['orders', 'withdrawals', 'settlements', 'commissions']
-            },
-            'customer_service': {
-                name: '客服',
-                description: '订单、售后、用户管理',
-                permissions: ['orders', 'refunds', 'users']
             }
         };
-
-        const allPermissions = [
-            { key: 'products', name: '商品管理' },
-            { key: 'orders', name: '订单管理' },
-            { key: 'users', name: '用户管理' },
-            { key: 'distribution', name: '分销管理' },
-            { key: 'content', name: '内容管理' },
-            { key: 'materials', name: '素材管理' },
-            { key: 'withdrawals', name: '提现管理' },
-            { key: 'refunds', name: '售后管理' },
-            { key: 'settlements', name: '结算管理' },
-            { key: 'commissions', name: '佣金管理' },
-            { key: 'dealers', name: '经销商管理' },
-            { key: 'statistics', name: '数据统计' },
-            { key: 'settings', name: '系统设置' },
-            { key: 'logs', name: '操作日志' },
-            { key: 'admins', name: '账号管理' }
-        ];
+        for (const [key, cfg] of Object.entries(ADMIN_ROLE_PRESETS)) {
+            rolePermissions[key] = {
+                name: cfg.name,
+                description: cfg.description,
+                permissions: cfg.permissions
+            };
+        }
 
         res.json({
             code: 0,
             data: {
                 roles: rolePermissions,
-                permissions: allPermissions
+                permissions: PERMISSION_CATALOG
             }
         });
     } catch (error) {

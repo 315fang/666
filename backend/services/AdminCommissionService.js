@@ -144,36 +144,43 @@ class AdminCommissionService {
         }
 
         const now = new Date();
-        const [updateCount] = await CommissionLog.update(
-            {
-                status: 'cancelled',
-                approved_by: adminId,
-                approved_at: now,
-                remark: sequelize.literal(`CONCAT(IFNULL(remark, ''), ' [管理员批量拒绝${reason ? ': ' + reason : ''}]')`)
-            },
-            {
+        const safeReason = String(reason || '').trim();
+        const t = await sequelize.transaction();
+        try {
+            const rejectedLogs = await CommissionLog.findAll({
                 where: {
                     id: { [Op.in]: ids },
                     status: { [Op.in]: ['pending_approval', 'frozen'] }
-                }
+                },
+                transaction: t,
+                lock: t.LOCK.UPDATE
+            });
+
+            for (const log of rejectedLogs) {
+                log.status = 'cancelled';
+                log.approved_by = adminId;
+                log.approved_at = now;
+                log.remark = (log.remark || '') + ` [管理员批量拒绝${safeReason ? ': ' + safeReason : ''}]`;
+                await log.save({ transaction: t });
             }
-        );
 
-        const rejectedLogs = await CommissionLog.findAll({
-            where: { id: { [Op.in]: ids }, status: 'cancelled' }
-        });
+            await t.commit();
 
-        for (const log of rejectedLogs) {
-            await sendNotification(
-                log.user_id,
-                '佣金审批未通过',
-                `您有一笔佣金 ¥${parseFloat(log.amount).toFixed(2)} 审批未通过${reason ? '，原因：' + reason : ''}。`,
-                'commission',
-                log.order_id
-            );
+            for (const log of rejectedLogs) {
+                await sendNotification(
+                    log.user_id,
+                    '佣金审批未通过',
+                    `您有一笔佣金 ¥${parseFloat(log.amount).toFixed(2)} 审批未通过${safeReason ? '，原因：' + safeReason : ''}。`,
+                    'commission',
+                    log.order_id
+                );
+            }
+
+            return rejectedLogs.length;
+        } catch (error) {
+            await t.rollback();
+            throw error;
         }
-
-        return updateCount;
     }
 }
 

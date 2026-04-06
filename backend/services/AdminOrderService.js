@@ -6,6 +6,7 @@ const { loadMiniProgramConfig } = require('../utils/miniprogramConfig');
 const { scheduleUploadShippingInfoAfterShip } = require('./WechatShippingInfoService');
 const CommissionService = require('./CommissionService');
 const AgentWalletService = require('./AgentWalletService');
+const { error: logError, info: logInfo } = require('../utils/logger');
 
 class AdminOrderService {
     /**
@@ -308,9 +309,9 @@ class AdminOrderService {
                         totalFee: Math.round(refundTarget.actual_price * 100),
                         reason: `管理员取消：${reason || '无'}`
                     });
-                    console.log(`[退款] 管理员取消订单 ${refundTarget.order_no} 微信退款申请成功，金额: ¥${refundTarget.actual_price}`);
+                    logInfo('ADMIN_ORDER', `[退款] 管理员取消订单 ${refundTarget.order_no} 微信退款申请成功`, { amount: refundTarget.actual_price });
                 } catch (refundErr) {
-                    console.error(`[退款] 管理员取消订单 ${refundTarget.order_no} 退款失败（需人工处理）:`, refundErr.message);
+                    logError('ADMIN_ORDER', `[退款] 管理员取消订单 ${refundTarget.order_no} 退款失败（需人工处理）`, { error: refundErr.message });
                     await Order.update(
                         {
                             remark: refundTarget.remark + ` [⚠️退款API失败，需人工退款: ${refundErr.message}]`
@@ -329,7 +330,7 @@ class AdminOrderService {
                     item.id
                 )));
             } catch (notifyErr) {
-                console.error('订单取消通知发送失败:', notifyErr.message);
+                logError('ADMIN_ORDER', '订单取消通知发送失败', { error: notifyErr.message });
             }
 
             return true;

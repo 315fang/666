@@ -1,5 +1,6 @@
 const { Product } = require('../../../models');
 const { Op } = require('sequelize');
+const { normalizeProductCommissionRate } = require('../../../utils/commissionRates');
 
 /**
  * 批量设置商品佣金 (支持比例和固定金额)
@@ -23,8 +24,16 @@ const batchSetCommission = async (req, res) => {
         const updateData = {};
 
         // 允许设置为空（清除配置），或者设置为具体数值
-        if (commission_rate_1 !== undefined) updateData.commission_rate_1 = commission_rate_1 === '' ? null : parseFloat(commission_rate_1);
-        if (commission_rate_2 !== undefined) updateData.commission_rate_2 = commission_rate_2 === '' ? null : parseFloat(commission_rate_2);
+        if (commission_rate_1 !== undefined) {
+            updateData.commission_rate_1 = (commission_rate_1 === '' || commission_rate_1 === null)
+                ? null
+                : normalizeProductCommissionRate(commission_rate_1);
+        }
+        if (commission_rate_2 !== undefined) {
+            updateData.commission_rate_2 = (commission_rate_2 === '' || commission_rate_2 === null)
+                ? null
+                : normalizeProductCommissionRate(commission_rate_2);
+        }
 
         if (commission_amount_1 !== undefined) updateData.commission_amount_1 = commission_amount_1 === '' ? null : parseFloat(commission_amount_1);
         if (commission_amount_2 !== undefined) updateData.commission_amount_2 = commission_amount_2 === '' ? null : parseFloat(commission_amount_2);

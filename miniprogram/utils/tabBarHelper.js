@@ -20,12 +20,22 @@ function syncPageTabBar(page, shouldHide) {
     }
 
     page._nativeTabBarHidden = !!shouldHide;
+    const tabBar = typeof page.getTabBar === 'function' ? page.getTabBar() : null;
+    if (tabBar && typeof tabBar.setHidden === 'function') {
+        tabBar.setHidden(!!shouldHide);
+        return Promise.resolve();
+    }
     return callTabBarApi(shouldHide ? 'hideTabBar' : 'showTabBar');
 }
 
 function restorePageTabBar(page) {
     if (page) {
         page._nativeTabBarHidden = false;
+        const tabBar = typeof page.getTabBar === 'function' ? page.getTabBar() : null;
+        if (tabBar && typeof tabBar.setHidden === 'function') {
+            tabBar.setHidden(false);
+            return Promise.resolve();
+        }
     }
     return callTabBarApi('showTabBar');
 }

@@ -1,5 +1,6 @@
 const { Dealer, User, Order, Product } = require('../models');
 const { Op } = require('sequelize');
+const logger = require('../utils/logger');
 
 // 生成经销商编号
 const generateDealerNo = () => {
@@ -37,7 +38,7 @@ const applyDealer = async (req, res) => {
 
         res.json({ code: 0, data: dealer, message: '申请已提交' });
     } catch (error) {
-        console.error('申请经销商失败:', error);
+        logger.error('申请经销商失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '申请失败' });
     }
 };
@@ -54,7 +55,7 @@ const getDealerInfo = async (req, res) => {
 
         res.json({ code: 0, data: dealer });
     } catch (error) {
-        console.error('获取经销商信息失败:', error);
+        logger.error('获取经销商信息失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '获取失败' });
     }
 };
@@ -93,7 +94,7 @@ const getDealerStats = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('获取经销商统计失败:', error);
+        logger.error('获取经销商统计失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '获取失败' });
     }
 };
@@ -121,7 +122,7 @@ const getDealerTeam = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('获取团队成员失败:', error);
+        logger.error('获取团队成员失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '获取失败' });
     }
 };
@@ -162,7 +163,7 @@ const getDealerOrders = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('获取团队订单失败:', error);
+        logger.error('获取团队订单失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '获取失败' });
     }
 };

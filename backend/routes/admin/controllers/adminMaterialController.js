@@ -1,5 +1,7 @@
 const { Material, MaterialGroup } = require('../../../models');
 const { Op } = require('sequelize');
+const { ensureNoTemporaryAssetUrls } = require('../../../utils/assetUrlAudit');
+const { deleteAssetIfUnreferenced } = require('../../../services/AssetReferenceService');
 
 // ==================== 素材分组管理 ====================
 
@@ -126,7 +128,7 @@ const moveMaterials = async (req, res) => {
 // 获取素材列表（支持按分组过滤）
 const getMaterials = async (req, res) => {
     try {
-        const { type, group_id, keyword, page = 1, limit = 24 } = req.query;
+        const { type, group_id, keyword, page = 1, limit = 24, sort } = req.query;
         const where = { status: 1 };
 
         if (type) where.type = type;
@@ -142,6 +144,9 @@ const getMaterials = async (req, res) => {
 
         const offset = (parseInt(page) - 1) * parseInt(limit);
 
+        // sort=created_asc：按创建时间正序（先上传的在前），供选图弹窗与上传顺序一致；默认仍为最新在前
+        const createdDir = sort === 'created_asc' ? 'ASC' : 'DESC';
+
         const { count, rows } = await Material.findAndCountAll({
             where,
             include: [{
@@ -150,7 +155,7 @@ const getMaterials = async (req, res) => {
                 attributes: ['id', 'name'],
                 required: false
             }],
-            order: [['sort_order', 'DESC'], ['created_at', 'DESC']],
+            order: [['sort_order', 'DESC'], ['created_at', createdDir]],
             offset,
             limit: parseInt(limit)
         });
@@ -187,6 +192,8 @@ const createMaterial = async (req, res) => {
     try {
         const { type, title, description, url, thumbnail_url, product_id, group_id, category, tags, sort_order } = req.body;
         if (!type || !title) return res.status(400).json({ code: -1, message: '类型和标题必填' });
+        if (url) ensureNoTemporaryAssetUrls([url], '素材地址');
+        if (thumbnail_url) ensureNoTemporaryAssetUrls([thumbnail_url], '素材缩略图');
 
         const material = await Material.create({
             type, title, description, url, thumbnail_url,
@@ -196,7 +203,7 @@ const createMaterial = async (req, res) => {
         res.json({ code: 0, data: material, message: '创建成功' });
     } catch (error) {
         console.error('创建素材失败:', error);
-        res.status(500).json({ code: -1, message: '创建素材失败' });
+        res.status(error.statusCode || 500).json({ code: -1, message: error.message || '创建素材失败' });
     }
 };
 
@@ -206,12 +213,14 @@ const updateMaterial = async (req, res) => {
         const { id } = req.params;
         const material = await Material.findByPk(id);
         if (!material) return res.status(404).json({ code: -1, message: '素材不存在' });
+        if (req.body.url) ensureNoTemporaryAssetUrls([req.body.url], '素材地址');
+        if (req.body.thumbnail_url) ensureNoTemporaryAssetUrls([req.body.thumbnail_url], '素材缩略图');
 
         await material.update(req.body);
         res.json({ code: 0, data: material, message: '更新成功' });
     } catch (error) {
         console.error('更新素材失败:', error);
-        res.status(500).json({ code: -1, message: '更新素材失败' });
+        res.status(error.statusCode || 500).json({ code: -1, message: error.message || '更新素材失败' });
     }
 };
 
@@ -221,7 +230,12 @@ const deleteMaterial = async (req, res) => {
         const { id } = req.params;
         const material = await Material.findByPk(id);
         if (!material) return res.status(404).json({ code: -1, message: '素材不存在' });
+
+        const urlsToCheck = new Set([material.url, material.thumbnail_url].filter(Boolean));
         await material.destroy();
+        for (const url of urlsToCheck) {
+            await deleteAssetIfUnreferenced(url);
+        }
         res.json({ code: 0, message: '删除成功' });
     } catch (error) {
         console.error('删除素材失败:', error);

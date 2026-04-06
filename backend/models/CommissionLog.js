@@ -22,8 +22,13 @@ const CommissionLog = sequelize.define('CommissionLog', {
     },
     order_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
-        comment: '订单ID'
+        allowNull: true,
+        comment: '订单ID（奖金类佣金如分红/平级奖可为空）'
+    },
+    order_no: {
+        type: DataTypes.STRING(50),
+        allowNull: true,
+        comment: '订单号（冗余字段，方便查询对账，无需关联查询）'
     },
     user_id: {
         type: DataTypes.INTEGER,
@@ -36,8 +41,13 @@ const CommissionLog = sequelize.define('CommissionLog', {
         comment: '佣金金额'
     },
     type: {
-        type: DataTypes.STRING(20),
-        comment: '佣金类型: gap(级差)/agent_fulfillment(代理商发货利润)/direct(直推)/indirect(间推)'
+        type: DataTypes.STRING(30),
+        comment: '佣金类型: gap(级差)/agent_fulfillment(代理商发货利润)/direct(直推)/indirect(间推)/n_price_gap(N路径差价)/n_separation_bonus(N路径脱离奖励)/Fund_Pool(基金池)/same_level(平级奖)'
+    },
+    level: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: '产生佣金的分销层级（1=直推，2=间推，以此类推）'
     },
     status: {
         type: DataTypes.STRING(20),

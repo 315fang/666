@@ -18,6 +18,11 @@ const SystemConfig = sequelize.define('SystemConfig', {
         allowNull: true,
         comment: '配置值'
     },
+    config_type: {
+        type: DataTypes.STRING(20),
+        defaultValue: 'string',
+        comment: '数据类型: string / number / boolean / json'
+    },
     config_group: {
         type: DataTypes.STRING(50),
         defaultValue: 'general',

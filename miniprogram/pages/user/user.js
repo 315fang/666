@@ -1,7 +1,7 @@
 // pages/user/user.js - 个人中心（全面升级版）
 const app = getApp();
 const { requireLogin } = require('../../utils/auth');
-const { getConfigSection, getFeatureFlags } = require('../../utils/miniProgramConfig');
+const { getConfigSection, getFeatureFlags, syncCustomTabBar } = require('../../utils/miniProgramConfig');
 const QUAD_PLACEHOLDER = '/assets/images/placeholder.svg';
 const {
     applyGrowthDisplay,
@@ -77,6 +77,7 @@ Page({
         },
         unusedCouponCount: 0,
         pointsBalanceDisplay: '0',
+        commissionBalance: '0.00',
         quadExpress: { sub: '暂无在途订单', image: QUAD_PLACEHOLDER, orderId: null },
         quadFavorite: { sub: '暂无收藏', image: QUAD_PLACEHOLDER, count: 0 },
         quadFootprint: { sub: '看过的商品', image: QUAD_PLACEHOLDER, count: 0 },
@@ -87,6 +88,7 @@ Page({
             mode: 'benefit',
             orderId: null
         },
+        showQuadExpressCard: false,
         // 角色相关
         isAgent: false,
         // 分销原始信息
@@ -117,7 +119,8 @@ Page({
         isPulling: false,
         lightTipShow: false,
         lightTipTitle: '',
-        lightTipContent: ''
+        lightTipContent: '',
+        couponBanner: null
     },
 
     // 触摸开始
@@ -136,6 +139,7 @@ Page({
     },
 
     onShow() {
+        syncCustomTabBar(this);
         const featureFlags = getFeatureFlags();
         const membershipConfig = getConfigSection('membership_config');
         this.setData({ statusBarHeight: app.globalData.statusBarHeight || 20 });
@@ -209,6 +213,11 @@ Page({
     },
 
     onAssetBalanceTap() {
+        if (!requireLogin()) return;
+        wx.navigateTo({ url: '/pages/wallet/agent-wallet' });
+    },
+
+    onCommissionWalletTap() {
         this.onWalletTap();
     },
 
@@ -242,6 +251,31 @@ Page({
     async loadNotificationsCount() {
         return loadNotificationsCount(this);
     },
+
+    onEditProfile() {
+        if (!requireLogin()) return;
+        wx.navigateTo({ url: '/pages/user/edit-profile' });
+    },
+
+    onMemberLevelTap() {
+        if (!requireLogin()) return;
+        wx.navigateTo({ url: '/pages/user/membership-center' });
+    },
+
+    onCopyMemberCode() {
+        const userInfo = this.data.userInfo || {};
+        const memberCode = String(userInfo.member_no || userInfo.invite_code || userInfo.member_code || '').trim();
+        if (!memberCode) {
+            wx.showToast({ title: '暂无UID', icon: 'none' });
+            return;
+        }
+        wx.setClipboardData({
+            data: memberCode,
+            success: () => wx.showToast({ title: 'UID已复制', icon: 'success' })
+        });
+    },
+
+    noop() {},
 
     // ======== 编辑资料：先选「头像 / 昵称」 ========
     onTapEditProfile() {
@@ -356,7 +390,7 @@ Page({
     },
 
     goStationsMap() {
-        navigateIfLoggedIn('/pages/stations/map');
+        wx.navigateTo({ url: '/pages/stations/map' });
     },
 
     goPickupVerify() {
@@ -425,7 +459,11 @@ Page({
 
     // ★ 跳转积分中心
     goPoints() {
-        navigateIfLoggedIn('/pages/points/index');
+        wx.navigateTo({ url: '/pages/points/index' });
+    },
+
+    onUseCouponBanner() {
+        this.goCoupons();
     },
 
     goShoppingBag() {

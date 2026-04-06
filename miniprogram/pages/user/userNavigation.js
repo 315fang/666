@@ -79,6 +79,8 @@ function onLogout(page) {
                     growthDisplay: null,
                     unusedCouponCount: 0,
                     pointsBalanceDisplay: '--',
+                    commissionBalance: '0.00',
+                    couponBanner: null,
                     orderStats: { pending: 0, paid: 0, shipped: 0, pendingReview: 0, refund: 0 }
                 });
                 page.loadQuadPreviews();

@@ -6,52 +6,73 @@
     <view class="hero-inner">
       <view style="height: {{statusBarHeight}}px;"></view>
 
-      <!-- 顶栏：右侧工具 -->
-      <view class="hero-toolbar">
-        <view class="hero-toolbar-left"></view>
-        <view class="hero-toolbar-right">
-          <view class="hero-top-btn" bindtap="goAddress" hover-class="hero-top-btn-hover">
-            <image class="hero-top-icon" src="/assets/icons/map-pin.svg" mode="aspectFit"></image>
-            <text class="hero-top-text">地址</text>
-          </view>
-          <view class="hero-top-btn" bindtap="goCustomerService" hover-class="hero-top-btn-hover">
-            <image class="hero-top-icon" src="/assets/icons/headphones.svg" mode="aspectFit"></image>
-            <text class="hero-top-text">客服</text>
-          </view>
-          <view class="hero-top-btn" bindtap="onSettingsTap" hover-class="hero-top-btn-hover">
-            <image class="hero-top-icon" src="/assets/icons/settings.svg" mode="aspectFit"></image>
-            <text class="hero-top-text">设置</text>
-          </view>
-        </view>
-      </view>
-
-      <!-- 个人信息 -->
+      <!-- 个人信息（合并工具栏） -->
       <view class="hero-profile-wrap">
-        <view class="hero-avatar-wrap">
-          <image class="hero-avatar" src="{{userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
-        </view>
-        <view class="hero-info">
-          <view class="hero-name-row">
-            <text class="hero-nickname">{{userInfo.nickname || '微信用户'}}</text>
-            <view class="hero-profile-edit" catchtap="onTapEditProfile">
-              <text class="hero-profile-edit-text">品</text>
+        <view class="hero-profile-left" bindtap="onEditProfile">
+          <view class="hero-avatar-wrap">
+            <image class="hero-avatar" src="{{userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
+          </view>
+          <view class="hero-info">
+            <view class="hero-name-row">
+              <view class="hero-nickname-wrap">
+                <text class="hero-nickname">{{userInfo.nickname || '微信用户'}}</text>
+              </view>
+              <view class="hero-member-badge" catchtap="onMemberLevelTap" wx:if="{{isLoggedIn}}">
+                <view class="member-badge-icon">
+                  <image src="/assets/icons/crown.svg" mode="aspectFit" class="member-badge-img"></image>
+                </view>
+                <text class="member-badge-text">{{distributionInfo.role_name || '普通会员'}}</text>
+                <text class="member-badge-level" wx:if="{{growthDisplay && growthDisplay.currentTierName}}">{{growthDisplay.currentTierName}}</text>
+              </view>
+            </view>
+            <view class="hero-meta-row" wx:if="{{isLoggedIn && (userInfo.member_no || userInfo.invite_code)}}">
+              <view class="hero-member-code" catchtap="noop">
+                <text class="member-code-label">UID</text>
+                <text class="member-code-value">{{userInfo.member_no || userInfo.invite_code}}</text>
+                <view class="member-code-copy" catchtap="onCopyMemberCode">
+                  <image src="/assets/icons/clipboard.svg" mode="aspectFit" class="member-code-copy-icon"></image>
+                </view>
+              </view>
             </view>
           </view>
-          <view class="hero-tags-row" wx:if="{{isLoggedIn && userInfo}}">
-            <text class="hero-tag-level" wx:if="{{isMember}}">{{userInfo.role_name || '会员'}}</text>
-            <text class="hero-tag-vip" wx:if="{{isAgent}}">{{userInfo.role_name || '代理商'}}</text>
+        </view>
+        <view class="hero-toolbar-right">
+          <view class="hero-tool-grid">
+            <view class="hero-top-btn" bindtap="goAddress" hover-class="hero-top-btn-hover">
+              <image class="hero-top-icon" src="/assets/icons/map-pin.svg" mode="aspectFit"></image>
+              <text class="hero-top-text">地址</text>
+            </view>
+            <view class="hero-top-btn" bindtap="goCustomerService" hover-class="hero-top-btn-hover">
+              <image class="hero-top-icon" src="/assets/icons/headphones.svg" mode="aspectFit"></image>
+              <text class="hero-top-text">客服</text>
+            </view>
+            <view class="hero-top-btn" bindtap="onNotificationsTap" hover-class="hero-top-btn-hover">
+              <view class="hero-top-icon-wrap">
+                <image class="hero-top-icon" src="/assets/icons/bell.svg" mode="aspectFit"></image>
+                <view class="hero-top-badge" wx:if="{{isLoggedIn && notificationsCount > 0}}">{{notificationsCount > 99 ? '99+' : notificationsCount}}</view>
+              </view>
+              <text class="hero-top-text">消息</text>
+            </view>
           </view>
         </view>
-        <!-- 未登录提示（如需） -->
-        <view class="hero-login-hint" wx:if="{{!isLoggedIn}}" bindtap="onLoginBtnTap">点击登录</view>
       </view>
+      <!-- 未登录提示（如需） -->
+      <view class="hero-login-hint" wx:if="{{!isLoggedIn}}" bindtap="onLoginBtnTap">点击登录</view>
 
       <!-- 核心资产卡 -->
       <view class="vip-card">
         <!-- 卡片头部: 省钱与宣传位 -->
         <view class="vip-card-header">
           <view class="vip-card-saved" bindtap="onGrowthPrivilegesTap">
-            <text class="saved-label">累计成长值</text><text class="saved-val">{{growthDisplay ? growthDisplay.value : 0}}</text><text class="saved-arrow">›</text>
+            <view class="growth-header">
+              <text class="saved-label">累计成长值</text><text class="saved-val">{{growthDisplay ? growthDisplay.value : 0}}</text><text class="saved-arrow">›</text>
+            </view>
+            <view class="growth-progress-bar" wx:if="{{isLoggedIn && growthDisplay}}">
+              <view class="growth-progress-track">
+                <view class="growth-progress-fill" style="width: {{growthDisplay.barPercent || 0}}%"></view>
+              </view>
+              <text class="growth-progress-text">{{growthDisplay.subLine || ''}}</text>
+            </view>
           </view>
           <view class="vip-card-promo">
             <view class="promo-block" bindtap="onGrowthPrivilegesTap">
@@ -78,12 +99,12 @@
               <view class="vip-asset-value">{{isLoggedIn ? pointsBalanceDisplay : '--'}}</view>
             </view>
             <view class="vip-asset-item" bindtap="onAssetBalanceTap">
-              <text class="vip-asset-title">账户余额</text>
-              <view class="vip-asset-value"><text class="vip-asset-sym">¥</text>{{isLoggedIn ? (userInfo.balance || '0.00') : '--'}}</view>
+              <text class="vip-asset-title">货款余额</text>
+              <view class="vip-asset-value"><text class="vip-asset-sym">¥</text>{{isLoggedIn ? (balance || '0.00') : '--'}}</view>
             </view>
-            <view class="vip-asset-item" bindtap="onGrowthPrivilegesTap">
-              <text class="vip-asset-title">会员等级</text>
-              <view class="vip-asset-value">{{growthDisplay.currentTierName || '普通会员'}}</view>
+            <view class="vip-asset-item" bindtap="onCommissionWalletTap">
+              <text class="vip-asset-title">佣金钱包</text>
+              <view class="vip-asset-value"><text class="vip-asset-sym">¥</text>{{isLoggedIn ? (commissionBalance || '0.00') : '--'}}</view>
             </view>
           </view>
           <view class="vip-asset-all">
@@ -92,11 +113,11 @@
           </view>
         </view>
 
-        <!-- 底部: 动作横幅 -->
-        <view class="vip-card-banner">
+        <!-- 底部: 动作横幅（根据真实优惠券数据动态显示） -->
+        <view class="vip-card-banner" wx:if="{{couponBanner}}" bindtap="onUseCouponBanner">
           <view class="banner-left">
-            <view class="banner-icon-wrap"><text class="banner-icon-text">¥</text></view>
-            <text class="banner-desc">1元优惠券待使用，限指定商品可用</text>
+            <view class="banner-icon-wrap"><text class="banner-icon-text">{{couponBanner.value}}</text></view>
+            <text class="banner-desc">{{couponBanner.name}}，{{couponBanner.minPurchase}}</text>
           </view>
           <view class="banner-btn">去使用</view>
         </view>
@@ -147,34 +168,34 @@
         <text class="order-tab-text">退款/售后</text>
       </view>
     </view>
-    <view class="order-aftersale-bar" bindtap="goCustomerService" hover-class="row-press">
-      <image class="order-aftersale-icon" src="/assets/icons/headphones.svg" mode="aspectFit"></image>
-      <text class="order-aftersale-text">联系客服</text>
-      <text class="order-aftersale-hint">售后与订单问题</text>
-      <text class="order-aftersale-arrow">›</text>
-    </view>
   </view>
 
   <!-- ══ 四宫格摘要 ══ -->
   <view class="section-card quad-card">
     <view class="quad-grid">
-      <view class="quad-cell" bindtap="onQuadExpressTap" hover-class="quad-cell-hover">
+      <view class="quad-cell" wx:if="{{showQuadExpressCard}}" bindtap="onQuadExpressTap" hover-class="quad-cell-hover">
         <view class="quad-cell-main">
           <view class="quad-texts">
             <text class="quad-title">快递</text>
             <text class="quad-sub">{{quadExpress.sub}}</text>
           </view>
-          <image class="quad-thumb" src="{{quadExpress.image}}" mode="aspectFill"></image>
+          <image class="quad-thumb" wx:if="{{quadExpress.hasImage}}" src="{{quadExpress.image}}" mode="aspectFill"></image>
+          <view class="quad-icon-placeholder" wx:else>
+            <image class="quad-icon" src="/assets/icons/truck.svg" mode="aspectFit"></image>
+          </view>
         </view>
         <text class="quad-action">去查看</text>
       </view>
-      <view class="quad-cell" bindtap="onQuadFavoriteTap" hover-class="quad-cell-hover">
+      <view class="quad-cell" wx:if="{{quadRecent.mode !== 'order'}}" bindtap="onQuadRecentTap" hover-class="quad-cell-hover">
         <view class="quad-cell-main">
           <view class="quad-texts">
-            <text class="quad-title">收藏</text>
-            <text class="quad-sub">{{quadFavorite.sub}}</text>
+            <text class="quad-title">{{quadRecent.title}}</text>
+            <text class="quad-sub">{{quadRecent.sub}}</text>
           </view>
-          <image class="quad-thumb" src="{{quadFavorite.image}}" mode="aspectFill"></image>
+          <image class="quad-thumb" wx:if="{{quadRecent.hasImage}}" src="{{quadRecent.image}}" mode="aspectFill"></image>
+          <view class="quad-icon-placeholder" wx:else>
+            <image class="quad-icon" src="/assets/icons/crown.svg" mode="aspectFit"></image>
+          </view>
         </view>
         <text class="quad-action">去查看</text>
       </view>
@@ -184,17 +205,23 @@
             <text class="quad-title">足迹</text>
             <text class="quad-sub">{{quadFootprint.sub}}</text>
           </view>
-          <image class="quad-thumb" src="{{quadFootprint.image}}" mode="aspectFill"></image>
+          <image class="quad-thumb" wx:if="{{quadFootprint.hasImage}}" src="{{quadFootprint.image}}" mode="aspectFill"></image>
+          <view class="quad-icon-placeholder" wx:else>
+            <image class="quad-icon" src="/assets/icons/clock.svg" mode="aspectFit"></image>
+          </view>
         </view>
         <text class="quad-action">去查看</text>
       </view>
-      <view class="quad-cell" bindtap="onQuadRecentTap" hover-class="quad-cell-hover">
+      <view class="quad-cell" bindtap="onQuadFavoriteTap" hover-class="quad-cell-hover">
         <view class="quad-cell-main">
           <view class="quad-texts">
-            <text class="quad-title">{{quadRecent.title}}</text>
-            <text class="quad-sub">{{quadRecent.sub}}</text>
+            <text class="quad-title">收藏</text>
+            <text class="quad-sub">{{quadFavorite.sub}}</text>
           </view>
-          <image class="quad-thumb" src="{{quadRecent.image}}" mode="aspectFill"></image>
+          <image class="quad-thumb" wx:if="{{quadFavorite.hasImage}}" src="{{quadFavorite.image}}" mode="aspectFill"></image>
+          <view class="quad-icon-placeholder" wx:else>
+            <image class="quad-icon" src="/assets/icons/heart.svg" mode="aspectFit"></image>
+          </view>
         </view>
         <text class="quad-action">去查看</text>
       </view>
@@ -203,45 +230,21 @@
 
   <!-- ══ 我的功能 ══ -->
   <view class="section-card func-card">
-    <view class="func-row" bindtap="goAddress" hover-class="row-press">
-      <image class="func-icon" src="/assets/icons/map-pin.svg" mode="aspectFit"></image>
-      <text class="func-label">地址管理</text>
-      <text class="func-arrow">›</text>
-    </view>
-    <view class="func-divider"></view>
-    <view class="func-row" bindtap="goFavoritesFootprints" hover-class="row-press">
-      <image class="func-icon" src="/assets/icons/star.svg" mode="aspectFit"></image>
-      <text class="func-label">足迹收藏</text>
-      <text class="func-arrow">›</text>
-    </view>
-    <view class="func-divider"></view>
-    <view class="func-row" bindtap="goCoupons" hover-class="row-press">
-      <image class="func-icon" src="/assets/icons/tag.svg" mode="aspectFit"></image>
-      <text class="func-label">优惠券</text>
-      <text class="func-arrow">›</text>
-    </view>
-    <view class="func-divider"></view>
-    <view class="func-row" bindtap="goPoints" hover-class="row-press">
-      <image class="func-icon" src="/assets/icons/gift.svg" mode="aspectFit"></image>
-      <text class="func-label">积分中心</text>
-      <text class="func-arrow">›</text>
-    </view>
-    <view class="func-divider" wx:if="{{showBusinessCenter}}"></view>
-    <view class="func-row" wx:if="{{showBusinessCenter}}" bindtap="goBusinessCenter" hover-class="row-press">
+    <view class="func-row" bindtap="goBusinessCenter" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/shopping-bag.svg" mode="aspectFit"></image>
-      <text class="func-label">商务中心</text>
+      <text class="func-label">团队中心</text>
       <text class="func-arrow">›</text>
     </view>
-    <view class="func-divider" wx:if="{{isLoggedIn}}"></view>
-    <view class="func-row" wx:if="{{isLoggedIn}}" bindtap="goPortalPassword" hover-class="row-press">
-      <image class="func-icon" src="/assets/icons/settings.svg" mode="aspectFit"></image>
-      <text class="func-label">代理商服务</text>
-      <text class="func-arrow">›</text>
-    </view>
-    <view class="func-divider" wx:if="{{isLoggedIn}}"></view>
-    <view class="func-row" wx:if="{{isLoggedIn}}" bindtap="goStationsMap" hover-class="row-press">
+    <view class="func-divider"></view>
+    <view class="func-row" bindtap="goStationsMap" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/map-pin.svg" mode="aspectFit"></image>
-      <text class="func-label">服务站点地图</text>
+      <text class="func-label">服务站点</text>
+      <text class="func-arrow">›</text>
+    </view>
+    <view class="func-divider"></view>
+    <view class="func-row" bindtap="goInvitePoster" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
+      <text class="func-label">好友邀请</text>
       <text class="func-arrow">›</text>
     </view>
     <view class="func-divider" wx:if="{{showPickupVerify}}"></view>
@@ -251,9 +254,9 @@
       <text class="func-arrow">›</text>
     </view>
     <view class="func-divider" wx:if="{{isLoggedIn}}"></view>
-    <view class="func-row" wx:if="{{isLoggedIn}}" bindtap="goInvitePoster" hover-class="row-press">
-      <image class="func-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
-      <text class="func-label">邀请海报</text>
+    <view class="func-row" wx:if="{{isLoggedIn}}" bindtap="goPortalPassword" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/settings.svg" mode="aspectFit"></image>
+      <text class="func-label">代理商服务</text>
       <text class="func-arrow">›</text>
     </view>
   </view>
@@ -262,6 +265,12 @@
     <view class="func-row" bindtap="goPrivacy" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/shield.svg" mode="aspectFit"></image>
       <text class="func-label">隐私协议</text>
+      <text class="func-arrow">›</text>
+    </view>
+    <view class="func-divider"></view>
+    <view class="func-row" bindtap="onSettingsTap" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/settings.svg" mode="aspectFit"></image>
+      <text class="func-label">设置</text>
       <text class="func-arrow">›</text>
     </view>
   </view>

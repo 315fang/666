@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const MemberTierService = require('../services/MemberTierService');
 const AgentWalletService = require('../services/AgentWalletService');
 const { getWxaCodeUnlimited } = require('../utils/wechat');
+const logger = require('../utils/logger');
 
 /**
  * 获取分销统计数据
@@ -119,7 +120,9 @@ async function getDistributionStats(req, res, next) {
                     growth_value: parseFloat(user.growth_value || 0),
                     discount_rate: parseFloat(user.discount_rate || 1),
                     growth_progress: growthProgress,
-                    invite_code: user.invite_code,
+                    invite_code: user.member_no || user.invite_code,
+                    member_no: user.member_no || '',
+                    member_code: user.member_no || '',
                     inviter: inviter
                 },
                 stats: {
@@ -329,19 +332,19 @@ async function getWorkbenchStats(req, res, next) {
 }
 
 /**
- * 无限量小程序码：scene 与小程序首页解析约定一致（i=6位邀请码），新用户扫码打开小程序注册时自动绑定上级
+ * 无限量小程序码：scene 与小程序首页解析约定一致（i=会员码），新用户扫码打开小程序注册时自动绑定上级
  * GET /api/distribution/wxacode-invite  → image/png
  */
 async function getInviteWxaCode(req, res, next) {
     try {
-        const user = await User.findByPk(req.user.id, { attributes: ['id', 'invite_code'] });
-        if (!user || !user.invite_code) {
+        const user = await User.findByPk(req.user.id, { attributes: ['id', 'member_no'] });
+        if (!user || !user.member_no) {
             return res.status(400).json({
                 code: -1,
-                message: '暂无邀请码，请在管理后台分配邀请码后再试'
+                message: '暂无会员码，请先补齐会员码后再试'
             });
         }
-        const scene = `i=${user.invite_code}`;
+        const scene = `i=${user.member_no}`;
         const png = await getWxaCodeUnlimited({
             scene,
             page: 'pages/index/index',
@@ -351,7 +354,7 @@ async function getInviteWxaCode(req, res, next) {
         res.setHeader('Cache-Control', 'private, max-age=120');
         return res.send(png);
     } catch (err) {
-        console.error('[getInviteWxaCode]', err.message);
+        logger.error('DISTRIBUTION_CTRL', '[getInviteWxaCode]', { error: err?.message || err });
         return res.status(502).json({
             code: -1,
             message: err.message || '小程序码生成失败，请检查服务端微信配置与小程序是否已发布'

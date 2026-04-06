@@ -1,6 +1,7 @@
 const { SystemConfig, SystemConfigHistory, Admin } = require('../models');
 const { Op } = require('sequelize');
 const EventEmitter = require('events');
+const { info: logInfo } = require('../utils/logger');
 
 class ConfigService extends EventEmitter {
     constructor() {
@@ -181,7 +182,7 @@ class ConfigService extends EventEmitter {
     async refreshCache() {
         this.cache.clear();
         this.lastFetch = null;
-        console.log('[ConfigService] 配置缓存已刷新');
+        logInfo('CONFIG', '配置缓存已刷新');
     }
     
     /**

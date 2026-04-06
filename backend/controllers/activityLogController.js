@@ -1,5 +1,6 @@
 const { ActivityLog, sequelize } = require('../models');
 const { Op } = require('sequelize');
+const logger = require('../utils/logger');
 
 /**
  * 记录活动日志的通用函数
@@ -8,7 +9,7 @@ const logActivity = async (logData) => {
     try {
         await ActivityLog.create(logData);
     } catch (error) {
-        console.error('记录活动日志失败:', error);
+        logger.error('记录活动日志失败', { message: error.message, stack: error.stack });
     }
 };
 
@@ -39,7 +40,7 @@ const getActivityLogs = async (req, res) => {
         if (status) where.status = status;
 
         if (start_date && end_date) {
-            where.createdAt = {
+            where.created_at = {
                 [Op.between]: [new Date(start_date), new Date(end_date)]
             };
         }
@@ -54,7 +55,7 @@ const getActivityLogs = async (req, res) => {
 
         const { count, rows } = await ActivityLog.findAndCountAll({
             where,
-            order: [['createdAt', 'DESC']],
+            order: [['created_at', 'DESC']],
             limit: parseInt(limit),
             offset: (parseInt(page) - 1) * parseInt(limit)
         });
@@ -69,7 +70,7 @@ const getActivityLogs = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('获取活动日志失败:', error);
+        logger.error('获取活动日志失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '获取活动日志失败' });
     }
 };
@@ -86,16 +87,16 @@ const getLogStatistics = async (req, res) => {
         // 按日期统计
         const dailyStats = await ActivityLog.findAll({
             attributes: [
-                [sequelize.fn('DATE', sequelize.col('createdAt')), 'date'],
+                [sequelize.fn('DATE', sequelize.col('created_at')), 'date'],
                 [sequelize.fn('COUNT', sequelize.col('id')), 'count']
             ],
             where: {
-                createdAt: {
+                created_at: {
                     [Op.gte]: startDate
                 }
             },
-            group: [sequelize.fn('DATE', sequelize.col('createdAt'))],
-            order: [[sequelize.fn('DATE', sequelize.col('createdAt')), 'ASC']],
+            group: [sequelize.fn('DATE', sequelize.col('created_at'))],
+            order: [[sequelize.fn('DATE', sequelize.col('created_at')), 'ASC']],
             raw: true
         });
 
@@ -106,7 +107,7 @@ const getLogStatistics = async (req, res) => {
                 [sequelize.fn('COUNT', sequelize.col('id')), 'count']
             ],
             where: {
-                createdAt: {
+                created_at: {
                     [Op.gte]: startDate
                 }
             },
@@ -123,7 +124,7 @@ const getLogStatistics = async (req, res) => {
                 [sequelize.fn('COUNT', sequelize.col('id')), 'count']
             ],
             where: {
-                createdAt: {
+                created_at: {
                     [Op.gte]: startDate
                 }
             },
@@ -140,7 +141,7 @@ const getLogStatistics = async (req, res) => {
                 [sequelize.fn('COUNT', sequelize.col('id')), 'count']
             ],
             where: {
-                createdAt: {
+                created_at: {
                     [Op.gte]: startDate
                 }
             },
@@ -158,7 +159,7 @@ const getLogStatistics = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('获取日志统计失败:', error);
+        logger.error('获取日志统计失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '获取日志统计失败' });
     }
 };
@@ -174,7 +175,7 @@ const cleanOldLogs = async (req, res) => {
 
         const result = await ActivityLog.destroy({
             where: {
-                createdAt: {
+                created_at: {
                     [Op.lt]: cutoffDate
                 }
             }
@@ -186,7 +187,7 @@ const cleanOldLogs = async (req, res) => {
             data: { deleted: result }
         });
     } catch (error) {
-        console.error('清理旧日志失败:', error);
+        logger.error('清理旧日志失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '清理旧日志失败' });
     }
 };
@@ -200,14 +201,14 @@ const exportLogs = async (req, res) => {
 
         const where = {};
         if (start_date && end_date) {
-            where.createdAt = {
+            where.created_at = {
                 [Op.between]: [new Date(start_date), new Date(end_date)]
             };
         }
 
         const logs = await ActivityLog.findAll({
             where,
-            order: [['createdAt', 'DESC']],
+            order: [['created_at', 'DESC']],
             limit: 10000 // 限制导出数量
         });
 
@@ -229,7 +230,7 @@ const exportLogs = async (req, res) => {
                     log.platform,
                     log.status,
                     log.ip_address || '',
-                    log.createdAt
+                    log.created_at
                 ].join(','));
             });
 
@@ -244,7 +245,7 @@ const exportLogs = async (req, res) => {
             });
         }
     } catch (error) {
-        console.error('导出日志失败:', error);
+        logger.error('导出日志失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '导出日志失败' });
     }
 };

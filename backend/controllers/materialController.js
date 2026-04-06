@@ -1,5 +1,6 @@
 const { Material, Product } = require('../models');
 const { Op } = require('sequelize');
+const logger = require('../utils/logger');
 
 // 获取素材列表
 const getMaterials = async (req, res) => {
@@ -54,7 +55,7 @@ const getMaterials = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('获取素材列表失败:', error);
+        logger.error('获取素材列表失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '获取素材列表失败' });
     }
 };
@@ -84,7 +85,7 @@ const getMaterialById = async (req, res) => {
             data: material
         });
     } catch (error) {
-        console.error('获取素材详情失败:', error);
+        logger.error('MATERIAL_CTRL', '获取素材详情失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '获取素材详情失败' });
     }
 };
@@ -112,7 +113,7 @@ const getMaterialsByProduct = async (req, res) => {
             data: materials
         });
     } catch (error) {
-        console.error('获取商品素材失败:', error);
+        logger.error('MATERIAL_CTRL', '获取商品素材失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '获取商品素材失败' });
     }
 };

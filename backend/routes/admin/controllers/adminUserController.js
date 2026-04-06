@@ -1,13 +1,38 @@
-const { User, Order, CommissionLog, Dealer } = require('../../../models');
+const { User, Order, CommissionLog, Dealer, PortalAccount } = require('../../../models');
 const { Op } = require('sequelize');
+const MemberTierService = require('../../../services/MemberTierService');
+const UserTeamService = require('../../../services/UserTeamService');
+const { isValidMemberNo, generateMemberNo, normalizeMemberNo } = require('../../../utils/memberNo');
 
 // 获取用户列表（含邀请码、库存信息）
 const getUsers = async (req, res) => {
     try {
-        const { role_level, keyword, member_no, phone, page = 1, limit = 20 } = req.query;
+        const { role_level, keyword, member_no, phone, status, team_leader_id, page = 1, limit = 20 } = req.query;
         const where = {};
 
+        if (team_leader_id !== undefined && team_leader_id !== '' && team_leader_id !== null) {
+            const sub = await UserTeamService.collectDescendantIds(team_leader_id);
+            if (!sub.ok) {
+                return res.status(400).json({ code: -1, message: sub.message || '团队筛选失败' });
+            }
+            if (sub.ids.length === 0) {
+                return res.json({
+                    code: 0,
+                    data: {
+                        list: [],
+                        pagination: {
+                            total: 0,
+                            page: parseInt(page, 10) || 1,
+                            limit: parseInt(limit, 10) || 20
+                        }
+                    }
+                });
+            }
+            where.id = { [Op.in]: sub.ids };
+        }
+
         if (role_level !== undefined && role_level !== '') where.role_level = parseInt(role_level);
+        if (status !== undefined && status !== '') where.status = parseInt(status);
 
         // member_no 精确或模糊匹配
         if (member_no) {
@@ -30,10 +55,11 @@ const getUsers = async (req, res) => {
             where,
             attributes: [
                 'id', 'openid', 'nickname', 'avatar_url', 'phone',
-                'role_level', 'balance', 'order_count', 'total_sales',
+                'role_level', 'purchase_level_code', 'balance', 'order_count', 'total_sales',
                 'stock_count', 'invite_code', 'member_no',
-                'parent_id', 'agent_id', 'status', 'remark',
+                'parent_id', 'agent_id', 'status', 'remark', 'tags',
                 'referee_count', 'growth_value', 'debt_amount',
+                'participate_distribution',
                 'created_at', 'joined_team_at', 'last_login'
             ],
             include: [
@@ -94,7 +120,7 @@ const getUserById = async (req, res) => {
 const updateUserRole = async (req, res) => {
     try {
         const { id } = req.params;
-        const { role_level } = req.body;
+        const { role_level, agent_level } = req.body;
 
         const user = await User.findByPk(id);
         if (!user) {
@@ -102,6 +128,12 @@ const updateUserRole = async (req, res) => {
         }
 
         user.role_level = role_level;
+        // 同步更新代理商级别（仅代理商角色有效）
+        if (role_level === 3 && agent_level !== undefined) {
+            user.agent_level = parseInt(agent_level) || 1;
+        } else if (role_level < 3) {
+            user.agent_level = null;
+        }
         await user.save();
 
         res.json({ code: 0, message: '角色更新成功' });
@@ -112,6 +144,26 @@ const updateUserRole = async (req, res) => {
 };
 
 // 获取用户团队
+/**
+ * GET /users/:id/team-summary
+ * 推荐子树汇总（不含负责人本人）：人数、用户表累计、订单维度统计
+ * query: range=all|30d（订单相关按 created_at）
+ */
+const getUserTeamSummary = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const range = req.query.range === '30d' ? '30d' : 'all';
+        const result = await UserTeamService.getTeamSummary(id, { range });
+        if (!result.ok) {
+            return res.status(400).json({ code: -1, message: result.message || '汇总失败' });
+        }
+        res.json({ code: 0, data: result.data });
+    } catch (error) {
+        console.error('团队汇总失败:', error);
+        res.status(500).json({ code: -1, message: '团队汇总失败: ' + error.message });
+    }
+};
+
 const getUserTeam = async (req, res) => {
     try {
         const { id } = req.params;
@@ -183,6 +235,61 @@ const updateUserStock = async (req, res) => {
     } catch (error) {
         console.error('更新库存失败:', error);
         res.status(500).json({ code: -1, message: '更新库存失败' });
+    }
+};
+
+const updateUserMemberNo = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { member_no } = req.body || {};
+
+        const user = await User.findByPk(id);
+        if (!user) {
+            return res.status(404).json({ code: -1, message: '用户不存在' });
+        }
+
+        let nextMemberNo = normalizeMemberNo(member_no);
+        if (!nextMemberNo) {
+            nextMemberNo = await generateMemberNo(User);
+        } else if (!isValidMemberNo(nextMemberNo)) {
+            return res.status(400).json({ code: -1, message: '会员码格式不正确，应为 8 位数字/大写字母（不含0/O/1/I）' });
+        }
+
+        const exists = await User.findOne({
+            where: {
+                member_no: nextMemberNo,
+                id: { [Op.ne]: id }
+            }
+        });
+        if (exists) {
+            return res.status(400).json({ code: -1, message: '该会员编号已被占用' });
+        }
+
+        const oldMemberNo = user.member_no || '';
+        await user.update({ member_no: nextMemberNo });
+        await PortalAccount.update(
+            { login_id: nextMemberNo },
+            { where: { user_id: user.id } }
+        );
+
+        if (oldMemberNo !== nextMemberNo) {
+            await user.update({
+                remark: `${user.remark || ''}${user.remark ? ' | ' : ''}[会员编号更新: ${oldMemberNo || '未设置'} -> ${nextMemberNo}]`
+            });
+        }
+
+        await user.reload();
+        res.json({
+            code: 0,
+            data: {
+                user_id: user.id,
+                member_no: user.member_no
+            },
+            message: '会员编号更新成功'
+        });
+    } catch (error) {
+        console.error('更新会员编号失败:', error);
+        res.status(500).json({ code: -1, message: '更新会员编号失败' });
     }
 };
 
@@ -462,10 +569,77 @@ const updateUserStatus = async (req, res) => {
 };
 
 /**
+ * 按用户ID设置拿货等级（仅影响价格）
+ * PUT /admin/api/users/:id/purchase-level
+ * body: { purchase_level_code: 'P1' | null }
+ */
+const updateUserPurchaseLevel = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { purchase_level_code } = req.body || {};
+
+        const user = await User.findByPk(id);
+        if (!user) {
+            return res.status(404).json({ code: -1, message: '用户不存在' });
+        }
+
+        const code = purchase_level_code === null || purchase_level_code === ''
+            ? null
+            : String(purchase_level_code).trim();
+
+        if (code) {
+            const purchaseLevel = await MemberTierService.getPurchaseLevelByCode(code);
+            if (!purchaseLevel) {
+                return res.status(400).json({ code: -1, message: '拿货等级不存在或未启用' });
+            }
+        }
+
+        user.purchase_level_code = code;
+        await user.save();
+
+        res.json({
+            code: 0,
+            data: {
+                user_id: user.id,
+                purchase_level_code: user.purchase_level_code
+            },
+            message: '拿货等级更新成功'
+        });
+    } catch (error) {
+        console.error('更新拿货等级失败:', error);
+        res.status(500).json({ code: -1, message: '更新拿货等级失败' });
+    }
+};
+
+/**
  * ★ 更新用户备注/标签
  * PUT /admin/api/users/:id/remark
  * body: { remark: '重要客户', tags: ['VIP', '高活跃'] }
  */
+/**
+ * PUT /admin/api/users/:id/commerce
+ * body: { participate_distribution: 0 | 1 }
+ */
+const updateUserCommerce = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { participate_distribution } = req.body;
+        const pd = parseInt(participate_distribution, 10);
+        if (pd !== 0 && pd !== 1) {
+            return res.status(400).json({ code: -1, message: 'participate_distribution 须为 0 或 1' });
+        }
+        const user = await User.findByPk(id);
+        if (!user) {
+            return res.status(404).json({ code: -1, message: '用户不存在' });
+        }
+        await user.update({ participate_distribution: pd });
+        res.json({ code: 0, message: '已更新商务中心展示开关' });
+    } catch (error) {
+        console.error('更新商务开关失败:', error);
+        res.status(500).json({ code: -1, message: '更新失败' });
+    }
+};
+
 const updateUserRemark = async (req, res) => {
     try {
         const { id } = req.params;
@@ -561,13 +735,17 @@ module.exports = {
     getUserById,
     updateUserRole,
     getUserTeam,
+    getUserTeamSummary,
     updateUserStock,
+    updateUserMemberNo,
     updateUserInviteCode,
     // ★ 新增高级管理功能
     adjustUserBalance,
     changeUserParent,
     updateUserStatus,
+    updateUserPurchaseLevel,
     updateUserRemark,
+    updateUserCommerce,
     batchUpdateRole,
     getUserHistory
 };

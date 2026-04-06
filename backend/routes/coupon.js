@@ -1,4 +1,4 @@
-// backend/routes/coupon.js
+// backend/routes/coupon.js — C 端优惠券（需登录）：我的券、结算页可用券（金额与商品/分类范围过滤）
 const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');

@@ -1,6 +1,10 @@
-const { AppConfig, QuickEntry, HomeSection, Banner } = require('../models');
+const { AppConfig, QuickEntry, HomeSection, Banner, Product } = require('../models');
 const { Op } = require('sequelize');
 const { LRUCache } = require('lru-cache');
+const { FEATURE_DEFS, getFeatureToggleKey, buildFeatureToggleMap } = require('../utils/featureToggles');
+const { loadMiniProgramConfig } = require('../utils/miniprogramConfig');
+const { clearPagePayloadCache } = require('../services/PageLayoutService');
+const logger = require('../utils/logger');
 
 // ★ 首页高并发 LRU 内存防压坝 (缓存 1 分钟)
 const homepageCache = new LRUCache({
@@ -49,7 +53,7 @@ const getPublicConfigs = async (req, res) => {
                     try {
                         value = JSON.parse(value);
                     } catch (e) {
-                        console.warn(`配置 ${config.config_key} 解析JSON失败:`, e);
+                        logger.warn('CONFIG_CTRL', `配置 ${config.config_key} 解析JSON失败`, { error: e?.message || e });
                     }
                     break;
             }
@@ -57,13 +61,45 @@ const getPublicConfigs = async (req, res) => {
             formattedConfigs[config.config_key] = value;
         });
 
+        const featureToggleKeys = FEATURE_DEFS.map((feature) => getFeatureToggleKey(feature.key));
+        const featureToggleConfigs = configs.filter((config) => featureToggleKeys.includes(config.config_key));
+        if (featureToggleConfigs.length) {
+            formattedConfigs.feature_toggles = buildFeatureToggleMap(featureToggleConfigs);
+        }
+
         res.json({
             code: 0,
             data: formattedConfigs
         });
     } catch (error) {
-        console.error('获取配置失败:', error);
+        logger.error('CONFIG_CTRL', '获取配置失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '获取配置失败' });
+    }
+};
+
+const getMiniProgramConfig = async (req, res) => {
+    try {
+        const [miniProgramConfig, featureToggleConfigs] = await Promise.all([
+            loadMiniProgramConfig(AppConfig),
+            AppConfig.findAll({
+                where: {
+                    category: 'feature_toggle',
+                    config_key: FEATURE_DEFS.map((feature) => getFeatureToggleKey(feature.key))
+                },
+                attributes: ['config_key', 'config_value']
+            })
+        ]);
+
+        res.json({
+            code: 0,
+            data: {
+                ...miniProgramConfig,
+                feature_toggles: buildFeatureToggleMap(featureToggleConfigs)
+            }
+        });
+    } catch (error) {
+        logger.error('CONFIG_CTRL', '获取小程序配置失败', { error: error?.message || error });
+        res.status(500).json({ code: -1, message: '获取小程序配置失败' });
     }
 };
 
@@ -104,7 +140,7 @@ const getQuickEntries = async (req, res) => {
             data: entries
         });
     } catch (error) {
-        console.error('获取快捷入口失败:', error);
+        logger.error('CONFIG_CTRL', '获取快捷入口失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '获取快捷入口失败' });
     }
 };
@@ -127,7 +163,7 @@ const getHomeSections = async (req, res) => {
             data: sections
         });
     } catch (error) {
-        console.error('获取首页区块配置失败:', error);
+        logger.error('CONFIG_CTRL', '获取首页区块配置失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '获取首页区块配置失败' });
     }
 };
@@ -195,7 +231,7 @@ const getHomePageConfig = async (req, res) => {
                 order: [['sort_order', 'DESC']]
             }),
 
-            // 获取轮播图
+            // 获取轮播图（含关联商品信息，用于自动填充首图）
             Banner.findAll({
                 where: {
                     status: 1,
@@ -217,7 +253,13 @@ const getHomePageConfig = async (req, res) => {
                     ]
                 },
                 order: [['sort_order', 'DESC'], ['id', 'ASC']],
-                attributes: ['id', 'title', 'subtitle', 'image_url', 'link_type', 'link_value']
+                attributes: ['id', 'title', 'subtitle', 'kicker', 'image_url', 'link_type', 'link_value', 'product_id'],
+                include: [{
+                    model: Product,
+                    as: 'product',
+                    required: false,
+                    attributes: ['id', 'name', 'images', 'retail_price']
+                }]
             })
         ]);
 
@@ -237,7 +279,7 @@ const getHomePageConfig = async (req, res) => {
                     try {
                         value = JSON.parse(value);
                     } catch (e) {
-                        console.warn(`配置解析失败:`, e);
+                        logger.warn('CONFIG_CTRL', '配置解析失败', { error: e?.message || e });
                     }
                     break;
             }
@@ -245,22 +287,75 @@ const getHomePageConfig = async (req, res) => {
         });
 
         // 特色卡片：优先从 AppConfig（config_key = feature_cards）读取，否则使用默认值
-        let featureCards = configs.feature_cards && Array.isArray(configs.feature_cards) ? configs.feature_cards : [
-            { id: 1, name: '镜像见面会', description: '全国各地线下见面会，零距离交流', icon_url: '/assets/icons/map-pin.svg', bg_gradient: 'linear-gradient(145deg, #0F2027, #203A43, #2C5364)', tag: '线下活动', link_type: 'page', link_value: '/pages/feature/meetup', sort_order: 4 },
-            { id: 2, name: '创始人对谈', description: '每周六腾讯会议，1对1答疑解惑', icon_url: '/assets/icons/mic.svg', bg_gradient: 'linear-gradient(145deg, #1a1a2e, #16213e)', tag: '每周六', link_type: 'page', link_value: '/pages/feature/founder-talk', sort_order: 3 },
-            { id: 3, name: '知识星球', description: '分级制社群，持续进阶成长', icon_url: '/assets/icons/star.svg', bg_gradient: 'linear-gradient(145deg, #2d1b69, #11998e)', tag: '社群', link_type: 'copy', link_value: '', sort_order: 2 },
-            { id: 4, name: '销售实战营', description: '实战训练，快速提升销售力', icon_url: '/assets/icons/target.svg', bg_gradient: 'linear-gradient(145deg, #c31432, #240b36)', tag: '训练营', link_type: 'page', link_value: '/pages/feature/sales-camp', sort_order: 1 }
-        ];
+        let featureCards = configs.feature_cards && Array.isArray(configs.feature_cards) ? configs.feature_cards : [];
         // 按 sort_order 降序排列
         featureCards.sort((a, b) => (b.sort_order || 0) - (a.sort_order || 0));
 
-        // 传统方案：扁平数据由前端固定组件自行填充
+        // ── Banner 商品关联处理 ──────────────────────────────────────────────
+        // 若 banner.product_id 已设置：
+        //   1. image_url 为空时自动取 product.images[0]
+        //   2. link_type/link_value 自动指向该商品（管理员手动填写的 link_type 优先）
+        let resolvedBanners = banners.map(banner => {
+            const b = banner.get ? banner.get({ plain: true }) : { ...banner };
+            if (b.product_id && b.product) {
+                // 解析商品图片数组
+                let productImages = b.product.images || [];
+                if (typeof productImages === 'string') {
+                    try { productImages = JSON.parse(productImages); } catch (e) { productImages = []; }
+                }
+                // 没有手动填图时，用商品首图
+                if (!b.image_url && productImages.length > 0) {
+                    b.image_url = productImages[0];
+                }
+                // 没有手动填跳转类型时，默认跳商品详情
+                if (!b.link_type || b.link_type === 'none') {
+                    b.link_type = 'product';
+                    b.link_value = String(b.product_id);
+                }
+                // 标题默认取商品名
+                if (!b.title) {
+                    b.title = b.product.name;
+                }
+                // 清除冗余的嵌套 product 对象（前端不需要）
+                delete b.product;
+            }
+            return b;
+        });
+
+        // 弹窗广告配置
+        let popupAd = { enabled: false };
+        try {
+            const popupRow = await AppConfig.findOne({
+                where: { category: 'popup_ad', config_key: 'popup_ad_config', status: 1 }
+            });
+            if (popupRow?.config_value) {
+                const parsed = JSON.parse(popupRow.config_value);
+                popupAd = { enabled: false, ...parsed };
+                if (popupAd.product_id && !popupAd.image_url) {
+                    const popupProduct = await Product.findByPk(popupAd.product_id, { attributes: ['images', 'name'] });
+                    if (popupProduct) {
+                        let pImgs = popupProduct.images || [];
+                        if (typeof pImgs === 'string') try { pImgs = JSON.parse(pImgs); } catch (_) { pImgs = []; }
+                        if (pImgs.length > 0) popupAd.image_url = pImgs[0];
+                        if (!popupAd.button_text) popupAd.button_text = popupProduct.name;
+                    }
+                }
+                if (popupAd.product_id && (!popupAd.link_type || popupAd.link_type === 'none')) {
+                    popupAd.link_type = 'product';
+                    popupAd.link_value = String(popupAd.product_id);
+                }
+            }
+        } catch (e) {
+            logger.warn('CONFIG', '弹窗广告配置加载失败', { error: e.message });
+        }
+
         const responseData = {
             configs,
             quickEntries,
             sections: homeSections,
-            banners,
-            featureCards
+            banners: resolvedBanners,
+            featureCards,
+            popupAd
         };
 
         // 写入 LRU 缓存
@@ -271,7 +366,7 @@ const getHomePageConfig = async (req, res) => {
             data: responseData
         });
     } catch (error) {
-        console.error('获取首页配置失败:', error);
+        logger.error('CONFIG', '获取首页配置失败', { error: error?.message || error });
         res.status(500).json({ code: -1, message: '获取首页配置失败' });
     }
 };
@@ -279,13 +374,73 @@ const getHomePageConfig = async (req, res) => {
 // 提供清除缓存的钩子给后台管理接口调用
 const clearHomepageCache = () => {
     homepageCache.clear();
-    console.log('[Cache] 首页配置内存缓存已清空');
+    clearPagePayloadCache();
+    logger.info('CONFIG_CTRL', '首页配置内存缓存已清空');
+};
+
+/**
+ * 按位置获取 Banner 列表
+ * GET /api/banners?position=category
+ * 支持 position: home | category | activity（默认 home）
+ */
+const getBannersByPosition = async (req, res) => {
+    try {
+        const { position = 'home' } = req.query;
+        const now = new Date();
+
+        const banners = await Banner.findAll({
+            where: {
+                status: 1,
+                position,
+                [Op.or]: [
+                    { start_time: null, end_time: null },
+                    { start_time: { [Op.lte]: now }, end_time: { [Op.gte]: now } },
+                    { start_time: { [Op.lte]: now }, end_time: null },
+                    { start_time: null, end_time: { [Op.gte]: now } }
+                ]
+            },
+            order: [['sort_order', 'DESC'], ['id', 'ASC']],
+            attributes: ['id', 'title', 'subtitle', 'kicker', 'image_url', 'link_type', 'link_value', 'product_id', 'position'],
+            include: [{
+                model: Product,
+                as: 'product',
+                required: false,
+                attributes: ['id', 'name', 'images', 'retail_price']
+            }]
+        });
+
+        // 同 getHomePageConfig 的处理逻辑：商品关联自动补图和跳转
+        const resolved = banners.map(banner => {
+            const b = banner.get ? banner.get({ plain: true }) : { ...banner };
+            if (b.product_id && b.product) {
+                let productImages = b.product.images || [];
+                if (typeof productImages === 'string') {
+                    try { productImages = JSON.parse(productImages); } catch (e) { productImages = []; }
+                }
+                if (!b.image_url && productImages.length > 0) b.image_url = productImages[0];
+                if (!b.link_type || b.link_type === 'none') {
+                    b.link_type = 'product';
+                    b.link_value = String(b.product_id);
+                }
+                if (!b.title) b.title = b.product.name;
+                delete b.product;
+            }
+            return b;
+        });
+
+        res.json({ code: 0, data: resolved });
+    } catch (error) {
+        logger.error('CONFIG', '获取 Banner 失败', { error: error?.message || error });
+        res.status(500).json({ code: -1, message: '获取 Banner 失败' });
+    }
 };
 
 module.exports = {
     getPublicConfigs,
+    getMiniProgramConfig,
     getQuickEntries,
     getHomeSections,
     getHomePageConfig,
+    getBannersByPosition,
     clearHomepageCache
 };

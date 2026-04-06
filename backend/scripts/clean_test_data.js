@@ -14,39 +14,36 @@ async function cleanTestData() {
 
         // 需要清理的业务/运营数据表 (不包含商品、分类、Banner、Admin账号、系统配置)
         const tablesToClean = [
-            'Users',
-            'Orders',
-            'Refunds',
-            'Carts',
-            'Addresses',
-            'Withdrawals',
-            'CommissionLogs',
-            'CommissionSettlements',
-            'StockReservations',
-            'StockTransactions',
-            'ActivityLogs',
-            'AIAlerts',
-            'AIFixSessions',
-            'Dealers',
-            'MassMessages',
-            'UserMassMessages',
-            'UserTags',
-            'UserTagRelations',
-            'Questionnaires',
-            'QuestionnaireResponses',
-            'QuestionnaireSubmissions',
-            'QuestionnaireTemplates',
-            'QuickEntries',
-            'Notifications'
+            'users',
+            'orders',
+            'refunds',
+            'cart_items',
+            'addresses',
+            'withdrawals',
+            'commission_logs',
+            'commission_settlements',
+            'stock_reservations',
+            'stock_transactions',
+            'activity_logs',
+            'dealers',
+            'mass_messages',
+            'user_mass_messages',
+            'user_tags',
+            'user_tag_relations',
+            'notifications'
         ];
 
         for (const table of tablesToClean) {
             try {
-                // 检查表是否存在
-                const [results] = await sequelize.query(`SHOW TABLES LIKE '${table}'`);
+                const [results] = await sequelize.query(
+                    'SHOW TABLES LIKE ?',
+                    { replacements: [table] }
+                );
                 if (results.length > 0) {
                     console.log(`🧹 正在清理表: ${table} ...`);
-                    await sequelize.query(`TRUNCATE TABLE ${table}`);
+                    await sequelize.query(
+                        `TRUNCATE TABLE \`${table.replace(/`/g, '')}\``
+                    );
                     console.log(`✔️ 表 ${table} 已清空`);
                 } else {
                     console.log(`ℹ️ 表 ${table} 不存在，跳过`);

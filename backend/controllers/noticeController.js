@@ -1,5 +1,7 @@
 const { AppConfig } = require('../models');
 
+const logger = require('../utils/logger');
+
 const RULE_KEYS = [
     'RULES_TITLE',
     'RULES_SUMMARY',
@@ -53,7 +55,7 @@ const getRules = async (req, res) => {
             if (config.config_type === 'json') {
                 try {
                     value = JSON.parse(value);
-                } catch (e) {}
+                } catch (e) { logger.warn('NOTICE_CTRL', '配置值 JSON 解析失败', { error: e.message }); }
             }
 
             if (config.config_key === 'RULES_TITLE') result.title = value || '';
@@ -66,7 +68,7 @@ const getRules = async (req, res) => {
             data: result
         });
     } catch (error) {
-        console.error('获取规则说明失败:', error);
+        logger.error('获取规则说明失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '获取规则说明失败' });
     }
 };

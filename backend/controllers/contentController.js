@@ -1,5 +1,6 @@
 const { Banner, Content } = require('../models');
 const { Op } = require('sequelize');
+const logger = require('../utils/logger');
 
 // 获取轮播图列表
 const getBanners = async (req, res) => {
@@ -36,7 +37,7 @@ const getBanners = async (req, res) => {
             data: banners
         });
     } catch (error) {
-        console.error('获取轮播图失败:', error);
+        logger.error('获取轮播图失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '获取轮播图失败' });
     }
 };
@@ -60,7 +61,7 @@ const getContents = async (req, res) => {
             data: contents
         });
     } catch (error) {
-        console.error('获取内容列表失败:', error);
+        logger.error('获取内容列表失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '获取内容列表失败' });
     }
 };
@@ -86,7 +87,7 @@ const getContentBySlug = async (req, res) => {
             data: content
         });
     } catch (error) {
-        console.error('获取页面内容失败:', error);
+        logger.error('获取页面内容失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '获取页面内容失败' });
     }
 };

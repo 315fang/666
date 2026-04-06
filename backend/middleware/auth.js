@@ -18,6 +18,12 @@ async function authenticate(req, res, next) {
             const token = authHeader.substring(7);
             try {
                 const decoded = jwt.verify(token, constants.SECURITY.JWT_SECRET);
+                if (decoded.type && decoded.type !== 'user') {
+                    return res.status(401).json({
+                        success: false,
+                        message: '登录状态无效，请重新登录'
+                    });
+                }
                 userId = decoded.id;
                 openid = decoded.openid;
             } catch (err) {
@@ -28,8 +34,8 @@ async function authenticate(req, res, next) {
             }
         }
 
-        // 方式2：兼容 x-openid（仅开发环境，生产环境自动禁用）
-        if (!userId && constants.DEBUG.ALLOW_OPENID_AUTH) {
+        // 方式2：兼容 x-openid（仅开发环境）
+        if (!userId && constants.DEBUG.ALLOW_OPENID_AUTH && process.env.NODE_ENV !== 'production') {
             openid = req.headers['x-openid'];
         }
 
@@ -52,6 +58,12 @@ async function authenticate(req, res, next) {
             return res.status(401).json({
                 success: false,
                 message: '用户不存在'
+            });
+        }
+        if (user.status !== 1) {
+            return res.status(403).json({
+                success: false,
+                message: '账号已被禁用'
             });
         }
 
@@ -83,26 +95,28 @@ async function optionalAuth(req, res, next) {
             const token = authHeader.substring(7);
             try {
                 const decoded = jwt.verify(token, constants.SECURITY.JWT_SECRET);
-                userId = decoded.id;
-                openid = decoded.openid;
+                if (!decoded.type || decoded.type === 'user') {
+                    userId = decoded.id;
+                    openid = decoded.openid;
+                }
             } catch (err) {
                 // Token 无效，忽略
             }
         }
 
-        if (!userId && constants.DEBUG.ALLOW_OPENID_AUTH) {
+        if (!userId && constants.DEBUG.ALLOW_OPENID_AUTH && process.env.NODE_ENV !== 'production') {
             openid = req.headers['x-openid'];
         }
 
         if (userId) {
             const user = await User.findByPk(userId);
-            if (user) {
+            if (user && user.status === 1) {
                 req.user = user;
                 req.openid = user.openid;
             }
         } else if (openid) {
             const user = await User.findOne({ where: { openid } });
-            if (user) {
+            if (user && user.status === 1) {
                 req.user = user;
                 req.openid = openid;
             }

@@ -7,6 +7,7 @@
 - Commit: `971ae9a`
 - Mode: static scan + key command verification
 - Method: baseline map + parallel subagent chain audits
+- **Status:** ✅ ALL TASKS COMPLETE (Task 1-7), report finalized 2026-04-06
 
 ## Baseline Map
 
@@ -136,12 +137,12 @@ Evidence:
 
 Findings:
 
-- `zz-repo-guard/reference.md` still pending and not stamped.
-- `zz-repo-guard` requires route/config scan artifacts and drift notes, currently missing.
+- ~~`zz-repo-guard/reference.md` still pending and not stamped.~~ **✅ RESOLVED** - reference.md 已更新，包含完整 scan stamp、API snapshot、frontend config snapshot 和 drift notes。
+- `zz-repo-guard` requires route/config scan artifacts and drift notes, now populated.
 - `zz-project-standards` mentions `zz-api-atlas` sync target not found in repo.
 
 Evidence:
-- `.opencode/skills/zz-repo-guard/reference.md:12`
+- `.opencode/skills/zz-repo-guard/reference.md:12` (updated)
 - `.opencode/skills/zz-repo-guard/SKILL.md:32`
 - `.opencode/skills/zz-project-standards/SKILL.md:65`
 
@@ -170,8 +171,8 @@ Evidence:
 5. Bubble switch/limit configs are exposed but not effectively enforced end-to-end.
    - Evidence: `admin-ui/src/views/home-sections/index.vue:194`, `backend/controllers/activityController.js:49`
 
-6. Skill artifact drift: repo-guard reference not updated (scan stamp/snapshots pending).
-   - Evidence: `.opencode/skills/zz-repo-guard/reference.md:12`
+6. ~~Skill artifact drift: repo-guard reference not updated (scan stamp/snapshots pending).~~ **✅ RESOLVED** - reference.md 已在 Task 7 中更新完成。
+   - Evidence: `.opencode/skills/zz-repo-guard/reference.md` (已包含完整扫描数据)
 
 7. Agent portal source config missing; only artifacts available for scan.
    - Risk: source/build divergence hidden.
@@ -199,7 +200,7 @@ Evidence:
 3. Add DB-level idempotency keys for commission/wallet event logs.
 4. Fix `festival_data`/`festival_config` key mismatch.
 5. Make bubble toggles effective (backend gate or frontend gate).
-6. Refresh repo-guard reference with latest scan stamp and snapshots.
+6. ~~Refresh repo-guard reference with latest scan stamp and snapshots.~~ ✅ 已完成。
 
 ### Next iteration governance (P2)
 

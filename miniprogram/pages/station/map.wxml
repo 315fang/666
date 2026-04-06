@@ -1,4 +1,3 @@
-<!--pages/station/map.wxml - 服务站点地图-->
 <view class="container">
   <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
     <view class="nav-back" bindtap="onBack">
@@ -8,33 +7,33 @@
     <view class="nav-placeholder"/>
   </view>
 
-  <!-- 统计栏 -->
+  <view class="hero-card">
+    <text class="hero-eyebrow">服务网络</text>
+    <text class="hero-title">把配送、认领与自提信息放在同一张图里</text>
+    <text class="hero-desc">地图会展示当前服务站覆盖情况，下面也可以直接查看每个站点的状态与认领入口。</text>
+  </view>
+
   <view class="stats-row">
     <view class="stat-item">
       <text class="stat-num">{{stations.length}}</text>
       <text class="stat-label">覆盖城市</text>
     </view>
-    <view class="stat-divider"/>
     <view class="stat-item">
       <text class="stat-num">{{claimedCount}}</text>
       <text class="stat-label">运营站点</text>
     </view>
-    <view class="stat-divider"/>
     <view class="stat-item">
       <text class="stat-num">{{pickupCount}}</text>
       <text class="stat-label">自提站点</text>
     </view>
   </view>
 
-  <!-- eCharts 地图容器 -->
-  <view class="map-container">
+  <view class="map-card">
     <ec-canvas id="mapCanvas" canvas-id="mapCanvas" ec="{{ec}}" class="map-canvas"/>
-    <view class="map-tip">点击站点查看详情</view>
+    <view class="map-tip">地图可缩放，站点详情请看下方列表</view>
   </view>
 
-  <!-- 站点列表 -->
   <view class="section-title">
-    <view class="title-accent"/>
     <text>站点列表</text>
   </view>
   <view class="station-list">
@@ -60,7 +59,6 @@
     </view>
   </view>
 
-  <!-- 认领表单弹窗 -->
   <view class="claim-modal" wx:if="{{showClaimModal}}">
     <view class="claim-overlay" bindtap="closeClaimModal"/>
     <view class="claim-card">

@@ -118,6 +118,23 @@ router.put('/mass-messages/:id/cancel', adminAuth, checkPermission('notification
     }
 });
 
+// 立即发送（草稿/待发送）
+router.post('/mass-messages/:id/send', adminAuth, checkPermission('notification'), async (req, res) => {
+    try {
+        const result = await MassMessageService.executeSend(req.params.id);
+        res.json({
+            code: 0,
+            data: result,
+            message: '群发任务已启动'
+        });
+    } catch (error) {
+        res.status(400).json({
+            code: 400,
+            message: error.message
+        });
+    }
+});
+
 // 删除消息
 router.delete('/mass-messages/:id', adminAuth, checkPermission('notification'), async (req, res) => {
     try {

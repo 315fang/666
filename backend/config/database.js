@@ -1,5 +1,7 @@
+const path = require('path');
 const { Sequelize } = require('sequelize');
-require('dotenv').config();
+// 固定从 backend 根目录读 .env，避免在 migrations/ 等子目录执行 node 脚本时 cwd 不对导致 DB_PASSWORD 未加载
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 // 创建Sequelize实例
 const sequelize = new Sequelize(

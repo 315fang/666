@@ -35,8 +35,8 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
             </div>
             <div>
-              <div class="feature-title">实时生效配置</div>
-              <div class="feature-sub">数据库热更新，无需重启服务</div>
+              <div class="feature-title">运营可视化配置</div>
+              <div class="feature-sub">订单、分销、内容等业务参数集中维护</div>
             </div>
           </div>
         </div>

@@ -1,37 +1,20 @@
 // pages/product/detail.js
-const { get, post, del } = require('../../utils/request');
-const { parseImages, calculatePrice, normalizeProductId } = require('../../utils/dataFormatter');
-
-/** 优先使用后端下发的 displayPrice（与下单应付单价一致），缺省再本地 calculatePrice */
-function parseApiDisplayPrice(v) {
-    if (v === null || v === undefined || v === '') return null;
-    const x = typeof v === 'number' ? v : parseFloat(String(v).trim());
-    return Number.isFinite(x) && x >= 0 ? x : null;
-}
-
-function resolvePayableUnitPrice(product, sku, roleLevel) {
-    if (sku && parseApiDisplayPrice(sku.displayPrice) != null) {
-        return parseApiDisplayPrice(sku.displayPrice);
-    }
-    if (parseApiDisplayPrice(product.displayPrice) != null) {
-        return parseApiDisplayPrice(product.displayPrice);
-    }
-    return calculatePrice(product, sku, roleLevel);
-}
-const { ErrorHandler } = require('../../utils/errorHandler');
+const { get } = require('../../utils/request');
+const { normalizeProductId } = require('../../utils/dataFormatter');
 const { USER_ROLES } = require('../../config/constants');
 const { safeBack } = require('../../utils/navigator');
-const LocalUserContent = require('../../utils/localUserContent');
+const { loadProduct, resolvePayableUnitPrice } = require('./productDetailData');
+const { refreshFavoriteState, toggleFavorite } = require('./productDetailFavorite');
+const {
+    onSpecSelect,
+    getMaxStock,
+    onMinus,
+    onPlus,
+    onQtyInput,
+    onBuyNow,
+    addToCart
+} = require('./productDetailActions');
 const app = getApp();
-
-const PLEDGE_ICONS = {
-    seven_day: '/assets/icons/refresh-cw.svg',
-    return_shipping: '/assets/icons/truck.svg',
-    brand_guarantee: '/assets/icons/shield.svg',
-    authentic: '/assets/icons/shield.svg',
-    shipping_promise: '/assets/icons/truck.svg',
-    after_sale: '/assets/icons/refresh-cw.svg'
-};
 
 Page({
     data: {
@@ -128,117 +111,7 @@ Page({
 
     // 加载商品详情
     async loadProduct(id) {
-        wx.showLoading({ title: '加载中...' });
-
-        try {
-            const res = await get(`/products/${id}`);
-            const product = res.data || {};
-
-            // 使用统一的图片解析工具
-            product.images = parseImages(product.images);
-            product.detail_images = parseImages(product.detail_images);
-
-            // 将 skus 转换为 specs 格式用于页面展示
-            let specs = [];
-            if (product.skus && product.skus.length > 0) {
-                // 提取所有规格名称和值
-                const specMap = {};
-                product.skus.forEach(sku => {
-                    if (sku.spec_name && sku.spec_value) {
-                        if (!specMap[sku.spec_name]) {
-                            specMap[sku.spec_name] = new Set();
-                        }
-                        specMap[sku.spec_name].add(sku.spec_value);
-                    }
-                });
-                
-                // 转换为数组格式
-                specs = Object.keys(specMap).map(name => ({
-                    name: name,
-                    values: Array.from(specMap[name])
-                }));
-            }
-            
-            // 将 specs 添加到 product 对象
-            product.specs = specs;
-
-            // 获取用户身份计算动态价格（从 globalData 读取，不信任可被篡改的 Storage）
-            const roleLevel = app.globalData.userInfo?.role_level || USER_ROLES.GUEST;
-
-            const displayPrice = resolvePayableUnitPrice(product, null, roleLevel);
-
-            // 计算折扣
-            let discount = 10;
-            if (product.market_price && parseFloat(product.market_price) > 0) {
-                discount = Math.round((Number(displayPrice) / parseFloat(product.market_price)) * 10);
-            }
-
-            // 初始化选中第一个SKU
-            const firstSku = (product.skus && product.skus.length > 0) ? product.skus[0] : null;
-            const selectedSpecs = {};
-            if (firstSku && firstSku.spec_name) {
-                selectedSpecs[firstSku.spec_name] = firstSku.spec_value;
-            }
-
-            const currentPrice = Number(
-                resolvePayableUnitPrice(product, firstSku, roleLevel)
-            ).toFixed(2);
-            const currentStock = firstSku ? (firstSku.stock || 0) : (product.stock || 0);
-            const isOutOfStock = currentStock <= 0;
-
-            const pid = normalizeProductId(product.id);
-
-            const rawPledges = Array.isArray(product.service_pledges) ? product.service_pledges : [];
-            const servicePledges = rawPledges.map((p) => ({
-                ...p,
-                icon: PLEDGE_ICONS[p.id] || '/assets/icons/shield.svg'
-            }));
-
-            this.setData({
-                product: {
-                    ...product,
-                    displayPrice: Number(displayPrice).toFixed(2)
-                },
-                skus: product.skus || [],
-                selectedSku: firstSku,
-                selectedSpecs,
-                selectedSkuText: firstSku ? `${firstSku.spec_name}: ${firstSku.spec_value}` : '默认规格',
-                imageCount: product.images.length || 1,
-                roleLevel,
-                isAgent: roleLevel >= USER_ROLES.LEADER,
-                discount,
-                currentPrice,
-                currentStock,
-                isOutOfStock,
-                detailImageList: product.detail_images || [],
-                hasRichDetail: !!product.detail_html,
-                servicePledges,
-                pageLoading: false
-            });
-
-            LocalUserContent.recordFootprint({
-                id: pid,
-                name: product.name,
-                image: (product.images && product.images[0]) || '',
-                price: Number(displayPrice).toFixed(2)
-            });
-
-            this.refreshFavoriteState();
-
-            // 加载评价
-            this.loadReviews();
-
-            // 加载佣金预览（如果用户是团长或代理商）
-            if (roleLevel >= USER_ROLES.LEADER) {
-                this.loadCommissionPreview();
-            }
-        } catch (err) {
-            ErrorHandler.handle(err, { customMessage: '商品加载失败' });
-            console.error('加载商品详情失败:', err);
-            this.setData({ pageLoading: false });
-        } finally {
-            wx.hideLoading();
-        }
+        return loadProduct(this, id);
     },
 
     // 加载评价
@@ -247,7 +120,7 @@ Page({
             const res = await get(`/products/${this.data.id}/reviews`, { limit: 2 }).catch(() => null);
             if (res && res.data) {
                 const reviews = res.data.list || [];
-                const reviewTotal = res.data.pagination?.total || reviews.length;
+                const reviewTotal = res.data.pagination?.total || res.data.total || reviews.length;
                 // 生成评价标签
                 const reviewTags = this.generateReviewTags(reviews);
                 this.setData({ reviews, reviewTotal, reviewTags });
@@ -335,127 +208,35 @@ Page({
     },
 
     async refreshFavoriteState() {
-        const p = this.data.product;
-        if (!p || p.id == null) return;
-        const pid = normalizeProductId(p.id);
-        const token = wx.getStorageSync('token');
-        if (token) {
-            try {
-                const res = await get(
-                    '/user/favorites/status',
-                    { product_id: pid },
-                    { showError: false }
-                );
-                const favorited = !!(res && res.data && res.data.favorited);
-                this.setData({ isFavorite: favorited });
-            } catch (_) {
-                this.setData({ isFavorite: false });
-            }
-        } else {
-            this.setData({ isFavorite: LocalUserContent.isFavorite(pid) });
-        }
+        return refreshFavoriteState(this);
     },
 
     async onToggleFavorite() {
-        const { product, currentPrice } = this.data;
-        if (!product || product.id == null) return;
-        const pid = normalizeProductId(product.id);
-        const token = wx.getStorageSync('token');
-
-        if (token) {
-            try {
-                if (this.data.isFavorite) {
-                    await del(`/user/favorites/${pid}`, {}, { showError: false });
-                    this.setData({ isFavorite: false });
-                    wx.showToast({ title: '已取消收藏', icon: 'none' });
-                } else {
-                    await post('/user/favorites', { product_id: pid }, { showError: false });
-                    this.setData({ isFavorite: true });
-                    wx.showToast({ title: '已收藏，可在「我的-收藏商品」查看', icon: 'none' });
-                }
-            } catch (err) {
-                const msg = (err && err.message) || '操作失败';
-                wx.showToast({ title: String(msg).slice(0, 20), icon: 'none' });
-            }
-            return;
-        }
-
-        const added = LocalUserContent.toggleFavorite({
-            id: pid,
-            name: product.name,
-            image: (product.images && product.images[0]) || '',
-            price: String(currentPrice || product.displayPrice || '')
-        });
-        this.setData({ isFavorite: added });
-        wx.showToast({
-            title: added ? '已收藏（本机），登录后可云端同步' : '已取消收藏',
-            icon: 'none'
-        });
+        return toggleFavorite(this);
     },
 
     // 选择规格
     onSpecSelect(e) {
-        const { key, val } = e.currentTarget.dataset;
-        const selectedSpecs = this.data.selectedSpecs || {};
-        selectedSpecs[key] = val;
-
-        // 查找匹配的SKU
-        const { skus, product } = this.data;
-        let selectedSku = null;
-
-        if (skus && skus.length > 0) {
-            selectedSku = skus.find(sku => {
-                const specName = sku.spec_name || '';
-                const specValue = sku.spec_value || '';
-                return selectedSpecs[specName] === specValue;
-            });
-        }
-
-        const currentPrice = Number(
-            resolvePayableUnitPrice(product, selectedSku, this.data.roleLevel)
-        ).toFixed(2);
-        const currentStock = selectedSku ? (selectedSku.stock || 0) : (product.stock || 0);
-        const isOutOfStock = currentStock <= 0;
-        const nextQuantity = isOutOfStock ? 1 : Math.min(this.data.quantity, currentStock || 1);
-
-        this.setData({
-            selectedSpecs,
-            selectedSku,
-            selectedSkuText: selectedSku ? `${selectedSku.spec_name}: ${selectedSku.spec_value}` : '请选择规格',
-            currentPrice,
-            currentStock,
-            isOutOfStock,
-            quantity: nextQuantity
-        });
+        return onSpecSelect(this, e, resolvePayableUnitPrice);
     },
 
     getMaxStock() {
-        const stock = Number(this.data.currentStock || 0);
-        return Number.isFinite(stock) && stock > 0 ? stock : 0;
+        return getMaxStock(this);
     },
 
     // 数量减少 (Renamed to match WXML: onMinus)
     onMinus() {
-        if (this.data.quantity > 1) {
-            this.setData({ quantity: this.data.quantity - 1 });
-        }
+        return onMinus(this);
     },
 
     // 数量增加 (Renamed to match WXML: onPlus)
     onPlus() {
-        const maxStock = this.getMaxStock();
-        if (this.data.quantity < maxStock) {
-            this.setData({ quantity: this.data.quantity + 1 });
-        }
+        return onPlus(this);
     },
 
     // Quantity Input (Added)
     onQtyInput(e) {
-        let val = parseInt(e.detail.value);
-        if (isNaN(val) || val < 1) val = 1;
-        const maxStock = this.getMaxStock();
-        if (maxStock > 0 && val > maxStock) val = maxStock;
-        this.setData({ quantity: val });
+        return onQtyInput(this, e);
     },
 
     /** 详情页「到店自提」仅为说明；不支持则提示，支持则引导至下单页切换 */
@@ -487,67 +268,12 @@ Page({
     },
 
     onBuyNow() {
-        if (this._buyingNow) return;
-        if (this.data.isOutOfStock) {
-            wx.showToast({ title: '该商品暂时缺货', icon: 'none' });
-            return;
-        }
-        this._buyingNow = true;
-        const { product, selectedSku, quantity } = this.data;
-
-        const buyInfo = {
-            product_id: normalizeProductId(product.id),
-            category_id: product.category_id || null,
-            sku_id: (selectedSku && selectedSku.id) || null,
-            quantity,
-            price: resolvePayableUnitPrice(product, selectedSku, this.data.roleLevel),
-            name: product.name,
-            image: (product.images && product.images[0]) || '',
-            spec: selectedSku ? `${selectedSku.spec_name}: ${selectedSku.spec_value}` : '',
-            supports_pickup: product.supports_pickup ? 1 : 0
-        };
-        wx.setStorageSync('directBuyInfo', buyInfo);
-
-        wx.navigateTo({
-            url: '/pages/order/confirm?from=direct',
-            complete: () => { this._buyingNow = false; }
-        });
+        return onBuyNow(this, resolvePayableUnitPrice);
     },
 
     // 加入购物袋
     async addToCart() {
-        if (this._addingToCart) return;
-        const { product, selectedSku, quantity } = this.data;
-        this._addingToCart = true;
-        let loadingShown = false;
-
-        try {
-            wx.showLoading({ title: '加入购物袋...', mask: true });
-            loadingShown = true;
-
-            await post(
-                '/cart',
-                {
-                    product_id: normalizeProductId(product.id),
-                    sku_id: (selectedSku && selectedSku.id) || null,
-                    quantity
-                },
-                { showError: false }
-            );
-
-            wx.hideLoading();
-            loadingShown = false;
-
-            this.triggerFlyAnim();
-            wx.showToast({ title: '已加入购物袋', icon: 'success' });
-        } catch (err) {
-            const msg = err && err.message ? String(err.message) : '加入失败';
-            wx.showToast({ title: msg, icon: 'none' });
-            console.error('加入购物袋失败:', err);
-        } finally {
-            if (loadingShown) wx.hideLoading();
-            this._addingToCart = false;
-        }
+        return addToCart(this);
     },
 
     // 触发飞入购物袋动画（使用 brand-animation 组件）

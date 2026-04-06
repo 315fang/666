@@ -7,9 +7,11 @@ const CommissionLog = require('./CommissionLog');
 const Category = require('./Category');
 const SKU = require('./SKU');
 const Cart = require('./Cart');
+const UserFavorite = require('./UserFavorite');
 const Banner = require('./Banner');
 const Content = require('./Content');
 const Material = require('./Material');
+const Review = require('./Review');
 const Withdrawal = require('./Withdrawal');
 const Admin = require('./Admin');
 const Refund = require('./Refund');
@@ -26,8 +28,6 @@ const MassMessage = require('./MassMessage');
 const UserMassMessage = require('./UserMassMessage');
 const UserTag = require('./UserTag');
 const UserTagRelation = require('./UserTagRelation');
-const Questionnaire = require('./Questionnaire');
-const QuestionnaireSubmission = require('./QuestionnaireSubmission');
 // ★ 新增：积分体系 + 拼团系统
 const PointAccount = require('./PointAccount');
 const PointLog = require('./PointLog');
@@ -49,12 +49,20 @@ const StationClaim = require('./StationClaim');
 const MaterialGroup = require('./MaterialGroup');
 // ★ Phase 6: 开屏动画
 const SplashScreen = require('./SplashScreen');
+const PortalAccount = require('./PortalAccount');
+const AgentWalletAccount = require('./AgentWalletAccount');
+const AgentWalletLog = require('./AgentWalletLog');
+const ContentBoard = require('./ContentBoard');
+const ContentBoardItem = require('./ContentBoardItem');
+const ContentBoardProduct = require('./ContentBoardProduct');
+const PageLayout = require('./PageLayout');
 // 库存管理（审计/预留）+ 佣金结算
 const StockTransaction = require('./StockTransaction');
 const StockReservation = require('./StockReservation');
 const CommissionSettlement = require('./CommissionSettlement');
 // 管理员操作日志
 const AdminLog = require('./AdminLog');
+const ActivitySpotStock = require('./ActivitySpotStock');
 
 // ========== 用户相关关联 ==========
 User.hasMany(Order, { foreignKey: 'buyer_id', as: 'orders' });
@@ -73,9 +81,14 @@ CommissionLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 User.belongsTo(User, { foreignKey: 'parent_id', as: 'parent' });
 User.hasMany(User, { foreignKey: 'parent_id', as: 'children' });
 
-// 用户购物车
+// 用户购物袋（Cart）
 User.hasMany(Cart, { foreignKey: 'user_id', as: 'cartItems' });
 Cart.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// 用户商品收藏（云端）
+User.hasMany(UserFavorite, { foreignKey: 'user_id', as: 'favorites' });
+UserFavorite.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+UserFavorite.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 
 // 用户提现记录
 User.hasMany(Withdrawal, { foreignKey: 'user_id', as: 'withdrawals' });
@@ -92,6 +105,13 @@ Dealer.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 // 用户通知关联
 User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications' });
 Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasOne(PortalAccount, { foreignKey: 'user_id', as: 'portalAccount' });
+PortalAccount.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasOne(AgentWalletAccount, { foreignKey: 'user_id', as: 'agentWallet' });
+AgentWalletAccount.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+AgentWalletAccount.hasMany(AgentWalletLog, { foreignKey: 'account_id', as: 'logs' });
+AgentWalletLog.belongsTo(AgentWalletAccount, { foreignKey: 'account_id', as: 'account' });
+AgentWalletLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
 // ========== 商品相关关联 ==========
 Product.hasMany(Order, { foreignKey: 'product_id', as: 'orders' });
@@ -105,9 +125,17 @@ Category.hasMany(Product, { foreignKey: 'category_id', as: 'products' });
 Product.hasMany(SKU, { foreignKey: 'product_id', as: 'skus' });
 SKU.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 
-// 购物车商品
+// 购物袋商品（Cart）
 Cart.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 Product.hasMany(Cart, { foreignKey: 'product_id', as: 'cartItems' });
+
+// 商品评价
+Product.hasMany(Review, { foreignKey: 'product_id', as: 'reviews' });
+Review.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+User.hasMany(Review, { foreignKey: 'user_id', as: 'reviews' });
+Review.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+Order.hasMany(Review, { foreignKey: 'order_id', as: 'reviews' });
+Review.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
 
 Cart.belongsTo(SKU, { foreignKey: 'sku_id', as: 'sku' });
 SKU.hasMany(Cart, { foreignKey: 'sku_id', as: 'cartItems' });
@@ -149,12 +177,6 @@ UserMassMessage.belongsTo(MassMessage, { foreignKey: 'mass_message_id', as: 'mas
 UserTagRelation.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 UserTagRelation.belongsTo(UserTag, { foreignKey: 'tag_id', as: 'tag' });
 UserTag.belongsTo(Admin, { foreignKey: 'created_by', as: 'creator' });
-
-// ========== 问卷关联 ==========
-Questionnaire.hasMany(QuestionnaireSubmission, { foreignKey: 'questionnaire_id', as: 'submissions' });
-QuestionnaireSubmission.belongsTo(Questionnaire, { foreignKey: 'questionnaire_id', as: 'questionnaire' });
-QuestionnaireSubmission.belongsTo(User, { foreignKey: 'inviter_id', as: 'inviter' });
-QuestionnaireSubmission.belongsTo(User, { foreignKey: 'submitter_id', as: 'submitter' });
 
 // ========== 积分体系关联 ==========
 User.hasOne(PointAccount, { foreignKey: 'user_id', as: 'pointAccount' });
@@ -212,6 +234,19 @@ User.hasMany(StationClaim, { foreignKey: 'applicant_id', as: 'stationClaims' });
 Order.belongsTo(ServiceStation, { foreignKey: 'pickup_station_id', as: 'pickupStation' });
 ServiceStation.hasMany(Order, { foreignKey: 'pickup_station_id', as: 'pickupOrders' });
 
+// ========== Banner 商品关联 ==========
+Banner.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+Product.hasMany(Banner, { foreignKey: 'product_id', as: 'banners' });
+
+// ========== 榜单图文管理 ==========
+ContentBoard.hasMany(ContentBoardItem, { foreignKey: 'board_id', as: 'items' });
+ContentBoardItem.belongsTo(ContentBoard, { foreignKey: 'board_id', as: 'board' });
+
+ContentBoard.hasMany(ContentBoardProduct, { foreignKey: 'board_id', as: 'products' });
+ContentBoardProduct.belongsTo(ContentBoard, { foreignKey: 'board_id', as: 'board' });
+ContentBoardProduct.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+Product.hasMany(ContentBoardProduct, { foreignKey: 'product_id', as: 'boardItems' });
+
 module.exports = {
     sequelize,
     User,
@@ -222,9 +257,11 @@ module.exports = {
     Category,
     SKU,
     Cart,
+    UserFavorite,
     Banner,
     Content,
     Material,
+    Review,
     Withdrawal,
     Admin,
     Refund,
@@ -241,8 +278,6 @@ module.exports = {
     UserMassMessage,
     UserTag,
     UserTagRelation,
-    Questionnaire,
-    QuestionnaireSubmission,
     // 积分体系
     PointAccount,
     PointLog,
@@ -267,10 +302,43 @@ module.exports = {
     MaterialGroup,
     // Phase 6: 开屏动画
     SplashScreen,
+    PortalAccount,
+    AgentWalletAccount,
+    AgentWalletLog,
+    ContentBoard,
+    ContentBoardItem,
+    ContentBoardProduct,
+    PageLayout,
     // 库存管理 + 佣金结算
     StockTransaction,
     StockReservation,
     CommissionSettlement,
     // 管理员操作日志
-    AdminLog
+    AdminLog,
+    ActivitySpotStock,
+    // 升级申请
+    UpgradeApplication: require('./UpgradeApplication'),
+    // 合伙人退出申请
+    PartnerExitApplication: require('./PartnerExitApplication'),
+    // N路径货款申请
+    NFundRequest: require('./NFundRequest')
 };
+
+// ========== 升级申请关联 ==========
+const UpgradeApplication = module.exports.UpgradeApplication;
+UpgradeApplication.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(UpgradeApplication, { foreignKey: 'user_id', as: 'upgradeApplications' });
+
+const PartnerExitApplication = module.exports.PartnerExitApplication;
+PartnerExitApplication.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(PartnerExitApplication, { foreignKey: 'user_id', as: 'exitApplications' });
+
+// ========== N路径关联 ==========
+const NFundRequest = module.exports.NFundRequest;
+NFundRequest.belongsTo(User, { foreignKey: 'requester_id', as: 'requester' });
+NFundRequest.belongsTo(User, { foreignKey: 'leader_id', as: 'leader' });
+User.hasMany(NFundRequest, { foreignKey: 'requester_id', as: 'nFundRequests' });
+User.hasMany(NFundRequest, { foreignKey: 'leader_id', as: 'nFundAllocations' });
+// N路径上下级自关联
+User.belongsTo(User, { foreignKey: 'n_leader_id', as: 'nLeader' });
+User.hasMany(User, { foreignKey: 'n_leader_id', as: 'nMembers' });

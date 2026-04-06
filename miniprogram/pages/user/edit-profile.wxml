@@ -1,0 +1,62 @@
+<view class="container">
+  <!-- 导航栏 -->
+  <view class="nav-bar">
+    <view class="nav-back" bindtap="onBack">
+      <text class="nav-back-icon">‹</text>
+      <text class="nav-back-text">返回</text>
+    </view>
+    <text class="nav-title">编辑资料</text>
+    <view class="nav-placeholder"></view>
+  </view>
+
+  <!-- 头像 -->
+  <view class="profile-section">
+    <view class="profile-item" bindtap="onSelectAvatar">
+      <text class="profile-label">头像</text>
+      <view class="profile-right">
+        <image class="profile-avatar" src="{{userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
+        <text class="profile-arrow">›</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 昵称 -->
+  <view class="profile-section">
+    <view class="profile-item" bindtap="onEditNickname">
+      <text class="profile-label">昵称</text>
+      <view class="profile-right">
+        <text class="profile-value">{{userInfo.nickname || '微信用户'}}</text>
+        <text class="profile-arrow">›</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 选择头像弹层 -->
+  <view class="avatar-pick-mask" wx:if="{{showAvatarPickSheet}}" catchtap="onCancelAvatarPick">
+    <view class="avatar-pick-panel" catchtap="stopP">
+      <text class="avatar-pick-title">更换头像</text>
+      <text class="avatar-pick-tip">点击下方按钮，从相册或微信头像中选择</text>
+      <button class="avatar-pick-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">选择头像</button>
+      <view class="avatar-pick-cancel" bindtap="onCancelAvatarPick">取消</view>
+    </view>
+  </view>
+
+  <!-- 修改昵称弹层 -->
+  <view class="nick-modal-mask" wx:if="{{showNicknameModal}}" catchtap="onCancelNickname">
+    <view class="nick-modal" catchtap="stopP">
+      <text class="nick-modal-title">修改昵称</text>
+      <input
+        class="nick-modal-input"
+        type="nickname"
+        placeholder="输入昵称或使用微信昵称"
+        maxlength="32"
+        value="{{newNickname}}"
+        bindinput="onNicknameInput"
+      />
+      <view class="nick-modal-actions">
+        <view class="nick-modal-btn nick-modal-btn-cancel" bindtap="onCancelNickname">取消</view>
+        <view class="nick-modal-btn nick-modal-btn-ok" bindtap="onConfirmNickname">保存</view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,5 +1,7 @@
 const { Category, Product } = require('../models');
 const { Op } = require('sequelize');
+const { MALL_LIST_WHERE } = require('../utils/productMallVisibility');
+const logger = require('../utils/logger');
 
 // 获取类目列表
 const getCategories = async (req, res) => {
@@ -28,7 +30,7 @@ const getCategories = async (req, res) => {
             data: categories
         });
     } catch (error) {
-        console.error('获取类目列表失败:', error);
+        logger.error('获取类目列表失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '获取类目列表失败' });
     }
 };
@@ -60,7 +62,7 @@ const getCategoryTree = async (req, res) => {
             data: tree
         });
     } catch (error) {
-        console.error('获取类目树失败:', error);
+        logger.error('获取类目树失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '获取类目树失败' });
     }
 };
@@ -85,7 +87,7 @@ const getCategoryById = async (req, res) => {
                 {
                     model: Product,
                     as: 'products',
-                    where: { status: 1 },
+                    where: { status: 1, ...MALL_LIST_WHERE },
                     required: false,
                     limit: 10
                 }
@@ -101,7 +103,7 @@ const getCategoryById = async (req, res) => {
             data: category
         });
     } catch (error) {
-        console.error('获取类目详情失败:', error);
+        logger.error('获取类目详情失败', { message: error.message, stack: error.stack });
         res.status(500).json({ code: -1, message: '获取类目详情失败' });
     }
 };

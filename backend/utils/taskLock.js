@@ -1,20 +1,20 @@
 /**
- * Task locking utility using in-memory locks
- * Prevents background tasks from overlapping across intervals
+ * 定时任务互斥：防止同一任务重叠执行
  *
- * Note: For multi-instance deployments, use database advisory locks
- * or a distributed lock service like Redis
+ * - memory（默认）：进程内 Map
+ * - mysql：MySQL GET_LOCK / RELEASE_LOCK，跨多实例互斥（同一数据库）
+ *
+ * 环境变量：TASK_LOCK_BACKEND=memory | mysql
  */
 
 const locks = new Map();
 
-// ── 任务运行统计（运维可观测性）──────────────────────────────────
-// 记录每个任务的最近一次运行时间、成功/失败次数、最近错误信息
 const taskStats = new Map();
 
-/**
- * 内部：更新任务统计
- */
+function getSequelize() {
+    return require('../config/database').sequelize;
+}
+
 function _recordRun(taskName, success, error = null) {
     const existing = taskStats.get(taskName) || {
         runCount: 0,
@@ -34,9 +34,6 @@ function _recordRun(taskName, success, error = null) {
     taskStats.set(taskName, existing);
 }
 
-/**
- * 获取所有任务的运行统计（供运维面板调用）
- */
 function getTaskStats() {
     const result = {};
     for (const [name, stats] of taskStats.entries()) {
@@ -45,22 +42,14 @@ function getTaskStats() {
     return result;
 }
 
-/**
- * Acquire a lock for a task
- * @param {string} taskName - Name of the task
- * @param {number} timeout - Lock timeout in ms (default: 5 minutes)
- * @returns {boolean} true if lock acquired, false if already locked
- */
 function acquireLock(taskName, timeout = 5 * 60 * 1000) {
     const now = Date.now();
     const existingLock = locks.get(taskName);
 
-    // Check if lock exists and hasn't expired
     if (existingLock && existingLock.expiresAt > now) {
         return false;
     }
 
-    // Acquire or renew the lock
     locks.set(taskName, {
         acquiredAt: now,
         expiresAt: now + timeout
@@ -69,26 +58,16 @@ function acquireLock(taskName, timeout = 5 * 60 * 1000) {
     return true;
 }
 
-/**
- * Release a lock for a task
- * @param {string} taskName - Name of the task
- */
 function releaseLock(taskName) {
     locks.delete(taskName);
 }
 
-/**
- * Check if a task is currently locked
- * @param {string} taskName - Name of the task
- * @returns {boolean} true if locked, false otherwise
- */
 function isLocked(taskName) {
     const lock = locks.get(taskName);
     if (!lock) return false;
 
     const now = Date.now();
     if (lock.expiresAt <= now) {
-        // Lock expired, remove it
         locks.delete(taskName);
         return false;
     }
@@ -97,21 +76,19 @@ function isLocked(taskName) {
 }
 
 /**
- * Execute a task with automatic locking
- * @param {string} taskName - Name of the task
- * @param {Function} taskFn - Async function to execute
- * @param {Object} options - Options
- * @param {number} options.timeout - Lock timeout in ms
- * @param {boolean} options.skipIfLocked - Skip execution if locked (default: true)
- * @returns {Promise<any>} Result of taskFn or null if skipped
+ * MySQL 用户锁名称（最长 64 字符）
  */
-async function executeWithLock(taskName, taskFn, options = {}) {
+function mysqlUserLockName(taskName) {
+    const base = `zz_${String(taskName).replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    return base.slice(0, 64);
+}
+
+async function executeWithMemoryLock(taskName, taskFn, options = {}) {
     const {
         timeout = 5 * 60 * 1000,
         skipIfLocked = true
     } = options;
 
-    // Try to acquire lock
     const acquired = acquireLock(taskName, timeout);
 
     if (!acquired) {
@@ -119,7 +96,6 @@ async function executeWithLock(taskName, taskFn, options = {}) {
             console.log(`[TaskLock] 任务 "${taskName}" 已在运行中，跳过此次执行`);
             return null;
         }
-        // Wait for lock to be released (not recommended for long tasks)
         throw new Error(`任务 "${taskName}" 已被锁定`);
     }
 
@@ -138,9 +114,72 @@ async function executeWithLock(taskName, taskFn, options = {}) {
     }
 }
 
+async function executeWithMysqlLock(taskName, taskFn, options = {}) {
+    const {
+        timeout = 5 * 60 * 1000,
+        skipIfLocked = true
+    } = options;
+
+    const sequelize = getSequelize();
+    if (sequelize.getDialect() !== 'mysql') {
+        console.warn('[TaskLock] TASK_LOCK_BACKEND=mysql 需要 MySQL，已回退 memory');
+        return executeWithMemoryLock(taskName, taskFn, options);
+    }
+
+    const lockName = mysqlUserLockName(taskName);
+    const lockWaitSec = Math.min(300, Math.max(1, Math.ceil(timeout / 1000)));
+
+    return sequelize.transaction(async (t) => {
+        const [rows] = await sequelize.query(
+            'SELECT GET_LOCK(:lockName, :waitSec) AS got',
+            { replacements: { lockName, waitSec: lockWaitSec }, transaction: t }
+        );
+        const got = rows[0]?.got;
+        const ok = got === 1 || got === '1';
+        if (!ok) {
+            if (skipIfLocked) {
+                console.log(`[TaskLock] MySQL 锁未获取 "${taskName}"，跳过此次执行`);
+                return null;
+            }
+            throw new Error(`任务 "${taskName}" 已被锁定`);
+        }
+
+        try {
+            console.log(`[TaskLock] MySQL 锁已获取: ${taskName}`);
+            const result = await taskFn();
+            _recordRun(taskName, true);
+            return result;
+        } catch (error) {
+            console.error(`[TaskLock] 任务 "${taskName}" 执行失败:`, error);
+            _recordRun(taskName, false, error.message);
+            throw error;
+        } finally {
+            try {
+                await sequelize.query('SELECT RELEASE_LOCK(:lockName) AS rel', {
+                    replacements: { lockName },
+                    transaction: t
+                });
+            } catch (e) {
+                console.error(`[TaskLock] RELEASE_LOCK 失败 (${taskName}):`, e.message);
+            }
+            console.log(`[TaskLock] MySQL 锁已释放: ${taskName}`);
+        }
+    });
+}
+
 /**
- * Clean up expired locks (should be called periodically)
+ * @param {string} taskName
+ * @param {Function} taskFn
+ * @param {{ timeout?: number, skipIfLocked?: boolean }} [options]
  */
+async function executeWithLock(taskName, taskFn, options = {}) {
+    const backend = String(process.env.TASK_LOCK_BACKEND || 'memory').toLowerCase();
+    if (backend === 'mysql') {
+        return executeWithMysqlLock(taskName, taskFn, options);
+    }
+    return executeWithMemoryLock(taskName, taskFn, options);
+}
+
 function cleanupExpiredLocks() {
     const now = Date.now();
     for (const [taskName, lock] of locks.entries()) {
@@ -150,7 +189,6 @@ function cleanupExpiredLocks() {
     }
 }
 
-// Clean up expired locks every minute
 setInterval(cleanupExpiredLocks, 60 * 1000);
 
 module.exports = {

@@ -2,22 +2,29 @@
  * 佣金计算服务 (增强版)
  * 支持固定金额和百分比两种模式
  * 统一管理所有佣金相关的计算逻辑
+ * 口径与调用链见仓库 docs/业务规则.md
  */
 
 const { CommissionLog, User, Order, Product, SKU, AppConfig } = require('../models');
 const { sequelize } = require('../models');
 const { Op } = require('sequelize');
+const { error: logError, warn: logWarn } = require('../utils/logger');
 const cacheService = require('./CacheService');
+const MemberTierService = require('./MemberTierService');
+const commissionPolicy = require('../config/commissionPolicy');
 
 // 佣金配置缓存 Key（使用 CacheService 替代静态变量，支持多进程一致性）
 const COMMISSION_CONFIG_CACHE_KEY = 'commission:config';
 
 // 用户角色常量
 const USER_ROLES = {
-    GUEST: 0,      // 普通用户
-    MEMBER: 1,     // 会员
-    LEADER: 2,     // 团长
-    AGENT: 3       // 代理商
+    GUEST: 0,        // 普通用户
+    MEMBER: 1,       // 会员
+    LEADER: 2,       // 团长
+    AGENT: 3,        // 代理商（通用，agent_level 区分 1/2/3 级）
+    AGENT1: 3,       // 一级代理（alias，等于 AGENT）
+    AGENT2: 3,       // 二级代理（role_level 相同，通过 agent_level 区分）
+    AGENT3: 3        // 三级代理（role_level 相同，通过 agent_level 区分）
 };
 
 // 佣金类型常量
@@ -30,37 +37,54 @@ const COMMISSION_TYPES = {
     STOCK_DIFF: 'Stock_Diff'              // 库存差价
 };
 
-// 默认佣金配置 (可从数据库或配置文件读取)
+// 默认佣金配置 — 与商业计划书4.0对齐
+// C1=80元/单(20%), C2=120元/单(30%), B1/B2=160元/单(40%)
 const DEFAULT_CONFIG = {
-    // 固定金额模式 (单位: 元)
+    // 固定金额模式 (单位: 元) — 主模式，基于399元标品
     FIXED_AMOUNTS: {
-        MEMBER_DIRECT: 60,      // 会员直推
-        LEADER_DIRECT: 90,      // 团长直推
-        AGENT_DIRECT: 120,      // 代理商直推
-        LEADER_TEAM: 30,        // 团长团队佣金
-        AGENT_TEAM: 50          // 代理商团队佣金
+        MEMBER_DIRECT: 80,      // C1 初级代理直推
+        LEADER_DIRECT: 120,     // C2 高级代理直推
+        AGENT_DIRECT: 160,      // B1 推广合伙人直推
+        PARTNER_DIRECT: 160,    // B2 运营合伙人直推
+        LEADER_TEAM: 40,        // C2 团队佣金
+        AGENT_TEAM: 60          // B1 团队佣金
     },
 
-    // 百分比模式
+    // 百分比模式（备用，商品级佣金优先于此）
     PERCENTAGE_RATES: {
         DIRECT: {
-            [USER_ROLES.MEMBER]: 0.05,   // 会员直推 5%
-            [USER_ROLES.LEADER]: 0.08,   // 团长直推 8%
-            [USER_ROLES.AGENT]: 0.12     // 代理商直推 12%
+            [USER_ROLES.MEMBER]: 0.20,   // C1 直推 20%
+            [USER_ROLES.LEADER]: 0.30,   // C2 直推 30%
+            [USER_ROLES.AGENT]: 0.40     // B1 直推 40%
         },
         INDIRECT: {
-            [USER_ROLES.LEADER]: 0.03,   // 团长间接 3%
-            [USER_ROLES.AGENT]: 0.05     // 代理商间接 5%
+            [USER_ROLES.LEADER]: 0.05,   // C2 间接 5%
+            [USER_ROLES.AGENT]: 0.08     // B1 间接 8%
         },
         SELF: {
-            [USER_ROLES.MEMBER]: 0.03,   // 会员自购返利 3%
-            [USER_ROLES.LEADER]: 0.05,   // 团长自购返利 5%
-            [USER_ROLES.AGENT]: 0.08     // 代理商自购返利 8%
+            [USER_ROLES.MEMBER]: 0.05,   // C1 自购返利 5%
+            [USER_ROLES.LEADER]: 0.08,   // C2 自购返利 8%
+            [USER_ROLES.AGENT]: 0.10     // B1 自购返利 10%
         }
     }
 };
 
 class CommissionService {
+    static async _ensurePlatformTopAgentUser(transaction = null) {
+        const OPENID = '__platform_top_agent__';
+        let user = await User.findOne({ where: { openid: OPENID }, transaction });
+        if (user) return user;
+        user = await User.create({
+            openid: OPENID,
+            nickname: '平台顶级代理',
+            role_level: 3,
+            agent_level: 1,
+            status: 1,
+            parent_id: null,
+            agent_id: null
+        }, { transaction });
+        return user;
+    }
     /**
      * 获取最新佣金配置 (带 CacheService 缓存，支持多进程）
      */
@@ -86,7 +110,7 @@ class CommissionService {
                             dbConfig.PERCENTAGE_RATES = { ...dbConfig.PERCENTAGE_RATES, ...val };
                         }
                     } catch (e) {
-                        console.error('解析佣金配置失败:', e);
+                        logError('COMMISSION', '解析佣金配置失败', { error: e.message });
                     }
                 });
 
@@ -94,7 +118,7 @@ class CommissionService {
                 return dbConfig;
             }
         } catch (e) {
-            console.error('加载佣金配置失败:', e);
+            logError('COMMISSION', '加载佣金配置失败', { error: e.message });
         }
 
         return DEFAULT_CONFIG;
@@ -134,11 +158,14 @@ class CommissionService {
         // 优先使用商品级配置
         let productCommission = null;
         if (product) {
+            const allowFixed = commissionPolicy.allowProductFixedCommission();
             productCommission = {
-                amount1: product.commission_amount_1 ? parseFloat(product.commission_amount_1) : null,
-                amount2: product.commission_amount_2 ? parseFloat(product.commission_amount_2) : null,
+                amount1: allowFixed && product.commission_amount_1 ? parseFloat(product.commission_amount_1) : null,
+                amount2: allowFixed && product.commission_amount_2 ? parseFloat(product.commission_amount_2) : null,
+                amount3: allowFixed && product.commission_amount_3 ? parseFloat(product.commission_amount_3) : null,
                 rate1: product.commission_rate_1 ? parseFloat(product.commission_rate_1) : null,
-                rate2: product.commission_rate_2 ? parseFloat(product.commission_rate_2) : null
+                rate2: product.commission_rate_2 ? parseFloat(product.commission_rate_2) : null,
+                rate3: product.commission_rate_3 ? parseFloat(product.commission_rate_3) : null
             };
         }
 
@@ -217,6 +244,34 @@ class CommissionService {
                     type,
                     level: 2,
                     description: '间接佣金'
+                });
+            }
+        }
+
+        // 3. 三级佣金 (Level 3) - 三级代理体系的第三层上级
+        const options_greatgrandparent = options.greatgrandparent || null;
+        if (options_greatgrandparent) {
+            let amount = 0;
+            const usedProfit = commissions.reduce((s, c) => s + c.amount, 0);
+            const remainingProfit = profitPool - usedProfit;
+
+            if (productCommission && productCommission.amount3 !== null) {
+                amount = productCommission.amount3;
+            } else if (productCommission && productCommission.rate3 !== null) {
+                amount = this._round(actualPrice * productCommission.rate3);
+            } else {
+                // 默认三级比例 = 二级间接比例的一半
+                const baseRate = config.PERCENTAGE_RATES.INDIRECT[options_greatgrandparent.role_level] || 0;
+                amount = this._round(actualPrice * baseRate * 0.5);
+            }
+
+            if (amount > 0 && amount <= remainingProfit) {
+                commissions.push({
+                    user_id: options_greatgrandparent.id,
+                    amount,
+                    type: COMMISSION_TYPES.INDIRECT,
+                    level: 3,
+                    description: '三级间接佣金'
                 });
             }
         }
@@ -506,7 +561,7 @@ class CommissionService {
             const actualPrice = this._getActualPrice(product, sku, user.role_level) * quantity;
             const wholesalePrice = parseFloat(product.wholesale_price || 0) * quantity;
 
-            // 模拟订单对象
+            // 预览用内存对象（非 orders 表行），仅用于 calculateOrderCommissions
             const mockOrder = {
                 total_amount: actualPrice,
                 actual_price: actualPrice,
@@ -641,6 +696,112 @@ class CommissionService {
             DEFAULT_CONFIG
         };
     }
+    /** 后台 agent_system_commission（与 admin 代理体系「佣金配置」一致） */
+    static async _loadAgentSystemCommissionConfig() {
+        const defaults = {
+            use_price_gap_middle_commission: undefined,
+            direct_pct_by_role: { 1: 20, 2: 30, 3: 40, 4: 40 },
+            indirect_pct_by_role: { 2: 5, 3: 8 },
+            tertiary_pct_factor: 50,
+            agent_layer_between_pct: 3
+        };
+        try {
+            const row = await AppConfig.findOne({ where: { config_key: 'agent_system_commission', status: 1 } });
+            if (row && row.config_value) {
+                const parsed = JSON.parse(row.config_value);
+                return {
+                    ...defaults,
+                    ...parsed,
+                    direct_pct_by_role: { ...defaults.direct_pct_by_role, ...(parsed.direct_pct_by_role || {}) },
+                    indirect_pct_by_role: { ...defaults.indirect_pct_by_role, ...(parsed.indirect_pct_by_role || {}) }
+                };
+            }
+        } catch (e) {
+            logError('COMMISSION', '读取agent_system_commission配置失败', { error: e.message });
+        }
+        return defaults;
+    }
+
+    static _commissionPctFromMap(map, roleLevel) {
+        if (map == null) return 0;
+        const k = String(roleLevel);
+        const raw = map[k] !== undefined ? map[k] : map[roleLevel];
+        const n = Number(raw);
+        if (!Number.isFinite(n)) return 0;
+        return Math.max(0, Math.min(100, n)) / 100;
+    }
+
+    /**
+     * 中间佣金：订单实付 × 配置比例，依次给 parent / grandparent / great-grandparent，总额不超过可分佣池
+     * （不含多级代理链逐跳；若需旧版三级代理层间逻辑请打开 use_price_gap_middle_commission）
+     */
+    static async _allocateMiddleByPercentOfPaid({
+        order, buyer, agentId, buyerPaid, distributablePool, t, notifySource, commCfg
+    }) {
+        const { sendNotification } = require('../models/notificationUtil');
+        const toNum = (v, d = 0) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : d;
+        };
+        let middleCommissionTotal = 0;
+        const allocByPool = (rawAmount) => {
+            const amount = Math.max(0, toNum(rawAmount, 0));
+            const remain = Math.max(0, distributablePool - middleCommissionTotal);
+            return Math.round(Math.min(amount, remain) * 100) / 100;
+        };
+        let reachedAgentInChain = Number(buyer.role_level || 0) >= 3;
+
+        const pay = async (u, rawAmt, remark) => {
+            if (!u || rawAmt <= 0) return;
+            if (agentId && agentId === u.id) return;
+            const amt = allocByPool(rawAmt);
+            if (amt <= 0) return;
+            await CommissionLog.create({
+                order_id: order.id,
+                user_id: u.id,
+                amount: amt,
+                type: 'gap',
+                status: 'frozen',
+                available_at: null,
+                refund_deadline: null,
+                remark
+            }, { transaction: t });
+            middleCommissionTotal += amt;
+            await sendNotification(
+                u.id,
+                '收益到账提醒',
+                `您的下级产生了一笔${notifySource}订单，您获得团队分佣 ¥${amt.toFixed(2)}（需售后期结束+审批后结算）。`,
+                'commission',
+                order.id
+            ).catch(() => {});
+        };
+
+        const parent = buyer.parent_id ? await User.findByPk(buyer.parent_id, { transaction: t }) : null;
+        if (parent) {
+            reachedAgentInChain = reachedAgentInChain || Number(parent.role_level) >= 3;
+            const r = this._commissionPctFromMap(commCfg.direct_pct_by_role, parent.role_level);
+            await pay(parent, buyerPaid * r, `直推分佣·实付${(r * 100).toFixed(2)}% (${notifySource})`);
+        }
+
+        const gp = parent?.parent_id ? await User.findByPk(parent.parent_id, { transaction: t }) : null;
+        if (gp) {
+            reachedAgentInChain = reachedAgentInChain || Number(gp.role_level) >= 3;
+            const r = this._commissionPctFromMap(commCfg.indirect_pct_by_role, gp.role_level);
+            await pay(gp, buyerPaid * r, `二级分佣·实付${(r * 100).toFixed(2)}% (${notifySource})`);
+        }
+
+        const ggp = gp?.parent_id ? await User.findByPk(gp.parent_id, { transaction: t }) : null;
+        if (ggp) {
+            reachedAgentInChain = reachedAgentInChain || Number(ggp.role_level) >= 3;
+            const base = this._commissionPctFromMap(commCfg.indirect_pct_by_role, ggp.role_level);
+            const factor = Math.max(0, Math.min(100, Number(commCfg.tertiary_pct_factor ?? 50))) / 100;
+            const r = base * factor;
+            await pay(ggp, buyerPaid * r, `三级分佣·实付${(r * 100).toFixed(2)}% (${notifySource})`);
+        }
+
+        return { middleCommissionTotal, reachedAgentInChain };
+    }
+
     /**
      * ★★★ 核心统一方法：代理商发货时的级差佣金 + 发货利润计算
      *
@@ -658,32 +819,74 @@ class CommissionService {
      */
     static async calculateGapAndFulfillmentCommissions({ order, buyer, product, agentId, transaction: t, notifySource = '代理商发货' }) {
         const { sendNotification } = require('../models/notificationUtil');
-
-        const priceMap = {
-            0: parseFloat(product.retail_price || 0),
-            1: parseFloat(product.price_member || product.retail_price || 0),
-            2: parseFloat(product.price_leader || product.price_member || product.retail_price || 0),
-            3: parseFloat(product.price_agent || product.price_leader || product.price_member || product.retail_price || 0)
+        const toNum = (v, d = 0) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : d;
         };
 
-        // ---- 1. 级差分润：向上遍历分销链 ----
+        const priceMap = {
+            0: toNum(product.retail_price, 0),
+            1: toNum(product.price_member || product.retail_price, 0),
+            2: toNum(product.price_leader || product.price_member || product.retail_price, 0),
+            3: toNum(product.price_agent || product.price_leader || product.price_member || product.retail_price, 0)
+        };
+
+        // 可分佣利润池：按实付金额口径，且保护代理商不亏损
+        const buyerPaid = toNum(order.actual_price, 0);
+        const qty = Math.max(1, toNum(order.quantity, 1));
+        const agentCostPrice = order.locked_agent_cost
+            ? toNum(order.locked_agent_cost, 0)
+            : toNum(product.cost_price || product.price_agent || product.price_leader || product.price_member || product.retail_price, 0);
+        const agentCost = agentCostPrice * qty;
+        const distributablePool = Math.max(0, buyerPaid - agentCost);
+
+        const commCfg = await this._loadAgentSystemCommissionConfig();
+        // 利润池 = 买家实付 - 发货成本（价差建池），各层按百分比从池中分配，剩余归发货方
+        // 安全默认：未明确配置时沿用价差模式（!== false），避免上线后静默改变分佣规则
+        // 新部署若要切换到百分比模式，需在后台「代理体系→佣金配置」保存一次（会写入 false）
+        const usePriceGap = commCfg.use_price_gap_middle_commission !== false;
+
         let currentLevel = buyer.role_level;
         let lastCost = priceMap[currentLevel] || priceMap[0];
         let pRef = buyer.parent_id;
         let middleCommissionTotal = 0;
+        const allocByPool = (rawAmount) => {
+            const amount = Math.max(0, toNum(rawAmount, 0));
+            const remain = Math.max(0, distributablePool - middleCommissionTotal);
+            return Math.round(Math.min(amount, remain) * 100) / 100;
+        };
+        let reachedAgentInChain = Number(buyer.role_level || 0) >= 3;
+
+        if (!usePriceGap) {
+            const pctResult = await this._allocateMiddleByPercentOfPaid({
+                order,
+                buyer,
+                agentId,
+                buyerPaid,
+                distributablePool,
+                t,
+                notifySource,
+                commCfg
+            });
+            middleCommissionTotal = pctResult.middleCommissionTotal;
+            reachedAgentInChain = pctResult.reachedAgentInChain;
+        } else {
         const visitedIds = new Set([buyer.id]); // 防止自购自佣 + 循环引用
+        let agentLayerCount = 0; // 已经遍历的代理层数（三级代理体系最多3层）
+
+        const tierRate = Math.max(0, Math.min(100, Number(commCfg.agent_layer_between_pct ?? 3))) / 100;
 
         while (pRef) {
             // 循环引用或超深保护
             if (visitedIds.has(pRef) || visitedIds.size > 50) {
-                console.error(`⚠️ [严重警告] 代理关系循环或深度过深！用户ID: ${buyer.id}, 异常节点: ${pRef}`);
+                logError('COMMISSION', '严重警告: 代理关系循环或深度过深', { buyerId: buyer.id, badNode: pRef });
                 sendNotification(
                     0,
-                    '🚨 严重系统告警：代理关系循环',
+                    '严重系统告警：代理关系循环',
                     `系统在计算佣金(订单 ${order.id})时检测到代理关系闭环或深度过深！请立即排查用户 ${buyer.id} 与 ${pRef} 的上下级关系。`,
                     'system_alert',
                     order.id
-                ).catch(e => console.error(e));
+                ).catch(e => logError('COMMISSION', '发送告警通知失败', { error: e.message }));
                 break;
             }
             visitedIds.add(pRef);
@@ -692,8 +895,10 @@ class CommissionService {
             if (!p) break;
 
             if (p.role_level > currentLevel) {
+                // 跨等级（会员→团长→代理）级差
                 const parentCost = priceMap[p.role_level];
-                const gapProfit = (lastCost - parentCost) * order.quantity;
+                const gapProfitRaw = (lastCost - parentCost) * qty;
+                const gapProfit = allocByPool(gapProfitRaw);
 
                 if (gapProfit > 0) {
                     const isOrderAgent = (agentId && agentId === p.id);
@@ -723,21 +928,95 @@ class CommissionService {
 
                 lastCost = parentCost;
                 currentLevel = p.role_level;
+                if (p.role_level >= 3) reachedAgentInChain = true;
+            } else if (p.role_level === 3 && p.agent_level && p.agent_level > 1) {
+                // 同为代理商（role_level=3），但 agent_level 更高（一级代理在上层）
+                // 三级代理体系：三级→二级→一级，各层通过 commission_rate_3/rate_2/rate_1 拿比例
+                agentLayerCount++;
+                if (agentLayerCount <= 3) {
+                    const isOrderAgent = (agentId && agentId === p.id);
+                    if (!isOrderAgent) {
+                        // 从商品或全局配置取三级代理佣金率
+                        const buyerPaidAmount = buyerPaid;
+                        let agentTierCommission = 0;
+
+                        // agent_layer_between_pct（0–100，默认 3 即 3%）
+                        agentTierCommission = allocByPool(Math.round(buyerPaidAmount * tierRate * 100) / 100);
+
+                        if (agentTierCommission > 0) {
+                            await CommissionLog.create({
+                                order_id: order.id,
+                                user_id: p.id,
+                                amount: agentTierCommission,
+                                type: 'gap',
+                                status: 'frozen',
+                                available_at: null,
+                                refund_deadline: null,
+                                remark: `三级代理层间佣金 (${p.agent_level}级代理, ${notifySource})`
+                            }, { transaction: t });
+
+                            middleCommissionTotal += agentTierCommission;
+
+                            await sendNotification(
+                                p.id,
+                                '三级代理收益到账',
+                                `您的下级代理产生了一笔${notifySource}订单，您获得代理层间佣金 ¥${agentTierCommission.toFixed(2)}（需售后期结束+审批后结算）。`,
+                                'commission',
+                                order.id
+                            );
+                        }
+                    }
+                }
             }
 
             pRef = p.parent_id;
-            if (currentLevel >= 3) break;
+            // 到达最高等级代理（一级代理，agent_level=1 或未设置）则停止
+            if (currentLevel >= 3 && (!p.agent_level || p.agent_level <= 1)) break;
+        }
+        }
+
+        // ---- 1.5 平台顶级代理补位（无上级代理时吃跳级利润）----
+        // 场景：用户上级链没有任何代理商，默认最上级是平台，平台获得剩余级差利润
+        if (!reachedAgentInChain) {
+            try {
+                const commercePolicy = await MemberTierService.getCommercePolicy();
+                const platformCfg = commercePolicy?.platform_top_agent || {};
+                const platformEnabled = platformCfg.enabled !== false;
+                let platformUserId = Number(platformCfg.user_id || process.env.PLATFORM_TOP_AGENT_USER_ID || 0);
+                const platformCost = parseFloat(order.locked_agent_cost || product.cost_price || priceMap[3] || 0);
+                const platformGapProfit = allocByPool(Math.max(0, (lastCost - platformCost) * qty));
+
+                if (platformEnabled && platformGapProfit > 0) {
+                    if (platformUserId <= 0) {
+                        const platformUser = await this._ensurePlatformTopAgentUser(t);
+                        platformUserId = platformUser?.id || 0;
+                    }
+                    const platformUser = platformUserId > 0 ? await User.findByPk(platformUserId, { transaction: t }) : null;
+                    if (platformUser && platformUser.status === 1) {
+                        if (platformUserId !== agentId) {
+                            await CommissionLog.create({
+                                order_id: order.id,
+                                user_id: platformUserId,
+                                amount: platformGapProfit,
+                                type: 'gap',
+                                status: 'frozen',
+                                available_at: null,
+                                refund_deadline: null,
+                                remark: `平台顶级代理跳级利润补位 (${notifySource})`
+                            }, { transaction: t });
+                            middleCommissionTotal += platformGapProfit;
+                        }
+                    }
+                }
+            } catch (e) {
+                logError('COMMISSION', '平台顶级代理补位失败', { error: e.message });
+            }
         }
 
         // 记录中间佣金总额到订单（调用方负责保存）
         order.middle_commission_total = middleCommissionTotal;
 
         // ---- 2. 代理商发货利润 ----
-        const agentCostPrice = order.locked_agent_cost
-            ? parseFloat(order.locked_agent_cost)
-            : parseFloat(product.price_agent || product.price_leader || product.price_member || product.retail_price);
-        const agentCost = agentCostPrice * order.quantity;
-        const buyerPaid = parseFloat(order.actual_price);
         const agentProfit = buyerPaid - agentCost - middleCommissionTotal;
 
         if (agentProfit > 0) {
@@ -760,7 +1039,7 @@ class CommissionService {
                 order.id
             );
         } else if (agentProfit < 0) {
-            console.error(`⚠️ [利润异常] 订单 ${order.order_no || order.id} 代理商(ID:${agentId})发货利润为 ¥${agentProfit.toFixed(2)}，不产生佣金！`);
+            logError('COMMISSION', `利润异常: 订单 ${order.order_no || order.id} 代理商(ID:${agentId})发货利润为 ¥${agentProfit.toFixed(2)}`);
             await sendNotification(
                 0,
                 '⚠️ 发货利润异常告警',

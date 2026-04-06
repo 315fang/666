@@ -10,7 +10,7 @@ const { QueryTypes } = require('sequelize');
  */
 
 // 获取所有可编辑配置（按分组）
-router.get('/system-configs', adminAuth, async (req, res) => {
+router.get('/system-configs', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         const configs = await ConfigService.getAllEditableConfigs();
         res.json({
@@ -27,7 +27,7 @@ router.get('/system-configs', adminAuth, async (req, res) => {
 });
 
 // 获取单个配置
-router.get('/system-configs/:key', adminAuth, async (req, res) => {
+router.get('/system-configs/:key', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         const { key } = req.params;
         const value = await ConfigService.get(key);
@@ -48,7 +48,7 @@ router.get('/system-configs/:key', adminAuth, async (req, res) => {
 });
 
 // 更新单个配置
-router.put('/system-configs/:key', adminAuth, async (req, res) => {
+router.put('/system-configs/:key', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         const { key } = req.params;
         const { value, reason } = req.body;
@@ -71,7 +71,7 @@ router.put('/system-configs/:key', adminAuth, async (req, res) => {
 });
 
 // 批量更新配置
-router.post('/system-configs/batch', adminAuth, async (req, res) => {
+router.post('/system-configs/batch', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         const { updates, reason } = req.body;
         const adminId = req.user.id;
@@ -111,7 +111,7 @@ router.post('/system-configs/batch', adminAuth, async (req, res) => {
 });
 
 // 获取配置修改历史
-router.get('/system-configs/:key/history', adminAuth, async (req, res) => {
+router.get('/system-configs/:key/history', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         const { key } = req.params;
         const { limit = 20 } = req.query;
@@ -132,7 +132,7 @@ router.get('/system-configs/:key/history', adminAuth, async (req, res) => {
 });
 
 // 回滚到指定历史版本
-router.post('/system-configs/:key/rollback', adminAuth, async (req, res) => {
+router.post('/system-configs/:key/rollback', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         const { key } = req.params;
         const { history_id } = req.body;
@@ -171,7 +171,7 @@ router.post('/system-configs/:key/rollback', adminAuth, async (req, res) => {
 });
 
 // 刷新配置缓存
-router.post('/system-configs/refresh-cache', adminAuth, checkPermission('system'), async (req, res) => {
+router.post('/system-configs/refresh-cache', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         await ConfigService.refreshCache();
         res.json({
@@ -187,7 +187,7 @@ router.post('/system-configs/refresh-cache', adminAuth, checkPermission('system'
 });
 
 // 获取配置健康度
-router.get('/system-configs/health', adminAuth, async (req, res) => {
+router.get('/system-configs/health', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         const { SystemConfig } = require('../../models');
 
@@ -289,7 +289,7 @@ const getTableIndexes = async (schema, table) => {
     });
 };
 
-router.get('/db-indexes/tables', adminAuth, checkPermission('system'), async (req, res) => {
+router.get('/db-indexes/tables', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         const schema = await getDatabaseName();
         const rows = await sequelize.query(
@@ -314,7 +314,7 @@ router.get('/db-indexes/tables', adminAuth, checkPermission('system'), async (re
     }
 });
 
-router.get('/db-indexes/:table/columns', adminAuth, checkPermission('system'), async (req, res) => {
+router.get('/db-indexes/:table/columns', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         const table = assertIdentifier(req.params.table, '表名');
         const schema = await getDatabaseName();
@@ -329,7 +329,7 @@ router.get('/db-indexes/:table/columns', adminAuth, checkPermission('system'), a
     }
 });
 
-router.get('/db-indexes/:table', adminAuth, checkPermission('system'), async (req, res) => {
+router.get('/db-indexes/:table', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         const table = assertIdentifier(req.params.table, '表名');
         const schema = await getDatabaseName();
@@ -344,7 +344,7 @@ router.get('/db-indexes/:table', adminAuth, checkPermission('system'), async (re
     }
 });
 
-router.post('/db-indexes', adminAuth, checkPermission('system'), async (req, res) => {
+router.post('/db-indexes', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         const { table, name, columns, unique } = req.body || {};
         const tableName = assertIdentifier(table, '表名');
@@ -381,7 +381,7 @@ router.post('/db-indexes', adminAuth, checkPermission('system'), async (req, res
     }
 });
 
-router.delete('/db-indexes/:table/:indexName', adminAuth, checkPermission('system'), async (req, res) => {
+router.delete('/db-indexes/:table/:indexName', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         const tableName = assertIdentifier(req.params.table, '表名');
         const indexName = assertIdentifier(req.params.indexName, '索引名');

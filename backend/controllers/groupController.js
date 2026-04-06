@@ -17,31 +17,48 @@ const {
 } = require('../models');
 const GroupCoreService = require('../services/GroupCoreService');
 
+/** 活动时间在有效期内（避免 where 里重复 [Op.or] 键被后者覆盖） */
+function buildGroupActivityWindowWhere(now) {
+    return {
+        [Op.and]: [
+            { [Op.or]: [{ start_at: null }, { start_at: { [Op.lte]: now } }] },
+            { [Op.or]: [{ end_at: null }, { end_at: { [Op.gt]: now } }] }
+        ]
+    };
+}
+
 // ============================================================
-// 获取商品的拼团活动（商品详情页调用）
-// GET /api/group/activities?product_id=X
+// 获取拼团活动
+// GET /api/group/activities
+// - 传 product_id：该商品下的有效活动（商品详情）
+// - 不传：全部有效活动（拼团专区列表）；仅返回上架且开启「参与拼团」的商品
 // ============================================================
 async function getActivitiesByProduct(req, res, next) {
     try {
-        const { product_id } = req.query;
-        if (!product_id) return res.json({ code: 0, data: [] });
-
+        const product_id = req.query.product_id;
         const now = new Date();
+
+        const productWhere = { status: 1 };
+        if (product_id) {
+            productWhere.id = product_id;
+        } else {
+            productWhere.enable_group_buy = 1;
+        }
+
         const activities = await GroupActivity.findAll({
             where: {
-                product_id,
                 status: 1,
-                [Op.or]: [
-                    { start_at: null },
-                    { start_at: { [Op.lte]: now } }
-                ],
-                [Op.or]: [
-                    { end_at: null },
-                    { end_at: { [Op.gt]: now } }
-                ]
+                ...(product_id ? { product_id } : {}),
+                ...buildGroupActivityWindowWhere(now)
             },
             include: [
-                { model: Product, as: 'product', attributes: ['id', 'name', 'images', 'retail_price'] }
+                {
+                    model: Product,
+                    as: 'product',
+                    attributes: ['id', 'name', 'images', 'retail_price', 'enable_group_buy', 'status', 'description', 'market_price'],
+                    where: productWhere,
+                    required: true
+                }
             ],
             order: [['group_price', 'ASC']]
         });
@@ -70,7 +87,17 @@ async function getGroupOrderDetail(req, res, next) {
                         { model: User, as: 'user', attributes: ['id', 'nickname', 'avatar_url'] }
                     ]
                 },
-                { model: Product, as: 'product', attributes: ['id', 'name', 'images', 'retail_price'] },
+                { model: Product, as: 'product', attributes: ['id', 'name', 'images', 'retail_price', 'category_id', 'supports_pickup', 'description', 'market_price'] },
+                {
+                    model: GroupActivity,
+                    as: 'activity',
+                    attributes: [
+                        'id', 'sku_id', 'product_id',
+                        'min_members', 'max_members', 'group_price', 'original_price',
+                        'expire_hours', 'stock_limit', 'sold_count',
+                        'start_at', 'end_at'
+                    ]
+                },
                 { model: User, as: 'leader', attributes: ['id', 'nickname', 'avatar_url'] }
             ]
         });

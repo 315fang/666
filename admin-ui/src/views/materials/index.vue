@@ -54,6 +54,7 @@
               />
             </el-select>
             <el-button size="small" type="warning" @click="handleBatchMove" :disabled="!moveTargetGroupId">移动</el-button>
+            <el-button size="small" type="danger" @click="handleBatchDelete">批量删除</el-button>
             <el-button size="small" type="danger" plain @click="selectedIds = []">取消选择</el-button>
             <el-divider direction="vertical" />
           </template>
@@ -85,13 +86,11 @@
           :class="{ selected: selectedIds.includes(item.id) }"
           @click="toggleSelect(item.id)"
         >
-          <!-- 选中蒙层 -->
-          <div class="select-mask">
-            <el-icon size="22" color="#fff"><Check /></el-icon>
-          </div>
-
-          <!-- 预览区 -->
+          <!-- 预览区（选中蒙层只盖住缩略图，避免挡住底部删除/编辑按钮） -->
           <div class="file-thumb">
+            <div class="select-mask">
+              <el-icon size="22" color="#fff"><Check /></el-icon>
+            </div>
             <el-image
               v-if="['image','poster'].includes(item.type)"
               :src="item.url"
@@ -124,16 +123,16 @@
             <div class="file-name" :title="item.title">{{ item.title }}</div>
           </div>
 
-          <!-- 操作按钮 -->
+          <!-- 删除放最前：窄卡片下 flex-end 会把删除挤到右侧被 overflow 裁切 -->
           <div class="file-ops" @click.stop>
-            <el-tooltip content="复制链接">
-              <el-button text size="small" :icon="CopyDocument" @click="copyUrl(item.url)" />
+            <el-tooltip content="从素材库永久删除">
+              <el-button text size="small" type="danger" :icon="Delete" @click="handleDelete(item)">删除</el-button>
             </el-tooltip>
             <el-tooltip content="编辑">
-              <el-button text size="small" :icon="Edit" @click="handleEdit(item)" />
+              <el-button text size="small" :icon="Edit" @click="handleEdit(item)">编辑</el-button>
             </el-tooltip>
-            <el-tooltip content="删除">
-              <el-button text size="small" :icon="Delete" type="danger" @click="handleDelete(item)" />
+            <el-tooltip content="复制链接">
+              <el-button text size="small" :icon="CopyDocument" @click="copyUrl(item.url)" />
             </el-tooltip>
           </div>
         </div>
@@ -154,7 +153,7 @@
     </main>
 
     <!-- ====== 分组编辑 Dialog ====== -->
-    <el-dialog v-model="groupDialogVisible" :title="editingGroup ? '编辑分组' : '新建分组'" width="420px">
+    <el-dialog v-model="groupDialogVisible" :title="editingGroup ? '编辑分组' : '新建分组'" width="min(420px, 94vw)">
       <el-form :model="groupForm" label-width="70px">
         <el-form-item label="分组名">
           <el-input v-model="groupForm.name" placeholder="如：产品图组、海报组" maxlength="50" />
@@ -170,7 +169,7 @@
     </el-dialog>
 
     <!-- ====== 素材上传/编辑 Dialog ====== -->
-    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑素材' : '上传素材'" width="560px">
+    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑素材' : '上传素材'" width="min(560px, 94vw)">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="名称" prop="title">
           <el-input v-model="form.title" placeholder="素材名称" />
@@ -233,8 +232,20 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Delete, Folder, FolderOpened, Check, Document, Microphone, CopyDocument, Lock, UploadFilled } from '@element-plus/icons-vue'
-import { uploadFile } from '@/api'
-import request from '@/utils/request'
+import {
+  getMaterials, createMaterial, updateMaterial, deleteMaterial,
+  getMaterialGroups, createMaterialGroup, updateMaterialGroup, deleteMaterialGroup,
+  moveMaterials, uploadFile
+} from '@/api'
+import { usePagination } from '@/composables/usePagination'
+import { warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
+
+const resolveAssetUrl = (url) => {
+  if (!url) return ''
+  if (/^https?:\/\//i.test(url)) return url
+  if (url.startsWith('/')) return `${window.location.origin}${url}`
+  return url
+}
 
 // ===== 分组 =====
 const groups = ref([])     // 含虚拟"全部素材"分组
@@ -248,13 +259,13 @@ const currentGroupName = computed(() => {
 })
 
 const fetchGroups = async () => {
-  const res = await request({ url: '/material-groups', method: 'get' })
+  const res = await getMaterialGroups()
   groups.value = res.data || res || []
 }
 
 const selectGroup = (id) => {
   activeGroupId.value = id
-  pagination.page = 1
+  resetPage()
   fetchMaterials()
 }
 
@@ -276,10 +287,10 @@ const submitGroup = async () => {
   groupSaving.value = true
   try {
     if (editingGroup.value) {
-      await request({ url: `/material-groups/${editingGroup.value.id}`, method: 'put', data: groupForm })
+      await updateMaterialGroup(editingGroup.value.id, groupForm)
       ElMessage.success('分组已更新')
     } else {
-      await request({ url: '/material-groups', method: 'post', data: groupForm })
+      await createMaterialGroup(groupForm)
       ElMessage.success('分组已创建')
     }
     groupDialogVisible.value = false
@@ -291,7 +302,7 @@ const submitGroup = async () => {
 
 const handleDeleteGroup = async (g) => {
   await ElMessageBox.confirm(`删除分组「${g.name}」后，组内素材将移至未分组，确认操作？`, '确认删除', { type: 'warning' })
-  await request({ url: `/material-groups/${g.id}`, method: 'delete' })
+  await deleteMaterialGroup(g.id)
   ElMessage.success('已删除')
   if (activeGroupId.value === g.id) activeGroupId.value = null
   await fetchGroups()
@@ -301,7 +312,7 @@ const handleDeleteGroup = async (g) => {
 // ===== 素材列表 =====
 const loading = ref(false)
 const tableData = ref([])
-const pagination = reactive({ page: 1, limit: 24, total: 0 })
+const { pagination, resetPage, applyResponse } = usePagination({ defaultLimit: 24 })
 const searchForm = reactive({ type: '', keyword: '' })
 
 const fetchMaterials = async () => {
@@ -316,15 +327,19 @@ const fetchMaterials = async () => {
     if (activeGroupId.value !== null) {
       params.group_id = activeGroupId.value ?? 'none'
     }
-    const res = await request({ url: '/materials', method: 'get', params })
-    tableData.value = res.data?.list || res.list || []
-    pagination.total = res.data?.pagination?.total || res.total || 0
+    const res = await getMaterials(params)
+    tableData.value = (res?.list || []).map(item => ({
+      ...item,
+      url: resolveAssetUrl(item.url),
+      thumbnail_url: resolveAssetUrl(item.thumbnail_url)
+    }))
+    applyResponse(res)
   } finally {
     loading.value = false
   }
 }
 
-const doSearch = () => { pagination.page = 1; fetchMaterials() }
+const doSearch = () => { resetPage(); fetchMaterials() }
 
 // ===== 多选 =====
 const selectedIds = ref([])
@@ -338,12 +353,37 @@ const toggleSelect = (id) => {
 
 const handleBatchMove = async () => {
   if (!selectedIds.value.length) return
-  await request({ url: '/material-groups/move', method: 'post', data: { ids: selectedIds.value, group_id: moveTargetGroupId.value } })
+  await moveMaterials({ ids: selectedIds.value, group_id: moveTargetGroupId.value })
   ElMessage.success('移动成功')
   selectedIds.value = []
   moveTargetGroupId.value = null
   await fetchGroups()
   await fetchMaterials()
+}
+
+const handleBatchDelete = async () => {
+  const ids = selectedIds.value.slice()
+  if (!ids.length) return
+  try {
+    await ElMessageBox.confirm(`确定删除已选的 ${ids.length} 个素材？此操作不可恢复。`, '批量删除', { type: 'warning' })
+  } catch {
+    return
+  }
+  let ok = 0
+  let fail = 0
+  for (const id of ids) {
+    try {
+      await deleteMaterial(id)
+      ok += 1
+    } catch {
+      fail += 1
+    }
+  }
+  selectedIds.value = []
+  await fetchGroups()
+  await fetchMaterials()
+  if (fail) ElMessage.warning(`已删除 ${ok} 个，${fail} 个失败（请查看网络或权限）`)
+  else ElMessage.success(`已删除 ${ok} 个素材`)
 }
 
 // ===== 素材 CRUD =====
@@ -365,13 +405,13 @@ const handleAdd = () => {
 
 const handleEdit = (row) => {
   isEdit.value = true
-  Object.assign(form, { ...row })
+  Object.assign(form, { ...row, url: resolveAssetUrl(row.url) })
   dialogVisible.value = true
 }
 
 const handleDelete = async (row) => {
   await ElMessageBox.confirm(`确认删除素材「${row.title}」？`, '确认删除', { type: 'warning' })
-  await request({ url: `/materials/${row.id}`, method: 'delete' })
+  await deleteMaterial(row.id)
   ElMessage.success('已删除')
   await fetchGroups()
   await fetchMaterials()
@@ -380,13 +420,15 @@ const handleDelete = async (row) => {
 const handleSubmit = async () => {
   await formRef.value?.validate(async (valid) => {
     if (!valid) return
+    const tempUrlMessage = warnTemporaryAssetUrls(form.url ? [form.url] : [], '素材地址')
+    if (tempUrlMessage) return ElMessage.warning(tempUrlMessage)
     submitting.value = true
     try {
       if (isEdit.value) {
-        await request({ url: `/materials/${form.id}`, method: 'put', data: form })
+        await updateMaterial(form.id, form)
         ElMessage.success('更新成功')
       } else {
-        await request({ url: '/materials', method: 'post', data: form })
+        await createMaterial(form)
         ElMessage.success('上传成功')
       }
       dialogVisible.value = false
@@ -399,17 +441,7 @@ const handleSubmit = async () => {
 }
 
 const handleUpload = async ({ file }) => {
-  // 素材库内部上传：skip_library=1，避免与后续手动保存重复入库
-  const formData = new FormData()
-  formData.append('file', file)
-  formData.append('skip_library', '1')
-  formData.append('folder', 'materials')
-  const data = await request({
-    url: '/upload',
-    method: 'post',
-    data: formData,
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
+  const data = await uploadFile(file, { params: { skip_library: 1, folder: 'materials' } })
   form.url = data.url
   if (!form.title) form.title = file.name.replace(/\.[^.]+$/, '')
   ElMessage.success('文件已上传')
@@ -530,7 +562,7 @@ onMounted(async () => {
   flex: 1;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 12px;
   align-content: start;
 }
@@ -574,6 +606,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 .thumb-img { width: 100%; height: 120px; object-fit: cover; display: block; }
@@ -597,11 +630,20 @@ onMounted(async () => {
 }
 
 .file-ops {
+  position: relative;
+  z-index: 3;
   display: flex;
-  padding: 2px 4px 4px;
+  flex-wrap: nowrap;
+  align-items: center;
+  padding: 4px 6px 6px;
   border-top: 1px solid #f0f0f0;
-  justify-content: flex-end;
-  gap: 0;
+  justify-content: flex-start;
+  gap: 4px;
+  background: #fff;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  min-height: 36px;
+  box-sizing: border-box;
 }
 
 /* 拖拽上传区 */
@@ -650,5 +692,45 @@ onMounted(async () => {
   gap: 6px;
   font-size: 13px;
   color: #67c23a;
+}
+
+@media (max-width: 767px) {
+  .media-library {
+    flex-direction: column;
+    height: auto;
+  }
+  .group-sidebar {
+    width: 100%;
+    min-width: 0;
+    border-right: none;
+    border-bottom: 1px solid #e4e7ed;
+  }
+  .group-list {
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 4px;
+    padding: 8px;
+  }
+  .group-item {
+    flex-shrink: 0;
+    border-radius: 8px;
+    background: #fff;
+    border: 1px solid #edf0f5;
+  }
+  .material-main {
+    padding: 12px;
+  }
+  .toolbar-left,
+  .toolbar-right {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .file-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+  .material-uploader :deep(.el-upload-dragger) {
+    width: 100%;
+  }
 }
 </style>

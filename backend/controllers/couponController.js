@@ -1,9 +1,54 @@
 // backend/controllers/couponController.js
 /**
- * 优惠券控制器
+ * 优惠券：C 端列表/可用券、管理端 CRUD、发券，以及下单侧复用的校验工具。
+ *
+ * - scope=all：全场；scope=product|category 须带 scope_ids（与 admin 创建/更新校验一致，见 validateCouponScopePayload）。
+ * - 核销口径与下单一致：OrderCoreService 创建订单时用 isCouponApplicable + calcCouponDiscount；
+ *   GET /api/coupons/available 用同一套过滤逻辑。
  */
 const { Coupon, UserCoupon, User, sequelize } = require('../models');
 const { Op } = require('sequelize');
+
+function normalizeScopeIds(value) {
+    if (Array.isArray(value)) return value.map(item => Number(item)).filter(Number.isFinite);
+    if (!value) return [];
+    return String(value)
+        .split(',')
+        .map(item => Number(item.trim()))
+        .filter(Number.isFinite);
+}
+
+/**
+ * 校验优惠券 scope / scope_ids，并返回写入库的 scope_ids（数组或 null）
+ */
+function validateCouponScopePayload(scope, scope_ids) {
+    const s = scope && String(scope).trim() ? String(scope).trim() : 'all';
+    if (s === 'all') {
+        return { ok: true, scope: 'all', scope_ids: null };
+    }
+    if (s !== 'product' && s !== 'category') {
+        return { ok: false, message: '无效的使用范围' };
+    }
+    const ids = normalizeScopeIds(scope_ids);
+    if (ids.length === 0) {
+        return { ok: false, message: '选择「指定商品」或「指定分类」时，请至少选择一项' };
+    }
+    return { ok: true, scope: s, scope_ids: ids };
+}
+
+function isCouponApplicable(userCoupon, { productIds = [], categoryIds = [] } = {}) {
+    const scope = userCoupon.scope || 'all';
+    if (scope === 'all') return true;
+    const ids = normalizeScopeIds(userCoupon.scope_ids);
+    if (ids.length === 0) return false;
+    if (scope === 'product') {
+        return productIds.some(id => ids.includes(Number(id)));
+    }
+    if (scope === 'category') {
+        return categoryIds.some(id => ids.includes(Number(id)));
+    }
+    return false;
+}
 
 /**
  * GET /api/coupons/mine
@@ -39,15 +84,14 @@ exports.getMyCoupons = async (req, res, next) => {
 };
 
 /**
- * GET /api/coupons/available?amount=xxx&product_id=xxx
- * 结算页：获取可用优惠券列表（按订单金额/商品筛选）
+ * GET /api/coupons/available?amount=&product_id=&category_id=&product_ids=&category_ids=
+ * 结算页可用券：门槛 + 未过期 + isCouponApplicable（与下单 OrderCoreService 一致）
  */
 exports.getAvailableCoupons = async (req, res, next) => {
     try {
-        const { amount = 0, product_id } = req.query;
+        const { amount = 0, product_id, category_id, product_ids, category_ids } = req.query;
         const userId = req.user.id;
 
-        // 过期处理
         await UserCoupon.update(
             { status: 'expired' },
             { where: { user_id: userId, status: 'unused', expire_at: { [Op.lt]: new Date() } } }
@@ -63,7 +107,23 @@ exports.getAvailableCoupons = async (req, res, next) => {
             order: [['coupon_value', 'DESC']]
         });
 
-        res.json({ code: 0, data: coupons });
+        const scopedProductIds = [...new Set([
+            ...normalizeScopeIds(product_ids),
+            ...normalizeScopeIds(product_id)
+        ])];
+        const scopedCategoryIds = [...new Set([
+            ...normalizeScopeIds(category_ids),
+            ...normalizeScopeIds(category_id)
+        ])];
+
+        const filtered = coupons.filter(c => {
+            return isCouponApplicable(c, {
+                productIds: scopedProductIds,
+                categoryIds: scopedCategoryIds
+            });
+        });
+
+        res.json({ code: 0, data: filtered });
     } catch (err) {
         next(err);
     }
@@ -82,10 +142,15 @@ exports.createCoupon = async (req, res, next) => {
             return res.json({ code: 1, message: '缺少必填字段' });
         }
 
+        const scopeCheck = validateCouponScopePayload(scope, scope_ids);
+        if (!scopeCheck.ok) {
+            return res.json({ code: 1, message: scopeCheck.message });
+        }
+
         const coupon = await Coupon.create({
             name, type, value: parseFloat(value),
             min_purchase: parseFloat(min_purchase),
-            scope, scope_ids: scope_ids || null,
+            scope: scopeCheck.scope, scope_ids: scopeCheck.scope_ids,
             valid_days: parseInt(valid_days),
             stock: parseInt(stock),
             target_level: target_level ? parseInt(target_level) : null,
@@ -190,28 +255,30 @@ exports.updateCoupon = async (req, res, next) => {
     try {
         const coupon = await Coupon.findByPk(req.params.id);
         if (!coupon) return res.json({ code: 1, message: '优惠券不存在' });
-        await coupon.update(req.body);
+        const ALLOWED_FIELDS = ['name', 'type', 'value', 'min_purchase', 'scope', 'scope_ids',
+            'valid_days', 'stock', 'target_level', 'target_region', 'description', 'is_active'];
+        const updates = {};
+        for (const key of ALLOWED_FIELDS) {
+            if (req.body[key] !== undefined) updates[key] = req.body[key];
+        }
+        const nextScope = updates.scope !== undefined ? updates.scope : coupon.scope;
+        const nextScopeIds = updates.scope_ids !== undefined ? updates.scope_ids : coupon.scope_ids;
+        const scopeCheck = validateCouponScopePayload(nextScope, nextScopeIds);
+        if (!scopeCheck.ok) {
+            return res.json({ code: 1, message: scopeCheck.message });
+        }
+        updates.scope = scopeCheck.scope;
+        updates.scope_ids = scopeCheck.scope_ids;
+        await coupon.update(updates);
         res.json({ code: 0, data: coupon });
     } catch (err) {
         next(err);
     }
 };
 
-/**
- * 辅助函数：计算优惠券抵扣金额
- * @param {object} userCoupon   UserCoupon instance
- * @param {number} orderAmount  订单金额
- * @returns {number} 抵扣金额
- */
-exports.calcCouponDiscount = (userCoupon, orderAmount) => {
-    if (!userCoupon) return 0;
-    if (parseFloat(userCoupon.min_purchase) > orderAmount) return 0;
+// 重导出：calcCouponDiscount 函数体已提取至 CouponCalcService（解除 Service→Controller 反向依赖），保持向后兼容
+const { calcCouponDiscount: _calcCouponDiscount } = require('../services/CouponCalcService');
+exports.calcCouponDiscount = _calcCouponDiscount;
 
-    if (userCoupon.coupon_type === 'fixed') {
-        return Math.min(parseFloat(userCoupon.coupon_value), orderAmount);
-    } else if (userCoupon.coupon_type === 'percent') {
-        const discount = 1 - parseFloat(userCoupon.coupon_value);
-        return parseFloat((orderAmount * discount).toFixed(2));
-    }
-    return 0;
-};
+exports.isCouponApplicable = isCouponApplicable;
+exports.validateCouponScopePayload = validateCouponScopePayload;

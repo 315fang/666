@@ -70,10 +70,13 @@ Page({
             const res = await get('/agent/orders', params);
             if (res.code === 0) {
                 let list = res.data.list || [];
-                // 解析 address_snapshot
+                // 兼容新接口 address / 旧字段 address_snapshot
                 list = list.map(item => {
                     if (item.address_snapshot && typeof item.address_snapshot === 'string') {
                         try { item.address_snapshot = JSON.parse(item.address_snapshot); } catch (e) { }
+                    }
+                    if (!item.address_snapshot && item.address) {
+                        item.address_snapshot = item.address;
                     }
                     // 解析 images
                     if (item.product && typeof item.product.images === 'string') {
