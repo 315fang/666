@@ -1,0 +1,61 @@
+.container {
+  min-height: 100vh;
+  background: #F8FAFC;
+  padding: 24rpx;
+  box-sizing: border-box;
+}
+
+.card {
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.04);
+  margin-bottom: 24rpx;
+}
+
+.title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #0F172A;
+  display: block;
+  margin-bottom: 12rpx;
+}
+
+.summary {
+  font-size: 26rpx;
+  color: #475569;
+  display: block;
+  margin-bottom: 16rpx;
+  line-height: 1.6;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.item {
+  display: flex;
+  gap: 12rpx;
+  align-items: flex-start;
+}
+
+.dot {
+  color: #2563EB;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.text {
+  font-size: 26rpx;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.empty {
+  font-size: 26rpx;
+  color: #94A3B8;
+  text-align: center;
+  display: block;
+}

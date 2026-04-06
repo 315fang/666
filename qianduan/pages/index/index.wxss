@@ -1,0 +1,283 @@
+/** pages/index/index.wxss - 重构首页 **/
+
+/* ========== 颜色变量 - 保持统一 ========== */
+:root {
+  --chagee-red: #C8102E;
+  --chagee-gold: #D4A84B;
+  --chagee-cream: #F5F0EB;
+  --chagee-white: #FFFFFF;
+  --text-primary: #1A1A1A;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+}
+
+.container {
+  min-height: 100vh;
+  background-color: #F5F5F5;
+  padding-bottom: 40rpx;
+}
+
+/* ========== 1. Banner - 轮播图 ========== */
+.banner-section {
+  position: relative;
+  width: 100%;
+  height: 500rpx;
+}
+
+.banner-swiper {
+  width: 100%;
+  height: 100%;
+}
+
+.banner-item {
+  width: 100%;
+  height: 100%;
+  background-color: #e0e0e0;
+}
+
+.banner-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ========== 2. Identity Card - 身份信息 (Single Row) ========== */
+.identity-card {
+  margin: -60rpx 30rpx 30rpx;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 30rpx;
+  position: relative;
+  z-index: 10;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.08);
+}
+
+.identity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.identity-left {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex: 1;
+}
+
+.identity-name {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #1A1A1A;
+  max-width: 200rpx;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.identity-level {
+  display: inline-block;
+  padding: 4rpx 16rpx;
+  background: linear-gradient(135deg, #D4A84B 0%, #F0C96A 100%);
+  color: #FFFFFF;
+  font-size: 20rpx;
+  font-weight: 500;
+  border-radius: 20rpx;
+  white-space: nowrap;
+}
+
+.identity-right {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.stat-icon {
+  width: 32rpx;
+  height: 32rpx;
+}
+
+.stat-value {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1A1A1A;
+}
+
+/* ========== 3. Main Entrances - 主要入口 ========== */
+.main-entrances {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 30rpx;
+  margin-bottom: 30rpx;
+  gap: 20rpx;
+}
+
+.entrance-card {
+  flex: 1;
+  height: 180rpx;
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+
+.entrance-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #F5F5F5;
+  z-index: 1;
+}
+
+.entrance-content {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-left: 30rpx;
+}
+
+.entrance-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1A1A1A;
+  margin-bottom: 8rpx;
+}
+
+.entrance-subtitle {
+  font-size: 24rpx;
+  color: #999999;
+  font-family: 'Helvetica Neue', Helvetica, sans-serif;
+  font-weight: 500;
+}
+
+/* ========== 4. Secondary Entrances - 次要入口 ========== */
+.secondary-grid {
+  margin: 0 30rpx 30rpx;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 30rpx;
+  display: flex;
+  justify-content: space-between;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+
+.secondary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16rpx;
+  width: 25%;
+}
+
+.secondary-icon-box {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.secondary-icon-box.mirror { background: linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%); }
+.secondary-icon-box.sales { background: linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%); }
+.secondary-icon-box.talk { background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%); }
+.secondary-icon-box.planet { background: linear-gradient(135deg, #F3E8FF 0%, #E9D5FF 100%); }
+
+.secondary-icon {
+  width: 44rpx;
+  height: 44rpx;
+}
+
+.secondary-text {
+  font-size: 24rpx;
+  color: #333333;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* ========== 5 & 6. Banner Card Sections ========== */
+.banner-card-section {
+  margin: 0 30rpx 30rpx;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 30rpx 30rpx 0; /* Padding bottom handled by body height or internal padding */
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.banner-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.banner-card-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1A1A1A;
+}
+
+.banner-card-more {
+  display: flex;
+  align-items: center;
+  font-size: 24rpx;
+  color: #999999;
+}
+
+.icon-arrow {
+  width: 24rpx;
+  height: 24rpx;
+  margin-left: 4rpx;
+}
+
+.banner-card-body {
+  height: 160rpx;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 30rpx; /* Add bottom margin inside the white card */
+}
+
+.banner-card-body.red-theme {
+  background: linear-gradient(135deg, #D32F2F 0%, #B71C1C 100%);
+}
+
+.banner-card-body.dark-theme {
+  background: linear-gradient(135deg, #2D3748 0%, #1A202C 100%);
+}
+
+.banner-card-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+}
+
+.card-big-text {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: 8rpx;
+}
+
+.card-sub-text {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.8);
+}

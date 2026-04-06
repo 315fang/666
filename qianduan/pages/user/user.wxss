@@ -1,0 +1,477 @@
+/** pages/user/user.wxss - 霸王茶姬风格个人中心 **/
+
+/* ========== 颜色变量 - 红色主题 ========== */
+:root {
+  --chagee-red: #C8102E;
+  --chagee-red-dark: #A00C24;
+  --chagee-red-light: #E31B3C;
+  --chagee-gold: #D4A84B;
+  --chagee-gold-light: #F0C96A;
+  --chagee-cream: #F5F0EB;
+  --chagee-white: #FFFFFF;
+  --text-primary: #1A1A1A;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+}
+
+/* ========== 容器基础 ========== */
+.container {
+  min-height: 100vh;
+  background-color: #F5F5F5;
+  position: relative;
+}
+
+/* ========== 1. 顶部红色背景区域 ========== */
+.user-header {
+  position: relative;
+  height: 280rpx;
+  overflow: hidden;
+}
+
+.header-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* ========== 2. 白色卡片区域 ========== */
+.white-card {
+  margin: -60rpx 30rpx 0;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 30rpx;
+  position: relative;
+  z-index: 10;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.white-card.pulling {
+  transition: none;
+}
+
+/* 用户信息行 - 左边头像右边信息 */
+.user-info-row {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  margin-bottom: 30rpx;
+  padding-bottom: 30rpx;
+  border-bottom: 1rpx solid #F0F0F0;
+}
+
+.avatar-container {
+  position: relative;
+  width: 120rpx;
+  height: 120rpx;
+  flex-shrink: 0;
+}
+
+.avatar-btn {
+  width: 120rpx !important;
+  height: 120rpx !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  line-height: normal !important;
+  display: block !important;
+}
+
+.avatar-btn::after {
+  border: none !important;
+  display: none !important;
+}
+
+.user-avatar {
+  width: 120rpx !important;
+  height: 120rpx !important;
+  border-radius: 50% !important;
+  border: 4rpx solid #F0F0F0;
+  background-color: #FFFFFF;
+  display: block;
+}
+
+.user-names {
+  flex: 1;
+}
+
+.name-row {
+  margin-bottom: 12rpx;
+}
+
+.nickname-input {
+  width: 100%;
+  height: 56rpx;
+  color: #1A1A1A;
+  font-size: 36rpx;
+  font-weight: 600;
+  background: transparent;
+}
+
+.user-level {
+  margin-bottom: 8rpx;
+}
+
+.level-badge {
+  display: inline-block;
+  padding: 6rpx 20rpx;
+  background: linear-gradient(135deg, #D4A84B 0%, #F0C96A 100%);
+  color: #FFFFFF;
+  font-size: 22rpx;
+  font-weight: 500;
+  border-radius: 20rpx;
+}
+
+.complete-info {
+  display: flex;
+  align-items: center;
+}
+
+.complete-text {
+  color: #999999;
+  font-size: 24rpx;
+}
+
+/* 资产统计 */
+.asset-section {
+  display: flex;
+  justify-content: space-around;
+}
+
+.asset-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.asset-value {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #1A1A1A;
+}
+
+.asset-value.highlight {
+  color: #D4A84B;
+}
+
+.asset-label {
+  font-size: 24rpx;
+  color: #999999;
+}
+
+/* ========== 3. 会员权益卡片 ========== */
+.vip-card {
+  margin: 30rpx;
+  height: 160rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
+  position: relative;
+}
+
+.vip-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.vip-content {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 30rpx;
+}
+
+.vip-left {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.vip-icon-wrap {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vip-icon {
+  font-size: 32rpx;
+  color: #FFFFFF;
+}
+
+.vip-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.vip-subtitle {
+  font-size: 22rpx;
+  color: #FFFFFF;
+  margin-bottom: 4rpx;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.3);
+}
+
+.vip-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #FFFFFF;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.3);
+}
+
+.vip-btn {
+  padding: 10rpx 24rpx;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 30rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.4);
+}
+
+.vip-btn text {
+  font-size: 22rpx;
+  color: #FFFFFF;
+}
+
+/* ========== 4. 功能区块 ========== */
+.section-card {
+  margin: 0 30rpx 30rpx;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 30rpx;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1A1A1A;
+}
+
+.section-more {
+  display: flex;
+  align-items: center;
+  font-size: 26rpx;
+  color: #999999;
+}
+
+.section-more .arrow {
+  margin-left: 4rpx;
+}
+
+/* ========== 功能菜单网格 ========== */
+.tools-grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.tool-item {
+  width: 25%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20rpx 0;
+  background: transparent;
+  border: none;
+  box-sizing: border-box;
+}
+
+.tool-item:active {
+  opacity: 0.7;
+}
+
+button.tool-item {
+  width: 25%;
+  background-color: transparent !important;
+  padding: 20rpx 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+button.tool-item::after {
+  display: none !important;
+  border: none !important;
+}
+
+.tool-icon-wrap {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin-bottom: 12rpx;
+}
+
+.tool-icon-wrap.red { background: linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%); }
+.tool-icon-wrap.orange { background: linear-gradient(135deg, #FFEDD5 0%, #FED7AA 100%); }
+.tool-icon-wrap.gold { background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%); }
+.tool-icon-wrap.purple { background: linear-gradient(135deg, #F3E8FF 0%, #E9D5FF 100%); }
+.tool-icon-wrap.blue { background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%); }
+.tool-icon-wrap.cyan { background: linear-gradient(135deg, #CFFAFE 0%, #A5F3FC 100%); }
+.tool-icon-wrap.pink { background: linear-gradient(135deg, #FCE7F3 0%, #FBCFE8 100%); }
+.tool-icon-wrap.gray { background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%); }
+
+.tool-icon-wrap .icon {
+  width: 44rpx;
+  height: 44rpx;
+}
+
+.tool-badge {
+  position: absolute;
+  top: -4rpx;
+  right: -4rpx;
+  min-width: 32rpx;
+  height: 32rpx;
+  background: #EF4444;
+  color: #FFFFFF;
+  font-size: 20rpx;
+  font-weight: 600;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6rpx;
+}
+
+.tool-text {
+  font-size: 24rpx;
+  color: #666666;
+}
+
+/* ========== 订单快捷入口 ========== */
+.order-shortcuts {
+  display: flex;
+  justify-content: space-around;
+}
+
+.shortcut-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.shortcut-icon {
+  width: 80rpx;
+  height: 80rpx;
+  background: #F9FAFB;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.shortcut-icon .icon {
+  width: 40rpx;
+  height: 40rpx;
+}
+
+.shortcut-badge {
+  position: absolute;
+  top: -4rpx;
+  right: -4rpx;
+  min-width: 32rpx;
+  height: 32rpx;
+  background: #EF4444;
+  color: #FFFFFF;
+  font-size: 20rpx;
+  font-weight: 600;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6rpx;
+}
+
+.shortcut-text {
+  font-size: 24rpx;
+  color: #666666;
+}
+
+/* ========== 底部安全区域 ========== */
+.safe-area-bottom {
+  height: 40rpx;
+}
+
+/* ========== 邀请码弹窗 ========== */
+.invite-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.invite-modal.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-content {
+  background: #FFFFFF;
+  width: 600rpx;
+  border-radius: 24rpx;
+  padding: 50rpx 40rpx;
+  text-align: center;
+  transform: scale(0.9);
+  transition: transform 0.3s;
+}
+
+.invite-modal.show .modal-content {
+  transform: scale(1);
+}
+
+.modal-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  margin-bottom: 30rpx;
+  color: #1A1A1A;
+}
+
+.code-display {
+  font-size: 48rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+  color: #D4A84B;
+  background: #FEF9E7;
+  padding: 30rpx;
+  border-radius: 16rpx;
+  margin-bottom: 20rpx;
+  border: 2rpx dashed #D4A84B;
+}
+
+.modal-tip {
+  font-size: 26rpx;
+  color: #999999;
+}

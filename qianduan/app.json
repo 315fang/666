@@ -1,0 +1,73 @@
+{
+    "pages": [
+        "pages/index/index",
+        "pages/category/category",
+        "pages/cart/cart",
+        "pages/user/user",
+        "pages/product/detail",
+        "pages/order/list",
+        "pages/order/detail",
+        "pages/order/confirm",
+        "pages/order/refund-apply",
+        "pages/order/refund-list",
+        "pages/order/refund-detail",
+        "pages/address/list",
+        "pages/address/edit",
+        "pages/distribution/center",
+        "pages/distribution/team",
+        "pages/distribution/invite",
+        "pages/distribution/workbench",
+        "pages/distribution/restock",
+        "pages/distribution/stock-logs",
+        "pages/distribution/commission-logs",
+        "pages/distribution/withdraw-history",
+        "pages/wallet/index",
+        "pages/user/notifications",
+        "pages/user/preferences",
+        "pages/order/logistics",
+        "pages/search/search",
+        "pages/ai/chat",
+        "pages/rules/index"
+    ],
+    "tabBar": {
+        "color": "#A8A29E",
+        "selectedColor": "#CA8A04",
+        "backgroundColor": "#FAFAF9",
+        "borderStyle": "white",
+        "list": [
+            {
+                "pagePath": "pages/index/index",
+                "text": "首页",
+                "iconPath": "assets/icons/home.png",
+                "selectedIconPath": "assets/icons/home_active.png"
+            },
+            {
+                "pagePath": "pages/category/category",
+                "text": "分类",
+                "iconPath": "assets/icons/category.png",
+                "selectedIconPath": "assets/icons/category_active.png"
+            },
+            {
+                "pagePath": "pages/cart/cart",
+                "text": "购物车",
+                "iconPath": "assets/icons/cart.png",
+                "selectedIconPath": "assets/icons/cart_active.png"
+            },
+            {
+                "pagePath": "pages/user/user",
+                "text": "我的",
+                "iconPath": "assets/icons/user.png",
+                "selectedIconPath": "assets/icons/user_active.png"
+            }
+        ]
+    },
+    "window": {
+        "navigationBarBackgroundColor": "#1C1917",
+        "navigationBarTitleText": "臻选",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#FAFAF9"
+    },
+    "style": "v2",
+    "sitemapLocation": "sitemap.json",
+    "lazyCodeLoading": "requiredComponents"
+}

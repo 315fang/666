@@ -1,0 +1,70 @@
+{
+  "env": {
+    "browser": false,
+    "es6": true,
+    "node": false,
+    "commonjs": true
+  },
+  "globals": {
+    "wx": "readonly",
+    "App": "readonly",
+    "Page": "readonly",
+    "Component": "readonly",
+    "Behavior": "readonly",
+    "getApp": "readonly",
+    "getCurrentPages": "readonly"
+  },
+  "extends": "eslint:recommended",
+  "parserOptions": {
+    "ecmaVersion": 2018,
+    "sourceType": "module"
+  },
+  "rules": {
+    // 代码风格
+    "indent": ["error", 2, { "SwitchCase": 1 }],
+    "linebreak-style": ["error", "unix"],
+    "quotes": ["error", "single", { "avoidEscape": true }],
+    "semi": ["error", "always"],
+    "no-trailing-spaces": "error",
+    "eol-last": ["error", "always"],
+    "comma-dangle": ["error", "never"],
+
+    // 最佳实践
+    "no-console": ["warn", { "allow": ["warn", "error", "info"] }],
+    "no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "no-var": "error",
+    "prefer-const": "error",
+    "eqeqeq": ["error", "always"],
+    "curly": ["error", "all"],
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-with": "error",
+
+    // ES6
+    "arrow-spacing": "error",
+    "no-duplicate-imports": "error",
+    "object-shorthand": ["error", "always"],
+    "prefer-arrow-callback": "error",
+    "prefer-template": "error",
+    "template-curly-spacing": ["error", "never"],
+
+    // 变量
+    "no-undef": "error",
+    "no-undefined": "off",
+    "no-use-before-define": ["error", { "functions": false }],
+
+    // 注释
+    "spaced-comment": ["error", "always"],
+    "multiline-comment-style": ["error", "starred-block"],
+
+    // 代码复杂度
+    "complexity": ["warn", 15],
+    "max-depth": ["warn", 4],
+    "max-nested-callbacks": ["warn", 3],
+    "max-params": ["warn", 5],
+
+    // 命名
+    "camelcase": ["error", { "properties": "never" }],
+    "new-cap": ["error", { "capIsNew": false }]
+  }
+}
