@@ -1,6 +1,0 @@
-# 将下面一行追加到服务器 backend/.env（或合并到现有配置）
-
-TENCENT_MAP_KEY=
-
-# 填好 Key 后示例：
-# TENCENT_MAP_KEY=OB4BZ-D4W3U-XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXX
