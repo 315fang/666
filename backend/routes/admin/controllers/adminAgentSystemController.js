@@ -33,9 +33,11 @@ const DEFAULT_UPGRADE_RULES = {
  *
  * 佣金部分：直推/二级/三级均为「占订单实付 %」（0–100 整数）
  * 成本结构部分：内部核算四维，不参与自动佣金计算
- * 协助奖（固定元/单）在独立的 DEFAULT_ASSIST_BONUS
+ * 上级代理协助奖（固定元/单）在独立的 DEFAULT_ASSIST_BONUS
  */
 const DEFAULT_COMMISSION = {
+    /** true=默认平台发货；false=按代理可用库存优先走代理发货 */
+    default_platform_fulfillment: true,
     /** false=百分比模式（推荐）；true=级差模式（依赖商品多级价） */
     use_price_gap_middle_commission: false,
     /** 直推上级按其 role_level 拿实付的百分之几（0–100） */
@@ -198,6 +200,9 @@ exports.getCommissionConfig = async (req, res) => {
         // 确保布尔值明确：新配置默认 false（百分比分配）；旧数据如需保留级差行为请手动设为 true
         if (data.use_price_gap_middle_commission === undefined || data.use_price_gap_middle_commission === null) {
             data.use_price_gap_middle_commission = false;
+        }
+        if (data.default_platform_fulfillment === undefined || data.default_platform_fulfillment === null) {
+            data.default_platform_fulfillment = true;
         }
         // 注：该字段不再暴露给运营界面，仅在 JSON 层面保留用于技术排查
         // 确保 cost_split 有默认结构（旧数据可能没有该字段）

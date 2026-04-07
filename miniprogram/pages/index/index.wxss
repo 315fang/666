@@ -23,7 +23,7 @@
 .nb-orb { position: absolute; border-radius: 50%; animation: nb-float 3s ease-in-out infinite; }
 .nb-orb-a { width: 32rpx; height: 32rpx; background: radial-gradient(circle at 35% 35%, #5B8FB8, #1E4A6D); top: 0; left: 4rpx; opacity: 0.92; }
 .nb-orb-b { width: 22rpx; height: 22rpx; background: radial-gradient(circle at 35% 35%, #5EEAD4, #0F766E); bottom: 2rpx; left: 0; animation-delay: 0.8s; opacity: 0.85; }
-.nb-orb-c { width: 18rpx; height: 18rpx; background: radial-gradient(circle at 35% 35%, #DBC08A, #9A7348); top: 6rpx; right: 0; animation-delay: 1.5s; opacity: 0.75; }
+.nb-orb-c { width: 18rpx; height: 18rpx; background: radial-gradient(circle at 35% 35%, #BFDBFE, #2563EB); top: 6rpx; right: 0; animation-delay: 1.5s; opacity: 0.75; }
 @keyframes nb-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5rpx); } }
 
 .nav-brand-copy { display: flex; flex-direction: column; flex: 1; }

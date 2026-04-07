@@ -8,6 +8,7 @@
  */
 const { Coupon, UserCoupon, User, sequelize } = require('../models');
 const { Op } = require('sequelize');
+const { getEffectiveMinPurchase } = require('../services/CouponCalcService');
 
 function normalizeScopeIds(value) {
     if (Array.isArray(value)) return value.map(item => Number(item)).filter(Number.isFinite);
@@ -101,8 +102,7 @@ exports.getAvailableCoupons = async (req, res, next) => {
             where: {
                 user_id: userId,
                 status: 'unused',
-                expire_at: { [Op.gte]: new Date() },
-                min_purchase: { [Op.lte]: parseFloat(amount) }
+                expire_at: { [Op.gte]: new Date() }
             },
             order: [['coupon_value', 'DESC']]
         });
@@ -117,7 +117,7 @@ exports.getAvailableCoupons = async (req, res, next) => {
         ])];
 
         const filtered = coupons.filter(c => {
-            return isCouponApplicable(c, {
+            return getEffectiveMinPurchase(c) <= parseFloat(amount) && isCouponApplicable(c, {
                 productIds: scopedProductIds,
                 categoryIds: scopedCategoryIds
             });

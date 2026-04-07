@@ -117,6 +117,9 @@ async function loadProduct(page, id) {
 
         page.refreshFavoriteState();
         page.loadReviews();
+        if (typeof page.loadActivityState === 'function') {
+            page.loadActivityState(product.id);
+        }
         if (roleLevel >= USER_ROLES.LEADER) {
             page.loadCommissionPreview();
         }

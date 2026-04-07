@@ -11,6 +11,14 @@ function formatExpireDate(dateStr) {
     }
 }
 
+function buildCouponQuery(params) {
+    const query = Object.keys(params)
+        .filter((key) => params[key] !== undefined && params[key] !== null && params[key] !== '')
+        .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
+        .join('&');
+    return query ? `?${query}` : '';
+}
+
 function recalcFinal(page) {
     const totalFen = Math.round(parseFloat(page.data.totalAmount) * 100);
     const shippingFen = Math.round(parseFloat(page.data.shippingFee || 0) * 100);
@@ -34,25 +42,52 @@ function recalcFinal(page) {
     });
 }
 
-async function loadAvailableCoupons(page, isLoggedIn) {
-    if (!isLoggedIn) return;
+async function loadAvailableCoupons(page) {
     try {
         const amount = page.data.totalAmount;
         const productIds = [...new Set((page.data.orderItems || []).map((item) => item.product_id).filter(Boolean))];
         const categoryIds = [...new Set((page.data.orderItems || []).map((item) => item.category_id).filter(Boolean))];
-        const params = new URLSearchParams({ amount: String(amount) });
-        if (productIds.length > 0) params.set('product_ids', productIds.join(','));
-        if (categoryIds.length > 0) params.set('category_ids', categoryIds.join(','));
-        const res = await get(`/coupons/available?${params.toString()}`);
-        if (res.code === 0) {
-            const coupons = (res.data || []).map((coupon) => ({
-                ...coupon,
-                expire_at_formatted: formatExpireDate(coupon.expire_at)
-            }));
-            page.setData({ availableCoupons: coupons });
+        const query = buildCouponQuery({
+            amount: String(amount),
+            product_ids: productIds.length > 0 ? productIds.join(',') : '',
+            category_ids: categoryIds.length > 0 ? categoryIds.join(',') : ''
+        });
+        const [availableRes, mineRes] = await Promise.all([
+            get(`/coupons/available${query}`, {}, { showError: false }).catch(() => null),
+            get('/coupons/mine', { status: 'unused' }, { showError: false }).catch(() => null)
+        ]);
+        const source = availableRes && availableRes.code === 0
+            ? (Array.isArray(availableRes.data)
+                ? availableRes.data
+                : (availableRes.data && Array.isArray(availableRes.data.list) ? availableRes.data.list : []))
+            : [];
+        const coupons = source.map((coupon) => ({
+            ...coupon,
+            expire_at_formatted: formatExpireDate(coupon.expire_at)
+        }));
+        const unusedCoupons = mineRes && mineRes.code === 0
+            ? (Array.isArray(mineRes.data)
+                ? mineRes.data
+                : (mineRes.data && Array.isArray(mineRes.data.list) ? mineRes.data.list : []))
+            : [];
+        const selectedCoupon = page.data.selectedCoupon;
+        const stillAvailable = selectedCoupon
+            ? coupons.some((item) => item.id === selectedCoupon.id)
+            : true;
+        page.setData({
+            availableCoupons: coupons,
+            unusedCouponCount: unusedCoupons.length,
+            selectedCoupon: stillAvailable ? selectedCoupon : null,
+            couponDiscount: stillAvailable ? page.data.couponDiscount : '0.00'
+        });
+        if (!stillAvailable) {
+            recalcFinal(page);
         }
     } catch (_err) {
-        // 静默失败
+        page.setData({
+            availableCoupons: [],
+            unusedCouponCount: 0
+        });
     }
 }
 

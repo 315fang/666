@@ -1,8 +1,7 @@
 const { get } = require('../../utils/request');
 const { processProduct } = require('../../utils/dataFormatter');
 const { ErrorHandler } = require('../../utils/errorHandler');
-const { ensurePrivacyAuthorization } = require('../../utils/privacy');
-const { getFuzzyCoordinates } = require('./utils/fuzzyLocation');
+const { ensureUserLocationPermission, getCurrentLocation } = require('./utils/location');
 
 async function loadAddresses() {
     const res = await get('/addresses');
@@ -63,25 +62,28 @@ async function loadPickupStations(page) {
 }
 
 async function locateForPickupSort(page) {
-    try {
-        await ensurePrivacyAuthorization();
-    } catch (_err) {
+    const granted = await ensureUserLocationPermission();
+    if (!granted) {
+        wx.showToast({
+            title: '未开启位置权限，请使用地图选点',
+            icon: 'none'
+        });
         return;
     }
 
-    const loc = await getFuzzyCoordinates();
-    if (loc) {
+    const loc = await getCurrentLocation();
+    if (loc && loc.ok) {
         page.setData({
             refLat: loc.latitude,
             refLng: loc.longitude,
-            refLocationName: '当前大致位置'
+            refLocationName: '当前位置'
         });
         loadPickupStations(page);
         return;
     }
 
     wx.showToast({
-        title: '模糊定位未开启，请用地图选点',
+        title: '当前位置获取失败，请用地图选点',
         icon: 'none'
     });
 }

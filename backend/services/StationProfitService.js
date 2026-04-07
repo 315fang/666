@@ -73,6 +73,8 @@ const attributeRegionalProfit = async (orderId, buyerCity, orderAmount) => {
         const baseAmount = Number(orderAmount || 0);
         if (!Number.isFinite(baseAmount) || baseAmount <= 0) return;
 
+        // TODO: 当前区域分成在支付后立即 settled 入账，退款/取消时尚未走统一冲回链路。
+        // 已知存在账务口径风险，本轮先保留现状，后续需改为可撤销/可审批的结算流程。
         let distributed = 0;
         for (const item of matched) {
             const station = item.station;

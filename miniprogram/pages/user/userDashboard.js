@@ -11,6 +11,38 @@ const { parseImages } = require('../../utils/dataFormatter');
 
 const USER_DASHBOARD_TTL = 15 * 1000;
 const QUAD_PLACEHOLDER = '/assets/images/placeholder.svg';
+const ORDER_BADGE_SNAPSHOT_KEY = 'user_order_badge_seen_snapshot';
+
+function getOrderBadgeSnapshotStorageKey(page) {
+    const userId = page?.data?.userInfo?.id || app.globalData?.userInfo?.id || 0;
+    return `${ORDER_BADGE_SNAPSHOT_KEY}_${userId || 'guest'}`;
+}
+
+function readOrderBadgeSnapshot(page) {
+    try {
+        return wx.getStorageSync(getOrderBadgeSnapshotStorageKey(page)) || {};
+    } catch (_) {
+        return {};
+    }
+}
+
+function writeOrderBadgeSnapshot(page, snapshot) {
+    try {
+        wx.setStorageSync(getOrderBadgeSnapshotStorageKey(page), snapshot || {});
+    } catch (_) {
+        // ignore storage write failures
+    }
+}
+
+function buildOrderFreshFlags(currentStats = {}, seenSnapshot = {}) {
+    return {
+        pending: Number(currentStats.pending || 0) > Number(seenSnapshot.pending || 0),
+        paid: Number(currentStats.paid || 0) > Number(seenSnapshot.paid || 0),
+        shipped: Number(currentStats.shipped || 0) > Number(seenSnapshot.shipped || 0),
+        pendingReview: Number(currentStats.pendingReview || 0) > Number(seenSnapshot.pendingReview || 0),
+        refund: Number(currentStats.refund || 0) > Number(seenSnapshot.refund || 0)
+    };
+}
 
 function orderFirstThumb(order) {
     if (!order || !order.product) return QUAD_PLACEHOLDER;
@@ -76,12 +108,10 @@ function scheduleSecondaryLoads(page, forceRefresh = false) {
             loadOrderCounts(page),
             loadNotificationsCount(page),
             loadAssetRow(page),
-            loadQuadPreviews(page)
+            loadQuadPreviews(page),
+            loadDistributionInfo(page),
+            loadPickupVerifyScope(page)
         ];
-        const userInfo = app.globalData.userInfo;
-        if (userInfo && userInfo.participate_distribution === 1) {
-            tasks.push(loadDistributionInfo(page));
-        }
         Promise.allSettled(tasks);
     }, delay);
 }
@@ -139,7 +169,7 @@ async function loadUserInfo(page, forceRefresh = false) {
                 userInfo: info,
                 hasUserInfo: true,
                 isAgent: roleLevel >= 2,
-                showPickupVerify: roleLevel >= 3
+                showPickupVerify: false
             });
             applyGrowthDisplay(page, info);
             refreshBusinessCenterVisibility(page);
@@ -149,7 +179,7 @@ async function loadUserInfo(page, forceRefresh = false) {
             page.setData({
                 userInfo: cached,
                 hasUserInfo: !!cached,
-                showPickupVerify: roleLevel >= 3
+                showPickupVerify: false
             });
             applyGrowthDisplay(page, cached);
             refreshBusinessCenterVisibility(page);
@@ -165,7 +195,7 @@ async function loadUserInfo(page, forceRefresh = false) {
         page.setData({
             userInfo: cached,
             hasUserInfo: !!cached,
-            showPickupVerify: roleLevel >= 3
+            showPickupVerify: false
         });
         applyGrowthDisplay(page, cached);
         refreshBusinessCenterVisibility(page);
@@ -228,41 +258,16 @@ async function loadQuadPreviews(page) {
         image: footprints[0]?.image || QUAD_PLACEHOLDER,
         hasImage: !!footprints[0]?.image
     };
-    let quadExpress = { sub: '暂无在途订单', image: QUAD_PLACEHOLDER, hasImage: false, orderId: null };
-    let quadRecent = {
-        title: '会员',
-        sub: '查看权益与等级',
-        image: QUAD_PLACEHOLDER,
-        hasImage: false,
-        mode: 'benefit',
-        orderId: null
-    };
 
     if (!app.globalData.isLoggedIn) {
-        quadExpress = { sub: '登录后查看物流', image: QUAD_PLACEHOLDER, hasImage: false, orderId: null };
-        page.setData({ quadFavorite, quadFootprint, quadExpress, quadRecent, showQuadExpressCard: false });
+        page.setData({ quadFavorite, quadFootprint });
         return;
     }
 
     try {
-        const [shippingResponse, recentResponse, favoriteResponse] = await Promise.all([
-            get('/orders', { status: 'shipped', limit: 1 }).catch(() => ({ data: { list: [], pagination: { total: 0 } } })),
-            get('/orders', { page: 1, limit: 1 }).catch(() => ({ data: { list: [] } })),
+        const [favoriteResponse] = await Promise.all([
             get('/user/favorites', {}, { showError: false }).catch(() => null)
         ]);
-
-        const shippingList = shippingResponse.data?.list || [];
-        const shippingTotal = shippingResponse.data?.pagination?.total ?? 0;
-        if (shippingList.length) {
-            const order = shippingList[0];
-            const name = order.product && order.product.name ? String(order.product.name).slice(0, 14) : '待收货';
-            quadExpress = {
-                sub: shippingTotal > 1 ? `${shippingTotal}件待收货` : name,
-                image: orderFirstThumb(order),
-                hasImage: true,
-                orderId: order.id
-            };
-        }
 
         if (favoriteResponse && favoriteResponse.code === 0 && Array.isArray(favoriteResponse.data) && favoriteResponse.data.length) {
             const list = favoriteResponse.data;
@@ -274,28 +279,13 @@ async function loadQuadPreviews(page) {
             };
         }
 
-        const recentList = recentResponse.data?.list || [];
-        if (recentList.length) {
-            const order = recentList[0];
-            quadRecent = {
-                title: '最近订单',
-                sub: order.product && order.product.name ? String(order.product.name).slice(0, 16) : '查看订单详情',
-                image: orderFirstThumb(order),
-                hasImage: true,
-                mode: 'order',
-                orderId: order.id
-            };
-        }
     } catch (_) {
         // keep defaults
     }
 
     page.setData({
         quadFavorite,
-        quadFootprint,
-        quadExpress,
-        quadRecent,
-        showQuadExpressCard: !!quadExpress.orderId
+        quadFootprint
     });
 }
 
@@ -321,16 +311,57 @@ async function loadOrderCounts(page) {
             + (results[5].data?.pagination?.total || 0)
             + (results[6].data?.pagination?.total || 0);
 
+        const nextStats = {
+            pending,
+            paid,
+            shipped,
+            pendingReview,
+            refund
+        };
+        const seenSnapshot = readOrderBadgeSnapshot(page);
+        const freshFlags = buildOrderFreshFlags(nextStats, seenSnapshot);
+        // 只更新 orderStats 数字；orderFreshFlags 采用合并不覆盖策略：
+        // - 某状态 freshFlag 已为 false（用户已点过），保持 false 不再亮起
+        // - 某状态 freshFlag 为 true 且新计算也为 true，保持亮起
+        // - 只有新订单数量增加时才重新亮起
+        const mergedFlags = {};
+        const currentFlags = page.data.orderFreshFlags || {};
+        ['pending', 'paid', 'shipped', 'pendingReview', 'refund'].forEach((key) => {
+            mergedFlags[key] = freshFlags[key] ? true : (currentFlags[key] || false);
+        });
         page.setData({
             'orderStats.pending': pending,
             'orderStats.paid': paid,
             'orderStats.shipped': shipped,
             'orderStats.pendingReview': pendingReview,
-            'orderStats.refund': refund
+            'orderStats.refund': refund,
+            orderFreshFlags: mergedFlags
         });
     } catch (error) {
         console.error('加载订单数量失败:', error);
     }
+}
+
+function markOrderBadgesSeen(page, statuses) {
+    const currentStats = page.data.orderStats || {};
+    const currentFlags = page.data.orderFreshFlags || {};
+    const targetStatuses = Array.isArray(statuses) && statuses.length
+        ? statuses
+        : ['pending', 'paid', 'shipped', 'pendingReview', 'refund'];
+    const nextSnapshot = {
+        ...readOrderBadgeSnapshot(page)
+    };
+    const nextFlags = {
+        ...currentFlags
+    };
+
+    targetStatuses.forEach((status) => {
+        nextSnapshot[status] = Number(currentStats[status] || 0);
+        nextFlags[status] = false;
+    });
+
+    writeOrderBadgeSnapshot(page, nextSnapshot);
+    page.setData({ orderFreshFlags: nextFlags });
 }
 
 async function loadDistributionInfo(page) {
@@ -341,6 +372,9 @@ async function loadDistributionInfo(page) {
             const totalEarnings = dashboard.stats ? dashboard.stats.totalEarnings : '0.00';
             const availableAmount = dashboard.stats ? dashboard.stats.availableAmount : '0.00';
             const frozenAmount = dashboard.stats ? (dashboard.stats.frozenAmount || '0.00') : '0.00';
+            const goodsFundBalance = dashboard.team && dashboard.team.agentGoodsFund
+                ? (dashboard.team.agentGoodsFund.goods_fund_balance || '0.00')
+                : '0.00';
             const teamCount = dashboard.team ? dashboard.team.totalCount : 0;
             const roleLevel = dashboard.userInfo ? dashboard.userInfo.role : 0;
 
@@ -348,13 +382,14 @@ async function loadDistributionInfo(page) {
                 distributionInfo: {
                     totalEarnings,
                     availableAmount,
+                    goodsFundBalance,
                     referee_count: teamCount,
                     role_level: roleLevel,
                     role_name: dashboard.userInfo ? (dashboard.userInfo.role_name || ROLE_NAMES[roleLevel]) : '普通用户'
                 },
                 stats: { frozenAmount },
-                balance: availableAmount,
-                commissionBalance: totalEarnings,
+                balance: goodsFundBalance,
+                commissionBalance: availableAmount,
                 teamCount,
                 isAgent: roleLevel >= 2
             });
@@ -379,6 +414,32 @@ async function loadNotificationsCount(page) {
     }
 }
 
+async function loadPickupVerifyScope(page) {
+    if (!app.globalData.isLoggedIn) {
+        page.setData({
+            showPickupVerify: false,
+            pickupVerifyScope: null
+        });
+        return;
+    }
+    try {
+        const response = await get('/stations/my-scope', {}, { showError: false });
+        if (response && response.code === 0 && response.data) {
+            page.setData({
+                showPickupVerify: !!response.data.has_verify_access,
+                pickupVerifyScope: response.data
+            });
+            return;
+        }
+    } catch (_) {
+        // ignore
+    }
+    page.setData({
+        showPickupVerify: false,
+        pickupVerifyScope: null
+    });
+}
+
 function clearUserCache() {
     [
         'home_config_cache',
@@ -400,8 +461,10 @@ module.exports = {
     loadNotificationsCount,
     loadOrderCounts,
     loadPageLayoutConfig,
+    loadPickupVerifyScope,
     loadQuadPreviews,
     loadUserInfo,
+    markOrderBadgesSeen,
     refreshBusinessCenterVisibility,
     scheduleSecondaryLoads
 };

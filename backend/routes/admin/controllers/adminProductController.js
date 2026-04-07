@@ -107,7 +107,8 @@ const createProduct = async (req, res) => {
     try {
         const {
             name, description, images, detail_images, category_id,
-            retail_price, member_price, wholesale_price, price_member, price_leader, price_agent, cost_price, stock, skus,
+            retail_price, member_price, wholesale_price, price_member, price_leader, price_agent, cost_price,
+            supply_price_b1, supply_price_b2, supply_price_b3, stock, skus,
             enable_coupon, enable_group_buy, custom_commissions,
             commission_rate_1, commission_rate_2, commission_amount_1, commission_amount_2, manual_weight, growth_value_reward,
             market_price, discount_exempt, product_tag, status, supports_pickup, visible_in_mall
@@ -139,6 +140,9 @@ const createProduct = async (req, res) => {
             price_leader: price_leader || null,
             price_agent: price_agent || null,
             cost_price: Number(cost_price),
+            supply_price_b1: supply_price_b1 !== undefined && supply_price_b1 !== null && supply_price_b1 !== '' ? Number(supply_price_b1) : null,
+            supply_price_b2: supply_price_b2 !== undefined && supply_price_b2 !== null && supply_price_b2 !== '' ? Number(supply_price_b2) : null,
+            supply_price_b3: supply_price_b3 !== undefined && supply_price_b3 !== null && supply_price_b3 !== '' ? Number(supply_price_b3) : null,
             stock: stock || 0,
             enable_coupon: enable_coupon ? 1 : 0,
             enable_group_buy: enable_group_buy ? 1 : 0,
@@ -241,6 +245,12 @@ const updateProduct = async (req, res) => {
         }
         if (updates.detail_images !== undefined) {
             ensureNoTemporaryAssetUrls(updates.detail_images || [], '商品详情图');
+        }
+        for (const key of ['supply_price_b1', 'supply_price_b2', 'supply_price_b3']) {
+            if (updates[key] !== undefined) {
+                const value = updates[key];
+                updates[key] = value === null || value === '' ? null : Number(value);
+            }
         }
 
         if (updates.commission_rate_1 !== undefined) {

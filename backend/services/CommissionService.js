@@ -12,6 +12,7 @@ const { error: logError, warn: logWarn } = require('../utils/logger');
 const cacheService = require('./CacheService');
 const MemberTierService = require('./MemberTierService');
 const commissionPolicy = require('../config/commissionPolicy');
+const constants = require('../config/constants');
 
 // 佣金配置缓存 Key（使用 CacheService 替代静态变量，支持多进程一致性）
 const COMMISSION_CONFIG_CACHE_KEY = 'commission:config';
@@ -699,6 +700,7 @@ class CommissionService {
     /** 后台 agent_system_commission（与 admin 代理体系「佣金配置」一致） */
     static async _loadAgentSystemCommissionConfig() {
         const defaults = {
+            default_platform_fulfillment: true,
             use_price_gap_middle_commission: undefined,
             direct_pct_by_role: { 1: 20, 2: 30, 3: 40, 4: 40 },
             indirect_pct_by_role: { 2: 5, 3: 8 },
@@ -729,6 +731,107 @@ class CommissionService {
         const n = Number(raw);
         if (!Number.isFinite(n)) return 0;
         return Math.max(0, Math.min(100, n)) / 100;
+    }
+
+    static async _loadAssistBonusConfig() {
+        const defaults = {
+            enabled: true,
+            tiers: [
+                { max_orders: 30, bonus: 40 },
+                { max_orders: 50, bonus: 50 },
+                { max_orders: 100, bonus: 60 }
+            ]
+        };
+        try {
+            const row = await AppConfig.findOne({ where: { config_key: 'agent_system_assist_bonus', status: 1 } });
+            if (row && row.config_value) {
+                const parsed = JSON.parse(row.config_value);
+                const tiers = Array.isArray(parsed.tiers) && parsed.tiers.length > 0 ? parsed.tiers : defaults.tiers;
+                return {
+                    enabled: parsed.enabled !== false,
+                    tiers
+                };
+            }
+        } catch (e) {
+            logError('COMMISSION', '读取agent_system_assist_bonus配置失败', { error: e.message });
+        }
+        return defaults;
+    }
+
+    static async _allocateAgentAssistBonus({
+        order,
+        shippingAgent,
+        buyer,
+        distributablePool,
+        middleCommissionTotal,
+        transaction: t,
+        notifySource
+    }) {
+        const { sendNotification } = require('../models/notificationUtil');
+        if (!shippingAgent?.parent_id) {
+            return 0;
+        }
+
+        const assistCfg = await this._loadAssistBonusConfig();
+        if (assistCfg.enabled === false) {
+            return 0;
+        }
+
+        const assistAgent = await User.findByPk(shippingAgent.parent_id, { transaction: t });
+        if (!assistAgent || Number(assistAgent.role_level || 0) < constants.ROLES.AGENT) {
+            return 0;
+        }
+
+        const shippedByOwnParent = buyer?.agent_id && Number(buyer.agent_id) === Number(assistAgent.id);
+        if (shippedByOwnParent || assistAgent.id === shippingAgent.id) {
+            return 0;
+        }
+
+        const assistCount = await CommissionLog.count({
+            where: {
+                user_id: assistAgent.id,
+                type: { [Op.in]: ['agent_assist', 'B2_Assist'] }
+            },
+            transaction: t
+        });
+        const tiers = assistCfg.tiers
+            .map((tier) => ({
+                max_orders: Number(tier.max_orders || 0),
+                bonus: Number(tier.bonus || 0)
+            }))
+            .filter((tier) => tier.max_orders > 0 && tier.bonus > 0)
+            .sort((a, b) => a.max_orders - b.max_orders);
+        if (!tiers.length) {
+            return 0;
+        }
+
+        const tier = tiers.find((item) => assistCount < item.max_orders) || tiers[tiers.length - 1];
+        const remainPool = Math.max(0, Number(distributablePool || 0) - Number(middleCommissionTotal || 0));
+        const bonus = Math.min(Number(tier.bonus || 0), remainPool);
+        if (bonus <= 0) {
+            return 0;
+        }
+
+        await CommissionLog.create({
+            order_id: order.id,
+            user_id: assistAgent.id,
+            amount: Math.round(bonus * 100) / 100,
+            type: 'agent_assist',
+            status: 'frozen',
+            available_at: null,
+            refund_deadline: null,
+            remark: `上级代理协助奖（协助下级代理#${shippingAgent.id}发货，累计第${assistCount + 1}单，${notifySource}）`
+        }, { transaction: t });
+
+        await sendNotification(
+            assistAgent.id,
+            '协助奖到账提醒',
+            `您下级代理产生了一笔${notifySource}订单，您获得协助奖 ¥${bonus.toFixed(2)}（需售后期结束+审批后结算）。`,
+            'commission',
+            order.id
+        ).catch(() => {});
+
+        return Math.round(bonus * 100) / 100;
     }
 
     /**
@@ -823,6 +926,7 @@ class CommissionService {
             const n = Number(v);
             return Number.isFinite(n) ? n : d;
         };
+        const shippingAgent = agentId ? await User.findByPk(agentId, { transaction: t }) : null;
 
         const priceMap = {
             0: toNum(product.retail_price, 0),
@@ -1015,6 +1119,20 @@ class CommissionService {
 
         // 记录中间佣金总额到订单（调用方负责保存）
         order.middle_commission_total = middleCommissionTotal;
+
+        const assistBonusTotal = await this._allocateAgentAssistBonus({
+            order,
+            shippingAgent,
+            buyer,
+            distributablePool,
+            middleCommissionTotal,
+            transaction: t,
+            notifySource
+        });
+        if (assistBonusTotal > 0) {
+            middleCommissionTotal += assistBonusTotal;
+            order.middle_commission_total = middleCommissionTotal;
+        }
 
         // ---- 2. 代理商发货利润 ----
         const agentProfit = buyerPaid - agentCost - middleCommissionTotal;

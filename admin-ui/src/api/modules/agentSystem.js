@@ -29,3 +29,7 @@ export const reviewUpgradeApplication = (id, data) => request({ url: `/upgrade-a
 export const getNSystemLeaders = (params) => request({ url: '/n-system/leaders', method: 'get', params })
 export const getNSystemMembers = (params) => request({ url: '/n-system/members', method: 'get', params })
 export const getNSystemLeaderMembers = (leaderId) => request({ url: `/n-system/leaders/${leaderId}/members`, method: 'get' })
+
+export const getPickupStationStaff = (id) => request({ url: `/pickup-stations/${id}/staff`, method: 'get' })
+export const addPickupStationStaff = (id, data) => request({ url: `/pickup-stations/${id}/staff`, method: 'post', data })
+export const removePickupStationStaff = (id, staffId) => request({ url: `/pickup-stations/${id}/staff/${staffId}`, method: 'delete' })

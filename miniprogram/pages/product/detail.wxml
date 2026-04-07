@@ -89,35 +89,23 @@
       <text class="product-subtitle">{{product.description || '围绕肤感、功效与礼赠体验进行精心陈列。'}}</text>
     </view>
 
-    <view class="tags-row" wx:if="{{servicePledges.length > 0}}">
-      <view class="tag {{item.tagClass}}" wx:for="{{servicePledges}}" wx:key="id">
-        <image class="tag-icon" src="{{item.icon}}" mode="aspectFit"></image>
-        <text>{{item.title}}</text>
+    <view class="purchase-mode-card" wx:if="{{availablePurchaseModes.length > 1}}">
+      <view class="purchase-mode-head">
+        <text class="purchase-mode-title">购买方式</text>
+        <text class="purchase-mode-hint">{{purchaseModeHint}}</text>
       </view>
-    </view>
-
-    <view class="pledges-detail-card" wx:if="{{servicePledges.length > 0}}">
-      <view class="pledges-detail-title">购物保障</view>
-      <view class="pledge-detail-block" wx:for="{{servicePledges}}" wx:key="id">
-        <text class="pledge-detail-name">{{item.title}}</text>
-        <text class="pledge-detail-copy" wx:if="{{item.desc}}">{{item.desc}}</text>
-      </view>
-    </view>
-
-    <!-- 与确认订单页一致的配送方式说明：默认快递邮寄；是否支持自提与后台 supports_pickup 一致 -->
-    <view class="delivery-preview-card">
-      <view class="delivery-preview-head">
-        <text class="delivery-preview-title">配送方式</text>
-      </view>
-      <view class="delivery-seg-preview">
-        <view class="delivery-seg-item-preview delivery-seg-item-preview-active">快递配送</view>
+      <view class="purchase-mode-options">
         <view
-          class="delivery-seg-item-preview {{product.supports_pickup ? '' : 'delivery-seg-item-preview-muted'}}"
-          bindtap="onDeliveryPreviewPickupTap"
-        >到店自提</view>
+          class="purchase-mode-option {{purchaseMode === item.key ? 'active' : ''}}"
+          wx:for="{{availablePurchaseModes}}"
+          wx:key="key"
+          data-mode="{{item.key}}"
+          bindtap="onPurchaseModeChange"
+        >
+          <text class="purchase-mode-option-label">{{item.label}}</text>
+          <text class="purchase-mode-option-desc">{{item.hint}}</text>
+        </view>
       </view>
-      <text class="delivery-preview-hint" wx:if="{{product.supports_pickup}}">本商品支持到店自提，下单确认页可切换为「到店自提」并选择门店；默认与快递相同，均可选。</text>
-      <text class="delivery-preview-hint delivery-preview-hint-muted" wx:else>本商品为快递配送，将邮寄至您填写的收货地址。如需自提服务，请选择标注支持到店自提的商品。</text>
     </view>
 
     <view class="embedded-section" wx:if="{{product.specs && product.specs.length > 0}}">
@@ -182,6 +170,24 @@
     </view>
   </view>
 
+  <view class="section-card" wx:if="{{servicePledges.length > 0}}">
+    <view class="section-title-row compact-row">
+      <text class="section-title">购物保障</text>
+    </view>
+    <view class="tags-row">
+      <view class="tag {{item.tagClass}}" wx:for="{{servicePledges}}" wx:key="id">
+        <image class="tag-icon" src="{{item.icon}}" mode="aspectFit"></image>
+        <text>{{item.title}}</text>
+      </view>
+    </view>
+    <view class="pledges-detail-card">
+      <view class="pledge-detail-block" wx:for="{{servicePledges}}" wx:key="id">
+        <text class="pledge-detail-name">{{item.title}}</text>
+        <text class="pledge-detail-copy" wx:if="{{item.desc}}">{{item.desc}}</text>
+      </view>
+    </view>
+  </view>
+
   <view class="bottom-safe-area"></view>
 
   <view class="action-bar">
@@ -194,11 +200,11 @@
       <text class="action-favorite-text">收藏</text>
     </view>
     <view class="action-buttons">
-      <view class="action-btn action-btn-cart {{isOutOfStock ? 'btn-disabled' : ''}}" bindtap="onAddToCart">
-        <text>加入购物袋</text>
+      <view class="action-btn action-btn-cart {{isOutOfStock ? 'btn-disabled' : ''}}" bindtap="onLeftActionTap">
+        <text>{{actionLeftLabel}}</text>
       </view>
-      <view class="action-btn action-btn-buy {{isOutOfStock ? 'btn-disabled' : ''}}" bindtap="onBuyNow">
-        <text>{{isOutOfStock ? '暂时缺货' : '立即购买'}}</text>
+      <view class="action-btn action-btn-buy {{purchaseMode === 'group' ? 'action-btn-group' : ''}} {{purchaseMode === 'slash' ? 'action-btn-slash' : ''}} {{isOutOfStock ? 'btn-disabled' : ''}}" bindtap="onRightActionTap">
+        <text>{{isOutOfStock ? '暂时缺货' : actionRightLabel}}</text>
       </view>
     </view>
   </view>

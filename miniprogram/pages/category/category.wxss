@@ -650,3 +650,5 @@
 .ptag-hot { background: linear-gradient(135deg, #FF4D4F, #FF7A45); }
 .ptag-discount { background: linear-gradient(135deg, #FA8C16, #FAAD14); }
 .ptag-new { background: linear-gradient(135deg, #52C41A, #73D13D); }
+.ptag-group { background: linear-gradient(135deg, #F08A4B, #D35C2D); }
+.ptag-slash { background: linear-gradient(135deg, #16B3A5, #0F8A88); }

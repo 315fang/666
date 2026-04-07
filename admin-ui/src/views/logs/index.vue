@@ -55,36 +55,36 @@
         <el-table-column label="操作人" width="130" class-name="hide-mobile">
           <template #default="{ row }">
             <div>
-              <div>{{ row.admin_username || row.admin_id || '-' }}</div>
-              <div style="font-size:11px;color:#909399">{{ row.ip_address || '' }}</div>
+              <div>{{ row.operatorName || '-' }}</div>
+              <div style="font-size:11px;color:#909399">{{ row.operatorIp || '' }}</div>
             </div>
           </template>
         </el-table-column>
         <el-table-column label="操作类型" width="100">
           <template #default="{ row }">
-            <el-tag :type="actionTagType(row.action)" size="small">{{ row.action }}</el-tag>
+            <el-tag :type="actionTagType(row.action)" size="small">{{ formatActionLabel(row.action) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="资源" width="100">
           <template #default="{ row }">
-            <el-tag type="info" size="small">{{ row.resource_type }}</el-tag>
+            <el-tag type="info" size="small">{{ formatResourceLabel(row.resourceType) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="resource_id" label="资源ID" width="90" class-name="hide-mobile" />
-        <el-table-column prop="description" label="操作描述" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="resourceId" label="资源ID" width="90" class-name="hide-mobile" />
+        <el-table-column prop="descriptionText" label="操作描述" min-width="200" show-overflow-tooltip />
         <el-table-column label="结果" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'success' ? 'success' : 'danger'" size="small">
-              {{ row.status === 'success' ? '成功' : '失败' }}
+            <el-tag :type="row.resultType" size="small">
+              {{ row.resultText }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="时间" width="160" class-name="hide-mobile">
-          <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+          <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
         </el-table-column>
         <el-table-column label="详情" width="80">
           <template #default="{ row }">
-            <el-button v-if="row.changes" text type="primary" size="small" @click="showDetail(row)">查看</el-button>
+            <el-button v-if="row.detailPayload" text type="primary" size="small" @click="showDetail(row)">查看</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -126,6 +126,52 @@ const searchForm = reactive({ action: '', resource: '', dateRange: [] })
 const { pagination, resetPage, applyResponse } = usePagination()
 const tableData = ref([])
 
+const actionLabelMap = {
+  login: '登录',
+  create: '创建',
+  update: '更新',
+  delete: '删除',
+  approve: '审批',
+  ship: '发货',
+  export: '导出',
+  import: '导入',
+  upload: '上传',
+  download: '下载',
+  logout: '退出'
+}
+
+const resourceLabelMap = {
+  order: '订单',
+  user: '用户',
+  product: '商品',
+  withdrawal: '提现',
+  commission: '佣金',
+  banner: 'Banner',
+  theme: '主题',
+  config: '配置',
+  pickup: '自提',
+  activity_log: '活动日志'
+}
+
+const normalizeLogRow = (row = {}) => {
+  const status = String(row.status || '').toLowerCase()
+  const isSuccess = ['success', 'succeeded', 'ok'].includes(status)
+  const detailPayload = row.changes ?? row.details ?? row.before_data ?? row.after_data ?? null
+
+  return {
+    ...row,
+    operatorName: row.username || row.admin_username || row.admin_name || row.admin_id || row.user_id || '-',
+    operatorIp: row.ip_address || row.ip || '',
+    resourceType: row.resource || row.resource_type || row.target_type || row.module || '',
+    resourceId: row.resource_id || row.target_id || '',
+    descriptionText: row.description || row.content || `${formatActionLabel(row.action)}${formatResourceLabel(row.resource || row.target_type || row.module)}`,
+    createdAt: row.created_at || row.createdAt,
+    detailPayload,
+    resultType: isSuccess ? 'success' : 'danger',
+    resultText: isSuccess ? '成功' : '失败'
+  }
+}
+
 const fetchData = async () => {
   loading.value = true
   try {
@@ -140,7 +186,7 @@ const fetchData = async () => {
       params.end_date = searchForm.dateRange[1]
     }
     const res = await getLogs(params)
-    tableData.value = res?.list || []
+    tableData.value = (res?.list || []).map(normalizeLogRow)
     applyResponse(res)
   } catch (e) {
     console.error('获取日志失败:', e)
@@ -160,7 +206,16 @@ const handleReset = () => {
 const handleExport = async () => {
   exporting.value = true
   try {
-    const res = await exportLogs(searchForm)
+    const params = {
+      action: searchForm.action,
+      resource: searchForm.resource,
+      format: 'csv'
+    }
+    if (searchForm.dateRange?.length === 2) {
+      params.start_date = searchForm.dateRange[0]
+      params.end_date = searchForm.dateRange[1]
+    }
+    const res = await exportLogs(params)
     const url = URL.createObjectURL(res)
     const a = document.createElement('a')
     a.href = url
@@ -178,11 +233,11 @@ const handleExport = async () => {
 const showDetail = (row) => {
   try {
     currentChanges.value = JSON.stringify(
-      typeof row.changes === 'string' ? JSON.parse(row.changes) : row.changes,
+      typeof row.detailPayload === 'string' ? JSON.parse(row.detailPayload) : row.detailPayload,
       null, 2
     )
   } catch {
-    currentChanges.value = row.changes || ''
+    currentChanges.value = typeof row.detailPayload === 'string' ? row.detailPayload : JSON.stringify(row.detailPayload || {}, null, 2)
   }
   detailDialogVisible.value = true
 }
@@ -190,6 +245,9 @@ const showDetail = (row) => {
 const actionTagType = (a) => ({
   login: 'primary', create: 'success', update: 'warning', delete: 'danger', approve: 'success', ship: 'info'
 }[a] || '')
+
+const formatActionLabel = (action) => actionLabelMap[action] || action || '-'
+const formatResourceLabel = (resource) => resourceLabelMap[resource] || resource || '-'
 
 onMounted(fetchData)
 </script>

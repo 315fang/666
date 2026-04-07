@@ -8,6 +8,7 @@ router.use(authenticate);
 
 // 用户：查看自提凭证（二维码+数字码）
 router.get('/my/:order_id', ctrl.getPickupInfo);
+router.get('/pending-orders', ctrl.getPendingPickupOrders);
 
 // 工作人员核销（station claimant 使用）
 router.post('/verify-code', ctrl.verifyByCode);   // 输入16位数字码

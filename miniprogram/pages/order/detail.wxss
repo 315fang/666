@@ -38,7 +38,7 @@
   width: 12rpx;
   height: 12rpx;
   border-radius: 50%;
-  background: #C6A16E;
+  background: #2563EB;
 }
 
 .order-bubble-text {
@@ -68,7 +68,7 @@
   margin-top: 8rpx;
 }
 
-.status-pending { background: linear-gradient(135deg, #C6A16E 0%, #9A7348 100%); }
+.status-pending { background: linear-gradient(135deg, #60A5FA 0%, #2563EB 100%); }
 .status-paid { background: linear-gradient(135deg, #2E6B94 0%, #1E4A6D 100%); }
 .status-shipped { background: linear-gradient(135deg, #0F766E 0%, #14B8A6 100%); }
 .status-completed { background: linear-gradient(135deg, #047857 0%, #10B981 100%); }
@@ -188,11 +188,11 @@
 
 .copy-btn {
   font-size: 22rpx;
-  color: #8A6A4E;
-  background: #F6EEE6;
+  color: #2563EB;
+  background: #EFF6FF;
   padding: 4rpx 16rpx;
   border-radius: 999rpx;
-  border: 1rpx solid #E7DDD2;
+  border: 1rpx solid #BFDBFE;
 }
 
 .price-value-strong {
@@ -217,26 +217,89 @@
   padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
   display: flex;
   justify-content: flex-end;
-  gap: 20rpx;
   box-shadow: 0 -8rpx 24rpx rgba(31, 25, 20, 0.06);
 }
 
+.bar-action-group {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10rpx;
+}
+
+.bar-action-row {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 14rpx;
+  flex-wrap: wrap;
+}
+
+.bar-action-row.single {
+  justify-content: flex-end;
+}
+
+.bar-action-link-row {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .btn-primary {
-  background: #241D18;
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
   color: #fff;
-  padding: 20rpx 40rpx;
+  padding: 0 34rpx;
+  min-height: 76rpx;
   border-radius: 40rpx;
   font-size: 28rpx;
   font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.btn-soft {
+  background: #EFF6FF;
+  color: #2563EB;
+  padding: 0 34rpx;
+  min-height: 76rpx;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+  border: 2rpx solid #BFDBFE;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .btn-outline {
   background: #fff;
-  color: #6D6258;
-  padding: 20rpx 40rpx;
+  color: #475569;
+  padding: 0 34rpx;
+  min-height: 76rpx;
   border-radius: 40rpx;
   font-size: 28rpx;
-  border: 2rpx solid #E7DDD2;
+  border: 2rpx solid #BFDBFE;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.btn-text-link {
+  font-size: 24rpx;
+  color: #64748B;
+  padding: 8rpx 4rpx;
+  line-height: 1.2;
 }
 
 /* 商品图片占位 icon */
@@ -256,7 +319,7 @@
   width: 48rpx;
   height: 48rpx;
   border: 4rpx solid #F0EBE3;
-  border-top-color: #C6903A;
+  border-top-color: #2563EB;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -268,7 +331,7 @@
 .error-container { gap: 20rpx; }
 .error-icon { width: 80rpx; height: 80rpx; opacity: 0.4; }
 .error-text { font-size: 28rpx; color: #9A8D80; }
-.retry-btn { background: #241D18; color: #fff; font-size: 26rpx; padding: 16rpx 48rpx; border-radius: 40rpx; margin-top: 8rpx; }
+.retry-btn { background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%); color: #fff; font-size: 26rpx; padding: 16rpx 48rpx; border-radius: 40rpx; margin-top: 8rpx; }
 
 /* 订单进度条 */
 .progress-card {
@@ -302,15 +365,15 @@
 }
 
 .progress-step.active .step-dot {
-  background: #C6903A;
-  border-color: #C6903A;
-  box-shadow: 0 0 0 6rpx rgba(198, 144, 58, 0.2);
+  background: #2563EB;
+  border-color: #2563EB;
+  box-shadow: 0 0 0 6rpx rgba(37, 99, 235, 0.18);
   transform: scale(1.1);
 }
 
 .progress-step.done .step-dot {
-  background: #B98B58;
-  border-color: #B98B58;
+  background: #60A5FA;
+  border-color: #60A5FA;
 }
 
 .step-label {
@@ -320,12 +383,12 @@
 }
 
 .progress-step.active .step-label {
-  color: #C6903A;
+  color: #2563EB;
   font-weight: 600;
 }
 
 .progress-step.done .step-label {
-  color: #B98B58;
+  color: #3B82F6;
   font-weight: 500;
 }
 
@@ -341,13 +404,13 @@
 }
 
 .progress-line.done {
-  background: #B98B58;
+  background: #60A5FA;
 }
 
 /* 佣金结算卡片 */
 .settlement-card {
-  background: #F8F3ED !important;
-  border: 1rpx solid rgba(185, 139, 88, 0.25);
+  background: #EFF6FF !important;
+  border: 1rpx solid rgba(59, 130, 246, 0.24);
 }
 
 .settlement-info {
@@ -362,13 +425,13 @@
 
 .settlement-text {
   font-size: 26rpx;
-  color: #B98B58;
+  color: #2563EB;
 }
 
 /* 退款信息样式 */
 .card-title-danger { color: #DC2626; }
 .info-value-danger { color: #DC2626; }
-.refund-link { color: #B98B58; font-size: 28rpx; }
+.refund-link { color: #2563EB; font-size: 28rpx; }
 
 .pickup-hint {
   font-size: 26rpx;
@@ -378,7 +441,7 @@
   margin-bottom: 20rpx;
 }
 .pickup-btn {
-  background: #1c1917;
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
   color: #fff;
   font-size: 28rpx;
   border-radius: 12rpx;

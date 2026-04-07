@@ -22,9 +22,16 @@ function goBusinessCenter(page) {
     wx.navigateTo({ url: '/pages/distribution/business-center' });
 }
 
-function onOrderTap(event) {
+function onOrderTap(page, event) {
     if (!requireLogin()) return;
     const type = event.currentTarget.dataset.type;
+    if (page && typeof page.markOrderBadgesSeen === 'function') {
+        if (type && type !== 'all') {
+            page.markOrderBadgesSeen([type]);
+        } else {
+            page.markOrderBadgesSeen();
+        }
+    }
     let url = '/pages/order/list';
     if (type && type !== 'all') {
         url += '?status=' + type;

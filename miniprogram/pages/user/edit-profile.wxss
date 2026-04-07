@@ -132,7 +132,7 @@
   line-height: 96rpx !important;
   padding: 0 !important;
   margin: 0 0 20rpx 0 !important;
-  background: linear-gradient(135deg, #c6a16e 0%, #9a7348 100%) !important;
+  background: linear-gradient(135deg, #60A5FA 0%, #2563EB 100%) !important;
   color: #fffdf8 !important;
   font-size: 30rpx;
   font-weight: 600;
@@ -217,5 +217,5 @@
 
 .nick-modal-btn-ok {
   color: #fffdf8;
-  background: linear-gradient(135deg, #c6a16e 0%, #9a7348 100%);
+  background: linear-gradient(135deg, #60A5FA 0%, #2563EB 100%);
 }

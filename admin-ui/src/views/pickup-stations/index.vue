@@ -66,11 +66,17 @@
         <el-table-column label="认领人" width="100">
           <template #default="{ row }">{{ row.claimant?.nickname || '-' }}</template>
         </el-table-column>
+        <el-table-column label="成员" width="90">
+          <template #default="{ row }">
+            <span>{{ row.staffMembers?.length || 0 }} 人</span>
+          </template>
+        </el-table-column>
         <el-table-column label="自提档" width="72">
           <template #default="{ row }">{{ row.pickup_commission_tier || 'A' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="88" fixed="right">
+        <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
+            <el-button text type="primary" @click="openStaffDialog(row)">成员管理</el-button>
             <el-button text type="primary" @click="openDialog(row)">编辑</el-button>
           </template>
         </el-table-column>
@@ -159,17 +165,94 @@
         <el-button type="primary" :loading="saving" @click="submit">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="staffDialogVisible" :title="staffState.stationName ? `${staffState.stationName} · 门店成员` : '门店成员'" width="860px" destroy-on-close>
+      <div class="staff-toolbar">
+        <div class="staff-meta">
+          <span>认领人：{{ staffState.claimantName || '未设置' }}</span>
+          <span>成员数：{{ staffState.list.length }}</span>
+        </div>
+        <el-button type="primary" @click="openStaffForm()">添加成员</el-button>
+      </div>
+
+      <el-table :data="staffState.list" v-loading="staffState.loading" stripe>
+        <el-table-column prop="id" label="ID" width="72" />
+        <el-table-column label="成员" min-width="180">
+          <template #default="{ row }">
+            <div>{{ row.user?.nickname || `用户${row.user_id}` }}</div>
+            <div class="sub">UID: {{ row.user_id }} {{ row.user?.phone ? ` / ${row.user.phone}` : '' }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="角色" width="100">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.role === 'manager' ? 'warning' : 'info'">
+              {{ row.role === 'manager' ? '店长' : '店员' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="核销权限" width="110">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.can_verify ? 'success' : 'info'">
+              {{ row.can_verify ? '可核销' : '不可核销' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag size="small">{{ row.status === 'active' ? '启用' : '停用' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="remark" label="备注" min-width="160" />
+        <el-table-column label="操作" width="170" fixed="right">
+          <template #default="{ row }">
+            <el-button text type="primary" @click="openStaffForm(row)">编辑</el-button>
+            <el-button text type="danger" @click="handleRemoveStaff(row)">移除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-empty v-if="!staffState.loading && !staffState.list.length" description="当前门店还没有成员" />
+    </el-dialog>
+
+    <el-dialog v-model="staffFormVisible" :title="staffForm.id ? '编辑门店成员' : '添加门店成员'" width="520px" destroy-on-close>
+      <el-form :model="staffForm" label-width="100px">
+        <el-form-item label="用户ID" required>
+          <el-input-number v-model="staffForm.user_id" :min="1" :step="1" style="width:220px" :disabled="!!staffForm.id" />
+          <div class="form-tip">当前先按用户ID添加成员，适合运营后台快速配置。</div>
+        </el-form-item>
+        <el-form-item label="门店角色">
+          <el-radio-group v-model="staffForm.role">
+            <el-radio label="manager">店长</el-radio>
+            <el-radio label="staff">店员</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="核销权限">
+          <el-switch v-model="staffForm.can_verify" :active-value="1" :inactive-value="0" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="staffForm.remark" type="textarea" :rows="3" maxlength="80" show-word-limit />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="staffFormVisible = false">取消</el-button>
+        <el-button type="primary" :loading="staffSaving" @click="submitStaff">保存</el-button>
+      </template>
+    </el-dialog>
     <MapPickerDialog v-model="mapPickerVisible" :seed="mapPickerSeed" @confirm="onMapPickerConfirm" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, watch, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getPickupStations,
+  getPickupStationById,
   createPickupStation,
-  updatePickupStation
+  updatePickupStation,
+  getPickupStationStaff,
+  addPickupStationStaff,
+  removePickupStationStaff
 } from '@/api'
 import { usePagination } from '@/composables/usePagination'
 import MapPickerDialog from '@/components/MapPickerDialog.vue'
@@ -196,6 +279,27 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const saving = ref(false)
 const mapPickerVisible = ref(false)
+const staffDialogVisible = ref(false)
+const staffFormVisible = ref(false)
+const staffSaving = ref(false)
+
+const staffState = reactive({
+  stationId: null,
+  stationName: '',
+  claimantName: '',
+  loading: false,
+  list: []
+})
+
+const defaultStaffForm = () => ({
+  id: null,
+  user_id: null,
+  role: 'staff',
+  can_verify: 1,
+  remark: ''
+})
+
+const staffForm = reactive(defaultStaffForm())
 
 const mapPickerSeed = computed(() => ({
   province: form.province,
@@ -329,6 +433,77 @@ function openDialog(row) {
   dialogVisible.value = true
 }
 
+async function openStaffDialog(row) {
+  if (!row?.id) return
+  staffDialogVisible.value = true
+  staffState.stationId = row.id
+  staffState.stationName = row.name || ''
+  staffState.claimantName = row.claimant?.nickname || ''
+  await loadStaffList(row.id)
+}
+
+function openStaffForm(row) {
+  Object.assign(staffForm, defaultStaffForm())
+  if (row) {
+    staffForm.id = row.id
+    staffForm.user_id = Number(row.user_id)
+    staffForm.role = row.role || 'staff'
+    staffForm.can_verify = Number(row.can_verify) === 1 ? 1 : 0
+    staffForm.remark = row.remark || ''
+  }
+  staffFormVisible.value = true
+}
+
+async function loadStaffList(stationId = staffState.stationId) {
+  if (!stationId) return
+  staffState.loading = true
+  try {
+    const [staffData, detail] = await Promise.all([
+      getPickupStationStaff(stationId),
+      getPickupStationById(stationId)
+    ])
+    staffState.stationName = staffData?.station_name || detail?.name || staffState.stationName
+    staffState.claimantName = detail?.claimant?.nickname || ''
+    staffState.list = staffData?.list || []
+  } finally {
+    staffState.loading = false
+  }
+}
+
+async function submitStaff() {
+  if (!staffState.stationId) return
+  if (!Number.isFinite(Number(staffForm.user_id)) || Number(staffForm.user_id) <= 0) {
+    ElMessage.warning('请填写有效的用户ID')
+    return
+  }
+  staffSaving.value = true
+  try {
+    await addPickupStationStaff(staffState.stationId, {
+      user_id: Number(staffForm.user_id),
+      role: staffForm.role,
+      can_verify: Number(staffForm.can_verify) === 1 ? 1 : 0,
+      remark: staffForm.remark?.trim() || null
+    })
+    ElMessage.success(staffForm.id ? '成员已更新' : '成员已添加')
+    staffFormVisible.value = false
+    await loadStaffList()
+    await fetchList()
+  } finally {
+    staffSaving.value = false
+  }
+}
+
+async function handleRemoveStaff(row) {
+  if (!staffState.stationId || !row?.id) return
+  await ElMessageBox.confirm(`确认移除成员 UID ${row.user_id}？移除后将失去该门店核销权限。`, '移除成员', {
+    type: 'warning'
+  })
+  await removePickupStationStaff(staffState.stationId, row.id)
+  ElMessage.success('成员已移除')
+  await loadStaffList()
+  await fetchList()
+}
+
 async function submit() {
   if (!form.name?.trim() || !form.province?.trim() || !form.city?.trim()) {
     ElMessage.warning('请填写名称、省、市')
@@ -394,6 +569,20 @@ fetchList()
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+}
+.staff-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.staff-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: #606266;
+  font-size: 14px;
 }
 .form-tip {
   margin-top: 6px;

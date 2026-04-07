@@ -36,7 +36,7 @@ function sanitizeActivityLinksForPublic(raw = {}) {
         if (!item.end_time) return true;
         return new Date(item.end_time).getTime() > now;
     });
-    const title = String(raw.brand_news_section_title || '品牌动态').trim().slice(0, 12) || '品牌动态';
+    const title = String(raw.brand_news_section_title || '品牌动态').trim().slice(0, 20) || '品牌动态';
     return {
         permanent_section_enabled: permanentEnabled,
         activity_sections_order: order,

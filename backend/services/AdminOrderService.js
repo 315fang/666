@@ -9,6 +9,37 @@ const AgentWalletService = require('./AgentWalletService');
 const { error: logError, info: logInfo } = require('../utils/logger');
 
 class AdminOrderService {
+    async deductAgentGoodsFundForShipment(order, agentId, transaction) {
+        const orderProduct = await Product.findByPk(order.product_id, { transaction });
+        const agentCostPrice = parseFloat(
+            order.locked_agent_cost
+            || orderProduct?.cost_price
+            || orderProduct?.price_agent
+            || orderProduct?.price_leader
+            || orderProduct?.price_member
+            || orderProduct?.retail_price
+            || 0
+        );
+        const shipCost = parseFloat((agentCostPrice * Number(order.quantity || 0)).toFixed(2));
+        if (shipCost <= 0) {
+            return {
+                walletDeduct: null,
+                orderProduct,
+                shipCost: 0
+            };
+        }
+
+        const walletDeduct = await AgentWalletService.deduct({
+            userId: agentId,
+            amount: shipCost,
+            refType: 'order_ship',
+            refId: order.id,
+            remark: `后台代发订单${order.order_no}扣货款`
+        }, transaction);
+
+        return { walletDeduct, orderProduct, shipCost };
+    }
+
     /**
      * 发货逻辑（代理商发货扣货款并计算利润，平台发货直接改状态）
      */
@@ -72,10 +103,11 @@ class AdminOrderService {
                     throw new Error('代理商信息异常');
                 }
 
+                const { walletDeduct, orderProduct, shipCost } = await this.deductAgentGoodsFundForShipment(order, order.agent_id, t);
+
                 // 修复平台库存与代理履约并行时的双重占用（保留原回补逻辑）
                 const platformDeducted = parseInt(order.platform_stock_deducted) !== 0;
                 if (platformDeducted) {
-                    const orderProduct = await Product.findByPk(order.product_id, { transaction: t });
                     if (orderProduct) {
                         await orderProduct.increment('stock', { by: order.quantity, transaction: t });
                     }
@@ -91,17 +123,20 @@ class AdminOrderService {
                 order.fulfillment_partner_id = order.agent_id;
 
                 // 统一佣金计算：级差 + 代理商发货利润
-                const orderProduct2 = await Product.findByPk(order.product_id, { transaction: t });
                 const buyer = await User.findByPk(order.buyer_id, { transaction: t });
-                if (orderProduct2 && buyer) {
+                if (orderProduct && buyer) {
                     await CommissionService.calculateGapAndFulfillmentCommissions({
                         order,
                         buyer,
-                        product: orderProduct2,
+                        product: orderProduct,
                         agentId: order.agent_id,
                         transaction: t,
                         notifySource: '后台代发(代理商)'
                     });
+                }
+                if (walletDeduct && shipCost > 0) {
+                    order.remark = (order.remark ? order.remark + ' | ' : '')
+                        + `货款扣减¥${shipCost.toFixed(2)}(余额 ${walletDeduct.before.toFixed(2)}→${walletDeduct.after.toFixed(2)})`;
                 }
             } else {
                 order.fulfillment_type = 'Company';

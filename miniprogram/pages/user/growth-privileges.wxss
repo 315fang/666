@@ -84,8 +84,8 @@
 }
 
 .tier-active {
-  border-color: #c6a16e;
-  box-shadow: 0 8rpx 24rpx rgba(198, 161, 110, 0.15);
+  border-color: #3B82F6;
+  box-shadow: 0 8rpx 24rpx rgba(59, 130, 246, 0.15);
 }
 
 .tier-head {

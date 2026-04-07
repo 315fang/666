@@ -3,6 +3,7 @@ const { Order, User, Product, CommissionLog, sequelize } = require('../models');
 const constants = require('../config/constants');
 const { error: logError } = require('../utils/logger');
 const CommissionService = require('./CommissionService');
+const AgentWalletService = require('./AgentWalletService');
 const { scheduleUploadShippingInfoAfterShip } = require('./WechatShippingInfoService');
 
 class OrderFulfillmentService {
@@ -228,6 +229,27 @@ class OrderFulfillmentService {
 
                 const buyer = await User.findByPk(order.buyer_id, { transaction: t });
                 const orderProduct = await Product.findByPk(order.product_id, { transaction: t });
+                const agentCostPrice = parseFloat(
+                    order.locked_agent_cost
+                    || orderProduct?.cost_price
+                    || orderProduct?.price_agent
+                    || orderProduct?.price_leader
+                    || orderProduct?.price_member
+                    || orderProduct?.retail_price
+                    || 0
+                );
+                const shipCost = parseFloat((agentCostPrice * Number(order.quantity || 0)).toFixed(2));
+
+                let walletDeduct = null;
+                if (shipCost > 0) {
+                    walletDeduct = await AgentWalletService.deduct({
+                        userId: agentId,
+                        amount: shipCost,
+                        refType: 'order_ship',
+                        refId: order.id,
+                        remark: `订单${order.order_no}发货扣货款`
+                    }, t);
+                }
 
                 if (orderProduct && buyer) {
                     await CommissionService.calculateGapAndFulfillmentCommissions({
@@ -238,6 +260,10 @@ class OrderFulfillmentService {
                         transaction: t,
                         notifySource: '平台代发(代理商)'
                     });
+                }
+                if (walletDeduct && shipCost > 0) {
+                    order.remark = (order.remark ? order.remark + ' | ' : '')
+                        + `货款扣减¥${shipCost.toFixed(2)}(余额 ${walletDeduct.before.toFixed(2)}→${walletDeduct.after.toFixed(2)})`;
                 }
             } else {
                 order.fulfillment_type = 'Company';

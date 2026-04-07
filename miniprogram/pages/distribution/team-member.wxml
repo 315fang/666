@@ -1,0 +1,74 @@
+<view class="container">
+  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-inner" style="height: {{navBarHeight}}px;">
+      <view class="nav-back" bindtap="onBack">
+        <image class="back-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"></image>
+      </view>
+      <text class="nav-title">成员详情</text>
+      <view class="nav-right"></view>
+    </view>
+  </view>
+
+  <scroll-view scroll-y class="main-scroll">
+    <view class="skeleton-wrap" wx:if="{{loading}}">
+      <view class="sk-hero"></view>
+      <view class="sk-grid">
+        <view class="sk-card" wx:for="{{[1,2,3,4]}}" wx:key="index"></view>
+      </view>
+    </view>
+
+    <block wx:elif="{{member}}">
+      <view class="hero-card">
+        <view class="hero-row">
+          <image class="hero-avatar" src="{{member.avatar_url || '/assets/icons/user.svg'}}" mode="aspectFill"></image>
+          <view class="hero-meta">
+            <text class="hero-name">{{member.nickname || '团队成员'}}</text>
+            <view class="hero-tags">
+              <text class="hero-pill">{{member.level_label}}</text>
+              <text class="hero-pill light">{{member.role_name}}</text>
+            </view>
+            <text class="hero-relation">{{member.relation_text}}</text>
+          </view>
+        </view>
+
+        <view class="hero-stats">
+          <view class="hero-stat">
+            <text class="hero-stat-label">订单数</text>
+            <text class="hero-stat-value">{{member.order_count}}</text>
+          </view>
+          <view class="hero-stat">
+            <text class="hero-stat-label">累计业绩</text>
+            <text class="hero-stat-value">¥{{member.total_sales}}</text>
+          </view>
+          <view class="hero-stat">
+            <text class="hero-stat-label">加入时间</text>
+            <text class="hero-stat-value small">{{member.joined_at_format}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="detail-section">
+        <view class="section-head">
+          <text class="section-title">详细信息</text>
+          <text class="section-sub">这里只展示你当前可查看的团队成员信息</text>
+        </view>
+        <view class="detail-grid">
+          <view class="detail-card" wx:for="{{detailItems}}" wx:key="label">
+            <text class="detail-label">{{item.label}}</text>
+            <text class="detail-value">{{item.value}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="action-card" bindtap="goInvitePoster">
+        <view>
+          <text class="action-title">继续拓展团队</text>
+          <text class="action-sub">去生成海报，继续邀请一级成员进入你的团队</text>
+        </view>
+        <text class="action-arrow">›</text>
+      </view>
+    </block>
+
+    <view class="bottom-space"></view>
+  </scroll-view>
+</view>

@@ -23,8 +23,11 @@ router.put('/branch-agents/claims/:id/review', checkPermission('dealers'), admin
 
 router.get('/pickup-stations', checkPermission('pickup_stations'), adminPickupStationController.listPickupStations);
 router.get('/pickup-stations/:id', checkPermission('pickup_stations'), adminPickupStationController.getPickupStation);
+router.get('/pickup-stations/:id/staff', checkPermission('pickup_stations'), adminPickupStationController.listPickupStationStaff);
 router.post('/pickup-stations', checkPermission('pickup_stations'), adminPickupStationController.createPickupStation);
 router.put('/pickup-stations/:id', checkPermission('pickup_stations'), adminPickupStationController.updatePickupStation);
+router.post('/pickup-stations/:id/staff', checkPermission('pickup_stations'), adminPickupStationController.addPickupStationStaff);
+router.delete('/pickup-stations/:id/staff/:staffId', checkPermission('pickup_stations'), adminPickupStationController.removePickupStationStaff);
 
 router.get('/admins', checkPermission('admins'), adminAccountController.getAdmins);
 router.post('/admins', checkPermission('admins'), adminAccountController.createAdmin);

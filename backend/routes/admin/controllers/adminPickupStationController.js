@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { ServiceStation, User } = require('../../../models');
+const { ServiceStation, StationStaff, User } = require('../../../models');
 const { resolveCoordsForCreate, resolveCoordsForUpdate } = require('../../../utils/stationGeocode');
 const { parseServiceStationRemark, normalizePickupTierKey } = require('../../../utils/serviceStationRemark');
 
@@ -82,7 +82,17 @@ exports.listPickupStations = async (req, res) => {
 
         const { count, rows } = await ServiceStation.findAndCountAll({
             where,
-            include: [{ model: User, as: 'claimant', attributes: ['id', 'nickname', 'phone'], required: false }],
+            distinct: true,
+            include: [
+                { model: User, as: 'claimant', attributes: ['id', 'nickname', 'phone'], required: false },
+                {
+                    model: StationStaff,
+                    as: 'staffMembers',
+                    attributes: ['id', 'status'],
+                    where: { status: 'active' },
+                    required: false
+                }
+            ],
             order: [['updated_at', 'DESC']],
             offset,
             limit: l
@@ -104,7 +114,15 @@ exports.listPickupStations = async (req, res) => {
 exports.getPickupStation = async (req, res) => {
     try {
         const row = await ServiceStation.findByPk(req.params.id, {
-            include: [{ model: User, as: 'claimant', attributes: ['id', 'nickname', 'phone'], required: false }]
+            include: [
+                { model: User, as: 'claimant', attributes: ['id', 'nickname', 'phone'], required: false },
+                {
+                    model: StationStaff,
+                    as: 'staffMembers',
+                    required: false,
+                    include: [{ model: User, as: 'user', attributes: ['id', 'nickname', 'phone'], required: false }]
+                }
+            ]
         });
         if (!row) return res.status(404).json({ code: -1, message: '门店不存在' });
         res.json({ code: 0, data: enrichPickupRow(row) });
@@ -234,5 +252,113 @@ exports.updatePickupStation = async (req, res) => {
     } catch (error) {
         console.error('更新自提门店失败:', error);
         res.status(500).json({ code: -1, message: '更新失败' });
+    }
+};
+
+exports.listPickupStationStaff = async (req, res) => {
+    try {
+        const station = await ServiceStation.findByPk(req.params.id, {
+            include: [
+                {
+                    model: StationStaff,
+                    as: 'staffMembers',
+                    required: false,
+                    include: [{ model: User, as: 'user', attributes: ['id', 'nickname', 'phone'], required: false }],
+                    order: [['created_at', 'DESC']]
+                }
+            ]
+        });
+        if (!station) return res.status(404).json({ code: -1, message: '门店不存在' });
+        res.json({
+            code: 0,
+            data: {
+                station_id: station.id,
+                station_name: station.name,
+                claimant_id: station.claimant_id || null,
+                list: (station.staffMembers || []).map((item) => {
+                    const plain = item.get ? item.get({ plain: true }) : item;
+                    return {
+                        id: plain.id,
+                        user_id: plain.user_id,
+                        role: plain.role,
+                        can_verify: plain.can_verify,
+                        status: plain.status,
+                        remark: plain.remark,
+                        user: plain.user || null
+                    };
+                })
+            }
+        });
+    } catch (error) {
+        console.error('门店成员列表失败:', error);
+        res.status(500).json({ code: -1, message: '获取失败' });
+    }
+};
+
+exports.addPickupStationStaff = async (req, res) => {
+    try {
+        const station = await ServiceStation.findByPk(req.params.id);
+        if (!station) return res.status(404).json({ code: -1, message: '门店不存在' });
+
+        const userId = parseInt(req.body.user_id, 10);
+        const role = req.body.role === 'manager' ? 'manager' : 'staff';
+        const canVerify = Number(req.body.can_verify) === 1 ? 1 : 0;
+        const remark = req.body.remark || null;
+
+        if (!Number.isFinite(userId)) {
+            return res.status(400).json({ code: -1, message: '请提供有效成员用户ID' });
+        }
+        const user = await User.findByPk(userId, { attributes: ['id', 'nickname', 'phone'] });
+        if (!user) {
+            return res.status(404).json({ code: -1, message: '用户不存在' });
+        }
+
+        const [staff, created] = await StationStaff.findOrCreate({
+            where: { station_id: station.id, user_id: userId },
+            defaults: {
+                role,
+                can_verify: canVerify,
+                status: 'active',
+                remark
+            }
+        });
+
+        if (!created) {
+            await staff.update({
+                role,
+                can_verify: canVerify,
+                status: 'active',
+                remark
+            });
+        }
+
+        const full = await StationStaff.findByPk(staff.id, {
+            include: [{ model: User, as: 'user', attributes: ['id', 'nickname', 'phone'], required: false }]
+        });
+
+        res.json({
+            code: 0,
+            message: created ? '成员添加成功' : '成员更新成功',
+            data: full
+        });
+    } catch (error) {
+        console.error('添加门店成员失败:', error);
+        res.status(500).json({ code: -1, message: '保存失败' });
+    }
+};
+
+exports.removePickupStationStaff = async (req, res) => {
+    try {
+        const stationId = parseInt(req.params.id, 10);
+        const staffId = parseInt(req.params.staffId, 10);
+        const staff = await StationStaff.findOne({
+            where: { id: staffId, station_id: stationId }
+        });
+        if (!staff) return res.status(404).json({ code: -1, message: '门店成员不存在' });
+        await staff.update({ status: 'inactive', can_verify: 0 });
+        res.json({ code: 0, message: '成员已移除' });
+    } catch (error) {
+        console.error('移除门店成员失败:', error);
+        res.status(500).json({ code: -1, message: '操作失败' });
     }
 };

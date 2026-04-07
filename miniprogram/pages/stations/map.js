@@ -81,8 +81,8 @@ function mergeUserMarker(stationMarkers, userLa, userLo, mode, displayName) {
     const markers = stationMarkers.slice();
     if (userLa == null || userLo == null) return markers;
     const isPick = mode === 'choose';
-    const title = isPick ? displayName || '地图选点' : '我的大致位置';
-    const calloutText = isPick ? '地图选点（精确）' : '微信模糊定位（约市/区级）';
+    const title = isPick ? displayName || '地图选点' : '我的位置';
+    const calloutText = isPick ? '地图选点（精确）' : '当前位置';
     markers.unshift({
         id: USER_MARKER_ID,
         latitude: userLa,
@@ -136,9 +136,9 @@ function scaleForStationSpread(points, singleScale) {
 }
 
 /**
- * 模糊点 + 逆地理市/区 → 地图视野优先框选「本市区内」门店与模糊点
+ * 当前坐标 + 逆地理市/区 → 地图视野优先框选「本市区内」门店与当前位置
  */
-function computeFuzzyCityViewport(list, userLa, userLo, regionObj) {
+function computeCurrentCityViewport(list, userLa, userLo, regionObj) {
     let subset = list.filter((s) => {
         const la = parseFloat(s.latitude);
         const lo = parseFloat(s.longitude);
@@ -207,7 +207,7 @@ Page({
         selectedId: null,
         scrollIntoView: '',
         userMarkerMode: null,
-        /** 顶部说明：模糊→市区视野；选点后→最近店提示 */
+        /** 顶部说明：当前位置→附近门店；选点后→最近店提示 */
         regionBanner: ''
     },
 
@@ -221,7 +221,7 @@ Page({
         return loadStations(this, {
             buildStationMarkersFromList,
             mergeUserMarker,
-            computeFuzzyCityViewport,
+            computeCurrentCityViewport,
             centroidOf,
             scaleForStationSpread
         });

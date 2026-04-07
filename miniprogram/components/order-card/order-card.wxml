@@ -38,33 +38,35 @@
 
   <!-- 操作按钮 -->
   <view wx:if="{{showActions}}" class="order-card__actions">
-    <button
-      wx:if="{{order.status === 'pending'}}"
-      class="order-card__action-btn order-card__action-btn--secondary"
-      catchtap="onCancelOrder"
-    >
-      取消订单
-    </button>
-    <button
-      wx:if="{{order.status === 'pending'}}"
-      class="order-card__action-btn order-card__action-btn--primary"
-      catchtap="onPayOrder"
-    >
-      立即支付
-    </button>
-    <button
-      wx:if="{{order.status === 'shipped'}}"
-      class="order-card__action-btn order-card__action-btn--primary"
-      catchtap="onConfirmOrder"
-    >
-      确认收货
-    </button>
-    <button
-      wx:if="{{order.status === 'completed'}}"
-      class="order-card__action-btn order-card__action-btn--secondary"
-      catchtap="onViewCommission"
-    >
-      查看佣金
-    </button>
+    <view class="order-card__action-row" wx:if="{{order.status === 'pending'}}">
+      <button
+        class="order-card__action-btn order-card__action-btn--secondary"
+        catchtap="onCancelOrder"
+      >
+        取消订单
+      </button>
+      <button
+        class="order-card__action-btn order-card__action-btn--primary"
+        catchtap="onPayOrder"
+      >
+        立即支付
+      </button>
+    </view>
+    <view class="order-card__action-row order-card__action-row--single" wx:if="{{order.status === 'shipped'}}">
+      <button
+        class="order-card__action-btn order-card__action-btn--primary"
+        catchtap="onConfirmOrder"
+      >
+        确认收货
+      </button>
+    </view>
+    <view class="order-card__action-row order-card__action-row--single" wx:if="{{order.status === 'completed'}}">
+      <button
+        class="order-card__action-btn order-card__action-btn--soft"
+        catchtap="onViewCommission"
+      >
+        查看佣金
+      </button>
+    </view>
   </view>
 </view>

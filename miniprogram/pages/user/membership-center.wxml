@@ -10,6 +10,23 @@
 
   <scroll-view scroll-y class="scroll" wx:else>
     <view class="cards-wrap" wx:if="{{cardReady}}">
+      <view class="card-switch-tabs">
+        <view
+          class="card-switch-tab {{activeCard === 'consume' ? 'card-switch-tab-active' : ''}}"
+          data-type="consume"
+          bindtap="onCardTabTap"
+        >
+          消费会员
+        </view>
+        <view
+          class="card-switch-tab {{activeCard === 'agent' ? 'card-switch-tab-active' : ''}}"
+          data-type="agent"
+          bindtap="onCardTabTap"
+        >
+          代理会员
+        </view>
+      </view>
+
       <swiper
         class="member-card-swiper"
         current="{{cardSwiperCurrent}}"

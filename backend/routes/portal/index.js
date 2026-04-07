@@ -61,6 +61,7 @@ router.get('/agent/stock-logs', agentController.getStockLogs);
 
 router.get('/distribution/stats', distributionController.getDistributionStats);
 router.get('/distribution/team', distributionController.getTeamMembers);
+router.get('/distribution/team/:id', distributionController.getTeamMemberDetail);
 
 router.get('/wallet', walletController.getWalletInfo);
 router.get('/wallet/info', walletController.getWalletInfo);

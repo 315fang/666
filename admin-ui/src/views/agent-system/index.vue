@@ -39,13 +39,21 @@
             type="info"
             :closable="false"
             style="margin-bottom:16px"
-            title="所有佣金均以「占订单实付的百分比（%）」计算。固定金额类仅有 B2协助奖（按件/单），配置在「B2协助奖」Tab。"
+            title="所有佣金均以「占订单实付的百分比（%）」计算。固定金额类仅有上级代理协助奖（按件/单），配置在「代理协助奖」Tab。"
           />
 
           <el-row :gutter="20" class="commission-layout">
             <el-col :xs="24" :lg="14">
               <el-form label-width="240px" class="commission-form">
                 <el-alert type="info" :closable="false" style="margin-bottom:12px" title="佣金计算逻辑：利润池 = 买家实付 - 发货成本（6折拿货价）。各层级从利润池中按下方比例获得佣金，剩余归发货方（代理商或平台）。" />
+
+                <el-divider content-position="left">默认履约策略</el-divider>
+                <el-form-item label="默认平台发货">
+                  <el-switch v-model="commission.default_platform_fulfillment" />
+                  <div class="form-tip-block">
+                    开启后，新订单默认走平台发货；关闭后，若上级代理存在可用云仓库存，则优先进入代理待发货。
+                  </div>
+                </el-form-item>
 
                 <el-divider content-position="left">直推上级佣金（占利润池 %）</el-divider>
                 <el-form-item label="四级统一比例">
@@ -183,11 +191,11 @@
         </el-card>
       </el-tab-pane>
 
-      <!-- ====== B2协助奖（动态阶梯）====== -->
-      <el-tab-pane label="B2协助奖" name="assist">
+      <!-- ====== 代理协助奖（动态阶梯）====== -->
+      <el-tab-pane label="代理协助奖" name="assist">
         <el-card>
           <template #header><div class="card-header">
-            <div><el-switch v-model="assistBonus.enabled" active-text="启用" inactive-text="停用" style="margin-right:12px" />B2协助B1开单阶梯奖</div>
+            <div><el-switch v-model="assistBonus.enabled" active-text="启用" inactive-text="停用" style="margin-right:12px" />上级代理协助下级代理发货阶梯奖</div>
             <el-button type="primary" :loading="saving" @click="save('assist')">保存</el-button>
           </div></template>
           <el-table :data="assistBonus.tiers" border style="max-width:500px;margin-bottom:16px" v-if="assistBonus.enabled">
@@ -432,6 +440,7 @@ async function withLoading(flagRef, task) {
 const upgradeRules = reactive({ enabled: true, c1_min_purchase: 299, c2_referee_count: 2, c2_min_sales: 580, b1_referee_count: 10, b1_recharge: 3000, b2_referee_count: 10, b2_recharge: 30000, b3_recharge: 198000 })
 const commission = reactive({
   enabled: true,
+  default_platform_fulfillment: true,
   use_price_gap_middle_commission: false,
   direct_pct_by_role: { 1: 20, 2: 30, 3: 40, 4: 40 },
   indirect_pct_by_role: { 2: 5, 3: 8 },

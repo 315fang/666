@@ -292,6 +292,16 @@
     color: #9A8D80;
 }
 
+.coupon-tip {
+    font-size: 22rpx;
+    line-height: 1.5;
+    color: #B78B58;
+}
+
+.coupon-tip-active {
+    color: #C45E3D;
+}
+
 .coupon-picker {
     position: fixed;
     left: 0;
@@ -351,6 +361,13 @@
     display: flex;
     flex-direction: column;
     gap: 16rpx;
+}
+
+.coupon-picker-empty {
+    text-align: center;
+    color: #9A8D80;
+    font-size: 24rpx;
+    padding: 56rpx 0;
 }
 
 .coupon-card {
@@ -622,7 +639,7 @@
   color: #1F1B17;
   font-weight: 600;
   background: #FFF9F0;
-  border-color: #C6A16E;
+  border-color: #3B82F6;
 }
 
 .delivery-seg-item-disabled {
@@ -701,7 +718,7 @@
 }
 
 .pickup-row-active {
-  border-color: #C6A16E;
+  border-color: #3B82F6;
   background: #FFF9F0;
 }
 
@@ -729,7 +746,44 @@
   line-height: 1.4;
 }
 
+.pickup-rule {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 20rpx;
+  color: #2563EB;
+}
+
 .pickup-empty {
   font-size: 24rpx;
   color: #9A8B7C;
+}
+
+.pickup-notice-card {
+  margin-top: 16rpx;
+  padding: 20rpx;
+  border-radius: 18rpx;
+  background: #EFF6FF;
+  border: 1rpx solid #BFDBFE;
+}
+
+.pickup-notice-title {
+  display: block;
+  font-size: 22rpx;
+  color: #8EA1BE;
+}
+
+.pickup-notice-name {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1D4ED8;
+}
+
+.pickup-notice-desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #54739E;
 }

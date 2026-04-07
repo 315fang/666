@@ -5,15 +5,15 @@
  * 流程：
  * 1. 用户下单选择自提 → 生成 pickup_code (16位) + pickup_qr_token (SHA256)
  * 2. 与快递一致：须先走「发货」→ 订单 status = shipped（分润/冻结流水在发货链路完成）
- * 3. 用户到店（可在任意已认领的自提站点核销，不必与下单时选择的 pickup_station_id 一致）：
+ * 3. 用户到店（仅限下单时选择的自提站点人员核销）：
  *    a) 出示二维码 → 工作人员扫码 → POST /api/pickup/verify-qr
  *    b) 报出数字码 → 工作人员输入 → POST /api/pickup/verify-code
- *    body 可选 station_id：核销所在站点；认领多站点时必须传入。未传则若认领站点唯一则自动使用该站。
+ *    body 可选 station_id：当前核销站点；若传入，必须与订单所属自提门店一致。
  * 4. 核销成功 → 等同确认收货：completed + settlement_at + 冻结佣金 refund_deadline
  */
 const crypto = require('crypto');
 const QRCode = require('qrcode');
-const { Order, ServiceStation, User, sequelize, CommissionLog } = require('../models');
+const { Order, ServiceStation, StationStaff, User, sequelize, CommissionLog } = require('../models');
 const logger = require('../utils/logger');
 const { logActivity } = require('./activityLogController');
 const constants = require('../config/constants');
@@ -41,6 +41,138 @@ const writePickupAudit = async ({ operator, order, action, status, description, 
 // 重导出：函数体已提取至 PickupService（解除 Service→Controller 反向依赖），保持向后兼容
 const { generatePickupCredentials } = require('../services/PickupService');
 exports.generatePickupCredentials = generatePickupCredentials;
+
+async function getVerifyStationsForUser(userId, transaction = null) {
+    const stations = await ServiceStation.findAll({
+        where: { status: 'active', is_pickup_point: 1 },
+        include: [
+            {
+                model: StationStaff,
+                as: 'staffMembers',
+                where: {
+                    user_id: userId,
+                    status: 'active',
+                    can_verify: 1
+                },
+                attributes: ['id'],
+                required: false
+            }
+        ],
+        attributes: ['id', 'name', 'claimant_id'],
+        order: [['name', 'ASC']],
+        ...(transaction ? { transaction } : {})
+    });
+
+    return stations
+        .filter((station) => {
+            const plain = station.get ? station.get({ plain: true }) : station;
+            const isClaimant = !!plain.claimant_id && parseInt(plain.claimant_id, 10) === parseInt(userId, 10);
+            const hasVerifyStaff = Array.isArray(plain.staffMembers) && plain.staffMembers.length > 0;
+            return isClaimant || hasVerifyStaff;
+        })
+        .map((station) => {
+            const plain = station.get ? station.get({ plain: true }) : station;
+            return { id: plain.id, name: plain.name };
+        });
+}
+
+exports.getPendingPickupOrders = async (req, res, next) => {
+    try {
+        const operatorId = parseInt(req.user.id, 10);
+        const requestedStationId = req.query.station_id ? parseInt(req.query.station_id, 10) : null;
+        const page = Math.max(parseInt(req.query.page || 1, 10), 1);
+        const limit = Math.min(Math.max(parseInt(req.query.limit || 20, 10), 1), 50);
+        const offset = (page - 1) * limit;
+
+        const claimedStations = await getVerifyStationsForUser(operatorId);
+
+        if (claimedStations.length === 0) {
+            return res.status(403).json({ code: -1, message: '您暂无可核销门店' });
+        }
+
+        const claimedStationIds = claimedStations.map((item) => item.id);
+        let stationId = null;
+
+        if (requestedStationId != null) {
+            if (!claimedStationIds.includes(requestedStationId)) {
+                return res.status(403).json({ code: -1, message: '您无权查看该门店的待核销订单' });
+            }
+            stationId = requestedStationId;
+        } else if (claimedStationIds.length === 1) {
+            stationId = claimedStationIds[0];
+        } else {
+            return res.status(400).json({
+                code: -1,
+                message: '请先指定门店后再查看待核销订单',
+                data: {
+                    requires_station_selection: true,
+                    stations: claimedStations
+                }
+            });
+        }
+
+        const { count, rows } = await Order.findAndCountAll({
+            where: {
+                delivery_type: 'pickup',
+                pickup_station_id: stationId,
+                status: 'shipped',
+                verified_at: null
+            },
+            include: [
+                {
+                    model: ServiceStation,
+                    as: 'pickupStation',
+                    attributes: ['id', 'name', 'city', 'district', 'address', 'contact_phone'],
+                    required: false
+                },
+                {
+                    model: User,
+                    as: 'buyer',
+                    attributes: ['id', 'nickname', 'phone'],
+                    required: false
+                }
+            ],
+            attributes: ['id', 'order_no', 'status', 'quantity', 'total_amount', 'pickup_code', 'created_at', 'shipped_at'],
+            order: [['shipped_at', 'DESC'], ['created_at', 'DESC']],
+            offset,
+            limit
+        });
+
+        return res.json({
+            code: 0,
+            data: {
+                list: rows.map((order) => {
+                    const plain = order.get ? order.get({ plain: true }) : order;
+                    return {
+                        id: plain.id,
+                        order_no: plain.order_no,
+                        status: plain.status,
+                        quantity: plain.quantity,
+                        total_amount: plain.total_amount,
+                        pickup_code: plain.pickup_code,
+                        created_at: plain.created_at,
+                        shipped_at: plain.shipped_at,
+                        buyer: plain.buyer ? {
+                            id: plain.buyer.id,
+                            nickname: plain.buyer.nickname ? `${plain.buyer.nickname.charAt(0)}***` : '用户***',
+                            phone: plain.buyer.phone ? `${String(plain.buyer.phone).slice(0, 3)}****${String(plain.buyer.phone).slice(-4)}` : ''
+                        } : null,
+                        pickupStation: plain.pickupStation || null
+                    };
+                }),
+                station: claimedStations.find((item) => item.id === stationId) || null,
+                pagination: {
+                    total: count,
+                    page,
+                    limit,
+                    totalPages: Math.ceil(count / limit)
+                }
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+};
 
 /**
  * GET /api/pickup/my/:order_id
@@ -89,7 +221,7 @@ exports.getPickupInfo = async (req, res, next) => {
  * POST /api/pickup/verify-code
  * 通过16位核销码核销（工作人员端）
  * body: { pickup_code, station_id? }
- * 需要：操作人员必须是某一运营中站点的认领人；station_id 为该次核销所在站（可与订单自提点不同）
+ * 需要：操作人员必须是订单所属自提站点的认领人；station_id 为当前核销站点，且必须等于订单 pickup_station_id
  */
 exports.verifyByCode = async (req, res, next) => {
     const t = await sequelize.transaction();
@@ -141,46 +273,51 @@ exports.verifyByQr = async (req, res, next) => {
 };
 
 /**
- * 解析「谁在什么站点执行核销」：须为运营中站点且 operator 为该站 claimant。
- * stationId 未传时：仅当该用户只认领一个运营中站点时可自动确定，否则须显式传 station_id。
+ * 解析「谁在什么站点执行核销」：须为订单所属自提站点且 operator 为该站 claimant。
+ * stationId 未传时：默认按订单所属站点校验；传入时必须与订单所属站点一致。
  */
-async function resolveVerifierPickupStation(operator, stationId, t) {
+async function resolveVerifierPickupStation(operator, stationId, orderPickupStationId, t) {
     const opId = parseInt(operator.id, 10);
     if (!Number.isFinite(opId)) {
         return { error: '无效操作者' };
+    }
+    const orderStationId = parseInt(orderPickupStationId, 10);
+    if (!Number.isFinite(orderStationId)) {
+        return { error: '订单未绑定有效自提站点' };
     }
     const raw = stationId;
     const nid =
         raw !== undefined && raw !== null && raw !== ''
             ? parseInt(raw, 10)
-            : null;
+            : orderStationId;
 
-    if (nid !== null) {
-        if (!Number.isFinite(nid)) {
-            return { error: '站点参数无效' };
-        }
-        const st = await ServiceStation.findByPk(nid, { transaction: t, lock: t.LOCK.UPDATE });
-        if (!st || st.status !== 'active') {
-            return { error: '当前站点不可用或未启用' };
-        }
-        if (!st.claimant_id || parseInt(st.claimant_id, 10) !== opId) {
-            return { error: '您不是该站点的认领人，无法在此站点核销' };
-        }
-        return { station: st };
+    if (!Number.isFinite(nid)) {
+        return { error: '站点参数无效' };
     }
-
-    const candidates = await ServiceStation.findAll({
-        where: { claimant_id: opId, status: 'active' },
-        transaction: t,
-        lock: t.LOCK.UPDATE
-    });
-    if (candidates.length === 0) {
-        return { error: '您尚未认领运营中的服务站点，无法核销' };
+    if (nid !== orderStationId) {
+        return { error: '当前订单仅限所属自提门店核销，请前往下单所选门店处理' };
     }
-    if (candidates.length > 1) {
-        return { error: '您认领了多个站点，请在请求中指定 station_id（当前核销所在站点）' };
+    const st = await ServiceStation.findByPk(orderStationId, { transaction: t, lock: t.LOCK.UPDATE });
+    if (!st || st.status !== 'active') {
+        return { error: '当前订单所属门店未处于运营状态，暂不可核销' };
     }
-    return { station: candidates[0] };
+    const isClaimant = !!st.claimant_id && parseInt(st.claimant_id, 10) === opId;
+    if (!isClaimant) {
+        const staff = await StationStaff.findOne({
+            where: {
+                station_id: orderStationId,
+                user_id: opId,
+                status: 'active',
+                can_verify: 1
+            },
+            transaction: t,
+            lock: t.LOCK.UPDATE
+        });
+        if (!staff) {
+            return { error: `该订单属于「${st.name || '指定门店'}」自提，您暂无该门店核销权限` };
+        }
+    }
+    return { station: st };
 }
 
 // 核销执行（共用逻辑）
@@ -227,7 +364,7 @@ async function _doVerify(order, operator, stationId, t, res) {
         });
     }
 
-    // 订单须为自提且已绑定用户选择的自提点（用户端展示用）；核销可在其它站点由任一认领人完成
+    // 订单须为自提且已绑定用户选择的自提点；仅允许订单所属门店人员核销
     if (!order.pickup_station_id) {
         await t.rollback();
         await writePickupAudit({
@@ -241,7 +378,7 @@ async function _doVerify(order, operator, stationId, t, res) {
         return res.json({ code: -1, message: '订单未绑定自提站点，不可核销' });
     }
 
-    const resolved = await resolveVerifierPickupStation(operator, stationId, t);
+    const resolved = await resolveVerifierPickupStation(operator, stationId, order.pickup_station_id, t);
     if (resolved.error) {
         await t.rollback();
         await writePickupAudit({
@@ -252,7 +389,7 @@ async function _doVerify(order, operator, stationId, t, res) {
             description: `核销失败：${resolved.error}`,
             details: { stationId, order_pickup_station_id: order.pickup_station_id }
         });
-        const isPerm = /认领|认领人|多个站点/.test(resolved.error);
+        const isPerm = /认领|认领人|核销权限|所属自提门店/.test(resolved.error);
         return res.status(isPerm ? 403 : 400).json({ code: -1, message: resolved.error });
     }
     const verifyStation = resolved.station;

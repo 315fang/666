@@ -21,7 +21,6 @@ const { attributeRegionalProfit } = require('./StationProfitService');
 const { sendNotification } = require('../models/notificationUtil');
 const { runAfterCommit } = require('./TransactionHelper');
 const { buildWxJsapiShoppingDescription } = require('./OrderCalcService');
-const { handleB2AssistBonus } = require('../utils/commission');
 
 /** 异步上报「小程序购物订单」（notify 与主动查单补单共用） */
 function scheduleShoppingOrderUploadAfterWechatPay(paidOrderId, notifySnap) {
@@ -135,22 +134,6 @@ async function accrueDividendPoolContribution(amount) {
     }
 }
 
-async function triggerB2AssistBonus(buyer, orderId) {
-    if (!buyer.parent_id) {
-        return;
-    }
-
-    const b1 = await User.findByPk(buyer.parent_id, { attributes: ['id', 'role_level', 'parent_id'] });
-    if (!b1 || b1.role_level !== constants.ROLES.AGENT || !b1.parent_id) {
-        return;
-    }
-
-    const b2 = await User.findByPk(b1.parent_id, { attributes: ['id', 'role_level'] });
-    if (b2 && b2.role_level >= (constants.ROLES.PARTNER || 4)) {
-        await handleB2AssistBonus(b2, b1, orderId);
-    }
-}
-
 async function settleNMemberPriceGap({ buyer, order }) {
     if (buyer.role_level !== constants.ROLES.N_MEMBER || !buyer.n_leader_id) {
         return;
@@ -190,12 +173,6 @@ async function runPostPaymentSideEffects({ buyer, order, amount, growthBaseAmoun
         await accrueDividendPoolContribution(amount);
     } catch (e) {
         logError('DIVIDEND', '分红池计提失败', { error: e.message });
-    }
-
-    try {
-        await triggerB2AssistBonus(buyer, order.id);
-    } catch (e) {
-        logError('COMMISSION', 'B2协助奖触发失败', { error: e.message });
     }
 
     try {

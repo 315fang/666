@@ -4,6 +4,7 @@ const {
     getDistributionStats,
     getWorkbenchStats,
     getTeamMembers,
+    getTeamMemberDetail,
     getPromotionOrders,
     getInviteWxaCode
 } = require('../controllers/distributionController');
@@ -20,6 +21,9 @@ router.get('/stats/workbench', authenticate, getWorkbenchStats);
 
 // GET /api/distribution/team - 获取团队成员列表
 router.get('/distribution/team', authenticate, getTeamMembers);
+
+// GET /api/distribution/team/:id - 获取团队成员详情
+router.get('/distribution/team/:id', authenticate, getTeamMemberDetail);
 
 // GET /api/distribution/stats - 团队页面的统计
 router.get('/distribution/stats', authenticate, getDistributionStats);

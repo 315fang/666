@@ -97,7 +97,7 @@ function onMarkerTap(page, event) {
         const msg =
             mode === 'choose'
                 ? '此为地图选点的精确位置'
-                : '此为模糊定位（约市/区级）；请点「选点查最近店」';
+                : '此为当前位置；请点「选点查最近店」手动修正';
         wx.showToast({ title: msg, icon: 'none', duration: 2600 });
         return;
     }

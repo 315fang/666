@@ -1,4 +1,3 @@
-// pages/distribution/business-center.js — 商务中心（货款/钱包 + 邀请海报与我的团队）
 const app = getApp();
 const { get } = require('../../utils/request');
 const { requireLogin } = require('../../utils/auth');
@@ -11,6 +10,11 @@ function businessCenterMinRoleLevel() {
     return Number.isFinite(n) ? n : 1;
 }
 
+function formatMoney(value) {
+    const n = Number(value || 0);
+    return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+}
+
 Page({
     data: {
         statusBarHeight: 20,
@@ -20,7 +24,14 @@ Page({
         showGoodsWallet: false,
         goodsBalanceDisplay: '0.00',
         purseBalanceDisplay: '0.00',
-        participateDistribution: false
+        participateDistribution: false,
+        directCount: 0,
+        indirectCount: 0,
+        totalCount: 0,
+        monthlyNewMembers: 0,
+        totalEarnings: '0.00',
+        availableAmount: '0.00',
+        frozenAmount: '0.00'
     },
 
     onLoad(options) {
@@ -28,7 +39,7 @@ Page({
             if (options && options.invite) {
                 wx.setStorageSync('pending_invite_code', String(options.invite).trim().toUpperCase());
             }
-        } catch (e) { /* ignore */ }
+        } catch (e) { }
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navBarHeight: app.globalData.navBarHeight || 44
@@ -40,7 +51,7 @@ Page({
         const rl = app.globalData.userInfo?.role_level || 0;
         const minRl = businessCenterMinRoleLevel();
         if (rl < minRl) {
-            wx.showToast({ title: '当前等级暂未开放商务中心', icon: 'none' });
+            wx.showToast({ title: '当前等级暂未开放团队中心', icon: 'none' });
             setTimeout(() => wx.navigateBack(), 500);
             return;
         }
@@ -55,10 +66,9 @@ Page({
             userInfo: u,
             participateDistribution: pd
         });
-        await Promise.all([this.loadBalances(), this.loadInviteInfo()]);
+        await Promise.all([this.loadBalances(), this.loadOverview()]);
     },
 
-    /** 货款余额（代理）+ 钱包金额（用户购物余额） */
     async loadBalances() {
         const roleLevel = app.globalData.userInfo?.role_level || 0;
         const showGoods = roleLevel >= 3;
@@ -73,19 +83,19 @@ Page({
                     profilePromise
                 ]);
                 if (agentRes && agentRes.code === 0 && agentRes.data) {
-                    goodsAmount = String(agentRes.data.balance != null ? agentRes.data.balance : '0.00');
+                    goodsAmount = formatMoney(agentRes.data.balance);
                 }
                 const info = profileResult?.info || app.globalData.userInfo || {};
-                purseAmount = parseFloat(info.balance || 0).toFixed(2);
+                purseAmount = formatMoney(info.balance);
             } else {
                 const profileResult = await profilePromise;
                 const info = profileResult?.info || app.globalData.userInfo || {};
-                purseAmount = parseFloat(info.balance || 0).toFixed(2);
+                purseAmount = formatMoney(info.balance);
             }
         } catch (_) {
             try {
                 const info = app.globalData.userInfo || {};
-                purseAmount = parseFloat(info.balance || 0).toFixed(2);
+                purseAmount = formatMoney(info.balance);
             } catch (__) {
                 purseAmount = '0.00';
             }
@@ -98,16 +108,25 @@ Page({
         });
     },
 
-    async loadInviteInfo() {
+    async loadOverview() {
         try {
             const res = await get('/distribution/overview');
             if (res && res.code === 0 && res.data) {
                 const d = res.data;
                 const code = d.userInfo?.invite_code || app.globalData.userInfo?.invite_code || '';
-                this.setData({ inviteCode: code });
+                this.setData({
+                    inviteCode: code,
+                    directCount: Number(d.team?.directCount || 0),
+                    indirectCount: Number(d.team?.indirectCount || 0),
+                    totalCount: Number(d.team?.totalCount || 0),
+                    monthlyNewMembers: Number(d.team?.monthlyNewMembers || 0),
+                    totalEarnings: formatMoney(d.stats?.totalEarnings),
+                    availableAmount: formatMoney(d.stats?.availableAmount),
+                    frozenAmount: formatMoney(d.stats?.frozenAmount)
+                });
             }
         } catch (e) {
-            console.error('加载邀请信息失败:', e);
+            console.error('加载团队中心概览失败:', e);
         }
     },
 
@@ -126,6 +145,32 @@ Page({
         wx.navigateTo({ url: '/pages/distribution/invite-poster' });
     },
 
+    goTeam(e) {
+        const tab = e && e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.tab : '';
+        const suffix = tab ? `?tab=${tab}` : '';
+        wx.navigateTo({ url: `/pages/distribution/team${suffix}` });
+    },
+
+    goCommissionLogs() {
+        wx.navigateTo({ url: '/pages/distribution/commission-logs' });
+    },
+
+    goDistributionCenter() {
+        wx.navigateTo({ url: '/pages/distribution/center' });
+    },
+
+    copyInviteCode() {
+        const { inviteCode } = this.data;
+        if (!inviteCode) {
+            wx.showToast({ title: '暂无邀请码', icon: 'none' });
+            return;
+        }
+        wx.setClipboardData({
+            data: inviteCode,
+            success: () => wx.showToast({ title: '邀请码已复制', icon: 'success' })
+        });
+    },
+
     onShareAppMessage() {
         const userInfo = this.data.userInfo;
         const code = this.data.inviteCode;
@@ -141,18 +186,10 @@ Page({
         const code = this.data.inviteCode;
         const brandName = app.globalData.brandName || '品牌臻选';
         return {
-            title: `${brandName} · 品质甄选，我在这里`,
+            title: `${brandName} · 团队邀新入口`,
             query: code ? `invite=${code}` : '',
             imageUrl: ''
         };
-    },
-
-    goTeam() {
-        wx.navigateTo({ url: '/pages/distribution/team' });
-    },
-
-    goDistributionCenter() {
-        wx.navigateTo({ url: '/pages/distribution/center' });
     },
 
     onBack() {

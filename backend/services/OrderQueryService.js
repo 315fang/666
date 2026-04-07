@@ -1,4 +1,4 @@
-const { Order, Product, SKU, User, Address, Review, sequelize } = require('../models');
+const { Order, Product, SKU, User, Address, Review, ServiceStation, sequelize } = require('../models');
 const { Op } = require('sequelize');
 
 function parsePagination(query) {
@@ -29,7 +29,7 @@ class OrderQueryService {
             ],
             order: [['created_at', 'DESC']],
             offset,
-            limit: parsedLimit
+            limit
         });
 
         return {
@@ -77,7 +77,7 @@ class OrderQueryService {
             ],
             order: [['created_at', 'DESC']],
             offset,
-            limit: parsedLimit
+            limit
         });
 
         const ids = rows.map((row) => row.id);
@@ -124,6 +124,7 @@ class OrderQueryService {
                 { model: Product, as: 'product', attributes: ['id', 'name', 'images', 'retail_price'] },
                 { model: User, as: 'distributor', attributes: ['id', 'nickname'] },
                 { model: Address, as: 'address', attributes: ['id', 'receiver_name', 'phone', 'province', 'city', 'district', 'detail'] },
+                { model: ServiceStation, as: 'pickupStation', attributes: ['id', 'name', 'city', 'district', 'address', 'contact_phone'], required: false },
                 { model: SKU, as: 'sku', attributes: ['id', 'spec_name', 'spec_value'], required: false }
             ]
         });

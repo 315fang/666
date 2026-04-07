@@ -486,7 +486,7 @@
 
 .redeem-card-arrow {
   font-size: 40rpx;
-  color: #C6A16E;
+  color: #2563EB;
   font-weight: 300;
   flex-shrink: 0;
 }

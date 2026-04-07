@@ -45,14 +45,16 @@
             "root": "pages/stations",
             "name": "packageStations",
             "pages": [
-                "map"
+                "map",
+                "my-station"
             ]
         },
         {
             "root": "pages/pickup",
             "name": "packagePickup",
             "pages": [
-                "verify"
+                "verify",
+                "orders"
             ]
         },
         {
@@ -76,6 +78,7 @@
             "pages": [
                 "center",
                 "team",
+                "team-member",
                 "invite-poster",
                 "business-center",
                 "stock-logs",
@@ -186,13 +189,10 @@
     "style": "v2",
     "sitemapLocation": "sitemap.json",
     "lazyCodeLoading": "requiredComponents",
-    "requiredPrivateInfos": ["chooseLocation", "getFuzzyLocation", "chooseAddress"],
+    "requiredPrivateInfos": ["chooseLocation", "chooseAddress"],
     "permission": {
         "scope.userLocation": {
-            "desc": "用于您主动在地图选点（chooseLocation），不参与自动精确定位"
-        },
-        "scope.userFuzzyLocation": {
-            "desc": "用于微信模糊定位，展示附近站点与自提排序（不使用精确地理位置接口）"
+            "desc": "用于推荐附近自提门店和地图选点"
         }
     }
 }

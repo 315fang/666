@@ -1,8 +1,9 @@
 // pages/product/detail.js
-const { get } = require('../../utils/request');
+const { get, post } = require('../../utils/request');
 const { normalizeProductId } = require('../../utils/dataFormatter');
 const { USER_ROLES } = require('../../config/constants');
 const { safeBack } = require('../../utils/navigator');
+const { requireLogin } = require('../../utils/auth');
 const { loadProduct, resolvePayableUnitPrice } = require('./productDetailData');
 const { refreshFavoriteState, toggleFavorite } = require('./productDetailFavorite');
 const {
@@ -44,7 +45,14 @@ Page({
         isAgent: false,
         commission: '0.00',
         pageLoading: true,
-        servicePledges: []
+        servicePledges: [],
+        groupActivity: null,
+        slashActivity: null,
+        availablePurchaseModes: [{ key: 'normal', label: '普通购买', hint: '加入购物袋后可与其他商品一起结算' }],
+        purchaseMode: 'normal',
+        purchaseModeHint: '加入购物袋后可与其他商品一起结算',
+        actionLeftLabel: '加入购物袋',
+        actionRightLabel: '立即购买'
     },
 
     onLoad(options) {
@@ -112,6 +120,109 @@ Page({
     // 加载商品详情
     async loadProduct(id) {
         return loadProduct(this, id);
+    },
+
+    async loadActivityState(productId) {
+        const normalizedId = normalizeProductId(productId || this.data.id);
+        if (normalizedId === null || normalizedId === undefined || normalizedId === '') return;
+
+        try {
+            const [groupRes, slashRes] = await Promise.all([
+                get('/group/activities', { product_id: normalizedId }, { showError: false }).catch(() => null),
+                get('/slash/activities', { product_id: normalizedId }, { showError: false }).catch(() => null)
+            ]);
+
+            const groupActivity = this.findProductActivity(groupRes && groupRes.data, normalizedId);
+            const slashActivity = this.findProductActivity(slashRes && slashRes.data, normalizedId);
+            const availablePurchaseModes = this.buildPurchaseModes(groupActivity, slashActivity);
+            const availableKeys = availablePurchaseModes.map((item) => item.key);
+            const preferredMode = groupActivity ? 'group' : slashActivity ? 'slash' : 'normal';
+            const purchaseMode = availableKeys.includes(this.data.purchaseMode) ? this.data.purchaseMode : preferredMode;
+
+            this.setData({
+                groupActivity,
+                slashActivity,
+                availablePurchaseModes,
+                purchaseMode
+            }, () => this.syncPurchaseActionState());
+        } catch (err) {
+            this.setData({
+                groupActivity: null,
+                slashActivity: null,
+                availablePurchaseModes: [{ key: 'normal', label: '普通购买', hint: '加入购物袋后可与其他商品一起结算' }],
+                purchaseMode: 'normal'
+            }, () => this.syncPurchaseActionState());
+        }
+    },
+
+    findProductActivity(list, productId) {
+        const normalizedId = String(productId);
+        const activities = Array.isArray(list) ? list : [];
+        return activities.find((activity) => {
+            const activityProductId = activity && activity.product && activity.product.id;
+            return activityProductId != null && String(activityProductId) === normalizedId;
+        }) || null;
+    },
+
+    buildPurchaseModes(groupActivity, slashActivity) {
+        const modes = [
+            { key: 'normal', label: '普通购买', hint: '加入购物袋后可与其他商品一起结算' }
+        ];
+
+        if (groupActivity) {
+            const groupPrice = parseFloat(groupActivity.group_price || 0);
+            modes.push({
+                key: 'group',
+                label: '拼团购买',
+                hint: groupPrice > 0 ? `发起拼团价 ¥${groupPrice.toFixed(2)}` : '立即购买或发起拼团'
+            });
+        }
+
+        if (slashActivity) {
+            const floorPrice = parseFloat(slashActivity.floor_price || 0);
+            modes.push({
+                key: 'slash',
+                label: '砍价购买',
+                hint: floorPrice > 0 ? `最低可砍至 ¥${floorPrice.toFixed(2)}` : '立即购买或发起砍价'
+            });
+        }
+
+        return modes;
+    },
+
+    syncPurchaseActionState() {
+        const mode = this.data.purchaseMode || 'normal';
+        const modeMeta = {
+            normal: {
+                purchaseModeHint: '加入购物袋后可与其他商品一起结算',
+                actionLeftLabel: '加入购物袋',
+                actionRightLabel: '立即购买'
+            },
+            group: {
+                purchaseModeHint: this.getPurchaseHint('group'),
+                actionLeftLabel: '立即购买',
+                actionRightLabel: '发起拼团'
+            },
+            slash: {
+                purchaseModeHint: this.getPurchaseHint('slash'),
+                actionLeftLabel: '立即购买',
+                actionRightLabel: '发起砍价'
+            }
+        };
+        const current = modeMeta[mode] || modeMeta.normal;
+        this.setData(current);
+    },
+
+    getPurchaseHint(mode) {
+        if (mode === 'group') {
+            const groupPrice = parseFloat(this.data.groupActivity && this.data.groupActivity.group_price || 0);
+            return groupPrice > 0 ? `当前拼团价 ¥${groupPrice.toFixed(2)}` : '可发起拼团购买';
+        }
+        if (mode === 'slash') {
+            const floorPrice = parseFloat(this.data.slashActivity && this.data.slashActivity.floor_price || 0);
+            return floorPrice > 0 ? `最低可砍至 ¥${floorPrice.toFixed(2)}` : '可发起砍价购买';
+        }
+        return '加入购物袋后可与其他商品一起结算';
     },
 
     // 加载评价
@@ -217,7 +328,9 @@ Page({
 
     // 选择规格
     onSpecSelect(e) {
-        return onSpecSelect(this, e, resolvePayableUnitPrice);
+        const result = onSpecSelect(this, e, resolvePayableUnitPrice);
+        this.syncPurchaseActionState();
+        return result;
     },
 
     getMaxStock() {
@@ -239,24 +352,6 @@ Page({
         return onQtyInput(this, e);
     },
 
-    /** 详情页「到店自提」仅为说明；不支持则提示，支持则引导至下单页切换 */
-    onDeliveryPreviewPickupTap() {
-        const pu = Number(this.data.product && this.data.product.supports_pickup);
-        if (!pu) {
-            wx.showToast({
-                title: '该商品不支持到店自提，将为您快递配送',
-                icon: 'none',
-                duration: 2800
-            });
-            return;
-        }
-        wx.showToast({
-            title: '立即购买或去购物袋结算后，在确认订单页切换为到店自提',
-            icon: 'none',
-            duration: 2800
-        });
-    },
-
     // 加入购物袋入口（防重复点击）
     onAddToCart() {
         if (this._addingToCart) return;
@@ -269,6 +364,82 @@ Page({
 
     onBuyNow() {
         return onBuyNow(this, resolvePayableUnitPrice);
+    },
+
+    onPurchaseModeChange(e) {
+        const mode = e.currentTarget.dataset.mode || 'normal';
+        if (mode === this.data.purchaseMode) return;
+        this.setData({ purchaseMode: mode }, () => this.syncPurchaseActionState());
+    },
+
+    onLeftActionTap() {
+        if (this.data.purchaseMode === 'normal') {
+            return this.onAddToCart();
+        }
+        return this.onBuyNow();
+    },
+
+    onRightActionTap() {
+        if (this.data.purchaseMode === 'group') {
+            return this.onStartGroup();
+        }
+        if (this.data.purchaseMode === 'slash') {
+            return this.onStartSlash();
+        }
+        return this.onBuyNow();
+    },
+
+    async onStartGroup() {
+        const activity = this.data.groupActivity;
+        if (!activity) {
+            wx.showToast({ title: '当前商品暂无拼团活动', icon: 'none' });
+            return;
+        }
+        if (!requireLogin()) return;
+
+        try {
+            const payload = { activity_id: activity.id };
+            const selectedSkuId = this.data.selectedSku && this.data.selectedSku.id;
+            if (selectedSkuId != null && selectedSkuId !== '') {
+                payload.sku_id = selectedSkuId;
+            } else if (activity.sku_id != null && activity.sku_id !== '') {
+                payload.sku_id = activity.sku_id;
+            }
+            const res = await post('/group/orders', payload);
+            if (res.code === 0 || res.code === 1) {
+                const groupNo = res.data && res.data.group_no;
+                if (groupNo) {
+                    wx.navigateTo({ url: `/pages/group/detail?group_no=${groupNo}` });
+                    return;
+                }
+            }
+            wx.showToast({ title: res.message || '发起失败', icon: 'none' });
+        } catch (err) {
+            wx.showToast({ title: err && err.message ? String(err.message) : '网络错误', icon: 'none' });
+        }
+    },
+
+    async onStartSlash() {
+        const activity = this.data.slashActivity;
+        if (!activity) {
+            wx.showToast({ title: '当前商品暂无砍价活动', icon: 'none' });
+            return;
+        }
+        if (!requireLogin()) return;
+
+        try {
+            const res = await post('/slash/start', { activity_id: activity.id });
+            if (res.code === 0 || res.code === 1) {
+                const slashNo = res.data && res.data.slash_no;
+                if (slashNo) {
+                    wx.navigateTo({ url: `/pages/slash/detail?slash_no=${slashNo}` });
+                    return;
+                }
+            }
+            wx.showToast({ title: res.message || '发起失败', icon: 'none' });
+        } catch (err) {
+            wx.showToast({ title: err && err.message ? String(err.message) : '网络错误', icon: 'none' });
+        }
     },
 
     // 加入购物袋

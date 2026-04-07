@@ -87,6 +87,8 @@ async function addPoints(userId, points, type, refId = null, remark = null, t = 
 
         if (ownTransaction) await t.commit();
 
+        const newLevel = Number(account.level) || 1;
+
         return {
             account,
             log,

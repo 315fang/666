@@ -11,6 +11,64 @@ const { error: logError } = require('../utils/logger');
 const { Op } = require('sequelize');
 
 class DividendService {
+    static async _loadRules() {
+        const { AppConfig } = require('../models');
+        try {
+            const cfg = await AppConfig.findOne({ where: { config_key: 'agent_system_dividend_rules', status: 1 } });
+            return cfg ? JSON.parse(cfg.config_value) : null;
+        } catch (e) {
+            logError('DIVIDEND', '读取分红规则失败', { error: e.message });
+            return null;
+        }
+    }
+
+    static _subtractMonths(date, months) {
+        const next = new Date(date);
+        next.setMonth(next.getMonth() - Math.max(0, Number(months) || 0));
+        return next;
+    }
+
+    static _isEligiblePartner(partner, rules, endDate) {
+        if (!partner) return false;
+        const minMonths = Math.max(0, Number(rules?.min_months) || 0);
+        if (minMonths <= 0) return true;
+
+        const joinedAt = partner.joined_team_at || partner.created_at;
+        if (!joinedAt) return false;
+
+        return new Date(joinedAt) <= this._subtractMonths(endDate, minMonths);
+    }
+
+    static async _collectTeamMemberIds(rootUserId) {
+        const { User } = require('../models');
+        const visited = new Set([Number(rootUserId)]);
+        let frontier = [Number(rootUserId)];
+
+        while (frontier.length) {
+            const rows = await User.findAll({
+                where: {
+                    id: { [Op.notIn]: Array.from(visited) },
+                    [Op.or]: [
+                        { parent_id: { [Op.in]: frontier } },
+                        { agent_id: { [Op.in]: frontier } }
+                    ]
+                },
+                attributes: ['id'],
+                raw: true
+            });
+
+            frontier = [];
+            for (const row of rows) {
+                const memberId = Number(row.id);
+                if (!visited.has(memberId)) {
+                    visited.add(memberId);
+                    frontier.push(memberId);
+                }
+            }
+        }
+
+        return Array.from(visited);
+    }
 
     /**
      * 将某一块「子分红池」按档位配置分给业绩排名前若干名。
@@ -64,30 +122,24 @@ class DividendService {
     static async calculateTeamRanking(year) {
         const { User, Order, sequelize } = require('../models');
         const ROLES = require('../config/constants').ROLES;
+        const rules = await this._loadRules();
 
         const startDate = new Date(`${year}-01-01`);
         const endDate = new Date(`${year + 1}-01-01`);
 
         const partners = await User.findAll({
-            where: { role_level: { [Op.gte]: ROLES.PARTNER || 4 } },
-            attributes: ['id', 'nickname', 'role_level']
+            where: {
+                role_level: { [Op.gte]: ROLES.PARTNER || 4 },
+                status: 1
+            },
+            attributes: ['id', 'nickname', 'role_level', 'joined_team_at', 'created_at']
         });
 
+        const eligiblePartners = partners.filter((partner) => this._isEligiblePartner(partner, rules, endDate));
         const rankings = [];
 
-        for (const partner of partners) {
-            const teamMembers = await User.findAll({
-                where: {
-                    [Op.or]: [
-                        { id: partner.id },
-                        { parent_id: partner.id },
-                        { agent_id: partner.id }
-                    ]
-                },
-                attributes: ['id']
-            });
-
-            const memberIds = teamMembers.map(m => m.id);
+        for (const partner of eligiblePartners) {
+            const memberIds = await this._collectTeamMemberIds(partner.id);
             if (memberIds.length === 0) {
                 rankings.push({ userId: partner.id, nickname: partner.nickname, roleLevel: partner.role_level, teamSales: 0, memberCount: 0 });
                 continue;
@@ -96,10 +148,11 @@ class DividendService {
             const result = await Order.findOne({
                 where: {
                     buyer_id: { [Op.in]: memberIds },
-                    status: { [Op.in]: ['paid', 'shipped', 'completed'] },
-                    paid_at: { [Op.gte]: startDate, [Op.lt]: endDate }
+                    status: 'completed',
+                    completion_processed: 1,
+                    completed_at: { [Op.gte]: startDate, [Op.lt]: endDate }
                 },
-                attributes: [[sequelize.fn('SUM', sequelize.col('total_amount')), 'totalSales']],
+                attributes: [[sequelize.fn('SUM', sequelize.col('actual_price')), 'totalSales']],
                 raw: true
             });
 
@@ -124,18 +177,9 @@ class DividendService {
      * @returns {Array} [{ userId, nickname, rank, teamSales, dividendAmount }]
      */
     static async previewDividend(year, dividendPool) {
+        const rules = await this._loadRules();
         const rankings = await this.calculateTeamRanking(year);
         if (rankings.length === 0) return [];
-
-        // 读取分红规则配置（冠亚季拆分）
-        const { AppConfig } = require('../models');
-        let rules = null;
-        try {
-            const cfg = await AppConfig.findOne({ where: { config_key: 'agent_system_dividend_rules', status: 1 } });
-            if (cfg) rules = JSON.parse(cfg.config_value);
-        } catch (e) {
-            logError('DIVIDEND', '静默捕获异常', { error: e.message });
-        }
 
         if (!rules || !rules.enabled) {
             return rankings.map(r => ({ ...r, dividendAmount: 0, sharePercent: 0, awardType: 'disabled' }));

@@ -83,41 +83,75 @@
         <view class="order-actions">
           <!-- ★ 有活跃退款时：只显示"查看退款" -->
           <block wx:if="{{item.hasActiveRefund}}">
-            <view class="btn btn-sm btn-secondary"
-                  catchtap="onViewRefund" data-order="{{item}}">查看退款</view>
+            <view class="action-row single">
+              <view class="btn btn-sm btn-primary"
+                    catchtap="onViewRefund" data-order="{{item}}">查看退款</view>
+            </view>
           </block>
 
           <!-- ★ 无活跃退款时：正常按钮逻辑 -->
           <block wx:else>
             <!-- 待付款 -->
-            <view class="btn btn-sm btn-ghost" wx:if="{{item.status === 'pending'}}"
-                  catchtap="onCancelOrder" data-order="{{item}}">取消订单</view>
-            <view class="btn btn-sm btn-primary" wx:if="{{item.status === 'pending'}}"
-                  catchtap="onPayOrder" data-order="{{item}}">去付款</view>
+            <block wx:if="{{item.status === 'pending'}}">
+              <view class="action-row">
+                <view class="btn btn-sm btn-ghost"
+                      catchtap="onCancelOrder" data-order="{{item}}">取消订单</view>
+                <view class="btn btn-sm btn-primary"
+                      catchtap="onPayOrder" data-order="{{item}}">去付款</view>
+              </view>
+            </block>
             
             <!-- 待发货：仅已支付未进入代理履约流程时可申请退款 -->
-            <view class="btn btn-sm btn-ghost" wx:if="{{item.status === 'paid'}}"
-                  catchtap="onApplyRefund" data-order="{{item}}">申请退款</view>
+            <block wx:if="{{item.status === 'paid'}}">
+              <view class="action-row single">
+                <view class="btn btn-sm btn-ghost"
+                      catchtap="onApplyRefund" data-order="{{item}}">申请退款</view>
+              </view>
+            </block>
 
-            <!-- 待收货：物流 / 评价 / 退款 / 确认收货 -->
-            <view class="btn btn-sm btn-secondary" wx:if="{{item.status === 'shipped'}}"
-                  catchtap="onViewLogistics" data-order="{{item}}">查看物流</view>
-            <view class="btn btn-sm btn-ghost" wx:if="{{item.status === 'shipped' && !item.reviewed}}"
-                  catchtap="onGoReview" data-order="{{item}}">评价</view>
-            <view class="btn btn-sm btn-ghost" wx:if="{{item.status === 'shipped'}}"
-                  catchtap="onApplyRefund" data-order="{{item}}">申请退款</view>
-            <view class="btn btn-sm btn-secondary" wx:if="{{item.status === 'shipped'}}"
-                  catchtap="onConfirmReceive" data-order="{{item}}">确认收货</view>
+            <!-- 待收货：主次分层 -->
+            <block wx:if="{{item.status === 'shipped'}}">
+              <view class="action-link-row" wx:if="{{!item.reviewed}}">
+                <view class="action-link"
+                      catchtap="onGoReview" data-order="{{item}}">评价</view>
+              </view>
+              <view class="action-row single" wx:if="{{item.tracking_no}}">
+                <view class="btn btn-sm btn-soft"
+                      catchtap="onViewLogistics" data-order="{{item}}">查看物流</view>
+              </view>
+              <view class="action-row">
+                <view class="btn btn-sm btn-ghost"
+                      catchtap="onApplyRefund" data-order="{{item}}">申请退款</view>
+                <view class="btn btn-sm btn-primary"
+                      catchtap="onConfirmReceive" data-order="{{item}}">确认收货</view>
+              </view>
+            </block>
 
             <!-- 已完成 -->
-            <view class="btn btn-sm btn-secondary" wx:if="{{item.status === 'completed' && !item.reviewed}}"
-                  catchtap="onGoReview" data-order="{{item}}">评价晒单</view>
-            <view class="btn btn-sm btn-primary" wx:if="{{item.status === 'completed'}}"
-                  catchtap="onBuyAgain" data-order="{{item}}">再次购买</view>
+            <block wx:if="{{item.status === 'completed'}}">
+              <view class="action-link-row" wx:if="{{!item.reviewed}}">
+                <view class="action-link"
+                      catchtap="onGoReview" data-order="{{item}}">评价晒单</view>
+              </view>
+              <view class="action-row" wx:if="{{item.tracking_no}}">
+                <view class="btn btn-sm btn-soft"
+                      catchtap="onViewLogistics" data-order="{{item}}">查看物流</view>
+                <view class="btn btn-sm btn-primary"
+                      catchtap="onBuyAgain" data-order="{{item}}">再次购买</view>
+              </view>
+              <view class="action-row single" wx:else>
+                <view class="btn btn-sm btn-primary"
+                      catchtap="onBuyAgain" data-order="{{item}}">再次购买</view>
+              </view>
+            </block>
             
             <!-- 退款Tab中已完成的退款 -->
-            <view class="btn btn-sm btn-primary" wx:if="{{item.displayStatus === 'refund_completed' || item.displayStatus === 'refund_rejected' || item.displayStatus === 'refund_cancelled'}}"
-                  catchtap="onViewRefund" data-order="{{item}}">查看详情</view>
+            <block wx:if="{{item.displayStatus === 'refund_completed' || item.displayStatus === 'refund_rejected' || item.displayStatus === 'refund_cancelled'}}">
+              <view class="action-row single">
+                <view class="btn btn-sm btn-primary"
+                      catchtap="onViewRefund" data-order="{{item}}">查看详情</view>
+              </view>
+            </block>
           </block>
         </view>
       </view>

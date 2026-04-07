@@ -9,11 +9,16 @@ function mapProductsForCategory(page, list) {
     const pointBalance = page.data.userPointBalance || 0;
     const bestCoupon = page.data.userBestCoupon || 0;
     const showPreview = page.data.pricePreviewEnabled;
+    const activityProductMaps = page.data.activityProductMaps || {};
+    const groupMap = activityProductMaps.group || {};
+    const slashMap = activityProductMaps.slash || {};
 
     return (list || []).map((item) => {
         const retailPrice = parseFloat(item.retail_price || item.price || 0);
         const marketPrice = parseFloat(item.market_price || 0);
         const sales = Number(item.purchase_count || item.sales_count || 0);
+        const groupActivity = groupMap[item.id] || null;
+        const slashActivity = slashMap[item.id] || null;
         let lowestTip = '';
 
         if (showPreview && (pointBalance > 0 || bestCoupon > 0)) {
@@ -35,7 +40,13 @@ function mapProductsForCategory(page, list) {
             discount_label: marketPrice > retailPrice
                 ? (retailPrice / marketPrice * 10).toFixed(1) + '折'
                 : '',
-            lowestTip
+            lowestTip,
+            groupActivity,
+            slashActivity,
+            hasGroupActivity: !!groupActivity,
+            hasSlashActivity: !!slashActivity,
+            groupPrice: groupActivity ? parseFloat(groupActivity.group_price || 0) : 0,
+            slashFloorPrice: slashActivity ? parseFloat(slashActivity.floor_price || 0) : 0
         };
     });
 }
@@ -105,6 +116,9 @@ async function loadCategoryProductsBatch(page, categoryIds, loadToken, options =
             ...(setLoadingFalse ? { loading: false } : {})
         }, resolve));
 
+        if (typeof page._rebuildVisibleProducts === 'function') {
+            page._rebuildVisibleProducts();
+        }
         page._scheduleHeightCalc();
         return results;
     } finally {

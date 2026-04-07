@@ -11,7 +11,7 @@
  */
 const { Op } = require('sequelize');
 const {
-    ServiceStation, StationClaim, User,
+    ServiceStation, StationClaim, StationStaff, User,
     CommissionLog, AppConfig, sequelize
 } = require('../models');
 
@@ -50,6 +50,42 @@ function buildStationMeta(station, extra = {}) {
     });
 }
 
+function maskPhone(phone) {
+    if (!phone) return '';
+    const raw = String(phone);
+    if (raw.length < 7) return raw;
+    return `${raw.slice(0, 3)}****${raw.slice(-4)}`;
+}
+
+function maskNickname(nickname, fallback = '成员') {
+    const raw = String(nickname || '').trim();
+    if (!raw) return fallback;
+    if (raw.length <= 1) return `${raw}*`;
+    return `${raw.slice(0, 1)}${'*'.repeat(Math.min(raw.length - 1, 2))}`;
+}
+
+function buildStaffSummary(staffMembers = []) {
+    const activeMembers = (Array.isArray(staffMembers) ? staffMembers : []).filter((item) => item && item.status === 'active');
+    const preview = activeMembers.slice(0, 4).map((item) => ({
+        id: item.id,
+        user_id: item.user_id,
+        role: item.role || 'staff',
+        can_verify: Number(item.can_verify || 0) === 1,
+        remark: item.remark || '',
+        user: item.user ? {
+            id: item.user.id,
+            nickname: maskNickname(item.user.nickname, `用户${item.user_id}`),
+            phone: maskPhone(item.user.phone)
+        } : null
+    }));
+    return {
+        total: activeMembers.length,
+        verify_count: activeMembers.filter((item) => Number(item.can_verify || 0) === 1).length,
+        manager_count: activeMembers.filter((item) => item.role === 'manager').length,
+        preview
+    };
+}
+
 async function getClaimedStationsByUser(userId) {
     const rows = await ServiceStation.findAll({
         where: { claimant_id: userId, status: 'active' }
@@ -59,6 +95,125 @@ async function getClaimedStationsByUser(userId) {
         branchType: parseStationMeta(st).branch_type || 'city'
     }));
 }
+
+async function getStationStaffSummaryMap(stationIds = []) {
+    if (!Array.isArray(stationIds) || stationIds.length === 0) {
+        return {};
+    }
+    const rows = await StationStaff.findAll({
+        where: {
+            station_id: { [Op.in]: stationIds },
+            status: 'active'
+        },
+        include: [{
+            model: User,
+            as: 'user',
+            attributes: ['id', 'nickname', 'phone'],
+            required: false
+        }],
+        order: [['created_at', 'ASC']]
+    });
+
+    return rows.reduce((acc, item) => {
+        const plain = item.get ? item.get({ plain: true }) : item;
+        const key = String(plain.station_id);
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(plain);
+        return acc;
+    }, {});
+}
+
+async function getManagedStationsByUser(userId) {
+    const rows = await ServiceStation.findAll({
+        where: { status: 'active' },
+        include: [
+            {
+                model: StationStaff,
+                as: 'staffMembers',
+                where: { user_id: userId, status: 'active' },
+                attributes: ['id', 'role', 'can_verify', 'status', 'remark'],
+                required: true
+            }
+        ],
+        order: [['name', 'ASC']]
+    });
+    const staffSummaryMap = await getStationStaffSummaryMap(rows.map((item) => item.id));
+    return rows.map((station) => {
+        const plain = station.get ? station.get({ plain: true }) : station;
+        const member = (plain.staffMembers || [])[0] || null;
+        const meta = parseStationMeta(station);
+        return {
+            ...plain,
+            branch_type: meta.branch_type || 'city',
+            region_name: meta.region_name || '',
+            my_role: member?.role || 'staff',
+            can_verify: Number(member?.can_verify || 0) === 1,
+            staff_summary: buildStaffSummary(staffSummaryMap[String(plain.id)] || [])
+        };
+    });
+}
+
+/**
+ * GET /api/stations/my-scope
+ * 当前用户的门店归属与核销范围
+ */
+exports.getMyVerifyScope = async (req, res, next) => {
+    try {
+        let stations = await getManagedStationsByUser(req.user.id);
+        if (stations.length === 0) {
+            const claimedRows = await ServiceStation.findAll({
+                where: { claimant_id: req.user.id, status: 'active' },
+                attributes: [
+                    'id', 'name', 'province', 'city', 'district', 'address',
+                    'status', 'is_pickup_point', 'pickup_contact', 'contact_name',
+                    'contact_phone', 'business_days', 'business_time_start', 'business_time_end'
+                ],
+                include: [
+                    {
+                        model: StationStaff,
+                        as: 'staffMembers',
+                        where: { status: 'active' },
+                        attributes: ['id', 'user_id', 'role', 'can_verify', 'status', 'remark'],
+                        include: [{
+                            model: User,
+                            as: 'user',
+                            attributes: ['id', 'nickname', 'phone'],
+                            required: false
+                        }],
+                        required: false
+                    }
+                ],
+                order: [['name', 'ASC']]
+            });
+            stations = claimedRows.map((station) => {
+                const plain = station.get ? station.get({ plain: true }) : station;
+                const meta = parseStationMeta(station);
+                return {
+                    ...plain,
+                    branch_type: meta.branch_type || 'city',
+                    region_name: meta.region_name || '',
+                    my_role: 'manager',
+                    can_verify: true,
+                    staff_summary: buildStaffSummary(plain.staffMembers || [])
+                };
+            });
+        }
+
+        const verifyStations = stations.filter((item) => item.can_verify && Number(item.is_pickup_point) === 1);
+
+        res.json({
+            code: 0,
+            data: {
+                has_verify_access: verifyStations.length > 0,
+                station_count: stations.length,
+                requires_station_selection: verifyStations.length > 1,
+                stations
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+};
 
 /**
  * GET /api/stations/region-from-point

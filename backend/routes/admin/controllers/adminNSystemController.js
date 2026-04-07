@@ -24,8 +24,8 @@ exports.getLeaders = async (req, res) => {
             include: [
                 { model: AgentWalletAccount, as: 'agentWallet', attributes: ['balance'], required: false }
             ],
-            attributes: ['id', 'nickname', 'avatar_url', 'phone', 'balance', 'createdAt'],
-            order: [['createdAt', 'DESC']],
+            attributes: ['id', 'nickname', 'avatar_url', 'phone', 'balance', ['created_at', 'createdAt']],
+            order: [['created_at', 'DESC']],
             limit: parseInt(limit),
             offset: (parseInt(page) - 1) * parseInt(limit)
         });

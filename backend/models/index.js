@@ -46,6 +46,7 @@ const SlashHelper = require('./SlashHelper');
 // ★ Phase 4：自提核销 + 服务站点
 const ServiceStation = require('./ServiceStation');
 const StationClaim = require('./StationClaim');
+const StationStaff = require('./StationStaff');
 const MaterialGroup = require('./MaterialGroup');
 // ★ Phase 6: 开屏动画
 const SplashScreen = require('./SplashScreen');
@@ -231,6 +232,10 @@ StationClaim.belongsTo(ServiceStation, { foreignKey: 'station_id', as: 'station'
 StationClaim.belongsTo(User, { foreignKey: 'applicant_id', as: 'applicant' });
 ServiceStation.hasMany(StationClaim, { foreignKey: 'station_id', as: 'claims' });
 User.hasMany(StationClaim, { foreignKey: 'applicant_id', as: 'stationClaims' });
+StationStaff.belongsTo(ServiceStation, { foreignKey: 'station_id', as: 'station' });
+StationStaff.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+ServiceStation.hasMany(StationStaff, { foreignKey: 'station_id', as: 'staffMembers' });
+User.hasMany(StationStaff, { foreignKey: 'user_id', as: 'stationStaffMemberships' });
 Order.belongsTo(ServiceStation, { foreignKey: 'pickup_station_id', as: 'pickupStation' });
 ServiceStation.hasMany(Order, { foreignKey: 'pickup_station_id', as: 'pickupOrders' });
 
@@ -298,6 +303,7 @@ module.exports = {
     // Phase 4: 自提核销 + 服务站点
     ServiceStation,
     StationClaim,
+    StationStaff,
     // 素材库分组
     MaterialGroup,
     // Phase 6: 开屏动画

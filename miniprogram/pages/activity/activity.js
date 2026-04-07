@@ -5,6 +5,7 @@ const { navigate } = require('../../utils/navigator');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
 const { loadConfig } = require('./activityLoader');
 const { startBannerCountdown, clearBannerTimers } = require('./activityTimers');
+const { buildActivitySections } = require('../../utils/activitySectionBuilder');
 const app = getApp();
 
 function getActivityPageConfig() {
@@ -87,37 +88,66 @@ function sortByOrder(arr) {
     return [...(arr || [])].sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
 }
 
+function plainSummary(html, maxLen = 46) {
+    if (!html) return '';
+    const text = String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    return text.length > maxLen ? `${text.slice(0, maxLen)}…` : text;
+}
+
+function enrichSlashActivity(item) {
+    if (!item) return item;
+    return {
+        ...item,
+        _summary: item._summary || plainSummary(item.product && item.product.description, 46)
+    };
+}
+
+function enrichGroupActivity(item) {
+    if (!item) return item;
+    return {
+        ...item,
+        _summary: item._summary || plainSummary(item.product && item.product.description, 46)
+    };
+}
+
+function formatLotteryDisplayValue(prize = {}) {
+    const value = Number(prize.prize_value || 0);
+    if (prize.type === 'points' && value > 0) return `${value} 积分`;
+    if (prize.type === 'coupon' && value > 0) return `${value} 元券`;
+    if (prize.type === 'physical') return '实物礼品';
+    return '试试下一次好运';
+}
+
+function enrichLotteryPrize(item) {
+    if (!item) return item;
+    return {
+        ...item,
+        display_value: item.display_value || formatLotteryDisplayValue(item)
+    };
+}
+
 function isRenderableCard(item) {
     if (!(item && item.title && (item.image || item.gradient))) return false;
     const nav = deriveActivityNav(item);
     return !!(nav.link_type && nav.link_type !== 'none' && nav.link_value);
 }
 
-/** Banner 轮播：后台 Banner + 常驻 + 限时，统一顶栏展示 */
-function mergeActivityBannerSlides({ banners, permanent, limited, linksMeta }) {
+/** Banner 轮播：后台 Banner + 限时活动，不在Banner中展示常驻活动 */
+function mergeActivityBannerSlides({ banners, limited }) {
     const b = sortByOrder((banners || []).map((item, idx) => normalizeCard(item, idx)).filter(isRenderableCard));
-    const permRaw = sortByOrder((permanent || []).map((item, idx) => normalizeCard(item, idx)).filter(isRenderableCard));
     const limRaw = sortByOrder((limited || []).map((item, idx) => normalizeCard(item, idx)).filter(isRenderableCard));
-    const penabled = !linksMeta || linksMeta.permanent_section_enabled !== false;
-    const pBlock = penabled ? permRaw : [];
-    const limitedFirst = linksMeta && linksMeta.activity_sections_order === 'limited_first';
-    const middle = limitedFirst ? [...limRaw, ...pBlock] : [...pBlock, ...limRaw];
-    return [...b, ...middle];
+    return [...b, ...limRaw];
 }
 
 function getFallbackBannerSlides() {
-    const meta = { permanent_section_enabled: true, activity_sections_order: 'permanent_first' };
     const merged = mergeActivityBannerSlides({
         banners: getDefaultBanners(),
-        permanent: getDefaultPermanentActivities(),
-        limited: [],
-        linksMeta: meta
+        limited: []
     });
     return merged.length ? merged : mergeActivityBannerSlides({
         banners: [],
-        permanent: getDefaultPermanentActivities(),
-        limited: [],
-        linksMeta: meta
+        limited: []
     });
 }
 
@@ -134,6 +164,8 @@ Page({
         /** 品牌新闻（列表页展示摘要，详情另请求） */
         brandNews: [],
         brandNewsSectionTitle: '品牌动态',
+        permanentActivities: [],
+        activitySections: [],
 
         wallpaperClass: '',
         loadError: false,
@@ -144,6 +176,7 @@ Page({
     onLoad() {
         const activityConfig = getActivityPageConfig();
         const initialSlides = getFallbackBannerSlides();
+        const initialPermanent = getDefaultPermanentActivities();
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navTopPadding:   app.globalData.navTopPadding   || (app.globalData.statusBarHeight || 20),
@@ -151,13 +184,16 @@ Page({
             bannerSlides: initialSlides,
             pendingToast: activityConfig.pending_toast || '活动筹备中',
             brandNews: [],
-            brandNewsSectionTitle: '品牌动态'
+            brandNewsSectionTitle: '品牌动态',
+            permanentActivities: initialPermanent,
+            activitySections: this._buildActivitySections(initialPermanent)
         });
         this._clearBannerTimers();
         initialSlides.forEach((item) => {
             if (item.end_time) this._startBannerCountdown(item.end_time, item.id);
         });
         this.loadConfig();
+        this.loadActivityPreviews();
     },
 
     onShow() {},
@@ -176,12 +212,15 @@ Page({
         loadError = false,
         linksMeta = null
     }) {
-        const merged = mergeActivityBannerSlides({ banners, permanent, limited, linksMeta: linksMeta || {} });
+        const merged = mergeActivityBannerSlides({ banners, limited });
         const slides = merged.length ? merged : getFallbackBannerSlides();
+        const permanentActivities = Array.isArray(permanent) ? permanent : [];
         this.setData({
             bannerSlides: slides,
             brandNews: Array.isArray(brandNews) ? brandNews : [],
             brandNewsSectionTitle: brandNewsSectionTitle || '品牌动态',
+            permanentActivities,
+            activitySections: this._buildActivitySections(permanentActivities),
             wallpaperClass,
             loadError,
             bannerIndex: 0
@@ -212,6 +251,25 @@ Page({
             sortByOrder,
             normalizeCard,
             isRenderableCard
+        });
+    },
+
+    _buildActivitySections(permanentActivities) {
+        const built = buildActivitySections({
+            permanentActivities: Array.isArray(permanentActivities) ? permanentActivities : [],
+            slashActivities: this._slashActivities || [],
+            groupActivities: this._groupActivities || [],
+            lotteryPrizes: this._lotteryPrizes || []
+        });
+        return (built.sections || []).map((section) => ({
+            ...section
+        }));
+    },
+
+    async loadActivityPreviews() {
+        // 简化：不再需要加载预览数据，直接更新sections
+        this.setData({
+            activitySections: this._buildActivitySections(this.data.permanentActivities || [])
         });
     },
 
@@ -326,9 +384,22 @@ Page({
         });
     },
 
+    onSectionTap(e) {
+        const section = e.currentTarget.dataset.section || {};
+        if (!(section.moreLinkType && section.moreLinkValue)) return;
+        navigate(section.moreLinkType, section.moreLinkValue);
+    },
+
+    onSubCardTap(e) {
+        const card = e.currentTarget.dataset.card || {};
+        if (!(card.moreLinkType && card.moreLinkValue)) return;
+        navigate(card.moreLinkType, card.moreLinkValue);
+    },
+
     onRetryLoad() {
         this.setData({ loadError: false });
         this.loadConfig();
+        this.loadActivityPreviews();
     },
 
     _resolveWallpaperClass(wallpaperCfg) {

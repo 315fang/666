@@ -144,6 +144,13 @@ async function getDistributionStats(req, res, next) {
     }
 }
 
+function maskPhone(phone) {
+    const value = String(phone || '').trim();
+    if (!value) return '';
+    if (value.length < 7) return value;
+    return `${value.slice(0, 3)}****${value.slice(-4)}`;
+}
+
 /**
  * 获取团队成员列表
  */
@@ -214,6 +221,7 @@ async function getTeamMembers(req, res, next) {
             order_count: member.order_count,
             total_sales: member.total_sales,
             member_no: member.member_no,
+            phone: maskPhone(member.phone),
             level: member.parent_id === user.id ? 1 : 2,
             joined_at: member.created_at,
             created_at: member.created_at
@@ -229,6 +237,76 @@ async function getTeamMembers(req, res, next) {
                     limit: parseInt(limit),
                     totalPages: Math.ceil(count / parseInt(limit))
                 }
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * 获取团队成员详情
+ */
+async function getTeamMemberDetail(req, res, next) {
+    try {
+        const user = req.user;
+        const memberId = parseInt(req.params.id, 10);
+
+        if (!memberId) {
+            return res.status(400).json({ code: -1, message: '成员ID无效' });
+        }
+
+        const directMembers = await User.findAll({
+            where: { parent_id: user.id },
+            attributes: ['id'],
+            raw: true
+        });
+        const directIds = directMembers.map(item => item.id);
+
+        const member = await User.findOne({
+            where: {
+                id: memberId,
+                [Op.or]: [
+                    { parent_id: user.id },
+                    ...(directIds.length > 0 ? [{ parent_id: { [Op.in]: directIds } }] : [])
+                ]
+            },
+            attributes: ['id', 'nickname', 'avatar_url', 'role_level', 'order_count', 'total_sales', 'created_at', 'member_no', 'parent_id', 'phone']
+        });
+
+        if (!member) {
+            return res.status(404).json({ code: -1, message: '成员不存在或无权查看' });
+        }
+
+        const roleName = await MemberTierService.getRoleName(member.role_level);
+        let parentDisplay = '';
+
+        if (member.parent_id === user.id) {
+            parentDisplay = '直属于你';
+        } else if (member.parent_id) {
+            const parent = await User.findByPk(member.parent_id, {
+                attributes: ['nickname', 'member_no']
+            });
+            const parentName = parent?.nickname ? `${parent.nickname.charAt(0)}***` : '一级成员';
+            parentDisplay = `上级：${parentName}${parent?.member_no ? `（${parent.member_no}）` : ''}`;
+        }
+
+        return res.json({
+            code: 0,
+            data: {
+                id: member.id,
+                nickname: member.nickname ? member.nickname.charAt(0) + '***' : '用户***',
+                avatar_url: member.avatar_url,
+                role_level: member.role_level,
+                role_name: roleName || '普通用户',
+                order_count: Number(member.order_count || 0),
+                total_sales: parseFloat(member.total_sales || 0).toFixed(2),
+                member_no: member.member_no || '',
+                phone: maskPhone(member.phone),
+                level: member.parent_id === user.id ? 1 : 2,
+                level_label: member.parent_id === user.id ? '一级成员' : '二级成员',
+                joined_at: member.created_at,
+                relation_text: parentDisplay || '团队成员'
             }
         });
     } catch (error) {
@@ -366,6 +444,7 @@ module.exports = {
     getDistributionStats,
     getWorkbenchStats,
     getTeamMembers,
+    getTeamMemberDetail,
     getPromotionOrders,
     getInviteWxaCode
 };

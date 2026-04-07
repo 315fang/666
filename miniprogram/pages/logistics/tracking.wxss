@@ -23,7 +23,7 @@
 .status-header { display: flex; align-items: center; gap: 16rpx; padding: 28rpx 24rpx; margin: 16rpx 24rpx; border-radius: 20rpx; position: relative; }
 .status-header.in_transit { background: linear-gradient(135deg, #6366F1, #8B5CF6); }
 .status-header.delivered { background: linear-gradient(135deg, #10B981, #059669); }
-.status-header.dispatching { background: linear-gradient(135deg, #F59E0B, #D97706); }
+.status-header.dispatching { background: linear-gradient(135deg, #3B82F6, #1D4ED8); }
 .status-header.collecting { background: linear-gradient(135deg, #94A3B8, #64748B); }
 .status-header.failed { background: linear-gradient(135deg, #EF4444, #DC2626); }
 .status-header.problem { background: linear-gradient(135deg, #F97316, #EA580C); }

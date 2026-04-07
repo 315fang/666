@@ -1,20 +1,12 @@
 const { get } = require('../../utils/request');
-const { ensurePrivacyAuthorization } = require('../../utils/privacy');
-const { getFuzzyCoordinates } = require('./utils/fuzzyLocation');
-
-const CITY_LEVEL_SCALE = 12;
+const { ensureUserLocationPermission, getCurrentLocation } = require('./utils/location');
 const SINGLE_STATION_SCALE = 14;
-const REGION_FIT_SCALE = 11;
-
-function tryGetUserFuzzyLocation() {
-    return getFuzzyCoordinates();
-}
 
 async function loadStations(page, helpers) {
     const {
         buildStationMarkersFromList,
         mergeUserMarker,
-        computeFuzzyCityViewport,
+        computeCurrentCityViewport,
         centroidOf,
         scaleForStationSpread
     } = helpers;
@@ -33,23 +25,25 @@ async function loadStations(page, helpers) {
         let geoConfigured = false;
 
         try {
-            await ensurePrivacyAuthorization({ showDeniedToast: false });
-            const loc = await tryGetUserFuzzyLocation();
-            if (loc) {
-                userLa = loc.latitude;
-                userLo = loc.longitude;
-                userMarkerMode = 'fuzzy';
-                try {
-                    const geo = await get(
-                        '/stations/region-from-point',
-                        { lat: userLa, lng: userLo },
-                        { showError: false }
-                    );
-                    const pack = geo && geo.data;
-                    regionObj = pack && pack.region ? pack.region : null;
-                    geoConfigured = !!(pack && pack.configured);
-                } catch (_) {
-                    regionObj = null;
+            const granted = await ensureUserLocationPermission();
+            if (granted) {
+                const loc = await getCurrentLocation({ isHighAccuracy: true });
+                if (loc && loc.ok) {
+                    userLa = loc.latitude;
+                    userLo = loc.longitude;
+                    userMarkerMode = 'current';
+                    try {
+                        const geo = await get(
+                            '/stations/region-from-point',
+                            { lat: userLa, lng: userLo },
+                            { showError: false }
+                        );
+                        const pack = geo && geo.data;
+                        regionObj = pack && pack.region ? pack.region : null;
+                        geoConfigured = !!(pack && pack.configured);
+                    } catch (_) {
+                        regionObj = null;
+                    }
                 }
             }
         } catch (_) {
@@ -60,12 +54,12 @@ async function loadStations(page, helpers) {
 
         let mapLat = 31.3;
         let mapLng = 121.5;
-        let scale = CITY_LEVEL_SCALE;
+        let scale = 12;
         let includePoints = [];
         let regionBanner = '';
 
         if (userLa != null && userLo != null) {
-            const viewport = computeFuzzyCityViewport(list, userLa, userLo, regionObj);
+            const viewport = computeCurrentCityViewport(list, userLa, userLo, regionObj);
             mapLat = viewport.mapLat;
             mapLng = viewport.mapLng;
             scale = viewport.scale;
@@ -75,12 +69,12 @@ async function loadStations(page, helpers) {
                     ? `${regionObj.city || ''}${regionObj.district || ''}`.trim()
                     : '';
             if (label) {
-                regionBanner = `已按模糊定位框选「${label}」内门店；点右下角选精确位置查看最近店`;
+                regionBanner = `已按当前位置框选「${label}」附近门店；点右下角可选点查最近店`;
             } else if (geoConfigured === false) {
                 regionBanner =
-                    '模糊定位已用于地图视野（服务端未配置腾讯地图 Key 时无法解析行政区）；请用选点查最近店';
+                    '已按当前位置调整地图；服务端未配置腾讯地图 Key 时无法解析行政区';
             } else {
-                regionBanner = '已按模糊定位调整地图；点「选点查最近店」获取精确位置';
+                regionBanner = '已按当前位置调整地图；点「选点查最近店」可手动修正';
             }
         } else if (points.length === 1) {
             mapLat = points[0].latitude;

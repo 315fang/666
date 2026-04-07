@@ -52,6 +52,13 @@ function isCouponApplicable(userCoupon, { productIds = [], categoryIds = [] } = 
     return false;
 }
 
+function getEffectiveMinPurchase(userCoupon) {
+    if (!userCoupon) return 0;
+    if (userCoupon.coupon_type === 'no_threshold') return 0;
+    const value = Number(userCoupon.min_purchase);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
 /**
  * 计算优惠券抵扣金额
  * @param {object} userCoupon   UserCoupon instance
@@ -60,7 +67,7 @@ function isCouponApplicable(userCoupon, { productIds = [], categoryIds = [] } = 
  */
 function calcCouponDiscount(userCoupon, orderAmount) {
     if (!userCoupon) return 0;
-    if (parseFloat(userCoupon.min_purchase) > orderAmount) return 0;
+    if (getEffectiveMinPurchase(userCoupon) > orderAmount) return 0;
 
     if (userCoupon.coupon_type === 'fixed' || userCoupon.coupon_type === 'no_threshold') {
         return Math.min(parseFloat(userCoupon.coupon_value), orderAmount);
@@ -74,4 +81,9 @@ function calcCouponDiscount(userCoupon, orderAmount) {
     return 0;
 }
 
-module.exports = { calcCouponDiscount, isCouponApplicable, validateCouponScopePayload };
+module.exports = {
+    calcCouponDiscount,
+    isCouponApplicable,
+    validateCouponScopePayload,
+    getEffectiveMinPurchase
+};

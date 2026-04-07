@@ -2,11 +2,10 @@
 // 结构：二级商城（侧边栏分类 → 商品列表）+ 分页加载
 // 联动：当前版本 scroll sync（calculateCategoryHeights + onRightScroll + leftToView）
 // 购物袋：当前版本改进逻辑（items / summary.total_amount + cart_ids 结算）
-const { get, post } = require('../../utils/request');
+const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
 const { normalizeProductId } = require('../../utils/dataFormatter');
 const { ErrorHandler } = require('../../utils/errorHandler');
-const { requireLogin } = require('../../utils/auth');
 const { getApiBaseUrl } = require('../../config/env');
 const navigator = require('../../utils/navigator');
 const { syncPageTabBar, restorePageTabBar } = require('../../utils/tabBarHelper');
@@ -43,10 +42,13 @@ function normalizeAssetUrl(url = '') {
 
 const CATEGORY_INITIAL_BATCH_SIZE = 2;
 const CATEGORY_PRICE_PREVIEW_TTL = 60 * 1000;
+const SPECIAL_CATEGORY_ID = '__special__';
+const SPECIAL_CATEGORY_NAME = '拼团砍价';
 
 Page({
     data: {
         categories: [],
+        sidebarCategories: [],
         currentCategory: '',
         headerTopPadding: 20,
 
@@ -58,8 +60,13 @@ Page({
 
         // 全分类商品（categoryId -> product[]）
         allProducts: {},
+        visibleProducts: {},
         loadedCategories: {},
         loading: false,
+        activityProductMaps: {
+            group: {},
+            slash: {}
+        },
 
         // 购物袋
         cartCount: 0,
@@ -83,6 +90,7 @@ Page({
     onShow() {
         this.updateCartData();
         this._loadPricePreviewData();
+        this.loadActivityProducts();
         this._syncOverlayTabBar();
         this._applyPendingCategoryFocus();
     },
@@ -105,12 +113,14 @@ Page({
             headerTopPadding
         });
         this.loadCategoryBanners();
+        this.loadActivityProducts();
         this.loadSidebarCategories();
     },
 
     onPullDownRefresh() {
         Promise.all([
             this.loadCategoryBanners(),
+            this.loadActivityProducts(true),
             this.loadAllProducts({
                 forceRefresh: true,
                 initialCategoryId: this.data.currentCategory
@@ -196,9 +206,11 @@ Page({
             if (filteredCats.length > 0) {
                 await new Promise((resolve) => this.setData({
                     categories: filteredCats,
+                    sidebarCategories: this._buildSidebarCategories(filteredCats),
                     currentCategory: filteredCats[0].id,
                     loadedCategories: {},
-                    allProducts: {}
+                    allProducts: {},
+                    visibleProducts: {}
                 }, resolve));
                 this._applyPendingCategoryFocus();
                 await this.loadAllProducts({
@@ -206,11 +218,56 @@ Page({
                     initialCategoryId: this.data.currentCategory || filteredCats[0].id
                 });
             } else {
-                this.setData({ categories: [] });
+                this.setData({
+                    categories: [],
+                    sidebarCategories: this._buildSidebarCategories([])
+                });
             }
         } catch (err) {
             ErrorHandler.handle(err, { customMessage: '加载分类失败' });
         }
+    },
+
+    _buildSidebarCategories(categories) {
+        return [{
+            id: SPECIAL_CATEGORY_ID,
+            name: SPECIAL_CATEGORY_NAME
+        }].concat(Array.isArray(categories) ? categories : []);
+    },
+
+    async loadActivityProducts(forceRefresh = false) {
+        try {
+            const [groupRes, slashRes] = await Promise.all([
+                get('/group/activities', {}, { showError: false }).catch(() => null),
+                get('/slash/activities', {}, { showError: false }).catch(() => null)
+            ]);
+            const groupMap = this._buildActivityProductMap(groupRes && groupRes.data);
+            const slashMap = this._buildActivityProductMap(slashRes && slashRes.data);
+            this.setData({
+                activityProductMaps: {
+                    group: groupMap,
+                    slash: slashMap
+                }
+            }, () => {
+                this._refreshPricePreviewHints();
+                this._rebuildVisibleProducts();
+            });
+        } catch (err) {
+            if (!forceRefresh) return;
+            this.setData({
+                activityProductMaps: { group: {}, slash: {} }
+            }, () => this._rebuildVisibleProducts());
+        }
+    },
+
+    _buildActivityProductMap(list) {
+        const map = {};
+        (Array.isArray(list) ? list : []).forEach((activity) => {
+            const productId = activity && activity.product && activity.product.id;
+            if (!productId || map[productId]) return;
+            map[productId] = activity;
+        });
+        return map;
     },
 
     async loadAllProducts(options = {}) {
@@ -218,7 +275,7 @@ Page({
         const categories = this.data.categories || [];
 
         if (!categories.length) {
-            this.setData({ allProducts: {}, loadedCategories: {}, loading: false });
+            this.setData({ allProducts: {}, visibleProducts: {}, loadedCategories: {}, loading: false });
             return;
         }
 
@@ -229,6 +286,7 @@ Page({
         await new Promise((resolve) => this.setData({
             loading: true,
             allProducts: forceRefresh ? {} : (this.data.allProducts || {}),
+            visibleProducts: forceRefresh ? {} : (this.data.visibleProducts || {}),
             loadedCategories: forceRefresh ? {} : (this.data.loadedCategories || {})
         }, resolve));
 
@@ -301,8 +359,32 @@ Page({
             leftToView: 'left-' + categoryId,
             isManualClick: true
         });
-        this.ensureCategoryProductsLoaded(categoryId);
+        if (categoryId !== SPECIAL_CATEGORY_ID) {
+            this.ensureCategoryProductsLoaded(categoryId);
+        }
         setTimeout(() => { this.setData({ isManualClick: false }); }, 800);
+    },
+
+    _rebuildVisibleProducts() {
+        const allProducts = this.data.allProducts || {};
+        const nextVisibleProducts = {};
+        const specialProducts = [];
+        const seenProductIds = new Set();
+
+        Object.keys(allProducts).forEach((categoryId) => {
+            const list = Array.isArray(allProducts[categoryId]) ? allProducts[categoryId] : [];
+            nextVisibleProducts[categoryId] = list;
+            list.forEach((product) => {
+                if (!product || seenProductIds.has(product.id)) return;
+                if (product.hasGroupActivity || product.hasSlashActivity) {
+                    seenProductIds.add(product.id);
+                    specialProducts.push(product);
+                }
+            });
+        });
+
+        nextVisibleProducts[SPECIAL_CATEGORY_ID] = specialProducts;
+        this.setData({ visibleProducts: nextVisibleProducts });
     },
 
     // ===== 右侧滚动联动左侧菜单（来自当前版本）=====
@@ -310,12 +392,12 @@ Page({
     onRightScroll(e) {
         if (this.data.isManualClick) return;
         const scrollTop = e.detail.scrollTop;
-        const { categoryHeights, categories } = this.data;
+        const { categoryHeights, sidebarCategories } = this.data;
         if (!categoryHeights || categoryHeights.length === 0) return;
 
         for (let i = categoryHeights.length - 1; i >= 0; i--) {
             if (scrollTop >= categoryHeights[i] - 50) {
-                const catId = categories[i]?.id;
+                const catId = sidebarCategories[i]?.id;
                 if (catId && this.data.currentCategory !== catId) {
                     this.setData({
                         currentCategory: catId,
@@ -445,7 +527,8 @@ Page({
     },
 
     _refreshPricePreviewHints() {
-        return refreshPricePreviewHints(this);
+        const result = refreshPricePreviewHints(this);
+        this._rebuildVisibleProducts();
+        return result;
     }
 });
-

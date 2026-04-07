@@ -38,7 +38,7 @@
     </view>
     <text class="delivery-hint" wx:if="{{deliveryType === 'express'}}">{{pickupAllowed ? '商品将邮寄至下方收货地址；需要到店取货可切换为「到店自提」。' : '商品将邮寄至下方收货地址。'}}</text>
     <text class="delivery-hint delivery-hint-muted" wx:if="{{!pickupAllowed}}">当前订单中的商品不支持到店自提。若需自提，请选购支持到店自提的商品，或咨询客服。</text>
-    <text class="delivery-hint" wx:if="{{pickupAllowed && deliveryType === 'pickup'}}">自提免运费；可选填联系地址便于售后。默认用微信模糊定位排序；需要更准请用「地图选点」。</text>
+    <text class="delivery-hint" wx:if="{{pickupAllowed && deliveryType === 'pickup'}}">自提免运费；可选填联系地址便于售后。可用当前位置推荐附近门店，也可用「地图选点」修正。</text>
     <view class="pickup-map-link" wx:if="{{pickupAllowed && deliveryType === 'pickup'}}" bindtap="onOpenStationsMap">
       <text class="pickup-map-link-text">查看全部门店地图</text>
     </view>
@@ -101,7 +101,7 @@
       <text class="section-title-text">自提门店</text>
     </view>
     <view class="pickup-loc-btns">
-      <button class="pickup-loc-btn" size="mini" bindtap="onLocateForPickupSort">大致位置排序</button>
+      <button class="pickup-loc-btn" size="mini" bindtap="onLocateForPickupSort">使用当前位置</button>
       <button class="pickup-loc-btn ghost" size="mini" bindtap="onChooseRefLocation">地图选点</button>
       <button class="pickup-loc-btn ghost" size="mini" wx:if="{{refLocationName}}" bindtap="clearRefLocation">清除参考点</button>
     </view>
@@ -119,8 +119,14 @@
         <text class="pickup-dist" wx:if="{{item.distance_km != null}}">约 {{item.distance_km}} km</text>
       </view>
       <text class="pickup-addr">{{item.city}} {{item.district || ''}} {{item.address || ''}}</text>
+      <text class="pickup-rule">仅该门店人员可核销本订单</text>
     </view>
     <text class="pickup-empty" wx:if="{{pickupStations.length === 0}}">暂无可用自提点，请稍后再试或联系客服</text>
+    <view class="pickup-notice-card" wx:if="{{pickupStation}}">
+      <text class="pickup-notice-title">已选自提门店</text>
+      <text class="pickup-notice-name">{{pickupStation.name}}</text>
+      <text class="pickup-notice-desc">提交订单后，仅限该门店工作人员完成核销，请勿前往其他门店自提。</text>
+    </view>
   </view>
 
   <view class="section goods-section">
@@ -159,6 +165,8 @@
         <text class="arrow" wx:if="{{availableCoupons.length > 0}}">›</text>
       </view>
     </view>
+    <text class="coupon-tip coupon-tip-active" wx:if="{{!selectedCoupon && availableCoupons.length > 0}}">您有{{availableCoupons.length}}张优惠券可用，点击立即选择</text>
+    <text class="coupon-tip" wx:elif="{{!selectedCoupon && unusedCouponCount > 0}}">您有{{unusedCouponCount}}张优惠券不适用于本单（金额/范围不符）</text>
   </view>
 
   <!-- 积分抵扣 -->
@@ -179,7 +187,8 @@
     <view class="coupon-picker-panel">
       <view class="coupon-picker-title">选择优惠券</view>
       <scroll-view scroll-y class="coupon-picker-scroll" show-scrollbar="{{true}}">
-        <view class="coupon-list">
+        <view class="coupon-picker-empty" wx:if="{{availableCoupons.length === 0}}">暂无可用优惠券</view>
+        <view class="coupon-list" wx:else>
           <view
             class="coupon-card {{selectedCoupon && selectedCoupon.id === item.id ? 'active' : ''}}"
             wx:for="{{availableCoupons}}"

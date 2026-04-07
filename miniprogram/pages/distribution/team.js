@@ -1,7 +1,16 @@
-// pages/distribution/team.js
 const { get } = require('../../utils/request');
 const { ROLE_NAMES } = require('../../config/constants');
 const app = getApp();
+
+function formatDate(dateText) {
+    if (!dateText) return '';
+    return String(dateText).split('T')[0];
+}
+
+function formatMoney(value) {
+    const n = Number(value || 0);
+    return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+}
 
 Page({
     data: {
@@ -45,23 +54,21 @@ Page({
     async loadStats() {
         try {
             const res = await get('/distribution/stats');
-            const { team, stats } = res.data;
-            const inviteCode = (res.data && res.data.userInfo && res.data.userInfo.invite_code)
-                || app.globalData.userInfo?.invite_code
-                || '';
+            const { team = {}, stats = {}, userInfo = {} } = res.data || {};
+            const inviteCode = userInfo.invite_code || app.globalData.userInfo?.invite_code || '';
             if (inviteCode && app.globalData.userInfo) {
                 app.globalData.userInfo.invite_code = inviteCode;
                 try {
                     wx.setStorageSync('userInfo', { ...app.globalData.userInfo, invite_code: inviteCode });
-                } catch (e) { /* ignore */ }
+                } catch (e) { }
             }
             this.setData({
                 inviteCode,
-                directCount: team.directCount,
-                indirectCount: team.indirectCount,
-                totalCount: team.totalCount,
-                monthlyNewMembers: team.monthlyNewMembers || 0,
-                totalSales: stats ? stats.totalEarnings : '0.00'
+                directCount: Number(team.directCount || 0),
+                indirectCount: Number(team.indirectCount || 0),
+                totalCount: Number(team.totalCount || 0),
+                monthlyNewMembers: Number(team.monthlyNewMembers || 0),
+                totalSales: formatMoney(stats.totalEarnings)
             });
         } catch (err) {
             console.error('加载统计失败:', err);
@@ -69,7 +76,7 @@ Page({
     },
 
     async loadMembers(isLoadMore = false) {
-        if (this.data.loading || (!isLoadMore && !this.data.hasMore)) return;
+        if (this.data.loading || (isLoadMore && !this.data.hasMore)) return;
         this.setData({ loading: true });
         try {
             const { currentTab, page, limit, members } = this.data;
@@ -78,12 +85,26 @@ Page({
                 page,
                 limit
             });
-            const list = res.data.list.map(item => ({
-                ...item,
-                joined_at_format: item.joined_at ? item.joined_at.split('T')[0] : '',
-                role_name: this.getRoleName(item.role_level),
-                total_sales_format: item.total_sales ? parseFloat(item.total_sales).toFixed(2) : '0.00'
-            }));
+            const list = (res.data?.list || []).map(item => {
+                const levelLabel = Number(item.level) === 1 ? '一级成员' : '二级成员';
+                return {
+                    ...item,
+                    joined_at_format: formatDate(item.joined_at),
+                    role_name: this.getRoleName(item.role_level),
+                    total_sales_format: formatMoney(item.total_sales),
+                    order_count_format: Number(item.order_count || 0),
+                    level_label: levelLabel,
+                    detail_items: [
+                        { label: '团队层级', value: levelLabel },
+                        { label: '成员身份', value: this.getRoleName(item.role_level) },
+                        { label: '会员码', value: item.member_no || '暂无' },
+                        { label: '手机号', value: item.phone || '未绑定' },
+                        { label: '订单数', value: `${Number(item.order_count || 0)} 单` },
+                        { label: '累计业绩', value: `¥${formatMoney(item.total_sales)}` },
+                        { label: '加入时间', value: formatDate(item.joined_at) || '未知' }
+                    ]
+                };
+            });
             this.setData({
                 members: isLoadMore ? members.concat(list) : list,
                 hasMore: list.length === limit,
@@ -97,7 +118,7 @@ Page({
     },
 
     getRoleName(level) {
-        return ROLE_NAMES[level] || '用户';
+        return ROLE_NAMES[level] || '普通用户';
     },
 
     switchTab(e) {
@@ -108,7 +129,9 @@ Page({
             members: [],
             page: 1,
             hasMore: true
-        }, () => { this.loadMembers(); });
+        }, () => {
+            this.loadMembers();
+        });
     },
 
     onLoadMore() {
@@ -117,11 +140,21 @@ Page({
 
     onCopyCode() {
         const code = this.data.inviteCode;
-        if (!code) { wx.showToast({ title: '暂无会员码', icon: 'none' }); return; }
+        if (!code) {
+            wx.showToast({ title: '暂无会员码', icon: 'none' });
+            return;
+        }
         wx.setClipboardData({
             data: code,
             success: () => wx.showToast({ title: '会员码已复制', icon: 'success' })
         });
+    },
+
+    goMemberDetail(e) {
+        const index = Number(e.currentTarget.dataset.index);
+        const member = this.data.members[index];
+        if (!member) return;
+        wx.navigateTo({ url: `/pages/distribution/team-member?id=${member.id}` });
     },
 
     onShareAppMessage() {

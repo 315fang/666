@@ -11,10 +11,13 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+backend/env*
+!backend/.env.example
 nul
 *.pem
 *.p12
@@ -41,3 +44,6 @@ final_test.txt
 
 # 本地技能扫描日志
 skill/**/logs/
+
+# 嵌套的 git 仓库
+agent-portal/

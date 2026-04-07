@@ -10,11 +10,29 @@ const PointService = require('./PointService');
 const LimitedSpotService = require('./LimitedSpotService');
 const MemberTierService = require('./MemberTierService');
 const PricingService = require('./PricingService');
-const { calcCouponDiscount, isCouponApplicable } = require('./CouponCalcService');
+const { calcCouponDiscount, isCouponApplicable, getEffectiveMinPurchase } = require('./CouponCalcService');
 const { normalizeSkuIdForFk } = require('../utils/skuId');
 const { generateOrderNo, calcShippingFeeByPolicy } = require('./OrderCalcService');
 
 class OrderCreationService {
+    static getProductSupplyPriceForRole(product, roleLevel) {
+        if (!product || !roleLevel) return null;
+        const fieldMap = {
+            [constants.ROLES.AGENT]: 'supply_price_b1',
+            [constants.ROLES.PARTNER]: 'supply_price_b2',
+            [constants.ROLES.REGIONAL]: 'supply_price_b3'
+        };
+        const field = fieldMap[roleLevel];
+        if (!field) return null;
+        const value = product[field];
+        const parsed = value === null || value === undefined || value === '' ? NaN : Number(value);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    }
+
+    static getAgentLevelLabel(roleLevel) {
+        return constants.ROLE_NAMES?.[roleLevel] || '代理商';
+    }
+
     static async rollbackWithError(transaction, message) {
         await transaction.rollback();
         throw new Error(message);
@@ -389,8 +407,13 @@ class OrderCreationService {
                     await this.rollbackWithError(t, `商品「${product.name}」库存不足，当前仅剩 ${stockTarget.stock} 件`);
                 }
 
-                // 锁定发货扣款成本单价（优先商品成本价）
-                // B端6折拿货：成本价 x 拿货折扣率（默认0.6），从后台agent_system_commission读取
+                let agent = null;
+                if (agentId) {
+                    agent = await User.findByPk(agentId, { transaction: t, lock: t.LOCK.UPDATE });
+                }
+
+                // 锁定发货扣款成本单价
+                // 代理履约按归属代理等级锁定手工配置的供货成本价；平台履约继续保留平台成本价口径。
                 const baseCost = parseFloat(
                     product.cost_price
                     || product.price_agent
@@ -402,41 +425,41 @@ class OrderCreationService {
                 // N路径：lockedAgentCost = 大N的拿货价（purchase_level_code=n_leader），差价归大N
                 // 小n 按自己的购买价（purchase_level_code=n_member）付款，差价自动计提给大N
                 let lockedAgentCost;
+                let commissionConfig = null;
                 if (roleLevel === constants.ROLES.N_MEMBER && nLeaderUser) {
                     const leaderPurchaseLevel = await MemberTierService.getPurchaseLevelByCode(nLeaderUser.purchase_level_code);
                     // calculatePayableUnitPrice 是 async，且含全场折扣；大N拿货价应用其自身的价格档
                     const leaderPrice = await PricingService.calculatePayableUnitPrice(product, sku, nLeaderUser.role_level, leaderPurchaseLevel);
                     lockedAgentCost = parseFloat((leaderPrice).toFixed(2));
                 } else {
-                    // 拿货折扣率：从后台 agent_system_commission 配置读取，默认0.6
-                    let agentCostRate = 1;
-                    if (roleLevel >= 3) {
+                    if (agent?.role_level >= constants.ROLES.AGENT) {
                         try {
                             const commCfg = await AppConfig.findOne({ where: { config_key: 'agent_system_commission', status: 1 } });
                             if (commCfg) {
-                                const parsed = JSON.parse(commCfg.config_value);
-                                agentCostRate = parseFloat(parsed.agent_cost_discount_rate || 0.6);
-                            } else {
-                                agentCostRate = 0.6;
+                                commissionConfig = JSON.parse(commCfg.config_value);
                             }
-                        } catch (_) { agentCostRate = 0.6; }
+                        } catch (_) {}
                     }
-                    lockedAgentCost = parseFloat((baseCost * agentCostRate).toFixed(2));
+                    const configuredSupplyPrice = this.getProductSupplyPriceForRole(product, agent?.role_level);
+                    lockedAgentCost = parseFloat((configuredSupplyPrice || baseCost).toFixed(2));
                 }
 
                 // 拆单逻辑（代理商云库存判断）
                 let agentQuantity = 0;
                 let platformQuantity = quantity;
 
-                if (agentId) {
-                    const agent = await User.findByPk(agentId, { transaction: t, lock: t.LOCK.UPDATE });
-                    if (agent && agent.role_level >= 3 && agent.stock_count > 0) {
-                        // 代理商云仓发货：stock_count > 0 时优先从代理商发货
-                        // 设为 Math.min(agent.stock_count, quantity) 即可启用代理商发货
-                        // 当前策略：全部平台发货，待业务需要时开启
-                        agentQuantity = 0;
-                        platformQuantity = quantity - agentQuantity;
+                if (agent && agent.role_level >= constants.ROLES.AGENT && agent.stock_count > 0) {
+                    const configuredSupplyPrice = this.getProductSupplyPriceForRole(product, agent.role_level);
+                    const defaultPlatformFulfillment = commissionConfig?.default_platform_fulfillment !== false;
+                    if (!defaultPlatformFulfillment && !configuredSupplyPrice) {
+                        await this.rollbackWithError(
+                            t,
+                            `商品「${product.name}」未配置${this.getAgentLevelLabel(agent.role_level)}发货成本价，暂不能走代理发货`
+                        );
                     }
+                    // 默认平台发货可由后台配置切换；关闭后按代理可用库存优先分配代理履约。
+                    agentQuantity = defaultPlatformFulfillment ? 0 : Math.min(agent.stock_count, quantity);
+                    platformQuantity = quantity - agentQuantity;
                 }
 
                 // 公共订单字段
@@ -557,8 +580,9 @@ class OrderCreationService {
                 if (new Date(uc.expire_at) < new Date()) {
                     await this.rollbackWithError(t, '优惠券已过期');
                 }
-                if (parseFloat(uc.min_purchase) > totalAmountSum) {
-                    await this.rollbackWithError(t, `订单金额未满足优惠券最低消费 ${uc.min_purchase} 元`);
+                const minPurchase = getEffectiveMinPurchase(uc);
+                if (minPurchase > totalAmountSum) {
+                    await this.rollbackWithError(t, `订单金额未满足优惠券最低消费 ${minPurchase} 元`);
                 }
                 if (!isCouponApplicable(uc, {
                     productIds: Array.from(orderProductIds),

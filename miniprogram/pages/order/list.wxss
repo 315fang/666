@@ -39,7 +39,7 @@
   transform: translateX(-50%);
   width: 0;
   height: 6rpx;
-  background: linear-gradient(135deg, #2E6B94 0%, #C6A16E 100%);
+  background: linear-gradient(135deg, #2E6B94 0%, #60A5FA 100%);
   border-radius: 999rpx;
   opacity: 0;
   transition: all 0.25s ease;
@@ -92,7 +92,7 @@
   border-radius: 999rpx;
 }
 
-.order-status.pending { color: #9A7348; background: #FCF4E8; }
+.order-status.pending { color: #2563EB; background: #EFF6FF; }
 .order-status.paid { color: #1E4A6D; background: #E3EDF4; }
 .order-status.shipped { color: #0F766E; background: #ECFDF8; }
 .order-status.completed { color: #047857; background: #D1FAE5; }
@@ -187,6 +187,8 @@
 .order-footer {
   padding: 20rpx 26rpx 24rpx;
   background: rgba(255,255,255,0.5);
+  align-items: flex-end;
+  gap: 20rpx;
 }
 
 .fulfillment-tag {
@@ -199,21 +201,72 @@
 }
 
 .order-actions {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10rpx;
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 12rpx;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.action-row.single {
+  justify-content: flex-end;
+}
+
+.action-link-row {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.action-link {
+  font-size: 22rpx;
+  line-height: 1.2;
+  color: #64748B;
+  padding: 6rpx 4rpx;
+}
+
+.action-link:active {
+  color: #1D4ED8;
 }
 
 .btn {
   border-radius: 999rpx;
   font-size: 22rpx;
+  line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .btn-sm {
-  padding: 12rpx 22rpx;
+  min-height: 64rpx;
+  padding: 0 22rpx;
 }
 
-.btn-primary { background: #241D18; color: #FFF7F0; }
-.btn-secondary { background: #8A6A4E; color: #FFF7F0; }
-.btn-ghost { background: #FFF; color: #6D6258; border: 1rpx solid #E7DDD2; }
+.btn-primary { background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%); color: #FFFFFF; }
+.btn-secondary { background: linear-gradient(135deg, #60A5FA 0%, #2563EB 100%); color: #FFFFFF; }
+.btn-soft { background: #EFF6FF; color: #2563EB; border: 1rpx solid #BFDBFE; }
+.btn-ghost { background: #FFF; color: #475569; border: 1rpx solid #BFDBFE; }
+
+.order-total {
+  flex: 1;
+  min-width: 0;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  row-gap: 6rpx;
+}
 
 .load-more,
 .loading {

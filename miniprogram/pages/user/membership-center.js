@@ -189,6 +189,23 @@ Page({
         });
     },
 
+    onCardTabTap(e) {
+        if (!this.data.cardReady) return;
+        const type = e.currentTarget.dataset.type;
+        const cardSwiperCurrent = type === 'agent' ? 1 : 0;
+        const activeCard = cardSwiperCurrent === 1 ? 'agent' : 'consume';
+        if (activeCard === this.data.activeCard) return;
+        this.setData({
+            cardSwiperCurrent,
+            activeCard,
+            currentCardMeta: getMembershipCardMeta({
+                activeCard,
+                consumeCardSummary: this.data.consumeCardSummary,
+                agentCardSummary: this.data.agentCardSummary
+            })
+        });
+    },
+
     goBusinessCenter() {
         wx.navigateTo({ url: '/pages/distribution/business-center' });
     },

@@ -135,35 +135,35 @@
       <view class="order-tab" bindtap="onOrderTap" data-type="pending">
         <view class="order-tab-icon-wrap">
           <image class="order-tab-icon" src="/assets/icons/credit-card.svg" mode="aspectFit"></image>
-          <view class="order-tab-badge" wx:if="{{orderStats.pending > 0}}">{{orderStats.pending > 99 ? '99+' : orderStats.pending}}</view>
+          <view class="order-tab-badge order-tab-dot" wx:if="{{orderFreshFlags.pending}}">{{orderStats.pending > 99 ? '99+' : orderStats.pending}}</view>
         </view>
         <text class="order-tab-text">待付款</text>
       </view>
       <view class="order-tab" bindtap="onOrderTap" data-type="paid">
         <view class="order-tab-icon-wrap">
           <image class="order-tab-icon" src="/assets/icons/package.svg" mode="aspectFit"></image>
-          <view class="order-tab-badge" wx:if="{{orderStats.paid > 0}}">{{orderStats.paid > 99 ? '99+' : orderStats.paid}}</view>
+          <view class="order-tab-badge order-tab-dot" wx:if="{{orderFreshFlags.paid}}">{{orderStats.paid > 99 ? '99+' : orderStats.paid}}</view>
         </view>
         <text class="order-tab-text">待发货</text>
       </view>
       <view class="order-tab" bindtap="onOrderTap" data-type="shipped">
         <view class="order-tab-icon-wrap">
           <image class="order-tab-icon" src="/assets/icons/truck.svg" mode="aspectFit"></image>
-          <view class="order-tab-badge" wx:if="{{orderStats.shipped > 0}}">{{orderStats.shipped > 99 ? '99+' : orderStats.shipped}}</view>
+          <view class="order-tab-badge order-tab-dot" wx:if="{{orderFreshFlags.shipped}}">{{orderStats.shipped > 99 ? '99+' : orderStats.shipped}}</view>
         </view>
         <text class="order-tab-text">待收货</text>
       </view>
       <view class="order-tab" bindtap="onOrderTap" data-type="pending_review">
         <view class="order-tab-icon-wrap">
           <image class="order-tab-icon" src="/assets/icons/message.svg" mode="aspectFit"></image>
-          <view class="order-tab-badge" wx:if="{{orderStats.pendingReview > 0}}">{{orderStats.pendingReview > 99 ? '99+' : orderStats.pendingReview}}</view>
+          <view class="order-tab-badge order-tab-dot" wx:if="{{orderFreshFlags.pendingReview}}">{{orderStats.pendingReview > 99 ? '99+' : orderStats.pendingReview}}</view>
         </view>
         <text class="order-tab-text">待评价</text>
       </view>
       <view class="order-tab" bindtap="onRefundTap">
         <view class="order-tab-icon-wrap">
           <image class="order-tab-icon" src="/assets/icons/refresh-cw.svg" mode="aspectFit"></image>
-          <view class="order-tab-badge" wx:if="{{orderStats.refund > 0}}">{{orderStats.refund > 99 ? '99+' : orderStats.refund}}</view>
+          <view class="order-tab-badge order-tab-dot" wx:if="{{orderFreshFlags.refund}}">{{orderStats.refund > 99 ? '99+' : orderStats.refund}}</view>
         </view>
         <text class="order-tab-text">退款/售后</text>
       </view>
@@ -173,32 +173,6 @@
   <!-- ══ 四宫格摘要 ══ -->
   <view class="section-card quad-card">
     <view class="quad-grid">
-      <view class="quad-cell" wx:if="{{showQuadExpressCard}}" bindtap="onQuadExpressTap" hover-class="quad-cell-hover">
-        <view class="quad-cell-main">
-          <view class="quad-texts">
-            <text class="quad-title">快递</text>
-            <text class="quad-sub">{{quadExpress.sub}}</text>
-          </view>
-          <image class="quad-thumb" wx:if="{{quadExpress.hasImage}}" src="{{quadExpress.image}}" mode="aspectFill"></image>
-          <view class="quad-icon-placeholder" wx:else>
-            <image class="quad-icon" src="/assets/icons/truck.svg" mode="aspectFit"></image>
-          </view>
-        </view>
-        <text class="quad-action">去查看</text>
-      </view>
-      <view class="quad-cell" wx:if="{{quadRecent.mode !== 'order'}}" bindtap="onQuadRecentTap" hover-class="quad-cell-hover">
-        <view class="quad-cell-main">
-          <view class="quad-texts">
-            <text class="quad-title">{{quadRecent.title}}</text>
-            <text class="quad-sub">{{quadRecent.sub}}</text>
-          </view>
-          <image class="quad-thumb" wx:if="{{quadRecent.hasImage}}" src="{{quadRecent.image}}" mode="aspectFill"></image>
-          <view class="quad-icon-placeholder" wx:else>
-            <image class="quad-icon" src="/assets/icons/crown.svg" mode="aspectFit"></image>
-          </view>
-        </view>
-        <text class="quad-action">去查看</text>
-      </view>
       <view class="quad-cell" bindtap="onQuadFootprintTap" hover-class="quad-cell-hover">
         <view class="quad-cell-main">
           <view class="quad-texts">
@@ -241,6 +215,12 @@
       <text class="func-label">服务站点</text>
       <text class="func-arrow">›</text>
     </view>
+    <view class="func-divider" wx:if="{{showPickupVerify}}"></view>
+    <view class="func-row" wx:if="{{showPickupVerify}}" bindtap="goMyStation" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/shield.svg" mode="aspectFit"></image>
+      <text class="func-label">我的门店</text>
+      <text class="func-arrow">›</text>
+    </view>
     <view class="func-divider"></view>
     <view class="func-row" bindtap="goInvitePoster" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
@@ -250,7 +230,7 @@
     <view class="func-divider" wx:if="{{showPickupVerify}}"></view>
     <view class="func-row" wx:if="{{showPickupVerify}}" bindtap="goPickupVerify" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/package.svg" mode="aspectFit"></image>
-      <text class="func-label">自提核销（店员）</text>
+      <text class="func-label">门店核销</text>
       <text class="func-arrow">›</text>
     </view>
     <view class="func-divider" wx:if="{{isLoggedIn}}"></view>

@@ -75,6 +75,13 @@ Page({
             pendingReview: 0,
             refund: 0
         },
+        orderFreshFlags: {
+            pending: false,
+            paid: false,
+            shipped: false,
+            pendingReview: false,
+            refund: false
+        },
         unusedCouponCount: 0,
         pointsBalanceDisplay: '0',
         commissionBalance: '0.00',
@@ -184,7 +191,7 @@ Page({
 
     onGrowthPrivilegesTap() {
         if (!requireLogin()) return;
-        wx.navigateTo({ url: '/pages/user/growth-privileges' });
+        wx.navigateTo({ url: '/pages/user/membership-center' });
     },
 
     /** 商务中心入口：由后台 membership_config.business_center_min_role_level 控制（默认 1 = C1/初级代理） */
@@ -240,6 +247,11 @@ Page({
     // ====== 订单数量（含退款） ======
     async loadOrderCounts() {
         return loadOrderCounts(this);
+    },
+
+    markOrderBadgesSeen(statuses) {
+        const { markOrderBadgesSeen } = require('./userDashboard');
+        return markOrderBadgesSeen(this, statuses);
     },
 
     // ====== 分销信息 ======
@@ -393,6 +405,10 @@ Page({
         wx.navigateTo({ url: '/pages/stations/map' });
     },
 
+    goMyStation() {
+        navigateIfLoggedIn('/pages/stations/my-station');
+    },
+
     goPickupVerify() {
         navigateIfLoggedIn('/pages/pickup/verify');
     },
@@ -405,16 +421,20 @@ Page({
 
     // ======== 订单入口 ========
     onOrderAllTap() {
-        navigateIfLoggedIn('/pages/order/list');
+        if (!requireLogin()) return;
+        this.markOrderBadgesSeen();
+        wx.navigateTo({ url: '/pages/order/list' });
     },
 
     onOrderTap(e) {
-        return handleOrderTap(e);
+        return handleOrderTap(this, e);
     },
 
     // ======== ★ 售后/退款入口 ========
     onRefundTap() {
-        navigateIfLoggedIn('/pages/order/refund-list');
+        if (!requireLogin()) return;
+        this.markOrderBadgesSeen(['refund']);
+        wx.navigateTo({ url: '/pages/order/refund-list' });
     },
 
     // ======== 通知入口 ========

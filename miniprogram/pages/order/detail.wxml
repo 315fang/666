@@ -72,7 +72,19 @@
   <!-- 到店自提凭证入口 -->
   <view class="card pickup-card" wx:if="{{order.delivery_type === 'pickup' && order.status !== 'pending' && order.status !== 'cancelled'}}">
     <view class="card-title">到店自提</view>
-    <text class="pickup-hint">查看核销码与二维码；商家发货后可到店核销。</text>
+    <text class="pickup-hint">请前往下单时选择的自提门店完成核销，只有该门店人员可以核销此订单。</text>
+    <view class="info-row" wx:if="{{order.pickupStation}}">
+      <text class="info-label">自提门店</text>
+      <text class="info-value">{{order.pickupStation.name}}</text>
+    </view>
+    <view class="info-row" wx:if="{{order.pickupStation}}">
+      <text class="info-label">门店地址</text>
+      <text class="info-value">{{order.pickupStation.city}} {{order.pickupStation.address || ''}}</text>
+    </view>
+    <view class="info-row" wx:if="{{order.pickupStation && order.pickupStation.contact_phone}}">
+      <text class="info-label">联系电话</text>
+      <text class="info-value">{{order.pickupStation.contact_phone}}</text>
+    </view>
     <button class="pickup-btn" bindtap="onPickupCredentialTap">查看自提凭证</button>
   </view>
 
@@ -170,33 +182,59 @@
   <view class="bottom-bar">
     <!-- 有活跃退款时：只显示查看退款 -->
     <block wx:if="{{hasActiveRefund}}">
-      <view class="btn-primary" bindtap="onViewRefund">查看退款进度</view>
+      <view class="bar-action-group">
+        <view class="bar-action-row single">
+          <view class="btn-primary" bindtap="onViewRefund">查看退款进度</view>
+        </view>
+      </view>
     </block>
 
     <!-- 无活跃退款，正常按钮 -->
     <block wx:else>
       <!-- 待付款 -->
       <block wx:if="{{order.status === 'pending'}}">
-        <view class="btn-outline" bindtap="onCancelOrder">取消订单</view>
-        <view class="btn-primary" bindtap="onPayOrder">立即支付</view>
+        <view class="bar-action-group">
+          <view class="bar-action-row">
+            <view class="btn-outline" bindtap="onCancelOrder">取消订单</view>
+            <view class="btn-primary" bindtap="onPayOrder">立即支付</view>
+          </view>
+        </view>
       </block>
       <!-- 待发货：仅已支付未进入代理履约流程时可申请退款 -->
       <block wx:if="{{order.status === 'paid'}}">
-        <view class="btn-outline" bindtap="onApplyRefund">申请退款</view>
+        <view class="bar-action-group">
+          <view class="bar-action-row single">
+            <view class="btn-outline" bindtap="onApplyRefund">申请退款</view>
+          </view>
+        </view>
       </block>
       <!-- 已发货 -->
       <block wx:if="{{order.status === 'shipped'}}">
-        <view class="btn-outline" bindtap="onViewLogistics" wx:if="{{canViewLogistics}}">查看物流</view>
-        <view class="btn-outline" bindtap="onGoReview" wx:if="{{!reviewed}}">评价</view>
-        <view class="btn-outline" bindtap="onApplyRefund">申请退款</view>
-        <view class="btn-primary" bindtap="onConfirmReceive">确认收货</view>
+        <view class="bar-action-group">
+          <view class="bar-action-link-row" wx:if="{{!reviewed}}">
+            <view class="btn-text-link" bindtap="onGoReview">评价</view>
+          </view>
+          <view class="bar-action-row single" wx:if="{{canViewLogistics}}">
+            <view class="btn-soft" bindtap="onViewLogistics">查看物流</view>
+          </view>
+          <view class="bar-action-row">
+            <view class="btn-outline" bindtap="onApplyRefund">申请退款</view>
+            <view class="btn-primary" bindtap="onConfirmReceive">确认收货</view>
+          </view>
+        </view>
       </block>
       <!-- 已完成 -->
       <block wx:if="{{order.status === 'completed'}}">
-         <view class="btn-outline" bindtap="onViewLogistics" wx:if="{{canViewLogistics}}">查看物流</view>
-         <view class="btn-primary" bindtap="onGoReview" wx:if="{{!reviewed}}">评价</view>
-         <view class="btn-outline" bindtap="onApplyRefund" wx:if="{{!latestRefund || latestRefund.status === 'rejected' || latestRefund.status === 'cancelled'}}">申请售后</view>
-         <view class="btn-outline" bindtap="onViewRefund" wx:if="{{latestRefund && latestRefund.status !== 'rejected' && latestRefund.status !== 'cancelled'}}">查看退款</view>
+        <view class="bar-action-group">
+          <view class="bar-action-link-row" wx:if="{{!reviewed}}">
+            <view class="btn-text-link" bindtap="onGoReview">评价</view>
+          </view>
+          <view class="bar-action-row">
+            <view class="btn-soft" bindtap="onViewLogistics" wx:if="{{canViewLogistics}}">查看物流</view>
+            <view class="btn-outline" bindtap="onApplyRefund" wx:if="{{!latestRefund || latestRefund.status === 'rejected' || latestRefund.status === 'cancelled'}}">申请售后</view>
+            <view class="btn-outline" bindtap="onViewRefund" wx:if="{{latestRefund && latestRefund.status !== 'rejected' && latestRefund.status !== 'cancelled'}}">查看退款</view>
+          </view>
+        </view>
       </block>
     </block>
   </view>

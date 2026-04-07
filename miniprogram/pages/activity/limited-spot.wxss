@@ -78,7 +78,7 @@
   font-size: 24rpx;
   font-weight: 600;
 }
-.btn-points { background: linear-gradient(135deg, #fde68a, #f59e0b); color: #422006; }
+.btn-points { background: linear-gradient(135deg, #bfdbfe, #2563eb); color: #eff6ff; }
 .btn-money { background: linear-gradient(135deg, #c8a258, #a07840); color: #fff8f0; }
 .btn.disabled { opacity: 0.38; pointer-events: none; }
 

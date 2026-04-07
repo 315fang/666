@@ -204,24 +204,38 @@ function buildActivitySections({
     lotteryPrizes = []
 }) {
     const sourceMap = pickSectionSource(permanentActivities);
-    const sections = [];
-    if (sourceMap.special) {
-        sections.push(buildSectionRow('special', sourceMap));
-    }
-    sections.push(...SECTION_ORDER.map((key) => buildSectionRow(key, sourceMap)));
-
-    const previewMap = {
-        slash: buildPreviewList('slash', slashActivities),
-        group: buildPreviewList('group', groupActivities),
-        lottery: buildPreviewList('lottery', lotteryPrizes)
+    
+    // 构建常驻活动区域，包含三个子卡片
+    const permanentSection = {
+        id: 'activity-section-permanent',
+        key: 'permanent',
+        title: '常驻活动',
+        subtitle: '',
+        subCards: []
     };
-    if (sourceMap.special) {
-        previewMap.special = buildFallbackPreview('special');
-    }
+
+    // 添加三个子卡片（砍价、拼团、抽奖）
+    SECTION_ORDER.forEach((key) => {
+        const fallback = FALLBACK_SECTION_CONFIG[key];
+        const source = sourceMap[key] || {};
+        permanentSection.subCards.push({
+            id: source.id || fallback.id,
+            key,
+            title: normalizeText(source.title) || fallback.title,
+            subtitle: normalizeText(source.subtitle || source.subTitle) || fallback.subtitle,
+            tag: normalizeText(source.tag),
+            image: normalizeText(source.image || source.image_url || source.cover_image || source.coverImage),
+            gradient: normalizeText(source.gradient) || fallback.gradient,
+            moreLinkType: normalizeLinkType(source) || fallback.moreLinkType,
+            moreLinkValue: normalizeLinkValue(source) || fallback.moreLinkValue
+        });
+    });
+
+    const sections = [permanentSection];
 
     return {
         sections,
-        previewMap
+        previewMap: {}
     };
 }
 

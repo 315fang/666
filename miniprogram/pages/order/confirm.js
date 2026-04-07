@@ -44,6 +44,7 @@ Page({
         roleLevel: 0,
         // 优惠券
         availableCoupons: [],
+        unusedCouponCount: 0,
         selectedCoupon: null,
         showCouponPicker: false,
         couponDiscount: '0.00',
@@ -136,6 +137,9 @@ Page({
         if (!this.data.address) {
             this.loadDefaultAddress();
         }
+        if (app.globalData.isLoggedIn && (this.data.availableCoupons || []).length === 0) {
+            this.loadAvailableCoupons();
+        }
         this._tryAutoCouponUsagePrompt();
     },
 
@@ -193,8 +197,8 @@ Page({
     },
 
     /**
-     * 方案 A：仅 wx.getFuzzyLocation + wx.chooseLocation，不传 wx.getLocation（易过审）。
-     * 模糊坐标 → pickup-options 展示距离并由近到远排序；更准请用 onChooseRefLocation。
+     * 当前位置授权后，按当前坐标请求门店距离并排序；
+     * 若用户不在取货地，可继续用地图选点修正参考位置。
      */
     async onLocateForPickupSort() {
         return locateForPickupSort(this);
@@ -238,11 +242,29 @@ Page({
 
     // 加载可用优惠券
     async loadAvailableCoupons() {
-        return loadAvailableCoupons(this, app.globalData.isLoggedIn);
+        await loadAvailableCoupons(this);
+    },
+
+    async _ensureCouponReady(tryLogin) {
+        if (!app.globalData.isLoggedIn) {
+            if (!tryLogin) return false;
+            try {
+                await app.wxLogin(false);
+            } catch (_err) {
+                return false;
+            }
+        }
+        await this.loadAvailableCoupons();
+        return true;
     },
 
     // 点击优惠券行，打开选择器
-    onCouponTap() {
+    async onCouponTap() {
+        const ready = await this._ensureCouponReady(true);
+        if (!ready) {
+            wx.showToast({ title: '登录后可使用优惠券', icon: 'none' });
+            return;
+        }
         this.setData({ showCouponPicker: true });
     },
 

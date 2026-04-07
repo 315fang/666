@@ -25,7 +25,7 @@
 .retry-btn {
   margin-top: 32rpx;
   padding: 18rpx 56rpx;
-  background: #c6a16e;
+  background: #2563EB;
   color: #fff;
   font-size: 28rpx;
   border-radius: 999rpx;
@@ -64,7 +64,7 @@
 .hero-growth-val {
   font-size: 48rpx;
   font-weight: 700;
-  color: #f0c97e;
+  color: #BFDBFE;
 }
 
 .progress-wrap {
@@ -80,7 +80,7 @@
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #c6a16e, #f0c97e);
+  background: linear-gradient(90deg, #60A5FA, #2563EB);
   border-radius: 999rpx;
   transition: width 0.4s;
 }
@@ -105,7 +105,7 @@
 }
 
 .hero-sub-max {
-  color: #f0c97e;
+  color: #BFDBFE;
   opacity: 0.9;
 }
 
@@ -152,14 +152,14 @@
 }
 
 .dot-passed {
-  background: #c6a16e;
-  border-color: #c6a16e;
+  background: #2563EB;
+  border-color: #2563EB;
 }
 
 .dot-active {
-  background: #f0c97e;
-  border-color: #c6a16e;
-  box-shadow: 0 0 0 6rpx rgba(198, 161, 110, 0.2);
+  background: #93C5FD;
+  border-color: #2563EB;
+  box-shadow: 0 0 0 6rpx rgba(59, 130, 246, 0.2);
 }
 
 .dot-check {
@@ -200,7 +200,7 @@
 .tier-tag-current {
   font-size: 20rpx;
   color: #92400e;
-  background: rgba(198, 161, 110, 0.18);
+  background: rgba(59, 130, 246, 0.18);
   padding: 4rpx 14rpx;
   border-radius: 999rpx;
   font-weight: 600;
@@ -244,7 +244,7 @@
 .footer-tip {
   margin: 0 24rpx 16rpx;
   padding: 20rpx 24rpx;
-  background: rgba(198, 161, 110, 0.08);
+  background: rgba(59, 130, 246, 0.08);
   border-radius: 16rpx;
   font-size: 22rpx;
   color: #78716c;

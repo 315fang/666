@@ -177,7 +177,7 @@
           :closable="false"
           show-icon
           class="form-alert"
-          title="零售价、成本价为必填；会员/团长/代理价用于不同身份展示，可展开填写。市场原价为划线展示价。"
+          title="零售价、成本价为必填；会员/团长/代理价用于前台展示；B1/B2/B3 发货成本价用于代理履约扣货款和锁定利润口径。"
         />
 
         <el-row :gutter="16">
@@ -226,6 +226,32 @@
             {{ showMorePrices ? '▲ 收起多档价格' : '▼ 展开会员/团长/代理价格' }}
           </el-button>
         </div>
+
+        <div class="form-section-title">代理发货成本价</div>
+        <el-alert
+          type="warning"
+          :closable="false"
+          show-icon
+          class="form-alert"
+          title="这里只填代理发货时实际扣除的货款成本，不会直接展示给用户。关闭“默认平台发货”后，如未配置对应等级成本价，将无法分配给代理发货。"
+        />
+        <el-row :gutter="16">
+          <el-col :span="8">
+            <el-form-item label="B1 成本价">
+              <el-input-number v-model="form.supply_price_b1" :min="0" :precision="2" style="width:100%" placeholder="推广合伙人" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="B2 成本价">
+              <el-input-number v-model="form.supply_price_b2" :min="0" :precision="2" style="width:100%" placeholder="运营合伙人" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="B3 成本价">
+              <el-input-number v-model="form.supply_price_b3" :min="0" :precision="2" style="width:100%" placeholder="区域合伙人" />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <el-row :gutter="16">
           <el-col :span="12">
@@ -525,6 +551,9 @@ const defaultForm = () => ({
   retail_price: null,
   market_price: null,
   cost_price: null,
+  supply_price_b1: null,
+  supply_price_b2: null,
+  supply_price_b3: null,
   price_member: null,
   price_leader: null,
   price_agent: null,
@@ -566,6 +595,9 @@ const openForm = (row) => {
       retail_price: row.retail_price,
       market_price: row.market_price || null,
       cost_price: row.cost_price,
+      supply_price_b1: row.supply_price_b1 ?? null,
+      supply_price_b2: row.supply_price_b2 ?? null,
+      supply_price_b3: row.supply_price_b3 ?? null,
       price_member: row.price_member || row.member_price || null,
       price_leader: row.price_leader || null,
       price_agent: row.price_agent || null,

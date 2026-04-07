@@ -695,7 +695,7 @@
   padding: 12rpx 20rpx;
   background: linear-gradient(135deg, #FFF7ED 0%, #FEF3C7 100%);
   border-radius: 12rpx;
-  border: 1rpx solid #F59E0B;
+  border: 1rpx solid #3B82F6;
 }
 
 .bonus-hint-text {

@@ -1,6 +1,6 @@
 const { get, post } = require('../../utils/request');
 const { parseImages } = require('../../utils/dataFormatter');
-const { logisticsCompanyLabel } = require('../../utils/logisticsCompany');
+const { logisticsCompanyLabel } = require('./utils/logisticsCompany');
 
 async function loadOrder(page, idOrNo) {
     if (idOrNo === undefined || idOrNo === null || idOrNo === '') {
