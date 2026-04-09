@@ -133,7 +133,7 @@ npm run dev
 ## 项目结构
 
 ```
-666/
+jingxiang_wl/
 ├── admin-ui/                # 管理后台（Vue 3 + Vite）
 │   ├── src/                # 页面、路由、状态、接口
 │   ├── index.html
@@ -194,10 +194,6 @@ npm run dev
 │   ├── app.js              # 小程序入口
 │   ├── app.json            # 小程序配置
 │   └── project.config.json # 项目配置
-│
-└── docs/                   # 文档
-    ├── README.md           # 本文档
-    └── ...
 ```
 
 ---
