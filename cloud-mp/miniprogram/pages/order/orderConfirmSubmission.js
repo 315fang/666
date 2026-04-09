@@ -1,0 +1,116 @@
+const { post } = require('../../utils/request');
+const { ErrorHandler } = require('../../utils/errorHandler');
+const { ensurePrivacyAuthorization } = require('../../utils/privacy');
+
+async function submitOrder(page, app, brandAnimation) {
+    const {
+        address,
+        orderItems,
+        remark,
+        submitting,
+        selectedCoupon,
+        deliveryType,
+        pickupStation
+    } = page.data;
+
+    if (submitting) return;
+
+    if (deliveryType === 'express' && !address) {
+        wx.showToast({ title: '请选择收货地址', icon: 'none' });
+        return;
+    }
+    if (deliveryType === 'pickup' && (!pickupStation || !pickupStation.id)) {
+        wx.showToast({ title: '请选择自提门店', icon: 'none' });
+        return;
+    }
+    if (orderItems.length === 0) {
+        wx.showToast({ title: '没有可提交的商品', icon: 'none' });
+        return;
+    }
+    if (orderItems.some((item) => item.spec_required_missing || (!item.sku_id && item.spec_required))) {
+        wx.showToast({ title: '部分商品缺少规格，请返回重新选择', icon: 'none' });
+        return;
+    }
+
+    try {
+        await ensurePrivacyAuthorization();
+        if (!app.globalData.isLoggedIn) {
+            await app.wxLogin(false);
+        }
+    } catch (_err) {
+        return;
+    }
+
+    page.setData({ submitting: true });
+
+    try {
+        const orderData = {
+            address_id: deliveryType === 'pickup' ? (address && address.id) || undefined : address.id,
+            delivery_type: deliveryType,
+            pickup_station_id: deliveryType === 'pickup' ? pickupStation.id : undefined,
+            remark,
+            items: orderItems.map((item) => ({
+                product_id: item.product_id,
+                sku_id: item.sku_id || null,
+                quantity: item.quantity,
+                cart_id: item.cart_id || null
+            }))
+        };
+        console.log('[order submit] payload items:', JSON.stringify(orderData.items));
+
+        if (page.data.slashNo) orderData.slash_no = page.data.slashNo;
+        if (page.data.groupNo) orderData.group_no = page.data.groupNo;
+        if (selectedCoupon) orderData.user_coupon_id = selectedCoupon.id != null ? selectedCoupon.id : selectedCoupon._id;
+        if (page.data.usePoints && page.data.pointsToUse > 0) {
+            orderData.points_to_use = page.data.pointsToUse;
+        }
+
+        if (page.data.useWallet && page.data.isAgent) {
+            wx.setStorageSync('useWalletPay', true);
+        } else {
+            wx.removeStorageSync('useWalletPay');
+            wx.removeStorageSync('walletPayOrderIds');
+        }
+
+        const res = await post('/orders', orderData);
+
+        if (page.data.from === 'direct') {
+            wx.removeStorageSync('directBuyInfo');
+        }
+
+        const createdOrders = Array.isArray(res.data) ? res.data : (res.data ? [res.data] : []);
+        const orderId = createdOrders[0] && createdOrders[0].id;
+        const isSplitOrders = createdOrders.length > 1;
+
+        if (page.data.useWallet && page.data.isAgent) {
+            wx.setStorageSync('walletPayOrderIds', createdOrders.map((item) => item.id).filter(Boolean));
+        }
+        if (isSplitOrders) {
+            wx.setStorageSync('latestCreatedOrderIds', createdOrders.map((item) => item.id).filter(Boolean));
+            wx.setStorageSync('latestCreatedOrderHint', `已创建 ${createdOrders.length} 个待支付订单，请在订单列表中逐个完成支付`);
+        }
+
+        if (brandAnimation) {
+            brandAnimation.show('success');
+        }
+
+        setTimeout(() => {
+            page.setData({ submitting: false });
+            if (isSplitOrders) {
+                wx.redirectTo({ url: '/pages/order/list?status=pending' });
+            } else if (orderId) {
+                wx.redirectTo({ url: `/pages/order/detail?id=${orderId}` });
+            } else {
+                wx.redirectTo({ url: '/pages/order/list?status=pending' });
+            }
+        }, 1500);
+    } catch (err) {
+        page.setData({ submitting: false });
+        ErrorHandler.handle(err, { customMessage: '下单失败，请稍后重试' });
+        console.error('提交订单失败:', err);
+    }
+}
+
+module.exports = {
+    submitOrder
+};

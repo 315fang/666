@@ -1,4 +1,4 @@
-const { getApiBaseUrl } = require('./config/env');
+const { getApiBaseUrl, CLOUD_ENV_ID } = require('./config/env');
 const { cloneDefaults } = require('./utils/miniProgramConfig');
 const authMethods = require('./appAuth');
 const configMethods = require('./appConfig');
@@ -13,11 +13,12 @@ App({
         openid: null,
         token: null,
         isLoggedIn: false,
-        baseUrl: getApiBaseUrl(), // 从环境配置读取
+        baseUrl: getApiBaseUrl(),
+        cloudEnvId: CLOUD_ENV_ID,
         statusBarHeight: 20,
         navTopPadding: 20,
         navBarHeight: 44,
-        splashConfig: null,      // 开屏动画配置（onLaunch prefetch）
+        splashConfig: null,
         splashConfigPromise: null,
         homePageData: null,
         homeDataPromise: null,
@@ -26,12 +27,15 @@ App({
         shareTitle: '问兰 · 品牌甄选',
         customerServiceWechat: 'wl_service',
         customerServiceHours: '9:00-21:00',
-        /** 商品详情页：从视频号/橱窗等进入时 reLaunch 去壳，仅对当前商品 id 执行一次，防死循环 */
         productDetailNfRelaunchKey: ''
     },
 
     onLaunch(options) {
-        // 获取系统信息
+        wx.cloud.init({
+            env: CLOUD_ENV_ID,
+            traceUser: true
+        });
+
         const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
         this.globalData.statusBarHeight = windowInfo.statusBarHeight || 20;
         try {
@@ -49,31 +53,18 @@ App({
             this.globalData.navBarHeight = 44;
         }
 
-        // 小程序启动时自动登录
         this.autoLogin();
-
-        // 分享 / 扫码进入时携带的会员码参数（登录时带给后端，新用户自动绑定团队）
         this._captureInviteFromLaunch(options);
-
         this.fetchMiniProgramConfig();
-
-        // ★ 并行预拉取首页数据（登录前就开始，首页 onLoad 直接读缓存）
         this.globalData.homeDataPromise = this.prefetchHomeData();
         this.prefetchSplashConfig();
-
-        // ★ 静默/强制版本更新检测
         this.checkUpdate();
 
-        // 非关键启动任务后置，降低冷启动主线程压力
         setTimeout(() => {
             this.applyActiveTheme();
         }, 420);
     },
 
-    /**
-     * ★ 版本更新检测
-     * 有新版本时：小版本静默等用户下次启动；逻辑层（需后端控制）可强制重启
-     */
     checkUpdate() {
         if (!wx.canIUse('getUpdateManager')) return;
         const updateManager = wx.getUpdateManager();
@@ -93,7 +84,6 @@ App({
         });
     },
 
-    // 工具方法：将回调风格 API 转为 Promise
     promisify(fn) {
         return (options = {}) => {
             return new Promise((resolve, reject) => {

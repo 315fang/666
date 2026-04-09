@@ -1,0 +1,221 @@
+.container {
+  min-height: 100vh;
+  background: #f5f7fa;
+}
+
+/* 导航栏 */
+.nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 24rpx;
+  padding-top: calc(var(--status-bar-height, 20px) + 20rpx);
+  background: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-back {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+}
+
+.nav-back-icon {
+  font-size: 40rpx;
+  color: #1c1917;
+  font-weight: 300;
+}
+
+.nav-back-text {
+  font-size: 28rpx;
+  color: #1c1917;
+}
+
+.nav-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1c1917;
+}
+
+.nav-placeholder {
+  width: 80rpx;
+}
+
+/* 内容区域 */
+.profile-section {
+  margin: 24rpx;
+  background: #fff;
+  border-radius: 20rpx;
+  overflow: hidden;
+}
+
+.profile-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28rpx 24rpx;
+}
+
+.profile-label {
+  font-size: 30rpx;
+  color: #1c1917;
+  font-weight: 500;
+}
+
+.profile-right {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.profile-avatar {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  background: #f1f5f9;
+}
+
+.profile-value {
+  font-size: 28rpx;
+  color: #64748b;
+}
+
+.profile-arrow {
+  font-size: 32rpx;
+  color: #94a3b8;
+}
+
+/* 选择头像弹层 */
+.avatar-pick-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.avatar-pick-panel {
+  width: 100%;
+  background: #fff;
+  border-radius: 28rpx 28rpx 0 0;
+  padding: 36rpx 40rpx calc(28rpx + env(safe-area-inset-bottom, 0));
+}
+
+.avatar-pick-title {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #0f172a;
+  text-align: center;
+  margin-bottom: 12rpx;
+}
+
+.avatar-pick-tip {
+  display: block;
+  font-size: 24rpx;
+  color: #64748b;
+  text-align: center;
+  line-height: 1.5;
+  margin-bottom: 32rpx;
+}
+
+.avatar-pick-btn {
+  width: 100% !important;
+  height: 96rpx !important;
+  line-height: 96rpx !important;
+  padding: 0 !important;
+  margin: 0 0 20rpx 0 !important;
+  background: linear-gradient(135deg, #60A5FA 0%, #2563EB 100%) !important;
+  color: #fffdf8 !important;
+  font-size: 30rpx;
+  font-weight: 600;
+  border-radius: 999rpx !important;
+  border: none !important;
+}
+
+.avatar-pick-btn::after {
+  border: none !important;
+}
+
+.avatar-pick-cancel {
+  text-align: center;
+  font-size: 28rpx;
+  color: #64748b;
+  padding: 16rpx 0;
+}
+
+/* 修改昵称弹层 */
+.nick-modal-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48rpx;
+}
+
+.nick-modal {
+  width: 100%;
+  max-width: 600rpx;
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 40rpx 36rpx 32rpx;
+  box-shadow: 0 24rpx 64rpx rgba(30, 74, 109, 0.15);
+}
+
+.nick-modal-title {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 28rpx;
+}
+
+.nick-modal-input {
+  width: 100%;
+  height: 88rpx;
+  padding: 0 24rpx;
+  box-sizing: border-box;
+  font-size: 30rpx;
+  color: #0f172a;
+  background: #e8f2f7;
+  border-radius: 16rpx;
+  margin-bottom: 36rpx;
+}
+
+.nick-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 20rpx;
+}
+
+.nick-modal-btn {
+  min-width: 160rpx;
+  text-align: center;
+  padding: 20rpx 28rpx;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.nick-modal-btn-cancel {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.nick-modal-btn-ok {
+  color: #fffdf8;
+  background: linear-gradient(135deg, #60A5FA 0%, #2563EB 100%);
+}

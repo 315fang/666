@@ -31,7 +31,7 @@
           <template #default="{ row }">{{ row.order?.order_no || '-' }}</template>
         </el-table-column>
         <el-table-column label="用户" width="130">
-          <template #default="{ row }">{{ row.user?.nickname || row.user_id }}</template>
+          <template #default="{ row }">{{ displayUserName(row.user, row.user_id) }}</template>
         </el-table-column>
         <el-table-column label="退款商品" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
@@ -97,7 +97,7 @@
       <el-descriptions :column="1" border v-if="currentRow">
         <el-descriptions-item label="申请 ID">{{ currentRow.id }}</el-descriptions-item>
         <el-descriptions-item label="订单号">{{ currentRow.order?.order_no || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="申请用户">{{ currentRow.user?.nickname || currentRow.user_id }}</el-descriptions-item>
+        <el-descriptions-item label="申请用户">{{ displayUserName(currentRow.user, currentRow.user_id) }}</el-descriptions-item>
         <el-descriptions-item label="退款商品">
           <span>{{ currentRow.order_item?.product?.name || currentRow.items?.[0]?.product?.name || currentRow.order?.product?.name || '—' }}</span>
           <span v-if="currentRow.order_item?.sku?.spec_value" class="text-gray" style="font-size:12px;margin-left:4px">
@@ -128,6 +128,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getRefunds, approveRefund, rejectRefund, completeRefund } from '@/api'
 import { formatDateTime } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
+import { getUserNickname } from '@/utils/userDisplay'
 
 const route = useRoute()
 const loading = ref(false)
@@ -149,6 +150,7 @@ const rejectForm = reactive({
   id: null,
   reason: ''
 })
+const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 
 const fetchRefunds = async () => {
   loading.value = true
@@ -252,7 +254,7 @@ const handleRejectSubmit = async () => {
 const handleComplete = async (row) => {
   try {
     await ElMessageBox.confirm(
-      `该操作将立即对用户「${row.user?.nickname || row.user_id}」发起退款，金额 ¥${parseFloat(row.amount || 0).toFixed(2)}。请确认当前售后单已审核无误。`,
+      `该操作将立即对用户「${displayUserName(row.user, row.user_id)}」发起退款，金额 ¥${parseFloat(row.amount || 0).toFixed(2)}。请确认当前售后单已审核无误。`,
       '确认发起退款',
       {
         confirmButtonText: '立即退款',

@@ -1,0 +1,27 @@
+[products]
+  id | name | category_id | description | images | detail_images | retail_price | member_price | wholesale_price | price_member | price_leader | price_agent | cost_price | commission_rate_1 | commission_rate_2 | commission_amount_1 | commission_amount_2 | commission_rate_3 | commission_amount_3 | ai_review_status | ai_review_reason | stock | status | custom_commissions | view_count | purchase_count | heat_score | manual_weight | heat_updated_at | market_price | created_at | updated_at | discount_exempt | product_tag | supports_pickup | visible_in_mall | enable_coupon | enable_group_buy
+
+[users]
+  id | openid | member_no | nickname | avatar_url | phone | role_level | agent_level | parent_id | parent_openid | agent_id | stock_count | invite_code | balance | referee_count | order_count | total_sales | last_login | joined_team_at | preferences | debt_amount | growth_value | discount_rate | status | remark | tags | created_at | updated_at | purchase_level_code | participate_distribution | n_leader_id | benefit_parent_id | cb_detached_at | cb_detached_from_user_id | cb_detach_level | n_level | n_parent_id
+
+[orders]
+  id | order_no | buyer_id | distributor_id | distributor_role | product_id | quantity | total_amount | actual_price | fulfillment_type | fulfillment_partner_id | agent_id | tracking_no | logistics_company | status | sku_id | address_id | address_snapshot | remark | paid_at | agent_confirmed_at | shipping_requested_at | shipped_at | completed_at | settlement_at | commission_settled | completion_processed | middle_commission_total | shipping_fee | platform_stock_deducted | locked_agent_cost | parent_order_id | coupon_id | coupon_discount | points_used | points_discount | member_discount_rate | delivery_type | pickup_station_id | pickup_code | pickup_qr_token | verified_at | created_at | updated_at | payment_method | n_region_rule_id | n_region_owner_id | n_region_profit_amount | n_region_match_scope | n_region_snapshot | verified_station_id | verified_by_type | verified_by_user_id | verified_by_portal_account_id | shipping_agent_id | shipping_agent_role | parent_chain_snapshot | distribution_trace
+
+[categories]
+  id | name | parent_id | icon | sort_order | status | created_at | updated_at
+
+[addresses]
+  id | user_id | receiver_name | phone | province | city | district | detail | is_default | created_at | updated_at
+
+[commissions]
+  id | order_id | order_no | user_id | amount | type | level | status | remark | refund_deadline | available_at | approved_by | approved_at | settled_at | created_at | updated_at
+
+[withdrawals]
+  id | withdrawal_no | user_id | amount | fee | actual_amount | method | account_name | account_no | bank_name | status | reject_reason | processed_by | processed_at | completed_at | remark | created_at | updated_at
+
+[configs]
+  id | config_key | config_value | config_type | config_group | is_sensitive | is_editable | description | validation_rule | version | updated_by | created_at | updated_at
+
+[app_configs]
+  id | config_key | config_value | config_type | category | description | is_public | status | created_at | updated_at
+

@@ -1,0 +1,68 @@
+<!--pages/address/edit.wxml - 地址编辑-->
+<view class="container">
+  <!-- 收货人 -->
+  <view class="form-group">
+    <text class="form-label">收货人</text>
+    <input class="form-input" placeholder="请输入收货人姓名" value="{{form.receiver_name}}" bindinput="onInputName" maxlength="20" />
+  </view>
+
+  <!-- 手机号 -->
+  <view class="form-group">
+    <text class="form-label">手机号码</text>
+    <input class="form-input" placeholder="请输入手机号码" value="{{form.phone}}" bindinput="onInputPhone" type="number" maxlength="11" />
+  </view>
+
+  <!-- 省市区 -->
+  <view class="form-group">
+    <text class="form-label">所在地区</text>
+    <view class="form-picker" bindtap="openRegionPanel">
+      <text class="{{regionText ? '' : 'placeholder'}}">{{regionText || '请选择省/市/区'}}</text>
+      <text class="arrow">›</text>
+    </view>
+    <view class="wechat-address-entry" bindtap="onChooseWechatAddress">
+      从微信收货地址快速填充
+    </view>
+  </view>
+
+  <!-- 详细地址 -->
+  <view class="form-group">
+    <text class="form-label">详细地址</text>
+    <textarea class="form-textarea" placeholder="街道、楼牌号等" value="{{form.detail}}" bindinput="onInputDetail" maxlength="100" auto-height />
+  </view>
+
+  <!-- 设为默认 -->
+  <view class="form-group row-between">
+    <text class="form-label">设为默认地址</text>
+    <switch checked="{{form.is_default}}" bindchange="onSwitchDefault" color="#2563EB" />
+  </view>
+
+  <!-- 保存按钮 -->
+  <view class="save-section">
+    <view class="save-btn {{submitting ? 'disabled' : ''}}" bindtap="onSave">
+      {{submitting ? '保存中...' : '保存地址'}}
+    </view>
+  </view>
+
+  <!-- 三级地区选择弹层 -->
+  <view class="region-panel {{showRegionPanel ? 'show' : ''}}">
+    <view class="region-mask" bindtap="closeRegionPanel"></view>
+    <view class="region-sheet">
+      <view class="region-toolbar">
+        <text class="region-action" bindtap="closeRegionPanel">取消</text>
+        <text class="region-title">请选择所在地区</text>
+        <text class="region-action confirm" bindtap="confirmRegionPanel">确定</text>
+      </view>
+      <picker-view indicator-style="height: 72rpx;" value="{{regionIndexes}}" bindchange="onRegionPickerChange" class="region-picker-view">
+        <picker-view-column>
+          <view class="region-option" wx:for="{{provinceOptions}}" wx:key="*this">{{item}}</view>
+        </picker-view-column>
+        <picker-view-column>
+          <view class="region-option" wx:for="{{cityOptions}}" wx:key="*this">{{item}}</view>
+        </picker-view-column>
+        <picker-view-column>
+          <view class="region-option" wx:for="{{districtOptions}}" wx:key="*this">{{item}}</view>
+        </picker-view-column>
+      </picker-view>
+    </view>
+  </view>
+</view>

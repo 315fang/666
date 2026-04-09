@@ -2,7 +2,7 @@ const app = getApp();
 const { get } = require('../../utils/request');
 const { requireLogin } = require('../../utils/auth');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
-const { fetchUserProfile } = require('../../utils/userProfile');
+const { fetchUserProfile, getUserNickname, normalizeUserProfile } = require('../../utils/userProfile');
 
 function businessCenterMinRoleLevel() {
     const mc = getConfigSection('membership_config');
@@ -172,11 +172,11 @@ Page({
     },
 
     onShareAppMessage() {
-        const userInfo = this.data.userInfo;
+        const userInfo = normalizeUserProfile(this.data.userInfo || {});
         const code = this.data.inviteCode;
         const brandName = app.globalData.brandName || '品牌臻选';
         return {
-            title: `${userInfo?.nickname || '好友'} 邀请你加入${brandName}，领取专属优惠`,
+            title: `${getUserNickname(userInfo) || '好友'} 邀请你加入${brandName}，领取专属优惠`,
             path: `/pages/index/index${code ? '?invite=' + code : ''}`,
             imageUrl: ''
         };

@@ -6,9 +6,9 @@
     <view class="header-content">
       <!-- 用户信息行 -->
       <view class="user-row" bindtap="onProfileTap">
-        <image class="avatar" src="{{userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
+        <image class="avatar" src="{{userInfo.avatarUrl || userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
         <view class="user-info">
-          <text class="nickname">{{userInfo.nickname || '微信用户'}}</text>
+          <text class="nickname">{{userInfo.nickName || userInfo.nickname || '微信用户'}}</text>
           <view class="role-badge">{{userInfo.role_name || '普通用户'}}</view>
         </view>
         <view class="arrow">›</view>

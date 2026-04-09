@@ -40,7 +40,7 @@ npm run dev
 
 开发服务器将在 `http://localhost:5173/admin/` 启动
 
-**注意**: 开发环境下，API 请求会通过 Vite proxy 代理到 `http://localhost:3000`
+**注意**: 开发环境下，API 请求会通过 Vite proxy 代理到 `VITE_ADMIN_DEV_PROXY_TARGET`，默认值为 `http://127.0.0.1:3001`
 
 ### 3. 构建生产版本
 
@@ -105,9 +105,22 @@ node scripts/create-admin.js
 3. 后端 Express 已配置静态文件服务，指向 `admin-ui/dist/`
 4. 启动后端服务后，访问 `http://localhost:3000/admin/` 即可
 
+### CloudBase 静态托管
+
+如果管理后台部署在 `*.tcloudbaseapp.com` 静态站，而管理 API 部署在 CloudBase 函数网关：
+
+1. 构建前优先显式设置 `VITE_ADMIN_API_BASE_URL=https://<envId>.service.tcloudbase.com/admin/api`
+2. 如果未设置该变量，前端会在 `*.tcloudbaseapp.com` 下自动推导 `https://<envId>.service.tcloudbase.com/admin/api`
+3. 自定义域名场景无法自动推导，仍应显式设置 `VITE_ADMIN_API_BASE_URL`
+
+当前正式入口约定：
+
+- 管理后台正式 API 入口为 `admin-api` 云函数网关
+- `cloudrun-admin-service` 当前保留为后续演进线，不作为本轮上线阻塞项
+
 ## API 接口
 
-所有 API 请求的 baseURL 为 `/admin/api`，主要接口包括：
+所有 API 请求默认使用 `/admin/api`。当页面运行在 `*.tcloudbaseapp.com` 时，会优先改用对应环境的 `https://<envId>.service.tcloudbase.com/admin/api`。主要接口包括：
 
 - `POST /login` - 管理员登录
 - `GET /stats` - 获取统计数据

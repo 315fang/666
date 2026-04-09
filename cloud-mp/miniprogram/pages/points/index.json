@@ -1,0 +1,7 @@
+{
+  "navigationStyle": "custom",
+  "navigationBarTextStyle": "white",
+  "usingComponents": {
+    "light-tip-modal": "/components/light-tip-modal/light-tip-modal"
+  }
+}

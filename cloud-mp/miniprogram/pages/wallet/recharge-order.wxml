@@ -1,0 +1,60 @@
+<view class="page">
+  <view class="card" wx:if="{{order}}">
+    <view class="status-row">
+      <text class="status-title">{{order.status_text}}</text>
+      <text class="status-countdown" wx:if="{{order.can_continue_pay}}">剩余 {{countdownText}}</text>
+    </view>
+
+    <view class="amount-block">
+      <text class="amount-label">充值金额</text>
+      <text class="amount-value">¥{{order.amountText}}</text>
+    </view>
+
+    <view class="info-list">
+      <view class="info-item">
+        <text class="info-label">充值单号</text>
+        <text class="info-value">{{order.order_no}}</text>
+      </view>
+      <view class="info-item">
+        <text class="info-label">创建时间</text>
+        <text class="info-value">{{order.createdAtText}}</text>
+      </view>
+      <view class="info-item" wx:if="{{order.expireAtText}}">
+        <text class="info-label">支付截止</text>
+        <text class="info-value">{{order.expireAtText}}</text>
+      </view>
+      <view class="info-item" wx:if="{{order.paidAtText}}">
+        <text class="info-label">支付时间</text>
+        <text class="info-value">{{order.paidAtText}}</text>
+      </view>
+      <view class="info-item" wx:if="{{order.cancelledAtText}}">
+        <text class="info-label">关闭时间</text>
+        <text class="info-value">{{order.cancelledAtText}}</text>
+      </view>
+      <view class="info-item" wx:if="{{order.close_reason}}">
+        <text class="info-label">关闭原因</text>
+        <text class="info-value">{{order.close_reason}}</text>
+      </view>
+    </view>
+
+    <view class="notice notice-pending" wx:if="{{order.can_continue_pay}}">
+      <text>该充值单在超时前都可以继续支付，超时后会自动关闭。</text>
+    </view>
+    <view class="notice" wx:elif="{{order.status === 'cancelled'}}">
+      <text>该充值单已经关闭，如需充值请返回上一页重新发起。</text>
+    </view>
+    <view class="notice notice-success" wx:elif="{{order.status === 'paid'}}">
+      <text>充值已到账，可返回货款余额页查看最新流水。</text>
+    </view>
+  </view>
+
+  <view class="empty" wx:elif="{{!loading}}">
+    <text class="empty-text">未找到充值订单</text>
+  </view>
+
+  <view class="footer" wx:if="{{order && order.can_continue_pay}}">
+    <view class="pay-btn {{paying ? 'pay-btn-disabled' : ''}}" bindtap="onContinuePay">
+      <text class="pay-btn-text">{{paying ? '支付中...' : '继续支付'}}</text>
+    </view>
+  </view>
+</view>

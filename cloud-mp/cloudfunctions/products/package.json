@@ -1,0 +1,7 @@
+{
+  "name": "products",
+  "version": "1.0.0",
+  "description": "云函数：商品列表/详情/分类",
+  "main": "index.js",
+  "dependencies": { "wx-server-sdk": "~2.6.3" }
+}

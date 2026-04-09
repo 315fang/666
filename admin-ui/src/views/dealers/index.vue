@@ -30,14 +30,14 @@
         <el-table-column label="经销商信息" min-width="180">
           <template #default="{ row }">
             <div class="dealer-info">
-              <div class="dealer-name">{{ row.company_name || row.contact_name || row.user?.nickname || '-' }}</div>
+              <div class="dealer-name">{{ row.company_name || row.contact_name || displayUserName(row.user) }}</div>
               <div class="dealer-code">编号: {{ row.dealer_no || '-' }}</div>
             </div>
           </template>
         </el-table-column>
         <el-table-column label="所属用户" width="130" class-name="hide-mobile">
           <template #default="{ row }">
-            {{ row.user?.nickname || row.user_id }}
+            {{ displayUserName(row.user, row.user_id) }}
           </template>
         </el-table-column>
         <el-table-column label="等级" width="100">
@@ -89,7 +89,7 @@
       <el-descriptions :column="2" border v-if="currentDealer">
         <el-descriptions-item label="经销商名称">{{ currentDealer.company_name || currentDealer.contact_name || '-' }}</el-descriptions-item>
         <el-descriptions-item label="经销商编号">{{ currentDealer.dealer_no || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="所属用户">{{ currentDealer.user?.nickname || currentDealer.user_id }}</el-descriptions-item>
+        <el-descriptions-item label="所属用户">{{ displayUserName(currentDealer.user, currentDealer.user_id) }}</el-descriptions-item>
         <el-descriptions-item label="等级">{{ levelText(currentDealer.level) }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="statusTagType(currentDealer.status)">{{ statusText(currentDealer.status) }}</el-tag>
@@ -129,6 +129,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getDealers, approveDealer, rejectDealer, updateDealerLevel } from '@/api'
 import { formatDate } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
+import { getUserNickname } from '@/utils/userDisplay'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -140,6 +141,7 @@ const newLevel = ref(1)
 const searchForm = reactive({ status: '', keyword: '' })
 const { pagination, resetPage, applyResponse } = usePagination({ defaultLimit: 10 })
 const tableData = ref([])
+const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 
 const fetchData = async () => {
   loading.value = true
@@ -164,7 +166,7 @@ const handleViewDetail = (row) => {
 
 const handleApprove = async (row) => {
   try {
-    await ElMessageBox.confirm(`确认审批通过 "${row.company_name || row.contact_name || row.user?.nickname || ''}" 的经销商申请？`, '审批确认', {
+    await ElMessageBox.confirm(`确认审批通过 "${row.company_name || row.contact_name || displayUserName(row.user, '')}" 的经销商申请？`, '审批确认', {
       confirmButtonText: '确认审批',
       cancelButtonText: '取消',
       type: 'success'

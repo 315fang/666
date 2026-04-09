@@ -398,12 +398,18 @@ Page({
         if (!requireLogin()) return;
 
         try {
+            const hasSkuOptions = Array.isArray(this.data.skus) && this.data.skus.length > 0;
             const payload = { activity_id: activity.id };
             const selectedSkuId = this.data.selectedSku && this.data.selectedSku.id;
+            const activitySkuId = activity.sku_id != null && activity.sku_id !== '' ? activity.sku_id : null;
+            if (hasSkuOptions && selectedSkuId == null && activitySkuId == null) {
+                wx.showToast({ title: '请选择商品规格', icon: 'none' });
+                return;
+            }
             if (selectedSkuId != null && selectedSkuId !== '') {
                 payload.sku_id = selectedSkuId;
-            } else if (activity.sku_id != null && activity.sku_id !== '') {
-                payload.sku_id = activity.sku_id;
+            } else if (activitySkuId != null) {
+                payload.sku_id = activitySkuId;
             }
             const res = await post('/group/orders', payload);
             if (res.code === 0 || res.code === 1) {
@@ -428,7 +434,20 @@ Page({
         if (!requireLogin()) return;
 
         try {
-            const res = await post('/slash/start', { activity_id: activity.id });
+            const hasSkuOptions = Array.isArray(this.data.skus) && this.data.skus.length > 0;
+            const selectedSkuId = this.data.selectedSku && this.data.selectedSku.id;
+            const activitySkuId = activity.sku_id != null && activity.sku_id !== '' ? activity.sku_id : null;
+            if (hasSkuOptions && selectedSkuId == null && activitySkuId == null) {
+                wx.showToast({ title: '请选择商品规格', icon: 'none' });
+                return;
+            }
+            const payload = { activity_id: activity.id };
+            if (selectedSkuId != null && selectedSkuId !== '') {
+                payload.sku_id = selectedSkuId;
+            } else if (activitySkuId != null) {
+                payload.sku_id = activitySkuId;
+            }
+            const res = await post('/slash/start', payload);
             if (res.code === 0 || res.code === 1) {
                 const slashNo = res.data && res.data.slash_no;
                 if (slashNo) {

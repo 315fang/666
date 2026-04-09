@@ -753,7 +753,8 @@ class OrderCreationService {
                 stack: error.stack,
                 userId: req.user?.id
             });
-            throw new Error('创建订单失败');
+            // 保留原始业务错误信息（库存不足/地址不存在等），而非包裹为通用错误
+            throw error;
         }
     };
 }

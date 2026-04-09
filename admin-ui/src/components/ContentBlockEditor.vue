@@ -53,8 +53,8 @@
     <!-- 自定义图片模式 -->
     <template v-if="source === 'custom'">
       <el-form-item label="图片">
-        <div v-if="localData.image_url" style="margin-bottom:8px;">
-          <el-image :src="localData.image_url" fit="contain" style="max-width:300px;max-height:160px;border-radius:8px;border:1px solid #eee;" />
+        <div v-if="resolvedImageUrl" style="margin-bottom:8px;">
+          <el-image :src="resolvedImageUrl" fit="contain" style="max-width:300px;max-height:160px;border-radius:8px;border:1px solid #eee;" />
         </div>
         <el-input v-model="localData.image_url" placeholder="输入图片URL" @input="emitData">
           <template #append>
@@ -78,7 +78,7 @@
         >
           <el-option v-for="b in reusableBanners" :key="b.id" :label="b.title || ('Banner #' + b.id)" :value="b.id">
             <div style="display:flex;align-items:center;gap:8px;">
-              <el-image :src="b.image_url" style="width:48px;height:24px;border-radius:3px;" fit="cover" v-if="b.image_url" />
+              <el-image :src="resolveAssetUrl(b)" style="width:48px;height:24px;border-radius:3px;" fit="cover" v-if="resolveAssetUrl(b)" />
               <div>
                 <div style="font-size:13px">{{ b.title || '(无标题)' }}</div>
                 <div style="font-size:11px;color:#999">{{ posLabel(b.position) }} · {{ b.link_type || 'none' }}</div>
@@ -128,7 +128,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getProducts, getProductById, getBanners, uploadFile } from '@/api'
 
@@ -149,6 +149,7 @@ const reuseId = ref(null)
 const reusedBanner = ref(null)
 
 const localData = reactive({
+  file_id: '',
   image_url: '',
   title: '',
   subtitle: '',
@@ -156,6 +157,9 @@ const localData = reactive({
   link_value: '',
   product_id: null
 })
+
+const resolveAssetUrl = (item = {}) => item.image_url || item.url || item.file_id || ''
+const resolvedImageUrl = computed(() => resolveAssetUrl(localData))
 
 const showField = (f) => props.fields.includes(f)
 
@@ -172,9 +176,8 @@ watch(() => props.modelValue, (v) => {
   // 只在初始化或外部明确变化时同步，避免 emitData → 父组件更新 → watch 触发 → 覆盖刚上传的 URL
   if (!v) return
   // 仅当数据真正不同时才同步，防止上传后被父组件空值覆盖
-  if (v.image_url !== undefined && v.image_url !== localData.image_url) {
-    localData.image_url = v.image_url
-  }
+  if (v.file_id !== undefined) localData.file_id = v.file_id || ''
+  if (v.image_url !== undefined && v.image_url !== localData.image_url) localData.image_url = v.image_url
   if (v.title !== undefined) localData.title = v.title
   if (v.subtitle !== undefined) localData.subtitle = v.subtitle
   if (v.link_type !== undefined) localData.link_type = v.link_type
@@ -182,7 +185,7 @@ watch(() => props.modelValue, (v) => {
   if (v.product_id !== undefined) localData.product_id = v.product_id
   // 根据外部数据推断模式（只在初始加载时）
   if (v.product_id && v.link_type === 'product') source.value = 'product'
-  else if (v.image_url) source.value = 'custom'
+  else if (resolveAssetUrl(v)) source.value = 'custom'
 }, { immediate: true })
 
 const emitData = () => { emit('update:modelValue', { ...localData }) }
@@ -225,7 +228,8 @@ const onReusePicked = (id) => {
   const b = reusableBanners.value.find(x => x.id === id)
   reusedBanner.value = b || null
   if (b) {
-    localData.image_url = b.image_url || ''
+    localData.file_id = b.file_id || ''
+    localData.image_url = resolveAssetUrl(b)
     localData.title = b.title || ''
     localData.subtitle = b.subtitle || ''
     localData.link_type = b.link_type || 'none'
@@ -246,18 +250,24 @@ const beforeUpload = (file) => {
 const handleUpload = async ({ file }) => {
   try {
     const res = await uploadFile(file)
-    const url = res?.url || res?.data?.url || ''
+    const payload = res?.data || res || {}
+    const url = payload.url || payload.image_url || ''
     if (!url) {
       ElMessage.error('上传成功但未返回图片地址，请检查存储配置')
       return
     }
-    localData.image_url = url
+    syncUploadedAsset(payload)
     ElMessage.success('图片上传成功')
     // 强制 emit，让父组件同步最新 image_url
     emitData()
   } catch (e) {
     ElMessage.error(e?.message || '图片上传失败')
   }
+}
+
+const syncUploadedAsset = (payload = {}) => {
+  localData.file_id = payload.file_id || ''
+  localData.image_url = payload.url || payload.image_url || ''
 }
 
 onMounted(async () => {

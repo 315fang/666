@@ -1,6 +1,18 @@
 // pages/distribution/workbench.js - 代理商工作台
 const { get, post } = require('../../utils/request');
 
+function resolveWorkbenchPendingCount(workbench = {}) {
+    return Number(workbench.pendingShip ?? workbench.pending_ship ?? 0);
+}
+
+function normalizeWorkbenchData(workbench = {}) {
+    return {
+        ...workbench,
+        pendingShip: resolveWorkbenchPendingCount(workbench),
+        pending_ship: resolveWorkbenchPendingCount(workbench)
+    };
+}
+
 Page({
     data: {
         workbench: {},
@@ -47,7 +59,7 @@ Page({
         try {
             const res = await get('/agent/workbench');
             if (res.code === 0) {
-                this.setData({ workbench: res.data });
+                this.setData({ workbench: normalizeWorkbenchData(res.data) });
             }
         } catch (err) {
             console.error('加载工作台失败:', err);

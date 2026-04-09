@@ -1,4 +1,6 @@
 // pages/feed/index.js
+const { getUserNickname, normalizeUserProfile } = require('../../utils/userProfile');
+
 Page({
     data: {
         userName: '生活家',
@@ -19,9 +21,10 @@ Page({
     },
 
     onLoad() {
-        const userInfo = wx.getStorageSync('userInfo');
-        if (userInfo && userInfo.nickname) {
-            this.setData({ userName: userInfo.nickname });
+        const userInfo = normalizeUserProfile(wx.getStorageSync('userInfo') || {});
+        const userName = getUserNickname(userInfo);
+        if (userName) {
+            this.setData({ userName });
         }
     },
 

@@ -1,0 +1,194 @@
+{
+    "pages": [
+        "pages/index/index",
+        "pages/splash/splash",
+        "pages/category/category",
+        "pages/activity/activity",
+        "pages/activity/n-invite",
+        "pages/activity/brand-news-detail",
+        "pages/activity/limited-spot",
+        "pages/cart/cart",
+        "pages/user/user",
+        "pages/user/edit-profile",
+        "pages/user/footprints",
+        "pages/user/favorites",
+        "pages/user/favorites-footprints",
+        "pages/user/notifications",
+        "pages/user/preferences",
+        "pages/user/portal-password",
+        "pages/user/customer-service",
+        "pages/user/growth-privileges",
+        "pages/user/membership-center",
+        "pages/user/member-levels",
+        "pages/user/ticket-list",
+        "pages/product/detail",
+        "pages/product/reviews",
+        "pages/search/search",
+        "pages/privacy/privacy"
+    ],
+    "subPackages": [
+        {
+            "root": "pages/order",
+            "name": "packageOrder",
+            "pages": [
+                "list",
+                "detail",
+                "confirm",
+                "review",
+                "refund-apply",
+                "refund-list",
+                "refund-detail",
+                "pickup-credential"
+            ]
+        },
+        {
+            "root": "pages/stations",
+            "name": "packageStations",
+            "pages": [
+                "map",
+                "my-station"
+            ]
+        },
+        {
+            "root": "pages/pickup",
+            "name": "packagePickup",
+            "pages": [
+                "verify",
+                "orders"
+            ]
+        },
+        {
+            "root": "pages/address",
+            "name": "packageAddress",
+            "pages": [
+                "list",
+                "edit"
+            ]
+        },
+        {
+            "root": "pages/logistics",
+            "name": "packageLogistics",
+            "pages": [
+                "tracking"
+            ]
+        },
+        {
+            "root": "pages/distribution",
+            "name": "packageDistribution",
+            "pages": [
+                "center",
+                "team",
+                "team-member",
+                "invite-poster",
+                "business-center",
+                "stock-logs",
+                "commission-logs",
+                "withdraw-history"
+            ]
+        },
+        {
+            "root": "pages/wallet",
+            "name": "packageWallet",
+            "pages": [
+                "index",
+                "agent-wallet",
+                "recharge-order"
+            ]
+        },
+        {
+            "root": "pages/points",
+            "name": "packagePoints",
+            "pages": [
+                "index"
+            ]
+        },
+        {
+            "root": "pages/lottery",
+            "name": "packageLottery",
+            "pages": [
+                "lottery"
+            ]
+        },
+        {
+            "root": "pages/coupon",
+            "name": "packageCoupon",
+            "pages": [
+                "list"
+            ]
+        },
+        {
+            "root": "pages/slash",
+            "name": "packageSlash",
+            "pages": [
+                "list",
+                "detail"
+            ]
+        },
+        {
+            "root": "pages/group",
+            "name": "packageGroup",
+            "pages": [
+                "list",
+                "detail"
+            ]
+        }
+    ],
+    "preloadRule": {
+        "pages/index/index": {
+            "network": "all",
+            "packages": ["packageOrder"]
+        },
+        "pages/cart/cart": {
+            "network": "all",
+            "packages": ["packageOrder"]
+        }
+    },
+    "tabBar": {
+        "custom": true,
+        "color": "#64748B",
+        "selectedColor": "#C6A16E",
+        "backgroundColor": "#F8FCFD",
+        "borderStyle": "white",
+        "list": [
+            {
+                "pagePath": "pages/index/index",
+                "text": "商城首页",
+                "iconPath": "assets/tabbar-icons/home.png",
+                "selectedIconPath": "assets/tabbar-icons/home-active.png"
+            },
+            {
+                "pagePath": "pages/category/category",
+                "text": "全部商品",
+                "iconPath": "assets/tabbar-icons/category.png",
+                "selectedIconPath": "assets/tabbar-icons/category-active.png"
+            },
+            {
+                "pagePath": "pages/activity/activity",
+                "text": "热门活动",
+                "iconPath": "assets/tabbar-icons/activity.png",
+                "selectedIconPath": "assets/tabbar-icons/activity-active.png"
+            },
+            {
+                "pagePath": "pages/user/user",
+                "text": "我的会员",
+                "iconPath": "assets/tabbar-icons/user.png",
+                "selectedIconPath": "assets/tabbar-icons/user-active.png"
+            }
+        ]
+    },
+    "window": {
+        "navigationBarBackgroundColor": "#1E4A6D",
+        "navigationBarTitleText": "臻选",
+        "navigationBarTextStyle": "white",
+        "backgroundColor": "#F4F8FA"
+    },
+    "style": "v2",
+    "sitemapLocation": "sitemap.json",
+    "lazyCodeLoading": "requiredComponents",
+    "requiredPrivateInfos": ["chooseLocation", "chooseAddress"],
+    "permission": {
+        "scope.userLocation": {
+            "desc": "用于推荐附近自提门店和地图选点"
+        }
+    }
+}

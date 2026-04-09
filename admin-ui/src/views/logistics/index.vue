@@ -83,7 +83,7 @@
         </el-table-column>
         <el-table-column label="收件人" width="110">
           <template #default="{ row }">
-            <div>{{ row.address?.receiver_name || row.address?.name || row.buyer?.nickname || '-' }}</div>
+            <div>{{ row.address?.receiver_name || row.address?.name || displayUserName(row.buyer) }}</div>
             <div style="font-size:12px; color:#909399;">{{ row.address?.phone }}</div>
           </template>
         </el-table-column>
@@ -228,6 +228,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getOrders, getAdminOrderLogistics, refreshAdminLogistics, getMiniProgramConfig } from '@/api/index'
 import { usePagination } from '@/composables/usePagination'
+import { getUserNickname } from '@/utils/userDisplay'
 
 // ── 搜索表单 ──────────────────────────────────────
 const searchForm = reactive({
@@ -252,6 +253,7 @@ const drawerVisible = ref(false)
 const drawerLoading = ref(false)
 const drawerLogistics = ref(null)
 const currentOrder = ref(null)
+const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 
 // ── 获取已发货订单列表 ─────────────────────────────
 async function fetchOrders() {

@@ -2,6 +2,7 @@ const { get } = require('../../utils/request');
 const { requireLogin } = require('../../utils/auth');
 const { InvitePosterCore } = require('./utils/invitePosterCore');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
+const { getUserNickname, normalizeUserProfile } = require('../../utils/userProfile');
 const app = getApp();
 
 /** 品牌名：优先后台 brand_config（与首页/我的一致），再 globalData */
@@ -79,10 +80,10 @@ Page({
 
     onShareAppMessage() {
         const code = this.data.inviteCode;
-        const userInfo = app.globalData.userInfo;
+        const userInfo = normalizeUserProfile(app.globalData.userInfo || {});
         const brandName = resolveBrandName();
         return {
-            title: `${userInfo?.nickname || '好友'} 邀请你来${brandName}逛逛`,
+            title: `${getUserNickname(userInfo) || '好友'} 邀请你来${brandName}逛逛`,
             path: `/pages/index/index${code ? '?invite=' + code : ''}`,
             imageUrl: ''
         };
@@ -98,7 +99,7 @@ Page({
         }
         this.setData({ posterGenerating: true, posterImagePath: '' });
         try {
-            const userInfo = app.globalData.userInfo || {};
+            const userInfo = normalizeUserProfile(app.globalData.userInfo || {});
             const brandName = resolveBrandName();
             const core = new InvitePosterCore(this);
             const tempPath = await core.generateToTempPath({

@@ -2,8 +2,47 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
 
+const localAdminProxyTarget = String(import.meta.env.VITE_ADMIN_DEV_PROXY_TARGET || 'http://127.0.0.1:3001').replace(/\/$/, '')
+const localDirectAdminApiBaseURL = `${localAdminProxyTarget}/admin/api`
+
+function isLocalRuntime() {
+  if (typeof window === 'undefined') return false
+  const { protocol, hostname } = window.location
+  return protocol === 'file:' || ['localhost', '127.0.0.1', '::1'].includes(hostname)
+}
+
+function isLoginRequestUrl(url) {
+  return typeof url === 'string' && url.includes('/login')
+}
+
+function getRequestDebugUrl(config = {}) {
+  const baseURL = config.baseURL || ''
+  const url = config.url || ''
+  return `${baseURL}${url}`
+}
+
+function getCloudBaseHostedAdminApiBaseURL() {
+  if (typeof window === 'undefined') return ''
+
+  const cloudBaseHostingSuffix = '.tcloudbaseapp.com'
+  const { hostname } = window.location
+  if (!hostname.endsWith(cloudBaseHostingSuffix)) return ''
+
+  const hostedSiteId = hostname.slice(0, -cloudBaseHostingSuffix.length)
+  const envId = hostedSiteId.replace(/-\d+$/, '')
+  if (!envId || envId === hostedSiteId) return ''
+
+  return `https://${envId}.service.tcloudbase.com/admin/api`
+}
+
+const cloudBaseHostedAdminApiBaseURL = getCloudBaseHostedAdminApiBaseURL()
+const resolvedAdminApiBaseURL =
+  import.meta.env.VITE_ADMIN_API_BASE_URL ||
+  cloudBaseHostedAdminApiBaseURL ||
+  '/admin/api'
+
 const request = axios.create({
-  baseURL: '/admin/api',
+  baseURL: resolvedAdminApiBaseURL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
@@ -50,7 +89,27 @@ request.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response
       const reqUrl = error.config?.url || ''
-      const isLoginRequest = typeof reqUrl === 'string' && reqUrl.includes('/login')
+      const isLoginRequest = isLoginRequestUrl(reqUrl)
+
+      // 本地直接打开 dist 或使用无代理静态服务时，请求会落到错误服务并返回 404。
+      // 登录接口在真实后端存在，此处仅对登录请求做一次本地直连回退。
+      if (
+        status === 404 &&
+        isLoginRequest &&
+        isLocalRuntime() &&
+        !error.config?._retriedWithLocalAdminApi &&
+        (error.config?.baseURL || request.defaults.baseURL) !== localDirectAdminApiBaseURL
+      ) {
+        const retryConfig = {
+          ...error.config,
+          baseURL: localDirectAdminApiBaseURL,
+          _retriedWithLocalAdminApi: true
+        }
+        console.warn(
+          `[admin-api] login 404 from ${getRequestDebugUrl(error.config)}; retrying ${getRequestDebugUrl(retryConfig)}`
+        )
+        return request.request(retryConfig)
+      }
       
       switch (status) {
         case 401:
@@ -68,6 +127,15 @@ request.interceptors.response.use(
           ElMessage.error('没有权限访问')
           break
         case 404:
+          if (isLoginRequest) {
+            ElMessage.error(`登录接口不存在：${getRequestDebugUrl(error.config)}。请确认当前页面由后端服务托管，或将 VITE_ADMIN_API_BASE_URL 指向正确后端。`)
+            console.error('[admin-api] login endpoint 404', {
+              requestUrl: getRequestDebugUrl(error.config),
+              fallbackTarget: localDirectAdminApiBaseURL,
+              cloudbaseHostedTarget: cloudBaseHostedAdminApiBaseURL
+            })
+            break
+          }
           ElMessage.error('请求的资源不存在')
           break
         case 500:

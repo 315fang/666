@@ -13,6 +13,9 @@ const cacheService = require('./CacheService');
 const MemberTierService = require('./MemberTierService');
 const commissionPolicy = require('../config/commissionPolicy');
 const constants = require('../config/constants');
+// P2拆分：协助奖励提取为独立服务
+// (方法签名保持不变，内部助手委托模式)
+const CommissionAssistService = require('./CommissionAssistService');
 
 // 佣金配置缓存 Key（使用 CacheService 替代静态变量，支持多进程一致性）
 const COMMISSION_CONFIG_CACHE_KEY = 'commission:config';
@@ -554,7 +557,8 @@ class CommissionService {
             let sku = null;
             if (skuId) {
                 sku = await SKU.findByPk(skuId, {
-                    attributes: ['id', 'price', 'price_member', 'price_leader', 'price_agent']
+                    // ★ 使用 SKU.js 中实际定义的字段名（retail_price/member_price/wholesale_price）
+                    attributes: ['id', 'retail_price', 'member_price', 'wholesale_price', 'stock']
                 });
             }
 
@@ -616,20 +620,57 @@ class CommissionService {
 
     /**
      * 获取实际售价
+     * ★ 已修复：SKU 和 Product 字段名不同，必须分支处理
+     *   - SKU:     retail_price / member_price / wholesale_price（SKU.js 定义）
+     *   - Product: retail_price / price_member / price_leader / price_agent（Product.js 定义）
      * @private
      */
     static _getActualPrice(product, sku, roleLevel) {
-        const source = sku || product;
+        if (sku) {
+            // SKU 层优先，字段名见 models/SKU.js
+            switch (roleLevel) {
+                case USER_ROLES.AGENT:  // B1/B2/B3（role_level=3）
+                    // SKU 没有独立的 agent/leader 价，批发价约等于代理价
+                    return parseFloat(
+                        sku.wholesale_price ||
+                        product.price_agent || product.price_leader ||
+                        product.price_member || product.retail_price
+                    );
+                case USER_ROLES.LEADER: // C2（role_level=2）
+                    return parseFloat(
+                        sku.member_price ||
+                        product.price_leader || product.price_member ||
+                        product.retail_price
+                    );
+                case USER_ROLES.MEMBER: // C1（role_level=1）
+                    return parseFloat(
+                        sku.member_price ||
+                        product.price_member ||
+                        product.retail_price
+                    );
+                default:
+                    return parseFloat(sku.retail_price || product.retail_price);
+            }
+        }
 
+        // 无 SKU，直接取 Product 字段（字段名见 models/Product.js）
         switch (roleLevel) {
             case USER_ROLES.AGENT:
-                return parseFloat(source.price_agent || source.price_leader || source.price_member || source.retail_price || source.price);
+                return parseFloat(
+                    product.price_agent || product.price_leader ||
+                    product.price_member || product.retail_price
+                );
             case USER_ROLES.LEADER:
-                return parseFloat(source.price_leader || source.price_member || source.retail_price || source.price);
+                return parseFloat(
+                    product.price_leader || product.price_member ||
+                    product.retail_price
+                );
             case USER_ROLES.MEMBER:
-                return parseFloat(source.price_member || source.retail_price || source.price);
+                return parseFloat(
+                    product.price_member || product.retail_price
+                );
             default:
-                return parseFloat(source.retail_price || source.price);
+                return parseFloat(product.retail_price);
         }
     }
 
@@ -733,105 +774,20 @@ class CommissionService {
         return Math.max(0, Math.min(100, n)) / 100;
     }
 
+    /**
+     * 加载协助奖励配置
+     * @deprecated 已委托给 CommissionAssistService.loadConfig()，保留此方法不破坏调用方
+     */
     static async _loadAssistBonusConfig() {
-        const defaults = {
-            enabled: true,
-            tiers: [
-                { max_orders: 30, bonus: 40 },
-                { max_orders: 50, bonus: 50 },
-                { max_orders: 100, bonus: 60 }
-            ]
-        };
-        try {
-            const row = await AppConfig.findOne({ where: { config_key: 'agent_system_assist_bonus', status: 1 } });
-            if (row && row.config_value) {
-                const parsed = JSON.parse(row.config_value);
-                const tiers = Array.isArray(parsed.tiers) && parsed.tiers.length > 0 ? parsed.tiers : defaults.tiers;
-                return {
-                    enabled: parsed.enabled !== false,
-                    tiers
-                };
-            }
-        } catch (e) {
-            logError('COMMISSION', '读取agent_system_assist_bonus配置失败', { error: e.message });
-        }
-        return defaults;
+        return CommissionAssistService.loadConfig();
     }
 
-    static async _allocateAgentAssistBonus({
-        order,
-        shippingAgent,
-        buyer,
-        distributablePool,
-        middleCommissionTotal,
-        transaction: t,
-        notifySource
-    }) {
-        const { sendNotification } = require('../models/notificationUtil');
-        if (!shippingAgent?.parent_id) {
-            return 0;
-        }
-
-        const assistCfg = await this._loadAssistBonusConfig();
-        if (assistCfg.enabled === false) {
-            return 0;
-        }
-
-        const assistAgent = await User.findByPk(shippingAgent.parent_id, { transaction: t });
-        if (!assistAgent || Number(assistAgent.role_level || 0) < constants.ROLES.AGENT) {
-            return 0;
-        }
-
-        const shippedByOwnParent = buyer?.agent_id && Number(buyer.agent_id) === Number(assistAgent.id);
-        if (shippedByOwnParent || assistAgent.id === shippingAgent.id) {
-            return 0;
-        }
-
-        const assistCount = await CommissionLog.count({
-            where: {
-                user_id: assistAgent.id,
-                type: { [Op.in]: ['agent_assist', 'B2_Assist'] }
-            },
-            transaction: t
-        });
-        const tiers = assistCfg.tiers
-            .map((tier) => ({
-                max_orders: Number(tier.max_orders || 0),
-                bonus: Number(tier.bonus || 0)
-            }))
-            .filter((tier) => tier.max_orders > 0 && tier.bonus > 0)
-            .sort((a, b) => a.max_orders - b.max_orders);
-        if (!tiers.length) {
-            return 0;
-        }
-
-        const tier = tiers.find((item) => assistCount < item.max_orders) || tiers[tiers.length - 1];
-        const remainPool = Math.max(0, Number(distributablePool || 0) - Number(middleCommissionTotal || 0));
-        const bonus = Math.min(Number(tier.bonus || 0), remainPool);
-        if (bonus <= 0) {
-            return 0;
-        }
-
-        await CommissionLog.create({
-            order_id: order.id,
-            user_id: assistAgent.id,
-            amount: Math.round(bonus * 100) / 100,
-            type: 'agent_assist',
-            status: 'frozen',
-            available_at: null,
-            refund_deadline: null,
-            remark: `上级代理协助奖（协助下级代理#${shippingAgent.id}发货，累计第${assistCount + 1}单，${notifySource}）`
-        }, { transaction: t });
-
-        await sendNotification(
-            assistAgent.id,
-            '协助奖到账提醒',
-            `您下级代理产生了一笔${notifySource}订单，您获得协助奖 ¥${bonus.toFixed(2)}（需售后期结束+审批后结算）。`,
-            'commission',
-            order.id
-        ).catch(() => {});
-
-        return Math.round(bonus * 100) / 100;
+    /**
+     * 分配协助奖励
+     * @deprecated 已委托给 CommissionAssistService.allocate()，保留此方法不破坏调用方
+     */
+    static async _allocateAgentAssistBonus(options) {
+        return CommissionAssistService.allocate(options);
     }
 
     /**

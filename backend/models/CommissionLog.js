@@ -42,7 +42,13 @@ const CommissionLog = sequelize.define('CommissionLog', {
     },
     type: {
         type: DataTypes.STRING(30),
-        comment: '佣金类型: gap(级差)/agent_fulfillment(代理商发货利润)/direct(直推)/indirect(间推)/n_price_gap(N路径差价)/n_separation_bonus(N路径脱离奖励)/Fund_Pool(基金池)/same_level(平级奖)'
+        // ★ VARCHAR(30) 非ENUM，数据库层勿再执行 MODIFY COLUMN type ENUM(...)
+        // 合法取值（与 CommissionService.COMMISSION_TYPES 保持一致）：
+        // 'direct'(直推) | 'indirect'(间推) | 'gap'(级差) | 'agent_fulfillment'(代理商发货利润)
+        // 'same_level'(平级奖) | 'n_price_gap'(N路径差价) | 'n_separation_bonus'(N路径脱离奖励)
+        // 'Fund_Pool'(基金池) | 'self'(自购返利) | 'Stock_Diff'(库存差价)
+        // 'agent_assist'(B路径协助奖励) | 'B2_Assist'(B2协助奖励)
+        comment: '佣金类型（VARCHAR，全小写，见上方注释清单）'
     },
     level: {
         type: DataTypes.INTEGER,
@@ -87,6 +93,12 @@ const CommissionLog = sequelize.define('CommissionLog', {
         type: DataTypes.DATE,
         allowNull: true,
         comment: '实际结算到账时间'
+    },
+    // ★ 所属结算批次（对应 20260212 migration ALTER TABLE commission_logs ADD COLUMN settlement_id）
+    settlement_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: '所属结算批次ID（commission_settlements.id），NULL=未划入任何批次'
     }
 }, {
     tableName: 'commission_logs',

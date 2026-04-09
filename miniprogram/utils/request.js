@@ -1,252 +1,261 @@
 /**
- * 网络请求封装（改进版）
- * 统一处理请求头、错误处理、Loading、重试等
+ * utils/request.js — 云开发兼容层（Cloud Function Router）
  */
 
-const { getApiBaseUrl, isLogEnabled } = require('../config/env');
-const { ErrorHandler } = require('./errorHandler');
-const { createLoginExpiredHandler } = require('./requestAuth');
-const { createUploadFile } = require('./requestUpload');
+const { callFn, uploadToCloud } = require('./cloud');
 
-// 请求配置
-const config = {
-    baseUrl: getApiBaseUrl(), // 从环境配置读取
-    timeout: 15000,
-    maxRetries: 1, // 最大重试次数
-    retryDelay: 1000 // 重试延迟（毫秒）
+const ROUTE_TABLE = {
+    'POST /login': { fn: 'login', action: null },
+    'GET /user/profile': { fn: 'user', action: 'getProfile' },
+    'PUT /user/profile': { fn: 'user', action: 'updateProfile' },
+    'GET /user/info': { fn: 'user', action: 'getProfile' },
+    'PUT /user/info': { fn: 'user', action: 'updateProfile' },
+    'GET /user/stats': { fn: 'user', action: 'getStats' },
+    'GET /user/favorites': { fn: 'user', action: 'getFavorites' },
+    'POST /user/favorites/sync': { fn: 'user', action: 'syncFavorites' },
+    'POST /user/favorites': { fn: 'user', action: 'addFavorite' },
+    'DELETE /user/favorites': { fn: 'user', action: 'removeFavorite' },
+    'GET /products': { fn: 'products', action: 'list' },
+    'GET /products/:id': { fn: 'products', action: 'detail', idKey: 'product_id' },
+    'GET /categories': { fn: 'products', action: 'categories' },
+    'GET /search': { fn: 'products', action: 'search' },
+    'GET /products/search': { fn: 'products', action: 'search' },
+    'GET /cart': { fn: 'cart', action: 'list' },
+    'POST /cart': { fn: 'cart', action: 'add' },
+    'PUT /cart/:id': { fn: 'cart', action: 'update', idKey: 'cart_id' },
+    'DELETE /cart/:id': { fn: 'cart', action: 'remove', idKey: 'cart_id' },
+    'DELETE /cart/clear': { fn: 'cart', action: 'clear' },
+    'POST /cart/check': { fn: 'cart', action: 'check' },
+    'POST /orders': { fn: 'order', action: 'create' },
+    'GET /orders': { fn: 'order', action: 'list' },
+    'GET /orders/:id': { fn: 'order', action: 'detail', idKey: 'order_id' },
+    'POST /orders/:id/cancel': { fn: 'order', action: 'cancel', idKey: 'order_id' },
+    'POST /orders/:id/confirm': { fn: 'order', action: 'confirm', idKey: 'order_id' },
+    'POST /orders/:id/confirm-received': { fn: 'order', action: 'confirm', idKey: 'order_id' },
+    'POST /orders/:id/review': { fn: 'order', action: 'review', idKey: 'order_id' },
+    'GET /refunds': { fn: 'order', action: 'refundList' },
+    'POST /refunds': { fn: 'order', action: 'applyRefund' },
+    'GET /refunds/:id': { fn: 'order', action: 'refundDetail', idKey: 'refund_id' },
+    'POST /orders/:id/pay': { fn: 'payment', action: 'prepay', idKey: 'order_id' },
+    'POST /orders/:id/prepay': { fn: 'payment', action: 'prepay', idKey: 'order_id' },
+    'GET /orders/:id/pay-status': { fn: 'payment', action: 'queryStatus', idKey: 'order_id' },
+    'POST /orders/:id/sync-wechat-pay': { fn: 'payment', action: 'syncWechatPay', idKey: 'order_id' },
+    'GET /addresses': { fn: 'user', action: 'listAddresses' },
+    'GET /addresses/:id': { fn: 'user', action: 'getAddressDetail', idKey: 'address_id' },
+    'POST /addresses': { fn: 'user', action: 'addAddress' },
+    'PUT /addresses/:id': { fn: 'user', action: 'updateAddress', idKey: 'address_id' },
+    'DELETE /addresses/:id': { fn: 'user', action: 'deleteAddress', idKey: 'address_id' },
+    'PUT /addresses/:id/default': { fn: 'user', action: 'setDefaultAddress', idKey: 'address_id' },
+    'POST /addresses/:id/default': { fn: 'user', action: 'setDefaultAddress', idKey: 'address_id' },
+    'GET /distribution/overview': { fn: 'distribution', action: 'center' },
+    'GET /distribution/center': { fn: 'distribution', action: 'center' },
+    'GET /distribution/team': { fn: 'distribution', action: 'team' },
+    'GET /distribution/team/:id': { fn: 'distribution', action: 'teamDetail', idKey: 'member_id' },
+    'GET /distribution/commission-logs': { fn: 'distribution', action: 'commLogs' },
+    'POST /distribution/withdraw': { fn: 'distribution', action: 'withdraw' },
+    'GET /distribution/stats': { fn: 'distribution', action: 'stats' },
+    'GET /stats/distribution': { fn: 'distribution', action: 'center' },
+    'GET /agent': { fn: 'distribution', action: 'center' },
+    'GET /agent/workbench': { fn: 'distribution', action: 'agentWorkbench' },
+    'GET /agent/orders': { fn: 'distribution', action: 'agentOrders' },
+    'POST /agent/restock': { fn: 'distribution', action: 'agentRestock' },
+    'GET /commissions': { fn: 'distribution', action: 'commLogs' },
+    'GET /wallet': { fn: 'distribution', action: 'center' },
+    'POST /wallet/withdraw': { fn: 'distribution', action: 'withdraw' },
+    'GET /wallet/withdrawals': { fn: 'distribution', action: 'withdrawList' },
+    'GET /points': { fn: 'user', action: 'getStats' },
+    'GET /points/summary': { fn: 'user', action: 'getStats' },
+    'GET /coupons/mine': { fn: 'user', action: 'listCoupons' },
+    'GET /coupons': { fn: 'user', action: 'listCoupons' },
+    'GET /configs': { fn: 'config', action: 'getSystemConfig' },
+    'GET /mini-program-config': { fn: 'config', action: 'miniProgramConfig' },
+    'GET /page-content/home': { fn: 'config', action: 'homeContent' },
+    'GET /page-content': { fn: 'config', action: 'homeContent' },
+    'GET /homepage-config': { fn: 'config', action: 'homeContent' },
+    'GET /splash/active': { fn: 'config', action: 'splash' },
+    'GET /themes/active': { fn: 'config', action: 'activeTheme' },
+    'GET /notifications': { fn: 'user', action: 'listNotifications' },
+    'PUT /notifications/:id/read': { fn: 'user', action: 'markRead', idKey: 'notification_id' },
+    'GET /stations/my-scope': { fn: 'user', action: 'getPickupScope' },
+    'GET /stations': { fn: 'user', action: 'listStations' },
+    'GET /logistics/:id': { fn: 'order', action: 'trackLogistics', idKey: 'order_id' },
+    'GET /activities': { fn: 'config', action: 'activities' },
+    'GET /groups': { fn: 'config', action: 'groups' },
+    'GET /groups/:id': { fn: 'config', action: 'groupDetail', idKey: 'group_id' },
+    'POST /groups/:id/join': { fn: 'order', action: 'joinGroup', idKey: 'group_id' },
+    'GET /group/activities': { fn: 'config', action: 'groupActivities' },
+    'GET /slash': { fn: 'config', action: 'slashList' },
+    'GET /slash/:id': { fn: 'config', action: 'slashDetail', idKey: 'slash_id' },
+    'POST /slash/:id/help': { fn: 'order', action: 'slashHelp', idKey: 'slash_id' },
+    'GET /lottery': { fn: 'config', action: 'lottery' },
+    'GET /lottery/prizes': { fn: 'config', action: 'lotteryPrizes' },
+    'GET /lottery/records': { fn: 'config', action: 'lotteryRecords' },
+    'POST /lottery/draw': { fn: 'order', action: 'lotteryDraw' },
+    'GET /upgrade/eligibility': { fn: 'user', action: 'upgradeEligibility' },
+    'POST /upgrade': { fn: 'user', action: 'upgrade' },
+    'GET /boards/map': { fn: 'config', action: 'boardsMap' },
+    'GET /banners': { fn: 'config', action: 'banners' },
+    'GET /activity/bubbles': { fn: 'config', action: 'activityBubbles' },
+    'GET /activity/links': { fn: 'config', action: 'activityLinks' },
+    'GET /activity/festival-config': { fn: 'config', action: 'festivalConfig' },
+    'GET /points/account': { fn: 'user', action: 'pointsAccount' },
+    'GET /coupons/available': { fn: 'user', action: 'availableCoupons' },
+    'GET /commissions/preview': { fn: 'distribution', action: 'commissionPreview' },
+    'POST /commissions/settle-matured': { fn: 'distribution', action: 'settleMatured' },
+    'GET /points/sign-in/status': { fn: 'user', action: 'pointsSignInStatus' },
+    'POST /points/sign-in': { fn: 'user', action: 'pointsSignIn' },
+    'GET /points/tasks': { fn: 'user', action: 'pointsTasks' },
+    'GET /points/logs': { fn: 'user', action: 'pointsLogs' },
+    'GET /wallet/info': { fn: 'user', action: 'walletInfo' },
+    'GET /wallet/commissions': { fn: 'user', action: 'walletCommissions' },
+    'GET /user/member-tier-meta': { fn: 'user', action: 'memberTierMeta' },
+    'GET /agent/wallet': { fn: 'distribution', action: 'agentWallet' },
+    'GET /agent/wallet/logs': { fn: 'distribution', action: 'agentWalletLogs' },
+    'GET /agent/wallet/recharge-config': { fn: 'distribution', action: 'agentWalletRechargeConfig' },
+    'POST /agent/wallet/prepay': { fn: 'distribution', action: 'agentWalletPrepay' },
+    'GET /agent/wallet/recharge-orders/:id': { fn: 'distribution', action: 'agentWalletRechargeOrderDetail', idKey: 'recharge_order_id' },
+    'GET /user/preferences': { fn: 'user', action: 'getPreferences' },
+    'POST /user/preferences/submit': { fn: 'user', action: 'submitPreferences' },
+    'POST /user/favorites/clear-all': { fn: 'user', action: 'clearAllFavorites' },
+    'POST /user/portal/apply-initial-password': { fn: 'user', action: 'applyInitialPassword' },
+    'POST /upgrade/apply': { fn: 'user', action: 'upgradeApply' },
+    'GET /customer-service/tickets': { fn: 'user', action: 'listTickets' },
+    'GET /questionnaire/active': { fn: 'config', action: 'questionnaireActive' },
+    'GET /questionnaire/share-eligibility': { fn: 'user', action: 'shareEligibility' },
+    'POST /questionnaire/submit': { fn: 'user', action: 'submitQuestionnaire' },
+    'GET /rules': { fn: 'config', action: 'rules' },
+    'GET /group/my': { fn: 'order', action: 'myGroups' },
+    'POST /group/orders': { fn: 'order', action: 'joinGroup' },
+    'GET /slash/activities': { fn: 'config', action: 'slashActivities' },
+    'GET /slash/my/list': { fn: 'order', action: 'mySlashList' },
+    'POST /slash/start': { fn: 'order', action: 'slashStart' },
+    'GET /pickup/pending-orders': { fn: 'order', action: 'pickupPendingOrders' },
+    'GET /pickup/my/:id': { fn: 'order', action: 'pickupMyOrder', idKey: 'order_id' },
+    'POST /pickup/verify-code': { fn: 'order', action: 'pickupVerifyCode' },
+    'POST /pickup/verify-qr': { fn: 'order', action: 'pickupVerifyQr' },
+    'GET /products/:id/reviews': { fn: 'products', action: 'reviews', idKey: 'product_id' },
+    'GET /activity/limited-spot/detail': { fn: 'config', action: 'limitedSpotDetail' },
+    'GET /page-content/brand-news': { fn: 'config', action: 'brandNews' },
+    'GET /n/invite-card': { fn: 'config', action: 'nInviteCard' },
+    'GET /stations/pickup-options': { fn: 'user', action: 'pickupOptions' },
+    'GET /group/orders/:id': { fn: 'order', action: 'groupOrderDetail', idKey: 'group_no' },
+    'DELETE /user/favorites/:id': { fn: 'user', action: 'removeFavoriteById', idKey: 'favorite_id' },
+    'PUT /refunds/:id/cancel': { fn: 'order', action: 'cancelRefund', idKey: 'refund_id' },
+    'PUT /refunds/:id/return-shipping': { fn: 'order', action: 'returnShipping', idKey: 'refund_id' }
 };
 
-/**
- * 规范化 URL，避免出现 /api/api 重复拼接
- * 兼容两类路径：
- * 1) 业务 API：/xxx （baseUrl 已包含 /api）
- * 2) 管理端公开接口：/admin/api/xxx（需回退到域名根）
- */
-function buildRequestUrl(path) {
-    const rawBase = String(config.baseUrl || '').replace(/\/+$/, '');
-    const rawPath = String(path || '');
-    if (/^https?:\/\//i.test(rawPath)) return rawPath;
-
-    let normalizedPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
-
-    // baseUrl = .../api 且 path 误写为 /api/xxx 时，去重为 /xxx
-    if (rawBase.endsWith('/api') && normalizedPath.startsWith('/api/')) {
-        normalizedPath = normalizedPath.replace(/^\/api/, '');
+function resolveRoute(url, method) {
+    let queryString = '';
+    let urlWithoutQuery = url;
+    const queryIndex = url.indexOf('?');
+    if (queryIndex !== -1) {
+        queryString = url.slice(queryIndex + 1);
+        urlWithoutQuery = url.slice(0, queryIndex);
     }
 
-    // 若访问 /admin/api/*，应拼到域名根而非 /api 前缀下
-    if (rawBase.endsWith('/api') && normalizedPath.startsWith('/admin/api/')) {
-        return `${rawBase.slice(0, -4)}${normalizedPath}`;
+    const cleanUrl = urlWithoutQuery.replace(/\/$/, '') || '/';
+    const queryParams = {};
+
+    if (queryString) {
+        queryString.split('&').forEach((pair) => {
+            const eqIndex = pair.indexOf('=');
+            if (eqIndex !== -1) {
+                const key = decodeURIComponent(pair.slice(0, eqIndex));
+                const value = decodeURIComponent(pair.slice(eqIndex + 1));
+                queryParams[key] = value;
+            }
+        });
     }
 
-    return `${rawBase}${normalizedPath}`;
-}
-
-// 正在进行的请求（用于防止重复请求）
-const pendingRequests = new Map();
-
-// 请求拦截器队列
-const requestInterceptors = [];
-const responseInterceptors = [];
-
-/**
- * 添加请求拦截器
- * @param {Function} fulfilled - 成功拦截器
- * @param {Function} rejected - 失败拦截器
- */
-function addRequestInterceptor(fulfilled, rejected) {
-    requestInterceptors.push({ fulfilled, rejected });
-}
-
-/**
- * 添加响应拦截器
- * @param {Function} fulfilled - 成功拦截器
- * @param {Function} rejected - 失败拦截器
- */
-function addResponseInterceptor(fulfilled, rejected) {
-    responseInterceptors.push({ fulfilled, rejected });
-}
-
-/**
- * 生成请求唯一标识
- */
-function generateRequestKey(url, method, data) {
-    return `${method}:${url}:${JSON.stringify(data)}`;
-}
-
-/**
- * 发起网络请求（改进版）
- * @param {Object} options - 请求配置
- * @param {string} options.url - 接口路径（不含 baseUrl）
- * @param {string} options.method - 请求方法，默认 GET
- * @param {Object} options.data - 请求数据
- * @param {boolean} options.showLoading - 是否显示 loading，默认 false
- * @param {boolean} options.showError - 是否显示错误提示，默认 true
- * @param {boolean} options.preventDuplicate - 是否防止重复请求，默认 false
- * @param {number} options.retryCount - 当前重试次数（内部使用）
- */
-function request(options) {
-    const {
-        url,
-        method = 'GET',
-        data = {},
-        showLoading = false,
-        showError = true,
-        ignore401 = false,
-        preventDuplicate = false,
-        timeout = config.timeout,
-        maxRetries = config.maxRetries,
-        retryDelay = config.retryDelay,
-        retryCount = 0
-    } = options;
-
-    // ★ 防止重复请求：检查必须在 Promise 构造函数外面，才能返回已有的 Promise
-    const requestKey = generateRequestKey(url, method, data);
-    if (preventDuplicate && pendingRequests.has(requestKey)) {
-        return pendingRequests.get(requestKey);
+    const exactKey = `${method} ${cleanUrl}`;
+    if (ROUTE_TABLE[exactKey]) {
+        return { ...ROUTE_TABLE[exactKey], pathId: null, queryParams };
     }
 
-    return new Promise(async (resolve, reject) => {
-        // 已在外层解构，此处保持引用
+    const parts = cleanUrl.split('/');
+    for (const [key, route] of Object.entries(ROUTE_TABLE)) {
+        const [routeMethod, routePath] = key.split(' ');
+        if (routeMethod !== method) continue;
+        if (!routePath.includes('/:id')) continue;
 
-        // 执行请求拦截器
-        let requestConfig = { url, method, data, showLoading, showError, ignore401 };
-        for (const interceptor of requestInterceptors) {
-            if (interceptor.fulfilled) {
-                try {
-                    requestConfig = await interceptor.fulfilled(requestConfig);
-                } catch (error) {
-                    if (interceptor.rejected) {
-                        interceptor.rejected(error);
-                    }
-                    return reject(error);
-                }
+        const routeParts = routePath.split('/');
+        if (routeParts.length !== parts.length) continue;
+
+        let idSegment = null;
+        let matched = true;
+        for (let index = 0; index < routeParts.length; index += 1) {
+            if (routeParts[index] === ':id') {
+                idSegment = parts[index];
+            } else if (routeParts[index] !== parts[index]) {
+                matched = false;
+                break;
             }
         }
 
-        // 显示加载提示
-        if (requestConfig.showLoading) {
-            wx.showLoading({ title: '加载中...', mask: true });
+        if (matched) {
+            return { ...route, pathId: idSegment, queryParams };
         }
+    }
 
-        // 获取用户标识
-        const token = wx.getStorageSync('token') || '';
-        const openid = wx.getStorageSync('openid') || '';
-
-        const requestPromise = new Promise((resolveRequest, rejectRequest) => {
-            wx.request({
-                url: buildRequestUrl(requestConfig.url),
-                method: requestConfig.method,
-                data: requestConfig.data,
-                header: {
-                    'Content-Type': 'application/json',
-                    'Authorization': token ? `Bearer ${token}` : '',
-                    'x-openid': openid
-                },
-                timeout,
-                success: async (res) => {
-                    if (requestConfig.showLoading) wx.hideLoading();
-
-                    // 执行响应拦截器
-                    let response = res;
-                    for (const interceptor of responseInterceptors) {
-                        if (interceptor.fulfilled) {
-                            try {
-                                response = await interceptor.fulfilled(response);
-                            } catch (error) {
-                                if (interceptor.rejected) {
-                                    interceptor.rejected(error);
-                                }
-                                return rejectRequest(error);
-                            }
-                        }
-                    }
-
-                    // HTTP 状态码检查
-                    if (response.statusCode >= 200 && response.statusCode < 300) {
-                        // 业务状态码检查：
-                        // 兼容两类后端返回：
-                        // 1) { code: 0, ... }
-                        // 2) { success: true, ... }（历史接口，如地址模块）
-                        if (response.data && (response.data.code === 0 || response.data.success === true)) {
-                            resolveRequest(response.data);
-                        } else {
-                            // 业务错误
-                            if (requestConfig.showError) {
-                                wx.showToast({
-                                    title: response.data.message || '请求失败',
-                                    icon: 'none',
-                                    duration: 2500
-                                });
-                            }
-                            rejectRequest(response.data);
-                        }
-                    } else if (response.statusCode === 401) {
-                        // 登录过期处理
-                        if (!requestConfig.ignore401) {
-                            handleLoginExpired();
-                        }
-                        rejectRequest({ code: 401, message: '登录已过期' });
-                    } else {
-                        // 其他 HTTP 错误，优先透传服务端 message，避免丢失关键排障信息
-                        const serverMessage = response.data && response.data.message;
-                        const errorMessage = serverMessage || `请求错误 (${response.statusCode})`;
-                        if (requestConfig.showError) {
-                            wx.showToast({
-                                title: errorMessage,
-                                icon: 'none',
-                                duration: 2500
-                            });
-                        }
-                        rejectRequest({ code: response.statusCode, message: errorMessage });
-                    }
-                },
-                fail: (err) => {
-                    if (requestConfig.showLoading) wx.hideLoading();
-
-                    // 网络错误，尝试重试
-                    if (retryCount < maxRetries) {
-                        console.log(`请求失败，${retryDelay}ms 后重试 (${retryCount + 1}/${maxRetries})`);
-                        setTimeout(() => {
-                            request({ ...options, retryCount: retryCount + 1 })
-                                .then(resolveRequest)
-                                .catch(rejectRequest);
-                        }, retryDelay);
-                    } else {
-                        if (requestConfig.showError) {
-                            wx.showToast({
-                                title: '网络连接失败',
-                                icon: 'none',
-                                duration: 2500
-                            });
-                        }
-                        rejectRequest({ code: -1, message: '网络连接失败', error: err });
-                    }
-                }
-            });
-        });
-
-        // 如果启用了防重复，将 Promise 存入 Map
-        if (preventDuplicate) {
-            pendingRequests.set(requestKey, requestPromise);
-            requestPromise.finally(() => {
-                pendingRequests.delete(requestKey);
-            });
-        }
-
-        requestPromise.then(resolve).catch(reject);
-    });
+    return null;
 }
 
-const handleLoginExpired = createLoginExpiredHandler(ErrorHandler);
+function request(options = {}) {
+    const {
+        url = '',
+        method = 'GET',
+        data = {},
+        showLoading = false,
+        showError = true
+    } = options;
 
-// 快捷方法
+    const upperMethod = String(method).toUpperCase();
+    const route = resolveRoute(url, upperMethod);
+
+    if (!route) {
+        const errMsg = `[request/cloud-shim] 未映射接口: ${upperMethod} ${url}`;
+        console.error(errMsg);
+        if (showError) {
+            wx.showToast({ title: '接口未适配云开发', icon: 'none', duration: 2500 });
+        }
+        return Promise.reject({ code: -1, message: errMsg, _unmapped: true });
+    }
+
+    const fnData = {};
+    if (route.action) fnData.action = route.action;
+    if (route.pathId && route.idKey) fnData[route.idKey] = route.pathId;
+    if (route.queryParams) Object.assign(fnData, route.queryParams);
+    Object.assign(fnData, data);
+
+    return callFn(route.fn, fnData, { showLoading, showError });
+}
+
 const get = (url, data, options = {}) => request({ url, method: 'GET', data, ...options });
 const post = (url, data, options = {}) => request({ url, method: 'POST', data, ...options });
 const put = (url, data, options = {}) => request({ url, method: 'PUT', data, ...options });
 const del = (url, data, options = {}) => request({ url, method: 'DELETE', data, ...options });
 
-const uploadFile = createUploadFile(buildRequestUrl);
+function uploadFile(url, filePath, name = 'file', formData = {}, options = {}) {
+    const ext = filePath.split('.').pop() || 'jpg';
+    const ts = Date.now();
+    const openid = wx.getStorageSync('openid') || 'unknown';
+    let dir = 'uploads';
+    if (url.includes('avatar')) dir = 'avatars';
+    else if (url.includes('review') || url.includes('refund')) dir = 'reviews';
+    const cloudPath = `${dir}/${openid}_${ts}.${ext}`;
+    return uploadToCloud(filePath, cloudPath, { showLoading: options.showLoading !== false })
+        .then((fileID) => ({ code: 0, success: true, data: { url: fileID, fileID } }));
+}
+
+function addRequestInterceptor() {}
+function addResponseInterceptor() {}
+
+const config = {
+    baseUrl: '',
+    timeout: 15000,
+    maxRetries: 1,
+    retryDelay: 1000
+};
 
 module.exports = {
     request,

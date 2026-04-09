@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "cloudbase": {
+      "source": "tencentcloudbase/cloudbase-skills",
+      "sourceType": "github",
+      "computedHash": "a9102be34a270657124cedb6a4477665a1463eca0d2e9313fa5ff34fcb5aa30c"
+    }
+  }
+}

@@ -28,7 +28,7 @@
       <el-table :data="tableData" v-loading="loading">
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column label="用户" width="150">
-          <template #default="{ row }">{{ row.user?.nickname || row.user_id }}</template>
+          <template #default="{ row }">{{ displayUserName(row.user, row.user_id) }}</template>
         </el-table-column>
         <el-table-column label="提现账号" min-width="200">
           <template #default="{ row }">
@@ -98,7 +98,7 @@
     <el-dialog v-model="detailDialogVisible" title="提现详情" width="min(480px, 94vw)">
       <el-descriptions :column="1" border v-if="currentRow">
         <el-descriptions-item label="申请 ID">{{ currentRow.id }}</el-descriptions-item>
-        <el-descriptions-item label="用户">{{ currentRow.user?.nickname || currentRow.user_id }}</el-descriptions-item>
+        <el-descriptions-item label="用户">{{ displayUserName(currentRow.user, currentRow.user_id) }}</el-descriptions-item>
         <el-descriptions-item label="提现账号">
           <template v-if="getWithdrawAccountText(currentRow)">
             <el-tag size="small" style="margin-right:6px">{{ getWithdrawAccountLabel(currentRow) }}</el-tag>
@@ -126,6 +126,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getWithdrawals, approveWithdrawal, rejectWithdrawal, completeWithdrawal } from '@/api'
 import { formatDateTime } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
+import { getUserNickname } from '@/utils/userDisplay'
 
 const route = useRoute()
 const loading = ref(false)
@@ -147,6 +148,7 @@ const rejectForm = reactive({
   id: null,
   reason: ''
 })
+const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 
 const fetchWithdrawals = async () => {
   loading.value = true
@@ -246,7 +248,7 @@ const handleRejectSubmit = async () => {
 const handleComplete = async (row) => {
   try {
     await ElMessageBox.confirm(
-      `该操作将尝试向用户「${row.user?.nickname || row.user_id}」自动打款 ¥${parseFloat(row.actual_amount || 0).toFixed(2)}。仅微信收款方式支持自动打款，请先确认账户信息。`,
+      `该操作将尝试向用户「${displayUserName(row.user, row.user_id)}」自动打款 ¥${parseFloat(row.actual_amount || 0).toFixed(2)}。仅微信收款方式支持自动打款，请先确认账户信息。`,
       '确认执行打款',
       {
         confirmButtonText: '立即打款',

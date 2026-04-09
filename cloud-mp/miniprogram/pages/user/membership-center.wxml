@@ -1,0 +1,147 @@
+<!--pages/user/membership-center.wxml - 会员权益中心（整合版）-->
+<view class="page">
+  <view class="state-wrap" wx:if="{{loading}}">
+    <text class="state-text">加载中…</text>
+  </view>
+  <view class="state-wrap" wx:elif="{{loadError}}">
+    <text class="state-text">加载失败</text>
+    <view class="retry-btn" bindtap="onRetry">重试</view>
+  </view>
+
+  <scroll-view scroll-y class="scroll" wx:else>
+    <view class="cards-wrap" wx:if="{{cardReady}}">
+      <view class="card-switch-tabs">
+        <view
+          class="card-switch-tab {{activeCard === 'consume' ? 'card-switch-tab-active' : ''}}"
+          data-type="consume"
+          bindtap="onCardTabTap"
+        >
+          消费会员
+        </view>
+        <view
+          class="card-switch-tab {{activeCard === 'agent' ? 'card-switch-tab-active' : ''}}"
+          data-type="agent"
+          bindtap="onCardTabTap"
+        >
+          代理会员
+        </view>
+      </view>
+
+      <swiper
+        class="member-card-swiper"
+        current="{{cardSwiperCurrent}}"
+        bindchange="onCardSwiperChange"
+        circular="false"
+        previous-margin="44rpx"
+        next-margin="44rpx"
+      >
+        <swiper-item>
+          <view class="member-card member-card-consume">
+            <view class="member-card-head">
+              <text class="member-card-label">{{consumeCardSummary.label || '消费会员'}}</text>
+              <text class="member-card-badge">{{consumeCardSummary.discountText || '原价'}}</text>
+            </view>
+            <text class="member-card-title">{{consumeCardSummary.tierName || currentTierName || '普通会员'}}</text>
+            <text class="member-card-foot">{{consumeCardSummary.benefitText || '当前复购价按原价结算'}}</text>
+          </view>
+        </swiper-item>
+
+        <swiper-item>
+          <view class="member-card member-card-agent">
+            <view class="member-card-head">
+              <text class="member-card-label">{{agentCardSummary.label || '代理权益'}}</text>
+              <text class="member-card-badge">{{agentCardSummary.levelText || '未开通'}}</text>
+            </view>
+            <text class="member-card-title">{{agentCardSummary.roleName || currentRoleName || '普通用户'}}</text>
+            <view class="member-card-agent-meta">
+              <text class="member-card-agent-discount">{{agentCardSummary.discountText || '暂无额外折扣'}}</text>
+              <text class="member-card-agent-status">{{agentCardSummary.statusText || '代理等级由后台审核认定'}}</text>
+            </view>
+          </view>
+        </swiper-item>
+      </swiper>
+
+      <view class="current-card-meta">
+        <view class="card-indicator">
+          <view class="indicator-dot {{cardSwiperCurrent === 0 ? 'indicator-dot-active' : ''}}"></view>
+          <view class="indicator-dot {{cardSwiperCurrent === 1 ? 'indicator-dot-active' : ''}}"></view>
+        </view>
+        <text class="current-card-title">{{currentCardMeta.title}}</text>
+        <text class="current-card-desc">{{currentCardMeta.desc}}</text>
+      </view>
+    </view>
+
+    <view class="cards-skeleton" wx:else></view>
+
+    <view class="benefits-panel" wx:if="{{activeCard === 'consume'}}">
+      <view class="benefits-panel-head">
+        <text class="benefits-panel-title">消费会员权益</text>
+        <text class="benefits-panel-desc">消费1元 = 1成长值，成长值决定复购价折扣</text>
+      </view>
+
+      <view class="growth-rule">
+        <text class="growth-rule-icon">💡</text>
+        <text class="growth-rule-text">消费越多，折扣越大；升级后下单实时生效</text>
+      </view>
+
+      <view
+        wx:for="{{growthTiers}}"
+        wx:key="min"
+        class="tier-card {{item.active ? 'tier-active' : ''}} {{item.passed ? 'tier-passed' : ''}} {{item.isNext ? 'tier-next' : ''}}"
+      >
+        <view class="tier-head">
+          <text class="tier-name">{{item.name || '档位'}}</text>
+          <text wx:if="{{item.active}}" class="tier-tag">当前档位</text>
+          <view wx:elif="{{item.passed}}" class="tier-tag-done">已达成</view>
+          <view wx:elif="{{item.isNext}}" class="tier-tag-next">下一档</view>
+        </view>
+        <text class="tier-meta">成长值 ≥ {{item.min}} · 折扣 {{item.discountText}}</text>
+        <text class="tier-desc" wx:if="{{item.desc}}">{{item.desc}}</text>
+      </view>
+    </view>
+
+    <view class="benefits-panel" wx:elif="{{activeCard === 'agent'}}">
+      <view class="benefits-panel-head">
+        <text class="benefits-panel-title">代理权益说明</text>
+        <text class="benefits-panel-desc">代理等级独立于成长值体系，由后台审核认定</text>
+      </view>
+
+      <view class="agent-summary-card">
+        <text class="agent-summary-label">当前身份</text>
+        <text class="agent-summary-title">{{agentCardSummary.roleName || currentRoleName || '普通用户'}}</text>
+        <text class="agent-summary-desc">{{agentCardSummary.statusText || '代理等级由后台审核认定'}}</text>
+      </view>
+
+      <block wx:if="{{memberLevels.length}}">
+        <view
+          wx:for="{{memberLevels}}"
+          wx:key="level"
+          class="tier-card {{item.level === currentRoleLevel ? 'tier-active' : ''}}"
+        >
+          <view class="tier-head">
+            <text class="tier-name">{{item.name}}</text>
+            <view class="level-badge">Lv.{{item.level}}</view>
+            <text wx:if="{{item.level === currentRoleLevel}}" class="tier-tag">当前</text>
+          </view>
+          <text class="tier-meta" wx:if="{{item.discount_rate && item.discount_rate < 1}}">等级额外折扣 {{item.discountText}}</text>
+          <text class="tier-meta" wx:else>暂无额外折扣</text>
+          <view class="perks" wx:if="{{item.perks && item.perks.length}}">
+            <text class="perk" wx:for="{{item.perks}}" wx:key="*this" wx:for-item="p">{{p}}</text>
+          </view>
+          <text class="tier-desc" wx:if="{{item.desc}}">{{item.desc}}</text>
+        </view>
+      </block>
+
+      <view class="agent-empty-card" wx:else>
+        <text class="agent-empty-title">代理等级信息暂未加载完成</text>
+        <text class="agent-empty-desc">请稍后重试，或返回后重新进入查看最新权益说明。</text>
+      </view>
+
+      <view class="agent-entry-wrap" wx:if="{{agentCardSummary.showEntry}}">
+        <view class="agent-entry-btn" bindtap="goBusinessCenter">进入团队中心</view>
+      </view>
+    </view>
+
+    <view class="bottom-space"></view>
+  </scroll-view>
+</view>

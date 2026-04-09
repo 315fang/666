@@ -1,5 +1,6 @@
 const { get } = require('../../utils/request');
 const { ROLE_NAMES } = require('../../config/constants');
+const { getUserNickname, normalizeUserProfile } = require('../../utils/userProfile');
 const app = getApp();
 
 function formatDate(dateText) {
@@ -159,10 +160,10 @@ Page({
 
     onShareAppMessage() {
         const code = this.data.inviteCode;
-        const userInfo = app.globalData.userInfo;
+        const userInfo = normalizeUserProfile(app.globalData.userInfo || {});
         const brandName = app.globalData.brandName || '品牌臻选';
         return {
-            title: `${userInfo?.nickname || '好友'} 邀请你加入${brandName}，领取专属优惠`,
+            title: `${getUserNickname(userInfo) || '好友'} 邀请你加入${brandName}，领取专属优惠`,
             path: `/pages/index/index${code ? '?invite=' + code : ''}`,
             imageUrl: ''
         };

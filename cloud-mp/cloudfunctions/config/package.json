@@ -1,0 +1,7 @@
+{
+  "name": "config",
+  "version": "1.0.0",
+  "description": "云函数：小程序配置/首页/主题（对应原 /mini-program-config /page-content /themes）",
+  "main": "index.js",
+  "dependencies": { "wx-server-sdk": "~2.6.3" }
+}

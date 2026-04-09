@@ -67,10 +67,10 @@
             <el-table-column label="图片" width="130">
               <template #default="{ row }">
                 <el-image
-                  :src="row.image_url || (row.product && row.product.images && row.product.images[0])"
+                  :src="bannerDisplayImage(row)"
                   fit="cover"
                   style="width: 90px; height: 45px; border-radius: 4px;"
-                  :preview-src-list="[row.image_url || (row.product && row.product.images && row.product.images[0])]"
+                  :preview-src-list="[bannerDisplayImage(row)]"
                 />
               </template>
             </el-table-column>
@@ -350,11 +350,13 @@ const bannerIsEdit = ref(false)
 const bannerFormRef = ref()
 const bannerForm = reactive({
   id: null, title: '', subtitle: '', kicker: '',
-  image_url: '', link_type: 'none', link_value: '',
+  file_id: '', image_url: '', link_type: 'none', link_value: '',
   product_id: null, position: 'home',
   sort_order: 0, status: 1, start_time: null, end_time: null
 })
 const bannerRules = {}
+
+const resolveAssetUrl = (item = {}) => item.file_id || item.image_url || item.url || ''
 
 // 商品搜索
 const productSearchLoading = ref(false)
@@ -438,7 +440,8 @@ const handleLinkTypeChange = () => {
 
 const bannerBlockData = computed({
   get: () => ({
-    image_url: bannerForm.image_url,
+    file_id: bannerForm.file_id,
+    image_url: resolveAssetUrl(bannerForm),
     title: bannerForm.title,
     subtitle: bannerForm.subtitle,
     link_type: bannerForm.link_type,
@@ -447,6 +450,7 @@ const bannerBlockData = computed({
   }),
   set: (v) => {
     // 只更新真正有值的字段，避免子组件 emit 空值覆盖父组件已有数据
+    if (v.file_id !== undefined) bannerForm.file_id = v.file_id || ''
     if (v.image_url !== undefined) bannerForm.image_url = v.image_url
     if (v.title !== undefined) bannerForm.title = v.title
     if (v.subtitle !== undefined) bannerForm.subtitle = v.subtitle
@@ -455,6 +459,7 @@ const bannerBlockData = computed({
     if (v.product_id !== undefined) bannerForm.product_id = v.product_id || null
   }
 })
+const bannerDisplayImage = (row) => resolveAssetUrl(row) || (row.product && row.product.images && row.product.images[0]) || ''
 
 // ===== Content =====
 const contentLoading = ref(false)
@@ -468,7 +473,11 @@ const fetchBanners = async () => {
   try {
     const params = bannerFilter.value ? { position: bannerFilter.value } : {}
     const res = await getBanners(params)
-    banners.value = Array.isArray(res) ? res : (res?.list || [])
+    const rows = Array.isArray(res) ? res : (res?.list || [])
+    banners.value = rows.map(item => ({
+      ...item,
+      asset_url: resolveAssetUrl(item)
+    }))
   } catch (e) {
     console.error('获取Banner失败:', e)
   } finally {
@@ -498,7 +507,7 @@ const handleAddBanner = () => {
   productOptions.value = []
   Object.assign(bannerForm, {
     id: null, title: '', subtitle: '', kicker: '',
-    image_url: '', link_type: 'none', link_value: '',
+    file_id: '', image_url: '', link_type: 'none', link_value: '',
     product_id: null, position: 'home',
     sort_order: 0, status: 1, start_time: null, end_time: null
   })
@@ -514,7 +523,8 @@ const handleEditBanner = (row) => {
     title: row.title || '',
     subtitle: row.subtitle || '',
     kicker: row.kicker || '',
-    image_url: row.image_url || '',
+    file_id: row.file_id || '',
+    image_url: resolveAssetUrl(row),
     link_type: row.link_type || 'none',
     link_value: row.link_value || '',
     product_id: row.product_id || null,
@@ -544,6 +554,9 @@ const handleBannerSubmit = async () => {
     // product类型时，link_value = product_id
     if (payload.link_type === 'product' && payload.product_id) {
       payload.link_value = String(payload.product_id)
+    }
+    if (!payload.image_url) {
+      payload.image_url = resolveAssetUrl(payload)
     }
     if (bannerIsEdit.value) {
       await updateBanner(bannerForm.id, payload)
@@ -575,7 +588,8 @@ const handleDeleteBanner = async (row) => {
 const handleBannerUpload = async ({ file }) => {
   try {
     const data = await uploadFile(file)
-    bannerForm.image_url = data.url
+    bannerForm.file_id = data.file_id || ''
+    bannerForm.image_url = data.url || data.image_url || ''
     ElMessage.success('上传成功')
   } catch (e) {
     console.error('上传失败:', e)

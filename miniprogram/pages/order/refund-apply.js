@@ -1,6 +1,14 @@
 // pages/order/refund-apply.js - 申请退货/退款
 const { get, post } = require('../../utils/request');
 
+function getOrderQty(order = {}) {
+    const qty = Number(order.qty);
+    if (Number.isFinite(qty) && qty > 0) return qty;
+    const legacyQuantity = Number(order.quantity);
+    if (Number.isFinite(legacyQuantity) && legacyQuantity > 0) return legacyQuantity;
+    return 0;
+}
+
 Page({
     data: {
         orderId: null,
@@ -52,7 +60,7 @@ Page({
         this.setData({
             type,
             // 切换到退货退款时，默认退货数量 = 订单数量
-            refundQuantity: type === 'return_refund' ? (this.data.order ? this.data.order.quantity : 0) : 0
+            refundQuantity: type === 'return_refund' ? getOrderQty(this.data.order) : 0
         });
     },
 
@@ -74,7 +82,7 @@ Page({
 
     onRefundQtyInput(e) {
         let qty = parseInt(e.detail.value) || 0;
-        const maxQty = this.data.order ? this.data.order.quantity : 0;
+        const maxQty = getOrderQty(this.data.order);
         if (qty < 0) qty = 0;
         if (qty > maxQty) qty = maxQty;
         this.setData({ refundQuantity: qty });
@@ -87,7 +95,7 @@ Page({
     },
 
     onRefundQtyPlus() {
-        const maxQty = this.data.order ? this.data.order.quantity : 0;
+        const maxQty = getOrderQty(this.data.order);
         if (this.data.refundQuantity < maxQty) {
             this.setData({ refundQuantity: this.data.refundQuantity + 1 });
         }

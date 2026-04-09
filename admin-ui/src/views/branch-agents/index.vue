@@ -82,7 +82,7 @@
             </el-table-column>
             <el-table-column prop="commission_rate" label="佣金比例" width="110" />
             <el-table-column label="认领人" width="130">
-              <template #default="{ row }">{{ row.claimant?.nickname || '-' }}</template>
+              <template #default="{ row }">{{ displayUserName(row.claimant) }}</template>
             </el-table-column>
             <el-table-column label="状态" width="100">
               <template #default="{ row }">
@@ -105,7 +105,7 @@
             <el-table-column prop="id" label="ID" width="70" />
             <el-table-column label="申请人" width="160">
               <template #default="{ row }">
-                {{ row.applicant?.nickname || row.applicant_id }} (Lv{{ row.applicant?.role_level ?? '-' }})
+                {{ displayUserName(row.applicant, row.applicant_id) }} (Lv{{ row.applicant?.role_level ?? '-' }})
               </template>
             </el-table-column>
             <el-table-column label="申请类型" width="120">
@@ -200,6 +200,7 @@ import {
   getBranchAgentClaims, reviewBranchAgentClaim
 } from '@/api'
 import MapPickerDialog from '@/components/MapPickerDialog.vue'
+import { getUserNickname } from '@/utils/userDisplay'
 
 function defaultPickupTiers() {
   return {
@@ -270,6 +271,7 @@ const stationForm = reactive({
 })
 
 const branchTypeText = (v) => ({ school: '学校代理', area: '区域代理', city: '市代理', province: '省代理' }[v] || v)
+const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 
 const loadPolicy = async () => {
   try {

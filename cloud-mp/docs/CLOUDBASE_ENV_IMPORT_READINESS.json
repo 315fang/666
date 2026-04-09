@@ -1,0 +1,192 @@
+{
+  "kind": "readiness",
+  "generated_at": "2026-04-08T06:56:34.760Z",
+  "ok": true,
+  "project_env": "cloud1-9gywyqe49638e46f",
+  "input_env": "",
+  "operator": "21963",
+  "files": {
+    "project_config": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\project.config.json",
+    "seed_summary": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\cloudbase-seed\\_summary.json",
+    "import_summary": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\cloudbase-import\\_summary.json"
+  },
+  "summaries": {
+    "seed": [
+      {
+        "name": "categories",
+        "count": 9
+      },
+      {
+        "name": "orders",
+        "count": 59
+      },
+      {
+        "name": "products",
+        "count": 11
+      },
+      {
+        "name": "skus",
+        "count": 11
+      },
+      {
+        "name": "users",
+        "count": 167
+      }
+    ],
+    "import": [
+      {
+        "name": "admin_roles",
+        "count": 2
+      },
+      {
+        "name": "admins",
+        "count": 2
+      },
+      {
+        "name": "banners",
+        "count": 5
+      },
+      {
+        "name": "cart_items",
+        "count": 25
+      },
+      {
+        "name": "categories",
+        "count": 9
+      },
+      {
+        "name": "commissions",
+        "count": 3
+      },
+      {
+        "name": "material_groups",
+        "count": 1
+      },
+      {
+        "name": "materials",
+        "count": 52
+      },
+      {
+        "name": "orders",
+        "count": 59
+      },
+      {
+        "name": "products",
+        "count": 11
+      },
+      {
+        "name": "refunds",
+        "count": 9
+      },
+      {
+        "name": "reviews",
+        "count": 3
+      },
+      {
+        "name": "skus",
+        "count": 11
+      },
+      {
+        "name": "users",
+        "count": 167
+      },
+      {
+        "name": "withdrawals",
+        "count": 3
+      }
+    ]
+  },
+  "collections": {
+    "required": [
+      "users",
+      "products",
+      "skus",
+      "categories",
+      "cart_items",
+      "orders",
+      "refunds",
+      "reviews",
+      "commissions",
+      "withdrawals",
+      "banners",
+      "materials",
+      "material_groups",
+      "admins",
+      "admin_roles"
+    ],
+    "optional": [
+      "configs"
+    ],
+    "missing_required": [],
+    "missing_optional": [
+      "configs"
+    ],
+    "unexpected": []
+  },
+  "warnings": [
+    "optional collections not prepared: configs",
+    "no CLOUDBASE_ENV_ID provided; env matching check is informational only"
+  ],
+  "checks": [
+    {
+      "name": "project.config.json",
+      "ok": true,
+      "detail": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\project.config.json"
+    },
+    {
+      "name": "_summary.json",
+      "ok": true,
+      "detail": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\cloudbase-seed\\_summary.json"
+    },
+    {
+      "name": "_summary.json",
+      "ok": true,
+      "detail": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\cloudbase-import\\_summary.json"
+    },
+    {
+      "name": "CLOUDBASE_ENV_IMPORT_CHECKLIST.md",
+      "ok": true,
+      "detail": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\docs\\CLOUDBASE_ENV_IMPORT_CHECKLIST.md"
+    },
+    {
+      "name": "CLOUDBASE_ENV_IMPORT_RESULT_TEMPLATE.md",
+      "ok": true,
+      "detail": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\docs\\CLOUDBASE_ENV_IMPORT_RESULT_TEMPLATE.md"
+    },
+    {
+      "name": "CLOUDBASE_MIGRATION_PROGRESS.md",
+      "ok": true,
+      "detail": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\docs\\CLOUDBASE_MIGRATION_PROGRESS.md"
+    },
+    {
+      "name": "CLOUDBASE_MIGRATION_BACKLOG.md",
+      "ok": true,
+      "detail": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\docs\\CLOUDBASE_MIGRATION_BACKLOG.md"
+    },
+    {
+      "name": "cloudbase env matches",
+      "ok": true,
+      "detail": "no override env provided"
+    },
+    {
+      "name": "project cloudbaseEnv configured",
+      "ok": true,
+      "detail": "cloud1-9gywyqe49638e46f"
+    },
+    {
+      "name": "required collections present",
+      "ok": true,
+      "detail": "all required collections present"
+    },
+    {
+      "name": "import package exists",
+      "ok": true,
+      "detail": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\cloudbase-import"
+    },
+    {
+      "name": "seed package exists",
+      "ok": true,
+      "detail": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\cloudbase-seed"
+    }
+  ]
+}

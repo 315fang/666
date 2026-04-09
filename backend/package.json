@@ -13,6 +13,7 @@
         "test:watch": "jest --watch",
         "test:db": "node -e \"require('./config/database').testConnection()\"",
         "migrate:boards": "node scripts/migrate-content-boards.js",
+        "migrate:product-marketing-columns": "node migrations/fix_p1_product_marketing_columns.js",
         "migrate:phase9": "node migrations/phase9_admin_token_blacklist.js",
         "migrate:visible-in-mall": "node migrations/apply_visible_in_mall_column.js",
         "wechat:order-path": "node scripts/sync-wechat-order-detail-path.js",

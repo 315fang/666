@@ -10,12 +10,12 @@
       <view class="hero-profile-wrap">
         <view class="hero-profile-left" bindtap="onEditProfile">
           <view class="hero-avatar-wrap">
-            <image class="hero-avatar" src="{{userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
+            <image class="hero-avatar" src="{{userInfo.avatarUrl || userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
           </view>
           <view class="hero-info">
             <view class="hero-name-row">
               <view class="hero-nickname-wrap">
-                <text class="hero-nickname">{{userInfo.nickname || '微信用户'}}</text>
+                <text class="hero-nickname">{{userInfo.nickName || userInfo.nickname || '微信用户'}}</text>
               </view>
               <view class="hero-member-badge" catchtap="onMemberLevelTap" wx:if="{{isLoggedIn}}">
                 <view class="member-badge-icon">

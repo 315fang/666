@@ -64,7 +64,7 @@
           </template>
         </el-table-column>
         <el-table-column label="认领人" width="100">
-          <template #default="{ row }">{{ row.claimant?.nickname || '-' }}</template>
+          <template #default="{ row }">{{ displayUserName(row.claimant) }}</template>
         </el-table-column>
         <el-table-column label="成员" width="90">
           <template #default="{ row }">
@@ -179,7 +179,7 @@
         <el-table-column prop="id" label="ID" width="72" />
         <el-table-column label="成员" min-width="180">
           <template #default="{ row }">
-            <div>{{ row.user?.nickname || `用户${row.user_id}` }}</div>
+            <div>{{ displayUserName(row.user, `用户${row.user_id}`) }}</div>
             <div class="sub">UID: {{ row.user_id }} {{ row.user?.phone ? ` / ${row.user.phone}` : '' }}</div>
           </template>
         </el-table-column>
@@ -256,6 +256,7 @@ import {
 } from '@/api'
 import { usePagination } from '@/composables/usePagination'
 import MapPickerDialog from '@/components/MapPickerDialog.vue'
+import { getUserNickname } from '@/utils/userDisplay'
 
 const weekDays = [
   { v: 1, l: '周一' },
@@ -290,6 +291,7 @@ const staffState = reactive({
   loading: false,
   list: []
 })
+const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 
 const defaultStaffForm = () => ({
   id: null,
@@ -438,7 +440,7 @@ async function openStaffDialog(row) {
   staffDialogVisible.value = true
   staffState.stationId = row.id
   staffState.stationName = row.name || ''
-  staffState.claimantName = row.claimant?.nickname || ''
+  staffState.claimantName = displayUserName(row.claimant, '')
   await loadStaffList(row.id)
 }
 
@@ -463,7 +465,7 @@ async function loadStaffList(stationId = staffState.stationId) {
       getPickupStationById(stationId)
     ])
     staffState.stationName = staffData?.station_name || detail?.name || staffState.stationName
-    staffState.claimantName = detail?.claimant?.nickname || ''
+    staffState.claimantName = displayUserName(detail?.claimant, '')
     staffState.list = staffData?.list || []
   } finally {
     staffState.loading = false

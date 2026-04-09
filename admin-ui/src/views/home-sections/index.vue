@@ -119,6 +119,7 @@ const popupForm = reactive({
   enabled: false,
   frequency: 'once_daily',
   image_url: '',
+  file_id: '',
   link_type: 'none',
   link_value: '',
   button_text: '',
@@ -135,6 +136,7 @@ const loadPopupAd = async () => {
 const popupBlockData = computed({
   get: () => ({
     image_url: popupForm.image_url,
+    file_id: popupForm.file_id,
     title: popupForm.button_text,
     link_type: popupForm.link_type,
     link_value: popupForm.link_value,
@@ -142,6 +144,7 @@ const popupBlockData = computed({
   }),
   set: (v) => {
     popupForm.image_url = v.image_url || ''
+    popupForm.file_id = v.file_id || ''
     popupForm.button_text = v.title || popupForm.button_text
     popupForm.link_type = v.link_type || 'none'
     popupForm.link_value = v.link_value || ''

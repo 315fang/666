@@ -1,0 +1,22 @@
+{
+  "users": 167,
+  "categories": 9,
+  "products": 11,
+  "skus": 11,
+  "orders": 59,
+  "group_activities": 2,
+  "group_orders": 0,
+  "group_members": 0,
+  "slash_activities": 1,
+  "slash_records": 0,
+  "slash_helpers": 0,
+  "activity_links": 0,
+  "stations": 0,
+  "wallet_accounts": 0,
+  "wallet_logs": 0,
+  "wallet_recharge_orders": 0,
+  "wallet_recharge_configs": 0,
+  "lottery_configs": 0,
+  "lottery_prizes": 0,
+  "lottery_records": 0
+}

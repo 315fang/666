@@ -1,0 +1,287 @@
+<view class="container">
+
+  <!-- ══ 头图 Hero + 资产大卡 ══ -->
+  <view class="hero-zone">
+    <view class="hero-bg"></view>
+    <view class="hero-inner">
+      <view style="height: {{statusBarHeight}}px;"></view>
+
+      <!-- 个人信息（合并工具栏） -->
+      <view class="hero-profile-wrap">
+        <view class="hero-profile-left" bindtap="onEditProfile">
+          <view class="hero-avatar-wrap">
+            <image class="hero-avatar" src="{{userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
+          </view>
+          <view class="hero-info">
+            <view class="hero-name-row">
+              <view class="hero-nickname-wrap">
+                <text class="hero-nickname">{{userInfo.nickname || '微信用户'}}</text>
+              </view>
+              <view class="hero-member-badge" catchtap="onMemberLevelTap" wx:if="{{isLoggedIn}}">
+                <view class="member-badge-icon">
+                  <image src="/assets/icons/crown.svg" mode="aspectFit" class="member-badge-img"></image>
+                </view>
+                <text class="member-badge-text">{{distributionInfo.role_name || '普通会员'}}</text>
+                <text class="member-badge-level" wx:if="{{growthDisplay && growthDisplay.currentTierName}}">{{growthDisplay.currentTierName}}</text>
+              </view>
+            </view>
+            <view class="hero-meta-row" wx:if="{{isLoggedIn && userInfo.invite_code}}">
+              <view class="hero-member-code" catchtap="noop">
+                <text class="member-code-label">会员码</text>
+                <text class="member-code-value">{{userInfo.invite_code}}</text>
+                <view class="member-code-copy" catchtap="onCopyMemberCode">
+                  <image src="/assets/icons/clipboard.svg" mode="aspectFit" class="member-code-copy-icon"></image>
+                </view>
+              </view>
+            </view>
+          </view>
+        </view>
+        <view class="hero-toolbar-right">
+          <view class="hero-tool-grid">
+            <view class="hero-top-btn" bindtap="goAddress" hover-class="hero-top-btn-hover">
+              <image class="hero-top-icon" src="/assets/icons/map-pin.svg" mode="aspectFit"></image>
+              <text class="hero-top-text">地址</text>
+            </view>
+            <view class="hero-top-btn" bindtap="goCustomerService" hover-class="hero-top-btn-hover">
+              <image class="hero-top-icon" src="/assets/icons/headphones.svg" mode="aspectFit"></image>
+              <text class="hero-top-text">客服</text>
+            </view>
+            <view class="hero-top-btn" bindtap="onNotificationsTap" hover-class="hero-top-btn-hover">
+              <view class="hero-top-icon-wrap">
+                <image class="hero-top-icon" src="/assets/icons/bell.svg" mode="aspectFit"></image>
+                <view class="hero-top-badge" wx:if="{{isLoggedIn && notificationsCount > 0}}">{{notificationsCount > 99 ? '99+' : notificationsCount}}</view>
+              </view>
+              <text class="hero-top-text">消息</text>
+            </view>
+          </view>
+        </view>
+      </view>
+      <!-- 未登录提示（如需） -->
+      <view class="hero-login-hint" wx:if="{{!isLoggedIn}}" bindtap="onLoginBtnTap">点击登录</view>
+
+      <!-- 核心资产卡 -->
+      <view class="vip-card">
+        <!-- 卡片头部: 省钱与宣传位 -->
+        <view class="vip-card-header">
+          <view class="vip-card-saved" bindtap="onGrowthPrivilegesTap">
+            <view class="growth-header">
+              <text class="saved-label">累计成长值</text><text class="saved-val">{{growthDisplay ? growthDisplay.value : 0}}</text><text class="saved-arrow">›</text>
+            </view>
+            <view class="growth-progress-bar" wx:if="{{isLoggedIn && growthDisplay}}">
+              <view class="growth-progress-track">
+                <view class="growth-progress-fill" style="width: {{growthDisplay.barPercent || 0}}%"></view>
+              </view>
+              <text class="growth-progress-text">{{growthDisplay.subLine || ''}}</text>
+            </view>
+          </view>
+          <view class="vip-card-promo">
+            <view class="promo-block" bindtap="onGrowthPrivilegesTap">
+              <text class="promo-title">会员中心</text>
+              <view class="promo-subtitle">查看特权 <text class="promo-arrow">›</text></view>
+            </view>
+            <view class="promo-divider"></view>
+            <view class="promo-block" bindtap="goPoints">
+              <text class="promo-title">积分中心</text>
+              <view class="promo-subtitle">每日签到 <text class="promo-arrow">›</text></view>
+            </view>
+          </view>
+        </view>
+
+        <!-- 中央: 资产数据 -->
+        <view class="vip-assets-panel">
+          <view class="vip-assets-matrix">
+            <view class="vip-asset-item" bindtap="onAssetCouponsTap">
+              <text class="vip-asset-title">优惠券</text>
+              <view class="vip-asset-value">{{isLoggedIn ? unusedCouponCount : '--'}}<text class="vip-asset-sym">张</text></view>
+            </view>
+            <view class="vip-asset-item" bindtap="onAssetPointsTap">
+              <text class="vip-asset-title">我的积分</text>
+              <view class="vip-asset-value">{{isLoggedIn ? pointsBalanceDisplay : '--'}}</view>
+            </view>
+            <view class="vip-asset-item" bindtap="onAssetBalanceTap">
+              <text class="vip-asset-title">货款余额</text>
+              <view class="vip-asset-value"><text class="vip-asset-sym">¥</text>{{isLoggedIn ? (balance || '0.00') : '--'}}</view>
+            </view>
+            <view class="vip-asset-item" bindtap="onCommissionWalletTap">
+              <text class="vip-asset-title">佣金钱包</text>
+              <view class="vip-asset-value"><text class="vip-asset-sym">¥</text>{{isLoggedIn ? (commissionBalance || '0.00') : '--'}}</view>
+            </view>
+          </view>
+          <view class="vip-asset-all">
+            <text class="all-text">全部\n权益</text>
+            <text class="all-arrow">›</text>
+          </view>
+        </view>
+
+        <!-- 底部: 动作横幅（根据真实优惠券数据动态显示） -->
+        <view class="vip-card-banner" wx:if="{{couponBanner}}" bindtap="onUseCouponBanner">
+          <view class="banner-left">
+            <view class="banner-icon-wrap"><text class="banner-icon-text">{{couponBanner.value}}</text></view>
+            <text class="banner-desc">{{couponBanner.name}}，{{couponBanner.minPurchase}}</text>
+          </view>
+          <view class="banner-btn">去使用</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ══ 我的订单 ══ -->
+  <view class="section-card section-card--orders">
+    <view class="section-row-header" bindtap="onOrderTap" data-type="all">
+      <text class="section-row-title">我的订单</text>
+      <view class="section-row-more"><text>查看全部</text><text class="arrow-icon">›</text></view>
+    </view>
+    <view class="order-tabs">
+      <view class="order-tab" bindtap="onOrderTap" data-type="pending">
+        <view class="order-tab-icon-wrap">
+          <image class="order-tab-icon" src="/assets/icons/credit-card.svg" mode="aspectFit"></image>
+          <view class="order-tab-badge order-tab-dot" wx:if="{{orderFreshFlags.pending}}">{{orderStats.pending > 99 ? '99+' : orderStats.pending}}</view>
+        </view>
+        <text class="order-tab-text">待付款</text>
+      </view>
+      <view class="order-tab" bindtap="onOrderTap" data-type="paid">
+        <view class="order-tab-icon-wrap">
+          <image class="order-tab-icon" src="/assets/icons/package.svg" mode="aspectFit"></image>
+          <view class="order-tab-badge order-tab-dot" wx:if="{{orderFreshFlags.paid}}">{{orderStats.paid > 99 ? '99+' : orderStats.paid}}</view>
+        </view>
+        <text class="order-tab-text">待发货</text>
+      </view>
+      <view class="order-tab" bindtap="onOrderTap" data-type="shipped">
+        <view class="order-tab-icon-wrap">
+          <image class="order-tab-icon" src="/assets/icons/truck.svg" mode="aspectFit"></image>
+          <view class="order-tab-badge order-tab-dot" wx:if="{{orderFreshFlags.shipped}}">{{orderStats.shipped > 99 ? '99+' : orderStats.shipped}}</view>
+        </view>
+        <text class="order-tab-text">待收货</text>
+      </view>
+      <view class="order-tab" bindtap="onOrderTap" data-type="pending_review">
+        <view class="order-tab-icon-wrap">
+          <image class="order-tab-icon" src="/assets/icons/message.svg" mode="aspectFit"></image>
+          <view class="order-tab-badge order-tab-dot" wx:if="{{orderFreshFlags.pendingReview}}">{{orderStats.pendingReview > 99 ? '99+' : orderStats.pendingReview}}</view>
+        </view>
+        <text class="order-tab-text">待评价</text>
+      </view>
+      <view class="order-tab" bindtap="onRefundTap">
+        <view class="order-tab-icon-wrap">
+          <image class="order-tab-icon" src="/assets/icons/refresh-cw.svg" mode="aspectFit"></image>
+          <view class="order-tab-badge order-tab-dot" wx:if="{{orderFreshFlags.refund}}">{{orderStats.refund > 99 ? '99+' : orderStats.refund}}</view>
+        </view>
+        <text class="order-tab-text">退款/售后</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- ══ 四宫格摘要 ══ -->
+  <view class="section-card quad-card">
+    <view class="quad-grid">
+      <view class="quad-cell" bindtap="onQuadFootprintTap" hover-class="quad-cell-hover">
+        <view class="quad-cell-main">
+          <view class="quad-texts">
+            <text class="quad-title">足迹</text>
+            <text class="quad-sub">{{quadFootprint.sub}}</text>
+          </view>
+          <image class="quad-thumb" wx:if="{{quadFootprint.hasImage}}" src="{{quadFootprint.image}}" mode="aspectFill"></image>
+          <view class="quad-icon-placeholder" wx:else>
+            <image class="quad-icon" src="/assets/icons/clock.svg" mode="aspectFit"></image>
+          </view>
+        </view>
+        <text class="quad-action">去查看</text>
+      </view>
+      <view class="quad-cell" bindtap="onQuadFavoriteTap" hover-class="quad-cell-hover">
+        <view class="quad-cell-main">
+          <view class="quad-texts">
+            <text class="quad-title">收藏</text>
+            <text class="quad-sub">{{quadFavorite.sub}}</text>
+          </view>
+          <image class="quad-thumb" wx:if="{{quadFavorite.hasImage}}" src="{{quadFavorite.image}}" mode="aspectFill"></image>
+          <view class="quad-icon-placeholder" wx:else>
+            <image class="quad-icon" src="/assets/icons/heart.svg" mode="aspectFit"></image>
+          </view>
+        </view>
+        <text class="quad-action">去查看</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- ══ 我的功能 ══ -->
+  <view class="section-card func-card">
+    <view class="func-row" bindtap="goBusinessCenter" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/shopping-bag.svg" mode="aspectFit"></image>
+      <text class="func-label">团队中心</text>
+      <text class="func-arrow">›</text>
+    </view>
+    <view class="func-divider"></view>
+    <view class="func-row" wx:if="{{showPickupVerify}}" bindtap="goMyStation" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/shield.svg" mode="aspectFit"></image>
+      <text class="func-label">我的门店</text>
+      <text class="func-arrow">›</text>
+    </view>
+    <view class="func-divider" wx:if="{{showPickupVerify}}"></view>
+    <view class="func-row" bindtap="goInvitePoster" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
+      <text class="func-label">好友邀请</text>
+      <text class="func-arrow">›</text>
+    </view>
+    <view class="func-divider" wx:if="{{showPickupVerify}}"></view>
+    <view class="func-row" wx:if="{{showPickupVerify}}" bindtap="goPickupVerify" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/package.svg" mode="aspectFit"></image>
+      <text class="func-label">门店核销</text>
+      <text class="func-arrow">›</text>
+    </view>
+    <view class="func-divider" wx:if="{{isLoggedIn}}"></view>
+    <view class="func-row" wx:if="{{isLoggedIn}}" bindtap="goPortalPassword" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/settings.svg" mode="aspectFit"></image>
+      <text class="func-label">代理商服务</text>
+      <text class="func-arrow">›</text>
+    </view>
+  </view>
+
+  <view class="section-card func-card">
+    <view class="func-row" bindtap="goPrivacy" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/shield.svg" mode="aspectFit"></image>
+      <text class="func-label">隐私协议</text>
+      <text class="func-arrow">›</text>
+    </view>
+    <view class="func-divider"></view>
+    <view class="func-row" bindtap="onSettingsTap" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/settings.svg" mode="aspectFit"></image>
+      <text class="func-label">设置</text>
+      <text class="func-arrow">›</text>
+    </view>
+  </view>
+
+  <view class="safe-area-bottom"></view>
+
+  <view class="avatar-pick-mask" wx:if="{{showAvatarPickSheet}}" catchtap="onCancelAvatarPick">
+    <view class="avatar-pick-panel" catchtap="stopP">
+      <text class="avatar-pick-title">更换头像</text>
+      <text class="avatar-pick-tip">点击下方按钮，从相册或微信头像中选择</text>
+      <button class="avatar-pick-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">选择头像</button>
+      <view class="avatar-pick-cancel" bindtap="onCancelAvatarPick">取消</view>
+    </view>
+  </view>
+
+  <view class="nick-modal-mask" wx:if="{{showNicknameModal}}" catchtap="onCancelNickname">
+    <view class="nick-modal" catchtap="stopP">
+      <text class="nick-modal-title">修改昵称</text>
+      <input
+        class="nick-modal-input"
+        type="nickname"
+        placeholder="输入昵称或使用微信昵称"
+        maxlength="32"
+        value="{{newNickname}}"
+        bindinput="onNicknameInput"
+      />
+      <view class="nick-modal-actions">
+        <view class="nick-modal-btn nick-modal-btn-cancel" bindtap="onCancelNickname">取消</view>
+        <view class="nick-modal-btn nick-modal-btn-ok" bindtap="onConfirmNickname">保存</view>
+      </view>
+    </view>
+  </view>
+
+  <light-tip-modal
+    show="{{lightTipShow}}"
+    title="{{lightTipTitle}}"
+    content="{{lightTipContent}}"
+    bind:close="onLightTipClose"
+  />
+</view>

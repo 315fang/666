@@ -73,11 +73,11 @@ const globalStore = createStore({
         const openid = wx.getStorageSync('openid');
         const token = wx.getStorageSync('token');
 
-        if (userInfo && openid && token) {
+        if (userInfo && openid) {
           commit({
             userInfo,
             openid,
-            token,
+            token: token || null,
             isLoggedIn: true,
             roleLevel: userInfo.role_level || USER_ROLES.GUEST
           });
@@ -95,13 +95,17 @@ const globalStore = createStore({
         // 保存到缓存
         wx.setStorageSync('userInfo', userInfo);
         wx.setStorageSync('openid', openid);
-        wx.setStorageSync('token', token);
+        if (token) {
+          wx.setStorageSync('token', token);
+        } else {
+          wx.removeStorageSync('token');
+        }
 
         // 更新状态
         commit({
           userInfo,
           openid,
-          token,
+          token: token || null,
           isLoggedIn: true,
           roleLevel: userInfo.role_level || USER_ROLES.GUEST
         });

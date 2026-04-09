@@ -68,7 +68,7 @@
       修改上级后，原上级直推人数-1，新上级+1，请谨慎操作。
     </el-alert>
     <el-form :model="parentForm" label-width="90px">
-      <el-form-item label="当前上级">{{ currentUser?.parent?.nickname || '无' }}</el-form-item>
+      <el-form-item label="当前上级">{{ displayUserName(currentUser?.parent, '无') }}</el-form-item>
       <el-form-item label="新上级ID">
         <el-input v-model="parentForm.new_parent_id" placeholder="输入用户ID，留空为解绑" />
       </el-form-item>
@@ -85,6 +85,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { getUserNickname } from '@/utils/userDisplay'
 
 const props = defineProps({
   currentUser: { type: Object, default: null },
@@ -140,4 +141,6 @@ const tagInputValue = computed({
   get: () => props.tagInputValue,
   set: (value) => emit('update:tagInputValue', value)
 })
+
+const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 </script>

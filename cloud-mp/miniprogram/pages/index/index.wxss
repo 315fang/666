@@ -1,0 +1,306 @@
+.container {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #E3EDF4 0%, #F4F8FA 28%, #ECF5F2 100%);
+  padding-bottom: 88rpx;
+}
+
+/* ── 导航栏 ── */
+.custom-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; transition: all 0.3s ease; }
+.nav-transparent { background: transparent; }
+.nav-scrolled { background: rgba(244, 248, 250, 0.9); backdrop-filter: blur(20px); box-shadow: 0 8rpx 30rpx rgba(30, 74, 109, 0.06); }
+.nav-inner { min-height: 88rpx; position: relative; padding: 0 28rpx; display: flex; align-items: center; }
+
+.nav-brand, .nav-search-box {
+  position: absolute; left: 28rpx; right: 190rpx;
+  display: flex; align-items: center; transition: all 0.35s ease;
+}
+.nav-visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.nav-hidden { opacity: 0; transform: translateY(16rpx); pointer-events: none; }
+.nav-brand { gap: 16rpx; }
+
+.nav-logo { width: 52rpx; height: 52rpx; border-radius: 12rpx; flex-shrink: 0; }
+.nav-bubble-logo { width: 52rpx; height: 52rpx; position: relative; flex-shrink: 0; }
+.nb-orb { position: absolute; border-radius: 50%; animation: nb-float 3s ease-in-out infinite; }
+.nb-orb-a { width: 32rpx; height: 32rpx; background: radial-gradient(circle at 35% 35%, #5B8FB8, #1E4A6D); top: 0; left: 4rpx; opacity: 0.92; }
+.nb-orb-b { width: 22rpx; height: 22rpx; background: radial-gradient(circle at 35% 35%, #5EEAD4, #0F766E); bottom: 2rpx; left: 0; animation-delay: 0.8s; opacity: 0.85; }
+.nb-orb-c { width: 18rpx; height: 18rpx; background: radial-gradient(circle at 35% 35%, #BFDBFE, #2563EB); top: 6rpx; right: 0; animation-delay: 1.5s; opacity: 0.75; }
+@keyframes nb-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5rpx); } }
+
+.nav-brand-copy { display: flex; flex-direction: column; flex: 1; }
+.nav-brand-title { font-size: 28rpx; color: #0F172A; font-weight: 600; }
+.nav-brand-sub { font-size: 20rpx; color: #64748B; letter-spacing: 2rpx; }
+
+.nav-search-icon { width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+.nav-search-bar {
+  flex: 1; height: 68rpx; border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.88); border: 1rpx solid rgba(100, 116, 139, 0.15);
+  display: flex; align-items: center; padding: 0 24rpx; gap: 12rpx;
+}
+.search-icon { width: 28rpx; height: 28rpx; opacity: 0.45; }
+.search-placeholder { font-size: 24rpx; color: #94A3B8; }
+
+/* ── Hero 全屏轮播 ── */
+.hero-editorial { position: relative; height: 100vh; min-height: 760rpx; overflow: hidden; }
+.hero-swiper, .hero-slide { width: 100%; height: 100%; }
+.hero-image, .hero-fallback { width: 100%; height: 100%; }
+
+.hero-fallback {
+  position: relative;
+  background: radial-gradient(circle at top left, rgba(91, 143, 184, 0.55) 0%, rgba(15, 118, 110, 0.45) 35%, rgba(30, 74, 109, 0.92) 85%);
+}
+.hero-orb { position: absolute; border-radius: 50%; filter: blur(4rpx); }
+.orb-a { width: 360rpx; height: 360rpx; top: 80rpx; right: -40rpx; background: rgba(255, 243, 224, 0.28); }
+.orb-b { width: 240rpx; height: 240rpx; left: -40rpx; bottom: 120rpx; background: rgba(255, 228, 213, 0.2); }
+.orb-c { width: 520rpx; height: 520rpx; right: 120rpx; bottom: -180rpx; background: rgba(255, 255, 255, 0.08); }
+
+.hero-mask {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(31, 27, 23, 0.04) 10%, rgba(31, 27, 23, 0.20) 55%, rgba(31, 27, 23, 0.42) 100%);
+}
+.hero-copy {
+  position: absolute; left: 32rpx; right: 32rpx; bottom: 80rpx;
+  display: flex; flex-direction: column; gap: 16rpx; z-index: 2;
+}
+.hero-title { font-size: 56rpx; line-height: 1.18; color: #FFF8F1; font-weight: 700; max-width: 560rpx; }
+.hero-subtitle { font-size: 22rpx; line-height: 1.7; color: rgba(255, 248, 241, 0.82); max-width: 480rpx; }
+
+/* ── 海报区块（多海报铺排，对标麦吉丽） ── */
+.poster-section {
+  padding: 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.poster-card {
+  position: relative;
+  border-radius: 24rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 20rpx rgba(30, 74, 109, 0.1);
+}
+
+.poster-image {
+  width: 100%;
+  display: block;
+}
+
+.poster-overlay {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 32rpx 24rpx;
+  background: linear-gradient(180deg, transparent 0%, rgba(31, 27, 23, 0.6) 100%);
+}
+
+.poster-title {
+  display: block;
+  font-size: 36rpx;
+  color: #FFFFFF;
+  font-weight: 700;
+  margin-bottom: 8rpx;
+}
+
+.poster-sub {
+  display: block;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* ── 区块标题 ── */
+.section-head {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 20rpx;
+}
+.section-intro-title { display: block; font-size: 34rpx; color: #201A15; font-weight: 700; }
+.section-link { font-size: 24rpx; color: #8D755A; padding: 8rpx 0; min-height: 88rpx; display: flex; align-items: center; }
+
+/* ── 商品精选区（全宽大图横幅，对标麦当劳） ── */
+.products-section { padding: 0 24rpx 32rpx; }
+
+.products-grid { display: flex; flex-direction: column; gap: 20rpx; }
+
+.product-card {
+  position: relative;
+  border-radius: 24rpx; overflow: hidden;
+  box-shadow: 0 8rpx 24rpx rgba(40, 32, 24, 0.10);
+}
+.product-card:active { transform: scale(0.98); }
+
+/* 图片区：1:1 大图（对标图二/三标准） */
+.product-card-img-wrap {
+  position: relative;
+  width: 100%;
+  padding-top: 100%;
+  overflow: hidden;
+  background: #F5F0EB;
+}
+.product-card-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+/* 图片底部渐变遮罩 */
+.product-card-img-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 40%, rgba(20,15,10,0.58) 100%);
+}
+
+.product-card-badge {
+  position: absolute; top: 16rpx; left: 16rpx; z-index: 2;
+  background: linear-gradient(135deg, #B98B58, #D4B896); color: #FFFFFF;
+  font-size: 20rpx; font-weight: 700; padding: 6rpx 16rpx; border-radius: 10rpx;
+}
+
+.product-card-soldout {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.45); color: rgba(255,255,255,0.9);
+  font-size: 28rpx; font-weight: 600; letter-spacing: 2rpx; z-index: 2;
+}
+
+/* 信息悬浮在图片底部 */
+.product-card-info {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: 20rpx 24rpx;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+.product-card-name {
+  font-size: 30rpx; font-weight: 700; color: #FFF8F0;
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+  line-height: 1.4; margin-bottom: 4rpx; text-shadow: 0 1rpx 6rpx rgba(0,0,0,0.4);
+}
+.product-card-desc {
+  font-size: 22rpx; color: rgba(255,248,240,0.78);
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* 热度标签 */
+.heat-tag { display: flex; align-items: center; gap: 4rpx; margin-top: 4rpx; }
+.heat-icon { font-size: 20rpx; }
+.heat-text { font-size: 20rpx; color: #FFC07A; font-weight: 500; }
+
+/* 价格标签 右下角胶囊 */
+.product-card-price-row {
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.14);
+  border: 1rpx solid rgba(255,255,255,0.22);
+  border-radius: 999rpx;
+  padding: 6rpx 16rpx;
+  display: flex;
+  align-items: baseline;
+  gap: 6rpx;
+  backdrop-filter: blur(6px);
+}
+.product-card-price { display: flex; align-items: baseline; }
+.price-sym { font-size: 20rpx; color: #FFF8F0; font-weight: 600; }
+.price-num { font-size: 28rpx; color: #FFF8F0; font-weight: 700; }
+.price-origin { font-size: 18rpx; color: rgba(255,248,240,0.6); text-decoration: line-through; }
+
+/* 骨架屏 */
+.product-card-skeleton { border-radius: 24rpx; overflow: hidden; background: #fff; }
+.psk-img { width: 100%; padding-top: 56%; background: linear-gradient(90deg, #F5F0EB 25%, #EDE8E2 50%, #F5F0EB 75%); background-size: 200% 100%; animation: psk-shimmer 1.4s infinite; }
+.psk-info { padding: 16rpx 18rpx 20rpx; display: flex; flex-direction: column; gap: 10rpx; }
+.psk-line { height: 20rpx; border-radius: 6rpx; background: linear-gradient(90deg, #F5F0EB 25%, #EDE8E2 50%, #F5F0EB 75%); background-size: 200% 100%; animation: psk-shimmer 1.4s infinite; }
+.psk-long { width: 80%; }
+.psk-short { width: 50%; }
+@keyframes psk-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+.products-empty { text-align: center; padding: 60rpx 0; font-size: 26rpx; color: #B0A396; }
+/* 气泡足迹导航栏版：占据原品牌甄选位置 */
+.nav-bubble-bar {
+  position: absolute; left: 28rpx; right: 190rpx;
+  display: flex; align-items: center; gap: 12rpx;
+  transition: all 0.35s ease;
+}
+.nav-bubble-icon { font-size: 26rpx; flex-shrink: 0; }
+.nav-bubble-scroll { flex: 1; overflow: hidden; height: 36rpx; }
+.nav-bubble-item { height: 36rpx; display: flex; align-items: center; }
+.nav-bubble-text { font-size: 24rpx; color: rgba(255, 248, 241, 0.92); white-space: nowrap; text-shadow: 0 1rpx 6rpx rgba(0,0,0,0.3); }
+.nav-search-icon-solo { position: absolute; right: 140rpx; display: flex; align-items: center; }
+
+.press { opacity: 0.7; }
+
+/* 弹窗广告 */
+.popup-ad-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24rpx;
+}
+
+.popup-ad-card {
+  width: 580rpx;
+  border-radius: 24rpx;
+  overflow: hidden;
+  background: #FFFFFF;
+  box-shadow: 0 16rpx 48rpx rgba(0,0,0,0.25);
+}
+
+.popup-ad-image {
+  width: 100%;
+  display: block;
+}
+
+.popup-ad-btn {
+  padding: 24rpx;
+  text-align: center;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #B98B58, #D4B896);
+}
+
+.popup-ad-close {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  border: 2rpx solid rgba(255,255,255,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  color: rgba(255,255,255,0.8);
+}
+
+/* ── 优惠券入口区 ── */
+.coupon-section { padding: 0 28rpx; margin-top: 16rpx; }
+.coupon-section .section-head { margin-bottom: 16rpx; }
+.coupon-scroll-x { width: 100%; white-space: nowrap; }
+.coupon-strip { display: inline-flex; gap: 16rpx; padding: 4rpx 0 12rpx; }
+.coupon-mini-card {
+  display: inline-flex; flex-direction: row; align-items: stretch;
+  background: linear-gradient(135deg, #FFF5F6 0%, #FFF0F2 100%);
+  border-radius: 16rpx; border: 1rpx solid #FCE4E6;
+  min-width: 400rpx; overflow: hidden; position: relative;
+  transition: transform 0.15s ease;
+}
+.coupon-mini-card.press { transform: scale(0.97); }
+.cmc-left {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 20rpx 16rpx 20rpx 24rpx; min-width: 140rpx;
+  background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%);
+}
+.cmc-value { font-size: 40rpx; font-weight: 800; color: #D32F2F; line-height: 1.1; }
+.cmc-min { font-size: 20rpx; color: #B71C1C; margin-top: 4rpx; opacity: 0.7; }
+.cmc-right {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 20rpx 24rpx; flex: 1;
+}
+.cmc-name { font-size: 26rpx; font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmc-expire { font-size: 20rpx; color: #C62828; margin-top: 6rpx; opacity: 0.6; }
+
+/* ── 优惠券无券引导 ── */
+.coupon-empty-tip {
+  display: flex; flex-direction: row; align-items: center;
+  padding: 24rpx 20rpx;
+  background: linear-gradient(135deg, #FFF8F0 0%, #FFF3E0 100%);
+  border-radius: 16rpx; border: 1rpx dashed #FFB74D;
+}
+.cet-icon { font-size: 36rpx; margin-right: 12rpx; }
+.cet-text { font-size: 26rpx; color: #E65100; }

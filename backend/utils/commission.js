@@ -124,7 +124,7 @@ async function handleSameLevelReferral(upline, newPeer, t = null) {
             user_id: upline.id,
             order_id: null,
             amount: bonus,
-            type: 'Peer_Direct',
+            type: 'peer_direct',  // 固定值，与 CommissionService 写入风格对齐（全小写）
             status: 'settled',
             settled_at: new Date(),
             remark: `同级直推奖金：下线用户(ID:${newPeer.id})升级至${newPeer.role_level}级`
@@ -180,7 +180,7 @@ async function handleB2AssistBonus(b2User, b1User, orderId, t = null) {
         } catch (_) {}
 
         const assistCount = await CommissionLog.count({
-            where: { user_id: b2User.id, type: 'B2_Assist' },
+            where: { user_id: b2User.id, type: 'b2_assist' },
             transaction: t
         });
 
@@ -192,7 +192,7 @@ async function handleB2AssistBonus(b2User, b1User, orderId, t = null) {
             user_id: b2User.id,
             order_id: orderId,
             amount: bonus,
-            type: 'B2_Assist',
+            type: 'b2_assist',   // 固定值，与 CommissionService 写入风格对齐（全小写）
             status: 'settled',
             settled_at: new Date(),
             remark: `B2协助B1(ID:${b1User.id})开单奖励 ¥${bonus}（累计第${assistCount + 1}单）`

@@ -1,0 +1,22 @@
+{
+  "name": "cloud-mp-foundation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CloudBase migration foundation scripts for the mini program and admin stack",
+  "scripts": {
+    "check:foundation": "node scripts/check-cloudbase-foundation.js",
+    "seed:normalize": "node scripts/normalize-cloudbase-data.js",
+    "seed:build-import": "node scripts/build-cloudbase-import-jsonl.js",
+    "seed:prepare": "npm run seed:normalize && npm run seed:build-import",
+    "import:ready": "node scripts/check-cloudbase-import-ready.js",
+    "import:validate": "node scripts/validate-cloudbase-import.js",
+    "runtime:status": "node scripts/check-cloudbase-runtime-status.js",
+    "import:selected": "node scripts/import-cloudbase-collections.js",
+    "import:report": "node scripts/write-cloudbase-import-result.js",
+    "import:prep": "npm run check:foundation && npm run import:ready && npm run import:validate",
+    "payment:ready": "node scripts/check-payment-readiness.js",
+    "audit:legacy": "node scripts/audit-legacy-compat.js",
+    "repair:cloudbase-openid": "node scripts/repair-cloudbase-openid-fields.js",
+    "release:check": "npm run check:foundation && npm run import:validate && npm run audit:legacy && node scripts/check-production-gaps.js"
+  }
+}

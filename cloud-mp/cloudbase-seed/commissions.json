@@ -1,0 +1,32 @@
+[
+  {
+    "_id": "commission-1",
+    "_legacy_id": 1,
+    "order_id": "",
+    "order_no": "",
+    "amount": 1000,
+    "status": "settled",
+    "created_at": "2026-03-28T10:39:21.000Z",
+    "updated_at": "2026-03-28T10:39:21.000Z"
+  },
+  {
+    "_id": "commission-2",
+    "_legacy_id": 2,
+    "order_id": "",
+    "order_no": "",
+    "amount": 10000,
+    "status": "settled",
+    "created_at": "2026-03-28T10:39:33.000Z",
+    "updated_at": "2026-03-28T10:39:33.000Z"
+  },
+  {
+    "_id": "commission-3",
+    "_legacy_id": 3,
+    "order_id": "",
+    "order_no": "",
+    "amount": 100000,
+    "status": "settled",
+    "created_at": "2026-03-29T10:33:16.000Z",
+    "updated_at": "2026-03-29T10:33:16.000Z"
+  }
+]

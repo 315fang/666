@@ -293,6 +293,11 @@ const batchShipOrders = async (req, res) => {
                     throw new Error(`订单状态不正确: ${order.status}`);
                 }
 
+                // ★ 修复：与单个发货接口保持一致，防止工厂误发代理商发货类型订单
+                if (order.fulfillment_type && order.fulfillment_type !== 'Platform') {
+                    throw new Error(`该订单履约类型为${order.fulfillment_type}，不归工厂发货`);
+                }
+
                 order.status = 'shipped';
                 order.tracking_no = tracking_no;
                 order.tracking_company = tracking_company;

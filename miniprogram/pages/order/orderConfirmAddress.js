@@ -125,12 +125,14 @@ async function loadCartItems(page, cartIds) {
             .filter((item) => ids.includes(item.id))
             .map((item) => {
                 const processed = processProduct(item.product, roleLevel);
+                const qty = Number(item.qty || item.quantity || 1);
                 return {
                     cart_id: item.id,
                     product_id: item.product_id,
                     category_id: item.product?.category_id || null,
                     sku_id: item.sku_id,
-                    quantity: item.quantity,
+                    qty,
+                    quantity: qty,
                     supports_pickup: item.product?.supports_pickup ? 1 : 0,
                     price: parseFloat(item.effective_price || processed.displayPrice || 0),
                     name: processed.name || '商品',
@@ -142,8 +144,9 @@ async function loadCartItems(page, cartIds) {
         let totalAmountFen = 0;
         let totalCount = 0;
         selectedItems.forEach((item) => {
-            totalAmountFen += Math.round(item.price * 100) * item.quantity;
-            totalCount += item.quantity;
+            const qty = Number(item.qty || item.quantity || 0);
+            totalAmountFen += Math.round(item.price * 100) * qty;
+            totalCount += qty;
         });
 
         const totalAmount = (totalAmountFen / 100).toFixed(2);

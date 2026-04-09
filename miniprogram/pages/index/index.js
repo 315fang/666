@@ -3,7 +3,7 @@ const { parseImages } = require('../../utils/dataFormatter');
 const { isDevelopment } = require('../../config/env');
 const navigator = require('../../utils/navigator');
 const { syncPageTabBar, restorePageTabBar } = require('../../utils/tabBarHelper');
-const { fetchUserProfile, truncateNickname, calcGrowthPercent } = require('../../utils/userProfile');
+const { fetchUserProfile, truncateNickname, calcGrowthPercent, getUserNickname } = require('../../utils/userProfile');
 const { consumePendingRegisterPrompt } = require('../../utils/lightPrompt');
 const { fetchPointSummary, checkinPoints } = require('../../utils/points');
 const {
@@ -166,7 +166,7 @@ Page({
     _normalizeLatestActivity(activity = {}) {
         return {
             ...activity,
-            coverImage: normalizeAssetUrl(activity.image || activity.image_url || ''),
+            coverImage: normalizeAssetUrl(activity.image || activity.file_id || activity.image_url || ''),
             displaySubtitle: activity.subtitle || activity.summary || ''
         };
     },
@@ -217,7 +217,7 @@ Page({
 
                 this.setData({
                     userInfo: info,
-                    truncatedName: truncateNickname(info.nickname),
+                    truncatedName: truncateNickname(getUserNickname(info)),
                     growthValue: growth,
                     nextLevelThreshold: threshold,
                     growthPercent: calcGrowthPercent(growth, threshold)

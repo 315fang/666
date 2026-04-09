@@ -19,7 +19,7 @@
       <el-table-column prop="sort_order" label="位置" width="70" />
       <el-table-column label="图片" width="80">
         <template #default="{ row }">
-          <el-image :src="row.image_url" style="width:40px;height:40px;border-radius:4px;" fit="cover" v-if="row.image_url" />
+          <el-image :src="row.image_url || row.image" style="width:40px;height:40px;border-radius:4px;" fit="cover" v-if="row.image_url || row.image" />
           <span v-else style="color:#ccc">无图</span>
         </template>
       </el-table-column>

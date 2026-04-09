@@ -31,8 +31,8 @@
             <el-table-column label="用户" min-width="160">
               <template #default="{ row }">
                 <div class="user-cell">
-                  <el-avatar :src="row.avatar_url" :size="32" />
-                  <span style="margin-left:8px">{{ row.nickname || '-' }}</span>
+                  <el-avatar :src="displayUserAvatar(row)" :size="32" />
+                  <span style="margin-left:8px">{{ displayUserName(row) }}</span>
                 </div>
               </template>
             </el-table-column>
@@ -93,15 +93,15 @@
             <el-table-column label="用户" min-width="160">
               <template #default="{ row }">
                 <div class="user-cell">
-                  <el-avatar :src="row.avatar_url" :size="32" />
-                  <span style="margin-left:8px">{{ row.nickname || '-' }}</span>
+                  <el-avatar :src="displayUserAvatar(row)" :size="32" />
+                  <span style="margin-left:8px">{{ displayUserName(row) }}</span>
                 </div>
               </template>
             </el-table-column>
             <el-table-column prop="phone" label="手机号" width="130" />
             <el-table-column label="所属大N" min-width="140">
               <template #default="{ row }">
-                {{ row.nLeader ? row.nLeader.nickname : '无' }}
+                {{ row.nLeader ? displayUserName(row.nLeader) : '无' }}
                 <el-tag v-if="row.nLeader" size="small" style="margin-left:4px">{{ row.nLeader.id }}</el-tag>
               </template>
             </el-table-column>
@@ -144,7 +144,7 @@
             <el-table-column prop="id" label="申请ID" width="80" />
             <el-table-column label="申请人" min-width="140">
               <template #default="{ row }">
-                {{ row.user?.nickname || '-' }}
+                {{ displayUserName(row.user) }}
                 <el-tag size="small" style="margin-left:4px">{{ row.user?.id }}</el-tag>
               </template>
             </el-table-column>
@@ -201,14 +201,14 @@
     </el-tabs>
 
     <!-- 查看大N名下小n弹窗 -->
-    <el-dialog v-model="memberDialogVisible" :title="`${selectedLeader?.nickname} 的小n团队`" width="720px">
+    <el-dialog v-model="memberDialogVisible" :title="`${displayUserName(selectedLeader, '-') } 的小n团队`" width="720px">
       <el-table :data="dialogMembers" border>
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column label="用户" min-width="160">
           <template #default="{ row }">
             <div class="user-cell">
-              <el-avatar :src="row.avatar_url" :size="28" />
-              <span style="margin-left:8px">{{ row.nickname || '-' }}</span>
+              <el-avatar :src="displayUserAvatar(row)" :size="28" />
+              <span style="margin-left:8px">{{ displayUserName(row) }}</span>
             </div>
           </template>
         </el-table-column>
@@ -229,8 +229,11 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getNSystemLeaders, getNSystemMembers, getNSystemLeaderMembers, getUpgradeApplications, reviewUpgradeApplication } from '@/api'
 import dayjs from 'dayjs'
+import { getUserAvatar, getUserNickname } from '@/utils/userDisplay'
 
 const activeTab = ref('leaders')
+const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
+const displayUserAvatar = (user) => getUserAvatar(user || {})
 
 // ── 大N ─────────────────────────────────────────
 const leaders = ref([])

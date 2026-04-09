@@ -24,6 +24,7 @@ nul
 *.key
 backend/说明/
 backend/certs/
+cloud-mp/cloudfunctions/payment/certs/
 .worktrees/
 .agent/
 .codebuddy/
@@ -44,6 +45,20 @@ final_test.txt
 
 # 本地技能扫描日志
 skill/**/logs/
+
+# 本地 NPM 缓存目录
+.npm-cache/
+.npm-cache-global/
+.npm-cache-local/
+
+# 历史前端目录（归档到 docs/archive，不再维护）
+qianduan/
+
+# 云开发残留
+miniprogram/.cloudbase/
+
+# 空组件目录
+miniprogram/ec-canvas/
 
 # 嵌套的 git 仓库
 agent-portal/

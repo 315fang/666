@@ -314,7 +314,7 @@ const updateUserInviteCode = async (req, res) => {
             }
             await user.update({ invite_code });
         } else {
-            // 自动生成
+            // 自动生成（最多重试100次）
             let code;
             let found = true;
             let attempts = 0;
@@ -323,6 +323,9 @@ const updateUserInviteCode = async (req, res) => {
                 const dup = await User.findOne({ where: { invite_code: code, id: { [Op.ne]: id } } });
                 found = !!dup;
                 attempts++;
+            }
+            if (found) {
+                return res.status(500).json({ code: -1, message: '自动生成邀请码失败，请手动指定' });
             }
             await user.update({ invite_code: code });
         }
@@ -334,10 +337,11 @@ const updateUserInviteCode = async (req, res) => {
             message: '邀请码更新成功'
         });
     } catch (error) {
-        console.error('更新邀请码失败:', error);
+        console.error('更新邀请码失败:', error.message);
         res.status(500).json({ code: -1, message: '更新邀请码失败' });
     }
 };
+
 
 // ==================== ★ 以下为新增高级管理功能 ★ ====================
 

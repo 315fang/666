@@ -60,7 +60,11 @@ const Order = sequelize.define('Order', {
     agent_id: {
         type: DataTypes.INTEGER,
         allowNull: true,
-        comment: '所属代理商ID（团队归属）'
+        // ★ 该字段有双重含义，请根据上下文判断：
+        //   ① 平台代发模式：=发货的代理商ID（订单由平台撮合、代理商履约）
+        //   ② 购买者归属：=买家所属团队的代理商ID（佣金链路归属，用于级差计算）
+        //   在 OrderCreationService 中写入含义为②；在代理商发货逻辑中用含义①
+        comment: '代理商ID：①发货代理商(Partner模式) ②买家归属代理商(佣金链路归属)'
     },
     tracking_no: {
         type: DataTypes.STRING(100),

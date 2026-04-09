@@ -6,6 +6,7 @@ Page({
         currentStock: 0,
         products: [],
         selectedProduct: null,
+        qty: 10,
         quantity: 10,
         totalAmount: '0.00'
     },
@@ -65,21 +66,23 @@ Page({
     onQuantityInput(e) {
         let qty = parseInt(e.detail.value) || 1;
         if (qty < 1) qty = 1;
-        this.setData({ quantity: qty });
+        this.setData({ qty, quantity: qty });
         this.calcTotal();
     },
 
     onMinus() {
-        if (this.data.quantity > 1) {
-            this.setData({ quantity: this.data.quantity - 1 });
+        if (this.data.qty > 1) {
+            const qty = this.data.qty - 1;
+            this.setData({ qty, quantity: qty });
             this.calcTotal();
         }
     },
 
     onPlus() {
         const max = this.data.selectedProduct ? this.data.selectedProduct.stock : 9999;
-        if (this.data.quantity < max) {
-            this.setData({ quantity: this.data.quantity + 1 });
+        if (this.data.qty < max) {
+            const qty = this.data.qty + 1;
+            this.setData({ qty, quantity: qty });
             this.calcTotal();
         }
     },
@@ -87,26 +90,26 @@ Page({
     // 快捷数量
     onQuickQty(e) {
         const qty = parseInt(e.currentTarget.dataset.qty);
-        this.setData({ quantity: qty });
+        this.setData({ qty, quantity: qty });
         this.calcTotal();
     },
 
     // 计算总额
     calcTotal() {
-        const { selectedProduct, quantity } = this.data;
+        const { selectedProduct, qty } = this.data;
         if (!selectedProduct) return;
-        const total = (parseFloat(selectedProduct.agent_price) * quantity).toFixed(2);
+        const total = (parseFloat(selectedProduct.agent_price) * qty).toFixed(2);
         this.setData({ totalAmount: total });
     },
 
     // 确认采购
     async onConfirmRestock() {
-        const { selectedProduct, quantity } = this.data;
+        const { selectedProduct, qty } = this.data;
         if (!selectedProduct) {
             wx.showToast({ title: '请选择商品', icon: 'none' });
             return;
         }
-        if (quantity < 1) {
+        if (qty < 1) {
             wx.showToast({ title: '请输入数量', icon: 'none' });
             return;
         }
@@ -114,7 +117,7 @@ Page({
         const confirmRes = await new Promise(resolve => {
             wx.showModal({
                 title: '确认采购',
-                content: `${selectedProduct.name}\n数量: ${quantity}件\n总额: ¥${this.data.totalAmount}\n\n采购后库存将直接入仓`,
+                content: `${selectedProduct.name}\n数量: ${qty}件\n总额: ¥${this.data.totalAmount}\n\n采购后库存将直接入仓`,
                 confirmText: '确认支付',
                 success: resolve
             });
@@ -126,14 +129,14 @@ Page({
         try {
             const res = await post('/agent/restock', {
                 product_id: selectedProduct.id,
-                quantity
+                quantity: qty
             });
             wx.hideLoading();
 
             if (res.code === 0) {
                 wx.showToast({ title: '入仓成功！', icon: 'success' });
                 this.setData({
-                    currentStock: res.data.stock_after || (this.data.currentStock + quantity)
+                    currentStock: res.data.stock_after || (this.data.currentStock + qty)
                 });
                 this.loadStock();
                 this.loadProducts();

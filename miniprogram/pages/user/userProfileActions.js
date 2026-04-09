@@ -1,6 +1,13 @@
 const app = getApp();
 const { put, uploadFile } = require('../../utils/request');
 const { ensurePrivacyAuthorization, openPrivacyContract } = require('../../utils/privacy');
+const { syncUserProfileCache, getUserNickname } = require('../../utils/userProfile');
+
+function syncUserProfile(page, profilePatch = {}) {
+    const nextUserInfo = syncUserProfileCache(profilePatch, page.data.userInfo || {});
+    page.setData({ userInfo: nextUserInfo });
+    return nextUserInfo;
+}
 
 function onTapEditProfile(page) {
     wx.showActionSheet({
@@ -34,9 +41,9 @@ async function onChooseAvatar(page, event) {
         const uploadResponse = await uploadFile('/user/upload', avatarUrl, 'file');
         if (uploadResponse.code === 0 && uploadResponse.data.url) {
             const fullUrl = uploadResponse.data.url;
-            const updateResponse = await put('/user/profile', { avatar_url: fullUrl });
+            const updateResponse = await put('/user/profile', { avatarUrl: fullUrl });
             if (updateResponse.code === 0) {
-                page.setData({ 'userInfo.avatar_url': fullUrl });
+                syncUserProfile(page, { avatarUrl: fullUrl });
                 wx.showToast({ title: '头像更新成功', icon: 'success' });
             }
         }
@@ -97,7 +104,7 @@ async function onLogin(page) {
 function onEditNickname(page) {
     page.setData({
         showNicknameModal: true,
-        newNickname: page.data.userInfo ? page.data.userInfo.nickname : ''
+        newNickname: getUserNickname(page.data.userInfo || {})
     });
 }
 
@@ -125,8 +132,11 @@ async function onConfirmNickname(page) {
     try {
         const response = await put('/user/profile', { nickname });
         if (response.code === 0) {
+            syncUserProfile(page, { nickName: nickname });
             wx.showToast({ title: '修改成功', icon: 'success' });
-            page.setData({ showNicknameModal: false });
+            page.setData({
+                showNicknameModal: false
+            });
             page.loadUserInfo(true);
         } else {
             wx.showToast({ title: response.message || '修改失败', icon: 'none' });

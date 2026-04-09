@@ -1,0 +1,138 @@
+.page {
+  min-height: 100vh;
+  background: #F5F1EC;
+  padding: 28rpx 24rpx 180rpx;
+  box-sizing: border-box;
+}
+
+.card {
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 32rpx 28rpx;
+  box-shadow: 0 10rpx 30rpx rgba(56, 34, 15, 0.06);
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32rpx;
+}
+
+.status-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #2F2116;
+}
+
+.status-countdown {
+  font-size: 24rpx;
+  color: #A56E1F;
+  background: #FBF0DB;
+  padding: 8rpx 16rpx;
+  border-radius: 999rpx;
+}
+
+.amount-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #F9F4EC 0%, #F3E6D3 100%);
+  margin-bottom: 28rpx;
+}
+
+.amount-label {
+  font-size: 24rpx;
+  color: #8B6B35;
+}
+
+.amount-value {
+  font-size: 56rpx;
+  font-weight: 700;
+  color: #2F2116;
+}
+
+.info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24rpx;
+}
+
+.info-label {
+  font-size: 26rpx;
+  color: #9B8C80;
+}
+
+.info-value {
+  flex: 1;
+  text-align: right;
+  font-size: 26rpx;
+  color: #2F2116;
+  word-break: break-all;
+}
+
+.notice {
+  margin-top: 28rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 18rpx;
+  background: #F7F2EC;
+  color: #866E58;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.notice-pending {
+  background: #FFF5E7;
+  color: #A56E1F;
+}
+
+.notice-success {
+  background: #EEF8F0;
+  color: #2E7D4F;
+}
+
+.empty {
+  padding-top: 160rpx;
+  text-align: center;
+}
+
+.empty-text {
+  color: #9B8C80;
+  font-size: 28rpx;
+}
+
+.footer {
+  position: fixed;
+  left: 24rpx;
+  right: 24rpx;
+  bottom: 32rpx;
+}
+
+.pay-btn {
+  height: 96rpx;
+  border-radius: 48rpx;
+  background: linear-gradient(135deg, #C8A258 0%, #A07840 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10rpx 24rpx rgba(160, 120, 64, 0.24);
+}
+
+.pay-btn-disabled {
+  opacity: 0.7;
+}
+
+.pay-btn-text {
+  color: #FFF8F0;
+  font-size: 32rpx;
+  font-weight: 600;
+}

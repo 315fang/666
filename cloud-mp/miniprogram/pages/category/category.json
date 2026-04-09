@@ -1,0 +1,7 @@
+{
+    "navigationBarTitleText": "商品分类",
+    "navigationStyle": "custom",
+    "usingComponents": {
+        "page-loading": "/components/page-loading/page-loading"
+    }
+}

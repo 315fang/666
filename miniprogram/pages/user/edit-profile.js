@@ -3,6 +3,7 @@ const app = getApp();
 const { get, put, uploadFile } = require('../../utils/request');
 const { ensurePrivacyAuthorization } = require('../../utils/privacy');
 const { requireLogin } = require('../../utils/auth');
+const { normalizeUserProfile, syncUserProfileCache, getUserNickname } = require('../../utils/userProfile');
 
 Page({
     data: {
@@ -25,10 +26,10 @@ Page({
     },
 
     loadUserInfo() {
-        const userInfo = app.globalData.userInfo || {};
+        const userInfo = normalizeUserProfile(app.globalData.userInfo || {});
         this.setData({
             userInfo,
-            newNickname: userInfo.nickname || ''
+            newNickname: getUserNickname(userInfo)
         });
     },
 
@@ -58,11 +59,10 @@ Page({
             const res = await uploadFile('/user/upload', avatarUrl, 'file');
             if (res.code === 0 && res.data.url) {
                 const fullUrl = res.data.url;
-                const updateRes = await put('/user/profile', { avatar_url: fullUrl });
+                const updateRes = await put('/user/profile', { avatarUrl: fullUrl });
                 if (updateRes.code === 0) {
-                    this.setData({ 'userInfo.avatar_url': fullUrl });
-                    app.globalData.userInfo.avatar_url = fullUrl;
-                    wx.setStorageSync('userInfo', app.globalData.userInfo);
+                    const nextUserInfo = syncUserProfileCache({ avatarUrl: fullUrl }, this.data.userInfo || {});
+                    this.setData({ userInfo: nextUserInfo });
                     wx.showToast({ title: '头像更新成功', icon: 'success' });
                 }
             }
@@ -78,7 +78,7 @@ Page({
     onEditNickname() {
         this.setData({
             showNicknameModal: true,
-            newNickname: this.data.userInfo?.nickname || ''
+            newNickname: getUserNickname(this.data.userInfo || {})
         });
     },
 
@@ -111,12 +111,11 @@ Page({
         try {
             const res = await put('/user/profile', { nickname });
             if (res.code === 0) {
+                const nextUserInfo = syncUserProfileCache({ nickName: nickname }, this.data.userInfo || {});
                 this.setData({
                     showNicknameModal: false,
-                    'userInfo.nickname': nickname
+                    userInfo: nextUserInfo
                 });
-                app.globalData.userInfo.nickname = nickname;
-                wx.setStorageSync('userInfo', app.globalData.userInfo);
                 wx.showToast({ title: '修改成功', icon: 'success' });
             } else {
                 wx.showToast({ title: res.message || '修改失败', icon: 'none' });

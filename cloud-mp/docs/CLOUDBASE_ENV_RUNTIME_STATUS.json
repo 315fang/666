@@ -1,0 +1,151 @@
+{
+  "kind": "runtime_status",
+  "generated_at": "2026-04-09T03:31:30.546Z",
+  "ok": true,
+  "environment": {
+    "env_id": "cloud1-9gywyqe49638e46f",
+    "auth_status": "READY",
+    "env_status": "READY"
+  },
+  "collections": {
+    "required": [
+      {
+        "name": "users",
+        "expected": 167,
+        "actual": 167,
+        "status": "ok"
+      },
+      {
+        "name": "products",
+        "expected": 11,
+        "actual": 11,
+        "status": "ok"
+      },
+      {
+        "name": "skus",
+        "expected": 11,
+        "actual": 11,
+        "status": "ok"
+      },
+      {
+        "name": "categories",
+        "expected": 9,
+        "actual": 9,
+        "status": "ok"
+      },
+      {
+        "name": "cart_items",
+        "expected": 25,
+        "actual": 25,
+        "status": "ok"
+      },
+      {
+        "name": "orders",
+        "expected": 59,
+        "actual": 59,
+        "status": "ok"
+      },
+      {
+        "name": "refunds",
+        "expected": 9,
+        "actual": 9,
+        "status": "ok"
+      },
+      {
+        "name": "reviews",
+        "expected": 3,
+        "actual": 3,
+        "status": "ok"
+      },
+      {
+        "name": "commissions",
+        "expected": 3,
+        "actual": 3,
+        "status": "ok"
+      },
+      {
+        "name": "withdrawals",
+        "expected": 3,
+        "actual": 3,
+        "status": "ok"
+      },
+      {
+        "name": "banners",
+        "expected": 5,
+        "actual": 5,
+        "status": "ok"
+      },
+      {
+        "name": "materials",
+        "expected": 52,
+        "actual": 52,
+        "status": "ok"
+      },
+      {
+        "name": "material_groups",
+        "expected": 1,
+        "actual": 1,
+        "status": "ok"
+      },
+      {
+        "name": "admins",
+        "expected": 2,
+        "actual": 2,
+        "status": "ok"
+      },
+      {
+        "name": "admin_roles",
+        "expected": 2,
+        "actual": 2,
+        "status": "ok"
+      }
+    ],
+    "missing_or_mismatched_required": []
+  },
+  "functions": {
+    "local": [
+      "admin-api",
+      "cart",
+      "config",
+      "distribution",
+      "login",
+      "order",
+      "payment",
+      "products",
+      "user"
+    ],
+    "deployed": [
+      "admin-api",
+      "cart",
+      "config",
+      "distribution",
+      "login",
+      "order",
+      "payment",
+      "products",
+      "user"
+    ],
+    "missing": [],
+    "extra": []
+  },
+  "admin_chain": {
+    "mode": "function_gateway",
+    "ready": true,
+    "evidence": "Admin chain currently resolves through the deployed admin-api cloud function gateway."
+  },
+  "cloudrun": {
+    "service_count": 0,
+    "services": []
+  },
+  "summary": {
+    "required_collection_count": 15,
+    "matched_required_collection_count": 15,
+    "required_collection_counts_match": true,
+    "local_function_count": 9,
+    "deployed_function_count": 9,
+    "functions_match": true,
+    "admin_chain_ready": true
+  },
+  "blockers": [],
+  "warnings": []
+}

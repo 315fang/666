@@ -71,12 +71,12 @@
 
       <view class="member-item" wx:for="{{members}}" wx:key="id" data-index="{{index}}" bindtap="goMemberDetail">
         <view class="member-avatar-wrap">
-          <image class="member-avatar" src="{{item.avatar_url || '/assets/icons/user.svg'}}" mode="aspectFill"></image>
+          <image class="member-avatar" src="{{item.avatarUrl || item.avatar_url || '/assets/icons/user.svg'}}" mode="aspectFill"></image>
         </view>
         <view class="member-info">
           <view class="member-top-row">
             <view class="member-name-wrap">
-              <text class="member-name">{{item.nickname || '用户' + item.id}}</text>
+              <text class="member-name">{{item.nickName || item.nickname || '用户' + item.id}}</text>
               <text class="member-level">{{item.level_label}}</text>
             </view>
             <text class="member-arrow">›</text>

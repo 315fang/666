@@ -1,6 +1,19 @@
 const { post } = require('../../utils/request');
 const { normalizeProductId } = require('../../utils/dataFormatter');
 
+function hasSkuOptions(page) {
+    const { skus } = page.data || {};
+    return Array.isArray(skus) && skus.length > 0;
+}
+
+function ensureSkuSelected(page) {
+    if (!hasSkuOptions(page) || page.data.selectedSku) {
+        return true;
+    }
+    wx.showToast({ title: '请选择商品规格', icon: 'none' });
+    return false;
+}
+
 function onSpecSelect(page, event, resolvePayableUnitPrice) {
     const { key, val } = event.currentTarget.dataset;
     const selectedSpecs = page.data.selectedSpecs || {};
@@ -67,14 +80,19 @@ function onBuyNow(page, resolvePayableUnitPrice) {
         wx.showToast({ title: '该商品暂时缺货', icon: 'none' });
         return;
     }
+    if (!ensureSkuSelected(page)) {
+        return;
+    }
     page._buyingNow = true;
     const { product, selectedSku, quantity } = page.data;
+    const qty = Number(page.data.qty || quantity || 1);
 
     const buyInfo = {
         product_id: normalizeProductId(product.id),
         category_id: product.category_id || null,
         sku_id: selectedSku && selectedSku.id || null,
-        quantity,
+        qty,
+        quantity: qty,
         price: resolvePayableUnitPrice(product, selectedSku, page.data.roleLevel),
         name: product.name,
         image: product.images && product.images[0] || '',
@@ -91,7 +109,11 @@ function onBuyNow(page, resolvePayableUnitPrice) {
 
 async function addToCart(page) {
     if (page._addingToCart) return;
+    if (!ensureSkuSelected(page)) {
+        return;
+    }
     const { product, selectedSku, quantity } = page.data;
+    const qty = Number(page.data.qty || quantity || 1);
     page._addingToCart = true;
     let loadingShown = false;
 
@@ -104,7 +126,7 @@ async function addToCart(page) {
             {
                 product_id: normalizeProductId(product.id),
                 sku_id: selectedSku && selectedSku.id || null,
-                quantity
+                quantity: qty
             },
             { showError: false }
         );

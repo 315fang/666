@@ -1,5 +1,5 @@
 <template>
-  <el-drawer :model-value="visible" :title="`用户详情 · ${detailUser?.nickname || ''}`" size="640px" @update:model-value="onVisibilityChange">
+  <el-drawer :model-value="visible" :title="`用户详情 · ${displayUserName(detailUser, '')}`" size="640px" @update:model-value="onVisibilityChange">
     <template v-if="detailUser">
       <el-tabs :model-value="detailTab" @update:model-value="onTabChange">
         <el-tab-pane label="基本信息" name="info">
@@ -9,7 +9,7 @@
             <el-descriptions-item label="会员码">
               <el-tag type="primary">{{ detailUser.member_no || '未生成' }}</el-tag>
             </el-descriptions-item>
-            <el-descriptions-item label="昵称">{{ detailUser.nickname || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="昵称">{{ displayUserName(detailUser) }}</el-descriptions-item>
             <el-descriptions-item label="手机号">{{ detailUser.phone || '-' }}</el-descriptions-item>
             <el-descriptions-item label="OpenID" :span="2">
               <span class="mono-ellipsis">{{ detailUser.openid || '-' }}</span>
@@ -44,7 +44,7 @@
             </el-descriptions-item>
             <el-descriptions-item label="上级推荐人" :span="2">
               <template v-if="detailUser.parent?.id">
-                <span>{{ detailUser.parent.nickname || '-' }}（ID: {{ detailUser.parent.id }}）</span>
+                <span>{{ displayUserName(detailUser.parent) }}（ID: {{ detailUser.parent.id }}）</span>
                 <el-button type="primary" link size="small" style="margin-left:8px" @click="onOpenParentDetail">查看上级</el-button>
               </template>
               <span v-else>无</span>
@@ -111,7 +111,9 @@
         <el-tab-pane label="直推团队 (下级)" name="team">
           <p class="sub-hint" style="margin-bottom:10px">此处仅一级直推。多层级全体后代请在列表用「团队负责人」筛选或打开「团队概况」。</p>
           <el-table :data="teamData" stripe size="small" v-loading="teamLoading">
-            <el-table-column label="昵称" prop="nickname" />
+            <el-table-column label="昵称">
+              <template #default="{ row }">{{ displayUserName(row) }}</template>
+            </el-table-column>
             <el-table-column label="角色">
               <template #default="{ row }">
                 <el-tag size="small" :type="roleTagType(row.role_level)">{{ roleText(row.role_level) }}</el-tag>
@@ -130,6 +132,8 @@
 </template>
 
 <script setup>
+import { getUserNickname } from '@/utils/userDisplay'
+
 defineProps({
   visible: {
     type: Boolean,
@@ -212,4 +216,6 @@ defineProps({
     required: true
   }
 })
+
+const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 </script>

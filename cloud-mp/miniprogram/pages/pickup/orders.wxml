@@ -1,0 +1,34 @@
+<view class="page">
+  <view class="hero-card" wx:if="{{station}}">
+    <text class="hero-title">{{station.name}}</text>
+    <text class="hero-sub">这里只展示当前门店待核销的自提订单。</text>
+    <button class="hero-btn" bindtap="goVerifyPage">去核销</button>
+  </view>
+
+  <view class="loading" wx:if="{{loading && list.length === 0}}">加载中...</view>
+
+  <view class="list" wx:else>
+    <view class="order-card" wx:for="{{list}}" wx:key="id" data-id="{{item.id}}" bindtap="goOrderDetail">
+      <view class="order-top">
+        <text class="order-no">{{item.order_no}}</text>
+        <text class="order-status">待核销</text>
+      </view>
+      <view class="order-main">
+        <text class="order-line">买家：{{item.buyer.nickname || '用户***'}}<text wx:if="{{item.buyer.phone}}"> {{item.buyer.phone}}</text></text>
+        <text class="order-line">数量：{{item.quantity}} 件</text>
+        <text class="order-line">金额：¥{{item.total_amount}}</text>
+        <text class="order-line">核销码：{{item.pickup_code}}</text>
+        <text class="order-line">发货时间：{{item.shipped_at_text || '--'}}</text>
+      </view>
+      <view class="order-footer">
+        <text class="order-tap">查看订单详情</text>
+        <text class="order-arrow">›</text>
+      </view>
+    </view>
+
+    <view class="empty" wx:if="{{!loading && list.length === 0}}">
+      <text class="empty-title">当前门店暂无待核销订单</text>
+      <text class="empty-desc">有新的自提订单发货后，会在这里出现。</text>
+    </view>
+  </view>
+</view>

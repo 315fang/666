@@ -59,6 +59,9 @@
                   style="width:320px;margin-top:8px"
                   clearable
                 />
+                <div v-if="form.file_id" style="font-size:12px;color:#909399;margin-top:6px;">
+                  file_id: {{ form.file_id }}
+                </div>
                 <div v-if="form.image_url" style="margin-top:8px">
                   <el-image :src="form.image_url" style="width:80px;height:80px;border-radius:6px;" fit="cover" />
                 </div>
@@ -205,9 +208,12 @@ import { getSplashConfig, updateSplashConfig, uploadSplashImage } from '@/api/in
 const loading = ref(false)
 const saving = ref(false)
 
+const resolveSplashAssetUrl = (payload = {}) => payload.file_id || payload.image_url || payload.image || payload.url || ''
+
 const form = reactive({
   is_active: false,
   show_mode: 'always',
+  file_id: '',
   image_url: '',
   title: '盒美美',
   subtitle: '做大学生的第一款护肤品',
@@ -241,9 +247,10 @@ let originalForm = null
 // ── 预览计算 ──────────────────────────────────────
 // 背景色：取起始深色作为预览背景（模拟第一层）
 const previewBg = computed(() => {
-  if (form.image_url) {
+  const assetUrl = resolveSplashAssetUrl(form)
+  if (assetUrl) {
     return {
-      backgroundImage: `url(${form.image_url})`,
+      backgroundImage: `url(${assetUrl})`,
       backgroundSize: 'cover',
       backgroundPosition: 'center'
     }
@@ -273,8 +280,13 @@ async function fetchConfig() {
     const res = await getSplashConfig()
     const data = res?.data || res
     if (data) {
-      Object.assign(form, data)
-      originalForm = JSON.stringify(data)
+      const normalizedData = {
+        ...data,
+        file_id: data.file_id || '',
+        image_url: resolveSplashAssetUrl(data)
+      }
+      Object.assign(form, normalizedData)
+      originalForm = JSON.stringify(normalizedData)
     }
   } catch (e) {
     ElMessage.error('加载配置失败')
@@ -287,9 +299,13 @@ async function fetchConfig() {
 async function handleSave() {
   saving.value = true
   try {
-    const res = await updateSplashConfig({ ...form })
+    const payload = {
+      ...form,
+      image_url: resolveSplashAssetUrl(form)
+    }
+    const res = await updateSplashConfig(payload)
     ElMessage.success(res?.message || '保存成功')
-    originalForm = JSON.stringify(form)
+    originalForm = JSON.stringify(payload)
   } catch (e) {
     ElMessage.error('保存异常')
   } finally {
@@ -320,7 +336,8 @@ async function handleUpload({ file }) {
     const data = res?.data || res
     const url = data?.url
     if (!url) return ElMessage.error('上传失败')
-    form.image_url = url
+    form.file_id = data?.file_id || ''
+    form.image_url = resolveSplashAssetUrl(data)
     ElMessage.success('上传成功')
   } catch (e) {
     ElMessage.error('上传异常')

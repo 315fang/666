@@ -1,0 +1,78 @@
+.page {
+  min-height: 100vh;
+  padding: 24rpx;
+  background: linear-gradient(180deg, #e9f2ff 0%, #f7fbff 100%);
+}
+
+.hero-card,
+.order-card,
+.empty,
+.loading {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 24rpx;
+  box-shadow: 0 12rpx 28rpx rgba(20, 56, 110, 0.06);
+  margin-bottom: 20rpx;
+}
+
+.hero-title,
+.empty-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #14386e;
+}
+
+.hero-sub,
+.empty-desc,
+.order-line {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #6f87aa;
+}
+
+.hero-btn {
+  margin-top: 18rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #fff;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+}
+
+.order-top,
+.order-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.order-no {
+  font-size: 24rpx;
+  color: #6f87aa;
+}
+
+.order-status {
+  font-size: 20rpx;
+  padding: 8rpx 16rpx;
+  border-radius: 999rpx;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.order-main {
+  margin-top: 14rpx;
+  padding-top: 12rpx;
+  border-top: 1rpx solid #e7eef9;
+}
+
+.order-footer {
+  margin-top: 16rpx;
+}
+
+.order-tap,
+.order-arrow {
+  font-size: 24rpx;
+  color: #1d4ed8;
+}

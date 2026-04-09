@@ -98,6 +98,10 @@ function markSplashSeen(mode) {
   }
 }
 
+function resolveSplashImage(config = {}) {
+  return config.image || config.file_id || config.image_url || '';
+}
+
 Page({
   data: {
     phase: 'flood',      // flood | interact | done
@@ -207,7 +211,7 @@ Page({
 
     this.setData({
       splashConfig: config,
-      splashBgImage: config.image_url || '',
+      splashBgImage: resolveSplashImage(config),
       layers,
       TOTAL,
       skipText: config.skip_text || '跳过',

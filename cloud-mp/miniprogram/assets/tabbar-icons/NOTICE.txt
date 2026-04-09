@@ -1,0 +1,9 @@
+Tab bar icons are based on the open-source Lucide icon style.
+
+Source project:
+https://lucide.dev
+
+License:
+ISC License, free for commercial use.
+
+This folder contains project-specific SVG source files prepared for the mini program tab bar.

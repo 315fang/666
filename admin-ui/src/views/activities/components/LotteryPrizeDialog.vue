@@ -37,6 +37,9 @@
           <el-image v-if="form.image_url" :src="form.image_url" style="width:64px;height:64px;border-radius:6px;" fit="cover" />
           <el-button v-else size="small">上传图片</el-button>
         </el-upload>
+        <div v-if="form.file_id" style="font-size:12px;color:#909399;margin-top:6px;">
+          file_id: {{ form.file_id }}
+        </div>
       </el-form-item>
       <el-form-item label="展示 Emoji">
         <el-input v-model="form.display_emoji" maxlength="8" style="width:min(180px, 100%);" placeholder="如：🎁 / ⭐ / 🎫" />

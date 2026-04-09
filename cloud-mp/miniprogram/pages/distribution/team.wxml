@@ -1,0 +1,103 @@
+<view class="container">
+  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-inner" style="height: {{navBarHeight}}px;">
+      <view class="nav-back" bindtap="onBack">
+        <image class="back-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"></image>
+      </view>
+      <text class="nav-title">我的团队</text>
+      <view class="nav-right" bindtap="goInvitePosterPage">
+        <image class="nav-share-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
+      </view>
+    </view>
+  </view>
+
+  <view class="tab-bar">
+    <view class="tab-item {{currentTab === 'direct' ? 'active' : ''}}" bindtap="switchTab" data-tab="direct">
+      <text class="tab-text">一级团队</text>
+    </view>
+    <view class="tab-item {{currentTab === 'indirect' ? 'active' : ''}}" bindtap="switchTab" data-tab="indirect">
+      <text class="tab-text">二级团队</text>
+    </view>
+  </view>
+
+  <view class="summary-strip">
+    <view class="summary-item">
+      <text class="summary-value">{{totalCount}}</text>
+      <text class="summary-label">团队总人数</text>
+    </view>
+    <view class="summary-item">
+      <text class="summary-value">¥{{totalSales}}</text>
+      <text class="summary-label">累计贡献业绩</text>
+    </view>
+    <view class="summary-item">
+      <text class="summary-value">{{monthlyNewMembers}}</text>
+      <text class="summary-label">本月新增</text>
+    </view>
+  </view>
+
+  <view class="toolbar-card" bindtap="goInvitePosterPage">
+    <view class="toolbar-left">
+      <image class="toolbar-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
+      <view class="toolbar-copy">
+        <text class="toolbar-title">分享海报</text>
+        <text class="toolbar-sub">快速生成你的专属邀新海报</text>
+      </view>
+    </view>
+    <text class="toolbar-arrow">›</text>
+  </view>
+
+  <scroll-view class="member-scroll" scroll-y bindscrolltolower="onLoadMore">
+    <view class="member-list">
+      <view class="skeleton-wrap" wx:if="{{loading && members.length === 0}}">
+        <view class="sk-member" wx:for="{{[1,2,3,4]}}" wx:key="index">
+          <view class="sk-avatar"></view>
+          <view class="sk-info">
+            <view class="sk-line sk-long"></view>
+            <view class="sk-line sk-short"></view>
+          </view>
+        </view>
+      </view>
+
+      <view class="member-item" wx:for="{{members}}" wx:key="id" data-index="{{index}}" bindtap="goMemberDetail">
+        <view class="member-avatar-wrap">
+          <image class="member-avatar" src="{{item.avatar_url || '/assets/icons/user.svg'}}" mode="aspectFill"></image>
+        </view>
+        <view class="member-info">
+          <view class="member-top-row">
+            <view class="member-name-wrap">
+              <text class="member-name">{{item.nickname || '用户' + item.id}}</text>
+              <text class="member-level">{{item.level_label}}</text>
+            </view>
+            <text class="member-arrow">›</text>
+          </view>
+          <view class="member-tag-row">
+            <view class="member-tag">{{item.role_name}}</view>
+            <text class="member-tag-sub">{{item.invite_code || '暂无会员码'}}</text>
+          </view>
+          <view class="member-meta-row">
+            <text class="member-meta">加入 {{item.joined_at_format}}</text>
+            <text class="member-meta">订单 {{item.order_count_format}}</text>
+            <text class="member-meta">业绩 ¥{{item.total_sales_format}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="load-footer" wx:if="{{members.length > 0}}">
+        <view class="loading-row" wx:if="{{loading}}">
+          <view class="loading-spinner"></view>
+          <text class="loading-text">加载中</text>
+        </view>
+        <text class="no-more" wx:elif="{{!hasMore}}">没有更多了</text>
+      </view>
+
+      <view class="empty-state" wx:if="{{!loading && members.length === 0}}">
+        <image src="/assets/icons/users.svg" mode="aspectFit" class="empty-icon"></image>
+        <text class="empty-title">当前没有成员</text>
+        <text class="empty-desc">从邀请海报或分享入口开始积累你的团队</text>
+        <button class="empty-invite-btn" open-type="share">立即邀请</button>
+      </view>
+    </view>
+    <view class="bottom-space"></view>
+  </scroll-view>
+
+</view>

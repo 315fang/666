@@ -1,0 +1,156 @@
+page {
+  background: #f7f1e8;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 24rpx;
+  padding-bottom: calc(36rpx + env(safe-area-inset-bottom));
+  background:
+    radial-gradient(circle at top right, rgba(157, 110, 57, 0.12), transparent 30%),
+    linear-gradient(180deg, #fbf7f0 0%, #f4ece0 100%);
+}
+
+.hero-card,
+.section-card {
+  border-radius: 30rpx;
+  background: rgba(255, 252, 247, 0.96);
+  border: 1rpx solid rgba(118, 83, 45, 0.12);
+  box-shadow: 0 18rpx 40rpx rgba(84, 52, 26, 0.08);
+}
+
+.hero-card {
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+  background: linear-gradient(145deg, #fffaf4 0%, #f4e8d9 100%);
+}
+
+.hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24rpx;
+}
+
+.hero-kicker {
+  display: block;
+  font-size: 22rpx;
+  letter-spacing: 4rpx;
+  color: #9a6d3f;
+}
+
+.hero-title {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 44rpx;
+  line-height: 1.2;
+  color: #3e2b1f;
+  font-weight: 700;
+}
+
+.hero-sub {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #8b6f56;
+}
+
+.box-entry {
+  position: relative;
+  width: 84rpx;
+  height: 84rpx;
+  border-radius: 50%;
+  background: rgba(121, 80, 45, 0.09);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.box-icon {
+  width: 40rpx;
+  height: 40rpx;
+}
+
+.box-badge {
+  position: absolute;
+  top: -4rpx;
+  right: -4rpx;
+  min-width: 34rpx;
+  height: 34rpx;
+  padding: 0 8rpx;
+  border-radius: 999rpx;
+  background: #c24f3f;
+  color: #fff;
+  font-size: 20rpx;
+  line-height: 34rpx;
+  text-align: center;
+}
+
+.empty-shell {
+  margin-top: 20rpx;
+  padding: 72rpx 36rpx;
+  text-align: center;
+}
+
+.empty-mark {
+  width: 120rpx;
+  height: 120rpx;
+  margin: 0 auto 28rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4b2d17 0%, #7b532e 100%);
+  color: #fff7ef;
+  font-size: 40rpx;
+  font-weight: 700;
+  line-height: 120rpx;
+}
+
+.empty-title {
+  display: block;
+  font-size: 36rpx;
+  color: #40291c;
+  font-weight: 700;
+}
+
+.empty-sub {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: #907761;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 36rpx;
+}
+
+.primary-btn,
+.ghost-btn {
+  flex: 1;
+  text-align: center;
+  padding: 24rpx 0;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, #4b2d17 0%, #7b532e 100%);
+  color: #fff;
+}
+
+.ghost-btn {
+  background: rgba(121, 80, 45, 0.08);
+  color: #6f4c2d;
+  border: 1rpx solid rgba(121, 80, 45, 0.14);
+}
+
+.action-hint {
+  margin-top: 28rpx;
+  text-align: center;
+  font-size: 24rpx;
+  color: #927863;
+}

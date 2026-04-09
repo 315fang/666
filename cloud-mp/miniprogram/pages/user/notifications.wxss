@@ -1,0 +1,52 @@
+/* pages/user/notifications.wxss - 暖棕统一版 */
+.notif-list { padding: 24rpx; }
+
+.notif-item {
+  display: flex;
+  background: rgba(255,255,255,0.94);
+  border-radius: 20rpx;
+  padding: 24rpx;
+  margin-bottom: 14rpx;
+  box-shadow: 0 4rpx 16rpx rgba(37, 29, 21, 0.04);
+  position: relative;
+}
+
+.notif-item.unread::before {
+  content: '';
+  position: absolute; top: 24rpx; right: 24rpx;
+  width: 14rpx; height: 14rpx;
+  background: #B76447; border-radius: 50%;
+}
+
+.notif-icon-box {
+  width: 88rpx; height: 88rpx; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin-right: 18rpx; flex-shrink: 0;
+}
+
+.notif-icon-box.upgrade-bg { background: rgba(185, 139, 88, 0.10); }
+.notif-icon-box.commission-bg { background: rgba(90, 128, 96, 0.10); }
+.notif-icon-box.stock-bg { background: rgba(160, 108, 70, 0.10); }
+.notif-icon-box.system-bg { background: rgba(154, 141, 128, 0.10); }
+.notif-icon-box.withdrawal-bg { background: rgba(106, 126, 154, 0.10); }
+.notif-icon-box.refund-bg { background: rgba(183, 100, 71, 0.10); }
+
+.notif-icon-img { width: 44rpx; height: 44rpx; opacity: 0.7; }
+
+.notif-content { flex: 1; min-width: 0; }
+
+.notif-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8rpx; }
+.notif-title { font-size: 28rpx; font-weight: 600; color: #1C1917; }
+.notif-time { font-size: 22rpx; color: #B0A396; }
+
+.notif-desc { font-size: 24rpx; color: #9A8D80; line-height: 1.5; display: block; }
+.unread .notif-desc { color: #78716C; }
+
+.empty {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 120rpx 0;
+}
+
+.empty-icon-img { width: 80rpx; height: 80rpx; margin-bottom: 20rpx; opacity: 0.25; }
+.empty-text { font-size: 26rpx; color: #B0A396; }

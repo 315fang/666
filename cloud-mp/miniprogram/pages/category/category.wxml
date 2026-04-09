@@ -1,0 +1,237 @@
+<view class="container">
+  <page-loading show="{{loading && categories.length === 0}}" text="分类加载中..."></page-loading>
+  <view class="header-shell" style="padding-top: {{headerTopPadding}}px;">
+    <view class="header-title-row">
+      <text class="header-title">商品分类</text>
+    </view>
+  </view>
+
+  <view class="main-content">
+    <scroll-view
+      class="left-sidebar"
+      scroll-y
+      show-scrollbar="{{false}}"
+      scroll-into-view="{{leftToView}}"
+      scroll-with-animation
+    >
+      <view
+        class="sidebar-item {{currentCategory === item.id ? 'active' : ''}}"
+        wx:for="{{sidebarCategories}}"
+        wx:key="id"
+        id="left-{{item.id}}"
+        bindtap="onCategoryTap"
+        data-id="{{item.id}}"
+        hover-class="press"
+      >
+        <text class="sidebar-text">{{item.name}}</text>
+      </view>
+    </scroll-view>
+
+    <view class="loading-footer" wx:if="{{loading}}">
+      <view class="spinner"></view>
+    </view>
+
+    <scroll-view
+      class="right-content"
+      scroll-y
+      scroll-into-view="{{toView}}"
+      scroll-with-animation
+      bindscroll="onRightScroll"
+      wx:if="{{!loading}}"
+    >
+      <!-- 分类页顶部广告：后台 Banner 位置「分类页」(position=category)，接口 GET /api/banners?position=category -->
+      <view class="category-banner-wrap" wx:if="{{categoryBanners.length > 0}}">
+        <swiper
+          class="category-banner-swiper"
+          indicator-dots="{{categoryBanners.length > 1}}"
+          autoplay="{{categoryBanners.length > 1}}"
+          interval="4500"
+          circular="{{categoryBanners.length > 1}}"
+          indicator-color="rgba(0,0,0,0.2)"
+          indicator-active-color="#B98B58"
+        >
+          <swiper-item wx:for="{{categoryBanners}}" wx:key="id">
+            <image
+              class="category-banner-img"
+              src="{{item.image}}"
+              mode="aspectFill"
+              bindtap="onCategoryBannerTap"
+              data-item="{{item}}"
+            />
+          </swiper-item>
+        </swiper>
+      </view>
+
+      <view class="cat-section" id="cat-__special__">
+        <view class="cat-section-header">
+          <text class="cat-section-title">拼团砍价</text>
+        </view>
+        <view class="product-list" wx:if="{{visibleProducts.__special__ && visibleProducts.__special__.length > 0}}">
+          <view
+            class="product-item"
+            wx:for="{{visibleProducts.__special__}}"
+            wx:for-item="prod"
+            wx:key="id"
+            bindtap="onOpenProductDetail"
+            data-id="{{prod.id}}"
+            hover-class="press"
+          >
+            <view class="product-img-wrap">
+              <image class="product-img" src="{{prod.image}}" mode="aspectFill" lazy-load></image>
+            </view>
+            <view class="product-info">
+              <view class="product-tag-row" wx:if="{{(prod.product_tag && prod.product_tag !== 'normal') || prod.hasGroupActivity || prod.hasSlashActivity}}">
+                <text class="ptag ptag-group" wx:if="{{prod.hasGroupActivity}}">拼团</text>
+                <text class="ptag ptag-slash" wx:if="{{prod.hasSlashActivity}}">砍价</text>
+                <text class="ptag ptag-hot" wx:if="{{prod.product_tag === 'hot'}}">爆品</text>
+                <text class="ptag ptag-discount" wx:if="{{prod.product_tag === 'discount'}}">折扣</text>
+                <text class="ptag ptag-new" wx:if="{{prod.product_tag === 'new'}}">新品</text>
+              </view>
+              <text class="product-name">{{prod.name}}</text>
+              <view class="product-meta-row">
+                <text class="product-sales" wx:if="{{prod.sales_label}}">{{prod.sales_label}}</text>
+                <text class="product-heat" wx:if="{{prod.heat_label}}">{{prod.heat_label}}</text>
+              </view>
+              <view class="product-discount-tag" wx:if="{{prod.discount_label}}">
+                <text class="discount-tag-text">{{prod.discount_label}}</text>
+              </view>
+              <view class="product-bottom">
+                <view class="price-stack">
+                  <text class="price-symbol">¥</text>
+                  <text class="product-price">{{prod.price}}</text>
+                  <text class="price-origin" wx:if="{{prod.market_price}}">¥{{prod.market_price}}</text>
+                </view>
+              </view>
+              <text class="product-points-tip" wx:if="{{prod.lowestTip}}">到手约¥{{prod.lowestTip}}</text>
+            </view>
+            <view class="add-btn" catchtap="onOpenProductDetail" data-id="{{prod.id}}">
+              <text class="add-btn-text">+</text>
+            </view>
+          </view>
+        </view>
+        <view class="cat-empty" wx:else>
+          <text class="cat-empty-text">暂无特殊商品</text>
+        </view>
+      </view>
+
+      <view class="cat-section" wx:for="{{categories}}" wx:key="id" id="cat-{{item.id}}">
+        <view class="cat-section-header">
+          <text class="cat-section-title">{{item.name}}</text>
+        </view>
+        <view class="cat-loading" wx:if="{{!loadedCategories[item.id]}}">
+          <text class="cat-loading-text">加载中...</text>
+        </view>
+        <view class="product-list" wx:elif="{{visibleProducts[item.id] && visibleProducts[item.id].length > 0}}">
+          <view
+            class="product-item"
+            wx:for="{{visibleProducts[item.id]}}"
+            wx:for-item="prod"
+            wx:key="id"
+            bindtap="onOpenProductDetail"
+            data-id="{{prod.id}}"
+            hover-class="press"
+          >
+            <!-- 正方形缩略图 -->
+            <view class="product-img-wrap">
+              <image class="product-img" src="{{prod.image}}" mode="aspectFill" lazy-load></image>
+            </view>
+            <!-- 中间信息 -->
+            <view class="product-info">
+              <view class="product-tag-row" wx:if="{{(prod.product_tag && prod.product_tag !== 'normal') || prod.hasGroupActivity || prod.hasSlashActivity}}">
+                <text class="ptag ptag-group" wx:if="{{prod.hasGroupActivity}}">拼团</text>
+                <text class="ptag ptag-slash" wx:if="{{prod.hasSlashActivity}}">砍价</text>
+                <text class="ptag ptag-hot" wx:if="{{prod.product_tag === 'hot'}}">爆品</text>
+                <text class="ptag ptag-discount" wx:if="{{prod.product_tag === 'discount'}}">折扣</text>
+                <text class="ptag ptag-new" wx:if="{{prod.product_tag === 'new'}}">新品</text>
+              </view>
+              <text class="product-name">{{prod.name}}</text>
+              <!-- 热度行：月售 + 热度标签 -->
+              <view class="product-meta-row">
+                <text class="product-sales" wx:if="{{prod.sales_label}}">{{prod.sales_label}}</text>
+                <text class="product-heat" wx:if="{{prod.heat_label}}">{{prod.heat_label}}</text>
+              </view>
+              <!-- 折扣标签 -->
+              <view class="product-discount-tag" wx:if="{{prod.discount_label}}">
+                <text class="discount-tag-text">{{prod.discount_label}}</text>
+              </view>
+              <!-- 价格行 -->
+              <view class="product-bottom">
+                <view class="price-stack">
+                  <text class="price-symbol">¥</text>
+                  <text class="product-price">{{prod.price}}</text>
+                  <text class="price-origin" wx:if="{{prod.market_price}}">¥{{prod.market_price}}</text>
+                </view>
+              </view>
+              <!-- 到手价提示 -->
+              <text class="product-points-tip" wx:if="{{prod.lowestTip}}">到手约¥{{prod.lowestTip}}</text>
+            </view>
+            <!-- 右侧加购按钮 -->
+            <view class="add-btn" catchtap="onOpenProductDetail" data-id="{{prod.id}}">
+              <text class="add-btn-text">+</text>
+            </view>
+          </view>
+        </view>
+        <view class="cat-empty" wx:else>
+          <text class="cat-empty-text">暂无商品</text>
+        </view>
+      </view>
+      <view style="height: 160rpx;"></view>
+    </scroll-view>
+  </view>
+
+  <!-- 悬浮购物袋（外卖平台模式） -->
+  <view class="floating-cart-shell" bindtap="onToggleCartPopup">
+    <view class="floating-cart-main cart-fly-target">
+      <view class="floating-cart-bag">
+        <image class="cart-bag-icon" src="/assets/icons/shopping-bag.svg" mode="aspectFit"></image>
+        <view class="cart-count-badge" wx:if="{{cartCount > 0}}">{{cartCount}}</view>
+      </view>
+      <view class="floating-cart-copy" wx:if="{{cartCount > 0}}">
+        <text class="floating-cart-total">¥{{cartTotal}}</text>
+      </view>
+    </view>
+    <view class="floating-cart-cta {{cartCount > 0 ? 'active' : ''}}" catchtap="onCheckout">去结算</view>
+  </view>
+
+  <!-- 底部购物袋弹层 -->
+  <view class="cart-popup-mask" wx:if="{{showCartPopup}}" bindtap="closeCartPopup">
+    <view class="cart-popup-panel" catchtap="stopProp">
+      <!-- 头部：全选 + 清空 -->
+      <view class="cart-popup-header">
+        <view class="cart-popup-header-left" bindtap="onPopupToggleAll">
+          <view class="cart-popup-check {{cartPopupAllSelected ? 'checked' : ''}}"></view>
+          <text class="cart-popup-header-text">全选</text>
+        </view>
+        <view class="cart-popup-header-right" bindtap="onPopupClearAll">
+          <text class="cart-popup-clear-text">清空</text>
+        </view>
+      </view>
+      <!-- 商品列表 -->
+      <scroll-view class="cart-popup-list" scroll-y>
+        <view class="cart-popup-item" wx:for="{{cartPopupItems}}" wx:key="id">
+          <view class="cart-popup-check {{item.selected ? 'checked' : ''}}" bindtap="onToggleCartPopupItem" data-index="{{index}}"></view>
+          <image class="cart-popup-image" src="{{item.image}}" mode="aspectFill"></image>
+          <view class="cart-popup-info">
+            <text class="cart-popup-name">{{item.name}}</text>
+            <text class="cart-popup-spec" wx:if="{{item.spec}}">{{item.spec}}</text>
+            <text class="cart-popup-price">¥{{item.price}}</text>
+          </view>
+          <!-- 步进器 -->
+          <view class="cart-popup-stepper">
+            <view class="cart-popup-step-btn" catchtap="onPopupMinus" data-index="{{index}}">-</view>
+            <text class="cart-popup-step-val">{{item.quantity}}</text>
+            <view class="cart-popup-step-btn" catchtap="onPopupPlus" data-index="{{index}}">+</view>
+          </view>
+        </view>
+      </scroll-view>
+      <!-- 底部 -->
+      <view class="cart-popup-footer">
+        <view class="cart-popup-total-wrap">
+          <text class="cart-popup-total-label">合计</text>
+          <text class="cart-popup-total-price">¥{{cartPopupTotal}}</text>
+        </view>
+        <view class="cart-popup-checkout" bindtap="onPopupCheckout">去结算</view>
+      </view>
+    </view>
+  </view>
+</view>

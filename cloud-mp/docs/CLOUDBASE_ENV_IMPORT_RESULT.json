@@ -1,0 +1,111 @@
+{
+  "kind": "result",
+  "generated_at": "2026-04-09T02:55:10.285Z",
+  "status": "VERIFIED",
+  "environment": {
+    "env_id": "cloud1-9gywyqe49638e46f",
+    "imported_at": "",
+    "operator": "21963",
+    "import_source": "cloud-mp/cloudbase-import",
+    "seed_summary_source": "cloud-mp/cloudbase-import/_summary.json"
+  },
+  "package_summary": [
+    {
+      "name": "admin_roles",
+      "count": 2
+    },
+    {
+      "name": "admins",
+      "count": 2
+    },
+    {
+      "name": "banners",
+      "count": 5
+    },
+    {
+      "name": "cart_items",
+      "count": 25
+    },
+    {
+      "name": "categories",
+      "count": 9
+    },
+    {
+      "name": "commissions",
+      "count": 3
+    },
+    {
+      "name": "material_groups",
+      "count": 1
+    },
+    {
+      "name": "materials",
+      "count": 52
+    },
+    {
+      "name": "orders",
+      "count": 59
+    },
+    {
+      "name": "products",
+      "count": 11
+    },
+    {
+      "name": "refunds",
+      "count": 9
+    },
+    {
+      "name": "reviews",
+      "count": 3
+    },
+    {
+      "name": "skus",
+      "count": 11
+    },
+    {
+      "name": "users",
+      "count": 167
+    },
+    {
+      "name": "withdrawals",
+      "count": 3
+    }
+  ],
+  "validation": {
+    "import_counts_match_summary": "YES (15/15)",
+    "users_sample_checked": "PENDING",
+    "products_sample_checked": "PENDING",
+    "orders_sample_checked": "PENDING",
+    "mini_program_login_smoke_test": "PENDING",
+    "product_list_smoke_test": "PENDING",
+    "order_list_smoke_test": "PENDING",
+    "admin_login_smoke_test": "PENDING"
+  },
+  "runtime_validation": {
+    "checked_at": "2026-04-09T02:54:58.672Z",
+    "env_id": "cloud1-9gywyqe49638e46f",
+    "required_collections_match": true,
+    "matched_required_collection_count": 15,
+    "required_collection_count": 15,
+    "missing_required_collections": [],
+    "functions_match": true,
+    "missing_functions": [],
+    "extra_functions": [],
+    "cloudrun_service_count": 0,
+    "blockers": [],
+    "warnings": [
+      "No CloudRun services deployed for the admin chain."
+    ]
+  },
+  "rollback": {
+    "legacy_jsonl_retained": "YES",
+    "cloudbase_seed_retained": "YES",
+    "runtime_overrides_retained": "YES"
+  },
+  "follow_up": [
+    "Switch backend read priority to CloudBase",
+    "Switch mini program runtime to CloudBase collections",
+    "Remove temporary compatibility reads",
+    "Start formal payment cutover"
+  ]
+}

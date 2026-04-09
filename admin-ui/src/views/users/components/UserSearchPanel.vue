@@ -39,7 +39,7 @@
           <el-option
             v-for="user in leaderOptions"
             :key="user.id"
-            :label="`${user.nickname || '-'} (#${user.id})`"
+            :label="`${displayUserName(user)} (#${user.id})`"
             :value="user.id"
           />
         </el-select>
@@ -56,6 +56,8 @@
 </template>
 
 <script setup>
+import { getUserNickname } from '@/utils/userDisplay'
+
 defineProps({
   searchForm: {
     type: Object,
@@ -86,4 +88,6 @@ defineProps({
     required: true
   }
 })
+
+const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 </script>

@@ -1,0 +1,5 @@
+{"id":1,"user_id":3,"balance":411.75,"frozen_balance":0,"total_recharge":1110,"total_deduct":0,"status":true,"created_at":"2026-03-22T08:20:53.000Z","updated_at":"2026-04-02T10:47:14.000Z"}
+{"id":2,"user_id":8,"balance":0,"frozen_balance":0,"total_recharge":0,"total_deduct":0,"status":true,"created_at":"2026-03-22T08:27:27.000Z","updated_at":"2026-03-22T08:27:27.000Z"}
+{"id":4,"user_id":28,"balance":0,"frozen_balance":0,"total_recharge":0,"total_deduct":0,"status":true,"created_at":"2026-03-27T09:19:29.000Z","updated_at":"2026-03-27T09:19:29.000Z"}
+{"id":5,"user_id":43,"balance":0,"frozen_balance":0,"total_recharge":0,"total_deduct":0,"status":true,"created_at":"2026-03-29T13:18:29.000Z","updated_at":"2026-03-29T13:18:29.000Z"}
+{"id":7,"user_id":22,"balance":0,"frozen_balance":0,"total_recharge":0,"total_deduct":0,"status":true,"created_at":"2026-03-30T04:14:58.000Z","updated_at":"2026-03-30T04:14:58.000Z"}

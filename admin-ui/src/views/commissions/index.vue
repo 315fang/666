@@ -77,7 +77,7 @@
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column label="收益人" width="130">
           <template #default="{ row }">
-            {{ row.user?.nickname || row.user_id }}
+            {{ displayUserName(row.user, row.user_id) }}
           </template>
         </el-table-column>
         <el-table-column label="来源订单" width="180" class-name="hide-mobile">
@@ -160,6 +160,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getCommissions, approveCommissionItem, rejectCommissionItem, batchApproveCommissions, batchRejectCommissions } from '@/api'
 import { formatDate } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
+import { getUserNickname } from '@/utils/userDisplay'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -179,6 +180,7 @@ const statsCards = ref([
 const searchForm = reactive({ status: '', user_id: '' })
 const { pagination, resetPage, applyResponse } = usePagination({ defaultLimit: 10 })
 const tableData = ref([])
+const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 
 const fetchData = async () => {
   loading.value = true

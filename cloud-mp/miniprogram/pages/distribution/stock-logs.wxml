@@ -1,0 +1,62 @@
+<!--pages/distribution/stock-logs.wxml - 代理商货款流水-->
+<view class="container">
+  <!-- 货款概览 -->
+  <view class="stock-header">
+    <view class="stock-header-info">
+      <text class="stock-header-label">当前货款余额</text>
+      <view class="stock-header-row">
+        <text class="stock-header-value">{{currentBalance}}</text>
+        <text class="stock-header-unit">元</text>
+      </view>
+    </view>
+    <view class="stock-header-btn" bindtap="onRecharge">充值</view>
+  </view>
+
+  <!-- 筛选 Tab -->
+  <view class="filter-bar">
+    <view class="filter-item {{activeFilter === 'all' ? 'active' : ''}}" data-filter="all" bindtap="onFilterChange">全部</view>
+    <view class="filter-item {{activeFilter === 'in' ? 'active' : ''}}" data-filter="in" bindtap="onFilterChange">
+      <text class="filter-dot in"></text>增加
+    </view>
+    <view class="filter-item {{activeFilter === 'out' ? 'active' : ''}}" data-filter="out" bindtap="onFilterChange">
+      <text class="filter-dot out"></text>扣减
+    </view>
+  </view>
+
+  <!-- 日志列表 -->
+  <view class="log-list">
+    <view class="log-card {{item.type}}" wx:for="{{logs}}" wx:key="id">
+      <view class="log-card-left">
+        <view class="log-type-icon {{item.type}}">
+          <image wx:if="{{item.type === 'in'}}" class="type-icon-img" src="/assets/icons/package.svg" mode="aspectFit"/>
+          <image wx:else class="type-icon-img" src="/assets/icons/truck.svg" mode="aspectFit"/>
+        </view>
+        <view class="log-card-info">
+          <text class="log-card-label">{{item.label}}</text>
+          <text class="log-card-product">{{item.product_name}}</text>
+          <text class="log-card-detail" wx:if="{{item.amount}}">变动金额: ¥{{item.amount}}</text>
+          <text class="log-card-time">{{item.time_format}}</text>
+        </view>
+      </view>
+      <view class="log-card-right">
+        <text class="log-qty {{item.type}}">{{item.type === 'in' ? '+' : '-'}}¥{{item.amount}}</text>
+        <text class="log-qty-unit">货款</text>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty-state" wx:if="{{logs.length === 0 && !loading}}">
+      <image class="empty-icon-img" src="/assets/icons/inbox.svg" mode="aspectFit"/>
+      <text class="empty-text">暂无货款流水记录</text>
+      <view class="empty-btn" bindtap="onRecharge">去充值货款</view>
+    </view>
+
+    <!-- 加载更多 -->
+    <view class="loading-tip" wx:if="{{loading}}">
+      <text>加载中...</text>
+    </view>
+    <view class="loading-tip" wx:if="{{!hasMore && logs.length > 0}}">
+      <text>没有更多了</text>
+    </view>
+  </view>
+</view>

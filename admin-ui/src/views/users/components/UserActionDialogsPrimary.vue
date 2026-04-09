@@ -26,7 +26,7 @@
 
     <el-dialog :model-value="purchaseLevelVisible" title="设置拿货等级" width="420px" @update:model-value="onPurchaseLevelVisibilityChange">
       <el-form :model="purchaseLevelForm" label-width="100px">
-        <el-form-item label="用户">{{ currentUser?.nickname }}</el-form-item>
+        <el-form-item label="用户">{{ displayUserName(currentUser, '-') }}</el-form-item>
         <el-form-item label="当前等级">
           <el-tag type="info">{{ purchaseLevelText(currentUser?.purchase_level_code) }}</el-tag>
         </el-form-item>
@@ -44,7 +44,7 @@
 
     <el-dialog :model-value="roleVisible" title="修改用户角色" width="360px" @update:model-value="onRoleVisibilityChange">
       <el-form :model="roleForm" label-width="80px">
-        <el-form-item label="用户">{{ currentUser?.nickname }}</el-form-item>
+        <el-form-item label="用户">{{ displayUserName(currentUser, '-') }}</el-form-item>
         <el-form-item label="当前角色">
           <el-tag :type="roleTagType(currentUser?.role_level)">{{ roleText(currentUser?.role_level) }}</el-tag>
         </el-form-item>
@@ -76,6 +76,8 @@
 </template>
 
 <script setup>
+import { getUserNickname } from '@/utils/userDisplay'
+
 defineProps({
   currentUser: {
     type: Object,
@@ -150,4 +152,6 @@ defineProps({
     required: true
   }
 })
+
+const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 </script>

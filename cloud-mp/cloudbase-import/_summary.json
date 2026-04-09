@@ -1,0 +1,17 @@
+{
+  "admins": 2,
+  "admin_roles": 2,
+  "banners": 5,
+  "cart_items": 25,
+  "categories": 9,
+  "commissions": 3,
+  "materials": 52,
+  "material_groups": 1,
+  "orders": 59,
+  "products": 11,
+  "refunds": 9,
+  "reviews": 3,
+  "skus": 11,
+  "users": 167,
+  "withdrawals": 3
+}

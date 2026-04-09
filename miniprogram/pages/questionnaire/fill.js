@@ -1,6 +1,7 @@
 // pages/questionnaire/fill.js - 邀请问卷填写页
 const app = getApp();
 const { get, post } = require('../../utils/request');
+const { getUserNickname, normalizeUserProfile } = require('../../utils/userProfile');
 
 Page({
     data: {
@@ -182,7 +183,7 @@ Page({
                 // ★ 触发「加入团队」品牌动画
                 if (this.brandAnimation) {
                     const inviterName = this.data.inviterInfo
-                        ? (this.data.inviterInfo.nickname || '臻选大家庭')
+                        ? (getUserNickname(normalizeUserProfile(this.data.inviterInfo)) || '臻选大家庭')
                         : '臻选大家庭';
                     this.brandAnimation.show('joinTeam', { teamName: inviterName });
                 }

@@ -1,15 +1,15 @@
 /**
  * 后台操作日志控制器
- * 
+ *
  * 记录管理员的操作行为，用于审计追溯
  */
-const { Admin, AdminLog } = require('../../../models');
+const { Admin, AdminLog, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
 
 /**
  * 记录操作日志（内部函数，供其他控制器调用）
  */
-const logAction = async (adminId, adminName, action, module, targetId, targetType, content, beforeData = null, afterData = null, ip = '', userAgent = '') => {
+const logAction = async (adminId, adminName, action, module, targetId, targetType, content, beforeData = null, afterData = null, ip = '', userAgent = '', status = 'success', errorMessage = null) => {
     try {
         await AdminLog.create({
             admin_id: adminId,
@@ -22,40 +22,46 @@ const logAction = async (adminId, adminName, action, module, targetId, targetTyp
             before_data: beforeData ? JSON.stringify(beforeData) : null,
             after_data: afterData ? JSON.stringify(afterData) : null,
             ip,
-            user_agent: userAgent
+            user_agent: userAgent,
+            status,
+            error_message: errorMessage
         });
     } catch (error) {
-        console.error('记录操作日志失败:', error);
+        console.error('记录操作日志失败:', error.message);
     }
 };
 
 /**
  * 创建记录日志中间件
+ * 自动拦截响应，根据 code 判断成功/失败后写入 AdminLog
  */
 const createLogMiddleware = (action, module, getTargetInfo) => {
     return async (req, res, next) => {
         const originalJson = res.json.bind(res);
 
         res.json = function (data) {
-            // 如果操作成功（code === 0），记录日志
-            if (data && data.code === 0) {
-                const admin = req.admin || {};
-                const targetInfo = getTargetInfo ? getTargetInfo(req, data) : {};
+            const admin = req.admin || {};
+            const targetInfo = getTargetInfo ? getTargetInfo(req, data) : {};
+            const isSuccess = data && data.code === 0;
+            const status = isSuccess ? 'success' : 'failed';
+            const errorMessage = isSuccess ? null : (data && data.message) || null;
 
-                logAction(
-                    admin.id || 0,
-                    admin.username || 'unknown',
-                    action,
-                    module,
-                    targetInfo.id || req.params?.id,
-                    targetInfo.type || module,
-                    targetInfo.content || `${action} ${module}`,
-                    targetInfo.before,
-                    targetInfo.after,
-                    req.ip || req.headers['x-forwarded-for'] || '',
-                    req.headers['user-agent'] || ''
-                );
-            }
+            logAction(
+                admin.id || 0,
+                admin.username || 'unknown',
+                action,
+                module,
+                targetInfo.id || req.params?.id,
+                targetInfo.type || module,
+                targetInfo.content || `${action} ${module}`,
+                targetInfo.before,
+                targetInfo.after,
+                req.ip || req.headers['x-forwarded-for'] || '',
+                req.headers['user-agent'] || '',
+                status,
+                errorMessage
+            );
+
             return originalJson(data);
         };
 
@@ -111,7 +117,7 @@ const getLogs = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('获取操作日志失败:', error);
+        console.error('获取操作日志失败:', error.message);
         res.status(500).json({ code: -1, message: '获取失败' });
     }
 };
@@ -169,7 +175,7 @@ const getLogStats = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('获取日志统计失败:', error);
+        console.error('获取日志统计失败:', error.message);
         res.status(500).json({ code: -1, message: '获取失败' });
     }
 };
@@ -202,7 +208,7 @@ const exportLogs = async (req, res) => {
             message: `导出 ${logs.length} 条日志`
         });
     } catch (error) {
-        console.error('导出日志失败:', error);
+        console.error('导出日志失败:', error.message);
         res.status(500).json({ code: -1, message: '导出失败' });
     }
 };

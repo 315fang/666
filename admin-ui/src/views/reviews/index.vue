@@ -32,7 +32,7 @@
         </el-table-column>
         <el-table-column label="用户" width="160">
           <template #default="{ row }">
-            <div>{{ row.user?.nickname || '用户' }}</div>
+            <div>{{ displayUserName(row.user, '用户') }}</div>
             <div class="muted">{{ row.user?.member_no || '' }}</div>
           </template>
         </el-table-column>
@@ -84,6 +84,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getReviews, updateReview } from '@/api'
+import { getUserNickname } from '@/utils/userDisplay'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -92,6 +93,7 @@ const tableData = ref([])
 const currentId = ref(null)
 const searchForm = reactive({ keyword: '', status: '' })
 const form = reactive({ content: '', reply_content: '', status: 1, is_featured: 0 })
+const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 
 const fetchReviews = async () => {
   loading.value = true

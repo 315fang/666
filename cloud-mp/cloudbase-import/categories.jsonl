@@ -1,0 +1,9 @@
+{"_id":"1","_legacy_id":1,"name":"抗衰系列","image":"","parent_id":"","level":1,"status":1,"sort_order":8,"created_at":"2026-03-18T04:59:56.000Z","updated_at":"2026-03-21T09:34:20.000Z"}
+{"_id":"2","_legacy_id":2,"name":"活动产品","image":"","parent_id":"","level":1,"status":1,"sort_order":2,"created_at":"2026-03-21T06:22:15.000Z","updated_at":"2026-03-21T09:35:27.000Z"}
+{"_id":"3","_legacy_id":3,"name":"蜜露系列","image":"","parent_id":"","level":1,"status":1,"sort_order":5,"created_at":"2026-03-21T06:43:05.000Z","updated_at":"2026-03-21T09:35:04.000Z"}
+{"_id":"4","_legacy_id":4,"name":"品牌推荐","image":"","parent_id":"","level":1,"status":1,"sort_order":9,"created_at":"2026-03-21T09:29:52.000Z","updated_at":"2026-03-21T09:34:12.000Z"}
+{"_id":"5","_legacy_id":5,"name":"淡斑亮白","image":"","parent_id":"","level":1,"status":1,"sort_order":6,"created_at":"2026-03-21T09:31:45.000Z","updated_at":"2026-03-21T09:34:57.000Z"}
+{"_id":"6","_legacy_id":6,"name":"修复系列","image":"","parent_id":"","level":1,"status":1,"sort_order":7,"created_at":"2026-03-21T09:32:15.000Z","updated_at":"2026-03-21T09:34:27.000Z"}
+{"_id":"7","_legacy_id":7,"name":"灯塔系列","image":"","parent_id":"","level":1,"status":1,"sort_order":4,"created_at":"2026-03-21T09:32:39.000Z","updated_at":"2026-03-21T09:35:12.000Z"}
+{"_id":"8","_legacy_id":8,"name":"魔方系列","image":"","parent_id":"","level":1,"status":1,"sort_order":3,"created_at":"2026-03-21T09:32:55.000Z","updated_at":"2026-03-21T09:35:20.000Z"}
+{"_id":"9","_legacy_id":9,"name":"商务系列","image":"","parent_id":"","level":1,"status":1,"sort_order":1,"created_at":"2026-03-21T09:33:12.000Z","updated_at":"2026-03-21T09:35:35.000Z"}

@@ -5,6 +5,40 @@
 const { get } = require('./request');
 const { ROLE_NAMES } = require('../config/constants');
 
+function getUserNickname(profile = {}) {
+    return profile.nickName || profile.nickname || '';
+}
+
+function getUserAvatar(profile = {}) {
+    return profile.avatarUrl || profile.avatar_url || '';
+}
+
+function normalizeUserProfile(rawProfile = {}) {
+    const profile = { ...rawProfile };
+    const nickName = getUserNickname(profile);
+    const avatarUrl = getUserAvatar(profile);
+    return {
+        ...profile,
+        nickName,
+        nickname: nickName,
+        avatarUrl,
+        avatar_url: avatarUrl
+    };
+}
+
+function syncUserProfileCache(profilePatch = {}, currentProfile = {}) {
+    const app = getApp();
+    const nextUserInfo = normalizeUserProfile({
+        ...(app?.globalData?.userInfo || currentProfile || {}),
+        ...profilePatch
+    });
+    if (app) {
+        app.globalData.userInfo = nextUserInfo;
+    }
+    wx.setStorageSync('userInfo', nextUserInfo);
+    return nextUserInfo;
+}
+
 /**
  * 从服务端拉取用户 profile，返回格式化后的 info 对象（含 role_name）。
  * 调用方负责将结果写入各自的 Page.data。
@@ -15,7 +49,7 @@ async function fetchUserProfile() {
     try {
         const res = await get('/user/profile');
         if (res.code === 0 && res.data) {
-            const info = res.data;
+            const info = normalizeUserProfile(res.data);
             const roleLevel = info.role_level || 0;
             info.role_name = info.role_name || ROLE_NAMES[roleLevel] || ROLE_NAMES[info.role || 0] || '普通用户';
             // 同步到 globalData 和缓存
@@ -54,4 +88,12 @@ function calcGrowthPercent(growth, threshold) {
     return Math.min(100, Math.round((growth / threshold) * 100));
 }
 
-module.exports = { fetchUserProfile, truncateNickname, calcGrowthPercent };
+module.exports = {
+    fetchUserProfile,
+    truncateNickname,
+    calcGrowthPercent,
+    normalizeUserProfile,
+    syncUserProfileCache,
+    getUserNickname,
+    getUserAvatar
+};

@@ -156,9 +156,9 @@
     <view class="review-list">
       <view class="review-item" wx:for="{{reviews}}" wx:key="id" wx:if="{{index < 2}}">
         <view class="review-header">
-          <image class="review-avatar" src="{{item.user.avatar_url || '/assets/icons/user.svg'}}"></image>
+          <image class="review-avatar" src="{{item.user.avatarUrl || item.user.avatar_url || '/assets/icons/user.svg'}}"></image>
           <view class="review-user-info">
-            <text class="review-name">{{item.user.nickname}}</text>
+            <text class="review-name">{{item.user.nickName || item.user.nickname}}</text>
             <view class="review-stars">
               <image wx:for="{{[1,2,3,4,5]}}" wx:for-item="star" wx:key="star" class="star-icon {{star <= item.rating ? 'filled' : ''}}" src="/assets/icons/star.svg" mode="aspectFit"></image>
             </view>

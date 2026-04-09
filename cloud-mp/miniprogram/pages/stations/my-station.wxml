@@ -1,0 +1,80 @@
+<view class="page">
+  <view class="loading" wx:if="{{loading}}">加载中...</view>
+
+  <block wx:elif="{{scope && scope.has_verify_access}}">
+    <view class="hero">
+      <text class="hero-title">你已加入门店体系</text>
+      <text class="hero-sub">仅可核销所属门店的自提订单，不能跨门店核销。</text>
+    </view>
+
+    <view class="summary-card">
+      <view class="summary-item">
+        <text class="summary-value">{{scope.station_count}}</text>
+        <text class="summary-label">所属门店数</text>
+      </view>
+      <view class="summary-item">
+        <text class="summary-value">{{scope.requires_station_selection ? '需要' : '固定'}}</text>
+        <text class="summary-label">核销门店选择</text>
+      </view>
+    </view>
+
+    <view class="section">
+      <text class="section-title">我的门店</text>
+      <view class="station-card" wx:for="{{scope.stations}}" wx:key="id">
+        <view class="station-top">
+          <text class="station-name">{{item.name}}</text>
+          <text class="station-tag">{{item.can_verify ? '可核销' : '仅门店成员'}}</text>
+        </view>
+        <text class="station-line">我的角色：{{item.my_role === 'manager' ? '店长' : '店员'}}</text>
+        <text class="station-line">{{item.province}} {{item.city}} {{item.district || ''}} {{item.address || ''}}</text>
+        <text class="station-line" wx:if="{{item.contact_phone}}">联系电话：{{item.contact_phone}}</text>
+        <text class="station-line" wx:if="{{item.business_time_start && item.business_time_end}}">营业时间：{{item.business_time_start}} - {{item.business_time_end}}</text>
+
+        <view class="staff-summary" wx:if="{{item.staff_summary && item.staff_summary.total}}">
+          <view class="staff-stats">
+            <view class="staff-stat">
+              <text class="staff-stat-value">{{item.staff_summary.total}}</text>
+              <text class="staff-stat-label">门店成员</text>
+            </view>
+            <view class="staff-stat">
+              <text class="staff-stat-value">{{item.staff_summary.verify_count}}</text>
+              <text class="staff-stat-label">可核销</text>
+            </view>
+            <view class="staff-stat">
+              <text class="staff-stat-value">{{item.staff_summary.manager_count}}</text>
+              <text class="staff-stat-label">店长</text>
+            </view>
+          </view>
+
+          <view class="staff-preview" wx:if="{{item.staff_summary.preview && item.staff_summary.preview.length}}">
+            <text class="staff-title">成员概况</text>
+            <view class="staff-member" wx:for="{{item.staff_summary.preview}}" wx:for-item="staff" wx:key="id">
+              <view class="staff-member-main">
+                <text class="staff-name">{{staff.user.nickname || ('用户' + staff.user_id)}}</text>
+                <text class="staff-role">{{staff.role === 'manager' ? '店长' : '店员'}}</text>
+                <text class="staff-verify" wx:if="{{staff.can_verify}}">可核销</text>
+              </view>
+              <text class="staff-phone" wx:if="{{staff.user.phone}}">{{staff.user.phone}}</text>
+            </view>
+            <text class="staff-more" wx:if="{{item.staff_summary.total > item.staff_summary.preview.length}}">还有 {{item.staff_summary.total - item.staff_summary.preview.length}} 位成员未展开</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section notice-section">
+      <text class="section-title">核销规则</text>
+      <text class="notice-line">1. 只有订单所选自提门店的人员才能核销。</text>
+      <text class="notice-line">2. 用户到错门店时，当前门店无法代为核销。</text>
+      <text class="notice-line">3. 订单必须已发货且未核销，才可完成核销。</text>
+    </view>
+
+    <button class="action-btn" bindtap="goPickupVerify">进入门店核销</button>
+    <button class="action-btn secondary-btn" wx:if="{{scope.station_count === 1}}" bindtap="goPendingOrders">查看待核销订单</button>
+  </block>
+
+  <view class="empty" wx:else>
+    <text class="empty-title">你暂未加入可核销门店</text>
+    <text class="empty-desc">只有被加入门店体系且属于对应自提门店的人员，才有核销权限。</text>
+  </view>
+</view>

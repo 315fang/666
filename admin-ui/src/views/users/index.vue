@@ -149,6 +149,7 @@ import UserActionDialogsPrimary from './components/UserActionDialogsPrimary.vue'
 import UserActionDialogsSecondary from './components/UserActionDialogsSecondary.vue'
 import { usePagination } from '@/composables/usePagination'
 import { formatDateShort as formatDate } from '@/utils/format'
+import { getUserNickname, normalizeUserDisplay } from '@/utils/userDisplay'
 import { useUserStore } from '@/store/user'
 
 // ===== 列表 =====
@@ -165,6 +166,8 @@ const teamSummaryData = ref(null)
 const teamSummaryRange = ref('all')
 /** 弹窗当前针对的负责人 ID（列表筛选或详情进入） */
 const teamSummaryActiveId = ref(null)
+const displayUser = (user) => normalizeUserDisplay(user || {})
+const displayUserName = (user, fallback = '-') => getUserNickname(displayUser(user), fallback)
 const selectedIds = ref([])
 const batchRole = ref(null)
 const canAdjustUserBalance = computed(() => userStore.hasPermission('user_balance_adjust'))
@@ -296,7 +299,7 @@ const goTeamMemberListFromDetail = () => {
   const u = detailUser.value
   searchForm.team_leader_id = u.id
   if (!leaderOptions.value.some((x) => x.id === u.id)) {
-    leaderOptions.value = [{ id: u.id, nickname: u.nickname || `用户#${u.id}` }, ...leaderOptions.value]
+    leaderOptions.value = [{ id: u.id, nickname: displayUserName(u, `用户#${u.id}`) }, ...leaderOptions.value]
   }
   detailVisible.value = false
   resetPage()
@@ -424,7 +427,7 @@ const openParentDetail = async () => {
   if (!pid) return
   await openDetail({
     id: pid,
-    nickname: detailUser.value.parent.nickname,
+    nickname: displayUserName(detailUser.value.parent, ''),
     member_no: '',
     avatar_url: '',
     phone: '',
@@ -595,7 +598,7 @@ const submitParent = async () => {
 // ===== 封禁/解封 =====
 const handleBan = async (row, ban) => {
   try {
-    await ElMessageBox.confirm(`确认${ban ? '封禁' : '解封'}用户「${row.nickname}」？`, '操作确认', { type: 'warning' })
+    await ElMessageBox.confirm(`确认${ban ? '封禁' : '解封'}用户「${displayUserName(row)}」？`, '操作确认', { type: 'warning' })
     await updateUserStatus(row.id, { status: ban ? 0 : 1, reason: ban ? '管理员封禁' : '管理员解封' })
     ElMessage.success(ban ? '已封禁' : '已解封')
     refreshUsers()

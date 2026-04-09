@@ -2,6 +2,8 @@
  * 邀请海报 Canvas 绘制（独立「邀请海报」页使用；团队页通过跳转进入该页）
  */
 const { getApiBaseUrl } = require('../../../config/env');
+const requestConfig = require('../../../utils/request').config;
+const { getUserAvatar, getUserNickname, normalizeUserProfile } = require('../../../utils/userProfile');
 
 const POSTER_W = 600;
 const POSTER_H = 900;
@@ -88,13 +90,17 @@ class InvitePosterCore {
 
     async fetchInviteWxaCodeToTempPath() {
         const token = wx.getStorageSync('token') || '';
-        const base = getApiBaseUrl().replace(/\/+$/, '');
-        const url = `${base}/distribution/wxacode-invite`;
+        const openid = wx.getStorageSync('openid') || '';
+        const baseUrl = (requestConfig && requestConfig.baseUrl) || getApiBaseUrl().replace(/\/+$/, '');
+        const url = `${baseUrl}/distribution/wxacode-invite`;
         const buf = await new Promise((resolve, reject) => {
             wx.request({
                 url,
                 method: 'GET',
-                header: { Authorization: token ? `Bearer ${token}` : '' },
+                header: {
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'x-openid': openid
+                },
                 responseType: 'arraybuffer',
                 success: (res) => {
                     if (res.statusCode !== 200 || !res.data) {
@@ -209,13 +215,14 @@ class InvitePosterCore {
     }
 
     async drawPosterInvite(ctx, canvas, W, H, userInfo, inviteCode, brandName) {
+        const normalizedUser = normalizeUserProfile(userInfo);
         await this.drawBaseCard(ctx, W, H, brandName);
         const nickBottom = await this.drawAvatarNick(
             ctx,
             canvas,
             W,
-            userInfo.avatar_url || '',
-            userInfo.nickname || '好友',
+            getUserAvatar(normalizedUser),
+            getUserNickname(normalizedUser) || '好友',
             150,
             { showNickname: false }
         );
@@ -268,6 +275,7 @@ class InvitePosterCore {
     }
 
     async drawPosterCreative(ctx, canvas, W, H, userInfo, inviteCode, brandName) {
+        const normalizedUser = normalizeUserProfile(userInfo);
         ctx.fillStyle = '#1a1410';
         ctx.fillRect(0, 0, W, H);
         ctx.strokeStyle = 'rgba(200,162,88,0.12)';
@@ -287,7 +295,7 @@ class InvitePosterCore {
         ctx.fillText('和好看的人，买好物', W / 2, 248);
         ctx.fillStyle = 'rgba(255,248,240,0.45)';
         ctx.font = '22px sans-serif';
-        const sub = `${(userInfo.nickname || '我').slice(0, 8)} 邀你一起逛 ${brandName}`;
+        const sub = `${(getUserNickname(normalizedUser) || '我').slice(0, 8)} 邀你一起逛 ${brandName}`;
         ctx.fillText(sub, W / 2, 300);
         const tw = 440;
         const th = 200;

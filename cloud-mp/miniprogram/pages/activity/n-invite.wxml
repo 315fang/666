@@ -1,0 +1,77 @@
+<view class="page">
+  <view class="hero" wx:if="{{!loading && inviteCard}}">
+    <view class="hero-badge">{{inviteCard.role_label}}</view>
+    <image class="avatar" src="{{inviteCard.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
+    <text class="title">{{inviteCard.invite_title}}</text>
+    <text class="subtitle">{{inviteCard.invite_subtitle}}</text>
+    <view class="meta-row">
+      <view class="meta-item">
+        <text class="meta-value">{{inviteCard.member_count || 0}}</text>
+        <text class="meta-label">现有 N1</text>
+      </view>
+      <view class="meta-item">
+        <text class="meta-value">{{inviteCard.phone_masked || '未留手机号'}}</text>
+        <text class="meta-label">联系信息</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="card loading-card" wx:if="{{loading}}">
+    <text class="loading-text">邀请信息加载中...</text>
+  </view>
+
+  <view class="card invalid-card" wx:elif="{{!inviteCard}}">
+    <text class="invalid-title">邀请暂不可用</text>
+    <text class="invalid-desc">{{invalidMessage || '该邀请可能已失效，请联系邀请人重新发送。'}}</text>
+  </view>
+
+  <block wx:elif="{{inviteCard}}">
+    <view class="card benefit-card">
+      <text class="section-title">加入后你可以获得什么</text>
+      <view class="benefit-item">
+        <text class="benefit-dot"></text>
+        <text class="benefit-text">成为 N1 代理，进入专属 N 路径体系</text>
+      </view>
+      <view class="benefit-item">
+        <text class="benefit-dot"></text>
+        <text class="benefit-text">审核通过后，由上级 N 代理承接团队与货款支持</text>
+      </view>
+      <view class="benefit-item">
+        <text class="benefit-dot"></text>
+        <text class="benefit-text">后续可继续发展团队，并具备升级 N2 的成长路径</text>
+      </view>
+    </view>
+
+    <view class="card flow-card">
+      <text class="section-title">流程说明</text>
+      <view class="flow-step">
+        <text class="step-index">1</text>
+        <text class="step-text">点击下方按钮提交加入申请</text>
+      </view>
+      <view class="flow-step">
+        <text class="step-index">2</text>
+        <text class="step-text">后台在申请审核中查看并处理</text>
+      </view>
+      <view class="flow-step">
+        <text class="step-index">3</text>
+        <text class="step-text">审核通过后，正式成为 N1 代理</text>
+      </view>
+    </view>
+
+    <view class="card action-card" wx:if="{{isOwner}}">
+      <text class="section-title">分享给好友</text>
+      <text class="action-desc" wx:if="{{canInviteN1}}">把这张小程序卡片发给好友，对方打开后即可直接提交加入 N1 的申请。</text>
+      <text class="action-desc" wx:else>当前账号暂无 N1 邀约权限，仅 N2 及以上可发起定向邀约。</text>
+      <button class="primary-btn" open-type="share" wx:if="{{canInviteN1}}">微信分享给好友</button>
+      <button class="primary-btn disabled-btn" disabled wx:else>暂无邀约权限</button>
+    </view>
+
+    <view class="card action-card" wx:else>
+      <text class="section-title">接受定向邀约</text>
+      <text class="action-desc">提交后会进入后台申请审核，由平台处理通过后正式加入该团队。</text>
+      <button class="primary-btn" bindtap="onAcceptInvite" loading="{{applyLoading}}" disabled="{{applied}}">
+        {{applied ? '已提交申请' : '接受邀请并提交申请'}}
+      </button>
+    </view>
+  </block>
+</view>

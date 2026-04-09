@@ -143,7 +143,8 @@ const orderListInclude = (buyerWhere, productWhere, addressWhere, buyerRequired,
         model: User,
         as: 'buyer',
         attributes: exportMode
-            ? ['id', 'nickname', 'openid', 'member_no', 'phone']
+            // ★ 安全修复：导出不包含 openid，使用 member_no 作为用户唯一标识
+            ? ['id', 'nickname', 'member_no', 'phone']
             : ['id', 'nickname', 'openid', 'role_level', 'member_no', 'phone', 'avatar_url'],
         where: buyerWhere,
         required: buyerRequired
@@ -442,15 +443,15 @@ const getAdminOrderLogistics = async (req, res) => {
 /**
  * ★ 修改订单金额（活动补差/错价补偿）
  * PUT /admin/api/orders/:id/amount
- * body: { new_amount: 100, reason: '说明' }
+ * body: { actual_price: 10000(分), reason: '说明' }
  */
 const adjustOrderAmount = async (req, res) => {
     try {
         const { id } = req.params;
-        const { new_amount, reason } = req.body;
+        const { actual_price, reason } = req.body;
         const adminName = req.admin?.username || 'unknown';
 
-        if (!new_amount || !reason) {
+        if (actual_price == null || !reason) {
             return res.status(400).json({ code: -1, message: '新金额和原因都是必填项' });
         }
 
@@ -465,16 +466,16 @@ const adjustOrderAmount = async (req, res) => {
         }
 
         const oldAmount = parseFloat(order.actual_price);
-        const adjustAmount = parseFloat(new_amount);
+        const adjustAmount = parseInt(actual_price, 10);
 
         if (isNaN(adjustAmount) || adjustAmount <= 0) {
-            return res.status(400).json({ code: -1, message: '金额必须为正数' });
+            return res.status(400).json({ code: -1, message: '金额必须为正整数(分)' });
         }
 
         await order.update({
             total_amount: adjustAmount,
             actual_price: adjustAmount,
-            remark: (order.remark || '') + ` [管理员${adminName}调价: ¥${oldAmount.toFixed(2)}→¥${adjustAmount.toFixed(2)} 原因:${reason}]`
+            remark: (order.remark || '') + ` [管理员${adminName}调价: ¥${(oldAmount / 100).toFixed(2)}→¥${(adjustAmount / 100).toFixed(2)} 原因:${reason}]`
         });
 
         res.json({

@@ -9,6 +9,7 @@ const ENV_TYPES = {
   STAGING: 'staging',
   PRODUCTION: 'production'
 };
+const CLOUD_ENV_ID = 'cloud1-9gywyqe49638e46f';
 
 // 当前环境配置
 // 通过微信官方 API 自动识别运行环境，无需手动修改
@@ -198,6 +199,7 @@ if (isDevelopment()) {
 module.exports = {
   ENV_TYPES,
   CURRENT_ENV,
+  CLOUD_ENV_ID,
   getConfig,
   getConfigByEnv,
   isDevelopment,

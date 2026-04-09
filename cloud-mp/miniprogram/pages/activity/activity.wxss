@@ -1,0 +1,402 @@
+/* ══════════════════════════════════
+   活动页样式 — 重构版
+   顶部：Banner 轮播（含 Banner + 常驻/限时活动）
+   下方：品牌新闻列表
+   ══════════════════════════════════ */
+
+.container {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #E3EDF4 0%, #F4F8FA 32%, #ECF5F2 100%);
+}
+
+/* ── 壁纸主题 ── */
+.container.wallpaper-warm-gold { background: linear-gradient(180deg,#F5EBD4 0%,#FCF6E8 35%,#EDE4D0 100%); }
+.container.wallpaper-mist-blue { background: linear-gradient(180deg,#D9E8F2 0%,#F0F7FB 40%,#D4E8E4 100%); }
+.container.wallpaper-dark      { background: linear-gradient(180deg,#20252D 0%,#2B313A 36%,#1E232A 100%); }
+
+/* ══ Banner 区 ══ */
+.banner-wrap {
+  position: relative;
+  width: 100%;
+  background: #1E4A6D;
+}
+
+.banner-swiper {
+  width: 100%;
+  height: 460rpx;
+  display: block;
+}
+
+.banner-swiper swiper-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.banner-img,
+.banner-fallback {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* 文字叠层 */
+.banner-overlay {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 60rpx 36rpx 36rpx;
+  background: linear-gradient(180deg, transparent 0%, rgba(20,15,10,0.72) 100%);
+}
+
+.banner-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 10rpx;
+}
+
+.banner-tag-pill {
+  display: inline-block;
+  font-size: 18rpx;
+  letter-spacing: 2rpx;
+  color: rgba(255,247,240,0.70);
+  text-transform: uppercase;
+}
+
+.banner-countdown {
+  display: inline-flex;
+  align-items: center;
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  background: rgba(0,0,0,0.38);
+}
+
+.banner-countdown-text {
+  font-size: 20rpx;
+  color: #FFF7F0;
+}
+
+.banner-title {
+  display: block;
+  font-size: 46rpx;
+  font-weight: 700;
+  color: #FFF7F0;
+  line-height: 1.2;
+  margin-bottom: 8rpx;
+}
+
+.banner-subtitle {
+  display: block;
+  font-size: 24rpx;
+  color: rgba(255,247,240,0.78);
+  line-height: 1.6;
+}
+
+/* 指示点 */
+.banner-dots {
+  position: absolute;
+  bottom: 20rpx;
+  left: 0; right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 10rpx;
+}
+
+.banner-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.35);
+  transition: all 0.3s;
+}
+
+.banner-dot.active {
+  width: 28rpx;
+  border-radius: 5rpx;
+  background: rgba(255,255,255,0.90);
+}
+
+/* ══ 主内容区 ══ */
+.content-area {
+  padding: 24rpx 24rpx 0;
+}
+
+/* ── 品牌新闻 ── */
+.news-section {
+  margin-bottom: 28rpx;
+}
+
+.news-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.news-card {
+  display: flex;
+  align-items: stretch;
+  background: #fff;
+  border-radius: 20rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 16rpx rgba(30, 74, 109, 0.08);
+  min-height: 140rpx;
+}
+
+.news-card-cover {
+  width: 200rpx;
+  flex-shrink: 0;
+  min-height: 140rpx;
+}
+
+.news-card-cover-placeholder {
+  background: linear-gradient(135deg, #E8F2F7 0%, #D4E8E4 100%);
+}
+
+.news-card-body {
+  flex: 1;
+  padding: 20rpx 16rpx;
+  min-width: 0;
+}
+
+.news-card-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #0F172A;
+  line-height: 1.35;
+  margin-bottom: 8rpx;
+}
+
+.news-card-summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 22rpx;
+  color: #64748B;
+  line-height: 1.45;
+}
+
+.news-card-arrow {
+  align-self: center;
+  padding: 0 16rpx;
+  font-size: 32rpx;
+  color: #94A3B8;
+}
+
+/* ── section 块 ── */
+.section-block {
+  margin-bottom: 28rpx;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 14rpx;
+  margin-bottom: 20rpx;
+}
+
+.section-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #201A15;
+}
+
+.section-desc {
+  font-size: 22rpx;
+  color: #A09080;
+}
+
+/* ── 子卡片容器 ── */
+.sub-cards-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+/* ── 活动卡片 ── */
+.activity-card {
+  position: relative;
+  width: 100%;
+  height: 220rpx;
+  border-radius: 24rpx;
+  overflow: hidden;
+  box-shadow: 0 8rpx 24rpx rgba(33,26,20,0.09);
+}
+
+.section-main-card {
+  margin-bottom: 16rpx;
+}
+
+.sub-card {
+  /* 子卡片使用相同高度 */
+  height: 220rpx;
+}
+
+.activity-card-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.activity-card-fallback {
+  position: absolute;
+  inset: 0;
+}
+
+/* 卡片信息叠层 */
+.activity-card-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, rgba(18,12,8,0.68) 0%, rgba(18,12,8,0.10) 100%);
+  display: flex;
+  align-items: center;
+  padding: 0 32rpx;
+  gap: 12rpx;
+}
+
+.activity-card-left {
+  flex: 1;
+}
+
+.activity-card-tag {
+  display: inline-block;
+  font-size: 18rpx;
+  letter-spacing: 2rpx;
+  color: rgba(255,247,240,0.65);
+  margin-bottom: 8rpx;
+}
+
+.activity-card-title {
+  display: block;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #FFF7F0;
+  line-height: 1.25;
+  margin-bottom: 8rpx;
+}
+
+.activity-card-sub {
+  display: block;
+  font-size: 22rpx;
+  color: rgba(255,247,240,0.70);
+  line-height: 1.5;
+}
+
+.activity-card-arrow {
+  font-size: 40rpx;
+  color: rgba(255,255,255,0.55);
+  flex-shrink: 0;
+}
+
+.activity-preview-card {
+  height: 152rpx;
+}
+
+.activity-preview-fallback {
+  background: linear-gradient(135deg, #EEF4F8 0%, #DDE8F0 100%);
+}
+
+.activity-preview-overlay {
+  background: linear-gradient(100deg, rgba(30,74,109,0.88) 0%, rgba(30,74,109,0.60) 100%);
+}
+
+.activity-preview-title {
+  font-size: 28rpx;
+  margin-bottom: 6rpx;
+}
+
+.activity-preview-sub {
+  font-size: 20rpx;
+}
+
+.card-press {
+  opacity: 0.88;
+  transform: scale(0.985);
+}
+
+/* ── 限时活动：倒计时行 ── */
+.limited-tag-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 8rpx;
+  flex-wrap: wrap;
+}
+
+.countdown-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  background: rgba(220, 80, 40, 0.82);
+  border-radius: 999rpx;
+  padding: 4rpx 14rpx;
+}
+
+.countdown-chip-icon {
+  font-size: 18rpx;
+}
+
+.countdown-chip-text {
+  font-size: 20rpx;
+  color: #FFF;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+/* 限时卡片给左边加一条暖红细边 */
+.limited-card {
+  border-left: 4rpx solid rgba(220, 80, 40, 0.7);
+}
+
+/* ── 空态 ── */
+.section-empty {
+  padding: 40rpx 0;
+  text-align: center;
+}
+
+.section-empty-text {
+  font-size: 26rpx;
+  color: #B0A396;
+}
+
+/* ── 加载失败 ── */
+.state-error {
+  padding: 60rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.state-icon-text {
+  font-size: 48rpx;
+  color: #C9B9A8;
+}
+
+.state-title {
+  font-size: 28rpx;
+  color: #8A7A6E;
+}
+
+.state-action {
+  margin-top: 8rpx;
+  padding: 16rpx 40rpx;
+  background: #2563EB;
+  color: #fff;
+  font-size: 26rpx;
+  border-radius: 999rpx;
+  border: none;
+}
+
+.state-action::after { border: none; }
+
+.safe-bottom {
+  height: env(safe-area-inset-bottom, 40rpx);
+  min-height: 40rpx;
+}

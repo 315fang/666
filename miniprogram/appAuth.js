@@ -1,6 +1,5 @@
-const { login } = require('./utils/auth');
-const { syncLocalFavoritesToCloud } = require('./utils/favoriteSync');
 const { cloneDefaults, mergeDeep } = require('./utils/miniProgramConfig');
+const { syncLocalFavoritesToCloud } = require('./utils/favoriteSync');
 
 module.exports = {
     _captureInviteFromLaunch(options) {
@@ -25,7 +24,7 @@ module.exports = {
             try {
                 value = decodeURIComponent(value);
             } catch (e) {
-                /* 保持原样 */
+                /* keep raw */
             }
             let code = '';
             const match = value.match(/^i=([23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8})$/i);
@@ -41,12 +40,11 @@ module.exports = {
         try {
             const userInfo = wx.getStorageSync('userInfo');
             const openid = wx.getStorageSync('openid');
-            const token = wx.getStorageSync('token');
 
-            if (userInfo && openid && token) {
+            if (userInfo && openid) {
                 this.globalData.userInfo = userInfo;
                 this.globalData.openid = openid;
-                this.globalData.token = token;
+                this.globalData.token = null;
                 this.globalData.isLoggedIn = true;
                 console.log('[Auth] 从缓存恢复登录状态');
             } else {
@@ -65,54 +63,51 @@ module.exports = {
             return { success: false, reason: 'privacy_denied' };
         }
         try {
-            return await this.wxLogin(false);
+            return await this.wxLogin();
         } catch (err) {
             return { success: false, reason: 'login_failed', err };
         }
     },
 
-    async wxLogin(withProfile = false) {
+    async wxLogin() {
         try {
-            const { code } = await this.promisify(wx.login)();
-            console.log('获取到 code:', code);
-
-            let profileData = {};
-            if (withProfile) {
-                console.log('跳过 getUserProfile，头像昵称请在个人中心手动补充');
-            }
-
-            const loginPayload = {
-                code,
-                ...profileData
-            };
+            let inviteCode = '';
             try {
                 const pending = wx.getStorageSync('pending_invite_code');
-                if (pending) {
-                    const memberCode = String(pending).trim().toUpperCase();
-                    loginPayload.invite_code = memberCode;
-                    loginPayload.member_no = memberCode;
-                    loginPayload.member_code = memberCode;
+                if (pending) inviteCode = String(pending).trim().toUpperCase();
+            } catch (e) {
+                /* ignore */
+            }
+
+            const res = await wx.cloud.callFunction({
+                name: 'login',
+                data: {
+                    invite_code: inviteCode || undefined
                 }
-            } catch (e) { /* ignore */ }
+            });
 
-            const result = await login(loginPayload);
-
-            if (!result.success) {
-                throw new Error(result.message || '登录失败');
+            const result = res.result;
+            if (!result || !result.success) {
+                throw new Error((result && result.message) || '登录失败');
             }
 
             try {
                 wx.removeStorageSync('pending_invite_code');
-            } catch (e) { /* ignore */ }
+            } catch (e) {
+                /* ignore */
+            }
 
-            this.globalData.userInfo = result.userInfo;
-            this.globalData.openid = result.openid;
-            this.globalData.token = result.token;
+            const userData = result.data || result.userInfo;
+            const userOpenid = (result.data && result.data.openid) || result.openid;
+
+            this.globalData.userInfo = userData;
+            this.globalData.openid = userOpenid;
+            this.globalData.token = null;
             this.globalData.isLoggedIn = true;
 
-            wx.setStorageSync('userInfo', result.userInfo);
-            wx.setStorageSync('openid', result.openid);
-            wx.setStorageSync('token', result.token);
+            wx.setStorageSync('userInfo', userData);
+            wx.setStorageSync('openid', userOpenid);
+            wx.removeStorageSync('token');
 
             if (result.is_new_user) {
                 this.globalData.isNewUser = true;
@@ -125,11 +120,11 @@ module.exports = {
                 };
             }
 
-            console.log('登录成功:', result.userInfo);
+            console.log('[Auth] 云函数登录成功:', userData);
             syncLocalFavoritesToCloud();
-            return result;
+            return { ...result, userInfo: userData, openid: userOpenid };
         } catch (err) {
-            console.error('微信登录失败:', err);
+            console.error('[Auth] 云函数登录失败:', err);
             throw err;
         }
     },

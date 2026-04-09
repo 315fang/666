@@ -4,6 +4,14 @@ const { parseImages, getFirstImage, formatMoney, processProducts } = require('..
 const { ErrorHandler, showError, showSuccess } = require('../../utils/errorHandler');
 const app = getApp();
 
+function getCartItemQty(item = {}) {
+    const qty = Number(item.qty);
+    if (Number.isFinite(qty) && qty > 0) return qty;
+    const legacyQuantity = Number(item.quantity);
+    if (Number.isFinite(legacyQuantity) && legacyQuantity > 0) return legacyQuantity;
+    return 1;
+}
+
 Page({
     data: {
         cartItems: [],
@@ -46,6 +54,8 @@ Page({
 
                 return {
                     ...item,
+                    qty: getCartItemQty(item),
+                    quantity: getCartItemQty(item),
                     selected: item.selected !== false,
                     // 获取价格：优先用后端按用户等级计算的 effective_price，
                     // 再 fallback 到工具函数计算出的等级价
@@ -129,9 +139,10 @@ Page({
         let totalCount = 0;
 
         cartItems.forEach(item => {
+            const qty = getCartItemQty(item);
             if (item.selected) {
-                totalPriceFen += Math.round(item.price * 100) * item.quantity;
-                totalCount += item.quantity;
+                totalPriceFen += Math.round(item.price * 100) * qty;
+                totalCount += qty;
             }
         });
 
@@ -181,7 +192,7 @@ Page({
     async onQuantityChange(e) {
         const { index, type } = e.currentTarget.dataset;
         const item = this.data.cartItems[index];
-        let newQuantity = item.quantity;
+        let newQuantity = getCartItemQty(item);
 
         if (type === 'minus') {
             newQuantity = Math.max(1, newQuantity - 1);
@@ -195,11 +206,14 @@ Page({
             return;
         }
 
-        if (newQuantity === item.quantity) return;
+        if (newQuantity === getCartItemQty(item)) return;
 
         // 乐观更新：先改 UI，请求失败再回滚
-        const oldQuantity = item.quantity;
-        this.setData({ [`cartItems[${index}].quantity`]: newQuantity });
+        const oldQuantity = getCartItemQty(item);
+        this.setData({
+            [`cartItems[${index}].qty`]: newQuantity,
+            [`cartItems[${index}].quantity`]: newQuantity
+        });
         this.calculateTotal();
 
         try {
@@ -214,7 +228,10 @@ Page({
             setTimeout(() => { this.setData({ priceAnim: false, countAnim: false }); }, 400);
         } catch (err) {
             // 请求失败：回滚数量和总价
-            this.setData({ [`cartItems[${index}].quantity`]: oldQuantity });
+            this.setData({
+                [`cartItems[${index}].qty`]: oldQuantity,
+                [`cartItems[${index}].quantity`]: oldQuantity
+            });
             this.calculateTotal();
             wx.showToast({ title: '更新数量失败，请重试', icon: 'none' });
             console.error('更新数量失败:', err);

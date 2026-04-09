@@ -257,7 +257,7 @@ const prizeDialogVisible = ref(false)
 const prizeIsEdit = ref(false)
 const prizeFormRef = ref()
 const prizeForm = reactive({
-  id: null, name: '', image_url: '', cost_points: 100,
+  id: null, name: '', image_url: '', file_id: '', cost_points: 100,
   probability: 10, stock: -1, type: 'miss', prize_value: 0,
   sort_order: 0, is_active: 1,
   display_emoji: '🍀', badge_text: '好运签',
@@ -301,7 +301,8 @@ const openPrizeDialog = (row = null) => {
   prizeIsEdit.value = !!row
   if (row) {
     Object.assign(prizeForm, {
-      id: row.id, name: row.name, image_url: row.image_url || '',
+      id: row.id, name: row.name, image_url: row.image_url || row.image || '',
+      file_id: row.file_id || '',
       cost_points: row.cost_points, probability: parseFloat(row.probability),
       stock: row.stock, type: row.type, prize_value: parseFloat(row.prize_value || 0),
       sort_order: row.sort_order, is_active: row.is_active,
@@ -313,7 +314,7 @@ const openPrizeDialog = (row = null) => {
   } else {
     const preset = getPrizeStylePreset('miss')
     Object.assign(prizeForm, {
-      id: null, name: '', image_url: '', cost_points: 100,
+      id: null, name: '', image_url: '', file_id: '', cost_points: 100,
       probability: 0, stock: -1, type: 'miss', prize_value: 0,
       sort_order: 0, is_active: 1,
       display_emoji: preset.display_emoji,
@@ -361,7 +362,8 @@ const deletePrize = async (row) => {
 const handlePrizeUpload = async ({ file }) => {
   try {
     const data = await uploadFile(file)
-    prizeForm.image_url = data.url
+    prizeForm.file_id = data.file_id || ''
+    prizeForm.image_url = data.url || data.image_url || ''
   } catch (e) { console.error(e) }
 }
 

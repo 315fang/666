@@ -1,0 +1,105 @@
+/* pages/privacy/privacy.wxss */
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #F5F2EE;
+}
+
+.header {
+  background: #2E2218;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  height: 88rpx;
+  padding: 0 16rpx;
+}
+
+.back-btn {
+  width: 72rpx;
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-icon {
+  width: 36rpx;
+  height: 36rpx;
+  opacity: 0.85;
+}
+
+.title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #FFF8F0;
+  flex: 1;
+  text-align: center;
+  margin-right: 72rpx;
+}
+
+/* 内容滚动区 */
+.content {
+  flex: 1;
+  background: #F5F2EE;
+}
+
+/* 日期 */
+.meta-row {
+  padding: 24rpx 32rpx 0;
+}
+.update-time {
+  font-size: 24rpx;
+  color: #A09080;
+}
+
+/* 正文 section */
+.section {
+  margin: 20rpx 24rpx 0;
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 28rpx 28rpx 24rpx;
+}
+
+.section-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1E1710;
+  margin-bottom: 14rpx;
+}
+
+.section-body {
+  display: block;
+  font-size: 26rpx;
+  color: #57534E;
+  line-height: 1.85;
+}
+
+/* 底部官方指引入口 */
+.official-entry {
+  margin: 20rpx 24rpx 0;
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.official-entry-text {
+  font-size: 28rpx;
+  color: #1E1710;
+}
+.official-entry-arrow {
+  font-size: 32rpx;
+  color: #C8BCB0;
+}
+
+.footer-space {
+  height: 80rpx;
+}

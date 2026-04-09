@@ -1,0 +1,165 @@
+<!-- pages/points/index.wxml -->
+<view class="container">
+
+  <!-- 导航栏 -->
+  <view class="nav-bar" style="padding-top: {{navTopPadding}}px;">
+    <view class="nav-inner" style="height: {{navBarHeight}}px;">
+      <view class="nav-back" bindtap="onBackTap">
+        <image src="/assets/icons/arrow-left.svg" mode="aspectFit" class="back-icon"></image>
+      </view>
+      <text class="nav-title">我的积分</text>
+    </view>
+  </view>
+
+  <!-- 主内容区 -->
+  <scroll-view scroll-y class="main-scroll">
+
+    <!-- 积分资产卡 -->
+    <view class="asset-card">
+      <view class="asset-card-inner">
+        <view class="asset-level-row">
+          <text class="asset-level-name">{{account.level_name || '普通用户'}}</text>
+          <view class="asset-streak" wx:if="{{account.streak > 0}}">
+            <text class="asset-streak-text">连签 {{account.streak}} 天</text>
+          </view>
+        </view>
+        <view class="asset-balance-row">
+          <text class="asset-balance-num">{{account.total_points || 0}}</text>
+          <text class="asset-balance-unit">累计积分</text>
+        </view>
+        <view class="asset-balance-sub" wx:if="{{account.balance_points != null}}">
+          <text class="asset-balance-sub-text">可用 {{account.balance_points || 0}} 积分</text>
+        </view>
+        <!-- 成长值进度 -->
+        <view class="asset-progress-wrap" wx:if="{{account.next_level && (account.growth_needed > 0 || account.next_level_threshold)}}">
+          <view class="asset-progress-label">
+            <text class="asset-progress-text">成长值 {{account.growth_value || 0}}</text>
+            <text class="asset-progress-text">距 {{account.next_level_name || '下一等级'}} 还差 {{account.growth_needed || 0}} 成长值</text>
+          </view>
+          <view class="asset-progress-bar">
+            <view class="asset-progress-fill" style="width: {{account.growth_progress || 0}}%"></view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 每日签到卡 -->
+    <view class="checkin-card">
+      <view class="checkin-left">
+        <view class="checkin-title-row">
+          <text class="checkin-title">每日签到</text>
+          <text class="checkin-tip-link" catchtap="onPointsTipTap">说明</text>
+        </view>
+        <text class="checkin-desc">签到可获得积分奖励</text>
+      </view>
+      <view class="checkin-btn {{account.today_signed ? 'signed' : ''}}" bindtap="onCheckin">
+        <text class="checkin-btn-text">{{checkinLoading ? '签到中' : (account.today_signed ? '已签到' : '签 到')}}</text>
+      </view>
+    </view>
+
+    <!-- Tab 选项卡 -->
+    <view class="tab-bar">
+      <view class="tab-item {{activeTab === 'tasks' ? 'active' : ''}}" bindtap="switchTab" data-tab="tasks">
+        <text class="tab-text">积分任务</text>
+      </view>
+      <view class="tab-item {{activeTab === 'logs' ? 'active' : ''}}" bindtap="switchTab" data-tab="logs">
+        <text class="tab-text">积分流水</text>
+      </view>
+      <view class="tab-item {{activeTab === 'redeem' ? 'active' : ''}}" bindtap="switchTab" data-tab="redeem">
+        <text class="tab-text">积分兑换</text>
+      </view>
+    </view>
+
+    <!-- 任务列表 -->
+    <view class="tab-panel" wx:if="{{activeTab === 'tasks'}}">
+      <view class="benefit-card" wx:if="{{effectiveBenefits.length}}">
+        <text class="benefit-title">当前已生效权益</text>
+        <view class="benefit-item" wx:for="{{effectiveBenefits}}" wx:key="*this">
+          <text class="benefit-dot">•</text>
+          <text class="benefit-text">{{item}}</text>
+        </view>
+      </view>
+      <view class="task-item" wx:for="{{tasks}}" wx:key="id">
+        <view class="task-left">
+          <view class="task-icon-wrap">
+            <image src="/assets/icons/star.svg" mode="aspectFit" class="task-icon"></image>
+          </view>
+          <view class="task-info">
+            <text class="task-name">{{item.name}}</text>
+            <text class="task-desc">{{item.description}}</text>
+            <view class="task-progress-bar" wx:if="{{item.max_progress > 1}}">
+              <view class="task-progress-fill" style="width: {{(item.progress || 0) / item.max_progress * 100}}%"></view>
+            </view>
+          </view>
+        </view>
+        <view class="task-right">
+          <text class="task-reward" wx:if="{{item.show_reward}}">+{{item.points_reward}}</text>
+          <text class="task-muted" wx:else>说明项</text>
+          <text class="task-done" wx:if="{{item.completed}}">已完成</text>
+          <text class="task-progress-text" wx:elif="{{item.max_progress > 1}}">{{item.progress || 0}}/{{item.max_progress}}</text>
+        </view>
+      </view>
+      <view class="list-empty" wx:if="{{tasks.length === 0 && !loading}}">
+        <text class="list-empty-text">暂无可用任务</text>
+      </view>
+    </view>
+
+    <!-- 积分流水 -->
+    <view class="tab-panel" wx:if="{{activeTab === 'logs'}}">
+      <view class="log-item" wx:for="{{logs}}" wx:key="id">
+        <view class="log-left">
+          <text class="log-remark">{{item.remark || item.type}}</text>
+          <text class="log-time">{{item.created_at}}</text>
+        </view>
+        <view class="log-right">
+          <text class="log-amount {{item.amount > 0 ? 'positive' : 'negative'}}">{{item.amount > 0 ? '+' : ''}}{{item.amount}}</text>
+          <text class="log-balance">余额 {{item.balance_after}}</text>
+        </view>
+      </view>
+      <view class="list-empty" wx:if="{{logs.length === 0 && !loading}}">
+        <text class="list-empty-text">暂无积分记录</text>
+      </view>
+    </view>
+
+    <!-- 积分兑换：抽奖 + 活动页专享/限时商品 -->
+    <view class="tab-panel redeem-panel" wx:if="{{activeTab === 'redeem'}}">
+      <view class="redeem-hint">使用积分参与抽奖，或在活动页购买积分/现金专享商品</view>
+      <view class="redeem-card redeem-card-lottery" bindtap="onOpenLottery" hover-class="redeem-card-hover">
+        <view class="redeem-card-icon">🎰</view>
+        <view class="redeem-card-body">
+          <text class="redeem-card-title">积分抽奖</text>
+          <text class="redeem-card-desc">消耗积分转动奖池，好礼兑不停</text>
+        </view>
+        <text class="redeem-card-arrow">›</text>
+      </view>
+      <view class="redeem-card redeem-card-activity" bindtap="onOpenActivityMall" hover-class="redeem-card-hover">
+        <view class="redeem-card-icon">🎁</view>
+        <view class="redeem-card-body">
+          <text class="redeem-card-title">活动商品</text>
+          <text class="redeem-card-desc">限时活动专享价，支持积分抵扣购买</text>
+        </view>
+        <text class="redeem-card-arrow">›</text>
+      </view>
+    </view>
+
+    <!-- 骨架屏 -->
+    <view class="skeleton-wrap" wx:if="{{loading}}">
+      <view class="sk-task" wx:for="{{[1,2,3,4]}}" wx:key="index">
+        <view class="sk-icon"></view>
+        <view class="sk-info">
+          <view class="sk-line sk-long"></view>
+          <view class="sk-line sk-short"></view>
+        </view>
+      </view>
+    </view>
+
+    <view style="height: 60rpx;"></view>
+  </scroll-view>
+
+  <light-tip-modal
+    show="{{lightTipShow}}"
+    title="{{lightTipTitle}}"
+    content="{{lightTipContent}}"
+    bind:close="onLightTipClose"
+  />
+</view>

@@ -33,9 +33,9 @@
       <el-table-column label="头像/昵称" min-width="160">
         <template #default="{ row }">
           <div class="cell-info">
-            <el-avatar :src="row.avatar_url" :size="32" />
+            <el-avatar :src="displayUserAvatar(row)" :size="32" />
             <div>
-              <div class="cell-info__title">{{ row.nickname || '-' }}</div>
+              <div class="cell-info__title">{{ displayUserName(row) }}</div>
               <div class="member-no">{{ row.member_no || '未生成' }}</div>
             </div>
           </div>
@@ -129,6 +129,7 @@
 <script setup>
 import { computed } from 'vue'
 import { Refresh, ArrowDown } from '@element-plus/icons-vue'
+import { getUserAvatar, getUserNickname } from '@/utils/userDisplay'
 
 const props = defineProps({
   tableData: {
@@ -225,4 +226,7 @@ const batchRoleModel = computed({
   get: () => props.batchRole,
   set: (value) => props.onBatchRoleChange(value)
 })
+
+const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
+const displayUserAvatar = (user) => getUserAvatar(user || {})
 </script>

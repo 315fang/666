@@ -1,0 +1,214 @@
+<!-- 加载骨架屏（画廊区与正式页同 padding + 1:1，避免高度跳变） -->
+<view class="skeleton-container" wx:if="{{pageLoading}}">
+  <view class="sk-gallery-section">
+    <view class="gallery-aspect-wrap">
+      <view class="gallery-aspect-inner">
+        <view class="sk-gallery"></view>
+      </view>
+    </view>
+  </view>
+  <view class="sk-info-card">
+    <view class="sk-price-line"></view>
+    <view class="sk-title-line sk-long"></view>
+    <view class="sk-title-line sk-short"></view>
+  </view>
+  <view class="sk-info-card" style="margin-top:16rpx;">
+    <view class="sk-title-line sk-long"></view>
+    <view class="sk-title-line sk-short"></view>
+    <view class="sk-title-line sk-tiny"></view>
+  </view>
+</view>
+
+<!-- 真实内容 -->
+<view class="container" wx:if="{{!pageLoading}}">
+  <!-- 自定义导航栏 -->
+  <view class="detail-nav" style="padding-top: {{navTopPadding}}px;">
+    <view class="detail-nav-inner" style="height: {{navBarHeight}}px;">
+      <view class="detail-nav-back" bindtap="onBackTap">
+        <text class="detail-nav-back-chevron">‹</text>
+        <text class="detail-nav-back-text">返回</text>
+      </view>
+      <text class="detail-nav-title">商品详情</text>
+      <!-- 右侧留白给微信胶囊，收藏放在底部栏 -->
+    </view>
+  </view>
+
+  <view class="gallery-section">
+    <view class="gallery-aspect-wrap">
+      <view class="gallery-aspect-inner">
+        <swiper class="gallery-swiper" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}" indicator-color="rgba(250,250,249,0.35)" indicator-active-color="#E2C4A0" bindchange="onImageChange">
+          <swiper-item class="gallery-slide" wx:for="{{product.images}}" wx:key="*this">
+            <view class="gallery-frame">
+              <image src="{{item}}" mode="aspectFill" class="gallery-image" bindtap="onPreviewImage" data-index="{{index}}"></image>
+            </view>
+          </swiper-item>
+        </swiper>
+      </view>
+    </view>
+    <view class="gallery-copy">
+      <text class="gallery-counter">{{currentImage + 1}} / {{imageCount}}</text>
+    </view>
+  </view>
+
+  <view class="product-info-card">
+    <view class="summary-top-row">
+      <view class="summary-price-wrap">
+        <view class="price-section">
+          <view class="price-main">
+            <text class="price-symbol">¥</text>
+            <text class="price-value">{{currentPrice || product.displayPrice || product.price}}</text>
+          </view>
+          <view class="price-origin" wx:if="{{product.market_price}}">¥{{product.market_price}}</view>
+          <view class="price-discount" wx:if="{{product.market_price}}">{{discount}}折</view>
+        </view>
+      </view>
+
+      <view class="qty-inline-panel">
+        <text class="qty-inline-label">选购数量</text>
+        <view class="stepper {{isOutOfStock ? 'stepper-disabled' : ''}}">
+          <view class="stepper-btn {{quantity <= 1 || isOutOfStock ? 'disabled' : ''}}" bindtap="onMinus">
+            <image class="icon-xs" src="/assets/icons/minus.svg" mode="aspectFit"></image>
+          </view>
+          <input class="stepper-input" type="number" value="{{quantity}}" bindinput="onQtyInput" disabled="{{isOutOfStock}}" />
+          <view class="stepper-btn {{isOutOfStock ? 'disabled' : ''}}" bindtap="onPlus">
+            <image class="icon-xs" src="/assets/icons/plus.svg" mode="aspectFit"></image>
+          </view>
+        </view>
+        <text class="stock-text stock-out" wx:if="{{isOutOfStock}}">已售罄</text>
+        <text class="stock-text" wx:else>库存 {{currentStock}} 件</text>
+      </view>
+    </view>
+
+    <view class="product-title-area">
+      <view class="product-tags" wx:if="{{product.product_tag && product.product_tag !== 'normal'}}">
+        <text class="tag-hot" wx:if="{{product.product_tag === 'hot'}}">爆品</text>
+        <text class="tag-discount" wx:if="{{product.product_tag === 'discount'}}">折扣</text>
+        <text class="tag-new" wx:if="{{product.product_tag === 'new'}}">新品</text>
+      </view>
+      <view class="product-title">{{product.name}}</view>
+      <text class="product-subtitle">{{product.description || '围绕肤感、功效与礼赠体验进行精心陈列。'}}</text>
+    </view>
+
+    <view class="purchase-mode-card" wx:if="{{availablePurchaseModes.length > 1}}">
+      <view class="purchase-mode-head">
+        <text class="purchase-mode-title">购买方式</text>
+        <text class="purchase-mode-hint">{{purchaseModeHint}}</text>
+      </view>
+      <view class="purchase-mode-options">
+        <view
+          class="purchase-mode-option {{purchaseMode === item.key ? 'active' : ''}}"
+          wx:for="{{availablePurchaseModes}}"
+          wx:key="key"
+          data-mode="{{item.key}}"
+          bindtap="onPurchaseModeChange"
+        >
+          <text class="purchase-mode-option-label">{{item.label}}</text>
+          <text class="purchase-mode-option-desc">{{item.hint}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="embedded-section" wx:if="{{product.specs && product.specs.length > 0}}">
+      <view class="embedded-section-head">
+        <text class="embedded-title">规格选择</text>
+        <text class="selected-spec-text">{{selectedSkuText || '默认规格'}}</text>
+      </view>
+      <view class="spec-group" wx:for="{{product.specs}}" wx:key="name">
+        <view class="spec-title">{{item.name}}</view>
+        <view class="spec-options">
+          <view class="spec-option {{selectedSpecs[item.name] === val ? 'active' : ''}}" wx:for="{{item.values}}" wx:for-item="val" wx:key="*this" bindtap="onSpecSelect" data-key="{{item.name}}" data-val="{{val}}">{{val}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="service-note-card" wx:if="{{isAgent && commission > 0}}">
+      <view class="service-note-copy">
+        <text class="service-note-title">品牌挚友礼遇</text>
+        <text class="service-note-desc">分享后若产生成交，预计可获得 ¥{{commission}} 的服务礼遇。</text>
+      </view>
+      <button class="service-note-btn" open-type="share">立即分享</button>
+    </view>
+  </view>
+
+  <view class="section-card detail-section">
+    <view class="section-title-row compact-row">
+      <text class="section-title">商品详情</text>
+    </view>
+    <view class="detail-images" wx:if="{{detailImageList.length > 0}}">
+      <image class="detail-image" wx:for="{{detailImageList}}" wx:key="*this" src="{{item}}" mode="widthFix" bindtap="onPreviewDetailImage" data-index="{{index}}"></image>
+    </view>
+    <view class="detail-content" wx:if="{{hasRichDetail}}">
+      <rich-text nodes="{{product.detail_html || '暂无详情'}}"></rich-text>
+    </view>
+    <text class="detail-empty" wx:if="{{!detailImageList.length && !hasRichDetail}}">暂无详情</text>
+  </view>
+
+  <view class="section-card reviews-section" wx:if="{{reviews.length > 0}}">
+    <view class="section-title-row compact-row">
+      <view class="review-title-wrap">
+        <text class="section-title">用户评价</text>
+        <text class="review-count">({{reviewTotal}})</text>
+      </view>
+    </view>
+    <view class="review-tags" wx:if="{{reviewTags.length > 0}}">
+      <view class="review-tag" wx:for="{{reviewTags}}" wx:key="*this">{{item}}</view>
+    </view>
+    <view class="review-list">
+      <view class="review-item" wx:for="{{reviews}}" wx:key="id" wx:if="{{index < 2}}">
+        <view class="review-header">
+          <image class="review-avatar" src="{{item.user.avatar_url || '/assets/icons/user.svg'}}"></image>
+          <view class="review-user-info">
+            <text class="review-name">{{item.user.nickname}}</text>
+            <view class="review-stars">
+              <image wx:for="{{[1,2,3,4,5]}}" wx:for-item="star" wx:key="star" class="star-icon {{star <= item.rating ? 'filled' : ''}}" src="/assets/icons/star.svg" mode="aspectFit"></image>
+            </view>
+          </view>
+          <text class="review-date">{{item.created_at}}</text>
+        </view>
+        <text class="review-content">{{item.content}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="section-card" wx:if="{{servicePledges.length > 0}}">
+    <view class="section-title-row compact-row">
+      <text class="section-title">购物保障</text>
+    </view>
+    <view class="tags-row">
+      <view class="tag {{item.tagClass}}" wx:for="{{servicePledges}}" wx:key="id">
+        <image class="tag-icon" src="{{item.icon}}" mode="aspectFit"></image>
+        <text>{{item.title}}</text>
+      </view>
+    </view>
+    <view class="pledges-detail-card">
+      <view class="pledge-detail-block" wx:for="{{servicePledges}}" wx:key="id">
+        <text class="pledge-detail-name">{{item.title}}</text>
+        <text class="pledge-detail-copy" wx:if="{{item.desc}}">{{item.desc}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="bottom-safe-area"></view>
+
+  <view class="action-bar">
+    <view class="action-favorite" bindtap="onToggleFavorite">
+      <image
+        class="action-favorite-icon"
+        src="{{isFavorite ? '/assets/icons/heart-filled.svg' : '/assets/icons/heart.svg'}}"
+        mode="aspectFit"
+      />
+      <text class="action-favorite-text">收藏</text>
+    </view>
+    <view class="action-buttons">
+      <view class="action-btn action-btn-cart {{isOutOfStock ? 'btn-disabled' : ''}}" bindtap="onLeftActionTap">
+        <text>{{actionLeftLabel}}</text>
+      </view>
+      <view class="action-btn action-btn-buy {{purchaseMode === 'group' ? 'action-btn-group' : ''}} {{purchaseMode === 'slash' ? 'action-btn-slash' : ''}} {{isOutOfStock ? 'btn-disabled' : ''}}" bindtap="onRightActionTap">
+        <text>{{isOutOfStock ? '暂时缺货' : actionRightLabel}}</text>
+      </view>
+    </view>
+  </view>
+
+  <brand-animation id="brandAnimation" fly-image="{{product.images && product.images[0]}}"></brand-animation>
+</view>
+<!-- /container -->

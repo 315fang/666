@@ -277,53 +277,55 @@ async function handleWalletRechargeNotify(orderNo, paidFee) {
 }
 
 async function handleUpgradePaymentNotify(orderNo, paidFee) {
+    const t = await sequelize.transaction();
     try {
-        const app = await UpgradeApplication.findOne({ where: { payment_no: orderNo } });
+        // 锁住升级申请记录，防止微信回调并发重复处理
+        const app = await UpgradeApplication.findOne({
+            where: { payment_no: orderNo },
+            transaction: t,
+            lock: t.LOCK.UPDATE
+        });
         if (!app || app.status !== 'pending_payment') {
             logError('PAYMENT', `[WechatNotify] 升级单已处理: ${orderNo}`, { orderNo });
-            return buildNotifyResponse(true);
+            return rollbackAndAcknowledge(t);
         }
 
         const expectedFee = Math.round(parseFloat(app.amount) * 100);
         if (Math.abs(paidFee - expectedFee) > 1) {
             logError('PAYMENT', '[WechatNotify] 升级缴费金额不一致', { expectedFee, paidFee, orderNo });
-            return buildNotifyResponse(false, 'amount mismatch', 400);
+            return rollbackAndRespond(t, 'amount mismatch', 400);
         }
 
-        const t = await sequelize.transaction();
-        try {
-            app.status = 'pending_review';
-            await app.save({ transaction: t });
+        app.status = 'pending_review';
+        await app.save({ transaction: t });
 
-            await AgentWalletService.recharge({
-                userId: app.user_id,
-                amount: parseFloat(app.amount),
-                refType: 'upgrade_payment',
-                refId: String(app.id),
-                remark: `升级缴费 ¥${app.amount}`
-            }, t);
+        await AgentWalletService.recharge({
+            userId: app.user_id,
+            amount: parseFloat(app.amount),
+            refType: 'upgrade_payment',
+            refId: String(app.id),
+            remark: `升级缴费 ¥${app.amount}`
+        }, t);
 
-            await t.commit();
-            logOrder('[WechatNotify] 升级缴费成功', { orderNo, amount: app.amount });
+        await t.commit();
+        logOrder('[WechatNotify] 升级缴费成功', { orderNo, amount: app.amount });
 
-            sendNotification(
-                app.user_id,
-                '升级缴费成功',
-                `您的 ¥${app.amount} 已充入货款钱包，升级申请正在等待审核。`,
-                'upgrade',
-                String(app.id)
-            ).catch(() => {});
+        sendNotification(
+            app.user_id,
+            '升级缴费成功',
+            `您的 ¥${app.amount} 已充入货款钱包，升级申请正在等待审核。`,
+            'upgrade',
+            String(app.id)
+        ).catch(() => {});
 
-            return buildNotifyResponse(true);
-        } catch (innerErr) {
-            if (!t.finished) await t.rollback();
-            throw innerErr;
-        }
+        return buildNotifyResponse(true);
     } catch (err) {
+        if (!t.finished) await t.rollback();
         logError('PAYMENT', '[WechatNotify] 升级缴费处理失败', { error: err.message });
         return buildNotifyResponse(false, 'server error', 500);
     }
 }
+
 
 async function handleOrderWechatPayNotify(orderNo, paidFee, notifyData) {
     const t = await sequelize.transaction();

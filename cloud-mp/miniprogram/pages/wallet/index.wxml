@@ -1,0 +1,106 @@
+<!-- pages/wallet/index.wxml -->
+<view class="container">
+  <scroll-view class="main-scroll" scroll-y>
+
+    <!-- 余额卡 -->
+    <view class="balance-card">
+      <view class="balance-card-inner">
+        <text class="balance-label">可提现余额（元）</text>
+        <view class="balance-amount-row">
+          <text class="balance-symbol">¥</text>
+          <text class="balance-amount">{{balance}}</text>
+        </view>
+        <view class="balance-action-row">
+          <view class="withdraw-btn" bindtap="onWithdrawTap">
+            <text class="withdraw-btn-text">立即提现</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 佣金概览 -->
+    <view class="section-card" wx:if="{{commissionOverview}}">
+      <text class="section-title">佣金概览</text>
+      <view class="overview-grid">
+        <view class="overview-item">
+          <text class="overview-val">¥{{commissionOverview.total}}</text>
+          <text class="overview-key">累计佣金</text>
+        </view>
+        <view class="overview-item">
+          <text class="overview-val overview-frozen">¥{{commissionOverview.frozen}}</text>
+          <text class="overview-key">冻结中</text>
+        </view>
+        <view class="overview-item">
+          <text class="overview-val overview-pending">¥{{commissionOverview.pendingApproval}}</text>
+          <text class="overview-key">待审核</text>
+        </view>
+        <view class="overview-item">
+          <text class="overview-val overview-settled">¥{{commissionOverview.approved}}</text>
+          <text class="overview-key">待结算</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 佣金明细 -->
+    <view class="section-card">
+      <text class="section-title">佣金明细</text>
+
+      <!-- 骨架屏 -->
+      <view class="skeleton-wrap" wx:if="{{logs.length === 0}}">
+        <view class="sk-log" wx:for="{{[1,2,3,4,5]}}" wx:key="index">
+          <view class="sk-info">
+            <view class="sk-line sk-long"></view>
+            <view class="sk-line sk-short"></view>
+          </view>
+          <view class="sk-amount"></view>
+        </view>
+      </view>
+
+      <!-- 流水列表 -->
+      <view class="log-item" wx:for="{{logs}}" wx:key="id">
+        <view class="log-left">
+          <view class="log-type-row">
+            <text class="log-type">{{item.typeName}}</text>
+            <view class="log-status-badge log-status-{{item.status}}">{{item.statusText}}</view>
+          </view>
+          <text class="log-time">{{item.created_at}}</text>
+          <text class="log-deadline" wx:if="{{item.refund_deadline}}">冻结至 {{item.refund_deadline}}</text>
+        </view>
+        <view class="log-right">
+          <text class="log-amount log-positive" wx:if="{{item.type !== 'withdrawal'}}">+¥{{item.amount}}</text>
+          <text class="log-amount log-negative" wx:else>-¥{{item.amount}}</text>
+        </view>
+      </view>
+
+      <!-- 空状态 -->
+      <view class="empty-state" wx:if="{{logs.length === 0}}">
+        <text class="empty-text">暂无佣金明细</text>
+        <text class="empty-sub">分享商品或发展团队即可获得佣金</text>
+      </view>
+    </view>
+
+    <view style="height: 80rpx;"></view>
+  </scroll-view>
+
+  <!-- 提现弹窗 -->
+  <view class="popup-mask" wx:if="{{showWithdraw}}" bindtap="hideWithdraw">
+    <view class="popup-panel" catchtap="">
+      <text class="popup-title">申请提现</text>
+      <view class="popup-balance-tip">可用余额 ¥{{balance}}</view>
+      <view class="popup-input-wrap">
+        <text class="popup-input-symbol">¥</text>
+        <input class="popup-input" type="digit" placeholder="输入提现金额" value="{{withdrawAmount}}" bindinput="onWithdrawInput" focus="{{showWithdraw}}"></input>
+      </view>
+      <view class="popup-btn-row">
+        <view class="popup-cancel" bindtap="hideWithdraw">
+          <text class="popup-cancel-text">取消</text>
+        </view>
+        <view class="popup-confirm" bindtap="confirmWithdraw">
+          <text class="popup-confirm-text">确认提现</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <brand-animation id="brandAnimation"></brand-animation>
+</view>

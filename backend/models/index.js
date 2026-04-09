@@ -145,6 +145,10 @@ SKU.hasMany(Cart, { foreignKey: 'sku_id', as: 'cartItems' });
 Order.hasMany(CommissionLog, { foreignKey: 'order_id', as: 'commissions' });
 CommissionLog.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
 
+// 佣金结算批次关联（settlement_id 字段由 20260212 迁移写入数据库）
+CommissionSettlement.hasMany(CommissionLog, { foreignKey: 'settlement_id', as: 'logs' });
+CommissionLog.belongsTo(CommissionSettlement, { foreignKey: 'settlement_id', as: 'settlement' });
+
 // 订单退款
 Order.hasMany(Refund, { foreignKey: 'order_id', as: 'refunds' });
 Refund.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });

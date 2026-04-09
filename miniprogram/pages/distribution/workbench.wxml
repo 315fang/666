@@ -19,7 +19,7 @@
     <view class="metrics-grid">
       <view class="metric-cell">
         <text class="metric-label">待发货</text>
-        <text class="metric-value">{{workbench.pending_ship || 0}}</text>
+        <text class="metric-value">{{workbench.pendingShip || workbench.pending_ship || 0}}</text>
       </view>
       <view class="metric-cell">
         <text class="metric-label">待确认</text>
@@ -53,7 +53,7 @@
         </view>
         <view class="status-pill {{activeStatus === 'pending' ? 'active' : ''}}" data-status="pending" bindtap="onStatusChange">
           <text>待发货</text>
-          <view class="pill-badge" wx:if="{{workbench.pending_ship > 0}}">{{workbench.pending_ship}}</view>
+          <view class="pill-badge" wx:if="{{(workbench.pendingShip || workbench.pending_ship || 0) > 0}}">{{workbench.pendingShip || workbench.pending_ship}}</view>
         </view>
         <view class="status-pill {{activeStatus === 'shipping_requested' ? 'active' : ''}}" data-status="shipping_requested" bindtap="onStatusChange">
           <text>待确认</text>

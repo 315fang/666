@@ -330,7 +330,7 @@ const paymentHighlights = computed(() => {
 
 const focusBarItems = computed(() => [
   {
-    key: 'pending_ship',
+    key: 'pendingShip',
     label: '待发货',
     count: Number(todoItems.value[0]?.count || 0),
     path: '/orders',
@@ -370,13 +370,14 @@ const fetchOperationsDashboard = async () => {
   try {
     const data = await getOperationsDashboard()
     const d = data
+    const pendingShipCount = Number(d?.kpi?.pendingShip ?? d?.kpi?.pending_ship ?? 0)
 
     statsCards.value[0].value = String(d?.kpi?.today_orders || 0)
     statsCards.value[1].value = '¥' + (d?.kpi?.today_sales || '0.00')
     statsCards.value[2].value = String(d?.kpi?.total_users || 0)
-    statsCards.value[3].value = String(d?.kpi?.pending_ship || 0)
+    statsCards.value[3].value = String(pendingShipCount)
 
-    todoItems.value[0].count = d?.kpi?.pending_ship || 0
+    todoItems.value[0].count = pendingShipCount
     todoItems.value[1].count = d?.pending?.withdrawals || 0
     todoItems.value[2].count = d?.pending?.refunds || 0
     todoItems.value[3].count = d?.pending?.commissions || 0

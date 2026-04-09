@@ -1,6 +1,7 @@
 // pages/distribution/invite.js - 邀请好友页面（问卷邀请版）
 const app = getApp();
 const { get } = require('../../utils/request');
+const { getUserNickname, normalizeUserProfile } = require('../../utils/userProfile');
 
 Page({
   data: {
@@ -27,8 +28,8 @@ Page({
    * 加载用户数据
    */
   loadUserData() {
-    const userInfo = app.globalData.userInfo;
-    if (!userInfo) {
+    const rawUserInfo = app.globalData.userInfo;
+    if (!rawUserInfo) {
       wx.showToast({ title: '请先登录', icon: 'none' });
       setTimeout(() => {
         wx.switchTab({ url: '/pages/user/user' });
@@ -36,7 +37,7 @@ Page({
       return;
     }
 
-    this.setData({ userInfo });
+    this.setData({ userInfo: normalizeUserProfile(rawUserInfo) });
   },
 
   /**
@@ -114,10 +115,10 @@ Page({
    * 分享配置 - 分享邀请问卷
    */
   onShareAppMessage() {
-    const { userInfo } = this.data;
+    const userInfo = normalizeUserProfile(this.data.userInfo || {});
     const userId = userInfo ? userInfo.id : '';
     return {
-      title: `${userInfo?.nickname || '我'}邀请你加入团队`,
+      title: `${getUserNickname(userInfo) || '我'}邀请你加入团队`,
       path: `/pages/questionnaire/fill?inviter_id=${userId}`,
       imageUrl: ''
     };

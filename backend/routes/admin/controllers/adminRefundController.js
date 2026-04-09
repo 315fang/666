@@ -70,27 +70,31 @@ const getRefundById = async (req, res) => {
 
 // 审核通过
 const approveRefund = async (req, res) => {
+    const t = await sequelize.transaction();
     try {
         const { id } = req.params;
         const { remark } = req.body;
         const adminId = req.admin.id;
 
-        const refund = await Refund.findByPk(id);
+        const refund = await Refund.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
         if (!refund) {
+            await t.rollback();
             return res.status(404).json({ code: -1, message: '售后单不存在' });
         }
 
         if (refund.status !== 'pending') {
-            return res.status(400).json({ code: -1, message: '状态不正确' });
+            await t.rollback();
+            return res.status(400).json({ code: -1, message: '状态不正确，仅待审核订单可操作' });
         }
 
         refund.status = 'approved';
         refund.admin_id = adminId;
         refund.admin_remark = remark;
         refund.processed_at = new Date();
-        await refund.save();
+        await refund.save({ transaction: t });
+        await t.commit();
 
-        // 通知用户
+        // 通知用户（事务外，通知失败不影响审核结果）
         await sendNotification(
             refund.user_id,
             '退款审核通过',
@@ -101,34 +105,39 @@ const approveRefund = async (req, res) => {
 
         res.json({ code: 0, message: '审核通过' });
     } catch (error) {
-        console.error('审核失败:', error);
+        await t.rollback();
+        console.error('审核失败:', error.message);
         res.status(500).json({ code: -1, message: '审核失败' });
     }
 };
 
 // 拒绝售后
 const rejectRefund = async (req, res) => {
+    const t = await sequelize.transaction();
     try {
         const { id } = req.params;
         const { reason } = req.body;
         const adminId = req.admin.id;
 
-        const refund = await Refund.findByPk(id);
+        const refund = await Refund.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
         if (!refund) {
+            await t.rollback();
             return res.status(404).json({ code: -1, message: '售后单不存在' });
         }
 
         if (refund.status !== 'pending') {
-            return res.status(400).json({ code: -1, message: '状态不正确' });
+            await t.rollback();
+            return res.status(400).json({ code: -1, message: '状态不正确，仅待审核订单可操作' });
         }
 
         refund.status = 'rejected';
         refund.admin_id = adminId;
         refund.reject_reason = reason;
         refund.processed_at = new Date();
-        await refund.save();
+        await refund.save({ transaction: t });
+        await t.commit();
 
-        // 通知用户
+        // 通知用户（事务外）
         await sendNotification(
             refund.user_id,
             '退款申请被拒绝',
@@ -139,7 +148,8 @@ const rejectRefund = async (req, res) => {
 
         res.json({ code: 0, message: '已拒绝' });
     } catch (error) {
-        console.error('拒绝失败:', error);
+        await t.rollback();
+        console.error('拒绝失败:', error.message);
         res.status(500).json({ code: -1, message: '操作失败' });
     }
 };

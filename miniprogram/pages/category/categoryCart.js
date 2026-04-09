@@ -4,7 +4,15 @@ const { getFirstImage, formatMoney } = require('../../utils/dataFormatter');
 const CATEGORY_CART_TTL = 8 * 1000;
 
 function parseCartItems(res) {
-    return res.data?.items || res.data || [];
+    const items = res.data?.items || res.data || [];
+    return (Array.isArray(items) ? items : []).map((item) => {
+        const qty = Number(item.qty || item.quantity || 1);
+        return {
+            ...item,
+            qty,
+            quantity: qty
+        };
+    });
 }
 
 async function updateCartData(page, forceRefresh = false) {
@@ -25,10 +33,13 @@ async function updateCartData(page, forceRefresh = false) {
             });
             if (res.code === 0) {
                 const items = parseCartItems(res);
-                const count = items.reduce((sum, item) => sum + item.quantity, 0);
+                const count = items.reduce((sum, item) => sum + Number(item.qty || item.quantity || 0), 0);
                 let total = res.data?.summary?.total_amount || 0;
                 if (!total && items.length > 0) {
-                    total = items.reduce((sum, item) => sum + (parseFloat(item.effective_price || item.sku?.retail_price || 0) * item.quantity), 0);
+                    total = items.reduce((sum, item) => {
+                        const qty = Number(item.qty || item.quantity || 0);
+                        return sum + (parseFloat(item.effective_price || item.sku?.retail_price || 0) * qty);
+                    }, 0);
                 }
 
                 page.setData({
@@ -76,7 +87,8 @@ async function openCartPopup(page) {
         const items = parseCartItems(res);
         const popupItems = (Array.isArray(items) ? items : []).map((item) => ({
             id: item.id,
-            quantity: item.quantity || 1,
+            qty: Number(item.qty || item.quantity || 1),
+            quantity: Number(item.qty || item.quantity || 1),
             selected: item.selected !== false,
             name: item.product?.name || '商品',
             image: item.sku?.image || getFirstImage(item.product?.images),
@@ -165,7 +177,10 @@ async function changeCartItemQty(page, index, nextQty) {
 
     try {
         await put(`/cart/${item.id}`, { quantity: nextQty });
-        page.setData({ [`cartPopupItems[${index}].quantity`]: nextQty }, () => {
+        page.setData({
+            [`cartPopupItems[${index}].qty`]: nextQty,
+            [`cartPopupItems[${index}].quantity`]: nextQty
+        }, () => {
             calcCartPopupTotal(page);
             updateCartData(page);
         });

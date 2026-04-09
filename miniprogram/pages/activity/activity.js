@@ -66,12 +66,13 @@ function deriveActivityNav(item = {}) {
 }
 
 function normalizeCard(item = {}, idx = 0) {
+    const image = item.image || item.file_id || item.image_url || item.cover_image || '';
     return {
         id: item.id || idx,
         title: item.title || '',
         subtitle: item.subtitle || item.subTitle || '',
         tag: item.tag || '',
-        image: item.image || item.image_url || item.cover_image || '',
+        image,
         gradient: item.gradient || 'linear-gradient(135deg,#3D2F22,#5A4535)',
         link_type: item.link_type || 'none',
         link_value: item.link_value || '',
@@ -333,12 +334,13 @@ Page({
     // 统一卡片标准化，顶层 normalizeCard() 用于新接口路径（无 link 别名字段）
     // 此处补充 link 别名字段的兼容处理，适用于旧接口降级路径
     _normalizeCard(item, idx) {
+        const image = item.image || item.file_id || item.image_url || '';
         return {
             id:       item.id || idx,
             title:    item.title || '',
             subtitle: item.subtitle || item.subTitle || '',
             tag:      item.tag || '',
-            image:    item.image || '',
+            image,
             gradient: item.gradient || 'linear-gradient(135deg,#3D2F22,#5A4535)',
             link_type:  item.link_type || (item.link ? 'page' : 'none'),
             link_value: item.link_value || item.link || '',

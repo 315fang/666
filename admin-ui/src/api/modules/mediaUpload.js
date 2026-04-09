@@ -1,18 +1,23 @@
 import request from '@/utils/request'
 
-export const uploadFile = (file, options = {}) => {
-  const formData = new FormData()
-  formData.append('file', file)
-  Object.entries(options.params || {}).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      formData.append(key, String(value))
-    }
-  })
+const fileToBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(reader.result || '')
+  reader.onerror = () => reject(reader.error || new Error('文件读取失败'))
+  reader.readAsDataURL(file)
+})
+
+export const uploadFile = async (file, options = {}) => {
+  const contentBase64 = await fileToBase64(file)
   return request({
     url: '/upload',
     method: 'post',
-    data: formData,
-    headers: { 'Content-Type': 'multipart/form-data' }
+    data: {
+      name: file.name,
+      mime_type: file.type || 'application/octet-stream',
+      content_base64: contentBase64,
+      ...(options.params || {})
+    }
   })
 }
 
@@ -39,13 +44,4 @@ export const testStorageConfig = (provider) => {
   })
 }
 
-export const uploadSplashImage = (file) => {
-  const formData = new FormData()
-  formData.append('file', file)
-  return request({
-    url: '/upload',
-    method: 'post',
-    data: formData,
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
-}
+export const uploadSplashImage = (file) => uploadFile(file)

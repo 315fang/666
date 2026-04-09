@@ -17,7 +17,9 @@ const AdminLog = sequelize.define('AdminLog', {
     before_data: { type: DataTypes.TEXT, comment: '操作前数据（JSON）' },
     after_data: { type: DataTypes.TEXT, comment: '操作后数据（JSON）' },
     ip: { type: DataTypes.STRING(50), comment: 'IP地址' },
-    user_agent: { type: DataTypes.STRING(255), comment: '浏览器UA' }
+    user_agent: { type: DataTypes.STRING(255), comment: '浏览器UA' },
+    status: { type: DataTypes.STRING(20), defaultValue: 'success', comment: '操作结果: success/failed' },
+    error_message: { type: DataTypes.TEXT, allowNull: true, comment: '失败原因' }
 }, {
     tableName: 'admin_logs',
     timestamps: true,

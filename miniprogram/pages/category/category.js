@@ -40,6 +40,10 @@ function normalizeAssetUrl(url = '') {
     return raw;
 }
 
+function resolveBannerAsset(item = {}) {
+    return normalizeAssetUrl(item.image || item.file_id || item.image_url || '');
+}
+
 const CATEGORY_INITIAL_BATCH_SIZE = 2;
 const CATEGORY_PRICE_PREVIEW_TTL = 60 * 1000;
 const SPECIAL_CATEGORY_ID = '__special__';
@@ -135,7 +139,7 @@ Page({
         const mapBanners = (list) => (list || [])
             .map((b) => ({
                 id: b.id,
-                image: normalizeAssetUrl(b.image_url),
+                image: resolveBannerAsset(b),
                 link_type: b.link_type || 'none',
                 link_value: b.link_value != null ? String(b.link_value) : ''
             }))

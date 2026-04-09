@@ -1,0 +1,49 @@
+<view class="reviews-page">
+  <!-- 筛选栏 -->
+  <view class="filter-bar">
+    <view class="filter-item {{filter === 'all' ? 'active' : ''}}" data-val="all" bindtap="onFilterChange">全部</view>
+    <view class="filter-item {{filter === 'featured' ? 'active' : ''}}" data-val="featured" bindtap="onFilterChange">精选</view>
+    <view class="filter-item {{filter === 'image' ? 'active' : ''}}" data-val="image" bindtap="onFilterChange">有图</view>
+  </view>
+
+  <!-- 评价列表 -->
+  <block wx:if="{{list.length > 0}}">
+    <view class="review-item" wx:for="{{list}}" wx:key="id">
+      <view class="review-header">
+        <image class="review-avatar" src="{{item.user.avatar_url || '/assets/icons/user.svg'}}" mode="aspectFill" />
+        <view class="review-user-info">
+          <text class="review-name">{{item.user.nickname}}</text>
+          <view class="review-stars">
+            <text class="star {{s <= item.rating ? 'filled' : ''}}" wx:for="{{[1,2,3,4,5]}}" wx:for-item="s" wx:key="*this">★</text>
+          </view>
+        </view>
+        <text class="review-date">{{item.created_at}}</text>
+      </view>
+      <text class="review-content">{{item.content}}</text>
+      <view class="review-images" wx:if="{{item.images && item.images.length > 0}}">
+        <image
+          wx:for="{{item.images}}" wx:for-item="img" wx:key="*this"
+          class="review-img"
+          src="{{img}}"
+          mode="aspectFill"
+          bindtap="onPreviewImage"
+          data-images="{{item.images}}"
+          data-index="{{index}}"
+        />
+      </view>
+      <view class="review-reply" wx:if="{{item.reply_content}}">
+        <text class="reply-label">商家回复：</text>
+        <text>{{item.reply_content}}</text>
+      </view>
+    </view>
+  </block>
+
+  <view class="empty" wx:if="{{!loading && list.length === 0}}">暂无评价</view>
+
+  <view class="load-more {{hasMore ? 'btn' : ''}}" wx:if="{{!loading || list.length > 0}}" bindtap="{{hasMore ? 'loadMore' : ''}}">
+    <text wx:if="{{hasMore}}">加载更多</text>
+    <text wx:elif="{{list.length > 0}}">已显示全部评价</text>
+  </view>
+
+  <view class="load-more" wx:if="{{loading}}">加载中...</view>
+</view>

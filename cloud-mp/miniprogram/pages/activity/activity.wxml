@@ -1,0 +1,147 @@
+<view class="container {{wallpaperClass}}">
+
+  <!-- ══ 顶部 Banner 轮播 ══ -->
+  <view class="banner-wrap">
+    <!-- 状态栏占位 -->
+    <view style="height: {{statusBarHeight}}px; background: transparent;"></view>
+
+    <swiper
+      class="banner-swiper"
+      autoplay
+      interval="4000"
+      duration="400"
+      circular
+      indicator-dots="{{false}}"
+      current="{{bannerIndex}}"
+      bindchange="onBannerChange"
+    >
+      <swiper-item
+        wx:for="{{bannerSlides}}"
+        wx:key="id"
+        bindtap="onBannerTap"
+        data-item="{{item}}"
+      >
+        <image
+          wx:if="{{item.image}}"
+          class="banner-img"
+          src="{{item.image}}"
+          mode="aspectFill"
+          lazy-load
+        ></image>
+        <view
+          wx:else
+          class="banner-fallback"
+          style="background: {{item.gradient || 'linear-gradient(135deg,#3D2F22,#5A4535)'}};"
+        ></view>
+        <view class="banner-overlay" wx:if="{{item.title || item.tag || item.subtitle || item.countdown}}">
+          <view class="banner-tag-row">
+            <view class="banner-tag-pill" wx:if="{{item.tag}}">{{item.tag}}</view>
+            <view class="banner-countdown" wx:if="{{item.countdown}}">
+              <text class="banner-countdown-text">⏱ {{item.countdown.days}}天 {{item.countdown.hours}}:{{item.countdown.mins}}:{{item.countdown.secs}}</text>
+            </view>
+          </view>
+          <text class="banner-title" wx:if="{{item.title}}">{{item.title}}</text>
+          <text class="banner-subtitle" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
+        </view>
+      </swiper-item>
+    </swiper>
+
+    <!-- 自定义指示点 -->
+    <view class="banner-dots" wx:if="{{bannerSlides.length > 1}}">
+      <view
+        wx:for="{{bannerSlides}}"
+        wx:key="index"
+        class="banner-dot {{index === bannerIndex ? 'active' : ''}}"
+      ></view>
+    </view>
+  </view>
+
+  <!-- ══ 主内容区：品牌新闻 ══ -->
+  <view class="content-area">
+
+    <view class="news-section" wx:if="{{brandNews.length}}">
+      <view class="section-header">
+        <text class="section-title">{{brandNewsSectionTitle}}</text>
+      </view>
+      <view class="news-list">
+        <view
+          class="news-card"
+          wx:for="{{brandNews}}"
+          wx:key="id"
+          bindtap="onBrandNewsTap"
+          data-id="{{item.id}}"
+          hover-class="card-press"
+        >
+          <image wx:if="{{item.cover_image}}" class="news-card-cover" src="{{item.cover_image}}" mode="aspectFill" lazy-load />
+          <view wx:else class="news-card-cover news-card-cover-placeholder"></view>
+          <view class="news-card-body">
+            <text class="news-card-title">{{item.title}}</text>
+            <text class="news-card-summary">{{item.summary}}</text>
+          </view>
+          <text class="news-card-arrow">›</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-block" wx:for="{{activitySections}}" wx:key="key">
+      <view class="section-header">
+        <text class="section-title">{{item.title}}</text>
+        <text class="section-desc" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
+      </view>
+
+      <!-- 常驻活动：展示多个子卡片 -->
+      <view wx:if="{{item.key === 'permanent' && item.subCards}}" class="sub-cards-container">
+        <view
+          class="activity-card sub-card"
+          wx:for="{{item.subCards}}"
+          wx:for-item="card"
+          wx:key="key"
+          bindtap="onSubCardTap"
+          data-card="{{card}}"
+          hover-class="card-press"
+        >
+          <image wx:if="{{card.image}}" class="activity-card-img" src="{{card.image}}" mode="aspectFill" lazy-load />
+          <view wx:else class="activity-card-fallback" style="background: {{card.gradient}};"></view>
+          <view class="activity-card-overlay">
+            <view class="activity-card-left">
+              <text class="activity-card-tag" wx:if="{{card.tag}}">{{card.tag}}</text>
+              <text class="activity-card-title">{{card.title}}</text>
+              <text class="activity-card-sub">{{card.subtitle}}</text>
+            </view>
+            <text class="activity-card-arrow">›</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 其他类型的活动区域 -->
+      <view
+        wx:if="{{item.key !== 'permanent'}}"
+        class="activity-card section-main-card"
+        bindtap="onSectionTap"
+        data-section="{{item}}"
+        hover-class="card-press"
+      >
+        <image wx:if="{{item.image}}" class="activity-card-img" src="{{item.image}}" mode="aspectFill" lazy-load />
+        <view wx:else class="activity-card-fallback" style="background: {{item.gradient}};"></view>
+        <view class="activity-card-overlay">
+          <view class="activity-card-left">
+            <text class="activity-card-tag" wx:if="{{item.tag}}">{{item.tag}}</text>
+            <text class="activity-card-title">{{item.title}}</text>
+            <text class="activity-card-sub">{{item.subtitle}}</text>
+          </view>
+          <text class="activity-card-arrow">›</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 加载失败 -->
+    <view class="state-error" wx:if="{{loadError}}">
+      <text class="state-icon-text">!</text>
+      <text class="state-title">加载失败</text>
+      <button class="state-action" bindtap="onRetryLoad">重新加载</button>
+    </view>
+
+    <view class="safe-bottom"></view>
+  </view>
+
+</view>

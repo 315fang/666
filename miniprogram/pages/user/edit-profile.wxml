@@ -14,7 +14,7 @@
     <view class="profile-item" bindtap="onSelectAvatar">
       <text class="profile-label">头像</text>
       <view class="profile-right">
-        <image class="profile-avatar" src="{{userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
+        <image class="profile-avatar" src="{{userInfo.avatarUrl || userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
         <text class="profile-arrow">›</text>
       </view>
     </view>
@@ -25,7 +25,7 @@
     <view class="profile-item" bindtap="onEditNickname">
       <text class="profile-label">昵称</text>
       <view class="profile-right">
-        <text class="profile-value">{{userInfo.nickname || '微信用户'}}</text>
+        <text class="profile-value">{{userInfo.nickName || userInfo.nickname || '微信用户'}}</text>
         <text class="profile-arrow">›</text>
       </view>
     </view>

@@ -1,0 +1,323 @@
+// pages/order/list.js
+const { get, post } = require('../../utils/request');
+const { ORDER_STATUS, ORDER_STATUS_TEXT } = require('../../config/constants');
+const { parseImages } = require('../../utils/dataFormatter');
+const { ErrorHandler } = require('../../utils/errorHandler');
+
+Page({
+    data: {
+        orders: [],
+        currentStatus: '',
+        loading: false,
+        hasMore: true,
+        page: 1,
+        limit: 10
+    },
+
+    onLoad(options) {
+        let status = options.status;
+        if (!status && options.type === 'distribution') {
+            status = 'all';
+        }
+        if (status === 'all') status = '';
+        if (status) {
+            // 只更新 status，不加载数据 — onShow 会紧接着触发并加载
+            this.setData({ currentStatus: status });
+        }
+    },
+
+    onShow() {
+        const latestCreatedOrderHint = wx.getStorageSync('latestCreatedOrderHint');
+        if (latestCreatedOrderHint) {
+            wx.removeStorageSync('latestCreatedOrderHint');
+            wx.showToast({ title: latestCreatedOrderHint, icon: 'none', duration: 2500 });
+        }
+        // 每次显示时刷新（从详情页/退款页返回后应看到最新状态）
+        this.setData({ page: 1, hasMore: true }, () => {
+            this.loadOrders();
+        });
+    },
+
+    onPullDownRefresh() {
+        this.setData({ page: 1, hasMore: true });
+        this.loadOrders().then(() => {
+            wx.stopPullDownRefresh();
+        });
+    },
+
+    // ★ 核心：加载订单 + 退款状态
+    async loadOrders(append = false) {
+        if (this.data.loading) return;
+
+        this.setData({ loading: true });
+
+        try {
+            const { currentStatus, page, limit } = this.data;
+            const params = { page, limit };
+
+            if (currentStatus === 'refund') {
+                await this._loadRefundOrders(append);
+                return;
+            }
+
+            if (currentStatus) params.status = currentStatus;
+
+            // 普通 Tab：只加载订单；退款角标数量通过 user.js 的 loadOrderCounts 已有，
+            // 这里按需拉取活跃退款用于在列表中标注"退款中"状态
+            const ordersRes = await get('/orders', params);
+
+            let newOrders = ordersRes.data?.list || ordersRes.data || [];
+
+            // 只有订单列表包含"已发货/已完成"状态时才需要查退款角标，
+            // 避免在"待付款""待发货"等Tab造成无意义的额外请求
+            let activeRefunds = [];
+            const statusNeedsRefundCheck = !currentStatus || currentStatus === 'shipped' || currentStatus === 'completed' || currentStatus === 'pending_review';
+            if (statusNeedsRefundCheck && newOrders.length > 0) {
+                try {
+                    // 只传 order_ids 过滤（若后端支持），否则限量拉取并在前端过滤
+                    const refundsRes = await get('/refunds', { page: 1, limit: 20 }).catch(() => ({ data: { list: [] } }));
+                    activeRefunds = (refundsRes.data?.list || [])
+                        .filter(r => ['pending', 'approved', 'processing'].includes(r.status));
+                } catch (_) { /* 退款状态查询失败不影响主列表 */ }
+            }
+
+            // 建立 order_id → refund 映射
+            const refundMap = {};
+            activeRefunds.forEach(r => {
+                refundMap[r.order_id] = r;
+            });
+
+            // 处理每个订单
+            newOrders = newOrders.map(order => {
+                if (order.product && order.product.images) {
+                    order.product.images = parseImages(order.product.images);
+                }
+                const quantity = Number(order.quantity || 1);
+                order.price = order.price || order.unit_price || Number(((parseFloat(order.actual_price || order.total_amount || 0)) / Math.max(quantity, 1)).toFixed(2));
+
+                // ★ 检查该订单是否有活跃退款
+                const activeRefund = refundMap[order.id];
+                if (activeRefund) {
+                    order.hasActiveRefund = true;
+                    order.refundId = activeRefund.id;
+                    order.refundStatus = activeRefund.status;
+                    // 覆盖状态文本为退款状态
+                    order.statusText = '退款中';
+                    order.displayStatus = 'refunding';
+                } else {
+                    order.hasActiveRefund = false;
+                    order.statusText = ORDER_STATUS_TEXT[order.status] || '未知状态';
+                    order.displayStatus = order.status;
+                }
+
+                return order;
+            });
+
+            this._applyAnimAndSet(newOrders, append, newOrders.length >= limit);
+        } catch (err) {
+            ErrorHandler.handle(err, {
+                customMessage: '加载订单失败，请稍后重试'
+            });
+            this.setData({ loading: false });
+        }
+    },
+
+    // ★ 退款/售后 Tab 专用加载
+    async _loadRefundOrders(append) {
+        try {
+            const { page, limit } = this.data;
+            const res = await get('/refunds', { page, limit });
+            const refundList = res.data?.list || [];
+
+            // 将退款记录转换为类订单结构（便于复用同一个模板）
+            const newOrders = refundList.map(refund => {
+                const order = refund.order || {};
+                if (order.product) {
+                    order.product.images = parseImages(order.product.images); // ★ 统一使用 dataFormatter.parseImages
+                }
+
+                return {
+                    ...order,
+                    id: order.id,
+                    hasActiveRefund: ['pending', 'approved', 'processing'].includes(refund.status),
+                    refundId: refund.id,
+                    refundStatus: refund.status,
+                    statusText: this._getRefundStatusText(refund.status),
+                    displayStatus: 'refund_' + refund.status,
+                    refundType: refund.type,
+                    refundAmount: refund.amount
+                };
+            });
+
+            this._applyAnimAndSet(newOrders, append, refundList.length >= limit);
+        } catch (err) {
+            console.error('加载退款列表失败:', err);
+            this.setData({ loading: false });
+        }
+    },
+
+    /**
+     * ★ 私有方法：添加入场动画标记并更新 data，动画结束后自动清除标记
+     * @param {Array} orders - 订单/退款列表
+     * @param {boolean} append - 是否追加（加载更多
+     * @param {boolean} hasMore - 是否还有更多
+     */
+    _applyAnimAndSet(orders, append, hasMore) {
+        const ordersWithAnim = orders.map(order => ({ ...order, animateIn: !append }));
+        this.setData({
+            orders: append ? [...this.data.orders, ...ordersWithAnim] : ordersWithAnim,
+            hasMore,
+            loading: false
+        });
+        if (!append) {
+            setTimeout(() => {
+                this.setData({
+                    orders: this.data.orders.map(o => ({ ...o, animateIn: false }))
+                });
+            }, 800);
+        }
+    },
+
+    _getRefundStatusText(status) {
+        const map = {
+            pending: '退款审核中',
+            approved: '退款已通过',
+            processing: '退款处理中',
+            completed: '退款完成',
+            rejected: '退款被拒绝',
+            cancelled: '退款已取消'
+        };
+        return map[status] || '退款中';
+    },
+
+    // Tab切换
+    onTabChange(e) {
+        const status = e.currentTarget.dataset.status;
+        this.setData({
+            currentStatus: status,
+            page: 1,
+            hasMore: true,
+            orders: []  // 清空旧数据，触发骨架屏
+        }, () => {
+            this.loadOrders();
+        });
+    },
+
+    // 加载更多（先加载再自增page，防止失败时跳页）
+    async onLoadMore() {
+        if (!this.data.hasMore || this.data.loading) return;
+        const nextPage = this.data.page + 1;
+        this.setData({ page: nextPage });
+        try {
+            await this.loadOrders(true);
+        } catch (_) {
+            this.setData({ page: nextPage - 1 });
+        }
+    },
+
+    // 订单点击
+    onOrderTap(e) {
+        const order = e.currentTarget.dataset.order;
+        wx.navigateTo({ url: `/pages/order/detail?id=${order.id}` });
+    },
+
+    // 取消订单
+    onCancelOrder(e) {
+        const order = e.currentTarget.dataset.order;
+
+        wx.showModal({
+            title: '确认取消',
+            content: '确定要取消该订单吗？',
+            success: async (res) => {
+                if (res.confirm) {
+                    try {
+                        await post(`/orders/${order.id}/cancel`);
+                        wx.showToast({ title: '订单已取消', icon: 'success' });
+                        this.loadOrders();
+                    } catch (err) {
+                        wx.showToast({ title: '取消失败', icon: 'none' });
+                    }
+                }
+            }
+        });
+    },
+
+    // 去付款
+    onPayOrder(e) {
+        const order = e.currentTarget.dataset.order;
+        wx.navigateTo({ url: `/pages/order/detail?id=${order.id}` });
+    },
+
+    // 确认收货
+    onConfirmReceive(e) {
+        const order = e.currentTarget.dataset.order;
+
+        wx.showModal({
+            title: '确认收货',
+            content: '确定已收到商品吗？',
+            success: async (res) => {
+                if (res.confirm) {
+                    try {
+                        await post(`/orders/${order.id}/confirm`);
+                        wx.showToast({ title: '已确认收货', icon: 'success' });
+                        this.loadOrders();
+                    } catch (err) {
+                        wx.showToast({ title: '操作失败', icon: 'none' });
+                    }
+                }
+            }
+        });
+    },
+
+    // 去评价（与详情页一致：已发货/已完成均可提交，以服务端校验为准）
+    onGoReview(e) {
+        const order = e.currentTarget.dataset.order;
+        if (!order?.id) return;
+        const pid = order.product_id || (order.product && order.product.id) || '';
+        wx.navigateTo({
+            url: `/pages/order/review?order_id=${order.id}&product_id=${pid}`
+        });
+    },
+
+    // 查看物流
+    onViewLogistics(e) {
+        const order = e.currentTarget.dataset.order;
+        if (order.tracking_no) {
+            wx.navigateTo({
+                url: `/pages/logistics/tracking?order_id=${order.id}`
+            });
+        } else {
+            wx.showToast({ title: '暂无物流信息', icon: 'none' });
+        }
+    },
+
+    // ★ 申请退款（从列表页直接操作）
+    onApplyRefund(e) {
+        const order = e.currentTarget.dataset.order;
+        wx.navigateTo({
+            url: `/pages/order/refund-apply?order_id=${order.id}`
+        });
+    },
+
+    // ★ 查看退款详情
+    onViewRefund(e) {
+        const order = e.currentTarget.dataset.order;
+        if (order.refundId) {
+            wx.navigateTo({
+                url: `/pages/order/refund-detail?id=${order.refundId}`
+            });
+        }
+    },
+
+    // 再次购买
+    onBuyAgain(e) {
+        const order = e.currentTarget.dataset.order;
+        if (order.product_id) {
+            wx.navigateTo({ url: `/pages/product/detail?id=${order.product_id}` });
+        } else if (order.product && order.product.id) {
+            wx.navigateTo({ url: `/pages/product/detail?id=${order.product.id}` });
+        } else {
+            wx.switchTab({ url: '/pages/index/index' });
+        }
+    }
+});

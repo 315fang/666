@@ -1,0 +1,664 @@
+{
+  "miniprogram": {
+    "quantity": {
+      "count": 101,
+      "files": [
+        {
+          "file": "cloud-mp/miniprogram/components/order-card/order-card.wxml",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/components/order-card/order-card.wxss",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/activity/limited-spot.js",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/cart/cart.js",
+          "count": 8
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/cart/cart.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/category/category.js",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/category/category.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/category/categoryCart.js",
+          "count": 7
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/restock.js",
+          "count": 16
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/restock.wxml",
+          "count": 9
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/restock.wxss",
+          "count": 3
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/workbench.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/group/detail.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/confirm.js",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/confirm.wxml",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/confirm.wxss",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/detail.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/list.js",
+          "count": 3
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/list.wxml",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/orderConfirmAddress.js",
+          "count": 4
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/orderConfirmSubmission.js",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/refund-apply.js",
+          "count": 3
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/refund-apply.wxml",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/pickup/orders.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/product/detail.js",
+          "count": 4
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/product/detail.wxml",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/product/productDetailActions.js",
+          "count": 13
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/slash/detail.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/store/index.js",
+          "count": 4
+        }
+      ]
+    },
+    "buyer_id": {
+      "count": 0,
+      "files": []
+    },
+    "user_id": {
+      "count": 2,
+      "files": [
+        {
+          "file": "cloud-mp/miniprogram/pages/group/detail.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/stations/my-station.wxml",
+          "count": 1
+        }
+      ]
+    },
+    "product_skus": {
+      "count": 0,
+      "files": []
+    },
+    "image_url": {
+      "count": 13,
+      "files": [
+        {
+          "file": "cloud-mp/miniprogram/pages/activity/activity.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/category/category.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/index/index.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/index/index.wxml",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/index/indexHomeLoader.js",
+          "count": 3
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/lottery/lottery.wxml",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/splash/splash.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/utils/activitySectionBuilder.js",
+          "count": 2
+        }
+      ]
+    },
+    "avatar_url": {
+      "count": 17,
+      "files": [
+        {
+          "file": "cloud-mp/miniprogram/pages/activity/n-invite.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/business-center.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/center.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/team-member.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/team.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/utils/invitePosterCore.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/group/detail.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/product/detail.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/product/reviews.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/slash/detail.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/user/edit-profile.js",
+          "count": 3
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/user/edit-profile.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/user/user.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/user/userProfileActions.js",
+          "count": 2
+        }
+      ]
+    },
+    "nickname": {
+      "count": 56,
+      "files": [
+        {
+          "file": "cloud-mp/miniprogram/pages/activity/n-invite.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/business-center.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/business-center.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/center.wxml",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/center.wxss",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/invite-poster.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/invite.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/invite.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/team-member.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/team.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/team.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/utils/invitePosterCore.js",
+          "count": 6
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/workbench.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/feed/index.js",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/group/detail.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/index/index.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/index/indexHomeLoader.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/detail.wxml",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/pickup/orders.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/product/detail.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/product/reviews.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/questionnaire/fill.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/slash/detail.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/stations/my-station.wxml",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/user/edit-profile.js",
+          "count": 9
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/user/edit-profile.wxml",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/user/user.wxml",
+          "count": 4
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/user/user.wxss",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/user/userProfileActions.js",
+          "count": 4
+        },
+        {
+          "file": "cloud-mp/miniprogram/utils/userProfile.js",
+          "count": 3
+        }
+      ]
+    },
+    "pending_ship": {
+      "count": 5,
+      "files": [
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/center.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/workbench.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/workbench.wxml",
+          "count": 3
+        }
+      ]
+    },
+    "pending_payment": {
+      "count": 0,
+      "files": []
+    }
+  },
+  "admin-ui": {
+    "quantity": {
+      "count": 5,
+      "files": [
+        {
+          "file": "admin-ui/src/views/orders/index.vue",
+          "count": 5
+        }
+      ]
+    },
+    "buyer_id": {
+      "count": 0,
+      "files": []
+    },
+    "user_id": {
+      "count": 26,
+      "files": [
+        {
+          "file": "admin-ui/src/views/commissions/index.vue",
+          "count": 4
+        },
+        {
+          "file": "admin-ui/src/views/dealers/index.vue",
+          "count": 2
+        },
+        {
+          "file": "admin-ui/src/views/logs/index.vue",
+          "count": 1
+        },
+        {
+          "file": "admin-ui/src/views/membership/index.vue",
+          "count": 2
+        },
+        {
+          "file": "admin-ui/src/views/pickup-stations/index.vue",
+          "count": 11
+        },
+        {
+          "file": "admin-ui/src/views/refunds/index.vue",
+          "count": 3
+        },
+        {
+          "file": "admin-ui/src/views/withdrawals/index.vue",
+          "count": 3
+        }
+      ]
+    },
+    "product_skus": {
+      "count": 0,
+      "files": []
+    },
+    "image_url": {
+      "count": 54,
+      "files": [
+        {
+          "file": "admin-ui/src/components/ContentBlockEditor.vue",
+          "count": 19
+        },
+        {
+          "file": "admin-ui/src/views/activities/components/LotteryPrizeDialog.vue",
+          "count": 2
+        },
+        {
+          "file": "admin-ui/src/views/activities/components/LotteryPrizePanel.vue",
+          "count": 2
+        },
+        {
+          "file": "admin-ui/src/views/activities/index.vue",
+          "count": 5
+        },
+        {
+          "file": "admin-ui/src/views/content/index.vue",
+          "count": 14
+        },
+        {
+          "file": "admin-ui/src/views/home-sections/index.vue",
+          "count": 5
+        },
+        {
+          "file": "admin-ui/src/views/splash/index.vue",
+          "count": 7
+        }
+      ]
+    },
+    "avatar_url": {
+      "count": 7,
+      "files": [
+        {
+          "file": "admin-ui/src/views/n-system/index.vue",
+          "count": 3
+        },
+        {
+          "file": "admin-ui/src/views/orders/index.vue",
+          "count": 2
+        },
+        {
+          "file": "admin-ui/src/views/users/components/UserListTableCard.vue",
+          "count": 1
+        },
+        {
+          "file": "admin-ui/src/views/users/index.vue",
+          "count": 1
+        }
+      ]
+    },
+    "nickname": {
+      "count": 46,
+      "files": [
+        {
+          "file": "admin-ui/src/views/agent-system/index.vue",
+          "count": 1
+        },
+        {
+          "file": "admin-ui/src/views/branch-agents/index.vue",
+          "count": 2
+        },
+        {
+          "file": "admin-ui/src/views/commissions/index.vue",
+          "count": 1
+        },
+        {
+          "file": "admin-ui/src/views/dealers/index.vue",
+          "count": 4
+        },
+        {
+          "file": "admin-ui/src/views/logistics/index.vue",
+          "count": 1
+        },
+        {
+          "file": "admin-ui/src/views/n-system/index.vue",
+          "count": 6
+        },
+        {
+          "file": "admin-ui/src/views/orders/index.vue",
+          "count": 5
+        },
+        {
+          "file": "admin-ui/src/views/pickup-stations/index.vue",
+          "count": 4
+        },
+        {
+          "file": "admin-ui/src/views/refunds/index.vue",
+          "count": 3
+        },
+        {
+          "file": "admin-ui/src/views/reviews/index.vue",
+          "count": 1
+        },
+        {
+          "file": "admin-ui/src/views/users/components/UserActionDialogsPrimary.vue",
+          "count": 2
+        },
+        {
+          "file": "admin-ui/src/views/users/components/UserActionDialogsSecondary.vue",
+          "count": 1
+        },
+        {
+          "file": "admin-ui/src/views/users/components/UserDetailDrawer.vue",
+          "count": 4
+        },
+        {
+          "file": "admin-ui/src/views/users/components/UserListTableCard.vue",
+          "count": 1
+        },
+        {
+          "file": "admin-ui/src/views/users/components/UserSearchPanel.vue",
+          "count": 1
+        },
+        {
+          "file": "admin-ui/src/views/users/index.vue",
+          "count": 6
+        },
+        {
+          "file": "admin-ui/src/views/withdrawals/index.vue",
+          "count": 3
+        }
+      ]
+    },
+    "pending_ship": {
+      "count": 6,
+      "files": [
+        {
+          "file": "admin-ui/src/views/dashboard/index.vue",
+          "count": 5
+        },
+        {
+          "file": "admin-ui/src/views/orders/index.vue",
+          "count": 1
+        }
+      ]
+    },
+    "pending_payment": {
+      "count": 2,
+      "files": [
+        {
+          "file": "admin-ui/src/views/n-system/index.vue",
+          "count": 2
+        }
+      ]
+    }
+  },
+  "cloudrun-admin-service": {
+    "quantity": {
+      "count": 1,
+      "files": [
+        {
+          "file": "backend/cloudrun-admin-service/src/app.js",
+          "count": 1
+        }
+      ]
+    },
+    "buyer_id": {
+      "count": 8,
+      "files": [
+        {
+          "file": "backend/cloudrun-admin-service/src/app.js",
+          "count": 8
+        }
+      ]
+    },
+    "user_id": {
+      "count": 22,
+      "files": [
+        {
+          "file": "backend/cloudrun-admin-service/src/app.js",
+          "count": 22
+        }
+      ]
+    },
+    "product_skus": {
+      "count": 0,
+      "files": []
+    },
+    "image_url": {
+      "count": 17,
+      "files": [
+        {
+          "file": "backend/cloudrun-admin-service/src/app.js",
+          "count": 17
+        }
+      ]
+    },
+    "avatar_url": {
+      "count": 4,
+      "files": [
+        {
+          "file": "backend/cloudrun-admin-service/src/app.js",
+          "count": 4
+        }
+      ]
+    },
+    "nickname": {
+      "count": 9,
+      "files": [
+        {
+          "file": "backend/cloudrun-admin-service/src/app.js",
+          "count": 9
+        }
+      ]
+    },
+    "pending_ship": {
+      "count": 11,
+      "files": [
+        {
+          "file": "backend/cloudrun-admin-service/src/app.js",
+          "count": 11
+        }
+      ]
+    },
+    "pending_payment": {
+      "count": 0,
+      "files": []
+    }
+  }
+}

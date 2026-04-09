@@ -4,6 +4,7 @@ const { cachedGet } = require('../../utils/requestCache');
 const { processProduct, genHeatLabel } = require('../../utils/dataFormatter');
 const { getApiBaseUrl } = require('../../config/env');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
+const { getUserNickname } = require('../../utils/userProfile');
 
 function normalizeAssetUrl(url = '') {
     const raw = String(url || '');
@@ -14,6 +15,10 @@ function normalizeAssetUrl(url = '') {
         return `${apiBase}${raw}`;
     }
     return raw;
+}
+
+function resolveAsset(item = {}) {
+    return normalizeAssetUrl(item.image || item.file_id || item.image_url || '');
 }
 
 async function loadData(page, forceRefresh = false) {
@@ -114,7 +119,7 @@ async function loadFeaturedProducts(page) {
 async function loadPosters(page) {
     const mapBanners = (list) => (list || []).map((banner) => ({
         id: banner.id,
-        image: normalizeAssetUrl(banner.image_url),
+        image: resolveAsset(banner),
         title: banner.title || '',
         subtitle: banner.subtitle || '',
         link_type: banner.link_type || 'none',
@@ -166,7 +171,7 @@ async function loadBubbles(page) {
         const bubbles = list.map((bubble) => {
             if (bubble.text) return bubble.text;
             const action = { order: '购买了', group_buy: '拼团了', slash: '砍价了', lottery: '抽中了' }[bubble.type] || '购买了';
-            return `${bubble.nickname} ${action} ${bubble.product_name}`;
+            return `${getUserNickname(bubble) || '好友'} ${action} ${bubble.product_name}`;
         });
         page.setData({ bubbles, currentBubble: bubbles[0] });
         page._bubbleIdx = 0;
@@ -195,7 +200,7 @@ function applyHomeConfig(page, data) {
     const heroBanners = bannerList.length > 0
         ? bannerList.map((banner) => ({
             id: banner.id,
-            image: normalizeAssetUrl(banner.image_url || ''),
+            image: resolveAsset(banner),
             title: banner.title || '',
             subtitle: banner.subtitle || '',
             link_type: banner.link_type || 'none',
@@ -217,10 +222,11 @@ function applyHomeConfig(page, data) {
     });
 
     const popupAd = data.popupAd || {};
-    if (popupAd.enabled && popupAd.image_url) {
+    if (popupAd.enabled && (popupAd.image || popupAd.file_id || popupAd.image_url)) {
         page._checkAndShowPopupAd({
             ...popupAd,
-            image_url: normalizeAssetUrl(popupAd.image_url)
+            image_url: resolveAsset(popupAd),
+            image: resolveAsset(popupAd)
         });
     }
 }

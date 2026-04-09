@@ -1,0 +1,7 @@
+{
+    "navigationStyle": "custom",
+    "enablePullDownRefresh": false,
+    "usingComponents": {
+        "brand-animation": "/components/brand-animation/brand-animation"
+    }
+}

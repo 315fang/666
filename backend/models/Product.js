@@ -60,10 +60,12 @@ const Product = sequelize.define('Product', {
         allowNull: false,
         comment: '零售价 ¥299'
     },
+    // ⚠️  [DEPRECATED] 请勿给此字段写入新数据，统一使用 price_member
+    //    迁移脚本: migrations/fix_p1_deprecate_member_price.js
     member_price: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
-        comment: '会员价（兼容旧字段）'
+        comment: '[废弃] 会员价旧字段，请使用 price_member；此字段仅保留用于历史数据兼容'
     },
     wholesale_price: {
         type: DataTypes.DECIMAL(10, 2),

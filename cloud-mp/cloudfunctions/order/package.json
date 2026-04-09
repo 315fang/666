@@ -1,0 +1,7 @@
+{
+  "name": "order",
+  "version": "1.0.0",
+  "description": "云函数：订单创建/查询/取消/评价",
+  "main": "index.js",
+  "dependencies": { "wx-server-sdk": "~2.6.3" }
+}

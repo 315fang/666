@@ -4,6 +4,10 @@ const { get, post } = require('../../utils/request');
 const { ROLE_NAMES, USER_ROLES } = require('../../config/constants');
 const { copyAgentPortalLink } = require('../../utils/helpers');
 
+function getPendingShipCount(source = {}) {
+    return Number(source.pendingShip ?? source.pending_ship ?? 0);
+}
+
 // 状态字典
 const COMMISSION_STATUS_MAP = {
     'frozen': { text: '冻结中(T+15)', class: 'status-frozen' },
@@ -274,7 +278,7 @@ Page({
             if (res.code === 0) {
                 this.setData({
                     isAgent: true,
-                    agentPending: res.data.pending_ship || 0,
+                    agentPending: getPendingShipCount(res.data),
                     agentMonthProfit: res.data.month_profit || '0.00',
                     agentDebt: parseFloat(res.data.debt_amount || 0),
                     goodsFundBalance: res.data.goods_fund_balance || '0.00'

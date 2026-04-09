@@ -5,8 +5,20 @@ import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
+const adminProxyTarget = process.env.VITE_ADMIN_DEV_PROXY_TARGET || 'http://127.0.0.1:3001'
+const proxy = {
+  '/admin/api': {
+    target: adminProxyTarget,
+    changeOrigin: true
+  },
+  '/uploads': {
+    target: adminProxyTarget,
+    changeOrigin: true
+  }
+}
+
 export default defineConfig({
-  base: '/admin/',
+  base: '/',
   plugins: [
     vue(),
     AutoImport({
@@ -23,16 +35,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: {
-      '/admin/api': {
-        target: 'http://127.0.0.1:3001',
-        changeOrigin: true
-      },
-      '/uploads': {
-        target: 'http://127.0.0.1:3001',
-        changeOrigin: true
-      }
-    }
+    proxy
+  },
+  preview: {
+    proxy
   },
   build: {
     outDir: 'dist',

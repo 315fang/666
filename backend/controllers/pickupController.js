@@ -429,6 +429,7 @@ async function _doVerify(order, operator, stationId, t, res) {
             await CommissionLog.create({
                 user_id: verifyStation.claimant_id,
                 order_id: order.id,
+                order_no: order.order_no,  // ★ 补全：与其他 CommissionLog 写入保持一致
                 amount: sub.amount,
                 type: 'pickup_subsidy',
                 status: 'settled',

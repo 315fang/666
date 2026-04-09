@@ -1,0 +1,40 @@
+[
+  {
+    "_id": "1",
+    "_legacy_id": 1,
+    "id": 1,
+    "product_id": 1,
+    "sku_id": null,
+    "min_members": 2,
+    "max_members": 2,
+    "group_price": 299,
+    "original_price": null,
+    "expire_hours": 6,
+    "stock_limit": 100,
+    "sold_count": 0,
+    "status": true,
+    "start_at": null,
+    "end_at": null,
+    "created_at": "2026-03-18T05:03:24.000Z",
+    "updated_at": "2026-03-28T10:53:39.000Z"
+  },
+  {
+    "_id": "2",
+    "_legacy_id": 2,
+    "id": 2,
+    "product_id": 5,
+    "sku_id": null,
+    "min_members": 2,
+    "max_members": 2,
+    "group_price": 488,
+    "original_price": null,
+    "expire_hours": 23,
+    "stock_limit": 100,
+    "sold_count": 0,
+    "status": true,
+    "start_at": null,
+    "end_at": null,
+    "created_at": "2026-03-21T06:57:10.000Z",
+    "updated_at": "2026-03-29T07:19:48.000Z"
+  }
+]

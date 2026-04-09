@@ -1,0 +1,106 @@
+<view class="page">
+  <view class="hero-card">
+    <view class="hero-top">
+      <view>
+        <text class="hero-kicker">团队工作台</text>
+        <text class="hero-title">代理发货与货款概览</text>
+      </view>
+      <view class="hero-badge">
+        <image class="hero-badge-icon" src="/assets/icons/package.svg" mode="aspectFit"></image>
+        <text>云仓</text>
+      </view>
+    </view>
+
+    <view class="hero-main">
+      <text class="hero-stock">{{workbench.stock_count || 0}}</text>
+      <text class="hero-stock-unit">件可调度库存</text>
+    </view>
+
+    <view class="metrics-grid">
+      <view class="metric-cell">
+        <text class="metric-label">待发货</text>
+        <text class="metric-value">{{workbench.pending_ship || 0}}</text>
+      </view>
+      <view class="metric-cell">
+        <text class="metric-label">待确认</text>
+        <text class="metric-value">{{workbench.pending_confirm || 0}}</text>
+      </view>
+      <view class="metric-cell">
+        <text class="metric-label">累计发货</text>
+        <text class="metric-value">{{workbench.total_handled || 0}}</text>
+      </view>
+      <view class="metric-cell accent">
+        <text class="metric-label">本月利润</text>
+        <text class="metric-value">¥{{workbench.month_profit || '0.00'}}</text>
+      </view>
+    </view>
+
+    <view class="hero-actions">
+      <view class="hero-btn hero-btn-primary" bindtap="goRestock">采购入仓</view>
+      <view class="hero-btn hero-btn-ghost" bindtap="goStockLogs">库存明细</view>
+    </view>
+  </view>
+
+  <view class="section-card">
+    <view class="section-head">
+      <text class="section-title">订单筛选</text>
+      <text class="section-sub">按状态查看当前处理队列</text>
+    </view>
+    <scroll-view scroll-x show-scrollbar="{{false}}" class="pill-scroll">
+      <view class="pill-row">
+        <view class="status-pill {{activeStatus === 'all' ? 'active' : ''}}" data-status="all" bindtap="onStatusChange">
+          <text>全部</text>
+        </view>
+        <view class="status-pill {{activeStatus === 'pending' ? 'active' : ''}}" data-status="pending" bindtap="onStatusChange">
+          <text>待发货</text>
+          <view class="pill-badge" wx:if="{{workbench.pending_ship > 0}}">{{workbench.pending_ship}}</view>
+        </view>
+        <view class="status-pill {{activeStatus === 'shipping_requested' ? 'active' : ''}}" data-status="shipping_requested" bindtap="onStatusChange">
+          <text>待确认</text>
+        </view>
+        <view class="status-pill {{activeStatus === 'shipped' ? 'active' : ''}}" data-status="shipped" bindtap="onStatusChange">
+          <text>已发货</text>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <view class="order-list">
+    <view class="order-card" wx:for="{{orders}}" wx:key="id">
+      <view class="order-head">
+        <text class="order-no">订单号 {{item.order_no}}</text>
+        <text class="order-state">{{item.status === 'paid' ? '待发货' : item.status === 'agent_confirmed' ? '已确认' : item.status === 'shipping_requested' ? '待平台确认' : item.status === 'shipped' ? '已发货' : item.status === 'completed' ? '已完成' : item.status}}</text>
+      </view>
+
+      <view class="order-body">
+        <image class="product-thumb" src="{{item.product.images[0] || '/assets/images/placeholder.svg'}}" mode="aspectFill"></image>
+        <view class="product-meta">
+          <text class="product-name">{{item.product.name || '商品'}}</text>
+          <text class="product-extra">买家 {{item.buyer.nickname || '用户'}} · 数量 x{{item.quantity}}</text>
+          <text class="product-price">实付 ¥{{item.actual_price || item.total_amount}}</text>
+        </view>
+      </view>
+
+      <view class="address-box" wx:if="{{item.address_snapshot}}">
+        <text class="address-name">{{item.address_snapshot.receiver_name}} {{item.address_snapshot.phone}}</text>
+        <text class="address-text">{{item.address_snapshot.province}}{{item.address_snapshot.city}}{{item.address_snapshot.district}}{{item.address_snapshot.detail}}</text>
+      </view>
+
+      <view class="order-foot" wx:if="{{item.status === 'paid' || item.status === 'agent_confirmed'}}">
+        <text class="order-tip">当前由平台履约发货，等待下一步处理</text>
+      </view>
+      <view class="order-foot" wx:if="{{item.status === 'shipped' || item.status === 'completed'}}">
+        <text class="order-tip">物流单号 {{item.tracking_no || '暂无'}}</text>
+      </view>
+    </view>
+
+    <view class="section-card empty-card" wx:if="{{orders.length === 0 && !loading}}">
+      <text class="empty-title">暂无订单</text>
+      <text class="empty-sub">当前筛选下没有需要处理的订单</text>
+    </view>
+
+    <view class="loading-block" wx:if="{{loading}}">
+      <text class="loading-text">加载中...</text>
+    </view>
+  </view>
+</view>

@@ -129,10 +129,10 @@
         <el-table-column label="会员信息" min-width="168" width="188">
           <template #default="{ row }">
             <div class="member-cell">
-              <el-avatar :src="row.buyer?.avatar_url" :size="36" class="member-avatar">{{ (row.buyer?.nickname || '?').slice(0, 1) }}</el-avatar>
+              <el-avatar :src="displayBuyerAvatar(row.buyer)" :size="36" class="member-avatar">{{ displayBuyerName(row.buyer, '?').slice(0, 1) }}</el-avatar>
               <div class="member-meta">
                 <div class="text-secondary">编号 {{ row.buyer?.member_no || '-' }}</div>
-                <div class="member-nick">{{ row.buyer?.nickname || '-' }}</div>
+                <div class="member-nick">{{ displayBuyerName(row.buyer) }}</div>
                 <div class="text-secondary hide-mobile">{{ row.buyer?.phone || '-' }}</div>
                 <el-tag size="small" :type="roleTagType(row.buyer?.role_level)" style="margin-top:4px">
                   {{ roleText(row.buyer?.role_level) }}
@@ -153,7 +153,7 @@
                   {{ row.product?.name || '-' }}
                 </el-link>
                 <div class="cell-info__sub">{{ listSkuText(row) }}</div>
-                <div class="cell-info__sub">单价 ¥{{ lineUnitPrice(row) }} × {{ row.quantity || 1 }}</div>
+                <div class="cell-info__sub">单价 ¥{{ lineUnitPrice(row) }} × {{ row.qty || row.quantity || 1 }}</div>
                 <div class="cell-info__sub text-price">小计 ¥{{ money(row.total_amount) }}</div>
               </div>
             </div>
@@ -161,7 +161,7 @@
         </el-table-column>
         <el-table-column label="实付 / 状态" width="138">
           <template #default="{ row }">
-            <div class="text-price">¥{{ Number(row.actual_price || 0).toFixed(2) }}</div>
+            <div class="text-price">¥{{ money(row.actual_price) }}</div>
             <div class="text-secondary hide-mobile">{{ paymentMethodText(row.payment_method) }}</div>
             <div style="margin-top:6px">
               <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</el-tag>
@@ -233,9 +233,9 @@
             <div class="detail-card">
               <div class="detail-card-title">会员信息</div>
               <div class="detail-member-row">
-                <el-avatar :src="detailData.buyer?.avatar_url" :size="48">{{ (detailData.buyer?.nickname || '?').slice(0, 1) }}</el-avatar>
+                <el-avatar :src="displayBuyerAvatar(detailData.buyer)" :size="48">{{ displayBuyerName(detailData.buyer, '?').slice(0, 1) }}</el-avatar>
                 <el-descriptions :column="2" border size="small" class="detail-member-desc">
-                  <el-descriptions-item label="买家昵称">{{ detailData.buyer?.nickname || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="买家昵称">{{ displayBuyerName(detailData.buyer) }}</el-descriptions-item>
                   <el-descriptions-item label="会员编号">{{ detailData.buyer?.member_no || '-' }}</el-descriptions-item>
                   <el-descriptions-item label="手机号">{{ detailData.buyer?.phone || '-' }}</el-descriptions-item>
                   <el-descriptions-item label="会员层级">
@@ -267,7 +267,9 @@
               <el-table-column label="价格(元)" width="100" align="right">
                 <template #default="{ row }">¥{{ row.unitPrice }}</template>
               </el-table-column>
-              <el-table-column prop="quantity" label="数量" width="72" align="center" />
+              <el-table-column prop="qty" label="数量" width="72" align="center">
+                <template #default="{ row }">{{ row.qty || row.quantity || 1 }}</template>
+              </el-table-column>
               <el-table-column label="小计(元)" width="100" align="right">
                 <template #default="{ row }">¥{{ row.lineTotal }}</template>
               </el-table-column>
@@ -374,10 +376,10 @@
     <el-dialog v-model="amountVisible" title="修改订单金额" width="400px">
       <el-form :model="amountForm" label-width="90px">
         <el-form-item label="当前金额">
-          <span style="color:#f56c6c; font-weight:bold; font-size:16px">¥{{ Number(currentOrder?.actual_price||0).toFixed(2) }}</span>
+          <span style="color:#f56c6c; font-weight:bold; font-size:16px">¥{{ money(currentOrder?.actual_price) }}</span>
         </el-form-item>
         <el-form-item label="新金额">
-          <el-input-number v-model="amountForm.new_amount" :min="0" :precision="2" style="width:100%" />
+          <el-input-number v-model="amountForm.actual_price" :min="0" :precision="2" style="width:100%" />
         </el-form-item>
         <el-form-item label="调整原因">
           <el-input v-model="amountForm.reason" placeholder="如：客服协商改价" />
@@ -433,6 +435,7 @@ import {
   exportOrders
 } from '@/api'
 import { formatDateTime } from '@/utils/format'
+import { getUserAvatar, getUserNickname, normalizeUserDisplay } from '@/utils/userDisplay'
 import { usePagination } from '@/composables/usePagination'
 import { useUserStore } from '@/store/user'
 
@@ -467,6 +470,9 @@ const logisticsCompanyRequired = ref(false)
 const canAdjustOrderAmount = computed(() => userStore.hasPermission('order_amount_adjust'))
 const canForceCompleteOrder = computed(() => userStore.hasPermission('order_force_complete'))
 const canForceCancelOrder = computed(() => userStore.hasPermission('order_force_cancel'))
+const displayBuyer = (buyer) => normalizeUserDisplay(buyer || {})
+const displayBuyerName = (buyer, fallback = '-') => getUserNickname(displayBuyer(buyer), fallback)
+const displayBuyerAvatar = (buyer) => getUserAvatar(displayBuyer(buyer))
 
 const buildListQueryParams = (forExport = false) => {
   const params = {}
@@ -594,7 +600,9 @@ const handleReset = () => {
   handleSearch()
 }
 
-const money = (value) => Number(value || 0).toFixed(2)
+const money = (value) => (Number(value || 0) / 100).toFixed(2)
+const moneyNumber = (value) => Number(money(value))
+const toFen = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100)
 const fmtDateTime = (value) => value ? formatDateTime(value) : '-'
 const paymentMethodText = (method) => ({
   wechat: '微信支付',
@@ -620,14 +628,14 @@ const listSkuText = (row) => {
 }
 
 const lineUnitPrice = (row) => {
-  const q = Number(row?.quantity || 1)
+  const q = Number(row?.qty || row?.quantity || 1)
   const t = Number(row?.total_amount || 0)
   if (q <= 0) return money(t)
-  return (t / q).toFixed(2)
+  return money(t / q)
 }
 
 const goUserManage = (row) => {
-  const k = row.buyer?.member_no || row.buyer?.phone || row.buyer?.nickname
+  const k = row.buyer?.member_no || row.buyer?.phone || displayBuyerName(row.buyer, '')
   if (!k) {
     ElMessage.warning('无会员信息可跳转')
     return
@@ -686,19 +694,29 @@ const detailData = ref(null)
 const detailLineItems = computed(() => {
   const o = detailData.value
   if (!o) return []
-  const q = Math.max(1, Number(o.quantity || 1))
-  const total = Number(o.total_amount || 0)
-  const unit = (total / q).toFixed(2)
-  return [
-    {
-      image: o.product?.images?.[0],
-      name: o.product?.name || '-',
-      spec: detailSkuText(o),
-      unitPrice: unit,
-      quantity: Number(o.quantity || 1),
-      lineTotal: money(total)
+  const sourceItems = Array.isArray(o.items) && o.items.length
+    ? o.items
+    : [{
+        snapshot_image: o.product?.images?.[0],
+        snapshot_name: o.product?.name || '-',
+        snapshot_spec: detailSkuText(o),
+        qty: Number(o.qty || o.quantity || 1),
+        item_amount: Number(o.total_amount || 0),
+        unit_price: Number(o.total_amount || 0) / Math.max(1, Number(o.qty || o.quantity || 1))
+      }]
+  return sourceItems.map((item) => {
+    const qty = Math.max(1, Number(item.qty || item.quantity || 1))
+    const itemAmount = Number(item.item_amount ?? item.total_amount ?? item.price ?? 0)
+    const unitPrice = Number(item.unit_price ?? (qty > 0 ? itemAmount / qty : itemAmount))
+    return {
+      image: item.snapshot_image || o.product?.images?.[0],
+      name: item.snapshot_name || o.product?.name || '-',
+      spec: item.snapshot_spec || detailSkuText(o),
+      unitPrice: money(unitPrice),
+      qty,
+      lineTotal: money(itemAmount)
     }
-  ]
+  })
 })
 
 const handleDetail = async (row) => {
@@ -755,11 +773,11 @@ const submitShip = async () => {
 
 // ===== 改价 =====
 const amountVisible = ref(false)
-const amountForm = reactive({ new_amount: 0, reason: '' })
+const amountForm = reactive({ actual_price: 0, reason: '' })
 
 const handleAmount = (row) => {
   currentOrder.value = row
-  amountForm.new_amount = row.actual_price
+  amountForm.actual_price = moneyNumber(row.actual_price)
   amountForm.reason = ''
   amountVisible.value = true
 }
@@ -767,7 +785,7 @@ const submitAmount = async () => {
   if (!amountForm.reason.trim()) return ElMessage.warning('请填写调整原因')
   await runOrderMutation(
     submittingAmount,
-    () => adjustOrderAmount(currentOrder.value.id, amountForm),
+    () => adjustOrderAmount(currentOrder.value.id, { actual_price: toFen(amountForm.actual_price), reason: amountForm.reason }),
     '金额修改成功',
     () => { amountVisible.value = false }
   )

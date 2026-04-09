@@ -1,0 +1,59 @@
+<!--pages/order/review.wxml-->
+<view class="review-page">
+  <!-- 商品信息卡 -->
+  <view class="product-card" wx:if="{{order && order.product}}">
+    <image class="product-img" src="{{order.product.images && order.product.images[0]}}" mode="aspectFill" />
+    <view class="product-name">{{order.product.name || '商品'}}</view>
+  </view>
+
+  <!-- 星级评分 -->
+  <view class="section">
+    <view class="section-title">商品评分</view>
+    <view class="star-row">
+      <view
+        class="star {{rating >= item ? 'active' : ''}}"
+        wx:for="{{starList}}"
+        wx:key="index"
+        data-rating="{{item}}"
+        bindtap="onStarTap"
+      >★</view>
+      <text class="rating-label">{{ratingLabels[rating]}}</text>
+    </view>
+  </view>
+
+  <!-- 评价内容 -->
+  <view class="section">
+    <view class="section-title">评价内容</view>
+    <textarea
+      class="content-input"
+      placeholder="分享您的使用感受（至少5字）"
+      maxlength="500"
+      bindinput="onContentInput"
+      value="{{content}}"
+      auto-height
+    />
+    <view class="content-count">{{content.length}}/500</view>
+  </view>
+
+  <!-- 图片上传 -->
+  <view class="section">
+    <view class="section-title">上传图片（选填，最多9张）</view>
+    <view class="image-grid">
+      <view class="image-item" wx:for="{{images}}" wx:key="index">
+        <image src="{{item}}" mode="aspectFill" class="preview-img" />
+        <view class="delete-btn" data-index="{{index}}" bindtap="onDeleteImage">×</view>
+      </view>
+      <view class="add-image-btn" wx:if="{{images.length < 9}}" bindtap="onChooseImage">
+        <text class="add-icon">+</text>
+        <text class="add-text">添加图片</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 提交按钮 -->
+  <view class="submit-wrap">
+    <button class="submit-btn {{submitting ? 'disabled' : ''}}" bindtap="onSubmit" disabled="{{submitting}}">
+      {{submitting ? '提交中...' : '提交评价'}}
+    </button>
+  </view>
+</view>
