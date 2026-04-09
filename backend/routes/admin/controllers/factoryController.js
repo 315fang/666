@@ -11,6 +11,7 @@
 const { Order, User, Product, Address, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
 const { sendNotification } = require('../../../models/notificationUtil');
+const { serverError } = require('../../../utils/apiResponse');
 
 /**
  * 获取工厂待发货订单列表
@@ -118,10 +119,7 @@ const getPendingOrders = async (req, res) => {
         });
     } catch (error) {
         console.error('获取工厂待发货订单失败:', error);
-        res.status(500).json({
-            code: -1,
-            message: '获取待发货订单失败: ' + error.message
-        });
+        return serverError(res, error, '获取待发货订单失败');
     }
 };
 
@@ -239,10 +237,7 @@ const shipOrder = async (req, res) => {
     } catch (error) {
         await t.rollback();
         console.error('工厂发货失败:', error);
-        res.status(500).json({
-            code: -1,
-            message: '发货失败: ' + error.message
-        });
+        return serverError(res, error, '发货失败');
     }
 };
 
@@ -346,10 +341,7 @@ const batchShipOrders = async (req, res) => {
         });
     } catch (error) {
         console.error('批量发货失败:', error);
-        res.status(500).json({
-            code: -1,
-            message: '批量发货失败: ' + error.message
-        });
+        return serverError(res, error, '批量发货失败');
     }
 };
 
@@ -405,10 +397,7 @@ const getShippedOrders = async (req, res) => {
         });
     } catch (error) {
         console.error('获取已发货订单失败:', error);
-        res.status(500).json({
-            code: -1,
-            message: '获取已发货订单失败: ' + error.message
-        });
+        return serverError(res, error, '获取已发货订单失败');
     }
 };
 
@@ -495,10 +484,7 @@ const getFactoryDashboard = async (req, res) => {
         });
     } catch (error) {
         console.error('获取工厂工作台数据失败:', error);
-        res.status(500).json({
-            code: -1,
-            message: '获取数据失败: ' + error.message
-        });
+        return serverError(res, error, '获取数据失败');
     }
 };
 

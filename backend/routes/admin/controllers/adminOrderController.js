@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const { sendNotification } = require('../../../models/notificationUtil');
 const AdminOrderService = require('../../../services/AdminOrderService');
 const { normalizeCompanyCode, getCompanyDisplayName } = require('../../../services/LogisticsService');
+const { serverError } = require('../../../utils/apiResponse');
 
 // 获取订单列表
 const getOrders = async (req, res) => {
@@ -79,7 +80,7 @@ const getOrders = async (req, res) => {
         });
     } catch (error) {
         console.error('获取订单列表失败:', error);
-        res.status(500).json({ code: -1, message: '获取订单列表失败: ' + error.message });
+        return serverError(res, error, '获取订单列表失败');
     }
 };
 
@@ -103,7 +104,7 @@ const getOrderById = async (req, res) => {
         res.json({ code: 0, data: order });
     } catch (error) {
         console.error('获取订单详情失败:', error);
-        res.status(500).json({ code: -1, message: '获取订单详情失败: ' + error.message });
+        return serverError(res, error, '获取订单详情失败');
     }
 };
 
@@ -148,7 +149,7 @@ const updateOrderStatus = async (req, res) => {
         res.json({ code: 0, message: '状态更新成功' });
     } catch (error) {
         console.error('更新订单状态失败:', error);
-        res.status(500).json({ code: -1, message: '更新失败: ' + error.message });
+        return serverError(res, error, '更新失败');
     }
 };
 
@@ -160,7 +161,7 @@ const shipOrder = async (req, res) => {
         res.json({ code: 0, message: '发货成功', data: result });
     } catch (error) {
         console.error('发货失败:', error);
-        res.status(500).json({ code: -1, message: error.message || '发货失败' });
+        return serverError(res, error, '发货失败');
     }
 };
 
@@ -216,7 +217,7 @@ const updateShippingInfo = async (req, res) => {
         });
     } catch (error) {
         console.error('修改物流信息失败:', error);
-        res.status(500).json({ code: -1, message: '修改物流信息失败: ' + error.message });
+        return serverError(res, error, '修改物流信息失败');
     }
 };
 
@@ -321,7 +322,7 @@ const transferOrderAgent = async (req, res) => {
         });
     } catch (error) {
         console.error('转移订单失败:', error);
-        res.status(500).json({ code: -1, message: error.message || '转移失败' });
+        return serverError(res, error, '转移失败');
     }
 };
 
@@ -381,7 +382,7 @@ const forceCancelOrder = async (req, res) => {
         res.json({ code: 0, message: '订单已取消' });
     } catch (error) {
         console.error('取消订单失败:', error);
-        res.status(500).json({ code: -1, message: error.message || '取消失败' });
+        return serverError(res, error, '取消失败');
     }
 };
 

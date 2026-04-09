@@ -1,5 +1,7 @@
 const { User, Order, CommissionLog, Dealer } = require('../../../models');
 const { Op } = require('sequelize');
+const { checkPermission } = require('../../../middleware/adminAuth');
+const { serverError } = require('../../../utils/apiResponse');
 
 // 获取用户列表（含邀请码、库存信息）
 const getUsers = async (req, res) => {
@@ -53,7 +55,7 @@ const getUsers = async (req, res) => {
         });
     } catch (error) {
         console.error('获取用户列表失败:', error);
-        res.status(500).json({ code: -1, message: '获取用户列表失败: ' + error.message });
+        return serverError(res, error, '获取用户列表失败');
     }
 };
 
@@ -249,6 +251,7 @@ const adjustUserBalance = async (req, res) => {
         const { amount, type, reason } = req.body;
         const adminId = req.admin?.id || 0;
         const adminName = req.admin?.username || 'unknown';
+        const adminIp = req.ip || req.headers['x-forwarded-for'] || '';
 
         if (!amount || !type || !reason) {
             await t.rollback();
@@ -293,7 +296,7 @@ const adjustUserBalance = async (req, res) => {
             type: 'admin_adjustment',
             status: 'settled',
             available_at: new Date(),
-            remark: `[管理员${adminName}] ${reason}`
+            remark: `[管理员${adminName}(${adminIp})] ${reason}`
         }, { transaction: t });
 
         await t.commit();
@@ -496,6 +499,17 @@ const updateUserRemark = async (req, res) => {
  */
 const batchUpdateRole = async (req, res) => {
     try {
+        // ★ 权限校验：只有 super_admin 或拥有 users 权限的 admin 才能修改用户角色
+        const admin = req.admin;
+        if (!admin) {
+            return res.status(401).json({ code: -1, message: '未登录' });
+        }
+        const isSuperAdmin = admin.role === 'super_admin';
+        const hasUsersPermission = (admin.role === 'admin' || admin.permissions?.includes('users'));
+        if (!isSuperAdmin && !hasUsersPermission) {
+            return res.status(403).json({ code: -1, message: '无操作权限：批量修改角色需要管理员权限' });
+        }
+
         const { user_ids, role_level } = req.body;
 
         if (!user_ids || !Array.isArray(user_ids) || user_ids.length === 0) {

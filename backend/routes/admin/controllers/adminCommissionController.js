@@ -2,6 +2,7 @@ const { CommissionLog, User, Order, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
 const { sendNotification } = require('../../../models/notificationUtil');
 const AdminCommissionService = require('../../../services/AdminCommissionService');
+const { serverError } = require('../../../utils/apiResponse');
 
 /**
  * 获取全局佣金/分润记录
@@ -128,7 +129,10 @@ const approveCommission = async (req, res) => {
     } catch (error) {
         console.error('审批失败:', error);
         const status = error.message.includes('不存在') ? 404 : 400;
-        res.status(status).json({ code: -1, message: error.message || '审批失败' });
+        if (status === 404) {
+            return res.status(404).json({ code: -1, message: '记录不存在' });
+        }
+        return serverError(res, error, '审批失败');
     }
 };
 
@@ -145,7 +149,10 @@ const rejectCommission = async (req, res) => {
     } catch (error) {
         console.error('拒绝失败:', error);
         const status = error.message.includes('不存在') ? 404 : 400;
-        res.status(status).json({ code: -1, message: error.message || '操作失败' });
+        if (status === 404) {
+            return res.status(404).json({ code: -1, message: '记录不存在' });
+        }
+        return serverError(res, error, '操作失败');
     }
 };
 
@@ -160,7 +167,7 @@ const batchApproveCommissions = async (req, res) => {
         res.json({ code: 0, message: `已审批通过 ${updateCount} 条记录` });
     } catch (error) {
         console.error('批量审批失败:', error);
-        res.status(400).json({ code: -1, message: error.message || '批量审批失败' });
+        return serverError(res, error, '批量审批失败');
     }
 };
 
@@ -175,7 +182,7 @@ const batchRejectCommissions = async (req, res) => {
         res.json({ code: 0, message: `已拒绝 ${updateCount} 条记录` });
     } catch (error) {
         console.error('批量拒绝失败:', error);
-        res.status(400).json({ code: -1, message: error.message || '批量拒绝失败' });
+        return serverError(res, error, '批量拒绝失败');
     }
 };
 

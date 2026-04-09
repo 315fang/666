@@ -11,6 +11,7 @@ const adminWithdrawalController = require('./controllers/adminWithdrawalControll
 const adminRefundController = require('./controllers/adminRefundController');
 const adminDealerController = require('./controllers/adminDealerController');
 const { AppConfig } = require('../../models');
+const { serverError } = require('../../utils/apiResponse');
 
 // ★ 配置 multer（内存存储，后续传到对象存储）
 const upload = multer({
@@ -346,7 +347,7 @@ router.get('/logistics/order/:id', checkPermission('orders'), async (req, res) =
         const data = await queryLogistics(order.tracking_no, order.logistics_company, req.query.refresh === '1');
         res.json({ code: 0, data });
     } catch (err) {
-        res.status(500).json({ code: -1, message: err.message });
+        return serverError(res, err);
     }
 });
 

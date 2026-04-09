@@ -5,6 +5,7 @@
 
 const { User, Order, CommissionLog, Product, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
+const { serverError } = require('../../../utils/apiResponse');
 
 /**
  * 获取综合统计概览
@@ -48,7 +49,7 @@ const getDashboardOverview = async (req, res) => {
         });
     } catch (error) {
         console.error('获取统计概览失败:', error);
-        res.status(500).json({ code: -1, message: '获取失败', error: error.message });
+        return serverError(res, error, '获取失败');
     }
 };
 

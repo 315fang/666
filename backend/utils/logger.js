@@ -1,12 +1,13 @@
 /**
  * 结构化日志模块（Winston 升级版）
- * 
+ *
  * 特性：
  * - 分级：error / warn / info / http / debug
  * - 文件按天轮转，保留 30 天，超 50MB 自动分片
  * - 生产环境不输出 debug，仅 warn+ 输出到控制台
  * - JSON 格式便于 ELK / Loki 等日志系统接入
  * - 向后兼容原有 API（requestLogger, errorTracker, logAuth 等）
+ * - 敏感信息脱敏（手机号、身份证等）
  */
 
 const { createLogger, format, transports } = require('winston');
@@ -15,6 +16,100 @@ const path = require('path');
 
 const isProd = process.env.NODE_ENV === 'production';
 const LOG_DIR = path.join(__dirname, '../logs');
+
+// ============================================================
+// 敏感信息脱敏工具
+// ============================================================
+
+/**
+ * 手机号脱敏：138****5678
+ * @param {string} phone - 原始手机号
+ * @returns {string} 脱敏后的手机号
+ */
+function maskPhone(phone) {
+    if (!phone || typeof phone !== 'string') return phone;
+    if (phone.length === 11) {
+        return phone.substring(0, 3) + '****' + phone.substring(7);
+    }
+    return phone;
+}
+
+/**
+ * 身份证脱敏：330***********1234
+ * @param {string} idCard - 原始身份证号
+ * @returns {string} 脱敏后的身份证号
+ */
+function maskIdCard(idCard) {
+    if (!idCard || typeof idCard !== 'string') return idCard;
+    if (idCard.length >= 18) {
+        return idCard.substring(0, 3) + '*'.repeat(11) + idCard.substring(14);
+    }
+    return idCard;
+}
+
+/**
+ * 对日志消息和元数据进行敏感信息脱敏
+ * @param {string} message - 日志消息
+ * @param {object} meta - 日志元数据
+ * @returns {{ message: string, meta: object }} 脱敏后的消息和元数据
+ */
+function sanitizeLogInput(message, meta = {}) {
+    // 脱敏消息中的敏感信息
+    let sanitizedMessage = message;
+    if (typeof message === 'string') {
+        // 脱敏手机号（11位数字）
+        sanitizedMessage = message.replace(/(\d{3})(\d{4})(\d{4})/g, (match, p1, p2, p3) => {
+            // 判断是否为手机号（以1开头的11位数字）
+            if (p1.startsWith('1') && message.includes(match)) {
+                return p1 + '****' + p3;
+            }
+            return match;
+        });
+        // 脱敏身份证号（18位）
+        sanitizedMessage = sanitizedMessage.replace(/\b(\d{3})\d{11}(\d{4})\b/g, '$1' + '*'.repeat(11) + '$2');
+    }
+
+    // 脱敏元数据中的敏感字段
+    const SENSITIVE_FIELDS = [
+        'phone', 'mobile', 'tel', 'telephone',
+        'id_card', 'idCard', 'identity', 'identity_no',
+        'card_no', 'cardNo', 'account_no', 'accountNo',
+        'password', 'secret', 'token', 'authorization'
+    ];
+
+    let sanitizedMeta = {};
+    for (const [key, val] of Object.entries(meta)) {
+        if (val === null || val === undefined) {
+            sanitizedMeta[key] = val;
+            continue;
+        }
+        const keyLower = key.toLowerCase();
+        if (SENSITIVE_FIELDS.some(f => keyLower.includes(f))) {
+            if (typeof val === 'string') {
+                // 对手机号和身份证进行特殊脱敏
+                if (keyLower.includes('phone') || keyLower.includes('mobile') || keyLower.includes('tel')) {
+                    sanitizedMeta[key] = maskPhone(val);
+                } else if (keyLower.includes('id_card') || keyLower.includes('identity') || keyLower.includes('card_no')) {
+                    sanitizedMeta[key] = maskIdCard(val);
+                } else {
+                    sanitizedMeta[key] = '[REDACTED]';
+                }
+            } else {
+                sanitizedMeta[key] = '[REDACTED]';
+            }
+        } else if (typeof val === 'string' && val.length > 200) {
+            // 超长字符串截断
+            sanitizedMeta[key] = val.substring(0, 100) + '...[TRUNCATED]';
+        } else if (typeof val === 'object') {
+            // 递归脱敏对象
+            sanitizedMeta[key] = sanitizeLogInput('', val).meta;
+        } else {
+            sanitizedMeta[key] = val;
+        }
+    }
+
+    return { message: sanitizedMessage, meta: sanitizedMeta };
+}
 
 // ============================================================
 // 格式定义
@@ -77,29 +172,47 @@ if (!isProd) {
 // 公共 API（向后兼容）
 // ============================================================
 const logger = {
-    // 基础日志方法
-    error: (category, message, meta = {}) =>
-        winstonLogger.error(message, { category, ...meta }),
-    warn: (category, message, meta = {}) =>
-        winstonLogger.warn(message, { category, ...meta }),
-    info: (category, message, meta = {}) =>
-        winstonLogger.info(message, { category, ...meta }),
-    debug: (category, message, meta = {}) =>
-        winstonLogger.debug(message, { category, ...meta }),
+    // 基础日志方法（自动脱敏）
+    error: (category, message, meta = {}) => {
+        const { message: safeMsg, meta: safeMeta } = sanitizeLogInput(message, meta);
+        winstonLogger.error(safeMsg, { category, ...safeMeta });
+    },
+    warn: (category, message, meta = {}) => {
+        const { message: safeMsg, meta: safeMeta } = sanitizeLogInput(message, meta);
+        winstonLogger.warn(safeMsg, { category, ...safeMeta });
+    },
+    info: (category, message, meta = {}) => {
+        const { message: safeMsg, meta: safeMeta } = sanitizeLogInput(message, meta);
+        winstonLogger.info(safeMsg, { category, ...safeMeta });
+    },
+    debug: (category, message, meta = {}) => {
+        const { message: safeMsg, meta: safeMeta } = sanitizeLogInput(message, meta);
+        winstonLogger.debug(safeMsg, { category, ...safeMeta });
+    },
 
-    // 业务快捷方法
-    logAuth: (action, meta = {}) =>
-        winstonLogger.info(action, { category: 'AUTH', ...meta }),
-    logOrder: (action, meta = {}) =>
-        winstonLogger.info(action, { category: 'ORDER', ...meta }),
-    logCommission: (action, meta = {}) =>
-        winstonLogger.info(action, { category: 'COMMISSION', ...meta }),
-    logPayment: (action, meta = {}) =>
-        winstonLogger.info(action, { category: 'PAYMENT', ...meta }),
+    // 业务快捷方法（自动脱敏）
+    logAuth: (action, meta = {}) => {
+        const { message: safeMsg, meta: safeMeta } = sanitizeLogInput(action, meta);
+        winstonLogger.info(safeMsg, { category: 'AUTH', ...safeMeta });
+    },
+    logOrder: (action, meta = {}) => {
+        const { message: safeMsg, meta: safeMeta } = sanitizeLogInput(action, meta);
+        winstonLogger.info(safeMsg, { category: 'ORDER', ...safeMeta });
+    },
+    logCommission: (action, meta = {}) => {
+        const { message: safeMsg, meta: safeMeta } = sanitizeLogInput(action, meta);
+        winstonLogger.info(safeMsg, { category: 'COMMISSION', ...safeMeta });
+    },
+    logPayment: (action, meta = {}) => {
+        const { message: safeMsg, meta: safeMeta } = sanitizeLogInput(action, meta);
+        winstonLogger.info(safeMsg, { category: 'PAYMENT', ...safeMeta });
+    },
 
-    // 定时任务
-    cronLog: (taskName, result = {}) =>
-        winstonLogger.info(taskName, { category: 'CRON', ...result }),
+    // 定时任务（自动脱敏）
+    cronLog: (taskName, result = {}) => {
+        const { message: safeMsg, meta: safeMeta } = sanitizeLogInput(taskName, result);
+        winstonLogger.info(safeMsg, { category: 'CRON', ...safeMeta });
+    },
 
     // ============================================================
     // Express 中间件：HTTP 请求日志

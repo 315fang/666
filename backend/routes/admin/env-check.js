@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const EnvConfigService = require('../../services/EnvConfigService');
 const { adminAuth } = require('../../middleware/adminAuth');
+const { serverError } = require('../../utils/apiResponse');
 
 /**
  * 环境配置检查路由（.env文件只读检查）
@@ -17,10 +18,7 @@ router.get('/env-report', adminAuth, async (req, res) => {
         });
     } catch (error) {
         console.error('[EnvCheck] 获取配置报告失败:', error);
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '获取配置报告失败');
     }
 });
 
@@ -43,10 +41,7 @@ router.get('/env-report/health', adminAuth, async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '获取配置健康度失败');
     }
 });
 
@@ -102,10 +97,7 @@ router.get('/env-content', adminAuth, async (req, res) => {
         });
     } catch (error) {
         console.error('[EnvCheck] 读取.env失败:', error);
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '读取.env失败');
     }
 });
 
@@ -118,10 +110,7 @@ router.get('/env-compare', adminAuth, async (req, res) => {
             data: comparison
         });
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '对比配置失败');
     }
 });
 
@@ -137,10 +126,7 @@ router.get('/env-template', adminAuth, async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '生成模板失败');
     }
 });
 
@@ -153,10 +139,7 @@ router.get('/env-template/download', adminAuth, async (req, res) => {
         res.setHeader('Content-Disposition', 'attachment; filename=.env.template');
         res.send(template);
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '下载模板失败');
     }
 });
 
@@ -184,10 +167,7 @@ router.get('/env-config/:key', adminAuth, async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '获取配置项详情失败');
     }
 });
 

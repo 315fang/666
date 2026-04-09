@@ -1,4 +1,5 @@
 const { User, Product, Order, CommissionLog, sequelize } = require('../../../models');
+const { serverError } = require('../../../utils/apiResponse');
 
 /**
  * 测试工具：创建模拟用户
@@ -162,7 +163,7 @@ const createTestOrder = async (req, res) => {
     } catch (error) {
         await t.rollback();
         console.error('创建测试订单失败:', error);
-        res.status(500).json({ code: -1, message: '创建失败: ' + error.message });
+        return serverError(res, error, '创建失败');
     }
 };
 

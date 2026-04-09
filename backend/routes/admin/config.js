@@ -4,6 +4,7 @@ const ConfigService = require('../../services/ConfigService');
 const { adminAuth, checkPermission } = require('../../middleware/adminAuth');
 const { sequelize } = require('../../config/database');
 const { QueryTypes } = require('sequelize');
+const { serverError } = require('../../utils/apiResponse');
 
 /**
  * 系统配置管理路由（数据库存储，热更新）
@@ -19,10 +20,7 @@ router.get('/system-configs', adminAuth, async (req, res) => {
         });
     } catch (error) {
         console.error('[Config] 获取配置失败:', error);
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '获取配置失败');
     }
 });
 
@@ -40,10 +38,7 @@ router.get('/system-configs/:key', adminAuth, async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '获取配置详情失败');
     }
 });
 
@@ -103,10 +98,7 @@ router.post('/system-configs/batch', adminAuth, async (req, res) => {
         });
     } catch (error) {
         console.error('[Config] 批量更新失败:', error);
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '批量更新失败');
     }
 });
 
@@ -124,10 +116,7 @@ router.get('/system-configs/:key/history', adminAuth, async (req, res) => {
         });
     } catch (error) {
         console.error('[Config] 获取历史失败:', error);
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '获取历史失败');
     }
 });
 
@@ -179,10 +168,7 @@ router.post('/system-configs/refresh-cache', adminAuth, checkPermission('system'
             message: '配置缓存已刷新'
         });
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '刷新缓存失败');
     }
 });
 
@@ -215,10 +201,7 @@ router.get('/system-configs/health', adminAuth, async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '获取配置健康度失败');
     }
 });
 
@@ -310,7 +293,7 @@ router.get('/db-indexes/tables', adminAuth, checkPermission('system'), async (re
             }))
         });
     } catch (error) {
-        res.status(500).json({ code: 500, message: error.message });
+        return serverError(res, error);
     }
 });
 

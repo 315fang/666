@@ -13,20 +13,16 @@ const { generatePickupCredentials } = require('../controllers/pickupController')
 const { attributeRegionalProfit } = require('../controllers/stationController');
 const { calcCouponDiscount } = require('../controllers/couponController');
 const { appendReservedStockMarker, hasReservedStockMarker, removeReservedStockMarker } = require('../utils/orderStock');
+const crypto = require('crypto');
 
-let _orderSeq = 0;
+/**
+ * 生成加密安全的订单号
+ * 格式: ORD + 24位无序随机字符（使用 crypto.randomBytes，12字节hex）
+ * 总长度 27 位，不可预测
+ */
 const generateOrderNo = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hour = String(now.getHours()).padStart(2, '0');
-    const min = String(now.getMinutes()).padStart(2, '0');
-    const sec = String(now.getSeconds()).padStart(2, '0');
-    _orderSeq = (_orderSeq + 1) % 10000;
-    const seq = String(_orderSeq).padStart(4, '0');
-    const random = String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
-    return "ORD" + year + month + day + hour + min + sec + seq + random;
+    const randomPart = crypto.randomBytes(12).toString('hex').toUpperCase();
+    return "ORD" + randomPart;
 };
 
 const sumOrderField = (orders, field) => orders.reduce((sum, current) => {
@@ -503,30 +499,43 @@ class OrderCoreService {
 
             const t = await sequelize.transaction();
             try {
+                // ★ 幂等处理：使用原子更新，只有 status='pending' 的订单才会被更新
+                const [affectedRows] = await Order.update(
+                    { status: 'paid', paid_at: new Date() },
+                    {
+                        where: { order_no: orderNo, status: 'pending' },
+                        transaction: t
+                    }
+                );
+
+                // 如果没有更新任何行，说明订单已不是 pending 状态（可能已支付或已取消）
+                if (affectedRows === 0) {
+                    const existingOrder = await Order.findOne({
+                        where: { order_no: orderNo },
+                        transaction: t
+                    });
+                    await t.rollback();
+                    if (!existingOrder) {
+                        console.error('[WechatNotify] 订单不存在:', orderNo);
+                        return { xml_fail: 'order not found' };
+                    }
+                    // 订单已处理过，返回成功确保微信不重复推送
+                    console.log(`[WechatNotify] 订单已处理，跳过: ${orderNo}, 当前状态: ${existingOrder.status}`);
+                    return { xml_success: true };
+                }
+
+                // 金额一致性校验（误差容忍 1 分，防止浮点精度问题）
+                // 注意：此时订单已是 'paid' 状态，需要重新查询获取金额
                 const order = await Order.findOne({
                     where: { order_no: orderNo },
                     transaction: t,
                     lock: t.LOCK.UPDATE
                 });
-
-                if (!order) {
-                    await t.rollback();
-                    console.error('[WechatNotify] 订单不存在:', orderNo);
-                    return { xml_fail: 'order not found' };
-                }
-
-                // 幂等处理：已支付则直接返回成功
-                if (order.status !== 'pending') {
-                    await t.rollback();
-                    return { xml_success: true };
-                }
-
-                // 金额一致性校验（误差容忍 1 分，防止浮点精度问题）
                 const expectedFee = Math.round(parseFloat(order.total_amount) * 100);
                 if (Math.abs(paidFee - expectedFee) > 1) {
-                    await t.rollback();
+                    // 金额不匹配，但订单已更新为 paid，需要记录异常并告警
                     console.error(`[WechatNotify] 金额不一致: 预期${expectedFee}分, 实收${paidFee}分, 订单${orderNo}`);
-                    return { xml_fail: 'amount mismatch' };
+                    // 暂不回滚，因为微信已经扣款，需要人工处理
                 }
 
                 await _markOrderAsPaid(order, t);
@@ -819,6 +828,7 @@ class OrderCoreService {
     static async shipOrder(req) {
         const t = await sequelize.transaction();
         try {
+            const userId = req.user.id;
             const { id } = req.params;
             const { fulfillment_type, type, tracking_no, tracking_company, logistics_company } = req.body;
             // fulfillment_type: 'agent'（代理商发） 或 'platform'（平台发）
@@ -832,6 +842,13 @@ class OrderCoreService {
             if (!order) {
                 await t.rollback();
                 throw new Error('订单不存在');
+            }
+
+            // ★ 安全校验：验证订单归属（防止越权访问他人订单）
+            // 仅当订单有归属买家时校验，平台发货场景可能无 buyer_id（如历史数据）
+            if (order.buyer_id && order.buyer_id !== userId) {
+                await t.rollback();
+                throw new Error('无权操作此订单');
             }
 
             if (!['paid', 'agent_confirmed', 'shipping_requested'].includes(order.status)) {

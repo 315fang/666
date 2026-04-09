@@ -1,10 +1,11 @@
 /**
  * 管理员账号管理控制器
- * 
+ *
  * 提供管理员账号的增删改查功能
  */
 const { Admin, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
+const { validatePassword } = require('../../../utils/passwordPolicy');
 
 /**
  * 获取管理员列表
@@ -60,8 +61,14 @@ const createAdmin = async (req, res) => {
             return res.status(400).json({ code: -1, message: '用户名和密码是必填项' });
         }
 
-        if (password.length < 6) {
-            return res.status(400).json({ code: -1, message: '密码长度至少6位' });
+        // ★ 强密码策略校验（至少满足：长度>=8 + 大写字母 + 小写字母 + 数字）
+        const passwordValidation = validatePassword(password);
+        if (!passwordValidation.valid) {
+            return res.status(400).json({
+                code: -1,
+                message: '密码不符合安全策略',
+                errors: passwordValidation.errors
+            });
         }
 
         // 检查用户名是否已存在
@@ -150,8 +157,14 @@ const resetAdminPassword = async (req, res) => {
             return res.status(403).json({ code: -1, message: '权限不足：仅超级管理员可重置密码' });
         }
 
-        if (!new_password || new_password.length < 6) {
-            return res.status(400).json({ code: -1, message: '新密码长度至少6位' });
+        // ★ 强密码策略校验
+        const passwordValidation = validatePassword(new_password);
+        if (!passwordValidation.valid) {
+            return res.status(400).json({
+                code: -1,
+                message: '新密码不符合安全策略',
+                errors: passwordValidation.errors
+            });
         }
 
         const admin = await Admin.findByPk(id);

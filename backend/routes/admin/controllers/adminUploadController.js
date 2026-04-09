@@ -16,6 +16,7 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { serverError } = require('../../../utils/apiResponse');
 
 // 懒加载：避免循环依赖（模型文件在服务启动后才完全初始化）
 let _Material = null;
@@ -119,10 +120,104 @@ const getMimeType = (filename) => {
         '.webp': 'image/webp',
         '.svg': 'image/svg+xml',
         '.pdf': 'application/pdf',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.zip': 'application/zip',
         '.mp4': 'video/mp4',
         '.mp3': 'audio/mpeg'
     };
     return mimeTypes[ext] || 'application/octet-stream';
+};
+
+// ============================================================
+// 文件上传安全校验配置
+// ============================================================
+
+// 允许的文件扩展名白名单
+const ALLOWED_EXTENSIONS = new Set([
+    '.jpg', '.jpeg', '.png', '.gif', '.webp',  // 图片
+    '.pdf', '.doc', '.docx',                    // 文档
+    '.zip'                                      // 压缩包
+]);
+
+// MIME 类型白名单（与扩展名对应）
+const ALLOWED_MIME_TYPES = new Set([
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/zip'
+]);
+
+// 文件大小限制（字节）
+const FILE_SIZE_LIMITS = {
+    image: 5 * 1024 * 1024,   // 图片: 5MB
+    document: 10 * 1024 * 1024, // 文档: 10MB
+    archive: 10 * 1024 * 1024   // 压缩包: 10MB
+};
+
+/**
+ * 根据MIME类型判断文件类别
+ */
+const getFileCategory = (mimetype) => {
+    if (mimetype.startsWith('image/')) return 'image';
+    if (mimetype === 'application/zip') return 'archive';
+    return 'document';
+};
+
+/**
+ * 校验文件安全性（扩展名 + MIME类型 + 文件大小）
+ * @param {Object} file - 上传的文件对象
+ * @returns {{ valid: boolean, error: string }}
+ */
+const validateFile = (file) => {
+    if (!file) {
+        return { valid: false, error: '文件对象无效' };
+    }
+
+    const ext = path.extname(file.originalname || file.filename || '').toLowerCase();
+
+    // 1. 扩展名校验
+    if (!ALLOWED_EXTENSIONS.has(ext)) {
+        return {
+            valid: false,
+            error: `不允许的文件类型: ${ext}。仅支持: jpg/png/gif/webp/pdf/doc/docx/zip`
+        };
+    }
+
+    // 2. MIME类型校验
+    const mimeType = file.mimetype || getMimeType(file.originalname || file.filename || '');
+    if (!ALLOWED_MIME_TYPES.has(mimeType)) {
+        return {
+            valid: false,
+            error: `不允许的MIME类型: ${mimeType}`
+        };
+    }
+
+    // 3. MIME类型与扩展名一致性校验（防止文件伪装）
+    const expectedMimeType = getMimeType(file.originalname || file.filename || '');
+    if (mimeType !== expectedMimeType) {
+        return {
+            valid: false,
+            error: '文件内容与扩展名不匹配，可能存在安全风险'
+        };
+    }
+
+    // 4. 文件大小校验
+    const category = getFileCategory(mimeType);
+    const sizeLimit = FILE_SIZE_LIMITS[category] || FILE_SIZE_LIMITS.document;
+    if (file.size > sizeLimit) {
+        const limitMB = sizeLimit / (1024 * 1024);
+        return {
+            valid: false,
+            error: `文件大小不能超过${limitMB}MB`
+        };
+    }
+
+    return { valid: true };
 };
 
 /**
@@ -348,16 +443,10 @@ const upload = async (req, res) => {
             return res.status(400).json({ code: -1, message: '请选择要上传的文件' });
         }
 
-        // 文件大小限制 (10MB)
-        const maxSize = 10 * 1024 * 1024;
-        if (req.file.size > maxSize) {
-            return res.status(400).json({ code: -1, message: '文件大小不能超过10MB' });
-        }
-
-        // 文件类型校验
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
-        if (!allowedTypes.includes(req.file.mimetype)) {
-            return res.status(400).json({ code: -1, message: '仅支持 jpg/png/gif/webp/svg 格式' });
+        // ★ 文件安全校验（扩展名 + MIME类型 + 文件大小）
+        const validation = validateFile(req.file);
+        if (!validation.valid) {
+            return res.status(400).json({ code: -1, message: validation.error });
         }
 
         const folder = req.body.folder || 'products';
@@ -392,7 +481,7 @@ const upload = async (req, res) => {
         });
     } catch (error) {
         console.error('文件上传失败:', error);
-        res.status(500).json({ code: -1, message: error.message || '上传失败' });
+        return serverError(res, error, '上传失败');
     }
 };
 
@@ -419,9 +508,10 @@ const uploadMultiple = async (req, res) => {
 
         for (const file of req.files) {
             try {
-                // 校验每个文件
-                if (file.size > 10 * 1024 * 1024) {
-                    errors.push({ name: file.originalname, error: '文件过大' });
+                // ★ 文件安全校验（扩展名 + MIME类型 + 文件大小）
+                const validation = validateFile(file);
+                if (!validation.valid) {
+                    errors.push({ name: file.originalname, error: validation.error });
                     continue;
                 }
 
@@ -598,7 +688,7 @@ const testStorageConfig = async (req, res) => {
         }
     } catch (error) {
         console.error('存储测试失败:', error);
-        res.status(500).json({ code: -1, message: `测试失败: ${error.message}` });
+        return serverError(res, error, '测试失败');
     }
 };
 

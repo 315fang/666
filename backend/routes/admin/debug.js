@@ -10,6 +10,11 @@ const path = require('path');
 const os = require('os');
 const { sequelize } = require('../../models');
 const { getTaskStats } = require('../../utils/taskLock');
+const { authenticateAdmin } = require('../../../middleware/auth');
+const { serverError } = require('../../utils/apiResponse');
+
+// ★ 所有调试路由必须管理员鉴权
+router.use(authenticateAdmin);
 
 // ★ 读取最近 N 行错误日志（直接读文件，无 AI 分析）
 router.get('/logs', async (req, res) => {
@@ -54,7 +59,7 @@ router.get('/logs', async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({ code: -1, message: '读取日志失败: ' + error.message });
+        return serverError(res, error, '读取日志失败');
     }
 });
 
@@ -136,7 +141,7 @@ router.get('/anomalies', async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({ code: -1, message: '查询失败: ' + error.message });
+        return serverError(res, error, '查询失败');
     }
 });
 
@@ -147,7 +152,11 @@ router.get('/db-ping', async (req, res) => {
         await sequelize.authenticate();
         res.json({ code: 0, data: { ok: true, latency_ms: Date.now() - start } });
     } catch (error) {
-        res.json({ code: -1, data: { ok: false, error: error.message } });
+        // 生产环境不暴露数据库错误详情
+        if (process.env.NODE_ENV === 'production') {
+            return res.json({ code: -1, data: { ok: false, error: '数据库连接失败' } });
+        }
+        return res.json({ code: -1, data: { ok: false, error: error.message } });
     }
 });
 

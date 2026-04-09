@@ -102,10 +102,30 @@ module.exports = {
     // ======================== 安全配置 ========================
     SECURITY: {
         // JWT 密钥（所有环境都必须通过 .env 设置强密钥）
-        // 使用弱默认值以便在启动检查时能捕获
-        JWT_SECRET: process.env.JWT_SECRET || 'INSECURE-DEFAULT-user-secret-key',
+        // 生产环境禁止使用默认值，必须显式配置
+        JWT_SECRET: (() => {
+            const secret = process.env.JWT_SECRET;
+            if (!secret || secret === 'INSECURE-DEFAULT-user-secret-key') {
+                if (process.env.NODE_ENV === 'production') {
+                    throw new Error('【安全错误】生产环境必须配置 JWT_SECRET 环境变量，禁止使用默认值');
+                }
+                console.warn('【警告】JWT_SECRET 使用默认值，仅限开发环境使用');
+                return 'INSECURE-DEV-ONLY-' + Date.now();
+            }
+            return secret;
+        })(),
         JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
-        ADMIN_JWT_SECRET: process.env.ADMIN_JWT_SECRET || 'INSECURE-DEFAULT-admin-secret-key',
+        ADMIN_JWT_SECRET: (() => {
+            const secret = process.env.ADMIN_JWT_SECRET;
+            if (!secret || secret === 'INSECURE-DEFAULT-admin-secret-key') {
+                if (process.env.NODE_ENV === 'production') {
+                    throw new Error('【安全错误】生产环境必须配置 ADMIN_JWT_SECRET 环境变量，禁止使用默认值');
+                }
+                console.warn('【警告】ADMIN_JWT_SECRET 使用默认值，仅限开发环境使用');
+                return 'INSECURE-DEV-ONLY-' + Date.now();
+            }
+            return secret;
+        })(),
         ADMIN_JWT_EXPIRES_IN: process.env.ADMIN_JWT_EXPIRES_IN || '8h',
 
         // API限流

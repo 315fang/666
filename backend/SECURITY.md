@@ -99,7 +99,7 @@ Static uploads (`/uploads`) include:
 
 The mini program now uses centralized environment configuration:
 
-**File:** `qianduan/config/env.js`
+**File:** `miniprogram/config/env.js`
 
 Change environments by modifying `CURRENT_ENV`:
 ```javascript

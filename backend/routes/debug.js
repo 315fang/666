@@ -37,7 +37,9 @@ router.get('/diagnostic', authenticate, async (req, res) => {
         const userCount = await User.count();
         report.checks.user_table_query = `OK (Count: ${userCount})`;
     } catch (err) {
-        report.checks.database_error = err.message;
+        report.checks.database_error = process.env.NODE_ENV === 'production'
+            ? '数据库连接失败（已隐藏详情）'
+            : err.message;
     }
 
     // 2. 检查微信代码握手能力 (尝试访问微信API，查看是否能通，但不传真正code)
@@ -54,7 +56,9 @@ router.get('/diagnostic', authenticate, async (req, res) => {
         report.checks.wechat_api_reachability = "OK";
         report.checks.wechat_response = wechatTest.data;
     } catch (err) {
-        report.checks.wechat_network_error = err.message;
+        report.checks.wechat_network_error = process.env.NODE_ENV === 'production'
+            ? '微信API连接失败（已隐藏详情）'
+            : err.message;
     }
 
     res.json(report);

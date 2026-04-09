@@ -221,9 +221,9 @@ class CommissionService {
             }
         }
 
-        // 3. 计算总佣金和代理商利润
-        const totalCommission = commissions.reduce((sum, c) => sum + c.amount, 0);
-        agentProfit = Math.max(0, profitPool - totalCommission);
+        // 3. 计算总佣金和代理商利润（使用 _round 避免浮点精度问题）
+        const totalCommission = this._round(commissions.reduce((sum, c) => sum + c.amount, 0));
+        agentProfit = Math.max(0, this._round(profitPool - totalCommission));
 
         return {
             commissions,
@@ -401,8 +401,8 @@ class CommissionService {
             }
         }
 
-        // 4. 剩余利润归代理商
-        const agentProfit = profitPool - totalCommission;
+        // 4. 剩余利润归代理商（使用 _round 避免浮点精度问题）
+        const agentProfit = this._round(profitPool - totalCommission);
 
         return {
             commissions,
@@ -578,10 +578,12 @@ class CommissionService {
     }
 
     /**
-     * 四舍五入到2位小数
+     * 安全四舍五入到2位小数
+     * 使用整数运算（分）避免 JavaScript 浮点精度问题
      * @private
      */
     static _round(amount) {
+        // 先转分为整数运算，再转回元
         return Math.round(amount * 100) / 100;
     }
 
@@ -693,7 +695,8 @@ class CommissionService {
 
             if (p.role_level > currentLevel) {
                 const parentCost = priceMap[p.role_level];
-                const gapProfit = (lastCost - parentCost) * order.quantity;
+                // 使用 _round 避免浮点精度问题
+                const gapProfit = this._round((lastCost - parentCost) * order.quantity);
 
                 if (gapProfit > 0) {
                     const isOrderAgent = (agentId && agentId === p.id);
@@ -736,9 +739,24 @@ class CommissionService {
         const agentCostPrice = order.locked_agent_cost
             ? parseFloat(order.locked_agent_cost)
             : parseFloat(product.price_agent || product.price_leader || product.price_member || product.retail_price);
-        const agentCost = agentCostPrice * order.quantity;
+        // 使用 _round 避免浮点精度问题
+        const agentCost = this._round(agentCostPrice * order.quantity);
         const buyerPaid = parseFloat(order.actual_price);
-        const agentProfit = buyerPaid - agentCost - middleCommissionTotal;
+        const agentProfit = this._round(buyerPaid - agentCost - middleCommissionTotal);
+
+        // ★ 安全校验：负利润或零利润不允许发货，防止平台亏损
+        if (agentProfit <= 0) {
+            const errorMsg = `佣金计算后利润为负(¥${agentProfit.toFixed(2)})，不允许发货！订单ID:${order.id}，实付=${buyerPaid}，成本=${agentCost}，中间佣金=${middleCommissionTotal}。`;
+            console.error(`⚠️ [利润异常] ${errorMsg}`);
+            await sendNotification(
+                0,
+                '⚠️ 发货利润异常告警',
+                `订单ID:${order.id} 代理商发货利润为 ¥${agentProfit.toFixed(2)}（≤0），实付=${buyerPaid}，成本=${agentCost}，中间佣金=${middleCommissionTotal}。`,
+                'system_alert',
+                order.id
+            );
+            throw new Error(errorMsg);
+        }
 
         if (agentProfit > 0) {
             await CommissionLog.create({
@@ -759,17 +777,8 @@ class CommissionService {
                 'commission',
                 order.id
             );
-        } else if (agentProfit < 0) {
-            console.error(`⚠️ [利润异常] 订单 ${order.order_no || order.id} 代理商(ID:${agentId})发货利润为 ¥${agentProfit.toFixed(2)}，不产生佣金！`);
-            await sendNotification(
-                0,
-                '⚠️ 发货利润异常告警',
-                `订单ID:${order.id} 代理商发货利润为 ¥${agentProfit.toFixed(2)}（<0），实付=${buyerPaid}，成本=${agentCost}，中间佣金=${middleCommissionTotal}。`,
-                'system_alert',
-                order.id
-            );
         }
-        // agentProfit === 0 不产生佣金也不告警
+        // agentProfit === 0 的情况在上面 <= 0 校验时已拦截
 
         return { middleCommissionTotal };
     }

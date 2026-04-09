@@ -4,6 +4,7 @@ const MassMessageService = require('../../services/MassMessageService');
 const { adminAuth, checkPermission } = require('../../middleware/adminAuth');
 const { User } = require('../../models');
 const { Op } = require('sequelize');
+const { serverError } = require('../../utils/apiResponse');
 
 /**
  * 群发信息管理路由
@@ -29,10 +30,7 @@ router.get('/mass-messages', adminAuth, async (req, res) => {
         });
     } catch (error) {
         console.error('[MassMessage] 获取列表失败:', error);
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '获取列表失败');
     }
 });
 
@@ -45,10 +43,7 @@ router.get('/mass-messages/:id', adminAuth, async (req, res) => {
             data: detail
         });
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '获取详情失败');
     }
 });
 
@@ -94,10 +89,7 @@ router.post('/mass-messages', adminAuth, checkPermission('notification'), async 
         });
     } catch (error) {
         console.error('[MassMessage] 创建失败:', error);
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '创建失败');
     }
 });
 
@@ -111,10 +103,7 @@ router.put('/mass-messages/:id/cancel', adminAuth, checkPermission('notification
             message: '已取消发送'
         });
     } catch (error) {
-        res.status(400).json({
-            code: 400,
-            message: error.message
-        });
+        return serverError(res, error, '取消发送失败');
     }
 });
 
@@ -127,10 +116,7 @@ router.delete('/mass-messages/:id', adminAuth, checkPermission('notification'), 
             message: '删除成功'
         });
     } catch (error) {
-        res.status(400).json({
-            code: 400,
-            message: error.message
-        });
+        return serverError(res, error, '删除失败');
     }
 });
 
@@ -145,10 +131,7 @@ router.get('/mass-messages/tags', adminAuth, async (req, res) => {
             data: tags
         });
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '获取标签失败');
     }
 });
 
@@ -177,10 +160,7 @@ router.get('/mass-messages/users/search', adminAuth, async (req, res) => {
             data: users
         });
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '搜索用户失败');
     }
 });
 
@@ -206,10 +186,7 @@ router.post('/mass-messages/preview-count', adminAuth, async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '预览失败');
     }
 });
 
@@ -224,10 +201,7 @@ router.get('/mass-messages/statistics', adminAuth, async (req, res) => {
             data: stats
         });
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return serverError(res, error, '获取统计失败');
     }
 });
 
