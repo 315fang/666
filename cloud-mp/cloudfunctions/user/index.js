@@ -24,6 +24,90 @@ const userFavorites = require('./user-favorites');
 const userNotifications = require('./user-notifications');
 const userWallet = require('./user-wallet');
 
+function parseConfigValue(row, fallback) {
+    if (!row) return fallback;
+    const value = row.config_value !== undefined ? row.config_value : row.value;
+    if (value === undefined || value === null || value === '') return fallback;
+    if (typeof value === 'string') {
+        try {
+            return JSON.parse(value);
+        } catch (_) {
+            return value;
+        }
+    }
+    return value;
+}
+
+async function getConfigByKey(key) {
+    const res = await db.collection('configs')
+        .where({ config_key: key })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return res.data && res.data[0] ? res.data[0] : null;
+}
+
+async function loadMembershipConfig() {
+    const [memberLevelRow, growthTierRow, growthRuleRow, commercePolicyRow, purchaseLevelRow, pointLevelRow, pointRuleRow] = await Promise.all([
+        getConfigByKey('member_level_config'),
+        getConfigByKey('growth_tier_config'),
+        getConfigByKey('growth_rule_config'),
+        getConfigByKey('commerce_policy_config'),
+        getConfigByKey('purchase_level_config'),
+        getConfigByKey('point_level_config'),
+        getConfigByKey('point_rule_config')
+    ]);
+
+    const growthTiers = parseConfigValue(growthTierRow, []);
+    const memberLevels = parseConfigValue(memberLevelRow, []);
+    return {
+        member_levels: Array.isArray(memberLevels) ? memberLevels : [],
+        growth_tiers: Array.isArray(growthTiers) ? growthTiers : [],
+        growth_rules: parseConfigValue(growthRuleRow, {}),
+        commerce_policy: parseConfigValue(commercePolicyRow, {}),
+        purchase_levels: parseConfigValue(purchaseLevelRow, []),
+        point_levels: parseConfigValue(pointLevelRow, []),
+        point_rules: parseConfigValue(pointRuleRow, {})
+    };
+}
+
+function discountText(discount) {
+    if (discount == null) return '原价';
+    const d = Number(discount);
+    if (!Number.isFinite(d) || d >= 1) return '原价';
+    const fold = parseFloat((d * 10).toFixed(2));
+    return `${fold % 1 === 0 ? fold.toFixed(0) : fold.toFixed(1)}折`;
+}
+
+function normalizeGrowthTiers(rows = []) {
+    return rows
+        .map((row, index) => ({
+            level: toNum(row.level != null ? row.level : index + 1, index + 1),
+            name: row.name || `成长档位${index + 1}`,
+            min: toNum(row.min != null ? row.min : row.growth_threshold, 0),
+            discount: toNum(row.discount != null ? row.discount : row.discount_rate, 1),
+            discountText: discountText(row.discount != null ? row.discount : row.discount_rate),
+            desc: row.desc || row.description || '',
+            enabled: row.enabled !== false
+        }))
+        .sort((a, b) => a.min - b.min);
+}
+
+function normalizeMemberLevels(rows = []) {
+    return rows
+        .map((row) => ({
+            ...row,
+            level: toNum(row.level, 0),
+            name: row.name || '代理等级',
+            discount_rate: toNum(row.discount_rate != null ? row.discount_rate : row.discount, 1),
+            discountText: discountText(row.discount_rate != null ? row.discount_rate : row.discount),
+            perks: Array.isArray(row.perks)
+                ? row.perks
+                : [row.description || row.desc || row.benefits].filter(Boolean)
+        }))
+        .sort((a, b) => a.level - b.level);
+}
+
 // 统一的异步处理包装
 const asyncHandler = (handler) => async (...args) => {
     try {
@@ -73,26 +157,47 @@ const handleAction = {
     'growth': asyncHandler(async (openid) => {
         const user = await userGrowth.getUser(openid);
         if (!user) throw notFound('用户不存在');
-        const tier = calculateTier(user);
+        const config = await loadMembershipConfig();
+        const growthTiers = normalizeGrowthTiers(config.growth_tiers);
+        const points = toNum(user.points || user.growth_value, 0);
+        const tier = calculateTier(points, growthTiers.length ? growthTiers : null);
         return success({
-            points: toNum(user.points || user.growth_value, 0),
+            points,
             tier: tier.level,
-            nextTierPoints: tier.nextLevelPoints,
-            progress: tier.progress
+            nextTierPoints: tier.nextThreshold,
+            progress: tier.pointsNeeded
         });
     }),
 
     'memberTierMeta': asyncHandler(async (openid) => {
         const user = await userGrowth.getUser(openid);
         if (!user) throw notFound('用户不存在');
-        const tier = calculateTier(user);
+        const config = await loadMembershipConfig();
+        const growthTiers = normalizeGrowthTiers(config.growth_tiers);
+        const memberLevels = normalizeMemberLevels(config.member_levels);
+        const points = toNum(user.points || user.growth_value, 0);
+        const tier = calculateTier(points, growthTiers.length ? growthTiers : null);
+        const roleLevel = toNum(user.role_level, 0);
+        const roleLevelConfig = memberLevels.find((item) => Number(item.level) === roleLevel);
         return success({
-            current_level: toNum(user.role_level, 0),
-            current_name: user.role_name || '普通用户',
-            points: toNum(user.points || user.growth_value, 0),
+            current_level: roleLevel,
+            current_name: user.role_name || roleLevelConfig?.name || '普通用户',
+            points,
             next_level: tier.nextLevel,
-            next_level_points: tier.nextLevelPoints,
-            progress: tier.progress,
+            next_level_points: tier.nextThreshold,
+            progress: tier.pointsNeeded,
+            current: {
+                role_level: roleLevel,
+                role_name: user.role_name || roleLevelConfig?.name || '普通用户',
+                current_growth_tier: tier
+            },
+            growth_tiers: growthTiers,
+            member_levels: memberLevels,
+            growth_rules: config.growth_rules || {},
+            commerce_policy: config.commerce_policy || {},
+            purchase_levels: Array.isArray(config.purchase_levels) ? config.purchase_levels : [],
+            point_levels: Array.isArray(config.point_levels) ? config.point_levels : [],
+            point_rules: config.point_rules || {}
         });
     }),
 

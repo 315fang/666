@@ -1,0 +1,48 @@
+{
+  "envId": "cloud1-9gywyqe49638e46f",
+  "functionRoot": "./cloudfunctions",
+  "functions": [
+    {
+      "name": "order-timeout-cancel",
+      "runtime": "Nodejs16.13",
+      "handler": "index.main",
+      "timeout": 30,
+      "memorySize": 256,
+      "triggers": [
+        {
+          "name": "orderTimeoutCancelTimer",
+          "type": "timer",
+          "config": "0 */5 * * * * *"
+        }
+      ]
+    },
+    {
+      "name": "commission-deadline-process",
+      "runtime": "Nodejs16.13",
+      "handler": "index.main",
+      "timeout": 30,
+      "memorySize": 256,
+      "triggers": [
+        {
+          "name": "commissionDeadlineProcessTimer",
+          "type": "timer",
+          "config": "0 15 */1 * * * *"
+        }
+      ]
+    },
+    {
+      "name": "order-auto-confirm",
+      "runtime": "Nodejs16.13",
+      "handler": "index.main",
+      "timeout": 30,
+      "memorySize": 256,
+      "triggers": [
+        {
+          "name": "orderAutoConfirmTimer",
+          "type": "timer",
+          "config": "0 30 */1 * * * *"
+        }
+      ]
+    }
+  ]
+}

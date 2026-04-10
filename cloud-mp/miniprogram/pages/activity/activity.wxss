@@ -21,6 +21,10 @@
   background: #1E4A6D;
 }
 
+.banner-wrap-empty {
+  background: transparent;
+}
+
 .banner-swiper {
   width: 100%;
   height: 460rpx;

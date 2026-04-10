@@ -8,8 +8,8 @@ This runbook closes the gap between local P0 readiness and CloudBase console dep
 
 - `npm run release:check` passes with `P0 blockers: 0` and `Warnings: 0`.
 - `admin-ui` production build passes.
-- CloudBase MCP is configured in `config/mcporter.json`, but local auth currently reports `AUTH_REQUIRED`.
-- Device-code auth via MCP timed out from this terminal; check network/proxy before cloud deployment.
+- CloudBase MCP is configured in `config/mcporter.json`, but MCP auth may still report `AUTH_REQUIRED`.
+- CloudBase CLI login is working on this machine and was used for deployment.
 
 ## Login And Bind Environment
 
@@ -35,7 +35,7 @@ Expected environment:
 
 ## Deploy Cloud Functions
 
-Deploy or update these functions after login:
+Deploy or update these functions after login. The latest deployment completed for the changed functions on 2026-04-10:
 
 ```bash
 cloudbase functions:deploy login --envId cloud1-9gywyqe49638e46f --force
@@ -52,11 +52,11 @@ cloudbase functions:deploy commission-deadline-process --envId cloud1-9gywyqe496
 cloudbase functions:deploy order-auto-confirm --envId cloud1-9gywyqe49638e46f --force
 ```
 
-The three timer functions must retain package trigger config:
+The three timer functions must retain package trigger config. Current cloud trigger check:
 
-- `order-timeout-cancel`: every 5 minutes
-- `commission-deadline-process`: every hour at minute 15
-- `order-auto-confirm`: every hour at minute 30
+- `order-timeout-cancel`: every 5 minutes, trigger `orderTimeoutCancelTimer`
+- `commission-deadline-process`: every hour at minute 15, trigger `commissionDeadlineProcessTimer`
+- `order-auto-confirm`: every hour at minute 30, trigger `orderAutoConfirmTimer`
 
 ## Manual Console Checks
 
@@ -66,6 +66,7 @@ In CloudBase console:
 - Confirm WeChat Pay notify URL points to the payment HTTP access URL.
 - Confirm payment private key/public key/API v3 key are configured through secure env/config, not copied into public code.
 - Confirm `admin-api` runtime env has `ADMIN_DATA_SOURCE=cloudbase` and `ADMIN_CLOUDBASE_ENV_ID=cloud1-9gywyqe49638e46f`.
+- Confirm `admin-api` `/health` eventually reports no CloudBase collection warnings after a cold start. A warm instance may keep startup warning counters until recycled.
 - Confirm the 22 import collections exist or can be imported from `cloudbase-import`.
 
 ## Required Collections
@@ -97,7 +98,7 @@ Core import validation currently expects these 22 collections:
 
 ## Suggested Indexes
 
-Create these indexes before production traffic:
+Create these indexes before production traffic. These ordinary indexes have been created via CLI; use the console to verify them:
 
 - `users`: `openid`, `my_invite_code`, `referrer_openid`
 - `orders`: `openid`, `order_no`, `status`, `openid + status`

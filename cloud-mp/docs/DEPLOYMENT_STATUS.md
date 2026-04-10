@@ -1,6 +1,6 @@
 # 项目部署状态
 
-> 更新时间：2026-04-10 18:55
+> 更新时间：2026-04-10 20:00
 
 ## CloudBase 环境
 
@@ -25,8 +25,8 @@
 | config | Nodejs16.13 | 10s | ✅ 已部署 |
 | admin-api | Nodejs16.13 | 15s | ✅ 已部署 |
 | order-timeout-cancel | Nodejs16.13 | 30s | ✅ 已部署（定时触发：每5分钟） |
-| commission-deadline-process | Nodejs16.13 | 30s | 待部署（定时触发：每小时15分） |
-| order-auto-confirm | Nodejs16.13 | 30s | 待部署（定时触发：每小时30分） |
+| commission-deadline-process | Nodejs16.13 | 30s | ✅ 已部署（定时触发：每小时15分，手动调用通过） |
+| order-auto-confirm | Nodejs16.13 | 30s | ✅ 已部署（定时触发：每小时30分，手动调用通过） |
 
 ## 微信支付配置
 
@@ -72,7 +72,7 @@
 
 ## 剩余工作
 
-1. **微信支付回调 HTTP 触发器**：需在控制台手动配置
+1. **微信支付回调 HTTP 触发器**：需在控制台确认 `/payment` 仍可访问
 2. **证书上传到云存储**：生产环境建议将私钥上传到云存储而非随代码部署
-3. **数据库索引**：需要在控制台为 users(openid)、orders(openid, order_no)、cart_items(openid) 等创建索引
+3. **数据库索引**：users、orders、cart_items、commissions、refunds、user_coupons、content_board_products、station_staff 的关键普通索引已通过 CLI 创建；控制台可复核
 4. **管理后台 admin-api**：优惠券、拼团、砍价、抽奖、自提站点、榜单、代理配置接口已补；仍需做云端页面级 smoke test

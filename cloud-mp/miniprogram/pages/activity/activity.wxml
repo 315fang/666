@@ -1,11 +1,12 @@
 <view class="container {{wallpaperClass}}">
 
   <!-- ══ 顶部 Banner 轮播 ══ -->
-  <view class="banner-wrap">
+  <view class="banner-wrap {{bannerSlides.length ? '' : 'banner-wrap-empty'}}">
     <!-- 状态栏占位 -->
     <view style="height: {{statusBarHeight}}px; background: transparent;"></view>
 
     <swiper
+      wx:if="{{bannerSlides.length}}"
       class="banner-swiper"
       autoplay
       interval="4000"

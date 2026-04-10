@@ -1,6 +1,6 @@
 # CloudBase Legacy Compatibility Audit
 
-Generated at: 2026-04-10T11:08:29.516Z
+Generated at: 2026-04-10T12:16:44.412Z
 
 This report tracks remaining legacy field/status/image references that should be removed as the CloudBase migration closes.
 

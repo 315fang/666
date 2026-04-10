@@ -3631,19 +3631,96 @@ app.put('/admin/api/mini-program-config', auth, (req, res) => {
     ok(res, nextConfig);
 });
 
-app.get('/admin/api/member-tier-config', auth, (req, res) => ok(res, getSingleton('member-tier-config', {
-    tiers: [
-        { level: 0, name: '普通会员', growth_threshold: 0 },
-        { level: 1, name: '银卡会员', growth_threshold: 1000 },
-        { level: 2, name: '金卡会员', growth_threshold: 5000 },
-        { level: 3, name: '黑金会员', growth_threshold: 20000 }
-    ]
-})));
+function parseConfigRowValue(row, fallback) {
+    if (!row) return fallback;
+    const value = row.config_value !== undefined ? row.config_value : row.value;
+    if (value === undefined || value === null || value === '') return fallback;
+    if (typeof value === 'string') {
+        try { return JSON.parse(value); } catch (_) { return value; }
+    }
+    return value;
+}
+
+function getConfigRowValue(key, fallback) {
+    const row = getCollection('configs').find((item) => item.config_key === key || item.key === key);
+    return parseConfigRowValue(row, fallback);
+}
+
+function upsertConfigRow(key, value, options = {}) {
+    const rows = getCollection('configs');
+    const index = rows.findIndex((item) => item.config_key === key || item.key === key);
+    const row = {
+        ...(index === -1 ? { id: nextId(rows), created_at: nowIso() } : rows[index]),
+        config_key: key,
+        key,
+        config_value: value,
+        value,
+        config_type: 'json',
+        category: options.category || rows[index]?.category || 'MEMBER',
+        config_group: options.group || rows[index]?.config_group || options.category || 'MEMBER',
+        description: options.description || rows[index]?.description || key,
+        is_public: options.is_public != null ? options.is_public : (rows[index]?.is_public ?? false),
+        status: true,
+        updated_at: nowIso()
+    };
+    if (index === -1) rows.push(row);
+    else rows[index] = row;
+    saveCollection('configs', rows);
+    return row;
+}
+
+function getMemberTierConfigSnapshot() {
+    const fallback = getSingleton('member-tier-config', {});
+    return {
+        ...fallback,
+        member_levels: getConfigRowValue('member_level_config', fallback.member_levels || []),
+        growth_rules: getConfigRowValue('growth_rule_config', fallback.growth_rules || {}),
+        growth_tiers: getConfigRowValue('growth_tier_config', fallback.growth_tiers || []),
+        commerce_policy: getConfigRowValue('commerce_policy_config', fallback.commerce_policy || {}),
+        purchase_levels: getConfigRowValue('purchase_level_config', fallback.purchase_levels || []),
+        point_levels: getConfigRowValue('point_level_config', fallback.point_levels || []),
+        point_rules: getConfigRowValue('point_rule_config', fallback.point_rules || {})
+    };
+}
+
+app.get('/admin/api/member-tier-config', auth, (req, res) => ok(res, getMemberTierConfigSnapshot()));
 
 app.put('/admin/api/member-tier-config', auth, (req, res) => {
     const nextConfig = toObject(req.body, {});
     saveSingleton('member-tier-config', nextConfig);
-    ok(res, nextConfig);
+    upsertConfigRow('member_level_config', toArray(nextConfig.member_levels), {
+        description: '会员/代理等级配置',
+        is_public: true
+    });
+    upsertConfigRow('growth_rule_config', toObject(nextConfig.growth_rules, {}), {
+        description: '成长值来源规则配置'
+    });
+    upsertConfigRow('growth_tier_config', toArray(nextConfig.growth_tiers), {
+        description: '成长值折扣阶梯配置',
+        is_public: true
+    });
+    upsertConfigRow('commerce_policy_config', toObject(nextConfig.commerce_policy, {}), {
+        description: '全场折扣与会员权益策略配置'
+    });
+    upsertConfigRow('purchase_level_config', toArray(nextConfig.purchase_levels), {
+        description: '拿货等级配置'
+    });
+    upsertConfigRow('point_level_config', toArray(nextConfig.point_levels), {
+        category: 'POINTS',
+        group: 'POINTS',
+        description: '积分中心等级特权配置',
+        is_public: true
+    });
+    upsertConfigRow('point_rule_config', toObject(nextConfig.point_rules, {}), {
+        category: 'POINTS',
+        group: 'POINTS',
+        description: '积分行为奖励规则'
+    });
+    createAuditLog(req.admin, 'member-tier-config.update', 'configs', {
+        member_levels: toArray(nextConfig.member_levels).length,
+        growth_tiers: toArray(nextConfig.growth_tiers).length
+    });
+    ok(res, getMemberTierConfigSnapshot());
 });
 
 app.get('/admin/api/alert-config', auth, (req, res) => ok(res, getSingleton('alert-config', {

@@ -196,7 +196,12 @@ Page({
         this.loadActivityPreviews();
     },
 
-    onShow() {},
+    onShow() {
+        const tabBar = typeof this.getTabBar === 'function' ? this.getTabBar() : null;
+        if (tabBar && typeof tabBar.refresh === 'function') {
+            tabBar.refresh();
+        }
+    },
 
     onUnload() {
         this._clearBannerTimers();
