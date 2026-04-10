@@ -39,7 +39,7 @@
         <swiper class="gallery-swiper" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}" indicator-color="rgba(250,250,249,0.35)" indicator-active-color="#E2C4A0" bindchange="onImageChange">
           <swiper-item class="gallery-slide" wx:for="{{product.images}}" wx:key="*this">
             <view class="gallery-frame">
-              <image src="{{item}}" mode="aspectFill" class="gallery-image" bindtap="onPreviewImage" data-index="{{index}}"></image>
+              <image src="{{item}}" mode="aspectFill" class="gallery-image" bindtap="onPreviewImage" binderror="onGalleryImageError" data-index="{{index}}"></image>
             </view>
           </swiper-item>
         </swiper>
@@ -139,7 +139,7 @@
       <text class="section-title">商品详情</text>
     </view>
     <view class="detail-images" wx:if="{{detailImageList.length > 0}}">
-      <image class="detail-image" wx:for="{{detailImageList}}" wx:key="*this" src="{{item}}" mode="widthFix" bindtap="onPreviewDetailImage" data-index="{{index}}"></image>
+      <image class="detail-image" wx:for="{{detailImageList}}" wx:key="*this" src="{{item}}" mode="widthFix" bindtap="onPreviewDetailImage" binderror="onDetailImageError" data-index="{{index}}"></image>
     </view>
     <view class="detail-content" wx:if="{{hasRichDetail}}">
       <rich-text nodes="{{product.detail_html || '暂无详情'}}"></rich-text>

@@ -51,7 +51,7 @@
     <view class="activity-list">
       <view class="activity-card" wx:for="{{activities}}" wx:key="id" bindtap="onStartGroup" data-activity="{{item}}">
         <view class="img-wrap">
-          <image class="product-img" src="{{item.product && item.product.images && item.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
+          <image class="product-img" src="{{item.product && item.product.images && item.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill" binderror="onActivityImageError" data-index="{{index}}"/>
           <view class="corner-badge">拼团</view>
         </view>
         <view class="activity-info">

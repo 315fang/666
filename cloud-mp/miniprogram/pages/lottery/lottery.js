@@ -119,7 +119,8 @@ Page({
         try {
             const res = await get('/lottery/prizes');
             if (res.code === 0) {
-                const prizes = (res.data || []).map(normalizePrize);
+                const prizeList = res.list || res.data?.list || res.data || [];
+                const prizes = (Array.isArray(prizeList) ? prizeList : []).map(normalizePrize);
                 this.setData({
                     prizes,
                     machineCapsules: buildMachineCapsules(prizes),

@@ -201,7 +201,7 @@ Page({
                 maxRetries: 0,
                 timeout: 10000
             });
-            let allCats = catRes.data || [];
+            let allCats = catRes.list || catRes.data?.list || catRes.data || [];
             const filteredCats = Array.isArray(allCats) && allCats.length > 0 ? allCats : [];
 
             if (filteredCats.length > 0) {

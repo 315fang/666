@@ -80,6 +80,11 @@ function handleError(error) {
         return error.toResponse();
     }
 
+    // 已经是标准响应对象（例如 throw badRequest(...)）
+    if (error && typeof error === 'object' && 'code' in error && 'success' in error && 'message' in error) {
+        return error;
+    }
+
     // 标准 Error 对象
     if (error instanceof Error) {
         console.error('[CloudFunction Error]', error.message, error.stack);

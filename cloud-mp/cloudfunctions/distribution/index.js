@@ -18,12 +18,79 @@ const _ = db.command;
 const distributionQuery = require('./distribution-query');
 const distributionCommission = require('./distribution-commission');
 
+function hasValue(value) {
+    return value !== null && value !== undefined && value !== '';
+}
+
+function firstNumber(values) {
+    for (const value of values) {
+        if (!hasValue(value)) continue;
+        const num = toNumber(value, NaN);
+        if (Number.isFinite(num)) return num;
+    }
+    return null;
+}
+
+function centsToYuan(value, fallback = 0) {
+    if (!hasValue(value)) return fallback;
+    const num = toNumber(value, NaN);
+    return Number.isFinite(num) ? num / 100 : fallback;
+}
+
+function resolveProductPrice(product = {}) {
+    const legacyPrice = firstNumber([product.retail_price, product.price]);
+    if (legacyPrice !== null) return legacyPrice;
+    return centsToYuan(product.min_price, 0);
+}
+
+function resolveSkuPrice(sku = {}) {
+    const legacyPrice = firstNumber([sku.retail_price]);
+    if (legacyPrice !== null) return legacyPrice;
+    return centsToYuan(sku.price, 0);
+}
+
+async function getProductById(id) {
+    if (!hasValue(id)) return null;
+    const num = toNumber(id, NaN);
+    const [legacy, doc] = await Promise.all([
+        Number.isFinite(num) ? db.collection('products').where({ id: num }).limit(1).get().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+        db.collection('products').doc(String(id)).get().catch(() => ({ data: null }))
+    ]);
+    return legacy.data[0] || doc.data || null;
+}
+
+async function getSkuById(id) {
+    if (!hasValue(id)) return null;
+    const num = toNumber(id, NaN);
+    const [legacy, doc] = await Promise.all([
+        Number.isFinite(num) ? db.collection('skus').where({ id: num }).limit(1).get().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+        db.collection('skus').doc(String(id)).get().catch(() => ({ data: null }))
+    ]);
+    return legacy.data[0] || doc.data || null;
+}
+
+function buildCommissionPreview(product = {}, baseAmount = 0) {
+    const amount1 = toNumber(product.commission_amount_1, 0);
+    const amount2 = toNumber(product.commission_amount_2, 0);
+    const configuredRate1 = firstNumber([product.commission_rate_1, product.rate_1]);
+    const configuredRate2 = firstNumber([product.commission_rate_2, product.rate_2]);
+    const rate1 = configuredRate1 !== null ? configuredRate1 : 0.1;
+    const rate2 = configuredRate2 !== null ? configuredRate2 : 0;
+    const commission1 = amount1 > 0 ? amount1 : Math.round(baseAmount * rate1 * 100) / 100;
+    const commission2 = amount2 > 0 ? amount2 : Math.round(baseAmount * rate2 * 100) / 100;
+    return [
+        { level: 1, rate: rate1, amount: commission1, label: '一级佣金' },
+        { level: 2, rate: rate2, amount: commission2, label: '二级佣金' }
+    ].filter((item) => item.amount > 0);
+}
+
 // ==================== 主处理函数 ====================
 const asyncHandler = (handler) => async (...args) => {
     try {
         return await handler(...args);
     } catch (err) {
         if (err instanceof CloudBaseError) throw err;
+        if (err && typeof err === 'object' && 'code' in err && 'success' in err && 'message' in err) throw err;
         throw serverError(err.message || '操作失败');
     }
 };
@@ -51,9 +118,23 @@ const handleAction = {
         return success({ list: commissions });
     }),
 
-    'commissionPreview': asyncHandler(async (openid) => {
-        const stats = await distributionCommission.getStats(openid);
-        return success(stats);
+    'commissionPreview': asyncHandler(async (openid, params = {}) => {
+        const quantity = Math.max(1, toNumber(params.quantity, 1));
+        const product = await getProductById(params.product_id || params.id);
+        const sku = await getSkuById(params.sku_id);
+        const unitPrice = sku ? resolveSkuPrice(sku) : resolveProductPrice(product || {});
+        const baseAmount = Math.round(unitPrice * quantity * 100) / 100;
+        const commissions = product ? buildCommissionPreview(product, baseAmount) : [];
+        const totalCommission = commissions.reduce((sum, item) => sum + toNumber(item.amount, 0), 0);
+        return success({
+            product_id: params.product_id || params.id || null,
+            sku_id: params.sku_id || null,
+            quantity,
+            unit_price: unitPrice,
+            base_amount: baseAmount,
+            commissions,
+            total_commission: Math.round(totalCommission * 100) / 100
+        });
     }),
 
     'stats': asyncHandler(async (openid) => {

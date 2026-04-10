@@ -20,6 +20,7 @@ const asyncHandler = (handler) => async (...args) => {
         return await handler(...args);
     } catch (err) {
         if (err instanceof CloudBaseError) throw err;
+        if (err && typeof err === 'object' && 'code' in err && 'success' in err && 'message' in err) throw err;
         throw serverError(err.message || '操作失败');
     }
 };
@@ -51,14 +52,94 @@ async function getProductById(id) {
     return legacy.data[0] || doc.data || null;
 }
 
+function hasValue(value) {
+    return value !== null && value !== undefined && value !== '';
+}
+
+function firstNumber(values) {
+    for (const value of values) {
+        if (!hasValue(value)) continue;
+        const num = toNumber(value, NaN);
+        if (Number.isFinite(num)) return num;
+    }
+    return null;
+}
+
+function centsToYuan(value, fallback = 0) {
+    if (!hasValue(value)) return fallback;
+    const num = toNumber(value, NaN);
+    return Number.isFinite(num) ? num / 100 : fallback;
+}
+
+function resolveProductPrice(p) {
+    const legacyPrice = firstNumber([p.retail_price, p.price]);
+    if (legacyPrice !== null) return legacyPrice;
+    return centsToYuan(p.min_price, 0);
+}
+
+function resolveProductOriginalPrice(p, price) {
+    const legacyOriginal = firstNumber([p.market_price]);
+    if (legacyOriginal !== null) return legacyOriginal;
+    if (hasValue(p.retail_price) && hasValue(p.original_price)) {
+        return toNumber(p.original_price, price);
+    }
+    if (hasValue(p.original_price)) return centsToYuan(p.original_price, price);
+    return price;
+}
+
+function resolveSkuPrice(sku) {
+    const legacyPrice = firstNumber([sku.retail_price]);
+    if (legacyPrice !== null) return legacyPrice;
+    return centsToYuan(sku.price, 0);
+}
+
+function resolveSkuOriginalPrice(sku, price) {
+    const legacyOriginal = firstNumber([sku.market_price]);
+    if (legacyOriginal !== null) return legacyOriginal;
+    if (hasValue(sku.retail_price) && hasValue(sku.original_price)) {
+        return toNumber(sku.original_price, price);
+    }
+    if (hasValue(sku.original_price)) return centsToYuan(sku.original_price, price);
+    return price;
+}
+
+function normalizeSku(sku) {
+    const price = resolveSkuPrice(sku);
+    const originalPrice = resolveSkuOriginalPrice(sku, price);
+    const specs = Array.isArray(sku.specs) && sku.specs.length > 0
+        ? sku.specs
+        : (sku.spec_name && sku.spec_value
+            ? [{ name: sku.spec_name, value: sku.spec_value }]
+            : (sku.spec ? [{ name: '规格', value: sku.spec }] : []));
+
+    return {
+        ...sku,
+        id: sku.id || sku._legacy_id || sku._id,
+        price,
+        retail_price: price,
+        min_price: price,
+        original_price: originalPrice,
+        market_price: originalPrice,
+        displayPrice: price.toFixed(2),
+        stock: toNumber(sku.stock, 0),
+        specs,
+        spec_name: specs.length >= 1 ? specs[0].name : (sku.spec_name || ''),
+        spec_value: specs.length >= 1 ? specs[0].value : (sku.spec_value || sku.spec || '')
+    };
+}
+
 function formatProduct(p) {
-    const price = toNumber(p.retail_price || p.min_price, 0);
+    const price = resolveProductPrice(p);
+    const originalPrice = resolveProductOriginalPrice(p, price);
     return {
         ...p,
         id: p.id || p._id,
-        price, retail_price: price, min_price: price,
-        original_price: toNumber(p.market_price || p.original_price, price),
-        market_price: toNumber(p.market_price || p.original_price, price),
+        price,
+        retail_price: price,
+        min_price: price,
+        displayPrice: price.toFixed(2),
+        original_price: originalPrice,
+        market_price: originalPrice,
         image: toArray(p.images)[0] || '',
         images: toArray(p.images),
         is_on_sale: isOnSale(p.status),
@@ -108,11 +189,7 @@ const handleAction = {
                     });
                     const specSummary = Object.keys(specMap).map((name) => Array.from(specMap[name]).join('/')).join(' · ');
                     if (specSummary) product.specSummary = specSummary;
-                    product.skus = productSkus.map((sku) => ({
-                        ...sku,
-                        id: sku.id || sku._id,
-                        specs: Array.isArray(sku.specs) && sku.specs.length > 0 ? sku.specs : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : [])
-                    }));
+                    product.skus = productSkus.map(normalizeSku);
                 }
                 return product;
             });
@@ -137,18 +214,7 @@ const handleAction = {
             skus = skuList.filter((sku) => {
                 const pid = String(sku.product_id);
                 return pid === productIdStr || pid === String(product.id) || (product._legacy_id && pid === String(product._legacy_id));
-            }).map((sku) => {
-                const specs = Array.isArray(sku.specs) && sku.specs.length > 0
-                    ? sku.specs
-                    : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
-                return {
-                    ...sku,
-                    id: sku.id || sku._legacy_id || sku._id,
-                    specs,
-                    spec_name: specs.length >= 1 ? specs[0].name : (sku.spec_name || ''),
-                    spec_value: specs.length >= 1 ? specs[0].value : (sku.spec_value || sku.spec || '')
-                };
-            });
+            }).map(normalizeSku);
 
             // 生成规格摘要
             const specMap = {};

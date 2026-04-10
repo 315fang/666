@@ -2,6 +2,7 @@
 const { get, post } = require('../../utils/request');
 const { normalizeActivityList } = require('../../utils/activityList');
 const app = getApp();
+const PRODUCT_PLACEHOLDER = '/assets/icons/package.svg';
 
 function plainSummary(html, maxLen = 44) {
     if (!html) return '';
@@ -31,6 +32,11 @@ function enrichGroupActivity(a) {
         _saveYuan: saveNum > 0 ? saveNum.toFixed(2) : '0.00',
         _maxCap: a.max_members || 10
     };
+}
+
+function getActivityList(res) {
+    if (!res || res.code !== 0) return [];
+    return normalizeActivityList(res.list || res.data || res);
 }
 
 Page({
@@ -75,7 +81,7 @@ Page({
         if (active === 'activities') {
             try {
                 const res = await get('/group/activities');
-                const raw = res.code === 0 ? normalizeActivityList(res.data) : [];
+                const raw = getActivityList(res);
                 this.setData({ activities: raw.map(enrichGroupActivity), loading: false });
             } catch { this.setData({ loading: false }); }
         } else {
@@ -125,6 +131,22 @@ Page({
         const groupNo = e.currentTarget.dataset.no;
         if (!groupNo) return;
         wx.navigateTo({ url: `/pages/group/detail?group_no=${groupNo}` });
+    },
+
+    onActivityImageError(e) {
+        const index = Number(e.currentTarget.dataset.index || 0);
+        const activities = Array.isArray(this.data.activities) ? this.data.activities.slice() : [];
+        if (!activities[index]) return;
+        const product = {
+            ...(activities[index].product || {}),
+            images: [PRODUCT_PLACEHOLDER],
+            image: PRODUCT_PLACEHOLDER
+        };
+        activities[index] = {
+            ...activities[index],
+            product
+        };
+        this.setData({ activities });
     },
 
     onShare(e) {

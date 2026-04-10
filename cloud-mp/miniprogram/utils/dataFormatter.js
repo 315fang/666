@@ -95,6 +95,9 @@ function calculatePrice(product, sku = null, roleLevel = USER_ROLES.GUEST) {
  * @returns {number} 价格
  */
 function calculateSkuPrice(sku, roleLevel) {
+  const rawFallbackPrice = sku.retail_price != null && sku.retail_price !== ''
+    ? sku.retail_price
+    : (sku.price != null && sku.price !== '' ? (Number(sku.price) >= 1000 ? Number(sku.price) / 100 : sku.price) : 0);
   const priceMap = {
     [USER_ROLES.GUEST]: sku.retail_price,
     [USER_ROLES.MEMBER]: sku.member_price || sku.retail_price,
@@ -102,7 +105,7 @@ function calculateSkuPrice(sku, roleLevel) {
     [USER_ROLES.AGENT]: sku.wholesale_price || sku.member_price || sku.retail_price
   };
 
-  return parseFloat(priceMap[roleLevel] || sku.retail_price || 0);
+  return parseFloat(priceMap[roleLevel] || rawFallbackPrice || 0);
 }
 
 /**

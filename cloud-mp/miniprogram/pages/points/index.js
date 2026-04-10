@@ -27,6 +27,32 @@ function getPointsTip() {
     };
 }
 
+function extractList(res, extraKey) {
+    if (!res) return [];
+    const data = res.data;
+    const list = Array.isArray(res.list)
+        ? res.list
+        : (data && Array.isArray(data.list)
+            ? data.list
+            : (extraKey && data && Array.isArray(data[extraKey]) ? data[extraKey] : data));
+    return Array.isArray(list) ? list : [];
+}
+
+function normalizeTask(task = {}) {
+    const points = task.points != null ? task.points : task.points_reward;
+    const completed = task.completed != null ? task.completed : task.done;
+    return {
+        ...task,
+        name: task.name || task.title || '积分任务',
+        description: task.description || task.desc || '',
+        points_reward: points,
+        show_reward: Number(points || 0) > 0,
+        completed: !!completed,
+        progress: task.current || (completed ? 1 : 0),
+        max_progress: task.total || 1
+    };
+}
+
 Page({
     data: {
         account: null,
@@ -116,16 +142,7 @@ Page({
             const res = await get('/points/tasks');
             if (res.code === 0) {
                 this.setData({
-                    tasks: (res.data.tasks || []).map((task) => ({
-                        ...task,
-                        name: task.title,
-                        description: task.desc,
-                        points_reward: task.points,
-                        show_reward: Number(task.points || 0) > 0,
-                        completed: !!task.done,
-                        progress: task.current || (task.done ? 1 : 0),
-                        max_progress: task.total || 1
-                    }))
+                    tasks: extractList(res, 'tasks').map(normalizeTask)
                 });
             }
         } catch (e) {
@@ -138,9 +155,9 @@ Page({
             const res = await get('/points/logs', { page: 1, limit: 30 });
             if (res.code === 0) {
                 this.setData({
-                    logs: (res.data.list || []).map((log) => ({
+                    logs: extractList(res).map((log) => ({
                         ...log,
-                        amount: log.points
+                        amount: log.amount != null ? log.amount : log.points
                     }))
                 });
             }
@@ -158,8 +175,11 @@ Page({
             const res = await checkinPoints();
             wx.hideLoading();
             if (res.code === 0) {
+                const data = res.data || res;
+                const earned = data.points_earned != null ? data.points_earned : (data.points || 0);
+                const streak = data.streak != null ? data.streak : (data.consecutive_days || 1);
                 wx.showToast({
-                    title: `+${res.data.points_earned}分 ${res.data.streak}天连签`,
+                    title: `+${earned}分 ${streak}天连签`,
                     icon: 'none',
                     duration: 2500
                 });

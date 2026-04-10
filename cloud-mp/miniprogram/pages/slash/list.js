@@ -2,6 +2,7 @@
 const { get, post } = require('../../utils/request');
 const { normalizeActivityList } = require('../../utils/activityList');
 const app = getApp();
+const PRODUCT_PLACEHOLDER = '/assets/icons/package.svg';
 
 function plainSummary(html, maxLen = 44) {
     if (!html) return '';
@@ -31,6 +32,11 @@ function enrichSlashActivity(a) {
         _saveYuan: saveNum > 0 ? saveNum.toFixed(2) : '0.00',
         _retailHint: retail > 0 && Math.abs(retail - orig) > 0.01 ? retail.toFixed(2) : ''
     };
+}
+
+function getActivityList(res) {
+    if (!res || res.code !== 0) return [];
+    return normalizeActivityList(res.list || res.data || res);
 }
 
 Page({
@@ -65,7 +71,7 @@ Page({
         if (active === 'activities') {
             try {
                 const res = await get('/slash/activities');
-                const raw = res.code === 0 ? normalizeActivityList(res.data) : [];
+                const raw = getActivityList(res);
                 this.setData({ activities: raw.map(enrichSlashActivity), loading: false });
             } catch { this.setData({ loading: false }); }
         } else {
@@ -103,6 +109,22 @@ Page({
     onViewRecord(e) {
         const slashNo = e.currentTarget.dataset.no;
         wx.navigateTo({ url: `/pages/slash/detail?slash_no=${slashNo}` });
+    },
+
+    onActivityImageError(e) {
+        const index = Number(e.currentTarget.dataset.index || 0);
+        const activities = Array.isArray(this.data.activities) ? this.data.activities.slice() : [];
+        if (!activities[index]) return;
+        const product = {
+            ...(activities[index].product || {}),
+            images: [PRODUCT_PLACEHOLDER],
+            image: PRODUCT_PLACEHOLDER
+        };
+        activities[index] = {
+            ...activities[index],
+            product
+        };
+        this.setData({ activities });
     },
 
     onBack() { wx.switchTab({ url: '/pages/activity/activity' }); }

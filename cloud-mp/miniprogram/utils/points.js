@@ -5,13 +5,25 @@ function toNumber(value, fallback = 0) {
     return Number.isFinite(n) ? n : fallback;
 }
 
+function payloadOf(res) {
+    if (!res || res.code !== 0) return {};
+    return res.data && typeof res.data === 'object' ? res.data : res;
+}
+
 function normalizePointAccount(account = {}, status = {}) {
-    const totalPoints = toNumber(account.total_points);
-    const balancePoints = toNumber(account.balance_points);
-    const growthValue = toNumber(account.growth_value);
+    const pointValue = account.points != null ? account.points : account.growth_value;
+    const totalPoints = toNumber(account.total_points != null ? account.total_points : pointValue);
+    const balancePoints = toNumber(account.balance_points != null ? account.balance_points : pointValue);
+    const growthValue = toNumber(account.growth_value != null ? account.growth_value : totalPoints);
     const levelNum = toNumber(account.level, 1) || 1;
-    const streak = toNumber(status.streak ?? account.checkin_streak);
-    const todaySigned = Boolean(status.signed ?? account.today_signed);
+    const streakSource = status.streak != null
+        ? status.streak
+        : (status.consecutive_days != null ? status.consecutive_days : account.checkin_streak);
+    const signedSource = status.signed != null
+        ? status.signed
+        : (status.signed_today != null ? status.signed_today : account.today_signed);
+    const streak = toNumber(streakSource);
+    const todaySigned = Boolean(signedSource);
     const growthNeeded = toNumber(account.next_level?.growth_needed ?? account.next_level?.points_needed);
     const nextTierMin = toNumber(account.next_level?.min);
     let growthProgress = toNumber(account.growth_progress);
@@ -42,8 +54,8 @@ async function fetchPointSummary() {
     ]);
 
     const account = normalizePointAccount(
-        accountRes?.code === 0 ? (accountRes.data || {}) : {},
-        statusRes?.code === 0 ? (statusRes.data || {}) : {}
+        payloadOf(accountRes),
+        payloadOf(statusRes)
     );
 
     return {
@@ -55,21 +67,23 @@ async function fetchPointSummary() {
 
 async function fetchPointBalance() {
     const res = await get('/points/account');
-    return normalizePointAccount(res?.data || {}).balance_points;
+    return normalizePointAccount(payloadOf(res)).balance_points;
 }
 
 async function checkinPoints() {
     const res = await post('/points/sign-in');
     if (res?.code !== 0) return res;
+    const data = payloadOf(res);
 
     const account = normalizePointAccount({
-        total_points: res.data?.total_points,
-        balance_points: res.data?.balance_points,
-        level: res.data?.level,
-        checkin_streak: res.data?.streak
+        total_points: data.total_points != null ? data.total_points : data.points,
+        balance_points: data.balance_points != null ? data.balance_points : data.points,
+        growth_value: data.growth_value,
+        level: data.level,
+        checkin_streak: data.streak != null ? data.streak : data.consecutive_days
     }, {
         signed: true,
-        streak: res.data?.streak
+        streak: data.streak != null ? data.streak : data.consecutive_days
     });
 
     return {

@@ -23,6 +23,7 @@ const asyncHandler = (handler) => async (...args) => {
         return await handler(...args);
     } catch (err) {
         if (err instanceof CloudBaseError) throw err;
+        if (err && typeof err === 'object' && 'code' in err && 'success' in err && 'message' in err) throw err;
         throw serverError(err.message || '操作失败');
     }
 };

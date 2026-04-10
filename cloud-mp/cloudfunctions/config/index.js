@@ -11,6 +11,7 @@ const {
 } = require('./shared/response');
 
 const db = cloud.database();
+const _ = db.command;
 
 // ==================== 子模块导入 ====================
 const configLoader = require('./config-loader');
@@ -22,9 +23,146 @@ const asyncHandler = (handler) => async (...args) => {
         return await handler(...args);
     } catch (err) {
         if (err instanceof CloudBaseError) throw err;
+        if (err && typeof err === 'object' && 'code' in err && 'success' in err && 'message' in err) throw err;
         throw serverError(err.message || '操作失败');
     }
 };
+
+function hasValue(value) {
+    return value !== null && value !== undefined && value !== '';
+}
+
+function toArray(value) {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (!hasValue(value)) return [];
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return [];
+        if (trimmed[0] === '[') {
+            try {
+                const parsed = JSON.parse(trimmed);
+                return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+            } catch (_) {
+                return [trimmed];
+            }
+        }
+        return [trimmed];
+    }
+    return [];
+}
+
+function toDisplayPrice(value, centsField) {
+    if (!hasValue(value)) return null;
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    if (centsField && Math.abs(num) >= 1000) return +(num / 100).toFixed(2);
+    return +num.toFixed(2);
+}
+
+function firstPrice(values) {
+    let fallback = 0;
+    for (let i = 0; i < values.length; i += 1) {
+        const value = values[i];
+        if (value == null) continue;
+        fallback = value;
+        if (Number(value) > 0) return value;
+    }
+    return fallback;
+}
+
+function productSummary(product) {
+    if (!product) return null;
+    const images = toArray(product.images);
+    const price = firstPrice([
+        toDisplayPrice(product.retail_price, false),
+        toDisplayPrice(product.price, false),
+        toDisplayPrice(product.min_price, true)
+    ]);
+    const marketPrice = firstPrice([
+        toDisplayPrice(product.market_price, false),
+        toDisplayPrice(product.original_price, true)
+    ]);
+    const id = hasValue(product.id)
+        ? product.id
+        : (hasValue(product._legacy_id) ? product._legacy_id : product._id);
+
+    return {
+        _id: product._id,
+        id,
+        _legacy_id: product._legacy_id,
+        name: product.name || product.title || '商品',
+        description: product.description || product.subtitle || '',
+        image: product.image || product.cover || images[0] || '',
+        images,
+        price,
+        retail_price: price,
+        min_price: price,
+        displayPrice: price > 0 ? price.toFixed(2) : '0.00',
+        market_price: marketPrice,
+        original_price: marketPrice,
+        stock: Number(product.stock || product.stock_quantity || 0),
+        sales_count: Number(product.sales_count || product.sold_count || product.purchase_count || 0)
+    };
+}
+
+function uniqueValues(values) {
+    const seen = {};
+    const list = [];
+    values.forEach((value) => {
+        if (!hasValue(value)) return;
+        const key = String(value);
+        if (seen[key]) return;
+        seen[key] = true;
+        list.push(value);
+    });
+    return list;
+}
+
+async function loadProductsByActivityIds(productIds) {
+    const ids = uniqueValues(productIds);
+    if (!ids.length) return {};
+
+    const numberIds = uniqueValues(ids.map((id) => Number(id)).filter((id) => Number.isFinite(id)));
+    const stringIds = uniqueValues(ids.map((id) => String(id)));
+    const queries = [];
+
+    if (numberIds.length) {
+        queries.push(db.collection('products').where({ id: _.in(numberIds) }).limit(100).get());
+        queries.push(db.collection('products').where({ _legacy_id: _.in(numberIds) }).limit(100).get());
+    }
+    if (stringIds.length) {
+        queries.push(db.collection('products').where({ _id: _.in(stringIds) }).limit(100).get());
+        queries.push(db.collection('products').where({ id: _.in(stringIds) }).limit(100).get());
+        queries.push(db.collection('products').where({ _legacy_id: _.in(stringIds) }).limit(100).get());
+    }
+
+    const results = await Promise.all(queries.map((query) => query.catch(() => ({ data: [] }))));
+    const productMap = {};
+    results.forEach((res) => {
+        (res.data || []).forEach((product) => {
+            const summary = productSummary(product);
+            if (!summary) return;
+            [summary._id, summary.id, summary._legacy_id].forEach((key) => {
+                if (hasValue(key)) productMap[String(key)] = summary;
+            });
+        });
+    });
+    return productMap;
+}
+
+async function hydrateActivitiesWithProducts(activities) {
+    const list = Array.isArray(activities) ? activities : [];
+    const productIds = list.map((activity) => activity && activity.product_id);
+    const products = await loadProductsByActivityIds(productIds);
+    return list.map((activity) => {
+        if (!activity) return activity;
+        const product = activity.product || products[String(activity.product_id)] || null;
+        return {
+            ...activity,
+            product
+        };
+    });
+}
 
 const handleAction = {
     // ===== 基础配置 =====
@@ -130,7 +268,8 @@ const handleAction = {
             .orderBy('created_at', 'desc')
             .limit(20)
             .get().catch(() => ({ data: [] }));
-        return success({ list: res.data || [] });
+        const list = await hydrateActivitiesWithProducts(res.data || []);
+        return success({ list });
     }),
 
     'groupDetail': asyncHandler(async (params) => {
@@ -138,7 +277,8 @@ const handleAction = {
         if (!id) throw badRequest('缺少拼团 ID');
         const res = await db.collection('group_activities').doc(id).get().catch(() => ({ data: null }));
         if (!res.data) throw badRequest('拼团活动不存在');
-        return success(res.data);
+        const list = await hydrateActivitiesWithProducts([res.data]);
+        return success(list[0] || res.data);
     }),
 
     'groupActivities': asyncHandler(async (params) => {
@@ -147,7 +287,8 @@ const handleAction = {
             .orderBy('created_at', 'desc')
             .limit(20)
             .get().catch(() => ({ data: [] }));
-        return success({ list: res.data || [] });
+        const list = await hydrateActivitiesWithProducts(res.data || []);
+        return success({ list });
     }),
 
     // ===== 砍价 =====
@@ -157,7 +298,8 @@ const handleAction = {
             .orderBy('created_at', 'desc')
             .limit(20)
             .get().catch(() => ({ data: [] }));
-        return success({ list: res.data || [] });
+        const list = await hydrateActivitiesWithProducts(res.data || []);
+        return success({ list });
     }),
 
     'slashDetail': asyncHandler(async (params) => {
@@ -165,7 +307,8 @@ const handleAction = {
         if (!id) throw badRequest('缺少砍价活动 ID');
         const res = await db.collection('slash_activities').doc(id).get().catch(() => ({ data: null }));
         if (!res.data) throw badRequest('砍价活动不存在');
-        return success(res.data);
+        const list = await hydrateActivitiesWithProducts([res.data]);
+        return success(list[0] || res.data);
     }),
 
     'slashActivities': asyncHandler(async (params) => {
@@ -174,7 +317,8 @@ const handleAction = {
             .orderBy('created_at', 'desc')
             .limit(20)
             .get().catch(() => ({ data: [] }));
-        return success({ list: res.data || [] });
+        const list = await hydrateActivitiesWithProducts(res.data || []);
+        return success({ list });
     }),
 
     // ===== 抽奖 =====

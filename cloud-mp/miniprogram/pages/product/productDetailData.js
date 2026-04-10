@@ -5,6 +5,7 @@ const { USER_ROLES } = require('../../config/constants');
 const LocalUserContent = require('../../utils/localUserContent');
 const app = getApp();
 
+const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
 const PLEDGE_ICONS = {
     seven_day: '/assets/icons/refresh-cw.svg',
     return_shipping: '/assets/icons/truck.svg',
@@ -20,6 +21,18 @@ function parseApiDisplayPrice(v) {
     return Number.isFinite(x) && x >= 0 ? x : null;
 }
 
+function parseApiCentPrice(v) {
+    const x = parseApiDisplayPrice(v);
+    if (x == null) return null;
+    return x >= 1000 ? x / 100 : x;
+}
+
+function sanitizeImageList(value, fallback) {
+    const images = parseImages(value).filter((item) => !!item);
+    if (images.length) return images;
+    return fallback ? [fallback] : [];
+}
+
 // 构建 SKU 规格文本（多规格用 " / " 连接，单规格用 ": " 连接）
 function buildSkuText(sku) {
     if (!sku) return '默认规格';
@@ -31,8 +44,19 @@ function buildSkuText(sku) {
 }
 
 function resolvePayableUnitPrice(product, sku, roleLevel) {
-    if (sku && parseApiDisplayPrice(sku.displayPrice) != null) {
-        return parseApiDisplayPrice(sku.displayPrice);
+    if (sku) {
+        const skuCentPrice = parseApiCentPrice(sku.price);
+        const skuDisplayPrice = parseApiDisplayPrice(sku.displayPrice);
+        if (skuDisplayPrice != null && (skuDisplayPrice > 0 || skuCentPrice == null)) {
+            return skuDisplayPrice;
+        }
+        const skuRetailPrice = parseApiDisplayPrice(sku.retail_price);
+        if (skuRetailPrice != null && (skuRetailPrice > 0 || skuCentPrice == null)) {
+            return skuRetailPrice;
+        }
+        if (skuCentPrice != null) {
+            return skuCentPrice;
+        }
     }
     if (parseApiDisplayPrice(product.displayPrice) != null) {
         return parseApiDisplayPrice(product.displayPrice);
@@ -47,8 +71,8 @@ async function loadProduct(page, id) {
         const res = await get(`/products/${id}`);
         const product = res.data || {};
 
-        product.images = parseImages(product.images);
-        product.detail_images = parseImages(product.detail_images);
+        product.images = sanitizeImageList(product.images, PRODUCT_PLACEHOLDER);
+        product.detail_images = sanitizeImageList(product.detail_images);
 
         let specs = [];
         if (product.skus && product.skus.length > 0) {
@@ -168,6 +192,8 @@ module.exports = {
     loadProduct,
     resolvePayableUnitPrice,
     parseApiDisplayPrice,
+    parseApiCentPrice,
     buildSkuText,
+    PRODUCT_PLACEHOLDER,
     PLEDGE_ICONS
 };

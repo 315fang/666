@@ -44,6 +44,23 @@ function buildOrderFreshFlags(currentStats = {}, seenSnapshot = {}) {
     };
 }
 
+function extractResponseList(response) {
+    if (!response) return [];
+    const data = response.data;
+    const list = Array.isArray(response.list)
+        ? response.list
+        : (data && Array.isArray(data.list) ? data.list : data);
+    return Array.isArray(list) ? list : [];
+}
+
+function pickPointBalance(account = {}) {
+    const value = account.balance_points != null
+        ? account.balance_points
+        : (account.points != null ? account.points : account.growth_value);
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+}
+
 function orderFirstThumb(order) {
     if (!order || !order.product) return QUAD_PLACEHOLDER;
     const imgs = parseImages(order.product.images);
@@ -214,9 +231,9 @@ async function loadAssetRow(page) {
             get('/coupons/mine', { status: 'unused' }).catch(() => ({ code: -1, data: [] })),
             fetchPointSummary().catch(() => ({ account: {} }))
         ]);
-        const coupons = couponResponse.code === 0 ? (couponResponse.data || []) : [];
+        const coupons = couponResponse.code === 0 ? extractResponseList(couponResponse) : [];
         const unusedCouponCount = coupons.length;
-        const balance = pointWrap.account != null ? pointWrap.account.balance_points : 0;
+        const balance = pickPointBalance(pointWrap.account || {});
         let couponBanner = null;
         if (unusedCouponCount > 0) {
             const firstCoupon = coupons[0];

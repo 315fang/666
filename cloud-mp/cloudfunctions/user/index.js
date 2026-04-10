@@ -3,6 +3,9 @@
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
+const db = cloud.database();
+const _ = db.command;
+
 const {
     CloudBaseError, cloudFunctionWrapper
 } = require('./shared/errors');
@@ -27,6 +30,7 @@ const asyncHandler = (handler) => async (...args) => {
         return await handler(...args);
     } catch (err) {
         if (err instanceof CloudBaseError) throw err;
+        if (err && typeof err === 'object' && 'code' in err && 'success' in err && 'message' in err) throw err;
         throw serverError(err.message || '操作失败');
     }
 };
@@ -316,11 +320,32 @@ const handleAction = {
         // 检查用户是否有关联的站点验证权限（pickup_verifiers）
         let hasVerifyAccess = false;
         if (openid && stations.length > 0) {
+            const activeStatuses = [true, 'active', 1, '1'];
             const verifierRes = await db.collection('pickup_verifiers')
-                .where({ openid, status: true })
+                .where({ openid, status: _.in(activeStatuses) })
                 .limit(1)
                 .get().catch(() => ({ data: [] }));
             hasVerifyAccess = verifierRes.data && verifierRes.data.length > 0;
+
+            if (!hasVerifyAccess) {
+                const userRes = await db.collection('users')
+                    .where({ openid })
+                    .limit(1)
+                    .get().catch(() => ({ data: [] }));
+                const user = userRes.data && userRes.data[0];
+                const userIds = user
+                    ? [user.id, user._legacy_id, user._id]
+                    : [];
+                const validUserIds = userIds
+                    .filter((id) => id !== null && id !== undefined && id !== '');
+                if (validUserIds.length > 0) {
+                    const userVerifierRes = await db.collection('pickup_verifiers')
+                        .where({ user_id: _.in(validUserIds), status: _.in(activeStatuses) })
+                        .limit(1)
+                        .get().catch(() => ({ data: [] }));
+                    hasVerifyAccess = userVerifierRes.data && userVerifierRes.data.length > 0;
+                }
+            }
         }
         return success({ has_verify_access: hasVerifyAccess, stations });
     }),

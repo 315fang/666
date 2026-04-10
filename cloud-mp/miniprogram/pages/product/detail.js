@@ -5,7 +5,7 @@ const { normalizeProductId } = require('../../utils/dataFormatter');
 const { USER_ROLES } = require('../../config/constants');
 const { safeBack } = require('../../utils/navigator');
 const { requireLogin } = require('../../utils/auth');
-const { loadProduct, resolvePayableUnitPrice } = require('./productDetailData');
+const { loadProduct, resolvePayableUnitPrice, PRODUCT_PLACEHOLDER } = require('./productDetailData');
 const { refreshFavoriteState, toggleFavorite } = require('./productDetailFavorite');
 const {
     onSpecSelect,
@@ -267,11 +267,12 @@ Page({
 
             const res = await get('/commissions/preview', params);
 
-            if (res.code === 0 && res.data) {
-                const data = res.data;
+            if (res.code === 0) {
+                const data = res.data || res;
+                const commissions = Array.isArray(data.commissions) ? data.commissions : [];
 
                 // 计算我可以获得的佣金
-                const myCommission = data.commissions
+                const myCommission = commissions
                     .filter(c => c.level === 0 || c.level === 1)
                     .reduce((sum, c) => sum + c.amount, 0);
 
@@ -312,6 +313,29 @@ Page({
             current: images[index] || images[0],
             urls: images
         });
+    },
+
+    onGalleryImageError(e) {
+        const index = Number(e.currentTarget.dataset.index || 0);
+        const product = this.data.product || {};
+        const images = Array.isArray(product.images) ? product.images.slice() : [];
+        if (!images.length) {
+            images.push(PRODUCT_PLACEHOLDER);
+        } else {
+            images[index] = PRODUCT_PLACEHOLDER;
+        }
+        this.setData({
+            'product.images': images,
+            imageCount: images.length || 1
+        });
+    },
+
+    onDetailImageError(e) {
+        const index = Number(e.currentTarget.dataset.index || 0);
+        const images = Array.isArray(this.data.detailImageList)
+            ? this.data.detailImageList.filter((_, i) => i !== index)
+            : [];
+        this.setData({ detailImageList: images });
     },
 
     // 返回 (Renamed to match WXML: onBackTap)
