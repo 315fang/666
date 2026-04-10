@@ -141,11 +141,11 @@
 
   <!-- 底部操作栏 -->
   <view class="bottom-bar" wx:if="{{!loading && detail}}">
-    <view class="btn-col-share" wx:if="{{detail.status === 'active'}}" bindtap="onShare">
+    <button class="btn-col-share share-button-reset" wx:if="{{detail.status === 'active'}}" open-type="share">
       <image src="/assets/icons/users.svg" class="btn-icon" mode="aspectFit"/>
       <text class="btn-col-main">邀请好友</text>
       <text class="btn-col-sub">每刀随机减</text>
-    </view>
+    </button>
     <view class="btn-buy-wrap" wx:if="{{detail.status === 'success' || detail.status === 'active'}}">
       <view class="btn-buy {{detail.status === 'success' ? 'btn-buy-ready' : 'btn-buy-default'}}" bindtap="onBuy">
         <text class="btn-buy-line1" wx:if="{{detail.status === 'success'}}">已到底价 · 立即抢购</text>

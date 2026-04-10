@@ -22,6 +22,41 @@ function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
 }
 
+function userRelationIds(user = {}) {
+    const ids = [user.id, user._legacy_id, user._id].filter(hasValue);
+    const out = [];
+    ids.forEach((id) => {
+        out.push(id);
+        const num = Number(id);
+        if (Number.isFinite(num)) out.push(num);
+        out.push(String(id));
+    });
+    return [...new Set(out.map((item) => `${typeof item}:${item}`))].map((key) => {
+        const [, value] = key.split(':');
+        const numeric = Number(value);
+        return key.startsWith('number:') && Number.isFinite(numeric) ? numeric : value;
+    });
+}
+
+function directRelationWhere(user = {}) {
+    const clauses = [];
+    if (user.openid) clauses.push({ referrer_openid: user.openid });
+    const ids = userRelationIds(user);
+    if (ids.length) clauses.push({ parent_id: _.in(ids) });
+    if (!clauses.length) return { referrer_openid: '__none__' };
+    return clauses.length === 1 ? clauses[0] : _.or(clauses);
+}
+
+function indirectRelationWhere(directMembers = []) {
+    const clauses = [];
+    const directOpenids = directMembers.map((item) => item.openid).filter(Boolean);
+    if (directOpenids.length) clauses.push({ referrer_openid: _.in(directOpenids) });
+    const ids = directMembers.flatMap(userRelationIds);
+    if (ids.length) clauses.push({ parent_id: _.in(ids) });
+    if (!clauses.length) return { referrer_openid: '__none__' };
+    return clauses.length === 1 ? clauses[0] : _.or(clauses);
+}
+
 function firstNumber(values) {
     for (const value of values) {
         if (!hasValue(value)) continue;
@@ -138,8 +173,8 @@ const handleAction = {
     }),
 
     'stats': asyncHandler(async (openid) => {
-        const stats = await distributionCommission.getStats(openid);
-        return success(stats);
+        const dashboard = await distributionQuery.getDashboard(openid);
+        return success(dashboard);
     }),
 
     'settleMatured': asyncHandler(async (openid) => {
@@ -231,27 +266,51 @@ const handleAction = {
     'team': asyncHandler(async (openid, params) => {
         const page = toNumber(params && params.page, 1);
         const pageSize = toNumber(params && (params.pageSize || params.limit || params.size), 20);
+        const level = params && params.level === 'indirect' ? 'indirect' : 'direct';
+
+        const userRes = await db.collection('users').where({ openid }).limit(1).get();
+        const currentUser = userRes.data && userRes.data[0] ? userRes.data[0] : { openid };
+        let where = directRelationWhere(currentUser);
+        if (level === 'indirect') {
+            const directRes = await db.collection('users')
+                .where(directRelationWhere(currentUser))
+                .limit(100)
+                .get()
+                .catch(() => ({ data: [] }));
+            where = indirectRelationWhere(directRes.data || []);
+        }
 
         const teamRes = await db.collection('users')
-            .where({ referrer_openid: openid })
+            .where(where)
             .orderBy('created_at', 'desc')
             .skip((page - 1) * pageSize)
             .limit(pageSize)
             .get().catch(() => ({ data: [] }));
 
         const totalRes = await db.collection('users')
-            .where({ referrer_openid: openid })
+            .where(where)
             .count().catch(() => ({ total: 0 }));
 
         return success({
             list: (teamRes.data || []).map(m => ({
                 _id: m._id,
+                id: m._id,
+                level: level === 'indirect' ? 2 : 1,
                 openid: m.openid,
                 nickName: m.nickName || m.nickname || '新用户',
+                nickname: m.nickname || m.nickName || '新用户',
                 avatarUrl: m.avatarUrl || m.avatar_url || '',
+                avatar: m.avatar || m.avatarUrl || m.avatar_url || '',
+                avatar_url: m.avatar_url || m.avatarUrl || m.avatar || '',
+                nick_name: m.nick_name || m.nickname || m.nickName || '新用户',
+                joined_at: m.created_at,
                 created_at: m.created_at,
                 role_level: toNumber(m.role_level, 0),
                 role_name: m.role_name || '普通用户',
+                invite_code: m.my_invite_code || m.invite_code || '',
+                phone: m.phone || '',
+                total_sales: toNumber(m.total_spent || m.total_sales, 0),
+                order_count: toNumber(m.order_count, 0),
             })),
             total: totalRes.total || 0,
             page,

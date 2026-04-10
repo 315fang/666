@@ -310,9 +310,107 @@ async function ensureCommissionsCreated(orderId, order) {
     return { created };
 }
 
+function isGroupOrder(order = {}) {
+    return order.type === 'group' || hasValue(order.group_activity_id) || hasValue(order.group_no);
+}
+
+function isActivityOpen(activity) {
+    return activity && (
+        activity.status === true
+        || activity.status === 'active'
+        || activity.is_active === true
+        || activity.active === true
+    );
+}
+
+async function findGroupOrder(groupNo) {
+    if (!hasValue(groupNo)) return null;
+    const res = await db.collection('group_orders')
+        .where({ group_no: String(groupNo) })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return res.data && res.data[0] ? res.data[0] : null;
+}
+
+async function ensurePaidGroupJoined(orderId, order) {
+    if (!isGroupOrder(order)) return { skipped: true };
+    if (order.group_joined_at) return { skipped: true };
+
+    const activity = await getDocByIdOrLegacy('group_activities', order.group_activity_id || order.legacy_group_activity_id || order.activity_id);
+    if (!activity) throw new Error('拼团活动不存在');
+    if (!isActivityOpen(activity)) throw new Error('拼团活动已结束');
+
+    const groupSize = Math.max(2, toNumber(activity.group_size || activity.min_members || order.group_size, 2));
+    let groupNo = order.group_no || '';
+    let groupOrder = await findGroupOrder(groupNo);
+
+    if (groupOrder && !['pending', 'open'].includes(groupOrder.status)) {
+        throw new Error('拼团已结束');
+    }
+
+    const member = {
+        openid: order.openid,
+        order_id: orderId,
+        order_no: order.order_no,
+        paid_at: db.serverDate(),
+        joined_at: db.serverDate(),
+    };
+
+    if (!groupOrder) {
+        groupNo = groupNo || ('GRP' + Date.now() + Math.floor(Math.random() * 1000));
+        const data = {
+            group_no: groupNo,
+            activity_id: activity._id,
+            legacy_activity_id: activity.id || activity._legacy_id || order.legacy_group_activity_id || '',
+            leader_openid: order.openid,
+            status: groupSize <= 1 ? 'completed' : 'pending',
+            members: [member],
+            group_size: groupSize,
+            created_order_id: orderId,
+            created_at: db.serverDate(),
+            updated_at: db.serverDate(),
+        };
+        const createRes = await db.collection('group_orders').add({ data });
+        await db.collection('orders').doc(orderId).update({
+            data: { group_no: groupNo, group_joined_at: db.serverDate(), updated_at: db.serverDate() },
+        });
+        return { created: true, group_id: createRes._id, group_no: groupNo, member_count: 1, completed: data.status === 'completed' };
+    }
+
+    const members = Array.isArray(groupOrder.members) ? groupOrder.members : [];
+    const exists = members.some((item) => item.openid === order.openid || item.order_id === orderId);
+    if (!exists) {
+        if (members.length >= groupSize) throw new Error('该团已满员');
+        await db.collection('group_orders').doc(groupOrder._id).update({
+            data: {
+                members: _.push(member),
+                updated_at: db.serverDate(),
+            },
+        });
+    }
+
+    const memberCount = exists ? members.length : members.length + 1;
+    const completed = memberCount >= groupSize;
+    if (completed && groupOrder.status !== 'completed') {
+        await db.collection('group_orders').doc(groupOrder._id).update({
+            data: { status: 'completed', completed_at: db.serverDate(), updated_at: db.serverDate() },
+        });
+    }
+
+    await db.collection('orders').doc(orderId).update({
+        data: { group_no: groupOrder.group_no, group_joined_at: db.serverDate(), updated_at: db.serverDate() },
+    });
+    return { joined: !exists, group_no: groupOrder.group_no, member_count: memberCount, completed };
+}
+
 async function processPaidOrder(orderId, order) {
     const latest = await db.collection('orders').doc(orderId).get().then((res) => res.data || order).catch(() => order);
-    if (latest.payment_post_processed_at) return { skipped: true };
+    const needsGroupJoin = isGroupOrder(latest) && !latest.group_joined_at;
+    if (latest.payment_post_processed_at && !needsGroupJoin) return { skipped: true };
+
+    const group = needsGroupJoin ? await ensurePaidGroupJoined(orderId, latest) : { skipped: true };
+    if (latest.payment_post_processed_at) return { group };
 
     const stock = await ensureStockDeducted(orderId, latest);
     const points = await ensurePointsAwarded(orderId, { ...latest, stock_deducted_at: true });
@@ -321,7 +419,7 @@ async function processPaidOrder(orderId, order) {
     await db.collection('orders').doc(orderId).update({
         data: { payment_post_processed_at: db.serverDate(), updated_at: db.serverDate() },
     });
-    return { stock, points, commissions };
+    return { group, stock, points, commissions };
 }
 
 /**

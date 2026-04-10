@@ -133,11 +133,11 @@
   <view class="bottom-bar" wx:if="{{!loading && detail}}">
     <!-- 进行中：分享 + 邀请参团 -->
     <block wx:if="{{detail.status === 'open'}}">
-      <view class="btn-col-share" bindtap="onShare">
+      <button class="btn-col-share share-button-reset" wx:if="{{detail.is_member}}" open-type="share">
         <image src="/assets/icons/users.svg" class="btn-icon" mode="aspectFit"/>
         <text class="btn-col-main">邀好友</text>
         <text class="btn-col-sub">差{{detail._needMore}}人</text>
-      </view>
+      </button>
       <view class="btn-join-wrap">
         <view class="btn-join" bindtap="onJoin">
           <text class="btn-line1">¥{{detail.group_price}} 去参团</text>

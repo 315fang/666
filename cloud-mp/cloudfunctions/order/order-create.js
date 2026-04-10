@@ -31,13 +31,60 @@ async function findSku(skuId) {
 }
 
 /**
+ * 根据活动 ID 查找拼团活动（兼容数字 id 和文档 _id）
+ */
+async function findGroupActivity(activityId) {
+    if (!activityId) return null;
+    const num = toNumber(activityId, NaN);
+    const [legacy, doc] = await Promise.all([
+        Number.isFinite(num) ? db.collection('group_activities').where({ id: num }).limit(1).get().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+        db.collection('group_activities').doc(String(activityId)).get().catch(() => ({ data: null }))
+    ]);
+    return legacy.data[0] || doc.data || null;
+}
+
+function isActivityOpen(activity) {
+    return activity && (
+        activity.status === true
+        || activity.status === 'active'
+        || activity.is_active === true
+        || activity.active === true
+    );
+}
+
+function sameProduct(activity = {}, product = {}) {
+    const expected = [activity.product_id, activity.productId].filter((value) => value !== undefined && value !== null);
+    const actual = [product._id, product.id, product._legacy_id].filter((value) => value !== undefined && value !== null);
+    return expected.length === 0 || expected.some((left) => actual.some((right) => String(left) === String(right)));
+}
+
+/**
  * 创建订单（含金额计算、库存校验、优惠券核销）
  */
 async function createOrder(openid, orderData) {
-    const { items, address_id, coupon_id, memo, delivery_type, pickup_station_id, points_to_use } = orderData;
+    const {
+        items,
+        address_id,
+        coupon_id,
+        memo,
+        delivery_type,
+        pickup_station_id,
+        points_to_use,
+        type,
+        group_activity_id,
+        group_no
+    } = orderData;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
         throw new Error('缺少商品信息');
+    }
+
+    const groupActivity = group_activity_id ? await findGroupActivity(group_activity_id) : null;
+    if (group_activity_id) {
+        if (!groupActivity) throw new Error('拼团活动不存在');
+        if (!isActivityOpen(groupActivity)) throw new Error('拼团活动已结束');
+        const endAt = groupActivity.end_time || groupActivity.end_at;
+        if (endAt && new Date(endAt) < new Date()) throw new Error('拼团活动已过期');
     }
 
     // 1. 查商品和 SKU，计算金额
@@ -49,6 +96,9 @@ async function createOrder(openid, orderData) {
         if (!product) {
             throw new Error(`商品不存在: ${item.product_id}`);
         }
+        if (groupActivity && !sameProduct(groupActivity, product)) {
+            throw new Error('拼团商品与活动不匹配');
+        }
 
         let sku = null;
         if (item.sku_id) {
@@ -56,7 +106,10 @@ async function createOrder(openid, orderData) {
         }
 
         const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
-        const unitPrice = toNumber(sku ? sku.price : product.retail_price || product.min_price, 0);
+        const activityPrice = groupActivity ? toNumber(groupActivity.group_price || groupActivity.price, 0) : null;
+        const unitPrice = groupActivity
+            ? activityPrice
+            : toNumber(sku ? sku.price : product.retail_price || product.min_price, 0);
         const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
         totalAmount += lineTotal;
@@ -69,7 +122,9 @@ async function createOrder(openid, orderData) {
             image: sku ? (sku.image || '') : (Array.isArray(product.images) ? product.images[0] : ''),
             price: unitPrice,
             qty,
-            subtotal: lineTotal
+            subtotal: lineTotal,
+            activity_type: groupActivity ? 'group' : '',
+            group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : ''
         });
     }
 
@@ -154,6 +209,11 @@ async function createOrder(openid, orderData) {
         pickup_station_id: pickup_station_id || '',
         coupon_id: coupon_id || '',
         memo: memo || '',
+        type: groupActivity ? 'group' : (type || 'normal'),
+        group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : '',
+        legacy_group_activity_id: groupActivity ? (groupActivity.id || groupActivity._legacy_id || group_activity_id) : '',
+        group_no: group_no || '',
+        group_joined_at: null,
         created_at: db.serverDate(),
         updated_at: db.serverDate()
     };
@@ -178,7 +238,7 @@ async function createOrder(openid, orderData) {
         }
     } catch (_) {}
 
-    return { _id: result._id, order_no: orderNo, total_amount: totalAmount, pay_amount: payAmount };
+    return { _id: result._id, id: result._id, order_no: orderNo, total_amount: totalAmount, pay_amount: payAmount };
 }
 
 module.exports = {

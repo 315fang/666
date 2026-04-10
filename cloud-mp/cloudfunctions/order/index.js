@@ -32,8 +32,8 @@ const asyncHandler = (handler) => async (...args) => {
 const handleAction = {
     // ===== 基础 CRUD =====
     'list': asyncHandler(async (openid, params) => {
-        const result = await orderQuery.queryOrders(openid, params.status);
-        return success({ list: result });
+        const result = await orderQuery.queryOrders(openid, params);
+        return success(result);
     }),
 
     'detail': asyncHandler(async (openid, params) => {
@@ -45,15 +45,15 @@ const handleAction = {
     }),
 
     'create': asyncHandler(async (openid, params) => {
-        const { items, address_id, coupon_id, memo, delivery_type, pickup_station_id, points_to_use } = params;
+        const { items, address_id, coupon_id, memo, delivery_type, pickup_station_id, points_to_use, type, group_activity_id, group_no } = params;
         if (!items || !Array.isArray(items) || items.length === 0) {
             throw badRequest('缺少商品信息');
         }
         if (!address_id) throw badRequest('缺少收货地址');
         const order = await orderCreate.createOrder(openid, {
-            items, address_id, coupon_id, memo, delivery_type, pickup_station_id, points_to_use
+            items, address_id, coupon_id, memo, delivery_type, pickup_station_id, points_to_use, type, group_activity_id, group_no
         });
-        return success({ order_id: order._id, order_no: order.order_no, total_amount: order.total_amount, pay_amount: order.pay_amount });
+        return success({ id: order._id, order_id: order._id, order_no: order.order_no, total_amount: order.total_amount, pay_amount: order.pay_amount });
     }),
 
     'status': asyncHandler(async (openid, params) => {
@@ -152,6 +152,11 @@ const handleAction = {
 
     'slashHelp': asyncHandler(async (openid, params) => {
         const result = await orderInteractive.slashHelp(openid, params);
+        return success(result);
+    }),
+
+    'slashDetail': asyncHandler(async (openid, params) => {
+        const result = await orderInteractive.slashDetail(openid, params);
         return success(result);
     }),
 

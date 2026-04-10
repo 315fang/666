@@ -162,11 +162,6 @@ Page({
         wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
     },
 
-    onShare() {
-        wx.showShareMenu({ withShareTicket: true, menus: ['shareAppMessage'] });
-        wx.showToast({ title: '点右上角分享', icon: 'none' });
-    },
-
     onShareAppMessage() {
         const { detail } = this.data;
         if (!detail) return {};

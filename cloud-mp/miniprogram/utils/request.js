@@ -132,7 +132,7 @@ const ROUTE_TABLE = {
     'GET /groups/:id':                      { fn: 'config',       action: 'groupDetail',        idKey: 'group_id' },
     'POST /groups/:id/join':                { fn: 'order',        action: 'joinGroup',          idKey: 'group_id' },
     'GET /slash':                           { fn: 'config',       action: 'slashList' },
-    'GET /slash/:id':                       { fn: 'config',       action: 'slashDetail',        idKey: 'slash_id' },
+    'GET /slash/:id':                       { fn: 'order',        action: 'slashDetail',        idKey: 'slash_no' },
     'POST /slash/:id/help':                 { fn: 'order',        action: 'slashHelp',          idKey: 'slash_id' },
 
     // ── 抽奖 ──────────────────────────────────

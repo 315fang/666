@@ -58,6 +58,8 @@ Page({
         // 活动单号
         slashNo: null,
         groupNo: null,
+        groupActivityId: null,
+        orderType: '',
         // B端货款余额支付
         walletBalance: 0,
         useWallet: false,
@@ -99,6 +101,8 @@ Page({
                     totalCount: directBuy.quantity,
                     slashNo: directBuy.slash_no || null,
                     groupNo: directBuy.group_no || null,
+                    groupActivityId: directBuy.group_activity_id || null,
+                    orderType: directBuy.type || '',
                     loading: false
                 });
                 this._refreshPickupAllowed();

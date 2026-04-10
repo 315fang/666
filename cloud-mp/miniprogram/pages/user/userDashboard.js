@@ -390,7 +390,9 @@ async function loadDistributionInfo(page) {
                 ? (dashboard.team.agentGoodsFund.goods_fund_balance || '0.00')
                 : '0.00';
             const teamCount = dashboard.team ? dashboard.team.totalCount : 0;
-            const roleLevel = dashboard.userInfo ? dashboard.userInfo.role : 0;
+            const roleLevel = dashboard.userInfo
+                ? Number(dashboard.userInfo.role_level != null ? dashboard.userInfo.role_level : dashboard.userInfo.role || 0)
+                : 0;
 
             page.setData({
                 distributionInfo: {

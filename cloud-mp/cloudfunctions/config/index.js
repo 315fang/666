@@ -164,6 +164,38 @@ async function hydrateActivitiesWithProducts(activities) {
     });
 }
 
+async function getAppConfigValue(key, fallback = null) {
+    const res = await db.collection('app_configs')
+        .where({ config_key: key, status: true })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    if (res.data && res.data[0]) {
+        const row = res.data[0];
+        return row.config_value !== undefined ? row.config_value : (row.value !== undefined ? row.value : row);
+    }
+    return fallback;
+}
+
+async function findOneByAnyId(collectionName, rawId) {
+    if (!hasValue(rawId)) return null;
+    const id = String(rawId);
+    const byDocId = await db.collection(collectionName).doc(id).get().catch(() => ({ data: null }));
+    if (byDocId.data) return byDocId.data;
+    const candidates = [id];
+    const numericId = Number(id);
+    if (Number.isFinite(numericId)) candidates.push(numericId);
+    const res = await db.collection(collectionName)
+        .where(_.or([
+            { id: _.in(candidates) },
+            { _legacy_id: _.in(candidates) }
+        ]))
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return res.data && res.data[0] ? res.data[0] : null;
+}
+
 const handleAction = {
     // ===== 基础配置 =====
     'init': asyncHandler(async (params) => {
@@ -275,10 +307,10 @@ const handleAction = {
     'groupDetail': asyncHandler(async (params) => {
         const id = params.group_id || params.id;
         if (!id) throw badRequest('缺少拼团 ID');
-        const res = await db.collection('group_activities').doc(id).get().catch(() => ({ data: null }));
-        if (!res.data) throw badRequest('拼团活动不存在');
-        const list = await hydrateActivitiesWithProducts([res.data]);
-        return success(list[0] || res.data);
+        const activity = await findOneByAnyId('group_activities', id);
+        if (!activity) throw badRequest('拼团活动不存在');
+        const list = await hydrateActivitiesWithProducts([activity]);
+        return success(list[0] || activity);
     }),
 
     'groupActivities': asyncHandler(async (params) => {
@@ -305,10 +337,10 @@ const handleAction = {
     'slashDetail': asyncHandler(async (params) => {
         const id = params.slash_id || params.id;
         if (!id) throw badRequest('缺少砍价活动 ID');
-        const res = await db.collection('slash_activities').doc(id).get().catch(() => ({ data: null }));
-        if (!res.data) throw badRequest('砍价活动不存在');
-        const list = await hydrateActivitiesWithProducts([res.data]);
-        return success(list[0] || res.data);
+        const activity = await findOneByAnyId('slash_activities', id);
+        if (!activity) throw badRequest('砍价活动不存在');
+        const list = await hydrateActivitiesWithProducts([activity]);
+        return success(list[0] || activity);
     }),
 
     'slashActivities': asyncHandler(async (params) => {
@@ -327,7 +359,8 @@ const handleAction = {
             .where({ config_group: 'lottery' })
             .limit(1)
             .get().catch(() => ({ data: [] }));
-        return success(res.data && res.data[0] ? (res.data[0].config_value || res.data[0].value) : {});
+        if (res.data && res.data[0]) return success(res.data[0].config_value || res.data[0].value || {});
+        return success(await getAppConfigValue('lottery_config', {}));
     }),
 
     'lotteryPrizes': asyncHandler(async (params) => {
@@ -371,6 +404,10 @@ const handleAction = {
     }),
 
     'activityLinks': asyncHandler(async (params) => {
+        const configValue = await getAppConfigValue('activity_links_config', null);
+        if (configValue && typeof configValue === 'object') {
+            return success(configValue);
+        }
         const res = await db.collection('activity_links')
             .where({ is_active: true })
             .orderBy('sort_order', 'asc')
@@ -384,7 +421,8 @@ const handleAction = {
             .where({ config_group: 'festival' })
             .limit(1)
             .get().catch(() => ({ data: [] }));
-        return success(res.data && res.data[0] ? (res.data[0].config_value || res.data[0].value) : {});
+        if (res.data && res.data[0]) return success(res.data[0].config_value || res.data[0].value || {});
+        return success(await getAppConfigValue('activity_links_config', {}));
     }),
 
     // ===== 限量抢购 =====

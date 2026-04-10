@@ -138,30 +138,23 @@ Page({
         }
         if (!detail.product || !detail.product.id) return;
 
-        if (detail.status === 'success') {
-            const actSku = resolvePreferredSkuId(detail);
-            const buyInfo = {
-                product_id: detail.product.id,
-                category_id: detail.product.category_id || null,
-                sku_id: actSku,
-                quantity: 1,
-                price: parseFloat(detail.group_price),
-                name: detail.product.name,
-                image: (detail.product.images && detail.product.images[0]) || '',
-                spec: actSku ? '拼团·指定规格' : '拼团特惠',
-                group_no: detail.group_no,
-                supports_pickup: detail.product.supports_pickup ? 1 : 0
-            };
-            wx.setStorageSync('directBuyInfo', buyInfo);
-            wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
-        } else {
-            wx.navigateTo({ url: `/pages/product/detail?id=${detail.product.id}` });
-        }
-    },
-
-    onShare() {
-        wx.showShareMenu({ withShareTicket: true, menus: ['shareAppMessage'] });
-        wx.showToast({ title: '点右上角分享给好友', icon: 'none' });
+        const actSku = resolvePreferredSkuId(detail);
+        const buyInfo = {
+            product_id: detail.product.id,
+            category_id: detail.product.category_id || null,
+            sku_id: actSku,
+            quantity: 1,
+            price: parseFloat(detail.group_price),
+            name: detail.product.name,
+            image: (detail.product.images && detail.product.images[0]) || '',
+            spec: actSku ? '拼团·指定规格' : '拼团特惠',
+            type: 'group',
+            group_no: detail.group_no,
+            group_activity_id: detail.activity && (detail.activity._id || detail.activity.id),
+            supports_pickup: detail.product.supports_pickup ? 1 : 0
+        };
+        wx.setStorageSync('directBuyInfo', buyInfo);
+        wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
     },
 
     onShareAppMessage() {

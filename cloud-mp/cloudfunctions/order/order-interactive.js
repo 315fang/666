@@ -3,6 +3,67 @@ const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
 const { toNumber } = require('./shared/utils');
+const orderCreate = require('./order-create');
+
+function hasValue(value) {
+    return value !== null && value !== undefined && value !== '';
+}
+
+async function findOneByAnyId(collectionName, rawId) {
+    if (!hasValue(rawId)) return null;
+
+    const id = String(rawId);
+    const byDocId = await db.collection(collectionName).doc(id).get().catch(() => ({ data: null }));
+    if (byDocId.data) return byDocId.data;
+
+    const candidates = [id];
+    const numericId = Number(id);
+    if (Number.isFinite(numericId)) candidates.push(numericId);
+
+    const res = await db.collection(collectionName)
+        .where(_.or([
+            { id: _.in(candidates) },
+            { _legacy_id: _.in(candidates) }
+        ]))
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+
+    return res.data && res.data[0] ? res.data[0] : null;
+}
+
+function isActivityOpen(activity) {
+    return activity && (
+        activity.status === true
+        || activity.status === 'active'
+        || activity.is_active === true
+        || activity.active === true
+    );
+}
+
+function productSummary(product) {
+    if (!product) return null;
+    const images = Array.isArray(product.images) ? product.images : (product.image || product.cover ? [product.image || product.cover] : []);
+    return {
+        id: product.id || product._legacy_id || product._id,
+        _id: product._id,
+        name: product.name || product.title || '商品',
+        images,
+        image: images[0] || '',
+        retail_price: product.retail_price || product.price || product.min_price || 0
+    };
+}
+
+async function loadProductSummary(productId) {
+    const product = await findOneByAnyId('products', productId);
+    return productSummary(product);
+}
+
+function groupStatusForClient(status) {
+    if (status === 'pending') return 'open';
+    if (status === 'completed') return 'success';
+    return status || 'failed';
+}
 
 // ==================== 拼团 ====================
 
@@ -12,127 +73,40 @@ const { toNumber } = require('./shared/utils');
  * @param {object} params - { group_id, product_id, sku_id, qty, address_id }
  */
 async function joinGroup(openid, params) {
-    const groupActivityId = params.group_id || params.id;
+    const groupActivityId = params.group_id || params.activity_id || params.id;
     if (!groupActivityId) throw new Error('缺少拼团活动 ID');
 
-    // 1. 查拼团活动
-    const activityRes = await db.collection('group_activities').doc(groupActivityId).get().catch(() => ({ data: null }));
-    if (!activityRes.data) throw new Error('拼团活动不存在');
-    const activity = activityRes.data;
-
-    if (activity.status !== 'active') throw new Error('拼团活动已结束');
+    const activity = await findOneByAnyId('group_activities', groupActivityId);
+    if (!activity) throw new Error('拼团活动不存在');
+    if (!isActivityOpen(activity)) throw new Error('拼团活动已结束');
     const now = new Date();
     if (activity.end_time && new Date(activity.end_time) < now) throw new Error('拼团活动已过期');
 
-    // 2. 查找进行中的团（未满员）
-    let groupNo = params.group_no || null;
-    let groupOrder = null;
-
-    if (groupNo) {
-        // 加入指定团
-        const groupRes = await db.collection('group_orders')
-            .where({ group_no: groupNo, status: 'pending' })
-            .limit(1).get().catch(() => ({ data: [] }));
-        if (groupRes.data && groupRes.data.length > 0) {
-            groupOrder = groupRes.data[0];
-            if (groupOrder.members && groupOrder.members.length >= activity.group_size) {
-                throw new Error('该团已满员');
-            }
-        }
-    }
-
-    // 如果没有指定团或指定团不存在，查找可加入的团
-    if (!groupOrder) {
-        const availableGroupRes = await db.collection('group_orders')
-            .where({
-                activity_id: groupActivityId,
-                status: 'pending',
-            })
-            .limit(5).get().catch(() => ({ data: [] }));
-
-        for (const g of (availableGroupRes.data || [])) {
-            if (!g.members || g.members.length < (activity.group_size || 2)) {
-                groupOrder = g;
-                break;
-            }
-        }
-    }
-
-    // 如果没有可加入的团，开新团
-    if (!groupOrder) {
-        groupNo = 'GRP' + Date.now() + Math.floor(Math.random() * 1000);
-        const newGroup = {
-            group_no: groupNo,
-            activity_id: groupActivityId,
-            leader_openid: openid,
-            status: 'pending',
-            members: [{
-                openid,
-                joined_at: db.serverDate(),
-            }],
-            group_size: activity.group_size || 2,
-            created_at: db.serverDate(),
-            updated_at: db.serverDate(),
-        };
-        const createRes = await db.collection('group_orders').add({ data: newGroup });
-        groupOrder = { _id: createRes._id, ...newGroup };
-    } else {
-        // 加入已有团
-        groupNo = groupOrder.group_no;
-        const memberExists = (groupOrder.members || []).some(m => m.openid === openid);
-        if (memberExists) throw new Error('您已加入该团');
-
-        await db.collection('group_orders').doc(groupOrder._id).update({
-            data: {
-                members: _.push({ openid, joined_at: db.serverDate() }),
-                updated_at: db.serverDate(),
-            },
-        });
-
-        // 检查是否满员
-        const currentMembers = (groupOrder.members || []).length + 1;
-        if (currentMembers >= (activity.group_size || 2)) {
-            await db.collection('group_orders').doc(groupOrder._id).update({
-                data: { status: 'completed', completed_at: db.serverDate() },
-            });
-        }
-    }
-
-    // 3. 创建拼团订单
     const productId = params.product_id || activity.product_id;
-    const qty = toNumber(params.qty || params.quantity, 1);
-    const groupPrice = toNumber(activity.group_price || activity.price, 0);
-    const totalAmount = Math.round(groupPrice * qty * 100) / 100;
-
-    const orderNo = 'GRP_ORD' + Date.now() + Math.floor(Math.random() * 1000);
-
-    const order = {
-        order_no: orderNo,
-        openid,
-        type: 'group',
-        group_no: groupNo,
-        activity_id: groupActivityId,
-        product_id: productId || '',
-        sku_id: params.sku_id || '',
-        qty,
-        unit_price: groupPrice,
-        total_amount: totalAmount,
-        pay_amount: totalAmount,
+    const order = await orderCreate.createOrder(openid, {
+        items: [{
+            product_id: productId,
+            sku_id: params.sku_id || '',
+            quantity: params.qty || params.quantity || 1
+        }],
         address_id: params.address_id || '',
-        status: 'pending_payment',
-        created_at: db.serverDate(),
-        updated_at: db.serverDate(),
-    };
-
-    const result = await db.collection('orders').add({ data: order });
+        delivery_type: params.delivery_type || 'express',
+        pickup_station_id: params.pickup_station_id || '',
+        memo: params.memo || '',
+        type: 'group',
+        group_activity_id: activity._id || String(groupActivityId),
+        group_no: params.group_no || ''
+    });
 
     return {
         success: true,
-        order_id: result._id,
-        order_no: orderNo,
-        group_no: groupNo,
-        total_amount: totalAmount,
-        pay_amount: totalAmount,
+        order_id: order._id,
+        id: order._id,
+        order_no: order.order_no,
+        group_no: params.group_no || '',
+        total_amount: order.total_amount,
+        pay_amount: order.pay_amount,
+        need_pay: true
     };
 }
 
@@ -156,17 +130,41 @@ async function myGroups(openid, params = {}) {
         .where({ 'members.openid': openid })
         .count().catch(() => ({ total: 0 }));
 
+    const groups = res.data || [];
+    const activityPairs = await Promise.all(groups.map(async (g) => {
+        const activity = await findOneByAnyId('group_activities', g.activity_id || g.legacy_activity_id);
+        const product = activity ? await loadProductSummary(activity.product_id) : null;
+        return [g.group_no, { activity, product }];
+    }));
+    const activityMap = activityPairs.reduce((map, [groupNo, value]) => {
+        map[groupNo] = value;
+        return map;
+    }, {});
+
     return {
-        list: (res.data || []).map(g => ({
+        list: groups.map(g => {
+            const related = activityMap[g.group_no] || {};
+            const memberCount = (g.members || []).length;
+            const groupOrder = {
+                group_no: g.group_no,
+                status: groupStatusForClient(g.status),
+                current_members: memberCount,
+                min_members: g.group_size || related.activity?.min_members || related.activity?.group_size || 2,
+                product: related.product
+            };
+            return {
             _id: g._id,
+            id: g._id || g.group_no,
             group_no: g.group_no,
             activity_id: g.activity_id,
             status: g.status,
-            member_count: (g.members || []).length,
+            member_count: memberCount,
             group_size: g.group_size,
             is_leader: g.leader_openid === openid,
+            groupOrder,
             created_at: g.created_at,
-        })),
+        };
+        }),
         total: totalRes.total || 0,
         page,
         pageSize,
@@ -198,18 +196,26 @@ async function groupOrderDetail(openid, params) {
 
     // 查活动信息
     let activityInfo = null;
+    let product = null;
     if (group.activity_id) {
-        const actRes = await db.collection('group_activities').doc(group.activity_id).get().catch(() => ({ data: null }));
-        activityInfo = actRes.data || null;
+        activityInfo = await findOneByAnyId('group_activities', group.activity_id || group.legacy_activity_id);
+        if (activityInfo) {
+            product = await loadProductSummary(activityInfo.product_id);
+        }
     }
+    const memberCount = (group.members || []).length;
 
     return {
         _id: group._id,
         group_no: group.group_no,
-        status: group.status,
-        member_count: (group.members || []).length,
+        status: groupStatusForClient(group.status),
+        raw_status: group.status,
+        member_count: memberCount,
+        current_members: memberCount,
+        min_members: group.group_size || activityInfo?.min_members || activityInfo?.group_size || 2,
         group_size: group.group_size,
         is_leader: group.leader_openid === openid,
+        is_member: (group.members || []).some(m => m.openid === openid),
         members: (group.members || []).map(m => ({
             openid: m.openid,
             joined_at: m.joined_at,
@@ -229,8 +235,16 @@ async function groupOrderDetail(openid, params) {
             name: activityInfo.name || '',
             group_price: activityInfo.group_price || activityInfo.price,
             original_price: activityInfo.original_price || 0,
+            min_members: activityInfo.min_members || activityInfo.group_size || group.group_size || 2,
+            max_members: activityInfo.max_members || activityInfo.group_size || group.group_size || 10,
+            stock_limit: activityInfo.stock_limit || 0,
+            sold_count: activityInfo.sold_count || 0,
+            expire_hours: activityInfo.expire_hours || 24,
             image: activityInfo.image || (activityInfo.images || [])[0] || '',
         } : null,
+        product,
+        group_price: activityInfo?.group_price || activityInfo?.price || 0,
+        max_members: activityInfo?.max_members || group.group_size || 10,
         created_at: group.created_at,
     };
 }
@@ -243,19 +257,23 @@ async function groupOrderDetail(openid, params) {
  * @param {object} params - { slash_id (活动ID), product_id }
  */
 async function slashStart(openid, params) {
-    const slashActivityId = params.slash_id || params.id;
+    const slashActivityId = params.slash_id || params.activity_id || params.id;
     if (!slashActivityId) throw new Error('缺少砍价活动 ID');
 
     // 1. 查砍价活动
-    const activityRes = await db.collection('slash_activities').doc(slashActivityId).get().catch(() => ({ data: null }));
-    if (!activityRes.data) throw new Error('砍价活动不存在');
-    const activity = activityRes.data;
+    const activity = await findOneByAnyId('slash_activities', slashActivityId);
+    if (!activity) throw new Error('砍价活动不存在');
+    const activityId = activity._id || String(slashActivityId);
 
-    if (activity.status !== 'active') throw new Error('砍价活动已结束');
+    if (!isActivityOpen(activity)) throw new Error('砍价活动已结束');
 
     // 2. 检查是否已发起
     const existingRes = await db.collection('slash_records')
-        .where({ openid, activity_id: slashActivityId, status: 'active' })
+        .where({
+            openid,
+            status: 'active',
+            activity_id: _.in([activityId, String(slashActivityId)].filter(Boolean))
+        })
         .limit(1).get().catch(() => ({ data: [] }));
     if (existingRes.data && existingRes.data.length > 0) {
         throw new Error('您已发起过砍价');
@@ -270,7 +288,8 @@ async function slashStart(openid, params) {
 
     const record = {
         slash_no: slashNo,
-        activity_id: slashActivityId,
+        activity_id: activityId,
+        legacy_activity_id: activity.id || activity._legacy_id || slashActivityId,
         openid,
         product_id: activity.product_id || params.product_id || '',
         original_price: originalPrice,
@@ -358,6 +377,64 @@ async function slashHelp(openid, params) {
 }
 
 /**
+ * 砍价记录详情
+ */
+async function slashDetail(openid, params) {
+    const slashNo = params.slash_no || params.slash_id || params.id;
+    if (!slashNo) throw new Error('缺少砍价编号');
+
+    const recordRes = await db.collection('slash_records')
+        .where(_.or([
+            { slash_no: String(slashNo) },
+            { _id: String(slashNo) }
+        ]))
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+
+    if (!recordRes.data || recordRes.data.length === 0) {
+        throw new Error('砍价记录不存在');
+    }
+
+    const record = recordRes.data[0];
+    const activity = await findOneByAnyId('slash_activities', record.activity_id || record.legacy_activity_id);
+    const product = await loadProductSummary(record.product_id || activity?.product_id);
+    const originalPrice = toNumber(record.original_price || activity?.original_price, 0);
+    const floorPrice = toNumber(record.target_price || activity?.floor_price || activity?.target_price, 0);
+    const currentPrice = toNumber(record.current_price, originalPrice);
+    let status = record.status || 'active';
+    if (status === 'completed') status = 'success';
+    if (currentPrice <= floorPrice && floorPrice > 0) status = 'success';
+
+    return {
+        _id: record._id,
+        id: record._id,
+        slash_no: record.slash_no,
+        status,
+        raw_status: record.status,
+        original_price: originalPrice,
+        floor_price: floorPrice,
+        target_price: floorPrice,
+        current_price: currentPrice,
+        total_slashed: record.total_slashed || Math.max(0, originalPrice - currentPrice),
+        helper_count: record.slash_count || (Array.isArray(record.helpers) ? record.helpers.length : 0),
+        helpers: record.helpers || [],
+        product,
+        activity: activity ? {
+            _id: activity._id,
+            id: activity.id || activity._legacy_id || activity._id,
+            max_helpers: activity.max_helpers,
+            min_slash_per_helper: activity.min_slash_per_helper,
+            max_slash_per_helper: activity.max_slash_per_helper,
+            stock_limit: activity.stock_limit || 0,
+            sold_count: activity.sold_count || 0
+        } : {},
+        created_at: record.created_at,
+        updated_at: record.updated_at
+    };
+}
+
+/**
  * 我的砍价列表
  */
 async function mySlashList(openid, params = {}) {
@@ -379,20 +456,39 @@ async function mySlashList(openid, params = {}) {
             .count().catch(() => ({ total: 0 })),
     ]);
 
+    const records = res.data || [];
+    const activityPairs = await Promise.all(records.map(async (r) => {
+        const activity = await findOneByAnyId('slash_activities', r.activity_id || r.legacy_activity_id);
+        const product = activity ? await loadProductSummary(activity.product_id || r.product_id) : await loadProductSummary(r.product_id);
+        return [r.slash_no, { activity, product }];
+    }));
+    const activityMap = activityPairs.reduce((map, [slashNo, value]) => {
+        map[slashNo] = value;
+        return map;
+    }, {});
+
     return {
-        list: (res.data || []).map(r => ({
+        list: records.map(r => {
+            const related = activityMap[r.slash_no] || {};
+            const activity = related.activity || {};
+            return {
             _id: r._id,
+            id: r._id || r.slash_no,
             slash_no: r.slash_no,
             activity_id: r.activity_id,
             product_id: r.product_id,
             original_price: r.original_price,
             target_price: r.target_price,
+            floor_price: r.target_price || activity.floor_price || activity.target_price || 0,
             current_price: r.current_price,
             total_slashed: r.total_slashed,
             slash_count: r.slash_count,
+            helper_count: r.slash_count || (Array.isArray(r.helpers) ? r.helpers.length : 0),
+            product: related.product,
             status: r.status,
             created_at: r.created_at,
-        })),
+        };
+        }),
         total: totalRes.total || 0,
         page,
         pageSize,
@@ -411,11 +507,15 @@ async function lotteryDraw(openid, params) {
 
     // 1. 查抽奖配置
     const configRes = await db.collection('configs')
-        .where({ type: 'lottery', active: true })
+        .where(_.or([
+            { type: 'lottery', active: true },
+            { config_group: 'lottery' },
+            { config_key: 'lottery_config' }
+        ]))
         .limit(1).get().catch(() => ({ data: [] }));
 
-    const config = configRes.data && configRes.data[0] ? configRes.data[0].value : null;
-    if (!config) throw new Error('暂无抽奖活动');
+    const configRow = configRes.data && configRes.data[0] ? configRes.data[0] : null;
+    const config = configRow ? (configRow.config_value || configRow.value || {}) : {};
 
     // 2. 检查抽奖次数
     const today = new Date();
@@ -436,7 +536,11 @@ async function lotteryDraw(openid, params) {
 
     // 3. 查奖品池
     const prizesRes = await db.collection('lottery_prizes')
-        .where({ active: true })
+        .where(_.or([
+            { is_active: true },
+            { active: true },
+            { status: true }
+        ]))
         .orderBy('sort_order', 'asc')
         .get().catch(() => ({ data: [] }));
 
@@ -457,7 +561,7 @@ async function lotteryDraw(openid, params) {
     }
 
     // 5. 检查库存
-    if (selectedPrize.stock !== undefined && selectedPrize.stock !== null && selectedPrize.stock <= 0) {
+    if (selectedPrize.stock !== undefined && selectedPrize.stock !== null && selectedPrize.stock !== -1 && selectedPrize.stock <= 0) {
         // 库存不足，给个安慰奖
         const consolation = prizes.find(p => p.type === 'consolation' || p.is_consolation);
         selectedPrize = consolation || prizes[prizes.length - 1];
@@ -469,7 +573,7 @@ async function lotteryDraw(openid, params) {
         prize_id: selectedPrize._id,
         prize_name: selectedPrize.name || '',
         prize_type: selectedPrize.type || 'point',
-        prize_value: selectedPrize.value || 0,
+        prize_value: selectedPrize.prize_value != null ? selectedPrize.prize_value : (selectedPrize.value || 0),
         lottery_id: lotteryId,
         created_at: db.serverDate(),
     };
@@ -478,7 +582,7 @@ async function lotteryDraw(openid, params) {
 
     // 7. 发放奖品
     if (selectedPrize.type === 'point' || selectedPrize.type === 'points') {
-        const points = toNumber(selectedPrize.value, 0);
+        const points = toNumber(selectedPrize.prize_value != null ? selectedPrize.prize_value : selectedPrize.value, 0);
         if (points > 0) {
             await db.collection('users').where({ openid }).update({
                 data: {
@@ -511,7 +615,7 @@ async function lotteryDraw(openid, params) {
     }
 
     // 8. 扣减库存
-    if (selectedPrize.stock !== undefined && selectedPrize.stock !== null) {
+    if (selectedPrize.stock !== undefined && selectedPrize.stock !== null && selectedPrize.stock > 0) {
         await db.collection('lottery_prizes').doc(selectedPrize._id).update({
             data: { stock: _.inc(-1) },
         }).catch(() => {});
@@ -524,7 +628,8 @@ async function lotteryDraw(openid, params) {
             _id: selectedPrize._id,
             name: selectedPrize.name,
             type: selectedPrize.type || 'point',
-            value: selectedPrize.value || 0,
+            value: selectedPrize.prize_value != null ? selectedPrize.prize_value : (selectedPrize.value || 0),
+            prize_value: selectedPrize.prize_value != null ? selectedPrize.prize_value : (selectedPrize.value || 0),
             image: selectedPrize.image || '',
         },
     };
@@ -705,6 +810,7 @@ module.exports = {
     groupOrderDetail,
     slashStart,
     slashHelp,
+    slashDetail,
     mySlashList,
     lotteryDraw,
     pickupPendingOrders,

@@ -49,12 +49,25 @@ async function getConfig(key) {
     // 查数据库
     try {
         const res = await db.collection('configs')
-            .where({ key, active: true })
+            .where({ config_key: key })
             .limit(1)
             .get();
 
         if (res.data && res.data.length > 0) {
-            const value = res.data[0].value !== undefined ? res.data[0].value : res.data[0];
+            const row = res.data[0];
+            const value = row.config_value !== undefined ? row.config_value : (row.value !== undefined ? row.value : row);
+            setCachedConfig(key, value);
+            return value;
+        }
+
+        const legacyRes = await db.collection('app_configs')
+            .where({ config_key: key, status: true })
+            .limit(1)
+            .get();
+
+        if (legacyRes.data && legacyRes.data.length > 0) {
+            const row = legacyRes.data[0];
+            const value = row.config_value !== undefined ? row.config_value : (row.value !== undefined ? row.value : row);
             setCachedConfig(key, value);
             return value;
         }

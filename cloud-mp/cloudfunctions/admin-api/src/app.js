@@ -3642,7 +3642,8 @@ function parseConfigRowValue(row, fallback) {
 }
 
 function getConfigRowValue(key, fallback) {
-    const row = getCollection('configs').find((item) => item.config_key === key || item.key === key);
+    const row = getCollection('configs').find((item) => item.config_key === key || item.key === key)
+        || getCollection('app_configs').find((item) => item.config_key === key || item.key === key);
     return parseConfigRowValue(row, fallback);
 }
 

@@ -1,5 +1,5 @@
 // pages/group/list.js
-const { get, post } = require('../../utils/request');
+const { get } = require('../../utils/request');
 const { normalizeActivityList } = require('../../utils/activityList');
 const app = getApp();
 const PRODUCT_PLACEHOLDER = '/assets/icons/package.svg';
@@ -37,6 +37,24 @@ function enrichGroupActivity(a) {
 function getActivityList(res) {
     if (!res || res.code !== 0) return [];
     return normalizeActivityList(res.list || res.data || res);
+}
+
+function buildGroupBuyInfo(activity = {}) {
+    const product = activity.product || {};
+    const price = parseFloat(activity.group_price || activity.price || product.retail_price || product.price || 0);
+    return {
+        product_id: product.id || product._id || activity.product_id,
+        category_id: product.category_id || null,
+        sku_id: activity.sku_id || null,
+        quantity: 1,
+        price,
+        name: product.name || activity.name || '拼团商品',
+        image: (product.images && product.images[0]) || product.image || '',
+        spec: activity.sku_id ? '拼团·指定规格' : '拼团特惠',
+        type: 'group',
+        group_activity_id: activity._id || activity.id,
+        supports_pickup: product.supports_pickup ? 1 : 0
+    };
 }
 
 Page({
@@ -110,21 +128,8 @@ Page({
             });
             return;
         }
-        try {
-            const payload = { activity_id: activity.id };
-            if (activity.sku_id != null && activity.sku_id !== '') {
-                payload.sku_id = activity.sku_id;
-            }
-            const res = await post('/group/orders', payload);
-            if (res.code === 0 || res.code === 1) {
-                const groupNo = res.data?.group_no;
-                wx.navigateTo({ url: `/pages/group/detail?group_no=${groupNo}` });
-            } else {
-                wx.showToast({ title: res.message || '发起失败', icon: 'none' });
-            }
-        } catch {
-            wx.showToast({ title: '网络错误', icon: 'none' });
-        }
+        wx.setStorageSync('directBuyInfo', buildGroupBuyInfo(activity));
+        wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
     },
 
     onViewGroup(e) {

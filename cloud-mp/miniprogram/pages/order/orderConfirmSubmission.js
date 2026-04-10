@@ -60,6 +60,8 @@ async function submitOrder(page, app, brandAnimation) {
 
         if (page.data.slashNo) orderData.slash_no = page.data.slashNo;
         if (page.data.groupNo) orderData.group_no = page.data.groupNo;
+        if (page.data.groupActivityId) orderData.group_activity_id = page.data.groupActivityId;
+        if (page.data.orderType) orderData.type = page.data.orderType;
         if (selectedCoupon) orderData.user_coupon_id = selectedCoupon.id != null ? selectedCoupon.id : selectedCoupon._id;
         if (page.data.usePoints && page.data.pointsToUse > 0) {
             orderData.points_to_use = page.data.pointsToUse;
@@ -79,14 +81,14 @@ async function submitOrder(page, app, brandAnimation) {
         }
 
         const createdOrders = Array.isArray(res.data) ? res.data : (res.data ? [res.data] : []);
-        const orderId = createdOrders[0] && createdOrders[0].id;
+        const orderId = createdOrders[0] && (createdOrders[0].id || createdOrders[0].order_id);
         const isSplitOrders = createdOrders.length > 1;
 
         if (page.data.useWallet && page.data.isAgent) {
-            wx.setStorageSync('walletPayOrderIds', createdOrders.map((item) => item.id).filter(Boolean));
+            wx.setStorageSync('walletPayOrderIds', createdOrders.map((item) => item.id || item.order_id).filter(Boolean));
         }
         if (isSplitOrders) {
-            wx.setStorageSync('latestCreatedOrderIds', createdOrders.map((item) => item.id).filter(Boolean));
+            wx.setStorageSync('latestCreatedOrderIds', createdOrders.map((item) => item.id || item.order_id).filter(Boolean));
             wx.setStorageSync('latestCreatedOrderHint', `已创建 ${createdOrders.length} 个待支付订单，请在订单列表中逐个完成支付`);
         }
 

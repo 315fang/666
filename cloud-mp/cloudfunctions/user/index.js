@@ -44,7 +44,13 @@ async function getConfigByKey(key) {
         .limit(1)
         .get()
         .catch(() => ({ data: [] }));
-    return res.data && res.data[0] ? res.data[0] : null;
+    if (res.data && res.data[0]) return res.data[0];
+    const legacyRes = await db.collection('app_configs')
+        .where({ config_key: key, status: true })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return legacyRes.data && legacyRes.data[0] ? legacyRes.data[0] : null;
 }
 
 async function loadMembershipConfig() {

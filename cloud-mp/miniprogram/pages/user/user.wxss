@@ -206,42 +206,58 @@
   min-width: 0;
 }
 
-.hero-member-badge {
+.hero-member-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8rpx;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 360rpx;
+}
+
+.hero-member-pill {
   display: flex;
   align-items: center;
   gap: 6rpx;
   box-sizing: border-box;
-  background: linear-gradient(135deg, rgba(147, 197, 253, 0.34) 0%, rgba(59, 130, 246, 0.18) 100%);
-  border: 1rpx solid rgba(147, 197, 253, 0.38);
   border-radius: 16rpx;
   padding: 6rpx 14rpx;
+  max-width: 100%;
+}
+
+.hero-member-pill-consume {
+  background: linear-gradient(135deg, rgba(147, 197, 253, 0.34) 0%, rgba(59, 130, 246, 0.18) 100%);
+  border: 1rpx solid rgba(147, 197, 253, 0.38);
+}
+
+.hero-member-pill-agent {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.28) 0%, rgba(217, 119, 6, 0.18) 100%);
+  border: 1rpx solid rgba(250, 204, 21, 0.42);
+}
+
+.member-pill-icon {
+  width: 22rpx;
+  height: 22rpx;
+  filter: brightness(0) invert(1);
   flex-shrink: 0;
 }
 
-.member-badge-icon {
-  width: 22rpx;
-  height: 22rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.member-badge-img {
-  width: 100%;
-  height: 100%;
-  filter: brightness(0) invert(1);
-}
-
-.member-badge-text {
-  font-size: 18rpx;
-  color: #DBECFF;
-  font-weight: 600;
-}
-
-.member-badge-level {
+.member-pill-label {
   font-size: 16rpx;
-  color: rgba(219, 236, 255, 0.86);
-  margin-left: 4rpx;
+  color: rgba(219, 236, 255, 0.78);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.member-pill-text {
+  font-size: 18rpx;
+  color: #FFFFFF;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* UID：宽度随内容收缩，最长不超过个人信息区域 */
