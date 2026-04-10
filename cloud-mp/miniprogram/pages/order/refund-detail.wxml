@@ -51,7 +51,7 @@
   <view class="card" wx:if="{{refund.order && refund.order.product}}">
     <view class="card-title">商品信息</view>
     <view class="product-row">
-      <image class="product-img" src="{{refund.order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{refund.order.product.images && refund.order.product.images.length > 0}}"></image>
+      <image class="product-img" src="{{refund.order.product && refund.order.product.images && refund.order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{refund.order.product && refund.order.product.images && refund.order.product.images.length > 0}}"></image>
       <view class="product-info">
         <text class="product-name">{{refund.order.product.name}}</text>
         <text class="product-price">订单金额: ¥{{refund.order.total_amount}}</text>

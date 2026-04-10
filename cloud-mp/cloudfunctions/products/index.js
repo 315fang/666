@@ -1,232 +1,236 @@
 'use strict';
-const cloud = require('wx-server-sdk');
 
+const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
 const _ = db.command;
 
-function toNumber(value, fallback = 0) {
-    const num = Number(value);
-    return Number.isFinite(num) ? num : fallback;
-}
+const {
+    CloudBaseError, cloudFunctionWrapper
+} = require('./shared/errors');
+const {
+    success, badRequest, notFound, serverError
+} = require('./shared/response');
+const { toNumber, toArray, getAllRecords } = require('./shared/utils');
 
-function toArray(value) {
-    return Array.isArray(value) ? value : [];
-}
+// 异步处理包装
+const asyncHandler = (handler) => async (...args) => {
+    try {
+        return await handler(...args);
+    } catch (err) {
+        if (err instanceof CloudBaseError) throw err;
+        throw serverError(err.message || '操作失败');
+    }
+};
 
-function isOnSaleStatus(status) {
+// 辅助函数
+function isOnSale(status) {
     return status === true || status === 1 || status === '1' || status === 'active' || status === 'on_sale';
 }
 
-function normalizeSku(sku) {
-    const price = toNumber(sku.price != null ? sku.price : sku.retail_price, 0);
-    const originalPrice = toNumber(sku.original_price != null ? sku.original_price : sku.market_price, price);
-    const image = sku.image || toArray(sku.images)[0] || '';
-    const memberPrice = toNumber(sku.member_price != null ? sku.member_price : sku.price_member, price);
-    const wholesalePrice = toNumber(sku.wholesale_price != null ? sku.wholesale_price : sku.price_leader, price);
-    const agentPrice = toNumber(sku.agent_price != null ? sku.agent_price : sku.price_agent, price);
-    return {
-        ...sku,
-        id: sku.id || sku._id,  // ★ 确保前端可用 sku.id
-        price,
-        original_price: originalPrice,
-        member_price: memberPrice,
-        price_member: memberPrice,
-        wholesale_price: wholesalePrice,
-        price_leader: wholesalePrice,
-        agent_price: agentPrice,
-        price_agent: agentPrice,
-        image,
-        images: sku.images ? toArray(sku.images) : (image ? [image] : []),
-        spec: sku.spec || sku.specs || '',
-        stock: toNumber(sku.stock, 0)
-    };
-}
-
-function formatProduct(product) {
-    const retailPrice = toNumber(product.retail_price != null ? product.retail_price : product.min_price, 0);
-    const originalPrice = toNumber(product.market_price != null ? product.market_price : product.original_price, retailPrice);
-    const images = toArray(product.images);
-    const detailImages = toArray(product.detail_images);
-    return {
-        ...product,
-        id: product.id || product._id,  // ★ 确保前端可用 product.id
-        price: retailPrice,
-        retail_price: retailPrice,
-        min_price: retailPrice,
-        original_price: originalPrice,
-        market_price: originalPrice,
-        image: images[0] || '',
-        images,
-        detail_images: detailImages,
-        is_on_sale: isOnSaleStatus(product.status),
-        stock: toNumber(product.stock, 0),
-        sales_count: toNumber(product.sales_count != null ? product.sales_count : product.purchase_count, 0),
-        skus: toArray(product.skus).map(normalizeSku)
-    };
-}
-
 async function queryActiveProducts() {
-    const candidates = [
-        { status: true },
-        { status: 1 },
-        { status: '1' },
-        { status: 'active' },
-        { status: 'on_sale' }
-    ];
-    const groups = await Promise.all(candidates.map((where) => db.collection('products').where(where).get()));
-    const map = new Map();
-    groups.forEach((group) => {
-        group.data.forEach((item) => {
-            map.set(item._id, item);
-        });
-    });
-    return Array.from(map.values());
+    try {
+        const candidates = [{ status: true }, { status: 1 }, { status: '1' }, { status: 'active' }, { status: 'on_sale' }];
+        const groups = await Promise.all(candidates.map((w) => db.collection('products').where(w).limit(100).get().catch(() => ({ data: [] }))));
+        const map = new Map();
+        groups.forEach((g) => (g.data || []).forEach((item) => map.set(item._id, item)));
+        return Array.from(map.values());
+    } catch (err) {
+        console.error('[products] queryActiveProducts 失败:', err.message);
+        return [];
+    }
 }
 
-async function getProductById(productId) {
-    const numericId = toNumber(productId, NaN);
-    const [byLegacyId, byDocId] = await Promise.all([
-        Number.isFinite(numericId) ? db.collection('products').where({ id: numericId }).limit(1).get() : Promise.resolve({ data: [] }),
-        db.collection('products').doc(String(productId)).get().catch(() => ({ data: null }))
+async function getProductById(id) {
+    const num = toNumber(id, NaN);
+    const [legacy, doc] = await Promise.all([
+        Number.isFinite(num) ? db.collection('products').where({ id: num }).limit(1).get() : Promise.resolve({ data: [] }),
+        db.collection('products').doc(String(id)).get().catch(() => ({ data: null }))
     ]);
-    if (byLegacyId.data && byLegacyId.data.length) return byLegacyId.data[0];
-    if (byDocId.data) return byDocId.data;
-    return null;
+    return legacy.data[0] || doc.data || null;
 }
 
-async function getSkusByProduct(product) {
-    const candidates = [];
-    if (product && product._id) {
-        candidates.push(db.collection('skus').where({ product_id: product._id }).get().catch(() => ({ data: [] })));
-    }
-    if (product && product.id != null) {
-        candidates.push(db.collection('skus').where({ product_id: Number(product.id) }).get().catch(() => ({ data: [] })));
-    }
-    if (!candidates.length) return [];
-    const groups = await Promise.all(candidates);
-    const map = new Map();
-    groups.forEach((group) => {
-        group.data.forEach((item) => map.set(item._id || item.id, item));
-    });
-    return Array.from(map.values()).sort((a, b) => toNumber(a.sort_order, 0) - toNumber(b.sort_order, 0));
+function formatProduct(p) {
+    const price = toNumber(p.retail_price || p.min_price, 0);
+    return {
+        ...p,
+        id: p.id || p._id,
+        price, retail_price: price, min_price: price,
+        original_price: toNumber(p.market_price || p.original_price, price),
+        market_price: toNumber(p.market_price || p.original_price, price),
+        image: toArray(p.images)[0] || '',
+        images: toArray(p.images),
+        is_on_sale: isOnSale(p.status),
+        stock: toNumber(p.stock, 0),
+        sales_count: toNumber(p.sales_count || p.purchase_count, 0)
+    };
 }
 
-exports.main = async (event) => {
-    const { action, page = 1, size = 20, limit, category_id, keyword, product_id } = event;
-    const pageSize = Math.max(1, toNumber(limit != null ? limit : size, 20));
-
-    if (action === 'list') {
+// 主处理函数
+const handleAction = {
+    'list': asyncHandler(async (params) => {
+        const pageSize = Math.max(1, toNumber(params.limit || params.size, 20));
         let list = await queryActiveProducts();
-        if (category_id) {
-            list = list.filter((item) => String(item.category_id) === String(category_id));
+        if (params.category_id) {
+            list = list.filter((p) => String(p.category_id) === String(params.category_id));
         }
-        list = list
-            .sort((a, b) => toNumber(b.manual_weight, 0) - toNumber(a.manual_weight, 0))
-            .map(formatProduct);
+        list = list.sort((a, b) => toNumber(b.manual_weight, 0) - toNumber(a.manual_weight, 0)).map(formatProduct);
 
-        const currentPage = Math.max(1, toNumber(page, 1));
-        const start = (currentPage - 1) * pageSize;
-        const pageList = list.slice(start, start + pageSize);
-        return {
-            code: 0,
-            success: true,
-            data: { list: pageList, total: list.length, page: currentPage, size: pageSize }
-        };
-    }
+        // 为列表商品添加规格摘要（安全查询，失败不影响主流程）
+        let skuList = [];
+        try {
+            skuList = await getAllRecords(db, 'skus');
+        } catch (e) {
+            console.warn('[products/list] 查询 SKU 失败，跳过规格摘要:', e.message);
+        }
 
-    if (action === 'detail') {
-        const product = await getProductById(product_id);
-        if (!product) return { code: 404, success: false, message: '商品不存在' };
-        const skus = await getSkusByProduct(product);
-        return {
-            code: 0,
-            success: true,
-            data: formatProduct({ ...product, skus })
-        };
-    }
+        if (skuList.length > 0) {
+            list = list.map((product) => {
+                const productIdStr = String(product._id || product.id);
+                const legacyIdStr = product._legacy_id ? String(product._legacy_id) : '';
+                const productSkus = skuList.filter((sku) => {
+                    const pid = String(sku.product_id);
+                    return pid === productIdStr || (legacyIdStr && pid === legacyIdStr) || pid === String(product.id);
+                });
+                if (productSkus.length > 0) {
+                    const specMap = {};
+                    productSkus.forEach((sku) => {
+                        const specs = Array.isArray(sku.specs) && sku.specs.length > 0
+                            ? sku.specs
+                            : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
+                        specs.forEach((s) => {
+                            if (s.name && s.value) {
+                                if (!specMap[s.name]) specMap[s.name] = new Set();
+                                specMap[s.name].add(s.value);
+                            }
+                        });
+                    });
+                    const specSummary = Object.keys(specMap).map((name) => Array.from(specMap[name]).join('/')).join(' · ');
+                    if (specSummary) product.specSummary = specSummary;
+                    product.skus = productSkus.map((sku) => ({
+                        ...sku,
+                        id: sku.id || sku._id,
+                        specs: Array.isArray(sku.specs) && sku.specs.length > 0 ? sku.specs : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : [])
+                    }));
+                }
+                return product;
+            });
+        }
 
-    if (action === 'categories') {
-        const res = await db.collection('categories')
-            .where({ status: _.in([true, 1, '1']) })
-            .orderBy('sort_order', 'asc')
-            .get();
-        return {
-            code: 0,
-            success: true,
-            data: res.data.map((item) => ({
-                ...item,
-                id: item.id || item._id,  // ★ 确保前端可用 category.id
-                image: item.image || item.icon || ''
-            }))
-        };
-    }
+        const page = Math.max(1, toNumber(params.page, 1));
+        const start = (page - 1) * pageSize;
+        return success({ list: list.slice(start, start + pageSize), page, size: pageSize, total: list.length });
+    }),
 
-    if (action === 'search') {
+    'detail': asyncHandler(async (params) => {
+        if (!params.product_id) throw badRequest('缺少商品 ID');
+        const product = await getProductById(params.product_id);
+        if (!product) throw notFound('商品不存在');
+
+        // 查询关联 SKU（安全查询，失败不影响主流程）
+        let skus = [];
+        let specSummary = '';
+        try {
+            const skuList = await getAllRecords(db, 'skus');
+            const productIdStr = String(product._id || product.id);
+            skus = skuList.filter((sku) => {
+                const pid = String(sku.product_id);
+                return pid === productIdStr || pid === String(product.id) || (product._legacy_id && pid === String(product._legacy_id));
+            }).map((sku) => {
+                const specs = Array.isArray(sku.specs) && sku.specs.length > 0
+                    ? sku.specs
+                    : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
+                return {
+                    ...sku,
+                    id: sku.id || sku._legacy_id || sku._id,
+                    specs,
+                    spec_name: specs.length >= 1 ? specs[0].name : (sku.spec_name || ''),
+                    spec_value: specs.length >= 1 ? specs[0].value : (sku.spec_value || sku.spec || '')
+                };
+            });
+
+            // 生成规格摘要
+            const specMap = {};
+            skus.forEach((sku) => {
+                const skuSpecs = sku.specs || [];
+                skuSpecs.forEach((s) => {
+                    if (s.name && s.value) {
+                        if (!specMap[s.name]) specMap[s.name] = new Set();
+                        specMap[s.name].add(s.value);
+                    }
+                });
+            });
+            specSummary = Object.keys(specMap).map((name) => Array.from(specMap[name]).join('/')).join(' · ');
+        } catch (e) {
+            console.warn('[products/detail] 查询 SKU 失败，跳过规格信息:', e.message);
+        }
+
+        const result = formatProduct(product);
+        if (skus.length > 0) result.skus = skus;
+        if (specSummary) result.specSummary = specSummary;
+        return success(result);
+    }),
+
+    'categories': asyncHandler(async (params) => {
+        const res = await db.collection('categories').where({ status: _.in([true, 1, '1']) }).orderBy('sort_order', 'asc').get().catch(() => ({ data: [] }));
+        return success({ list: res.data.map((c) => ({ ...c, id: c.id || c._id })) });
+    }),
+
+    'search': asyncHandler(async (params) => {
+        if (!params.keyword) throw badRequest('缺少搜索关键词');
+        const pageSize = Math.max(1, toNumber(params.limit || params.size, 20));
         let list = await queryActiveProducts();
-        const searchText = String(keyword || '').trim().toLowerCase();
-        if (searchText) {
-            list = list.filter((item) => `${item.name || ''} ${item.description || ''}`.toLowerCase().includes(searchText));
-        }
-        list = list.map(formatProduct);
-        const currentPage = Math.max(1, toNumber(page, 1));
-        const start = (currentPage - 1) * pageSize;
-        return {
-            code: 0,
-            success: true,
-            data: {
-                list: list.slice(start, start + pageSize),
-                total: list.length,
-                page: currentPage,
-                size: pageSize
-            }
-        };
-    }
+        const search = String(params.keyword).trim().toLowerCase();
+        list = list.filter((p) => {
+            const text = `${p.name || ''} ${p.description || ''}`.toLowerCase();
+            return text.includes(search);
+        }).map(formatProduct);
+        const page = Math.max(1, toNumber(params.page, 1));
+        const start = (page - 1) * pageSize;
+        return success({ list: list.slice(start, start + pageSize), page, size: pageSize, total: list.length, keyword: search });
+    }),
 
-    // ── 商品评价列表 ────────────────────────────
-    if (action === 'reviews') {
-        const productId = event.product_id;
-        if (!productId) return { code: 400, success: false, message: '缺少商品ID' };
-        const currentPage = Math.max(1, toNumber(event.page, 1));
-        const pageSizeVal = Math.max(1, toNumber(event.limit || event.size, 10));
-        const rows = await db.collection('reviews')
-            .where({ product_id: productId })
-            .orderBy('created_at', 'desc')
-            .limit(100)
-            .get()
-            .catch(() => ({ data: [] }));
-        // 补充评价者用户信息
-        const reviewerOpenids = [...new Set(rows.data.map((item) => item.openid).filter(Boolean))];
+    'reviews': asyncHandler(async (params) => {
+        if (!params.product_id) throw badRequest('缺少商品 ID');
+        const pageSize = Math.max(1, toNumber(params.limit || params.size, 10));
+        const rows = await db.collection('reviews').where({ product_id: params.product_id }).orderBy('created_at', 'desc').limit(100).get().catch(() => ({ data: [] }));
+        
+        const reviews = rows.data || [];
+        if (reviews.length === 0) {
+            const page = Math.max(1, toNumber(params.page, 1));
+            return success({ list: [], page, size: pageSize, total: 0 });
+        }
+
+        const reviewerIds = [...new Set(reviews.map((r) => r.openid).filter(Boolean))];
         const reviewerMap = {};
-        if (reviewerOpenids.length) {
-            const userRes = await db.collection('users').where({ openid: _.in(reviewerOpenids) }).limit(100).get().catch(() => ({ data: [] }));
-            userRes.data.forEach((u) => { reviewerMap[u.openid] = u; });
+        if (reviewerIds.length) {
+            const users = await db.collection('users').where({ openid: _.in(reviewerIds) }).limit(100).get().catch(() => ({ data: [] }));
+            (users.data || []).forEach((u) => { reviewerMap[u.openid] = u; });
         }
-        const list = rows.data.map((item) => {
-            const reviewer = reviewerMap[item.openid] || null;
+
+        const list = reviews.map((r) => {
+            const u = reviewerMap[r.openid];
             return {
-                ...item,
-                id: item.id || item._id,
-                rating: toNumber(item.rating, 5),
-                created_at: item.created_at,
-                reviewer_nickname: reviewer?.nickName || reviewer?.nickname || '用户',
-                reviewer_avatar: reviewer?.avatarUrl || reviewer?.avatar_url || ''
+                ...r, id: r.id || r._id, rating: toNumber(r.rating, 5),
+                reviewer_nickname: u?.nickName || u?.nickname || '用户',
+                reviewer_avatar: u?.avatarUrl || u?.avatar_url || ''
             };
         });
-        const start = (currentPage - 1) * pageSizeVal;
-        return {
-            code: 0,
-            success: true,
-            data: {
-                list: list.slice(start, start + pageSizeVal),
-                total: list.length,
-                page: currentPage,
-                size: pageSizeVal,
-                pagination: { page: currentPage, limit: pageSizeVal, total: list.length }
-            }
-        };
+
+        const page = Math.max(1, toNumber(params.page, 1));
+        const start = (page - 1) * pageSize;
+        return success({ list: list.slice(start, start + pageSize), page, size: pageSize, total: list.length });
+    })
+};
+
+exports.main = cloudFunctionWrapper(async (event) => {
+    const { action, ...params } = event;
+    const handler = handleAction[action];
+
+    if (!handler) {
+        throw badRequest(`未知 action: ${action}`);
     }
 
-    return { code: 400, success: false, message: `未知 action: ${action}` };
-};
+    return handler(params);
+});

@@ -57,6 +57,11 @@
             <el-option label="已撤销" value="cancelled" />
           </el-select>
         </el-form-item>
+        <el-form-item label="类型">
+          <el-select v-model="searchForm.type" placeholder="全部类型" clearable style="width:160px">
+            <el-option v-for="item in commissionTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="用户ID">
           <el-input v-model="searchForm.user_id" placeholder="用户ID" clearable style="width:120px" />
         </el-form-item>
@@ -88,6 +93,11 @@
         <el-table-column label="佣金金额" width="120">
           <template #default="{ row }">
             <span class="amount">¥{{ Number(row.amount || 0).toFixed(2) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" width="130">
+          <template #default="{ row }">
+            <el-tag size="small" effect="plain">{{ commissionTypeText(row.type) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="层级" width="80">
@@ -159,6 +169,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getCommissions, approveCommissionItem, rejectCommissionItem, batchApproveCommissions, batchRejectCommissions } from '@/api'
 import { formatDate } from '@/utils/format'
+import { COMMISSION_TYPE_OPTIONS, getCommissionTypeLabel } from '@/utils/commission'
 import { usePagination } from '@/composables/usePagination'
 import { getUserNickname } from '@/utils/userDisplay'
 
@@ -176,11 +187,13 @@ const statsCards = ref([
   { label: '已结算金额', value: '0.00', icon: 'SuccessFilled', color: '#67c23a' },
   { label: '已审批金额', value: '0.00', icon: 'TrendCharts', color: '#f56c6c' }
 ])
+const commissionTypeOptions = COMMISSION_TYPE_OPTIONS
 
-const searchForm = reactive({ status: '', user_id: '' })
+const searchForm = reactive({ status: '', type: '', user_id: '' })
 const { pagination, resetPage, applyResponse } = usePagination({ defaultLimit: 10 })
 const tableData = ref([])
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
+const commissionTypeText = (type) => getCommissionTypeLabel(type)
 
 const fetchData = async () => {
   loading.value = true
@@ -205,7 +218,7 @@ const fetchData = async () => {
 }
 
 const handleSearch = () => { resetPage(); fetchData() }
-const handleReset = () => { searchForm.status = ''; searchForm.user_id = ''; handleSearch() }
+const handleReset = () => { searchForm.status = ''; searchForm.type = ''; searchForm.user_id = ''; handleSearch() }
 const handleSelectionChange = (rows) => { selectedIds.value = rows.filter(r => r.status === 'pending_approval').map(r => r.id) }
 
 const handleApprove = async (row) => {

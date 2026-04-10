@@ -60,10 +60,10 @@
       <view class="member-list" wx:if="{{detail.members && detail.members.length > 0}}">
         <view class="member-item" wx:for="{{detail.members}}" wx:key="id">
           <view class="avatar-wrap">
-            <image class="member-avatar" src="{{item.user && item.user.avatar_url || '/assets/icons/user.svg'}}" mode="aspectFill"/>
+            <image class="member-avatar" src="{{item.user && (item.user.avatar || item.user.avatar_url) || '/assets/icons/user.svg'}}" mode="aspectFill"/>
             <text class="owner-tag" wx:if="{{item.is_leader}}">团长</text>
           </view>
-          <text class="member-name">{{item.user && item.user.nickname || '成员'}}</text>
+          <text class="member-name">{{item.user && (item.user.nick_name || item.user.nickname) || '成员'}}</text>
         </view>
         <!-- 空位占位 -->
         <view class="member-item" wx:for="{{detail._needMore}}" wx:key="*this">

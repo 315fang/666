@@ -1,7 +1,7 @@
 <view class="page">
   <view class="hero" wx:if="{{!loading && inviteCard}}">
     <view class="hero-badge">{{inviteCard.role_label}}</view>
-    <image class="avatar" src="{{inviteCard.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
+    <image class="avatar" src="{{inviteCard.avatar || inviteCard.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
     <text class="title">{{inviteCard.invite_title}}</text>
     <text class="subtitle">{{inviteCard.invite_subtitle}}</text>
     <view class="meta-row">

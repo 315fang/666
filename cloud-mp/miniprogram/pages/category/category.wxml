@@ -92,6 +92,7 @@
                 <text class="product-sales" wx:if="{{prod.sales_label}}">{{prod.sales_label}}</text>
                 <text class="product-heat" wx:if="{{prod.heat_label}}">{{prod.heat_label}}</text>
               </view>
+              <text class="product-spec-summary" wx:if="{{prod.specSummary}}">{{prod.specSummary}}</text>
               <view class="product-discount-tag" wx:if="{{prod.discount_label}}">
                 <text class="discount-tag-text">{{prod.discount_label}}</text>
               </view>
@@ -150,6 +151,8 @@
                 <text class="product-sales" wx:if="{{prod.sales_label}}">{{prod.sales_label}}</text>
                 <text class="product-heat" wx:if="{{prod.heat_label}}">{{prod.heat_label}}</text>
               </view>
+              <!-- 规格摘要 -->
+              <text class="product-spec-summary" wx:if="{{prod.specSummary}}">{{prod.specSummary}}</text>
               <!-- 折扣标签 -->
               <view class="product-discount-tag" wx:if="{{prod.discount_label}}">
                 <text class="discount-tag-text">{{prod.discount_label}}</text>

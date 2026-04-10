@@ -429,7 +429,7 @@ const openParentDetail = async () => {
     id: pid,
     nickname: displayUserName(detailUser.value.parent, ''),
     member_no: '',
-    avatar_url: '',
+    avatar: '', avatar_url: '',
     phone: '',
     role_level: 0
   })

@@ -58,10 +58,10 @@ Page({
             const res = await uploadFile('/user/upload', avatarUrl, 'file');
             if (res.code === 0 && res.data.url) {
                 const fullUrl = res.data.url;
-                const updateRes = await put('/user/profile', { avatar_url: fullUrl });
+                const updateRes = await put('/user/profile', { avatar: fullUrl });
                 if (updateRes.code === 0) {
-                    this.setData({ 'userInfo.avatar_url': fullUrl });
-                    app.globalData.userInfo.avatar_url = fullUrl;
+                    this.setData({ 'userInfo.avatar': fullUrl });
+                    app.globalData.userInfo.avatar = fullUrl;
                     wx.setStorageSync('userInfo', app.globalData.userInfo);
                     wx.showToast({ title: '头像更新成功', icon: 'success' });
                 }
@@ -115,6 +115,7 @@ Page({
                     showNicknameModal: false,
                     'userInfo.nickname': nickname
                 });
+                app.globalData.userInfo.nick_name = nickname;
                 app.globalData.userInfo.nickname = nickname;
                 wx.setStorageSync('userInfo', app.globalData.userInfo);
                 wx.showToast({ title: '修改成功', icon: 'success' });

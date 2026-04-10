@@ -5,6 +5,24 @@ const { getFirstImage, genHeatLabel } = require('../../utils/dataFormatter');
 const CATEGORY_BACKGROUND_BATCH_SIZE = 2;
 const CATEGORY_PRODUCTS_CACHE_TTL = 2 * 60 * 1000;
 
+// 生成规格摘要文本
+function buildSpecSummary(item) {
+    if (!item.skus || !item.skus.length) return '';
+    const specMap = {};
+    item.skus.forEach((sku) => {
+        const skuSpecs = Array.isArray(sku.specs) && sku.specs.length > 0
+            ? sku.specs
+            : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
+        skuSpecs.forEach((s) => {
+            if (s.name && s.value) {
+                if (!specMap[s.name]) specMap[s.name] = new Set();
+                specMap[s.name].add(s.value);
+            }
+        });
+    });
+    return Object.keys(specMap).map((name) => Array.from(specMap[name]).join('/')).join(' · ');
+}
+
 function mapProductsForCategory(page, list) {
     const pointBalance = page.data.userPointBalance || 0;
     const bestCoupon = page.data.userBestCoupon || 0;
@@ -33,6 +51,7 @@ function mapProductsForCategory(page, list) {
         return {
             ...item,
             image: getFirstImage(item.images),
+            specSummary: buildSpecSummary(item),
             price: retailPrice,
             market_price: marketPrice > retailPrice ? marketPrice : 0,
             heat_label: genHeatLabel(item),

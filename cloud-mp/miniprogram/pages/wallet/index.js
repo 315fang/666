@@ -4,8 +4,10 @@ const { get, post } = require('../../utils/request');
 Page({
     data: {
         balance: '0.00',
+        pendingIn: '0.00',
         commissionOverview: null,
         logs: [],
+        logsLoading: true,
         showWithdraw: false,
         withdrawAmount: ''
     },
@@ -26,10 +28,11 @@ Page({
                 const overview = res.data.commission || {};
                 this.setData({
                     balance: (res.data.balance || 0).toFixed(2),
+                    pendingIn: (res.data.pendingIn || 0).toFixed(2),
                     commissionOverview: {
                         total: overview.total ? overview.total.toFixed(2) : '0.00',
                         frozen: overview.frozen ? overview.frozen.toFixed(2) : '0.00',
-                        pendingApproval: overview.pendingApproval ? overview.pendingApproval.toFixed(2) : '0.00',
+                        pendingIn: overview.pendingIn ? overview.pendingIn.toFixed(2) : '0.00',
                         approved: overview.approved ? overview.approved.toFixed(2) : '0.00',
                         available: overview.available ? overview.available.toFixed(2) : '0.00'
                     }
@@ -53,10 +56,11 @@ Page({
                         refund_deadline: item.refund_deadline ? item.refund_deadline.split('T')[0] : null
                     };
                 });
-                this.setData({ logs });
+                this.setData({ logs, logsLoading: false });
             }
         } catch (err) {
             console.error(err);
+            this.setData({ logsLoading: false });
         }
     },
 
@@ -83,7 +87,7 @@ Page({
             'approved': '待结算',
             'settled': '已结算',
             'available': '可提现',
-            'pending': '审核中',
+            'pending': '待入账',
             'completed': '已完成',
             'rejected': '已驳回',
             'failed': '已失败',

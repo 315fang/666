@@ -86,6 +86,10 @@
         <text class="tag-new" wx:if="{{product.product_tag === 'new'}}">新品</text>
       </view>
       <view class="product-title">{{product.name}}</view>
+      <view class="product-spec-summary" wx:if="{{product.specSummary}}">
+        <text class="spec-summary-label">规格</text>
+        <text class="spec-summary-text">{{product.specSummary}}</text>
+      </view>
       <text class="product-subtitle">{{product.description || '围绕肤感、功效与礼赠体验进行精心陈列。'}}</text>
     </view>
 
@@ -111,12 +115,12 @@
     <view class="embedded-section" wx:if="{{product.specs && product.specs.length > 0}}">
       <view class="embedded-section-head">
         <text class="embedded-title">规格选择</text>
-        <text class="selected-spec-text">{{selectedSkuText || '默认规格'}}</text>
+        <text class="selected-spec-text {{!selectedSku ? 'spec-unselected' : ''}}">{{selectedSkuText || '请选择规格'}}</text>
       </view>
       <view class="spec-group" wx:for="{{product.specs}}" wx:key="name">
         <view class="spec-title">{{item.name}}</view>
         <view class="spec-options">
-          <view class="spec-option {{selectedSpecs[item.name] === val ? 'active' : ''}}" wx:for="{{item.values}}" wx:for-item="val" wx:key="*this" bindtap="onSpecSelect" data-key="{{item.name}}" data-val="{{val}}">{{val}}</view>
+          <view class="spec-option {{selectedSpecs[item.name] === val ? 'active' : ''}} {{isSpecValueDisabled(item.name, val) ? 'disabled' : ''}}" wx:for="{{item.values}}" wx:for-item="val" wx:key="*this" bindtap="onSpecSelect" data-key="{{item.name}}" data-val="{{val}}">{{val}}</view>
         </view>
       </view>
     </view>
@@ -156,9 +160,9 @@
     <view class="review-list">
       <view class="review-item" wx:for="{{reviews}}" wx:key="id" wx:if="{{index < 2}}">
         <view class="review-header">
-          <image class="review-avatar" src="{{item.user.avatar_url || '/assets/icons/user.svg'}}"></image>
+          <image class="review-avatar" src="{{item.user.avatar || item.user.avatar_url || '/assets/icons/user.svg'}}"></image>
           <view class="review-user-info">
-            <text class="review-name">{{item.user.nickname}}</text>
+            <text class="review-name">{{item.user.nick_name || item.user.nickname}}</text>
             <view class="review-stars">
               <image wx:for="{{[1,2,3,4,5]}}" wx:for-item="star" wx:key="star" class="star-icon {{star <= item.rating ? 'filled' : ''}}" src="/assets/icons/star.svg" mode="aspectFit"></image>
             </view>
@@ -209,6 +213,6 @@
     </view>
   </view>
 
-  <brand-animation id="brandAnimation" fly-image="{{product.images && product.images[0]}}"></brand-animation>
+  <brand-animation id="brandAnimation" fly-image="{{product.images && product.images[0] || ''}}"></brand-animation>
 </view>
 <!-- /container -->

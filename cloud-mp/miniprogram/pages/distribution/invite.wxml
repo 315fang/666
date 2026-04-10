@@ -19,7 +19,7 @@
     <view wx:else class="content-wrap">
         <view class="hero-card">
             <text class="hero-eyebrow">团队邀请</text>
-            <text class="hero-title">{{userInfo.nickname || '伙伴'}}，把问卷发给下一位合伙人</text>
+            <text class="hero-title">{{userInfo.nick_name || userInfo.nickname || '伙伴'}}，把问卷发给下一位合伙人</text>
             <text class="hero-desc">好友填写完成后即可进入您的团队，后续下单与成长数据也会同步计入团队表现。</text>
             <button class="primary-btn" open-type="share">分享邀请问卷</button>
         </view>

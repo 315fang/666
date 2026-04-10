@@ -10,9 +10,9 @@
   <block wx:if="{{list.length > 0}}">
     <view class="review-item" wx:for="{{list}}" wx:key="id">
       <view class="review-header">
-        <image class="review-avatar" src="{{item.user.avatar_url || '/assets/icons/user.svg'}}" mode="aspectFill" />
+        <image class="review-avatar" src="{{item.user.avatar || item.user.avatar_url || '/assets/icons/user.svg'}}" mode="aspectFill" />
         <view class="review-user-info">
-          <text class="review-name">{{item.user.nickname}}</text>
+          <text class="review-name">{{item.user.nick_name || item.user.nickname}}</text>
           <view class="review-stars">
             <text class="star {{s <= item.rating ? 'filled' : ''}}" wx:for="{{[1,2,3,4,5]}}" wx:for-item="s" wx:key="*this">★</text>
           </view>

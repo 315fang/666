@@ -16,7 +16,7 @@ Page({
     data: {
         statusBarHeight: 20,
         navBarHeight: 44,
-        inviteCode: '',
+        memberCode: '',
         directCount: 0,
         indirectCount: 0,
         totalCount: 0,
@@ -83,6 +83,7 @@ Page({
             const res = await get('/distribution/team', {
                 level: currentTab,
                 page,
+                pageSize: limit,
                 limit
             });
             const list = (res.data?.list || []).map(item => {
@@ -142,7 +143,7 @@ Page({
         const index = Number(e.currentTarget.dataset.index);
         const member = this.data.members[index];
         if (!member) return;
-        wx.navigateTo({ url: `/pages/distribution/team-member?id=${member.id}` });
+        wx.navigateTo({ url: `/pages/distribution/team-member?id=${member._id || member.id}` });
     },
 
     onShareAppMessage() {
@@ -150,7 +151,7 @@ Page({
         const userInfo = app.globalData.userInfo;
         const brandName = app.globalData.brandName || '品牌臻选';
         return {
-            title: `${userInfo?.nickname || '好友'} 邀请你加入${brandName}，领取专属优惠`,
+            title: `${userInfo?.nick_name || userInfo?.nickname || '好友'} 邀请你加入${brandName}，领取专属优惠`,
             path: `/pages/index/index${code ? '?invite=' + code : ''}`,
             imageUrl: ''
         };

@@ -237,6 +237,31 @@
   margin-bottom: 10rpx;
 }
 
+/* 规格摘要标签（显眼位置） */
+.product-spec-summary {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-bottom: 10rpx;
+  margin-top: 4rpx;
+}
+
+.spec-summary-label {
+  font-size: 20rpx;
+  font-weight: 600;
+  color: #8E6B47;
+  background: #F6E9D7;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  flex-shrink: 0;
+}
+
+.spec-summary-text {
+  font-size: 24rpx;
+  color: #6F5A48;
+  font-weight: 500;
+}
+
 .product-subtitle {
   font-size: 24rpx;
   color: #72675D;
@@ -523,6 +548,16 @@
   background: #F1E0CA;
   color: #7A583A;
   font-weight: 600;
+}
+
+.spec-option.disabled {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.spec-unselected {
+  color: #C6763A !important;
+  font-weight: 500;
 }
 
 .stepper {

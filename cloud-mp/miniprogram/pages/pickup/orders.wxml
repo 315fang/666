@@ -14,7 +14,7 @@
         <text class="order-status">待核销</text>
       </view>
       <view class="order-main">
-        <text class="order-line">买家：{{item.buyer.nickname || '用户***'}}<text wx:if="{{item.buyer.phone}}"> {{item.buyer.phone}}</text></text>
+        <text class="order-line">买家：{{item.buyer.nick_name || item.buyer.nickname || '用户***'}}<text wx:if="{{item.buyer.phone}}"> {{item.buyer.phone}}</text></text>
         <text class="order-line">数量：{{item.quantity}} 件</text>
         <text class="order-line">金额：¥{{item.total_amount}}</text>
         <text class="order-line">核销码：{{item.pickup_code}}</text>

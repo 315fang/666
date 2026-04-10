@@ -58,6 +58,21 @@ async function loadOrder(page, idOrNo) {
 
         if (order && order.status === 'pending') {
             page._maybeSyncWechatPayAfterLoad(order.id);
+            // 启动支付倒计时
+            const expireAt = order.expire_at || '';
+            if (expireAt && typeof page.startPayCountdown === 'function') {
+                page.startPayCountdown(expireAt);
+            } else if (!expireAt && typeof page.startPayCountdown === 'function') {
+                // 兼容旧数据无 expire_at，用 created_at + 30分钟推算
+                const createdTs = order.created_at ? new Date(order.created_at).getTime() : Date.now();
+                const fallbackExpire = new Date(createdTs + 30 * 60 * 1000).toISOString();
+                page.startPayCountdown(fallbackExpire);
+            }
+        } else {
+            // 非待付款状态清除倒计时
+            if (typeof page.startPayCountdown === 'function') {
+                page.startPayCountdown(null);
+            }
         }
     } catch (err) {
         console.error('加载订单失败:', err);

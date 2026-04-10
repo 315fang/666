@@ -6,23 +6,41 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 
-function toNumber(value, fallback = 0) {
-    const num = Number(value);
-    return Number.isFinite(num) ? num : fallback;
-}
+// ==================== 共享模块导入 ====================
+const {
+    validateAction, validateAmount, validateInteger, validateString,
+    validateArray, validateRequiredFields
+} = require('./shared/validators');
+const {
+    CloudBaseError, ERROR_CODES, errorHandler, cloudFunctionWrapper
+} = require('./shared/errors');
+const {
+    success, error, paginated, list, created, updated, deleted,
+    badRequest, unauthorized, forbidden, notFound, conflict, serverError
+} = require('./shared/response');
+const {
+    DEFAULT_GROWTH_TIERS, calculateTier, buildGrowthProgress, loadTierConfig
+} = require('./shared/growth');
+const {
+    toNumber, toArray, toString, toBoolean, getDeep, setDeep, deepClone, merge, pick, omit, generateId, delay, getAllRecords
+} = require('./shared/utils');
 
-function toArray(value) {
-    return Array.isArray(value) ? value : [];
-}
+// ==================== 云初始化 ====================
+
 
 async function queryCartRows(openid) {
-    const [newRows, legacyRows] = await Promise.all([
-        db.collection('cart_items').where({ openid }).get().catch(() => ({ data: [] })),
-        db.collection('cart_items').where({ user_id: openid }).get().catch(() => ({ data: [] }))
-    ]);
-    const map = new Map();
-    [...newRows.data, ...legacyRows.data].forEach((item) => map.set(item._id, item));
-    return Array.from(map.values()).sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+    try {
+        const [newRows, legacyRows] = await Promise.all([
+            getAllRecords(db, 'cart_items', { openid }).catch(() => []),
+            getAllRecords(db, 'cart_items', { user_id: openid }).catch(() => [])
+        ]);
+        const map = new Map();
+        [...newRows, ...legacyRows].forEach((item) => map.set(item._id, item));
+        return Array.from(map.values()).sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+    } catch (err) {
+        console.error('[cart] queryCartRows 失败:', err.message);
+        return [];
+    }
 }
 
 async function getProductByCandidate(productId) {
@@ -101,161 +119,238 @@ function normalizeCartRow(row, product, sku) {
     };
 }
 
-exports.main = async (event) => {
+exports.main = cloudFunctionWrapper(async (event) => {
     const wxContext = cloud.getWXContext();
     const openid = wxContext.OPENID;
     const { action, ...params } = event;
 
+    // 验证 action
+    if (!action || typeof action !== 'string') {
+        throw badRequest('缺少有效的 action 参数');
+    }
+
     if (action === 'list') {
-        const rows = await queryCartRows(openid);
-        const items = await Promise.all(rows.map(async (row) => {
-            const [product, sku] = await Promise.all([
-                getProductByCandidate(row.product_id),
-                getSkuByCandidate(row.sku_id)
-            ]);
-            return normalizeCartRow(row, product, sku);
-        }));
-        return { code: 0, success: true, data: { list: items, total: items.length } };
+        try {
+            const rows = await queryCartRows(openid);
+            const items = await Promise.all(rows.map(async (row) => {
+                try {
+                    const [product, sku] = await Promise.all([
+                        getProductByCandidate(row.product_id),
+                        getSkuByCandidate(row.sku_id)
+                    ]);
+                    return normalizeCartRow(row, product, sku);
+                } catch (err) {
+                    console.error('Error normalizing cart row:', row._id, err);
+                    throw serverError(`处理购物车项目 ${row._id} 失败`);
+                }
+            }));
+            return success({ list: items });
+        } catch (err) {
+            if (err instanceof CloudBaseError) throw err;
+            console.error('Cart list error:', err);
+            throw serverError('获取购物车列表失败');
+        }
     }
 
     if (action === 'add') {
-        const productId = params.product_id;
-        const skuId = params.sku_id;
-        const qty = Math.max(1, toNumber(params.qty != null ? params.qty : params.quantity, 1));
-        const [product, sku, existingRows] = await Promise.all([
-            getProductByCandidate(productId),
-            getSkuByCandidate(skuId),
-            queryCartRows(openid)
-        ]);
-
-        if (!product) return { code: 400, success: false, message: '商品不存在' };
-        const productSkus = await getProductSkuList(product);
-        if (!skuId && productSkus.length > 1) {
-            return { code: 400, success: false, message: '请选择商品规格' };
-        }
-        if (!skuId && productSkus.length === 1) {
-            return { code: 400, success: false, message: '请选择商品规格' };
-        }
-        if (skuId && !sku) return { code: 400, success: false, message: '规格不存在' };
-
-        const effectiveSkuId = sku ? (sku._id || sku.id) : null;
-        const existing = existingRows.find((item) => {
-            if (effectiveSkuId) {
-                return String(item.sku_id) === String(effectiveSkuId) && String(item.product_id) === String(productId);
+        try {
+            const productId = params.product_id;
+            const skuId = params.sku_id;
+            
+            if (!productId) {
+                throw badRequest('缺少必要参数: product_id');
             }
-            return String(item.product_id) === String(productId) && (!item.sku_id || item.sku_id === '');
-        });
-        if (existing) {
-            await db.collection('cart_items').doc(existing._id).update({
-                data: {
-                    qty: _.inc(qty),
-                    quantity: _.inc(qty),
-                    openid,
-                    updated_at: db.serverDate()
-                }
-            });
-            return { code: 0, success: true, data: { _id: existing._id, merged: true } };
-        }
 
-        const payload = {
-            openid,
-            user_id: openid,
-            product_id: product._id || product.id,
-            sku_id: effectiveSkuId,
-            qty,
-            quantity: qty,
-            selected: true,
-            snapshot_price: toNumber(sku ? sku.price : product.retail_price, 0),
-            snapshot_name: sku ? (sku.name || product.name || '') : (product.name || ''),
-            snapshot_spec: sku ? (sku.spec || sku.specs || '') : '',
-            snapshot_image: sku ? (sku.image || toArray(sku.images)[0]) : (toArray(product.images)[0] || ''),
-            created_at: db.serverDate(),
-            updated_at: db.serverDate()
-        };
-        const res = await db.collection('cart_items').add({ data: payload });
-        return { code: 0, success: true, data: { _id: res._id } };
+            const qty = Math.max(1, toNumber(params.qty != null ? params.qty : params.quantity, 1));
+            if (qty > 99999) {
+                throw badRequest('购买数量不能超过 99999');
+            }
+
+            const [product, sku, existingRows] = await Promise.all([
+                getProductByCandidate(productId),
+                getSkuByCandidate(skuId),
+                queryCartRows(openid)
+            ]);
+
+            if (!product) {
+                throw notFound('商品不存在');
+            }
+
+            const productSkus = await getProductSkuList(product);
+            if (productSkus.length > 1 && !skuId) {
+                throw badRequest('请选择商品规格');
+            }
+            if (skuId && !sku) {
+                throw notFound('规格不存在');
+            }
+
+            const effectiveSkuId = sku ? (sku._id || sku.id) : null;
+            const existing = existingRows.find((item) => {
+                if (effectiveSkuId) {
+                    return String(item.sku_id) === String(effectiveSkuId) && String(item.product_id) === String(productId);
+                }
+                return String(item.product_id) === String(productId) && (!item.sku_id || item.sku_id === '');
+            });
+
+            if (existing) {
+                await db.collection('cart_items').doc(existing._id).update({
+                    data: {
+                        qty: _.inc(qty),
+                        quantity: _.inc(qty),
+                        openid,
+                        updated_at: db.serverDate()
+                    }
+                });
+                return success({ _id: existing._id });
+            }
+
+            const payload = {
+                openid,
+                user_id: openid,
+                product_id: product._id || product.id,
+                sku_id: effectiveSkuId,
+                qty,
+                quantity: qty,
+                selected: true,
+                snapshot_price: toNumber(sku ? sku.price : product.retail_price, 0),
+                snapshot_name: sku ? (sku.name || product.name || '') : (product.name || ''),
+                snapshot_spec: sku ? (sku.spec || sku.specs || '') : '',
+                snapshot_image: sku ? (sku.image || toArray(sku.images)[0]) : (toArray(product.images)[0] || ''),
+                created_at: db.serverDate(),
+                updated_at: db.serverDate()
+            };
+
+            const res = await db.collection('cart_items').add({ data: payload });
+            return success({ _id: res._id });
+        } catch (err) {
+            if (err instanceof CloudBaseError) throw err;
+            console.error('Cart add error:', err);
+            throw serverError('添加购物车失败');
+        }
     }
 
     if (action === 'update') {
-        const cartId = params.cart_id;
-        const qty = toNumber(params.qty, 0);
-        if (qty <= 0) {
-            await db.collection('cart_items').doc(cartId).remove();
-            return { code: 0, success: true };
-        }
-        await db.collection('cart_items').doc(cartId).update({
-            data: {
-                qty,
-                quantity: qty,
-                updated_at: db.serverDate()
+        try {
+            const cartId = params.cart_id;
+            const qty = toNumber(params.qty, 0);
+
+            if (!cartId) {
+                throw badRequest('缺少必要参数: cart_id');
             }
-        });
-        return { code: 0, success: true };
+            if (qty < 0) {
+                throw badRequest('购买数量不能为负数');
+            }
+
+            if (qty <= 0) {
+                await db.collection('cart_items').doc(cartId).remove();
+                return success(null);
+            }
+
+            await db.collection('cart_items').doc(cartId).update({
+                data: {
+                    qty,
+                    quantity: qty,
+                    updated_at: db.serverDate()
+                }
+            });
+            return success(null);
+        } catch (err) {
+            if (err instanceof CloudBaseError) throw err;
+            console.error('Cart update error:', err);
+            throw serverError('更新购物车失败');
+        }
     }
 
     if (action === 'remove') {
-        await db.collection('cart_items').doc(params.cart_id).remove();
-        return { code: 0, success: true };
+        try {
+            const cartId = params.cart_id;
+            if (!cartId) {
+                throw badRequest('缺少必要参数: cart_id');
+            }
+            await db.collection('cart_items').doc(cartId).remove();
+            return success(null);
+        } catch (err) {
+            if (err instanceof CloudBaseError) throw err;
+            console.error('Cart remove error:', err);
+            throw serverError('删除购物车项失败');
+        }
     }
 
     if (action === 'clear') {
-        const rows = await queryCartRows(openid);
-        await Promise.all(rows.map((item) => db.collection('cart_items').doc(item._id).remove()));
-        return { code: 0, success: true };
+        try {
+            const rows = await queryCartRows(openid);
+            await Promise.all(rows.map((item) => db.collection('cart_items').doc(item._id).remove()));
+            return success(null);
+        } catch (err) {
+            if (err instanceof CloudBaseError) throw err;
+            console.error('Cart clear error:', err);
+            throw serverError('清空购物车失败');
+        }
     }
 
     if (action === 'check') {
-        const rows = await queryCartRows(openid);
-        const cartIds = toArray(params.cart_ids);
-        const selectedRows = cartIds.length
-            ? rows.filter((item) => cartIds.includes(item._id))
-            : rows.filter((item) => item.selected !== false);
+        try {
+            const rows = await queryCartRows(openid);
+            const cartIds = toArray(params.cart_ids);
+            const selectedRows = cartIds.length
+                ? rows.filter((item) => cartIds.includes(item._id))
+                : rows.filter((item) => item.selected !== false);
 
-        const errors = [];
-        const normalized = [];
-        let total = 0;
+            const errors = [];
+            const normalized = [];
+            let total = 0;
 
-        for (const row of selectedRows) {
-            const [product, sku] = await Promise.all([
-                getProductByCandidate(row.product_id),
-                getSkuByCandidate(row.sku_id)
-            ]);
-            if (!product) {
-                errors.push({ cart_id: row._id, sku_id: row.sku_id, msg: '商品不存在' });
-                continue;
-            }
-            const productSkus = await getProductSkuList(product);
-            if (!row.sku_id && productSkus.length > 0) {
-                errors.push({ cart_id: row._id, sku_id: row.sku_id, msg: '请选择商品规格' });
-                continue;
-            }
-            // 有 sku_id 时要求 sku 必须存在；无 sku_id 时走商品路径
-            if (row.sku_id && !sku) {
-                errors.push({ cart_id: row._id, sku_id: row.sku_id, msg: '规格不存在' });
-                continue;
-            }
-            const qty = toNumber(row.qty != null ? row.qty : row.quantity, 1);
-            const availableStock = sku ? toNumber(sku.stock, 0) : toNumber(product.stock, 0);
-            if (availableStock < qty) {
-                errors.push({ cart_id: row._id, sku_id: row.sku_id, msg: `库存不足（剩余${availableStock}）` });
-                continue;
-            }
-            const item = normalizeCartRow(row, product, sku);
-            total += item.snapshot_price * qty;
-            normalized.push(item);
-        }
+            for (const row of selectedRows) {
+                try {
+                    const [product, sku] = await Promise.all([
+                        getProductByCandidate(row.product_id),
+                        getSkuByCandidate(row.sku_id)
+                    ]);
 
-        return {
-            code: 0,
-            success: true,
-            data: {
+                    if (!product) {
+                        errors.push({ cart_id: row._id, sku_id: row.sku_id, msg: '商品不存在' });
+                        continue;
+                    }
+
+                    const productSkus = await getProductSkuList(product);
+                    if (!row.sku_id && productSkus.length > 0) {
+                        errors.push({ cart_id: row._id, sku_id: row.sku_id, msg: '请选择商品规格' });
+                        continue;
+                    }
+
+                    if (row.sku_id && !sku) {
+                        errors.push({ cart_id: row._id, sku_id: row.sku_id, msg: '规格不存在' });
+                        continue;
+                    }
+
+                    const qty = toNumber(row.qty != null ? row.qty : row.quantity, 1);
+                    const availableStock = sku ? toNumber(sku.stock, 0) : toNumber(product.stock, 0);
+                    if (availableStock < qty) {
+                        errors.push({ cart_id: row._id, sku_id: row.sku_id, msg: `库存不足（剩余${availableStock}）` });
+                        continue;
+                    }
+
+                    const item = normalizeCartRow(row, product, sku);
+                    total += item.snapshot_price * qty;
+                    normalized.push(item);
+                } catch (err) {
+                    console.error('Error checking row:', row._id, err);
+                    errors.push({ cart_id: row._id, sku_id: row.sku_id, msg: '检查失败' });
+                }
+            }
+
+            return success({
                 valid: errors.length === 0,
                 errors,
-                total,
-                list: normalized
-            }
-        };
+                items: normalized,
+                total
+            });
+        } catch (err) {
+            if (err instanceof CloudBaseError) throw err;
+            console.error('Cart check error:', err);
+            throw serverError('检查购物车失败');
+        }
     }
 
-    return { code: 400, success: false, message: `未知 action: ${action}` };
-};
+    throw badRequest(`未知 action: ${action}`);
+});

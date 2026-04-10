@@ -118,7 +118,7 @@ Page({
         const inviteCard = this.data.inviteCard || {};
         const brandName = app.globalData.brandName || '品牌甄选';
         return {
-            title: inviteCard.invite_title || `${inviteCard.nickname || '好友'} 邀请你加入 N1`,
+            title: inviteCard.invite_title || `${inviteCard.nick_name || inviteCard.nickname || '好友'} 邀请你加入 N1`,
             path: `/pages/activity/n-invite?leader_id=${encodeURIComponent(String(leaderId))}`,
             imageUrl: '',
             desc: inviteCard.invite_subtitle || `${brandName} N 路径定向邀约`

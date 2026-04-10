@@ -274,7 +274,7 @@ Page({
             if (res.code === 0) {
                 this.setData({
                     isAgent: true,
-                    agentPending: res.data.pending_ship || 0,
+                    agentPending: res.data.paid || 0,
                     agentMonthProfit: res.data.month_profit || '0.00',
                     agentDebt: parseFloat(res.data.debt_amount || 0),
                     goodsFundBalance: res.data.goods_fund_balance || '0.00'

@@ -49,6 +49,18 @@ function callFn(name, data = {}, opts = {}) {
 
             // 统一成功判断：{ success: true } 或 { code: 0 }
             if (result.success === true || result.code === 0) {
+                // ★ 自动解包：后端统一用 success(data) 返回 { code, success, data, message }
+                // 解包后前端可直接用 res.data / res.list 等，无需再 res.data.list
+                // 同时保留 code/message 在顶层，方便前端判断 res.code === 0
+                if (result.data !== undefined && result.data !== null) {
+                    // 将 result.data 的字段提升到 result 顶层
+                    const data = result.data;
+                    if (data && typeof data === 'object' && !Array.isArray(data)) {
+                        return { code: result.code, success: result.success, message: result.message, ...data };
+                    }
+                    // data 是原始值（string/number/boolean/数组），保持 data 字段
+                    return result;
+                }
                 return result;
             }
 

@@ -1,6 +1,6 @@
 # CloudBase Legacy Compatibility Audit
 
-Generated at: 2026-04-08T12:44:46.609Z
+Generated at: 2026-04-09T08:45:14.700Z
 
 This report tracks remaining legacy field/status/image references that should be removed as the CloudBase migration closes.
 
@@ -30,17 +30,17 @@ This report tracks remaining legacy field/status/image references that should be
   - cloud-mp/miniprogram/pages/lottery/lottery.wxml: 2
   - cloud-mp/miniprogram/pages/splash/splash.js: 1
   - cloud-mp/miniprogram/utils/activitySectionBuilder.js: 2
-- `avatar_url` legacy avatar field: 17
+- `avatar_url` legacy avatar field: 18
   - cloud-mp/miniprogram/pages/activity/n-invite.wxml: 1
   - cloud-mp/miniprogram/pages/distribution/business-center.wxml: 1
   - cloud-mp/miniprogram/pages/distribution/center.wxml: 1
   - cloud-mp/miniprogram/pages/distribution/team-member.wxml: 1
   - cloud-mp/miniprogram/pages/distribution/team.wxml: 1
-  - cloud-mp/miniprogram/pages/distribution/utils/invitePosterCore.js: 1
+  - cloud-mp/miniprogram/pages/distribution/utils/invitePosterCore.js: 2
   - cloud-mp/miniprogram/pages/group/detail.wxml: 1
   - cloud-mp/miniprogram/pages/product/detail.wxml: 1
   - ... 6 more files
-- `nickname` legacy display field: 56
+- `nickname` legacy display field: 53
   - cloud-mp/miniprogram/pages/activity/n-invite.js: 1
   - cloud-mp/miniprogram/pages/distribution/business-center.js: 1
   - cloud-mp/miniprogram/pages/distribution/business-center.wxml: 1
@@ -58,8 +58,8 @@ This report tracks remaining legacy field/status/image references that should be
 
 ## admin-ui
 
-- `quantity` old cart count field: 5
-  - admin-ui/src/views/orders/index.vue: 5
+- `quantity` old cart count field: 6
+  - admin-ui/src/views/orders/index.vue: 6
 - `buyer_id` old order owner field: 0
 - `user_id` old user owner field: 26
   - admin-ui/src/views/commissions/index.vue: 4
@@ -70,53 +70,46 @@ This report tracks remaining legacy field/status/image references that should be
   - admin-ui/src/views/refunds/index.vue: 3
   - admin-ui/src/views/withdrawals/index.vue: 3
 - `product_skus` old sku collection name: 0
-- `image_url` legacy image field: 54
-  - admin-ui/src/components/ContentBlockEditor.vue: 19
+- `image_url` legacy image field: 53
+  - admin-ui/src/components/ContentBlockEditor.vue: 16
   - admin-ui/src/views/activities/components/LotteryPrizeDialog.vue: 2
   - admin-ui/src/views/activities/components/LotteryPrizePanel.vue: 2
-  - admin-ui/src/views/activities/index.vue: 5
+  - admin-ui/src/views/activities/index.vue: 6
   - admin-ui/src/views/content/index.vue: 14
   - admin-ui/src/views/home-sections/index.vue: 5
-  - admin-ui/src/views/splash/index.vue: 7
-- `avatar_url` legacy avatar field: 7
-  - admin-ui/src/views/n-system/index.vue: 3
-  - admin-ui/src/views/orders/index.vue: 2
-  - admin-ui/src/views/users/components/UserListTableCard.vue: 1
+  - admin-ui/src/views/splash/index.vue: 8
+- `avatar_url` legacy avatar field: 3
+  - admin-ui/src/utils/userDisplay.js: 2
   - admin-ui/src/views/users/index.vue: 1
-- `nickname` legacy display field: 46
+- `nickname` legacy display field: 10
+  - admin-ui/src/utils/userDisplay.js: 6
   - admin-ui/src/views/agent-system/index.vue: 1
-  - admin-ui/src/views/branch-agents/index.vue: 2
-  - admin-ui/src/views/commissions/index.vue: 1
-  - admin-ui/src/views/dealers/index.vue: 4
-  - admin-ui/src/views/logistics/index.vue: 1
-  - admin-ui/src/views/n-system/index.vue: 6
-  - admin-ui/src/views/orders/index.vue: 5
-  - admin-ui/src/views/pickup-stations/index.vue: 4
-  - ... 9 more files
-- `pending_ship` legacy status bucket: 6
-  - admin-ui/src/views/dashboard/index.vue: 5
+  - admin-ui/src/views/users/index.vue: 3
+- `pending_ship` legacy status bucket: 4
+  - admin-ui/src/views/dashboard/index.vue: 3
   - admin-ui/src/views/orders/index.vue: 1
 - `pending_payment` old storage status: 2
   - admin-ui/src/views/n-system/index.vue: 2
 
 ## cloudrun-admin-service
 
-- `quantity` old cart count field: 1
-  - backend/cloudrun-admin-service/src/app.js: 1
+- `quantity` old cart count field: 6
+  - backend/cloudrun-admin-service/src/app.js: 6
 - `buyer_id` old order owner field: 8
   - backend/cloudrun-admin-service/src/app.js: 8
-- `user_id` old user owner field: 22
-  - backend/cloudrun-admin-service/src/app.js: 22
+- `user_id` old user owner field: 35
+  - backend/cloudrun-admin-service/src/app.js: 35
 - `product_skus` old sku collection name: 0
 - `image_url` legacy image field: 17
   - backend/cloudrun-admin-service/src/app.js: 17
-- `avatar_url` legacy avatar field: 4
-  - backend/cloudrun-admin-service/src/app.js: 4
-- `nickname` legacy display field: 9
-  - backend/cloudrun-admin-service/src/app.js: 9
+- `avatar_url` legacy avatar field: 8
+  - backend/cloudrun-admin-service/src/app.js: 8
+- `nickname` legacy display field: 17
+  - backend/cloudrun-admin-service/src/app.js: 17
 - `pending_ship` legacy status bucket: 11
   - backend/cloudrun-admin-service/src/app.js: 11
-- `pending_payment` old storage status: 0
+- `pending_payment` old storage status: 1
+  - backend/cloudrun-admin-service/src/app.js: 1
 
 ## Recommended next cleanup
 

@@ -20,7 +20,7 @@ Page({
         statusBarHeight: 20,
         navBarHeight: 44,
         userInfo: null,
-        inviteCode: '',
+        memberCode: '',
         showGoodsWallet: false,
         goodsBalanceDisplay: '0.00',
         purseBalanceDisplay: '0.00',
@@ -170,14 +170,14 @@ Page({
         const code = this.data.memberCode;
         const brandName = app.globalData.brandName || '品牌臻选';
         return {
-            title: `${userInfo?.nickname || '好友'} 邀请你加入${brandName}，领取专属优惠`,
+            title: `${userInfo?.nick_name || userInfo?.nickname || '好友'} 邀请你加入${brandName}，领取专属优惠`,
             path: `/pages/index/index${code ? '?invite=' + code : ''}`,
             imageUrl: ''
         };
     },
 
     onShareTimeline() {
-        const code = this.data.inviteCode;
+        const code = this.data.memberCode;
         const brandName = app.globalData.brandName || '品牌臻选';
         return {
             title: `${brandName} · 团队邀新入口`,

@@ -180,7 +180,7 @@
       ]
     },
     "avatar_url": {
-      "count": 17,
+      "count": 18,
       "files": [
         {
           "file": "cloud-mp/miniprogram/pages/activity/n-invite.wxml",
@@ -204,7 +204,7 @@
         },
         {
           "file": "cloud-mp/miniprogram/pages/distribution/utils/invitePosterCore.js",
-          "count": 1
+          "count": 2
         },
         {
           "file": "cloud-mp/miniprogram/pages/group/detail.wxml",
@@ -241,7 +241,7 @@
       ]
     },
     "nickname": {
-      "count": 56,
+      "count": 53,
       "files": [
         {
           "file": "cloud-mp/miniprogram/pages/activity/n-invite.js",
@@ -289,7 +289,7 @@
         },
         {
           "file": "cloud-mp/miniprogram/pages/distribution/utils/invitePosterCore.js",
-          "count": 6
+          "count": 3
         },
         {
           "file": "cloud-mp/miniprogram/pages/distribution/workbench.wxml",
@@ -389,11 +389,11 @@
   },
   "admin-ui": {
     "quantity": {
-      "count": 5,
+      "count": 6,
       "files": [
         {
           "file": "admin-ui/src/views/orders/index.vue",
-          "count": 5
+          "count": 6
         }
       ]
     },
@@ -439,11 +439,11 @@
       "files": []
     },
     "image_url": {
-      "count": 54,
+      "count": 53,
       "files": [
         {
           "file": "admin-ui/src/components/ContentBlockEditor.vue",
-          "count": 19
+          "count": 16
         },
         {
           "file": "admin-ui/src/views/activities/components/LotteryPrizeDialog.vue",
@@ -455,7 +455,7 @@
         },
         {
           "file": "admin-ui/src/views/activities/index.vue",
-          "count": 5
+          "count": 6
         },
         {
           "file": "admin-ui/src/views/content/index.vue",
@@ -467,24 +467,16 @@
         },
         {
           "file": "admin-ui/src/views/splash/index.vue",
-          "count": 7
+          "count": 8
         }
       ]
     },
     "avatar_url": {
-      "count": 7,
+      "count": 3,
       "files": [
         {
-          "file": "admin-ui/src/views/n-system/index.vue",
-          "count": 3
-        },
-        {
-          "file": "admin-ui/src/views/orders/index.vue",
+          "file": "admin-ui/src/utils/userDisplay.js",
           "count": 2
-        },
-        {
-          "file": "admin-ui/src/views/users/components/UserListTableCard.vue",
-          "count": 1
         },
         {
           "file": "admin-ui/src/views/users/index.vue",
@@ -493,84 +485,28 @@
       ]
     },
     "nickname": {
-      "count": 46,
+      "count": 10,
       "files": [
+        {
+          "file": "admin-ui/src/utils/userDisplay.js",
+          "count": 6
+        },
         {
           "file": "admin-ui/src/views/agent-system/index.vue",
           "count": 1
         },
         {
-          "file": "admin-ui/src/views/branch-agents/index.vue",
-          "count": 2
-        },
-        {
-          "file": "admin-ui/src/views/commissions/index.vue",
-          "count": 1
-        },
-        {
-          "file": "admin-ui/src/views/dealers/index.vue",
-          "count": 4
-        },
-        {
-          "file": "admin-ui/src/views/logistics/index.vue",
-          "count": 1
-        },
-        {
-          "file": "admin-ui/src/views/n-system/index.vue",
-          "count": 6
-        },
-        {
-          "file": "admin-ui/src/views/orders/index.vue",
-          "count": 5
-        },
-        {
-          "file": "admin-ui/src/views/pickup-stations/index.vue",
-          "count": 4
-        },
-        {
-          "file": "admin-ui/src/views/refunds/index.vue",
-          "count": 3
-        },
-        {
-          "file": "admin-ui/src/views/reviews/index.vue",
-          "count": 1
-        },
-        {
-          "file": "admin-ui/src/views/users/components/UserActionDialogsPrimary.vue",
-          "count": 2
-        },
-        {
-          "file": "admin-ui/src/views/users/components/UserActionDialogsSecondary.vue",
-          "count": 1
-        },
-        {
-          "file": "admin-ui/src/views/users/components/UserDetailDrawer.vue",
-          "count": 4
-        },
-        {
-          "file": "admin-ui/src/views/users/components/UserListTableCard.vue",
-          "count": 1
-        },
-        {
-          "file": "admin-ui/src/views/users/components/UserSearchPanel.vue",
-          "count": 1
-        },
-        {
           "file": "admin-ui/src/views/users/index.vue",
-          "count": 6
-        },
-        {
-          "file": "admin-ui/src/views/withdrawals/index.vue",
           "count": 3
         }
       ]
     },
     "pending_ship": {
-      "count": 6,
+      "count": 4,
       "files": [
         {
           "file": "admin-ui/src/views/dashboard/index.vue",
-          "count": 5
+          "count": 3
         },
         {
           "file": "admin-ui/src/views/orders/index.vue",
@@ -590,11 +526,11 @@
   },
   "cloudrun-admin-service": {
     "quantity": {
-      "count": 1,
+      "count": 6,
       "files": [
         {
           "file": "backend/cloudrun-admin-service/src/app.js",
-          "count": 1
+          "count": 6
         }
       ]
     },
@@ -608,11 +544,11 @@
       ]
     },
     "user_id": {
-      "count": 22,
+      "count": 35,
       "files": [
         {
           "file": "backend/cloudrun-admin-service/src/app.js",
-          "count": 22
+          "count": 35
         }
       ]
     },
@@ -630,20 +566,20 @@
       ]
     },
     "avatar_url": {
-      "count": 4,
+      "count": 8,
       "files": [
         {
           "file": "backend/cloudrun-admin-service/src/app.js",
-          "count": 4
+          "count": 8
         }
       ]
     },
     "nickname": {
-      "count": 9,
+      "count": 17,
       "files": [
         {
           "file": "backend/cloudrun-admin-service/src/app.js",
-          "count": 9
+          "count": 17
         }
       ]
     },
@@ -657,8 +593,13 @@
       ]
     },
     "pending_payment": {
-      "count": 0,
-      "files": []
+      "count": 1,
+      "files": [
+        {
+          "file": "backend/cloudrun-admin-service/src/app.js",
+          "count": 1
+        }
+      ]
     }
   }
 }

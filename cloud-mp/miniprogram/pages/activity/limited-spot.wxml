@@ -24,7 +24,7 @@
     <view class="empty" wx:if="{{!products.length}}">暂未配置专享商品</view>
 
     <view class="goods-card" wx:for="{{products}}" wx:key="offer_id">
-      <image class="goods-img" src="{{item.product.images[0] || '/assets/images/placeholder.svg'}}" mode="aspectFill"></image>
+      <image class="goods-img" src="{{item.product && item.product.images && item.product.images[0] || '/assets/images/placeholder.svg'}}" mode="aspectFill"></image>
       <view class="goods-body">
         <text class="goods-name">{{item.product.name}}</text>
         <view class="goods-meta">

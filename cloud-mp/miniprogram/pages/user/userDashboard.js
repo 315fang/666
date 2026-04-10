@@ -421,6 +421,7 @@ async function loadPickupVerifyScope(page) {
     }
     try {
         const response = await get('/stations/my-scope', {}, { showError: false });
+        console.log('[userDashboard] loadPickupVerifyScope response:', JSON.stringify(response?.data || null));
         if (response && response.code === 0 && response.data) {
             page.setData({
                 showPickupVerify: !!response.data.has_verify_access,
@@ -428,8 +429,8 @@ async function loadPickupVerifyScope(page) {
             });
             return;
         }
-    } catch (_) {
-        // ignore
+    } catch (e) {
+        console.error('[userDashboard] loadPickupVerifyScope error:', e);
     }
     page.setData({
         showPickupVerify: false,

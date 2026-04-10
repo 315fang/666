@@ -38,6 +38,10 @@ Page({
         });
     },
 
+    onUnload() {
+        if (this._listCountdownTimer) clearInterval(this._listCountdownTimer);
+    },
+
     onPullDownRefresh() {
         this.setData({ page: 1, hasMore: true });
         this.loadOrders().then(() => {
@@ -94,6 +98,11 @@ Page({
                 }
                 const quantity = Number(order.quantity || 1);
                 order.price = order.price || order.unit_price || Number(((parseFloat(order.actual_price || order.total_amount || 0)) / Math.max(quantity, 1)).toFixed(2));
+
+                // ★ 待付款倒计时文字
+                if (order.status === 'pending') {
+                    order.countdownText = this._calcCountdownText(order.expire_at, order.created_at);
+                }
 
                 // ★ 检查该订单是否有活跃退款
                 const activeRefund = refundMap[order.id];
@@ -176,6 +185,46 @@ Page({
                 });
             }, 800);
         }
+        // 启动列表倒计时定时器
+        this._startListCountdown();
+    },
+
+    // ── 列表倒计时相关 ──
+    _calcCountdownText(expireAt, createdAt) {
+        const ORDER_TIMEOUT_MS = 30 * 60 * 1000;
+        let targetTs = expireAt ? new Date(expireAt).getTime() : 0;
+        if (!targetTs || isNaN(targetTs)) {
+            const createdTs = createdAt ? new Date(createdAt).getTime() : 0;
+            targetTs = createdTs > 0 ? createdTs + ORDER_TIMEOUT_MS : 0;
+        }
+        if (!targetTs) return '';
+        const remainMs = targetTs - Date.now();
+        if (remainMs <= 0) return '已超时';
+        const totalSec = Math.ceil(remainMs / 1000);
+        const min = Math.floor(totalSec / 60);
+        const sec = totalSec % 60;
+        if (min > 0) return `${min}分${sec.toString().padStart(2, '0')}秒`;
+        return `${sec}秒`;
+    },
+
+    _startListCountdown() {
+        if (this._listCountdownTimer) clearInterval(this._listCountdownTimer);
+        const hasPending = this.data.orders.some(o => o.status === 'pending');
+        if (!hasPending) return;
+        this._listCountdownTimer = setInterval(() => {
+            const orders = this.data.orders;
+            let needUpdate = false;
+            const updated = orders.map(o => {
+                if (o.status !== 'pending') return o;
+                const text = this._calcCountdownText(o.expire_at, o.created_at);
+                if (text !== o.countdownText) {
+                    needUpdate = true;
+                    return { ...o, countdownText: text };
+                }
+                return o;
+            });
+            if (needUpdate) this.setData({ orders: updated });
+        }, 10000); // 列表每10秒刷新一次倒计时
     },
 
     _getRefundStatusText(status) {

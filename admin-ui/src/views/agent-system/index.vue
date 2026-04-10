@@ -314,12 +314,22 @@
             <el-form-item label="分红池总金额（元）"><el-input-number v-model="dividendPool" :min="0" :step="1000" style="width:200px" /></el-form-item>
             <el-form-item>
               <el-button type="warning" @click="previewDividend" :loading="dividendLoading">预览</el-button>
-              <el-button type="danger" @click="confirmExecuteDividend" :loading="dividendExecuting" :disabled="!dividendPreviewData.length">确认发放</el-button>
+              <el-button
+                type="danger"
+                @click="confirmExecuteDividend"
+                :loading="dividendExecuting"
+                :disabled="!dividendPreviewData.length || !isSuperAdmin"
+              >
+                确认发放
+              </el-button>
+            </el-form-item>
+            <el-form-item v-if="!isSuperAdmin">
+              <el-text type="warning" size="small">仅超级管理员可执行实际分红发放。</el-text>
             </el-form-item>
           </el-form>
           <el-table :data="dividendPreviewData" v-if="dividendPreviewData.length" style="margin-top:16px" border>
             <el-table-column prop="rank" label="排名" width="70" />
-            <el-table-column prop="nickname" label="昵称" />
+            <el-table-column label="昵称"><template #default="{row}">{{ row.nick_name || row.nickname || '-' }}</template></el-table-column>
             <el-table-column prop="roleLevel" label="等级" width="110"><template #default="{row}">{{ ROLE_NAMES[row.roleLevel] }}</template></el-table-column>
             <el-table-column prop="teamSales" label="团队业绩" width="130"><template #default="{row}">¥{{ Number(row.teamSales).toFixed(2) }}</template></el-table-column>
             <el-table-column prop="sharePercent" label="比例" width="80"><template #default="{row}">{{ row.sharePercent }}%</template></el-table-column>
@@ -355,8 +365,11 @@
             <el-form-item label="退出原因"><el-input v-model="exitForm.reason" type="textarea" :rows="3" /></el-form-item>
             <el-form-item>
               <el-popconfirm title="确认执行合伙人退出？此操作不可撤销！" @confirm="executePartnerExit" confirm-button-type="danger">
-                <template #reference><el-button type="danger" :loading="exitLoading">执行退出退款</el-button></template>
+                <template #reference><el-button type="danger" :loading="exitLoading" :disabled="!isSuperAdmin">执行退出退款</el-button></template>
               </el-popconfirm>
+            </el-form-item>
+            <el-form-item v-if="!isSuperAdmin">
+              <el-text type="warning" size="small">仅超级管理员可创建和审核合伙人退出流程。</el-text>
             </el-form-item>
           </el-form>
           <el-descriptions v-if="exitResult" title="退款结果" :column="1" border style="margin-top:20px">
@@ -411,6 +424,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useUserStore } from '@/store/user'
 import {
   getUpgradeRules, updateUpgradeRules,
   getCommissionConfig, updateCommissionConfig,
@@ -426,6 +440,8 @@ import {
 
 const activeTab = ref('upgrade')
 const saving = ref(false)
+const userStore = useUserStore()
+const isSuperAdmin = computed(() => userStore.isSuperAdmin)
 const ROLE_NAMES = { 0: '普通用户', 1: 'C1初级代理', 2: 'C2高级代理', 3: 'B1推广合伙人', 4: 'B2运营合伙人', 5: 'B3区域合伙人' }
 
 async function withLoading(flagRef, task) {
@@ -653,23 +669,25 @@ const previewDividend = async () => {
   if (!dividendYear.value || dividendPool.value <= 0) return ElMessage.warning('请选择年份并填写金额')
   await withLoading(dividendLoading, async () => {
     const res = await getDividendPreview({ year: dividendYear.value, pool: dividendPool.value })
-    dividendPreviewData.value = res?.data || []
+    dividendPreviewData.value = Array.isArray(res) ? res : (res?.data || [])
     if (!dividendPreviewData.value.length) ElMessage.info('暂无符合条件的合伙人')
   }).catch(() => { ElMessage.error('预览失败') })
 }
 
 const confirmExecuteDividend = async () => {
+  if (!isSuperAdmin.value) return ElMessage.warning('仅超级管理员可执行实际分红发放')
   try {
     await ElMessageBox.confirm(`确认发放 ${dividendYear.value} 年度分红 ¥${dividendPool.value}？`, '确认', { type: 'warning' })
     await withLoading(dividendExecuting, async () => {
       const res = await executeDividend({ year: Number(dividendYear.value), pool: dividendPool.value })
-      ElMessage.success(`已发放 ¥${res?.data?.totalDistributed || 0}`)
+      ElMessage.success(`已发放 ¥${res?.totalDistributed ?? res?.data?.totalDistributed ?? 0}`)
       dividendPreviewData.value = []
     })
   } catch (_) {}
 }
 
 const executePartnerExit = async () => {
+  if (!isSuperAdmin.value) return ElMessage.warning('仅超级管理员可创建退出退款流程')
   if (!exitForm.userId) return ElMessage.warning('请输入用户ID')
   exitResult.value = null
   await withLoading(exitLoading, async () => {

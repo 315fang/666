@@ -59,7 +59,7 @@ Page({
         this.setData({ loading: true });
         try {
             const statusMap = {
-                'pending': 'pending_ship',
+                'pending': 'paid',
                 'shipped': 'shipped',
                 'all': ''
             };

@@ -9,6 +9,27 @@
 const { cloneDefaults, mergeDeep } = require('./utils/miniProgramConfig');
 const { syncLocalFavoritesToCloud } = require('./utils/favoriteSync');
 
+function isPlainObject(value) {
+    return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeLoginPayload(result) {
+    if (!isPlainObject(result)) return { userData: null, openid: '' };
+
+    const data = isPlainObject(result.data) ? result.data : null;
+    const userInfo = isPlainObject(result.userInfo) ? result.userInfo : null;
+    const userData = data || userInfo || result;
+    const openid = userData.openid || result.openid || '';
+
+    return { userData, openid };
+}
+
+function extractCachedOpenid(userInfo, openid) {
+    if (openid) return openid;
+    if (isPlainObject(userInfo) && userInfo.openid) return userInfo.openid;
+    return '';
+}
+
 module.exports = {
     _captureInviteFromLaunch(options) {
         try {
@@ -46,9 +67,13 @@ module.exports = {
     async autoLogin() {
         try {
             const userInfo = wx.getStorageSync('userInfo');
-            const openid = wx.getStorageSync('openid');
+            const cachedOpenid = wx.getStorageSync('openid');
+            const openid = extractCachedOpenid(userInfo, cachedOpenid);
 
             if (userInfo && openid) {
+                if (!cachedOpenid) {
+                    wx.setStorageSync('openid', openid);
+                }
                 this.globalData.userInfo = userInfo;
                 this.globalData.openid = openid;
                 this.globalData.isLoggedIn = true;
@@ -86,7 +111,7 @@ module.exports = {
      */
     async wxLogin() {
         try {
-            // 读取邀请码（如果有）
+            // 读取待绑定的会员码（如果有）
             let inviteCode = '';
             try {
                 const pending = wx.getStorageSync('pending_invite_code');
@@ -111,8 +136,12 @@ module.exports = {
 
             // 保存登录信息（注意：云开发版无 token）
             // 云函数 login 返回 { success, data: { openid, ... } }，data 即 userInfo
-            const userData = result.data || result.userInfo;
-            const userOpenid = (result.data && result.data.openid) || result.openid;
+            const { userData, openid: userOpenid } = normalizeLoginPayload(result);
+            if (!userData || !userOpenid) {
+                throw new Error('登录响应缺少用户标识');
+            }
+
+            userData.openid = userOpenid;
 
             this.globalData.userInfo = userData;
             this.globalData.openid = userOpenid;
@@ -122,15 +151,15 @@ module.exports = {
             wx.setStorageSync('openid', userOpenid);
 
             // 新用户优惠券提示
-            if (result.is_new_user) {
+            if (result.is_new_user || userData.is_new_user) {
                 this.globalData.isNewUser = true;
                 this._applyRegisterCouponPrompt(result);
             }
 
             // 等级提升提示
-            if (result.level_up) {
+            if (result.level_up || userData.level_up) {
                 this.globalData.levelUpInfo = {
-                    levelName: result.level_name || ''
+                    levelName: result.level_name || userData.level_name || ''
                 };
             }
 

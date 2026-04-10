@@ -39,7 +39,7 @@ async function toggleFavorite(page) {
             } else {
                 await post('/user/favorites', { product_id: pid }, { showError: false });
                 page.setData({ isFavorite: true });
-                wx.showToast({ title: '已收藏，可在「我的-收藏商品」查看', icon: 'none' });
+                wx.showToast({ title: '已收藏', icon: 'none' });
             }
         } catch (err) {
             const msg = err && err.message || '操作失败';
@@ -56,7 +56,7 @@ async function toggleFavorite(page) {
     });
     page.setData({ isFavorite: added });
     wx.showToast({
-        title: added ? '已收藏（本机），登录后可云端同步' : '已取消收藏',
+        title: added ? '已收藏到本机' : '已取消收藏',
         icon: 'none'
     });
 }

@@ -86,49 +86,13 @@
   color: #FFF8F0;
 }
 
-.poster-variant-bar {
-  display: flex;
-  gap: 12rpx;
-  margin-bottom: 16rpx;
-}
-.poster-variant-item {
-  flex: 1;
-  height: 64rpx;
-  border-radius: 14rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1rpx solid rgba(55, 48, 40, 0.08);
-}
-.poster-variant-item.active {
-  background: #1C1917;
-  border-color: #1C1917;
-}
-.poster-variant-text {
-  font-size: 24rpx;
-  font-weight: 600;
-  color: #6B5D52;
-}
-.poster-variant-item.active .poster-variant-text {
-  color: #FFF7EF;
-}
-
-.poster-variant-hint {
-  font-size: 22rpx;
-  color: #8A7A6E;
-  line-height: 1.55;
-  margin-bottom: 18rpx;
-  padding: 0 4rpx;
-}
-
 .poster-preview-wrap {
   background: linear-gradient(160deg, #2E2218 0%, #4A3527 100%);
   border-radius: 28rpx;
   overflow: hidden;
   position: relative;
   width: 100%;
-  padding-top: 150%;
+  padding-top: 160%;
   box-shadow: 0 16rpx 48rpx rgba(37, 29, 21, 0.18);
 }
 
@@ -170,12 +134,8 @@
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 .poster-gen-text {
   font-size: 26rpx;
@@ -202,16 +162,18 @@
   background: rgba(255, 255, 255, 0.92);
   border: 1rpx solid #DDD5CB;
 }
-.poster-action-secondary .poster-action-text {
-  color: #1E1710;
-}
-.btn-disabled {
-  opacity: 0.4;
-}
 .poster-action-text {
   font-size: 28rpx;
   font-weight: 600;
   color: #FFF8F0;
+}
+.poster-action-text-secondary {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1E1710;
+}
+.btn-disabled {
+  opacity: 0.4;
 }
 
 .poster-tip {
@@ -219,31 +181,4 @@
   font-size: 22rpx;
   color: #B0A090;
   margin-top: 14rpx;
-  margin-bottom: 20rpx;
-}
-
-.poster-tips-card {
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 20rpx;
-  padding: 24rpx 28rpx;
-}
-.ptip-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10rpx;
-  margin-bottom: 14rpx;
-}
-.ptip-item:last-child {
-  margin-bottom: 0;
-}
-.ptip-dot {
-  font-size: 26rpx;
-  color: #C8A258;
-  flex-shrink: 0;
-  line-height: 1.6;
-}
-.ptip-text {
-  font-size: 24rpx;
-  color: #8A7A6E;
-  line-height: 1.7;
 }

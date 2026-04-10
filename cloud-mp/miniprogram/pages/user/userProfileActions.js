@@ -34,9 +34,9 @@ async function onChooseAvatar(page, event) {
         const uploadResponse = await uploadFile('/user/upload', avatarUrl, 'file');
         if (uploadResponse.code === 0 && uploadResponse.data.url) {
             const fullUrl = uploadResponse.data.url;
-            const updateResponse = await put('/user/profile', { avatar_url: fullUrl });
+            const updateResponse = await put('/user/profile', { avatar: fullUrl });
             if (updateResponse.code === 0) {
-                page.setData({ 'userInfo.avatar_url': fullUrl });
+                page.setData({ 'userInfo.avatar': fullUrl });
                 wx.showToast({ title: '头像更新成功', icon: 'success' });
             }
         }
@@ -97,7 +97,7 @@ async function onLogin(page) {
 function onEditNickname(page) {
     page.setData({
         showNicknameModal: true,
-        newNickname: page.data.userInfo ? page.data.userInfo.nickname : ''
+        newNickname: page.data.userInfo ? (page.data.userInfo.nick_name || page.data.userInfo.nickname) : ''
     });
 }
 

@@ -10,6 +10,9 @@
           <text class="balance-symbol">¥</text>
           <text class="balance-amount">{{balance}}</text>
         </view>
+        <view class="balance-pending-row" wx:if="{{pendingIn !== '0.00'}}">
+          <text class="balance-pending-text">待入账 ¥{{pendingIn}}</text>
+        </view>
         <view class="balance-action-row">
           <view class="withdraw-btn" bindtap="onWithdrawTap">
             <text class="withdraw-btn-text">立即提现</text>
@@ -31,8 +34,8 @@
           <text class="overview-key">冻结中</text>
         </view>
         <view class="overview-item">
-          <text class="overview-val overview-pending">¥{{commissionOverview.pendingApproval}}</text>
-          <text class="overview-key">待审核</text>
+          <text class="overview-val overview-pending">¥{{commissionOverview.pendingIn}}</text>
+          <text class="overview-key">待入账</text>
         </view>
         <view class="overview-item">
           <text class="overview-val overview-settled">¥{{commissionOverview.approved}}</text>
@@ -46,7 +49,7 @@
       <text class="section-title">佣金明细</text>
 
       <!-- 骨架屏 -->
-      <view class="skeleton-wrap" wx:if="{{logs.length === 0}}">
+      <view class="skeleton-wrap" wx:if="{{logsLoading}}">
         <view class="sk-log" wx:for="{{[1,2,3,4,5]}}" wx:key="index">
           <view class="sk-info">
             <view class="sk-line sk-long"></view>
@@ -73,7 +76,7 @@
       </view>
 
       <!-- 空状态 -->
-      <view class="empty-state" wx:if="{{logs.length === 0}}">
+      <view class="empty-state" wx:if="{{!logsLoading && logs.length === 0}}">
         <text class="empty-text">暂无佣金明细</text>
         <text class="empty-sub">分享商品或发展团队即可获得佣金</text>
       </view>

@@ -105,7 +105,7 @@
     <view class="products-grid" wx:if="{{featuredProducts.length > 0}}">
       <view class="product-card" wx:for="{{featuredProducts}}" wx:key="id" bindtap="onProductTap" data-id="{{item.id}}" hover-class="press">
         <view class="product-card-img-wrap">
-          <image class="product-card-img" src="{{item.cover_image || item.images[0]}}" mode="aspectFill" lazy-load="{{true}}"></image>
+          <image class="product-card-img" src="{{item.cover_image || (item.images && item.images[0]) || '/assets/images/placeholder.svg'}}" mode="aspectFill" lazy-load="{{true}}"></image>
           <view class="product-card-badge" wx:if="{{item.market_price && item.market_price > item.retail_price && item.discount_label}}">
             {{item.discount_label}}
           </view>
@@ -115,6 +115,7 @@
         <view class="product-card-info">
           <view>
             <text class="product-card-name">{{item.name}}</text>
+            <text class="product-card-spec" wx:if="{{item.specSummary}}">{{item.specSummary}}</text>
             <view class="heat-tag" wx:if="{{item.heat_label}}">
               <text class="heat-icon">🔥</text>
               <text class="heat-text">{{item.heat_label}}</text>
@@ -151,7 +152,7 @@
   <!-- 弹窗广告 -->
   <view class="popup-ad-overlay" wx:if="{{showPopupAd}}" bindtap="onClosePopupAd">
     <view class="popup-ad-card" catchtap="onPopupAdTap">
-      <image class="popup-ad-image" src="{{popupAd.image_url}}" mode="widthFix" wx:if="{{popupAd.image_url}}"/>
+      <image class="popup-ad-image" src="{{popupAd.file_id || popupAd.image_url}}" mode="widthFix" wx:if="{{popupAd.file_id || popupAd.image_url}}"/>
       <view class="popup-ad-btn" wx:if="{{popupAd.button_text}}">
         {{popupAd.button_text}}
       </view>

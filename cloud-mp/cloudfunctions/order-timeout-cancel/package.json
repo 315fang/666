@@ -1,0 +1,9 @@
+{
+  "name": "order-timeout-cancel",
+  "version": "1.0.0",
+  "description": "定时任务：自动取消超时未支付订单",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

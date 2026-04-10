@@ -207,7 +207,7 @@ Page({
 
     this.setData({
       splashConfig: config,
-      splashBgImage: config.image_url || '',
+      splashBgImage: config.file_id || config.image_url || '',
       layers,
       TOTAL,
       skipText: config.skip_text || '跳过',

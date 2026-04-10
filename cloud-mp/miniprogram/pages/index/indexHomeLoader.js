@@ -230,7 +230,7 @@ function applyHomeConfig(page, data) {
         page._checkAndShowPopupAd({
             ...popupAd,
             file_id: popupAd.file_id || '',
-            image_url: pickImageSource(popupAd),
+            image_url: pickImageSource(popupAd), // deprecated: use file_id instead
             url: pickImageSource(popupAd)
         });
     }

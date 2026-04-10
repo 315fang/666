@@ -334,6 +334,29 @@ Page({
         return result;
     },
 
+    // 判断规格值是否可选（库存为0则灰化）
+    isSpecValueDisabled(specName, specValue) {
+        const { skus, selectedSpecs } = this.data;
+        if (!skus || skus.length === 0) return false;
+
+        // 构建临时选中状态
+        const tempSpecs = { ...selectedSpecs, [specName]: specValue };
+
+        // 检查是否存在匹配的 SKU 且有库存
+        const matchedSku = skus.find((sku) => {
+            const skuSpecs = Array.isArray(sku.specs) && sku.specs.length > 0
+                ? sku.specs
+                : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
+            if (skuSpecs.length === 0) return false;
+            return skuSpecs.every((s) => tempSpecs[s.name] === s.value);
+        });
+
+        if (matchedSku) {
+            return (matchedSku.stock || 0) <= 0;
+        }
+        return false;
+    },
+
     getMaxStock() {
         return getMaxStock(this);
     },

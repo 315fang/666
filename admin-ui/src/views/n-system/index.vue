@@ -351,11 +351,11 @@ function formatDate(d) {
 }
 
 function statusLabel(status) {
-  return { pending_payment: '待付款', pending_review: '待审核', approved: '已通过', rejected: '已驳回', cancelled: '已取消' }[status] || status
+  return { pending_pay: '待付款', pending_review: '待审核', approved: '已通过', rejected: '已驳回', cancelled: '已取消' }[status] || status
 }
 
 function statusTagType(status) {
-  return { pending_review: 'warning', approved: 'success', rejected: 'danger', pending_payment: 'info' }[status] || ''
+  return { pending_review: 'warning', approved: 'success', rejected: 'danger', pending_pay: 'info' }[status] || ''
 }
 
 onMounted(() => {

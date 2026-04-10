@@ -26,7 +26,7 @@ Page({
         try {
             this.setData({ loading: true });
             const res = await get('/addresses');
-            const addresses = res.list || res.data || [];
+            const addresses = res.data?.list || res.list || res.data || [];
             this.setData({ addresses, loading: false });
         } catch (err) {
             console.error('加载地址失败:', err);
@@ -41,7 +41,7 @@ Page({
         const address = this.data.addresses[index];
         if (this.data.pickSource === 'limited_spot') {
             const summary = `${address.receiver_name} ${address.phone} ${address.province || ''}${address.city || ''}${address.district || ''}${address.detail || ''}`;
-            wx.setStorageSync('limited_spot_pick_address', { id: address.id, summary });
+            wx.setStorageSync('limited_spot_pick_address', { id: address._id || address.id, summary });
         } else {
             wx.setStorageSync('selectedAddress', address);
         }
@@ -63,7 +63,7 @@ Page({
     onDeleteAddress(e) {
         const id = e.currentTarget.dataset.id;
         // 找到索引
-        const index = this.data.addresses.findIndex(item => item.id === id);
+        const index = this.data.addresses.findIndex(item => (item._id || item.id) === id);
         
         wx.showModal({
             title: '确认删除',

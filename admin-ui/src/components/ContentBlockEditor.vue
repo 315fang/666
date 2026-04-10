@@ -158,7 +158,7 @@ const localData = reactive({
   product_id: null
 })
 
-const resolveAssetUrl = (item = {}) => item.image_url || item.url || item.file_id || ''
+const resolveAssetUrl = (item = {}) => item.file_id || item.image_url || item.url || ''
 const resolvedImageUrl = computed(() => resolveAssetUrl(localData))
 
 const showField = (f) => props.fields.includes(f)

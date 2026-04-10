@@ -25,7 +25,7 @@
           <text class="station-name">{{item.name}}</text>
           <text class="station-tag">{{item.can_verify ? '可核销' : '仅门店成员'}}</text>
         </view>
-        <text class="station-line">我的角色：{{item.my_role === 'manager' ? '店长' : '店员'}}</text>
+        <text class="station-line">我的角色：{{item.my_role === 'manager' ? '店长' : '核销员'}}</text>
         <text class="station-line">{{item.province}} {{item.city}} {{item.district || ''}} {{item.address || ''}}</text>
         <text class="station-line" wx:if="{{item.contact_phone}}">联系电话：{{item.contact_phone}}</text>
         <text class="station-line" wx:if="{{item.business_time_start && item.business_time_end}}">营业时间：{{item.business_time_start}} - {{item.business_time_end}}</text>
@@ -50,8 +50,8 @@
             <text class="staff-title">成员概况</text>
             <view class="staff-member" wx:for="{{item.staff_summary.preview}}" wx:for-item="staff" wx:key="id">
               <view class="staff-member-main">
-                <text class="staff-name">{{staff.user.nickname || ('用户' + staff.user_id)}}</text>
-                <text class="staff-role">{{staff.role === 'manager' ? '店长' : '店员'}}</text>
+                <text class="staff-name">{{staff.user.nick_name || staff.user.nickname || ('用户' + staff.user_id)}}</text>
+                <text class="staff-role">{{staff.role === 'manager' ? '店长' : '核销员'}}</text>
                 <text class="staff-verify" wx:if="{{staff.can_verify}}">可核销</text>
               </view>
               <text class="staff-phone" wx:if="{{staff.user.phone}}">{{staff.user.phone}}</text>

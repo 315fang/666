@@ -86,6 +86,7 @@ const ROUTE_TABLE = {
     'GET /distribution/commission-logs':    { fn: 'distribution', action: 'commLogs' },
     'POST /distribution/withdraw':          { fn: 'distribution', action: 'withdraw' },
     'GET /distribution/stats':              { fn: 'distribution', action: 'stats' },
+    'GET /distribution/wxacode-invite':     { fn: 'distribution', action: 'wxacodeInvite' },
     'GET /stats/distribution':              { fn: 'distribution', action: 'center' },
     'GET /agent':                           { fn: 'distribution', action: 'center' },
     'GET /agent/workbench':                 { fn: 'distribution', action: 'agentWorkbench' },
@@ -122,7 +123,8 @@ const ROUTE_TABLE = {
     'GET /stations':                        { fn: 'user',         action: 'listStations' },
 
     // ── 物流 ──────────────────────────────────
-    'GET /logistics/:id':                   { fn: 'order',        action: 'trackLogistics',     idKey: 'order_id' },
+    'GET /logistics/order/:id':             { fn: 'order',        action: 'trackLogistics',     idKey: 'order_id' },
+    'GET /logistics/:id':                   { fn: 'order',        action: 'trackLogistics',     idKey: 'tracking_no' },
 
     // ── 活动/拼团/砍价 ────────────────────────
     'GET /activities':                      { fn: 'config',       action: 'activities' },

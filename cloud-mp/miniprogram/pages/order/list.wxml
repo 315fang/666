@@ -54,11 +54,15 @@
         <text class="order-no">{{item.order_no}}</text>
         <text class="order-status {{item.displayStatus || item.status}} {{item.hasActiveRefund ? 'refunding' : ''}}">{{item.statusText}}</text>
       </view>
+      <!-- 待付款倒计时 -->
+      <view class="order-countdown" wx:if="{{item.status === 'pending' && item.countdownText}}">
+        <text class="countdown-text">剩余 {{item.countdownText}}</text>
+      </view>
 
       <!-- 商品信息 -->
       <view class="order-products" bindtap="onOrderTap" data-order="{{item}}">
         <view class="order-product" wx:if="{{item.product}}">
-          <image class="product-image" src="{{item.product.images[0]}}" mode="aspectFill" wx:if="{{item.product.images && item.product.images.length > 0}}"></image>
+          <image class="product-image" src="{{item.product.images[0] || ''}}" mode="aspectFill" wx:if="{{item.product.images && item.product.images.length > 0}}"></image>
           <view class="product-image product-image-placeholder" wx:else>
             <image class="placeholder-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
           </view>

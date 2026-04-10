@@ -136,7 +136,7 @@ Page({
         const mapBanners = (list) => (list || [])
             .map((b) => ({
                 id: b.id,
-                image: normalizeAssetUrl(b.image_url),
+                image: normalizeAssetUrl(b.file_id || b.image_url),
                 link_type: b.link_type || 'none',
                 link_value: b.link_value != null ? String(b.link_value) : ''
             }))

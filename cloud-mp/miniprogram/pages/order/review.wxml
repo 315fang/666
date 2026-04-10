@@ -2,7 +2,7 @@
 <view class="review-page">
   <!-- 商品信息卡 -->
   <view class="product-card" wx:if="{{order && order.product}}">
-    <image class="product-img" src="{{order.product.images && order.product.images[0]}}" mode="aspectFill" />
+    <image class="product-img" src="{{order.product && order.product.images && order.product.images[0] || '/assets/images/placeholder.svg'}}" mode="aspectFill" />
     <view class="product-name">{{order.product.name || '商品'}}</view>
   </view>
 

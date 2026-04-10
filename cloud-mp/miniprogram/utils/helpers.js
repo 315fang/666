@@ -87,12 +87,12 @@ function validateEmail(email) {
 }
 
 /**
- * 验证会员码（6位字母数字）
+ * 验证会员码（8位字母数字混合）
  * @param {string} code - 会员码
  * @returns {boolean} 是否有效
  */
 function validateInviteCode(code) {
-  return /^\d{6}$/.test(code);
+  return /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/i.test(code);
 }
 
 /**

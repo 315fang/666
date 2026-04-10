@@ -24,6 +24,10 @@ async function onPayOrder(page, app) {
     const { order } = page.data;
     if (!(order && order.id)) return;
 
+    // 防止重复点击
+    if (page._paying) return;
+    page._paying = true;
+
     let loadingVisible = false;
     const safeHideLoading = () => {
         if (loadingVisible) {
@@ -31,6 +35,7 @@ async function onPayOrder(page, app) {
             loadingVisible = false;
         }
     };
+    const done = () => { page._paying = false; };
 
     wx.showLoading({ title: '支付中...' });
     loadingVisible = true;
@@ -42,6 +47,7 @@ async function onPayOrder(page, app) {
         });
         if (prepayRes.code !== 0) {
             safeHideLoading();
+            done();
             wx.showToast({ title: prepayRes.message || '预下单失败', icon: 'none' });
             return;
         }
@@ -58,6 +64,7 @@ async function onPayOrder(page, app) {
 
         if (payParams.paid_by_wallet) {
             safeHideLoading();
+            done();
             clearWalletPreference(order.id);
             wx.showToast({ title: '货款余额支付成功！', icon: 'success' });
             page.startPayStatusPolling(order.id);
@@ -66,6 +73,7 @@ async function onPayOrder(page, app) {
 
         if (payParams.paid_by_free) {
             safeHideLoading();
+            done();
             clearWalletPreference(order.id);
             wx.showToast({
                 title: payParams.message || '订单已自动完成支付',
@@ -77,6 +85,7 @@ async function onPayOrder(page, app) {
 
         if (!requestParams || !requestParams.timeStamp || !requestParams.nonceStr || !requestParams.package || !requestParams.paySign) {
             safeHideLoading();
+            done();
             wx.showToast({ title: '支付参数缺失，请稍后重试', icon: 'none' });
             console.error('支付参数异常:', payParams);
             return;
@@ -102,10 +111,12 @@ async function onPayOrder(page, app) {
             },
             complete: () => {
                 safeHideLoading();
+                done();
             }
         });
     } catch (err) {
         safeHideLoading();
+        done();
         wx.showToast({ title: err.message || '支付失败', icon: 'none' });
         console.error('支付流程异常:', err);
     }

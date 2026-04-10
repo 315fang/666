@@ -121,9 +121,9 @@
       <text class="card-title">帮砍好友</text>
       <view class="helper-list">
         <view class="helper-item" wx:for="{{detail.helpers}}" wx:key="id">
-          <image class="helper-avatar" src="{{item.user && item.user.avatar_url || '/assets/icons/user.svg'}}" mode="aspectFill"/>
+          <image class="helper-avatar" src="{{item.user && (item.user.avatar || item.user.avatar_url) || '/assets/icons/user.svg'}}" mode="aspectFill"/>
           <view class="helper-info">
-            <text class="helper-name">{{item.user && item.user.nickname || '好友'}}</text>
+            <text class="helper-name">{{item.user && (item.user.nick_name || item.user.nickname) || '好友'}}</text>
             <text class="helper-cut">砍了 ¥{{item.cut_amount}}</text>
           </view>
           <text class="helper-time">{{item.created_at}}</text>

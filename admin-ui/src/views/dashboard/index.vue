@@ -292,7 +292,7 @@ const paymentHealth = ref({
 })
 
 const todoItems = ref([
-  { title: '待发货订单', count: 0, path: '/orders', query: { status_group: 'pending_ship' }, icon: 'Box', iconBg: 'rgba(245,158,11,0.12)' },
+  { title: '待发货订单', count: 0, path: '/orders', query: { status_group: 'paid' }, icon: 'Box', iconBg: 'rgba(245,158,11,0.12)' },
   { title: '待提现审核', count: 0, path: '/withdrawals', query: { status: 'pending' }, icon: 'Money', iconBg: 'rgba(239,68,68,0.12)' },
   { title: '待退款审核', count: 0, path: '/refunds', query: { status: 'pending' }, icon: 'RefreshLeft', iconBg: 'rgba(99,102,241,0.12)' },
   { title: '待审批佣金', count: 0, path: '/commissions', icon: 'Wallet', iconBg: 'rgba(20,184,166,0.12)' }
@@ -334,7 +334,7 @@ const focusBarItems = computed(() => [
     label: '待发货',
     count: Number(todoItems.value[0]?.count || 0),
     path: '/orders',
-    query: { status_group: 'pending_ship' }
+    query: { status_group: 'paid' }
   },
   {
     key: 'pending_withdraw',
@@ -370,7 +370,7 @@ const fetchOperationsDashboard = async () => {
   try {
     const data = await getOperationsDashboard()
     const d = data
-    const pendingShipCount = Number(d?.kpi?.pendingShip ?? d?.kpi?.pending_ship ?? 0)
+    const pendingShipCount = Number(d?.kpi?.pendingShip ?? d?.kpi?.paid ?? d?.kpi?.pending_ship ?? 0)
 
     statsCards.value[0].value = String(d?.kpi?.today_orders || 0)
     statsCards.value[1].value = '¥' + (d?.kpi?.today_sales || '0.00')

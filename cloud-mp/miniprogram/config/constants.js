@@ -5,7 +5,7 @@
 
 // ==================== API 配置 ====================
 const API_CONFIG = {
-  BASE_URL: 'https://api.wenlan.store/api',
+  BASE_URL: '',  // 已迁移至 CloudBase 云函数，不再使用外部 API
   TIMEOUT: 15000,
   RETRY_COUNT: 3
 };

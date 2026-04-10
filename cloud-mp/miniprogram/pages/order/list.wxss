@@ -80,6 +80,16 @@
   padding: 26rpx 26rpx 18rpx;
 }
 
+.order-countdown {
+  padding: 0 26rpx 14rpx;
+}
+
+.countdown-text {
+  font-size: 22rpx;
+  color: #DC2626;
+  font-weight: 500;
+}
+
 .order-no {
   font-size: 22rpx;
   color: #96897D;

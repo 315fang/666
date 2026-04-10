@@ -19,11 +19,13 @@ Page({
         this.setData({ loading: true });
         try {
             const res = await get('/stations/my-scope', {}, { showLoading: true });
+            console.log('[my-station] getPickupScope response:', JSON.stringify(res));
             this.setData({
                 scope: res.data || null,
                 loading: false
             });
-        } catch (_) {
+        } catch (e) {
+            console.error('[my-station] getPickupScope error:', e);
             this.setData({
                 scope: null,
                 loading: false

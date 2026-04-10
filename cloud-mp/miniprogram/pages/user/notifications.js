@@ -51,7 +51,7 @@ Page({
         if (!unreadItems.length) return;
 
         try {
-            await Promise.all(unreadItems.map(item => put(`/notifications/${item.id}/read`)));
+            await Promise.all(unreadItems.map(item => put(`/notifications/${item._id || item.id}/read`)));
             const notifications = (this.data.notifications || []).map(item => ({
                 ...item,
                 is_read: true

@@ -532,6 +532,25 @@ function productWithRelations(product, categories, skus, reviews) {
     const category = categories.find((item) => Number(item.id || item._legacy_id || item._id) === Number(product.category_id)) || null;
     const productSkus = skus.filter((item) => Number(item.product_id) === productId);
     const productReviews = reviews.filter((item) => Number(item.product_id) === productId);
+
+    // 生成规格摘要
+    let specSummary = '';
+    if (productSkus.length > 0) {
+        const specMap = {};
+        productSkus.forEach((sku) => {
+            const specs = Array.isArray(sku.specs) && sku.specs.length > 0
+                ? sku.specs
+                : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
+            specs.forEach((s) => {
+                if (s.name && s.value) {
+                    if (!specMap[s.name]) specMap[s.name] = new Set();
+                    specMap[s.name].add(s.value);
+                }
+            });
+        });
+        specSummary = Object.keys(specMap).map((name) => Array.from(specMap[name]).join('/')).join(' · ');
+    }
+
     return {
         ...product,
         id: productId || product.id || product._legacy_id || product._id,
@@ -539,7 +558,12 @@ function productWithRelations(product, categories, skus, reviews) {
         images: Array.isArray(product.images) ? product.images : [],
         detail_images: Array.isArray(product.detail_images) ? product.detail_images : [],
         category,
-        skus: productSkus,
+        skus: productSkus.map((sku) => ({
+            ...sku,
+            id: sku.id || sku._legacy_id || sku._id,
+            specs: Array.isArray(sku.specs) && sku.specs.length > 0 ? sku.specs : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : [])
+        })),
+        specSummary,
         review_count: productReviews.length
     };
 }
@@ -737,7 +761,7 @@ function buildOrderRecord(order, users, products, commissions) {
         avatar_url: getUserAvatar(buyer),
         phone: pickString(buyer.phone),
         member_no: pickString(buyer.member_no || buyer.my_invite_code || buyer.invite_code),
-        invite_code: pickString(buyer.member_no || buyer.my_invite_code || buyer.invite_code),
+        invite_code: pickString(buyer.my_invite_code || buyer.invite_code || buyer.member_no),
         role_level: toNumber(buyer.role_level ?? buyer.distributor_level, 0),
         parent_id: getUserParentRef(buyer)
     } : null;
@@ -1040,7 +1064,7 @@ function buildUserListRecord(user, context) {
         openid: pickString(user.openid),
         phone: pickString(user.phone),
         member_no: pickString(user.member_no || user.my_invite_code || user.invite_code),
-        invite_code: pickString(user.invite_code || user.my_invite_code || user.member_no),
+        invite_code: pickString(user.my_invite_code || user.invite_code || user.member_no),
         role_level: toNumber(user.role_level ?? user.distributor_level, 0),
         purchase_level_code: pickString(user.purchase_level_code || user.purchase_level || ''),
         balance: toNumber(user.balance ?? user.wallet_balance, 0),
@@ -1087,7 +1111,7 @@ function buildUserRecord(user, users, orders, commissions) {
         openid: pickString(user.openid),
         phone: pickString(user.phone),
         member_no: pickString(user.member_no || user.my_invite_code || user.invite_code),
-        invite_code: pickString(user.invite_code || user.my_invite_code || user.member_no),
+        invite_code: pickString(user.my_invite_code || user.invite_code || user.member_no),
         role_level: toNumber(user.role_level ?? user.distributor_level, 0),
         purchase_level_code: pickString(user.purchase_level_code || user.purchase_level || ''),
         balance: toNumber(user.balance ?? user.wallet_balance, 0),
@@ -1703,6 +1727,195 @@ app.delete('/admin/api/products/:id', auth, requirePermission('products'), (req,
     if (rows.length === nextRows.length) return fail(res, '商品不存在', 404);
     saveCollection('products', nextRows);
     createAuditLog(req.admin, 'product.delete', 'products', { product_id: Number(req.params.id) });
+    ok(res, { success: true });
+});
+
+// ===== SKU 管理 API（多规格支持）=====
+
+// 获取商品的所有 SKU
+app.get('/admin/api/products/:productId/skus', auth, requirePermission('products'), (req, res) => {
+    const productId = Number(req.params.productId);
+    const skus = getCollection('skus');
+    const productSkus = skus.filter((item) => Number(item.product_id) === productId).map((item) => ({
+        ...item,
+        id: item.id || item._legacy_id || item._id,
+        // 兼容：确保 specs 数组可用
+        specs: Array.isArray(item.specs) ? item.specs : (item.spec_name && item.spec_value ? [{ name: item.spec_name, value: item.spec_value }] : []),
+        image: assetUrl(item.image || '')
+    }));
+    ok(res, { list: productSkus, total: productSkus.length });
+});
+
+// 批量更新商品 SKU（整体替换，支持多规格）
+app.put('/admin/api/products/:productId/skus', auth, requirePermission('products'), (req, res) => {
+    const productId = Number(req.params.productId);
+    const products = getCollection('products');
+    const product = products.find((item) => Number(item.id || item._legacy_id || item._id) === productId);
+    if (!product) return fail(res, '商品不存在', 404);
+
+    const incomingSkus = toArray(req.body.skus);
+    const skus = getCollection('skus');
+
+    // 删除旧 SKU
+    const remainingSkus = skus.filter((item) => Number(item.product_id) !== productId);
+
+    // 创建新 SKU
+    const newSkus = incomingSkus.map((sku, index) => {
+        const specs = Array.isArray(sku.specs) ? sku.specs : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
+        const specName = specs.length === 1 ? specs[0].name : (specs.length > 1 ? specs.map((s) => s.name).join('/') : (sku.spec_name || ''));
+        const specValue = specs.length === 1 ? specs[0].value : (specs.length > 1 ? specs.map((s) => s.value).join('/') : (sku.spec_value || sku.spec || ''));
+
+        return {
+            id: sku.id || nextId(remainingSkus.concat(newSkus)),
+            _legacy_id: null,
+            product_id: productId,
+            name: sku.name || product.name,
+            spec: specValue || '默认规格',
+            spec_name: specName,
+            spec_value: specValue,
+            specs: specs,
+            image: sku.image || '',
+            price: toNumber(sku.price, 0),
+            original_price: toNumber(sku.original_price || sku.market_price, 0),
+            stock: toNumber(sku.stock, 0),
+            sku_code: pickString(sku.sku_code, ''),
+            sort_order: toNumber(sku.sort_order, index),
+            created_at: sku.created_at || nowIso(),
+            updated_at: nowIso()
+        };
+    });
+
+    const finalSkus = [...remainingSkus, ...newSkus];
+    saveCollection('skus', finalSkus);
+
+    // 同步更新商品库存和最低价
+    const totalStock = newSkus.reduce((sum, s) => sum + toNumber(s.stock, 0), 0);
+    const minPrice = newSkus.length > 0 ? Math.min(...newSkus.map((s) => toNumber(s.price, 0))) : toNumber(product.retail_price, 0);
+    const productIndex = products.findIndex((item) => Number(item.id || item._legacy_id || item._id) === productId);
+    if (productIndex !== -1) {
+        products[productIndex] = {
+            ...products[productIndex],
+            stock: totalStock,
+            min_price: minPrice,
+            retail_price: minPrice,
+            updated_at: nowIso()
+        };
+        saveCollection('products', products);
+    }
+
+    createAuditLog(req.admin, 'product.skus.update', 'products', { product_id: productId, sku_count: newSkus.length });
+    ok(res, { list: newSkus, total: newSkus.length });
+});
+
+// 新增单个 SKU
+app.post('/admin/api/products/:productId/skus', auth, requirePermission('products'), (req, res) => {
+    const productId = Number(req.params.productId);
+    const products = getCollection('products');
+    const product = products.find((item) => Number(item.id || item._legacy_id || item._id) === productId);
+    if (!product) return fail(res, '商品不存在', 404);
+
+    const skus = getCollection('skus');
+    const specs = Array.isArray(req.body.specs) ? req.body.specs : (req.body.spec_name && req.body.spec_value ? [{ name: req.body.spec_name, value: req.body.spec_value }] : []);
+    const specName = specs.length === 1 ? specs[0].name : (specs.length > 1 ? specs.map((s) => s.name).join('/') : (req.body.spec_name || ''));
+    const specValue = specs.length === 1 ? specs[0].value : (specs.length > 1 ? specs.map((s) => s.value).join('/') : (req.body.spec_value || req.body.spec || ''));
+
+    const sku = {
+        id: nextId(skus),
+        _legacy_id: null,
+        product_id: productId,
+        name: req.body.name || product.name,
+        spec: specValue || '默认规格',
+        spec_name: specName,
+        spec_value: specValue,
+        specs: specs,
+        image: req.body.image || '',
+        price: toNumber(req.body.price, 0),
+        original_price: toNumber(req.body.original_price || req.body.market_price, 0),
+        stock: toNumber(req.body.stock, 0),
+        sku_code: pickString(req.body.sku_code, ''),
+        sort_order: toNumber(req.body.sort_order, skus.filter((s) => Number(s.product_id) === productId).length),
+        created_at: nowIso(),
+        updated_at: nowIso()
+    };
+
+    skus.push(sku);
+    saveCollection('skus', skus);
+
+    // 同步商品库存/最低价
+    const productSkus = skus.filter((s) => Number(s.product_id) === productId);
+    const totalStock = productSkus.reduce((sum, s) => sum + toNumber(s.stock, 0), 0);
+    const minPrice = Math.min(...productSkus.map((s) => toNumber(s.price, 0)));
+    const productIndex = products.findIndex((item) => Number(item.id || item._legacy_id || item._id) === productId);
+    if (productIndex !== -1) {
+        products[productIndex] = { ...products[productIndex], stock: totalStock, min_price: minPrice, retail_price: minPrice, updated_at: nowIso() };
+        saveCollection('products', products);
+    }
+
+    createAuditLog(req.admin, 'product.sku.create', 'products', { product_id: productId, sku_id: sku.id });
+    ok(res, sku);
+});
+
+// 更新单个 SKU
+app.put('/admin/api/products/:productId/skus/:skuId', auth, requirePermission('products'), (req, res) => {
+    const productId = Number(req.params.productId);
+    const skuId = Number(req.params.skuId);
+    const skus = getCollection('skus');
+    const index = skus.findIndex((item) => Number(item.id) === skuId && Number(item.product_id) === productId);
+    if (index === -1) return fail(res, 'SKU不存在', 404);
+
+    const specs = Array.isArray(req.body.specs) ? req.body.specs : (req.body.spec_name && req.body.spec_value ? [{ name: req.body.spec_name, value: req.body.spec_value }] : skus[index].specs || []);
+    const specName = specs.length === 1 ? specs[0].name : (specs.length > 1 ? specs.map((s) => s.name).join('/') : (req.body.spec_name || skus[index].spec_name || ''));
+    const specValue = specs.length === 1 ? specs[0].value : (specs.length > 1 ? specs.map((s) => s.value).join('/') : (req.body.spec_value || req.body.spec || skus[index].spec_value || ''));
+
+    skus[index] = {
+        ...skus[index],
+        ...req.body,
+        spec: specValue || skus[index].spec,
+        spec_name: specName,
+        spec_value: specValue,
+        specs: specs,
+        price: req.body.price != null ? toNumber(req.body.price, 0) : skus[index].price,
+        original_price: req.body.original_price != null ? toNumber(req.body.original_price, 0) : skus[index].original_price,
+        stock: req.body.stock != null ? toNumber(req.body.stock, 0) : skus[index].stock,
+        updated_at: nowIso()
+    };
+    saveCollection('skus', skus);
+
+    // 同步商品库存/最低价
+    const products = getCollection('products');
+    const productSkus = skus.filter((s) => Number(s.product_id) === productId);
+    const totalStock = productSkus.reduce((sum, s) => sum + toNumber(s.stock, 0), 0);
+    const minPrice = productSkus.length > 0 ? Math.min(...productSkus.map((s) => toNumber(s.price, 0))) : 0;
+    const productIndex = products.findIndex((item) => Number(item.id || item._legacy_id || item._id) === productId);
+    if (productIndex !== -1) {
+        products[productIndex] = { ...products[productIndex], stock: totalStock, min_price: minPrice, retail_price: minPrice, updated_at: nowIso() };
+        saveCollection('products', products);
+    }
+
+    ok(res, skus[index]);
+});
+
+// 删除单个 SKU
+app.delete('/admin/api/products/:productId/skus/:skuId', auth, requirePermission('products'), (req, res) => {
+    const productId = Number(req.params.productId);
+    const skuId = Number(req.params.skuId);
+    const skus = getCollection('skus');
+    const nextSkus = skus.filter((item) => !(Number(item.id) === skuId && Number(item.product_id) === productId));
+    if (skus.length === nextSkus.length) return fail(res, 'SKU不存在', 404);
+    saveCollection('skus', nextSkus);
+
+    // 同步商品库存/最低价
+    const products = getCollection('products');
+    const productSkus = nextSkus.filter((s) => Number(s.product_id) === productId);
+    const totalStock = productSkus.reduce((sum, s) => sum + toNumber(s.stock, 0), 0);
+    const minPrice = productSkus.length > 0 ? Math.min(...productSkus.map((s) => toNumber(s.price, 0))) : 0;
+    const productIndex = products.findIndex((item) => Number(item.id || item._legacy_id || item._id) === productId);
+    if (productIndex !== -1) {
+        products[productIndex] = { ...products[productIndex], stock: totalStock, min_price: minPrice, retail_price: minPrice, updated_at: nowIso() };
+        saveCollection('products', products);
+    }
+
+    createAuditLog(req.admin, 'product.sku.delete', 'products', { product_id: productId, sku_id: skuId });
     ok(res, { success: true });
 });
 

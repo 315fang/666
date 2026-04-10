@@ -33,7 +33,7 @@ Page({
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navBarHeight: app.globalData.navBarHeight || 44,
-            memberId: Number(options && options.id)
+            memberId: (options && options.id) || ''
         });
         this.loadMemberDetail();
     },

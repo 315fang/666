@@ -3,5 +3,16 @@
   "version": "1.0.0",
   "description": "云函数：订单创建/查询/取消/评价",
   "main": "index.js",
-  "dependencies": { "wx-server-sdk": "~2.6.3" }
+  "dependencies": { "wx-server-sdk": "~2.6.3" },
+  "cloudfunction-config": {
+    "memorySize": 256,
+    "timeout": 20
+  },
+  "triggers": [
+    {
+      "name": "autoCancelExpiredOrders",
+      "type": "timer",
+      "config": "0 */5 * * * * *"
+    }
+  ]
 }

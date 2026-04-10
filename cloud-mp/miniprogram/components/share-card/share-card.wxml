@@ -9,8 +9,8 @@
   <!-- 会员码显示 -->
   <view class="invite-code-section">
     <view class="invite-label">我的会员码</view>
-    <view class="invite-code-box" bindtap="onCopyInviteCode">
-      <text class="invite-code">{{inviteCode}}</text>
+    <view class="invite-code-box" bindtap="onCopyMemberCode">
+      <text class="invite-code">{{memberCode}}</text>
       <image class="copy-icon-img" src="/assets/icons/clipboard.svg" mode="aspectFit"/>
     </view>
   </view>

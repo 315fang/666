@@ -112,7 +112,7 @@ function buildSectionRow(key, sourceMap) {
         title: normalizeText(source.title) || fallback.title,
         subtitle: normalizeText(source.subtitle || source.subTitle) || fallback.subtitle,
         tag: normalizeText(source.tag),
-        image: normalizeText(source.image || source.image_url || source.cover_image || source.coverImage),
+        image: normalizeText(source.image || source.file_id || source.image_url || source.cover_image || source.coverImage),
         gradient: normalizeText(source.gradient) || fallback.gradient,
         moreLinkType: normalizeLinkType(source) || fallback.moreLinkType,
         moreLinkValue: normalizeLinkValue(source) || fallback.moreLinkValue
@@ -224,7 +224,7 @@ function buildActivitySections({
             title: normalizeText(source.title) || fallback.title,
             subtitle: normalizeText(source.subtitle || source.subTitle) || fallback.subtitle,
             tag: normalizeText(source.tag),
-            image: normalizeText(source.image || source.image_url || source.cover_image || source.coverImage),
+            image: normalizeText(source.image || source.file_id || source.image_url || source.cover_image || source.coverImage),
             gradient: normalizeText(source.gradient) || fallback.gradient,
             moreLinkType: normalizeLinkType(source) || fallback.moreLinkType,
             moreLinkValue: normalizeLinkValue(source) || fallback.moreLinkValue

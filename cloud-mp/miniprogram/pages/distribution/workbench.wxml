@@ -19,7 +19,7 @@
     <view class="metrics-grid">
       <view class="metric-cell">
         <text class="metric-label">待发货</text>
-        <text class="metric-value">{{workbench.pending_ship || 0}}</text>
+        <text class="metric-value">{{workbench.paid || 0}}</text>
       </view>
       <view class="metric-cell">
         <text class="metric-label">待确认</text>
@@ -53,7 +53,7 @@
         </view>
         <view class="status-pill {{activeStatus === 'pending' ? 'active' : ''}}" data-status="pending" bindtap="onStatusChange">
           <text>待发货</text>
-          <view class="pill-badge" wx:if="{{workbench.pending_ship > 0}}">{{workbench.pending_ship}}</view>
+          <view class="pill-badge" wx:if="{{workbench.paid > 0}}">{{workbench.paid}}</view>
         </view>
         <view class="status-pill {{activeStatus === 'shipping_requested' ? 'active' : ''}}" data-status="shipping_requested" bindtap="onStatusChange">
           <text>待确认</text>
@@ -73,10 +73,10 @@
       </view>
 
       <view class="order-body">
-        <image class="product-thumb" src="{{item.product.images[0] || '/assets/images/placeholder.svg'}}" mode="aspectFill"></image>
+        <image class="product-thumb" src="{{item.product && item.product.images && item.product.images[0] || '/assets/images/placeholder.svg'}}" mode="aspectFill"></image>
         <view class="product-meta">
           <text class="product-name">{{item.product.name || '商品'}}</text>
-          <text class="product-extra">买家 {{item.buyer.nickname || '用户'}} · 数量 x{{item.quantity}}</text>
+          <text class="product-extra">买家 {{item.buyer.nick_name || item.buyer.nickname || '用户'}} · 数量 x{{item.quantity}}</text>
           <text class="product-price">实付 ¥{{item.actual_price || item.total_amount}}</text>
         </view>
       </view>

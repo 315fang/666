@@ -20,9 +20,9 @@
     <block wx:elif="{{member}}">
       <view class="hero-card">
         <view class="hero-row">
-          <image class="hero-avatar" src="{{member.avatar_url || '/assets/icons/user.svg'}}" mode="aspectFill"></image>
+          <image class="hero-avatar" src="{{member.avatar || member.avatar_url || '/assets/icons/user.svg'}}" mode="aspectFill"></image>
           <view class="hero-meta">
-            <text class="hero-name">{{member.nickname || '团队成员'}}</text>
+            <text class="hero-name">{{member.nick_name || member.nickname || '团队成员'}}</text>
             <view class="hero-tags">
               <text class="hero-pill">{{member.level_label}}</text>
               <text class="hero-pill light">{{member.role_name}}</text>

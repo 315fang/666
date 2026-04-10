@@ -1,0 +1,94 @@
+{
+  "phase": "P3",
+  "timestamp": "2026-04-09T09:27:02.123Z",
+  "tasks": [
+    {
+      "module": "user",
+      "status": "in-progress",
+      "submodules": [
+        "user-profile",
+        "user-growth",
+        "user-addresses",
+        "user-coupons"
+      ],
+      "actions": [
+        "profile",
+        "balance",
+        "growth",
+        "addresses",
+        "add-address",
+        "update-address",
+        "delete-address",
+        "coupons"
+      ],
+      "priority": "high"
+    },
+    {
+      "module": "order",
+      "status": "in-progress",
+      "submodules": [
+        "order-create",
+        "order-query",
+        "order-status"
+      ],
+      "actions": [
+        "create",
+        "list",
+        "detail",
+        "status"
+      ],
+      "priority": "high"
+    },
+    {
+      "module": "payment",
+      "status": "in-progress",
+      "submodules": [
+        "payment-prepay",
+        "payment-callback",
+        "payment-query",
+        "payment-refund"
+      ],
+      "actions": [
+        "prepay",
+        "callback",
+        "query",
+        "refund"
+      ],
+      "priority": "medium"
+    },
+    {
+      "module": "distribution",
+      "status": "in-progress",
+      "submodules": [
+        "distribution-query",
+        "distribution-commission"
+      ],
+      "actions": [
+        "dashboard",
+        "commission",
+        "stats"
+      ],
+      "priority": "medium"
+    },
+    {
+      "module": "config",
+      "status": "in-progress",
+      "submodules": [
+        "config-loader",
+        "config-cache"
+      ],
+      "actions": [
+        "init",
+        "list",
+        "get"
+      ],
+      "priority": "medium"
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "completed": 5,
+    "skipped": 0,
+    "failed": 0
+  }
+}

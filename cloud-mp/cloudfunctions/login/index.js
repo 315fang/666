@@ -6,39 +6,35 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 
+// ==================== 共享模块导入 ====================
+const {
+    validateAction, validateAmount, validateInteger, validateString,
+    validateArray, validateRequiredFields
+} = require('./shared/validators');
+const {
+    CloudBaseError, ERROR_CODES, errorHandler, cloudFunctionWrapper
+} = require('./shared/errors');
+const {
+    success, error, paginated, list, created, updated, deleted,
+    badRequest, unauthorized, forbidden, notFound, conflict, serverError
+} = require('./shared/response');
+const {
+    DEFAULT_GROWTH_TIERS, calculateTier, buildGrowthProgress, loadTierConfig
+} = require('./shared/growth');
+const {
+    toNumber, toArray, toString, toBoolean, getDeep, setDeep, deepClone, merge, pick, omit, generateId, delay
+} = require('./shared/utils');
+
+// ==================== 云初始化 ====================
+
+
 function createInviteCode() {
-    return Math.random().toString(36).slice(2, 8).toUpperCase();
-}
-
-function toNumber(value, fallback = 0) {
-    const num = Number(value);
-    return Number.isFinite(num) ? num : fallback;
-}
-
-const DEFAULT_GROWTH_TIERS = [
-    { level: 1, name: '普通会员', min: 0, discount: 1, enabled: true },
-    { level: 2, name: '银卡会员', min: 100, discount: 0.95, enabled: true },
-    { level: 3, name: '金卡会员', min: 500, discount: 0.9, enabled: true },
-    { level: 4, name: '钻石会员', min: 2000, discount: 0.85, enabled: true }
-];
-
-function buildGrowthProgress(pointsValue, tierConfig) {
-    const points = toNumber(pointsValue, 0);
-    const tiers = (tierConfig || DEFAULT_GROWTH_TIERS).map((t) => ({
-        level: toNumber(t.level, 0),
-        name: t.name || '未知等级',
-        min: toNumber(t.min || t.min_growth_value || t.growth_threshold, 0),
-        discount: toNumber(t.discount, 1),
-        enabled: t.enabled !== false
-    })).filter((t) => t.enabled).sort((a, b) => a.min - b.min);
-    if (!tiers.length) tiers.push({ level: 1, name: '普通会员', min: 0, discount: 1 });
-    let current = tiers[0];
-    let next = tiers[1] || null;
-    for (let i = 0; i < tiers.length; i += 1) {
-        if (points >= tiers[i].min) { current = tiers[i]; next = tiers[i + 1] || null; }
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
     }
-    const percent = next ? Math.min(100, Math.round(((points - current.min) / Math.max(1, next.min - current.min)) * 100)) : 100;
-    return { current, next, percent, next_threshold: next ? next.min : null };
+    return code;
 }
 
 // 自动为用户发放新人注册优惠券（幂等）
@@ -121,7 +117,7 @@ function formatUser(user, openid, tierConfig) {
         role_name: user.role_name || ROLE_NAMES[roleLevel] || '普通用户',
         is_distributor: distLevel > 0,
         distributor_level: distLevel,
-        invite_code: user.invite_code || user.my_invite_code || '',
+        invite_code: user.my_invite_code || user.invite_code || '',
         my_invite_code: user.my_invite_code || '',
         register_coupons_issued: !!user.register_coupons_issued,
         growth_value: points,
@@ -132,7 +128,7 @@ function formatUser(user, openid, tierConfig) {
     };
 }
 
-exports.main = async (event) => {
+exports.main = cloudFunctionWrapper(async (event) => {
     const wxContext = cloud.getWXContext();
     const openid = wxContext.OPENID;
     const { action, invite_code } = event;
@@ -194,16 +190,14 @@ exports.main = async (event) => {
         } catch (_) {}
 
         const userData = formatUser(userRes.data[0], openid, tierConfig);
-        return {
-            code: 0,
-            success: true,
-            data: userData,
+        return success({
+            ...userData,
             is_new_user: isNewUser,
             level_up: false,
             level_name: userData.level_name,
             register_coupons_issued: userData.register_coupons_issued
-        };
+        });
     }
 
-    return { code: 400, success: false, message: `未知 action: ${action}` };
-};
+    throw badRequest(`未知 action: ${action}`);
+});

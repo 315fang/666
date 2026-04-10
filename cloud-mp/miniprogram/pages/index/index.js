@@ -209,7 +209,7 @@ Page({
     _normalizeLatestActivity(activity = {}) {
         return {
             ...activity,
-            coverImage: normalizeAssetUrl(activity.image || activity.image_url || ''),
+            coverImage: normalizeAssetUrl(activity.image || activity.file_id || activity.image_url || ''),
             displaySubtitle: activity.subtitle || activity.summary || ''
         };
     },

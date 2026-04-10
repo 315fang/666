@@ -201,12 +201,32 @@ function processProduct(product, roleLevel = USER_ROLES.GUEST) {
   if (!product) return null;
 
   const rawFirstImage = getFirstImage(product.images || product.image);
+
+  // 生成规格摘要（用于商品卡片和列表展示）
+  let specSummary = '';
+  if (product.skus && product.skus.length > 0) {
+    const specMap = {};
+    product.skus.forEach((sku) => {
+      const skuSpecs = Array.isArray(sku.specs) && sku.specs.length > 0
+        ? sku.specs
+        : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
+      skuSpecs.forEach((s) => {
+        if (s.name && s.value) {
+          if (!specMap[s.name]) specMap[s.name] = new Set();
+          specMap[s.name].add(s.value);
+        }
+      });
+    });
+    specSummary = Object.keys(specMap).map((name) => Array.from(specMap[name]).join('/')).join(' · ');
+  }
+
   return {
     ...product,
     images: parseImages(product.images),
     firstImage: toOssUrl(rawFirstImage, 400), // 列表卡片宽度按 400 处理
     displayPrice: formatMoney(calculatePrice(product, null, roleLevel)),
-    formattedRetailPrice: formatMoney(product.retail_price || 0)
+    formattedRetailPrice: formatMoney(product.retail_price || 0),
+    specSummary
   };
 }
 

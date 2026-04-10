@@ -54,6 +54,15 @@
   display: flex;
 }
 
+.balance-pending-row {
+  margin-bottom: 20rpx;
+}
+
+.balance-pending-text {
+  font-size: 22rpx;
+  color: rgba(212, 184, 150, 0.70);
+}
+
 .withdraw-btn {
   min-width: 200rpx;
   height: 80rpx;
@@ -158,9 +167,11 @@
 }
 
 .log-status-frozen { color: #B76447; background: #FAECE8; }
+.log-status-pending { color: #A06C46; background: #F8EEE4; }
 .log-status-pending_approval { color: #A06C46; background: #F8EEE4; }
 .log-status-approved { color: #6A7E9A; background: #EEF4FB; }
 .log-status-settled { color: #53725B; background: #EDF6EF; }
+.log-status-available { color: #53725B; background: #EDF6EF; }
 .log-status-cancelled { color: #9A8D80; background: #F2EFEC; }
 
 .log-time {

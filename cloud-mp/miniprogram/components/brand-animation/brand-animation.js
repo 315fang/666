@@ -4,26 +4,31 @@ Component({
         // 动画类型: withdraw, payment, joinTeam, welcome, levelUp
         type: {
             type: String,
+            optionalTypes: [Number, Boolean],
             value: ''
         },
         // 提现金额
         amount: {
             type: String,
+            optionalTypes: [Number],
             value: '0.00'
         },
         // 团队名称
         teamName: {
             type: String,
+            optionalTypes: [Number],
             value: ''
         },
         // 等级名称（晋级动画用）
         levelName: {
             type: String,
+            optionalTypes: [Number],
             value: ''
         },
         // 飞入购物袋的图片
         flyImage: {
             type: String,
+            optionalTypes: [Number],
             value: ''
         }
     },

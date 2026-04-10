@@ -20,8 +20,8 @@ Page({
 
     onLoad() {
         const userInfo = wx.getStorageSync('userInfo');
-        if (userInfo && userInfo.nickname) {
-            this.setData({ userName: userInfo.nickname });
+        if (userInfo && (userInfo.nick_name || userInfo.nickname)) {
+            this.setData({ userName: userInfo.nick_name || userInfo.nickname });
         }
     },
 

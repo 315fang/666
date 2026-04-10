@@ -6,7 +6,11 @@ const root = path.resolve(__dirname, '..', '..');
 const projectRoot = root;
 
 function readText(relativePath) {
-  return fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
+  try {
+    return fs.readFileSync(path.join(projectRoot, relativePath), 'utf8');
+  } catch (err) {
+    return '';
+  }
 }
 
 function tryReadJson(relativePath) {
@@ -19,7 +23,8 @@ function tryReadJson(relativePath) {
 
 function hasPattern(relativePath, pattern) {
   try {
-    return pattern.test(readText(relativePath));
+    const content = readText(relativePath);
+    return content && pattern.test(content);
   } catch (_) {
     return false;
   }
@@ -33,8 +38,14 @@ const blockers = [];
 const warnings = [];
 const paymentConfig = loadPaymentConfig(process.env);
 
+// ✅ P1-3 修复：安全读取字段（添加类型检查）
 const legacyAudit = tryReadJson('cloud-mp/docs/CLOUDBASE_LEGACY_COMPAT_AUDIT.json');
-if (legacyAudit?.summary?.totalMatches > 0) {
+if (legacyAudit && 
+    typeof legacyAudit === 'object' &&
+    legacyAudit.summary &&
+    typeof legacyAudit.summary === 'object' &&
+    Number.isFinite(legacyAudit.summary.totalMatches) &&
+    legacyAudit.summary.totalMatches > 0) {
   warnings.push(`旧字段兼容残留 ${legacyAudit.summary.totalMatches} 处，仍需继续收口。`);
 }
 
@@ -67,6 +78,70 @@ if (hasPattern('cloud-mp/inject.js', /mock|mockData|模拟/i) ||
     hasPattern('cloud-mp/inject2.js', /mock|mockData|模拟/i) ||
     hasPattern('cloud-mp/inject3.js', /mock|mockData|模拟/i)) {
   warnings.push('仓库仍保留注入/模拟脚本，发布前应确认是否归档或移除。');
+}
+
+// ✅ P1-3 修复：添加云函数部署检查
+function checkCloudFunctionExistence() {
+  const requiredFunctions = ['login', 'user', 'products', 'cart', 'order', 'payment', 'config', 'distribution'];
+  const basePath = 'cloud-mp/cloudfunctions';
+  const missing = [];
+  
+  requiredFunctions.forEach(fnName => {
+    const fnPath = `${basePath}/${fnName}/index.js`;
+    try {
+      const content = readText(fnPath);
+      if (!content || content.trim().length === 0) {
+        missing.push(fnName);
+      }
+    } catch (_) {
+      missing.push(fnName);
+    }
+  });
+  
+  return { missing, count: missing.length };
+}
+
+// ✅ P1-3 修复：添加数据库集合检查
+function checkCloudBaseSeed() {
+  try {
+    const seedSummary = tryReadJson('cloud-mp/cloudbase-seed/_summary.json');
+    if (!seedSummary || !Array.isArray(seedSummary.collections)) {
+      return { collections: [], count: 0 };
+    }
+    const requiredCollections = ['users', 'products', 'orders', 'cart_items', 'categories'];
+    const existing = seedSummary.collections.filter(c => requiredCollections.includes(c.name));
+    return { collections: existing.map(c => c.name), count: existing.length };
+  } catch (_) {
+    return { collections: [], count: 0 };
+  }
+}
+
+// ✅ P1-3 修复：检查配置环境变量
+function checkAuthConfiguration() {
+  const projectConfig = tryReadJson('cloud-mp/project.config.json');
+  const cloudbaseEnv = projectConfig?.cloudbaseEnv;
+  
+  return {
+    hasEnv: !!cloudbaseEnv,
+    env: cloudbaseEnv || 'undefined'
+  };
+}
+
+// 执行所有检查
+const cloudFunctionCheck = checkCloudFunctionExistence();
+const cloudBaseSeedCheck = checkCloudBaseSeed();
+const authCheck = checkAuthConfiguration();
+
+if (cloudFunctionCheck.count > 0) {
+  blockers.push(`缺失云函数：${cloudFunctionCheck.missing.join(', ')}`);
+}
+
+if (cloudBaseSeedCheck.count < 5) {
+  blockers.push(`云数据库集合不完整，仅有 ${cloudBaseSeedCheck.count}/5 个必需集合：${cloudBaseSeedCheck.collections.join(', ')}`);
+}
+
+if (!authCheck.hasEnv) {
+  blockers.push('CloudBase 环境未配置，检查 project.config.json 的 cloudbaseEnv 字段');
 }
 
 const lines = [];

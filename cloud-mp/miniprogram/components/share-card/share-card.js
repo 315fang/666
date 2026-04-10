@@ -12,7 +12,7 @@ Component({
       value: '分享给好友，一起享受优惠'
     },
     // 会员码
-    inviteCode: {
+    memberCode: {
       type: String,
       value: ''
     },
@@ -67,10 +67,10 @@ Component({
 
   methods: {
     /**
-     * 复制邀请码
+     * 复制会员码
      */
-    onCopyInviteCode() {
-      const code = this.properties.inviteCode;
+    onCopyMemberCode() {
+      const code = this.properties.memberCode;
       if (!code) {
         wx.showToast({ title: '会员码为空', icon: 'none' });
         return;
@@ -97,8 +97,8 @@ Component({
       let link = this.properties.shareLink;
 
       // 如果没有提供链接，则构造默认链接
-      if (!link && this.properties.inviteCode) {
-        link = `/pages/index/index?share_id=${this.properties.inviteCode}`;
+      if (!link && this.properties.memberCode) {
+        link = `/pages/index/index?share_id=${this.properties.memberCode}`;
       }
 
       if (!link) {

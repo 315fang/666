@@ -1,52 +1,52 @@
 # CloudBase Environment Runtime Status
 
-Generated at: 2026-04-09T03:31:30.546Z
+Generated at: 2026-04-09T08:43:20.845Z
 
 ## Environment
 
-- Env ID: cloud1-9gywyqe49638e46f
-- Auth status: READY
-- Env status: READY
+- Env ID: missing
+- Auth status: REQUIRED
+- Env status: NONE
 
 ## Required Collections
 
-- `users`: expected=167, actual=167, status=ok
-- `products`: expected=11, actual=11, status=ok
-- `skus`: expected=11, actual=11, status=ok
-- `categories`: expected=9, actual=9, status=ok
-- `cart_items`: expected=25, actual=25, status=ok
-- `orders`: expected=59, actual=59, status=ok
-- `refunds`: expected=9, actual=9, status=ok
-- `reviews`: expected=3, actual=3, status=ok
-- `commissions`: expected=3, actual=3, status=ok
-- `withdrawals`: expected=3, actual=3, status=ok
-- `banners`: expected=5, actual=5, status=ok
-- `materials`: expected=52, actual=52, status=ok
-- `material_groups`: expected=1, actual=1, status=ok
-- `admins`: expected=2, actual=2, status=ok
-- `admin_roles`: expected=2, actual=2, status=ok
+- `users`: expected=167, actual=missing, status=missing_collection
+- `products`: expected=11, actual=missing, status=missing_collection
+- `skus`: expected=11, actual=missing, status=missing_collection
+- `categories`: expected=9, actual=missing, status=missing_collection
+- `cart_items`: expected=25, actual=missing, status=missing_collection
+- `orders`: expected=59, actual=missing, status=missing_collection
+- `refunds`: expected=9, actual=missing, status=missing_collection
+- `reviews`: expected=3, actual=missing, status=missing_collection
+- `commissions`: expected=3, actual=missing, status=missing_collection
+- `withdrawals`: expected=3, actual=missing, status=missing_collection
+- `banners`: expected=5, actual=missing, status=missing_collection
+- `materials`: expected=52, actual=missing, status=missing_collection
+- `material_groups`: expected=1, actual=missing, status=missing_collection
+- `admins`: expected=2, actual=missing, status=missing_collection
+- `admin_roles`: expected=2, actual=missing, status=missing_collection
 
 ## Functions
 
 - Local function count: 9
-- Deployed function count: 9
-- Function names match: YES
+- Deployed function count: 0
+- Function names match: NO
 
-- `admin-api`: deployed=yes
-- `cart`: deployed=yes
-- `config`: deployed=yes
-- `distribution`: deployed=yes
-- `login`: deployed=yes
-- `order`: deployed=yes
-- `payment`: deployed=yes
-- `products`: deployed=yes
-- `user`: deployed=yes
+- `admin-api`: deployed=no
+- `cart`: deployed=no
+- `config`: deployed=no
+- `distribution`: deployed=no
+- `login`: deployed=no
+- `order`: deployed=no
+- `payment`: deployed=no
+- `products`: deployed=no
+- `user`: deployed=no
 
 ## Admin Chain
 
-- Mode: function_gateway
-- Ready: YES
-- Evidence: Admin chain currently resolves through the deployed admin-api cloud function gateway.
+- Mode: missing
+- Ready: NO
+- Evidence: No CloudRun service or deployed admin-api cloud function was found for the admin chain.
 
 ## CloudRun
 
@@ -55,13 +55,16 @@ Generated at: 2026-04-09T03:31:30.546Z
 
 ## Summary
 
-- Required collection counts match import package: YES
-- Matched required collections: 15/15
-- Runtime ready: YES
+- Required collection counts match import package: NO
+- Matched required collections: 0/15
+- Runtime ready: NO
 
 ## Blockers
 
-- none
+- CloudBase auth/env not ready: auth=REQUIRED, env=NONE
+- Required collections missing or mismatched: users, products, skus, categories, cart_items, orders, refunds, reviews, commissions, withdrawals, banners, materials, material_groups, admins, admin_roles
+- Cloud functions not deployed from local source: admin-api, cart, config, distribution, login, order, payment, products, user
+- No CloudRun service or deployed admin-api cloud function was found for the admin chain.
 
 ## Warnings
 

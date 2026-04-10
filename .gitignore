@@ -62,3 +62,6 @@ miniprogram/ec-canvas/
 
 # 嵌套的 git 仓库
 agent-portal/
+
+# 需独立上传的文件（微信开发者工具等单独部署）
+cloud-mp/inject2.js

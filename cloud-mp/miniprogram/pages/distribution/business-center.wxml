@@ -12,9 +12,9 @@
     <view class="hero-card">
       <view class="hero-top">
         <view class="hero-user">
-          <image class="hero-avatar" src="{{userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
+          <image class="hero-avatar" src="{{userInfo.avatar || userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
           <view class="hero-user-meta">
-            <text class="hero-name">{{userInfo.nickname || '微信用户'}}</text>
+            <text class="hero-name">{{userInfo.nick_name || userInfo.nickname || '微信用户'}}</text>
             <text class="hero-role">{{userInfo.role_name || '团队成员'}}</text>
           </view>
         </view>

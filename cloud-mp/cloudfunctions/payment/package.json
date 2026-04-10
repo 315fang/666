@@ -1,10 +1,9 @@
 {
   "name": "payment",
   "version": "1.0.0",
-  "description": "云函数：微信支付统一下单 & 回调",
+  "description": "云函数：微信支付 V3 统一下单 & 回调 & 退款",
   "main": "index.js",
   "dependencies": {
-    "wx-server-sdk": "~2.6.3",
-    "node-fetch": "^2.6.7"
+    "wx-server-sdk": "~2.6.3"
   }
 }

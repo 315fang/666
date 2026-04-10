@@ -182,7 +182,7 @@ Page({
                 // ★ 触发「加入团队」品牌动画
                 if (this.brandAnimation) {
                     const inviterName = this.data.inviterInfo
-                        ? (this.data.inviterInfo.nickname || '臻选大家庭')
+                        ? (this.data.inviterInfo.nick_name || this.data.inviterInfo.nickname || '臻选大家庭')
                         : '臻选大家庭';
                     this.brandAnimation.show('joinTeam', { teamName: inviterName });
                 }

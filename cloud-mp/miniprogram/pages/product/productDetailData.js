@@ -20,6 +20,16 @@ function parseApiDisplayPrice(v) {
     return Number.isFinite(x) && x >= 0 ? x : null;
 }
 
+// 构建 SKU 规格文本（多规格用 " / " 连接，单规格用 ": " 连接）
+function buildSkuText(sku) {
+    if (!sku) return '默认规格';
+    const specs = Array.isArray(sku.specs) && sku.specs.length > 0
+        ? sku.specs
+        : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
+    if (specs.length === 0) return sku.spec || '默认规格';
+    return specs.map((s) => `${s.name}: ${s.value}`).join(' / ');
+}
+
 function resolvePayableUnitPrice(product, sku, roleLevel) {
     if (sku && parseApiDisplayPrice(sku.displayPrice) != null) {
         return parseApiDisplayPrice(sku.displayPrice);
@@ -44,12 +54,18 @@ async function loadProduct(page, id) {
         if (product.skus && product.skus.length > 0) {
             const specMap = {};
             product.skus.forEach((sku) => {
-                if (sku.spec_name && sku.spec_value) {
-                    if (!specMap[sku.spec_name]) {
-                        specMap[sku.spec_name] = new Set();
+                // 优先使用 specs 数组（多规格），向后兼容 spec_name/spec_value
+                const skuSpecs = Array.isArray(sku.specs) && sku.specs.length > 0
+                    ? sku.specs
+                    : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
+                skuSpecs.forEach((s) => {
+                    if (s.name && s.value) {
+                        if (!specMap[s.name]) {
+                            specMap[s.name] = new Set();
+                        }
+                        specMap[s.name].add(s.value);
                     }
-                    specMap[sku.spec_name].add(sku.spec_value);
-                }
+                });
             });
 
             specs = Object.keys(specMap).map((name) => ({
@@ -58,6 +74,10 @@ async function loadProduct(page, id) {
             }));
         }
         product.specs = specs;
+
+        // 生成规格摘要文本（如 "120ml / 50ml"），用于商品卡片和详情页显眼展示
+        const specSummary = specs.map((s) => s.values.join('/')).join(' · ');
+        product.specSummary = specSummary;
 
         const roleLevel = app.globalData.userInfo && app.globalData.userInfo.role_level || USER_ROLES.GUEST;
         const displayPrice = resolvePayableUnitPrice(product, null, roleLevel);
@@ -69,8 +89,20 @@ async function loadProduct(page, id) {
 
         const firstSku = product.skus && product.skus.length > 0 ? product.skus[0] : null;
         const selectedSpecs = {};
-        if (firstSku && firstSku.spec_name) {
-            selectedSpecs[firstSku.spec_name] = firstSku.spec_value;
+        if (firstSku) {
+            // 优先使用 specs 数组（多规格），向后兼容 spec_name/spec_value
+            const firstSkuSpecs = Array.isArray(firstSku.specs) && firstSku.specs.length > 0
+                ? firstSku.specs
+                : (firstSku.spec_name && firstSku.spec_value ? [{ name: firstSku.spec_name, value: firstSku.spec_value }] : []);
+            firstSkuSpecs.forEach((s) => {
+                if (s.name && s.value) {
+                    selectedSpecs[s.name] = s.value;
+                }
+            });
+            // 向后兼容
+            if (Object.keys(selectedSpecs).length === 0 && firstSku.spec_name) {
+                selectedSpecs[firstSku.spec_name] = firstSku.spec_value;
+            }
         }
 
         const currentPrice = Number(
@@ -94,7 +126,7 @@ async function loadProduct(page, id) {
             skus: product.skus || [],
             selectedSku: firstSku,
             selectedSpecs,
-            selectedSkuText: firstSku ? `${firstSku.spec_name}: ${firstSku.spec_value}` : '默认规格',
+            selectedSkuText: firstSku ? buildSkuText(firstSku) : '默认规格',
             imageCount: product.images.length || 1,
             roleLevel,
             isAgent: roleLevel >= USER_ROLES.LEADER,
@@ -136,5 +168,6 @@ module.exports = {
     loadProduct,
     resolvePayableUnitPrice,
     parseApiDisplayPrice,
+    buildSkuText,
     PLEDGE_ICONS
 };

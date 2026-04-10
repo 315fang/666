@@ -23,7 +23,7 @@
         <el-radio-group v-model="searchForm.status_group" size="default" @change="onStatusGroupChange">
           <el-radio-button label="all">全部</el-radio-button>
           <el-radio-button label="pending_pay">待付款</el-radio-button>
-          <el-radio-button label="pending_ship">待发货</el-radio-button>
+          <el-radio-button label="paid">待发货</el-radio-button>
           <el-radio-button label="pending_receive">待收货</el-radio-button>
           <el-radio-button label="completed">已完成</el-radio-button>
           <el-radio-button label="closed">已关闭</el-radio-button>
@@ -434,6 +434,7 @@ import {
   forceCancelOrder,
   exportOrders
 } from '@/api'
+import { getCommissionTypeLabel } from '@/utils/commission'
 import { formatDateTime } from '@/utils/format'
 import { getUserAvatar, getUserNickname, normalizeUserDisplay } from '@/utils/userDisplay'
 import { usePagination } from '@/composables/usePagination'
@@ -672,13 +673,7 @@ const detailTimeline = (order) => {
   ]
   return items.filter(item => item.time)
 }
-const commissionTypeText = (type) => ({
-  gap: '级差收益',
-  agent_fulfillment: '代理发货利润',
-  direct: '直推佣金',
-  indirect: '间推佣金',
-  self: '自购返利'
-}[type] || type || '佣金')
+const commissionTypeText = (type) => getCommissionTypeLabel(type)
 const commissionStatusText = (status) => ({
   frozen: '冻结中',
   pending_approval: '待审批',
