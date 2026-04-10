@@ -120,6 +120,7 @@ const ROUTE_TABLE = {
 
     // ── 自提门店 ──────────────────────────────
     'GET /stations/my-scope':               { fn: 'user',         action: 'getPickupScope' },
+    'GET /stations/region-from-point':      { fn: 'user',         action: 'regionFromPoint' },
     'GET /stations':                        { fn: 'user',         action: 'listStations' },
 
     // ── 物流 ──────────────────────────────────

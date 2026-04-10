@@ -17,6 +17,13 @@
       </view>
     </view>
 
+    <view class="empty-state" wx:elif="{{loadError}}">
+      <image src="/assets/icons/users.svg" mode="aspectFit" class="empty-icon"></image>
+      <text class="empty-title">成员信息加载失败</text>
+      <text class="empty-desc">{{loadError}}</text>
+      <view class="empty-retry-btn" bindtap="onRetry">重新加载</view>
+    </view>
+
     <block wx:elif="{{member}}">
       <view class="hero-card">
         <view class="hero-row">

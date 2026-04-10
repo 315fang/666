@@ -24,6 +24,7 @@ Page({
         statusBarHeight: 20,
         navBarHeight: 44,
         loading: true,
+        loadError: '',
         memberId: null,
         member: null,
         detailItems: []
@@ -41,11 +42,11 @@ Page({
     async loadMemberDetail() {
         const { memberId } = this.data;
         if (!memberId) {
-            this.setData({ loading: false });
+            this.setData({ loading: false, loadError: '成员参数错误' });
             wx.showToast({ title: '成员参数错误', icon: 'none' });
             return;
         }
-        this.setData({ loading: true });
+        this.setData({ loading: true, loadError: '' });
         try {
             const res = await get(`/distribution/team/${memberId}`);
             if (res && res.code === 0 && res.data) {
@@ -56,15 +57,21 @@ Page({
                 this.setData({
                     member,
                     detailItems: buildDetailItems(member),
-                    loading: false
+                    loading: false,
+                    loadError: ''
                 });
                 return;
             }
             throw new Error(res.message || '加载失败');
         } catch (err) {
-            this.setData({ loading: false });
-            wx.showToast({ title: err.message || '加载失败', icon: 'none' });
+            const message = err.message || '加载失败';
+            this.setData({ loading: false, loadError: message, member: null, detailItems: [] });
+            wx.showToast({ title: message, icon: 'none' });
         }
+    },
+
+    onRetry() {
+        this.loadMemberDetail();
     },
 
     goInvitePoster() {

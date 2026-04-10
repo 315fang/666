@@ -50,25 +50,37 @@ async function loadStations(page, helpers) {
             /* 未同意隐私或未开定位 */
         }
 
+        const hasStationCoords = points.length > 0;
         const markers = mergeUserMarker(stationMarkers, userLa, userLo, userMarkerMode, '');
 
-        let mapLat = 31.3;
-        let mapLng = 121.5;
+        let mapLat = null;
+        let mapLng = null;
         let scale = 12;
         let includePoints = [];
         let regionBanner = '';
+        let mapUnavailableText = '';
 
         if (userLa != null && userLo != null) {
-            const viewport = computeCurrentCityViewport(list, userLa, userLo, regionObj);
-            mapLat = viewport.mapLat;
-            mapLng = viewport.mapLng;
-            scale = viewport.scale;
-            includePoints = viewport.includePoints;
+            if (hasStationCoords) {
+                const viewport = computeCurrentCityViewport(list, userLa, userLo, regionObj);
+                mapLat = viewport.mapLat;
+                mapLng = viewport.mapLng;
+                scale = viewport.scale;
+                includePoints = viewport.includePoints;
+            } else {
+                mapLat = userLa;
+                mapLng = userLo;
+                scale = 12;
+                includePoints = [{ latitude: userLa, longitude: userLo }];
+                mapUnavailableText = '站点尚未配置经纬度，地图无法显示门店位置；请在后台自提站点中补充坐标。';
+            }
             const label =
                 regionObj && (regionObj.city || regionObj.district)
                     ? `${regionObj.city || ''}${regionObj.district || ''}`.trim()
                     : '';
-            if (label) {
+            if (!hasStationCoords) {
+                regionBanner = '已定位当前位置；门店缺少坐标，请查看下方地址列表';
+            } else if (label) {
                 regionBanner = `已按当前位置框选「${label}」附近门店；点右下角可选点查最近店`;
             } else if (geoConfigured === false) {
                 regionBanner =
@@ -86,11 +98,8 @@ async function loadStations(page, helpers) {
             mapLng = center.longitude;
             scale = scaleForStationSpread(points, SINGLE_STATION_SCALE);
         } else if (list.length > 0) {
-            wx.showToast({
-                title: '站点未配置地图坐标，请查看下方地址',
-                icon: 'none',
-                duration: 2200
-            });
+            mapUnavailableText = '站点未配置地图坐标，地图无法定位；请在后台自提站点中补充经纬度。';
+            regionBanner = '当前仅能查看站点地址列表';
         }
 
         page.setData({
@@ -104,7 +113,8 @@ async function loadStations(page, helpers) {
             selectedId: null,
             scrollIntoView: '',
             userMarkerMode,
-            regionBanner
+            regionBanner,
+            mapUnavailableText
         });
     } catch (e) {
         page.setData({ loading: false });

@@ -45,13 +45,13 @@ const handleAction = {
     }),
 
     'create': asyncHandler(async (openid, params) => {
-        const { items, address_id, coupon_id, memo, delivery_type, pickup_station_id, points_to_use, type, group_activity_id, group_no } = params;
+        const { items, address_id, coupon_id, user_coupon_id, memo, delivery_type, pickup_station_id, points_to_use, type, group_activity_id, group_no } = params;
         if (!items || !Array.isArray(items) || items.length === 0) {
             throw badRequest('缺少商品信息');
         }
         if (!address_id) throw badRequest('缺少收货地址');
         const order = await orderCreate.createOrder(openid, {
-            items, address_id, coupon_id, memo, delivery_type, pickup_station_id, points_to_use, type, group_activity_id, group_no
+            items, address_id, coupon_id, user_coupon_id, memo, delivery_type, pickup_station_id, points_to_use, type, group_activity_id, group_no
         });
         return success({ id: order._id, order_id: order._id, order_no: order.order_no, total_amount: order.total_amount, pay_amount: order.pay_amount });
     }),

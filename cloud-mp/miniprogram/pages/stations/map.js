@@ -208,7 +208,8 @@ Page({
         scrollIntoView: '',
         userMarkerMode: null,
         /** 顶部说明：当前位置→附近门店；选点后→最近店提示 */
-        regionBanner: ''
+        regionBanner: '',
+        mapUnavailableText: ''
     },
 
     onLoad() {

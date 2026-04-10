@@ -591,4 +591,5 @@ async function handleCallback(event) {
 
 module.exports = {
     handleCallback,
+    processPaidOrder,
 };

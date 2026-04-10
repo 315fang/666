@@ -185,7 +185,7 @@
     "style": "v2",
     "sitemapLocation": "sitemap.json",
     "lazyCodeLoading": "requiredComponents",
-    "requiredPrivateInfos": ["chooseLocation", "chooseAddress"],
+    "requiredPrivateInfos": ["getLocation", "chooseLocation", "chooseAddress"],
     "permission": {
         "scope.userLocation": {
             "desc": "用于推荐附近自提门店和地图选点"

@@ -261,6 +261,50 @@
   border-radius: 22rpx;
 }
 
+.empty-state {
+  margin: 120rpx 48rpx 0;
+  padding: 56rpx 32rpx;
+  border-radius: 28rpx;
+  background: #ffffff;
+  box-shadow: 0 18rpx 40rpx rgba(18, 69, 140, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18rpx;
+}
+
+.empty-icon {
+  width: 88rpx;
+  height: 88rpx;
+  opacity: 0.32;
+}
+
+.empty-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #12366a;
+}
+
+.empty-desc {
+  font-size: 24rpx;
+  color: #7f93b2;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.empty-retry-btn {
+  min-width: 180rpx;
+  height: 68rpx;
+  border-radius: 999rpx;
+  background: #0d61ce;
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }

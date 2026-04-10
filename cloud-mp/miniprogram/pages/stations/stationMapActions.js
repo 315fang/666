@@ -101,13 +101,13 @@ function onMarkerTap(page, event) {
         wx.showToast({ title: msg, icon: 'none', duration: 2600 });
         return;
     }
-    const station = page.data.stations.find((item) => item.id === markerId);
+    const station = page.data.stations.find((item) => String(item.id) === String(markerId));
     if (station) page.showStationDetail(station);
 }
 
 function onSelectStation(page, event) {
     const id = event.currentTarget.dataset.id;
-    const station = page.data.stations.find((item) => item.id === id);
+    const station = page.data.stations.find((item) => String(item.id) === String(id));
     if (station) page.showStationDetail(station);
 }
 

@@ -1,6 +1,7 @@
 'use strict';
 
 const cloud = require('wx-server-sdk');
+const https = require('https');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
@@ -112,6 +113,69 @@ function normalizeMemberLevels(rows = []) {
                 : [row.description || row.desc || row.benefits].filter(Boolean)
         }))
         .sort((a, b) => a.level - b.level);
+}
+
+function normalizeStation(row = {}) {
+    const latitude = row.latitude != null ? row.latitude : row.lat;
+    const longitude = row.longitude != null ? row.longitude : row.lng;
+    const la = Number(latitude);
+    const lo = Number(longitude);
+    const hasCoord = Number.isFinite(la) && Number.isFinite(lo);
+    return {
+        ...row,
+        id: row.id || row._legacy_id || row._id,
+        latitude: hasCoord ? la : null,
+        longitude: hasCoord ? lo : null,
+        coordinate_missing: !hasCoord,
+        address: row.address || '',
+        province: row.province || '',
+        city: row.city || '',
+        district: row.district || ''
+    };
+}
+
+async function reverseGeocode(latitude, longitude) {
+    const key = String(process.env.TENCENT_MAP_KEY || '').trim();
+    if (!key || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return { region: null, configured: !!key };
+    }
+    const path = `/ws/geocoder/v1/?location=${encodeURIComponent(`${latitude},${longitude}`)}&key=${encodeURIComponent(key)}`;
+    return new Promise((resolve) => {
+        const req = https.request({
+            hostname: 'apis.map.qq.com',
+            path,
+            method: 'GET',
+            timeout: 10000
+        }, (res) => {
+            let body = '';
+            res.on('data', (chunk) => { body += chunk; });
+            res.on('end', () => {
+                try {
+                    const json = JSON.parse(body);
+                    const ac = json.result && json.result.address_component;
+                    if (json.status === 0 && ac) {
+                        resolve({
+                            configured: true,
+                            region: {
+                                province: String(ac.province || '').trim(),
+                                city: String(ac.city || '').trim(),
+                                district: String(ac.district || '').trim(),
+                                street: String(ac.street || '').trim()
+                            }
+                        });
+                        return;
+                    }
+                } catch (_) {}
+                resolve({ region: null, configured: true });
+            });
+        });
+        req.on('error', () => resolve({ region: null, configured: true }));
+        req.on('timeout', () => {
+            req.destroy();
+            resolve({ region: null, configured: true });
+        });
+        req.end();
+    });
 }
 
 // 统一的异步处理包装
@@ -422,12 +486,12 @@ const handleAction = {
 
     'listStations': asyncHandler(async (openid, params) => {
         const res = await getAllRecords(db, 'stations', { status: 'active' }).catch(() => []);
-        return success({ list: res || [] });
+        return success({ list: (res || []).map(normalizeStation) });
     }),
 
     'getPickupScope': asyncHandler(async (openid, params) => {
         const res = await db.collection('stations').where({ status: 'active' }).limit(10).get().catch(() => ({ data: [] }));
-        const stations = res.data || [];
+        const stations = (res.data || []).map(normalizeStation);
         // 检查用户是否有关联的站点验证权限（pickup_verifiers）
         let hasVerifyAccess = false;
         if (openid && stations.length > 0) {
@@ -463,7 +527,16 @@ const handleAction = {
 
     'pickupOptions': asyncHandler(async (openid, params) => {
         const res = await getAllRecords(db, 'stations', { status: 'active' }).catch(() => []);
-        return success({ list: res || [] });
+        return success({ list: (res || []).map(normalizeStation) });
+    }),
+
+    'regionFromPoint': asyncHandler(async (openid, params) => {
+        const lat = Number(params.lat);
+        const lng = Number(params.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+            throw badRequest('请提供有效 lat、lng');
+        }
+        return success(await reverseGeocode(lat, lng));
     }),
 
     'shareEligibility': asyncHandler(async (openid) => {

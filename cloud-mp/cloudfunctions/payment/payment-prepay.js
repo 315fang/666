@@ -4,6 +4,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const { toNumber } = require('./shared/utils');
 const { jsapiOrder, buildMiniPayParams, loadPrivateKey } = require('./wechat-pay-v3');
+const { processPaidOrder } = require('./payment-callback');
 
 /**
  * 预支付 — 调用微信支付 V3 JSAPI 下单
@@ -38,7 +39,23 @@ async function preparePay(openid, params) {
     const payAmount = toNumber(order.pay_amount || order.total_amount, 0);
     const amountInFen = Math.round(payAmount * 100);
     if (amountInFen <= 0) {
-        throw new Error('支付金额必须大于0');
+        await db.collection('orders').doc(orderId).update({
+            data: {
+                status: 'paid',
+                paid_at: db.serverDate(),
+                pay_time: db.serverDate(),
+                pay_channel: 'free',
+                updated_at: db.serverDate(),
+            },
+        });
+        await processPaidOrder(orderId, { ...order, status: 'paid', paid_at: new Date() });
+        return {
+            order_id: orderId,
+            order_no: order.order_no,
+            pay_amount: 0,
+            paid_by_free: true,
+            message: '订单已自动完成支付'
+        };
     }
 
     // 5. 加载私钥

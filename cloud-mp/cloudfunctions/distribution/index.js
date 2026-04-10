@@ -57,6 +57,56 @@ function indirectRelationWhere(directMembers = []) {
     return clauses.length === 1 ? clauses[0] : _.or(clauses);
 }
 
+async function findUserByAnyId(id) {
+    if (!hasValue(id)) return null;
+    const stringId = String(id);
+    const num = Number(stringId);
+    const queries = [
+        db.collection('users').doc(stringId).get().then((res) => ({ data: res.data ? [res.data] : [] })).catch(() => ({ data: [] }))
+    ];
+    if (Number.isFinite(num)) {
+        queries.push(db.collection('users').where({ id: num }).limit(1).get().catch(() => ({ data: [] })));
+    }
+    queries.push(db.collection('users').where({ _legacy_id: stringId }).limit(1).get().catch(() => ({ data: [] })));
+    const results = await Promise.all(queries);
+    return results.flatMap((item) => item.data || [])[0] || null;
+}
+
+function isParentIdMatch(member = {}, ids = []) {
+    if (!hasValue(member.parent_id)) return false;
+    return ids.some((id) => String(id) === String(member.parent_id));
+}
+
+function normalizeTeamMember(member = {}, level = 1, extra = {}) {
+    const nickname = member.nick_name || member.nickname || member.nickName || '团队成员';
+    const avatar = member.avatar || member.avatar_url || member.avatarUrl || '';
+    const roleLevel = toNumber(member.role_level, 0);
+    return {
+        _id: member._id,
+        id: member._id,
+        legacy_id: member.id || member._legacy_id || '',
+        level,
+        level_label: level === 2 ? '二级成员' : '一级成员',
+        relation_text: level === 2 ? '由你的一级成员继续发展' : '你直接邀请并绑定的成员',
+        openid: member.openid,
+        nickName: nickname,
+        nickname,
+        nick_name: nickname,
+        avatarUrl: avatar,
+        avatar,
+        avatar_url: avatar,
+        joined_at: member.created_at,
+        created_at: member.created_at,
+        role_level: roleLevel,
+        role_name: member.role_name || '',
+        invite_code: member.my_invite_code || member.invite_code || '',
+        phone: member.phone || '',
+        total_sales: toNumber(member.total_spent || member.total_sales, 0),
+        order_count: toNumber(member.order_count, 0),
+        ...extra
+    };
+}
+
 function firstNumber(values) {
     for (const value of values) {
         if (!hasValue(value)) continue;
@@ -322,25 +372,44 @@ const handleAction = {
         const memberId = params.member_id || params.id;
         if (!memberId) throw badRequest('缺少成员 ID');
 
-        const member = await db.collection('users').doc(memberId).get().catch(() => ({ data: null }));
-        if (!member.data || member.data.referrer_openid !== openid) {
+        const userRes = await db.collection('users').where({ openid }).limit(1).get();
+        const currentUser = userRes.data && userRes.data[0] ? userRes.data[0] : { openid };
+        const memberData = await findUserByAnyId(memberId);
+        if (!memberData) {
             throw notFound('团队成员不存在');
         }
 
+        const currentIds = userRelationIds(currentUser);
+        let level = 0;
+        if (memberData.referrer_openid === openid || isParentIdMatch(memberData, currentIds)) {
+            level = 1;
+        } else {
+            const directRes = await db.collection('users')
+                .where(directRelationWhere(currentUser))
+                .limit(100)
+                .get()
+                .catch(() => ({ data: [] }));
+            const directMembers = directRes.data || [];
+            const directOpenids = directMembers.map((item) => item.openid).filter(Boolean);
+            const directIds = directMembers.flatMap(userRelationIds);
+            if ((memberData.referrer_openid && directOpenids.includes(memberData.referrer_openid)) || isParentIdMatch(memberData, directIds)) {
+                level = 2;
+            }
+        }
+
+        if (!level) throw notFound('团队成员不存在');
+
         // 查该成员贡献的佣金
-        const commRes = await getAllRecords(db, 'commissions', { openid, from_openid: member.data.openid }).catch(() => []);
+        const commRes = await getAllRecords(db, 'commissions', { openid, from_openid: memberData.openid }).catch(() => []);
 
         let contributedAmount = 0;
         (commRes || []).forEach(c => { contributedAmount += toNumber(c.amount, 0); });
 
-        return success({
-            _id: member.data._id,
-            nickName: member.data.nickName || member.data.nickname || '新用户',
-            avatarUrl: member.data.avatarUrl || member.data.avatar_url || '',
-            created_at: member.data.created_at,
+        return success(normalizeTeamMember(memberData, level, {
             contributed_amount: contributedAmount,
             order_count: (commRes || []).length,
-        });
+            total_sales: contributedAmount
+        }));
     }),
 
     // ===== 代理/团长 =====

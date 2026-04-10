@@ -35,6 +35,38 @@
   border-radius: 999rpx;
   box-shadow: 0 8rpx 24rpx rgba(28, 25, 23, 0.18);
 }
+.map-unavailable-tip {
+  position: absolute;
+  left: 20rpx;
+  right: 20rpx;
+  bottom: 88rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 16rpx;
+  background: rgba(15, 23, 42, 0.72);
+  color: #fff;
+  font-size: 22rpx;
+  line-height: 1.45;
+}
+.map-unavailable {
+  margin: 16rpx 24rpx 0;
+  padding: 36rpx 28rpx;
+  border-radius: 24rpx;
+  background: #ffffff;
+  box-shadow: 0 4rpx 20rpx rgba(28, 25, 23, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+.map-unavailable-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1c1917;
+}
+.map-unavailable-desc {
+  font-size: 24rpx;
+  line-height: 1.55;
+  color: #78716c;
+}
 .list {
   flex: 1;
   overflow-y: auto;

@@ -277,6 +277,14 @@
 
           <el-divider content-position="left">积分任务 / 签到分值</el-divider>
           <el-form label-width="200px" style="max-width:920px" size="small">
+            <el-form-item label="订单积分抵扣">
+              <el-input-number v-model="pointRules.deduction.yuan_per_point" :min="0.01" :step="0.01" :precision="2" style="width:140px" />
+              <span class="form-hint">每 1 积分可抵扣金额，默认 0.10 元</span>
+            </el-form-item>
+            <el-form-item label="最高抵扣比例">
+              <el-input-number v-model="pointRules.deduction.max_order_ratio" :min="0.01" :max="1" :step="0.05" :precision="2" style="width:140px" />
+              <span class="form-hint">按券后商品金额计算，0.50 表示最多抵扣 50%</span>
+            </el-form-item>
             <el-form-item label="每日签到">
               <el-input-number v-model="pointRules.checkin.points" :min="0" style="width:140px" />
               <span class="form-hint">文案：{{ pointRules.checkin.remark }}</span>
@@ -339,6 +347,7 @@ const pointLevels = ref(defaultPointLevels())
 
 const pointRules = reactive({
   register: { points: 0, remark: '注册自动升级体验官，享全场包邮特权' },
+  deduction: { yuan_per_point: 0.1, max_order_ratio: 0.5 },
   purchase: { rate: 1, remark: '消费积分（1元=1积分）' },
   share: { points: 5, remark: '分享商品获得积分' },
   review: { points: 10, remark: '写评价获得积分' },

@@ -1,4 +1,29 @@
 const { get } = require('../../utils/request');
+const { getMiniProgramConfig } = require('../../utils/miniProgramConfig');
+
+function getPointDeductionRule() {
+    const config = getMiniProgramConfig();
+    const rule = config.point_rule_config || {};
+    const deduction = rule.deduction || rule.redeem || {};
+    const yuanPerPoint = Number(
+        deduction.yuan_per_point
+        ?? deduction.value_per_point
+        ?? rule.yuan_per_point
+        ?? rule.point_value
+        ?? 0.1
+    );
+    const maxRatio = Number(
+        deduction.max_order_ratio
+        ?? deduction.max_deduction_ratio
+        ?? rule.max_order_ratio
+        ?? rule.max_deduction_ratio
+        ?? 0.5
+    );
+    return {
+        yuanPerPoint: Number.isFinite(yuanPerPoint) && yuanPerPoint > 0 ? yuanPerPoint : 0.1,
+        maxRatio: Number.isFinite(maxRatio) && maxRatio > 0 ? Math.min(1, maxRatio) : 0.5
+    };
+}
 
 function formatExpireDate(dateStr) {
     if (!dateStr) return '';
@@ -33,10 +58,12 @@ function recalcFinal(page) {
     let pointsDeductionFen = 0;
     let pointsToUse = 0;
     if (page.data.usePoints && page.data.pointBalance > 0) {
-        const maxDeductFen = Math.floor(afterCouponFen * 0.5);
-        const maxPoints = Math.floor(maxDeductFen);
+        const { yuanPerPoint, maxRatio } = getPointDeductionRule();
+        const pointValueFen = Math.max(1, Math.round(yuanPerPoint * 100));
+        const cappedDeductFen = Math.floor(afterCouponFen * maxRatio);
+        const maxPoints = Math.floor(cappedDeductFen / pointValueFen);
         pointsToUse = Math.min(page.data.pointBalance, maxPoints);
-        pointsDeductionFen = pointsToUse;
+        pointsDeductionFen = pointsToUse * pointValueFen;
     }
 
     const finalFen = Math.max(0, afterCouponFen - pointsDeductionFen);

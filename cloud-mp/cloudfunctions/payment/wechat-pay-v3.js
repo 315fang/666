@@ -159,6 +159,7 @@ function request(method, path, body, privateKey) {
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
+                'User-Agent': 'cloud-mp-wechat-pay/1.0',
                 'Authorization': authorization,
                 'Wechatpay-Serial': CONFIG.publicKeyId || CONFIG.serialNo,
             },

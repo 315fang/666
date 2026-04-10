@@ -2,7 +2,7 @@
   <view class="map-banner" wx:if="{{regionBanner}}">
     <text class="map-banner-text">{{regionBanner}}</text>
   </view>
-  <view class="map-wrap" wx:if="{{mapLat}}">
+  <view class="map-wrap" wx:if="{{mapLat && mapLng}}">
     <map
       class="map"
       latitude="{{mapLat}}"
@@ -14,6 +14,13 @@
       bindmarkertap="onMarkerTap"
     />
     <view class="map-choose-btn" bindtap="onChooseMyLocationOnMap">选点查最近店</view>
+    <view class="map-unavailable-tip" wx:if="{{mapUnavailableText}}">
+      <text>{{mapUnavailableText}}</text>
+    </view>
+  </view>
+  <view class="map-unavailable" wx:else>
+    <text class="map-unavailable-title">地图暂不可用</text>
+    <text class="map-unavailable-desc">{{mapUnavailableText || '站点缺少经纬度，无法在地图上标记门店。'}}</text>
   </view>
   <scroll-view class="list" scroll-y show-scrollbar="{{false}}" scroll-into-view="{{scrollIntoView}}" scroll-with-animation>
     <view

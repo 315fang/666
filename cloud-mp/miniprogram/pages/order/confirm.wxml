@@ -179,7 +179,7 @@
   </view>
   <view class="section points-detail" wx:if="{{usePoints && pointBalance > 0}}">
     <text class="points-deduct-text">使用 {{pointsToUse}} 积分抵扣 ¥{{pointsDeduction}}</text>
-    <text class="points-deduct-tip">（最多抵扣订单50%）</text>
+    <text class="points-deduct-tip">（1积分抵0.1元，最多抵扣订单50%）</text>
   </view>
 
   <view class="coupon-picker {{showCouponPicker ? 'show' : ''}}" wx:if="{{showCouponPicker}}">

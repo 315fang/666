@@ -62,6 +62,12 @@ const DEFAULT_CONFIG = {
     join_button_text: '去拼团',
     status_texts: { open: '拼团中', success: '已成团', failed: '拼团失败' }
   },
+  point_rule_config: {
+    deduction: {
+      yuan_per_point: 0.1,
+      max_order_ratio: 0.5
+    }
+  },
   slash_config: {
     share_title_template: '帮我砍一刀！{product_name} 只差一点就到底价了',
     buy_button_text: '立即购买',
