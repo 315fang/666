@@ -148,7 +148,7 @@ Page({
                 maxRetries: 0,
                 timeout: 10000
             });
-            const raw = res?.data ?? res?.list ?? [];
+            const raw = res?.data?.list ?? res?.list ?? res?.data ?? [];
             const list = Array.isArray(raw) ? raw : [];
             this.setData({ categoryBanners: mapBanners(list) });
         } catch (e) {

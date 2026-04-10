@@ -153,9 +153,11 @@ async function loadPosters(page) {
                 timeout: 10000
             }).catch(() => ({ data: [] }))
         ]);
+        const midList = midRes?.data?.list ?? midRes?.list ?? midRes?.data ?? [];
+        const bottomList = bottomRes?.data?.list ?? bottomRes?.list ?? bottomRes?.data ?? [];
         page.setData({
-            midPosters: mapBanners((midRes && (midRes.data || midRes.list)) || []),
-            bottomPosters: mapBanners((bottomRes && (bottomRes.data || bottomRes.list)) || [])
+            midPosters: mapBanners(Array.isArray(midList) ? midList : []),
+            bottomPosters: mapBanners(Array.isArray(bottomList) ? bottomList : [])
         });
     } catch (e) {
         console.log('[Index] 海报加载失败，不影响主页渲染');

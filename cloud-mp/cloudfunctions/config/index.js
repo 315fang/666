@@ -229,7 +229,7 @@ const handleAction = {
     'homeContent': asyncHandler(async (params) => {
         // 兼容旧数据字段：banners 用 status, products 用 status:true, page_layouts 用 page_key+status
         const [bannersRes, layoutsRes, productsRes] = await Promise.all([
-            db.collection('banners').where({ status: true }).orderBy('sort_order', 'asc').limit(10).get().catch(() => ({ data: [] })),
+            db.collection('banners').where({ status: true, position: 'home' }).orderBy('sort_order', 'asc').limit(10).get().catch(() => ({ data: [] })),
             db.collection('page_layouts').where({ page_key: 'home', status: true }).limit(1).get().catch(() => ({ data: [] })),
             db.collection('products').where({ status: true }).orderBy('sales_count', 'desc').limit(10).get().catch(() => ({ data: [] })),
         ]);
