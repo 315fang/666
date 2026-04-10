@@ -5,6 +5,325 @@ const db = cloud.database();
 const _ = db.command;
 const { verifySignature, decryptResource, loadPublicKey } = require('./wechat-pay-v3');
 
+function toNumber(value, fallback = 0) {
+    if (value === null || value === undefined || value === '') return fallback;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+}
+
+function toArray(value) {
+    if (Array.isArray(value)) return value;
+    if (value === null || value === undefined || value === '') return [];
+    return [value];
+}
+
+function roundMoney(value) {
+    return Math.round(toNumber(value, 0) * 100) / 100;
+}
+
+function amountFen(value) {
+    return Math.round(toNumber(value, 0) * 100);
+}
+
+function hasValue(value) {
+    return value !== null && value !== undefined && value !== '';
+}
+
+function firstNumber(values) {
+    for (const value of values) {
+        if (!hasValue(value)) continue;
+        const num = toNumber(value, NaN);
+        if (Number.isFinite(num)) return num;
+    }
+    return null;
+}
+
+function centsToYuan(value, fallback = 0) {
+    if (!hasValue(value)) return fallback;
+    const num = toNumber(value, NaN);
+    return Number.isFinite(num) ? num / 100 : fallback;
+}
+
+function getCallbackPaidFen(transaction = {}) {
+    const total = transaction.amount && transaction.amount.total;
+    if (total !== undefined && total !== null) return toNumber(total, NaN);
+    if (transaction.total_fee !== undefined && transaction.total_fee !== null) return toNumber(transaction.total_fee, NaN);
+    if (transaction.payer_total !== undefined && transaction.payer_total !== null) return toNumber(transaction.payer_total, NaN);
+    return NaN;
+}
+
+function getOrderPayFen(order = {}) {
+    return amountFen(order.pay_amount ?? order.actual_price ?? order.total_amount);
+}
+
+function getOrderTotalAmount(order = {}) {
+    return roundMoney(order.pay_amount ?? order.actual_price ?? order.total_amount);
+}
+
+async function getDocByIdOrLegacy(collectionName, id) {
+    if (!hasValue(id)) return null;
+    const num = toNumber(id, NaN);
+    const [legacy, doc] = await Promise.all([
+        Number.isFinite(num)
+            ? db.collection(collectionName).where({ id: num }).limit(1).get().catch(() => ({ data: [] }))
+            : Promise.resolve({ data: [] }),
+        db.collection(collectionName).doc(String(id)).get().catch(() => ({ data: null }))
+    ]);
+    return legacy.data[0] || doc.data || null;
+}
+
+async function findUserByAny(value) {
+    if (!hasValue(value)) return null;
+    const num = toNumber(value, NaN);
+    const candidates = [
+        db.collection('users').where({ openid: String(value) }).limit(1).get().catch(() => ({ data: [] })),
+        Number.isFinite(num)
+            ? db.collection('users').where({ id: num }).limit(1).get().catch(() => ({ data: [] }))
+            : Promise.resolve({ data: [] }),
+        db.collection('users').doc(String(value)).get().then((res) => ({ data: res.data ? [res.data] : [] })).catch(() => ({ data: [] }))
+    ];
+    const results = await Promise.all(candidates);
+    return results.flatMap((item) => item.data || [])[0] || null;
+}
+
+function getUserReferrer(user = {}) {
+    return user.referrer_openid
+        || user.parent_openid
+        || user.parent_id
+        || user.referrer_id
+        || user.inviter_openid
+        || user.inviter_id
+        || '';
+}
+
+function resolveProductPrice(product = {}) {
+    const legacyPrice = firstNumber([product.retail_price, product.price]);
+    if (legacyPrice !== null) return legacyPrice;
+    return centsToYuan(product.min_price, 0);
+}
+
+function resolveSkuPrice(sku = {}) {
+    const legacyPrice = firstNumber([sku.retail_price, sku.price]);
+    if (legacyPrice !== null) return legacyPrice;
+    return centsToYuan(sku.min_price, 0);
+}
+
+function resolveUnitCost(product = {}, sku = {}, item = {}, order = {}) {
+    const explicit = firstNumber([
+        item.locked_agent_cost,
+        order.locked_agent_cost,
+        sku.cost_price,
+        product.cost_price,
+        sku.price_agent,
+        product.price_agent,
+        sku.price_leader,
+        product.price_leader,
+        sku.price_member,
+        product.price_member
+    ]);
+    return explicit !== null ? explicit : resolveSkuPrice(sku) || resolveProductPrice(product);
+}
+
+function commissionConfigForLevel(product = {}, level, baseAmount) {
+    const fixed = firstNumber([
+        product[`commission_amount_${level}`],
+        product[`commission${level}_amount`]
+    ]);
+    if (fixed !== null) return roundMoney(fixed);
+
+    const rate = firstNumber([
+        product[`commission_rate_${level}`],
+        product[`rate_${level}`]
+    ]);
+    if (rate !== null) return roundMoney(baseAmount * rate);
+
+    return 0;
+}
+
+function roleBasedCommission(user = {}, level, baseAmount) {
+    const role = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+    const directRates = { 1: 0.05, 2: 0.08, 3: 0.12, 4: 0.12 };
+    const indirectRates = { 2: 0.03, 3: 0.05, 4: 0.05 };
+    const rates = level === 1 ? directRates : indirectRates;
+    return roundMoney(baseAmount * (rates[role] || 0));
+}
+
+async function ensurePointsAwarded(orderId, order) {
+    if (order.points_awarded_at) return { skipped: true };
+    const payAmount = getOrderTotalAmount(order);
+    const pointsEarned = Math.floor(payAmount);
+    if (pointsEarned <= 0 || !order.openid) {
+        await db.collection('orders').doc(orderId).update({
+            data: { points_awarded_at: db.serverDate(), updated_at: db.serverDate() },
+        });
+        return { awarded: 0 };
+    }
+
+    await db.collection('users').where({ openid: order.openid }).update({
+        data: {
+            points: _.inc(pointsEarned),
+            growth_value: _.inc(pointsEarned),
+            total_spent: _.inc(payAmount),
+            order_count: _.inc(1),
+            updated_at: db.serverDate(),
+        },
+    });
+
+    const existingLog = await db.collection('point_logs')
+        .where({ openid: order.openid, source: 'order_pay', order_id: orderId })
+        .limit(1).get().catch(() => ({ data: [] }));
+    if (!existingLog.data || existingLog.data.length === 0) {
+        await db.collection('point_logs').add({
+            data: {
+                openid: order.openid,
+                type: 'earn',
+                amount: pointsEarned,
+                source: 'order_pay',
+                order_id: orderId,
+                description: `订单支付获得${pointsEarned}积分`,
+                created_at: db.serverDate(),
+            },
+        });
+    }
+
+    await db.collection('orders').doc(orderId).update({
+        data: { points_awarded_at: db.serverDate(), updated_at: db.serverDate() },
+    });
+    return { awarded: pointsEarned };
+}
+
+async function ensureStockDeducted(orderId, order) {
+    if (order.stock_deducted_at) return { skipped: true };
+    const items = toArray(order.items);
+    for (const item of items) {
+        const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+        if (item.product_id) {
+            const product = await getDocByIdOrLegacy('products', item.product_id);
+            if (product && product._id) {
+                await db.collection('products').doc(String(product._id)).update({
+                    data: { stock: _.inc(-qty), sales_count: _.inc(qty), updated_at: db.serverDate() },
+                }).catch(() => {});
+            }
+        }
+        if (item.sku_id) {
+            const sku = await getDocByIdOrLegacy('skus', item.sku_id);
+            if (sku && sku._id) {
+                await db.collection('skus').doc(String(sku._id)).update({
+                    data: { stock: _.inc(-qty), updated_at: db.serverDate() },
+                }).catch(() => {});
+            }
+        }
+    }
+    await db.collection('orders').doc(orderId).update({
+        data: { stock_deducted_at: db.serverDate(), updated_at: db.serverDate() },
+    });
+    return { deducted: items.length };
+}
+
+async function ensureCommissionsCreated(orderId, order) {
+    if (order.commissions_created_at) return { skipped: true };
+    const buyer = await findUserByAny(order.openid || order.buyer_id || order.user_id);
+    if (!buyer) {
+        await db.collection('orders').doc(orderId).update({
+            data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
+        });
+        return { created: 0 };
+    }
+
+    const parent = await findUserByAny(getUserReferrer(buyer));
+    const grandparent = parent ? await findUserByAny(getUserReferrer(parent)) : null;
+    const beneficiaries = [
+        { level: 1, type: 'direct', user: parent },
+        { level: 2, type: 'indirect', user: grandparent }
+    ].filter((item) => item.user && item.user.openid && item.user.openid !== order.openid);
+
+    if (!beneficiaries.length) {
+        await db.collection('orders').doc(orderId).update({
+            data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
+        });
+        return { created: 0 };
+    }
+
+    const totals = new Map();
+    const items = toArray(order.items);
+    const orderPayAmount = getOrderTotalAmount(order);
+    const itemBaseTotal = items.reduce((sum, item) => {
+        const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+        return sum + roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
+    }, 0) || orderPayAmount;
+
+    for (const item of items) {
+        const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+        const product = await getDocByIdOrLegacy('products', item.product_id) || {};
+        const sku = item.sku_id ? await getDocByIdOrLegacy('skus', item.sku_id) || {} : {};
+        const rawBase = roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
+        const allocatedBase = itemBaseTotal > 0 ? roundMoney(orderPayAmount * rawBase / itemBaseTotal) : rawBase;
+        const cost = roundMoney(resolveUnitCost(product, sku, item, order) * qty);
+        let remainingProfit = Math.max(0, roundMoney(allocatedBase - cost));
+
+        for (const beneficiary of beneficiaries) {
+            if (remainingProfit <= 0) break;
+            const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
+            const roleBased = roleBasedCommission(beneficiary.user, beneficiary.level, allocatedBase);
+            const amount = Math.min(remainingProfit, configured > 0 ? configured : roleBased);
+            if (amount <= 0) continue;
+            const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
+            totals.set(key, {
+                openid: beneficiary.user.openid,
+                user_id: beneficiary.user.id || beneficiary.user._legacy_id || beneficiary.user._id || beneficiary.user.openid,
+                amount: roundMoney((totals.get(key)?.amount || 0) + amount),
+                level: beneficiary.level,
+                type: beneficiary.type
+            });
+            remainingProfit = roundMoney(remainingProfit - amount);
+        }
+    }
+
+    let created = 0;
+    for (const commission of totals.values()) {
+        if (commission.amount <= 0) continue;
+        const existing = await db.collection('commissions')
+            .where({ order_id: orderId, openid: commission.openid, level: commission.level, type: commission.type })
+            .limit(1).get().catch(() => ({ data: [] }));
+        if (existing.data && existing.data.length > 0) continue;
+        await db.collection('commissions').add({
+            data: {
+                openid: commission.openid,
+                user_id: commission.user_id,
+                from_openid: order.openid,
+                order_id: orderId,
+                order_no: order.order_no,
+                amount: commission.amount,
+                level: commission.level,
+                type: commission.type,
+                status: 'pending',
+                created_at: db.serverDate(),
+                updated_at: db.serverDate(),
+            },
+        });
+        created += 1;
+    }
+
+    await db.collection('orders').doc(orderId).update({
+        data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
+    });
+    return { created };
+}
+
+async function processPaidOrder(orderId, order) {
+    const latest = await db.collection('orders').doc(orderId).get().then((res) => res.data || order).catch(() => order);
+    if (latest.payment_post_processed_at) return { skipped: true };
+
+    const stock = await ensureStockDeducted(orderId, latest);
+    const points = await ensurePointsAwarded(orderId, { ...latest, stock_deducted_at: true });
+    const commissions = await ensureCommissionsCreated(orderId, { ...latest, stock_deducted_at: true, points_awarded_at: true });
+
+    await db.collection('orders').doc(orderId).update({
+        data: { payment_post_processed_at: db.serverDate(), updated_at: db.serverDate() },
+    });
+    return { stock, points, commissions };
+}
+
 /**
  * 处理微信支付 V3 回调通知
  * 
@@ -90,13 +409,30 @@ async function handleCallback(event) {
             if (orderRes.data && orderRes.data.length > 0) {
                 const order = orderRes.data[0];
 
+                const callbackPaidFen = getCallbackPaidFen(transaction);
+                const expectedFen = getOrderPayFen(order);
+                if (!Number.isFinite(callbackPaidFen) || callbackPaidFen !== expectedFen) {
+                    console.error(`[PaymentCallback] 金额不一致: expected=${expectedFen}, paid=${callbackPaidFen}, order_no=${outTradeNo}`);
+                    return { code: 'FAIL', message: 'Amount mismatch' };
+                }
+
                 // 幂等：已支付不重复处理
                 if (order.status === 'paid' || order.status === 'shipped' || order.status === 'completed') {
+                    await processPaidOrder(order._id, order).catch((postErr) => {
+                        console.error('[PaymentCallback] 已支付订单后处理补偿失败:', postErr.message);
+                    });
                     return { code: 'SUCCESS', message: 'Already processed' };
                 }
 
-                // 更新订单状态
-                await db.collection('orders').doc(order._id).update({
+                if (order.status !== 'pending_payment') {
+                    console.error(`[PaymentCallback] 订单状态不允许支付回调处理: ${order.status}, order_no=${outTradeNo}`);
+                    return { code: 'FAIL', message: 'Invalid order status' };
+                }
+
+                // 仅允许 pending_payment -> paid，避免重复回调重复后处理。
+                const updateRes = await db.collection('orders')
+                    .where({ _id: order._id, status: 'pending_payment' })
+                    .update({
                     data: {
                         status: 'paid',
                         paid_at: db.serverDate(),
@@ -105,92 +441,13 @@ async function handleCallback(event) {
                         updated_at: db.serverDate(),
                     },
                 });
+                if (updateRes.stats && updateRes.stats.updated === 0) {
+                    return { code: 'SUCCESS', message: 'Already processed' };
+                }
 
                 // 6. 支付成功后续处理
                 try {
-                    // 6.1 增加用户积分（消费1元=1积分）
-                    const payAmount = order.pay_amount || order.total_amount || 0;
-                    const pointsEarned = Math.floor(payAmount);
-                    if (pointsEarned > 0 && order.openid) {
-                        await db.collection('users').where({ openid: order.openid }).update({
-                            data: {
-                                points: _.inc(pointsEarned),
-                                growth_value: _.inc(pointsEarned),
-                                total_spent: _.inc(payAmount),
-                                order_count: _.inc(1),
-                                updated_at: db.serverDate(),
-                            },
-                        });
-
-                        // 记录积分日志
-                        await db.collection('point_logs').add({
-                            data: {
-                                openid: order.openid,
-                                type: 'earn',
-                                amount: pointsEarned,
-                                source: 'order_pay',
-                                order_id: order._id,
-                                description: `订单支付获得${pointsEarned}积分`,
-                                created_at: db.serverDate(),
-                            },
-                        });
-                    }
-
-                    // 6.2 分销佣金计算 — 通过云函数调用确保走统一链路
-                    try {
-                        const userRes = await db.collection('users')
-                            .where({ openid: order.openid })
-                            .limit(1).get();
-                        if (userRes.data && userRes.data.length > 0) {
-                            const referrer = userRes.data[0].referrer_openid;
-                            if (referrer) {
-                                // 直接写入佣金记录（回调场景下无法 callFunction 调自己环境的云函数）
-                                const commissionRate = 0.10;
-                                const commissionAmount = Math.round(payAmount * commissionRate * 100) / 100;
-                                if (commissionAmount > 0) {
-                                    // 幂等检查
-                                    const existingComm = await db.collection('commissions')
-                                        .where({ order_id: order._id, openid: referrer })
-                                        .limit(1).get().catch(() => ({ data: [] }));
-                                    if (!existingComm.data || existingComm.data.length === 0) {
-                                        await db.collection('commissions').add({
-                                            data: {
-                                                openid: referrer,
-                                                from_openid: order.openid,
-                                                order_id: order._id,
-                                                order_no: order.order_no,
-                                                amount: commissionAmount,
-                                                rate: commissionRate,
-                                                status: 'pending',
-                                                created_at: db.serverDate(),
-                                            },
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    } catch (commErr) {
-                        console.error('[PaymentCallback] 佣金计算失败:', commErr.message);
-                    }
-
-                    // 6.3 扣减库存
-                    try {
-                        const items = order.items || [];
-                        for (const item of items) {
-                            if (item.product_id) {
-                                await db.collection('products').doc(String(item.product_id)).update({
-                                    data: { stock: _.inc(-(item.qty || 1)), sales_count: _.inc(item.qty || 1) },
-                                }).catch(() => {});
-                            }
-                            if (item.sku_id) {
-                                await db.collection('skus').doc(String(item.sku_id)).update({
-                                    data: { stock: _.inc(-(item.qty || 1)) },
-                                }).catch(() => {});
-                            }
-                        }
-                    } catch (stockErr) {
-                        console.error('[PaymentCallback] 库存扣减失败:', stockErr.message);
-                    }
+                    await processPaidOrder(order._id, order);
 
                     // 6.4 核销优惠券（二次确认，防止创建订单时未核销）
                     if (order.coupon_id) {

@@ -3,6 +3,90 @@ const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
 
+function toNumber(value, fallback = 0) {
+    if (value === null || value === undefined || value === '') return fallback;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+}
+
+function toArray(value) {
+    if (Array.isArray(value)) return value;
+    if (value === null || value === undefined || value === '') return [];
+    return [value];
+}
+
+function refundDeadlineDate() {
+    const days = Math.max(0, toNumber(process.env.REFUND_MAX_DAYS || process.env.COMMISSION_FREEZE_DAYS, 7));
+    return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+}
+
+async function getDocByIdOrLegacy(collectionName, id) {
+    if (id === null || id === undefined || id === '') return null;
+    const num = toNumber(id, NaN);
+    const [legacy, doc] = await Promise.all([
+        Number.isFinite(num)
+            ? db.collection(collectionName).where({ id: num }).limit(1).get().catch(() => ({ data: [] }))
+            : Promise.resolve({ data: [] }),
+        db.collection(collectionName).doc(String(id)).get().catch(() => ({ data: null }))
+    ]);
+    return legacy.data[0] || doc.data || null;
+}
+
+async function restoreOrderStock(orderId, order, markerField = 'stock_restored_at') {
+    if (!order.stock_deducted_at || order[markerField]) return { skipped: true };
+    for (const item of toArray(order.items)) {
+        const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+        if (item.product_id) {
+            const product = await getDocByIdOrLegacy('products', item.product_id);
+            if (product && product._id) {
+                await db.collection('products').doc(String(product._id)).update({
+                    data: { stock: _.inc(qty), sales_count: _.inc(-qty), updated_at: db.serverDate() },
+                }).catch(() => {});
+            }
+        }
+        if (item.sku_id) {
+            const sku = await getDocByIdOrLegacy('skus', item.sku_id);
+            if (sku && sku._id) {
+                await db.collection('skus').doc(String(sku._id)).update({
+                    data: { stock: _.inc(qty), updated_at: db.serverDate() },
+                }).catch(() => {});
+            }
+        }
+    }
+    await db.collection('orders').doc(orderId).update({
+        data: { [markerField]: db.serverDate(), updated_at: db.serverDate() },
+    });
+    return { restored: true };
+}
+
+async function freezeCommissionsForOrder(orderId, extraData = {}) {
+    await db.collection('commissions')
+        .where({ order_id: orderId, status: _.in(['pending', 'pending_approval']) })
+        .update({
+            data: {
+                status: 'frozen',
+                frozen_at: db.serverDate(),
+                updated_at: db.serverDate(),
+                ...extraData
+            }
+        })
+        .catch(() => {});
+}
+
+async function restoreFrozenCommissions(orderId) {
+    await db.collection('commissions')
+        .where({ order_id: orderId, status: 'frozen' })
+        .update({
+            data: {
+                status: 'pending',
+                frozen_at: _.remove(),
+                refund_deadline: _.remove(),
+                updated_at: db.serverDate()
+            }
+        })
+        .catch(() => {});
+}
+
 /**
  * 取消订单（仅 pending_payment 状态可取消）
  */
@@ -38,12 +122,16 @@ async function cancelOrder(openid, orderId) {
     // 取消佣金
     try {
         await db.collection('commissions')
-            .where({ order_id: orderId, status: _.in(['pending', 'frozen']) })
+            .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval']) })
             .update({ data: { status: 'cancelled', cancelled_at: db.serverDate() } })
             .catch(() => {});
     } catch (commErr) {
         console.error('[OrderLifecycle] 取消佣金失败:', commErr.message);
     }
+
+    await restoreOrderStock(orderId, order).catch((stockErr) => {
+        console.error('[OrderLifecycle] 取消订单恢复库存失败:', stockErr.message);
+    });
 
     // 更新订单状态
     await db.collection('orders').doc(orderId).update({
@@ -78,30 +166,11 @@ async function confirmOrder(openid, orderId) {
         },
     });
 
-    // 确认收货后，将待结算佣金设为可提现（解冻佣金 + 加入钱包余额）
+    // 确认收货后进入售后期：佣金先冻结，待售后期结束后转人工审批。
     try {
-        const commRes = await db.collection('commissions')
-            .where({ order_id: orderId, status: 'pending' })
-            .get().catch(() => ({ data: [] }));
-
-        for (const comm of (commRes.data || [])) {
-            await db.collection('commissions').doc(comm._id).update({
-                data: { status: 'settled', settled_at: db.serverDate() },
-            });
-
-            const amount = Number(comm.amount) || 0;
-            if (amount > 0) {
-                await db.collection('users').where({ openid: comm.openid }).update({
-                    data: {
-                        wallet_balance: _.inc(amount),
-                        total_earned: _.inc(amount),
-                        updated_at: db.serverDate(),
-                    },
-                });
-            }
-        }
+        await freezeCommissionsForOrder(orderId, { refund_deadline: refundDeadlineDate() });
     } catch (commErr) {
-        console.error('[OrderLifecycle] 佣金解冻失败:', commErr.message);
+        console.error('[OrderLifecycle] 佣金冻结失败:', commErr.message);
     }
 
     return { success: true, order_id: orderId, status: 'completed' };
@@ -228,10 +297,7 @@ async function applyRefund(openid, params) {
 
     // 退款申请时，冻结佣金（防止提现）
     try {
-        await db.collection('commissions')
-            .where({ order_id: orderId, status: 'pending' })
-            .update({ data: { status: 'frozen', frozen_at: db.serverDate() } })
-            .catch(() => {});
+        await freezeCommissionsForOrder(orderId);
     } catch (freezeErr) {
         console.error('[OrderLifecycle] 佣金冻结失败:', freezeErr.message);
     }
@@ -285,10 +351,7 @@ async function cancelRefund(openid, refundId) {
     try {
         const orderId = refundRes.data.order_id;
         if (orderId) {
-            await db.collection('commissions')
-                .where({ order_id: orderId, status: 'frozen' })
-                .update({ data: { status: 'pending', frozen_at: _.remove() } })
-                .catch(() => {});
+        await restoreFrozenCommissions(orderId);
         }
     } catch (unfreezeErr) {
         console.error('[OrderLifecycle] 佣金解冻失败:', unfreezeErr.message);

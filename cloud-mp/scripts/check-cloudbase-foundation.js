@@ -42,7 +42,20 @@ function run() {
     assert(checks, projectConfig.miniprogramRoot === 'miniprogram/', 'miniprogramRoot configured', String(projectConfig.miniprogramRoot || ''));
   }
 
-  const requiredCloudFunctions = ['login', 'user', 'products', 'cart', 'order', 'payment', 'config'];
+  const requiredCloudFunctions = [
+    'login',
+    'user',
+    'products',
+    'cart',
+    'order',
+    'payment',
+    'config',
+    'distribution',
+    'admin-api',
+    'order-timeout-cancel',
+    'commission-deadline-process',
+    'order-auto-confirm'
+  ];
   requiredCloudFunctions.forEach((name) => {
     const fnIndexPath = path.join(projectRoot, 'cloudfunctions', name, 'index.js');
     assert(checks, exists(fnIndexPath), `cloudfunction ${name} exists`, fnIndexPath);

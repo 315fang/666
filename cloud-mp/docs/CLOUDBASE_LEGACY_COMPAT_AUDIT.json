@@ -180,7 +180,7 @@
       ]
     },
     "avatar_url": {
-      "count": 18,
+      "count": 13,
       "files": [
         {
           "file": "cloud-mp/miniprogram/pages/activity/n-invite.wxml",
@@ -223,25 +223,17 @@
           "count": 1
         },
         {
-          "file": "cloud-mp/miniprogram/pages/user/edit-profile.js",
-          "count": 3
-        },
-        {
           "file": "cloud-mp/miniprogram/pages/user/edit-profile.wxml",
           "count": 1
         },
         {
           "file": "cloud-mp/miniprogram/pages/user/user.wxml",
           "count": 1
-        },
-        {
-          "file": "cloud-mp/miniprogram/pages/user/userProfileActions.js",
-          "count": 2
         }
       ]
     },
     "nickname": {
-      "count": 53,
+      "count": 54,
       "files": [
         {
           "file": "cloud-mp/miniprogram/pages/activity/n-invite.js",
@@ -341,7 +333,7 @@
         },
         {
           "file": "cloud-mp/miniprogram/pages/user/edit-profile.js",
-          "count": 9
+          "count": 10
         },
         {
           "file": "cloud-mp/miniprogram/pages/user/edit-profile.wxml",
@@ -366,21 +358,8 @@
       ]
     },
     "pending_ship": {
-      "count": 5,
-      "files": [
-        {
-          "file": "cloud-mp/miniprogram/pages/distribution/center.js",
-          "count": 1
-        },
-        {
-          "file": "cloud-mp/miniprogram/pages/distribution/workbench.js",
-          "count": 1
-        },
-        {
-          "file": "cloud-mp/miniprogram/pages/distribution/workbench.wxml",
-          "count": 3
-        }
-      ]
+      "count": 0,
+      "files": []
     },
     "pending_payment": {
       "count": 0,
@@ -502,26 +481,17 @@
       ]
     },
     "pending_ship": {
-      "count": 4,
+      "count": 1,
       "files": [
         {
           "file": "admin-ui/src/views/dashboard/index.vue",
-          "count": 3
-        },
-        {
-          "file": "admin-ui/src/views/orders/index.vue",
           "count": 1
         }
       ]
     },
     "pending_payment": {
-      "count": 2,
-      "files": [
-        {
-          "file": "admin-ui/src/views/n-system/index.vue",
-          "count": 2
-        }
-      ]
+      "count": 0,
+      "files": []
     }
   },
   "cloudrun-admin-service": {

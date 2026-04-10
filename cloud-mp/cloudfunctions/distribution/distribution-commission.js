@@ -1,202 +1,326 @@
 'use strict';
+
 const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
 const { toNumber, getAllRecords } = require('./shared/utils');
 
-/**
- * 计算佣金
- */
+function hasValue(value) {
+    return value !== null && value !== undefined && value !== '';
+}
+
+function roundMoney(value) {
+    return Math.round(toNumber(value, 0) * 100) / 100;
+}
+
+function toList(value) {
+    if (Array.isArray(value)) return value;
+    if (!hasValue(value)) return [];
+    return [value];
+}
+
+function firstNumber(values) {
+    for (const value of values) {
+        if (!hasValue(value)) continue;
+        const num = toNumber(value, NaN);
+        if (Number.isFinite(num)) return num;
+    }
+    return null;
+}
+
+function centsToYuan(value, fallback = 0) {
+    if (!hasValue(value)) return fallback;
+    const num = toNumber(value, NaN);
+    return Number.isFinite(num) ? num / 100 : fallback;
+}
+
+async function getDocByIdOrLegacy(collectionName, id) {
+    if (!hasValue(id)) return null;
+    const num = toNumber(id, NaN);
+    const [legacy, doc] = await Promise.all([
+        Number.isFinite(num)
+            ? db.collection(collectionName).where({ id: num }).limit(1).get().catch(() => ({ data: [] }))
+            : Promise.resolve({ data: [] }),
+        db.collection(collectionName).doc(String(id)).get().catch(() => ({ data: null }))
+    ]);
+    return legacy.data[0] || doc.data || null;
+}
+
+async function findUserByAny(value) {
+    if (!hasValue(value)) return null;
+    const num = toNumber(value, NaN);
+    const [byOpenid, byLegacyId, byDoc] = await Promise.all([
+        db.collection('users').where({ openid: String(value) }).limit(1).get().catch(() => ({ data: [] })),
+        Number.isFinite(num)
+            ? db.collection('users').where({ id: num }).limit(1).get().catch(() => ({ data: [] }))
+            : Promise.resolve({ data: [] }),
+        db.collection('users').doc(String(value)).get().then((res) => ({ data: res.data ? [res.data] : [] })).catch(() => ({ data: [] }))
+    ]);
+    return byOpenid.data[0] || byLegacyId.data[0] || byDoc.data[0] || null;
+}
+
+function getUserReferrer(user = {}) {
+    return user.referrer_openid
+        || user.parent_openid
+        || user.parent_id
+        || user.referrer_id
+        || user.inviter_openid
+        || user.inviter_id
+        || '';
+}
+
+function resolveProductPrice(product = {}) {
+    const legacyPrice = firstNumber([product.retail_price, product.price]);
+    if (legacyPrice !== null) return legacyPrice;
+    return centsToYuan(product.min_price, 0);
+}
+
+function resolveUnitCost(product = {}, item = {}, order = {}) {
+    const explicit = firstNumber([
+        item.locked_agent_cost,
+        order.locked_agent_cost,
+        product.cost_price,
+        product.price_agent,
+        product.price_leader,
+        product.price_member
+    ]);
+    return explicit !== null ? explicit : resolveProductPrice(product);
+}
+
+function configuredCommission(product = {}, level, baseAmount) {
+    const fixed = firstNumber([product[`commission_amount_${level}`], product[`commission${level}_amount`]]);
+    if (fixed !== null) return roundMoney(fixed);
+
+    const rate = firstNumber([product[`commission_rate_${level}`], product[`rate_${level}`]]);
+    if (rate !== null) return roundMoney(baseAmount * rate);
+
+    return 0;
+}
+
+function roleCommission(user = {}, level, baseAmount) {
+    const role = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+    const directRates = { 1: 0.05, 2: 0.08, 3: 0.12, 4: 0.12 };
+    const indirectRates = { 2: 0.03, 3: 0.05, 4: 0.05 };
+    const rate = (level === 1 ? directRates : indirectRates)[role] || 0;
+    return roundMoney(baseAmount * rate);
+}
+
+async function calculateOrderCommissions(order, explicitReferrerOpenid) {
+    const buyer = await findUserByAny(order.openid || order.buyer_id || order.user_id);
+    const parent = await findUserByAny(explicitReferrerOpenid || getUserReferrer(buyer || {}));
+    const grandparent = parent ? await findUserByAny(getUserReferrer(parent)) : null;
+    const beneficiaries = [
+        { level: 1, type: 'direct', user: parent },
+        { level: 2, type: 'indirect', user: grandparent }
+    ].filter((item) => item.user && item.user.openid && item.user.openid !== order.openid);
+
+    const totals = new Map();
+    const orderAmount = roundMoney(order.pay_amount ?? order.actual_price ?? order.total_amount);
+    const items = toList(order.items);
+    const normalizedItems = items.length ? items : [{ item_amount: orderAmount, qty: 1, product_id: order.product_id }];
+    const itemBaseTotal = normalizedItems.reduce((sum, item) => {
+        const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+        return sum + roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
+    }, 0) || orderAmount;
+
+    for (const item of normalizedItems) {
+        const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+        const product = await getDocByIdOrLegacy('products', item.product_id) || {};
+        const rawBase = roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price || orderAmount, 0) * qty));
+        const allocatedBase = itemBaseTotal > 0 ? roundMoney(orderAmount * rawBase / itemBaseTotal) : rawBase;
+        const cost = roundMoney(resolveUnitCost(product, item, order) * qty);
+        let remainingProfit = Math.max(0, roundMoney(allocatedBase - cost));
+
+        for (const beneficiary of beneficiaries) {
+            if (remainingProfit <= 0) break;
+            const amount = Math.min(
+                remainingProfit,
+                configuredCommission(product, beneficiary.level, allocatedBase) || roleCommission(beneficiary.user, beneficiary.level, allocatedBase)
+            );
+            if (amount <= 0) continue;
+            const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
+            totals.set(key, {
+                openid: beneficiary.user.openid,
+                user_id: beneficiary.user.id || beneficiary.user._legacy_id || beneficiary.user._id || beneficiary.user.openid,
+                from_openid: order.openid,
+                order_id: order._id,
+                order_no: order.order_no,
+                amount: roundMoney((totals.get(key)?.amount || 0) + amount),
+                level: beneficiary.level,
+                type: beneficiary.type
+            });
+            remainingProfit = roundMoney(remainingProfit - amount);
+        }
+    }
+
+    const rows = [...totals.values()].filter((item) => item.amount > 0);
+    return {
+        rows,
+        total_amount: roundMoney(rows.reduce((sum, item) => sum + item.amount, 0))
+    };
+}
+
 async function calculateCommission(orderId) {
     try {
-        const order = await db.collection('orders').doc(orderId).get().catch(() => ({ data: null }));
-        if (!order.data) return 0;
-
-        const amount = order.data.pay_amount || 0;
-        const commissionRate = 0.1; // 10%
-        return Math.round(amount * commissionRate * 100) / 100;
+        const order = await getDocByIdOrLegacy('orders', orderId);
+        if (!order) return 0;
+        const result = await calculateOrderCommissions(order);
+        return result.total_amount;
     } catch (err) {
-        console.error('[distribution-commission] calculateCommission 失败:', err.message);
+        console.error('[distribution-commission] calculateCommission failed:', err.message);
         return 0;
     }
 }
 
-/**
- * 结算佣金
- */
 async function settleCommission(openid, amount) {
     await db.collection('users').where({ openid }).update({
         data: {
             wallet_balance: _.inc(amount),
+            total_earned: _.inc(amount),
             updated_at: db.serverDate()
         }
     });
     return { success: true };
 }
 
-/**
- * 获取佣金列表
- */
 async function getCommissions(openid, params = {}) {
     let query = db.collection('commissions').where({ openid });
-
-    if (params.status) {
-        query = query.where({ status: params.status });
-    }
-
+    if (params.status) query = query.where({ status: params.status });
     const res = await query.orderBy('created_at', 'desc').limit(100).get().catch(() => ({ data: [] }));
     return res.data || [];
 }
 
-/**
- * 获取佣金统计
- */
 async function getStats(openid) {
     try {
         const commRes = await getAllRecords(db, 'commissions', { openid });
-
-        let totalCommission = 0;
-        let pendingCommission = 0;
-        let settledCommission = 0;
-        let frozenCommission = 0;
-        let cancelledCommission = 0;
-
-        (commRes || []).forEach(c => {
-            const amount = toNumber(c.amount, 0);
-            totalCommission += amount;
-            switch (c.status) {
-                case 'pending': pendingCommission += amount; break;
-                case 'settled': settledCommission += amount; break;
-                case 'frozen': frozenCommission += amount; break;
-                case 'cancelled': cancelledCommission += amount; break;
-            }
-        });
-
-        return {
-            total_commission: Math.round(totalCommission * 100) / 100,
-            pending_commission: Math.round(pendingCommission * 100) / 100,
-            settled_commission: Math.round(settledCommission * 100) / 100,
-            frozen_commission: Math.round(frozenCommission * 100) / 100,
-            cancelled_commission: Math.round(cancelledCommission * 100) / 100,
+        const stats = {
+            total_commission: 0,
+            pending_commission: 0,
+            frozen_commission: 0,
+            pending_approval_commission: 0,
+            settled_commission: 0,
+            cancelled_commission: 0,
             count: (commRes || []).length
         };
+
+        (commRes || []).forEach((item) => {
+            const amount = toNumber(item.amount, 0);
+            stats.total_commission += amount;
+            if (item.status === 'pending') stats.pending_commission += amount;
+            else if (item.status === 'frozen') stats.frozen_commission += amount;
+            else if (item.status === 'pending_approval') stats.pending_approval_commission += amount;
+            else if (item.status === 'settled') stats.settled_commission += amount;
+            else if (item.status === 'cancelled') stats.cancelled_commission += amount;
+        });
+
+        Object.keys(stats).forEach((key) => {
+            if (key !== 'count') stats[key] = roundMoney(stats[key]);
+        });
+        return stats;
     } catch (err) {
-        console.error('[distribution-commission] getStats 失败:', err.message);
+        console.error('[distribution-commission] getStats failed:', err.message);
         return {
-            total_commission: 0, pending_commission: 0, settled_commission: 0,
-            frozen_commission: 0, cancelled_commission: 0, count: 0
+            total_commission: 0,
+            pending_commission: 0,
+            frozen_commission: 0,
+            pending_approval_commission: 0,
+            settled_commission: 0,
+            cancelled_commission: 0,
+            count: 0
         };
     }
 }
 
-/**
- * 创建佣金（支付成功后调用）
- * @param {string} referrerOpenid - 推荐人 openid
- * @param {string} fromOpenid - 下单用户 openid
- * @param {string} orderId - 订单 ID
- * @param {string} orderNo - 订单号
- * @param {number} payAmount - 实付金额
- * @param {number} rate - 佣金比例（默认 0.10 = 10%）
- */
 async function createCommissions(referrerOpenid, fromOpenid, orderId, orderNo, payAmount, rate = 0.10) {
     if (!referrerOpenid) return { created: false, reason: 'no referrer' };
+    const orderDoc = await getDocByIdOrLegacy('orders', orderId);
+    const order = orderDoc || {
+        _id: orderId,
+        openid: fromOpenid,
+        order_no: orderNo,
+        pay_amount: payAmount,
+        total_amount: payAmount,
+        items: []
+    };
 
-    const commissionAmount = Math.round(payAmount * rate * 100) / 100;
-    if (commissionAmount <= 0) return { created: false, reason: 'amount too small' };
-
-    // 检查是否已创建过
-    const existingRes = await db.collection('commissions')
-        .where({ order_id: orderId, openid: referrerOpenid })
-        .limit(1).get().catch(() => ({ data: [] }));
-    if (existingRes.data && existingRes.data.length > 0) {
-        return { created: false, reason: 'already exists' };
-    }
-
-    const result = await db.collection('commissions').add({
-        data: {
+    const calculated = await calculateOrderCommissions(order, referrerOpenid);
+    const rows = calculated.rows.length
+        ? calculated.rows
+        : [{
             openid: referrerOpenid,
             from_openid: fromOpenid,
             order_id: orderId,
             order_no: orderNo,
-            amount: commissionAmount,
-            rate: rate,
-            status: 'pending',
-            created_at: db.serverDate(),
-        },
-    });
+            amount: roundMoney(toNumber(payAmount, 0) * toNumber(rate, 0.10)),
+            level: 1,
+            type: 'direct'
+        }].filter((item) => item.amount > 0);
 
-    return { created: true, commission_id: result._id, amount: commissionAmount };
-}
+    let created = 0;
+    let totalAmount = 0;
+    for (const row of rows) {
+        const existingRes = await db.collection('commissions')
+            .where({ order_id: orderId, openid: row.openid, level: row.level, type: row.type })
+            .limit(1).get().catch(() => ({ data: [] }));
+        if (existingRes.data && existingRes.data.length > 0) continue;
 
-/**
- * 解冻佣金（确认收货后调用）
- * 将 pending 状态的佣金改为 settled
- * @param {string} orderId - 订单 ID
- */
-async function unfreezeCommissions(orderId) {
-    if (!orderId) return { unfreezed: 0 };
-
-    const res = await db.collection('commissions')
-        .where({ order_id: orderId, status: 'pending' })
-        .get().catch(() => ({ data: [] }));
-
-    let totalUnfreezed = 0;
-    for (const comm of (res.data || [])) {
-        await db.collection('commissions').doc(comm._id).update({
-            data: { status: 'settled', settled_at: db.serverDate() },
+        await db.collection('commissions').add({
+            data: {
+                openid: row.openid,
+                user_id: row.user_id,
+                from_openid: fromOpenid,
+                order_id: orderId,
+                order_no: orderNo,
+                amount: row.amount,
+                level: row.level,
+                type: row.type,
+                status: 'pending',
+                created_at: db.serverDate(),
+                updated_at: db.serverDate(),
+            },
         });
-        // 将佣金加入推荐人钱包
-        const amount = toNumber(comm.amount, 0);
-        if (amount > 0) {
-            await db.collection('users').where({ openid: comm.openid }).update({
-                data: {
-                    wallet_balance: _.inc(amount),
-                    total_earned: _.inc(amount),
-                    updated_at: db.serverDate(),
-                },
-            });
-        }
-        totalUnfreezed += amount;
+        created += 1;
+        totalAmount += row.amount;
     }
 
-    return { unfreezed: (res.data || []).length, total_amount: Math.round(totalUnfreezed * 100) / 100 };
+    return { created: created > 0, count: created, amount: roundMoney(totalAmount) };
 }
 
-/**
- * 取消佣金（退款时调用）
- * 将 pending/frozen 状态的佣金改为 cancelled
- * @param {string} orderId - 订单 ID
- */
+async function unfreezeCommissions(orderId) {
+    if (!orderId) return { settled: 0 };
+    const res = await db.collection('commissions')
+        .where({ order_id: orderId, status: 'pending_approval' })
+        .get().catch(() => ({ data: [] }));
+
+    let totalSettled = 0;
+    for (const comm of (res.data || [])) {
+        await db.collection('commissions').doc(comm._id).update({
+            data: { status: 'settled', settled_at: db.serverDate(), updated_at: db.serverDate() },
+        });
+        const amount = toNumber(comm.amount, 0);
+        if (amount > 0) {
+            await settleCommission(comm.openid, amount);
+            totalSettled += amount;
+        }
+    }
+    return { settled: (res.data || []).length, total_amount: roundMoney(totalSettled) };
+}
+
 async function cancelCommissions(orderId) {
     if (!orderId) return { cancelled: 0 };
-
     const res = await db.collection('commissions')
-        .where({ order_id: orderId, status: _.in(['pending', 'frozen']) })
+        .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval']) })
         .get().catch(() => ({ data: [] }));
 
     let totalCancelled = 0;
     for (const comm of (res.data || [])) {
-        // 如果佣金已结算（settled），需要从钱包扣回
-        if (comm.status === 'settled') {
-            const amount = toNumber(comm.amount, 0);
-            if (amount > 0) {
-                await db.collection('users').where({ openid: comm.openid }).update({
-                    data: {
-                        wallet_balance: _.inc(-amount),
-                        total_earned: _.inc(-amount),
-                        updated_at: db.serverDate(),
-                    },
-                });
-            }
-        }
-
         await db.collection('commissions').doc(comm._id).update({
-            data: { status: 'cancelled', cancelled_at: db.serverDate() },
+            data: { status: 'cancelled', cancelled_at: db.serverDate(), updated_at: db.serverDate() },
         });
         totalCancelled += toNumber(comm.amount, 0);
     }
 
-    return { cancelled: (res.data || []).length, total_amount: Math.round(totalCancelled * 100) / 100 };
+    return { cancelled: (res.data || []).length, total_amount: roundMoney(totalCancelled) };
 }
 
 module.exports = {
@@ -207,4 +331,5 @@ module.exports = {
     createCommissions,
     unfreezeCommissions,
     cancelCommissions,
+    calculateOrderCommissions
 };

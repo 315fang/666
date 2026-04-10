@@ -1,0 +1,20 @@
+{
+  "name": "commission-deadline-process",
+  "version": "1.0.0",
+  "description": "定时任务：售后期结束后将冻结佣金转为待审批",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  },
+  "cloudfunction-config": {
+    "memorySize": 256,
+    "timeout": 30
+  },
+  "triggers": [
+    {
+      "name": "commissionDeadlineProcessTimer",
+      "type": "timer",
+      "config": "0 15 */1 * * * *"
+    }
+  ]
+}

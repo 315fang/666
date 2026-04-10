@@ -1,6 +1,6 @@
 # CloudBase Legacy Compatibility Audit
 
-Generated at: 2026-04-09T08:45:14.700Z
+Generated at: 2026-04-10T11:08:29.516Z
 
 This report tracks remaining legacy field/status/image references that should be removed as the CloudBase migration closes.
 
@@ -30,7 +30,7 @@ This report tracks remaining legacy field/status/image references that should be
   - cloud-mp/miniprogram/pages/lottery/lottery.wxml: 2
   - cloud-mp/miniprogram/pages/splash/splash.js: 1
   - cloud-mp/miniprogram/utils/activitySectionBuilder.js: 2
-- `avatar_url` legacy avatar field: 18
+- `avatar_url` legacy avatar field: 13
   - cloud-mp/miniprogram/pages/activity/n-invite.wxml: 1
   - cloud-mp/miniprogram/pages/distribution/business-center.wxml: 1
   - cloud-mp/miniprogram/pages/distribution/center.wxml: 1
@@ -39,8 +39,8 @@ This report tracks remaining legacy field/status/image references that should be
   - cloud-mp/miniprogram/pages/distribution/utils/invitePosterCore.js: 2
   - cloud-mp/miniprogram/pages/group/detail.wxml: 1
   - cloud-mp/miniprogram/pages/product/detail.wxml: 1
-  - ... 6 more files
-- `nickname` legacy display field: 53
+  - ... 4 more files
+- `nickname` legacy display field: 54
   - cloud-mp/miniprogram/pages/activity/n-invite.js: 1
   - cloud-mp/miniprogram/pages/distribution/business-center.js: 1
   - cloud-mp/miniprogram/pages/distribution/business-center.wxml: 1
@@ -50,10 +50,7 @@ This report tracks remaining legacy field/status/image references that should be
   - cloud-mp/miniprogram/pages/distribution/invite.js: 1
   - cloud-mp/miniprogram/pages/distribution/invite.wxml: 1
   - ... 22 more files
-- `pending_ship` legacy status bucket: 5
-  - cloud-mp/miniprogram/pages/distribution/center.js: 1
-  - cloud-mp/miniprogram/pages/distribution/workbench.js: 1
-  - cloud-mp/miniprogram/pages/distribution/workbench.wxml: 3
+- `pending_ship` legacy status bucket: 0
 - `pending_payment` old storage status: 0
 
 ## admin-ui
@@ -85,11 +82,9 @@ This report tracks remaining legacy field/status/image references that should be
   - admin-ui/src/utils/userDisplay.js: 6
   - admin-ui/src/views/agent-system/index.vue: 1
   - admin-ui/src/views/users/index.vue: 3
-- `pending_ship` legacy status bucket: 4
-  - admin-ui/src/views/dashboard/index.vue: 3
-  - admin-ui/src/views/orders/index.vue: 1
-- `pending_payment` old storage status: 2
-  - admin-ui/src/views/n-system/index.vue: 2
+- `pending_ship` legacy status bucket: 1
+  - admin-ui/src/views/dashboard/index.vue: 1
+- `pending_payment` old storage status: 0
 
 ## cloudrun-admin-service
 

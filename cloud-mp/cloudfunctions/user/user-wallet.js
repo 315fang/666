@@ -4,6 +4,57 @@ const db = cloud.database();
 const _ = db.command;
 const { toNumber } = require('./shared/utils');
 
+function hasValue(value) {
+    return value !== null && value !== undefined && value !== '';
+}
+
+function uniqueValues(values) {
+    const seen = {};
+    const list = [];
+    values.forEach((value) => {
+        if (!hasValue(value)) return;
+        const key = String(value);
+        if (seen[key]) return;
+        seen[key] = true;
+        list.push(value);
+    });
+    return list;
+}
+
+async function getUserCouponIds(openid) {
+    const userRes = await db.collection('users')
+        .where({ openid })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    const user = userRes.data && userRes.data[0] ? userRes.data[0] : null;
+    const values = [openid];
+    if (user) {
+        if (hasValue(user.id)) values.push(user.id, String(user.id));
+        if (hasValue(user._id)) values.push(user._id);
+    }
+    return uniqueValues(values);
+}
+
+function isCouponExpired(coupon) {
+    const raw = coupon.expire_at || coupon.end_at || coupon.valid_until;
+    if (!raw) return false;
+    const time = new Date(raw).getTime();
+    return Number.isFinite(time) && time < Date.now();
+}
+
+function normalizeCoupon(coupon) {
+    return {
+        ...coupon,
+        status: isCouponExpired(coupon) ? 'expired' : (coupon.status || 'unused'),
+        coupon_name: coupon.coupon_name || coupon.name || '优惠券',
+        coupon_type: coupon.coupon_type || coupon.type || 'fixed',
+        coupon_value: toNumber(coupon.coupon_value != null ? coupon.coupon_value : coupon.value, 0),
+        min_purchase: toNumber(coupon.min_purchase, 0),
+        scope: coupon.scope || 'all'
+    };
+}
+
 /**
  * 获取钱包信息
  */
@@ -194,18 +245,31 @@ async function pointsLogs(openid, params = {}) {
  * 可用优惠券
  */
 async function availableCoupons(openid, params = {}) {
-    const minPurchase = toNumber(params.min_purchase, 0);
+    const minPurchase = toNumber(params.min_purchase != null ? params.min_purchase : params.amount, 0);
+    const userIds = await getUserCouponIds(openid);
 
-    let query = db.collection('user_coupons').where({ openid, status: 'unused' });
+    const [openidRes, userIdRes] = await Promise.all([
+        db.collection('user_coupons').where({ openid }).orderBy('expire_at', 'asc').limit(50).get().catch(() => ({ data: [] })),
+        db.collection('user_coupons').where({ user_id: _.in(userIds) }).orderBy('expire_at', 'asc').limit(50).get().catch(() => ({ data: [] }))
+    ]);
 
-    const res = await query.orderBy('expire_at', 'asc').limit(50).get().catch(() => ({ data: [] }));
-
-    let coupons = res.data || [];
+    const map = {};
+    (openidRes.data || []).concat(userIdRes.data || []).forEach((coupon) => {
+        const key = String(coupon._id || coupon.id || `${coupon.user_id || coupon.openid || ''}:${coupon.coupon_id || ''}`);
+        map[key] = coupon;
+    });
+    let coupons = Object.keys(map)
+        .map((key) => normalizeCoupon(map[key]))
+        .filter((coupon) => coupon.status === 'unused');
     if (minPurchase > 0) {
         coupons = coupons.filter(c => toNumber(c.min_purchase, 0) <= minPurchase);
     }
 
-    return coupons;
+    return coupons.sort((a, b) => {
+        const ta = a.expire_at ? new Date(a.expire_at).getTime() : 0;
+        const tb = b.expire_at ? new Date(b.expire_at).getTime() : 0;
+        return ta - tb;
+    });
 }
 
 module.exports = {

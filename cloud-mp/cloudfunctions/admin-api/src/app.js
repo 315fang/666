@@ -9,6 +9,7 @@ const crypto = require('crypto');
 
 const { dataRoot, normalizedDataRoot, runtimeRoot, uploadsRoot, jwtSecret, assetBaseUrl, preferNormalizedData } = require('./config');
 const { createDataStore } = require('./store');
+const { registerMarketingRoutes } = require('./admin-marketing');
 
 const app = express();
 const dataStore = createDataStore();
@@ -1503,6 +1504,172 @@ function commissionStats(rows) {
     });
 }
 
+function commissionOwnerRef(row) {
+    return row.openid || row.user_id || row.receiver_openid || row.beneficiary_openid || null;
+}
+
+function applyUserMoneyChange(users, userRef, amount, options = {}) {
+    const index = users.findIndex((user) => rowMatchesLookup(user, userRef, [user.openid, user.member_no]));
+    if (index === -1) return null;
+    const user = users[index];
+    const currentBalance = toNumber(user.wallet_balance ?? user.balance, 0);
+    const currentDebt = toNumber(user.debt_amount, 0);
+
+    if (amount >= 0) {
+        const debtOffset = Math.min(currentDebt, amount);
+        const credited = amount - debtOffset;
+        users[index] = {
+            ...user,
+            wallet_balance: currentBalance + credited,
+            balance: currentBalance + credited,
+            total_earned: toNumber(user.total_earned, 0) + credited,
+            debt_amount: currentDebt - debtOffset,
+            updated_at: nowIso()
+        };
+        return { user: users[index], credited, debt_offset: debtOffset };
+    }
+
+    const debit = Math.abs(amount);
+    const paidFromBalance = Math.min(currentBalance, debit);
+    const debtAdded = debit - paidFromBalance;
+    users[index] = {
+        ...user,
+        wallet_balance: currentBalance - paidFromBalance,
+        balance: currentBalance - paidFromBalance,
+        total_earned: Math.max(0, toNumber(user.total_earned, 0) - paidFromBalance),
+        debt_amount: currentDebt + debtAdded,
+        updated_at: nowIso()
+    };
+    if (options.reason) {
+        users[index].debt_reason = debtAdded > 0 ? options.reason : user.debt_reason;
+    }
+    return { user: users[index], debited: paidFromBalance, debt_added: debtAdded };
+}
+
+function settleCommissionRow(row, users) {
+    if (row.status === 'settled') return { row, changed: false };
+    if (!['pending_approval', 'approved', 'pending'].includes(row.status)) {
+        return { row, changed: false, blocked: true };
+    }
+    const amount = toNumber(row.amount, 0);
+    if (amount > 0) {
+        applyUserMoneyChange(users, commissionOwnerRef(row), amount, { reason: `佣金结算 ${row.order_no || row.order_id || ''}` });
+    }
+    return {
+        row: {
+            ...row,
+            status: 'settled',
+            approved_at: row.approved_at || nowIso(),
+            settled_at: nowIso(),
+            updated_at: nowIso()
+        },
+        changed: true
+    };
+}
+
+function cancelCommissionRow(row, users, reason) {
+    if (row.status === 'cancelled') return { row, changed: false };
+    const amount = toNumber(row.amount, 0);
+    let nextRow = {
+        ...row,
+        status: 'cancelled',
+        cancelled_at: nowIso(),
+        cancel_reason: reason || row.cancel_reason || '',
+        updated_at: nowIso()
+    };
+    if (row.status === 'settled' && !row.clawed_back_at && amount > 0) {
+        const clawback = applyUserMoneyChange(users, commissionOwnerRef(row), -amount, { reason: `退款追回佣金 ${row.order_no || row.order_id || ''}` });
+        nextRow = {
+            ...nextRow,
+            clawed_back_at: nowIso(),
+            clawback_debited: clawback?.debited || 0,
+            clawback_debt_added: clawback?.debt_added || 0
+        };
+    }
+    return { row: nextRow, changed: true };
+}
+
+function restoreFrozenCommissionsForOrder(orderId) {
+    const rows = getCollection('commissions');
+    let changed = 0;
+    const nextRows = rows.map((row) => {
+        if (!rowMatchesLookup(row, orderId, [row.order_id, row.order_no]) || row.status !== 'frozen') return row;
+        changed += 1;
+        return {
+            ...row,
+            status: 'pending',
+            frozen_at: null,
+            refund_deadline: null,
+            updated_at: nowIso()
+        };
+    });
+    if (changed) saveCollection('commissions', nextRows);
+    return changed;
+}
+
+function cancelCommissionsForOrder(orderId, reason) {
+    const rows = getCollection('commissions');
+    const users = getCollection('users');
+    let changed = 0;
+    const nextRows = rows.map((row) => {
+        if (!rowMatchesLookup(row, orderId, [row.order_id, row.order_no])) return row;
+        if (!['pending', 'frozen', 'pending_approval', 'settled', 'approved'].includes(row.status)) return row;
+        const result = cancelCommissionRow(row, users, reason);
+        if (result.changed) changed += 1;
+        return result.row;
+    });
+    if (changed) {
+        saveCollection('users', users);
+        saveCollection('commissions', nextRows);
+    }
+    return changed;
+}
+
+function restoreOrderStockForRefund(orderId) {
+    const orders = getCollection('orders');
+    const orderIndex = orders.findIndex((order) => rowMatchesLookup(order, orderId, [order.order_no]));
+    if (orderIndex === -1) return { restored: 0 };
+    const order = orders[orderIndex];
+    if (!order.stock_deducted_at || order.refund_stock_restored_at) return { restored: 0 };
+
+    const products = getCollection('products');
+    const skus = getCollection('skus');
+    let restored = 0;
+    toArray(order.items).forEach((item) => {
+        const qty = Math.max(1, toNumber(item.qty ?? item.quantity, 1));
+        const productIndex = products.findIndex((product) => rowMatchesLookup(product, item.product_id));
+        if (productIndex !== -1) {
+            products[productIndex] = {
+                ...products[productIndex],
+                stock: toNumber(products[productIndex].stock, 0) + qty,
+                sales_count: Math.max(0, toNumber(products[productIndex].sales_count, 0) - qty),
+                updated_at: nowIso()
+            };
+            restored += qty;
+        }
+        if (item.sku_id) {
+            const skuIndex = skus.findIndex((sku) => rowMatchesLookup(sku, item.sku_id));
+            if (skuIndex !== -1) {
+                skus[skuIndex] = {
+                    ...skus[skuIndex],
+                    stock: toNumber(skus[skuIndex].stock, 0) + qty,
+                    updated_at: nowIso()
+                };
+            }
+        }
+    });
+
+    orders[orderIndex] = {
+        ...order,
+        refund_stock_restored_at: nowIso(),
+        updated_at: nowIso()
+    };
+    saveCollection('products', products);
+    saveCollection('skus', skus);
+    saveCollection('orders', orders);
+    return { restored };
+}
+
 ensureDir(runtimeRoot);
 ensureDir(uploadsRoot);
 ensureDir(path.join(runtimeRoot, 'overrides'));
@@ -1728,6 +1895,27 @@ app.delete('/admin/api/products/:id', auth, requirePermission('products'), (req,
     saveCollection('products', nextRows);
     createAuditLog(req.admin, 'product.delete', 'products', { product_id: Number(req.params.id) });
     ok(res, { success: true });
+});
+
+registerMarketingRoutes(app, {
+    auth,
+    requirePermission,
+    getCollection,
+    saveCollection,
+    nextId,
+    nowIso,
+    toNumber,
+    toArray,
+    toBoolean,
+    pickString,
+    findByLookup,
+    rowMatchesLookup,
+    paginate,
+    sortByUpdatedDesc,
+    assetUrl,
+    createAuditLog,
+    ok,
+    fail
 });
 
 // ===== SKU 管理 API（多规格支持）=====
@@ -3020,26 +3208,56 @@ app.put('/admin/api/refunds/:id/approve', auth, requirePermission('refunds'), (r
 });
 
 app.put('/admin/api/refunds/:id/reject', auth, requirePermission('refunds'), (req, res) => {
-    const updated = patchCollectionRow('refunds', req.params.id, (row) => ({
-        ...row,
-        status: 'rejected',
-        reject_reason: pickString(req.body?.reason),
-        updated_at: nowIso()
-    }));
+    let rejectedRefund = null;
+    const updated = patchCollectionRow('refunds', req.params.id, (row) => {
+        rejectedRefund = row;
+        return {
+            ...row,
+            status: 'rejected',
+            reject_reason: pickString(req.body?.reason),
+            updated_at: nowIso()
+        };
+    });
     if (!updated) return fail(res, '退款记录不存在', 404);
+    const orderId = rejectedRefund?.order_id || rejectedRefund?.order_no;
+    if (orderId) {
+        restoreFrozenCommissionsForOrder(orderId);
+        patchCollectionRow('orders', orderId, (order) => ({
+            ...order,
+            status: order.status === 'refunding' ? (order.shipped_at ? 'shipped' : (order.paid_at ? 'paid' : 'pending_payment')) : order.status,
+            updated_at: nowIso()
+        }));
+    }
+    createAuditLog(req.admin, 'refund.reject', 'refunds', { refund_id: req.params.id, order_id: orderId });
     ok(res, updated);
 });
 
 app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), (req, res) => {
-    const updated = patchCollectionRow('refunds', req.params.id, (row) => ({
-        ...row,
-        status: 'completed',
-        completed_at: nowIso(),
-        return_company: pickString(req.body?.return_company || row.return_company),
-        return_tracking_no: pickString(req.body?.return_tracking_no || row.return_tracking_no),
-        updated_at: nowIso()
-    }));
+    let completedRefund = null;
+    const updated = patchCollectionRow('refunds', req.params.id, (row) => {
+        completedRefund = row;
+        return {
+            ...row,
+            status: 'completed',
+            completed_at: nowIso(),
+            return_company: pickString(req.body?.return_company || row.return_company),
+            return_tracking_no: pickString(req.body?.return_tracking_no || row.return_tracking_no),
+            updated_at: nowIso()
+        };
+    });
     if (!updated) return fail(res, '退款记录不存在', 404);
+    const orderId = completedRefund?.order_id || completedRefund?.order_no;
+    if (orderId) {
+        cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
+        restoreOrderStockForRefund(orderId);
+        patchCollectionRow('orders', orderId, (order) => ({
+            ...order,
+            status: 'refunded',
+            refunded_at: nowIso(),
+            updated_at: nowIso()
+        }));
+    }
+    createAuditLog(req.admin, 'refund.complete', 'refunds', { refund_id: req.params.id, order_id: orderId });
     ok(res, updated);
 });
 
@@ -3056,23 +3274,31 @@ app.get('/admin/api/commissions', auth, requirePermission('commissions'), (req, 
 });
 
 app.put('/admin/api/commissions/:id/approve', auth, requirePermission('commissions'), (req, res) => {
-    const updated = patchCollectionRow('commissions', req.params.id, (row) => ({
-        ...row,
-        status: 'approved',
-        approved_at: nowIso(),
-        updated_at: nowIso()
-    }));
+    const rows = getCollection('commissions');
+    const users = getCollection('users');
+    const index = rows.findIndex((row) => rowMatchesLookup(row, req.params.id));
+    if (index === -1) return fail(res, '佣金记录不存在', 404);
+    const result = settleCommissionRow(rows[index], users);
+    if (result.blocked) return fail(res, '当前佣金状态不允许审批入账');
+    rows[index] = result.row;
+    saveCollection('users', users);
+    saveCollection('commissions', rows);
+    createAuditLog(req.admin, 'commission.approve_settle', 'commissions', { commission_id: req.params.id });
+    const updated = rows[index];
     if (!updated) return fail(res, '佣金记录不存在', 404);
     ok(res, updated);
 });
 
 app.put('/admin/api/commissions/:id/reject', auth, requirePermission('commissions'), (req, res) => {
-    const updated = patchCollectionRow('commissions', req.params.id, (row) => ({
-        ...row,
-        status: 'rejected',
-        reject_reason: pickString(req.body?.reason),
-        updated_at: nowIso()
-    }));
+    const rows = getCollection('commissions');
+    const users = getCollection('users');
+    const index = rows.findIndex((row) => rowMatchesLookup(row, req.params.id));
+    if (index === -1) return fail(res, '佣金记录不存在', 404);
+    rows[index] = cancelCommissionRow(rows[index], users, pickString(req.body?.reason || '管理员驳回')).row;
+    saveCollection('users', users);
+    saveCollection('commissions', rows);
+    createAuditLog(req.admin, 'commission.reject_cancel', 'commissions', { commission_id: req.params.id });
+    const updated = rows[index];
     if (!updated) return fail(res, '佣金记录不存在', 404);
     ok(res, updated);
 });
@@ -3080,21 +3306,35 @@ app.put('/admin/api/commissions/:id/reject', auth, requirePermission('commission
 app.post('/admin/api/commissions/batch-approve', auth, requirePermission('commissions'), (req, res) => {
     const ids = toArray(req.body?.commission_ids || req.body?.ids);
     if (!ids.length) return fail(res, '请选择要操作的佣金记录');
-    const rows = getCollection('commissions').map((row) => ids.some((id) => rowMatchesLookup(row, id))
-        ? { ...row, status: 'approved', approved_at: nowIso(), updated_at: nowIso() }
-        : row);
+    const users = getCollection('users');
+    let affected = 0;
+    const rows = getCollection('commissions').map((row) => {
+        if (!ids.some((id) => rowMatchesLookup(row, id))) return row;
+        const result = settleCommissionRow(row, users);
+        if (result.changed) affected += 1;
+        return result.row;
+    });
+    saveCollection('users', users);
     saveCollection('commissions', rows);
-    ok(res, { success: true, affected: ids.length });
+    createAuditLog(req.admin, 'commission.batch_approve_settle', 'commissions', { affected });
+    ok(res, { success: true, affected });
 });
 
 app.post('/admin/api/commissions/batch-reject', auth, requirePermission('commissions'), (req, res) => {
     const ids = toArray(req.body?.commission_ids || req.body?.ids);
     if (!ids.length) return fail(res, '请选择要操作的佣金记录');
-    const rows = getCollection('commissions').map((row) => ids.some((id) => rowMatchesLookup(row, id))
-        ? { ...row, status: 'rejected', reject_reason: pickString(req.body?.reason), updated_at: nowIso() }
-        : row);
+    const users = getCollection('users');
+    let affected = 0;
+    const rows = getCollection('commissions').map((row) => {
+        if (!ids.some((id) => rowMatchesLookup(row, id))) return row;
+        const result = cancelCommissionRow(row, users, pickString(req.body?.reason || '管理员批量驳回'));
+        if (result.changed) affected += 1;
+        return result.row;
+    });
+    saveCollection('users', users);
     saveCollection('commissions', rows);
-    ok(res, { success: true, affected: ids.length });
+    createAuditLog(req.admin, 'commission.batch_reject_cancel', 'commissions', { affected });
+    ok(res, { success: true, affected });
 });
 
 app.get('/admin/api/orders', auth, requirePermission('orders'), (req, res) => {

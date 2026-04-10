@@ -82,7 +82,20 @@ if (hasPattern('cloud-mp/inject.js', /mock|mockData|模拟/i) ||
 
 // ✅ P1-3 修复：添加云函数部署检查
 function checkCloudFunctionExistence() {
-  const requiredFunctions = ['login', 'user', 'products', 'cart', 'order', 'payment', 'config', 'distribution'];
+  const requiredFunctions = [
+    'login',
+    'user',
+    'products',
+    'cart',
+    'order',
+    'payment',
+    'config',
+    'distribution',
+    'admin-api',
+    'order-timeout-cancel',
+    'commission-deadline-process',
+    'order-auto-confirm'
+  ];
   const basePath = 'cloud-mp/cloudfunctions';
   const missing = [];
   
@@ -101,16 +114,64 @@ function checkCloudFunctionExistence() {
   return { missing, count: missing.length };
 }
 
+function checkTimerTriggers() {
+  const timerFunctions = ['order-timeout-cancel', 'commission-deadline-process', 'order-auto-confirm'];
+  const missing = [];
+  timerFunctions.forEach(fnName => {
+    const packagePath = `cloud-mp/cloudfunctions/${fnName}/package.json`;
+    const packageJson = tryReadJson(packagePath);
+    const triggers = Array.isArray(packageJson?.triggers) ? packageJson.triggers : [];
+    const hasTimer = triggers.some(trigger => trigger && trigger.type === 'timer' && trigger.config);
+    if (!hasTimer) missing.push(fnName);
+  });
+  return { missing, count: missing.length };
+}
+
+function checkAdminRuntimeCollections() {
+  const seedSummary = tryReadJson('cloud-mp/cloudbase-seed/_summary.json') || {};
+  const importSummary = tryReadJson('cloud-mp/cloudbase-import/_summary.json') || {};
+  const collectionNames = new Set([
+    ...Object.keys(seedSummary).filter(name => Number(seedSummary[name]) >= 0),
+    ...Object.keys(importSummary).filter(name => Number(importSummary[name]) >= 0)
+  ]);
+  const recommendedCollections = [
+    'coupon_auto_rules',
+    'stations',
+    'station_staff',
+    'content_boards',
+    'content_board_products',
+    'agent_exit_applications',
+    'dividend_executions',
+    'lottery_prizes',
+    'slash_activities',
+    'splash_screens'
+  ];
+  const missing = recommendedCollections.filter(name => !collectionNames.has(name));
+  return { missing, count: missing.length };
+}
+
 // ✅ P1-3 修复：添加数据库集合检查
 function checkCloudBaseSeed() {
   try {
     const seedSummary = tryReadJson('cloud-mp/cloudbase-seed/_summary.json');
-    if (!seedSummary || !Array.isArray(seedSummary.collections)) {
+    const importSummary = tryReadJson('cloud-mp/cloudbase-import/_summary.json');
+    if ((!seedSummary || typeof seedSummary !== 'object') && (!importSummary || typeof importSummary !== 'object')) {
       return { collections: [], count: 0 };
     }
     const requiredCollections = ['users', 'products', 'orders', 'cart_items', 'categories'];
-    const existing = seedSummary.collections.filter(c => requiredCollections.includes(c.name));
-    return { collections: existing.map(c => c.name), count: existing.length };
+    const summaryCollectionNames = summary => {
+      if (!summary || typeof summary !== 'object') return [];
+      return Array.isArray(summary.collections)
+        ? summary.collections.map(c => c && c.name).filter(Boolean)
+        : Object.keys(summary).filter(name => Number(summary[name]) >= 0);
+    };
+    const collectionNames = [
+      ...summaryCollectionNames(seedSummary),
+      ...summaryCollectionNames(importSummary)
+    ];
+    const existing = collectionNames.filter(name => requiredCollections.includes(name));
+    const uniqueExisting = [...new Set(existing)];
+    return { collections: uniqueExisting, count: uniqueExisting.length };
   } catch (_) {
     return { collections: [], count: 0 };
   }
@@ -129,11 +190,17 @@ function checkAuthConfiguration() {
 
 // 执行所有检查
 const cloudFunctionCheck = checkCloudFunctionExistence();
+const timerTriggerCheck = checkTimerTriggers();
 const cloudBaseSeedCheck = checkCloudBaseSeed();
+const adminRuntimeCollectionsCheck = checkAdminRuntimeCollections();
 const authCheck = checkAuthConfiguration();
 
 if (cloudFunctionCheck.count > 0) {
   blockers.push(`缺失云函数：${cloudFunctionCheck.missing.join(', ')}`);
+}
+
+if (timerTriggerCheck.count > 0) {
+  blockers.push(`定时云函数缺少 timer 触发器声明：${timerTriggerCheck.missing.join(', ')}`);
 }
 
 if (cloudBaseSeedCheck.count < 5) {
@@ -142,6 +209,10 @@ if (cloudBaseSeedCheck.count < 5) {
 
 if (!authCheck.hasEnv) {
   blockers.push('CloudBase 环境未配置，检查 project.config.json 的 cloudbaseEnv 字段');
+}
+
+if (adminRuntimeCollectionsCheck.count > 0) {
+  warnings.push(`后台新增运行集合尚未出现在 seed/import 摘要中，云端首次写入可创建，但建议发布前预建：${adminRuntimeCollectionsCheck.missing.join(', ')}`);
 }
 
 const lines = [];

@@ -5,6 +5,11 @@
   "cart_items": 25,
   "categories": 9,
   "commissions": 3,
+  "coupon_auto_rules": 0,
+  "content_boards": 0,
+  "content_board_products": 0,
+  "agent_exit_applications": 0,
+  "dividend_executions": 0,
   "materials": 52,
   "material_groups": 1,
   "orders": 59,
@@ -12,6 +17,8 @@
   "refunds": 9,
   "reviews": 3,
   "skus": 11,
+  "splash_screens": 0,
+  "station_staff": 0,
   "users": 167,
   "withdrawals": 3
 }

@@ -17,6 +17,36 @@ function formatExpire(dateStr) {
     }
 }
 
+function extractCouponList(res) {
+    if (!res) return [];
+    const data = res.data;
+    const list = Array.isArray(res.list)
+        ? res.list
+        : (data && Array.isArray(data.list) ? data.list : data);
+    return Array.isArray(list) ? list : [];
+}
+
+function buildCouponView(c = {}) {
+    let discount_text = '';
+    if (c.coupon_type === 'percent') {
+        const value = Number(c.coupon_value || c.value || 0);
+        const raw = value <= 1 ? value * 10 : value;
+        discount_text = (raw % 1 === 0 ? raw.toFixed(0) : raw.toFixed(1)) + '折';
+    }
+
+    return {
+        ...c,
+        id: c.id || c._id || c.coupon_id,
+        coupon_name: c.coupon_name || c.name || '优惠券',
+        coupon_type: c.coupon_type || c.type || 'fixed',
+        coupon_value: c.coupon_value != null ? c.coupon_value : (c.value || 0),
+        min_purchase: c.min_purchase != null ? c.min_purchase : 0,
+        scope: c.scope || 'all',
+        expire_at_formatted: formatExpire(c.expire_at || c.end_at || c.valid_until),
+        discount_text
+    };
+}
+
 Page({
     data: {
         statusBarHeight: 20,
@@ -60,18 +90,7 @@ Page({
             const res = await get('/coupons/mine', { status: tab });
             if (res.code === 0) {
                 // 在 JS 中格式化日期，WXML 不支持管道过滤器
-                const coupons = (res.data || []).map(c => {
-                    let discount_text = '';
-                    if (c.coupon_type === 'percent') {
-                        const raw = parseFloat((c.coupon_value * 10).toFixed(1));
-                        discount_text = (raw % 1 === 0 ? raw.toFixed(0) : raw.toFixed(1)) + '折';
-                    }
-                    return {
-                        ...c,
-                        expire_at_formatted: formatExpire(c.expire_at),
-                        discount_text
-                    };
-                });
+                const coupons = extractCouponList(res).map(buildCouponView);
                 this.setData({ coupons, loading: false });
                 if (tab === 'unused') {
                     this.setData({ unusedCount: coupons.length });

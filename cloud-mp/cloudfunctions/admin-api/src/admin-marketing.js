@@ -1,0 +1,677 @@
+'use strict';
+
+function registerMarketingRoutes(app, deps) {
+    const {
+        auth,
+        requirePermission,
+        getCollection,
+        saveCollection,
+        nextId,
+        nowIso,
+        toNumber,
+        toArray,
+        toBoolean,
+        pickString,
+        findByLookup,
+        rowMatchesLookup,
+        paginate,
+        sortByUpdatedDesc,
+        assetUrl,
+        createAuditLog,
+        ok,
+        fail
+    } = deps;
+
+    function getConfigValue(key, fallback) {
+        const rows = getCollection('configs');
+        const row = rows.find((item) => item.config_key === key || item.key === key || item._id === key);
+        if (!row) return fallback;
+        if (row.config_value !== undefined) {
+            if (typeof row.config_value === 'string') {
+                try { return JSON.parse(row.config_value); } catch (_) { return row.config_value; }
+            }
+            return row.config_value;
+        }
+        return row.value !== undefined ? row.value : fallback;
+    }
+
+    function setConfigValue(key, value, group = 'admin') {
+        const rows = getCollection('configs');
+        const index = rows.findIndex((item) => item.config_key === key || item.key === key || item._id === key);
+        const row = {
+            ...(index === -1 ? { id: nextId(rows), created_at: nowIso() } : rows[index]),
+            config_key: key,
+            key,
+            config_value: value,
+            value,
+            config_group: group,
+            updated_at: nowIso()
+        };
+        if (index === -1) rows.push(row);
+        else rows[index] = row;
+        saveCollection('configs', rows);
+        return value;
+    }
+
+    function crudCollection(options) {
+        const {
+            basePath,
+            collection,
+            permission,
+            label,
+            normalize = row => row,
+            payload = (body, existing) => ({ ...existing, ...body, updated_at: nowIso() })
+        } = options;
+
+        app.get(`/admin/api/${basePath}`, auth, requirePermission(permission), (req, res) => {
+            let rows = sortByUpdatedDesc(getCollection(collection)).map(normalize);
+            const keyword = pickString(req.query.keyword).trim().toLowerCase();
+            if (keyword) rows = rows.filter((item) => `${item.name || item.title || item.description || ''}`.toLowerCase().includes(keyword));
+            if (req.query.status !== undefined && req.query.status !== '') rows = rows.filter((item) => String(item.status ?? item.is_active) === String(req.query.status));
+            ok(res, paginate(rows, req));
+        });
+
+        app.get(`/admin/api/${basePath}/:id`, auth, requirePermission(permission), (req, res) => {
+            const row = findByLookup(getCollection(collection), req.params.id);
+            if (!row) return fail(res, `${label}不存在`, 404);
+            ok(res, normalize(row));
+        });
+
+        app.post(`/admin/api/${basePath}`, auth, requirePermission(permission), (req, res) => {
+            const rows = getCollection(collection);
+            const row = payload(req.body || {}, { id: nextId(rows), created_at: nowIso() });
+            rows.push(row);
+            saveCollection(collection, rows);
+            createAuditLog(req.admin, `${collection}.create`, collection, { id: row.id || row._id });
+            ok(res, normalize(row));
+        });
+
+        app.put(`/admin/api/${basePath}/:id`, auth, requirePermission(permission), (req, res) => {
+            const rows = getCollection(collection);
+            const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
+            if (index === -1) return fail(res, `${label}不存在`, 404);
+            rows[index] = payload(req.body || {}, rows[index]);
+            saveCollection(collection, rows);
+            createAuditLog(req.admin, `${collection}.update`, collection, { id: req.params.id });
+            ok(res, normalize(rows[index]));
+        });
+
+        app.delete(`/admin/api/${basePath}/:id`, auth, requirePermission(permission), (req, res) => {
+            const rows = getCollection(collection);
+            const nextRows = rows.filter((item) => !rowMatchesLookup(item, req.params.id));
+            if (rows.length === nextRows.length) return fail(res, `${label}不存在`, 404);
+            saveCollection(collection, nextRows);
+            createAuditLog(req.admin, `${collection}.delete`, collection, { id: req.params.id });
+            ok(res, { success: true });
+        });
+    }
+
+    function normalizeCoupon(row) {
+        const type = pickString(row.type || row.coupon_type || 'fixed');
+        const isActive = row.is_active != null ? row.is_active : row.status;
+        return {
+            ...row,
+            id: row.id || row._legacy_id || row._id,
+            name: pickString(row.name || row.title),
+            type,
+            coupon_type: type,
+            value: toNumber(row.value ?? row.coupon_value ?? row.amount, 0),
+            coupon_value: toNumber(row.coupon_value ?? row.value ?? row.amount, 0),
+            min_purchase: toNumber(row.min_purchase ?? row.min_amount, 0),
+            valid_days: Math.max(1, toNumber(row.valid_days, 30)),
+            stock: row.stock == null ? -1 : toNumber(row.stock, -1),
+            issued_count: toNumber(row.issued_count, 0),
+            used_count: toNumber(row.used_count, 0),
+            scope: pickString(row.scope || 'all'),
+            scope_ids: toArray(row.scope_ids),
+            is_active: toBoolean(isActive == null ? 1 : isActive) ? 1 : 0,
+            status: toBoolean(isActive == null ? 1 : isActive) ? 1 : 0
+        };
+    }
+
+    function normalizeCouponPayload(body = {}, existing = {}) {
+        const type = pickString(body.type ?? body.coupon_type ?? existing.type ?? 'fixed');
+        const value = toNumber(body.value ?? body.coupon_value ?? existing.value, 0);
+        const minPurchase = type === 'no_threshold' ? 0 : toNumber(body.min_purchase ?? existing.min_purchase, 0);
+        return {
+            ...existing,
+            ...body,
+            type,
+            coupon_type: type,
+            value,
+            coupon_value: value,
+            min_purchase: minPurchase,
+            valid_days: Math.max(1, toNumber(body.valid_days ?? existing.valid_days, 30)),
+            stock: body.stock == null ? (existing.stock == null ? -1 : toNumber(existing.stock, -1)) : toNumber(body.stock, -1),
+            scope: pickString(body.scope ?? existing.scope ?? 'all'),
+            scope_ids: toArray(body.scope_ids ?? existing.scope_ids),
+            is_active: toBoolean(body.is_active ?? existing.is_active ?? existing.status ?? 1) ? 1 : 0,
+            status: toBoolean(body.is_active ?? existing.is_active ?? existing.status ?? 1) ? 1 : 0,
+            updated_at: nowIso()
+        };
+    }
+
+    app.get('/admin/api/coupons', auth, requirePermission('products'), (req, res) => {
+        let rows = sortByUpdatedDesc(getCollection('coupons')).map(normalizeCoupon);
+        const keyword = pickString(req.query.keyword).trim().toLowerCase();
+        const status = pickString(req.query.status).trim();
+        if (keyword) rows = rows.filter((item) => `${item.name} ${item.description || ''}`.toLowerCase().includes(keyword));
+        if (status !== '') rows = rows.filter((item) => String(item.is_active) === status || String(item.status) === status);
+        ok(res, paginate(rows, req));
+    });
+
+    app.get('/admin/api/coupons/:id', auth, requirePermission('products'), (req, res) => {
+        const row = findByLookup(getCollection('coupons'), req.params.id);
+        if (!row) return fail(res, '优惠券不存在', 404);
+        ok(res, normalizeCoupon(row));
+    });
+
+    app.post('/admin/api/coupons', auth, requirePermission('products'), (req, res) => {
+        const rows = getCollection('coupons');
+        const row = normalizeCouponPayload(req.body, {
+            id: nextId(rows),
+            issued_count: 0,
+            used_count: 0,
+            created_at: nowIso()
+        });
+        if (!pickString(row.name).trim()) return fail(res, '优惠券名称不能为空');
+        rows.push(row);
+        saveCollection('coupons', rows);
+        createAuditLog(req.admin, 'coupon.create', 'coupons', { coupon_id: row.id, name: row.name });
+        ok(res, normalizeCoupon(row));
+    });
+
+    app.put('/admin/api/coupons/:id', auth, requirePermission('products'), (req, res) => {
+        const rows = getCollection('coupons');
+        const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
+        if (index === -1) return fail(res, '优惠券不存在', 404);
+        rows[index] = normalizeCouponPayload(req.body, rows[index]);
+        saveCollection('coupons', rows);
+        createAuditLog(req.admin, 'coupon.update', 'coupons', { coupon_id: rows[index].id || rows[index]._id });
+        ok(res, normalizeCoupon(rows[index]));
+    });
+
+    app.delete('/admin/api/coupons/:id', auth, requirePermission('products'), (req, res) => {
+        const rows = getCollection('coupons');
+        const nextRows = rows.filter((item) => !rowMatchesLookup(item, req.params.id));
+        if (rows.length === nextRows.length) return fail(res, '优惠券不存在', 404);
+        saveCollection('coupons', nextRows);
+        createAuditLog(req.admin, 'coupon.delete', 'coupons', { coupon_id: req.params.id });
+        ok(res, { success: true });
+    });
+
+    app.post('/admin/api/coupons/:id/issue', auth, requirePermission('products'), (req, res) => {
+        const coupons = getCollection('coupons');
+        const coupon = findByLookup(coupons, req.params.id);
+        if (!coupon) return fail(res, '优惠券不存在', 404);
+
+        const users = getCollection('users');
+        const userIds = toArray(req.body?.user_ids).map(String);
+        const roleLevels = toArray(req.body?.role_levels ?? req.body?.roleLevels).map((item) => Number(item));
+        const targets = users.filter((user) => {
+            const userIdMatch = userIds.some((id) => rowMatchesLookup(user, id, [user.openid, user.member_no]));
+            const level = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+            const levelMatch = roleLevels.includes(level);
+            return userIdMatch || levelMatch;
+        });
+
+        const userCoupons = getCollection('user_coupons');
+        let issued = 0;
+        const couponId = coupon.id || coupon._legacy_id || coupon._id;
+        const expiresAt = new Date(Date.now() + Math.max(1, toNumber(coupon.valid_days, 30)) * 24 * 60 * 60 * 1000).toISOString();
+        for (const user of targets) {
+            const openid = user.openid;
+            if (!openid) continue;
+            const exists = userCoupons.some((item) => String(item.openid) === String(openid)
+                && String(item.coupon_id) === String(couponId)
+                && ['unused', 'pending'].includes(pickString(item.status || 'unused')));
+            if (exists) continue;
+            userCoupons.push({
+                id: nextId(userCoupons),
+                openid,
+                user_id: user.id || user._legacy_id || user._id || openid,
+                coupon_id: couponId,
+                coupon_name: coupon.name,
+                coupon_type: coupon.type || coupon.coupon_type || 'fixed',
+                coupon_value: toNumber(coupon.value ?? coupon.coupon_value, 0),
+                min_purchase: toNumber(coupon.min_purchase, 0),
+                status: 'unused',
+                issued_at: nowIso(),
+                expires_at: expiresAt,
+                created_at: nowIso(),
+                updated_at: nowIso()
+            });
+            issued += 1;
+        }
+        saveCollection('user_coupons', userCoupons);
+        saveCollection('coupons', coupons.map((item) => rowMatchesLookup(item, req.params.id)
+            ? { ...item, issued_count: toNumber(item.issued_count, 0) + issued, updated_at: nowIso() }
+            : item));
+        createAuditLog(req.admin, 'coupon.issue', 'coupons', { coupon_id: couponId, issued });
+        ok(res, { success: true, issued, skipped: targets.length - issued, message: `已发放 ${issued} 张优惠券` });
+    });
+
+    app.get('/admin/api/coupon-auto-rules', auth, requirePermission('products'), (_req, res) => {
+        ok(res, getCollection('coupon_auto_rules'));
+    });
+
+    app.put('/admin/api/coupon-auto-rules', auth, requirePermission('products'), (req, res) => {
+        const rules = toArray(req.body?.rules).map((item, index) => ({
+            id: item.id || index + 1,
+            trigger_event: pickString(item.trigger_event || 'register'),
+            enabled: toBoolean(item.enabled),
+            coupon_id: item.coupon_id || null,
+            target_levels: toArray(item.target_levels).map((level) => Number(level)),
+            updated_at: nowIso()
+        }));
+        saveCollection('coupon_auto_rules', rules);
+        createAuditLog(req.admin, 'coupon.auto_rules.update', 'coupon_auto_rules', { count: rules.length });
+        ok(res, rules);
+    });
+
+    function normalizeGroup(row, products) {
+        const product = findByLookup(products, row.product_id);
+        const requiredMembers = toNumber(row.required_members ?? row.min_members ?? row.group_size, 2);
+        return {
+            ...row,
+            id: row.id || row._legacy_id || row._id,
+            name: pickString(row.name || row.title),
+            product_id: row.product_id,
+            product: product ? {
+                ...product,
+                id: product.id || product._legacy_id || product._id,
+                images: toArray(product.images).map(assetUrl)
+            } : null,
+            group_price: toNumber(row.group_price ?? row.price, 0),
+            required_members: requiredMembers,
+            min_members: requiredMembers,
+            expire_hours: Math.max(1, toNumber(row.expire_hours, 24)),
+            stock_limit: Math.max(0, toNumber(row.stock_limit ?? row.stock, 0)),
+            sold_count: toNumber(row.sold_count, 0),
+            status: toBoolean(row.status) ? 1 : 0
+        };
+    }
+
+    function normalizeGroupPayload(body = {}, existing = {}) {
+        const requiredMembers = toNumber(body.required_members ?? body.min_members ?? existing.required_members ?? existing.min_members, 2);
+        return {
+            ...existing,
+            ...body,
+            name: pickString(body.name ?? existing.name),
+            product_id: body.product_id ?? existing.product_id,
+            group_price: toNumber(body.group_price ?? existing.group_price, 0),
+            required_members: Math.max(2, requiredMembers),
+            min_members: Math.max(2, requiredMembers),
+            expire_hours: Math.max(1, toNumber(body.expire_hours ?? existing.expire_hours, 24)),
+            stock_limit: Math.max(0, toNumber(body.stock_limit ?? existing.stock_limit, 0)),
+            status: toBoolean(body.status ?? existing.status ?? 1) ? 1 : 0,
+            updated_at: nowIso()
+        };
+    }
+
+    app.get('/admin/api/group-buys', auth, requirePermission('products'), (req, res) => {
+        const products = getCollection('products');
+        let rows = sortByUpdatedDesc(getCollection('group_activities')).map((item) => normalizeGroup(item, products));
+        const keyword = pickString(req.query.keyword).trim().toLowerCase();
+        const status = pickString(req.query.status).trim();
+        if (keyword) rows = rows.filter((item) => `${item.name} ${item.product?.name || ''}`.toLowerCase().includes(keyword));
+        if (status !== '') rows = rows.filter((item) => String(item.status) === status);
+        ok(res, paginate(rows, req));
+    });
+
+    app.get('/admin/api/group-buys/:id', auth, requirePermission('products'), (req, res) => {
+        const row = findByLookup(getCollection('group_activities'), req.params.id);
+        if (!row) return fail(res, '拼团活动不存在', 404);
+        ok(res, normalizeGroup(row, getCollection('products')));
+    });
+
+    app.post('/admin/api/group-buys', auth, requirePermission('products'), (req, res) => {
+        const products = getCollection('products');
+        if (!findByLookup(products, req.body?.product_id)) return fail(res, '关联商品不存在或未同步', 404);
+        const rows = getCollection('group_activities');
+        const row = normalizeGroupPayload(req.body, {
+            id: nextId(rows),
+            sold_count: 0,
+            created_at: nowIso()
+        });
+        if (!pickString(row.name).trim()) return fail(res, '活动名称不能为空');
+        rows.push(row);
+        saveCollection('group_activities', rows);
+        createAuditLog(req.admin, 'group_buy.create', 'group_activities', { group_id: row.id, name: row.name });
+        ok(res, normalizeGroup(row, products));
+    });
+
+    app.put('/admin/api/group-buys/:id', auth, requirePermission('products'), (req, res) => {
+        const rows = getCollection('group_activities');
+        const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
+        if (index === -1) return fail(res, '拼团活动不存在', 404);
+        if (req.body?.product_id && !findByLookup(getCollection('products'), req.body.product_id)) {
+            return fail(res, '关联商品不存在或未同步', 404);
+        }
+        rows[index] = normalizeGroupPayload(req.body, rows[index]);
+        saveCollection('group_activities', rows);
+        createAuditLog(req.admin, 'group_buy.update', 'group_activities', { group_id: rows[index].id || rows[index]._id });
+        ok(res, normalizeGroup(rows[index], getCollection('products')));
+    });
+
+    app.delete('/admin/api/group-buys/:id', auth, requirePermission('products'), (req, res) => {
+        const rows = getCollection('group_activities');
+        const nextRows = rows.filter((item) => !rowMatchesLookup(item, req.params.id));
+        if (rows.length === nextRows.length) return fail(res, '拼团活动不存在', 404);
+        saveCollection('group_activities', nextRows);
+        createAuditLog(req.admin, 'group_buy.delete', 'group_activities', { group_id: req.params.id });
+        ok(res, { success: true });
+    });
+
+    crudCollection({
+        basePath: 'slash-activities',
+        collection: 'slash_activities',
+        permission: 'products',
+        label: '砍价活动',
+        normalize: row => ({
+            ...row,
+            id: row.id || row._legacy_id || row._id,
+            product: findByLookup(getCollection('products'), row.product_id) || null,
+            initial_price: toNumber(row.initial_price, 0),
+            floor_price: toNumber(row.floor_price, 0),
+            min_slash_per_helper: toNumber(row.min_slash_per_helper, 0.1),
+            max_slash_per_helper: toNumber(row.max_slash_per_helper, 5),
+            max_helpers: Math.max(1, toNumber(row.max_helpers, 10)),
+            expire_hours: Math.max(1, toNumber(row.expire_hours, 24)),
+            stock_limit: Math.max(0, toNumber(row.stock_limit, 0)),
+            status: toBoolean(row.status) ? 1 : 0
+        }),
+        payload: (body, existing) => ({
+            ...existing,
+            ...body,
+            status: toBoolean(body.status ?? existing.status ?? 1) ? 1 : 0,
+            updated_at: nowIso()
+        })
+    });
+
+    crudCollection({
+        basePath: 'lottery-prizes',
+        collection: 'lottery_prizes',
+        permission: 'products',
+        label: '抽奖奖品',
+        normalize: row => ({
+            ...row,
+            id: row.id || row._legacy_id || row._id,
+            name: pickString(row.name),
+            image_url: assetUrl(row.image_url || row.image || ''),
+            prize_value: toNumber(row.prize_value ?? row.value, 0),
+            cost_points: Math.max(0, toNumber(row.cost_points, 1)),
+            probability: toNumber(row.probability, 0),
+            stock: row.stock == null ? -1 : toNumber(row.stock, -1),
+            sort_order: toNumber(row.sort_order, 0),
+            is_active: toBoolean(row.is_active ?? row.status ?? 1) ? 1 : 0
+        }),
+        payload: (body, existing) => ({
+            ...existing,
+            ...body,
+            is_active: toBoolean(body.is_active ?? body.status ?? existing.is_active ?? 1) ? 1 : 0,
+            status: toBoolean(body.is_active ?? body.status ?? existing.status ?? 1) ? 1 : 0,
+            updated_at: nowIso()
+        })
+    });
+
+    app.get('/admin/api/activity-options', auth, requirePermission('products'), (_req, res) => {
+        const groups = getCollection('group_activities').map((item) => ({ key: `group:${item.id || item._id}`, type: 'group', value: item.id || item._id, title: item.name || '拼团活动' }));
+        const slash = getCollection('slash_activities').map((item) => ({ key: `slash:${item.id || item._id}`, type: 'slash', value: item.id || item._id, title: item.name || '砍价活动' }));
+        const lottery = getCollection('lottery_prizes').map((item) => ({ key: `lottery:${item.id || item._id}`, type: 'lottery', value: item.id || item._id, title: item.name || '抽奖奖品' }));
+        ok(res, [...groups, ...slash, ...lottery]);
+    });
+
+    app.get('/admin/api/festival-config', auth, requirePermission('products'), (_req, res) => {
+        ok(res, getConfigValue('festival_config', { active: false, name: '', theme: '', theme_colors: {}, tags: [], card_posters: [] }));
+    });
+
+    app.put('/admin/api/festival-config', auth, requirePermission('products'), (req, res) => {
+        ok(res, setConfigValue('festival_config', req.body || {}, 'marketing'));
+    });
+
+    app.get('/admin/api/global-ui-config', auth, requirePermission('products'), (_req, res) => {
+        ok(res, getConfigValue('global_ui_config', { enabled: false, theme: 'default' }));
+    });
+
+    app.put('/admin/api/global-ui-config', auth, requirePermission('products'), (req, res) => {
+        ok(res, setConfigValue('global_ui_config', req.body || {}, 'marketing'));
+    });
+
+    app.get('/admin/api/activity-links', auth, requirePermission('products'), (_req, res) => {
+        ok(res, getConfigValue('activity_links', { primary: [], secondary: [], posters: [] }));
+    });
+
+    app.put('/admin/api/activity-links', auth, requirePermission('products'), (req, res) => {
+        ok(res, setConfigValue('activity_links', req.body || {}, 'marketing'));
+    });
+
+    app.get('/admin/api/splash', auth, requirePermission('content'), (_req, res) => {
+        ok(res, getConfigValue('splash_config', getCollection('splash_screens')[0] || { enabled: false }));
+    });
+
+    app.put('/admin/api/splash', auth, requirePermission('content'), (req, res) => {
+        ok(res, setConfigValue('splash_config', req.body || {}, 'content'));
+    });
+
+    app.get('/admin/api/pickup-stations', auth, requirePermission('pickup_stations'), (req, res) => {
+        const users = getCollection('users');
+        const staffRows = getCollection('station_staff');
+        let rows = sortByUpdatedDesc(getCollection('stations')).map((row) => ({
+            ...row,
+            id: row.id || row._legacy_id || row._id,
+            is_pickup_point: toBoolean(row.is_pickup_point ?? row.pickup_enabled ?? 1) ? 1 : 0,
+            status: row.status || 'active',
+            claimant: findByLookup(users, row.claimant_id || row.claimant_openid) || null,
+            staffMembers: staffRows.filter((staff) => rowMatchesLookup(row, staff.station_id))
+        }));
+        const keyword = pickString(req.query.keyword).trim().toLowerCase();
+        if (keyword) rows = rows.filter((item) => `${item.name} ${item.address} ${item.city} ${item.contact_name}`.toLowerCase().includes(keyword));
+        if (req.query.status) rows = rows.filter((item) => item.status === req.query.status);
+        if (req.query.is_pickup_point !== undefined && req.query.is_pickup_point !== '') rows = rows.filter((item) => Number(item.is_pickup_point) === Number(req.query.is_pickup_point));
+        ok(res, paginate(rows, req));
+    });
+
+    app.get('/admin/api/pickup-stations/:id', auth, requirePermission('pickup_stations'), (req, res) => {
+        const row = findByLookup(getCollection('stations'), req.params.id);
+        if (!row) return fail(res, '自提门店不存在', 404);
+        ok(res, {
+            ...row,
+            id: row.id || row._legacy_id || row._id,
+            claimant: findByLookup(getCollection('users'), row.claimant_id || row.claimant_openid) || null
+        });
+    });
+
+    app.post('/admin/api/pickup-stations', auth, requirePermission('pickup_stations'), (req, res) => {
+        const rows = getCollection('stations');
+        const row = {
+            id: nextId(rows),
+            ...req.body,
+            status: req.body?.status || 'active',
+            is_pickup_point: toBoolean(req.body?.is_pickup_point ?? 1) ? 1 : 0,
+            created_at: nowIso(),
+            updated_at: nowIso()
+        };
+        rows.push(row);
+        saveCollection('stations', rows);
+        ok(res, row);
+    });
+
+    app.put('/admin/api/pickup-stations/:id', auth, requirePermission('pickup_stations'), (req, res) => {
+        const rows = getCollection('stations');
+        const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
+        if (index === -1) return fail(res, '自提门店不存在', 404);
+        rows[index] = { ...rows[index], ...req.body, updated_at: nowIso() };
+        saveCollection('stations', rows);
+        ok(res, rows[index]);
+    });
+
+    app.get('/admin/api/pickup-stations/:id/staff', auth, requirePermission('pickup_stations'), (req, res) => {
+        const station = findByLookup(getCollection('stations'), req.params.id);
+        if (!station) return fail(res, '自提门店不存在', 404);
+        const users = getCollection('users');
+        const list = getCollection('station_staff')
+            .filter((row) => rowMatchesLookup(row, req.params.id, [row.station_id]))
+            .map((row) => ({ ...row, id: row.id || row._id, user: findByLookup(users, row.user_id || row.openid, (user) => [user.openid]) || null }));
+        ok(res, { station_id: req.params.id, station_name: station.name, list });
+    });
+
+    app.post('/admin/api/pickup-stations/:id/staff', auth, requirePermission('pickup_stations'), (req, res) => {
+        if (!findByLookup(getCollection('stations'), req.params.id)) return fail(res, '自提门店不存在', 404);
+        const rows = getCollection('station_staff');
+        const existingIndex = rows.findIndex((row) => rowMatchesLookup(row, req.body?.id) || (String(row.station_id) === String(req.params.id) && String(row.user_id) === String(req.body?.user_id)));
+        const row = {
+            ...(existingIndex === -1 ? { id: nextId(rows), created_at: nowIso() } : rows[existingIndex]),
+            station_id: req.params.id,
+            user_id: req.body?.user_id,
+            role: req.body?.role || 'staff',
+            can_verify: toBoolean(req.body?.can_verify ?? 1) ? 1 : 0,
+            status: req.body?.status || 'active',
+            remark: req.body?.remark || '',
+            updated_at: nowIso()
+        };
+        if (existingIndex === -1) rows.push(row);
+        else rows[existingIndex] = row;
+        saveCollection('station_staff', rows);
+        ok(res, row);
+    });
+
+    app.delete('/admin/api/pickup-stations/:id/staff/:staffId', auth, requirePermission('pickup_stations'), (req, res) => {
+        const rows = getCollection('station_staff');
+        const nextRows = rows.filter((row) => !(String(row.station_id) === String(req.params.id) && rowMatchesLookup(row, req.params.staffId)));
+        if (rows.length === nextRows.length) return fail(res, '门店成员不存在', 404);
+        saveCollection('station_staff', nextRows);
+        ok(res, { success: true });
+    });
+
+    app.get('/admin/api/boards', auth, requirePermission('content'), (req, res) => {
+        let rows = getCollection('content_boards');
+        if (!rows.length) {
+            rows = [{ id: 1, board_key: 'home.featuredProducts', name: '首页精选商品榜', created_at: nowIso(), updated_at: nowIso() }];
+            saveCollection('content_boards', rows);
+        }
+        if (req.query.board_key) rows = rows.filter((row) => row.board_key === req.query.board_key);
+        ok(res, rows.map((row) => ({ ...row, id: row.id || row._id })));
+    });
+
+    app.get('/admin/api/boards/:id/products', auth, requirePermission('content'), (req, res) => {
+        const products = getCollection('products');
+        const list = sortByUpdatedDesc(getCollection('content_board_products')
+            .filter((row) => String(row.board_id) === String(req.params.id)))
+            .sort((a, b) => toNumber(b.sort_order, 0) - toNumber(a.sort_order, 0))
+            .map((row) => {
+                const product = findByLookup(products, row.product_id);
+                return {
+                    ...row,
+                    id: row.id || row._id,
+                    is_active: row.is_active !== false,
+                    product: product ? { ...product, cover_image: assetUrl(toArray(product.images)[0] || product.image || '') } : null
+                };
+            });
+        ok(res, { list, total: list.length });
+    });
+
+    app.post('/admin/api/boards/:id/products', auth, requirePermission('content'), (req, res) => {
+        const rows = getCollection('content_board_products');
+        const productIds = toArray(req.body?.product_ids);
+        let added = 0;
+        productIds.forEach((productId) => {
+            const exists = rows.some((row) => String(row.board_id) === String(req.params.id) && String(row.product_id) === String(productId));
+            if (exists) return;
+            rows.push({ id: nextId(rows), board_id: req.params.id, product_id: productId, is_active: true, sort_order: rows.length + 1, created_at: nowIso(), updated_at: nowIso() });
+            added += 1;
+        });
+        saveCollection('content_board_products', rows);
+        ok(res, { success: true, added });
+    });
+
+    app.post('/admin/api/boards/:id/products/sort', auth, requirePermission('content'), (req, res) => {
+        const orders = toArray(req.body?.orders);
+        const rows = getCollection('content_board_products').map((row) => {
+            const order = orders.find((item) => rowMatchesLookup(row, item.id));
+            return order ? { ...row, sort_order: toNumber(order.sort_order, row.sort_order), updated_at: nowIso() } : row;
+        });
+        saveCollection('content_board_products', rows);
+        ok(res, { success: true });
+    });
+
+    app.put('/admin/api/boards/:id/products/:relationId', auth, requirePermission('content'), (req, res) => {
+        const rows = getCollection('content_board_products');
+        const index = rows.findIndex((row) => String(row.board_id) === String(req.params.id) && rowMatchesLookup(row, req.params.relationId));
+        if (index === -1) return fail(res, '榜单商品不存在', 404);
+        rows[index] = { ...rows[index], ...req.body, updated_at: nowIso() };
+        saveCollection('content_board_products', rows);
+        ok(res, rows[index]);
+    });
+
+    app.delete('/admin/api/boards/:id/products/:relationId', auth, requirePermission('content'), (req, res) => {
+        const rows = getCollection('content_board_products');
+        const nextRows = rows.filter((row) => !(String(row.board_id) === String(req.params.id) && rowMatchesLookup(row, req.params.relationId)));
+        if (rows.length === nextRows.length) return fail(res, '榜单商品不存在', 404);
+        saveCollection('content_board_products', nextRows);
+        ok(res, { success: true });
+    });
+
+    const agentConfigDefaults = {
+        'upgrade-rules': { enabled: true },
+        'commission-config': { enabled: true },
+        'peer-bonus': { enabled: false },
+        'assist-bonus': { enabled: false },
+        'fund-pool': { enabled: false },
+        'dividend-rules': { enabled: false, source_pct: 0, b_team_award: { enabled: false, pool_pct: 0, ranks: [] }, b1_personal_award: { enabled: false, pool_pct: 0, ranks: [] } },
+        'exit-rules': { enabled: false },
+        'recharge-config': { enabled: false, options: [] }
+    };
+
+    Object.keys(agentConfigDefaults).forEach((key) => {
+        app.get(`/admin/api/agent-system/${key}`, auth, requirePermission('settings_manage'), (_req, res) => {
+            ok(res, getConfigValue(`agent_system_${key}`, agentConfigDefaults[key]));
+        });
+        app.put(`/admin/api/agent-system/${key}`, auth, requirePermission('settings_manage'), (req, res) => {
+            ok(res, setConfigValue(`agent_system_${key}`, req.body || {}, 'agent_system'));
+        });
+    });
+
+    app.get('/admin/api/agent-system/dividend/preview', auth, requirePermission('settings_manage'), (req, res) => {
+        const users = getCollection('users');
+        const amount = toNumber(req.query.amount || req.query.pool_amount, 0);
+        const eligible = users.filter((user) => toNumber(user.role_level ?? user.distributor_level, 0) >= 3);
+        const perUser = eligible.length ? Math.round(amount / eligible.length * 100) / 100 : 0;
+        ok(res, { pool_amount: amount, eligible_count: eligible.length, list: eligible.map((user) => ({ user_id: user.id || user._id, openid: user.openid, amount: perUser })) });
+    });
+
+    app.post('/admin/api/agent-system/dividend/execute', auth, requirePermission('settings_manage'), (req, res) => {
+        const executions = getCollection('dividend_executions');
+        const row = { id: nextId(executions), ...req.body, status: 'pending_review', created_at: nowIso(), updated_at: nowIso() };
+        executions.push(row);
+        saveCollection('dividend_executions', executions);
+        ok(res, row);
+    });
+
+    app.get('/admin/api/agent-system/exit-applications', auth, requirePermission('users'), (req, res) => {
+        let rows = sortByUpdatedDesc(getCollection('agent_exit_applications'));
+        if (req.query.status) rows = rows.filter((row) => row.status === req.query.status);
+        ok(res, paginate(rows, req));
+    });
+
+    app.post('/admin/api/agent-system/exit-applications/:userId', auth, requirePermission('users'), (req, res) => {
+        const rows = getCollection('agent_exit_applications');
+        const row = { id: nextId(rows), user_id: req.params.userId, ...req.body, status: 'pending', created_at: nowIso(), updated_at: nowIso() };
+        rows.push(row);
+        saveCollection('agent_exit_applications', rows);
+        ok(res, row);
+    });
+
+    app.put('/admin/api/agent-system/exit-applications/:id/review', auth, requirePermission('users'), (req, res) => {
+        const rows = getCollection('agent_exit_applications');
+        const index = rows.findIndex((row) => rowMatchesLookup(row, req.params.id));
+        if (index === -1) return fail(res, '退出申请不存在', 404);
+        rows[index] = { ...rows[index], status: req.body?.status || req.body?.result || 'approved', review_remark: req.body?.remark || '', reviewed_at: nowIso(), updated_at: nowIso() };
+        saveCollection('agent_exit_applications', rows);
+        ok(res, rows[index]);
+    });
+}
+
+module.exports = {
+    registerMarketingRoutes
+};
