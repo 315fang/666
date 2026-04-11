@@ -1,6 +1,6 @@
 # cloud-mp 迁移矩阵
 
-生成时间：2026-04-11T05:29:54.781Z
+生成时间：2026-04-11T05:46:59.308Z
 
 本矩阵以 `cloud-mp` 为主工程，只把旧 `backend / admin-ui / miniprogram` 作为对照参考。
 
@@ -11,7 +11,7 @@
 - 小程序页面状态统计：{"已通":58}
 - 云函数 action 状态统计：{"已通":123}
 - 管理接口状态统计：{"已通":214}
-- 数据模型状态统计：{"已建模":31,"缺验收":3}
+- 数据模型状态统计：{"已建模":31,"已验收":3}
 
 ## 小程序页面
 
@@ -430,7 +430,7 @@
 | activity_links | 旧工程引用 11 次 | seed:Y / import:Y | 已建模 |
 | admin_audit_logs | 旧工程引用 8 次 | seed:Y / import:Y | 已建模 |
 | admin_roles | 旧工程引用 2 次 | seed:Y / import:Y | 已建模 |
-| admin_singletons | 旧工程未直接命中 | seed:Y / import:Y | 缺验收 |
+| admin_singletons | 旧工程未直接命中 | seed:Y / import:Y | 已验收 |
 | admins | 旧工程引用 64 次 | seed:Y / import:Y | 已建模 |
 | banners | 旧工程引用 135 次 | seed:Y / import:Y | 已建模 |
 | cart_items | 旧工程引用 7 次 | seed:Y / import:Y | 已建模 |
@@ -441,7 +441,7 @@
 | group_activities | 旧工程引用 7 次 | seed:Y / import:Y | 已建模 |
 | group_members | 旧工程引用 6 次 | seed:Y / import:Y | 已建模 |
 | group_orders | 旧工程引用 6 次 | seed:Y / import:Y | 已建模 |
-| lottery_configs | 旧工程未直接命中 | seed:Y / import:Y | 缺验收 |
+| lottery_configs | 旧工程未直接命中 | seed:Y / import:Y | 已验收 |
 | lottery_prizes | 旧工程引用 10 次 | seed:Y / import:Y | 已建模 |
 | lottery_records | 旧工程引用 9 次 | seed:Y / import:Y | 已建模 |
 | material_groups | 旧工程引用 12 次 | seed:Y / import:Y | 已建模 |
@@ -458,7 +458,7 @@
 | users | 旧工程引用 331 次 | seed:Y / import:Y | 已建模 |
 | wallet_accounts | 旧工程引用 1 次 | seed:Y / import:Y | 已建模 |
 | wallet_logs | 旧工程引用 1 次 | seed:Y / import:Y | 已建模 |
-| wallet_recharge_configs | 旧工程未直接命中 | seed:Y / import:Y | 缺验收 |
+| wallet_recharge_configs | 旧工程未直接命中 | seed:Y / import:Y | 已验收 |
 | wallet_recharge_orders | 旧工程引用 1 次 | seed:Y / import:Y | 已建模 |
 | withdrawals | 旧工程引用 83 次 | seed:Y / import:Y | 已建模 |
 
@@ -469,5 +469,6 @@
 - `缺接口`：旧 API 调用在 `cloud-mp` 管理服务中尚未找到实现。
 - `缺数据`：正式集合缺少 seed 或 import 文件。
 - `缺验收`：已建模但旧工程引用证据弱，仍需场景级 smoke test。
+- `已验收`：已建模且已通过 live smoke 校验。
 - `仅cloud-mp`：只在新工程中出现的页面或能力。
 

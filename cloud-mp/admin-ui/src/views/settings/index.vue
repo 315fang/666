@@ -112,7 +112,7 @@ const settingsForm = reactive({
   min_withdrawal: 100,
   auto_cancel_minutes: 30,
   auto_confirm_days: 7,
-  user_default_avatar_url: '/assets/images/default-avatar.svg',
+  user_default_avatar_url: '/admin/assets/images/default-avatar.svg',
   user_idle_guest_purge_days: 7
 })
 

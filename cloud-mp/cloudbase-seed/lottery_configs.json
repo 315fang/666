@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "_id": "default-lottery",
+    "key": "lottery_config",
+    "is_active": true,
+    "hero_title": "把积分换成一点仪式感",
+    "hero_subtitle": "奖池支持后台配置 emoji、配色和标签，小奖池也能做出活动感。",
+    "result_win_title": "恭喜，手气不错",
+    "result_miss_title": "这次差一点点",
+    "theme": "gold",
+    "created_at": "2026-04-11T00:00:00.000Z",
+    "updated_at": "2026-04-11T00:00:00.000Z"
+  }
+]

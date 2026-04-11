@@ -6,6 +6,7 @@ const workspaceRoot = path.resolve(cloudRoot, '..');
 const docsDir = path.join(cloudRoot, 'docs');
 const jsonPath = path.join(docsDir, 'CLOUD_MP_MIGRATION_MATRIX.json');
 const mdPath = path.join(docsDir, 'CLOUD_MP_MIGRATION_MATRIX.md');
+const liveSmokePath = path.join(docsDir, 'CLOUDBASE_LIVE_SMOKE.json');
 
 const ignoreDirs = new Set(['node_modules', '.git', 'dist', 'build', '.runtime', '.omx']);
 const textExtensions = new Set(['.js', '.json', '.md', '.vue', '.wxml', '.wxss']);
@@ -271,6 +272,12 @@ function buildAdminApiMatrix() {
 }
 
 function buildCollectionMatrix() {
+  const liveSmoke = readJson(liveSmokePath, null);
+  const validated = new Set(
+    Array.isArray(liveSmoke && liveSmoke.results)
+      ? liveSmoke.results.filter((item) => item.ok).map((item) => item.collection)
+      : []
+  );
   const collections = extractTargetCollections(path.join(cloudRoot, 'CLOUDBASE_TARGET_MODEL.md'));
   return collections.map((collection) => {
     const seedPath = path.join(cloudRoot, 'cloudbase-seed', `${collection}.json`);
@@ -281,6 +288,8 @@ function buildCollectionMatrix() {
     let status = '已建模';
     if (!hasSeed || !hasImport) {
       status = '缺数据';
+    } else if (validated.has(collection)) {
+      status = '已验收';
     } else if (!referenceCount) {
       status = '缺验收';
     }
@@ -356,6 +365,7 @@ function renderMarkdown(report) {
   lines.push('- `缺接口`：旧 API 调用在 `cloud-mp` 管理服务中尚未找到实现。');
   lines.push('- `缺数据`：正式集合缺少 seed 或 import 文件。');
   lines.push('- `缺验收`：已建模但旧工程引用证据弱，仍需场景级 smoke test。');
+  lines.push('- `已验收`：已建模且已通过 live smoke 校验。');
   lines.push('- `仅cloud-mp`：只在新工程中出现的页面或能力。');
   lines.push('');
   return `${lines.join('\n')}\n`;

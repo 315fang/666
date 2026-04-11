@@ -209,7 +209,7 @@ async function reviewOrder(openid, orderId, reviewData) {
                 order_id: orderId,
                 openid,
                 product_id: item.product_id || '',
-                product_name: item.name || '',
+                product_name: item.name || item.snapshot_name || '',
                 rating,
                 content: content || '',
                 images: images || [],
@@ -437,7 +437,8 @@ async function trackLogistics(openid, params) {
             order_no: orderRes.data.order_no,
             status: orderRes.data.status,
             tracking_no: orderRes.data.tracking_no || '',
-            shipping_company: orderRes.data.shipping_company || '',
+            shipping_company: orderRes.data.shipping_company || orderRes.data.logistics_company || '',
+            logistics_company: orderRes.data.logistics_company || orderRes.data.shipping_company || '',
             shipped_at: orderRes.data.shipped_at || null,
             estimated_delivery: orderRes.data.estimated_delivery || null,
             // 简易物流轨迹
@@ -459,7 +460,8 @@ async function trackLogistics(openid, params) {
             order_no: order.order_no,
             status: order.status,
             tracking_no: order.tracking_no || trackingNo,
-            shipping_company: order.shipping_company || '',
+            shipping_company: order.shipping_company || order.logistics_company || '',
+            logistics_company: order.logistics_company || order.shipping_company || '',
             shipped_at: order.shipped_at || null,
             traces: order.shipping_traces || generateDefaultTraces(order),
         };

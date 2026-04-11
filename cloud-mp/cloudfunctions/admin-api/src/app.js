@@ -892,7 +892,7 @@ function getSettingsSnapshot() {
         COMMISSION: { COMMISSION_RATE: 10 },
         WITHDRAWAL: { MIN_AMOUNT: 100 },
         ORDER: { AUTO_CANCEL_MINUTES: 30, AUTO_CONFIRM_DAYS: 7 },
-        USER: { DEFAULT_AVATAR_URL: '/assets/images/default-avatar.svg', IDLE_GUEST_PURGE_DAYS: 7 }
+        USER: { DEFAULT_AVATAR_URL: '/admin/assets/images/default-avatar.svg', IDLE_GUEST_PURGE_DAYS: 7 }
     };
     for (const row of configs) {
         const group = row.config_group || row.category || 'SYSTEM';

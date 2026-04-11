@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-11T05:29:54.781Z",
+  "generatedAt": "2026-04-11T05:46:59.308Z",
   "adminSource": {
     "exists": true,
     "routeSource": true
@@ -2403,7 +2403,7 @@
       "item": "admin_singletons",
       "legacy": "旧工程未直接命中",
       "target": "seed:Y / import:Y",
-      "status": "缺验收"
+      "status": "已验收"
     },
     {
       "item": "admins",
@@ -2469,7 +2469,7 @@
       "item": "lottery_configs",
       "legacy": "旧工程未直接命中",
       "target": "seed:Y / import:Y",
-      "status": "缺验收"
+      "status": "已验收"
     },
     {
       "item": "lottery_prizes",
@@ -2571,7 +2571,7 @@
       "item": "wallet_recharge_configs",
       "legacy": "旧工程未直接命中",
       "target": "seed:Y / import:Y",
-      "status": "缺验收"
+      "status": "已验收"
     },
     {
       "item": "wallet_recharge_orders",
@@ -2598,7 +2598,7 @@
     },
     "collections": {
       "已建模": 31,
-      "缺验收": 3
+      "已验收": 3
     }
   }
 }

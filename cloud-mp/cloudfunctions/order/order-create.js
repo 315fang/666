@@ -149,6 +149,45 @@ function resolveSkuUnitPrice(sku = {}, product = {}) {
     return resolveProductUnitPrice(product);
 }
 
+function normalizeImages(images) {
+    if (!images) return [];
+    if (Array.isArray(images)) return images.filter(Boolean);
+    if (typeof images === 'string') {
+        try {
+            const parsed = JSON.parse(images);
+            return Array.isArray(parsed) ? parsed.filter(Boolean) : [parsed].filter(Boolean);
+        } catch (_) {
+            return [images].filter(Boolean);
+        }
+    }
+    return [];
+}
+
+function normalizeSpecValue(rawSpec) {
+    if (Array.isArray(rawSpec)) {
+        return rawSpec
+            .map((item) => {
+                if (!item || typeof item !== 'object') return '';
+                return item.value || item.spec_value || item.name || '';
+            })
+            .filter(Boolean)
+            .join(' / ');
+    }
+    return rawSpec ? String(rawSpec) : '';
+}
+
+function buildAddressSnapshot(addressInfo) {
+    if (!addressInfo || typeof addressInfo !== 'object') return null;
+    return {
+        receiver_name: addressInfo.receiver_name || addressInfo.name || '',
+        phone: addressInfo.phone || '',
+        province: addressInfo.province || '',
+        city: addressInfo.city || '',
+        district: addressInfo.district || '',
+        detail: addressInfo.detail || addressInfo.address || ''
+    };
+}
+
 /**
  * 创建订单（含金额计算、库存校验、优惠券核销）
  */
@@ -221,15 +260,27 @@ async function createOrder(openid, orderData) {
 
         totalAmount += lineTotal;
 
+        const productId = String(product._id || product.id || item.product_id || '');
+        const productImages = normalizeImages(product.images);
+        const specValue = normalizeSpecValue(sku ? (sku.spec || sku.specs || sku.spec_value || '') : '');
+        const image = sku ? (sku.image || productImages[0] || '') : (productImages[0] || '');
+        const productName = product.name || sku?.name || '';
+
         orderItems.push({
-            product_id: product._id || product.id,
+            product_id: productId,
             sku_id: item.sku_id || '',
-            name: product.name || '',
-            spec: sku ? (sku.spec || sku.specs || '') : '',
-            image: sku ? (sku.image || '') : (Array.isArray(product.images) ? product.images[0] : ''),
+            name: productName,
+            snapshot_name: productName,
+            spec: specValue,
+            snapshot_spec: specValue,
+            image,
+            snapshot_image: image,
             price: unitPrice,
+            unit_price: unitPrice,
             qty,
+            quantity: qty,
             subtotal: lineTotal,
+            item_amount: lineTotal,
             activity_type: groupActivity ? 'group' : (slashRecord ? 'slash' : ''),
             group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : '',
             slash_no: slashRecord ? (slashRecord.slash_no || slash_no) : ''
@@ -312,6 +363,9 @@ async function createOrder(openid, orderData) {
 
     // 6. 生成订单号
     const orderNo = 'ORD' + Date.now() + Math.floor(Math.random() * 1000);
+    const totalQuantity = orderItems.reduce((sum, item) => sum + Math.max(1, toNumber(item.qty || item.quantity, 1)), 0);
+    const primaryItem = orderItems[0] || {};
+    const addressSnapshot = buildAddressSnapshot(addressInfo);
 
     // 7. 构建订单
     const order = {
@@ -319,15 +373,28 @@ async function createOrder(openid, orderData) {
         openid,
         status: 'pending_payment',
         items: orderItems,
+        product_id: primaryItem.product_id || '',
+        product_name: primaryItem.snapshot_name || primaryItem.name || '',
+        quantity: totalQuantity,
+        sku: primaryItem.snapshot_spec || primaryItem.spec ? { spec_value: primaryItem.snapshot_spec || primaryItem.spec } : null,
         total_amount: totalAmount,
+        original_amount: totalAmount,
         coupon_discount: couponDiscount,
         points_discount: pointsDiscount,
         points_used: actualPoints,
         pay_amount: payAmount,
+        actual_price: payAmount,
         address_id: address_id || '',
-        address: addressInfo,
+        address: addressSnapshot,
+        address_snapshot: addressSnapshot,
         delivery_type: delivery_type || 'express',
         pickup_station_id: pickup_station_id || '',
+        tracking_no: '',
+        logistics_company: '',
+        shipping_company: '',
+        shipping_traces: [],
+        reviewed: false,
+        fulfillment_type: 'Platform',
         coupon_id: usedCouponTemplateId || coupon_id || '',
         user_coupon_id: usedCouponDocId || user_coupon_id || '',
         memo: memo || '',
@@ -339,6 +406,7 @@ async function createOrder(openid, orderData) {
         slash_no: slashRecord ? (slashRecord.slash_no || slash_no) : '',
         slash_record_id: slashRecord ? slashRecord._id : '',
         slash_activity_id: slashRecord ? slashRecord.activity_id || slashRecord.legacy_activity_id || '' : '',
+        expire_at: db.serverDate({ offset: 30 * 60 }),
         created_at: db.serverDate(),
         updated_at: db.serverDate()
     };

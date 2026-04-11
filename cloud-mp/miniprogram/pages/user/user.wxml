@@ -15,18 +15,18 @@
           <view class="hero-info">
             <view class="hero-name-row">
               <view class="hero-nickname-wrap">
-                <text class="hero-nickname">{{userInfo.nick_name || userInfo.nickname || '微信用户'}}</text>
+                <text class="hero-nickname">{{displayNickname || userInfo.nick_name || userInfo.nickname || '微信用户'}}</text>
               </view>
-              <view class="hero-member-badges" catchtap="onMemberLevelTap" wx:if="{{isLoggedIn}}">
-                <view class="hero-member-pill hero-member-pill-consume">
-                  <image src="/assets/icons/crown.svg" mode="aspectFit" class="member-pill-icon"></image>
-                  <text class="member-pill-label">消费</text>
-                  <text class="member-pill-text">{{growthDisplay && growthDisplay.currentTierName ? growthDisplay.currentTierName : '普通会员'}}</text>
-                </view>
-                <view class="hero-member-pill hero-member-pill-agent" wx:if="{{(distributionInfo.role_level || userInfo.role_level) > 0}}">
-                  <text class="member-pill-label">代理</text>
-                  <text class="member-pill-text">{{distributionInfo.role_name || userInfo.role_name || '代理会员'}}</text>
-                </view>
+            </view>
+            <view class="hero-member-badges" catchtap="onMemberLevelTap" wx:if="{{isLoggedIn}}">
+              <view class="hero-member-pill hero-member-pill-consume">
+                <image src="/assets/icons/crown.svg" mode="aspectFit" class="member-pill-icon"></image>
+                <text class="member-pill-label">消费</text>
+                <text class="member-pill-text">{{growthDisplay && growthDisplay.currentTierName ? growthDisplay.currentTierName : '普通会员'}}</text>
+              </view>
+              <view class="hero-member-pill hero-member-pill-agent" wx:if="{{(distributionInfo.role_level || userInfo.role_level) > 0}}">
+                <text class="member-pill-label">代理</text>
+                <text class="member-pill-text">{{distributionInfo.role_name || userInfo.role_name || '代理会员'}}</text>
               </view>
             </view>
             <view class="hero-meta-row" wx:if="{{isLoggedIn && userInfo.invite_code}}">

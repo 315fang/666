@@ -1,1 +1,57 @@
-[]
+[
+  {
+    "_id": "storage-config",
+    "key": "storage-config",
+    "value": {
+      "provider": "cloudbase",
+      "bucket": "",
+      "folder": "materials",
+      "mode": "managed"
+    },
+    "updated_at": "2026-04-11T00:00:00.000Z"
+  },
+  {
+    "_id": "feature-toggles",
+    "key": "feature-toggles",
+    "value": {
+      "show_station_entry": false,
+      "show_pickup_entry": false,
+      "enable_logistics_entry": true,
+      "enable_lottery_entry": true
+    },
+    "updated_at": "2026-04-11T00:00:00.000Z"
+  },
+  {
+    "_id": "popup-ad-config",
+    "key": "popup-ad-config",
+    "value": {
+      "enabled": false,
+      "title": "",
+      "file_id": "",
+      "image_url": "",
+      "link_type": "",
+      "link_value": ""
+    },
+    "updated_at": "2026-04-11T00:00:00.000Z"
+  },
+  {
+    "_id": "alert-config",
+    "key": "alert-config",
+    "value": {
+      "dingtalk": {
+        "enabled": false,
+        "webhook": "",
+        "secret": ""
+      },
+      "wecom": {
+        "enabled": false,
+        "webhook": ""
+      },
+      "email": {
+        "enabled": false,
+        "recipients": []
+      }
+    },
+    "updated_at": "2026-04-11T00:00:00.000Z"
+  }
+]
