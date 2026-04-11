@@ -226,5 +226,25 @@ Page({
 
     onPickupCredentialTap() {
         return onPickupCredentialTap(this);
+    },
+
+    onViewActivity() {
+        const activity = this.data.order && this.data.order.activityInfo;
+        if (!activity) return;
+        if (activity.type === 'group') {
+            if (!activity.targetNo) {
+                wx.showToast({ title: '支付成功后可查看拼团进度', icon: 'none' });
+                return;
+            }
+            wx.navigateTo({ url: `/pages/group/detail?group_no=${activity.targetNo}` });
+            return;
+        }
+        if (activity.type === 'slash') {
+            if (!activity.targetNo) {
+                wx.navigateTo({ url: '/pages/slash/list?tab=my' });
+                return;
+            }
+            wx.navigateTo({ url: `/pages/slash/detail?slash_no=${activity.targetNo}` });
+        }
     }
 });

@@ -121,10 +121,10 @@
       </view>
     </view>
 
-    <!-- 积分兑换：抽奖 + 活动页专享/限时商品 -->
+    <!-- 积分兑换：活动页专享/限时商品 -->
     <view class="tab-panel redeem-panel" wx:if="{{activeTab === 'redeem'}}">
-      <view class="redeem-hint">使用积分参与抽奖，或在活动页购买积分/现金专享商品</view>
-      <view class="redeem-card redeem-card-lottery" bindtap="onOpenLottery" hover-class="redeem-card-hover">
+      <view class="redeem-hint">可在活动页购买积分/现金专享商品</view>
+      <view class="redeem-card redeem-card-lottery" wx:if="{{showLotteryEntry}}" bindtap="onOpenLottery" hover-class="redeem-card-hover">
         <view class="redeem-card-icon">🎰</view>
         <view class="redeem-card-body">
           <text class="redeem-card-title">积分抽奖</text>

@@ -10,12 +10,13 @@ const defaultDataSource = process.env.ADMIN_DATA_SOURCE
     ? String(process.env.ADMIN_DATA_SOURCE).toLowerCase()
     : (inferredCloudbaseEnvId ? 'cloudbase' : 'filesystem');
 const bundledSeedRoot = path.resolve(serviceRoot, '.runtime', 'overrides');
+const projectRoot = path.resolve(serviceRoot, '..', '..');
 const dataRoot = process.env.ADMIN_DATA_ROOT
     ? path.resolve(process.env.ADMIN_DATA_ROOT)
-    : (isFunctionRuntime ? bundledSeedRoot : path.resolve(serviceRoot, '..', '..', 'cloud-mp', 'mysql', 'jsonl'));
+    : (isFunctionRuntime ? bundledSeedRoot : path.resolve(projectRoot, 'mysql', 'jsonl'));
 const normalizedDataRoot = process.env.ADMIN_NORMALIZED_DATA_ROOT
     ? path.resolve(process.env.ADMIN_NORMALIZED_DATA_ROOT)
-    : (isFunctionRuntime ? bundledSeedRoot : path.resolve(serviceRoot, '..', '..', 'cloud-mp', 'cloudbase-seed'));
+    : (isFunctionRuntime ? bundledSeedRoot : path.resolve(projectRoot, 'cloudbase-seed'));
 const runtimeRoot = process.env.ADMIN_RUNTIME_ROOT
     ? path.resolve(process.env.ADMIN_RUNTIME_ROOT)
     : (isFunctionRuntime

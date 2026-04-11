@@ -54,11 +54,20 @@
         <text class="order-no">{{item.order_no}}</text>
         <text class="order-status {{item.displayStatus || item.status}} {{item.hasActiveRefund ? 'refunding' : ''}}">{{item.statusText}}</text>
       </view>
+      <!-- 待付款倒计时 -->
+      <view class="order-countdown" wx:if="{{item.status === 'pending' && item.countdownText}}">
+        <text class="countdown-text">剩余 {{item.countdownText}}</text>
+      </view>
+      <view class="activity-strip activity-strip-{{item.activityInfo.type}}" wx:if="{{item.activityInfo}}">
+        <text class="activity-strip-label">{{item.activityInfo.label}}订单</text>
+        <text class="activity-strip-text" wx:if="{{item.activityInfo.type === 'group' && !item.activityInfo.targetNo}}">支付成功后生成拼团进度</text>
+        <text class="activity-strip-text" wx:else>可继续查看活动状态</text>
+      </view>
 
       <!-- 商品信息 -->
       <view class="order-products" bindtap="onOrderTap" data-order="{{item}}">
         <view class="order-product" wx:if="{{item.product}}">
-          <image class="product-image" src="{{item.product.images[0]}}" mode="aspectFill" wx:if="{{item.product.images && item.product.images.length > 0}}"></image>
+          <image class="product-image" src="{{item.product.images[0] || ''}}" mode="aspectFill" wx:if="{{item.product.images && item.product.images.length > 0}}"></image>
           <view class="product-image product-image-placeholder" wx:else>
             <image class="placeholder-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
           </view>
@@ -91,6 +100,10 @@
 
           <!-- ★ 无活跃退款时：正常按钮逻辑 -->
           <block wx:else>
+            <view class="action-row single" wx:if="{{item.activityInfo}}">
+              <view class="btn btn-sm btn-soft {{item.activityInfo.disabled ? 'btn-disabled' : ''}}"
+                    catchtap="onViewActivity" data-order="{{item}}">{{item.activityInfo.actionText}}</view>
+            </view>
             <!-- 待付款 -->
             <block wx:if="{{item.status === 'pending'}}">
               <view class="action-row">

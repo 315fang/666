@@ -229,10 +229,16 @@ const routes = [
         meta: { title: '操作日志', icon: 'List', group: '平台与运维', order: 3, permission: 'logs' }
       },
       {
+        path: 'system-config',
+        name: 'SystemConfig',
+        component: () => import('@/views/system-config/index.vue'),
+        meta: { title: '系统配置', icon: 'SetUp', group: '平台与运维', order: 4, permission: 'settings_manage' }
+      },
+      {
         path: 'content-map',
         name: 'ContentMap',
         component: () => import('@/views/content-map/index.vue'),
-        meta: { title: '内容归属表', icon: 'Document', group: '平台与运维', order: 4, permission: 'content' }
+        meta: { title: '内容归属表', icon: 'Document', group: '平台与运维', order: 5, permission: 'content' }
       }
     ]
   },

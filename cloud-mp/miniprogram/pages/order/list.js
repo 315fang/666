@@ -4,6 +4,35 @@ const { ORDER_STATUS, ORDER_STATUS_TEXT } = require('../../config/constants');
 const { parseImages } = require('../../utils/dataFormatter');
 const { ErrorHandler } = require('../../utils/errorHandler');
 
+function buildOrderActivityInfo(order = {}) {
+    const firstItem = Array.isArray(order.items) ? (order.items[0] || {}) : {};
+    const type = order.type || order.order_type || firstItem.activity_type || '';
+    const groupNo = order.group_no || firstItem.group_no || '';
+    const slashNo = order.slash_no || firstItem.slash_no || '';
+
+    if (type === 'group' || groupNo || order.group_activity_id || firstItem.group_activity_id) {
+        return {
+            type: 'group',
+            label: '拼团',
+            actionText: groupNo ? '查看进度' : '支付后查看',
+            targetNo: groupNo,
+            disabled: !groupNo
+        };
+    }
+
+    if (type === 'slash' || slashNo) {
+        return {
+            type: 'slash',
+            label: '砍价',
+            actionText: slashNo ? '查看详情' : '去我的砍价',
+            targetNo: slashNo,
+            disabled: false
+        };
+    }
+
+    return null;
+}
+
 Page({
     data: {
         orders: [],
@@ -118,6 +147,7 @@ Page({
                     order.statusText = ORDER_STATUS_TEXT[order.status] || '未知状态';
                     order.displayStatus = order.status;
                 }
+                order.activityInfo = buildOrderActivityInfo(order);
 
                 return order;
             });
@@ -145,7 +175,7 @@ Page({
                     order.product.images = parseImages(order.product.images); // ★ 统一使用 dataFormatter.parseImages
                 }
 
-                return {
+                const item = {
                     ...order,
                     id: order.id,
                     hasActiveRefund: ['pending', 'approved', 'processing'].includes(refund.status),
@@ -156,6 +186,8 @@ Page({
                     refundType: refund.type,
                     refundAmount: refund.amount
                 };
+                item.activityInfo = buildOrderActivityInfo(item);
+                return item;
             });
 
             this._applyAnimAndSet(newOrders, append, refundList.length >= limit);
@@ -355,6 +387,27 @@ Page({
             wx.navigateTo({
                 url: `/pages/order/refund-detail?id=${order.refundId}`
             });
+        }
+    },
+
+    onViewActivity(e) {
+        const order = e.currentTarget.dataset.order || {};
+        const activity = order.activityInfo || buildOrderActivityInfo(order);
+        if (!activity) return;
+        if (activity.type === 'group') {
+            if (!activity.targetNo) {
+                wx.showToast({ title: '支付成功后可查看拼团进度', icon: 'none' });
+                return;
+            }
+            wx.navigateTo({ url: `/pages/group/detail?group_no=${activity.targetNo}` });
+            return;
+        }
+        if (activity.type === 'slash') {
+            if (!activity.targetNo) {
+                wx.navigateTo({ url: '/pages/slash/list?tab=my' });
+                return;
+            }
+            wx.navigateTo({ url: `/pages/slash/detail?slash_no=${activity.targetNo}` });
         }
     },
 

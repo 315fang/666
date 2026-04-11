@@ -4,6 +4,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const http = require('http');
+const https = require('https');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
@@ -85,7 +87,25 @@ function nowIso() {
 }
 
 function toBoolean(value) {
-    return value === true || value === 1 || value === '1';
+    if (value === true || value === 1 || value === '1') return true;
+    const normalized = pickString(value).trim().toLowerCase();
+    if (!normalized) return false;
+    return ['true', 'yes', 'y', 'on', 'enabled', 'active', 'on_sale', 'approved', 'online', 'show', 'visible', 'display'].includes(normalized);
+}
+
+function normalizeDateValue(value, fallback = '') {
+    if (value == null || value === '') return fallback;
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' && Number.isFinite(value)) return new Date(value).toISOString();
+    if (typeof value === 'object') {
+        const rawDate = value.$date ?? value.value ?? null;
+        if (rawDate == null || rawDate === '') return fallback;
+        const numeric = Number(rawDate);
+        if (Number.isFinite(numeric)) return new Date(numeric).toISOString();
+        if (typeof rawDate === 'string') return rawDate;
+    }
+    return fallback;
 }
 
 function normalizePermissionList(rawPermissions) {
@@ -350,10 +370,7 @@ function getManagedStorageFolder() {
 }
 
 function isManagedStorageStrict() {
-    const config = getStorageConfigSnapshot();
-    const provider = pickString(config.provider, 'cloudbase');
-    const mode = pickString(config.mode, 'managed');
-    return provider === 'cloudbase' && mode !== 'fallback-local';
+    return true;
 }
 
 function isCloudFileId(value) {
@@ -393,13 +410,20 @@ async function resolveAssetValue(value) {
 
 async function normalizeBannerRecordAsync(banner) {
     const fileId = banner.file_id || '';
-    const imageUrl = await resolveAssetValue(banner.image_url || banner.url || fileId);
+    const imageUrl = await resolveAssetValue(banner.image_url || banner.url || banner.image || banner.cover_image || fileId);
+    const isActive = toBoolean(banner.status ?? banner.is_active ?? 1) ? 1 : 0;
     return {
         ...banner,
         id: banner.id || banner._legacy_id || banner._id,
         file_id: fileId,
         image_url: imageUrl,
-        url: imageUrl
+        image: imageUrl,
+        cover_image: imageUrl,
+        url: imageUrl,
+        is_active: isActive,
+        status: isActive,
+        created_at: normalizeDateValue(banner.created_at),
+        updated_at: normalizeDateValue(banner.updated_at)
     };
 }
 
@@ -452,6 +476,166 @@ async function uploadManagedAsset(file) {
         url,
         cloud_path: cloudPath
     };
+}
+
+function isRemoteHttpUrl(value) {
+    return /^https?:\/\//i.test(pickString(value).trim());
+}
+
+function getMaterialMigrationSource(item) {
+    const fileId = pickString(item?.file_id).trim();
+    const rawUrl = pickString(item?.url || item?.image_url || item?.temp_url).trim();
+    if (isCloudFileId(fileId)) return null;
+    if (isCloudFileId(rawUrl)) return { kind: 'cloud-id', value: rawUrl };
+    if (/^\/(?:uploads)(?:\/|$)/.test(rawUrl)) return { kind: 'local', value: rawUrl };
+    if (isRemoteHttpUrl(rawUrl)) return { kind: 'remote', value: rawUrl };
+    return null;
+}
+
+function getExtensionByMimeType(mimeType) {
+    const normalized = pickString(mimeType).split(';')[0].trim().toLowerCase();
+    const mapping = {
+        'image/jpeg': '.jpg',
+        'image/jpg': '.jpg',
+        'image/png': '.png',
+        'image/webp': '.webp',
+        'image/gif': '.gif',
+        'image/svg+xml': '.svg',
+        'image/bmp': '.bmp',
+        'image/x-icon': '.ico',
+        'image/vnd.microsoft.icon': '.ico',
+        'image/avif': '.avif'
+    };
+    return mapping[normalized] || '';
+}
+
+function getMimeTypeByFilename(fileName) {
+    const ext = path.extname(fileName || '').toLowerCase();
+    const mapping = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.webp': 'image/webp',
+        '.gif': 'image/gif',
+        '.svg': 'image/svg+xml',
+        '.bmp': 'image/bmp',
+        '.ico': 'image/x-icon',
+        '.avif': 'image/avif'
+    };
+    return mapping[ext] || 'application/octet-stream';
+}
+
+function getFileNameFromUrl(url, mimeType) {
+    try {
+        const parsed = new URL(url);
+        const baseName = path.basename(decodeURIComponent(parsed.pathname || ''));
+        if (baseName && baseName !== '/' && path.extname(baseName)) return baseName;
+        const ext = path.extname(baseName || '') || getExtensionByMimeType(mimeType) || '.bin';
+        return `${Date.now()}_${crypto.randomBytes(4).toString('hex')}${ext}`;
+    } catch (_) {
+        const ext = getExtensionByMimeType(mimeType) || '.bin';
+        return `${Date.now()}_${crypto.randomBytes(4).toString('hex')}${ext}`;
+    }
+}
+
+async function downloadRemoteBuffer(url, redirectCount = 0) {
+    if (redirectCount > 5) {
+        throw new Error('远程文件重定向次数过多');
+    }
+    return new Promise((resolve, reject) => {
+        const transport = /^https:/i.test(url) ? https : http;
+        const request = transport.get(url, {
+            headers: {
+                'User-Agent': 'cloud-mp-admin-migrator/1.0',
+                Accept: '*/*'
+            }
+        }, (response) => {
+            const statusCode = Number(response.statusCode || 0);
+            if ([301, 302, 303, 307, 308].includes(statusCode) && response.headers.location) {
+                response.resume();
+                const nextUrl = new URL(response.headers.location, url).toString();
+                resolve(downloadRemoteBuffer(nextUrl, redirectCount + 1));
+                return;
+            }
+            if (statusCode < 200 || statusCode >= 300) {
+                response.resume();
+                reject(new Error(`下载失败，状态码 ${statusCode || 'unknown'}`));
+                return;
+            }
+            const chunks = [];
+            let total = 0;
+            response.on('data', (chunk) => {
+                total += chunk.length;
+                if (total > 20 * 1024 * 1024) {
+                    request.destroy(new Error('远程文件超过 20MB 限制'));
+                    return;
+                }
+                chunks.push(chunk);
+            });
+            response.on('end', () => {
+                const mimeType = pickString(response.headers['content-type']).split(';')[0].trim() || getMimeTypeByFilename(url);
+                resolve({
+                    buffer: Buffer.concat(chunks),
+                    mimeType,
+                    fileName: getFileNameFromUrl(url, mimeType)
+                });
+            });
+        });
+        request.setTimeout(15000, () => request.destroy(new Error('下载远程文件超时')));
+        request.on('error', reject);
+    });
+}
+
+async function migrateMaterialAsset(item) {
+    const source = getMaterialMigrationSource(item);
+    if (!source) {
+        return { skipped: true, reason: '该素材无需迁移' };
+    }
+    if (source.kind === 'cloud-id') {
+        return {
+            uploaded: {
+                provider: 'cloudbase',
+                file_id: source.value,
+                url: await resolveManagedFileUrl(source.value),
+                cloud_path: ''
+            },
+            source
+        };
+    }
+    if (source.kind === 'local') {
+        const rel = source.value.replace(/^\/+/, '');
+        const localPath = path.join(uploadsRoot, rel.replace(/^uploads\//, ''));
+        if (!fs.existsSync(localPath)) {
+            throw new Error('本地文件不存在');
+        }
+        const buffer = fs.readFileSync(localPath);
+        const fileName = path.basename(localPath);
+        const file = {
+            originalname: fileName,
+            mimetype: getMimeTypeByFilename(fileName),
+            size: buffer.length,
+            buffer
+        };
+        return {
+            uploaded: await uploadManagedAsset(file),
+            source,
+            localPath
+        };
+    }
+    if (source.kind === 'remote') {
+        const remoteFile = await downloadRemoteBuffer(source.value);
+        const file = {
+            originalname: remoteFile.fileName,
+            mimetype: remoteFile.mimeType,
+            size: remoteFile.buffer.length,
+            buffer: remoteFile.buffer
+        };
+        return {
+            uploaded: await uploadManagedAsset(file),
+            source
+        };
+    }
+    throw new Error('暂不支持的迁移来源');
 }
 
 function paginate(rows, req) {
@@ -522,8 +706,8 @@ function parseAddressSnapshot(value) {
 
 function sortByUpdatedDesc(rows) {
     return [...rows].sort((a, b) => {
-        const left = new Date(a.updated_at || a.created_at || 0).getTime();
-        const right = new Date(b.updated_at || b.created_at || 0).getTime();
+        const left = new Date(normalizeDateValue(a.updated_at || a.created_at, 0) || 0).getTime();
+        const right = new Date(normalizeDateValue(b.updated_at || b.created_at, 0) || 0).getTime();
         return right - left;
     });
 }
@@ -571,13 +755,20 @@ function productWithRelations(product, categories, skus, reviews) {
 
 function normalizeBannerRecord(banner) {
     const fileId = banner.file_id || '';
-    const imageUrl = assetUrl(banner.image_url || banner.url || fileId);
+    const imageUrl = assetUrl(banner.image_url || banner.url || banner.image || banner.cover_image || fileId);
+    const isActive = toBoolean(banner.status ?? banner.is_active ?? 1) ? 1 : 0;
     return {
         ...banner,
         id: banner.id || banner._legacy_id || banner._id,
         file_id: fileId,
         image_url: imageUrl,
-        url: imageUrl
+        image: imageUrl,
+        cover_image: imageUrl,
+        url: imageUrl,
+        is_active: isActive,
+        status: isActive,
+        created_at: normalizeDateValue(banner.created_at),
+        updated_at: normalizeDateValue(banner.updated_at)
     };
 }
 
@@ -624,7 +815,7 @@ function getMiniProgramDefault() {
             show_station_entry: false,
             show_pickup_entry: false,
             enable_logistics_entry: true,
-            enable_lottery_entry: true
+            enable_lottery_entry: false
         },
         activity_page_config: {
             permanent_section_title: '常驻活动',
@@ -859,7 +1050,60 @@ function getUserNickname(user) {
 }
 
 function getUserAvatar(user) {
-    return assetUrl(user?.avatar_url || user?.avatarUrl || '');
+    return assetUrl(user?.avatar_url || user?.avatarUrl || user?.avatar || user?.headimgurl || '');
+}
+
+function buildReviewRecord(review, users = [], products = [], orders = []) {
+    const product = findByLookup(products, review?.product_id);
+    const user = findUserByAnyId(users, review?.user_id ?? review?.openid);
+    const order = findByLookup(orders, review?.order_id);
+    const productImages = toArray(product?.images).map(assetUrl);
+    const productImage = productImages[0] || assetUrl(product?.image || product?.cover_image || '');
+    const userNickname = getUserNickname(user) || '用户';
+    const userAvatar = getUserAvatar(user);
+
+    return {
+        ...review,
+        id: primaryId(review),
+        status: toBoolean(review?.status ?? 1) ? 1 : 0,
+        is_featured: toBoolean(review?.is_featured ?? review?.featured ?? 0) ? 1 : 0,
+        reply_content: pickString(review?.reply_content || review?.reply || ''),
+        rating: toNumber(review?.rating, 5),
+        content: pickString(review?.content),
+        images: toArray(review?.images).map(assetUrl),
+        created_at: normalizeDateValue(review?.created_at),
+        updated_at: normalizeDateValue(review?.updated_at),
+        user_id: primaryId(user) || review?.user_id || review?.openid || null,
+        nickname: userNickname,
+        avatar_url: userAvatar,
+        user: {
+            id: primaryId(user) || review?.user_id || review?.openid || null,
+            nickname: userNickname,
+            name: userNickname,
+            avatar_url: userAvatar,
+            avatar: userAvatar,
+            phone: pickString(user?.phone),
+            openid: pickString(user?.openid)
+        },
+        product_id: primaryId(product) || review?.product_id || null,
+        product_name: pickString(product?.name || '商品'),
+        product_image: productImage,
+        product: {
+            id: primaryId(product) || review?.product_id || null,
+            name: pickString(product?.name || '商品'),
+            image: productImage,
+            cover_image: productImage,
+            images: productImages,
+            status: toBoolean(product?.status ?? 1) ? 1 : 0
+        },
+        order_id: primaryId(order) || review?.order_id || null,
+        order_no: pickString(order?.order_no || review?.order_no),
+        order: order ? {
+            id: primaryId(order),
+            order_no: pickString(order.order_no),
+            status: pickString(order.status)
+        } : null
+    };
 }
 
 function getUserParentRef(user) {
@@ -1879,14 +2123,22 @@ app.put('/admin/api/products/:id', auth, requirePermission('products'), (req, re
     ok(res, rows[index]);
 });
 
-app.put('/admin/api/products/:id/status', auth, requirePermission('products'), (req, res) => {
-    const rows = getCollection('products');
-    const index = rows.findIndex((item) => Number(item.id) === Number(req.params.id));
-    if (index === -1) return fail(res, '商品不存在', 404);
-    rows[index] = { ...rows[index], status: toBoolean(req.body?.status) ? 1 : 0, updated_at: nowIso() };
-    saveCollection('products', rows);
-    ok(res, rows[index]);
-});
+function updateProductStatus(req, res) {
+    const nextStatus = toBoolean(req.body?.status ?? req.body?.is_active ?? req.body?.enabled ?? req.body?.value) ? 1 : 0;
+    const row = patchCollectionRow('products', req.params.id, (item) => ({
+        ...item,
+        status: nextStatus,
+        is_active: nextStatus,
+        updated_at: nowIso()
+    }));
+    if (!row) return fail(res, '商品不存在', 404);
+    ok(res, row);
+}
+
+app.put('/admin/api/products/:id/status', auth, requirePermission('products'), updateProductStatus);
+app.post('/admin/api/products/:id/status', auth, requirePermission('products'), updateProductStatus);
+app.put('/admin/api/products/:id/toggle', auth, requirePermission('products'), updateProductStatus);
+app.post('/admin/api/products/:id/toggle', auth, requirePermission('products'), updateProductStatus);
 
 app.delete('/admin/api/products/:id', auth, requirePermission('products'), (req, res) => {
     const rows = getCollection('products');
@@ -2321,28 +2573,10 @@ app.post('/admin/api/upload', auth, requirePermission('materials'), uploadSingle
                 cloud_path: managedUpload.cloud_path
             });
         }
-        if (isManagedStorageStrict()) {
-            if (uploadFile?.path) {
-                try { fs.unlinkSync(uploadFile.path); } catch (_) {}
-            }
-            return fail(res, '当前环境要求新素材必须上传到 CloudBase 云存储，本地兜底已禁用。', 503);
+        if (uploadFile?.path) {
+            try { fs.unlinkSync(uploadFile.path); } catch (_) {}
         }
-        const ext = path.extname(uploadFile.originalname || '') || '';
-        const fileName = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`;
-        const targetPath = path.join(uploadsRoot, fileName);
-        if (uploadFile.path) {
-            fs.renameSync(uploadFile.path, targetPath);
-        } else if (Buffer.isBuffer(uploadFile.buffer)) {
-            fs.writeFileSync(targetPath, uploadFile.buffer);
-        }
-        return ok(res, {
-            name: uploadFile.originalname,
-            url: assetUrl(`/uploads/${fileName}`),
-            file_id: `local-upload://${fileName}`,
-            size: uploadFile.size,
-            mime_type: uploadFile.mimetype,
-            provider: 'local'
-        });
+        return fail(res, '上传失败：当前素材上传已强制使用微信云开发存储，请确认 admin-api 运行在 CloudBase 云函数环境并已正确绑定环境。', 503);
     } catch (error) {
         if (uploadFile?.path) {
             try { fs.unlinkSync(uploadFile.path); } catch (_) {}
@@ -2362,9 +2596,19 @@ app.get('/admin/api/storage/config', auth, requirePermission('materials'), (req,
 });
 
 app.put('/admin/api/storage/config', auth, requirePermission('materials'), (req, res) => {
-    const nextConfig = { provider: 'cloudbase', bucket: '', folder: 'materials', mode: 'managed', ...toObject(req.body, {}) };
+    const requestConfig = toObject(req.body, {});
+    const nextConfig = {
+        provider: 'cloudbase',
+        bucket: '',
+        folder: pickString(requestConfig.folder, 'materials') || 'materials',
+        mode: 'managed'
+    };
     saveSingleton('storage-config', nextConfig);
-    ok(res, nextConfig);
+    ok(res, {
+        ...nextConfig,
+        locked: true,
+        message: '素材上传已固定为 CloudBase 云存储，不能再切回本地或其他存储。'
+    });
 });
 
 app.post('/admin/api/storage/test', auth, requirePermission('materials'), async (req, res) => {
@@ -2430,20 +2674,39 @@ app.post('/admin/api/banners', auth, requirePermission('content'), async (req, r
 
 app.put('/admin/api/banners/:id', auth, requirePermission('content'), async (req, res) => {
     const rows = getCollection('banners');
-    const index = rows.findIndex((item) => Number(item.id) === Number(req.params.id));
+    const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
     if (index === -1) return fail(res, 'Banner 不存在', 404);
     rows[index] = {
         ...rows[index],
         ...req.body,
         file_id: req.body?.file_id != null ? pickString(req.body.file_id) : rows[index].file_id || '',
-        image_url: req.body?.image_url != null || req.body?.url != null || req.body?.file_id != null
-            ? pickString(req.body?.image_url || req.body?.url || req.body?.file_id)
+        image_url: req.body?.image_url != null || req.body?.url != null || req.body?.file_id != null || req.body?.image != null || req.body?.cover_image != null
+            ? pickString(req.body?.image_url || req.body?.url || req.body?.image || req.body?.cover_image || req.body?.file_id)
             : rows[index].image_url,
         updated_at: nowIso()
     };
     saveCollection('banners', rows);
     ok(res, await normalizeBannerRecordAsync(rows[index]));
 });
+
+async function updateBannerStatus(req, res) {
+    const row = patchCollectionRow('banners', req.params.id, (item) => {
+        const nextStatus = toBoolean(req.body?.status ?? req.body?.is_active ?? req.body?.enabled ?? req.body?.value ?? 1) ? 1 : 0;
+        return {
+            ...item,
+            status: nextStatus,
+            is_active: nextStatus,
+            updated_at: nowIso()
+        };
+    });
+    if (!row) return fail(res, 'Banner 不存在', 404);
+    ok(res, await normalizeBannerRecordAsync(row));
+}
+
+app.put('/admin/api/banners/:id/status', auth, requirePermission('content'), updateBannerStatus);
+app.post('/admin/api/banners/:id/status', auth, requirePermission('content'), updateBannerStatus);
+app.put('/admin/api/banners/:id/toggle', auth, requirePermission('content'), updateBannerStatus);
+app.post('/admin/api/banners/:id/toggle', auth, requirePermission('content'), updateBannerStatus);
 
 app.delete('/admin/api/banners/:id', auth, requirePermission('content'), (req, res) => {
     const rows = getCollection('banners');
@@ -2515,16 +2778,47 @@ app.get('/admin/api/logs/export', auth, (req, res) => {
     res.send(JSON.stringify(getCollection('admin_audit_logs'), null, 2));
 });
 
-app.get('/admin/api/reviews', auth, (req, res) => ok(res, paginate(sortByUpdatedDesc(getCollection('reviews')), req)));
-
-app.put('/admin/api/reviews/:id', auth, (req, res) => {
-    const rows = getCollection('reviews');
-    const index = rows.findIndex((item) => Number(item.id) === Number(req.params.id));
-    if (index === -1) return fail(res, '评价不存在', 404);
-    rows[index] = { ...rows[index], ...req.body, updated_at: nowIso() };
-    saveCollection('reviews', rows);
-    ok(res, rows[index]);
+app.get('/admin/api/reviews', auth, (req, res) => {
+    const users = getCollection('users');
+    const products = getCollection('products');
+    const orders = getCollection('orders');
+    let rows = sortByUpdatedDesc(getCollection('reviews')).map((item) => buildReviewRecord(item, users, products, orders));
+    const keyword = pickString(req.query.keyword).trim().toLowerCase();
+    const status = pickString(req.query.status).trim();
+    if (keyword) {
+        rows = rows.filter((item) => [
+            item.content,
+            item.product_name,
+            item.nickname,
+            item.order_no,
+            item.reply_content
+        ].filter(Boolean).join(' ').toLowerCase().includes(keyword));
+    }
+    if (status !== '') rows = rows.filter((item) => String(item.status) === status);
+    ok(res, paginate(rows, req));
 });
+
+function updateReviewRow(req, res, patcher) {
+    const row = patchCollectionRow('reviews', req.params.id, (item) => ({
+        ...item,
+        ...patcher(item),
+        updated_at: nowIso()
+    }));
+    if (!row) return fail(res, '评价不存在', 404);
+    const users = getCollection('users');
+    const products = getCollection('products');
+    const orders = getCollection('orders');
+    ok(res, buildReviewRecord(row, users, products, orders));
+}
+
+app.put('/admin/api/reviews/:id', auth, (req, res) => updateReviewRow(req, res, () => ({ ...toObject(req.body, {}) })));
+app.post('/admin/api/reviews/:id', auth, (req, res) => updateReviewRow(req, res, () => ({ ...toObject(req.body, {}) })));
+app.put('/admin/api/reviews/:id/status', auth, (req, res) => updateReviewRow(req, res, () => ({ status: toBoolean(req.body?.status ?? req.body?.visible ?? req.body?.enabled ?? 1) ? 1 : 0 })));
+app.post('/admin/api/reviews/:id/status', auth, (req, res) => updateReviewRow(req, res, () => ({ status: toBoolean(req.body?.status ?? req.body?.visible ?? req.body?.enabled ?? 1) ? 1 : 0 })));
+app.put('/admin/api/reviews/:id/featured', auth, (req, res) => updateReviewRow(req, res, () => ({ is_featured: toBoolean(req.body?.is_featured ?? req.body?.featured ?? req.body?.value ?? 1) ? 1 : 0 })));
+app.post('/admin/api/reviews/:id/featured', auth, (req, res) => updateReviewRow(req, res, () => ({ is_featured: toBoolean(req.body?.is_featured ?? req.body?.featured ?? req.body?.value ?? 1) ? 1 : 0 })));
+app.put('/admin/api/reviews/:id/reply', auth, (req, res) => updateReviewRow(req, res, () => ({ reply_content: pickString(req.body?.reply_content ?? req.body?.reply ?? req.body?.content) })));
+app.post('/admin/api/reviews/:id/reply', auth, (req, res) => updateReviewRow(req, res, () => ({ reply_content: pickString(req.body?.reply_content ?? req.body?.reply ?? req.body?.content) })));
 
 app.get('/admin/api/home-sections', auth, requirePermission('content'), (req, res) => {
     const rows = sortByUpdatedDesc(getCollection('content_boards'));
@@ -3819,6 +4113,101 @@ app.get('/admin/api/db-indexes/:tableName', auth, (req, res) => ok(res, { list: 
 app.get('/admin/api/db-indexes/:tableName/columns', auth, (req, res) => ok(res, { list: [] }));
 app.post('/admin/api/db-indexes', auth, (req, res) => ok(res, { success: true }));
 app.delete('/admin/api/db-indexes/:tableName/:indexName', auth, (req, res) => ok(res, { success: true }));
+
+// Storage migration: move legacy local /uploads and remote COS/http materials to CloudBase storage
+app.get('/admin/api/storage/migrate/preview', auth, requirePermission('materials'), async (req, res) => {
+    try {
+        const rows = getCollection('materials');
+        const needMigrate = rows
+            .map((item) => ({ item, source: getMaterialMigrationSource(item) }))
+            .filter((entry) => entry.source);
+        const by_source = needMigrate.reduce((acc, entry) => {
+            acc[entry.source.kind] = (acc[entry.source.kind] || 0) + 1;
+            return acc;
+        }, {});
+        ok(res, {
+            total: rows.length,
+            need_migrate: needMigrate.length,
+            by_source,
+            sample: needMigrate.slice(0, 10).map(({ item, source }) => ({
+                id: item.id || item._legacy_id || item._id,
+                title: item.title || item.name || '',
+                source: source.kind,
+                url: source.value
+            }))
+        });
+    } catch (error) {
+        fail(res, error.message || '预览失败', 500);
+    }
+});
+
+app.post('/admin/api/storage/migrate', auth, requirePermission('materials'), async (req, res) => {
+    const limit = Math.max(1, Math.min(50, toNumber(req.body?.limit, 10)));
+    let success = 0;
+    let failed = 0;
+    const details = [];
+    try {
+        const rows = getCollection('materials');
+        const candidates = rows
+            .map((item) => ({ item, source: getMaterialMigrationSource(item) }))
+            .filter((entry) => entry.source)
+            .slice(0, limit);
+        for (const { item, source } of candidates) {
+            const sourceValue = source.value;
+            try {
+                const migrated = await migrateMaterialAsset(item);
+                const uploaded = migrated?.uploaded;
+                if (!uploaded?.file_id) {
+                    failed += 1;
+                    details.push({ id: item.id, title: item.title, source: source.kind, url: sourceValue, error: '上传失败' });
+                    continue;
+                }
+                const updated = {
+                    ...item,
+                    file_id: uploaded.file_id,
+                    url: uploaded.file_id,
+                    image_url: uploaded.file_id,
+                    temp_url: uploaded.url,
+                    updated_at: nowIso()
+                };
+                const index = rows.findIndex((row) => Number(row.id || row._legacy_id || row._id) === Number(item.id || item._legacy_id || item._id));
+                if (index >= 0) rows[index] = updated;
+                success += 1;
+                details.push({
+                    id: item.id || item._legacy_id || item._id,
+                    title: item.title || item.name || '',
+                    source: source.kind,
+                    from: sourceValue,
+                    to: uploaded.file_id
+                });
+            } catch (error) {
+                failed += 1;
+                details.push({
+                    id: item.id || item._legacy_id || item._id,
+                    title: item.title || item.name || '',
+                    source: source.kind,
+                    url: sourceValue,
+                    error: error.message || '未知错误'
+                });
+            }
+        }
+        if (success > 0) {
+            saveCollection('materials', rows);
+            await Promise.resolve(dataStore.flush?.());
+        }
+        ok(res, {
+            success: true,
+            requested_limit: limit,
+            processed: candidates.length,
+            migrated: success,
+            failed,
+            remaining_estimate: Math.max(rows.filter((item) => getMaterialMigrationSource(item)).length - success, 0),
+            details
+        });
+    } catch (error) {
+        fail(res, error.message || '迁移失败', 500);
+    }
+});
 
 app.use((req, res) => fail(res, `未实现的接口：${req.method} ${req.path}`, 404));
 

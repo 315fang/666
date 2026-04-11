@@ -231,7 +231,7 @@ exports.main = cloudFunctionWrapper(async (event) => {
 
     if (action === 'update') {
         try {
-            const cartId = params.cart_id;
+            const cartId = params.cart_id || params.id || params._id;
             const qty = toNumber(params.qty, 0);
 
             if (!cartId) {

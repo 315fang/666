@@ -211,14 +211,19 @@ function defaultPickupTiers() {
   }
 }
 
+function toSafeNumber(value, fallback) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
 function mergePolicyPickupTiers(raw) {
   const d = defaultPickupTiers()
   const src = raw && typeof raw === 'object' ? raw : {}
   for (const k of ['A', 'B', 'C', 'D']) {
     const r = src[k]
     d[k] = {
-      rate: Math.min(1, Math.max(0, Number(r?.rate ?? d[k].rate))),
-      fixed_yuan: Math.max(0, Number(r?.fixed_yuan ?? d[k].fixed_yuan))
+      rate: Math.min(1, Math.max(0, toSafeNumber(r?.rate, d[k].rate))),
+      fixed_yuan: Math.max(0, toSafeNumber(r?.fixed_yuan, d[k].fixed_yuan))
     }
   }
   return d
@@ -279,14 +284,14 @@ const loadPolicy = async () => {
     const d = res?.data || res || {}
     Object.assign(policy, {
       enabled: d.enabled === true,
-      min_apply_role_level: Number(d.min_apply_role_level || 3),
+      min_apply_role_level: toSafeNumber(d.min_apply_role_level, 3),
       pickup_station_subsidy_enabled: d.pickup_station_subsidy_enabled === true,
-      pickup_station_subsidy_amount: Number(d.pickup_station_subsidy_amount || 0),
+      pickup_station_subsidy_amount: toSafeNumber(d.pickup_station_subsidy_amount, 0),
       type_commission_rate: {
-        school: Number(d.type_commission_rate?.school || 0.01),
-        area: Number(d.type_commission_rate?.area || 0.015),
-        city: Number(d.type_commission_rate?.city || 0.02),
-        province: Number(d.type_commission_rate?.province || 0.03)
+        school: toSafeNumber(d.type_commission_rate?.school, 0.01),
+        area: toSafeNumber(d.type_commission_rate?.area, 0.015),
+        city: toSafeNumber(d.type_commission_rate?.city, 0.02),
+        province: toSafeNumber(d.type_commission_rate?.province, 0.03)
       }
     })
     policy.pickup_tiers = mergePolicyPickupTiers(d.pickup_tiers)
@@ -324,9 +329,9 @@ const openStationDialog = (row = null) => {
       district: row.district || '',
       region_name: row.region_name || '',
       address: row.address || '',
-      longitude: row.longitude || '',
-      latitude: row.latitude || '',
-      commission_rate: Number(row.commission_rate || 0.02),
+      longitude: row.longitude ?? '',
+      latitude: row.latitude ?? '',
+      commission_rate: toSafeNumber(row.commission_rate, 0.02),
       status: row.status || 'active',
       pickup_commission_tier: row.pickup_commission_tier || 'A'
     })

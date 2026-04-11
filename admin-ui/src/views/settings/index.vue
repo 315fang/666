@@ -35,13 +35,10 @@
         <el-tab-pane label="支付检测" name="paymentHealth">
           <PaymentHealthPanel
             :loading="paymentHealthLoading"
-            :refreshing="paymentHealthRefreshing"
             :payment-health="paymentHealth"
             :status-type="paymentStatusType"
             :status-label="paymentStatusLabel"
             :format-date-time="formatDateTime"
-            :on-refresh="() => fetchPaymentHealth()"
-            :on-refresh-cert="handleRefreshPaymentCert"
           />
         </el-tab-pane>
 
@@ -97,7 +94,6 @@ const systemStatus = ref({ status: 'ok' })
 const miniProgramLoading = ref(false)
 const miniProgramSaving = ref(false)
 const paymentHealthLoading = ref(false)
-const paymentHealthRefreshing = ref(false)
 const paymentHealth = ref({
   status: 'warning',
   summary: '',
@@ -424,28 +420,29 @@ const formatDateTime = (value) => {
   return date.toLocaleString('zh-CN')
 }
 
-const fetchPaymentHealth = async (params = {}) => {
-  await withLoading(paymentHealthLoading, async () => {
-    const data = await getPaymentHealth(params)
-    paymentHealth.value = {
-      status: data?.status || 'warning',
-      summary: data?.summary || '',
-      checked_at: data?.checked_at || '',
-      checks: Array.isArray(data?.checks) ? data.checks : [],
-      cert_status: data?.cert_status || {},
-      refresh_result: data?.refresh_result || null
-    }
-  }).catch((error) => {
-    console.error('获取支付健康状态失败:', error)
-  })
+function normalizePaymentHealth(data, fallbackSummary = '') {
+  return {
+    status: data?.status || 'warning',
+    summary: data?.summary || fallbackSummary,
+    checked_at: data?.checked_at || '',
+    checks: Array.isArray(data?.checks) ? data.checks : [],
+    cert_status: data?.cert_status || {},
+    refresh_result: data?.refresh_result || null,
+    errors: Array.isArray(data?.errors) ? data.errors : [],
+    warnings: Array.isArray(data?.warnings) ? data.warnings : []
+  }
 }
 
-const handleRefreshPaymentCert = async () => {
-  await withLoading(paymentHealthRefreshing, async () => {
-    await fetchPaymentHealth({ refresh: 1 })
-    ElMessage.success('已完成支付状态重检')
+const fetchPaymentHealth = async () => {
+  await withLoading(paymentHealthLoading, async () => {
+    const data = await getPaymentHealth()
+    paymentHealth.value = normalizePaymentHealth(data, '尚未获取支付检测结果')
   }).catch((error) => {
-    console.error('刷新支付证书失败:', error)
+    console.error('获取支付健康状态失败:', error)
+    paymentHealth.value = normalizePaymentHealth({
+      status: 'error',
+      summary: error?.message || '支付检测加载失败'
+    })
   })
 }
 

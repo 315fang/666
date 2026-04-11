@@ -50,7 +50,7 @@ async function ensureWelcomeCoupons(openid, userId) {
 
         let claimedCount = 0;
         for (const tpl of templates) {
-            const cid = String(tpl.id) || tpl._id;
+            const cid = tpl.id != null ? String(tpl.id) : tpl._id;
             // 检查是否已领
             const existing = await db.collection('user_coupons').where({
                 openid,

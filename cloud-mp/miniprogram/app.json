@@ -1,7 +1,6 @@
 {
     "pages": [
         "pages/index/index",
-        "pages/splash/splash",
         "pages/category/category",
         "pages/activity/activity",
         "pages/activity/n-invite",
@@ -184,11 +183,5 @@
     },
     "style": "v2",
     "sitemapLocation": "sitemap.json",
-    "lazyCodeLoading": "requiredComponents",
-    "requiredPrivateInfos": ["getLocation", "chooseLocation", "chooseAddress"],
-    "permission": {
-        "scope.userLocation": {
-            "desc": "用于推荐附近自提门店和地图选点"
-        }
-    }
+    "lazyCodeLoading": "requiredComponents"
 }

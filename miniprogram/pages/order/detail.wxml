@@ -10,7 +10,9 @@
   <!-- 订单状态（如有退款，覆盖为退款状态） -->
   <view class="status-card status-{{hasActiveRefund ? 'refunding' : order.status}}">
     <text class="status-text">{{hasActiveRefund ? '退款中' : (statusMap[order.status] || order.status)}}</text>
-    <text class="status-desc">{{hasActiveRefund ? statusDescMap['refunding'] : (statusDescMap[order.status] || '')}}</text>
+    <text class="status-desc" wx:if="{{order.status === 'pending' && payCountdownText}}">剩余支付时间 {{payCountdownText}}</text>
+    <text class="status-desc" wx:elif="{{hasActiveRefund}}">{{statusDescMap['refunding']}}</text>
+    <text class="status-desc" wx:else>{{statusDescMap[order.status] || ''}}</text>
   </view>
 
   <!-- 订单流程进度 -->
@@ -92,7 +94,7 @@
   <view class="card product-card">
     <view class="card-title">商品信息</view>
     <view class="product-row" wx:if="{{order.product}}">
-      <image class="product-img" src="{{order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{order.product.images && order.product.images.length > 0}}"></image>
+      <image class="product-img" src="{{order.product.images && order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{order.product.images && order.product.images.length > 0}}"></image>
       <view class="product-img-placeholder" wx:else>
         <image class="placeholder-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
       </view>
@@ -101,6 +103,21 @@
         <text class="product-price">合计 ¥{{order.total_amount}}</text>
         <text class="product-qty">×{{order.quantity}}</text>
       </view>
+    </view>
+  </view>
+
+  <!-- 活动承接 -->
+  <view class="card activity-card activity-card-{{order.activityInfo.type}}" wx:if="{{order.activityInfo}}">
+    <view class="activity-card-head">
+      <view>
+        <text class="activity-label">{{order.activityInfo.label}}</text>
+        <text class="activity-title">{{order.activityInfo.title}}</text>
+      </view>
+      <view class="activity-status">{{order.activityInfo.type === 'group' ? '拼团' : '砍价'}}</view>
+    </view>
+    <text class="activity-desc">{{order.activityInfo.desc}}</text>
+    <view class="activity-action {{order.activityInfo.disabled ? 'activity-action-disabled' : ''}}" bindtap="onViewActivity">
+      {{order.activityInfo.actionText}}
     </view>
   </view>
 
@@ -129,7 +146,19 @@
     </view>
     <view class="info-row">
       <text class="info-label">订单金额</text>
-      <text class="info-value price-value-strong">¥{{order.total_amount}}</text>
+      <text class="info-value">¥{{order.display_original_amount || order.total_amount}}</text>
+    </view>
+    <view class="info-row" wx:if="{{order.coupon_discount > 0}}">
+      <text class="info-label">优惠券抵扣</text>
+      <text class="info-value">-¥{{order.display_coupon_discount || order.coupon_discount}}</text>
+    </view>
+    <view class="info-row" wx:if="{{order.points_discount > 0}}">
+      <text class="info-label">积分抵扣</text>
+      <text class="info-value">-¥{{order.display_points_discount || order.points_discount}}（{{order.points_used}}积分）</text>
+    </view>
+    <view class="info-row" wx:if="{{order.has_discount_breakdown}}">
+      <text class="info-label">实付金额</text>
+      <text class="info-value price-value-strong">¥{{order.display_pay_amount || order.pay_amount || order.actual_price || order.total_amount}}</text>
     </view>
     <view class="info-row" wx:if="{{order.tracking_no}}">
       <text class="info-label">物流单号</text>
@@ -165,7 +194,7 @@
     </view>
     <view class="info-row" wx:if="{{order.distributor}}">
       <text class="info-label">推荐人</text>
-      <text class="info-value">{{order.distributor.nickname}}</text>
+      <text class="info-value">{{order.distributor.nick_name || order.distributor.nickname}}</text>
     </view>
   </view>
 

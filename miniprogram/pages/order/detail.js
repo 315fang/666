@@ -28,6 +28,7 @@ Page({
         orderBubbleVisible: false,
         orderBubbleText: '',
         canViewLogistics: true,
+        payCountdownText: '',
         // 退款相关
         activeRefund: null,
         hasActiveRefund: false,
@@ -95,6 +96,7 @@ Page({
     onUnload() {
         if (this._bubbleTimer) clearTimeout(this._bubbleTimer);
         if (this._payPollTimer) clearTimeout(this._payPollTimer);
+        if (this._countdownTimer) clearInterval(this._countdownTimer);
     },
 
     async loadOrder(idOrNo) {
@@ -130,6 +132,44 @@ Page({
         this._bubbleTimer = setTimeout(() => {
             this.setData({ orderBubbleVisible: false });
         }, 3200);
+    },
+
+    // ── 支付倒计时 ──
+    startPayCountdown(expireAtStr) {
+        if (this._countdownTimer) clearInterval(this._countdownTimer);
+        if (!expireAtStr) {
+            this.setData({ payCountdownText: '' });
+            return;
+        }
+        const expireTs = new Date(expireAtStr).getTime();
+        if (isNaN(expireTs)) {
+            this.setData({ payCountdownText: '' });
+            return;
+        }
+        const ORDER_TIMEOUT_MS = 30 * 60 * 1000; // 后端默认30分钟
+        const fallbackExpireTs = Date.now() + ORDER_TIMEOUT_MS;
+        const targetTs = expireTs > 0 ? expireTs : fallbackExpireTs;
+
+        const tick = () => {
+            const remainMs = targetTs - Date.now();
+            if (remainMs <= 0) {
+                this.setData({ payCountdownText: '已超时' });
+                clearInterval(this._countdownTimer);
+                // 超时后自动刷新订单状态
+                setTimeout(() => {
+                    if (this.data.orderId) this.loadOrder(this.data.orderId);
+                }, 1500);
+                return;
+            }
+            const totalSec = Math.ceil(remainMs / 1000);
+            const min = Math.floor(totalSec / 60);
+            const sec = totalSec % 60;
+            this.setData({
+                payCountdownText: `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`
+            });
+        };
+        tick();
+        this._countdownTimer = setInterval(tick, 1000);
     },
 
     _shouldUseWalletForOrder(orderId) {
@@ -186,5 +226,25 @@ Page({
 
     onPickupCredentialTap() {
         return onPickupCredentialTap(this);
+    },
+
+    onViewActivity() {
+        const activity = this.data.order && this.data.order.activityInfo;
+        if (!activity) return;
+        if (activity.type === 'group') {
+            if (!activity.targetNo) {
+                wx.showToast({ title: '支付成功后可查看拼团进度', icon: 'none' });
+                return;
+            }
+            wx.navigateTo({ url: `/pages/group/detail?group_no=${activity.targetNo}` });
+            return;
+        }
+        if (activity.type === 'slash') {
+            if (!activity.targetNo) {
+                wx.navigateTo({ url: '/pages/slash/list?tab=my' });
+                return;
+            }
+            wx.navigateTo({ url: `/pages/slash/detail?slash_no=${activity.targetNo}` });
+        }
     }
 });

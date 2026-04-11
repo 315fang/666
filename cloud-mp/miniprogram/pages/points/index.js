@@ -2,15 +2,17 @@
 const { get } = require('../../utils/request');
 const { safeBack } = require('../../utils/navigator');
 const { fetchPointSummary, checkinPoints } = require('../../utils/points');
-const { getLightPromptModals } = require('../../utils/miniProgramConfig');
+const { getFeatureFlags, getLightPromptModals } = require('../../utils/miniProgramConfig');
 const { shouldShowDaily, markDailyShown } = require('../../utils/lightPrompt');
 
-function buildEffectiveBenefits(account = {}) {
+function buildEffectiveBenefits(account = {}, featureFlags = {}) {
     const benefits = [
         '下单时可使用积分抵扣，当前最多可抵订单金额的 50%',
-        '可用于积分抽奖',
         '部分活动商品支持积分兑换或积分加现金购买'
     ];
+    if (featureFlags.enable_lottery_entry === true) {
+        benefits.splice(1, 0, '可用于积分抽奖');
+    }
     if (account.next_level) {
         benefits.push(`成长值当前主要用于等级展示，距 ${account.next_level.name} 还差 ${account.next_level.growth_needed || 0} 成长值`);
     } else {
@@ -19,11 +21,14 @@ function buildEffectiveBenefits(account = {}) {
     return benefits;
 }
 
-function getPointsTip() {
+function getPointsTip(featureFlags = {}) {
     const mod = getLightPromptModals().points_checkin || {};
+    const pointsUsageText = featureFlags.enable_lottery_entry === true
+        ? '下单积分抵扣、积分抽奖，以及部分活动商品的积分兑换'
+        : '下单积分抵扣，以及部分活动商品的积分兑换';
     return {
         title: mod.title || '签到与积分',
-        body: '当前已生效的积分能力包括：每日签到得积分、下单积分抵扣、积分抽奖，以及部分活动商品的积分兑换。成长值等级用于页面展示，未明确开放的额外特权暂不生效。'
+        body: `当前已生效的积分能力包括：每日签到得积分、${pointsUsageText}。成长值等级用于页面展示，未明确开放的额外特权暂不生效。`
     };
 }
 
@@ -65,6 +70,10 @@ Page({
         statusBarHeight: 20,
         navTopPadding: 20,
         navBarHeight: 44,
+        featureFlags: {
+            enable_lottery_entry: false
+        },
+        showLotteryEntry: false,
         lightTipShow: false,
         lightTipTitle: '',
         lightTipContent: ''
@@ -72,15 +81,23 @@ Page({
 
     onLoad() {
         const app = getApp();
+        const featureFlags = getFeatureFlags();
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
-            navBarHeight: app.globalData.navBarHeight || 44
+            navBarHeight: app.globalData.navBarHeight || 44,
+            featureFlags,
+            showLotteryEntry: featureFlags.enable_lottery_entry === true
         });
         this.loadAll();
     },
 
     async onShow() {
+        const featureFlags = getFeatureFlags();
+        this.setData({
+            featureFlags,
+            showLotteryEntry: featureFlags.enable_lottery_entry === true
+        });
         await this.loadAccount();
         this._tryPointsCheckinPrompt();
     },
@@ -90,7 +107,7 @@ Page({
         if (!mod || !mod.enabled) return;
         if (!shouldShowDaily('light_tip_points_checkin')) return;
         markDailyShown('light_tip_points_checkin');
-        const tip = getPointsTip();
+        const tip = getPointsTip(this.data.featureFlags);
         this.setData({
             lightTipShow: true,
             lightTipTitle: tip.title,
@@ -104,7 +121,7 @@ Page({
             wx.showToast({ title: '暂无可展示说明', icon: 'none' });
             return;
         }
-        const tip = getPointsTip();
+        const tip = getPointsTip(this.data.featureFlags);
         this.setData({
             lightTipShow: true,
             lightTipTitle: tip.title,
@@ -130,7 +147,7 @@ Page({
             const { account } = await fetchPointSummary();
             this.setData({
                 account,
-                effectiveBenefits: buildEffectiveBenefits(account)
+                effectiveBenefits: buildEffectiveBenefits(account, this.data.featureFlags)
             });
         } catch (e) {
             console.error('加载积分账户失败', e);
@@ -208,6 +225,10 @@ Page({
     },
 
     onOpenLottery() {
+        if (!this.data.showLotteryEntry) {
+            wx.showToast({ title: '抽奖入口暂未开放', icon: 'none' });
+            return;
+        }
         wx.navigateTo({ url: '/pages/lottery/lottery' });
     },
 

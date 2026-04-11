@@ -28,8 +28,6 @@ App({
         statusBarHeight: 20,
         navTopPadding: 20,
         navBarHeight: 44,
-        splashConfig: null,
-        splashConfigPromise: null,
         homePageData: null,
         homeDataPromise: null,
         miniProgramConfig: cloneDefaults(),
@@ -76,7 +74,6 @@ App({
 
         // 并行预拉取首页数据
         this.globalData.homeDataPromise = this.prefetchHomeData();
-        this.prefetchSplashConfig();
 
         // 版本更新检测
         this.checkUpdate();

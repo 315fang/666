@@ -58,6 +58,8 @@ Page({
         // 活动单号
         slashNo: null,
         groupNo: null,
+        groupActivityId: null,
+        orderType: '',
         // B端货款余额支付
         walletBalance: 0,
         useWallet: false,
@@ -99,6 +101,8 @@ Page({
                     totalCount: directBuy.quantity,
                     slashNo: directBuy.slash_no || null,
                     groupNo: directBuy.group_no || null,
+                    groupActivityId: directBuy.group_activity_id || null,
+                    orderType: directBuy.type || '',
                     loading: false
                 });
                 this._refreshPickupAllowed();
@@ -123,6 +127,10 @@ Page({
     },
 
     onShow() {
+        const roleLevel = app.globalData.userInfo?.role_level || 0;
+        if (roleLevel !== this.data.roleLevel) {
+            this.setData({ roleLevel });
+        }
         // 从地址选择页返回时刷新地址
         const selectedAddress = wx.getStorageSync('selectedAddress');
         if (selectedAddress) {
@@ -137,7 +145,11 @@ Page({
         if (!this.data.address) {
             this.loadDefaultAddress();
         }
-        if (app.globalData.isLoggedIn && (this.data.availableCoupons || []).length === 0) {
+        if ((this.data.orderItems || []).length > 0) {
+            this.loadPointBalance();
+            this.loadWalletBalance();
+        }
+        if ((this.data.orderItems || []).length > 0 && ((app.globalData.isLoggedIn && (this.data.availableCoupons || []).length === 0) || (this.data.availableCoupons || []).length === 0)) {
             this.loadAvailableCoupons();
         }
         this._tryAutoCouponUsagePrompt();

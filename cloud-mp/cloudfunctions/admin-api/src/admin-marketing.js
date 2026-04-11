@@ -1,5 +1,7 @@
 'use strict';
 
+const https = require('https');
+
 function registerMarketingRoutes(app, deps) {
     const {
         auth,
@@ -51,6 +53,92 @@ function registerMarketingRoutes(app, deps) {
         else rows[index] = row;
         saveCollection('configs', rows);
         return value;
+    }
+
+    function parseCoordinate(value) {
+        if (value === '' || value == null) return null;
+        const num = Number(value);
+        return Number.isFinite(num) ? num : null;
+    }
+
+    function stationFullAddress(station = {}) {
+        return [
+            pickString(station.province),
+            pickString(station.city),
+            pickString(station.district),
+            pickString(station.address)
+        ].filter(Boolean).join('');
+    }
+
+    function geocodeAddress(fullAddress) {
+        const key = pickString(process.env.TENCENT_MAP_KEY).trim();
+        if (!key || !fullAddress) {
+            return Promise.resolve({ location: null, configured: !!key, error: '' });
+        }
+        const url = `https://apis.map.qq.com/ws/geocoder/v1/?address=${encodeURIComponent(fullAddress)}&key=${encodeURIComponent(key)}`;
+        return new Promise((resolve) => {
+            https.get(url, { headers: { 'User-Agent': 'cloud-mp-admin-api/1.0' } }, (resp) => {
+                let body = '';
+                resp.on('data', (chunk) => { body += chunk; });
+                resp.on('end', () => {
+                    try {
+                        const parsed = JSON.parse(body);
+                        const location = parsed?.result?.location;
+                        const lat = Number(location?.lat);
+                        const lng = Number(location?.lng);
+                        if (parsed?.status === 0 && Number.isFinite(lat) && Number.isFinite(lng)) {
+                            resolve({ location: { latitude: lat, longitude: lng }, configured: true, error: '' });
+                            return;
+                        }
+                        resolve({ location: null, configured: true, error: pickString(parsed?.message) });
+                        return;
+                    } catch (_) {
+                        // Ignore geocoder parse errors and keep the station save path available.
+                    }
+                    resolve({ location: null, configured: true, error: '地图接口返回异常' });
+                });
+            }).on('error', () => resolve({ location: null, configured: true, error: '地图接口请求失败' }));
+        });
+    }
+
+    async function normalizeStationPayload(body = {}, existing = {}) {
+        const payload = {
+            ...existing,
+            ...body,
+            status: body.status || existing.status || 'active',
+            is_pickup_point: toBoolean(body.is_pickup_point ?? existing.is_pickup_point ?? 1) ? 1 : 0,
+            longitude: parseCoordinate(body.longitude ?? existing.longitude),
+            latitude: parseCoordinate(body.latitude ?? existing.latitude),
+            updated_at: nowIso()
+        };
+
+        if (payload.latitude != null && payload.longitude != null) {
+            return { payload, geocodeNote: '' };
+        }
+
+        const fullAddress = stationFullAddress(payload);
+        if (!fullAddress) {
+            return { payload, geocodeNote: '未填写完整地址，已保存但未生成地图坐标' };
+        }
+
+        const result = await geocodeAddress(fullAddress);
+        if (result.location) {
+            return {
+                payload: {
+                    ...payload,
+                    latitude: result.location.latitude,
+                    longitude: result.location.longitude
+                },
+                geocodeNote: '已按地址自动解析经纬度'
+            };
+        }
+
+        return {
+            payload,
+            geocodeNote: result.configured
+                ? `地址解析失败${result.error ? `：${result.error}` : ''}，已保存地址；请在地图选点中手动选择坐标`
+                : '未配置地图密钥，已保存地址但未生成经纬度'
+        };
     }
 
     function crudCollection(options) {
@@ -151,6 +239,19 @@ function registerMarketingRoutes(app, deps) {
         };
     }
 
+    function patchCollectionFlag(collection, id, patch) {
+        const rows = getCollection(collection);
+        const index = rows.findIndex((item) => rowMatchesLookup(item, id));
+        if (index === -1) return null;
+        rows[index] = {
+            ...rows[index],
+            ...patch,
+            updated_at: nowIso()
+        };
+        saveCollection(collection, rows);
+        return rows[index];
+    }
+
     app.get('/admin/api/coupons', auth, requirePermission('products'), (req, res) => {
         let rows = sortByUpdatedDesc(getCollection('coupons')).map(normalizeCoupon);
         const keyword = pickString(req.query.keyword).trim().toLowerCase();
@@ -199,6 +300,21 @@ function registerMarketingRoutes(app, deps) {
         createAuditLog(req.admin, 'coupon.delete', 'coupons', { coupon_id: req.params.id });
         ok(res, { success: true });
     });
+
+    function updateCouponStatus(req, res) {
+        const row = patchCollectionFlag('coupons', req.params.id, {
+            is_active: toBoolean(req.body?.status ?? req.body?.is_active ?? req.body?.enabled ?? req.body?.value ?? 1) ? 1 : 0,
+            status: toBoolean(req.body?.status ?? req.body?.is_active ?? req.body?.enabled ?? req.body?.value ?? 1) ? 1 : 0
+        });
+        if (!row) return fail(res, '优惠券不存在', 404);
+        createAuditLog(req.admin, 'coupon.status', 'coupons', { coupon_id: req.params.id, status: row.status });
+        ok(res, normalizeCoupon(row));
+    }
+
+    app.put('/admin/api/coupons/:id/status', auth, requirePermission('products'), updateCouponStatus);
+    app.post('/admin/api/coupons/:id/status', auth, requirePermission('products'), updateCouponStatus);
+    app.put('/admin/api/coupons/:id/toggle', auth, requirePermission('products'), updateCouponStatus);
+    app.post('/admin/api/coupons/:id/toggle', auth, requirePermission('products'), updateCouponStatus);
 
     app.post('/admin/api/coupons/:id/issue', auth, requirePermission('products'), (req, res) => {
         const coupons = getCollection('coupons');
@@ -394,18 +510,25 @@ function registerMarketingRoutes(app, deps) {
         collection: 'lottery_prizes',
         permission: 'products',
         label: '抽奖奖品',
-        normalize: row => ({
-            ...row,
-            id: row.id || row._legacy_id || row._id,
-            name: pickString(row.name),
-            image_url: assetUrl(row.image_url || row.image || ''),
-            prize_value: toNumber(row.prize_value ?? row.value, 0),
-            cost_points: Math.max(0, toNumber(row.cost_points, 1)),
-            probability: toNumber(row.probability, 0),
-            stock: row.stock == null ? -1 : toNumber(row.stock, -1),
-            sort_order: toNumber(row.sort_order, 0),
-            is_active: toBoolean(row.is_active ?? row.status ?? 1) ? 1 : 0
-        }),
+        normalize: row => {
+            const imageUrl = assetUrl(row.image_url || row.image || row.cover_image || '');
+            const isActive = toBoolean(row.is_active ?? row.status ?? 1) ? 1 : 0;
+            return {
+                ...row,
+                id: row.id || row._legacy_id || row._id,
+                name: pickString(row.name),
+                image_url: imageUrl,
+                image: imageUrl,
+                cover_image: imageUrl,
+                prize_value: toNumber(row.prize_value ?? row.value, 0),
+                cost_points: Math.max(0, toNumber(row.cost_points, 1)),
+                probability: toNumber(row.probability, 0),
+                stock: row.stock == null ? -1 : toNumber(row.stock, -1),
+                sort_order: toNumber(row.sort_order, 0),
+                is_active: isActive,
+                status: isActive
+            };
+        },
         payload: (body, existing) => ({
             ...existing,
             ...body,
@@ -414,6 +537,30 @@ function registerMarketingRoutes(app, deps) {
             updated_at: nowIso()
         })
     });
+
+    function updateLotteryPrizeStatus(req, res) {
+        const row = patchCollectionFlag('lottery_prizes', req.params.id, {
+            is_active: toBoolean(req.body?.status ?? req.body?.is_active ?? req.body?.enabled ?? req.body?.value ?? 1) ? 1 : 0,
+            status: toBoolean(req.body?.status ?? req.body?.is_active ?? req.body?.enabled ?? req.body?.value ?? 1) ? 1 : 0
+        });
+        if (!row) return fail(res, '抽奖奖品不存在', 404);
+        createAuditLog(req.admin, 'lottery_prize.status', 'lottery_prizes', { prize_id: req.params.id, status: row.status });
+        const imageUrl = assetUrl(row.image_url || row.image || row.cover_image || '');
+        ok(res, {
+            ...row,
+            id: row.id || row._legacy_id || row._id,
+            image_url: imageUrl,
+            image: imageUrl,
+            cover_image: imageUrl,
+            is_active: toBoolean(row.is_active ?? row.status ?? 1) ? 1 : 0,
+            status: toBoolean(row.is_active ?? row.status ?? 1) ? 1 : 0
+        });
+    }
+
+    app.put('/admin/api/lottery-prizes/:id/status', auth, requirePermission('products'), updateLotteryPrizeStatus);
+    app.post('/admin/api/lottery-prizes/:id/status', auth, requirePermission('products'), updateLotteryPrizeStatus);
+    app.put('/admin/api/lottery-prizes/:id/toggle', auth, requirePermission('products'), updateLotteryPrizeStatus);
+    app.post('/admin/api/lottery-prizes/:id/toggle', auth, requirePermission('products'), updateLotteryPrizeStatus);
 
     app.get('/admin/api/activity-options', auth, requirePermission('products'), (_req, res) => {
         const groups = getCollection('group_activities').map((item) => ({ key: `group:${item.id || item._id}`, type: 'group', value: item.id || item._id, title: item.name || '拼团活动' }));
@@ -482,28 +629,27 @@ function registerMarketingRoutes(app, deps) {
         });
     });
 
-    app.post('/admin/api/pickup-stations', auth, requirePermission('pickup_stations'), (req, res) => {
+    app.post('/admin/api/pickup-stations', auth, requirePermission('pickup_stations'), async (req, res) => {
         const rows = getCollection('stations');
-        const row = {
+        const baseRow = {
             id: nextId(rows),
-            ...req.body,
-            status: req.body?.status || 'active',
-            is_pickup_point: toBoolean(req.body?.is_pickup_point ?? 1) ? 1 : 0,
             created_at: nowIso(),
-            updated_at: nowIso()
+            ...req.body
         };
+        const { payload: row, geocodeNote } = await normalizeStationPayload(req.body || {}, baseRow);
         rows.push(row);
         saveCollection('stations', rows);
-        ok(res, row);
+        ok(res, { ...row, geocode_note: geocodeNote });
     });
 
-    app.put('/admin/api/pickup-stations/:id', auth, requirePermission('pickup_stations'), (req, res) => {
+    app.put('/admin/api/pickup-stations/:id', auth, requirePermission('pickup_stations'), async (req, res) => {
         const rows = getCollection('stations');
         const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
         if (index === -1) return fail(res, '自提门店不存在', 404);
-        rows[index] = { ...rows[index], ...req.body, updated_at: nowIso() };
+        const { payload, geocodeNote } = await normalizeStationPayload(req.body || {}, rows[index]);
+        rows[index] = payload;
         saveCollection('stations', rows);
-        ok(res, rows[index]);
+        ok(res, { ...rows[index], geocode_note: geocodeNote });
     });
 
     app.get('/admin/api/pickup-stations/:id/staff', auth, requirePermission('pickup_stations'), (req, res) => {

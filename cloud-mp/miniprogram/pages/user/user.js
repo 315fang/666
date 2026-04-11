@@ -109,7 +109,9 @@ Page({
         notificationsCount: 0,
         pageLayout: null,
         featureFlags: {
-            enable_lottery_entry: true
+            show_station_entry: false,
+            show_pickup_entry: false,
+            enable_lottery_entry: false
         },
         loginAgreementHint: '登录后查看订单、积分、佣金等信息',
         showBusinessCenter: false,
@@ -508,6 +510,14 @@ Page({
     // Phase 2: 积分抽奖
     goLottery() {
         return navigateLottery(this);
+    },
+
+    goMyGroups() {
+        navigateIfLoggedIn('/pages/group/list?tab=my');
+    },
+
+    goMySlash() {
+        navigateIfLoggedIn('/pages/slash/list?tab=my');
     },
 
     // ======== 分享入口（跳转团队页邀请海报） ========

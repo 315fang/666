@@ -1,6 +1,9 @@
 // pages/slash/list.js
 const { get, post } = require('../../utils/request');
+const { normalizeActivityList } = require('../../utils/activityList');
+const { requireLogin } = require('../../utils/auth');
 const app = getApp();
+const PRODUCT_PLACEHOLDER = '/assets/icons/package.svg';
 
 function plainSummary(html, maxLen = 44) {
     if (!html) return '';
@@ -32,6 +35,23 @@ function enrichSlashActivity(a) {
     };
 }
 
+function getActivityList(res) {
+    if (!res || res.code !== 0) return [];
+    return normalizeActivityList(res.list || res.data || res);
+}
+
+function normalizeSlashRecord(record) {
+    if (!record) return record;
+    const currentPrice = parseFloat(record.current_price);
+    const floorPrice = parseFloat(record.floor_price);
+    let status = record.status || 'active';
+    if (status === 'completed') status = 'success';
+    if (Number.isFinite(currentPrice) && Number.isFinite(floorPrice) && floorPrice > 0 && currentPrice <= floorPrice) {
+        status = 'success';
+    }
+    return { ...record, status };
+}
+
 Page({
     data: {
         statusBarHeight: 20,
@@ -43,18 +63,21 @@ Page({
         loading: true
     },
 
-    onLoad() {
+    onLoad(options = {}) {
+        const initialTab = options.tab === 'my' ? 'my' : 'activities';
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
-            navBarHeight: app.globalData.navBarHeight || 44
+            navBarHeight: app.globalData.navBarHeight || 44,
+            activeTab: initialTab
         });
-        this.loadData();
+        this.loadData(initialTab);
     },
     onShow() { this.loadData(); },
 
     switchTab(e) {
         const tab = e.currentTarget.dataset.tab;
+        if (tab === 'my' && !requireLogin(null, '登录后查看我的砍价')) return;
         this.setData({ activeTab: tab, loading: true });
         this.loadData(tab);
     },
@@ -64,14 +87,15 @@ Page({
         if (active === 'activities') {
             try {
                 const res = await get('/slash/activities');
-                const raw = res.code === 0 ? res.data : [];
-                this.setData({ activities: (raw || []).map(enrichSlashActivity), loading: false });
+                const raw = getActivityList(res);
+                this.setData({ activities: raw.map(enrichSlashActivity), loading: false });
             } catch { this.setData({ loading: false }); }
         } else {
-            if (!app.globalData.isLoggedIn) { this.setData({ loading: false }); return; }
+            if (!app.globalData.isLoggedIn) { this.setData({ myRecords: [], loading: false }); return; }
             try {
                 const res = await get('/slash/my/list');
-                this.setData({ myRecords: res.code === 0 ? res.data : [], loading: false });
+                const records = res.code === 0 && Array.isArray(res.data) ? res.data.map(normalizeSlashRecord) : [];
+                this.setData({ myRecords: records, loading: false });
             } catch { this.setData({ loading: false }); }
         }
     },
@@ -101,7 +125,38 @@ Page({
 
     onViewRecord(e) {
         const slashNo = e.currentTarget.dataset.no;
+        if (!slashNo) {
+            wx.showToast({ title: '砍价记录缺少详情编号', icon: 'none' });
+            return;
+        }
         wx.navigateTo({ url: `/pages/slash/detail?slash_no=${slashNo}` });
+    },
+
+    onGoMySlash() {
+        if (!requireLogin(null, '登录后查看我的砍价')) return;
+        this.setData({ activeTab: 'my', loading: true });
+        this.loadData('my');
+    },
+
+    onGoActivities() {
+        this.setData({ activeTab: 'activities', loading: true });
+        this.loadData('activities');
+    },
+
+    onActivityImageError(e) {
+        const index = Number(e.currentTarget.dataset.index || 0);
+        const activities = Array.isArray(this.data.activities) ? this.data.activities.slice() : [];
+        if (!activities[index]) return;
+        const product = {
+            ...(activities[index].product || {}),
+            images: [PRODUCT_PLACEHOLDER],
+            image: PRODUCT_PLACEHOLDER
+        };
+        activities[index] = {
+            ...activities[index],
+            product
+        };
+        this.setData({ activities });
     },
 
     onBack() { wx.switchTab({ url: '/pages/activity/activity' }); }

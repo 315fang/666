@@ -18,7 +18,7 @@ const proxy = {
 }
 
 export default defineConfig({
-  base: '/',
+  base: '/admin/',
   plugins: [
     vue(),
     AutoImport({

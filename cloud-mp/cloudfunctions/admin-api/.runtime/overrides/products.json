@@ -1,0 +1,280 @@
+[
+  {
+    "_id": "1",
+    "_legacy_id": 1,
+    "name": "镜像案例库奢护/体验理套装+赠瞬间抗皱神器",
+    "description": "滋养修护组套（送抗皱保湿精华液）",
+    "images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1773442002338_e2c0135b1b16e32e.jpg"
+    ],
+    "detail_images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774074019910_9231dd64d8335181.jpg"
+    ],
+    "category_id": "4",
+    "status": "on_sale",
+    "min_price": 39900,
+    "original_price": 79900,
+    "sales_count": 0,
+    "stock": 97,
+    "sort_order": 6,
+    "tags": [
+      "hot"
+    ],
+    "created_at": "2026-03-18T04:59:34.000Z",
+    "updated_at": "2026-04-07T03:40:38.000Z"
+  },
+  {
+    "_id": "2",
+    "_legacy_id": 2,
+    "name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+    "description": "镜像案例库特惠（皮脂膜精华液+抗皱保湿精华液+燕窝精萃露）",
+    "images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774074009052_d9731bb253058045.jpg"
+    ],
+    "detail_images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774074009052_d9731bb253058045.jpg"
+    ],
+    "category_id": "4",
+    "status": "on_sale",
+    "min_price": 39900,
+    "original_price": 97300,
+    "sales_count": 0,
+    "stock": 100,
+    "sort_order": 8,
+    "tags": [
+      "hot"
+    ],
+    "created_at": "2026-03-21T06:24:49.000Z",
+    "updated_at": "2026-04-06T14:56:08.000Z"
+  },
+  {
+    "_id": "3",
+    "_legacy_id": 3,
+    "name": "问兰燕窝邂逅试用礼",
+    "description": "问兰燕窝邂逅试用礼",
+    "images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg"
+    ],
+    "detail_images": [],
+    "category_id": "2",
+    "status": "on_sale",
+    "min_price": 100,
+    "original_price": 9300,
+    "sales_count": 0,
+    "stock": 98,
+    "sort_order": 4,
+    "tags": [
+      "hot"
+    ],
+    "created_at": "2026-03-21T06:26:31.000Z",
+    "updated_at": "2026-04-06T14:16:02.000Z"
+  },
+  {
+    "_id": "4",
+    "_legacy_id": 4,
+    "name": "问兰灯塔皮脂膜精华乳 ",
+    "description": "问兰灯塔皮脂膜精华乳 紧致抗衰亮肤美白保湿滋养修护全效乳王",
+    "images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1775015467907_6a61e38ba210903f.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1775015536586_88ec61cd98cf473d.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1775015408934_18fcc6e02c8e8526.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1773887249237_39ce3afec6386c20.png"
+    ],
+    "detail_images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267110325_1f843d22fc3b46a7.png"
+    ],
+    "category_id": "7",
+    "status": "on_sale",
+    "min_price": 29900,
+    "original_price": 51900,
+    "sales_count": 0,
+    "stock": 100,
+    "sort_order": 9,
+    "tags": [
+      "normal"
+    ],
+    "created_at": "2026-03-21T06:42:45.000Z",
+    "updated_at": "2026-04-07T09:40:34.000Z"
+  },
+  {
+    "_id": "5",
+    "_legacy_id": 5,
+    "name": "玻色因紧致面霜",
+    "description": "饱含30%玻色因",
+    "images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267022149_87d1c87b2545e176.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267033677_e2bcf7f8c30075d0.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267038934_7cd11499daad8944.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267043243_39b5786717a8efb6.png"
+    ],
+    "detail_images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267056975_6d2efb7b60dadae8.png"
+    ],
+    "category_id": "1",
+    "status": "on_sale",
+    "min_price": 49900,
+    "original_price": 100800,
+    "sales_count": 0,
+    "stock": 100,
+    "sort_order": 10,
+    "tags": [
+      "new"
+    ],
+    "created_at": "2026-03-21T06:51:10.000Z",
+    "updated_at": "2026-04-07T08:57:14.000Z"
+  },
+  {
+    "_id": "6",
+    "_legacy_id": 6,
+    "name": "问兰氨基酸洁面慕斯",
+    "description": "问兰氨基酸洁面慕斯敏感肌温和舒缓清爽卸淡妆不紧绷",
+    "images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016185150_647fd6d7fadb2f1d.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016189591_87171939f6ef5f4b.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016192857_afa77531b583a5e1.png"
+    ],
+    "detail_images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016199942_dddf0eef5b8d7014.png"
+    ],
+    "category_id": "4",
+    "status": "on_sale",
+    "min_price": 9900,
+    "original_price": 23000,
+    "sales_count": 0,
+    "stock": 93,
+    "sort_order": 5,
+    "tags": [
+      "discount"
+    ],
+    "created_at": "2026-03-22T01:42:03.000Z",
+    "updated_at": "2026-04-06T15:46:39.000Z"
+  },
+  {
+    "_id": "7",
+    "_legacy_id": 7,
+    "name": "问兰燕窝精萃露",
+    "description": "燕窝精萃露/滋养紧致/长效保湿/清爽舒适/深层修护不脱妆",
+    "images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016119797_16bff5e657e0f1a4.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016128608_422eafcde0f1d017.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016133076_495a911604dbb3ab.png"
+    ],
+    "detail_images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016137563_b18f4aff630ec286.png"
+    ],
+    "category_id": "6",
+    "status": "on_sale",
+    "min_price": 19900,
+    "original_price": 41900,
+    "sales_count": 0,
+    "stock": 96,
+    "sort_order": 4,
+    "tags": [
+      "hot"
+    ],
+    "created_at": "2026-03-22T01:50:08.000Z",
+    "updated_at": "2026-04-04T05:11:24.000Z"
+  },
+  {
+    "_id": "8",
+    "_legacy_id": 8,
+    "name": "绿魔方抗皱焕颜霜/",
+    "description": "清爽控油抗衰抗氧化抗细纹紧致亮肤",
+    "images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016049176_e1c6dbbd71f96879.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016052617_6402058c1a37a891.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016055634_976f64f5298df86e.png"
+    ],
+    "detail_images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016064737_b4322a528a820ad4.png"
+    ],
+    "category_id": "8",
+    "status": "on_sale",
+    "min_price": 59900,
+    "original_price": 103900,
+    "sales_count": 0,
+    "stock": 100,
+    "sort_order": 3,
+    "tags": [
+      "discount"
+    ],
+    "created_at": "2026-03-22T01:54:52.000Z",
+    "updated_at": "2026-04-01T07:30:26.000Z"
+  },
+  {
+    "_id": "9",
+    "_legacy_id": 9,
+    "name": "小极光焕彩面霜",
+    "description": "补剥脱 自然亮肤 美白抗氧化 安全淡斑 滋润保湿",
+    "images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775015999498_0c680ab51adb1c91.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775015995214_2ae8abecf8b99125.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775015990761_d4ff613fd1e9a53b.png"
+    ],
+    "detail_images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016004460_187ebf5a2880161c.png"
+    ],
+    "category_id": "5",
+    "status": "on_sale",
+    "min_price": 39900,
+    "original_price": 54900,
+    "sales_count": 0,
+    "stock": 100,
+    "sort_order": 6,
+    "tags": [
+      "new"
+    ],
+    "created_at": "2026-03-22T01:57:25.000Z",
+    "updated_at": "2026-04-04T04:32:25.000Z"
+  },
+  {
+    "_id": "10",
+    "_legacy_id": 10,
+    "name": "皮脂膜精华液(次抛装)",
+    "description": "敏感肌屏障修复退红镇敏过敏修护/万能救场王",
+    "images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775015767948_c941fdd88150f2f2.jpg"
+    ],
+    "detail_images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775015902443_d02ca95a69562f5d.png"
+    ],
+    "category_id": "3",
+    "status": "on_sale",
+    "min_price": 18900,
+    "original_price": 37800,
+    "sales_count": 0,
+    "stock": 100,
+    "sort_order": 9,
+    "tags": [
+      "hot"
+    ],
+    "created_at": "2026-03-22T02:09:23.000Z",
+    "updated_at": "2026-04-07T02:49:12.000Z"
+  },
+  {
+    "_id": "11",
+    "_legacy_id": 11,
+    "name": "问兰护肤尊享礼盒",
+    "description": " 员工福利 客户随礼 客户体验 亲友馈赠",
+    "images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775013321299_9076d97661b913ff.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775013338189_57a28ea1867aa2f8.png",
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775013345557_fca55086b2d4176c.png"
+    ],
+    "detail_images": [
+      "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775013363041_1a43e5020c2494d4.png"
+    ],
+    "category_id": "9",
+    "status": "on_sale",
+    "min_price": 39900,
+    "original_price": 79900,
+    "sales_count": 0,
+    "stock": 100,
+    "sort_order": 0,
+    "tags": [
+      "discount"
+    ],
+    "created_at": "2026-03-22T02:38:06.000Z",
+    "updated_at": "2026-04-04T05:11:47.000Z"
+  }
+]

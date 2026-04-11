@@ -7,6 +7,7 @@ const adminProductController = require('./controllers/adminProductController');
 const adminOrderController = require('./controllers/adminOrderController');
 const adminUserController = require('./controllers/adminUserController');
 const contentRoutes = require('./content');
+const configRoutes = require('./config');
 const financeRoutes = require('./finance');
 const organizationRoutes = require('./organization');
 const systemRoutes = require('./system');
@@ -79,6 +80,7 @@ router.use('/', contentRoutes);
 
 router.use('/', financeRoutes);
 router.use('/', organizationRoutes);
+router.use('/', configRoutes);
 
 // ========== 测试工具（受配置开关控制，生产环境自动关闭） ==========
 const constants = require('../../config/constants');

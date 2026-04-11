@@ -7,6 +7,39 @@ function toMoney(value) {
     return Number.isFinite(num) ? num.toFixed(2) : '0.00';
 }
 
+function buildOrderActivityInfo(order = {}) {
+    const firstItem = Array.isArray(order.items) ? (order.items[0] || {}) : {};
+    const type = order.type || order.order_type || firstItem.activity_type || '';
+    const groupNo = order.group_no || firstItem.group_no || '';
+    const slashNo = order.slash_no || firstItem.slash_no || '';
+
+    if (type === 'group' || groupNo || order.group_activity_id || firstItem.group_activity_id) {
+        return {
+            type: 'group',
+            label: '拼团订单',
+            title: groupNo ? '可查看拼团进度' : '拼团进度待生成',
+            desc: groupNo ? '支付后已生成拼团进度，可继续邀请或查看成团状态。' : '完成支付后会生成拼团进度，可从订单或我的拼团继续查看。',
+            actionText: groupNo ? '查看拼团进度' : '支付后查看',
+            targetNo: groupNo,
+            disabled: !groupNo
+        };
+    }
+
+    if (type === 'slash' || slashNo) {
+        return {
+            type: 'slash',
+            label: '砍价订单',
+            title: slashNo ? '可查看砍价详情' : '去我的砍价继续查看',
+            desc: slashNo ? '该订单已关联你的砍价记录，可返回查看砍价进度和购买状态。' : '订单还没带回砍价编号时，也可以先去“我的砍价”继续查看当前进度。',
+            actionText: slashNo ? '查看砍价详情' : '去我的砍价',
+            targetNo: slashNo,
+            disabled: false
+        };
+    }
+
+    return null;
+}
+
 async function loadOrder(page, idOrNo) {
     if (idOrNo === undefined || idOrNo === null || idOrNo === '') {
         page.setData({ loading: false, loadError: true });
@@ -35,6 +68,7 @@ async function loadOrder(page, idOrNo) {
             order.display_points_discount = toMoney(pointsDiscount);
             order.display_pay_amount = toMoney(payAmount);
             order.has_discount_breakdown = couponDiscount > 0 || pointsDiscount > 0 || Math.abs(originalAmount - payAmount) > 0.0001;
+            order.activityInfo = buildOrderActivityInfo(order);
         }
 
         const allRefunds = refundsRes.data && refundsRes.data.list || [];

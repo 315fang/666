@@ -110,6 +110,28 @@
           <text class="purchase-mode-option-desc">{{item.hint}}</text>
         </view>
       </view>
+      <view class="activity-status-card" wx:if="{{activityStatusCard}}">
+        <view class="activity-status-head">
+          <text class="activity-status-badge">{{activityStatusCard.badge}}</text>
+          <text class="activity-status-title">{{activityStatusCard.title}}</text>
+        </view>
+        <text class="activity-status-desc">{{activityStatusCard.desc}}</text>
+      </view>
+      <view class="activity-quick-links" wx:if="{{activityQuickLinks.length}}">
+        <view
+          class="activity-quick-link"
+          wx:for="{{activityQuickLinks}}"
+          wx:key="key"
+          data-action="{{item.key}}"
+          bindtap="onActivityQuickActionTap"
+        >
+          <view class="activity-quick-copy">
+            <text class="activity-quick-label">{{item.label}}</text>
+            <text class="activity-quick-desc">{{item.desc}}</text>
+          </view>
+          <text class="activity-quick-arrow">›</text>
+        </view>
+      </view>
     </view>
 
     <view class="embedded-section" wx:if="{{product.specs && product.specs.length > 0}}">

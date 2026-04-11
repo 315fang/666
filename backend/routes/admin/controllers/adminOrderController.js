@@ -640,7 +640,7 @@ const batchShipOrders = async (req, res) => {
 };
 
 /**
- * ★ 导出订单（返回JSON，前端可转Excel）
+ * ★ 导出订单（返回 JSON 附件，兼容多套管理后台实现）
  * GET /admin/api/orders/export?status=xxx&start_date=xxx&end_date=xxx
  */
 const exportOrders = async (req, res) => {
@@ -655,11 +655,9 @@ const exportOrders = async (req, res) => {
             limit: parseInt(limit, 10)
         });
 
-        res.json({
-            code: 0,
-            data: orders,
-            message: `导出 ${orders.length} 条订单`
-        });
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="orders.json"');
+        res.send(JSON.stringify(orders, null, 2));
     } catch (error) {
         console.error('导出订单失败:', error);
         res.status(500).json({ code: -1, message: '导出失败' });

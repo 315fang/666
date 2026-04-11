@@ -44,10 +44,12 @@ async function submitOrder(page, app, brandAnimation) {
     page.setData({ submitting: true });
 
     try {
+        const addressId = address && (address._id || address.id);
         const orderData = {
-            address_id: deliveryType === 'pickup' ? (address && address.id) || undefined : address.id,
+            address_id: deliveryType === 'pickup' ? addressId || undefined : addressId,
             delivery_type: deliveryType,
             pickup_station_id: deliveryType === 'pickup' ? pickupStation.id : undefined,
+            memo: remark,
             remark,
             items: orderItems.map((item) => ({
                 product_id: item.product_id,

@@ -106,6 +106,19 @@ async function clearAllFavorites(openid) {
     return { success: true };
 }
 
+/**
+ * 查询某商品是否已收藏
+ */
+async function getFavoriteStatus(openid, productId) {
+    if (!productId) return { favorited: false };
+    const res = await db.collection('user_favorites')
+        .where({ openid, product_id: productId })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return { favorited: !!(res.data && res.data.length > 0) };
+}
+
 module.exports = {
     getFavorites,
     addFavorite,
@@ -113,4 +126,5 @@ module.exports = {
     removeFavoriteById,
     syncFavorites,
     clearAllFavorites,
+    getFavoriteStatus,
 };
