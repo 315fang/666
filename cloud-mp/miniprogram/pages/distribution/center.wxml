@@ -55,6 +55,30 @@
     </view>
   </view>
 
+  <view class="focus-section" wx:if="{{focusGuide}}">
+    <text class="focus-kicker">{{focusGuide.eyebrow}}</text>
+    <text class="focus-title">{{focusGuide.title}}</text>
+    <text class="focus-desc">{{focusGuide.description}}</text>
+    <view class="focus-chip-row">
+      <view class="focus-chip" wx:for="{{focusGuide.chips}}" wx:key="label">
+        <text class="focus-chip-label">{{item.label}}</text>
+        <text class="focus-chip-value">{{item.value}}</text>
+      </view>
+    </view>
+    <view class="focus-action-row">
+      <view
+        class="focus-action {{index === 0 ? 'focus-action-primary' : 'focus-action-secondary'}}"
+        wx:for="{{focusGuide.actions}}"
+        wx:key="label"
+        bindtap="onFocusActionTap"
+        data-action="{{item.action}}"
+      >
+        <text class="focus-action-text">{{item.label}}</text>
+        <text class="focus-action-arrow">›</text>
+      </view>
+    </view>
+  </view>
+
   <!-- 3. 邀请好友区域 -->
   <view class="invite-card">
     <view class="invite-header">

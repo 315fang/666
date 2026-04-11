@@ -19,7 +19,13 @@
 - `config`、`distribution`、`admin-api` 云函数已同步到最新代码。
 - `payment` 网关访问路径已补充 `/payment`，同时保留 `/payment-notify`。
 - 静态托管已确认存在 `admin/index.html` 与 `admin/assets/images/default-avatar.svg`。
-- 管理端整站静态资源批量上传仍未稳定完成，当前需继续补齐 `admin/assets/*` 首屏产物。
+- 已通过 COS SDK 直传补齐当前首屏依赖的关键资源：
+  - `admin/assets/index-Cnc3SZm0.js`
+  - `admin/assets/vue-vendor-C5t8wCBm.js`
+  - `admin/assets/http-vendor-C0Zqfgkc.js`
+  - `admin/assets/element-plus-icons-UEi9pTXG.js`
+  - `admin/assets/index-XFU74PjQ.css`
+- CloudBase MCP 的 `uploadFiles` 对 `admin-ui/dist` 目录级上传仍不稳定，因此整站其余 `admin/assets/*` 仍建议继续做补齐校验。
 
 
 ## 云函数部署状态（12 个）

@@ -69,6 +69,28 @@ function parseLogisticsFromRemark(remark) {
     };
 }
 
+function toIsoString(value) {
+    if (isMissing(value)) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+}
+
+function addMinutes(value, minutes) {
+    const iso = toIsoString(value);
+    if (!iso) return '';
+    const date = new Date(iso);
+    date.setMinutes(date.getMinutes() + minutes);
+    return date.toISOString();
+}
+
+function addDays(value, days) {
+    const iso = toIsoString(value);
+    if (!iso) return '';
+    const date = new Date(iso);
+    date.setDate(date.getDate() + days);
+    return date.toISOString();
+}
+
 function pickAddressSnapshot(address) {
     if (!address || typeof address !== 'object') return null;
     return {
@@ -153,7 +175,7 @@ function updateCloudDocument(collectionName, docId, patch) {
     });
 }
 
-function buildLookup(products, skus) {
+function buildLookup(products, skus, users = [], refunds = [], commissions = [], stations = []) {
     const productById = new Map();
     products.forEach((product) => {
         if (!product) return;
@@ -173,7 +195,69 @@ function buildLookup(products, skus) {
         }
     });
 
-    return { productById, skuById, firstSkuByProduct };
+    const userByAnyId = new Map();
+    users.forEach((user) => {
+        if (!user) return;
+        [user._id, user.id, user._legacy_id, user.openid].filter((value) => !isMissing(value)).forEach((key) => {
+            userByAnyId.set(String(key), user);
+        });
+    });
+
+    const refundsByOrder = new Map();
+    refunds.forEach((refund) => {
+        if (!refund) return;
+        [refund.order_id, refund.order_no].filter((value) => !isMissing(value)).forEach((key) => {
+            const list = refundsByOrder.get(String(key)) || [];
+            list.push(refund);
+            refundsByOrder.set(String(key), list);
+        });
+    });
+
+    const commissionsByOrder = new Map();
+    commissions.forEach((commission) => {
+        if (!commission) return;
+        [commission.order_id, commission.order_no].filter((value) => !isMissing(value)).forEach((key) => {
+            const list = commissionsByOrder.get(String(key)) || [];
+            list.push(commission);
+            commissionsByOrder.set(String(key), list);
+        });
+    });
+
+    const stationById = new Map();
+    stations.forEach((station) => {
+        if (!station) return;
+        [station._id, station.id, station._legacy_id].filter((value) => !isMissing(value)).forEach((key) => {
+            stationById.set(String(key), station);
+        });
+    });
+
+    return { productById, skuById, firstSkuByProduct, userByAnyId, refundsByOrder, commissionsByOrder, stationById };
+}
+
+function buildUserSummary(user) {
+    if (!user) return null;
+    return {
+        id: firstFilled(user._id, user.id, user._legacy_id),
+        openid: firstFilled(user.openid),
+        nick_name: firstFilled(user.nickName, user.nickname),
+        nickname: firstFilled(user.nickName, user.nickname),
+        avatar: firstFilled(user.avatarUrl, user.avatar),
+        role_level: Number(firstFilled(user.role_level, user.distributor_level, 0)) || 0
+    };
+}
+
+function buildStationSummary(station) {
+    if (!station) return null;
+    return {
+        id: firstFilled(station._id, station.id, station._legacy_id),
+        name: firstFilled(station.name),
+        city: firstFilled(station.city),
+        address: firstFilled(station.address, station.detail),
+        contact_phone: firstFilled(station.contact_phone, station.phone),
+        business_time_start: firstFilled(station.business_time_start),
+        business_time_end: firstFilled(station.business_time_end),
+        pickup_contact: firstFilled(station.pickup_contact, station.contact_name)
+    };
 }
 
 function deriveOrderPatch(order, lookup) {
@@ -227,11 +311,84 @@ function deriveOrderPatch(order, lookup) {
     const primaryItem = patchedItems[0] || {};
     const quantity = patchedItems.reduce((sum, item) => sum + (Number(item.qty || item.quantity || 0) || 0), 0);
     const addressSnapshot = order.address_snapshot || pickAddressSnapshot(order.address);
+    const orderKeys = [order._id, order.id, order._legacy_id, order.order_no].filter((value) => !isMissing(value)).map((value) => String(value));
+    const relatedRefunds = orderKeys.flatMap((key) => lookup.refundsByOrder.get(key) || []);
+    const relatedCommissions = orderKeys.flatMap((key) => lookup.commissionsByOrder.get(key) || []);
+    const buyer = lookup.userByAnyId.get(String(order.openid)) || null;
+    const distributorUser = buyer && buyer.referrer_openid ? lookup.userByAnyId.get(String(buyer.referrer_openid)) : null;
+    const station = order.pickup_station_id ? lookup.stationById.get(String(order.pickup_station_id)) : null;
+    const paidAt = firstFilled(
+        toIsoString(order.paid_at),
+        !['pending_payment', 'cancelled'].includes(order.status) ? toIsoString(order.created_at) : ''
+    );
+    const cancelledAt = firstFilled(
+        toIsoString(order.cancelled_at),
+        order.status === 'cancelled' ? toIsoString(order.updated_at) : ''
+    );
+    const refundCompletedAt = relatedRefunds
+        .filter((item) => item.status === 'completed')
+        .map((item) => toIsoString(item.updated_at))
+        .filter(Boolean)
+        .sort()[0] || '';
+    const completedAt = firstFilled(
+        toIsoString(order.completed_at),
+        toIsoString(order.confirmed_at),
+        order.status === 'completed' ? toIsoString(order.updated_at) : ''
+    );
+    const confirmedAt = firstFilled(
+        toIsoString(order.confirmed_at),
+        completedAt
+    );
+    const shippedAt = firstFilled(
+        toIsoString(order.shipped_at),
+        (['shipped', 'completed', 'refunding', 'refunded'].includes(order.status) && firstFilled(order.tracking_no, logisticsFromRemark.tracking_no))
+            ? firstFilled(toIsoString(order.updated_at), paidAt, toIsoString(order.created_at))
+            : ''
+    );
+    const agentConfirmedAt = firstFilled(
+        toIsoString(order.agent_confirmed_at),
+        ['agent_confirmed', 'shipping_requested'].includes(order.status) ? firstFilled(toIsoString(order.updated_at), paidAt) : ''
+    );
+    const expireAt = firstFilled(
+        toIsoString(order.expire_at),
+        order.status === 'pending_payment' || (order.status === 'cancelled' && !paidAt) ? addMinutes(order.created_at, 30) : ''
+    );
+    const reviewed = order.reviewed === true || String(order.remark || '').includes('[已评价]');
+    const reviewedAt = firstFilled(
+        toIsoString(order.reviewed_at),
+        reviewed ? firstFilled(completedAt, toIsoString(order.updated_at)) : ''
+    );
+    const settledCommission = relatedCommissions.find((item) => item.status === 'settled');
+    const settlementAt = firstFilled(
+        toIsoString(order.settlement_at),
+        settledCommission ? toIsoString(settledCommission.updated_at || settledCommission.created_at) : '',
+        completedAt ? addDays(completedAt, 15) : ''
+    );
+    const estimatedDelivery = firstFilled(
+        toIsoString(order.estimated_delivery),
+        shippedAt ? addDays(shippedAt, 3) : ''
+    );
+    const shippingTraces = Array.isArray(order.shipping_traces) && order.shipping_traces.length > 0
+        ? order.shipping_traces
+        : [
+            toIsoString(order.created_at) ? { time: toIsoString(order.created_at), desc: '订单已创建', status: 'created' } : null,
+            paidAt ? { time: paidAt, desc: '支付成功', status: 'paid' } : null,
+            shippedAt ? { time: shippedAt, desc: '商家已发货', status: 'shipped' } : null,
+            completedAt ? { time: completedAt, desc: '已签收', status: 'completed' } : null,
+            cancelledAt ? { time: cancelledAt, desc: '订单已取消', status: 'cancelled' } : null,
+            refundCompletedAt ? { time: refundCompletedAt, desc: '退款已完成', status: 'refunded' } : null
+        ].filter(Boolean);
     const patch = {
         items: patchedItems,
         quantity: firstFilled(order.quantity, quantity),
         product_id: firstFilled(order.product_id, primaryItem.product_id),
         product_name: firstFilled(order.product_name, primaryItem.snapshot_name, primaryItem.name),
+        product: order.product || {
+            id: firstFilled(order.product_id, primaryItem.product_id),
+            name: firstFilled(order.product_name, primaryItem.snapshot_name, primaryItem.name),
+            images: firstFilled(primaryItem.snapshot_image, primaryItem.image) ? [firstFilled(primaryItem.snapshot_image, primaryItem.image)] : [],
+            image: firstFilled(primaryItem.snapshot_image, primaryItem.image)
+        },
         sku: order.sku || (firstFilled(primaryItem.snapshot_spec, primaryItem.spec) ? { spec_value: firstFilled(primaryItem.snapshot_spec, primaryItem.spec) } : null),
         address: order.address || addressSnapshot || null,
         address_snapshot: addressSnapshot || null,
@@ -240,10 +397,30 @@ function deriveOrderPatch(order, lookup) {
         coupon_discount: firstFilled(order.coupon_discount, 0),
         points_discount: firstFilled(order.points_discount, 0),
         points_used: firstFilled(order.points_used, 0),
-        reviewed: typeof order.reviewed === 'boolean' ? order.reviewed : String(order.remark || '').includes('[已评价]'),
+        paid_at: paidAt || null,
+        shipped_at: shippedAt || null,
+        agent_confirmed_at: agentConfirmedAt || null,
+        completed_at: completedAt || null,
+        confirmed_at: confirmedAt || null,
+        cancelled_at: cancelledAt || null,
+        expire_at: expireAt || null,
+        reviewed,
+        reviewed_at: reviewedAt || null,
         tracking_no: firstFilled(order.tracking_no, logisticsFromRemark.tracking_no),
         logistics_company: firstFilled(order.logistics_company, order.shipping_company, logisticsFromRemark.logistics_company),
-        shipping_company: firstFilled(order.shipping_company, order.logistics_company, logisticsFromRemark.logistics_company)
+        shipping_company: firstFilled(order.shipping_company, order.logistics_company, logisticsFromRemark.logistics_company),
+        fulfillment_type: firstFilled(order.fulfillment_type, ['agent_confirmed', 'shipping_requested'].includes(order.status) ? 'Agent_Pending' : 'Platform'),
+        pickupStation: buildStationSummary(station),
+        pickup_station_id: firstFilled(order.pickup_station_id, station ? station._id : ''),
+        pickup_code: firstFilled(order.pickup_code),
+        pickup_qr_code: firstFilled(order.pickup_qr_code),
+        distributor: buildUserSummary(distributorUser),
+        agent: buildUserSummary(distributorUser),
+        agent_info: buildUserSummary(distributorUser),
+        settlement_at: settlementAt || null,
+        commission_settled: order.commission_settled === true || !!settledCommission,
+        estimated_delivery: estimatedDelivery || null,
+        shipping_traces: shippingTraces
     };
 
     const changed = {};
@@ -281,7 +458,11 @@ function runSeedMode() {
     const orders = readJson('cloudbase-seed/orders.json');
     const products = readJson('cloudbase-seed/products.json');
     const skus = readJson('cloudbase-seed/skus.json');
-    const lookup = buildLookup(products, skus);
+    const users = readJson('cloudbase-seed/users.json');
+    const refunds = readJson('cloudbase-seed/refunds.json');
+    const commissions = readJson('cloudbase-seed/commissions.json');
+    const stations = readJson('cloudbase-seed/stations.json');
+    const lookup = buildLookup(products, skus, users, refunds, commissions, stations);
 
     const plans = [];
     const nextOrders = orders.map((order) => {
@@ -309,7 +490,11 @@ function runCloudMode() {
     const orders = readCloudCollection('orders');
     const products = readCloudCollection('products');
     const skus = readCloudCollection('skus');
-    const lookup = buildLookup(products, skus);
+    const users = readCloudCollection('users');
+    const refunds = readCloudCollection('refunds');
+    const commissions = readCloudCollection('commissions');
+    const stations = readCloudCollection('stations');
+    const lookup = buildLookup(products, skus, users, refunds, commissions, stations);
 
     const plans = orders
         .map((order) => ({

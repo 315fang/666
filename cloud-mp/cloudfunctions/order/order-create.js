@@ -58,6 +58,26 @@ async function findSlashRecord(slashNo) {
     return res.data && res.data[0] ? res.data[0] : null;
 }
 
+async function findUserByOpenid(openid) {
+    if (!openid) return null;
+    const res = await db.collection('users')
+        .where({ openid })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return res.data && res.data[0] ? res.data[0] : null;
+}
+
+async function findStation(stationId) {
+    if (!stationId) return null;
+    const num = toNumber(stationId, NaN);
+    const [legacy, doc] = await Promise.all([
+        Number.isFinite(num) ? db.collection('stations').where({ id: num }).limit(1).get().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+        db.collection('stations').doc(String(stationId)).get().catch(() => ({ data: null }))
+    ]);
+    return legacy.data[0] || doc.data || null;
+}
+
 function parseConfigValue(row, fallback) {
     if (!row) return fallback;
     const value = row.config_value !== undefined ? row.config_value : row.value;
@@ -185,6 +205,32 @@ function buildAddressSnapshot(addressInfo) {
         city: addressInfo.city || '',
         district: addressInfo.district || '',
         detail: addressInfo.detail || addressInfo.address || ''
+    };
+}
+
+function buildUserSummary(user) {
+    if (!user || typeof user !== 'object') return null;
+    return {
+        id: user._id || user.id || user._legacy_id || '',
+        openid: user.openid || '',
+        nick_name: user.nickName || user.nickname || '',
+        nickname: user.nickName || user.nickname || '',
+        avatar: user.avatarUrl || user.avatar || '',
+        role_level: toNumber(user.role_level || user.distributor_level, 0)
+    };
+}
+
+function buildStationSummary(station) {
+    if (!station || typeof station !== 'object') return null;
+    return {
+        id: station._id || station.id || station._legacy_id || '',
+        name: station.name || '',
+        city: station.city || '',
+        address: station.address || station.detail || '',
+        contact_phone: station.contact_phone || station.phone || '',
+        business_time_start: station.business_time_start || '',
+        business_time_end: station.business_time_end || '',
+        pickup_contact: station.pickup_contact || station.contact_name || ''
     };
 }
 
@@ -352,6 +398,12 @@ async function createOrder(openid, orderData) {
 
     // 5. 查收货地址
     let addressInfo = null;
+    const [buyerInfo, pickupStationInfo] = await Promise.all([
+        findUserByOpenid(openid),
+        pickup_station_id ? findStation(pickup_station_id) : Promise.resolve(null)
+    ]);
+    const distributorInfo = buyerInfo && buyerInfo.referrer_openid ? await findUserByOpenid(buyerInfo.referrer_openid) : null;
+
     if (address_id) {
         try {
             const addrRes = await db.collection('addresses').doc(address_id).get();
@@ -366,6 +418,8 @@ async function createOrder(openid, orderData) {
     const totalQuantity = orderItems.reduce((sum, item) => sum + Math.max(1, toNumber(item.qty || item.quantity, 1)), 0);
     const primaryItem = orderItems[0] || {};
     const addressSnapshot = buildAddressSnapshot(addressInfo);
+    const pickupStationSummary = buildStationSummary(pickupStationInfo);
+    const distributorSummary = buildUserSummary(distributorInfo);
 
     // 7. 构建订单
     const order = {
@@ -375,6 +429,12 @@ async function createOrder(openid, orderData) {
         items: orderItems,
         product_id: primaryItem.product_id || '',
         product_name: primaryItem.snapshot_name || primaryItem.name || '',
+        product: {
+            id: primaryItem.product_id || '',
+            name: primaryItem.snapshot_name || primaryItem.name || '',
+            images: primaryItem.snapshot_image ? [primaryItem.snapshot_image] : [],
+            image: primaryItem.snapshot_image || ''
+        },
         quantity: totalQuantity,
         sku: primaryItem.snapshot_spec || primaryItem.spec ? { spec_value: primaryItem.snapshot_spec || primaryItem.spec } : null,
         total_amount: totalAmount,
@@ -389,6 +449,10 @@ async function createOrder(openid, orderData) {
         address_snapshot: addressSnapshot,
         delivery_type: delivery_type || 'express',
         pickup_station_id: pickup_station_id || '',
+        pickupStation: pickupStationSummary,
+        distributor: distributorSummary,
+        agent: distributorSummary,
+        agent_info: distributorSummary,
         tracking_no: '',
         logistics_company: '',
         shipping_company: '',

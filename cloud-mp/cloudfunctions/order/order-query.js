@@ -106,6 +106,95 @@ function parseLogisticsFromRemark(remark) {
     };
 }
 
+function toIsoString(value) {
+    if (!hasValue(value)) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+}
+
+function addMinutes(value, minutes) {
+    const iso = toIsoString(value);
+    if (!iso) return '';
+    const date = new Date(iso);
+    date.setMinutes(date.getMinutes() + minutes);
+    return date.toISOString();
+}
+
+function addDays(value, days) {
+    const iso = toIsoString(value);
+    if (!iso) return '';
+    const date = new Date(iso);
+    date.setDate(date.getDate() + days);
+    return date.toISOString();
+}
+
+async function findUserByAnyId(rawId, cache) {
+    if (!hasValue(rawId)) return null;
+
+    const key = `users:${String(rawId)}`;
+    if (cache.has(key)) {
+        return cache.get(key);
+    }
+
+    const loader = (async () => {
+        const id = String(rawId);
+        const byDocId = await db.collection('users').doc(id).get().catch(() => ({ data: null }));
+        if (byDocId.data) return byDocId.data;
+
+        const numericId = Number(id);
+        const conditions = [{ openid: id }];
+        if (Number.isFinite(numericId)) {
+            conditions.push({ _legacy_id: numericId });
+            conditions.push({ id: numericId });
+        }
+
+        const res = await db.collection('users')
+            .where(_.or(conditions))
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+
+        return res.data && res.data[0] ? res.data[0] : null;
+    })();
+
+    cache.set(key, loader);
+    return loader;
+}
+
+async function findCommissionByOrder(order = {}, cache) {
+    const orderKeys = [order._id, order.id, order.order_no].filter(hasValue);
+    if (!orderKeys.length) return null;
+
+    const key = `commissions:${orderKeys.join('|')}`;
+    if (cache.has(key)) {
+        return cache.get(key);
+    }
+
+    const loader = (async () => {
+        const stringKeys = orderKeys.map((value) => String(value));
+        const numericKeys = stringKeys.map((value) => Number(value)).filter((value) => Number.isFinite(value));
+        const conditions = [
+            { order_id: _.in(stringKeys) },
+            { order_no: _.in(stringKeys) }
+        ];
+        if (numericKeys.length) {
+            conditions.push({ order_id: _.in(numericKeys) });
+            conditions.push({ order_no: _.in(numericKeys) });
+        }
+
+        const res = await db.collection('commissions')
+            .where(_.or(conditions))
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+
+        return res.data && res.data[0] ? res.data[0] : null;
+    })();
+
+    cache.set(key, loader);
+    return loader;
+}
+
 async function findCollectionDocByAnyId(collectionName, rawId, cache) {
     if (!hasValue(rawId)) return null;
 
@@ -143,10 +232,14 @@ async function findCollectionDocByAnyId(collectionName, rawId, cache) {
 
 async function formatOrderForClient(order = {}, cache = new Map()) {
     const item = firstOrderItem(order);
-    const [productDoc, skuDoc] = await Promise.all([
+    const [productDoc, skuDoc, buyerDoc, commissionDoc, pickupStation] = await Promise.all([
         findCollectionDocByAnyId('products', order.product_id || item.product_id, cache),
-        findCollectionDocByAnyId('skus', item.sku_id || order.sku_id, cache)
+        findCollectionDocByAnyId('skus', item.sku_id || order.sku_id, cache),
+        findUserByAnyId(order.openid, cache),
+        findCommissionByOrder(order, cache),
+        findCollectionDocByAnyId('stations', order.pickup_station_id, cache)
     ]);
+    const distributorDoc = buyerDoc && buyerDoc.referrer_openid ? await findUserByAnyId(buyerDoc.referrer_openid, cache) : null;
 
     const quantity = toNumber(order.quantity || order.qty || item.qty || item.quantity, 1);
     const rawStatus = order.status || '';
@@ -200,6 +293,78 @@ async function formatOrderForClient(order = {}, cache = new Map()) {
     );
     const orderProduct = order.product && typeof order.product === 'object' ? order.product : {};
     const orderProductImages = normalizeImages(orderProduct.images);
+    const paidAt = firstFilled(
+        toIsoString(order.paid_at),
+        rawStatus !== 'pending_payment' && rawStatus !== 'cancelled' ? toIsoString(order.created_at) : ''
+    );
+    const cancelledAt = firstFilled(
+        toIsoString(order.cancelled_at),
+        rawStatus === 'cancelled' ? toIsoString(order.updated_at) : ''
+    );
+    const confirmedAt = firstFilled(
+        toIsoString(order.confirmed_at),
+        rawStatus === 'completed' ? toIsoString(order.updated_at) : ''
+    );
+    const completedAt = firstFilled(
+        toIsoString(order.completed_at),
+        confirmedAt,
+        rawStatus === 'completed' ? toIsoString(order.updated_at) : ''
+    );
+    const shippedAt = firstFilled(
+        toIsoString(order.shipped_at),
+        (['shipped', 'completed', 'refunding', 'refunded'].includes(rawStatus) && (trackingNo || logisticsCompany))
+            ? firstFilled(toIsoString(order.updated_at), paidAt, toIsoString(order.created_at))
+            : ''
+    );
+    const agentConfirmedAt = firstFilled(
+        toIsoString(order.agent_confirmed_at),
+        ['agent_confirmed', 'shipping_requested'].includes(rawStatus) ? firstFilled(toIsoString(order.updated_at), paidAt) : ''
+    );
+    const expireAt = firstFilled(
+        toIsoString(order.expire_at),
+        rawStatus === 'pending_payment' || (rawStatus === 'cancelled' && !paidAt) ? addMinutes(order.created_at, 30) : ''
+    );
+    const reviewed = order.reviewed === true || String(order.remark || '').includes('[已评价]');
+    const reviewedAt = firstFilled(
+        toIsoString(order.reviewed_at),
+        reviewed ? firstFilled(completedAt, toIsoString(order.updated_at)) : ''
+    );
+    const estimatedDelivery = firstFilled(
+        toIsoString(order.estimated_delivery),
+        shippedAt ? addDays(shippedAt, 3) : ''
+    );
+    const settlementAt = firstFilled(
+        toIsoString(order.settlement_at),
+        completedAt ? addDays(completedAt, 15) : ''
+    );
+    const fulfillmentType = firstFilled(
+        order.fulfillment_type,
+        ['agent_confirmed', 'shipping_requested'].includes(rawStatus) ? 'Agent_Pending' : 'Platform'
+    );
+    const shippingTraces = Array.isArray(order.shipping_traces) && order.shipping_traces.length > 0
+        ? order.shipping_traces
+        : [
+            toIsoString(order.created_at) ? { time: toIsoString(order.created_at), desc: '订单已创建', status: 'created' } : null,
+            paidAt ? { time: paidAt, desc: '支付成功', status: 'paid' } : null,
+            shippedAt ? { time: shippedAt, desc: '商家已发货', status: 'shipped' } : null,
+            completedAt ? { time: completedAt, desc: '已签收', status: 'completed' } : null,
+            cancelledAt ? { time: cancelledAt, desc: '订单已取消', status: 'cancelled' } : null
+        ].filter(Boolean);
+    const normalizedDistributor = distributorDoc ? {
+        id: distributorDoc._id || distributorDoc.id || '',
+        openid: distributorDoc.openid || '',
+        nick_name: distributorDoc.nickName || distributorDoc.nickname || '',
+        nickname: distributorDoc.nickName || distributorDoc.nickname || '',
+        avatar: distributorDoc.avatarUrl || '',
+        role_level: toNumber(distributorDoc.role_level || distributorDoc.distributor_level, 0)
+    } : null;
+    const normalizedAgent = normalizedDistributor ? {
+        id: normalizedDistributor.id,
+        openid: normalizedDistributor.openid,
+        nickname: normalizedDistributor.nickname,
+        avatar: normalizedDistributor.avatar,
+        role_level: normalizedDistributor.role_level
+    } : null;
     const mergedProduct = {
         ...orderProduct,
         id: firstFilled(orderProduct.id, orderProduct._id, productId),
@@ -216,6 +381,24 @@ async function formatOrderForClient(order = {}, cache = new Map()) {
         raw_status: rawStatus,
         status,
         quantity,
+        paid_at: paidAt || null,
+        shipped_at: shippedAt || null,
+        agent_confirmed_at: agentConfirmedAt || null,
+        completed_at: completedAt || null,
+        confirmed_at: confirmedAt || null,
+        cancelled_at: cancelledAt || null,
+        expire_at: expireAt || null,
+        reviewed,
+        reviewed_at: reviewedAt || null,
+        fulfillment_type: fulfillmentType,
+        pickupStation: pickupStation || null,
+        settlement_at: settlementAt || null,
+        commission_settled: order.commission_settled === true || (commissionDoc && commissionDoc.status === 'settled'),
+        estimated_delivery: estimatedDelivery || null,
+        shipping_traces: shippingTraces,
+        distributor: normalizedDistributor,
+        agent: normalizedAgent,
+        agent_info: normalizedAgent,
         product_id: productId,
         sku: orderSku ? { ...orderSku, spec_value: firstFilled(orderSku.spec_value, specValue) } : (specValue ? { spec_value: specValue } : null),
         address: order.address || order.address_snapshot || null,
