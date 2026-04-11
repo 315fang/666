@@ -12,6 +12,57 @@ function formatMoney(value) {
     return Number.isFinite(n) ? n.toFixed(2) : '0.00';
 }
 
+function pickNumber(values, fallback = 0) {
+    for (let i = 0; i < values.length; i += 1) {
+        const n = Number(values[i]);
+        if (Number.isFinite(n)) return n;
+    }
+    return fallback;
+}
+
+function buildTabStats(team = {}) {
+    const levels = team.levels || {};
+    const directCount = pickNumber([levels.direct && levels.direct.count, team.directCount], 0);
+    const indirectCount = pickNumber([levels.indirect && levels.indirect.count, team.indirectCount], 0);
+    const directMonthlyNew = pickNumber([
+        levels.direct && levels.direct.monthlyNewCount,
+        team.directMonthlyNewMembers,
+        team.monthlyNewMembers
+    ], 0);
+    const indirectMonthlyNew = pickNumber([
+        levels.indirect && levels.indirect.monthlyNewCount,
+        team.indirectMonthlyNewMembers
+    ], 0);
+    const directTotalSales = pickNumber([
+        levels.direct && levels.direct.totalSales,
+        team.directTotalSales,
+        team.directSales
+    ], 0);
+    const indirectTotalSales = pickNumber([
+        levels.indirect && levels.indirect.totalSales,
+        team.indirectTotalSales,
+        team.indirectSales
+    ], 0);
+
+    return {
+        direct: {
+            count: directCount,
+            monthlyNewMembers: directMonthlyNew,
+            totalSales: directTotalSales
+        },
+        indirect: {
+            count: indirectCount,
+            monthlyNewMembers: indirectMonthlyNew,
+            totalSales: indirectTotalSales
+        },
+        all: {
+            count: pickNumber([levels.all && levels.all.count, team.totalCount], directCount + indirectCount),
+            monthlyNewMembers: pickNumber([levels.all && levels.all.monthlyNewCount, team.monthlyNewMembers], directMonthlyNew + indirectMonthlyNew),
+            totalSales: pickNumber([levels.all && levels.all.totalSales, team.totalSales], directTotalSales + indirectTotalSales)
+        }
+    };
+}
+
 Page({
     data: {
         statusBarHeight: 20,
@@ -22,6 +73,11 @@ Page({
         totalCount: 0,
         totalSales: '0.00',
         monthlyNewMembers: 0,
+        teamStatsByTab: {
+            direct: { count: 0, monthlyNewMembers: 0, totalSales: 0 },
+            indirect: { count: 0, monthlyNewMembers: 0, totalSales: 0 },
+            all: { count: 0, monthlyNewMembers: 0, totalSales: 0 }
+        },
         members: [],
         currentTab: 'direct',
         page: 1,
@@ -51,11 +107,21 @@ Page({
         wx.navigateTo({ url: '/pages/distribution/invite-poster' });
     },
 
+    applyCurrentTabSummary(tab = this.data.currentTab, teamStatsByTab = this.data.teamStatsByTab) {
+        const summary = teamStatsByTab[tab] || teamStatsByTab.all || { count: 0, monthlyNewMembers: 0, totalSales: 0 };
+        this.setData({
+            totalCount: Number(summary.count || 0),
+            monthlyNewMembers: Number(summary.monthlyNewMembers || 0),
+            totalSales: formatMoney(summary.totalSales)
+        });
+    },
+
     async loadStats() {
         try {
             const res = await get('/distribution/stats');
-            const { team = {}, stats = {}, userInfo = {} } = res.data || {};
+            const { team = {}, userInfo = {} } = res.data || {};
             const memberCode = userInfo.invite_code || app.globalData.userInfo?.invite_code || '';
+            const teamStatsByTab = buildTabStats(team);
             if (memberCode && app.globalData.userInfo) {
                 app.globalData.userInfo.invite_code = memberCode;
                 try {
@@ -66,9 +132,9 @@ Page({
                 memberCode,
                 directCount: Number(team.directCount || 0),
                 indirectCount: Number(team.indirectCount || 0),
-                totalCount: Number(team.totalCount || 0),
-                monthlyNewMembers: Number(team.monthlyNewMembers || 0),
-                totalSales: formatMoney(stats.totalEarnings)
+                teamStatsByTab
+            }, () => {
+                this.applyCurrentTabSummary(this.data.currentTab, teamStatsByTab);
             });
         } catch (err) {
             console.error('加载统计失败:', err);
@@ -86,7 +152,7 @@ Page({
                 pageSize: limit,
                 limit
             });
-            const list = (res.data?.list || []).map(item => {
+            const list = (res.data?.list || []).map((item) => {
                 const levelLabel = Number(item.level) === 1 ? '一级成员' : '二级成员';
                 return {
                     ...item,
@@ -131,6 +197,7 @@ Page({
             page: 1,
             hasMore: true
         }, () => {
+            this.applyCurrentTabSummary(tab);
             this.loadMembers();
         });
     },

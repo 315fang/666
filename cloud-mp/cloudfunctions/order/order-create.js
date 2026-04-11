@@ -43,6 +43,20 @@ async function findGroupActivity(activityId) {
     return legacy.data[0] || doc.data || null;
 }
 
+async function findSlashRecord(slashNo) {
+    if (!slashNo) return null;
+    const key = String(slashNo);
+    const res = await db.collection('slash_records')
+        .where(_.or([
+            { slash_no: key },
+            { _id: key }
+        ]))
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return res.data && res.data[0] ? res.data[0] : null;
+}
+
 function parseConfigValue(row, fallback) {
     if (!row) return fallback;
     const value = row.config_value !== undefined ? row.config_value : row.value;
@@ -149,7 +163,8 @@ async function createOrder(openid, orderData) {
         points_to_use,
         type,
         group_activity_id,
-        group_no
+        group_no,
+        slash_no
     } = orderData;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -162,6 +177,16 @@ async function createOrder(openid, orderData) {
         if (!isActivityOpen(groupActivity)) throw new Error('拼团活动已结束');
         const endAt = groupActivity.end_time || groupActivity.end_at;
         if (endAt && new Date(endAt) < new Date()) throw new Error('拼团活动已过期');
+    }
+    const slashRecord = slash_no ? await findSlashRecord(slash_no) : null;
+    if (slash_no) {
+        if (!slashRecord) throw new Error('砍价记录不存在');
+        if (slashRecord.openid !== openid) throw new Error('砍价记录归属异常');
+        if (slashRecord.status === 'purchased') throw new Error('该砍价已完成购买');
+        if (slashRecord.status === 'expired') throw new Error('砍价已过期');
+    }
+    if (groupActivity && slashRecord) {
+        throw new Error('活动订单类型冲突');
     }
 
     // 1. 查商品和 SKU，计算金额
@@ -176,6 +201,9 @@ async function createOrder(openid, orderData) {
         if (groupActivity && !sameProduct(groupActivity, product)) {
             throw new Error('拼团商品与活动不匹配');
         }
+        if (slashRecord && !sameProduct(slashRecord, product)) {
+            throw new Error('砍价商品与记录不匹配');
+        }
 
         let sku = null;
         if (item.sku_id) {
@@ -184,9 +212,10 @@ async function createOrder(openid, orderData) {
 
         const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
         const activityPrice = groupActivity ? toNumber(groupActivity.group_price || groupActivity.price, 0) : null;
+        const slashPrice = slashRecord ? toNumber(slashRecord.current_price || slashRecord.price, 0) : null;
         const unitPrice = groupActivity
             ? activityPrice
-            : resolveSkuUnitPrice(sku, product);
+            : (slashRecord ? slashPrice : resolveSkuUnitPrice(sku, product));
         const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
         totalAmount += lineTotal;
@@ -200,8 +229,9 @@ async function createOrder(openid, orderData) {
             price: unitPrice,
             qty,
             subtotal: lineTotal,
-            activity_type: groupActivity ? 'group' : '',
-            group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : ''
+            activity_type: groupActivity ? 'group' : (slashRecord ? 'slash' : ''),
+            group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : '',
+            slash_no: slashRecord ? (slashRecord.slash_no || slash_no) : ''
         });
     }
 
@@ -310,11 +340,14 @@ async function createOrder(openid, orderData) {
         coupon_id: usedCouponTemplateId || coupon_id || '',
         user_coupon_id: usedCouponDocId || user_coupon_id || '',
         memo: memo || '',
-        type: groupActivity ? 'group' : (type || 'normal'),
+        type: groupActivity ? 'group' : (slashRecord ? 'slash' : (type || 'normal')),
         group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : '',
         legacy_group_activity_id: groupActivity ? (groupActivity.id || groupActivity._legacy_id || group_activity_id) : '',
         group_no: group_no || '',
         group_joined_at: null,
+        slash_no: slashRecord ? (slashRecord.slash_no || slash_no) : '',
+        slash_record_id: slashRecord ? slashRecord._id : '',
+        slash_activity_id: slashRecord ? slashRecord.activity_id || slashRecord.legacy_activity_id || '' : '',
         created_at: db.serverDate(),
         updated_at: db.serverDate()
     };
@@ -339,7 +372,15 @@ async function createOrder(openid, orderData) {
         }
     } catch (_) {}
 
-    return { _id: result._id, id: result._id, order_no: orderNo, total_amount: totalAmount, pay_amount: payAmount };
+    return {
+        _id: result._id,
+        id: result._id,
+        order_no: orderNo,
+        total_amount: totalAmount,
+        pay_amount: payAmount,
+        group_no: group_no || '',
+        slash_no: slashRecord ? (slashRecord.slash_no || slash_no || '') : ''
+    };
 }
 
 module.exports = {

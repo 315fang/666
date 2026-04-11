@@ -138,7 +138,7 @@
                 <span class="payment-item-message">{{ item.message }}</span>
               </div>
             </div>
-            <div v-else class="payment-empty">当前支付配置检查通过</div>
+            <div v-else class="payment-empty">当前支付由微信云开发 / 微信支付链路接管，无需后台重复检测。</div>
           </div>
         </div>
 
@@ -283,8 +283,8 @@ const lowStockList = ref([])
 const hotProducts = ref([])
 const paymentLoading = ref(false)
 const paymentHealth = ref({
-  status: 'warning',
-  summary: '',
+  status: 'ok',
+  summary: '当前小程序支付由微信云开发 / 微信支付链路接管，后台无需重复执行证书巡检。',
   checked_at: '',
   checks: [],
   errors: [],
@@ -475,6 +475,12 @@ const getProductImage = (p) => {
   } catch {
     return ''
   }
+}
+
+const formatFenToYuan = (value) => {
+  const amount = Number(value ?? 0)
+  if (!Number.isFinite(amount)) return '0.00'
+  return (amount / 100).toFixed(2)
 }
 
 const getStatusText = (status) => {

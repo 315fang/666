@@ -241,6 +241,14 @@ import dayjs from 'dayjs'
 
 const activeTab = ref('config')
 
+const unwrapListResponse = (res) => {
+  if (Array.isArray(res)) return res
+  if (Array.isArray(res?.list)) return res.list
+  if (Array.isArray(res?.rows)) return res.rows
+  return []
+}
+
+
 // ===== 系统配置 =====
 const configLoading = ref(false)
 const batchSaving = ref(false)
@@ -254,7 +262,7 @@ const rollingBack = ref(null)   // 正在回滚的 history id
 const groupedConfigs = computed(() => {
   const groups = {}
   for (const c of allConfigs.value) {
-    const g = c.config_group || 'general'
+    const g = c.config_group || c.category || 'general'
     if (!groups[g]) groups[g] = []
     groups[g].push(c)
   }
@@ -265,7 +273,7 @@ const fetchConfigs = async () => {
   configLoading.value = true
   try {
     const res = await getSystemConfigs()
-    const data = res.data || res.list || []
+    const data = unwrapListResponse(res)
     allConfigs.value = data.map(c => ({
       ...c,
       _editValue: parseConfigValue(c.config_value, c.config_type),
@@ -279,6 +287,7 @@ const fetchConfigs = async () => {
     configLoading.value = false
   }
 }
+
 
 const parseConfigValue = (val, type) => {
   if (type === 'number') return Number(val) || 0
@@ -327,12 +336,13 @@ const refreshCache = async () => {
 const showHistory = async (row) => {
   try {
     const res = await getSystemConfigHistory(row.config_key)
-    configHistory.value = res.data || []
+    configHistory.value = unwrapListResponse(res)
     historyDialogVisible.value = true
   } catch (e) {
     console.error('获取历史失败:', e)
   }
 }
+
 
 const handleRollback = async (h) => {
   try {
@@ -346,16 +356,17 @@ const handleRollback = async (h) => {
   }
   rollingBack.value = h.id
   try {
-    const res = await rollbackSystemConfig(h.config_key, { history_id: h.id })
-    ElMessage.success(res.message || '回滚成功，配置已即时生效')
+    await rollbackSystemConfig(h.config_key, { history_id: h.id })
+    ElMessage.success('回滚成功，配置已即时生效')
     historyDialogVisible.value = false
-    fetchConfigs()
+    await fetchConfigs()
   } catch (e) {
     console.error('回滚失败:', e)
   } finally {
     rollingBack.value = null
   }
 }
+
 
 const groupLabel = (g) => ({
   general: '基础设置', commission: '佣金分销', order: '订单配置',
@@ -384,13 +395,14 @@ const fetchTables = async () => {
   tablesLoading.value = true
   try {
     const res = await getDbIndexTables()
-    dbTables.value = res.data || []
+    dbTables.value = unwrapListResponse(res)
   } catch (e) {
     console.error('获取表列表失败:', e)
   } finally {
     tablesLoading.value = false
   }
 }
+
 
 const selectTable = async (tableName) => {
   selectedTable.value = tableName
@@ -400,14 +412,15 @@ const selectTable = async (tableName) => {
       getDbIndexes(tableName),
       getDbIndexColumns(tableName)
     ])
-    tableIndexes.value = idxRes.data || []
-    tableColumns.value = colRes.data || []
+    tableIndexes.value = unwrapListResponse(idxRes)
+    tableColumns.value = unwrapListResponse(colRes)
   } catch (e) {
     console.error('获取索引/列信息失败:', e)
   } finally {
     indexLoading.value = false
   }
 }
+
 
 const showAddIndexDialog = () => {
   Object.assign(indexForm, { name: '', columns: [], unique: false })

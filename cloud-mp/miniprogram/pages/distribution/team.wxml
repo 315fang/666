@@ -23,7 +23,7 @@
   <view class="summary-strip">
     <view class="summary-item">
       <text class="summary-value">{{totalCount}}</text>
-      <text class="summary-label">团队总人数</text>
+      <text class="summary-label">{{currentTab === 'indirect' ? '二级团队人数' : '一级团队人数'}}</text>
     </view>
     <view class="summary-item">
       <text class="summary-value">¥{{totalSales}}</text>
@@ -99,5 +99,6 @@
     </view>
     <view class="bottom-space"></view>
   </scroll-view>
+
 
 </view>

@@ -115,7 +115,9 @@ node scripts/create-admin.js
 
 当前正式入口约定：
 
-- 管理后台正式 API 入口为 `admin-api` 云函数网关
+- 管理后台正式访问地址：`https://cloud1-9gywyqe49638e46f-1419893803.tcloudbaseapp.com/admin/`
+- 管理后台正式 API 入口：`https://cloud1-9gywyqe49638e46f.service.tcloudbase.com/admin/api`
+- 管理后台正式 API 仍由 `admin-api` 云函数网关承接
 - `cloudrun-admin-service` 当前保留为后续演进线，不作为本轮上线阻塞项
 
 ## API 接口

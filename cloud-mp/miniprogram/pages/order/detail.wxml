@@ -106,6 +106,21 @@
     </view>
   </view>
 
+  <!-- 活动承接 -->
+  <view class="card activity-card activity-card-{{order.activityInfo.type}}" wx:if="{{order.activityInfo}}">
+    <view class="activity-card-head">
+      <view>
+        <text class="activity-label">{{order.activityInfo.label}}</text>
+        <text class="activity-title">{{order.activityInfo.title}}</text>
+      </view>
+      <view class="activity-status">{{order.activityInfo.type === 'group' ? '拼团' : '砍价'}}</view>
+    </view>
+    <text class="activity-desc">{{order.activityInfo.desc}}</text>
+    <view class="activity-action {{order.activityInfo.disabled ? 'activity-action-disabled' : ''}}" bindtap="onViewActivity">
+      {{order.activityInfo.actionText}}
+    </view>
+  </view>
+
   <!-- 订单信息 -->
   <view class="card info-card">
     <view class="card-title">订单信息</view>

@@ -1,6 +1,6 @@
 # 项目部署状态
 
-> 更新时间：2026-04-10 20:00
+> 更新时间：2026-04-11 09:17
 
 ## CloudBase 环境
 
@@ -10,6 +10,9 @@
 | 区域 | ap-shanghai |
 | 小程序 AppID | `wx2483d9ca40c2a2a9` |
 | 静态托管域名 | `cloud1-9gywyqe49638e46f-1419893803.tcloudbaseapp.com` |
+| 管理后台入口 | `https://cloud1-9gywyqe49638e46f-1419893803.tcloudbaseapp.com/admin/` |
+| 管理后台 API | `https://cloud1-9gywyqe49638e46f.service.tcloudbase.com/admin/api` |
+
 
 ## 云函数部署状态（12 个）
 

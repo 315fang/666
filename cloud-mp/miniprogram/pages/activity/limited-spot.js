@@ -73,7 +73,7 @@ Page({
             const def = list.find((a) => a.is_default) || list[0];
             if (def) {
                 this.setData({
-                    addressId: def.id,
+                    addressId: def._id || def.id,
                     addressSummary: `${def.receiver_name} ${def.phone} ${def.province || ''}${def.city || ''}${def.district || ''}${def.detail || ''}`
                 });
             }

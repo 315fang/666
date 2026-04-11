@@ -1,10 +1,12 @@
 // pages/product/detail.js
 const { get, post } = require('../../utils/request');
+const { normalizeActivityList } = require('../../utils/activityList');
 const { normalizeProductId } = require('../../utils/dataFormatter');
 const { USER_ROLES } = require('../../config/constants');
 const { safeBack } = require('../../utils/navigator');
 const { requireLogin } = require('../../utils/auth');
-const { loadProduct, resolvePayableUnitPrice } = require('./productDetailData');
+const { resolveSlashResumePayload } = require('../../utils/activityResume');
+const { loadProduct, resolvePayableUnitPrice, PRODUCT_PLACEHOLDER } = require('./productDetailData');
 const { refreshFavoriteState, toggleFavorite } = require('./productDetailFavorite');
 const {
     onSpecSelect,
@@ -16,6 +18,12 @@ const {
     addToCart
 } = require('./productDetailActions');
 const app = getApp();
+
+function normalizeUserMessage(message, fallback) {
+    const text = message ? String(message).trim() : '';
+    if (!text || text === 'ok') return fallback;
+    return text;
+}
 
 Page({
     data: {
@@ -132,8 +140,8 @@ Page({
                 get('/slash/activities', { product_id: normalizedId }, { showError: false }).catch(() => null)
             ]);
 
-            const groupActivity = this.findProductActivity(groupRes && groupRes.data, normalizedId);
-            const slashActivity = this.findProductActivity(slashRes && slashRes.data, normalizedId);
+            const groupActivity = this.findProductActivity(normalizeActivityList(groupRes && groupRes.data), normalizedId);
+            const slashActivity = this.findProductActivity(normalizeActivityList(slashRes && slashRes.data), normalizedId);
             const availablePurchaseModes = this.buildPurchaseModes(groupActivity, slashActivity);
             const availableKeys = availablePurchaseModes.map((item) => item.key);
             const preferredMode = groupActivity ? 'group' : slashActivity ? 'slash' : 'normal';
@@ -196,17 +204,39 @@ Page({
             normal: {
                 purchaseModeHint: '加入购物袋后可与其他商品一起结算',
                 actionLeftLabel: '加入购物袋',
-                actionRightLabel: '立即购买'
+                actionRightLabel: '立即购买',
+                activityStatusCard: null,
+                activityQuickLinks: []
             },
             group: {
                 purchaseModeHint: this.getPurchaseHint('group'),
                 actionLeftLabel: '立即购买',
-                actionRightLabel: '发起拼团'
+                actionRightLabel: '去下单拼团',
+                activityStatusCard: {
+                    badge: '拼团说明',
+                    title: '支付成功后可在订单或“我的拼团”继续查看进度',
+                    desc: '拼团不是发起后立刻成团，支付完成后系统会为你建立或加入对应拼团。'
+                },
+                activityQuickLinks: [{
+                    key: 'my-group',
+                    label: '查看我的拼团',
+                    desc: '回到我参与的拼团，继续看是否已成团'
+                }]
             },
             slash: {
                 purchaseModeHint: this.getPurchaseHint('slash'),
                 actionLeftLabel: '立即购买',
-                actionRightLabel: '发起砍价'
+                actionRightLabel: '发起砍价',
+                activityStatusCard: {
+                    badge: '砍价说明',
+                    title: '发起后会自动进入你的砍价详情',
+                    desc: '如果你已经发起过同一商品的砍价，我们会直接带你继续查看上次进度。'
+                },
+                activityQuickLinks: [{
+                    key: 'my-slash',
+                    label: '查看我的砍价',
+                    desc: '继续看我已经发起的砍价记录与进度'
+                }]
             }
         };
         const current = modeMeta[mode] || modeMeta.normal;
@@ -266,11 +296,12 @@ Page({
 
             const res = await get('/commissions/preview', params);
 
-            if (res.code === 0 && res.data) {
-                const data = res.data;
+            if (res.code === 0) {
+                const data = res.data || res;
+                const commissions = Array.isArray(data.commissions) ? data.commissions : [];
 
                 // 计算我可以获得的佣金
-                const myCommission = data.commissions
+                const myCommission = commissions
                     .filter(c => c.level === 0 || c.level === 1)
                     .reduce((sum, c) => sum + c.amount, 0);
 
@@ -313,6 +344,29 @@ Page({
         });
     },
 
+    onGalleryImageError(e) {
+        const index = Number(e.currentTarget.dataset.index || 0);
+        const product = this.data.product || {};
+        const images = Array.isArray(product.images) ? product.images.slice() : [];
+        if (!images.length) {
+            images.push(PRODUCT_PLACEHOLDER);
+        } else {
+            images[index] = PRODUCT_PLACEHOLDER;
+        }
+        this.setData({
+            'product.images': images,
+            imageCount: images.length || 1
+        });
+    },
+
+    onDetailImageError(e) {
+        const index = Number(e.currentTarget.dataset.index || 0);
+        const images = Array.isArray(this.data.detailImageList)
+            ? this.data.detailImageList.filter((_, i) => i !== index)
+            : [];
+        this.setData({ detailImageList: images });
+    },
+
     // 返回 (Renamed to match WXML: onBackTap)
     onBackTap() {
         safeBack();
@@ -331,6 +385,29 @@ Page({
         const result = onSpecSelect(this, e, resolvePayableUnitPrice);
         this.syncPurchaseActionState();
         return result;
+    },
+
+    // 判断规格值是否可选（库存为0则灰化）
+    isSpecValueDisabled(specName, specValue) {
+        const { skus, selectedSpecs } = this.data;
+        if (!skus || skus.length === 0) return false;
+
+        // 构建临时选中状态
+        const tempSpecs = { ...selectedSpecs, [specName]: specValue };
+
+        // 检查是否存在匹配的 SKU 且有库存
+        const matchedSku = skus.find((sku) => {
+            const skuSpecs = Array.isArray(sku.specs) && sku.specs.length > 0
+                ? sku.specs
+                : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
+            if (skuSpecs.length === 0) return false;
+            return skuSpecs.every((s) => tempSpecs[s.name] === s.value);
+        });
+
+        if (matchedSku) {
+            return (matchedSku.stock || 0) <= 0;
+        }
+        return false;
     },
 
     getMaxStock() {
@@ -372,6 +449,26 @@ Page({
         this.setData({ purchaseMode: mode }, () => this.syncPurchaseActionState());
     },
 
+    onActivityQuickActionTap(e) {
+        const action = e.currentTarget.dataset.action;
+        if (action === 'my-group') {
+            return this.openMyGroupList();
+        }
+        if (action === 'my-slash') {
+            return this.openMySlashList();
+        }
+    },
+
+    openMyGroupList() {
+        if (!requireLogin()) return;
+        wx.navigateTo({ url: '/pages/group/list?tab=my' });
+    },
+
+    openMySlashList() {
+        if (!requireLogin()) return;
+        wx.navigateTo({ url: '/pages/slash/list?tab=my' });
+    },
+
     onLeftActionTap() {
         if (this.data.purchaseMode === 'normal') {
             return this.onAddToCart();
@@ -397,29 +494,45 @@ Page({
         }
         if (!requireLogin()) return;
 
+        const roleLevel = app.globalData.userInfo && app.globalData.userInfo.role_level || 0;
+        if (roleLevel < 1) {
+            wx.showModal({
+                title: '需要会员身份',
+                content: '发起拼团需要会员身份，完成首单消费即可升级。',
+                confirmText: '去购物',
+                success: (res) => {
+                    if (res.confirm) wx.switchTab({ url: '/pages/category/category' });
+                }
+            });
+            return;
+        }
+
         try {
             const hasSkuOptions = Array.isArray(this.data.skus) && this.data.skus.length > 0;
-            const payload = { activity_id: activity.id };
             const selectedSkuId = this.data.selectedSku && this.data.selectedSku.id;
             const activitySkuId = activity.sku_id != null && activity.sku_id !== '' ? activity.sku_id : null;
             if (hasSkuOptions && selectedSkuId == null && activitySkuId == null) {
                 wx.showToast({ title: '请选择商品规格', icon: 'none' });
                 return;
             }
-            if (selectedSkuId != null && selectedSkuId !== '') {
-                payload.sku_id = selectedSkuId;
-            } else if (activitySkuId != null) {
-                payload.sku_id = activitySkuId;
-            }
-            const res = await post('/group/orders', payload);
-            if (res.code === 0 || res.code === 1) {
-                const groupNo = res.data && res.data.group_no;
-                if (groupNo) {
-                    wx.navigateTo({ url: `/pages/group/detail?group_no=${groupNo}` });
-                    return;
-                }
-            }
-            wx.showToast({ title: res.message || '发起失败', icon: 'none' });
+            const product = this.data.product || {};
+            const price = parseFloat(activity.group_price || activity.price || product.retail_price || product.price || this.data.currentPrice || 0);
+            const skuId = selectedSkuId != null && selectedSkuId !== '' ? selectedSkuId : activitySkuId;
+            const buyInfo = {
+                product_id: normalizeProductId(product.id || this.data.id),
+                category_id: product.category_id || null,
+                sku_id: skuId || null,
+                quantity: this.data.quantity || 1,
+                price,
+                name: product.name || activity.name || '拼团商品',
+                image: product.images && product.images[0] || '',
+                spec: this.data.selectedSkuText || (skuId ? '拼团·指定规格' : '拼团特惠'),
+                type: 'group',
+                group_activity_id: activity._id || activity.id,
+                supports_pickup: product.supports_pickup ? 1 : 0
+            };
+            wx.setStorageSync('directBuyInfo', buyInfo);
+            wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
         } catch (err) {
             wx.showToast({ title: err && err.message ? String(err.message) : '网络错误', icon: 'none' });
         }
@@ -448,16 +561,25 @@ Page({
                 payload.sku_id = activitySkuId;
             }
             const res = await post('/slash/start', payload);
-            if (res.code === 0 || res.code === 1) {
-                const slashNo = res.data && res.data.slash_no;
-                if (slashNo) {
-                    wx.navigateTo({ url: `/pages/slash/detail?slash_no=${slashNo}` });
-                    return;
-                }
+            const resume = resolveSlashResumePayload(res);
+            if ((res.code === 0 || res.code === 1) && resume.resumable) {
+                wx.navigateTo({ url: `/pages/slash/detail?slash_no=${resume.slashNo}` });
+                return;
             }
-            wx.showToast({ title: res.message || '发起失败', icon: 'none' });
+            if (res.code === 0 || res.code === 1) {
+                wx.showToast({ title: normalizeUserMessage(res.message, '砍价已发起，请到“我的砍价”继续查看'), icon: 'none' });
+                setTimeout(() => this.openMySlashList(), 500);
+                return;
+            }
+            wx.showToast({ title: normalizeUserMessage(res.message, '发起砍价失败'), icon: 'none' });
         } catch (err) {
-            wx.showToast({ title: err && err.message ? String(err.message) : '网络错误', icon: 'none' });
+            const message = err && err.message ? String(err.message) : '';
+            if (message.includes('已发起过砍价')) {
+                wx.showToast({ title: '你已参与过该砍价，正带你去查看', icon: 'none' });
+                setTimeout(() => this.openMySlashList(), 500);
+                return;
+            }
+            wx.showToast({ title: normalizeUserMessage(message, '网络错误，请稍后重试'), icon: 'none' });
         }
     },
 

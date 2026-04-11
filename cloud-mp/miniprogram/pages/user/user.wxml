@@ -174,6 +174,40 @@
     </view>
   </view>
 
+  <!-- ══ 我的活动 ══ -->
+  <view class="section-card activity-entry-card">
+    <view class="section-row-header">
+      <text class="section-row-title">我的活动</text>
+      <text class="activity-entry-hint">发起后在这里继续查看</text>
+    </view>
+    <view class="activity-entry-grid">
+      <view class="activity-entry activity-entry--group" bindtap="goMyGroups" hover-class="activity-entry-hover">
+        <view class="activity-entry-main">
+          <view class="activity-entry-icon-wrap">
+            <image class="activity-entry-icon" src="/assets/icons/users.svg" mode="aspectFit"></image>
+          </view>
+          <view class="activity-entry-copy">
+            <text class="activity-entry-title">我的拼团</text>
+            <text class="activity-entry-desc">查看拼团进度</text>
+          </view>
+        </view>
+        <text class="activity-entry-action">继续查看</text>
+      </view>
+      <view class="activity-entry activity-entry--slash" bindtap="goMySlash" hover-class="activity-entry-hover">
+        <view class="activity-entry-main">
+          <view class="activity-entry-icon-wrap">
+            <image class="activity-entry-icon" src="/assets/icons/tag.svg" mode="aspectFit"></image>
+          </view>
+          <view class="activity-entry-copy">
+            <text class="activity-entry-title">我的砍价</text>
+            <text class="activity-entry-desc">查看砍价进度</text>
+          </view>
+        </view>
+        <text class="activity-entry-action">继续查看</text>
+      </view>
+    </view>
+  </view>
+
   <!-- ══ 四宫格摘要 ══ -->
   <view class="section-card quad-card">
     <view class="quad-grid">
@@ -214,19 +248,19 @@
       <text class="func-arrow">›</text>
     </view>
     <view class="func-divider"></view>
-    <view class="func-row" wx:if="{{showPickupVerify}}" bindtap="goMyStation" hover-class="row-press">
+    <view class="func-row" wx:if="{{showPickupVerify && featureFlags.show_pickup_entry}}" bindtap="goMyStation" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/shield.svg" mode="aspectFit"></image>
       <text class="func-label">我的门店</text>
       <text class="func-arrow">›</text>
     </view>
-    <view class="func-divider" wx:if="{{showPickupVerify}}"></view>
+    <view class="func-divider" wx:if="{{showPickupVerify && featureFlags.show_pickup_entry}}"></view>
     <view class="func-row" bindtap="goInvitePoster" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
       <text class="func-label">好友邀请</text>
       <text class="func-arrow">›</text>
     </view>
     <view class="func-divider"></view>
-    <view class="func-row" wx:if="{{showPickupVerify}}" bindtap="goPickupVerify" hover-class="row-press">
+    <view class="func-row" wx:if="{{showPickupVerify && featureFlags.show_pickup_entry}}" bindtap="goPickupVerify" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/package.svg" mode="aspectFit"></image>
       <text class="func-label">门店核销</text>
       <text class="func-arrow">›</text>

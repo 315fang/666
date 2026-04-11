@@ -13,9 +13,10 @@
                   <el-option v-for="r in ROLES" :key="r.value" :label="r.label" :value="r.value" />
                 </el-select>
               </div>
-              <el-button type="primary" @click="openAdminForm()">
+              <el-button v-if="isSuperAdmin" type="primary" @click="openAdminForm()">
                 <el-icon><Plus /></el-icon> 新增管理员
               </el-button>
+
             </div>
           </template>
 
@@ -74,9 +75,10 @@
             </el-table-column>
             <el-table-column label="操作" width="190" fixed="right">
               <template #default="{ row }">
-                <el-button text type="primary" size="small" @click="openAdminForm(row)">编辑</el-button>
-                <el-button text type="warning" size="small" @click="resetPwd(row)">改密</el-button>
+                <el-button v-if="canEditAdminRow(row)" text type="primary" size="small" @click="openAdminForm(row)">编辑</el-button>
+                <el-button v-if="isSuperAdmin" text type="warning" size="small" @click="resetPwd(row)">改密</el-button>
                 <el-popconfirm
+                  v-if="isSuperAdmin"
                   :title="`确认删除 「${row.username}」？`"
                   @confirm="deleteAdmin(row)"
                   :disabled="row.role === 'super_admin'"
@@ -86,6 +88,7 @@
                   </template>
                 </el-popconfirm>
               </template>
+
             </el-table-column>
           </el-table>
 
@@ -160,8 +163,9 @@
           </el-col>
         </el-row>
         <el-form-item label="预设角色" prop="role">
-          <el-select v-model="adminForm.role" style="width:100%" @change="onRoleChange">
-            <el-option v-for="r in ROLES.filter(r=>r.value!=='super_admin')" :key="r.value" :label="r.label" :value="r.value">
+          <el-select v-model="adminForm.role" style="width:100%" :disabled="!isSuperAdmin" @change="onRoleChange">
+            <el-option v-for="r in editableRoleOptions" :key="r.value" :label="r.label" :value="r.value">
+
               <span>{{ r.label }}</span>
               <span style="color:#999;font-size:12px;margin-left:8px">{{ r.desc }}</span>
             </el-option>
@@ -187,7 +191,8 @@
             </div>
           </div>
         </el-form-item>
-        <el-form-item label="状态" v-if="adminForm.id">
+        <el-form-item label="状态" v-if="adminForm.id && isSuperAdmin">
+
           <el-radio-group v-model="adminForm.status">
             <el-radio :label="1">启用</el-radio>
             <el-radio :label="0">禁用</el-radio>
@@ -356,12 +361,23 @@ const submitAdminForm = async () => {
     submitting.value = true
     try {
       let permissions = [...adminForm.permissions]
-      if (!userStore.isSuperAdmin) permissions = permissions.filter((p) => p !== 'super_admin')
+      if (!userStore.isSuperAdmin) permissions = permissions.filter((p) => assignablePermissionSet.value.has(p))
       if (adminForm.id) {
-        await updateAdmin(adminForm.id, {
-          name: adminForm.name, role: adminForm.role, phone: adminForm.phone,
-          email: adminForm.email, permissions, status: adminForm.status
-        })
+        const payload = userStore.isSuperAdmin
+          ? {
+              name: adminForm.name,
+              role: adminForm.role,
+              phone: adminForm.phone,
+              email: adminForm.email,
+              permissions,
+              status: adminForm.status
+            }
+          : {
+              name: adminForm.name,
+              phone: adminForm.phone,
+              email: adminForm.email
+            }
+        await updateAdmin(adminForm.id, payload)
         ElMessage.success('更新成功')
       } else {
         await createAdmin({
@@ -371,6 +387,7 @@ const submitAdminForm = async () => {
         })
         ElMessage.success('创建成功')
       }
+
       adminFormVisible.value = false
       fetchAdmins()
     } catch (e) {

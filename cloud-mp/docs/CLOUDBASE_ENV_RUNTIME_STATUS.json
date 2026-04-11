@@ -1,153 +1,150 @@
 {
   "kind": "runtime_status",
-  "generated_at": "2026-04-09T08:43:20.845Z",
-  "ok": false,
+  "generated_at": "2026-04-10T15:41:46.746Z",
+  "ok": true,
   "environment": {
-    "env_id": "",
-    "auth_status": "REQUIRED",
-    "env_status": "NONE"
+    "env_id": "cloud1-9gywyqe49638e46f",
+    "auth_status": "READY",
+    "env_status": "READY"
   },
   "collections": {
     "required": [
       {
         "name": "users",
         "expected": 167,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 168,
+        "status": "count_above_seed"
       },
       {
         "name": "products",
         "expected": 11,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 11,
+        "status": "ok"
       },
       {
         "name": "skus",
         "expected": 11,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 11,
+        "status": "ok"
       },
       {
         "name": "categories",
         "expected": 9,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 9,
+        "status": "ok"
       },
       {
         "name": "cart_items",
         "expected": 25,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 26,
+        "status": "count_above_seed"
       },
       {
         "name": "orders",
         "expected": 59,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 71,
+        "status": "count_above_seed"
       },
       {
         "name": "refunds",
         "expected": 9,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 11,
+        "status": "count_above_seed"
       },
       {
         "name": "reviews",
         "expected": 3,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 3,
+        "status": "ok"
       },
       {
         "name": "commissions",
         "expected": 3,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 3,
+        "status": "ok"
       },
       {
         "name": "withdrawals",
         "expected": 3,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 4,
+        "status": "count_above_seed"
       },
       {
         "name": "banners",
         "expected": 5,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 5,
+        "status": "ok"
       },
       {
         "name": "materials",
         "expected": 52,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 52,
+        "status": "ok"
       },
       {
         "name": "material_groups",
         "expected": 1,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 1,
+        "status": "ok"
       },
       {
         "name": "admins",
         "expected": 2,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 2,
+        "status": "ok"
       },
       {
         "name": "admin_roles",
         "expected": 2,
-        "actual": null,
-        "status": "missing_collection"
+        "actual": 2,
+        "status": "ok"
       }
     ],
-    "missing_or_mismatched_required": [
+    "missing_or_below_required": [],
+    "above_seed_required": [
       "users",
-      "products",
-      "skus",
-      "categories",
       "cart_items",
       "orders",
       "refunds",
-      "reviews",
-      "commissions",
-      "withdrawals",
-      "banners",
-      "materials",
-      "material_groups",
-      "admins",
-      "admin_roles"
+      "withdrawals"
     ]
   },
   "functions": {
     "local": [
       "admin-api",
       "cart",
+      "commission-deadline-process",
       "config",
       "distribution",
       "login",
       "order",
+      "order-auto-confirm",
+      "order-timeout-cancel",
       "payment",
       "products",
       "user"
     ],
-    "deployed": [],
-    "missing": [
+    "deployed": [
       "admin-api",
       "cart",
+      "commission-deadline-process",
       "config",
       "distribution",
       "login",
       "order",
+      "order-auto-confirm",
+      "order-timeout-cancel",
       "payment",
       "products",
       "user"
     ],
+    "missing": [],
     "extra": []
   },
   "admin_chain": {
-    "mode": "missing",
-    "ready": false,
-    "evidence": "No CloudRun service or deployed admin-api cloud function was found for the admin chain."
+    "mode": "function_gateway",
+    "ready": true,
+    "evidence": "Admin chain currently resolves through the deployed admin-api cloud function gateway."
   },
   "cloudrun": {
     "service_count": 0,
@@ -155,18 +152,15 @@
   },
   "summary": {
     "required_collection_count": 15,
-    "matched_required_collection_count": 0,
-    "required_collection_counts_match": false,
-    "local_function_count": 9,
-    "deployed_function_count": 0,
-    "functions_match": false,
-    "admin_chain_ready": false
+    "matched_required_collection_count": 15,
+    "required_collection_baseline_met": true,
+    "local_function_count": 12,
+    "deployed_function_count": 12,
+    "functions_match": true,
+    "admin_chain_ready": true
   },
-  "blockers": [
-    "CloudBase auth/env not ready: auth=REQUIRED, env=NONE",
-    "Required collections missing or mismatched: users, products, skus, categories, cart_items, orders, refunds, reviews, commissions, withdrawals, banners, materials, material_groups, admins, admin_roles",
-    "Cloud functions not deployed from local source: admin-api, cart, config, distribution, login, order, payment, products, user",
-    "No CloudRun service or deployed admin-api cloud function was found for the admin chain."
-  ],
-  "warnings": []
+  "blockers": [],
+  "warnings": [
+    "Required collections contain runtime data beyond import baseline: users, cart_items, orders, refunds, withdrawals"
+  ]
 }

@@ -276,8 +276,18 @@ async function slashStart(openid, params) {
         })
         .limit(1).get().catch(() => ({ data: [] }));
     if (existingRes.data && existingRes.data.length > 0) {
-        throw new Error('您已发起过砍价');
+        const existingRecord = existingRes.data[0];
+        return {
+            success: true,
+            existing: true,
+            slash_id: existingRecord._id,
+            slash_no: existingRecord.slash_no,
+            current_price: existingRecord.current_price,
+            target_price: existingRecord.target_price,
+            message: '已为你找到进行中的砍价，继续查看即可'
+        };
     }
+
 
     // 3. 创建砍价记录
     const originalPrice = toNumber(activity.original_price || activity.price, 0);
@@ -322,13 +332,20 @@ async function slashStart(openid, params) {
  * @param {object} params - { slash_id (砍价记录ID), slash_no }
  */
 async function slashHelp(openid, params) {
-    const slashId = params.slash_id || params.id;
+    const slashId = params.slash_id || params.slash_no || params.id;
     if (!slashId) throw new Error('缺少砍价记录 ID');
 
     // 1. 查砍价记录
-    const recordRes = await db.collection('slash_records').doc(slashId).get().catch(() => ({ data: null }));
-    if (!recordRes.data) throw new Error('砍价记录不存在');
-    const record = recordRes.data;
+    const recordRes = await db.collection('slash_records')
+        .where(_.or([
+            { slash_no: String(slashId) },
+            { _id: String(slashId) }
+        ]))
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    const record = recordRes.data && recordRes.data[0] ? recordRes.data[0] : null;
+    if (!record) throw new Error('砍价记录不存在');
 
     if (record.status !== 'active') throw new Error('砍价已结束');
 
@@ -352,7 +369,7 @@ async function slashHelp(openid, params) {
     const actualCut = Math.round((record.current_price - newPrice) * 100) / 100;
 
     // 5. 更新记录
-    await db.collection('slash_records').doc(slashId).update({
+    await db.collection('slash_records').doc(record._id).update({
         data: {
             current_price: newPrice,
             total_slashed: _.inc(actualCut),
@@ -641,7 +658,7 @@ async function lotteryDraw(openid, params) {
  * 待核销订单列表（门店管理员查看）
  */
 async function pickupPendingOrders(openid, params = {}) {
-    const stationId = params.station_id;
+    const stationId = params.station_id || params.pickup_station_id;
     const page = toNumber(params.page, 1);
     const pageSize = toNumber(params.pageSize || params.size, 20);
 

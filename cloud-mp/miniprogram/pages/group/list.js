@@ -1,6 +1,7 @@
 // pages/group/list.js
 const { get } = require('../../utils/request');
 const { normalizeActivityList } = require('../../utils/activityList');
+const { requireLogin } = require('../../utils/auth');
 const app = getApp();
 const PRODUCT_PLACEHOLDER = '/assets/icons/package.svg';
 
@@ -39,6 +40,13 @@ function getActivityList(res) {
     return normalizeActivityList(res.list || res.data || res);
 }
 
+function getPagedList(res) {
+    if (Array.isArray(res && res.list)) return res.list;
+    if (Array.isArray(res && res.data)) return res.data;
+    if (res && res.data && Array.isArray(res.data.list)) return res.data.list;
+    return [];
+}
+
 function buildGroupBuyInfo(activity = {}) {
     const product = activity.product || {};
     const price = parseFloat(activity.group_price || activity.price || product.retail_price || product.price || 0);
@@ -70,14 +78,16 @@ Page({
         showMemberTip: false
     },
 
-    onLoad() {
+    onLoad(options = {}) {
+        const initialTab = options.tab === 'my' ? 'my' : 'activities';
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
-            navBarHeight: app.globalData.navBarHeight || 44
+            navBarHeight: app.globalData.navBarHeight || 44,
+            tab: initialTab
         });
         this.checkMemberStatus();
-        this.loadData();
+        this.loadData(initialTab);
     },
     onShow() { this.loadData(); },
 
@@ -90,6 +100,7 @@ Page({
 
     switchTab(e) {
         const tab = e.currentTarget.dataset.tab;
+        if (tab === 'my' && !requireLogin(null, '登录后查看我的拼团')) return;
         this.setData({ tab, loading: true });
         this.loadData(tab);
     },
@@ -103,10 +114,10 @@ Page({
                 this.setData({ activities: raw.map(enrichGroupActivity), loading: false });
             } catch { this.setData({ loading: false }); }
         } else {
-            if (!app.globalData.isLoggedIn) return this.setData({ loading: false });
+            if (!app.globalData.isLoggedIn) return this.setData({ myGroups: [], loading: false });
             try {
-                const res = await get('/group/my');
-                this.setData({ myGroups: res.code === 0 ? res.data : [], loading: false });
+                const res = await get('/group/my', { page: 1, pageSize: 20 });
+                this.setData({ myGroups: getPagedList(res), loading: false });
             } catch { this.setData({ loading: false }); }
         }
     },
@@ -134,8 +145,22 @@ Page({
 
     onViewGroup(e) {
         const groupNo = e.currentTarget.dataset.no;
-        if (!groupNo) return;
+        if (!groupNo) {
+            wx.showToast({ title: '支付成功后可在订单中查看拼团进度', icon: 'none' });
+            return;
+        }
         wx.navigateTo({ url: `/pages/group/detail?group_no=${groupNo}` });
+    },
+
+    onGoMyGroups() {
+        if (!requireLogin(null, '登录后查看我的拼团')) return;
+        this.setData({ tab: 'my', loading: true });
+        this.loadData('my');
+    },
+
+    onGoActivities() {
+        this.setData({ tab: 'activities', loading: true });
+        this.loadData('activities');
     },
 
     onActivityImageError(e) {
@@ -156,6 +181,10 @@ Page({
 
     onShare(e) {
         const groupNo = e.currentTarget.dataset.no;
+        if (!groupNo) {
+            wx.showToast({ title: '支付成功后再分享拼团', icon: 'none' });
+            return;
+        }
         // 让微信处理分享，detail 页面会实现 onShareAppMessage
         wx.navigateTo({ url: `/pages/group/detail?group_no=${groupNo}&share=1` });
     },

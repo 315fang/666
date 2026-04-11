@@ -77,6 +77,10 @@ function isParentIdMatch(member = {}, ids = []) {
     return ids.some((id) => String(id) === String(member.parent_id));
 }
 
+function resolveJoinedAt(member = {}) {
+    return member.joined_team_at || member.bound_parent_at || member.created_at || null;
+}
+
 function normalizeTeamMember(member = {}, level = 1, extra = {}) {
     const nickname = member.nick_name || member.nickname || member.nickName || '团队成员';
     const avatar = member.avatar || member.avatar_url || member.avatarUrl || '';
@@ -95,7 +99,7 @@ function normalizeTeamMember(member = {}, level = 1, extra = {}) {
         avatarUrl: avatar,
         avatar,
         avatar_url: avatar,
-        joined_at: member.created_at,
+        joined_at: resolveJoinedAt(member),
         created_at: member.created_at,
         role_level: roleLevel,
         role_name: member.role_name || '',
@@ -353,7 +357,7 @@ const handleAction = {
                 avatar: m.avatar || m.avatarUrl || m.avatar_url || '',
                 avatar_url: m.avatar_url || m.avatarUrl || m.avatar || '',
                 nick_name: m.nick_name || m.nickname || m.nickName || '新用户',
-                joined_at: m.created_at,
+                joined_at: resolveJoinedAt(m),
                 created_at: m.created_at,
                 role_level: toNumber(m.role_level, 0),
                 role_name: m.role_name || '普通用户',
@@ -406,9 +410,7 @@ const handleAction = {
         (commRes || []).forEach(c => { contributedAmount += toNumber(c.amount, 0); });
 
         return success(normalizeTeamMember(memberData, level, {
-            contributed_amount: contributedAmount,
-            order_count: (commRes || []).length,
-            total_sales: contributedAmount
+            contributed_amount: contributedAmount
         }));
     }),
 

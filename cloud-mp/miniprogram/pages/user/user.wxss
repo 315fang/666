@@ -637,6 +637,111 @@
   margin-top: 20rpx;
 }
 
+/* ══ 活动入口 ══ */
+.activity-entry-card {
+  padding-bottom: 18rpx;
+}
+
+.activity-entry-hint {
+  font-size: 22rpx;
+  color: #64748B;
+}
+
+.activity-entry-grid {
+  display: flex;
+  gap: 16rpx;
+  padding: 0 24rpx;
+}
+
+.activity-entry {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  background: #F8FAFC;
+  border: 1rpx solid #E2E8F0;
+}
+
+.activity-entry--group {
+  background: linear-gradient(135deg, #EFF6FF 0%, #F8FAFC 100%);
+}
+
+.activity-entry--slash {
+  background: linear-gradient(135deg, #FFF7ED 0%, #F8FAFC 100%);
+}
+
+.activity-entry-hover {
+  opacity: 0.86;
+}
+
+.activity-entry-main {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  min-width: 0;
+}
+
+.activity-entry-icon-wrap {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #FFFFFF;
+  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.06);
+}
+
+.activity-entry-icon {
+  width: 32rpx;
+  height: 32rpx;
+  opacity: 0.9;
+  filter: brightness(0) invert(41%) sepia(84%) saturate(1139%) hue-rotate(195deg) brightness(96%) contrast(96%);
+}
+
+.activity-entry--slash .activity-entry-icon {
+  filter: brightness(0) invert(48%) sepia(69%) saturate(585%) hue-rotate(353deg) brightness(93%) contrast(86%);
+}
+
+.activity-entry-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-entry-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #0F172A;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-entry-desc {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #64748B;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-entry-action {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 18rpx;
+  padding: 8rpx 16rpx;
+  border-radius: 8rpx;
+  background: #0F172A;
+  color: #FFFFFF;
+  font-size: 22rpx;
+  font-weight: 600;
+}
+
 /* ══ 四宫格 ══ */
 .quad-card {
   padding: 8rpx 0 16rpx;

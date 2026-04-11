@@ -13,7 +13,11 @@
     <view class="intro-left">
       <text class="intro-badge">会员可发起</text>
       <text class="intro-title">组团买，享折扣</text>
-      <text class="intro-desc">会员发起拼团，好友参团，凑够人数即成团享超低价</text>
+      <text class="intro-desc">会员发起拼团，好友参团，凑够人数即成团享超低价；支付后可在订单或“我的拼团”继续查看进度。</text>
+      <view class="intro-actions">
+        <view class="intro-action intro-action-primary" bindtap="onGoMyGroups">我的拼团</view>
+        <view class="intro-action" bindtap="onGoActivities">去发起</view>
+      </view>
     </view>
     <image class="intro-icon" src="/assets/icons/users.svg" mode="aspectFit"/>
   </view>
@@ -46,7 +50,7 @@
 
     <view class="empty-wrap" wx:if="{{!activities.length && !loading}}">
       <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
-      <text class="empty-text">暂无拼团活动</text>
+      <text class="empty-text">暂无拼团活动\n活动上线后可从这里发起，已参与记录看“我的拼团”</text>
     </view>
     <view class="activity-list">
       <view class="activity-card" wx:for="{{activities}}" wx:key="id" bindtap="onStartGroup" data-activity="{{item}}">
@@ -106,6 +110,7 @@
     <view class="empty-wrap" wx:if="{{!myGroups.length && !loading}}">
       <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
       <text class="empty-text">还没有参与拼团\n快去发起一个吧</text>
+      <view class="empty-action" bindtap="onGoActivities">去发起拼团</view>
     </view>
     <view class="group-list">
       <view class="group-record" wx:for="{{myGroups}}" wx:key="id" bindtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}">
@@ -126,9 +131,15 @@
             <text wx:elif="{{item.groupOrder && item.groupOrder.status === 'success'}}">已成团</text>
             <text wx:else>已失败</text>
           </view>
-          <view class="share-row" wx:if="{{item.groupOrder && item.groupOrder.status === 'open'}}" catchtap="onShare" data-no="{{item.groupOrder.group_no}}">
-            <image class="share-icon" src="/assets/icons/users.svg" mode="aspectFit"/>
-            <text>分享给好友参团</text>
+          <view class="record-action-row">
+            <view class="share-row" wx:if="{{item.groupOrder && item.groupOrder.status === 'open'}}" catchtap="onShare" data-no="{{item.groupOrder.group_no}}">
+              <image class="share-icon" src="/assets/icons/users.svg" mode="aspectFit"/>
+              <text>分享给好友参团</text>
+            </view>
+            <view class="record-action" catchtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}">
+              <text wx:if="{{item.groupOrder && item.groupOrder.group_no}}">查看进度</text>
+              <text wx:else>支付后生成进度</text>
+            </view>
           </view>
         </view>
       </view>

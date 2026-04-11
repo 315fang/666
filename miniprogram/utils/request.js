@@ -85,7 +85,7 @@ const ROUTE_TABLE = {
     'POST /groups/:id/join': { fn: 'order', action: 'joinGroup', idKey: 'group_id' },
     'GET /group/activities': { fn: 'config', action: 'groupActivities' },
     'GET /slash': { fn: 'config', action: 'slashList' },
-    'GET /slash/:id': { fn: 'config', action: 'slashDetail', idKey: 'slash_id' },
+    'GET /slash/:id': { fn: 'order', action: 'slashDetail', idKey: 'slash_no' },
     'POST /slash/:id/help': { fn: 'order', action: 'slashHelp', idKey: 'slash_id' },
     'GET /lottery': { fn: 'config', action: 'lottery' },
     'GET /lottery/prizes': { fn: 'config', action: 'lotteryPrizes' },

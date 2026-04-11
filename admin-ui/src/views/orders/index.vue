@@ -551,15 +551,14 @@ watch(
 const handleExport = async () => {
   exporting.value = true
   try {
-    const data = await exportOrders({ ...buildListQueryParams(true), limit: 2000 })
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' })
+    const blob = await exportOrders({ ...buildListQueryParams(true), limit: 2000 })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
     a.download = `orders-export-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
-    ElMessage.success('已导出 JSON（最多 2000 条）')
+    ElMessage.success('已导出订单 JSON')
   } catch (e) {
     ElMessage.error(e?.message || '导出失败')
   } finally {

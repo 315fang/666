@@ -109,7 +109,9 @@ Page({
         notificationsCount: 0,
         pageLayout: null,
         featureFlags: {
-            enable_lottery_entry: true
+            show_station_entry: false,
+            show_pickup_entry: false,
+            enable_lottery_entry: false
         },
         loginAgreementHint: '登录后查看订单、积分、佣金等信息',
         showBusinessCenter: false,
@@ -276,9 +278,9 @@ Page({
 
     onCopyMemberCode() {
         const userInfo = this.data.userInfo || {};
-        const memberCode = String(userInfo.member_no || userInfo.invite_code || userInfo.member_code || '').trim();
+        const memberCode = String(userInfo.invite_code || '').trim();
         if (!memberCode) {
-            wx.showToast({ title: '暂无UID', icon: 'none' });
+            wx.showToast({ title: '暂无会员码', icon: 'none' });
             return;
         }
         wx.setClipboardData({
@@ -508,6 +510,14 @@ Page({
     // Phase 2: 积分抽奖
     goLottery() {
         return navigateLottery(this);
+    },
+
+    goMyGroups() {
+        navigateIfLoggedIn('/pages/group/list?tab=my');
+    },
+
+    goMySlash() {
+        navigateIfLoggedIn('/pages/slash/list?tab=my');
     },
 
     // ======== 分享入口（跳转团队页邀请海报） ========

@@ -225,7 +225,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getNSystemLeaders, getNSystemMembers, getNSystemLeaderMembers, getUpgradeApplications, reviewUpgradeApplication } from '@/api'
 import dayjs from 'dayjs'
@@ -234,6 +234,14 @@ import { getUserAvatar, getUserNickname } from '@/utils/userDisplay'
 const activeTab = ref('leaders')
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 const displayUserAvatar = (user) => getUserAvatar(user || {})
+const membersLoaded = ref(false)
+const upgradesLoaded = ref(false)
+
+function normalizePagedResult(res) {
+  const list = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
+  const total = Number(res?.total ?? res?.pagination?.total ?? list.length)
+  return { list, total }
+}
 
 // ── 大N ─────────────────────────────────────────
 const leaders = ref([])
@@ -251,8 +259,9 @@ async function loadLeaders() {
       limit: leaderPageSize.value,
       search: leaderSearch.value
     })
-    leaders.value = res.data?.list || []
-    leaderTotal.value = res.data?.total || 0
+    const { list, total } = normalizePagedResult(res)
+    leaders.value = list
+    leaderTotal.value = total
   } catch (e) {
     ElMessage.error('加载大N列表失败')
   } finally {
@@ -276,8 +285,10 @@ async function loadMembers() {
       limit: memberPageSize.value,
       search: memberSearch.value
     })
-    members.value = res.data?.list || []
-    memberTotal.value = res.data?.total || 0
+    const { list, total } = normalizePagedResult(res)
+    members.value = list
+    memberTotal.value = total
+    membersLoaded.value = true
   } catch (e) {
     ElMessage.error('加载小n列表失败')
   } finally {
@@ -302,8 +313,10 @@ async function loadUpgrades() {
       status: upgradeStatusFilter.value || undefined,
       path_type: 'n_join,n_upgrade'
     })
-    upgrades.value = res.data?.list || []
-    upgradeTotal.value = res.data?.total || 0
+    const { list, total } = normalizePagedResult(res)
+    upgrades.value = list
+    upgradeTotal.value = total
+    upgradesLoaded.value = true
   } catch (e) {
     ElMessage.error('加载升级申请失败')
   } finally {
@@ -323,7 +336,7 @@ async function reviewUpgrade(row, action) {
     }
     await reviewUpgradeApplication(row.id, { action, remark })
     ElMessage.success(`已${label}`)
-    loadUpgrades()
+    await loadUpgrades()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '操作失败')
   }
@@ -339,7 +352,8 @@ async function viewLeaderMembers(leader) {
   memberDialogVisible.value = true
   try {
     const res = await getNSystemLeaderMembers(leader.id)
-    dialogMembers.value = res.data?.list || []
+    const { list } = normalizePagedResult(res)
+    dialogMembers.value = list
   } catch (e) {
     ElMessage.error('加载失败')
   }
@@ -357,6 +371,15 @@ function statusLabel(status) {
 function statusTagType(status) {
   return { pending_review: 'warning', approved: 'success', rejected: 'danger', pending_pay: 'info' }[status] || ''
 }
+
+watch(activeTab, async (tab) => {
+  if (tab === 'members' && !membersLoaded.value) {
+    await loadMembers()
+  }
+  if (tab === 'upgrades' && !upgradesLoaded.value) {
+    await loadUpgrades()
+  }
+})
 
 onMounted(() => {
   loadLeaders()

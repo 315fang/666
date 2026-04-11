@@ -31,6 +31,7 @@ const ROUTE_TABLE = {
     'PUT /user/info':                       { fn: 'user',         action: 'updateProfile' },
     'GET /user/stats':                      { fn: 'user',         action: 'getStats' },
     'GET /user/favorites':                  { fn: 'user',         action: 'getFavorites' },
+    'GET /user/favorites/status':           { fn: 'user',         action: 'favoriteStatus' },
     'POST /user/favorites/sync':            { fn: 'user',         action: 'syncFavorites' },
     'POST /user/favorites':                 { fn: 'user',         action: 'addFavorite' },
     'DELETE /user/favorites':               { fn: 'user',         action: 'removeFavorite' },

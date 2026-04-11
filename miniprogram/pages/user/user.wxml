@@ -10,25 +10,29 @@
       <view class="hero-profile-wrap">
         <view class="hero-profile-left" bindtap="onEditProfile">
           <view class="hero-avatar-wrap">
-            <image class="hero-avatar" src="{{userInfo.avatarUrl || userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
+            <image class="hero-avatar" src="{{userInfo.avatar || userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
           </view>
           <view class="hero-info">
             <view class="hero-name-row">
               <view class="hero-nickname-wrap">
-                <text class="hero-nickname">{{userInfo.nickName || userInfo.nickname || '微信用户'}}</text>
+                <text class="hero-nickname">{{userInfo.nick_name || userInfo.nickname || '微信用户'}}</text>
               </view>
-              <view class="hero-member-badge" catchtap="onMemberLevelTap" wx:if="{{isLoggedIn}}">
-                <view class="member-badge-icon">
-                  <image src="/assets/icons/crown.svg" mode="aspectFit" class="member-badge-img"></image>
+              <view class="hero-member-badges" catchtap="onMemberLevelTap" wx:if="{{isLoggedIn}}">
+                <view class="hero-member-pill hero-member-pill-consume">
+                  <image src="/assets/icons/crown.svg" mode="aspectFit" class="member-pill-icon"></image>
+                  <text class="member-pill-label">消费</text>
+                  <text class="member-pill-text">{{growthDisplay && growthDisplay.currentTierName ? growthDisplay.currentTierName : '普通会员'}}</text>
                 </view>
-                <text class="member-badge-text">{{distributionInfo.role_name || '普通会员'}}</text>
-                <text class="member-badge-level" wx:if="{{growthDisplay && growthDisplay.currentTierName}}">{{growthDisplay.currentTierName}}</text>
+                <view class="hero-member-pill hero-member-pill-agent" wx:if="{{(distributionInfo.role_level || userInfo.role_level) > 0}}">
+                  <text class="member-pill-label">代理</text>
+                  <text class="member-pill-text">{{distributionInfo.role_name || userInfo.role_name || '代理会员'}}</text>
+                </view>
               </view>
             </view>
-            <view class="hero-meta-row" wx:if="{{isLoggedIn && (userInfo.member_no || userInfo.invite_code)}}">
+            <view class="hero-meta-row" wx:if="{{isLoggedIn && userInfo.invite_code}}">
               <view class="hero-member-code" catchtap="noop">
-                <text class="member-code-label">UID</text>
-                <text class="member-code-value">{{userInfo.member_no || userInfo.invite_code}}</text>
+                <text class="member-code-label">会员码</text>
+                <text class="member-code-value">{{userInfo.invite_code}}</text>
                 <view class="member-code-copy" catchtap="onCopyMemberCode">
                   <image src="/assets/icons/clipboard.svg" mode="aspectFit" class="member-code-copy-icon"></image>
                 </view>
@@ -170,6 +174,40 @@
     </view>
   </view>
 
+  <!-- ══ 我的活动 ══ -->
+  <view class="section-card activity-entry-card">
+    <view class="section-row-header">
+      <text class="section-row-title">我的活动</text>
+      <text class="activity-entry-hint">发起后在这里继续查看</text>
+    </view>
+    <view class="activity-entry-grid">
+      <view class="activity-entry activity-entry--group" bindtap="goMyGroups" hover-class="activity-entry-hover">
+        <view class="activity-entry-main">
+          <view class="activity-entry-icon-wrap">
+            <image class="activity-entry-icon" src="/assets/icons/users.svg" mode="aspectFit"></image>
+          </view>
+          <view class="activity-entry-copy">
+            <text class="activity-entry-title">我的拼团</text>
+            <text class="activity-entry-desc">查看拼团进度</text>
+          </view>
+        </view>
+        <text class="activity-entry-action">继续查看</text>
+      </view>
+      <view class="activity-entry activity-entry--slash" bindtap="goMySlash" hover-class="activity-entry-hover">
+        <view class="activity-entry-main">
+          <view class="activity-entry-icon-wrap">
+            <image class="activity-entry-icon" src="/assets/icons/tag.svg" mode="aspectFit"></image>
+          </view>
+          <view class="activity-entry-copy">
+            <text class="activity-entry-title">我的砍价</text>
+            <text class="activity-entry-desc">查看砍价进度</text>
+          </view>
+        </view>
+        <text class="activity-entry-action">继续查看</text>
+      </view>
+    </view>
+  </view>
+
   <!-- ══ 四宫格摘要 ══ -->
   <view class="section-card quad-card">
     <view class="quad-grid">
@@ -210,25 +248,19 @@
       <text class="func-arrow">›</text>
     </view>
     <view class="func-divider"></view>
-    <view class="func-row" bindtap="goStationsMap" hover-class="row-press">
-      <image class="func-icon" src="/assets/icons/map-pin.svg" mode="aspectFit"></image>
-      <text class="func-label">服务站点</text>
-      <text class="func-arrow">›</text>
-    </view>
-    <view class="func-divider" wx:if="{{showPickupVerify}}"></view>
-    <view class="func-row" wx:if="{{showPickupVerify}}" bindtap="goMyStation" hover-class="row-press">
+    <view class="func-row" wx:if="{{showPickupVerify && featureFlags.show_pickup_entry}}" bindtap="goMyStation" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/shield.svg" mode="aspectFit"></image>
       <text class="func-label">我的门店</text>
       <text class="func-arrow">›</text>
     </view>
-    <view class="func-divider"></view>
+    <view class="func-divider" wx:if="{{showPickupVerify && featureFlags.show_pickup_entry}}"></view>
     <view class="func-row" bindtap="goInvitePoster" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
       <text class="func-label">好友邀请</text>
       <text class="func-arrow">›</text>
     </view>
-    <view class="func-divider" wx:if="{{showPickupVerify}}"></view>
-    <view class="func-row" wx:if="{{showPickupVerify}}" bindtap="goPickupVerify" hover-class="row-press">
+    <view class="func-divider"></view>
+    <view class="func-row" wx:if="{{showPickupVerify && featureFlags.show_pickup_entry}}" bindtap="goPickupVerify" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/package.svg" mode="aspectFit"></image>
       <text class="func-label">门店核销</text>
       <text class="func-arrow">›</text>

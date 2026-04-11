@@ -24,8 +24,10 @@ const DEFAULT_CONFIG = {
     }
   },
   feature_flags: {
+    show_station_entry: false,
+    show_pickup_entry: false,
     enable_logistics_entry: true,
-    enable_lottery_entry: true
+    enable_lottery_entry: false
   },
   activity_page_config: {
     default_banners: [],

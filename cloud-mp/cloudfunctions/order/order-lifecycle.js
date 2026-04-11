@@ -2,6 +2,7 @@
 const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
+const { getOrderByIdOrNo } = require('./order-query');
 
 function toNumber(value, fallback = 0) {
     if (value === null || value === undefined || value === '') return fallback;
@@ -253,56 +254,65 @@ async function reviewOrder(openid, orderId, reviewData) {
  * 申请退款
  */
 async function applyRefund(openid, params) {
-    const orderId = params.order_id;
+    const orderId = params.order_id || params.id;
     if (!orderId) throw new Error('缺少订单 ID');
 
-    const orderRes = await db.collection('orders').doc(orderId).get().catch(() => ({ data: null }));
-    if (!orderRes.data) throw new Error('订单不存在');
-    if (orderRes.data.openid !== openid) throw new Error('无权操作此订单');
+    const order = await getOrderByIdOrNo(openid, orderId);
+    if (!order) throw new Error('订单不存在');
+    if (order.openid !== openid) throw new Error('无权操作此订单');
 
-    const order = orderRes.data;
     if (order.status !== 'paid' && order.status !== 'shipped' && order.status !== 'completed') {
         throw new Error(`订单状态不允许退款: ${order.status}`);
     }
+    const canonicalOrderId = order._id || String(orderId);
 
     // 检查是否已有待处理退款
     const existingRefund = await db.collection('refunds')
-        .where({ order_id: orderId, status: _.in(['pending', 'processing']) })
+        .where({
+            order_id: _.in([canonicalOrderId, order.id, order.order_no].filter((value) => value !== undefined && value !== null && value !== '')),
+            status: _.in(['pending', 'approved', 'processing'])
+        })
         .limit(1).get().catch(() => ({ data: [] }));
     if (existingRefund.data && existingRefund.data.length > 0) {
         throw new Error('该订单已有待处理的退款申请');
     }
 
     const refundNo = 'REF' + Date.now() + Math.floor(Math.random() * 1000);
-    const refundAmount = params.refund_amount || order.pay_amount || 0;
+    const refundAmount = toNumber(params.amount ?? params.refund_amount, toNumber(order.pay_amount || order.total_amount, 0));
+    const type = params.type || 'refund_only';
+    const refundQuantity = type === 'return_refund' ? Math.max(1, toNumber(params.refund_quantity, 1)) : 0;
 
     const result = await db.collection('refunds').add({
         data: {
-            order_id: orderId,
+            order_id: canonicalOrderId,
             order_no: order.order_no,
             openid,
             refund_no: refundNo,
             amount: refundAmount,
+            type,
             reason: params.reason || '用户申请退款',
+            description: params.description || '',
+            refund_quantity: refundQuantity,
             status: 'pending',
             images: params.images || [],
             created_at: db.serverDate(),
+            updated_at: db.serverDate(),
         },
     });
 
     // 更新订单状态
-    await db.collection('orders').doc(orderId).update({
+    await db.collection('orders').doc(canonicalOrderId).update({
         data: { status: 'refunding', updated_at: db.serverDate() },
     });
 
     // 退款申请时，冻结佣金（防止提现）
     try {
-        await freezeCommissionsForOrder(orderId);
+        await freezeCommissionsForOrder(canonicalOrderId);
     } catch (freezeErr) {
         console.error('[OrderLifecycle] 佣金冻结失败:', freezeErr.message);
     }
 
-    return { success: true, refund_id: result._id, refund_no: refundNo };
+    return { success: true, id: result._id, refund_id: result._id, refund_no: refundNo };
 }
 
 /**
@@ -316,7 +326,15 @@ async function queryRefundList(openid, params = {}) {
     }
 
     const res = await query.orderBy('created_at', 'desc').limit(50).get().catch(() => ({ data: [] }));
-    return res.data || [];
+    let rows = res.data || [];
+    if (params.order_id) {
+        const order = await getOrderByIdOrNo(openid, params.order_id);
+        const orderTokens = [params.order_id, order && order._id, order && order.id, order && order.order_no]
+            .filter((value) => value !== undefined && value !== null && value !== '')
+            .map((value) => String(value));
+        rows = rows.filter((refund) => orderTokens.includes(String(refund.order_id)) || orderTokens.includes(String(refund.order_no)));
+    }
+    return rows.map((refund) => ({ ...refund, id: refund._id || refund.id }));
 }
 
 /**
@@ -327,7 +345,7 @@ async function queryRefundDetail(openid, refundId) {
     if (!refundRes.data || refundRes.data.openid !== openid) {
         throw new Error('退款记录不存在');
     }
-    return refundRes.data;
+    return { ...refundRes.data, id: refundRes.data._id || refundRes.data.id };
 }
 
 /**

@@ -1,6 +1,7 @@
 // backend/routes/admin/controllers/adminDashboardController.js
 // 后台 Dashboard 相关接口：通知、弹窗广告配置、规则公告配置
 const { AppConfig, Notification, Withdrawal, Refund, CommissionLog, Order } = require('../../../models');
+const { clearHomepageCache } = require('../../../controllers/configController');
 const { clearPagePayloadCache } = require('../../../services/PageLayoutService');
 
 // ─── 后台通知（首页快捷通知） ────────────────────────────────────────
@@ -43,6 +44,7 @@ const getDashboardNotifications = async (req, res) => {
 const POPUP_AD_DEFAULTS = {
     enabled: false,
     frequency: 'once_daily',
+    file_id: '',
     image_url: '',
     link_type: 'none',
     link_value: '',
@@ -73,6 +75,7 @@ const updatePopupAdConfig = async (req, res) => {
             frequency: ['every_time', 'once_daily', 'once_session'].includes(body.frequency)
                 ? body.frequency
                 : 'once_daily',
+            file_id:     body.file_id     || '',
             image_url:   body.image_url   || '',
             link_type:   body.link_type   || 'none',
             link_value:  body.link_value  || '',
@@ -88,6 +91,7 @@ const updatePopupAdConfig = async (req, res) => {
             is_public:    true,
             status:       1
         });
+        clearHomepageCache();
         res.json({ code: 0, message: '保存成功' });
     } catch (e) {
         console.error('更新弹窗广告配置失败:', e);

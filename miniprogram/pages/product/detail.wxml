@@ -39,7 +39,7 @@
         <swiper class="gallery-swiper" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}" indicator-color="rgba(250,250,249,0.35)" indicator-active-color="#E2C4A0" bindchange="onImageChange">
           <swiper-item class="gallery-slide" wx:for="{{product.images}}" wx:key="*this">
             <view class="gallery-frame">
-              <image src="{{item}}" mode="aspectFill" class="gallery-image" bindtap="onPreviewImage" data-index="{{index}}"></image>
+              <image src="{{item}}" mode="aspectFill" class="gallery-image" bindtap="onPreviewImage" binderror="onGalleryImageError" data-index="{{index}}"></image>
             </view>
           </swiper-item>
         </swiper>
@@ -86,6 +86,10 @@
         <text class="tag-new" wx:if="{{product.product_tag === 'new'}}">新品</text>
       </view>
       <view class="product-title">{{product.name}}</view>
+      <view class="product-spec-summary" wx:if="{{product.specSummary}}">
+        <text class="spec-summary-label">规格</text>
+        <text class="spec-summary-text">{{product.specSummary}}</text>
+      </view>
       <text class="product-subtitle">{{product.description || '围绕肤感、功效与礼赠体验进行精心陈列。'}}</text>
     </view>
 
@@ -106,17 +110,39 @@
           <text class="purchase-mode-option-desc">{{item.hint}}</text>
         </view>
       </view>
+      <view class="activity-status-card" wx:if="{{activityStatusCard}}">
+        <view class="activity-status-head">
+          <text class="activity-status-badge">{{activityStatusCard.badge}}</text>
+          <text class="activity-status-title">{{activityStatusCard.title}}</text>
+        </view>
+        <text class="activity-status-desc">{{activityStatusCard.desc}}</text>
+      </view>
+      <view class="activity-quick-links" wx:if="{{activityQuickLinks.length}}">
+        <view
+          class="activity-quick-link"
+          wx:for="{{activityQuickLinks}}"
+          wx:key="key"
+          data-action="{{item.key}}"
+          bindtap="onActivityQuickActionTap"
+        >
+          <view class="activity-quick-copy">
+            <text class="activity-quick-label">{{item.label}}</text>
+            <text class="activity-quick-desc">{{item.desc}}</text>
+          </view>
+          <text class="activity-quick-arrow">›</text>
+        </view>
+      </view>
     </view>
 
     <view class="embedded-section" wx:if="{{product.specs && product.specs.length > 0}}">
       <view class="embedded-section-head">
         <text class="embedded-title">规格选择</text>
-        <text class="selected-spec-text">{{selectedSkuText || '默认规格'}}</text>
+        <text class="selected-spec-text {{!selectedSku ? 'spec-unselected' : ''}}">{{selectedSkuText || '请选择规格'}}</text>
       </view>
       <view class="spec-group" wx:for="{{product.specs}}" wx:key="name">
         <view class="spec-title">{{item.name}}</view>
         <view class="spec-options">
-          <view class="spec-option {{selectedSpecs[item.name] === val ? 'active' : ''}}" wx:for="{{item.values}}" wx:for-item="val" wx:key="*this" bindtap="onSpecSelect" data-key="{{item.name}}" data-val="{{val}}">{{val}}</view>
+          <view class="spec-option {{selectedSpecs[item.name] === val ? 'active' : ''}} {{isSpecValueDisabled(item.name, val) ? 'disabled' : ''}}" wx:for="{{item.values}}" wx:for-item="val" wx:key="*this" bindtap="onSpecSelect" data-key="{{item.name}}" data-val="{{val}}">{{val}}</view>
         </view>
       </view>
     </view>
@@ -135,7 +161,7 @@
       <text class="section-title">商品详情</text>
     </view>
     <view class="detail-images" wx:if="{{detailImageList.length > 0}}">
-      <image class="detail-image" wx:for="{{detailImageList}}" wx:key="*this" src="{{item}}" mode="widthFix" bindtap="onPreviewDetailImage" data-index="{{index}}"></image>
+      <image class="detail-image" wx:for="{{detailImageList}}" wx:key="*this" src="{{item}}" mode="widthFix" bindtap="onPreviewDetailImage" binderror="onDetailImageError" data-index="{{index}}"></image>
     </view>
     <view class="detail-content" wx:if="{{hasRichDetail}}">
       <rich-text nodes="{{product.detail_html || '暂无详情'}}"></rich-text>
@@ -156,9 +182,9 @@
     <view class="review-list">
       <view class="review-item" wx:for="{{reviews}}" wx:key="id" wx:if="{{index < 2}}">
         <view class="review-header">
-          <image class="review-avatar" src="{{item.user.avatarUrl || item.user.avatar_url || '/assets/icons/user.svg'}}"></image>
+          <image class="review-avatar" src="{{item.user.avatar || item.user.avatar_url || '/assets/icons/user.svg'}}"></image>
           <view class="review-user-info">
-            <text class="review-name">{{item.user.nickName || item.user.nickname}}</text>
+            <text class="review-name">{{item.user.nick_name || item.user.nickname}}</text>
             <view class="review-stars">
               <image wx:for="{{[1,2,3,4,5]}}" wx:for-item="star" wx:key="star" class="star-icon {{star <= item.rating ? 'filled' : ''}}" src="/assets/icons/star.svg" mode="aspectFit"></image>
             </view>
@@ -209,6 +235,6 @@
     </view>
   </view>
 
-  <brand-animation id="brandAnimation" fly-image="{{product.images && product.images[0]}}"></brand-animation>
+  <brand-animation id="brandAnimation" fly-image="{{product.images && product.images[0] || ''}}"></brand-animation>
 </view>
 <!-- /container -->

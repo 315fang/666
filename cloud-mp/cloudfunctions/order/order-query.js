@@ -25,6 +25,28 @@ function displayAmount(value) {
     return normalized.toFixed(2);
 }
 
+async function getOrderByIdOrNo(openid, orderId) {
+    if (orderId === null || orderId === undefined || orderId === '') return null;
+    const id = String(orderId);
+    const num = Number(id);
+    const docRes = await db.collection('orders').doc(id).get().catch(() => ({ data: null }));
+    if (docRes.data && docRes.data.openid === openid) return docRes.data;
+
+    const orConditions = [{ order_no: id }];
+    if (Number.isFinite(num)) {
+        orConditions.push({ id: num });
+        orConditions.push({ _legacy_id: num });
+    }
+    const where = db.command.or(orConditions);
+    const res = await db.collection('orders')
+        .where(where)
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    const order = res.data && res.data[0];
+    return order && order.openid === openid ? order : null;
+}
+
 function firstOrderItem(order = {}) {
     const items = Array.isArray(order.items) ? order.items : [];
     return items[0] || {};
@@ -100,16 +122,12 @@ async function queryOrders(openid, params = {}) {
  * 获取订单详情
  */
 async function getOrderDetail(openid, orderId) {
-    const order = await db.collection('orders').doc(orderId).get().catch(() => ({ data: null }));
-    
-    if (!order.data || order.data.openid !== openid) {
-        return null;
-    }
-
-    return formatOrderForClient(order.data);
+    const order = await getOrderByIdOrNo(openid, orderId);
+    return order ? formatOrderForClient(order) : null;
 }
 
 module.exports = {
     queryOrders,
-    getOrderDetail
+    getOrderDetail,
+    getOrderByIdOrNo
 };

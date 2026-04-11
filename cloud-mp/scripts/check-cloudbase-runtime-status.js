@@ -71,6 +71,10 @@ function getLocalFunctionNames() {
         return uniqueSorted(
             fs.readdirSync(cloudfunctionsRoot, { withFileTypes: true })
                 .filter((entry) => entry.isDirectory())
+                .filter((entry) => {
+                    const dir = path.join(cloudfunctionsRoot, entry.name);
+                    return fs.existsSync(path.join(dir, 'index.js')) && fs.existsSync(path.join(dir, 'package.json'));
+                })
                 .map((entry) => entry.name)
         );
     } catch (_) {
@@ -87,8 +91,10 @@ function buildCollectionRows(expectedSummary, actualCollections) {
         let status = 'ok';
         if (!hasActual) {
             status = 'missing_collection';
-        } else if (hasExpected && expected !== actual) {
-            status = 'count_mismatch';
+        } else if (hasExpected && actual < expected) {
+            status = 'count_below_expected';
+        } else if (hasExpected && actual > expected) {
+            status = 'count_above_seed';
         }
         return { name, expected, actual, status };
     });
@@ -193,8 +199,8 @@ ${functionLines || '- none'}
 
 ## Summary
 
-- Required collection counts match import package: ${report.summary.required_collection_counts_match ? 'YES' : 'NO'}
-- Matched required collections: ${report.summary.matched_required_collection_count}/${report.summary.required_collection_count}
+- Required collection baseline met: ${report.summary.required_collection_baseline_met ? 'YES' : 'NO'}
+- Required collections at or above baseline: ${report.summary.matched_required_collection_count}/${report.summary.required_collection_count}
 - Runtime ready: ${report.ok ? 'YES' : 'NO'}
 
 ## Blockers
@@ -222,8 +228,11 @@ function main() {
             : (((collectionPayload.collections || []).find((item) => item.CollectionName === name) || {}).Count || 0);
     });
     const requiredRows = buildCollectionRows(expectedSummary, actualCollections);
-    const missingOrMismatchedRequired = requiredRows
-        .filter((item) => item.status !== 'ok')
+    const blockingRequiredRows = requiredRows
+        .filter((item) => item.status === 'missing_collection' || item.status === 'count_below_expected')
+        .map((item) => item.name);
+    const grownRequiredRows = requiredRows
+        .filter((item) => item.status === 'count_above_seed')
         .map((item) => item.name);
 
     const localFunctions = getLocalFunctionNames();
@@ -240,8 +249,12 @@ function main() {
         blockers.push(`CloudBase auth/env not ready: auth=${authStatus.auth_status || 'unknown'}, env=${authStatus.env_status || 'unknown'}`);
     }
 
-    if (missingOrMismatchedRequired.length) {
-        blockers.push(`Required collections missing or mismatched: ${missingOrMismatchedRequired.join(', ')}`);
+    if (blockingRequiredRows.length) {
+        blockers.push(`Required collections missing or below import baseline: ${blockingRequiredRows.join(', ')}`);
+    }
+
+    if (grownRequiredRows.length) {
+        warnings.push(`Required collections contain runtime data beyond import baseline: ${grownRequiredRows.join(', ')}`);
     }
 
     if (missingFunctions.length) {
@@ -267,7 +280,8 @@ function main() {
         },
         collections: {
             required: requiredRows,
-            missing_or_mismatched_required: missingOrMismatchedRequired
+            missing_or_below_required: blockingRequiredRows,
+            above_seed_required: grownRequiredRows
         },
         functions: {
             local: localFunctions,
@@ -282,8 +296,8 @@ function main() {
         },
         summary: {
             required_collection_count: requiredRows.length,
-            matched_required_collection_count: requiredRows.filter((item) => item.status === 'ok').length,
-            required_collection_counts_match: missingOrMismatchedRequired.length === 0,
+            matched_required_collection_count: requiredRows.filter((item) => item.status === 'ok' || item.status === 'count_above_seed').length,
+            required_collection_baseline_met: blockingRequiredRows.length === 0,
             local_function_count: localFunctions.length,
             deployed_function_count: deployedFunctions.length,
             functions_match: missingFunctions.length === 0 && extraFunctions.length === 0,

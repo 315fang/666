@@ -38,9 +38,10 @@ Page({
             if (order && order.product && typeof order.product.images === 'string') {
                 try { order.product.images = JSON.parse(order.product.images); } catch (e) { order.product.images = []; }
             }
+            const refundableAmount = order.pay_amount || order.actual_price || order.total_amount;
             this.setData({
                 order,
-                amount: order.total_amount
+                amount: refundableAmount
             });
         } catch (err) {
             wx.showToast({ title: '加载订单失败', icon: 'none' });
@@ -109,7 +110,8 @@ Page({
             return;
         }
 
-        if (refundAmount > parseFloat(this.data.order.total_amount)) {
+        const maxRefundAmount = parseFloat(this.data.order.pay_amount || this.data.order.actual_price || this.data.order.total_amount);
+        if (refundAmount > maxRefundAmount) {
             wx.showToast({ title: '退款金额不能超过订单金额', icon: 'none' });
             return;
         }
@@ -124,11 +126,12 @@ Page({
 
         try {
             const params = {
-                order_id: parseInt(orderId),
+                order_id: orderId,
                 type,
                 reason,
                 description,
-                amount: refundAmount
+                amount: refundAmount,
+                refund_amount: refundAmount
             };
             // 退货退款传退货数量，仅退款不传（后端默认0）
             if (type === 'return_refund') {
@@ -140,7 +143,7 @@ Page({
             if (res.code === 0) {
                 wx.showToast({ title: '申请已提交', icon: 'success' });
                 // ★ 跳转到退款详情页，而非返回旧页面
-                const refundId = res.data?.id;
+                const refundId = res.data?.id || res.data?.refund_id;
                 setTimeout(() => {
                     if (refundId) {
                         wx.redirectTo({

@@ -7,6 +7,28 @@ const { Admin, sequelize } = require('../../../models');
 const { Op } = require('sequelize');
 const { ADMIN_ROLE_PRESETS, PERMISSION_CATALOG } = require('../../../config/adminPermissionCatalog');
 
+const validPermissionKeys = new Set(PERMISSION_CATALOG.map((item) => item.key));
+
+function normalizePermissionList(list) {
+    if (!Array.isArray(list)) return [];
+    return [...new Set(list.filter((key) => typeof key === 'string' && validPermissionKeys.has(key)))];
+}
+
+function getEffectiveAdminPermissions(admin) {
+    if (!admin) return [];
+    if (admin.role === 'super_admin') return [...validPermissionKeys];
+    const preset = ADMIN_ROLE_PRESETS[admin.role]?.permissions || [];
+    return normalizePermissionList([...(Array.isArray(preset) ? preset : []), ...(Array.isArray(admin.permissions) ? admin.permissions : [])]);
+}
+
+function sanitizeGrantablePermissions(currentAdmin, permissions) {
+    const normalized = normalizePermissionList(permissions);
+    if (!currentAdmin || currentAdmin.role === 'super_admin') return normalized;
+    const grantable = new Set(getEffectiveAdminPermissions(currentAdmin));
+    return normalized.filter((key) => grantable.has(key));
+}
+
+
 /**
  * 获取管理员列表
  */
@@ -72,6 +94,8 @@ const createAdmin = async (req, res) => {
             return res.status(400).json({ code: -1, message: '用户名已存在' });
         }
 
+        const normalizedPermissions = sanitizeGrantablePermissions(currentAdmin, permissions);
+
         // 创建管理员
         const admin = Admin.build({
             username,
@@ -79,9 +103,10 @@ const createAdmin = async (req, res) => {
             role: role || 'operator',
             phone,
             email,
-            permissions: permissions || [],
+            permissions: normalizedPermissions,
             status: 1
         });
+
 
         admin.setPassword(password);
         await admin.save();
@@ -121,13 +146,23 @@ const updateAdmin = async (req, res) => {
             return res.status(403).json({ code: -1, message: '不能修改超级管理员的角色' });
         }
 
+        if (currentAdmin.role !== 'super_admin' && parseInt(currentAdmin.id) === parseInt(id)) {
+            const touchedSensitiveFields = role !== undefined || permissions !== undefined || status !== undefined;
+            if (touchedSensitiveFields) {
+                return res.status(403).json({ code: -1, message: '不能修改自己的角色、权限或状态' });
+            }
+        }
+
         const updateData = {};
         if (name !== undefined) updateData.name = name;
         if (role !== undefined && currentAdmin.role === 'super_admin') updateData.role = role;
         if (phone !== undefined) updateData.phone = phone;
         if (email !== undefined) updateData.email = email;
-        if (permissions !== undefined) updateData.permissions = permissions;
-        if (status !== undefined) updateData.status = status;
+        if (permissions !== undefined && currentAdmin.role === 'super_admin') {
+            updateData.permissions = sanitizeGrantablePermissions(currentAdmin, permissions);
+        }
+        if (status !== undefined && currentAdmin.role === 'super_admin') updateData.status = status;
+
 
         await admin.update(updateData);
 

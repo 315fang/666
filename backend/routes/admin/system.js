@@ -92,8 +92,8 @@ router.post('/alert-config/test', checkPermission('settings_manage'), async (req
     }
 });
 
-router.get('/upgrade-applications', checkPermission('users'), upgradeController.adminGetApplications);
-router.put('/upgrade-applications/:id/review', checkPermission('users'), upgradeController.adminReviewApplication);
+router.get('/upgrade-applications', checkPermission('users', 'dealers'), upgradeController.adminGetApplications);
+router.put('/upgrade-applications/:id/review', checkPermission('users', 'dealers'), upgradeController.adminReviewApplication);
 
 router.get('/agent-system/upgrade-rules', checkPermission('settings_manage'), adminAgentSystemController.getUpgradeRules);
 router.put('/agent-system/upgrade-rules', checkPermission('settings_manage'), adminAgentSystemController.updateUpgradeRules);

@@ -84,6 +84,39 @@
   padding: 0 26rpx 14rpx;
 }
 
+.activity-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin: 0 26rpx 4rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 8rpx;
+  background: #EFF6FF;
+}
+
+.activity-strip-slash {
+  background: #FFF7ED;
+}
+
+.activity-strip-label {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #0F172A;
+}
+
+.activity-strip-text {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 22rpx;
+  color: #64748B;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .countdown-text {
   font-size: 22rpx;
   color: #DC2626;
@@ -269,6 +302,7 @@
 .btn-secondary { background: linear-gradient(135deg, #60A5FA 0%, #2563EB 100%); color: #FFFFFF; }
 .btn-soft { background: #EFF6FF; color: #2563EB; border: 1rpx solid #BFDBFE; }
 .btn-ghost { background: #FFF; color: #475569; border: 1rpx solid #BFDBFE; }
+.btn-disabled { color: #64748B; background: #F1F5F9; border-color: #E2E8F0; }
 
 .order-total {
   flex: 1;

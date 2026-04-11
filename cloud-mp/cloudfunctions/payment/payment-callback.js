@@ -404,13 +404,52 @@ async function ensurePaidGroupJoined(orderId, order) {
     return { joined: !exists, group_no: groupOrder.group_no, member_count: memberCount, completed };
 }
 
+async function ensureSlashOrderPurchased(orderId, order) {
+    if (!hasValue(order.slash_no)) return { skipped: true };
+    if (order.slash_purchased_at) return { skipped: true };
+
+    const slashId = String(order.slash_no);
+    const recordRes = await db.collection('slash_records')
+        .where(_.or([
+            { slash_no: slashId },
+            { _id: slashId }
+        ]))
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    const record = recordRes.data && recordRes.data[0] ? recordRes.data[0] : null;
+    if (!record) throw new Error('砍价记录不存在');
+    if (record.openid !== order.openid) throw new Error('砍价记录归属异常');
+
+    await db.collection('slash_records').doc(record._id).update({
+        data: {
+            status: 'purchased',
+            order_id: orderId,
+            order_no: order.order_no,
+            purchased_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    });
+    await db.collection('orders').doc(orderId).update({
+        data: {
+            slash_no: record.slash_no || order.slash_no,
+            slash_record_id: record._id,
+            slash_purchased_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    });
+    return { updated: true, slash_no: record.slash_no || order.slash_no };
+}
+
 async function processPaidOrder(orderId, order) {
     const latest = await db.collection('orders').doc(orderId).get().then((res) => res.data || order).catch(() => order);
     const needsGroupJoin = isGroupOrder(latest) && !latest.group_joined_at;
-    if (latest.payment_post_processed_at && !needsGroupJoin) return { skipped: true };
+    const needsSlashPurchase = hasValue(latest.slash_no) && !latest.slash_purchased_at;
+    if (latest.payment_post_processed_at && !needsGroupJoin && !needsSlashPurchase) return { skipped: true };
 
     const group = needsGroupJoin ? await ensurePaidGroupJoined(orderId, latest) : { skipped: true };
-    if (latest.payment_post_processed_at) return { group };
+    const slash = needsSlashPurchase ? await ensureSlashOrderPurchased(orderId, latest) : { skipped: true };
+    if (latest.payment_post_processed_at) return { group, slash };
 
     const stock = await ensureStockDeducted(orderId, latest);
     const points = await ensurePointsAwarded(orderId, { ...latest, stock_deducted_at: true });
@@ -419,7 +458,7 @@ async function processPaidOrder(orderId, order) {
     await db.collection('orders').doc(orderId).update({
         data: { payment_post_processed_at: db.serverDate(), updated_at: db.serverDate() },
     });
-    return { group, stock, points, commissions };
+    return { group, slash, stock, points, commissions };
 }
 
 /**

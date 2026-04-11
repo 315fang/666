@@ -137,7 +137,7 @@ function normalizeStation(row = {}) {
 async function reverseGeocode(latitude, longitude) {
     const key = String(process.env.TENCENT_MAP_KEY || '').trim();
     if (!key || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        return { region: null, configured: !!key };
+        return { region: null, configured: !!key, error: '' };
     }
     const path = `/ws/geocoder/v1/?location=${encodeURIComponent(`${latitude},${longitude}`)}&key=${encodeURIComponent(key)}`;
     return new Promise((resolve) => {
@@ -156,6 +156,7 @@ async function reverseGeocode(latitude, longitude) {
                     if (json.status === 0 && ac) {
                         resolve({
                             configured: true,
+                            error: '',
                             region: {
                                 province: String(ac.province || '').trim(),
                                 city: String(ac.city || '').trim(),
@@ -165,14 +166,16 @@ async function reverseGeocode(latitude, longitude) {
                         });
                         return;
                     }
+                    resolve({ region: null, configured: true, error: String(json.message || '').trim() });
+                    return;
                 } catch (_) {}
-                resolve({ region: null, configured: true });
+                resolve({ region: null, configured: true, error: '地图接口返回异常' });
             });
         });
-        req.on('error', () => resolve({ region: null, configured: true }));
+        req.on('error', () => resolve({ region: null, configured: true, error: '地图接口请求失败' }));
         req.on('timeout', () => {
             req.destroy();
-            resolve({ region: null, configured: true });
+            resolve({ region: null, configured: true, error: '地图接口请求超时' });
         });
         req.end();
     });
@@ -377,6 +380,12 @@ const handleAction = {
         return success(result);
     }),
 
+    'favoriteStatus': asyncHandler(async (openid, params) => {
+        const productId = params.product_id || params.id;
+        const result = await userFavorites.getFavoriteStatus(openid, productId);
+        return success(result);
+    }),
+
     'syncFavorites': asyncHandler(async (openid, params) => {
         const result = await userFavorites.syncFavorites(openid, params.product_ids || []);
         return success(result);
@@ -558,12 +567,8 @@ const aliasMap = {};
 exports.main = cloudFunctionWrapper(async (event) => {
     const wxContext = cloud.getWXContext();
     const openid = wxContext.OPENID;
-
-    if (!openid) {
-        throw unauthorized('未登录');
-    }
-
     const { action, ...params } = event;
+    const publicActions = ['listStations', 'pickupOptions', 'regionFromPoint'];
     const actualAction = aliasMap[action] || action;
     const handler = handleAction[actualAction];
 
@@ -571,5 +576,9 @@ exports.main = cloudFunctionWrapper(async (event) => {
         throw badRequest(`未知 action: ${action}`);
     }
 
-    return handler(openid, params);
+    if (!openid && !publicActions.includes(actualAction)) {
+        throw unauthorized('未登录');
+    }
+
+    return handler(openid || '', params);
 });

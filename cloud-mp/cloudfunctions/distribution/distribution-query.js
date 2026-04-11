@@ -43,13 +43,25 @@ function indirectRelationWhere(directMembers = []) {
     return clauses.length === 1 ? clauses[0] : _.or(clauses);
 }
 
-async function listMembers(where, limit = 100) {
-    const res = await db.collection('users')
-        .where(where)
-        .limit(limit)
-        .get()
-        .catch(() => ({ data: [] }));
-    return res.data || [];
+function resolveJoinedAt(member = {}) {
+    return member.joined_team_at || member.bound_parent_at || member.created_at || null;
+}
+
+function roundMoney(value) {
+    return Math.round(toNumber(value, 0) * 100) / 100;
+}
+
+function summarizeMembers(members = [], monthStartTime = 0) {
+    return {
+        count: members.length,
+        monthlyNewCount: members.filter((item) => {
+            const joinedAt = resolveJoinedAt(item);
+            return joinedAt && new Date(joinedAt).getTime() >= monthStartTime;
+        }).length,
+        totalSales: roundMoney(members.reduce((sum, item) => {
+            return sum + toNumber(item.total_spent != null ? item.total_spent : item.total_sales, 0);
+        }, 0))
+    };
 }
 
 /**
@@ -87,7 +99,7 @@ async function getDashboard(openid) {
     let settledCommission = 0;
     try {
         const commRes = await getAllRecords(db, 'commissions', { openid });
-        (commRes || []).forEach(c => {
+        (commRes || []).forEach((c) => {
             const amount = toNumber(c.amount, 0);
             totalCommission += amount;
             if (c.status === 'pending' || c.status === 'frozen') {
@@ -96,30 +108,26 @@ async function getDashboard(openid) {
                 settledCommission += amount;
             }
         });
-    } catch (_) {}
+    } catch (_) { }
 
-    // 查团队人数
-    let directCount = 0;
-    let indirectCount = 0;
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const monthStartTime = monthStart.getTime();
+
+    let directSummary = { count: 0, monthlyNewCount: 0, totalSales: 0 };
+    let indirectSummary = { count: 0, monthlyNewCount: 0, totalSales: 0 };
     try {
-        const directWhere = directRelationWhere(userData);
-        const directMembers = await listMembers(directWhere, 100);
-        const directCountRes = await db.collection('users').where(directWhere).count().catch(() => ({ total: directMembers.length }));
-        directCount = directCountRes.total || directMembers.length;
+        const directMembers = await getAllRecords(db, 'users', directRelationWhere(userData)).catch(() => []);
+        directSummary = summarizeMembers(directMembers, monthStartTime);
 
-        const indirectWhere = indirectRelationWhere(directMembers);
-        const indirectCountRes = await db.collection('users').where(indirectWhere).count().catch(() => ({ total: 0 }));
-        indirectCount = indirectCountRes.total || 0;
-    } catch (_) {}
+        const indirectMembers = await getAllRecords(db, 'users', indirectRelationWhere(directMembers)).catch(() => []);
+        indirectSummary = summarizeMembers(indirectMembers, monthStartTime);
+    } catch (_) { }
 
-    let monthlyNewMembers = 0;
-    try {
-        const start = new Date();
-        start.setDate(1);
-        start.setHours(0, 0, 0, 0);
-        const directMembers = await listMembers(directRelationWhere(userData), 100);
-        monthlyNewMembers = directMembers.filter((item) => item.created_at && new Date(item.created_at) >= start).length;
-    } catch (_) {}
+    const totalTeamCount = directSummary.count + indirectSummary.count;
+    const totalTeamSales = roundMoney(directSummary.totalSales + indirectSummary.totalSales);
+    const monthlyNewMembers = directSummary.monthlyNewCount + indirectSummary.monthlyNewCount;
 
     // 查订单数
     let orderCount = 0;
@@ -128,22 +136,47 @@ async function getDashboard(openid) {
             .where({ referrer_openid: openid })
             .count().catch(() => ({ total: 0 }));
         orderCount = orderRes.total || 0;
-    } catch (_) {}
+    } catch (_) { }
 
     const inviteCode = userData.my_invite_code || userData.invite_code || '';
     const team = {
-        directCount,
-        indirectCount,
-        totalCount: directCount + indirectCount,
-        monthlyNewMembers
+        directCount: directSummary.count,
+        indirectCount: indirectSummary.count,
+        totalCount: totalTeamCount,
+        monthlyNewMembers,
+        directMonthlyNewMembers: directSummary.monthlyNewCount,
+        indirectMonthlyNewMembers: indirectSummary.monthlyNewCount,
+        directTotalSales: directSummary.totalSales,
+        indirectTotalSales: indirectSummary.totalSales,
+        totalSales: totalTeamSales,
+        levels: {
+            direct: {
+                count: directSummary.count,
+                monthlyNewCount: directSummary.monthlyNewCount,
+                totalSales: directSummary.totalSales
+            },
+            indirect: {
+                count: indirectSummary.count,
+                monthlyNewCount: indirectSummary.monthlyNewCount,
+                totalSales: indirectSummary.totalSales
+            },
+            all: {
+                count: totalTeamCount,
+                monthlyNewCount: monthlyNewMembers,
+                totalSales: totalTeamSales
+            }
+        }
     };
     const stats = {
-        totalEarnings: totalCommission,
-        availableAmount: settledCommission,
-        frozenAmount: pendingCommission,
-        totalCommission,
-        pendingCommission,
-        settledCommission
+        totalEarnings: roundMoney(totalCommission),
+        availableAmount: roundMoney(settledCommission),
+        frozenAmount: roundMoney(pendingCommission),
+        totalCommission: roundMoney(totalCommission),
+        pendingCommission: roundMoney(pendingCommission),
+        settledCommission: roundMoney(settledCommission),
+        teamSales: totalTeamSales,
+        directTeamSales: directSummary.totalSales,
+        indirectTeamSales: indirectSummary.totalSales
     };
 
     return {
@@ -165,9 +198,9 @@ async function getDashboard(openid) {
         stats,
         wallet_balance: walletBalance,
         balance: walletBalance,
-        total_commission: totalCommission,
-        pending_commission: pendingCommission,
-        settled_commission: settledCommission,
+        total_commission: roundMoney(totalCommission),
+        pending_commission: roundMoney(pendingCommission),
+        settled_commission: roundMoney(settledCommission),
         team_count: team.totalCount,
         order_count: orderCount,
         invite_code: inviteCode,

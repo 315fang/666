@@ -155,6 +155,7 @@ Page({
             name: detail.product.name,
             image: (detail.product.images && detail.product.images[0]) || '',
             spec: resolvedSkuId ? '砍价·指定规格' : '砍价特惠',
+            type: 'slash',
             slash_no: detail.slash_no,
             supports_pickup: detail.product.supports_pickup ? 1 : 0
         };
