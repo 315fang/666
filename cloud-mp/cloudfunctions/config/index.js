@@ -355,6 +355,14 @@ const handleAction = {
 
     // ===== 抽奖 =====
     'lottery': asyncHandler(async (params) => {
+        const collectionRes = await db.collection('lottery_configs')
+            .where({ is_active: true })
+            .orderBy('updated_at', 'desc')
+            .limit(1)
+            .get().catch(() => ({ data: [] }));
+        if (collectionRes.data && collectionRes.data[0]) {
+            return success(collectionRes.data[0]);
+        }
         const res = await db.collection('configs')
             .where({ config_group: 'lottery' })
             .limit(1)

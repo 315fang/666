@@ -61,6 +61,16 @@ function pickPointBalance(account = {}) {
     return Number.isFinite(n) ? n : 0;
 }
 
+function formatMoney(value, fallback = '0.00') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toFixed(2) : fallback;
+}
+
+function buildDisplayNickname(info) {
+    const rawName = info?.nick_name || info?.nickname || info?.nickName || '微信用户';
+    return String(rawName).trim() || '微信用户';
+}
+
 function orderFirstThumb(order) {
     if (!order || !order.product) return QUAD_PLACEHOLDER;
     const imgs = parseImages(order.product.images);
@@ -152,10 +162,12 @@ async function loadUserInfo(page, forceRefresh = false) {
     if (!isLoggedIn) {
         page.setData({
             userInfo: app.globalData.userInfo,
+            displayNickname: buildDisplayNickname(app.globalData.userInfo),
             showBusinessCenter: false,
             growthDisplay: null,
             unusedCouponCount: 0,
             pointsBalanceDisplay: '--',
+            balance: '0.00',
             commissionBalance: '0.00',
             couponBanner: null,
             notificationsCount: 0,
@@ -184,6 +196,7 @@ async function loadUserInfo(page, forceRefresh = false) {
             info.participate_distribution = participateDistribution ? 1 : 0;
             page.setData({
                 userInfo: info,
+                displayNickname: buildDisplayNickname(info),
                 hasUserInfo: true,
                 isAgent: roleLevel >= 2
             });
@@ -194,6 +207,7 @@ async function loadUserInfo(page, forceRefresh = false) {
             const roleLevel = cached?.role_level != null ? cached.role_level : 0;
             page.setData({
                 userInfo: cached,
+                displayNickname: buildDisplayNickname(cached),
                 hasUserInfo: !!cached
             });
             applyGrowthDisplay(page, cached);
@@ -209,6 +223,7 @@ async function loadUserInfo(page, forceRefresh = false) {
         const roleLevel = cached?.role_level != null ? cached.role_level : 0;
         page.setData({
             userInfo: cached,
+            displayNickname: buildDisplayNickname(cached),
             hasUserInfo: !!cached
         });
         applyGrowthDisplay(page, cached);
@@ -380,36 +395,78 @@ function markOrderBadgesSeen(page, statuses) {
 
 async function loadDistributionInfo(page) {
     try {
-        const response = await get('/distribution/overview');
-        if (response.code === 0 && response.data) {
-            const dashboard = response.data;
-            const totalEarnings = dashboard.stats ? dashboard.stats.totalEarnings : '0.00';
-            const availableAmount = dashboard.stats ? dashboard.stats.availableAmount : '0.00';
-            const frozenAmount = dashboard.stats ? (dashboard.stats.frozenAmount || '0.00') : '0.00';
-            const goodsFundBalance = dashboard.team && dashboard.team.agentGoodsFund
-                ? (dashboard.team.agentGoodsFund.goods_fund_balance || '0.00')
-                : '0.00';
-            const teamCount = dashboard.team ? dashboard.team.totalCount : 0;
-            const roleLevel = dashboard.userInfo
-                ? Number(dashboard.userInfo.role_level != null ? dashboard.userInfo.role_level : dashboard.userInfo.role || 0)
-                : 0;
+        const [overviewResponse, walletResponse, agentWalletResponse] = await Promise.all([
+            get('/distribution/overview', {}, { showError: false }).catch(() => null),
+            get('/wallet/info', {}, { showError: false }).catch(() => null),
+            get('/agent/wallet', {}, { showError: false }).catch(() => null)
+        ]);
 
-            page.setData({
-                distributionInfo: {
-                    totalEarnings,
-                    availableAmount,
-                    goodsFundBalance,
-                    referee_count: teamCount,
-                    role_level: roleLevel,
-                    role_name: dashboard.userInfo ? (dashboard.userInfo.role_name || ROLE_NAMES[roleLevel]) : '普通用户'
-                },
-                stats: { frozenAmount },
-                balance: goodsFundBalance,
-                commissionBalance: availableAmount,
-                teamCount,
-                isAgent: roleLevel >= 2
-            });
-        }
+        const dashboard = overviewResponse && overviewResponse.code === 0 ? (overviewResponse.data || {}) : {};
+        const walletInfo = walletResponse && walletResponse.code === 0 ? (walletResponse.data || {}) : {};
+        const agentWalletInfo = agentWalletResponse && agentWalletResponse.code === 0 ? (agentWalletResponse.data || {}) : {};
+        const stats = dashboard.stats || {};
+        const dashboardUserInfo = dashboard.userInfo || {};
+        const teamInfo = dashboard.team || {};
+        const teamGoodsFund = teamInfo.agentGoodsFund || {};
+        const roleLevel = Number(
+            dashboardUserInfo.role_level != null
+                ? dashboardUserInfo.role_level
+                : ((page.data.userInfo || app.globalData.userInfo || {}).role_level || dashboardUserInfo.role || 0)
+        ) || 0;
+        const goodsFundBalance = formatMoney(
+            agentWalletInfo.balance != null
+                ? agentWalletInfo.balance
+                : (teamGoodsFund.goods_fund_balance != null ? teamGoodsFund.goods_fund_balance : '0.00')
+        );
+        const commissionBalance = formatMoney(
+            walletInfo.balance != null
+                ? walletInfo.balance
+                : (
+                    walletInfo.available_balance != null
+                        ? walletInfo.available_balance
+                        : (
+                            walletInfo.commission && walletInfo.commission.available != null
+                                ? walletInfo.commission.available
+                                : stats.availableAmount
+                        )
+                )
+        );
+        const availableAmount = formatMoney(
+            stats.availableAmount != null
+                ? stats.availableAmount
+                : (
+                    walletInfo.commission && walletInfo.commission.available != null
+                        ? walletInfo.commission.available
+                        : commissionBalance
+                )
+        );
+        const totalEarnings = formatMoney(stats.totalEarnings);
+        const frozenAmount = formatMoney(
+            stats.frozenAmount != null
+                ? stats.frozenAmount
+                : (
+                    walletInfo.commission && walletInfo.commission.frozen != null
+                        ? walletInfo.commission.frozen
+                        : '0.00'
+                )
+        );
+        const teamCount = Number(teamInfo.totalCount || 0);
+
+        page.setData({
+            distributionInfo: {
+                totalEarnings,
+                availableAmount,
+                goodsFundBalance,
+                referee_count: teamCount,
+                role_level: roleLevel,
+                role_name: dashboardUserInfo.role_name || ROLE_NAMES[roleLevel] || '普通用户'
+            },
+            stats: { frozenAmount },
+            balance: goodsFundBalance,
+            commissionBalance,
+            teamCount,
+            isAgent: roleLevel >= 2
+        });
     } catch (error) {
         console.error('加载分销信息失败:', error);
     }

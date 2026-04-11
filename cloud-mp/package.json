@@ -5,6 +5,7 @@
   "description": "CloudBase migration foundation scripts for the mini program and admin stack",
   "scripts": {
     "audit:migration": "node scripts/generate-migration-matrix.js",
+    "audit:order-fields": "node scripts/audit-order-fields.js",
     "check:foundation": "node scripts/check-cloudbase-foundation.js",
     "check:order-helpers": "node scripts/check-order-helper-integrity.js",
     "seed:ensure-target": "node scripts/ensure-target-collections.js",
@@ -14,11 +15,13 @@
     "import:ready": "node scripts/check-cloudbase-import-ready.js",
     "import:validate": "node scripts/validate-cloudbase-import.js",
     "runtime:status": "node scripts/check-cloudbase-runtime-status.js",
+    "runtime:smoke": "node scripts/check-cloudbase-live-readiness.js",
     "import:selected": "node scripts/import-cloudbase-collections.js",
     "import:report": "node scripts/write-cloudbase-import-result.js",
     "import:prep": "npm run check:foundation && npm run import:ready && npm run import:validate",
     "payment:ready": "node scripts/check-payment-readiness.js",
     "audit:legacy": "node scripts/audit-legacy-compat.js",
+    "repair:order-fields": "node scripts/repair-cloudbase-order-fields.js",
     "repair:cloudbase-openid": "node scripts/repair-cloudbase-openid-fields.js",
     "release:check": "npm run check:foundation && npm run import:validate && npm run audit:legacy && node scripts/check-production-gaps.js"
   }

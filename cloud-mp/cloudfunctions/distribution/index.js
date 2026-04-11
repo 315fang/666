@@ -455,6 +455,22 @@ const handleAction = {
     }),
 
     'agentWalletRechargeConfig': asyncHandler(async (openid) => {
+        const configRes = await db.collection('wallet_recharge_configs')
+            .where({ is_active: true })
+            .orderBy('sort_order', 'asc')
+            .limit(20)
+            .get().catch(() => ({ data: [] }));
+        if (configRes.data && configRes.data.length) {
+            return success({
+                options: configRes.data.map((item) => ({
+                    id: item._id,
+                    title: item.title || `充值${toNumber(item.amount, 0)}元`,
+                    amount: toNumber(item.amount, 0),
+                    bonus: toNumber(item.bonus_amount != null ? item.bonus_amount : item.bonus, 0),
+                    sort_order: toNumber(item.sort_order, 0)
+                }))
+            });
+        }
         return success({
             options: [
                 { amount: 100, bonus: 5 },

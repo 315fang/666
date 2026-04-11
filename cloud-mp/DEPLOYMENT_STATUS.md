@@ -13,6 +13,14 @@
 | 管理后台入口 | `https://cloud1-9gywyqe49638e46f-1419893803.tcloudbaseapp.com/admin/` |
 | 管理后台 API | `https://cloud1-9gywyqe49638e46f.service.tcloudbase.com/admin/api` |
 
+### 2026-04-11 补充状态
+
+- `admin_singletons`、`lottery_configs`、`wallet_recharge_configs` 已在 CloudBase 环境中创建并写入最小样本。
+- `config`、`distribution`、`admin-api` 云函数已同步到最新代码。
+- `payment` 网关访问路径已补充 `/payment`，同时保留 `/payment-notify`。
+- 静态托管已确认存在 `admin/index.html` 与 `admin/assets/images/default-avatar.svg`。
+- 管理端整站静态资源批量上传仍未稳定完成，当前需继续补齐 `admin/assets/*` 首屏产物。
+
 
 ## 云函数部署状态（12 个）
 
@@ -41,9 +49,14 @@
 | 回调地址 | `https://cloud1-9gywyqe49638e46f.ap-shanghai.tcb.qcloud.la/payment` |
 | 证书位置 | `cloudfunctions/payment/certs/` (本地) |
 
-### 待办：回调地址配置
+### 回调地址配置
 
-微信支付回调需要 payment 云函数开启 HTTP 触发器。需在微信开发者工具 → 云开发控制台 → 云函数 → payment → 触发器 中手动添加 HTTP 触发器，路径设为 `/payment`。
+当前 payment 网关已存在以下访问路径：
+
+- `https://cloud1-9gywyqe49638e46f.service.tcloudbase.com/payment`
+- `https://cloud1-9gywyqe49638e46f.service.tcloudbase.com/payment-notify`
+
+仍需最终确认微信支付平台当前回调地址使用哪一条，并确保它与生产配置一致。
 
 ## 数据库安全规则
 
@@ -79,3 +92,4 @@
 2. **证书上传到云存储**：生产环境建议将私钥上传到云存储而非随代码部署
 3. **数据库索引**：users、orders、cart_items、commissions、refunds、user_coupons、content_board_products、station_staff 的关键普通索引已通过 CLI 创建；控制台可复核
 4. **管理后台 admin-api**：优惠券、拼团、砍价、抽奖、自提站点、榜单、代理配置接口已补；仍需做云端页面级 smoke test
+5. **静态托管资源补齐**：`admin/index.html` 已上传，但 `admin/assets/*` 仍需做完整发布校验

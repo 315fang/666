@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-04-11T05:45:56.620Z",
+  "envId": "cloud1-9gywyqe49638e46f",
+  "authStatus": "READY",
+  "envStatus": "READY",
+  "ok": true,
+  "results": [
+    {
+      "collection": "admin_singletons",
+      "exists": true,
+      "total": 4,
+      "ok": true
+    },
+    {
+      "collection": "lottery_configs",
+      "exists": true,
+      "total": 1,
+      "ok": true
+    },
+    {
+      "collection": "wallet_recharge_configs",
+      "exists": true,
+      "total": 3,
+      "ok": true
+    }
+  ]
+}

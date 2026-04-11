@@ -60,6 +60,7 @@ const {
 Page({
     data: {
         userInfo: null,
+        displayNickname: '微信用户',
         isLoggedIn: false,
         hasUserInfo: false,
         statusBarHeight: 20,
@@ -102,6 +103,7 @@ Page({
         distributionInfo: {
             totalEarnings: '0.00',
             availableAmount: '0.00',
+            goodsFundBalance: '0.00',
             referee_count: 0,
             role_level: 0,
             role_name: '普通用户'

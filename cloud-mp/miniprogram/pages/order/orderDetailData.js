@@ -58,6 +58,7 @@ async function loadOrder(page, idOrNo) {
             order.product.images = parseImages(order.product.images);
         }
         if (order) {
+            order.logistics_company = order.logistics_company || order.shipping_company || '';
             order.logistics_company_label = logisticsCompanyLabel(order.logistics_company);
             const originalAmount = Number(order.original_amount != null ? order.original_amount : order.total_amount);
             const couponDiscount = Number(order.coupon_discount || 0);
