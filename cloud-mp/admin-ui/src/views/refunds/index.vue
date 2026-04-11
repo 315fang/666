@@ -174,6 +174,19 @@ const fetchRefunds = async () => {
 
 const refreshRefunds = () => fetchRefunds()
 
+const patchRefundRow = (id, patch) => {
+  const applyPatch = (row) => ({ ...row, ...patch })
+  tableData.value = tableData.value
+    .map((row) => (row.id === id ? applyPatch(row) : row))
+    .filter((row) => {
+      if (!searchForm.status) return true
+      return row.status === searchForm.status
+    })
+  if (currentRow.value?.id === id) {
+    currentRow.value = applyPatch(currentRow.value)
+  }
+}
+
 const runRefundMutation = async (task, successMessage, onSuccess) => {
   submitting.value = true
   try {
@@ -221,9 +234,18 @@ const handleApprove = async (row) => {
         type: 'warning'
       }
     )
-    await approveRefund(row.id)
-    ElMessage.success('审核通过，请尽快完成退款')
-    refreshRefunds()
+    await runRefundMutation(
+      () => approveRefund(row.id),
+      '审核通过，请尽快完成退款',
+      () => {
+        const nextTime = new Date().toISOString()
+        patchRefundRow(row.id, {
+          status: 'approved',
+          approved_at: nextTime,
+          updated_at: nextTime
+        })
+      }
+    )
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('操作失败')
@@ -247,6 +269,12 @@ const handleRejectSubmit = async () => {
     () => rejectRefund(rejectForm.id, { reason: rejectForm.reason }),
     '已拒绝',
     () => {
+      const nextTime = new Date().toISOString()
+      patchRefundRow(rejectForm.id, {
+        status: 'rejected',
+        reject_reason: rejectForm.reason,
+        updated_at: nextTime
+      })
       rejectDialogVisible.value = false
     }
   )
@@ -263,9 +291,18 @@ const handleComplete = async (row) => {
         type: 'warning'
       }
     )
-    await completeRefund(row.id)
-    ElMessage.success('退款请求已执行')
-    refreshRefunds()
+    await runRefundMutation(
+      () => completeRefund(row.id),
+      '退款请求已执行',
+      () => {
+        const nextTime = new Date().toISOString()
+        patchRefundRow(row.id, {
+          status: 'completed',
+          completed_at: nextTime,
+          updated_at: nextTime
+        })
+      }
+    )
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('操作失败')
@@ -277,12 +314,12 @@ const handleComplete = async (row) => {
 const getProcessedTime = (row) => row?.completed_at || row?.processed_at || row?.updated_at || ''
 
 const getStatusType = (status) => {
-  const map = { pending: 'warning', approved: 'info', processing: 'primary', rejected: 'danger', completed: 'success' }
+  const map = { pending: 'warning', approved: 'info', processing: 'primary', rejected: 'danger', completed: 'success', failed: 'danger' }
   return map[status] || 'info'
 }
 
 const getStatusText = (status) => {
-  const map = { pending: '待审核', approved: '待退款', processing: '退款中', rejected: '已拒绝', completed: '已退款' }
+  const map = { pending: '待审核', approved: '待退款', processing: '退款处理中（等待微信回调）', rejected: '已拒绝', completed: '已退款', failed: '退款失败' }
   return map[status] || status
 }
 

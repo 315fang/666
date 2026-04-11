@@ -158,10 +158,22 @@ const handleAction = {
         }
         list = list.sort((a, b) => toNumber(b.manual_weight, 0) - toNumber(a.manual_weight, 0)).map(formatProduct);
 
-        // 为列表商品添加规格摘要（安全查询，失败不影响主流程）
+        // 为列表商品按 product_id 查询 SKU（避免拉全表）
         let skuList = [];
         try {
-            skuList = await getAllRecords(db, 'skus');
+            const productIds = list.map(p => p._id || p.id).filter(Boolean);
+            const productIdStrs = [...new Set(productIds.map(String))];
+            if (productIdStrs.length > 0) {
+                // 微信云开发 _.in() 最多支持 100 个元素
+                const chunks = [];
+                for (let i = 0; i < productIdStrs.length; i += 100) {
+                    chunks.push(productIdStrs.slice(i, i + 100));
+                }
+                const chunkResults = await Promise.all(chunks.map(ids =>
+                    db.collection('skus').where({ product_id: _.in(ids) }).limit(500).get().catch(() => ({ data: [] }))
+                ));
+                skuList = chunkResults.flatMap(r => r.data || []);
+            }
         } catch (e) {
             console.warn('[products/list] 查询 SKU 失败，跳过规格摘要:', e.message);
         }
@@ -205,15 +217,19 @@ const handleAction = {
         const product = await getProductById(params.product_id);
         if (!product) throw notFound('商品不存在');
 
-        // 查询关联 SKU（安全查询，失败不影响主流程）
+        // 查询关联 SKU（按 product_id 精确查询，避免拉全表）
         let skus = [];
         let specSummary = '';
         try {
-            const skuList = await getAllRecords(db, 'skus');
             const productIdStr = String(product._id || product.id);
+            const queryIds = [productIdStr];
+            if (product.id && String(product.id) !== productIdStr) queryIds.push(String(product.id));
+            if (product._legacy_id) queryIds.push(String(product._legacy_id));
+            const skuRes = await db.collection('skus').where({ product_id: _.in(queryIds) }).limit(100).get().catch(() => ({ data: [] }));
+            const skuList = skuRes.data || [];
             skus = skuList.filter((sku) => {
                 const pid = String(sku.product_id);
-                return pid === productIdStr || pid === String(product.id) || (product._legacy_id && pid === String(product._legacy_id));
+                return queryIds.includes(pid);
             }).map(normalizeSku);
 
             // 生成规格摘要

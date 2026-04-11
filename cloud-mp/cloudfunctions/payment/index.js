@@ -48,7 +48,7 @@ async function handlePaymentAction(event, openid) {
         try {
             const orderId = params.order_id || params.id;
             if (!orderId) throw badRequest('缺少订单 ID');
-            const result = await paymentQuery.queryPaymentStatus(orderId);
+            const result = await paymentQuery.queryPaymentStatus(orderId, openid);
             return success(result);
         } catch (err) {
             if (err instanceof CloudBaseError) throw err;
@@ -73,7 +73,7 @@ async function handlePaymentAction(event, openid) {
         try {
             const orderId = params.order_id || params.id;
             if (!orderId) throw badRequest('缺少订单 ID');
-            const result = await paymentQuery.queryPaymentStatus(orderId);
+            const result = await paymentQuery.queryPaymentStatus(orderId, openid);
             return success(result);
         } catch (err) {
             if (err instanceof CloudBaseError) throw err;
@@ -87,7 +87,7 @@ async function handlePaymentAction(event, openid) {
         try {
             const orderId = params.order_id || params.id;
             if (!orderId) throw badRequest('缺少订单 ID');
-            const result = await paymentQuery.queryPaymentStatus(orderId);
+            const result = await paymentQuery.queryPaymentStatus(orderId, openid);
             return success(result);
         } catch (err) {
             if (err instanceof CloudBaseError) throw err;

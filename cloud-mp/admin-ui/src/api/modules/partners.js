@@ -4,6 +4,7 @@ export const getDealers = (params) => request({ url: '/dealers', method: 'get', 
 export const approveDealer = (id) => request({ url: `/dealers/${id}/approve`, method: 'put' })
 export const rejectDealer = (id, data) => request({ url: `/dealers/${id}/reject`, method: 'put', data })
 export const updateDealerLevel = (id, data) => request({ url: `/dealers/${id}/level`, method: 'put', data })
+export const updateDealerProfile = (id, data) => request({ url: `/dealers/${id}/profile`, method: 'put', data })
 
 export const getAdmins = (params) => request({ url: '/admins', method: 'get', params })
 export const createAdmin = (data) => request({ url: '/admins', method: 'post', data })

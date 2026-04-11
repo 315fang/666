@@ -67,6 +67,9 @@
             <el-button v-if="row.status === 'approved'" text type="warning" size="small" @click="handleSetLevel(row)">
               调整等级
             </el-button>
+            <el-button v-if="row.status === 'approved'" text type="primary" size="small" @click="handleEditProfile(row)">
+              企业资料
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -98,6 +101,15 @@
         <el-descriptions-item label="审批时间">{{ formatDate(currentDealer.approved_at) }}</el-descriptions-item>
         <el-descriptions-item label="联系方式">{{ currentDealer.contact_phone || '-' }}</el-descriptions-item>
         <el-descriptions-item label="联系邮箱" :span="2">{{ currentDealer.contact_email || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="法人姓名">{{ currentDealer.legal_person || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="统一社会信用代码">{{ currentDealer.business_license_no || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="纳税人识别号">{{ currentDealer.tax_no || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="公司地址" :span="2">{{ currentDealer.company_address || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="发票抬头">{{ currentDealer.invoice_title || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="发票邮箱">{{ currentDealer.invoice_email || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="开户名">{{ currentDealer.bank_account_name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="开户行">{{ currentDealer.bank_name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="对公账号" :span="2">{{ currentDealer.bank_account_no || '-' }}</el-descriptions-item>
       </el-descriptions>
     </el-dialog>
 
@@ -120,13 +132,35 @@
         <el-button type="primary" @click="submitLevelChange" :loading="submitting">确认调整</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="profileDialogVisible" title="企业资料" width="min(640px, 94vw)">
+      <el-form :model="profileForm" label-width="120px">
+        <el-form-item label="公司名称"><el-input v-model="profileForm.company_name" /></el-form-item>
+        <el-form-item label="联系人"><el-input v-model="profileForm.contact_name" /></el-form-item>
+        <el-form-item label="联系电话"><el-input v-model="profileForm.contact_phone" /></el-form-item>
+        <el-form-item label="联系邮箱"><el-input v-model="profileForm.contact_email" /></el-form-item>
+        <el-form-item label="法人姓名"><el-input v-model="profileForm.legal_person" /></el-form-item>
+        <el-form-item label="公司地址"><el-input v-model="profileForm.company_address" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item label="营业执照号"><el-input v-model="profileForm.business_license_no" /></el-form-item>
+        <el-form-item label="税号"><el-input v-model="profileForm.tax_no" /></el-form-item>
+        <el-form-item label="发票抬头"><el-input v-model="profileForm.invoice_title" /></el-form-item>
+        <el-form-item label="发票邮箱"><el-input v-model="profileForm.invoice_email" /></el-form-item>
+        <el-form-item label="开户名"><el-input v-model="profileForm.bank_account_name" /></el-form-item>
+        <el-form-item label="开户行"><el-input v-model="profileForm.bank_name" /></el-form-item>
+        <el-form-item label="对公账号"><el-input v-model="profileForm.bank_account_no" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="profileDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitProfile" :loading="submitting">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getDealers, approveDealer, rejectDealer, updateDealerLevel } from '@/api'
+import { getDealers, approveDealer, rejectDealer, updateDealerLevel, updateDealerProfile } from '@/api'
 import { formatDate } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
 import { getUserNickname } from '@/utils/userDisplay'
@@ -135,8 +169,24 @@ const loading = ref(false)
 const submitting = ref(false)
 const detailDialogVisible = ref(false)
 const levelDialogVisible = ref(false)
+const profileDialogVisible = ref(false)
 const currentDealer = ref(null)
 const newLevel = ref(1)
+const profileForm = reactive({
+  company_name: '',
+  contact_name: '',
+  contact_phone: '',
+  contact_email: '',
+  legal_person: '',
+  company_address: '',
+  business_license_no: '',
+  tax_no: '',
+  invoice_title: '',
+  invoice_email: '',
+  bank_account_name: '',
+  bank_name: '',
+  bank_account_no: ''
+})
 
 const searchForm = reactive({ status: '', keyword: '' })
 const { pagination, resetPage, applyResponse } = usePagination({ defaultLimit: 10 })
@@ -201,6 +251,26 @@ const handleSetLevel = (row) => {
   levelDialogVisible.value = true
 }
 
+const handleEditProfile = (row) => {
+  currentDealer.value = row
+  Object.assign(profileForm, {
+    company_name: row.company_name || '',
+    contact_name: row.contact_name || '',
+    contact_phone: row.contact_phone || '',
+    contact_email: row.contact_email || '',
+    legal_person: row.legal_person || '',
+    company_address: row.company_address || '',
+    business_license_no: row.business_license_no || '',
+    tax_no: row.tax_no || '',
+    invoice_title: row.invoice_title || '',
+    invoice_email: row.invoice_email || '',
+    bank_account_name: row.bank_account_name || '',
+    bank_name: row.bank_name || '',
+    bank_account_no: row.bank_account_no || ''
+  })
+  profileDialogVisible.value = true
+}
+
 const submitLevelChange = async () => {
   submitting.value = true
   try {
@@ -210,6 +280,21 @@ const submitLevelChange = async () => {
     fetchData()
   } catch (e) {
     console.error('调整失败:', e)
+  } finally {
+    submitting.value = false
+  }
+}
+
+const submitProfile = async () => {
+  submitting.value = true
+  try {
+    const updated = await updateDealerProfile(currentDealer.value.id, { ...profileForm })
+    currentDealer.value = updated?.data || updated
+    ElMessage.success('企业资料已保存')
+    profileDialogVisible.value = false
+    fetchData()
+  } catch (e) {
+    console.error('企业资料保存失败:', e)
   } finally {
     submitting.value = false
   }

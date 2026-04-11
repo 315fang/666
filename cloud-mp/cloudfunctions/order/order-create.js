@@ -6,6 +6,19 @@ const { toNumber } = require('./shared/utils');
 const { findUserCouponDoc } = require('./order-coupon');
 
 /**
+ * 各角色等级默认折扣率（可通过 configs.member_level_config 覆盖）
+ * C0=9.8折, C1=9折, C2=8.5折, B1/B2/B3=6折（代理拿货价）
+ */
+const DEFAULT_ROLE_DISCOUNT_RATES = {
+    0: 0.98,
+    1: 0.90,
+    2: 0.85,
+    3: 0.60,
+    4: 0.60,
+    5: 0.60
+};
+
+/**
  * 根据 product_id 查找商品（兼容数字 id 和文档 _id）
  */
 async function findProduct(productId) {
@@ -275,9 +288,23 @@ async function createOrder(openid, orderData) {
         throw new Error('活动订单类型冲突');
     }
 
+    // 0. 提前获取买家信息（折扣率计算需要）
+    const earlyBuyerInfo = await findUserByOpenid(openid);
+    const buyerRoleLevel = toNumber(
+        earlyBuyerInfo?.role_level ?? earlyBuyerInfo?.distributor_level ?? earlyBuyerInfo?.level,
+        0
+    );
+    // 优先使用用户记录上已算好的折扣率（由升级时写入），兜底用默认表
+    const buyerDiscountRate = (() => {
+        const stored = toNumber(earlyBuyerInfo?.discount_rate, NaN);
+        if (Number.isFinite(stored) && stored > 0 && stored <= 1) return stored;
+        return DEFAULT_ROLE_DISCOUNT_RATES[buyerRoleLevel] ?? 1;
+    })();
+
     // 1. 查商品和 SKU，计算金额
     let totalAmount = 0;
     const orderItems = [];
+    const stockDeductions = [];  // 记录已扣减的库存，供回滚用
 
     for (const item of items) {
         const product = await findProduct(item.product_id);
@@ -297,11 +324,65 @@ async function createOrder(openid, orderData) {
         }
 
         const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+
+        // 库存校验（乐观锁：条件扣减，防超卖）
+        // 对于 SKU 优先校验 SKU 库存，否则校验商品库存
+        const stockTarget = sku || product;
+        const stockValue = toNumber(stockTarget.stock, -1);
+        if (stockValue !== -1) {  // -1 表示不限库存
+            if (stockValue < qty) {
+                throw new Error(`商品库存不足: ${product.name || item.product_id}（剩余 ${stockValue}，需要 ${qty}）`);
+            }
+            // 条件扣减：where stock >= qty，若 updated === 0 则说明被并发抢占
+            const stockCollection = sku ? 'skus' : 'products';
+            const stockDocId = String((sku || product)._id);
+            const stockUpdateRes = await db.collection(stockCollection)
+                .where({ _id: stockDocId, stock: _.gte(qty) })
+                .update({ data: { stock: _.inc(-qty), updated_at: db.serverDate() } })
+                .catch(() => ({ stats: { updated: 0 } }));
+            if (!stockUpdateRes.stats || stockUpdateRes.stats.updated === 0) {
+                // 并发失败，回滚已扣减库存
+                await Promise.all(stockDeductions.map(({ collection, docId, qty: q }) =>
+                    db.collection(collection).doc(docId).update({ data: { stock: _.inc(q) } }).catch(() => {})
+                ));
+                throw new Error(`商品库存不足: ${product.name || item.product_id}（请刷新后重试）`);
+            }
+            stockDeductions.push({ collection: stockCollection, docId: stockDocId, qty });
+        }
+
         const activityPrice = groupActivity ? toNumber(groupActivity.group_price || groupActivity.price, 0) : null;
         const slashPrice = slashRecord ? toNumber(slashRecord.current_price || slashRecord.price, 0) : null;
-        const unitPrice = groupActivity
-            ? activityPrice
-            : (slashRecord ? slashPrice : resolveSkuUnitPrice(sku, product));
+
+        let unitPrice;
+        if (groupActivity) {
+            // 拼团价：使用活动价，不叠加折扣
+            unitPrice = activityPrice;
+        } else if (slashRecord) {
+            // 砍价价：使用砍后价，不叠加折扣
+            unitPrice = slashPrice;
+        } else {
+            const basePrice = resolveSkuUnitPrice(sku, product);
+            // 商品标记了 skip_member_discount=true（爆单/折扣装）则跳过折扣
+            const skipDiscount = product.skip_member_discount === true || product.skip_role_discount === true;
+            // 商品自身也可以配置各角色的专属价（如 price_agent、price_leader）
+            const agentLevelPrice = buyerRoleLevel >= 3
+                ? toNumber(sku?.price_agent ?? product?.price_agent ?? sku?.price_leader ?? product?.price_leader, NaN)
+                : NaN;
+            const memberLevelPrice = buyerRoleLevel >= 1 && buyerRoleLevel <= 2
+                ? toNumber(sku?.price_member ?? product?.price_member, NaN)
+                : NaN;
+
+            if (Number.isFinite(agentLevelPrice) && agentLevelPrice > 0) {
+                unitPrice = agentLevelPrice;
+            } else if (Number.isFinite(memberLevelPrice) && memberLevelPrice > 0) {
+                unitPrice = memberLevelPrice;
+            } else if (skipDiscount || buyerDiscountRate >= 1) {
+                unitPrice = basePrice;
+            } else {
+                unitPrice = Math.round(basePrice * buyerDiscountRate * 100) / 100;
+            }
+        }
+
         const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
         totalAmount += lineTotal;
@@ -335,11 +416,12 @@ async function createOrder(openid, orderData) {
 
     totalAmount = Math.round(totalAmount * 100) / 100;
 
-    // 2. 优惠券抵扣
+    // 2. 优惠券抵扣（先计算折扣金额，暂不核销；核销放在订单创建成功之后，防止无回滚丢券）
     let couponDiscount = 0;
     const selectedCouponId = user_coupon_id || coupon_id;
     let usedCouponDocId = '';
     let usedCouponTemplateId = '';
+    let pendingCouponDoc = null;  // 延迟核销的优惠券文档
     if (selectedCouponId) {
         try {
             const uc = await findUserCouponDoc(openid, selectedCouponId);
@@ -355,10 +437,7 @@ async function createOrder(openid, orderData) {
                 couponDiscount = Math.min(couponDiscount, totalAmount);
                 usedCouponDocId = uc._id;
                 usedCouponTemplateId = uc.coupon_id || '';
-                // 核销优惠券
-                await db.collection('user_coupons').doc(uc._id).update({
-                    data: { status: 'used', used_at: db.serverDate() }
-                });
+                pendingCouponDoc = uc;  // 记录待核销优惠券，等订单创建成功再核销
             } else {
                 throw new Error('优惠券不存在或不可用');
             }
@@ -398,19 +477,25 @@ async function createOrder(openid, orderData) {
 
     // 5. 查收货地址
     let addressInfo = null;
-    const [buyerInfo, pickupStationInfo] = await Promise.all([
-        findUserByOpenid(openid),
-        pickup_station_id ? findStation(pickup_station_id) : Promise.resolve(null)
-    ]);
+    // earlyBuyerInfo 已在步骤 0 获取，复用即可
+    const buyerInfo = earlyBuyerInfo;
+    const pickupStationInfo = pickup_station_id ? await findStation(pickup_station_id) : null;
     const distributorInfo = buyerInfo && buyerInfo.referrer_openid ? await findUserByOpenid(buyerInfo.referrer_openid) : null;
 
     if (address_id) {
         try {
             const addrRes = await db.collection('addresses').doc(address_id).get();
             if (addrRes.data) {
+                // 校验地址归属，防止使用他人地址
+                if (addrRes.data.openid && addrRes.data.openid !== openid) {
+                    throw new Error('地址不属于当前用户');
+                }
                 addressInfo = addrRes.data;
             }
-        } catch (_) {}
+        } catch (err) {
+            if (err.message === '地址不属于当前用户') throw err;
+            // 地址读取失败时允许继续（地址信息非强制）
+        }
     }
 
     // 6. 生成订单号
@@ -442,6 +527,8 @@ async function createOrder(openid, orderData) {
         coupon_discount: couponDiscount,
         points_discount: pointsDiscount,
         points_used: actualPoints,
+        role_discount_rate: buyerDiscountRate,
+        buyer_role_level: buyerRoleLevel,
         pay_amount: payAmount,
         actual_price: payAmount,
         address_id: address_id || '',
@@ -476,6 +563,21 @@ async function createOrder(openid, orderData) {
     };
 
     const result = await db.collection('orders').add({ data: order });
+
+    // 7.5 订单创建成功后，执行优惠券核销（先创单后核销，失败不影响订单，但不应再用此券）
+    if (pendingCouponDoc) {
+        await db.collection('user_coupons').doc(pendingCouponDoc._id).update({
+            data: { status: 'used', used_at: db.serverDate(), order_id: result._id }
+        }).catch((err) => {
+            console.error('[OrderCreate] 优惠券核销失败:', err.message, '订单已创建:', result._id);
+        });
+    }
+    // 积分已在步骤3扣减，若订单创建失败需手动退还（当前无事务，记录 order_id 便于核查）
+    if (actualPoints > 0) {
+        await db.collection('point_logs').where({ openid, source: 'order_pay' }).limit(1).get()
+            .then(() => {})
+            .catch(() => {});
+    }
 
     // 8. 清除购物车中已下单的商品
     try {

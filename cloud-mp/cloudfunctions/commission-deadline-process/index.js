@@ -10,22 +10,29 @@ exports.main = async () => {
     const now = new Date();
     console.log(`[CommissionDeadlineProcess] start at ${now.toISOString()}`);
 
-    const res = await db.collection('commissions')
-        .where({
-            status: 'frozen',
-            refund_deadline: _.lte(now)
-        })
-        .limit(100)
-        .get()
-        .catch((err) => {
-            console.error('[CommissionDeadlineProcess] query failed:', err.message);
-            return { data: [] };
-        });
-
     let processed = 0;
     const errors = [];
+    let batchSize = 100;
+    let hasMore = true;
 
-    for (const commission of (res.data || [])) {
+    while (hasMore) {
+        const res = await db.collection('commissions')
+            .where({
+                status: 'frozen',
+                refund_deadline: _.lte(now)
+            })
+            .limit(batchSize)
+            .get()
+            .catch((err) => {
+                console.error('[CommissionDeadlineProcess] query failed:', err.message);
+                return { data: [] };
+            });
+
+        const batch = res.data || [];
+        if (batch.length === 0) break;
+        hasMore = batch.length === batchSize;
+
+    for (const commission of batch) {
         try {
             const pendingRefund = await db.collection('refunds')
                 .where({
@@ -52,6 +59,7 @@ exports.main = async () => {
             errors.push({ commission_id: commission._id, error: err.message });
         }
     }
+    } // end while
 
     console.log(`[CommissionDeadlineProcess] processed=${processed}, errors=${errors.length}`);
     return { processed, errors };

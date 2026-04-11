@@ -99,6 +99,9 @@ function createFilesystemStore(options) {
             };
         },
         getCollection,
+        async reloadCollection(name) {
+            return getCollection(name);
+        },
         saveCollection,
         getSingleton,
         saveSingleton

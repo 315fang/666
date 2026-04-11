@@ -55,6 +55,136 @@ function registerMarketingRoutes(app, deps) {
         return value;
     }
 
+    function parseConfigRowValue(row, fallback) {
+        if (!row) return fallback;
+        if (row.config_value !== undefined) {
+            if (typeof row.config_value === 'string') {
+                try { return JSON.parse(row.config_value); } catch (_) { return row.config_value; }
+            }
+            return row.config_value;
+        }
+        return row.value !== undefined ? row.value : fallback;
+    }
+
+    function getExitRulesSnapshot() {
+        return {
+            enabled: true,
+            under_1_year_min_days: 60,
+            under_1_year_max_days: 90,
+            over_1_year_min_days: 45,
+            over_1_year_max_days: 60,
+            refund_scope: '仅退本人后台账户余额（货款余额+佣金余额），不含利息及其他费用',
+            auto_revoke_identity: true,
+            ...getConfigValue('agent_system_exit-rules', {})
+        };
+    }
+
+    function getExitRefundPreview(user, commissions = []) {
+        const walletRaw = Math.max(0, toNumber(user?.agent_wallet_balance ?? user?.wallet_balance, 0));
+        const hasSeparateCommissionBalance = user?.commission_balance != null || (
+            user?.balance != null
+            && user?.wallet_balance != null
+            && toNumber(user.balance, 0) !== toNumber(user.wallet_balance, 0)
+        );
+        const balanceRaw = hasSeparateCommissionBalance
+            ? Math.max(0, toNumber(user?.commission_balance ?? user?.balance, 0))
+            : 0;
+        const pendingCommission = commissions
+            .filter((row) => ['pending', 'frozen', 'pending_approval', 'approved'].includes(pickString(row.status)))
+            .reduce((sum, row) => sum + toNumber(row.amount, 0), 0);
+
+        return {
+            walletRefund: Number(walletRaw.toFixed(2)),
+            balanceRefund: Number(balanceRaw.toFixed(2)),
+            pendingCommission: Number(pendingCommission.toFixed(2)),
+            refundAmount: Number((walletRaw + balanceRaw).toFixed(2))
+        };
+    }
+
+    function getUserRef(user = {}) {
+        return user?.openid || user?.id || user?._id || user?._legacy_id || null;
+    }
+
+    function buildExitApplicationResponse(row, users, commissions) {
+        const user = findByLookup(users, row.user_id, (item) => [item.openid, item.member_no]);
+        const userRef = getUserRef(user) || row.user_id;
+        const ownedCommissions = commissions.filter((item) => rowMatchesLookup(item, userRef, [item.openid, item.user_id, item.receiver_openid, item.beneficiary_openid]));
+        return {
+            ...row,
+            ...getExitRefundPreview(user, ownedCommissions),
+            user: user ? {
+                id: user.id || user._id || user._legacy_id || '',
+                openid: user.openid || '',
+                nickname: pickString(user.nickname || user.nickName || user.nick_name || ''),
+                role_level: toNumber(user.role_level ?? user.distributor_level, 0)
+            } : null
+        };
+    }
+
+    function applyExitSettlement(row, deps) {
+        const { users, commissions, walletLogs } = deps;
+        const userIndex = users.findIndex((item) => rowMatchesLookup(item, row.user_id, [item.openid, item.member_no]));
+        if (userIndex === -1) throw new Error('用户不存在');
+
+        const user = users[userIndex];
+        const exitRules = getExitRulesSnapshot();
+        const userRef = getUserRef(user);
+        const ownedCommissions = commissions.filter((item) => rowMatchesLookup(item, userRef, [item.openid, item.user_id, item.receiver_openid, item.beneficiary_openid]));
+        const preview = getExitRefundPreview(user, ownedCommissions);
+
+        users[userIndex] = {
+            ...user,
+            agent_wallet_balance: 0,
+            wallet_balance: 0,
+            commission_balance: 0,
+            balance: 0,
+            role_level: exitRules.auto_revoke_identity === false ? user.role_level : 0,
+            role_name: exitRules.auto_revoke_identity === false ? user.role_name : '普通用户',
+            distributor_level: exitRules.auto_revoke_identity === false ? user.distributor_level : 0,
+            agent_level: exitRules.auto_revoke_identity === false ? user.agent_level : 0,
+            participate_distribution: exitRules.auto_revoke_identity === false ? user.participate_distribution : 0,
+            discount_rate: exitRules.auto_revoke_identity === false ? user.discount_rate : 1,
+            updated_at: nowIso()
+        };
+
+        commissions.forEach((item, index) => {
+            if (!rowMatchesLookup(item, userRef, [item.openid, item.user_id, item.receiver_openid, item.beneficiary_openid])) return;
+            if (!['pending', 'frozen', 'pending_approval', 'approved'].includes(pickString(item.status))) return;
+            commissions[index] = {
+                ...item,
+                status: 'cancelled',
+                cancelled_at: nowIso(),
+                cancel_reason: '合伙人退出，未结佣金作废',
+                updated_at: nowIso()
+            };
+        });
+
+        if (preview.walletRefund > 0) {
+            walletLogs.push({
+                id: nextId(walletLogs),
+                openid: user.openid || '',
+                user_id: user.id || user._id || row.user_id,
+                type: 'exit_wallet_refund',
+                amount: -preview.walletRefund,
+                description: `合伙人退出退款（货款）`,
+                created_at: nowIso()
+            });
+        }
+        if (preview.balanceRefund > 0) {
+            walletLogs.push({
+                id: nextId(walletLogs),
+                openid: user.openid || '',
+                user_id: user.id || user._id || row.user_id,
+                type: 'exit_commission_refund',
+                amount: -preview.balanceRefund,
+                description: `合伙人退出退款（佣金）`,
+                created_at: nowIso()
+            });
+        }
+
+        return preview;
+    }
+
     function normalizeActivityLinksConfig(rawValue) {
         const value = rawValue && typeof rawValue === 'object' ? rawValue : {};
         const banners = Array.isArray(value.banners)
@@ -93,6 +223,107 @@ function registerMarketingRoutes(app, deps) {
             pickString(station.district),
             pickString(station.address)
         ].filter(Boolean).join('');
+    }
+
+    function getUserReferrer(user = {}) {
+        return user.referrer_openid
+            || user.parent_openid
+            || user.parent_id
+            || user.referrer_id
+            || user.inviter_openid
+            || user.inviter_id
+            || null;
+    }
+
+    function getDirectMembers(user, users) {
+        if (!user) return [];
+        return users.filter((item) => rowMatchesLookup(item, getUserReferrer(item), [user.openid, user.id, user._id, user._legacy_id]));
+    }
+
+    function getAllDescendants(user, users) {
+        const result = [];
+        const queue = getDirectMembers(user, users);
+        const seen = new Set();
+        while (queue.length) {
+            const current = queue.shift();
+            const key = String(current.openid || current.id || current._id || '');
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            result.push(current);
+            queue.push(...getDirectMembers(current, users));
+        }
+        return result;
+    }
+
+    function sortDividendCandidates(list = [], metricKey = 'teamSales') {
+        return [...list].sort((a, b) => {
+            const diff = toNumber(b?.[metricKey], 0) - toNumber(a?.[metricKey], 0);
+            if (diff !== 0) return diff;
+            return String(a?.openid || a?.id || '').localeCompare(String(b?.openid || b?.id || ''));
+        });
+    }
+
+    function buildDividendPreviewRows(users, rules, totalPool) {
+        const sourcePct = Math.max(0.0001, toNumber(rules?.source_pct, 0));
+        const rows = [];
+        let displayRank = 1;
+
+        const teamCandidates = sortDividendCandidates(
+            users
+                .filter((user) => toNumber(user.role_level ?? user.distributor_level, 0) >= 4)
+                .map((user) => ({
+                    ...user,
+                    teamSales: getAllDescendants(user, users).reduce((sum, item) => sum + toNumber(item.total_spent, 0), 0)
+                }))
+                .filter((user) => user.teamSales > 0),
+            'teamSales'
+        );
+        const personalCandidates = sortDividendCandidates(
+            users
+                .filter((user) => toNumber(user.role_level ?? user.distributor_level, 0) === 3)
+                .map((user) => ({
+                    ...user,
+                    teamSales: toNumber(user.total_spent, 0)
+                }))
+                .filter((user) => user.teamSales > 0),
+            'teamSales'
+        );
+
+        const buildRowsForAward = (awardKey, awardLabel, candidates, ranks = []) => {
+            let offset = 0;
+            for (const rank of ranks) {
+                const count = Math.max(0, Math.floor(toNumber(rank.count, 0)));
+                const pct = Math.max(0, toNumber(rank.pct, 0));
+                if (!count || pct <= 0) continue;
+                const bucket = candidates.slice(offset, offset + count);
+                offset += count;
+                bucket.forEach((user) => {
+                    rows.push({
+                        awardKey,
+                        awardLabel,
+                        rank: displayRank++,
+                        userId: user.id || user._id || user._legacy_id,
+                        openid: user.openid,
+                        nick_name: user.nickName || user.nickname || user.nick_name || '',
+                        nickname: user.nickname || user.nickName || user.nick_name || '',
+                        roleLevel: toNumber(user.role_level ?? user.distributor_level, 0),
+                        teamSales: Number(toNumber(user.teamSales, 0).toFixed(2)),
+                        sharePercent: pct,
+                        dividendAmount: Number((totalPool * pct / sourcePct).toFixed(2)),
+                        rankLabel: pickString(rank.label || `${awardLabel}${displayRank}`)
+                    });
+                });
+            }
+        };
+
+        if (rules?.b_team_award?.enabled) {
+            buildRowsForAward('b_team_award', 'B团队奖', teamCandidates, toArray(rules.b_team_award.ranks));
+        }
+        if (rules?.b1_personal_award?.enabled) {
+            buildRowsForAward('b1_personal_award', 'B1个人奖', personalCandidates, toArray(rules.b1_personal_award.ranks));
+        }
+
+        return rows;
     }
 
     function geocodeAddress(fullAddress) {
@@ -912,15 +1143,74 @@ function registerMarketingRoutes(app, deps) {
 
     app.get('/admin/api/agent-system/dividend/preview', auth, requirePermission('settings_manage'), (req, res) => {
         const users = getCollection('users');
-        const amount = toNumber(req.query.amount || req.query.pool_amount, 0);
-        const eligible = users.filter((user) => toNumber(user.role_level ?? user.distributor_level, 0) >= 3);
-        const perUser = eligible.length ? Math.round(amount / eligible.length * 100) / 100 : 0;
-        ok(res, { pool_amount: amount, eligible_count: eligible.length, list: eligible.map((user) => ({ user_id: user.id || user._id, openid: user.openid, amount: perUser })) });
+        const amount = toNumber(req.query.amount || req.query.pool_amount || req.query.pool, 0);
+        const rules = {
+            enabled: false,
+            source_pct: 0,
+            b_team_award: { enabled: false, pool_pct: 0, ranks: [] },
+            b1_personal_award: { enabled: false, pool_pct: 0, ranks: [] },
+            ...getConfigValue('agent_system_dividend-rules', {})
+        };
+        const list = rules.enabled ? buildDividendPreviewRows(users, rules, amount) : [];
+        ok(res, { pool_amount: amount, eligible_count: list.length, list });
     });
 
     app.post('/admin/api/agent-system/dividend/execute', auth, requirePermission('settings_manage'), (req, res) => {
         const executions = getCollection('dividend_executions');
-        const row = { id: nextId(executions), ...req.body, status: 'pending_review', created_at: nowIso(), updated_at: nowIso() };
+        const users = getCollection('users');
+        const commissions = getCollection('commissions');
+        const amount = toNumber(req.body?.pool || req.body?.pool_amount || req.body?.amount, 0);
+        const year = Math.max(2000, Math.floor(toNumber(req.body?.year, new Date().getFullYear() - 1)));
+        const rules = {
+            enabled: false,
+            source_pct: 0,
+            b_team_award: { enabled: false, pool_pct: 0, ranks: [] },
+            b1_personal_award: { enabled: false, pool_pct: 0, ranks: [] },
+            ...getConfigValue('agent_system_dividend-rules', {})
+        };
+        const previewRows = rules.enabled ? buildDividendPreviewRows(users, rules, amount) : [];
+        let totalDistributed = 0;
+        previewRows.forEach((item) => {
+            const userIndex = users.findIndex((row) => rowMatchesLookup(row, item.userId, [row.openid, row.member_no]));
+            if (userIndex === -1) return;
+            const exists = commissions.find((row) =>
+                pickString(row.type).toLowerCase() === 'year_end_dividend'
+                && row.dividend_year === year
+                && rowMatchesLookup(row, item.userId, [row.openid, row.user_id])
+                && pickString(row.dividend_award_key) === pickString(item.awardKey)
+            );
+            if (exists) return;
+
+            const amountValue = Math.max(0, toNumber(item.dividendAmount, 0));
+            if (amountValue <= 0) return;
+            totalDistributed += amountValue;
+            users[userIndex] = {
+                ...users[userIndex],
+                wallet_balance: toNumber(users[userIndex].wallet_balance ?? users[userIndex].balance, 0) + amountValue,
+                balance: toNumber(users[userIndex].balance ?? users[userIndex].wallet_balance, 0) + amountValue,
+                total_earned: toNumber(users[userIndex].total_earned, 0) + amountValue,
+                updated_at: nowIso()
+            };
+            commissions.push({
+                id: nextId(commissions),
+                openid: users[userIndex].openid,
+                user_id: users[userIndex].id || users[userIndex]._id || item.userId,
+                amount: amountValue,
+                level: toNumber(users[userIndex].role_level ?? users[userIndex].distributor_level, 0),
+                type: 'year_end_dividend',
+                status: 'settled',
+                dividend_year: year,
+                dividend_award_key: item.awardKey,
+                approved_at: nowIso(),
+                settled_at: nowIso(),
+                created_at: nowIso(),
+                updated_at: nowIso(),
+                description: `${year} 年终分红 · ${item.awardLabel}`
+            });
+        });
+        saveCollection('users', users);
+        saveCollection('commissions', commissions);
+        const row = { id: nextId(executions), ...req.body, year, totalDistributed: Number(totalDistributed.toFixed(2)), distributedCount: previewRows.length, status: 'completed', created_at: nowIso(), updated_at: nowIso() };
         executions.push(row);
         saveCollection('dividend_executions', executions);
         ok(res, row);
@@ -934,19 +1224,33 @@ function registerMarketingRoutes(app, deps) {
 
     app.post('/admin/api/agent-system/exit-applications/:userId', auth, requirePermission('users'), (req, res) => {
         const rows = getCollection('agent_exit_applications');
+        const users = getCollection('users');
+        const commissions = getCollection('commissions');
         const row = { id: nextId(rows), user_id: req.params.userId, ...req.body, status: 'pending', created_at: nowIso(), updated_at: nowIso() };
         rows.push(row);
         saveCollection('agent_exit_applications', rows);
-        ok(res, row);
+        ok(res, buildExitApplicationResponse(row, users, commissions));
     });
 
     app.put('/admin/api/agent-system/exit-applications/:id/review', auth, requirePermission('users'), (req, res) => {
         const rows = getCollection('agent_exit_applications');
         const index = rows.findIndex((row) => rowMatchesLookup(row, req.params.id));
         if (index === -1) return fail(res, '退出申请不存在', 404);
-        rows[index] = { ...rows[index], status: req.body?.status || req.body?.result || 'approved', review_remark: req.body?.remark || '', reviewed_at: nowIso(), updated_at: nowIso() };
+        const users = getCollection('users');
+        const commissions = getCollection('commissions');
+        const walletLogs = getCollection('wallet_logs');
+        const status = req.body?.status || req.body?.result || 'approved';
+        rows[index] = { ...rows[index], status, review_remark: req.body?.remark || '', reviewed_at: nowIso(), updated_at: nowIso() };
+        let settlement = null;
+        if (status === 'approved' && !rows[index].settled_at) {
+            settlement = applyExitSettlement(rows[index], { users, commissions, walletLogs });
+            rows[index] = { ...rows[index], ...settlement, settled_at: nowIso() };
+            saveCollection('users', users);
+            saveCollection('commissions', commissions);
+            saveCollection('wallet_logs', walletLogs);
+        }
         saveCollection('agent_exit_applications', rows);
-        ok(res, rows[index]);
+        ok(res, buildExitApplicationResponse(rows[index], users, commissions));
     });
 }
 

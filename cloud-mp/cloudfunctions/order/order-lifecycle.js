@@ -296,9 +296,14 @@ async function applyRefund(openid, params) {
         },
     });
 
-    // 更新订单状态
+    // 更新订单状态，记录 prev_status 供取消退款时恢复
+    const currentOrderRes = await db.collection('orders').doc(canonicalOrderId).get().catch(() => ({ data: null }));
     await db.collection('orders').doc(canonicalOrderId).update({
-        data: { status: 'refunding', updated_at: db.serverDate() },
+        data: {
+            status: 'refunding',
+            prev_status: currentOrderRes.data?.status || 'paid',
+            updated_at: db.serverDate()
+        },
     });
 
     // 退款申请时，冻结佣金（防止提现）
@@ -381,10 +386,15 @@ async function cancelRefund(openid, refundId) {
                 .where({ order_id: orderId, status: _.in(['pending', 'processing']) })
                 .limit(1).get().catch(() => ({ data: [] }));
             if (!otherRefunds.data || otherRefunds.data.length === 0) {
-                // 恢复为退款前状态
-                const prevStatus = orderRes.data.paid_at ? 'paid' : 'pending_payment';
+                // 恢复为退款前的状态：优先使用 prev_status 字段，否则按实际字段推断
+                // 顺序：completed > shipped > paid > pending_payment
+                const order = orderRes.data;
+                const prevStatus = order.prev_status
+                    || (order.confirmed_at || order.auto_confirmed_at ? 'completed'
+                        : (order.shipped_at ? 'shipped'
+                            : (order.paid_at ? 'paid' : 'pending_payment')));
                 await db.collection('orders').doc(orderId).update({
-                    data: { status: prevStatus, updated_at: db.serverDate() },
+                    data: { status: prevStatus, prev_status: _.remove(), updated_at: db.serverDate() },
                 });
             }
         }

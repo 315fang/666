@@ -241,6 +241,11 @@ exports.main = cloudFunctionWrapper(async (event) => {
                 throw badRequest('购买数量不能为负数');
             }
 
+            // 校验购物车项归属，防止越权修改他人购物车
+            const cartItem = await db.collection('cart_items').doc(cartId).get().catch(() => ({ data: null }));
+            if (!cartItem.data) throw badRequest('购物车项不存在');
+            if (cartItem.data.openid && cartItem.data.openid !== openid) throw badRequest('无权操作该购物车项');
+
             if (qty <= 0) {
                 await db.collection('cart_items').doc(cartId).remove();
                 return success(null);
@@ -267,6 +272,11 @@ exports.main = cloudFunctionWrapper(async (event) => {
             if (!cartId) {
                 throw badRequest('缺少必要参数: cart_id');
             }
+            // 校验购物车项归属，防止越权删除他人购物车
+            const cartItem = await db.collection('cart_items').doc(cartId).get().catch(() => ({ data: null }));
+            if (!cartItem.data) throw badRequest('购物车项不存在');
+            if (cartItem.data.openid && cartItem.data.openid !== openid) throw badRequest('无权操作该购物车项');
+
             await db.collection('cart_items').doc(cartId).remove();
             return success(null);
         } catch (err) {

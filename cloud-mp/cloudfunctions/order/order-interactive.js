@@ -14,6 +14,90 @@ function refundDeadlineDate() {
     return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
+function parseConfigValue(row, fallback) {
+    if (!row) return fallback;
+    const value = row.config_value !== undefined ? row.config_value : row.value;
+    if (value === undefined || value === null || value === '') return fallback;
+    if (typeof value === 'string') {
+        try { return JSON.parse(value); } catch (_) { return fallback; }
+    }
+    return value;
+}
+
+async function getConfigByKey(key) {
+    const res = await db.collection('configs')
+        .where(_.or([{ config_key: key }, { key }]))
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    if (res.data && res.data[0]) return res.data[0];
+    const legacyRes = await db.collection('app_configs')
+        .where({ config_key: key, status: _.in([true, 1, '1']) })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return legacyRes.data && legacyRes.data[0] ? legacyRes.data[0] : null;
+}
+
+async function ensurePickupSubsidyCommission(order, verifierOpenid) {
+    if (!order?.pickup_station_id) return null;
+    const [policyRow, station] = await Promise.all([
+        getConfigByKey('branch-agent-policy'),
+        findOneByAnyId('branch_agent_stations', order.pickup_station_id)
+    ]);
+    const policy = {
+        enabled: false,
+        pickup_station_subsidy_enabled: false,
+        pickup_station_subsidy_amount: 0,
+        pickup_tiers: {},
+        ...parseConfigValue(policyRow, {})
+    };
+    if (!policy.enabled || !policy.pickup_station_subsidy_enabled || !station) return null;
+
+    const claimantId = station.claimant_id || station.user_id || station.openid;
+    const claimant = claimantId ? await findOneByAnyId('users', claimantId) : null;
+    if (!claimant?.openid) return null;
+
+    const existing = await db.collection('commissions')
+        .where({
+            order_id: order._id,
+            openid: claimant.openid,
+            type: 'pickup_subsidy'
+        })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    if (existing.data && existing.data[0]) return existing.data[0];
+
+    const tierKey = String(station.pickup_commission_tier || 'A').trim() || 'A';
+    const tier = policy.pickup_tiers?.[tierKey] || {};
+    const payAmount = toNumber(order.actual_price ?? order.pay_amount ?? order.total_amount, 0);
+    let amount = payAmount * toNumber(tier.rate, 0) + toNumber(tier.fixed_yuan, 0);
+    if (amount <= 0) amount = toNumber(policy.pickup_station_subsidy_amount, 0);
+    amount = Number(amount.toFixed(2));
+    if (amount <= 0) return null;
+
+    const result = await db.collection('commissions').add({
+        data: {
+            openid: claimant.openid,
+            user_id: claimant.id || claimant._id || claimant.openid,
+            from_openid: order.openid || '',
+            order_id: order._id,
+            order_no: order.order_no || '',
+            amount,
+            level: toNumber(claimant.role_level ?? claimant.distributor_level, 0),
+            type: 'pickup_subsidy',
+            status: 'pending_approval',
+            branch_station_id: station.id || station._id || order.pickup_station_id,
+            pickup_verified_by: verifierOpenid || '',
+            created_at: db.serverDate(),
+            updated_at: db.serverDate(),
+            description: `自提核销补贴：${station.name || station.region_name || '站点'}`
+        }
+    });
+    return { _id: result._id, amount };
+}
+
 async function findOneByAnyId(collectionName, rawId) {
     if (!hasValue(rawId)) return null;
 
@@ -804,6 +888,8 @@ async function pickupVerifyCode(openid, params) {
             }
         })
         .catch(() => {});
+
+    await ensurePickupSubsidyCommission(order, openid).catch(() => null);
 
     return {
         success: true,
