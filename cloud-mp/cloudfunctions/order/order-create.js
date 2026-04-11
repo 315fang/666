@@ -244,18 +244,8 @@ async function createOrder(openid, orderData) {
     let usedCouponTemplateId = '';
     if (selectedCouponId) {
         try {
-            const directDoc = await db.collection('user_coupons')
-                .doc(String(selectedCouponId))
-                .get()
-                .then((res) => ({ data: res.data ? [res.data] : [] }))
-                .catch(() => ({ data: [] }));
-            const couponDoc = directDoc.data && directDoc.data.length
-                ? directDoc
-                : await db.collection('user_coupons')
-                .where({ openid, coupon_id: selectedCouponId, status: 'unused' })
-                .limit(1).get();
-            if (couponDoc.data && couponDoc.data.length > 0) {
-                const uc = couponDoc.data[0];
+            const uc = await findUserCouponDoc(openid, selectedCouponId);
+            if (uc) {
                 if (uc.openid && uc.openid !== openid) throw new Error('优惠券不属于当前用户');
                 if (uc.status !== 'unused') throw new Error('优惠券不可用');
                 if (toNumber(uc.min_purchase, 0) > totalAmount) throw new Error('订单金额未达到优惠券门槛');

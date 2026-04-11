@@ -49,14 +49,16 @@ const handleAction = {
         if (!items || !Array.isArray(items) || items.length === 0) {
             throw badRequest('缺少商品信息');
         }
-        if (!address_id) throw badRequest('缺少收货地址');
+        const actualDeliveryType = delivery_type === 'pickup' ? 'pickup' : 'express';
+        if (actualDeliveryType === 'express' && !address_id) throw badRequest('缺少收货地址');
+        if (actualDeliveryType === 'pickup' && !pickup_station_id) throw badRequest('缺少自提门店');
         const order = await orderCreate.createOrder(openid, {
             items,
             address_id,
             coupon_id,
             user_coupon_id,
             memo: memo != null ? memo : remark,
-            delivery_type,
+            delivery_type: actualDeliveryType,
             pickup_station_id,
             points_to_use,
             type,

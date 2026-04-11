@@ -38,7 +38,7 @@ function formatExpireDate(dateStr) {
 
 function getCouponId(coupon) {
     if (!coupon) return null;
-    return coupon.id != null ? coupon.id : (coupon._id != null ? coupon._id : null);
+    return coupon._id != null ? coupon._id : (coupon.id != null ? coupon.id : null);
 }
 
 function buildCouponQuery(params) {

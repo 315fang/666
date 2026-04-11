@@ -113,12 +113,7 @@ async function cancelOrder(openid, orderId) {
     }
 
     // 退还优惠券
-    if (order.coupon_id) {
-        await db.collection('user_coupons')
-            .where({ openid, coupon_id: order.coupon_id, status: 'used' })
-            .update({ data: { status: 'unused', used_at: _.remove() } })
-            .catch(() => {});
-    }
+    await restoreUsedCoupon(order).catch(() => {});
 
     // 取消佣金
     try {

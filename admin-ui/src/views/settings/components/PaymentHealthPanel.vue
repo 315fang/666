@@ -2,11 +2,11 @@
   <div v-loading="loading" class="payment-health-panel">
     <div>
       <div class="payment-health-title">支付健康检测</div>
-      <div class="payment-health-subtitle">展示当前管理后台读取到的支付链路状态、检查项与最近检查时间。</div>
+      <div class="payment-health-subtitle">展示当前管理后台读取到的真实支付模式、校验项与最近检查时间。</div>
     </div>
 
     <el-alert
-      :title="paymentHealth.summary || '当前支付由云开发链路接管'"
+      :title="paymentHealth.summary || '尚未获取支付检测结果'"
       :type="statusType"
       :closable="false"
       show-icon
@@ -16,8 +16,20 @@
       <el-descriptions-item label="当前状态">
         <el-tag :type="statusType">{{ statusLabel }}</el-tag>
       </el-descriptions-item>
+      <el-descriptions-item label="运行模式">
+        {{ paymentHealth.mode || '-' }}
+      </el-descriptions-item>
+      <el-descriptions-item label="支付通道">
+        {{ paymentHealth.provider || '-' }}
+      </el-descriptions-item>
       <el-descriptions-item label="说明更新时间">
         {{ formatDateTime(paymentHealth.checked_at) }}
+      </el-descriptions-item>
+      <el-descriptions-item label="错误数">
+        {{ paymentHealth.errors?.length || 0 }}
+      </el-descriptions-item>
+      <el-descriptions-item label="警告数">
+        {{ paymentHealth.warnings?.length || 0 }}
       </el-descriptions-item>
     </el-descriptions>
 

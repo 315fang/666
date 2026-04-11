@@ -25,6 +25,8 @@ const ADMIN_ROLE_PRESETS = {
     warehouse: ['orders', 'logistics', 'pickup_stations'],
     designer: ['content', 'materials']
 };
+const SUPER_ADMIN_ROLE = 'super_admin';
+const PROTECTED_ADMIN_PERMISSIONS = new Set([SUPER_ADMIN_ROLE]);
 
 function ensureDir(dir) {
     fs.mkdirSync(dir, { recursive: true });
@@ -79,7 +81,10 @@ function saveSingleton(name, value) {
 }
 
 function nextId(rows) {
-    return rows.reduce((max, row) => Math.max(max, Number(row.id || 0)), 0) + 1;
+    return rows.reduce((max, row) => {
+        const numericId = Number(primaryId(row));
+        return Number.isFinite(numericId) ? Math.max(max, numericId) : max;
+    }, 0) + 1;
 }
 
 function nowIso() {
@@ -108,8 +113,22 @@ function normalizeDateValue(value, fallback = '') {
     return fallback;
 }
 
-function normalizePermissionList(rawPermissions) {
-    return [...new Set(toArray(rawPermissions).map((item) => pickString(item).trim()).filter(Boolean))];
+function normalizeAdminPermissionKey(permission) {
+    const normalized = pickString(permission).trim();
+    return ({
+        settlements: 'commissions',
+        settings: 'settings_manage',
+        system: 'settings_manage'
+    }[normalized] || normalized);
+}
+
+function normalizePermissionList(rawPermissions, { allowProtected = true } = {}) {
+    const permissions = [...new Set(
+        toArray(rawPermissions)
+            .map((item) => normalizeAdminPermissionKey(item))
+            .filter(Boolean)
+    )];
+    return allowProtected ? permissions : permissions.filter((item) => !PROTECTED_ADMIN_PERMISSIONS.has(item));
 }
 
 function getAdminRoleDefinition(roleCode) {
@@ -124,11 +143,11 @@ function getAdminRoleDefinition(roleCode) {
 }
 
 function normalizePermissions(admin) {
-    const extra = normalizePermissionList(admin.permissions);
-    if (admin.role === 'super_admin') return ['*'];
+    const extra = normalizePermissionList(admin.permissions, { allowProtected: false });
+    if (pickString(admin.role) === SUPER_ADMIN_ROLE) return ['*'];
     const roleDefinition = getAdminRoleDefinition(admin.role);
-    const rolePermissions = normalizePermissionList(roleDefinition?.permissions);
-    const presetPermissions = ADMIN_ROLE_PRESETS[admin.role] || [];
+    const rolePermissions = normalizePermissionList(roleDefinition?.permissions, { allowProtected: false });
+    const presetPermissions = normalizePermissionList(ADMIN_ROLE_PRESETS[admin.role] || [], { allowProtected: false });
     return [...new Set([...(rolePermissions.length ? rolePermissions : presetPermissions), ...extra])];
 }
 
@@ -333,7 +352,7 @@ function getPaymentHealthSnapshot() {
     const status = errors.length ? 'error' : (warnings.length ? 'warning' : 'ok');
     return {
         status,
-        summary: status === 'ok' ? '正式支付配置已齐全，下一步接入真实签名与回调。' : (status === 'warning' ? '支付基础配置未切到正式模式。' : '正式支付配置不完整。'),
+        summary: status === 'ok' ? '正式支付配置已齐全，已接入真实签名与回调链路。' : (status === 'warning' ? '支付基础配置未切到正式模式。' : '正式支付配置不完整。'),
         checked_at: nowIso(),
         mode: snapshot.mode,
         provider: snapshot.provider,
@@ -1453,8 +1472,19 @@ function buildDealerRecord(user) {
     };
 }
 
-function normalizeAdminPermissions(rawPermissions) {
-    return normalizePermissionList(rawPermissions);
+function normalizeAdminPermissions(rawPermissions, { allowProtected = true } = {}) {
+    return normalizePermissionList(rawPermissions, { allowProtected });
+}
+
+function isSuperAdminAdmin(admin) {
+    return pickString(admin?.role) === SUPER_ADMIN_ROLE;
+}
+
+function isValidAdminRole(roleCode) {
+    const normalizedRole = pickString(roleCode).trim();
+    if (!normalizedRole) return false;
+    if (normalizedRole === SUPER_ADMIN_ROLE) return true;
+    return !!ADMIN_ROLE_PRESETS[normalizedRole] || !!getAdminRoleDefinition(normalizedRole);
 }
 
 function sanitizeAdminRecord(admin) {
@@ -1464,7 +1494,7 @@ function sanitizeAdminRecord(admin) {
         username: pickString(admin.username),
         name: pickString(admin.name || admin.username),
         role: pickString(admin.role || 'admin'),
-        permissions: normalizeAdminPermissions(admin.permissions),
+        permissions: normalizePermissions(admin),
         phone: pickString(admin.phone),
         email: pickString(admin.email),
         status: toBoolean(admin.status) ? 1 : 0,
@@ -1475,8 +1505,8 @@ function sanitizeAdminRecord(admin) {
     };
 }
 
-function getBranchAgentPolicySnapshot() {
-    return getSingleton('branch-agent-policy', {
+function createDefaultBranchAgentPolicy() {
+    return {
         enabled: false,
         min_apply_role_level: 3,
         type_commission_rate: { school: 0.01, area: 0.015, city: 0.02, province: 0.03 },
@@ -1488,7 +1518,42 @@ function getBranchAgentPolicySnapshot() {
             C: { rate: 0.01, fixed_yuan: 0 },
             D: { rate: 0.015, fixed_yuan: 1 }
         }
-    });
+    };
+}
+
+function normalizeBranchAgentPolicySnapshot(rawPolicy) {
+    const defaults = createDefaultBranchAgentPolicy();
+    const policy = toObject(rawPolicy, {});
+    const typeCommissionRate = toObject(policy.type_commission_rate, {});
+    const pickupTiers = toObject(policy.pickup_tiers, {});
+    const normalizeRate = (value, fallback) => Math.min(1, Math.max(0, toNumber(value, fallback)));
+    const normalizeMoney = (value, fallback) => Math.max(0, toNumber(value, fallback));
+    const normalizedPickupTiers = {};
+    for (const tierKey of Object.keys(defaults.pickup_tiers)) {
+        const tierDefaults = defaults.pickup_tiers[tierKey];
+        const tierPayload = toObject(pickupTiers[tierKey], {});
+        normalizedPickupTiers[tierKey] = {
+            rate: normalizeRate(tierPayload.rate, tierDefaults.rate),
+            fixed_yuan: normalizeMoney(tierPayload.fixed_yuan, tierDefaults.fixed_yuan)
+        };
+    }
+    return {
+        enabled: toBoolean(policy.enabled),
+        min_apply_role_level: Math.max(0, Math.floor(toNumber(policy.min_apply_role_level, defaults.min_apply_role_level))),
+        type_commission_rate: {
+            school: normalizeRate(typeCommissionRate.school, defaults.type_commission_rate.school),
+            area: normalizeRate(typeCommissionRate.area, defaults.type_commission_rate.area),
+            city: normalizeRate(typeCommissionRate.city, defaults.type_commission_rate.city),
+            province: normalizeRate(typeCommissionRate.province, defaults.type_commission_rate.province)
+        },
+        pickup_station_subsidy_enabled: toBoolean(policy.pickup_station_subsidy_enabled),
+        pickup_station_subsidy_amount: normalizeMoney(policy.pickup_station_subsidy_amount, defaults.pickup_station_subsidy_amount),
+        pickup_tiers: normalizedPickupTiers
+    };
+}
+
+function getBranchAgentPolicySnapshot() {
+    return normalizeBranchAgentPolicySnapshot(getSingleton('branch-agent-policy', createDefaultBranchAgentPolicy()));
 }
 
 function getBranchAgentStationsSnapshot() {
@@ -3158,11 +3223,14 @@ app.get('/admin/api/admins', auth, requirePermission('admins'), (req, res) => {
 });
 
 app.post('/admin/api/admins', auth, requirePermission('admins'), (req, res) => {
+    if (!isSuperAdminAdmin(req.admin)) return fail(res, '只有超级管理员可以创建管理员账号', 403);
     const rows = getCollection('admins');
     const username = pickString(req.body?.username).trim();
     const password = pickString(req.body?.password);
+    const role = pickString(req.body?.role || 'operator').trim() || 'operator';
     if (!username) return fail(res, '请输入用户名');
     if (password.length < 6) return fail(res, '密码至少6位');
+    if (!isValidAdminRole(role)) return fail(res, '管理员角色无效');
     if (rows.some((item) => pickString(item.username).toLowerCase() === username.toLowerCase())) {
         return fail(res, '用户名已存在');
     }
@@ -3171,13 +3239,13 @@ app.post('/admin/api/admins', auth, requirePermission('admins'), (req, res) => {
         id: nextId(rows),
         username,
         name: pickString(req.body?.name || username),
-        role: pickString(req.body?.role || 'operator'),
-        permissions: normalizeAdminPermissions(req.body?.permissions),
+        role,
+        permissions: normalizeAdminPermissions(req.body?.permissions, { allowProtected: role === SUPER_ADMIN_ROLE }),
         phone: pickString(req.body?.phone),
         email: pickString(req.body?.email),
         password_hash: hashPassword(password, salt),
         salt,
-        status: true,
+        status: 1,
         created_at: nowIso(),
         updated_at: nowIso(),
         last_login_at: '',
@@ -3190,22 +3258,45 @@ app.post('/admin/api/admins', auth, requirePermission('admins'), (req, res) => {
 });
 
 app.put('/admin/api/admins/:id', auth, requirePermission('admins'), (req, res) => {
+    const rows = getCollection('admins');
+    const target = rows.find((item) => rowMatchesLookup(item, req.params.id));
+    if (!target) return fail(res, '管理员不存在', 404);
+    const isSelf = rowMatchesLookup(target, req.admin.id, [req.admin.username]);
+    const canManageAllAdmins = isSuperAdminAdmin(req.admin);
+    if (!canManageAllAdmins && !isSelf) {
+        return fail(res, '只有超级管理员可以修改其他管理员', 403);
+    }
+    const nextRole = req.body?.role != null ? pickString(req.body.role).trim() : pickString(target.role);
+    if (!isValidAdminRole(nextRole)) return fail(res, '管理员角色无效');
+    if (pickString(target.role) === SUPER_ADMIN_ROLE) {
+        if (nextRole !== SUPER_ADMIN_ROLE) return fail(res, '不能调整超级管理员角色', 403);
+        if (req.body?.status != null && !toBoolean(req.body.status)) return fail(res, '不能禁用超级管理员', 403);
+    }
+    const permissions = req.body?.permissions != null
+        ? normalizeAdminPermissions(req.body.permissions, { allowProtected: nextRole === SUPER_ADMIN_ROLE })
+        : target.permissions;
     const updated = patchCollectionRow('admins', req.params.id, (row) => ({
         ...row,
         name: req.body?.name != null ? pickString(req.body.name) : row.name,
-        role: req.body?.role != null ? pickString(req.body.role) : row.role,
-        permissions: req.body?.permissions != null ? normalizeAdminPermissions(req.body.permissions) : row.permissions,
+        role: canManageAllAdmins ? nextRole : row.role,
+        permissions: canManageAllAdmins ? permissions : row.permissions,
         phone: req.body?.phone != null ? pickString(req.body.phone) : row.phone,
         email: req.body?.email != null ? pickString(req.body.email) : row.email,
-        status: req.body?.status != null ? (toBoolean(req.body.status) ? 1 : 0) : row.status,
+        status: canManageAllAdmins && req.body?.status != null ? (toBoolean(req.body.status) ? 1 : 0) : row.status,
         updated_at: nowIso()
     }));
-    if (!updated) return fail(res, '管理员不存在', 404);
     createAuditLog(req.admin, 'admin.update', 'admins', { admin_id: primaryId(updated) });
     ok(res, sanitizeAdminRecord(updated));
 });
 
 app.put('/admin/api/admins/:id/password', auth, requirePermission('admins'), (req, res) => {
+    const rows = getCollection('admins');
+    const target = rows.find((item) => rowMatchesLookup(item, req.params.id));
+    if (!target) return fail(res, '管理员不存在', 404);
+    const isSelf = rowMatchesLookup(target, req.admin.id, [req.admin.username]);
+    if (!isSelf && !isSuperAdminAdmin(req.admin)) {
+        return fail(res, '只有超级管理员可以重置其他管理员密码', 403);
+    }
     const password = pickString(req.body?.new_password || req.body?.password);
     if (password.length < 6) return fail(res, '密码至少6位');
     const salt = crypto.randomBytes(16).toString('hex');
@@ -3215,16 +3306,16 @@ app.put('/admin/api/admins/:id/password', auth, requirePermission('admins'), (re
         password_hash: hashPassword(password, salt),
         updated_at: nowIso()
     }));
-    if (!updated) return fail(res, '管理员不存在', 404);
-    createAuditLog(req.admin, 'admin.password.reset', 'admins', { admin_id: primaryId(updated) });
+    createAuditLog(req.admin, isSelf ? 'admin.password.update' : 'admin.password.reset', 'admins', { admin_id: primaryId(updated) });
     ok(res, { success: true });
 });
 
 app.delete('/admin/api/admins/:id', auth, requirePermission('admins'), (req, res) => {
+    if (!isSuperAdminAdmin(req.admin)) return fail(res, '只有超级管理员可以删除管理员账号', 403);
     const rows = getCollection('admins');
     const target = rows.find((item) => rowMatchesLookup(item, req.params.id));
     if (!target) return fail(res, '管理员不存在', 404);
-    if (pickString(target.role) === 'super_admin') return fail(res, '不能删除超级管理员');
+    if (pickString(target.role) === SUPER_ADMIN_ROLE) return fail(res, '不能删除超级管理员', 403);
     saveCollection('admins', rows.filter((item) => !rowMatchesLookup(item, req.params.id)));
     createAuditLog(req.admin, 'admin.delete', 'admins', { admin_id: primaryId(target) });
     ok(res, { success: true });
@@ -3235,7 +3326,20 @@ app.get('/admin/api/branch-agent-policy', auth, requirePermission('dealers'), (r
 });
 
 app.put('/admin/api/branch-agent-policy', auth, requirePermission('dealers'), (req, res) => {
-    const nextPolicy = { ...getBranchAgentPolicySnapshot(), ...toObject(req.body, {}) };
+    const current = getBranchAgentPolicySnapshot();
+    const payload = toObject(req.body, {});
+    const nextPolicy = normalizeBranchAgentPolicySnapshot({
+        ...current,
+        ...payload,
+        type_commission_rate: {
+            ...current.type_commission_rate,
+            ...toObject(payload.type_commission_rate, {})
+        },
+        pickup_tiers: {
+            ...current.pickup_tiers,
+            ...toObject(payload.pickup_tiers, {})
+        }
+    });
     saveSingleton('branch-agent-policy', nextPolicy);
     createAuditLog(req.admin, 'branch-agent.policy.update', 'branch-agent-policy', {});
     ok(res, nextPolicy);

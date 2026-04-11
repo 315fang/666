@@ -1,12 +1,12 @@
 # CloudBase Legacy Compatibility Audit
 
-Generated at: 2026-04-10T15:31:16.079Z
+Generated at: 2026-04-11T01:48:12.309Z
 
 This report tracks remaining legacy field/status/image references that should be removed as the CloudBase migration closes.
 
 ## miniprogram
 
-- `quantity` old cart count field: 102
+- `quantity` old cart count field: 104
   - cloud-mp/miniprogram/components/order-card/order-card.wxml: 2
   - cloud-mp/miniprogram/components/order-card/order-card.wxss: 1
   - cloud-mp/miniprogram/pages/activity/limited-spot.js: 2
