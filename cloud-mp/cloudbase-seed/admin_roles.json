@@ -32,8 +32,7 @@
       "user_role_manage",
       "user_parent_manage",
       "user_status_manage",
-      "settlements",
-      "super_admin"
+      "settlements"
     ]
   }
 ]

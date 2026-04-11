@@ -94,14 +94,18 @@ const systemStatus = ref({ status: 'ok' })
 const miniProgramLoading = ref(false)
 const miniProgramSaving = ref(false)
 const paymentHealthLoading = ref(false)
-const paymentHealth = ref({
+const DEFAULT_PAYMENT_HEALTH = {
   status: 'warning',
   summary: '',
   checked_at: '',
+  mode: '',
+  provider: '',
   checks: [],
-  cert_status: {},
-  refresh_result: null
-})
+  errors: [],
+  warnings: [],
+  detail: null
+}
+const paymentHealth = ref({ ...DEFAULT_PAYMENT_HEALTH })
 
 const settingsForm = reactive({
   commission_rate: 10,
@@ -422,14 +426,16 @@ const formatDateTime = (value) => {
 
 function normalizePaymentHealth(data, fallbackSummary = '') {
   return {
+    ...DEFAULT_PAYMENT_HEALTH,
     status: data?.status || 'warning',
     summary: data?.summary || fallbackSummary,
     checked_at: data?.checked_at || '',
+    mode: data?.mode || '',
+    provider: data?.provider || '',
     checks: Array.isArray(data?.checks) ? data.checks : [],
-    cert_status: data?.cert_status || {},
-    refresh_result: data?.refresh_result || null,
     errors: Array.isArray(data?.errors) ? data.errors : [],
-    warnings: Array.isArray(data?.warnings) ? data.warnings : []
+    warnings: Array.isArray(data?.warnings) ? data.warnings : [],
+    detail: data?.detail && typeof data.detail === 'object' ? data.detail : null
   }
 }
 

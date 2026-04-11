@@ -64,7 +64,9 @@ async function submitOrder(page, app, brandAnimation) {
         if (page.data.groupNo) orderData.group_no = page.data.groupNo;
         if (page.data.groupActivityId) orderData.group_activity_id = page.data.groupActivityId;
         if (page.data.orderType) orderData.type = page.data.orderType;
-        if (selectedCoupon) orderData.user_coupon_id = selectedCoupon.id != null ? selectedCoupon.id : selectedCoupon._id;
+        if (selectedCoupon) {
+            orderData.user_coupon_id = selectedCoupon._id != null ? selectedCoupon._id : selectedCoupon.id;
+        }
         if (page.data.usePoints && page.data.pointsToUse > 0) {
             orderData.points_to_use = page.data.pointsToUse;
         }
@@ -110,7 +112,7 @@ async function submitOrder(page, app, brandAnimation) {
         }, 1500);
     } catch (err) {
         page.setData({ submitting: false });
-        ErrorHandler.handle(err, { customMessage: '下单失败，请稍后重试' });
+        ErrorHandler.handle(err);
         console.error('提交订单失败:', err);
     }
 }

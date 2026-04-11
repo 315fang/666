@@ -69,7 +69,7 @@
               <tbody>
                 <tr v-for="order in recentOrders" :key="order.id" class="table-row" @click="$router.push('/orders')">
                   <td class="order-no">{{ order.order_no }}</td>
-                  <td class="amount">¥{{ order.actual_price || order.total_amount || 0 }}</td>
+                  <td class="amount">¥{{ formatFenToYuan(order.actual_price ?? order.total_amount ?? 0) }}</td>
                   <td>
                     <span class="status-badge" :class="`status-${order.status}`">{{ getStatusText(order.status) }}</span>
                   </td>
@@ -138,7 +138,7 @@
                 <span class="payment-item-message">{{ item.message }}</span>
               </div>
             </div>
-            <div v-else class="payment-empty">当前支付由微信云开发 / 微信支付链路接管，无需后台重复检测。</div>
+            <div v-else class="payment-empty">当前支付配置状态正常，暂时没有需要跟进的异常检查项。</div>
           </div>
         </div>
 
@@ -159,7 +159,7 @@
                 <div class="rank-name">{{ p.name }}</div>
                 <div class="rank-meta">热度 {{ p.heat_score || 0 }} · 售出 {{ p.purchase_count || 0 }}</div>
               </div>
-              <div class="rank-price">¥{{ p.retail_price }}</div>
+              <div class="rank-price">¥{{ formatFenToYuan(p.retail_price ?? p.min_price ?? p.price ?? 0) }}</div>
             </div>
             <div v-if="hotProducts.length === 0 && !dashLoading" class="empty-row">暂无商品数据</div>
           </div>
@@ -270,7 +270,7 @@ const router = useRouter()
 // ───────────────── KPI 卡片 ─────────────────
 const statsCards = ref([
   { title: '今日订单', value: '0', sub: '需要重点盯转化', icon: 'ShoppingCart', iconBg: 'rgba(99,102,241,0.12)', trend: 0 },
-  { title: '今日销售额', value: '¥0', sub: '优先看活动拉动', icon: 'Money', iconBg: 'rgba(236,72,153,0.12)', trend: 0 },
+  { title: '今日销售额', value: '¥0.00', sub: '优先看活动拉动', icon: 'Money', iconBg: 'rgba(236,72,153,0.12)', trend: 0 },
   { title: '累计用户', value: '0', sub: '关注新增与留存', icon: 'User', iconBg: 'rgba(20,184,166,0.12)', trend: 0 },
   { title: '待发货', value: '0', sub: '先清履约积压', icon: 'Box', iconBg: 'rgba(245,158,11,0.12)', trend: 0 }
 ])
@@ -282,14 +282,17 @@ const ordersLoading = ref(false)
 const lowStockList = ref([])
 const hotProducts = ref([])
 const paymentLoading = ref(false)
-const paymentHealth = ref({
-  status: 'ok',
-  summary: '当前小程序支付由微信云开发 / 微信支付链路接管，后台无需重复执行证书巡检。',
+const DEFAULT_PAYMENT_HEALTH = {
+  status: 'warning',
+  summary: '',
   checked_at: '',
+  mode: '',
+  provider: '',
   checks: [],
   errors: [],
   warnings: []
-})
+}
+const paymentHealth = ref({ ...DEFAULT_PAYMENT_HEALTH })
 
 const todoItems = ref([
   { title: '待发货订单', count: 0, path: '/orders', query: { status_group: 'paid' }, icon: 'Box', iconBg: 'rgba(245,158,11,0.12)' },
@@ -373,7 +376,7 @@ const fetchOperationsDashboard = async () => {
     const pendingShipCount = Number(d?.kpi?.pendingShip ?? d?.kpi?.paid ?? d?.kpi?.pending_ship ?? 0)
 
     statsCards.value[0].value = String(d?.kpi?.today_orders || 0)
-    statsCards.value[1].value = '¥' + (d?.kpi?.today_sales || '0.00')
+    statsCards.value[1].value = '¥' + formatFenToYuan(d?.kpi?.today_sales ?? 0)
     statsCards.value[2].value = String(d?.kpi?.total_users || 0)
     statsCards.value[3].value = String(pendingShipCount)
 
@@ -390,10 +393,10 @@ const fetchOperationsDashboard = async () => {
     // fallback：单独获取统计概况
     try {
       const ov = await getDashboardOverview()
-      statsCards.value[0].value = String(ov?.orders?.today || 0)
-      statsCards.value[1].value = '¥' + Number(ov?.sales?.today || 0).toFixed(2)
-      statsCards.value[2].value = String(ov?.users?.total || 0)
-      statsCards.value[3].value = String(ov?.pending?.orders || 0)
+      statsCards.value[0].value = String(ov?.today_orders || 0)
+      statsCards.value[1].value = '¥' + formatFenToYuan(ov?.total_sales ?? 0)
+      statsCards.value[2].value = String(ov?.total_users || 0)
+      statsCards.value[3].value = String(ov?.pending_ship || 0)
     } catch (fallbackErr) {
       ElMessage.error(fallbackErr?.message || '加载仪表盘失败')
     }
@@ -420,9 +423,12 @@ const fetchPaymentHealth = async () => {
     const data = await getPaymentHealth()
     const d = data
     paymentHealth.value = {
+      ...DEFAULT_PAYMENT_HEALTH,
       status: d?.status || 'warning',
       summary: d?.summary || '',
       checked_at: d?.checked_at || '',
+      mode: d?.mode || '',
+      provider: d?.provider || '',
       checks: Array.isArray(d?.checks) ? d.checks : [],
       errors: Array.isArray(d?.errors) ? d.errors : [],
       warnings: Array.isArray(d?.warnings) ? d.warnings : []
@@ -430,12 +436,9 @@ const fetchPaymentHealth = async () => {
   } catch (e) {
     console.warn('获取支付状态失败:', e)
     paymentHealth.value = {
+      ...DEFAULT_PAYMENT_HEALTH,
       status: 'error',
-      summary: e?.message || '支付检测加载失败',
-      checked_at: '',
-      checks: [],
-      errors: [],
-      warnings: []
+      summary: e?.message || '支付检测加载失败'
     }
   } finally {
     paymentLoading.value = false
@@ -478,8 +481,11 @@ const getProductImage = (p) => {
 }
 
 const formatFenToYuan = (value) => {
-  const amount = Number(value ?? 0)
+  if (value === null || value === undefined || value === '') return '0.00'
+  const raw = String(value).trim()
+  const amount = Number(raw)
   if (!Number.isFinite(amount)) return '0.00'
+  if (raw.includes('.')) return amount.toFixed(2)
   return (amount / 100).toFixed(2)
 }
 

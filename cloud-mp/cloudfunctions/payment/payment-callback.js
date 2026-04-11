@@ -587,7 +587,15 @@ async function handleCallback(event) {
                     await processPaidOrder(order._id, order);
 
                     // 6.4 核销优惠券（二次确认，防止创建订单时未核销）
-                    if (order.coupon_id) {
+                    let couponConfirmed = false;
+                    if (order.user_coupon_id) {
+                        couponConfirmed = await db.collection('user_coupons')
+                            .doc(String(order.user_coupon_id))
+                            .update({ data: { status: 'used', used_at: db.serverDate() } })
+                            .then(() => true)
+                            .catch(() => false);
+                    }
+                    if (!couponConfirmed && order.coupon_id) {
                         await db.collection('user_coupons')
                             .where({ openid: order.openid, coupon_id: order.coupon_id, status: 'unused' })
                             .update({ data: { status: 'used', used_at: db.serverDate() } })

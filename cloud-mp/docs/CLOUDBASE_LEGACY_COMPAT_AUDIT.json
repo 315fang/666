@@ -1,7 +1,7 @@
 {
   "miniprogram": {
     "quantity": {
-      "count": 102,
+      "count": 104,
       "files": [
         {
           "file": "cloud-mp/miniprogram/components/order-card/order-card.wxml",
@@ -105,7 +105,7 @@
         },
         {
           "file": "cloud-mp/miniprogram/pages/product/detail.js",
-          "count": 4
+          "count": 6
         },
         {
           "file": "cloud-mp/miniprogram/pages/product/detail.wxml",

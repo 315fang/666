@@ -34,8 +34,12 @@ async function queryPaymentStatus(orderId) {
                         status: 'paid',
                         paid_at: db.serverDate(),
                         trade_id: wxResult.transaction_id || '',
+                        pay_time: wxResult.success_time ? new Date(wxResult.success_time) : db.serverDate(),
                         updated_at: db.serverDate(),
                     },
+                });
+                await processPaidOrder(orderId, { ...order, status: 'paid', paid_at: new Date() }).catch((postErr) => {
+                    console.error('[PaymentQuery] 支付后补偿处理失败:', postErr.message);
                 });
                 return {
                     orderId: order._id,

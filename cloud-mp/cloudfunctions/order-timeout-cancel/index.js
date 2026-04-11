@@ -4,6 +4,23 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 
+async function restoreUsedCoupon(order) {
+    if (order.user_coupon_id) {
+        const restored = await db.collection('user_coupons')
+            .doc(String(order.user_coupon_id))
+            .update({ data: { status: 'unused', used_at: _.remove() } })
+            .then(() => true)
+            .catch(() => false);
+        if (restored) return;
+    }
+    if (order.coupon_id) {
+        await db.collection('user_coupons')
+            .where({ openid: order.openid, coupon_id: order.coupon_id, status: 'used' })
+            .update({ data: { status: 'unused', used_at: _.remove() } })
+            .catch(() => {});
+    }
+}
+
 /**
  * 订单超时自动取消定时触发器
  * 每5分钟执行，取消超过30分钟未支付的订单
@@ -46,12 +63,7 @@ exports.main = async (event, context) => {
                 }
 
                 // 退还优惠券
-                if (order.coupon_id) {
-                    await db.collection('user_coupons')
-                        .where({ openid: order.openid, coupon_id: order.coupon_id, status: 'used' })
-                        .update({ data: { status: 'unused' } })
-                        .catch(() => {});
-                }
+                await restoreUsedCoupon(order);
 
                 // 更新订单状态
                 await db.collection('orders').doc(order._id).update({

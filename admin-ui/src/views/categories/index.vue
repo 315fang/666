@@ -78,8 +78,12 @@ const resetForm = () => {
 const fetchList = async () => {
   loading.value = true
   try {
-    const list = await getCategories()
-    categories.value = Array.isArray(list) ? list : []
+    const res = await getCategories()
+    const rows = Array.isArray(res) ? res : (res?.list || [])
+    categories.value = rows.map(item => ({
+      ...item,
+      id: item.id ?? item._legacy_id ?? item._id ?? null
+    }))
   } finally {
     loading.value = false
   }

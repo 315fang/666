@@ -62,7 +62,7 @@
               <template #default="{ row }">
                 <el-switch
                   v-model="row.status" :active-value="1" :inactive-value="0"
-                  :disabled="row.role === 'super_admin'"
+                  :disabled="!isSuperAdmin || row.role === 'super_admin'"
                   @change="(v) => toggleAdminStatus(row, v)"
                 />
               </template>
@@ -258,6 +258,13 @@ const permissionGroups = computed(() => {
 const allPermissionDefs = computed(() => flattenPermissionDefs(menuGroupsBase.value))
 
 const defaultRolePerms = ADMIN_ROLE_PRESETS
+const currentAdminId = computed(() => userStore.userInfo?.id ?? '')
+const isSuperAdmin = computed(() => userStore.isSuperAdmin)
+const editableRoleOptions = computed(() => ROLES.filter((role) => isSuperAdmin.value || role.value !== 'super_admin'))
+const assignablePermissionSet = computed(() => new Set(
+  permissionGroups.value.flatMap((group) => group.items.map((item) => item.key))
+))
+const canEditAdminRow = (row) => isSuperAdmin.value || String(row?.id ?? '') === String(currentAdminId.value)
 
 // ===== 列表 =====
 const activeTab = ref('accounts')
@@ -282,16 +289,25 @@ const fetchAdmins = async () => {
 const fetchAdminsDebounced = debounce(fetchAdmins, 300)
 
 const toggleAdminStatus = async (row, val) => {
+  if (!isSuperAdmin.value || row?.role === 'super_admin') {
+    row.status = val === 1 ? 0 : 1
+    ElMessage.error('只有超级管理员可以调整管理员状态')
+    return
+  }
   try {
     await updateAdmin(row.id, { status: val })
     ElMessage.success(val === 1 ? '已启用' : '已禁用')
-  } catch(e) {
+  } catch (e) {
     row.status = val === 1 ? 0 : 1
     ElMessage.error(e?.message || '更新管理员状态失败')
   }
 }
 
 const deleteAdmin = async (row) => {
+  if (!isSuperAdmin.value) {
+    ElMessage.error('只有超级管理员可以删除管理员')
+    return
+  }
   try {
     await deleteAdminApi(row.id)
     ElMessage.success('删除成功')
@@ -302,6 +318,10 @@ const deleteAdmin = async (row) => {
 }
 
 const resetPwd = async (row) => {
+  if (!isSuperAdmin.value) {
+    ElMessage.error('只有超级管理员可以重置其他管理员密码')
+    return
+  }
   try {
     const { value: pwd } = await ElMessageBox.prompt(`重置 「${row.username}」 的密码`, '重置密码', {
       confirmButtonText: '确认', cancelButtonText: '取消',
@@ -331,9 +351,17 @@ const adminRules = {
 }
 
 const openAdminForm = (row) => {
+  if (!row && !isSuperAdmin.value) {
+    ElMessage.error('只有超级管理员可以新增管理员')
+    return
+  }
+  if (row && !canEditAdminRow(row)) {
+    ElMessage.error('只能编辑自己的基础资料')
+    return
+  }
   if (row) {
     let perms = Array.isArray(row.permissions) ? [...row.permissions] : []
-    if (!userStore.isSuperAdmin) perms = perms.filter((p) => p !== 'super_admin')
+    if (!isSuperAdmin.value) perms = perms.filter((p) => p !== 'super_admin')
     Object.assign(adminForm, {
       id: row.id, username: row.username, password: '', name: row.name || '',
       phone: row.phone || '', email: row.email || '',
@@ -358,12 +386,20 @@ const onRoleChange = (role) => {
 const submitAdminForm = async () => {
   await adminFormRef.value?.validate(async (valid) => {
     if (!valid) return
+    if (!adminForm.id && !isSuperAdmin.value) {
+      ElMessage.error('只有超级管理员可以创建管理员账号')
+      return
+    }
+    if (adminForm.id && !isSuperAdmin.value && String(adminForm.id) !== String(currentAdminId.value)) {
+      ElMessage.error('只能编辑自己的基础资料')
+      return
+    }
     submitting.value = true
     try {
       let permissions = [...adminForm.permissions]
-      if (!userStore.isSuperAdmin) permissions = permissions.filter((p) => assignablePermissionSet.value.has(p))
+      if (!isSuperAdmin.value) permissions = permissions.filter((p) => assignablePermissionSet.value.has(p))
       if (adminForm.id) {
-        const payload = userStore.isSuperAdmin
+        const payload = isSuperAdmin.value
           ? {
               name: adminForm.name,
               role: adminForm.role,
