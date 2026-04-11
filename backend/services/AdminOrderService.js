@@ -271,6 +271,11 @@ class AdminOrderService {
                 throw new Error('该订单组存在已完成/已取消/已退款订单，请人工处理');
             }
 
+            if (orderGroup.some(item => item.status === 'shipped')) {
+                await t.rollback();
+                throw new Error('已发货订单请走售后退款流程，禁止直接强制取消并回补库存');
+            }
+
             const orderIds = orderGroup.map(item => item.id);
             const totalRestoreQty = orderGroup.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
@@ -301,6 +306,10 @@ class AdminOrderService {
                 }));
             const walletRefundTargets = refundTargets.filter(item => item.payment_method === 'wallet');
             const wechatRefundTargets = refundTargets.filter(item => item.payment_method !== 'wallet');
+            if (wechatRefundTargets.length > 0) {
+                await t.rollback();
+                throw new Error('涉及微信已支付订单，请使用售后退款流程，避免资金状态不一致');
+            }
             const notificationTargets = orderGroup.map(item => ({
                 id: item.id,
                 order_no: item.order_no,
@@ -333,28 +342,6 @@ class AdminOrderService {
             }
 
             await t.commit();
-
-            for (const refundTarget of wechatRefundTargets) {
-                const refundNo = `REFUND-ADMIN-${refundTarget.id}-${Date.now()}`;
-                try {
-                    await refundOrder({
-                        orderNo: refundTarget.order_no,
-                        refundNo,
-                        refundFee: Math.round(refundTarget.actual_price * 100),
-                        totalFee: Math.round(refundTarget.actual_price * 100),
-                        reason: `管理员取消：${reason || '无'}`
-                    });
-                    logInfo('ADMIN_ORDER', `[退款] 管理员取消订单 ${refundTarget.order_no} 微信退款申请成功`, { amount: refundTarget.actual_price });
-                } catch (refundErr) {
-                    logError('ADMIN_ORDER', `[退款] 管理员取消订单 ${refundTarget.order_no} 退款失败（需人工处理）`, { error: refundErr.message });
-                    await Order.update(
-                        {
-                            remark: refundTarget.remark + ` [⚠️退款API失败，需人工退款: ${refundErr.message}]`
-                        },
-                        { where: { id: refundTarget.id } }
-                    );
-                }
-            }
 
             try {
                 await Promise.all(notificationTargets.map(item => sendNotification(

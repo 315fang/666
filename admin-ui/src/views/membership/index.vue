@@ -411,8 +411,7 @@ const mergePointRulesFromApi = (from) => {
 
 const loadConfig = async () => {
   try {
-    const res = await getMemberTierConfig()
-    const d = res?.data || res || {}
+    const d = await getMemberTierConfig()
     if (Array.isArray(d.member_levels) && d.member_levels.length) memberLevels.value = d.member_levels
     if (Array.isArray(d.purchase_levels)) purchaseLevels.value = d.purchase_levels
     if (d.growth_rules) Object.assign(growthRules, d.growth_rules)

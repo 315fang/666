@@ -14,6 +14,7 @@
           <el-select v-model="searchForm.status" placeholder="全部状态" clearable style="width: 130px">
             <el-option label="待审核" value="pending" />
             <el-option label="已通过" value="approved" />
+            <el-option label="退款中" value="processing" />
             <el-option label="已拒绝" value="rejected" />
             <el-option label="已退款" value="completed" />
           </el-select>
@@ -276,12 +277,12 @@ const handleComplete = async (row) => {
 const getProcessedTime = (row) => row?.completed_at || row?.processed_at || row?.updated_at || ''
 
 const getStatusType = (status) => {
-  const map = { pending: 'warning', approved: 'info', rejected: 'danger', completed: 'success' }
+  const map = { pending: 'warning', approved: 'info', processing: 'primary', rejected: 'danger', completed: 'success' }
   return map[status] || 'info'
 }
 
 const getStatusText = (status) => {
-  const map = { pending: '待审核', approved: '待退款', rejected: '已拒绝', completed: '已退款' }
+  const map = { pending: '待审核', approved: '待退款', processing: '退款中', rejected: '已拒绝', completed: '已退款' }
   return map[status] || status
 }
 

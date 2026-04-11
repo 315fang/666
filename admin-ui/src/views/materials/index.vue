@@ -260,7 +260,7 @@ const currentGroupName = computed(() => {
 
 const fetchGroups = async () => {
   const res = await getMaterialGroups()
-  groups.value = res.data || res || []
+  groups.value = res?.list || []
 }
 
 const selectGroup = (id) => {
@@ -442,7 +442,7 @@ const handleSubmit = async () => {
 
 const handleUpload = async ({ file }) => {
   const data = await uploadFile(file, { params: { skip_library: 1, folder: 'materials' } })
-  form.url = data.url
+  form.url = data.file?.url || data.url
   if (!form.title) form.title = file.name.replace(/\.[^.]+$/, '')
   ElMessage.success('文件已上传')
 }

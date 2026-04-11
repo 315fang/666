@@ -118,7 +118,6 @@ Page({
         loginAgreementHint: '登录后查看订单、积分、佣金等信息',
         showBusinessCenter: false,
         showPickupVerify: false,
-        nextGuide: null,
         /** 我的页成长值条（真实后端 growth_progress） */
         growthDisplay: null,
         // 昵称修改弹窗
@@ -489,45 +488,6 @@ Page({
 
     onUseCouponBanner() {
         this.goCoupons();
-    },
-
-    onGuideActionTap(e) {
-        const action = e.currentTarget.dataset.action;
-        if (!action) return;
-        switch (action) {
-            case 'login':
-                this.onLogin();
-                return;
-            case 'browse_hot':
-                wx.switchTab({ url: '/pages/category/category' });
-                return;
-            case 'orders':
-                this.onOrderAllTap();
-                return;
-            case 'membership':
-                this.onGrowthPrivilegesTap();
-                return;
-            case 'points':
-                this.goPoints();
-                return;
-            case 'earnings':
-                this.goWallet();
-                return;
-            case 'invite':
-                this.goInvitePoster();
-                return;
-            case 'business_center':
-                this.goBusinessCenter();
-                return;
-            case 'goods_wallet':
-                this.onAssetBalanceTap();
-                return;
-            case 'team_manage':
-                navigateIfLoggedIn('/pages/distribution/team');
-                return;
-            default:
-                return;
-        }
     },
 
     goShoppingBag() {

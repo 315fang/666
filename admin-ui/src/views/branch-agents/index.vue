@@ -280,8 +280,7 @@ const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fa
 
 const loadPolicy = async () => {
   try {
-    const res = await getBranchAgentPolicy()
-    const d = res?.data || res || {}
+    const d = await getBranchAgentPolicy()
     Object.assign(policy, {
       enabled: d.enabled === true,
       min_apply_role_level: toSafeNumber(d.min_apply_role_level, 3),
@@ -312,7 +311,7 @@ const loadStations = async () => {
   loadingStations.value = true
   try {
     const res = await getBranchAgentStations()
-    stations.value = res?.data || res || []
+    stations.value = res.list
   } finally {
     loadingStations.value = false
   }
@@ -382,7 +381,7 @@ const loadClaims = async () => {
   loadingClaims.value = true
   try {
     const res = await getBranchAgentClaims()
-    claims.value = res?.data || res || []
+    claims.value = res.list
   } finally {
     loadingClaims.value = false
   }

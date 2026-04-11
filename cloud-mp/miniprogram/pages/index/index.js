@@ -1,9 +1,7 @@
 const { get, post } = require('../../utils/request');
 const { parseImages } = require('../../utils/dataFormatter');
 const { isDevelopment } = require('../../config/env');
-const { USER_ROLES } = require('../../config/constants');
 const navigator = require('../../utils/navigator');
-const { requireLogin } = require('../../utils/auth');
 const { syncPageTabBar, restorePageTabBar } = require('../../utils/tabBarHelper');
 const { fetchUserProfile, truncateNickname, calcGrowthPercent } = require('../../utils/userProfile');
 const { consumePendingRegisterPrompt } = require('../../utils/lightPrompt');
@@ -20,88 +18,6 @@ const {
 const app = getApp();
 
 const INDEX_USER_INFO_TTL = 15 * 1000;
-
-function getHomeRoleKind(roleLevel = 0) {
-    const role = Number(roleLevel) || 0;
-    if (role >= USER_ROLES.AGENT) return 'agent';
-    if (role >= USER_ROLES.MEMBER) return 'distribution';
-    return 'member';
-}
-
-function buildHomeTaskGuide(pageData = {}) {
-    const roleLevel = Number(pageData.userInfo?.role_level || 0);
-    const roleKind = getHomeRoleKind(roleLevel);
-    const isLoggedIn = !!pageData.isLoggedIn;
-    const unusedCouponCount = Number(pageData.unusedCouponCount || 0);
-
-    if (roleKind === 'agent') {
-        return {
-            roleKind,
-            eyebrow: '经营路线',
-            title: `货款余额 ¥${pageData.balance || '0.00'}`,
-            description: '先处理货款与团队，再看经营动作',
-            primary: { label: '进入商务中心', action: 'business_center' },
-            secondary: [
-                { label: '查看货款', action: 'goods_wallet' },
-                { label: '团队管理', action: 'team_manage' }
-            ]
-        };
-    }
-
-    if (roleKind === 'distribution') {
-        return {
-            roleKind,
-            eyebrow: '赚钱路线',
-            title: `当前可提现 ¥${pageData.walletBalance || '0.00'}`,
-            description: '先看收益，再去邀请好友',
-            primary: { label: '查看收益', action: 'earnings' },
-            secondary: [
-                { label: '去邀请', action: 'invite' },
-                { label: '查看订单', action: 'orders' }
-            ]
-        };
-    }
-
-    if (isLoggedIn && unusedCouponCount === 0) {
-        return {
-            roleKind,
-            eyebrow: '省钱路线',
-            title: '先领券，再下单更划算',
-            description: '新人和普通会员都可以先看看当前可领优惠',
-            primary: { label: '领新人券', action: 'claim_welcome_coupons' },
-            secondary: [
-                { label: '查看订单', action: 'orders' },
-                { label: '会员权益', action: 'membership' }
-            ]
-        };
-    }
-
-    if (isLoggedIn && unusedCouponCount > 0) {
-        return {
-            roleKind,
-            eyebrow: '省钱路线',
-            title: `你有 ${unusedCouponCount} 张券可用`,
-            description: '先领券再下单，首单更省',
-            primary: { label: '去逛热销', action: 'browse_hot' },
-            secondary: [
-                { label: '查看订单', action: 'orders' },
-                { label: '会员权益', action: 'membership' }
-            ]
-        };
-    }
-
-    return {
-        roleKind,
-        eyebrow: '开始逛店',
-        title: '先看看热销，再决定要不要下单',
-        description: '登录后还能领取专属优惠并查看会员权益',
-        primary: { label: '去逛热销', action: 'browse_hot' },
-        secondary: [
-            { label: '查看订单', action: 'orders' },
-            { label: '会员权益', action: 'membership' }
-        ]
-    };
-}
 
 Page({
     data: {
@@ -128,6 +44,8 @@ Page({
         navScrolled: false,
         navBrandTitle: '问兰镜像',
         navBrandSub: '品牌甄选',
+        heroGuideTitle: '向下滑动，解锁更多惊喜',
+        heroGuideSubtitle: '首屏海报只是开始，下面还有精选内容与隐藏福利',
         statusBarHeight: 20,
         navTopPadding: 20,
         navBarHeight: 44,
@@ -138,9 +56,7 @@ Page({
         regLightTipTitle: '',
         regLightTipContent: '',
         homeCoupons: [],
-        unusedCouponCount: 0,
-        showScrollHint: true,
-        homeTaskGuide: buildHomeTaskGuide()
+        unusedCouponCount: 0
     },
 
     onLoad(options) {
@@ -163,7 +79,6 @@ Page({
     },
 
     onShow() {
-        this.setData({ showScrollHint: true });
         this.loadUserInfo();
         this.loadCoupons();
         wx.showShareMenu({ withShareTicket: true, menus: ['shareAppMessage', 'shareTimeline'] });
@@ -193,9 +108,6 @@ Page({
         const scrolled = e.scrollTop > 40;
         if (scrolled !== this.data.navScrolled) {
             this.setData({ navScrolled: scrolled });
-        }
-        if (e.scrollTop > 60 && this.data.showScrollHint) {
-            this.setData({ showScrollHint: false });
         }
     },
 
@@ -330,7 +242,6 @@ Page({
                 growthPercent: 0,
                 pointBalance: 0
             });
-            this._syncHomeTaskGuide();
             return;
         }
 
@@ -356,14 +267,14 @@ Page({
                     growthValue: growth,
                     nextLevelThreshold: threshold,
                     growthPercent: calcGrowthPercent(growth, threshold)
-                }, () => this._syncHomeTaskGuide());
+                });
             }
 
             const { account } = await fetchPointSummary();
             this.setData({
                 pointBalance: account.balance_points || 0,
                 todaySigned: !!account.today_signed
-            }, () => this._syncHomeTaskGuide());
+            });
             this._lastUserInfoLoadedAt = Date.now();
         })().catch((err) => {
             console.error('加载用户信息失败:', err);
@@ -452,74 +363,6 @@ Page({
 
     onSearchTap() {
         wx.navigateTo({ url: '/pages/search/search' });
-    },
-
-    _syncHomeTaskGuide() {
-        this.setData({
-            homeTaskGuide: buildHomeTaskGuide({
-                ...this.data,
-                balance: this.data.userInfo?.balance != null
-                    ? Number(this.data.userInfo.balance).toFixed(2)
-                    : '0.00',
-                walletBalance: this.data.userInfo?.wallet_balance != null
-                    ? Number(this.data.userInfo.wallet_balance).toFixed(2)
-                    : (this.data.userInfo?.balance != null
-                        ? Number(this.data.userInfo.balance).toFixed(2)
-                    : '0.00'
-                    )
-            })
-        });
-    },
-
-    onHomeTaskTap(e) {
-        const action = e.currentTarget.dataset.action;
-        if (!action) return;
-        switch (action) {
-            case 'claim_welcome_coupons':
-                if (!requireLogin()) return;
-                this.onClaimWelcomeCoupons();
-                return;
-            case 'browse_hot':
-                this.onGoCategory();
-                return;
-            case 'orders':
-                requireLogin(() => {
-                    wx.navigateTo({ url: '/pages/order/list?status=all' });
-                });
-                return;
-            case 'membership':
-                requireLogin(() => {
-                    wx.navigateTo({ url: '/pages/user/membership-center' });
-                });
-                return;
-            case 'earnings':
-                requireLogin(() => {
-                    wx.navigateTo({ url: '/pages/distribution/center' });
-                });
-                return;
-            case 'invite':
-                requireLogin(() => {
-                    wx.navigateTo({ url: '/pages/distribution/invite-poster' });
-                });
-                return;
-            case 'business_center':
-                requireLogin(() => {
-                    wx.navigateTo({ url: '/pages/distribution/business-center' });
-                });
-                return;
-            case 'goods_wallet':
-                requireLogin(() => {
-                    wx.navigateTo({ url: '/pages/wallet/agent-wallet' });
-                });
-                return;
-            case 'team_manage':
-                requireLogin(() => {
-                    wx.navigateTo({ url: '/pages/distribution/team' });
-                });
-                return;
-            default:
-                return;
-        }
     },
 
     onProductTap(e) {

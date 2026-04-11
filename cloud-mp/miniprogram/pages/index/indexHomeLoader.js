@@ -240,10 +240,7 @@ function applyHomeConfig(page, data) {
 
 async function loadCoupons(page) {
     if (!app.globalData.isLoggedIn) {
-        page.setData({ homeCoupons: [], unusedCouponCount: 0 });
-        if (typeof page._syncHomeTaskGuide === 'function') {
-            page._syncHomeTaskGuide();
-        }
+        page.setData({ homeCoupons: [] });
         return;
     }
     try {
@@ -269,9 +266,6 @@ async function loadCoupons(page) {
             });
             // 只展示前 3 张
             page.setData({ homeCoupons: coupons.slice(0, 3), unusedCouponCount: coupons.length });
-            if (typeof page._syncHomeTaskGuide === 'function') {
-                page._syncHomeTaskGuide();
-            }
         }
     } catch (_) {
         // 静默失败

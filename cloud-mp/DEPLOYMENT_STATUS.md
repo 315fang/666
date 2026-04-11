@@ -25,7 +25,8 @@
   - `admin/assets/http-vendor-C0Zqfgkc.js`
   - `admin/assets/element-plus-icons-UEi9pTXG.js`
   - `admin/assets/index-XFU74PjQ.css`
-- CloudBase MCP 的 `uploadFiles` 对 `admin-ui/dist` 目录级上传仍不稳定，因此整站其余 `admin/assets/*` 仍建议继续做补齐校验。
+- 已通过 COS SDK 递归上传 `cloud-mp/admin-ui/dist` 全量静态资源，共 181 个对象；中途仅 `admin/assets/agentSystem-CQLIB_83.js` 一项因 TLS 抖动失败，随后单独补传成功。
+- CloudBase MCP 的 `uploadFiles` 对 `admin-ui/dist` 目录级上传仍不稳定，当前整站托管发布已改由 COS 临时凭证上传完成。
 
 
 ## 云函数部署状态（12 个）
@@ -98,4 +99,4 @@
 2. **证书上传到云存储**：生产环境建议将私钥上传到云存储而非随代码部署
 3. **数据库索引**：users、orders、cart_items、commissions、refunds、user_coupons、content_board_products、station_staff 的关键普通索引已通过 CLI 创建；控制台可复核
 4. **管理后台 admin-api**：优惠券、拼团、砍价、抽奖、自提站点、榜单、代理配置接口已补；仍需做云端页面级 smoke test
-5. **静态托管资源补齐**：`admin/index.html` 已上传，但 `admin/assets/*` 仍需做完整发布校验
+5. **静态托管页面联调**：整站资源已补齐，仍需人工验证 `/admin/` 登录页和首屏加载

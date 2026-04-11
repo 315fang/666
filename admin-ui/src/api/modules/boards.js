@@ -1,10 +1,11 @@
 import request from '@/utils/request'
+import { normalizeListResult } from '@/api/normalize'
 
 export const getFeaturedBoard = () =>
-  request({ url: '/boards', method: 'get', params: { board_key: 'home.featuredProducts' } })
+  request({ url: '/boards', method: 'get', params: { board_key: 'home.featuredProducts' } }).then(normalizeListResult)
 
 export const getBoardProducts = (boardId) =>
-  request({ url: `/boards/${boardId}/products`, method: 'get' })
+  request({ url: `/boards/${boardId}/products`, method: 'get' }).then(normalizeListResult)
 
 export const addBoardProducts = (boardId, productIds) =>
   request({ url: `/boards/${boardId}/products`, method: 'post', data: { product_ids: productIds } })

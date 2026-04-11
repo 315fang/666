@@ -1,5 +1,6 @@
 const { Op } = require('sequelize');
 const { ServiceStation, StationClaim, User, AppConfig, sequelize } = require('../../../models');
+const { ok, okList, okAction, fail } = require('../../../utils/adminResponse');
 const { resolveCoordsForCreate, resolveCoordsForUpdate } = require('../../../utils/stationGeocode');
 const { mergePickupTiersFromParsed, DEFAULT_PICKUP_TIERS } = require('../../../utils/branchAgentPolicy');
 const { normalizePickupTierKey } = require('../../../utils/serviceStationRemark');
@@ -73,10 +74,10 @@ async function getPolicyRaw() {
 
 exports.getPolicy = async (req, res) => {
     try {
-        res.json({ code: 0, data: await getPolicyRaw() });
+        return ok(res, await getPolicyRaw());
     } catch (error) {
         console.error('获取分支代理策略失败:', error);
-        res.status(500).json({ code: -1, message: '获取失败' });
+        return fail(res, 500, '获取失败');
     }
 };
 
@@ -113,10 +114,10 @@ exports.updatePolicy = async (req, res) => {
             is_public: false,
             status: 1
         });
-        res.json({ code: 0, message: '保存成功' });
+        return okAction(res, '保存成功');
     } catch (error) {
         console.error('更新分支代理策略失败:', error);
-        res.status(500).json({ code: -1, message: '保存失败' });
+        return fail(res, 500, '保存失败');
     }
 };
 
@@ -141,10 +142,10 @@ exports.getStations = async (req, res) => {
         if (branch_type) {
             list = list.filter(item => item.branch_type === branch_type);
         }
-        res.json({ code: 0, data: list });
+        return okList(res, list);
     } catch (error) {
         console.error('获取分支代理网点失败:', error);
-        res.status(500).json({ code: -1, message: '获取失败' });
+        return fail(res, 500, '获取失败');
     }
 };
 
@@ -157,7 +158,7 @@ exports.createStation = async (req, res) => {
             pickup_commission_tier
         } = req.body || {};
         if (!name || !province || !city) {
-            return res.status(400).json({ code: -1, message: '名称、省、市必填' });
+            return fail(res, 400, '名称、省、市必填');
         }
         const policy = await getPolicyRaw();
         const defaultRate = clampRate(policy.type_commission_rate?.[branch_type], 0.02);
@@ -183,22 +184,19 @@ exports.createStation = async (req, res) => {
                 pickup_commission_tier: normalizePickupTierKey(pickup_commission_tier)
             })
         });
-        res.json({
-            code: 0,
-            data: withMeta(station),
-            message: '创建成功',
+        return ok(res, withMeta(station), '创建成功', {
             geocode_note: geo.geocode_note || undefined
         });
     } catch (error) {
         console.error('创建分支代理网点失败:', error);
-        res.status(500).json({ code: -1, message: '创建失败' });
+        return fail(res, 500, '创建失败');
     }
 };
 
 exports.updateStation = async (req, res) => {
     try {
         const station = await ServiceStation.findByPk(req.params.id);
-        if (!station) return res.status(404).json({ code: -1, message: '网点不存在' });
+        if (!station) return fail(res, 404, '网点不存在');
         const body = req.body || {};
         const meta = parseMeta(station);
         station.name = body.name ?? station.name;
@@ -228,15 +226,12 @@ exports.updateStation = async (req, res) => {
             station.longitude = geo.longitude;
         }
         await station.save();
-        res.json({
-            code: 0,
-            data: withMeta(station),
-            message: '更新成功',
+        return ok(res, withMeta(station), '更新成功', {
             geocode_note: geo.geocode_note || undefined
         });
     } catch (error) {
         console.error('更新分支代理网点失败:', error);
-        res.status(500).json({ code: -1, message: '更新失败' });
+        return fail(res, 500, '更新失败');
     }
 };
 
@@ -260,10 +255,10 @@ exports.getClaims = async (req, res) => {
             plain.region_name = meta.region_name || '';
             return plain;
         });
-        res.json({ code: 0, data: list });
+        return okList(res, list);
     } catch (error) {
         console.error('获取分支代理申请失败:', error);
-        res.status(500).json({ code: -1, message: '获取失败' });
+        return fail(res, 500, '获取失败');
     }
 };
 
@@ -273,16 +268,16 @@ exports.reviewClaim = async (req, res) => {
         const claim = await StationClaim.findByPk(req.params.id, { transaction: t, lock: t.LOCK.UPDATE });
         if (!claim) {
             await t.rollback();
-            return res.status(404).json({ code: -1, message: '申请不存在' });
+            return fail(res, 404, '申请不存在');
         }
         if (claim.status !== 'pending') {
             await t.rollback();
-            return res.status(400).json({ code: -1, message: '该申请已处理' });
+            return fail(res, 400, '该申请已处理');
         }
         const { action, note } = req.body || {};
         if (!['approve', 'reject'].includes(action)) {
             await t.rollback();
-            return res.status(400).json({ code: -1, message: 'action 必须为 approve/reject' });
+            return fail(res, 400, 'action 必须为 approve/reject');
         }
         claim.status = action === 'approve' ? 'approved' : 'rejected';
         claim.review_note = note || '';
@@ -293,7 +288,7 @@ exports.reviewClaim = async (req, res) => {
             const station = await ServiceStation.findByPk(claim.station_id, { transaction: t, lock: t.LOCK.UPDATE });
             if (!station) {
                 await t.rollback();
-                return res.status(404).json({ code: -1, message: '网点不存在' });
+                return fail(res, 404, '网点不存在');
             }
             const stationMeta = parseMeta(station);
             const targetBranchType = stationMeta.branch_type || 'city';
@@ -304,7 +299,7 @@ exports.reviewClaim = async (req, res) => {
                 const hasSchool = claimed.some(item => item.branchType === 'school');
                 if (!hasSchool) {
                     await t.rollback();
-                    return res.status(400).json({ code: -1, message: '该申请人尚未认领学校据点，不能通过市代理申请' });
+                    return fail(res, 400, '该申请人尚未认领学校据点，不能通过市代理申请');
                 }
             }
 
@@ -335,18 +330,17 @@ exports.reviewClaim = async (req, res) => {
             }
 
             await t.commit();
-            return res.json({
-                code: 0,
-                message: action === 'approve' ? '已通过' : '已拒绝',
-                data: { released_school_count: releasedSchoolCount }
+            return okAction(res, action === 'approve' ? '已通过' : '已拒绝', {
+                success: true,
+                released_school_count: releasedSchoolCount
             });
         }
 
         await t.commit();
-        res.json({ code: 0, message: action === 'approve' ? '已通过' : '已拒绝' });
+        return okAction(res, action === 'approve' ? '已通过' : '已拒绝');
     } catch (error) {
         await t.rollback();
         console.error('审核分支代理申请失败:', error);
-        res.status(500).json({ code: -1, message: '审核失败' });
+        return fail(res, 500, '审核失败');
     }
 };

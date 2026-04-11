@@ -1,5 +1,13 @@
 <template>
   <div class="agent-system-page">
+    <el-alert
+      v-if="loadIssueMessage"
+      type="error"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 16px"
+      :title="loadIssueMessage"
+    />
     <el-tabs v-model="activeTab" type="border-card">
 
       <!-- ====== 升级条件 ====== -->
@@ -442,7 +450,22 @@ const activeTab = ref('upgrade')
 const saving = ref(false)
 const userStore = useUserStore()
 const isSuperAdmin = computed(() => userStore.isSuperAdmin)
+const failedConfigKeys = ref([])
 const ROLE_NAMES = { 0: '普通用户', 1: 'C1初级代理', 2: 'C2高级代理', 3: 'B1推广合伙人', 4: 'B2运营合伙人', 5: 'B3区域合伙人' }
+const configLabels = {
+  upgrade: '升级条件',
+  commission: '佣金配置',
+  peer: '平级奖',
+  assist: '代理协助奖',
+  fund: '基金池',
+  dividendRules: '分红规则',
+  exitRules: '退出规则',
+  recharge: '充值配置'
+}
+const loadIssueMessage = computed(() => {
+  if (!failedConfigKeys.value.length) return ''
+  return `以下配置加载失败，当前页面展示的是默认值，已禁止直接保存：${failedConfigKeys.value.map((key) => configLabels[key] || key).join('、')}`
+})
 
 async function withLoading(flagRef, task) {
   flagRef.value = true
@@ -647,17 +670,28 @@ function deepAssign(target, source) {
 const loadAll = async () => {
   const results = await Promise.allSettled(Object.values(configMap).map(c => c.get()))
   const keys = Object.keys(configMap)
+  const failures = []
   results.forEach((r, i) => {
     if (r.status === 'fulfilled' && r.value) {
       const payload = r.value.data ?? r.value
       if (payload && typeof payload === 'object') {
         deepAssign(configMap[keys[i]].state, payload)
       }
+    } else {
+      failures.push(keys[i])
     }
   })
+  failedConfigKeys.value = failures
+  if (failures.length) {
+    ElMessage.error('部分代理体系配置加载失败，已阻止直接保存默认值')
+  }
 }
 
 const save = async (key) => {
+  if (failedConfigKeys.value.includes(key)) {
+    ElMessage.warning(`「${configLabels[key] || key}」加载失败，当前默认值不可直接保存，请先排查接口或重试刷新`)
+    return
+  }
   await withLoading(saving, async () => {
     const c = configMap[key]
     await c.put(JSON.parse(JSON.stringify(c.state)))
@@ -669,7 +703,7 @@ const previewDividend = async () => {
   if (!dividendYear.value || dividendPool.value <= 0) return ElMessage.warning('请选择年份并填写金额')
   await withLoading(dividendLoading, async () => {
     const res = await getDividendPreview({ year: dividendYear.value, pool: dividendPool.value })
-    dividendPreviewData.value = Array.isArray(res) ? res : (res?.data || [])
+    dividendPreviewData.value = res.list
     if (!dividendPreviewData.value.length) ElMessage.info('暂无符合条件的合伙人')
   }).catch(() => { ElMessage.error('预览失败') })
 }
@@ -692,7 +726,7 @@ const executePartnerExit = async () => {
   exitResult.value = null
   await withLoading(exitLoading, async () => {
     const res = await createExitApplication(exitForm.userId, { reason: exitForm.reason })
-    exitResult.value = res?.data || res
+    exitResult.value = res
     ElMessage.success('退出申请已创建，请在列表中进行审核和打款确认')
   }).catch((e) => { ElMessage.error(e?.message || '执行失败') })
 }

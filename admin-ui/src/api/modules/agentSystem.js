@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { normalizeItemResult, normalizeListResult } from '@/api/normalize'
 
 export const getUpgradeRules = () => request({ url: '/agent-system/upgrade-rules', method: 'get' })
 export const updateUpgradeRules = (data) => request({ url: '/agent-system/upgrade-rules', method: 'put', data })
@@ -17,19 +18,19 @@ export const updateExitRulesConfig = (data) => request({ url: '/agent-system/exi
 export const getRechargeConfig = () => request({ url: '/agent-system/recharge-config', method: 'get' })
 export const updateRechargeConfig = (data) => request({ url: '/agent-system/recharge-config', method: 'put', data })
 
-export const getDividendPreview = (params) => request({ url: '/agent-system/dividend/preview', method: 'get', params })
+export const getDividendPreview = (params) => request({ url: '/agent-system/dividend/preview', method: 'get', params }).then(normalizeListResult)
 export const executeDividend = (data) => request({ url: '/agent-system/dividend/execute', method: 'post', data })
 
-export const getExitApplications = (params) => request({ url: '/agent-system/exit-applications', method: 'get', params })
+export const getExitApplications = (params) => request({ url: '/agent-system/exit-applications', method: 'get', params }).then(normalizeListResult)
 export const createExitApplication = (userId, data) => request({ url: `/agent-system/exit-applications/${userId}`, method: 'post', data })
 export const reviewExitApplication = (id, data) => request({ url: `/agent-system/exit-applications/${id}/review`, method: 'put', data })
 
-export const getUpgradeApplications = (params) => request({ url: '/upgrade-applications', method: 'get', params })
+export const getUpgradeApplications = (params) => request({ url: '/upgrade-applications', method: 'get', params }).then(normalizeListResult)
 export const reviewUpgradeApplication = (id, data) => request({ url: `/upgrade-applications/${id}/review`, method: 'put', data })
-export const getNSystemLeaders = (params) => request({ url: '/n-system/leaders', method: 'get', params })
-export const getNSystemMembers = (params) => request({ url: '/n-system/members', method: 'get', params })
-export const getNSystemLeaderMembers = (leaderId) => request({ url: `/n-system/leaders/${leaderId}/members`, method: 'get' })
+export const getNSystemLeaders = (params) => request({ url: '/n-system/leaders', method: 'get', params }).then(normalizeListResult)
+export const getNSystemMembers = (params) => request({ url: '/n-system/members', method: 'get', params }).then(normalizeListResult)
+export const getNSystemLeaderMembers = (leaderId) => request({ url: `/n-system/leaders/${leaderId}/members`, method: 'get' }).then(normalizeListResult)
 
-export const getPickupStationStaff = (id) => request({ url: `/pickup-stations/${id}/staff`, method: 'get' })
+export const getPickupStationStaff = (id) => request({ url: `/pickup-stations/${id}/staff`, method: 'get' }).then(normalizeItemResult)
 export const addPickupStationStaff = (id, data) => request({ url: `/pickup-stations/${id}/staff`, method: 'post', data })
 export const removePickupStationStaff = (id, staffId) => request({ url: `/pickup-stations/${id}/staff/${staffId}`, method: 'delete' })

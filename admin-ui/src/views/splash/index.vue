@@ -203,12 +203,12 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getSplashConfig, updateSplashConfig, uploadSplashImage } from '@/api/index'
+import { getSplashConfig, updateSplashConfig, uploadSplashImage } from '@/api'
 
 const loading = ref(false)
 const saving = ref(false)
 
-const resolveSplashAssetUrl = (payload = {}) => payload.file_id || payload.image_url || payload.image || payload.url || ''
+const resolveSplashAssetUrl = (payload = {}) => payload.image_url || payload.image || payload.url || payload.file_id || ''
 
 const form = reactive({
   is_active: false,
@@ -277,12 +277,11 @@ const subColor = computed(() => isDark.value ? 'rgba(255,255,255,0.65)' : 'rgba(
 async function fetchConfig() {
   loading.value = true
   try {
-    const res = await getSplashConfig()
-    const data = res?.data || res
+    const data = await getSplashConfig()
     if (data) {
       const normalizedData = {
         ...data,
-        file_id: data.file_id || '',
+        file_id: data.file_id || data.image_url || data.url || data.object_key || '',
         image_url: resolveSplashAssetUrl(data)
       }
       Object.assign(form, normalizedData)
@@ -332,12 +331,11 @@ function handleBeforeUpload(file) {
 
 async function handleUpload({ file }) {
   try {
-    const res = await uploadSplashImage(file)
-    const data = res?.data || res
-    const url = data?.url
+    const data = await uploadSplashImage(file)
+    const url = data?.file?.url || data?.url
     if (!url) return ElMessage.error('上传失败')
-    form.file_id = data?.file_id || ''
-    form.image_url = resolveSplashAssetUrl(data)
+    form.file_id = data?.file?.url || data?.url || data?.file?.object_key || data?.object_key || ''
+    form.image_url = resolveSplashAssetUrl(data.file || data)
     ElMessage.success('上传成功')
   } catch (e) {
     ElMessage.error('上传异常')

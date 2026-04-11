@@ -195,7 +195,7 @@
                     placeholder="不配专享时可选：小程序点击卡片进入该商品详情直购"
                     class="product-select"
                   >
-                    <el-option v-for="p in props.productOptions" :key="p.id" :label="p.name" :value="p.id" />
+                    <el-option v-for="p in props.productOptions" :key="p.id" :label="p.name" :value="String(p.id)" />
                   </el-select>
                   <div class="form-hint-muted">与下方「专享商品」可同时配置；已配置专享时优先进入限时专享页。仅配此项则走普通商品详情（加购/立即买）。</div>
                 </el-form-item>
@@ -220,7 +220,7 @@
                       style="width: 100%"
                       @change="() => { sp.sku_id = null }"
                     >
-                      <el-option v-for="p in props.productOptions" :key="p.id" :label="p.name" :value="p.id" />
+                      <el-option v-for="p in props.productOptions" :key="p.id" :label="p.name" :value="String(p.id)" />
                     </el-select>
                   </el-form-item>
                 </el-col>
@@ -311,9 +311,11 @@ const props = defineProps({
 const clearLinkTarget = (item) => {
   item.link_type = 'none'
   item.link_value = ''
+  item.direct_product_id = null
 }
 
 const setManualLinkType = (item) => {
+  item.direct_product_id = null
   item.link_type = item.link_value ? 'page' : 'none'
 }
 </script>

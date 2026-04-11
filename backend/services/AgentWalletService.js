@@ -24,6 +24,25 @@ class AgentWalletService {
     static async _doRecharge(tx, { userId, amount, refType, refId, remark }) {
         const account = await this.ensureAccount(userId, tx);
         const locked = await AgentWalletAccount.findByPk(account.id, { transaction: tx, lock: tx.LOCK.UPDATE });
+        if (refType && refId) {
+            const existingLog = await AgentWalletLog.findOne({
+                where: {
+                    user_id: userId,
+                    change_type: 'recharge',
+                    ref_type: refType,
+                    ref_id: String(refId)
+                },
+                transaction: tx,
+                lock: tx.LOCK.UPDATE
+            });
+            if (existingLog) {
+                return {
+                    before: toMoney(existingLog.balance_before),
+                    after: toMoney(existingLog.balance_after),
+                    duplicated: true
+                };
+            }
+        }
         const before = toMoney(locked.balance);
         const change = toMoney(amount);
         const after = addMoney(before, change);

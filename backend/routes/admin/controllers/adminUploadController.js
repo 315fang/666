@@ -16,6 +16,7 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { ok, fail } = require('../../../utils/adminResponse');
 const isProduction = process.env.NODE_ENV === 'production';
 
 // 懒加载：避免循环依赖（模型文件在服务启动后才完全初始化）
@@ -152,6 +153,19 @@ const getMimeType = (filename) => {
         '.mp3': 'audio/mpeg'
     };
     return mimeTypes[ext] || 'application/octet-stream';
+};
+
+const toFilePayload = (result = {}) => {
+    const payload = {
+        url: result.url || '',
+        file_name: result.fileName || result.file_name || '',
+        provider: result.provider || '',
+        material_id: result.material_id ?? null
+    };
+    if (result.objectKey || result.object_key) {
+        payload.object_key = result.objectKey || result.object_key;
+    }
+    return payload;
 };
 
 /**
@@ -409,13 +423,13 @@ const uploadFile = async (file, folder = 'images') => {
 const upload = async (req, res) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ code: -1, message: '请选择要上传的文件' });
+            return fail(res, 400, '请选择要上传的文件');
         }
 
         // 文件大小限制 (10MB)
         const maxSize = 10 * 1024 * 1024;
         if (req.file.size > maxSize) {
-            return res.status(400).json({ code: -1, message: '文件大小不能超过10MB' });
+            return fail(res, 400, '文件大小不能超过10MB');
         }
 
         // 文件类型校验（MIME + 扩展名双重校验）
@@ -423,7 +437,7 @@ const upload = async (req, res) => {
         const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
         const ext = path.extname(req.file.originalname || '').toLowerCase();
         if (!allowedTypes.includes(req.file.mimetype) || !allowedExts.includes(ext)) {
-            return res.status(400).json({ code: -1, message: '仅支持 jpg/png/gif/webp/svg 格式' });
+            return fail(res, 400, '仅支持 jpg/png/gif/webp/svg 格式');
         }
 
         const defaultFolder = isUserAvatarUploadRequest(req) ? 'users/avatars' : 'products';
@@ -455,14 +469,12 @@ const upload = async (req, res) => {
             }
         }
 
-        res.json({
-            code: 0,
-            data: { ...publicResult, material_id: materialId },
-            message: '上传成功'
-        });
+        const legacyFile = { ...publicResult, material_id: materialId };
+        const file = toFilePayload(legacyFile);
+        return ok(res, { file, ...legacyFile }, '上传成功');
     } catch (error) {
         console.error('文件上传失败:', error);
-        res.status(500).json({ code: -1, message: error.message || '上传失败' });
+        return fail(res, 500, error.message || '上传失败');
     }
 };
 
@@ -473,7 +485,7 @@ const upload = async (req, res) => {
 const uploadMultiple = async (req, res) => {
     try {
         if (!req.files || req.files.length === 0) {
-            return res.status(400).json({ code: -1, message: '请选择要上传的文件' });
+            return fail(res, 400, '请选择要上传的文件');
         }
 
         const folder = normalizeFolder(req.body.folder || 'products');
@@ -531,14 +543,15 @@ const uploadMultiple = async (req, res) => {
             }
         }
 
-        res.json({
-            code: 0,
-            data: { uploaded: results, failed: errors },
-            message: `成功上传 ${results.length} 个文件`
-        });
+        const files = results.map(toFilePayload);
+        return ok(res, {
+            files,
+            failed: errors,
+            uploaded: results
+        }, `成功上传 ${results.length} 个文件`);
     } catch (error) {
         console.error('批量上传失败:', error);
-        res.status(500).json({ code: -1, message: '上传失败' });
+        return fail(res, 500, '上传失败');
     }
 };
 
@@ -592,10 +605,10 @@ const getStorageConfig = async (req, res) => {
             local: storageConfig.local
         };
 
-        res.json({ code: 0, data: safeConfig });
+        return ok(res, safeConfig);
     } catch (error) {
         console.error('获取存储配置失败:', error);
-        res.status(500).json({ code: -1, message: '获取失败' });
+        return fail(res, 500, '获取失败');
     }
 };
 
@@ -609,7 +622,7 @@ const updateStorageConfig = async (req, res) => {
 
         if (provider) {
             if (!['local', 'aliyun', 'tencent', 'qiniu', 'minio'].includes(provider)) {
-                return res.status(400).json({ code: -1, message: '无效的存储服务商' });
+                return fail(res, 400, '无效的存储服务商');
             }
             storageConfig.provider = provider;
         }
@@ -631,13 +644,12 @@ const updateStorageConfig = async (req, res) => {
             Object.assign(storageConfig.local, local);
         }
 
-        res.json({
-            code: 0,
-            message: '存储配置更新成功（仅内存生效，重启后需重新配置。如需持久化请配置环境变量）'
-        });
+        return ok(res, {
+            success: true
+        }, '存储配置更新成功（仅内存生效，重启后需重新配置。如需持久化请配置环境变量）');
     } catch (error) {
         console.error('更新存储配置失败:', error);
-        res.status(500).json({ code: -1, message: '更新失败' });
+        return fail(res, 500, '更新失败');
     }
 };
 
@@ -666,18 +678,14 @@ const testStorageConfig = async (req, res) => {
             const result = await uploadFile(testFile, 'test');
             storageConfig.provider = originalProvider;
 
-            res.json({
-                code: 0,
-                message: `${testProvider} 配置测试成功`,
-                data: result
-            });
+            return ok(res, toFilePayload(result), `${testProvider} 配置测试成功`);
         } catch (e) {
             storageConfig.provider = originalProvider;
             throw e;
         }
     } catch (error) {
         console.error('存储测试失败:', error);
-        res.status(500).json({ code: -1, message: `测试失败: ${error.message}` });
+        return fail(res, 500, `测试失败: ${error.message}`);
     }
 };
 
@@ -693,7 +701,7 @@ const getUploadSignature = async (req, res) => {
         if (provider === 'aliyun') {
             const config = storageConfig.aliyun;
             if (!config.accessKeyId || !config.accessKeySecret) {
-                return res.status(400).json({ code: -1, message: '阿里云OSS未配置' });
+                return fail(res, 400, '阿里云OSS未配置');
             }
 
             // 生成Policy和签名（用于前端直传）
@@ -714,32 +722,28 @@ const getUploadSignature = async (req, res) => {
 
             const host = config.endpoint || `https://${config.bucket}.${config.region}.aliyuncs.com`;
 
-            return res.json({
-                code: 0,
-                data: {
-                    provider: 'aliyun',
-                    host,
-                    accessId: config.accessKeyId,
-                    policy,
-                    signature,
-                    dir: folder + '/',
-                    expire: Math.floor(Date.now() / 1000) + 1800
-                }
+            return ok(res, {
+                mode: 'direct',
+                provider: 'aliyun',
+                host,
+                accessId: config.accessKeyId,
+                policy,
+                signature,
+                dir: folder + '/',
+                expire: Math.floor(Date.now() / 1000) + 1800
             });
         }
 
         // 其他服务商暂不支持前端直传签名，返回服务端上传模式标记
-        res.json({
-            code: 0,
-            data: {
-                provider,
-                mode: 'server',
-                uploadUrl: '/admin/api/upload'
-            }
+        return ok(res, {
+            mode: 'server',
+            provider,
+            upload_url: '/admin/api/upload',
+            uploadUrl: '/admin/api/upload'
         });
     } catch (error) {
         console.error('获取上传签名失败:', error);
-        res.status(500).json({ code: -1, message: '获取失败' });
+        return fail(res, 500, '获取失败');
     }
 };
 

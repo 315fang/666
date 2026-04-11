@@ -158,7 +158,7 @@ const localData = reactive({
   product_id: null
 })
 
-const resolveAssetUrl = (item = {}) => item.file_id || item.image_url || item.url || ''
+const resolveAssetUrl = (item = {}) => item.image_url || item.url || item.file_id || ''
 const resolvedImageUrl = computed(() => resolveAssetUrl(localData))
 
 const showField = (f) => props.fields.includes(f)
@@ -199,7 +199,7 @@ const searchProducts = async (kw) => {
   searching.value = true
   try {
     const res = await getProducts({ keyword: kw, limit: 20 })
-    productList.value = Array.isArray(res?.list || res?.data?.list || res) ? (res?.list || res?.data?.list || res) : []
+    productList.value = res.list
   } catch (_) { productList.value = [] }
   finally { searching.value = false }
 }
@@ -220,7 +220,7 @@ const onProductPicked = (id) => {
 const loadReusableBanners = async () => {
   try {
     const list = await getBanners()
-    reusableBanners.value = Array.isArray(list) ? list : []
+    reusableBanners.value = list.list
   } catch (_) { reusableBanners.value = [] }
 }
 
@@ -250,7 +250,7 @@ const beforeUpload = (file) => {
 const handleUpload = async ({ file }) => {
   try {
     const res = await uploadFile(file)
-    const payload = res?.data || res || {}
+    const payload = res.file || res || {}
     const url = payload.url || payload.image_url || ''
     if (!url) {
       ElMessage.error('上传成功但未返回图片地址，请检查存储配置')
@@ -266,7 +266,7 @@ const handleUpload = async ({ file }) => {
 }
 
 const syncUploadedAsset = (payload = {}) => {
-  localData.file_id = payload.file_id || ''
+  localData.file_id = payload.file_id || payload.url || payload.object_key || ''
   localData.image_url = payload.url || payload.image_url || ''
 }
 
@@ -274,7 +274,7 @@ onMounted(async () => {
   if (props.modelValue?.product_id) {
     try {
       const res = await getProductById(props.modelValue.product_id)
-      const product = res?.data || res
+      const product = res
       if (product && product.id) {
         productList.value = [product]
         onProductPicked(product.id)

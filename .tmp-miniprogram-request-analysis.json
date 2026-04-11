@@ -1,0 +1,2805 @@
+{
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\appAuth.js": [
+    {
+      "type": "callFunction",
+      "method": "wx.cloud.callFunction",
+      "line": 82,
+      "routeArg": "{\n                name: 'login',\n                data: {\n                    invite_code: inviteCode || undefined\n                }\n            }",
+      "dataArg": "{\n                name: 'login',\n                data: {\n                    invite_code: inviteCode || undefined\n                }\n            }",
+      "dataKeys": [
+        "name",
+        "data"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "result"
+      ]
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\appConfig.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 31,
+      "routeArg": "'/mini-program-config'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/mini-program-config', {}, {\n            showError: false,\n            maxRetries: 0,\n            timeout: 8000,\n            ignore401: true\n        }).then((res) => {"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 86,
+      "routeArg": "'/themes/active'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/themes/active', {}, { showError: false, ignore401: true }).then((res) => {"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\appPrefetch.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 18,
+      "routeArg": "'/page-content/home'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "promise",
+      "responseFields": [],
+      "lineText": "const promise = get('/page-content/home').then((res) => {"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 30,
+      "routeArg": "'/homepage-config'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "return get('/homepage-config').then((res) => {"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 66,
+      "routeArg": "'/splash/active'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "splashConfigPromise",
+      "responseFields": [],
+      "lineText": "this.globalData.splashConfigPromise = get('/splash/active').then((res) => {"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\components\\section-renderer\\section-renderer.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 53,
+      "routeArg": "'/products'",
+      "dataArg": "params",
+      "dataKeys": [
+        "page",
+        "limit",
+        "status"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data",
+        "data.list"
+      ],
+      "lineText": "const res = await get('/products', params);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\activity\\brand-news-detail.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 17,
+      "routeArg": "'/page-content/brand-news'",
+      "dataArg": "{ id }",
+      "dataKeys": [
+        "id"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get('/page-content/brand-news', { id }, { showError: false });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\activity\\limited-spot.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 53,
+      "routeArg": "'/activity/limited-spot/detail'",
+      "dataArg": "{ card_id: this.data.cardId }",
+      "dataKeys": [
+        "card_id"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.card",
+        "data.products",
+        "message"
+      ],
+      "lineText": "const res = await get('/activity/limited-spot/detail', { card_id: this.data.cardId });"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 70,
+      "routeArg": "'/addresses'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get('/addresses');"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 97,
+      "routeArg": "`/orders/${order.id}/prepay`",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": "prepayRes",
+      "responseFields": [
+        "code",
+        "data",
+        "message"
+      ],
+      "lineText": "const prepayRes = await post(`/orders/${order.id}/prepay`, {});"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 162,
+      "routeArg": "'/orders'",
+      "dataArg": "orderData",
+      "dataKeys": [
+        "address_id",
+        "delivery_type",
+        "limited_spot",
+        "items"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "message"
+      ],
+      "lineText": "const res = await post('/orders', orderData);"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 197,
+      "routeArg": "'/orders'",
+      "dataArg": "orderData",
+      "dataKeys": [
+        "address_id",
+        "delivery_type",
+        "limited_spot",
+        "items"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "message"
+      ],
+      "lineText": "const res = await post('/orders', orderData);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\activity\\n-invite.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 69,
+      "routeArg": "'/n/invite-card'",
+      "dataArg": "{ leader_id: leaderId }",
+      "dataKeys": [
+        "leader_id"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get('/n/invite-card', { leader_id: leaderId }, { showError: false });"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 99,
+      "routeArg": "'/upgrade/apply'",
+      "dataArg": "{\n                path_type: 'n_join',\n                leader_id: leaderId\n            }",
+      "dataKeys": [
+        "path_type",
+        "leader_id"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "message"
+      ],
+      "lineText": "const res = await post('/upgrade/apply', {\n                path_type: 'n_join',\n                leader_id: leaderId\n            }, { showLoading: true, preventDuplicate: true });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\address\\edit.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 78,
+      "routeArg": "`/addresses/${id}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get(`/addresses/${id}`);"
+    },
+    {
+      "type": "request",
+      "method": "put",
+      "line": 273,
+      "routeArg": "`/addresses/${id}`",
+      "dataArg": "data",
+      "dataKeys": [
+        "receiver_name",
+        "phone",
+        "province",
+        "city",
+        "district",
+        "detail",
+        "is_default"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await put(`/addresses/${id}`, data);"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 275,
+      "routeArg": "'/addresses'",
+      "dataArg": "data",
+      "dataKeys": [
+        "receiver_name",
+        "phone",
+        "province",
+        "city",
+        "district",
+        "detail",
+        "is_default"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await post('/addresses', data);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\address\\list.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 28,
+      "routeArg": "'/addresses'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data",
+        "list"
+      ],
+      "lineText": "const res = await get('/addresses');"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 104,
+      "routeArg": "`/addresses/${id}/default`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await post(`/addresses/${id}/default`);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\cart\\cart.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 48,
+      "routeArg": "'/cart'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data",
+        "data.items"
+      ],
+      "lineText": "const res = await get('/cart');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 111,
+      "routeArg": "'/products'",
+      "dataArg": "{ limit: 6 }",
+      "dataKeys": [
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.list"
+      ],
+      "lineText": "const res = await get('/products', { limit: 6 });"
+    },
+    {
+      "type": "request",
+      "method": "put",
+      "line": 220,
+      "routeArg": "`/cart/${item.id}`",
+      "dataArg": "{ quantity: newQuantity }",
+      "dataKeys": [
+        "quantity"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await put(`/cart/${item.id}`, { quantity: newQuantity });"
+    },
+    {
+      "type": "request",
+      "method": "del",
+      "line": 252,
+      "routeArg": "`/cart/${item.id}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await del(`/cart/${item.id}`);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\category\\category.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 245,
+      "routeArg": "'/group/activities'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/group/activities', {}, { showError: false }).catch(() => null),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 246,
+      "routeArg": "'/slash/activities'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/slash/activities', {}, { showError: false }).catch(() => null)"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\category\\categoryCart.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 28,
+      "routeArg": "'/cart'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.summary.total_amount"
+      ],
+      "lineText": "const res = await get('/cart', {}, {\n                showError: false,\n                maxRetries: 0,\n                timeout: 8000,\n                preventDuplicate: true\n            });"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 81,
+      "routeArg": "'/cart'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": "res",
+      "responseFields": [],
+      "lineText": "const res = await get('/cart', {}, {\n            showError: false,\n            maxRetries: 0,\n            timeout: 8000,\n            preventDuplicate: true\n        });"
+    },
+    {
+      "type": "request",
+      "method": "del",
+      "line": 149,
+      "routeArg": "`/cart/${id}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "Promise.all(ids.map((id) => del(`/cart/${id}`).catch(() => null)))"
+    },
+    {
+      "type": "request",
+      "method": "del",
+      "line": 165,
+      "routeArg": "`/cart/${item.id}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await del(`/cart/${item.id}`);"
+    },
+    {
+      "type": "request",
+      "method": "put",
+      "line": 179,
+      "routeArg": "`/cart/${item.id}`",
+      "dataArg": "{ quantity: nextQty }",
+      "dataKeys": [
+        "quantity"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await put(`/cart/${item.id}`, { quantity: nextQty });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\category\\categoryPricePreview.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 14,
+      "routeArg": "'/configs'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/configs').catch(() => null),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 15,
+      "routeArg": "'/points/account'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/points/account').catch(() => null),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 16,
+      "routeArg": "'/coupons/available?amount=0'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/coupons/available?amount=0').catch(() => null)"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\coupon\\list.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 60,
+      "routeArg": "'/coupons/mine'",
+      "dataArg": "{ status: tab }",
+      "dataKeys": [
+        "status"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data"
+      ],
+      "lineText": "const res = await get('/coupons/mine', { status: tab });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\distribution\\business-center.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 82,
+      "routeArg": "'/agent/wallet'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/agent/wallet').catch(() => null),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 113,
+      "routeArg": "'/distribution/overview'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data"
+      ],
+      "lineText": "const res = await get('/distribution/overview');"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\distribution\\center.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 179,
+      "routeArg": "'/stats/distribution'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.stats",
+        "data.team",
+        "data.userInfo",
+        "data.userInfo.inviter"
+      ],
+      "lineText": "const res = await get('/stats/distribution');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 213,
+      "routeArg": "'/wallet/info'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.balance"
+      ],
+      "lineText": "const res = await get('/wallet/info');"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 246,
+      "routeArg": "'/wallet/withdraw'",
+      "dataArg": "{ amount }",
+      "dataKeys": [
+        "amount"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "message"
+      ],
+      "lineText": "const res = await post('/wallet/withdraw', { amount });"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 273,
+      "routeArg": "'/agent/workbench'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.debt_amount",
+        "data.goods_fund_balance",
+        "data.month_profit"
+      ],
+      "lineText": "const res = await get('/agent/workbench', {}, {\n                showError: false,\n                maxRetries: 0,\n                timeout: 8000\n            });"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 297,
+      "routeArg": "'/user/member-tier-meta'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.member_levels"
+      ],
+      "lineText": "const res = await get('/user/member-tier-meta');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 309,
+      "routeArg": "'/agent/wallet'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.balance"
+      ],
+      "lineText": "const res = await get('/agent/wallet');"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\distribution\\commission-logs.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 49,
+      "routeArg": "'/stats/distribution'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.stats.frozenAmount",
+        "data.stats.totalEarnings"
+      ],
+      "lineText": "const res = await get('/stats/distribution');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 76,
+      "routeArg": "'/wallet/commissions'",
+      "dataArg": "params",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.list"
+      ],
+      "lineText": "const res = await get('/wallet/commissions', params);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\distribution\\invite-poster.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 43,
+      "routeArg": "'/distribution/stats'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data",
+        "data.userInfo",
+        "data.userInfo.invite_code"
+      ],
+      "lineText": "const res = await get('/distribution/stats');"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\distribution\\invite.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 48,
+      "routeArg": "'/questionnaire/share-eligibility'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.eligible"
+      ],
+      "lineText": "const res = await get('/questionnaire/share-eligibility');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 77,
+      "routeArg": "'/stats/distribution'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.team"
+      ],
+      "lineText": "const res = await get('/stats/distribution');"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\distribution\\restock.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 22,
+      "routeArg": "'/agent/workbench'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.stock_count"
+      ],
+      "lineText": "const res = await get('/agent/workbench');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 34,
+      "routeArg": "'/products'",
+      "dataArg": "{ page: 1, limit: 100 }",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.list"
+      ],
+      "lineText": "const res = await get('/products', { page: 1, limit: 100 });"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 130,
+      "routeArg": "'/agent/restock'",
+      "dataArg": "{\n                product_id: selectedProduct.id,\n                quantity: qty\n            }",
+      "dataKeys": [
+        "product_id",
+        "quantity"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.stock_after",
+        "message"
+      ],
+      "lineText": "const res = await post('/agent/restock', {\n                product_id: selectedProduct.id,\n                quantity: qty\n            });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\distribution\\stock-logs.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 49,
+      "routeArg": "'/agent/wallet'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "accountRes",
+      "responseFields": [
+        "code",
+        "data",
+        "data.balance"
+      ],
+      "lineText": "const accountRes = await get('/agent/wallet');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 56,
+      "routeArg": "'/agent/wallet/logs'",
+      "dataArg": "{\n                page: this.data.page,\n                limit: this.data.limit\n            }",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.list",
+        "data.pagination"
+      ],
+      "lineText": "const res = await get('/agent/wallet/logs', {\n                page: this.data.page,\n                limit: this.data.limit\n            });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\distribution\\team-member.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 50,
+      "routeArg": "`/distribution/team/${memberId}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.joined_at",
+        "message"
+      ],
+      "lineText": "const res = await get(`/distribution/team/${memberId}`);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\distribution\\team.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 57,
+      "routeArg": "'/distribution/stats'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get('/distribution/stats');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 84,
+      "routeArg": "'/distribution/team'",
+      "dataArg": "{\n                level: currentTab,\n                page,\n                limit\n            }",
+      "dataKeys": [
+        "level",
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data.list"
+      ],
+      "lineText": "const res = await get('/distribution/team', {\n                level: currentTab,\n                page,\n                limit\n            });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\distribution\\withdraw-history.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 41,
+      "routeArg": "'/wallet/withdrawals'",
+      "dataArg": "{ page, limit: 20 }",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.list"
+      ],
+      "lineText": "const res = await get('/wallet/withdrawals', { page, limit: 20 });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\distribution\\workbench.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 60,
+      "routeArg": "'/agent/workbench'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data"
+      ],
+      "lineText": "const res = await get('/agent/workbench');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 82,
+      "routeArg": "'/agent/orders'",
+      "dataArg": "params",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.list"
+      ],
+      "lineText": "const res = await get('/agent/orders', params);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\group\\detail.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 71,
+      "routeArg": "`/group/orders/${groupNo}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "message"
+      ],
+      "lineText": "const res = await get(`/group/orders/${groupNo}`);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\group\\list.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 105,
+      "routeArg": "'/group/activities'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [],
+      "lineText": "const res = await get('/group/activities');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 112,
+      "routeArg": "'/group/my'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data"
+      ],
+      "lineText": "const res = await get('/group/my');"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\index\\indexHomeLoader.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 44,
+      "routeArg": "'/page-content/home'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "pageRes",
+      "responseFields": [
+        "data",
+        "data.layout",
+        "data.resources",
+        "data.resources.legacy_payload"
+      ],
+      "lineText": "const pageRes = await get('/page-content/home').catch(() => null);"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 53,
+      "routeArg": "'/homepage-config'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get('/homepage-config').catch(() => ({ data: {} }));"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\logistics\\tracking.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 51,
+      "routeArg": "url",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": "res",
+      "responseFields": [],
+      "lineText": "res = await get(url, {}, reqOptions);"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 56,
+      "routeArg": "url",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": "res",
+      "responseFields": [],
+      "lineText": "res = await get(url, {}, reqOptions);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\lottery\\lottery.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 120,
+      "routeArg": "'/lottery/prizes'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data"
+      ],
+      "lineText": "const res = await get('/lottery/prizes');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 136,
+      "routeArg": "'/lottery/records'",
+      "dataArg": "{ page: 1, limit: 10 }",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.list"
+      ],
+      "lineText": "const res = await get('/lottery/records', { page: 1, limit: 10 });"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 181,
+      "routeArg": "'/lottery/draw'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.prize",
+        "message"
+      ],
+      "lineText": "const res = await post('/lottery/draw');"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\order\\list.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 100,
+      "routeArg": "'/orders'",
+      "dataArg": "params",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "ordersRes",
+      "responseFields": [
+        "data",
+        "data.list"
+      ],
+      "lineText": "const ordersRes = await get('/orders', params);"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 111,
+      "routeArg": "'/refunds'",
+      "dataArg": "{ page: 1, limit: 20 }",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "refundsRes",
+      "responseFields": [
+        "data.list"
+      ],
+      "lineText": "const refundsRes = await get('/refunds', { page: 1, limit: 20 }).catch(() => ({ data: { list: [] } }));"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 168,
+      "routeArg": "'/refunds'",
+      "dataArg": "{ page, limit }",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data.list"
+      ],
+      "lineText": "const res = await get('/refunds', { page, limit });"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 315,
+      "routeArg": "`/orders/${order.id}/cancel`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await post(`/orders/${order.id}/cancel`);"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 342,
+      "routeArg": "`/orders/${order.id}/confirm`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await post(`/orders/${order.id}/confirm`);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\order\\orderConfirmAccount.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 5,
+      "routeArg": "'/points/account'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.balance_points"
+      ],
+      "lineText": "const res = await get('/points/account');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 26,
+      "routeArg": "'/agent/wallet'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.balance"
+      ],
+      "lineText": "const res = await get('/agent/wallet');"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\order\\orderConfirmAddress.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 7,
+      "routeArg": "'/addresses'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data",
+        "list"
+      ],
+      "lineText": "const res = await get('/addresses');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 48,
+      "routeArg": "`/stations/pickup-options${qs}`",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get(`/stations/pickup-options${qs}`, {}, { showError: false });"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 119,
+      "routeArg": "'/cart'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data",
+        "data.items"
+      ],
+      "lineText": "const res = await get('/cart');"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\order\\orderConfirmPricing.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 56,
+      "routeArg": "`/coupons/available${query}`",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get(`/coupons/available${query}`, {}, { showError: false }).catch(() => null),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 57,
+      "routeArg": "'/coupons/mine'",
+      "dataArg": "{ status: 'unused' }",
+      "dataKeys": [
+        "status"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/coupons/mine', { status: 'unused' }, { showError: false }).catch(() => null)"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\order\\orderConfirmSubmission.js": [
+    {
+      "type": "request",
+      "method": "post",
+      "line": 79,
+      "routeArg": "'/orders'",
+      "dataArg": "orderData",
+      "dataKeys": [
+        "address_id",
+        "delivery_type",
+        "pickup_station_id",
+        "memo",
+        "remark",
+        "items"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await post('/orders', orderData);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\order\\orderDetailActions.js": [
+    {
+      "type": "request",
+      "method": "post",
+      "line": 13,
+      "routeArg": "`/orders/${order.id}/confirm`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "confirmRes",
+      "responseFields": [
+        "code",
+        "message"
+      ],
+      "lineText": "const confirmRes = await post(`/orders/${order.id}/confirm`);"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 37,
+      "routeArg": "`/orders/${order.id}/cancel`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await post(`/orders/${order.id}/cancel`);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\order\\orderDetailData.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 50,
+      "routeArg": "`/orders/${pathKey}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "orderRes",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const orderRes = await get(`/orders/${pathKey}`);"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 53,
+      "routeArg": "'/refunds'",
+      "dataArg": "{ page: 1, limit: 100, order_id: order.id }",
+      "dataKeys": [
+        "page",
+        "limit",
+        "order_id"
+      ],
+      "responseVar": "refundsRes",
+      "responseFields": [
+        "data",
+        "data.list"
+      ],
+      "lineText": "const refundsRes = await get('/refunds', { page: 1, limit: 100, order_id: order.id }).catch(() => ({"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 122,
+      "routeArg": "`/orders/${orderId}/sync-wechat-pay`",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "post(`/orders/${orderId}/sync-wechat-pay`, {}, { showError: false, maxRetries: 0, timeout: 12000 })"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\order\\orderDetailPayment.js": [
+    {
+      "type": "request",
+      "method": "post",
+      "line": 40,
+      "routeArg": "`/orders/${order.id}/prepay`",
+      "dataArg": "{\n            use_wallet_balance: useWallet\n        }",
+      "dataKeys": [
+        "use_wallet_balance"
+      ],
+      "responseVar": "prepayRes",
+      "responseFields": [
+        "code",
+        "data",
+        "message"
+      ],
+      "lineText": "const prepayRes = await post(`/orders/${order.id}/prepay`, {\n            use_wallet_balance: useWallet\n        });"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 116,
+      "routeArg": "`/orders/${orderId}/sync-wechat-pay`",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await post(`/orders/${orderId}/sync-wechat-pay`, {}, { showError: false, maxRetries: 0, timeout: 12000 }).catch(() => {});"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 117,
+      "routeArg": "`/orders/${orderId}`",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get(`/orders/${orderId}`, {}, { showError: false, maxRetries: 0, timeout: 8000 });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\order\\pickup-credential.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 28,
+      "routeArg": "`/pickup/my/${id}`",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get(`/pickup/my/${id}`, {}, { showLoading: true });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\order\\refund-apply.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 44,
+      "routeArg": "`/orders/${id}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get(`/orders/${id}`);"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 146,
+      "routeArg": "'/refunds'",
+      "dataArg": "params",
+      "dataKeys": [
+        "order_id",
+        "type",
+        "reason",
+        "description",
+        "amount"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.id",
+        "message"
+      ],
+      "lineText": "const res = await post('/refunds', params);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\order\\refund-detail.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 47,
+      "routeArg": "`/refunds/${id}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "message"
+      ],
+      "lineText": "const res = await get(`/refunds/${id}`);"
+    },
+    {
+      "type": "request",
+      "method": "put",
+      "line": 96,
+      "routeArg": "`/refunds/${refund.id}/return-shipping`",
+      "dataArg": "{\r\n                return_tracking_no: trackingNo,\r\n                return_company: company || undefined\r\n            }",
+      "dataKeys": [
+        "return_tracking_no",
+        "return_company"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await put(`/refunds/${refund.id}/return-shipping`, {\r\n                return_tracking_no: trackingNo,\r\n                return_company: company || undefined\r\n            });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\order\\refund-list.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 37,
+      "routeArg": "'/refunds'",
+      "dataArg": "{ page, limit }",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.list"
+      ],
+      "lineText": "const res = await get('/refunds', { page, limit });"
+    },
+    {
+      "type": "request",
+      "method": "put",
+      "line": 82,
+      "routeArg": "`/refunds/${id}/cancel`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "cancelRes",
+      "responseFields": [
+        "code"
+      ],
+      "lineText": "const cancelRes = await put(`/refunds/${id}/cancel`);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\order\\review.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 33,
+      "routeArg": "`/orders/${id}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "message"
+      ],
+      "lineText": "const res = await get(`/orders/${id}`);"
+    },
+    {
+      "type": "request",
+      "method": "uploadFile",
+      "line": 98,
+      "routeArg": "'/user/upload'",
+      "dataArg": "localPath",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data",
+        "data.url",
+        "url"
+      ],
+      "lineText": "const res = await uploadFile('/user/upload', localPath, 'file', {}, { showLoading: false });"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 128,
+      "routeArg": "`/orders/${orderId}/review`",
+      "dataArg": "{\n                rating,\n                content: content.trim(),\n                images: uploadedImages\n            }",
+      "dataKeys": [
+        "rating",
+        "content",
+        "images"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "message"
+      ],
+      "lineText": "const res = await post(`/orders/${orderId}/review`, {\n                rating,\n                content: content.trim(),\n                images: uploadedImages\n            });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\pickup\\orders.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 35,
+      "routeArg": "'/pickup/pending-orders'",
+      "dataArg": "{\n                station_id: this.data.stationId,\n                page,\n                limit: this.data.limit\n            }",
+      "dataKeys": [
+        "station_id",
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data.list",
+        "data.station"
+      ],
+      "lineText": "const res = await get('/pickup/pending-orders', {\n                station_id: this.data.stationId,\n                page,\n                limit: this.data.limit\n            }, { showLoading: !append });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\pickup\\pickup.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 19,
+      "routeArg": "`/pickup/my/${this.orderId}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data"
+      ],
+      "lineText": "const res = await get(`/pickup/my/${this.orderId}`);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\pickup\\verify.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 31,
+      "routeArg": "'/stations/my-scope'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get('/stations/my-scope', {}, { showError: false });"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 93,
+      "routeArg": "'/pickup/verify-code'",
+      "dataArg": "{ pickup_code: c, station_id: stationId }",
+      "dataKeys": [
+        "pickup_code",
+        "station_id"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data.order_no"
+      ],
+      "lineText": "const res = await post('/pickup/verify-code', { pickup_code: c, station_id: stationId }, { showLoading: true });"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 138,
+      "routeArg": "'/pickup/verify-qr'",
+      "dataArg": "{ qr_token: t, station_id: stationId }",
+      "dataKeys": [
+        "qr_token",
+        "station_id"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data.order_no"
+      ],
+      "lineText": "const res = await post('/pickup/verify-qr', { qr_token: t, station_id: stationId }, { showLoading: true });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\points\\index.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 88,
+      "routeArg": "'/points/tasks'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.tasks"
+      ],
+      "lineText": "const res = await get('/points/tasks');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 109,
+      "routeArg": "'/points/logs'",
+      "dataArg": "{ page: 1, limit: 30 }",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.list"
+      ],
+      "lineText": "const res = await get('/points/logs', { page: 1, limit: 30 });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\product\\detail.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 139,
+      "routeArg": "'/group/activities'",
+      "dataArg": "{ product_id: normalizedId }",
+      "dataKeys": [
+        "product_id"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/group/activities', { product_id: normalizedId }, { showError: false }).catch(() => null),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 140,
+      "routeArg": "'/slash/activities'",
+      "dataArg": "{ product_id: normalizedId }",
+      "dataKeys": [
+        "product_id"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/slash/activities', { product_id: normalizedId }, { showError: false }).catch(() => null)"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 261,
+      "routeArg": "`/products/${this.data.id}/reviews`",
+      "dataArg": "{ limit: 2 }",
+      "dataKeys": [
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data",
+        "data.list",
+        "data.pagination.total",
+        "data.total"
+      ],
+      "lineText": "const res = await get(`/products/${this.data.id}/reviews`, { limit: 2 }).catch(() => null);"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 297,
+      "routeArg": "'/commissions/preview'",
+      "dataArg": "params",
+      "dataKeys": [
+        "product_id",
+        "quantity"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data"
+      ],
+      "lineText": "const res = await get('/commissions/preview', params);"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 563,
+      "routeArg": "'/slash/start'",
+      "dataArg": "payload",
+      "dataKeys": [
+        "activity_id"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "message"
+      ],
+      "lineText": "const res = await post('/slash/start', payload);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\product\\productDetailActions.js": [
+    {
+      "type": "request",
+      "method": "post",
+      "line": 124,
+      "routeArg": "'/cart'",
+      "dataArg": "{\n                product_id: normalizeProductId(product.id),\n                sku_id: selectedSku && selectedSku.id || null,\n                quantity: qty\n            }",
+      "dataKeys": [
+        "product_id",
+        "sku_id",
+        "quantity"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await post(\n            '/cart',\n            {\n                product_id: normalizeProductId(product.id),\n                sku_id: selectedSku && selectedSku.id || null,\n                quantity: qty\n            },\n            { showError: false }\n        );"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\product\\productDetailData.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 37,
+      "routeArg": "`/products/${id}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get(`/products/${id}`);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\product\\productDetailFavorite.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 12,
+      "routeArg": "'/user/favorites/status'",
+      "dataArg": "{ product_id: pid }",
+      "dataKeys": [
+        "product_id"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data",
+        "data.favorited"
+      ],
+      "lineText": "const res = await get(\n                '/user/favorites/status',\n                { product_id: pid },\n                { showError: false }\n            );"
+    },
+    {
+      "type": "request",
+      "method": "del",
+      "line": 36,
+      "routeArg": "`/user/favorites/${pid}`",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await del(`/user/favorites/${pid}`, {}, { showError: false });"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 40,
+      "routeArg": "'/user/favorites'",
+      "dataArg": "{ product_id: pid }",
+      "dataKeys": [
+        "product_id"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await post('/user/favorites', { product_id: pid }, { showError: false });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\product\\reviews.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 41,
+      "routeArg": "`/products/${this.data.productId}/reviews`",
+      "dataArg": "params",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.list",
+        "data.pagination",
+        "data.total"
+      ],
+      "lineText": "const res = await get(`/products/${this.data.productId}/reviews`, params);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\questionnaire\\fill.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 54,
+      "routeArg": "'/questionnaire/active'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/questionnaire/active')"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 170,
+      "routeArg": "'/questionnaire/submit'",
+      "dataArg": "{\r\n                questionnaire_id: questionnaire.id,\r\n                inviter_id: parseInt(inviterId),\r\n                answers\r\n            }",
+      "dataKeys": [
+        "questionnaire_id",
+        "inviter_id",
+        "answers"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "message"
+      ],
+      "lineText": "const res = await post('/questionnaire/submit', {\r\n                questionnaire_id: questionnaire.id,\r\n                inviter_id: parseInt(inviterId),\r\n                answers\r\n            });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\rules\\index.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 23,
+      "routeArg": "'/rules'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.details",
+        "data.summary",
+        "data.title"
+      ],
+      "lineText": "const res = await get('/rules');"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\search\\search.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 76,
+      "routeArg": "url",
+      "dataArg": "params",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "(url, params) => get(url, params),"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\slash\\detail.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 76,
+      "routeArg": "`/slash/${slashNo}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "message"
+      ],
+      "lineText": "const res = await get(`/slash/${slashNo}`);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\slash\\list.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 89,
+      "routeArg": "'/slash/activities'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [],
+      "lineText": "const res = await get('/slash/activities');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 96,
+      "routeArg": "'/slash/my/list'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.map"
+      ],
+      "lineText": "const res = await get('/slash/my/list');"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 110,
+      "routeArg": "'/slash/start'",
+      "dataArg": "{ activity_id: activity.id }",
+      "dataKeys": [
+        "activity_id"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.slash_no",
+        "message"
+      ],
+      "lineText": "const res = await post('/slash/start', { activity_id: activity.id });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\stations\\my-station.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 21,
+      "routeArg": "'/stations/my-scope'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get('/stations/my-scope', {}, { showLoading: true });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\stations\\stationMapLoader.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 16,
+      "routeArg": "'/stations'",
+      "dataArg": "{ status: 'active' }",
+      "dataKeys": [
+        "status"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get('/stations', { status: 'active' }, { showError: true });"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 36,
+      "routeArg": "'/stations/region-from-point'",
+      "dataArg": "{ lat: userLa, lng: userLo }",
+      "dataKeys": [
+        "lat",
+        "lng"
+      ],
+      "responseVar": "geo",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const geo = await get(\n                            '/stations/region-from-point',\n                            { lat: userLa, lng: userLo },\n                            { showError: false }\n                        );"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\user\\customer-service.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 96,
+      "routeArg": "'/mini-program-config'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/mini-program-config', {}, { showError: false, ignore401: true, timeout: 10000 })"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\user\\edit-profile.js": [
+    {
+      "type": "request",
+      "method": "uploadFile",
+      "line": 59,
+      "routeArg": "'/user/upload'",
+      "dataArg": "avatarUrl",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.url"
+      ],
+      "lineText": "const res = await uploadFile('/user/upload', avatarUrl, 'file');"
+    },
+    {
+      "type": "request",
+      "method": "put",
+      "line": 62,
+      "routeArg": "'/user/profile'",
+      "dataArg": "{ avatarUrl: fullUrl }",
+      "dataKeys": [
+        "avatarUrl"
+      ],
+      "responseVar": "updateRes",
+      "responseFields": [
+        "code"
+      ],
+      "lineText": "const updateRes = await put('/user/profile', { avatarUrl: fullUrl });"
+    },
+    {
+      "type": "request",
+      "method": "put",
+      "line": 112,
+      "routeArg": "'/user/profile'",
+      "dataArg": "{ nickname }",
+      "dataKeys": [
+        "nickname"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "message"
+      ],
+      "lineText": "const res = await put('/user/profile', { nickname });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\user\\favorites-footprints.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 53,
+      "routeArg": "'/user/favorites'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get('/user/favorites', {}, { showError: false });"
+    },
+    {
+      "type": "request",
+      "method": "del",
+      "line": 100,
+      "routeArg": "`/user/favorites/${id}`",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await del(`/user/favorites/${id}`, {}, { showError: false });"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 126,
+      "routeArg": "'/user/favorites/clear-all'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await post('/user/favorites/clear-all', {}, { showError: false });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\user\\growth-privileges.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 37,
+      "routeArg": "'/user/profile'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/user/profile'),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 38,
+      "routeArg": "'/user/member-tier-meta'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/user/member-tier-meta')"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\user\\member-levels.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 48,
+      "routeArg": "'/user/profile'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/user/profile'),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 49,
+      "routeArg": "'/user/member-tier-meta'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/user/member-tier-meta')"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\user\\membership-center.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 77,
+      "routeArg": "'/user/profile'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/user/profile'),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 78,
+      "routeArg": "'/user/member-tier-meta'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/user/member-tier-meta')"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\user\\notifications.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 24,
+      "routeArg": "'/notifications'",
+      "dataArg": "{ page, limit }",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data.list.map",
+        "data.unread_count"
+      ],
+      "lineText": "const res = await get('/notifications', { page, limit });"
+    },
+    {
+      "type": "request",
+      "method": "put",
+      "line": 54,
+      "routeArg": "`/notifications/${item.id}/read`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await Promise.all(unreadItems.map(item => put(`/notifications/${item.id}/read`)));"
+    },
+    {
+      "type": "request",
+      "method": "put",
+      "line": 75,
+      "routeArg": "`/notifications/${id}/read`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await put(`/notifications/${id}/read`);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\user\\portal-password.js": [
+    {
+      "type": "request",
+      "method": "post",
+      "line": 20,
+      "routeArg": "'/user/portal/apply-initial-password'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await post('/user/portal/apply-initial-password', {}, { showLoading: true });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\user\\preferences.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 23,
+      "routeArg": "'/user/preferences'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get('/user/preferences');"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 86,
+      "routeArg": "'/user/preferences/submit'",
+      "dataArg": "{\n        preferences: { style, categories }\n      }",
+      "dataKeys": [
+        "preferences"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "await post('/user/preferences/submit', {\n        preferences: { style, categories }\n      });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\user\\ticket-list.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 41,
+      "routeArg": "'/customer-service/tickets'",
+      "dataArg": "{ page: 1, limit: 50 }",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.list",
+        "message"
+      ],
+      "lineText": "const res = await get('/customer-service/tickets', { page: 1, limit: 50 }, { showError: false });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\user\\userDashboard.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 121,
+      "routeArg": "'/page-content'",
+      "dataArg": "{ page_key: 'user' }",
+      "dataKeys": [
+        "page_key"
+      ],
+      "responseVar": "response",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const response = await get('/page-content', { page_key: 'user' });"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 217,
+      "routeArg": "'/coupons/mine'",
+      "dataArg": "{ status: 'unused' }",
+      "dataKeys": [
+        "status"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/coupons/mine', { status: 'unused' }).catch(() => ({ code: -1, data: [] })),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 269,
+      "routeArg": "'/user/favorites'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/user/favorites', {}, { showError: false }).catch(() => null)"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 297,
+      "routeArg": "'/orders'",
+      "dataArg": "{ status: 'pending', limit: 1 }",
+      "dataKeys": [
+        "status",
+        "limit"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/orders', { status: 'pending', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 298,
+      "routeArg": "'/orders'",
+      "dataArg": "{ status: 'paid', limit: 1 }",
+      "dataKeys": [
+        "status",
+        "limit"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/orders', { status: 'paid', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 299,
+      "routeArg": "'/orders'",
+      "dataArg": "{ status: 'shipped', limit: 1 }",
+      "dataKeys": [
+        "status",
+        "limit"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/orders', { status: 'shipped', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 300,
+      "routeArg": "'/orders'",
+      "dataArg": "{ status: 'pending_review', limit: 1 }",
+      "dataKeys": [
+        "status",
+        "limit"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/orders', { status: 'pending_review', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 301,
+      "routeArg": "'/refunds'",
+      "dataArg": "{ status: 'pending', page: 1, limit: 1 }",
+      "dataKeys": [
+        "status",
+        "page",
+        "limit"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/refunds', { status: 'pending', page: 1, limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 302,
+      "routeArg": "'/refunds'",
+      "dataArg": "{ status: 'approved', page: 1, limit: 1 }",
+      "dataKeys": [
+        "status",
+        "page",
+        "limit"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/refunds', { status: 'approved', page: 1, limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 303,
+      "routeArg": "'/refunds'",
+      "dataArg": "{ status: 'processing', page: 1, limit: 1 }",
+      "dataKeys": [
+        "status",
+        "page",
+        "limit"
+      ],
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/refunds', { status: 'processing', page: 1, limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } }))"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 369,
+      "routeArg": "'/distribution/overview'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "response",
+      "responseFields": [
+        "code",
+        "data"
+      ],
+      "lineText": "const response = await get('/distribution/overview');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 408,
+      "routeArg": "'/notifications'",
+      "dataArg": "{ page: 1, limit: 1 }",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "response",
+      "responseFields": [
+        "code",
+        "data",
+        "data.unread_count"
+      ],
+      "lineText": "const response = await get('/notifications', { page: 1, limit: 1 });"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 426,
+      "routeArg": "'/stations/my-scope'",
+      "dataArg": "{}",
+      "dataKeys": [],
+      "responseVar": "response",
+      "responseFields": [
+        "code",
+        "data",
+        "data.has_verify_access"
+      ],
+      "lineText": "const response = await get('/stations/my-scope', {}, { showError: false });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\user\\userProfileActions.js": [
+    {
+      "type": "request",
+      "method": "uploadFile",
+      "line": 41,
+      "routeArg": "'/user/upload'",
+      "dataArg": "avatarUrl",
+      "dataKeys": null,
+      "responseVar": "uploadResponse",
+      "responseFields": [
+        "code",
+        "data.url"
+      ],
+      "lineText": "const uploadResponse = await uploadFile('/user/upload', avatarUrl, 'file');"
+    },
+    {
+      "type": "request",
+      "method": "put",
+      "line": 44,
+      "routeArg": "'/user/profile'",
+      "dataArg": "{ avatarUrl: fullUrl }",
+      "dataKeys": [
+        "avatarUrl"
+      ],
+      "responseVar": "updateResponse",
+      "responseFields": [
+        "code"
+      ],
+      "lineText": "const updateResponse = await put('/user/profile', { avatarUrl: fullUrl });"
+    },
+    {
+      "type": "request",
+      "method": "put",
+      "line": 133,
+      "routeArg": "'/user/profile'",
+      "dataArg": "{ nickname }",
+      "dataKeys": [
+        "nickname"
+      ],
+      "responseVar": "response",
+      "responseFields": [
+        "code",
+        "message"
+      ],
+      "lineText": "const response = await put('/user/profile', { nickname });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\wallet\\agent-wallet.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 84,
+      "routeArg": "'/agent/wallet'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data"
+      ],
+      "lineText": "const res = await get('/agent/wallet');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 111,
+      "routeArg": "'/agent/wallet/logs'",
+      "dataArg": "params",
+      "dataKeys": [
+        "page",
+        "limit"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.list",
+        "data.pagination.total",
+        "message"
+      ],
+      "lineText": "const res = await get('/agent/wallet/logs', params);"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 251,
+      "routeArg": "'/agent/wallet/prepay'",
+      "dataArg": "{ amount }",
+      "dataKeys": [
+        "amount"
+      ],
+      "responseVar": "prepayRes",
+      "responseFields": [
+        "code",
+        "data",
+        "message"
+      ],
+      "lineText": "const prepayRes = await post('/agent/wallet/prepay', { amount });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\wallet\\agentWalletRecharge.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 7,
+      "routeArg": "'/agent/wallet/recharge-config'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data",
+        "data.bonus_enabled",
+        "data.bonus_tiers",
+        "data.bonus_tiers.sort",
+        "data.preset_amounts",
+        "data.preset_amounts.length"
+      ],
+      "lineText": "const res = await get('/agent/wallet/recharge-config');"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\wallet\\index.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 24,
+      "routeArg": "'/wallet/info'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.balance",
+        "data.commission"
+      ],
+      "lineText": "const res = await get('/wallet/info');"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 45,
+      "routeArg": "'/wallet/commissions'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.list"
+      ],
+      "lineText": "const res = await get('/wallet/commissions');"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 115,
+      "routeArg": "'/wallet/withdraw'",
+      "dataArg": "{ amount }",
+      "dataKeys": [
+        "amount"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "message"
+      ],
+      "lineText": "const res = await post('/wallet/withdraw', { amount });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\pages\\wallet\\recharge-order.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 78,
+      "routeArg": "`/agent/wallet/recharge-orders/${encodeURIComponent(this.data.rechargeOrderId)}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get(`/agent/wallet/recharge-orders/${encodeURIComponent(this.data.rechargeOrderId)}`);"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 107,
+      "routeArg": "'/agent/wallet/prepay'",
+      "dataArg": "{ recharge_order_id: order.id || order.order_no }",
+      "dataKeys": [
+        "recharge_order_id"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await post('/agent/wallet/prepay', { recharge_order_id: order.id || order.order_no });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\utils\\address.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 12,
+      "routeArg": "'/addresses'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data",
+        "list"
+      ],
+      "lineText": "const res = await get('/addresses');"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\utils\\auth.js": [
+    {
+      "type": "request",
+      "method": "post",
+      "line": 13,
+      "routeArg": "'/login'",
+      "dataArg": "params",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "return post('/login', params);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\utils\\cloud.js": [
+    {
+      "type": "callFunction",
+      "method": "wx.cloud.callFunction",
+      "line": 23,
+      "routeArg": "{ name, data }",
+      "dataArg": "{ name, data }",
+      "dataKeys": [
+        "name",
+        "data"
+      ],
+      "responseVar": "promise",
+      "responseFields": []
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\utils\\couponPricing.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 56,
+      "routeArg": "`/coupons/available${query}`",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data"
+      ],
+      "lineText": "const res = await get(`/coupons/available${query}`);"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\utils\\favoriteSync.js": [
+    {
+      "type": "request",
+      "method": "post",
+      "line": 14,
+      "routeArg": "'/user/favorites/sync'",
+      "dataArg": "{ product_ids }",
+      "dataKeys": [
+        "product_ids"
+      ],
+      "responseVar": "res",
+      "responseFields": [
+        "code"
+      ],
+      "lineText": "const res = await post('/user/favorites/sync', { product_ids }, { showError: false });"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\utils\\points.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 40,
+      "routeArg": "'/points/account'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/points/account').catch(() => null),"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 41,
+      "routeArg": "'/points/sign-in/status'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": null,
+      "responseFields": [],
+      "lineText": "get('/points/sign-in/status').catch(() => null)"
+    },
+    {
+      "type": "request",
+      "method": "get",
+      "line": 57,
+      "routeArg": "'/points/account'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "data"
+      ],
+      "lineText": "const res = await get('/points/account');"
+    },
+    {
+      "type": "request",
+      "method": "post",
+      "line": 62,
+      "routeArg": "'/points/sign-in'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data.balance_points",
+        "data.level",
+        "data.streak",
+        "data.total_points"
+      ],
+      "lineText": "const res = await post('/points/sign-in');"
+    }
+  ],
+  "C:\\Users\\21963\\WeChatProjects\\zz\\miniprogram\\utils\\userProfile.js": [
+    {
+      "type": "request",
+      "method": "get",
+      "line": 50,
+      "routeArg": "'/user/profile'",
+      "dataArg": "",
+      "dataKeys": null,
+      "responseVar": "res",
+      "responseFields": [
+        "code",
+        "data"
+      ],
+      "lineText": "const res = await get('/user/profile');"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 const express = require('express');
 const { checkPermission } = require('../../middleware/adminAuth');
+const { okAction, fail } = require('../../utils/adminResponse');
 const adminDashboardController = require('./controllers/adminDashboardController');
 const adminStatisticsController = require('./controllers/adminStatisticsController');
 const adminSettingsController = require('./controllers/adminSettingsController');
@@ -42,7 +43,7 @@ router.get('/alert-config', checkPermission('settings_manage'), async (req, res)
         const cfg = await AlertService.loadAlertConfig();
         res.json({ code: 0, data: cfg });
     } catch (e) {
-        res.status(500).json({ code: 500, message: e.message });
+        fail(res, 500, e.message);
     }
 });
 
@@ -72,9 +73,9 @@ router.put('/alert-config', checkPermission('settings_manage'), async (req, res)
             });
         }));
 
-        res.json({ code: 0, message: '告警配置已保存' });
+        okAction(res, '告警配置已保存');
     } catch (e) {
-        res.status(500).json({ code: 500, message: e.message });
+        fail(res, 500, e.message);
     }
 });
 
@@ -82,13 +83,16 @@ router.post('/alert-config/test', checkPermission('settings_manage'), async (req
     try {
         const { type, url } = req.body || {};
         if (!type || !url) {
-            return res.status(400).json({ code: 400, message: '缺少 type 或 url' });
+            return fail(res, 400, '缺少 type 或 url');
         }
 
         const result = await AlertService.testWebhook(type, url);
-        return res.json({ code: result.ok ? 0 : 1, data: result, message: result.message });
+        if (!result.ok) {
+            return fail(res, 400, result.message, result, 400);
+        }
+        return res.json({ code: 0, data: result, message: result.message });
     } catch (e) {
-        return res.status(500).json({ code: 500, message: e.message });
+        return fail(res, 500, e.message);
     }
 });
 

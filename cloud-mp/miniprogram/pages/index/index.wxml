@@ -40,10 +40,12 @@
             <view class="hero-orb orb-c"></view>
           </view>
           <view class="hero-mask"></view>
-          <view class="hero-scroll-hint" wx:if="{{showScrollHint && !navScrolled}}">
-            <text class="hero-scroll-label">下滑</text>
-            <view class="hero-scroll-track">
-              <view class="hero-scroll-dot"></view>
+          <view class="hero-guide" style="top: {{navTopPadding + navBarHeight + 24}}px;">
+            <text class="hero-guide-kicker">SCROLL FOR MORE</text>
+            <text class="hero-guide-title">{{heroGuideTitle}}</text>
+            <view class="hero-guide-row">
+              <text class="hero-guide-subtitle">{{heroGuideSubtitle}}</text>
+              <text class="hero-guide-arrow">↓</text>
             </view>
           </view>
           <view class="hero-copy">
@@ -53,32 +55,6 @@
         </view>
       </swiper-item>
     </swiper>
-  </view>
-
-  <view class="home-task-section" wx:if="{{homeTaskGuide}}">
-    <view class="home-task-head">
-      <text class="home-task-kicker">{{homeTaskGuide.eyebrow}}</text>
-      <text class="home-task-title">{{homeTaskGuide.title}}</text>
-      <text class="home-task-desc">{{homeTaskGuide.description}}</text>
-    </view>
-    <view class="home-task-actions">
-      <view class="home-task-primary" bindtap="onHomeTaskTap" data-action="{{homeTaskGuide.primary.action}}">
-        <text class="home-task-primary-text">{{homeTaskGuide.primary.label}}</text>
-        <text class="home-task-primary-arrow">›</text>
-      </view>
-      <view class="home-task-secondary-row">
-        <view
-          class="home-task-secondary"
-          wx:for="{{homeTaskGuide.secondary}}"
-          wx:key="label"
-          bindtap="onHomeTaskTap"
-          data-action="{{item.action}}"
-        >
-          <text class="home-task-secondary-text">{{item.label}}</text>
-          <text class="home-task-secondary-arrow">›</text>
-        </view>
-      </view>
-    </view>
   </view>
 
   <!-- 优惠券入口（暂时隐藏） -->

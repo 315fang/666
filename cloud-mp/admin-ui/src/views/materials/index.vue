@@ -260,7 +260,8 @@ const currentGroupName = computed(() => {
 
 const fetchGroups = async () => {
   const res = await getMaterialGroups()
-  groups.value = res.data || res || []
+  const data = res?.data || res
+  groups.value = Array.isArray(data) ? data : (data?.list || [])
 }
 
 const selectGroup = (id) => {

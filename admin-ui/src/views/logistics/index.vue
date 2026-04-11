@@ -226,7 +226,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getOrders, getAdminOrderLogistics, refreshAdminLogistics, getMiniProgramConfig } from '@/api/index'
+import { getOrders, getAdminOrderLogistics, refreshAdminLogistics, getMiniProgramConfig } from '@/api'
 import { usePagination } from '@/composables/usePagination'
 import { getUserNickname } from '@/utils/userDisplay'
 
@@ -268,7 +268,7 @@ async function fetchOrders() {
     if (searchForm.company) params.company = searchForm.company
 
     const res = await getOrders(params)
-    tableData.value = (res?.list || res?.data?.list || []).map(o => ({ ...o, _logistics: null, _refreshing: false }))
+    tableData.value = (res.list || []).map(o => ({ ...o, _logistics: null, _refreshing: false }))
     applyResponse(res)
     stats.total = pagination.total
 
@@ -392,7 +392,7 @@ async function loadDrawerLogistics(order, forceRefresh = false) {
     } else {
       res = await getAdminOrderLogistics(order.id)
     }
-    const data = res?.data || res
+    const data = res
     if (!data) {
       ElMessage.warning('物流查询失败')
       return
@@ -417,7 +417,7 @@ async function handleRefresh(row) {
   row._refreshing = true
   try {
     const res = await refreshAdminLogistics(row.id)
-    const data = res?.data || res
+    const data = res
     if (!data) return ElMessage.warning('刷新失败')
     row._logistics = data
     ElMessage.success('已刷新')

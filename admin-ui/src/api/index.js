@@ -1,5 +1,5 @@
 /**
- * 管理端 API：按业务域拆分为 modules/*，此处统一再导出，调用方仍使用 `@/api` 或 `@/api/index`。
+ * 管理端 API 聚合出口。页面层只应从 `@/api` 导入。
  */
 export * from './modules/auth'
 export * from './modules/statistics'
