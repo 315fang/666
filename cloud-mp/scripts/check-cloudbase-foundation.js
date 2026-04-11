@@ -26,6 +26,8 @@ function run() {
   const seedSummaryPath = path.join(projectRoot, 'cloudbase-seed', '_summary.json');
   const importSummaryPath = path.join(projectRoot, 'cloudbase-import', '_summary.json');
   const docsPath = path.join(projectRoot, 'docs', 'CLOUDBASE_MIGRATION_PROGRESS.md');
+  const adminUiPackagePath = path.join(projectRoot, 'admin-ui', 'package.json');
+  const migrationMatrixPath = path.join(projectRoot, 'docs', 'CLOUD_MP_MIGRATION_MATRIX.md');
 
   assert(checks, exists(projectConfigPath), 'project.config.json exists', projectConfigPath);
   assert(checks, exists(packageJsonPath), 'cloud-mp package.json exists', packageJsonPath);
@@ -34,6 +36,8 @@ function run() {
   assert(checks, exists(seedSummaryPath), 'normalized seed exists', seedSummaryPath);
   assert(checks, exists(importSummaryPath), 'import package exists', importSummaryPath);
   assert(checks, exists(docsPath), 'migration progress doc exists', docsPath);
+  assert(checks, exists(adminUiPackagePath), 'cloud-mp admin-ui exists', adminUiPackagePath);
+  assert(checks, exists(migrationMatrixPath), 'migration matrix exists', migrationMatrixPath);
 
   if (exists(projectConfigPath)) {
     const projectConfig = readJson(projectConfigPath);

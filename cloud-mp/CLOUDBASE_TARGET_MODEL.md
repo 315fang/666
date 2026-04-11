@@ -27,6 +27,7 @@
 - `admins`
 - `admin_roles`
 - `admin_audit_logs`
+- `admin_singletons` — 管理端运行配置/单例快照
 - `group_activities` — 拼团活动配置
 - `group_orders` — 拼团订单（同 orders 中 order_type='group'）
 - `group_members` — 拼团参与成员
@@ -74,6 +75,12 @@
 - 图片长期存储统一为 CloudBase 云存储
 - 数据库存储 `file_id` 和素材元数据
 - 临时 URL 不是正式字段
+
+### 管理端运行配置
+
+- 管理端单例配置统一存储在 `admin_singletons`
+- 生产环境不依赖本地文件 override 作为正式配置源
+- `settings`、`mini-program-config`、`feature-toggles`、`popup-ad-config` 等都属于运行时配置
 
 ## 运行层约束
 

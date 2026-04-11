@@ -6,6 +6,11 @@ function normalizeSourceName(name) {
     return String(name || '').trim();
 }
 
+function isMissingCollectionError(error) {
+    const message = String(error && error.message || '').toLowerCase();
+    return message.includes('collection') && (message.includes('not exist') || message.includes('not found') || message.includes('does not exist'));
+}
+
 function toDocumentId(row) {
     const candidate = row && (row._id || row.id || row._legacy_id);
     return candidate == null || candidate === '' ? crypto.randomUUID() : String(candidate);
@@ -35,16 +40,23 @@ function createCloudBaseStore(options) {
         warnings: []
     };
     const cache = new Map();
+    const singletonCache = new Map();
     const dirty = new Set();
     const pendingFlush = new Map();
+    const dirtySingletons = new Set();
+    const pendingSingletonFlush = new Map();
     const pageSize = 100;
+    const singletonCollectionName = `${cloudbase.collectionPrefix || ''}admin_singletons`;
     const preloadCollections = [
+        'admin_singletons',
         'admins',
         'admin_roles',
         'admin_audit_logs',
         'addresses',
         'app_configs',
         'banners',
+        'branch_agent_claims',
+        'branch_agent_stations',
         'cart_items',
         'categories',
         'commissions',
@@ -67,6 +79,7 @@ function createCloudBaseStore(options) {
         'notifications',
         'orders',
         'page_layouts',
+        'pickup_stations',
         'point_accounts',
         'point_logs',
         'portal_accounts',
@@ -84,6 +97,7 @@ function createCloudBaseStore(options) {
         'user_favorites',
         'user_mass_messages',
         'users',
+        'upgrade_applications',
         'wallet_accounts',
         'wallet_logs',
         'wallet_recharge_orders',
@@ -152,7 +166,7 @@ function createCloudBaseStore(options) {
         return `${prefix}${normalizeSourceName(name)}`;
     }
 
-    async function fetchAll(name) {
+    async function fetchCollection(name) {
         const collection = db.collection(getCollectionName(name));
         let offset = 0;
         const rows = [];
@@ -166,9 +180,23 @@ function createCloudBaseStore(options) {
         return rows;
     }
 
+    async function fetchSingletonRows() {
+        const collection = db.collection(singletonCollectionName);
+        let offset = 0;
+        const rows = [];
+        while (true) {
+          const response = await collection.skip(offset).limit(pageSize).get();
+          const batch = Array.isArray(response.data) ? response.data : [];
+          rows.push(...batch);
+          if (batch.length < pageSize) break;
+          offset += batch.length;
+        }
+        return rows;
+    }
+
     async function replaceCollection(name, rows) {
         const collection = db.collection(getCollectionName(name));
-        const existingRows = await fetchAll(name).catch(() => []);
+        const existingRows = await fetchCollection(name).catch(() => []);
         const existingIds = new Set(existingRows.map((item) => String(item._id)));
         const nextRows = Array.isArray(rows) ? rows : [];
         const nextIds = new Set();
@@ -192,12 +220,35 @@ function createCloudBaseStore(options) {
     }
 
     async function loadCollection(name) {
+        if (name === 'admin_singletons') {
+            try {
+                const rows = await fetchSingletonRows();
+                for (const row of rows) {
+                    const key = String(row.key || row.name || row._id || '').trim();
+                    if (!key) continue;
+                    singletonCache.set(key, row.value);
+                }
+            } catch (error) {
+                if (isMissingCollectionError(error)) {
+                    state.warnings.push({ collection: name, message: error.message });
+                    return;
+                }
+                state.error = error;
+                throw error;
+            }
+            return;
+        }
         try {
-            const rows = await fetchAll(name);
+            const rows = await fetchCollection(name);
             cache.set(name, rows);
         } catch (error) {
-            state.warnings.push({ collection: name, message: error.message });
-            cache.set(name, fallbackStore.getCollection(name));
+            if (isMissingCollectionError(error)) {
+                state.warnings.push({ collection: name, message: error.message });
+                cache.set(name, []);
+                return;
+            }
+            state.error = error;
+            throw error;
         }
     }
 
@@ -220,15 +271,47 @@ function createCloudBaseStore(options) {
         const pending = pendingFlush.get(key);
         if (pending) return pending;
         const flushPromise = (async () => {
-            await replaceCollection(key, cache.get(key) || []);
-            dirty.delete(key);
-            return { success: true, rows: (cache.get(key) || []).length };
+            let flushedRows = 0;
+            while (dirty.has(key)) {
+                dirty.delete(key);
+                const rows = cache.get(key) || [];
+                flushedRows = rows.length;
+                await replaceCollection(key, rows);
+            }
+            return { success: true, rows: flushedRows };
         })();
         pendingFlush.set(key, flushPromise);
         try {
             return await flushPromise;
         } finally {
             pendingFlush.delete(key);
+        }
+    }
+
+    async function flushSingleton(name) {
+        const key = normalizeSourceName(name);
+        const pending = pendingSingletonFlush.get(key);
+        if (pending) return pending;
+        const flushPromise = (async () => {
+            const collection = db.collection(singletonCollectionName);
+            while (dirtySingletons.has(key)) {
+                dirtySingletons.delete(key);
+                await collection.doc(key).set({
+                    data: {
+                        _id: key,
+                        key,
+                        value: singletonCache.get(key),
+                        updated_at: new Date().toISOString()
+                    }
+                });
+            }
+            return { success: true, name: key };
+        })();
+        pendingSingletonFlush.set(key, flushPromise);
+        try {
+            return await flushPromise;
+        } finally {
+            pendingSingletonFlush.delete(key);
         }
     }
 
@@ -239,10 +322,13 @@ function createCloudBaseStore(options) {
 
     return {
         kind: 'cloudbase',
-        description: 'CloudBase 文档数据库 + 单例文件 fallback',
+        description: 'CloudBase 文档数据库 + CloudBase 单例配置',
         readyPromise,
         async flush() {
-            const tasks = Array.from(dirty).map((name) => flushCollection(name));
+            const tasks = [
+                ...Array.from(dirty).map((name) => flushCollection(name)),
+                ...Array.from(dirtySingletons).map((name) => flushSingleton(name))
+            ];
             return Promise.allSettled(tasks);
         },
         health() {
@@ -254,8 +340,11 @@ function createCloudBaseStore(options) {
                 region: cloudbase.region || '',
                 collection_prefix: cloudbase.collectionPrefix || '',
                 cached_collections: cache.size,
+                cached_singletons: singletonCache.size,
                 dirty_collections: Array.from(dirty),
+                dirty_singletons: Array.from(dirtySingletons),
                 pending_flush_collections: Array.from(pendingFlush.keys()),
+                pending_singleton_flushes: Array.from(pendingSingletonFlush.keys()),
                 last_error: state.error ? state.error.message : null,
                 warnings: state.warnings,
                 loaded_at: state.loadedAt
@@ -265,7 +354,7 @@ function createCloudBaseStore(options) {
             return {
                 source: 'cloudbase',
                 collection_source: 'cloudbase',
-                singleton_source: 'filesystem',
+                singleton_source: 'cloudbase',
                 env_id: cloudbase.envId || '',
                 region: cloudbase.region || '',
                 collection_prefix: cloudbase.collectionPrefix || '',
@@ -274,7 +363,10 @@ function createCloudBaseStore(options) {
         },
         getCollection(name) {
             const key = normalizeSourceName(name);
-            if (!cache.has(key)) cache.set(key, []);
+            if (!cache.has(key)) {
+                cache.set(key, []);
+                state.warnings.push({ collection: key, message: 'collection requested before preload; verify preload list' });
+            }
             return cache.get(key);
         },
         saveCollection(name, rows) {
@@ -286,12 +378,18 @@ function createCloudBaseStore(options) {
             });
         },
         getSingleton(name, fallback) {
-            return fallbackStore.getSingleton(name, fallback);
+            const key = normalizeSourceName(name);
+            return singletonCache.has(key) ? singletonCache.get(key) : fallback;
         },
         saveSingleton(name, value) {
-            return fallbackStore.saveSingleton(name, value);
+            const key = normalizeSourceName(name);
+            singletonCache.set(key, value);
+            dirtySingletons.add(key);
+            void flushSingleton(key).catch((error) => {
+                state.error = error;
+            });
         },
-        _internals: { cache, dirty, state, db, app }
+        _internals: { cache, singletonCache, dirty, dirtySingletons, state, db, app }
     };
 }
 

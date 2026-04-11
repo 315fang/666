@@ -1,0 +1,2604 @@
+{
+  "generatedAt": "2026-04-11T05:29:54.781Z",
+  "adminSource": {
+    "exists": true,
+    "routeSource": true
+  },
+  "miniprogram": [
+    {
+      "item": "pages/activity/activity",
+      "legacy": "miniprogram/pages/activity/activity",
+      "target": "cloud-mp/miniprogram/pages/activity/activity",
+      "status": "已通"
+    },
+    {
+      "item": "pages/activity/brand-news-detail",
+      "legacy": "miniprogram/pages/activity/brand-news-detail",
+      "target": "cloud-mp/miniprogram/pages/activity/brand-news-detail",
+      "status": "已通"
+    },
+    {
+      "item": "pages/activity/limited-spot",
+      "legacy": "miniprogram/pages/activity/limited-spot",
+      "target": "cloud-mp/miniprogram/pages/activity/limited-spot",
+      "status": "已通"
+    },
+    {
+      "item": "pages/activity/n-invite",
+      "legacy": "miniprogram/pages/activity/n-invite",
+      "target": "cloud-mp/miniprogram/pages/activity/n-invite",
+      "status": "已通"
+    },
+    {
+      "item": "pages/address/edit",
+      "legacy": "miniprogram/pages/address/edit",
+      "target": "cloud-mp/miniprogram/pages/address/edit",
+      "status": "已通"
+    },
+    {
+      "item": "pages/address/list",
+      "legacy": "miniprogram/pages/address/list",
+      "target": "cloud-mp/miniprogram/pages/address/list",
+      "status": "已通"
+    },
+    {
+      "item": "pages/cart/cart",
+      "legacy": "miniprogram/pages/cart/cart",
+      "target": "cloud-mp/miniprogram/pages/cart/cart",
+      "status": "已通"
+    },
+    {
+      "item": "pages/category/category",
+      "legacy": "miniprogram/pages/category/category",
+      "target": "cloud-mp/miniprogram/pages/category/category",
+      "status": "已通"
+    },
+    {
+      "item": "pages/coupon/list",
+      "legacy": "miniprogram/pages/coupon/list",
+      "target": "cloud-mp/miniprogram/pages/coupon/list",
+      "status": "已通"
+    },
+    {
+      "item": "pages/distribution/business-center",
+      "legacy": "miniprogram/pages/distribution/business-center",
+      "target": "cloud-mp/miniprogram/pages/distribution/business-center",
+      "status": "已通"
+    },
+    {
+      "item": "pages/distribution/center",
+      "legacy": "miniprogram/pages/distribution/center",
+      "target": "cloud-mp/miniprogram/pages/distribution/center",
+      "status": "已通"
+    },
+    {
+      "item": "pages/distribution/commission-logs",
+      "legacy": "miniprogram/pages/distribution/commission-logs",
+      "target": "cloud-mp/miniprogram/pages/distribution/commission-logs",
+      "status": "已通"
+    },
+    {
+      "item": "pages/distribution/invite-poster",
+      "legacy": "miniprogram/pages/distribution/invite-poster",
+      "target": "cloud-mp/miniprogram/pages/distribution/invite-poster",
+      "status": "已通"
+    },
+    {
+      "item": "pages/distribution/stock-logs",
+      "legacy": "miniprogram/pages/distribution/stock-logs",
+      "target": "cloud-mp/miniprogram/pages/distribution/stock-logs",
+      "status": "已通"
+    },
+    {
+      "item": "pages/distribution/team",
+      "legacy": "miniprogram/pages/distribution/team",
+      "target": "cloud-mp/miniprogram/pages/distribution/team",
+      "status": "已通"
+    },
+    {
+      "item": "pages/distribution/team-member",
+      "legacy": "miniprogram/pages/distribution/team-member",
+      "target": "cloud-mp/miniprogram/pages/distribution/team-member",
+      "status": "已通"
+    },
+    {
+      "item": "pages/distribution/withdraw-history",
+      "legacy": "miniprogram/pages/distribution/withdraw-history",
+      "target": "cloud-mp/miniprogram/pages/distribution/withdraw-history",
+      "status": "已通"
+    },
+    {
+      "item": "pages/group/detail",
+      "legacy": "miniprogram/pages/group/detail",
+      "target": "cloud-mp/miniprogram/pages/group/detail",
+      "status": "已通"
+    },
+    {
+      "item": "pages/group/list",
+      "legacy": "miniprogram/pages/group/list",
+      "target": "cloud-mp/miniprogram/pages/group/list",
+      "status": "已通"
+    },
+    {
+      "item": "pages/index/index",
+      "legacy": "miniprogram/pages/index/index",
+      "target": "cloud-mp/miniprogram/pages/index/index",
+      "status": "已通"
+    },
+    {
+      "item": "pages/logistics/tracking",
+      "legacy": "miniprogram/pages/logistics/tracking",
+      "target": "cloud-mp/miniprogram/pages/logistics/tracking",
+      "status": "已通"
+    },
+    {
+      "item": "pages/lottery/lottery",
+      "legacy": "miniprogram/pages/lottery/lottery",
+      "target": "cloud-mp/miniprogram/pages/lottery/lottery",
+      "status": "已通"
+    },
+    {
+      "item": "pages/order/confirm",
+      "legacy": "miniprogram/pages/order/confirm",
+      "target": "cloud-mp/miniprogram/pages/order/confirm",
+      "status": "已通"
+    },
+    {
+      "item": "pages/order/detail",
+      "legacy": "miniprogram/pages/order/detail",
+      "target": "cloud-mp/miniprogram/pages/order/detail",
+      "status": "已通"
+    },
+    {
+      "item": "pages/order/list",
+      "legacy": "miniprogram/pages/order/list",
+      "target": "cloud-mp/miniprogram/pages/order/list",
+      "status": "已通"
+    },
+    {
+      "item": "pages/order/pickup-credential",
+      "legacy": "miniprogram/pages/order/pickup-credential",
+      "target": "cloud-mp/miniprogram/pages/order/pickup-credential",
+      "status": "已通"
+    },
+    {
+      "item": "pages/order/refund-apply",
+      "legacy": "miniprogram/pages/order/refund-apply",
+      "target": "cloud-mp/miniprogram/pages/order/refund-apply",
+      "status": "已通"
+    },
+    {
+      "item": "pages/order/refund-detail",
+      "legacy": "miniprogram/pages/order/refund-detail",
+      "target": "cloud-mp/miniprogram/pages/order/refund-detail",
+      "status": "已通"
+    },
+    {
+      "item": "pages/order/refund-list",
+      "legacy": "miniprogram/pages/order/refund-list",
+      "target": "cloud-mp/miniprogram/pages/order/refund-list",
+      "status": "已通"
+    },
+    {
+      "item": "pages/order/review",
+      "legacy": "miniprogram/pages/order/review",
+      "target": "cloud-mp/miniprogram/pages/order/review",
+      "status": "已通"
+    },
+    {
+      "item": "pages/pickup/orders",
+      "legacy": "miniprogram/pages/pickup/orders",
+      "target": "cloud-mp/miniprogram/pages/pickup/orders",
+      "status": "已通"
+    },
+    {
+      "item": "pages/pickup/verify",
+      "legacy": "miniprogram/pages/pickup/verify",
+      "target": "cloud-mp/miniprogram/pages/pickup/verify",
+      "status": "已通"
+    },
+    {
+      "item": "pages/points/index",
+      "legacy": "miniprogram/pages/points/index",
+      "target": "cloud-mp/miniprogram/pages/points/index",
+      "status": "已通"
+    },
+    {
+      "item": "pages/privacy/privacy",
+      "legacy": "miniprogram/pages/privacy/privacy",
+      "target": "cloud-mp/miniprogram/pages/privacy/privacy",
+      "status": "已通"
+    },
+    {
+      "item": "pages/product/detail",
+      "legacy": "miniprogram/pages/product/detail",
+      "target": "cloud-mp/miniprogram/pages/product/detail",
+      "status": "已通"
+    },
+    {
+      "item": "pages/product/reviews",
+      "legacy": "miniprogram/pages/product/reviews",
+      "target": "cloud-mp/miniprogram/pages/product/reviews",
+      "status": "已通"
+    },
+    {
+      "item": "pages/search/search",
+      "legacy": "miniprogram/pages/search/search",
+      "target": "cloud-mp/miniprogram/pages/search/search",
+      "status": "已通"
+    },
+    {
+      "item": "pages/slash/detail",
+      "legacy": "miniprogram/pages/slash/detail",
+      "target": "cloud-mp/miniprogram/pages/slash/detail",
+      "status": "已通"
+    },
+    {
+      "item": "pages/slash/list",
+      "legacy": "miniprogram/pages/slash/list",
+      "target": "cloud-mp/miniprogram/pages/slash/list",
+      "status": "已通"
+    },
+    {
+      "item": "pages/splash/splash",
+      "legacy": "miniprogram/pages/splash/splash",
+      "target": "cloud-mp/miniprogram/pages/splash/splash",
+      "status": "已通"
+    },
+    {
+      "item": "pages/stations/map",
+      "legacy": "miniprogram/pages/stations/map",
+      "target": "cloud-mp/miniprogram/pages/stations/map",
+      "status": "已通"
+    },
+    {
+      "item": "pages/stations/my-station",
+      "legacy": "miniprogram/pages/stations/my-station",
+      "target": "cloud-mp/miniprogram/pages/stations/my-station",
+      "status": "已通"
+    },
+    {
+      "item": "pages/user/customer-service",
+      "legacy": "miniprogram/pages/user/customer-service",
+      "target": "cloud-mp/miniprogram/pages/user/customer-service",
+      "status": "已通"
+    },
+    {
+      "item": "pages/user/edit-profile",
+      "legacy": "miniprogram/pages/user/edit-profile",
+      "target": "cloud-mp/miniprogram/pages/user/edit-profile",
+      "status": "已通"
+    },
+    {
+      "item": "pages/user/favorites",
+      "legacy": "miniprogram/pages/user/favorites",
+      "target": "cloud-mp/miniprogram/pages/user/favorites",
+      "status": "已通"
+    },
+    {
+      "item": "pages/user/favorites-footprints",
+      "legacy": "miniprogram/pages/user/favorites-footprints",
+      "target": "cloud-mp/miniprogram/pages/user/favorites-footprints",
+      "status": "已通"
+    },
+    {
+      "item": "pages/user/footprints",
+      "legacy": "miniprogram/pages/user/footprints",
+      "target": "cloud-mp/miniprogram/pages/user/footprints",
+      "status": "已通"
+    },
+    {
+      "item": "pages/user/growth-privileges",
+      "legacy": "miniprogram/pages/user/growth-privileges",
+      "target": "cloud-mp/miniprogram/pages/user/growth-privileges",
+      "status": "已通"
+    },
+    {
+      "item": "pages/user/member-levels",
+      "legacy": "miniprogram/pages/user/member-levels",
+      "target": "cloud-mp/miniprogram/pages/user/member-levels",
+      "status": "已通"
+    },
+    {
+      "item": "pages/user/membership-center",
+      "legacy": "miniprogram/pages/user/membership-center",
+      "target": "cloud-mp/miniprogram/pages/user/membership-center",
+      "status": "已通"
+    },
+    {
+      "item": "pages/user/notifications",
+      "legacy": "miniprogram/pages/user/notifications",
+      "target": "cloud-mp/miniprogram/pages/user/notifications",
+      "status": "已通"
+    },
+    {
+      "item": "pages/user/portal-password",
+      "legacy": "miniprogram/pages/user/portal-password",
+      "target": "cloud-mp/miniprogram/pages/user/portal-password",
+      "status": "已通"
+    },
+    {
+      "item": "pages/user/preferences",
+      "legacy": "miniprogram/pages/user/preferences",
+      "target": "cloud-mp/miniprogram/pages/user/preferences",
+      "status": "已通"
+    },
+    {
+      "item": "pages/user/ticket-list",
+      "legacy": "miniprogram/pages/user/ticket-list",
+      "target": "cloud-mp/miniprogram/pages/user/ticket-list",
+      "status": "已通"
+    },
+    {
+      "item": "pages/user/user",
+      "legacy": "miniprogram/pages/user/user",
+      "target": "cloud-mp/miniprogram/pages/user/user",
+      "status": "已通"
+    },
+    {
+      "item": "pages/wallet/agent-wallet",
+      "legacy": "miniprogram/pages/wallet/agent-wallet",
+      "target": "cloud-mp/miniprogram/pages/wallet/agent-wallet",
+      "status": "已通"
+    },
+    {
+      "item": "pages/wallet/index",
+      "legacy": "miniprogram/pages/wallet/index",
+      "target": "cloud-mp/miniprogram/pages/wallet/index",
+      "status": "已通"
+    },
+    {
+      "item": "pages/wallet/recharge-order",
+      "legacy": "miniprogram/pages/wallet/recharge-order",
+      "target": "cloud-mp/miniprogram/pages/wallet/recharge-order",
+      "status": "已通"
+    }
+  ],
+  "cloudfunctions": [
+    {
+      "item": "cart.add",
+      "legacy": "POST /cart",
+      "target": "cloud-mp/cloudfunctions/cart/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "cart.check",
+      "legacy": "POST /cart/check",
+      "target": "cloud-mp/cloudfunctions/cart/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "cart.clear",
+      "legacy": "DELETE /cart/clear",
+      "target": "cloud-mp/cloudfunctions/cart/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "cart.list",
+      "legacy": "GET /cart",
+      "target": "cloud-mp/cloudfunctions/cart/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "cart.remove",
+      "legacy": "DELETE /cart/:id",
+      "target": "cloud-mp/cloudfunctions/cart/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "cart.update",
+      "legacy": "PUT /cart/:id",
+      "target": "cloud-mp/cloudfunctions/cart/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.activeTheme",
+      "legacy": "GET /themes/active",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.activities",
+      "legacy": "GET /activities",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.activityBubbles",
+      "legacy": "GET /activity/bubbles",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.activityLinks",
+      "legacy": "GET /activity/links",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.banners",
+      "legacy": "GET /banners",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.boardsMap",
+      "legacy": "GET /boards/map",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.brandNews",
+      "legacy": "GET /page-content/brand-news",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.festivalConfig",
+      "legacy": "GET /activity/festival-config",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.getSystemConfig",
+      "legacy": "GET /configs",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.groupActivities",
+      "legacy": "GET /group/activities",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.groupDetail",
+      "legacy": "GET /groups/:id",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.groups",
+      "legacy": "GET /groups",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.homeContent",
+      "legacy": "GET /page-content/home | GET /page-content | GET /homepage-config",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.limitedSpotDetail",
+      "legacy": "GET /activity/limited-spot/detail",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.lottery",
+      "legacy": "GET /lottery",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.lotteryPrizes",
+      "legacy": "GET /lottery/prizes",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.lotteryRecords",
+      "legacy": "GET /lottery/records",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.miniProgramConfig",
+      "legacy": "GET /mini-program-config",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.nInviteCard",
+      "legacy": "GET /n/invite-card",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.questionnaireActive",
+      "legacy": "GET /questionnaire/active",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.rules",
+      "legacy": "GET /rules",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.slashActivities",
+      "legacy": "GET /slash/activities",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.slashList",
+      "legacy": "GET /slash",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "config.splash",
+      "legacy": "GET /splash/active",
+      "target": "cloud-mp/cloudfunctions/config/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.agentOrders",
+      "legacy": "GET /agent/orders",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.agentRestock",
+      "legacy": "POST /agent/restock",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.agentWallet",
+      "legacy": "GET /agent/wallet",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.agentWalletLogs",
+      "legacy": "GET /agent/wallet/logs",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.agentWalletPrepay",
+      "legacy": "POST /agent/wallet/prepay",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.agentWalletRechargeConfig",
+      "legacy": "GET /agent/wallet/recharge-config",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.agentWalletRechargeOrderDetail",
+      "legacy": "GET /agent/wallet/recharge-orders/:id",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.agentWorkbench",
+      "legacy": "GET /agent/workbench",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.center",
+      "legacy": "GET /distribution/overview | GET /distribution/center | GET /stats/distribution | GET /agent | GET /wallet",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.commissionPreview",
+      "legacy": "GET /commissions/preview",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.commLogs",
+      "legacy": "GET /distribution/commission-logs | GET /commissions",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.settleMatured",
+      "legacy": "POST /commissions/settle-matured",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.stats",
+      "legacy": "GET /distribution/stats",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.team",
+      "legacy": "GET /distribution/team",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.teamDetail",
+      "legacy": "GET /distribution/team/:id",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.withdraw",
+      "legacy": "POST /distribution/withdraw | POST /wallet/withdraw",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.withdrawList",
+      "legacy": "GET /wallet/withdrawals",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "distribution.wxacodeInvite",
+      "legacy": "GET /distribution/wxacode-invite",
+      "target": "cloud-mp/cloudfunctions/distribution/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.applyRefund",
+      "legacy": "POST /refunds",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.cancel",
+      "legacy": "POST /orders/:id/cancel",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.cancelRefund",
+      "legacy": "PUT /refunds/:id/cancel",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.confirm",
+      "legacy": "POST /orders/:id/confirm | POST /orders/:id/confirm-received",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.create",
+      "legacy": "POST /orders",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.detail",
+      "legacy": "GET /orders/:id",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.groupOrderDetail",
+      "legacy": "GET /group/orders/:id",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.joinGroup",
+      "legacy": "POST /groups/:id/join | POST /group/orders",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.list",
+      "legacy": "GET /orders",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.lotteryDraw",
+      "legacy": "POST /lottery/draw",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.myGroups",
+      "legacy": "GET /group/my",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.mySlashList",
+      "legacy": "GET /slash/my/list",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.pickupMyOrder",
+      "legacy": "GET /pickup/my/:id",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.pickupPendingOrders",
+      "legacy": "GET /pickup/pending-orders",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.pickupVerifyCode",
+      "legacy": "POST /pickup/verify-code",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.pickupVerifyQr",
+      "legacy": "POST /pickup/verify-qr",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.refundDetail",
+      "legacy": "GET /refunds/:id",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.refundList",
+      "legacy": "GET /refunds",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.returnShipping",
+      "legacy": "PUT /refunds/:id/return-shipping",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.review",
+      "legacy": "POST /orders/:id/review",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.slashDetail",
+      "legacy": "GET /slash/:id",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.slashHelp",
+      "legacy": "POST /slash/:id/help",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.slashStart",
+      "legacy": "POST /slash/start",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "order.trackLogistics",
+      "legacy": "GET /logistics/order/:id | GET /logistics/:id",
+      "target": "cloud-mp/cloudfunctions/order/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "payment.prepay",
+      "legacy": "POST /orders/:id/pay | POST /orders/:id/prepay",
+      "target": "cloud-mp/cloudfunctions/payment/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "payment.queryStatus",
+      "legacy": "GET /orders/:id/pay-status",
+      "target": "cloud-mp/cloudfunctions/payment/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "payment.syncWechatPay",
+      "legacy": "POST /orders/:id/sync-wechat-pay",
+      "target": "cloud-mp/cloudfunctions/payment/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "products.categories",
+      "legacy": "GET /categories",
+      "target": "cloud-mp/cloudfunctions/products/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "products.detail",
+      "legacy": "GET /products/:id",
+      "target": "cloud-mp/cloudfunctions/products/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "products.list",
+      "legacy": "GET /products",
+      "target": "cloud-mp/cloudfunctions/products/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "products.reviews",
+      "legacy": "GET /products/:id/reviews",
+      "target": "cloud-mp/cloudfunctions/products/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "products.search",
+      "legacy": "GET /search | GET /products/search",
+      "target": "cloud-mp/cloudfunctions/products/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.addAddress",
+      "legacy": "POST /addresses",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.addFavorite",
+      "legacy": "POST /user/favorites",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.applyInitialPassword",
+      "legacy": "POST /user/portal/apply-initial-password",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.availableCoupons",
+      "legacy": "GET /coupons/available",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.claimCoupon",
+      "legacy": "POST /coupons/claim",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.claimWelcomeCoupons",
+      "legacy": "POST /user/claim-welcome-coupons",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.clearAllFavorites",
+      "legacy": "POST /user/favorites/clear-all",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.deleteAddress",
+      "legacy": "DELETE /addresses/:id",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.favoriteStatus",
+      "legacy": "GET /user/favorites/status",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.getAddressDetail",
+      "legacy": "GET /addresses/:id",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.getFavorites",
+      "legacy": "GET /user/favorites",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.getPickupScope",
+      "legacy": "GET /stations/my-scope",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.getPreferences",
+      "legacy": "GET /user/preferences",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.getProfile",
+      "legacy": "GET /user/profile | GET /user/info",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.getStats",
+      "legacy": "GET /user/stats | GET /points | GET /points/summary",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.listAddresses",
+      "legacy": "GET /addresses",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.listCoupons",
+      "legacy": "GET /coupons/mine | GET /coupons",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.listNotifications",
+      "legacy": "GET /notifications",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.listStations",
+      "legacy": "GET /stations",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.listTickets",
+      "legacy": "GET /customer-service/tickets",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.markRead",
+      "legacy": "PUT /notifications/:id/read",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.memberTierMeta",
+      "legacy": "GET /user/member-tier-meta",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.pickupOptions",
+      "legacy": "GET /stations/pickup-options",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.pointsAccount",
+      "legacy": "GET /points/account",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.pointsLogs",
+      "legacy": "GET /points/logs",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.pointsSignIn",
+      "legacy": "POST /points/sign-in",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.pointsSignInStatus",
+      "legacy": "GET /points/sign-in/status",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.pointsTasks",
+      "legacy": "GET /points/tasks",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.regionFromPoint",
+      "legacy": "GET /stations/region-from-point",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.removeFavorite",
+      "legacy": "DELETE /user/favorites",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.removeFavoriteById",
+      "legacy": "DELETE /user/favorites/:id",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.setDefaultAddress",
+      "legacy": "PUT /addresses/:id/default | POST /addresses/:id/default",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.shareEligibility",
+      "legacy": "GET /questionnaire/share-eligibility",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.submitPreferences",
+      "legacy": "POST /user/preferences/submit",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.submitQuestionnaire",
+      "legacy": "POST /questionnaire/submit",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.syncFavorites",
+      "legacy": "POST /user/favorites/sync",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.updateAddress",
+      "legacy": "PUT /addresses/:id",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.updateProfile",
+      "legacy": "PUT /user/profile | PUT /user/info",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.upgrade",
+      "legacy": "POST /upgrade",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.upgradeApply",
+      "legacy": "POST /upgrade/apply",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.upgradeEligibility",
+      "legacy": "GET /upgrade/eligibility",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.walletCommissions",
+      "legacy": "GET /wallet/commissions",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    },
+    {
+      "item": "user.walletInfo",
+      "legacy": "GET /wallet/info",
+      "target": "cloud-mp/cloudfunctions/user/index.js",
+      "status": "已通"
+    }
+  ],
+  "adminApi": [
+    {
+      "item": "DELETE /admins/:id",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /banners/:id",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /boards/:id/products/:id",
+      "legacy": "admin-ui/src/api/modules/boards.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /categories/:id",
+      "legacy": "admin-ui/src/api/modules/catalog.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /contents/:id",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /coupons/:id",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /db-indexes/:id/:id",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /group-buys/:id",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /home-sections/:id",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /lottery-prizes/:id",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /mass-messages/:id",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /material-groups/:id",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /materials/:id",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /pickup-stations/:id/staff/:id",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /products/:id",
+      "legacy": "admin-ui/src/api/modules/catalog.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "DELETE /slash-activities/:id",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /activity-links",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /activity-options",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /admins",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /agent-system/assist-bonus",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /agent-system/commission-config",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /agent-system/dividend-rules",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /agent-system/dividend/preview",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /agent-system/exit-applications",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /agent-system/exit-rules",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /agent-system/fund-pool",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /agent-system/peer-bonus",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /agent-system/recharge-config",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /agent-system/upgrade-rules",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /alert-config",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /banners",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /boards",
+      "legacy": "admin-ui/src/api/modules/boards.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /boards/:id/products",
+      "legacy": "admin-ui/src/api/modules/boards.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /branch-agent-policy",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /branch-agents/claims",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /branch-agents/stations",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /categories",
+      "legacy": "admin-ui/src/api/modules/catalog.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /commissions",
+      "legacy": "admin-ui/src/api/modules/finance.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /contents",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /coupon-auto-rules",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /coupons",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /coupons/:id",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /dashboard/notifications",
+      "legacy": "admin-ui/src/api/modules/statistics.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /db-indexes/:id",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /db-indexes/:id/columns",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /db-indexes/tables",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /dealers",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /debug/anomalies",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /debug/cron-status",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /debug/db-ping",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /debug/logs",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /debug/process",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /feature-toggles",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /festival-config",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /global-ui-config",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /group-buys",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /group-buys/:id",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /home-sections",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /home-sections/schemas",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /logistics/order/:id",
+      "legacy": "admin-ui/src/api/modules/ordersFulfillment.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /logs",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /logs/export",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /lottery-prizes",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /mass-messages",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /material-groups",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /materials",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /member-tier-config",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /mini-program-config",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /n-system/leaders",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /n-system/leaders/:id/members",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /n-system/members",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /operations/dashboard",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /orders",
+      "legacy": "admin-ui/src/api/modules/ordersFulfillment.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /orders/:id",
+      "legacy": "admin-ui/src/api/modules/ordersFulfillment.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /orders/export",
+      "legacy": "admin-ui/src/api/modules/ordersFulfillment.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /payment-health",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /pickup-stations",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /pickup-stations/:id",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /pickup-stations/:id/staff",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /popup-ad-config",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /products",
+      "legacy": "admin-ui/src/api/modules/catalog.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /products/:id",
+      "legacy": "admin-ui/src/api/modules/catalog.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /profile",
+      "legacy": "admin-ui/src/api/modules/auth.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /refunds",
+      "legacy": "admin-ui/src/api/modules/finance.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /refunds/:id",
+      "legacy": "admin-ui/src/api/modules/finance.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /reviews",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /settings",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /slash-activities",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /slash-activities/:id",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /splash",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /statistics/agent-ranking",
+      "legacy": "admin-ui/src/api/modules/statistics.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /statistics/distribution-report",
+      "legacy": "admin-ui/src/api/modules/statistics.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /statistics/low-stock",
+      "legacy": "admin-ui/src/api/modules/statistics.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /statistics/overview",
+      "legacy": "admin-ui/src/api/modules/statistics.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /statistics/product-ranking",
+      "legacy": "admin-ui/src/api/modules/statistics.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /statistics/sales-trend",
+      "legacy": "admin-ui/src/api/modules/statistics.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /statistics/user-trend",
+      "legacy": "admin-ui/src/api/modules/statistics.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /storage/config",
+      "legacy": "admin-ui/src/api/modules/mediaUpload.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /system-configs",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /system-configs/:id/history",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /system/status",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /upgrade-applications",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /users",
+      "legacy": "admin-ui/src/api/modules/users.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /users/:id",
+      "legacy": "admin-ui/src/api/modules/users.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /users/:id/team",
+      "legacy": "admin-ui/src/api/modules/users.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /users/:id/team-summary",
+      "legacy": "admin-ui/src/api/modules/users.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "GET /withdrawals",
+      "legacy": "admin-ui/src/api/modules/finance.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /admins",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /agent-system/dividend/execute",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /agent-system/exit-applications/:id",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /alert-config/test",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /banners",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /boards/:id/products",
+      "legacy": "admin-ui/src/api/modules/boards.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /boards/:id/products/sort",
+      "legacy": "admin-ui/src/api/modules/boards.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /branch-agents/stations",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /categories",
+      "legacy": "admin-ui/src/api/modules/catalog.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /commissions/batch-approve",
+      "legacy": "admin-ui/src/api/modules/finance.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /commissions/batch-reject",
+      "legacy": "admin-ui/src/api/modules/finance.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /contents",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /coupons",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /coupons/:id/issue",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /db-indexes",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /feature-toggles",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /group-buys",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /home-sections",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /home-sections/sort",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /login",
+      "legacy": "admin-ui/src/api/modules/auth.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /logout",
+      "legacy": "admin-ui/src/api/modules/auth.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /lottery-prizes",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /mass-messages",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /mass-messages/:id/send",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /material-groups",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /material-groups/move",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /materials",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /orders/batch-ship",
+      "legacy": "admin-ui/src/api/modules/ordersFulfillment.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /pickup-stations",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /pickup-stations/:id/staff",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /products",
+      "legacy": "admin-ui/src/api/modules/catalog.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /slash-activities",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /storage/test",
+      "legacy": "admin-ui/src/api/modules/mediaUpload.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /system-configs/:id/rollback",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /system-configs/batch",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /system-configs/refresh-cache",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /upload",
+      "legacy": "admin-ui/src/api/modules/mediaUpload.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "POST /users/batch-role",
+      "legacy": "admin-ui/src/api/modules/users.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /activity-links",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /admins/:id",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /admins/:id/password",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /agent-system/assist-bonus",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /agent-system/commission-config",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /agent-system/dividend-rules",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /agent-system/exit-applications/:id/review",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /agent-system/exit-rules",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /agent-system/fund-pool",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /agent-system/peer-bonus",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /agent-system/recharge-config",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /agent-system/upgrade-rules",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /alert-config",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /banners/:id",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /boards/:id/products/:id",
+      "legacy": "admin-ui/src/api/modules/boards.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /branch-agent-policy",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /branch-agents/claims/:id/review",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /branch-agents/stations/:id",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /categories/:id",
+      "legacy": "admin-ui/src/api/modules/catalog.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /commissions/:id/approve",
+      "legacy": "admin-ui/src/api/modules/finance.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /commissions/:id/reject",
+      "legacy": "admin-ui/src/api/modules/finance.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /contents/:id",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /coupon-auto-rules",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /coupons/:id",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /dealers/:id/approve",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /dealers/:id/level",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /dealers/:id/reject",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /festival-config",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /global-ui-config",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /group-buys/:id",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /home-sections/:id",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /home-sections/:id/toggle",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /lottery-prizes/:id",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /material-groups/:id",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /materials/:id",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /member-tier-config",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /mini-program-config",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /orders/:id/amount",
+      "legacy": "admin-ui/src/api/modules/ordersFulfillment.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /orders/:id/force-cancel",
+      "legacy": "admin-ui/src/api/modules/ordersFulfillment.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /orders/:id/force-complete",
+      "legacy": "admin-ui/src/api/modules/ordersFulfillment.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /orders/:id/remark",
+      "legacy": "admin-ui/src/api/modules/ordersFulfillment.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /orders/:id/ship",
+      "legacy": "admin-ui/src/api/modules/ordersFulfillment.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /orders/:id/shipping-info",
+      "legacy": "admin-ui/src/api/modules/ordersFulfillment.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /password",
+      "legacy": "admin-ui/src/api/modules/auth.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /pickup-stations/:id",
+      "legacy": "admin-ui/src/api/modules/partners.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /popup-ad-config",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /products/:id",
+      "legacy": "admin-ui/src/api/modules/catalog.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /products/:id/status",
+      "legacy": "admin-ui/src/api/modules/catalog.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /refunds/:id/approve",
+      "legacy": "admin-ui/src/api/modules/finance.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /refunds/:id/complete",
+      "legacy": "admin-ui/src/api/modules/finance.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /refunds/:id/reject",
+      "legacy": "admin-ui/src/api/modules/finance.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /reviews/:id",
+      "legacy": "admin-ui/src/api/modules/content.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /settings",
+      "legacy": "admin-ui/src/api/modules/system.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /slash-activities/:id",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /splash",
+      "legacy": "admin-ui/src/api/modules/marketing.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/admin-marketing.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /storage/config",
+      "legacy": "admin-ui/src/api/modules/mediaUpload.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /upgrade-applications/:id/review",
+      "legacy": "admin-ui/src/api/modules/agentSystem.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /users/:id/balance",
+      "legacy": "admin-ui/src/api/modules/users.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /users/:id/commerce",
+      "legacy": "admin-ui/src/api/modules/users.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /users/:id/invite-code",
+      "legacy": "admin-ui/src/api/modules/users.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /users/:id/member-no",
+      "legacy": "admin-ui/src/api/modules/users.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /users/:id/parent",
+      "legacy": "admin-ui/src/api/modules/users.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /users/:id/purchase-level",
+      "legacy": "admin-ui/src/api/modules/users.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /users/:id/remark",
+      "legacy": "admin-ui/src/api/modules/users.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /users/:id/role",
+      "legacy": "admin-ui/src/api/modules/users.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /users/:id/status",
+      "legacy": "admin-ui/src/api/modules/users.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /withdrawals/:id/approve",
+      "legacy": "admin-ui/src/api/modules/finance.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /withdrawals/:id/complete",
+      "legacy": "admin-ui/src/api/modules/finance.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    },
+    {
+      "item": "PUT /withdrawals/:id/reject",
+      "legacy": "admin-ui/src/api/modules/finance.js",
+      "target": "cloud-mp/cloudfunctions/admin-api/src/app.js",
+      "status": "已通"
+    }
+  ],
+  "collections": [
+    {
+      "item": "activity_links",
+      "legacy": "旧工程引用 11 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "admin_audit_logs",
+      "legacy": "旧工程引用 8 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "admin_roles",
+      "legacy": "旧工程引用 2 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "admin_singletons",
+      "legacy": "旧工程未直接命中",
+      "target": "seed:Y / import:Y",
+      "status": "缺验收"
+    },
+    {
+      "item": "admins",
+      "legacy": "旧工程引用 64 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "banners",
+      "legacy": "旧工程引用 135 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "cart_items",
+      "legacy": "旧工程引用 7 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "categories",
+      "legacy": "旧工程引用 140 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "commissions",
+      "legacy": "旧工程引用 185 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "configs",
+      "legacy": "旧工程引用 99 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "contents",
+      "legacy": "旧工程引用 39 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "group_activities",
+      "legacy": "旧工程引用 7 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "group_members",
+      "legacy": "旧工程引用 6 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "group_orders",
+      "legacy": "旧工程引用 6 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "lottery_configs",
+      "legacy": "旧工程未直接命中",
+      "target": "seed:Y / import:Y",
+      "status": "缺验收"
+    },
+    {
+      "item": "lottery_prizes",
+      "legacy": "旧工程引用 10 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "lottery_records",
+      "legacy": "旧工程引用 9 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "material_groups",
+      "legacy": "旧工程引用 12 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "materials",
+      "legacy": "旧工程引用 112 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "orders",
+      "legacy": "旧工程引用 449 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "products",
+      "legacy": "旧工程引用 402 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "refunds",
+      "legacy": "旧工程引用 126 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "reviews",
+      "legacy": "旧工程引用 50 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "skus",
+      "legacy": "旧工程引用 94 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "slash_activities",
+      "legacy": "旧工程引用 9 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "slash_helpers",
+      "legacy": "旧工程引用 9 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "slash_records",
+      "legacy": "旧工程引用 9 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "stations",
+      "legacy": "旧工程引用 112 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "users",
+      "legacy": "旧工程引用 331 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "wallet_accounts",
+      "legacy": "旧工程引用 1 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "wallet_logs",
+      "legacy": "旧工程引用 1 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "wallet_recharge_configs",
+      "legacy": "旧工程未直接命中",
+      "target": "seed:Y / import:Y",
+      "status": "缺验收"
+    },
+    {
+      "item": "wallet_recharge_orders",
+      "legacy": "旧工程引用 1 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    },
+    {
+      "item": "withdrawals",
+      "legacy": "旧工程引用 83 次",
+      "target": "seed:Y / import:Y",
+      "status": "已建模"
+    }
+  ],
+  "summary": {
+    "miniprogram": {
+      "已通": 58
+    },
+    "cloudfunctions": {
+      "已通": 123
+    },
+    "adminApi": {
+      "已通": 214
+    },
+    "collections": {
+      "已建模": 31,
+      "缺验收": 3
+    }
+  }
+}

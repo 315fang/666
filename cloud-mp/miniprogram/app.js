@@ -78,9 +78,7 @@ App({
         // 版本更新检测
         this.checkUpdate();
 
-        setTimeout(() => {
-            this.applyActiveTheme();
-        }, 420);
+        // 开屏动画入口已删除，永远不会再次使用
     },
 
     checkUpdate() {

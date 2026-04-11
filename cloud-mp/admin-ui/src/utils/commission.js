@@ -1,0 +1,35 @@
+const COMMISSION_TYPE_LABELS = {
+  direct: '直推佣金',
+  indirect: '间推佣金',
+  gap: '级差收益',
+  agent_fulfillment: '代理发货利润',
+  same_level: '平级奖',
+  n_price_gap: 'N路径差价',
+  n_separation_bonus: 'N路径脱离奖励',
+  fund_pool: '基金池奖励',
+  self: '自购返利',
+  stock_diff: '库存差价',
+  agent_assist: '代理协助奖',
+  b2_assist: 'B2协助奖'
+}
+
+export const COMMISSION_TYPE_OPTIONS = [
+  { value: 'direct', label: COMMISSION_TYPE_LABELS.direct },
+  { value: 'indirect', label: COMMISSION_TYPE_LABELS.indirect },
+  { value: 'gap', label: COMMISSION_TYPE_LABELS.gap },
+  { value: 'agent_fulfillment', label: COMMISSION_TYPE_LABELS.agent_fulfillment },
+  { value: 'same_level', label: COMMISSION_TYPE_LABELS.same_level },
+  { value: 'n_price_gap', label: COMMISSION_TYPE_LABELS.n_price_gap },
+  { value: 'n_separation_bonus', label: COMMISSION_TYPE_LABELS.n_separation_bonus },
+  { value: 'Fund_Pool', label: COMMISSION_TYPE_LABELS.fund_pool },
+  { value: 'self', label: COMMISSION_TYPE_LABELS.self },
+  { value: 'Stock_Diff', label: COMMISSION_TYPE_LABELS.stock_diff },
+  { value: 'agent_assist', label: COMMISSION_TYPE_LABELS.agent_assist },
+  { value: 'B2_Assist', label: COMMISSION_TYPE_LABELS.b2_assist }
+]
+
+export function getCommissionTypeLabel(type) {
+  if (!type) return '佣金'
+  const normalized = String(type).trim().toLowerCase()
+  return COMMISSION_TYPE_LABELS[normalized] || String(type)
+}
