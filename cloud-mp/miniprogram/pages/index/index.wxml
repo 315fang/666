@@ -40,14 +40,6 @@
             <view class="hero-orb orb-c"></view>
           </view>
           <view class="hero-mask"></view>
-          <view class="hero-guide" style="top: {{navTopPadding + navBarHeight + 24}}px;">
-            <text class="hero-guide-kicker">SCROLL FOR MORE</text>
-            <text class="hero-guide-title">{{heroGuideTitle}}</text>
-            <view class="hero-guide-row">
-              <text class="hero-guide-subtitle">{{heroGuideSubtitle}}</text>
-              <text class="hero-guide-arrow">↓</text>
-            </view>
-          </view>
           <view class="hero-copy">
             <text class="hero-title">{{item.title}}</text>
             <text class="hero-subtitle">{{item.subtitle}}</text>

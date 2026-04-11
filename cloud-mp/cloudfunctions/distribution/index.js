@@ -17,6 +17,7 @@ const _ = db.command;
 // ==================== 子模块导入 ====================
 const distributionQuery = require('./distribution-query');
 const distributionCommission = require('./distribution-commission');
+const internalActionToken = String(process.env.DISTRIBUTION_INTERNAL_TOKEN || '').trim();
 
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
@@ -231,32 +232,8 @@ const handleAction = {
         return success(dashboard);
     }),
 
-    'settleMatured': asyncHandler(async (openid) => {
-        // 结算已到期佣金
-        const res = await getAllRecords(db, 'commissions', { openid, status: 'pending' }).catch(() => []);
-
-        let settledCount = 0;
-        let totalAmount = 0;
-        for (const comm of (res || [])) {
-            // 佣金创建超过7天可结算
-            const created = new Date(comm.created_at);
-            const daysDiff = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
-            if (daysDiff >= 7) {
-                await db.collection('commissions').doc(comm._id).update({
-                    data: { status: 'settled', settled_at: db.serverDate() },
-                });
-                totalAmount += toNumber(comm.amount, 0);
-                settledCount += 1;
-            }
-        }
-
-        if (totalAmount > 0) {
-            await db.collection('users').where({ openid }).update({
-                data: { wallet_balance: _.inc(totalAmount), total_earned: _.inc(totalAmount), updated_at: db.serverDate() },
-            });
-        }
-
-        return success({ settled_count: settledCount, total_amount: totalAmount });
+    'settleMatured': asyncHandler(async () => {
+        throw forbidden('该接口已停用，请使用佣金冻结期 + 后台审批结算主链');
     }),
 
     // ===== 提现 =====
@@ -542,9 +519,16 @@ exports.main = cloudFunctionWrapper(async (event) => {
         throw unauthorized('未登录');
     }
 
+    const internalActions = new Set(['createCommissions', 'unfreezeCommissions', 'cancelCommissions']);
+    if (internalActions.has(action)) {
+        const providedToken = String(event.internal_token || '').trim();
+        if (!internalActionToken || providedToken !== internalActionToken) {
+            throw forbidden('内部佣金接口禁止直接访问');
+        }
+    }
+
     // 对于 center/dashboard 等查看类 action，非分销员也可访问（返回基础数据）
-    // createCommissions/unfreezeCommissions/cancelCommissions 为内部调用，跳过权限检查
-    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench', 'createCommissions', 'unfreezeCommissions', 'cancelCommissions'];
+    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench'];
     const { action } = event;
 
     if (!viewActions.includes(action)) {

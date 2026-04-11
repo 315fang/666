@@ -1821,7 +1821,7 @@ function buildCommissionRecord(commission, users, orders) {
         id: primaryId(commission),
         amount: toNumber(commission.amount, 0),
         level: toNumber(commission.level || commission.commission_level, 1),
-        status: pickString(commission.status || 'pending_approval'),
+        status: pickString(commission.status || 'unknown'),
         user_id: primaryId(user) || commission.user_id || commission.openid || null,
         user: buildUserTiny(user),
         order: order ? {
@@ -1839,14 +1839,14 @@ function commissionStats(rows) {
         const amount = toNumber(row.amount, 0);
         if (row.status === 'frozen') stats.totalFrozen += amount;
         else if (row.status === 'pending_approval') stats.totalPendingApproval += amount;
-        else if (row.status === 'approved') stats.totalApproved += amount;
         else if (['settled', 'completed'].includes(row.status)) stats.totalSettled += amount;
+        else if (row.status === 'unknown') stats.totalUnknown += amount;
         return stats;
     }, {
         totalFrozen: 0,
         totalPendingApproval: 0,
-        totalApproved: 0,
-        totalSettled: 0
+        totalSettled: 0,
+        totalUnknown: 0
     });
 }
 
@@ -1894,7 +1894,7 @@ function applyUserMoneyChange(users, userRef, amount, options = {}) {
 
 function settleCommissionRow(row, users) {
     if (row.status === 'settled') return { row, changed: false };
-    if (!['pending_approval', 'approved', 'pending'].includes(row.status)) {
+    if (row.status !== 'pending_approval') {
         return { row, changed: false, blocked: true };
     }
     const amount = toNumber(row.amount, 0);
@@ -3789,7 +3789,7 @@ app.get('/admin/api/commissions', auth, requirePermission('commissions'), (req, 
     ok(res, { ...pageResult, stats: commissionStats(rows) });
 });
 
-app.put('/admin/api/commissions/:id/approve', auth, requirePermission('commissions'), (req, res) => {
+app.put('/admin/api/commissions/:id/approve', auth, requirePermission('commissions'), async (req, res) => {
     const rows = getCollection('commissions');
     const users = getCollection('users');
     const index = rows.findIndex((row) => rowMatchesLookup(row, req.params.id));
@@ -3800,57 +3800,71 @@ app.put('/admin/api/commissions/:id/approve', auth, requirePermission('commissio
     saveCollection('users', users);
     saveCollection('commissions', rows);
     createAuditLog(req.admin, 'commission.approve_settle', 'commissions', { commission_id: req.params.id });
+    await Promise.resolve(dataStore.flush?.());
     const updated = rows[index];
     if (!updated) return fail(res, '佣金记录不存在', 404);
     ok(res, updated);
 });
 
-app.put('/admin/api/commissions/:id/reject', auth, requirePermission('commissions'), (req, res) => {
+app.put('/admin/api/commissions/:id/reject', auth, requirePermission('commissions'), async (req, res) => {
     const rows = getCollection('commissions');
     const users = getCollection('users');
     const index = rows.findIndex((row) => rowMatchesLookup(row, req.params.id));
     if (index === -1) return fail(res, '佣金记录不存在', 404);
+    if (pickString(rows[index].status) !== 'pending_approval') {
+        return fail(res, '当前佣金状态不允许驳回');
+    }
     rows[index] = cancelCommissionRow(rows[index], users, pickString(req.body?.reason || '管理员驳回')).row;
     saveCollection('users', users);
     saveCollection('commissions', rows);
     createAuditLog(req.admin, 'commission.reject_cancel', 'commissions', { commission_id: req.params.id });
+    await Promise.resolve(dataStore.flush?.());
     const updated = rows[index];
     if (!updated) return fail(res, '佣金记录不存在', 404);
     ok(res, updated);
 });
 
-app.post('/admin/api/commissions/batch-approve', auth, requirePermission('commissions'), (req, res) => {
+app.post('/admin/api/commissions/batch-approve', auth, requirePermission('commissions'), async (req, res) => {
     const ids = toArray(req.body?.commission_ids || req.body?.ids);
     if (!ids.length) return fail(res, '请选择要操作的佣金记录');
     const users = getCollection('users');
     let affected = 0;
+    const blockedIds = [];
     const rows = getCollection('commissions').map((row) => {
         if (!ids.some((id) => rowMatchesLookup(row, id))) return row;
         const result = settleCommissionRow(row, users);
+        if (result.blocked) blockedIds.push(primaryId(row));
         if (result.changed) affected += 1;
         return result.row;
     });
     saveCollection('users', users);
     saveCollection('commissions', rows);
-    createAuditLog(req.admin, 'commission.batch_approve_settle', 'commissions', { affected });
-    ok(res, { success: true, affected });
+    createAuditLog(req.admin, 'commission.batch_approve_settle', 'commissions', { affected, blocked_ids: blockedIds });
+    await Promise.resolve(dataStore.flush?.());
+    ok(res, { success: true, affected, blocked_ids: blockedIds });
 });
 
-app.post('/admin/api/commissions/batch-reject', auth, requirePermission('commissions'), (req, res) => {
+app.post('/admin/api/commissions/batch-reject', auth, requirePermission('commissions'), async (req, res) => {
     const ids = toArray(req.body?.commission_ids || req.body?.ids);
     if (!ids.length) return fail(res, '请选择要操作的佣金记录');
     const users = getCollection('users');
     let affected = 0;
+    const blockedIds = [];
     const rows = getCollection('commissions').map((row) => {
         if (!ids.some((id) => rowMatchesLookup(row, id))) return row;
+        if (pickString(row.status) !== 'pending_approval') {
+            blockedIds.push(primaryId(row));
+            return row;
+        }
         const result = cancelCommissionRow(row, users, pickString(req.body?.reason || '管理员批量驳回'));
         if (result.changed) affected += 1;
         return result.row;
     });
     saveCollection('users', users);
     saveCollection('commissions', rows);
-    createAuditLog(req.admin, 'commission.batch_reject_cancel', 'commissions', { affected });
-    ok(res, { success: true, affected });
+    createAuditLog(req.admin, 'commission.batch_reject_cancel', 'commissions', { affected, blocked_ids: blockedIds });
+    await Promise.resolve(dataStore.flush?.());
+    ok(res, { success: true, affected, blocked_ids: blockedIds });
 });
 
 app.get('/admin/api/orders', auth, requirePermission('orders'), (req, res) => {

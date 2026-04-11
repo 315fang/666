@@ -44,8 +44,6 @@ Page({
         navScrolled: false,
         navBrandTitle: '问兰镜像',
         navBrandSub: '品牌甄选',
-        heroGuideTitle: '向下滑动，解锁更多惊喜',
-        heroGuideSubtitle: '首屏海报只是开始，下面还有精选内容与隐藏福利',
         statusBarHeight: 20,
         navTopPadding: 20,
         navBarHeight: 44,

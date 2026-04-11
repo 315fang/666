@@ -102,7 +102,7 @@ async function getDashboard(openid) {
         (commRes || []).forEach((c) => {
             const amount = toNumber(c.amount, 0);
             totalCommission += amount;
-            if (c.status === 'pending' || c.status === 'frozen') {
+            if (c.status === 'pending' || c.status === 'frozen' || c.status === 'pending_approval') {
                 pendingCommission += amount;
             } else if (c.status === 'settled') {
                 settledCommission += amount;

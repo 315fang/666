@@ -5,6 +5,32 @@ const db = cloud.database();
 const _ = db.command;
 const { verifySignature, decryptResource, loadPublicKey } = require('./wechat-pay-v3');
 
+const DEFAULT_ROLE_NAMES = {
+    0: '普通用户',
+    1: '初级代理',
+    2: '高级代理',
+    3: '推广合伙人',
+    4: '运营合伙人',
+    5: '区域合伙人'
+};
+
+const DEFAULT_AGENT_UPGRADE_RULES = {
+    enabled: true,
+    c1_min_purchase: 299,
+    c2_referee_count: 2,
+    c2_min_sales: 580,
+    b1_referee_count: 10,
+    b1_recharge: 3000,
+    b2_referee_count: 10,
+    b2_recharge: 30000,
+    b3_recharge: 198000
+};
+
+const DEFAULT_AGENT_COMMISSION_CONFIG = {
+    direct_pct_by_role: { 1: 20, 2: 30, 3: 40, 4: 40, 5: 40 },
+    indirect_pct_by_role: { 2: 0, 3: 0, 4: 0, 5: 0 }
+};
+
 function toNumber(value, fallback = 0) {
     if (value === null || value === undefined || value === '') return fallback;
     const num = Number(value);
@@ -19,6 +45,168 @@ function toArray(value) {
 
 function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
+}
+
+function parseConfigValue(row, fallback) {
+    if (!row) return fallback;
+    const value = row.config_value !== undefined ? row.config_value : row.value;
+    if (value === undefined || value === null || value === '') return fallback;
+    if (typeof value === 'string') {
+        try {
+            return JSON.parse(value);
+        } catch (_) {
+            return fallback;
+        }
+    }
+    return value;
+}
+
+async function getConfigByKeys(keys = []) {
+    for (const key of keys) {
+        const current = String(key || '').trim();
+        if (!current) continue;
+        const res = await db.collection('configs')
+            .where(_.or([{ config_key: current }, { key: current }]))
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+        if (res.data && res.data[0]) return res.data[0];
+        const legacyRes = await db.collection('app_configs')
+            .where({ config_key: current, status: _.in([true, 1, '1']) })
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+        if (legacyRes.data && legacyRes.data[0]) return legacyRes.data[0];
+    }
+    return null;
+}
+
+function normalizePctMap(rawMap = {}, fallback = {}) {
+    const merged = {};
+    Object.keys(fallback || {}).forEach((key) => {
+        const value = toNumber(fallback[key], NaN);
+        if (!Number.isFinite(value)) return;
+        merged[key] = value > 1 ? value / 100 : value;
+    });
+    Object.keys(rawMap || {}).forEach((key) => {
+        const rawValue = toNumber(rawMap[key], NaN);
+        if (!Number.isFinite(rawValue)) return;
+        merged[key] = rawValue > 1 ? rawValue / 100 : rawValue;
+    });
+    return merged;
+}
+
+async function loadAgentRuntimeConfig() {
+    const [upgradeRow, commissionRow, memberLevelRow] = await Promise.all([
+        getConfigByKeys(['agent_system_upgrade-rules', 'agent_system_upgrade_rules']),
+        getConfigByKeys(['agent_system_commission-config', 'agent_system_commission_config']),
+        getConfigByKeys(['member_level_config'])
+    ]);
+    const upgradeRules = { ...DEFAULT_AGENT_UPGRADE_RULES, ...parseConfigValue(upgradeRow, {}) };
+    const commission = parseConfigValue(commissionRow, {});
+    const memberLevels = Array.isArray(parseConfigValue(memberLevelRow, [])) ? parseConfigValue(memberLevelRow, []) : [];
+    return {
+        upgradeRules,
+        commissionConfig: {
+            direct_pct_by_role: normalizePctMap(commission?.direct_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.direct_pct_by_role),
+            indirect_pct_by_role: normalizePctMap(commission?.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role)
+        },
+        memberLevels
+    };
+}
+
+function getRoleMeta(roleLevel, memberLevels = []) {
+    const current = (memberLevels || []).find((item) => toNumber(item.level, -1) === roleLevel);
+    return {
+        roleName: current?.name || DEFAULT_ROLE_NAMES[roleLevel] || '普通用户',
+        discountRate: current?.discount_rate != null ? toNumber(current.discount_rate, 1) : null
+    };
+}
+
+function userRelationIds(user = {}) {
+    const ids = [user.id, user._legacy_id, user._id].filter(hasValue);
+    const out = [];
+    ids.forEach((id) => {
+        out.push(id);
+        const num = Number(id);
+        if (Number.isFinite(num)) out.push(num);
+        out.push(String(id));
+    });
+    return [...new Set(out.map((item) => `${typeof item}:${item}`))].map((key) => {
+        const [, value] = key.split(':');
+        const numeric = Number(value);
+        return key.startsWith('number:') && Number.isFinite(numeric) ? numeric : value;
+    });
+}
+
+function directRelationWhere(user = {}) {
+    const clauses = [];
+    if (user.openid) clauses.push({ referrer_openid: user.openid });
+    const ids = userRelationIds(user);
+    if (ids.length) clauses.push({ parent_id: _.in(ids) });
+    if (!clauses.length) return { referrer_openid: '__none__' };
+    return clauses.length === 1 ? clauses[0] : _.or(clauses);
+}
+
+async function getDirectMembers(user = {}) {
+    if (!user || !user.openid) return [];
+    return db.collection('users')
+        .where(directRelationWhere(user))
+        .limit(200)
+        .get()
+        .then((res) => res.data || [])
+        .catch(() => []);
+}
+
+async function getRechargeTotal(openid) {
+    if (!openid) return 0;
+    const rows = await db.collection('wallet_recharge_orders')
+        .where({ openid, status: _.in(['paid', 'completed', 'success']) })
+        .limit(200)
+        .get()
+        .then((res) => res.data || [])
+        .catch(() => []);
+    return roundMoney(rows.reduce((sum, row) => sum + toNumber(row.amount, 0), 0));
+}
+
+function deriveEligibleRoleLevel(user = {}, directMembers = [], rechargeTotal = 0, upgradeRules = DEFAULT_AGENT_UPGRADE_RULES) {
+    const currentRoleLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+    let nextRoleLevel = currentRoleLevel;
+    const totalSpent = roundMoney(user.total_spent != null ? user.total_spent : user.growth_value);
+
+    if (totalSpent >= toNumber(upgradeRules.c1_min_purchase, DEFAULT_AGENT_UPGRADE_RULES.c1_min_purchase)) {
+        nextRoleLevel = Math.max(nextRoleLevel, 1);
+    }
+
+    const c1OrAboveCount = directMembers.filter((member) => toNumber(member.role_level ?? member.distributor_level, 0) >= 1).length;
+    if (
+        totalSpent >= toNumber(upgradeRules.c2_min_sales, DEFAULT_AGENT_UPGRADE_RULES.c2_min_sales)
+        && c1OrAboveCount >= toNumber(upgradeRules.c2_referee_count, DEFAULT_AGENT_UPGRADE_RULES.c2_referee_count)
+    ) {
+        nextRoleLevel = Math.max(nextRoleLevel, 2);
+    }
+
+    const c2OrAboveCount = directMembers.filter((member) => toNumber(member.role_level ?? member.distributor_level, 0) >= 2).length;
+    if (
+        c2OrAboveCount >= toNumber(upgradeRules.b1_referee_count, DEFAULT_AGENT_UPGRADE_RULES.b1_referee_count)
+        || rechargeTotal >= toNumber(upgradeRules.b1_recharge, DEFAULT_AGENT_UPGRADE_RULES.b1_recharge)
+    ) {
+        nextRoleLevel = Math.max(nextRoleLevel, 3);
+    }
+
+    const b1OrAboveCount = directMembers.filter((member) => toNumber(member.role_level ?? member.distributor_level, 0) >= 3).length;
+    if (
+        b1OrAboveCount >= toNumber(upgradeRules.b2_referee_count, DEFAULT_AGENT_UPGRADE_RULES.b2_referee_count)
+        || rechargeTotal >= toNumber(upgradeRules.b2_recharge, DEFAULT_AGENT_UPGRADE_RULES.b2_recharge)
+    ) {
+        nextRoleLevel = Math.max(nextRoleLevel, 4);
+    }
+
+    if (rechargeTotal >= toNumber(upgradeRules.b3_recharge, DEFAULT_AGENT_UPGRADE_RULES.b3_recharge)) {
+        nextRoleLevel = Math.max(nextRoleLevel, 5);
+    }
+
+    return nextRoleLevel;
 }
 
 function amountFen(value) {
@@ -140,12 +328,50 @@ function commissionConfigForLevel(product = {}, level, baseAmount) {
     return 0;
 }
 
-function roleBasedCommission(user = {}, level, baseAmount) {
+function roleBasedCommission(user = {}, level, baseAmount, commissionConfig = DEFAULT_AGENT_COMMISSION_CONFIG) {
     const role = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
-    const directRates = { 1: 0.05, 2: 0.08, 3: 0.12, 4: 0.12 };
-    const indirectRates = { 2: 0.03, 3: 0.05, 4: 0.05 };
+    const directRates = normalizePctMap(commissionConfig.direct_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.direct_pct_by_role);
+    const indirectRates = normalizePctMap(commissionConfig.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role);
     const rates = level === 1 ? directRates : indirectRates;
     return roundMoney(baseAmount * (rates[role] || 0));
+}
+
+async function ensureAgentRoleSynced(orderId, order) {
+    if (!order.openid) return { skipped: true };
+    const user = await findUserByAny(order.openid);
+    if (!user) return { skipped: true };
+
+    const { upgradeRules, memberLevels } = await loadAgentRuntimeConfig();
+    if (upgradeRules.enabled === false) return { skipped: true };
+
+    const [directMembers, rechargeTotal] = await Promise.all([
+        getDirectMembers(user),
+        getRechargeTotal(order.openid)
+    ]);
+
+    const currentRoleLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+    const nextRoleLevel = deriveEligibleRoleLevel(user, directMembers, rechargeTotal, upgradeRules);
+    if (nextRoleLevel <= currentRoleLevel) {
+        return { skipped: true, currentRoleLevel, nextRoleLevel };
+    }
+
+    const roleMeta = getRoleMeta(nextRoleLevel, memberLevels);
+    const nextDistributorLevel = Math.max(
+        toNumber(user.distributor_level != null ? user.distributor_level : user.agent_level, 0),
+        nextRoleLevel
+    );
+    await db.collection('users').where({ openid: order.openid }).update({
+        data: {
+            role_level: nextRoleLevel,
+            role_name: roleMeta.roleName,
+            distributor_level: nextDistributorLevel,
+            agent_level: nextDistributorLevel,
+            participate_distribution: 1,
+            discount_rate: roleMeta.discountRate != null ? roleMeta.discountRate : user.discount_rate,
+            updated_at: db.serverDate()
+        }
+    });
+    return { upgraded: true, previousRoleLevel: currentRoleLevel, nextRoleLevel, roleName: roleMeta.roleName };
 }
 
 async function ensurePointsAwarded(orderId, order) {
@@ -244,6 +470,7 @@ async function ensureCommissionsCreated(orderId, order) {
         return { created: 0 };
     }
 
+    const { commissionConfig } = await loadAgentRuntimeConfig();
     const totals = new Map();
     const items = toArray(order.items);
     const orderPayAmount = getOrderTotalAmount(order);
@@ -264,7 +491,7 @@ async function ensureCommissionsCreated(orderId, order) {
         for (const beneficiary of beneficiaries) {
             if (remainingProfit <= 0) break;
             const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
-            const roleBased = roleBasedCommission(beneficiary.user, beneficiary.level, allocatedBase);
+            const roleBased = roleBasedCommission(beneficiary.user, beneficiary.level, allocatedBase, commissionConfig);
             const amount = Math.min(remainingProfit, configured > 0 ? configured : roleBased);
             if (amount <= 0) continue;
             const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
@@ -453,12 +680,13 @@ async function processPaidOrder(orderId, order) {
 
     const stock = await ensureStockDeducted(orderId, latest);
     const points = await ensurePointsAwarded(orderId, { ...latest, stock_deducted_at: true });
+    const roles = await ensureAgentRoleSynced(orderId, { ...latest, stock_deducted_at: true, points_awarded_at: true });
     const commissions = await ensureCommissionsCreated(orderId, { ...latest, stock_deducted_at: true, points_awarded_at: true });
 
     await db.collection('orders').doc(orderId).update({
         data: { payment_post_processed_at: db.serverDate(), updated_at: db.serverDate() },
     });
-    return { group, slash, stock, points, commissions };
+    return { group, slash, stock, points, roles, commissions };
 }
 
 /**

@@ -5,12 +5,87 @@ const db = cloud.database();
 const _ = db.command;
 const { toNumber, getAllRecords } = require('./shared/utils');
 
+const DEFAULT_ROLE_NAMES = {
+    0: '普通用户',
+    1: '初级代理',
+    2: '高级代理',
+    3: '推广合伙人',
+    4: '运营合伙人',
+    5: '区域合伙人'
+};
+
+const DEFAULT_AGENT_COMMISSION_CONFIG = {
+    direct_pct_by_role: { 1: 20, 2: 30, 3: 40, 4: 40, 5: 40 },
+    indirect_pct_by_role: { 2: 0, 3: 0, 4: 0, 5: 0 }
+};
+
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
 }
 
 function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
+}
+
+function parseConfigValue(row, fallback) {
+    if (!row) return fallback;
+    const value = row.config_value !== undefined ? row.config_value : row.value;
+    if (value === undefined || value === null || value === '') return fallback;
+    if (typeof value === 'string') {
+        try {
+            return JSON.parse(value);
+        } catch (_) {
+            return fallback;
+        }
+    }
+    return value;
+}
+
+async function getConfigByKeys(keys = []) {
+    for (const key of keys) {
+        const current = String(key || '').trim();
+        if (!current) continue;
+        const res = await db.collection('configs')
+            .where(_.or([{ config_key: current }, { key: current }]))
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+        if (res.data && res.data[0]) return res.data[0];
+        const legacyRes = await db.collection('app_configs')
+            .where({ config_key: current, status: _.in([true, 1, '1']) })
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+        if (legacyRes.data && legacyRes.data[0]) return legacyRes.data[0];
+    }
+    return null;
+}
+
+function normalizePctMap(rawMap = {}, fallback = {}) {
+    const merged = {};
+    Object.keys(fallback || {}).forEach((key) => {
+        const value = toNumber(fallback[key], NaN);
+        if (!Number.isFinite(value)) return;
+        merged[key] = value > 1 ? value / 100 : value;
+    });
+    Object.keys(rawMap || {}).forEach((key) => {
+        const rawValue = toNumber(rawMap[key], NaN);
+        if (!Number.isFinite(rawValue)) return;
+        merged[key] = rawValue > 1 ? rawValue / 100 : rawValue;
+    });
+    return merged;
+}
+
+async function loadAgentCommissionConfig() {
+    const row = await getConfigByKeys([
+        'agent_system_commission-config',
+        'agent_system_commission_config'
+    ]);
+    const config = parseConfigValue(row, {});
+    return {
+        direct_pct_by_role: normalizePctMap(config?.direct_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.direct_pct_by_role),
+        indirect_pct_by_role: normalizePctMap(config?.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role)
+    };
 }
 
 function toList(value) {
@@ -97,10 +172,10 @@ function configuredCommission(product = {}, level, baseAmount) {
     return 0;
 }
 
-function roleCommission(user = {}, level, baseAmount) {
+function roleCommission(user = {}, level, baseAmount, commissionConfig = DEFAULT_AGENT_COMMISSION_CONFIG) {
     const role = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
-    const directRates = { 1: 0.05, 2: 0.08, 3: 0.12, 4: 0.12 };
-    const indirectRates = { 2: 0.03, 3: 0.05, 4: 0.05 };
+    const directRates = normalizePctMap(commissionConfig.direct_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.direct_pct_by_role);
+    const indirectRates = normalizePctMap(commissionConfig.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role);
     const rate = (level === 1 ? directRates : indirectRates)[role] || 0;
     return roundMoney(baseAmount * rate);
 }
@@ -114,6 +189,7 @@ async function calculateOrderCommissions(order, explicitReferrerOpenid) {
         { level: 2, type: 'indirect', user: grandparent }
     ].filter((item) => item.user && item.user.openid && item.user.openid !== order.openid);
 
+    const commissionConfig = await loadAgentCommissionConfig();
     const totals = new Map();
     const orderAmount = roundMoney(order.pay_amount ?? order.actual_price ?? order.total_amount);
     const items = toList(order.items);
@@ -135,7 +211,7 @@ async function calculateOrderCommissions(order, explicitReferrerOpenid) {
             if (remainingProfit <= 0) break;
             const amount = Math.min(
                 remainingProfit,
-                configuredCommission(product, beneficiary.level, allocatedBase) || roleCommission(beneficiary.user, beneficiary.level, allocatedBase)
+                configuredCommission(product, beneficiary.level, allocatedBase) || roleCommission(beneficiary.user, beneficiary.level, allocatedBase, commissionConfig)
             );
             if (amount <= 0) continue;
             const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
@@ -147,7 +223,8 @@ async function calculateOrderCommissions(order, explicitReferrerOpenid) {
                 order_no: order.order_no,
                 amount: roundMoney((totals.get(key)?.amount || 0) + amount),
                 level: beneficiary.level,
-                type: beneficiary.type
+                type: beneficiary.type,
+                role_name: beneficiary.user.role_name || DEFAULT_ROLE_NAMES[toNumber(beneficiary.user.role_level, 0)] || '代理'
             });
             remainingProfit = roundMoney(remainingProfit - amount);
         }

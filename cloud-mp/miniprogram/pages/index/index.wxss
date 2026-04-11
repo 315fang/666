@@ -58,51 +58,6 @@
   position: absolute; inset: 0;
   background: linear-gradient(180deg, rgba(31, 27, 23, 0.04) 10%, rgba(31, 27, 23, 0.20) 55%, rgba(31, 27, 23, 0.42) 100%);
 }
-.hero-guide {
-  position: absolute;
-  left: 24rpx;
-  right: 24rpx;
-  z-index: 2;
-  padding: 28rpx 28rpx 24rpx;
-  border-radius: 28rpx;
-  background: linear-gradient(180deg, rgba(18, 28, 46, 0.42) 0%, rgba(18, 28, 46, 0.18) 100%);
-  border: 1rpx solid rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(16rpx);
-}
-.hero-guide-kicker {
-  display: block;
-  font-size: 18rpx;
-  line-height: 1;
-  letter-spacing: 0.3em;
-  color: rgba(255, 255, 255, 0.62);
-  margin-bottom: 18rpx;
-}
-.hero-guide-title {
-  display: block;
-  font-size: 34rpx;
-  line-height: 1.35;
-  color: #FFFFFF;
-  font-weight: 600;
-}
-.hero-guide-row {
-  margin-top: 14rpx;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-}
-.hero-guide-subtitle {
-  flex: 1;
-  font-size: 22rpx;
-  line-height: 1.6;
-  color: rgba(255, 255, 255, 0.82);
-}
-.hero-guide-arrow {
-  flex-shrink: 0;
-  font-size: 34rpx;
-  line-height: 1;
-  color: rgba(255, 255, 255, 0.92);
-}
 .hero-copy {
   position: absolute; left: 32rpx; right: 32rpx; bottom: 80rpx;
   display: flex; flex-direction: column; gap: 16rpx; z-index: 2;
