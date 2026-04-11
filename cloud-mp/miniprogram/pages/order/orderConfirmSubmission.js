@@ -2,6 +2,14 @@ const { post } = require('../../utils/request');
 const { ErrorHandler } = require('../../utils/errorHandler');
 const { ensurePrivacyAuthorization } = require('../../utils/privacy');
 
+function resolveSubmitOrderMessage(error) {
+    const code = error && (error.code || error.statusCode);
+    if (code >= 400 && code < 500 && error && error.message) {
+        return error.message;
+    }
+    return '下单失败，请稍后重试';
+}
+
 async function submitOrder(page, app, brandAnimation) {
     const {
         address,
@@ -78,7 +86,7 @@ async function submitOrder(page, app, brandAnimation) {
             wx.removeStorageSync('walletPayOrderIds');
         }
 
-        const res = await post('/orders', orderData);
+        const res = await post('/orders', orderData, { showError: false });
 
         if (page.data.from === 'direct') {
             wx.removeStorageSync('directBuyInfo');
@@ -112,7 +120,9 @@ async function submitOrder(page, app, brandAnimation) {
         }, 1500);
     } catch (err) {
         page.setData({ submitting: false });
-        ErrorHandler.handle(err);
+        ErrorHandler.handle(err, {
+            customMessage: resolveSubmitOrderMessage(err)
+        });
         console.error('提交订单失败:', err);
     }
 }

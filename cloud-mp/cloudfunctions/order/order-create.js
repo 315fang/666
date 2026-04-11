@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
 const { toNumber } = require('./shared/utils');
+const { findUserCouponDoc } = require('./order-coupon');
 
 /**
  * 根据 product_id 查找商品（兼容数字 id 和文档 _id）

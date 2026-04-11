@@ -2,6 +2,7 @@ const path = require('path');
 
 const serviceRoot = path.resolve(__dirname, '..');
 const isFunctionRuntime = Boolean(process.env.TENCENTCLOUD_RUNENV || process.env.SCF_RUNTIME_API || process.env.TCB_ROUTE_KEY);
+const enforceCloudbaseRuntime = isFunctionRuntime || process.env.ADMIN_FORCE_CLOUDBASE === 'true';
 const inferredCloudbaseEnvId = process.env.ADMIN_CLOUDBASE_ENV_ID
     || process.env.TCB_ENV
     || process.env.SCF_NAMESPACE
@@ -23,8 +24,10 @@ const runtimeRoot = process.env.ADMIN_RUNTIME_ROOT
         ? path.resolve(process.env.TMPDIR || process.env.TMP || '/tmp', 'cloudrun-admin-service-runtime')
         : path.resolve(serviceRoot, '.runtime'));
 const uploadsRoot = path.resolve(runtimeRoot, 'uploads');
-const dataSource = defaultDataSource;
-const singletonSource = (process.env.ADMIN_SINGLETON_SOURCE || 'filesystem').toLowerCase();
+const dataSource = enforceCloudbaseRuntime ? 'cloudbase' : defaultDataSource;
+const singletonSource = enforceCloudbaseRuntime
+    ? 'cloudbase'
+    : (process.env.ADMIN_SINGLETON_SOURCE || 'filesystem').toLowerCase();
 const mysql = {
     host: process.env.ADMIN_MYSQL_HOST || process.env.DB_HOST || '',
     port: Number(process.env.ADMIN_MYSQL_PORT || process.env.DB_PORT || 3306),
@@ -50,6 +53,8 @@ module.exports = {
     uploadsRoot,
     dataSource,
     singletonSource,
+    enforceCloudbaseRuntime,
+    isFunctionRuntime,
     mysql,
     cloudbase,
     jwtSecret: process.env.ADMIN_JWT_SECRET || 'cloudrun-admin-local-secret',

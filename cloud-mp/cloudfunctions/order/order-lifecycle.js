@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
 const { getOrderByIdOrNo } = require('./order-query');
+const { restoreUsedCoupon } = require('./order-coupon');
 
 function toNumber(value, fallback = 0) {
     if (value === null || value === undefined || value === '') return fallback;

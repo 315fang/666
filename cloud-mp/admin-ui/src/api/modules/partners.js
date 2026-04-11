@@ -1,0 +1,25 @@
+import request from '@/utils/request'
+
+export const getDealers = (params) => request({ url: '/dealers', method: 'get', params })
+export const approveDealer = (id) => request({ url: `/dealers/${id}/approve`, method: 'put' })
+export const rejectDealer = (id, data) => request({ url: `/dealers/${id}/reject`, method: 'put', data })
+export const updateDealerLevel = (id, data) => request({ url: `/dealers/${id}/level`, method: 'put', data })
+
+export const getAdmins = (params) => request({ url: '/admins', method: 'get', params })
+export const createAdmin = (data) => request({ url: '/admins', method: 'post', data })
+export const updateAdmin = (id, data) => request({ url: `/admins/${id}`, method: 'put', data })
+export const resetAdminPassword = (id, data) => request({ url: `/admins/${id}/password`, method: 'put', data })
+export const deleteAdmin = (id) => request({ url: `/admins/${id}`, method: 'delete' })
+
+export const getBranchAgentPolicy = () => request({ url: '/branch-agent-policy', method: 'get' })
+export const updateBranchAgentPolicy = (data) => request({ url: '/branch-agent-policy', method: 'put', data })
+export const getPickupStations = (params) => request({ url: '/pickup-stations', method: 'get', params })
+export const getPickupStationById = (id) => request({ url: `/pickup-stations/${id}`, method: 'get' })
+export const createPickupStation = (data) => request({ url: '/pickup-stations', method: 'post', data })
+export const updatePickupStation = (id, data) => request({ url: `/pickup-stations/${id}`, method: 'put', data })
+
+export const getBranchAgentStations = (params) => request({ url: '/branch-agents/stations', method: 'get', params })
+export const createBranchAgentStation = (data) => request({ url: '/branch-agents/stations', method: 'post', data })
+export const updateBranchAgentStation = (id, data) => request({ url: `/branch-agents/stations/${id}`, method: 'put', data })
+export const getBranchAgentClaims = (params) => request({ url: '/branch-agents/claims', method: 'get', params })
+export const reviewBranchAgentClaim = (id, data) => request({ url: `/branch-agents/claims/${id}/review`, method: 'put', data })
