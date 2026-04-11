@@ -638,6 +638,100 @@
   margin-top: 20rpx;
 }
 
+.guide-card {
+  padding: 26rpx 24rpx 24rpx;
+  background: linear-gradient(135deg, #F8FBFF 0%, #FFFFFF 60%, #F3F8FF 100%);
+  border: 1rpx solid rgba(191, 219, 254, 0.72);
+}
+
+.guide-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.guide-card-kicker {
+  font-size: 20rpx;
+  color: #2563EB;
+  letter-spacing: 0.22em;
+}
+
+.guide-card-title {
+  font-size: 24rpx;
+  color: #64748B;
+  font-weight: 600;
+}
+
+.guide-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  margin-top: 16rpx;
+}
+
+.guide-card-main {
+  font-size: 34rpx;
+  line-height: 1.35;
+  color: #0F172A;
+  font-weight: 700;
+}
+
+.guide-card-desc {
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #64748B;
+}
+
+.guide-card-primary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22rpx 24rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #2563EB 0%, #0F172A 100%);
+  box-shadow: 0 12rpx 28rpx rgba(37, 99, 235, 0.18);
+}
+
+.guide-card-primary-text {
+  font-size: 28rpx;
+  color: #FFFFFF;
+  font-weight: 700;
+}
+
+.guide-card-primary-arrow {
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.guide-card-secondary-row {
+  display: flex;
+  gap: 12rpx;
+}
+
+.guide-card-secondary {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18rpx 20rpx;
+  border-radius: 18rpx;
+  background: rgba(219, 234, 254, 0.45);
+  border: 1rpx solid rgba(148, 163, 184, 0.12);
+}
+
+.guide-card-secondary-text {
+  font-size: 24rpx;
+  color: #0F172A;
+  font-weight: 600;
+}
+
+.guide-card-secondary-arrow {
+  font-size: 22rpx;
+  color: #2563EB;
+}
+
 /* ══ 活动入口 ══ */
 .activity-entry-card {
   padding-bottom: 18rpx;

@@ -269,6 +269,12 @@
     margin-left: 8rpx;
 }
 
+.checkout-guide-inline {
+    font-size: 22rpx;
+    line-height: 1.5;
+    color: #516074;
+}
+
 .remark-input {
     flex: 1;
     font-size: 26rpx;
@@ -300,6 +306,46 @@
 
 .coupon-tip-active {
     color: #C45E3D;
+}
+
+.checkout-guide-section {
+    display: block;
+}
+
+.checkout-guide-title {
+    display: block;
+    font-size: 26rpx;
+    font-weight: 600;
+    color: #2B241D;
+}
+
+.checkout-guide-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14rpx;
+    margin-top: 16rpx;
+}
+
+.checkout-guide-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12rpx;
+}
+
+.checkout-guide-bullet {
+    width: 10rpx;
+    height: 10rpx;
+    margin-top: 12rpx;
+    border-radius: 50%;
+    background: #B98B58;
+    flex-shrink: 0;
+}
+
+.checkout-guide-text {
+    flex: 1;
+    font-size: 23rpx;
+    line-height: 1.7;
+    color: #6A5D4F;
 }
 
 .coupon-picker {

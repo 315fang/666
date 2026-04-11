@@ -22,6 +22,45 @@ const WITHDRAW_STATUS_MAP = {
 
 const DISTRIBUTION_DASHBOARD_TTL = 20 * 1000;
 
+function buildFocusGuide(data = {}) {
+    const isAgent = !!data.isAgent;
+    const availableAmount = data.balance || '0.00';
+    const frozenAmount = data.stats?.frozenAmount || '0.00';
+    const monthlyGrowth = Number(data.team?.monthlyNewMembers || 0);
+
+    if (isAgent) {
+        return {
+            eyebrow: '经营路线',
+            title: `货款余额 ¥${data.goodsFundBalance || '0.00'}`,
+            description: '先处理货款与团队，再看收益动作',
+            chips: [
+                { label: '当前可提现', value: `¥${availableAmount}` },
+                { label: '待结算', value: `¥${frozenAmount}` },
+                { label: '本月团队新增', value: `${monthlyGrowth}人` }
+            ],
+            actions: [
+                { label: '进入商务中心', action: 'business_center' },
+                { label: '查看货款', action: 'goods_wallet' }
+            ]
+        };
+    }
+
+    return {
+        eyebrow: '赚钱路线',
+        title: `当前可提现 ¥${availableAmount}`,
+        description: '先看收益，再去邀请好友',
+        chips: [
+            { label: '累计收益', value: `¥${data.stats?.totalEarnings || '0.00'}` },
+            { label: '待结算', value: `¥${frozenAmount}` },
+            { label: '本月团队新增', value: `${monthlyGrowth}人` }
+        ],
+        actions: [
+            { label: Number(availableAmount || 0) > 0 ? '去提现' : '查看收益', action: Number(availableAmount || 0) > 0 ? 'withdraw' : 'earnings' },
+            { label: '去邀请', action: 'invite' }
+        ]
+    };
+}
+
 Page({
     data: {
         userInfo: null,
@@ -58,6 +97,7 @@ Page({
         agentDebt: 0,
         goodsFundBalance: '0.00',
         walletSummary: null,
+        focusGuide: null,
         // 会员成长
         growthValue: 0,
         growthPercent: 0,
@@ -74,6 +114,7 @@ Page({
 
     onShow() {
         this.setData({ userInfo: app.globalData.userInfo });
+        this._syncFocusGuide();
         this.refreshDashboard();
 
         // 如果用户没有上级，且没有提示过，显示提示
@@ -154,6 +195,29 @@ Page({
         wx.navigateTo({ url: '/pages/order/list?status=all' });
     },
 
+    onFocusActionTap(e) {
+        const action = e.currentTarget.dataset.action;
+        switch (action) {
+            case 'withdraw':
+                this.onWithdrawTap();
+                return;
+            case 'earnings':
+                this.onCommissionLogsTap();
+                return;
+            case 'invite':
+                this.onInviteTap();
+                return;
+            case 'goods_wallet':
+                this.goWorkbench();
+                return;
+            case 'business_center':
+                wx.navigateTo({ url: '/pages/distribution/business-center' });
+                return;
+            default:
+                return;
+        }
+    },
+
     // ====== 分享弹窗 ======
     async onShowShareModal() {
         this.setData({ showShareModal: true });
@@ -196,7 +260,7 @@ Page({
                     growthPercent: userInfo.growth_progress?.percent || 0,
                     nextGrowthThreshold: userInfo.growth_progress?.next_threshold || null,
                     growthLoaded: true
-                });
+                }, () => this._syncFocusGuide());
             }
         } catch (err) {
             console.error('加载分销统计失败', err);
@@ -211,7 +275,7 @@ Page({
                 this.setData({
                     balance: (res.data.balance || 0).toFixed(2),
                     walletInfo: res.data
-                });
+                }, () => this._syncFocusGuide());
             }
         } catch (err) {
             console.error('加载钱包失败', err);
@@ -278,13 +342,13 @@ Page({
                     agentMonthProfit: res.data.month_profit || '0.00',
                     agentDebt: parseFloat(res.data.debt_amount || 0),
                     goodsFundBalance: res.data.goods_fund_balance || '0.00'
-                });
+                }, () => this._syncFocusGuide());
                 this.loadAgentWallet();
             } else {
-                this.setData({ isAgent: false });
+                this.setData({ isAgent: false }, () => this._syncFocusGuide());
             }
         } catch (err) {
-            this.setData({ isAgent: false });
+            this.setData({ isAgent: false }, () => this._syncFocusGuide());
         }
     },
 
@@ -307,7 +371,7 @@ Page({
                 this.setData({
                     walletSummary: res.data,
                     goodsFundBalance: res.data.balance || this.data.goodsFundBalance
-                });
+                }, () => this._syncFocusGuide());
             }
         } catch (err) {
             console.warn('加载代理货款失败', err);
@@ -345,5 +409,9 @@ Page({
             path: '/pages/index/index',
             imageUrl: ''
         };
+    },
+
+    _syncFocusGuide() {
+        this.setData({ focusGuide: buildFocusGuide(this.data) });
     }
 });

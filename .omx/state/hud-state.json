@@ -1,6 +1,6 @@
 {
-  "last_turn_at": "2026-04-11T06:08:45.706Z",
-  "turn_count": 76,
-  "last_progress_at": "2026-04-11T06:08:45.706Z",
-  "last_agent_output": "继续推进了，这轮有实质进展。\n\n云端侧已经完成：\n- `payment` 网关正式补上了 `/payment`\n- `config` / `distribution` / `admin-api` 三个"
+  "last_turn_at": "2026-04-11T06:22:16.946Z",
+  "turn_count": 77,
+  "last_progress_at": "2026-04-11T06:22:16.946Z",
+  "last_agent_output": "继续推进了，这轮把“卡在静态托管”的问题往前推了一大步。\n\n已经完成的：\n\n- `payment` 正式网关路径 `/payment` 已补上，`/payment-notify` 也还保留\n- `co"
 }

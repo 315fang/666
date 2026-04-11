@@ -167,6 +167,7 @@
     </view>
     <text class="coupon-tip coupon-tip-active" wx:if="{{!selectedCoupon && availableCoupons.length > 0}}">您有{{availableCoupons.length}}张优惠券可用，点击立即选择</text>
     <text class="coupon-tip" wx:elif="{{!selectedCoupon && unusedCouponCount > 0}}">您有{{unusedCouponCount}}张优惠券不适用于本单（金额/范围不符）</text>
+    <text class="checkout-guide-inline" wx:if="{{checkoutGuide.processTip}}">{{checkoutGuide.processTip}}</text>
   </view>
 
   <!-- 积分抵扣 -->
@@ -180,6 +181,20 @@
   <view class="section points-detail" wx:if="{{usePoints && pointBalance > 0}}">
     <text class="points-deduct-text">使用 {{pointsToUse}} 积分抵扣 ¥{{pointsDeduction}}</text>
     <text class="points-deduct-tip">（1积分抵0.1元，最多抵扣订单50%）</text>
+  </view>
+
+  <view class="section checkout-guide-section" wx:if="{{checkoutGuide.rewardTip || checkoutGuide.resultTip}}">
+    <text class="checkout-guide-title">下单后你会看到什么</text>
+    <view class="checkout-guide-list">
+      <view class="checkout-guide-item" wx:if="{{checkoutGuide.rewardTip}}">
+        <text class="checkout-guide-bullet"></text>
+        <text class="checkout-guide-text">{{checkoutGuide.rewardTip}}</text>
+      </view>
+      <view class="checkout-guide-item" wx:if="{{checkoutGuide.resultTip}}">
+        <text class="checkout-guide-bullet"></text>
+        <text class="checkout-guide-text">{{checkoutGuide.resultTip}}</text>
+      </view>
+    </view>
   </view>
 
   <view class="coupon-picker {{showCouponPicker ? 'show' : ''}}" wx:if="{{showCouponPicker}}">
