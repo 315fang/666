@@ -9,6 +9,11 @@ function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
 }
 
+function refundDeadlineDate() {
+    const days = Math.max(0, toNumber(process.env.REFUND_MAX_DAYS || process.env.COMMISSION_FREEZE_DAYS, 7));
+    return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+}
+
 async function findOneByAnyId(collectionName, rawId) {
     if (!hasValue(rawId)) return null;
 
@@ -787,10 +792,17 @@ async function pickupVerifyCode(openid, params) {
         },
     });
 
-    // 3. 确认收货后的佣金结算
+    // 3. 自提核销后进入售后冻结期，保持和普通确认收货一致
     await db.collection('commissions')
-        .where({ order_id: order._id, status: 'pending' })
-        .update({ data: { status: 'settled', settled_at: db.serverDate() } })
+        .where({ order_id: order._id, status: _.in(['pending', 'pending_approval']) })
+        .update({
+            data: {
+                status: 'frozen',
+                frozen_at: db.serverDate(),
+                refund_deadline: refundDeadlineDate(),
+                updated_at: db.serverDate()
+            }
+        })
         .catch(() => {});
 
     return {

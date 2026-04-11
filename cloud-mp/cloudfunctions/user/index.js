@@ -7,6 +7,27 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 
+const DEFAULT_ROLE_NAMES = {
+    0: '普通用户',
+    1: '初级代理',
+    2: '高级代理',
+    3: '推广合伙人',
+    4: '运营合伙人',
+    5: '区域合伙人'
+};
+
+const DEFAULT_AGENT_UPGRADE_RULES = {
+    enabled: true,
+    c1_min_purchase: 299,
+    c2_referee_count: 2,
+    c2_min_sales: 580,
+    b1_referee_count: 10,
+    b1_recharge: 3000,
+    b2_referee_count: 10,
+    b2_recharge: 30000,
+    b3_recharge: 198000
+};
+
 const {
     CloudBaseError, cloudFunctionWrapper
 } = require('./shared/errors');
@@ -54,6 +75,14 @@ async function getConfigByKey(key) {
     return legacyRes.data && legacyRes.data[0] ? legacyRes.data[0] : null;
 }
 
+async function getConfigByKeys(keys = []) {
+    for (const key of keys) {
+        const row = await getConfigByKey(key);
+        if (row) return row;
+    }
+    return null;
+}
+
 async function loadMembershipConfig() {
     const [memberLevelRow, growthTierRow, growthRuleRow, commercePolicyRow, purchaseLevelRow, pointLevelRow, pointRuleRow] = await Promise.all([
         getConfigByKey('member_level_config'),
@@ -75,6 +104,17 @@ async function loadMembershipConfig() {
         purchase_levels: parseConfigValue(purchaseLevelRow, []),
         point_levels: parseConfigValue(pointLevelRow, []),
         point_rules: parseConfigValue(pointRuleRow, {})
+    };
+}
+
+async function loadAgentUpgradeRules() {
+    const row = await getConfigByKeys([
+        'agent_system_upgrade-rules',
+        'agent_system_upgrade_rules'
+    ]);
+    return {
+        ...DEFAULT_AGENT_UPGRADE_RULES,
+        ...parseConfigValue(row, {})
     };
 }
 
@@ -113,6 +153,110 @@ function normalizeMemberLevels(rows = []) {
                 : [row.description || row.desc || row.benefits].filter(Boolean)
         }))
         .sort((a, b) => a.level - b.level);
+}
+
+function userRelationIds(user = {}) {
+    const ids = [user.id, user._legacy_id, user._id].filter((value) => value !== null && value !== undefined && value !== '');
+    const out = [];
+    ids.forEach((id) => {
+        out.push(id);
+        const num = Number(id);
+        if (Number.isFinite(num)) out.push(num);
+        out.push(String(id));
+    });
+    return [...new Set(out.map((item) => `${typeof item}:${item}`))].map((key) => {
+        const [, value] = key.split(':');
+        const numeric = Number(value);
+        return key.startsWith('number:') && Number.isFinite(numeric) ? numeric : value;
+    });
+}
+
+function directRelationWhere(user = {}) {
+    const clauses = [];
+    if (user.openid) clauses.push({ referrer_openid: user.openid });
+    const ids = userRelationIds(user);
+    if (ids.length) clauses.push({ parent_id: _.in(ids) });
+    if (!clauses.length) return { referrer_openid: '__none__' };
+    return clauses.length === 1 ? clauses[0] : _.or(clauses);
+}
+
+async function getDirectMembers(user = {}) {
+    if (!user || !user.openid) return [];
+    return getAllRecords(db, 'users', directRelationWhere(user)).catch(() => []);
+}
+
+async function getRechargeTotal(openid) {
+    if (!openid) return 0;
+    const rows = await getAllRecords(db, 'wallet_recharge_orders', { openid }).catch(() => []);
+    return rows
+        .filter((row) => ['paid', 'completed', 'success'].includes(String(row.status || '').toLowerCase()))
+        .reduce((sum, row) => sum + toNum(row.amount, 0), 0);
+}
+
+function deriveEligibleRoleLevel(user = {}, directMembers = [], rechargeTotal = 0, upgradeRules = DEFAULT_AGENT_UPGRADE_RULES) {
+    const currentRoleLevel = toNum(user.role_level ?? user.distributor_level ?? user.level, 0);
+    let nextRoleLevel = currentRoleLevel;
+    const totalSpent = toNum(user.total_spent != null ? user.total_spent : user.growth_value, 0);
+
+    if (totalSpent >= toNum(upgradeRules.c1_min_purchase, DEFAULT_AGENT_UPGRADE_RULES.c1_min_purchase)) {
+        nextRoleLevel = Math.max(nextRoleLevel, 1);
+    }
+
+    const c1OrAboveCount = directMembers.filter((member) => toNum(member.role_level ?? member.distributor_level, 0) >= 1).length;
+    if (
+        totalSpent >= toNum(upgradeRules.c2_min_sales, DEFAULT_AGENT_UPGRADE_RULES.c2_min_sales)
+        && c1OrAboveCount >= toNum(upgradeRules.c2_referee_count, DEFAULT_AGENT_UPGRADE_RULES.c2_referee_count)
+    ) {
+        nextRoleLevel = Math.max(nextRoleLevel, 2);
+    }
+
+    const c2OrAboveCount = directMembers.filter((member) => toNum(member.role_level ?? member.distributor_level, 0) >= 2).length;
+    if (
+        c2OrAboveCount >= toNum(upgradeRules.b1_referee_count, DEFAULT_AGENT_UPGRADE_RULES.b1_referee_count)
+        || rechargeTotal >= toNum(upgradeRules.b1_recharge, DEFAULT_AGENT_UPGRADE_RULES.b1_recharge)
+    ) {
+        nextRoleLevel = Math.max(nextRoleLevel, 3);
+    }
+
+    const b1OrAboveCount = directMembers.filter((member) => toNum(member.role_level ?? member.distributor_level, 0) >= 3).length;
+    if (
+        b1OrAboveCount >= toNum(upgradeRules.b2_referee_count, DEFAULT_AGENT_UPGRADE_RULES.b2_referee_count)
+        || rechargeTotal >= toNum(upgradeRules.b2_recharge, DEFAULT_AGENT_UPGRADE_RULES.b2_recharge)
+    ) {
+        nextRoleLevel = Math.max(nextRoleLevel, 4);
+    }
+
+    if (rechargeTotal >= toNum(upgradeRules.b3_recharge, DEFAULT_AGENT_UPGRADE_RULES.b3_recharge)) {
+        nextRoleLevel = Math.max(nextRoleLevel, 5);
+    }
+
+    return nextRoleLevel;
+}
+
+async function evaluateAgentUpgrade(openid) {
+    const user = await userGrowth.getUser(openid);
+    if (!user) throw notFound('用户不存在');
+    const [upgradeRules, membershipConfig, directMembers, rechargeTotal] = await Promise.all([
+        loadAgentUpgradeRules(),
+        loadMembershipConfig(),
+        getDirectMembers(user),
+        getRechargeTotal(openid)
+    ]);
+    const memberLevels = normalizeMemberLevels(membershipConfig.member_levels);
+    const currentRoleLevel = toNum(user.role_level, 0);
+    const nextRoleLevel = deriveEligibleRoleLevel(user, directMembers, rechargeTotal, upgradeRules);
+    const roleMeta = memberLevels.find((item) => Number(item.level) === nextRoleLevel);
+    return {
+        user,
+        memberLevels,
+        upgradeRules,
+        currentRoleLevel,
+        nextRoleLevel,
+        rechargeTotal,
+        directMembers,
+        roleName: roleMeta?.name || DEFAULT_ROLE_NAMES[nextRoleLevel] || '普通用户',
+        discountRate: roleMeta?.discount_rate != null ? toNum(roleMeta.discount_rate, 1) : null
+    };
 }
 
 function normalizeStation(row = {}) {
@@ -447,33 +591,74 @@ const handleAction = {
 
     // ===== 升级 / 其他 =====
     'upgradeEligibility': asyncHandler(async (openid) => {
-        const user = await userGrowth.getUser(openid);
-        if (!user) throw notFound('用户不存在');
-        const points = toNum(user.points || user.growth_value, 0);
-        const level = toNum(user.role_level, 0);
+        const evaluation = await evaluateAgentUpgrade(openid);
+        const points = toNum(evaluation.user.points || evaluation.user.growth_value, 0);
         return success({
-            current_level: level,
+            current_level: evaluation.currentRoleLevel,
+            current_name: evaluation.user.role_name || DEFAULT_ROLE_NAMES[evaluation.currentRoleLevel] || '普通用户',
             current_points: points,
-            can_upgrade: level < 2 && points >= 1000,
-            next_level: level + 1,
-            required_points: 1000,
+            can_upgrade: evaluation.nextRoleLevel > evaluation.currentRoleLevel,
+            next_level: evaluation.nextRoleLevel,
+            next_name: evaluation.roleName,
+            required_points: null,
+            direct_member_count: evaluation.directMembers.length,
+            recharge_total: Number(evaluation.rechargeTotal.toFixed(2)),
+            rules: evaluation.upgradeRules
         });
     }),
 
     'upgrade': asyncHandler(async (openid, params) => {
-        const user = await userGrowth.getUser(openid);
-        if (!user) throw notFound('用户不存在');
-        const level = toNum(user.role_level, 0);
-        if (level >= 2) throw badRequest('已达最高等级');
+        const evaluation = await evaluateAgentUpgrade(openid);
+        if (evaluation.nextRoleLevel <= evaluation.currentRoleLevel) {
+            throw badRequest('当前未满足升级条件');
+        }
+        const nextDistributorLevel = Math.max(
+            toNum(evaluation.user.distributor_level != null ? evaluation.user.distributor_level : evaluation.user.agent_level, 0),
+            evaluation.nextRoleLevel
+        );
         await db.collection('users').where({ openid }).update({
-            data: { role_level: level + 1, role_name: '会员', updated_at: db.serverDate() },
+            data: {
+                role_level: evaluation.nextRoleLevel,
+                role_name: evaluation.roleName,
+                distributor_level: nextDistributorLevel,
+                agent_level: nextDistributorLevel,
+                participate_distribution: 1,
+                discount_rate: evaluation.discountRate != null ? evaluation.discountRate : evaluation.user.discount_rate,
+                updated_at: db.serverDate()
+            },
         });
-        return success({ new_level: level + 1 });
+        return success({ new_level: evaluation.nextRoleLevel, role_name: evaluation.roleName });
     }),
 
     'upgradeApply': asyncHandler(async (openid, params) => {
-        // 提交升级申请（简单记录）
-        return success({ success: true, message: '申请已提交' });
+        const user = await userGrowth.getUser(openid);
+        if (!user) throw notFound('用户不存在');
+        const pathType = String(params.path_type || 'standard').trim() || 'standard';
+        const leaderId = params.leader_id || params.parent_id || null;
+        const existing = await db.collection('upgrade_applications')
+            .where({ openid, path_type: pathType, status: _.in(['pending', 'approved']) })
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+        if (existing.data && existing.data[0]) {
+            return success({ success: true, id: existing.data[0]._id, status: existing.data[0].status, message: '申请已存在' });
+        }
+
+        const result = await db.collection('upgrade_applications').add({
+            data: {
+                openid,
+                user_id: user._id || user.id || '',
+                role_level: toNum(user.role_level, 0),
+                role_name: user.role_name || DEFAULT_ROLE_NAMES[toNum(user.role_level, 0)] || '普通用户',
+                path_type: pathType,
+                leader_id: leaderId,
+                status: 'pending',
+                remark: String(params.remark || '').trim(),
+                created_at: db.serverDate(),
+                updatedAt: db.serverDate()
+            }
+        });
+        return success({ success: true, id: result._id, message: '申请已提交' });
     }),
 
     'getPreferences': asyncHandler(async (openid) => {

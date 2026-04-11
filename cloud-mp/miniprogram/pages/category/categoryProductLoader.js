@@ -1,6 +1,7 @@
 const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
-const { getFirstImage, genHeatLabel } = require('../../utils/dataFormatter');
+const { getFirstImage, genHeatLabel, calculatePrice } = require('../../utils/dataFormatter');
+const app = getApp();
 
 const CATEGORY_BACKGROUND_BATCH_SIZE = 2;
 const CATEGORY_PRODUCTS_CACHE_TTL = 2 * 60 * 1000;
@@ -30,9 +31,10 @@ function mapProductsForCategory(page, list) {
     const activityProductMaps = page.data.activityProductMaps || {};
     const groupMap = activityProductMaps.group || {};
     const slashMap = activityProductMaps.slash || {};
+    const roleLevel = app.globalData.userInfo?.role_level || 0;
 
     return (list || []).map((item) => {
-        const retailPrice = parseFloat(item.retail_price || item.price || 0);
+        const retailPrice = parseFloat(calculatePrice(item, null, roleLevel) || item.retail_price || item.price || 0);
         const marketPrice = parseFloat(item.market_price || 0);
         const sales = Number(item.purchase_count || item.sales_count || 0);
         const groupActivity = groupMap[item.id] || null;
@@ -65,7 +67,8 @@ function mapProductsForCategory(page, list) {
             hasGroupActivity: !!groupActivity,
             hasSlashActivity: !!slashActivity,
             groupPrice: groupActivity ? parseFloat(groupActivity.group_price || 0) : 0,
-            slashFloorPrice: slashActivity ? parseFloat(slashActivity.floor_price || 0) : 0
+            slashFloorPrice: slashActivity ? parseFloat(slashActivity.floor_price || 0) : 0,
+            role_level_price: retailPrice
         };
     });
 }

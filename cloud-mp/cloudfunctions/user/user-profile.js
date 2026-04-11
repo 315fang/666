@@ -32,7 +32,14 @@ function formatUser(user) {
     const points = toNumber(user.points != null ? user.points : user.growth_value, 0);
     const balance = toNumber(user.wallet_balance != null ? user.wallet_balance : user.balance, 0);
     const roleLevel = toNumber(user.role_level, 0);
-    const ROLE_NAMES = { 0: '普通用户', 1: '会员', 2: '团长', 3: '代理商', 4: '高级代理', 5: '合伙人' };
+    const ROLE_NAMES = {
+        0: '普通用户',
+        1: '初级代理',
+        2: '高级代理',
+        3: '推广合伙人',
+        4: '运营合伙人',
+        5: '区域合伙人'
+    };
 
     return {
         _id: user._id,

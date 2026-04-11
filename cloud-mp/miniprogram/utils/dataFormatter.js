@@ -102,7 +102,9 @@ function calculateSkuPrice(sku, roleLevel) {
     [USER_ROLES.GUEST]: sku.retail_price,
     [USER_ROLES.MEMBER]: sku.member_price || sku.retail_price,
     [USER_ROLES.LEADER]: sku.wholesale_price || sku.member_price || sku.retail_price,
-    [USER_ROLES.AGENT]: sku.wholesale_price || sku.member_price || sku.retail_price
+    [USER_ROLES.AGENT]: sku.wholesale_price || sku.member_price || sku.retail_price,
+    [USER_ROLES.PARTNER]: sku.wholesale_price || sku.member_price || sku.retail_price,
+    [USER_ROLES.REGIONAL]: sku.wholesale_price || sku.member_price || sku.retail_price
   };
 
   return parseFloat(priceMap[roleLevel] || rawFallbackPrice || 0);
@@ -119,7 +121,9 @@ function calculateProductPrice(product, roleLevel) {
     [USER_ROLES.GUEST]: product.retail_price,
     [USER_ROLES.MEMBER]: product.price_member || product.retail_price,
     [USER_ROLES.LEADER]: product.price_leader || product.price_member || product.retail_price,
-    [USER_ROLES.AGENT]: product.price_agent || product.price_leader || product.price_member || product.retail_price
+    [USER_ROLES.AGENT]: product.price_agent || product.price_leader || product.price_member || product.retail_price,
+    [USER_ROLES.PARTNER]: product.price_agent || product.price_leader || product.price_member || product.retail_price,
+    [USER_ROLES.REGIONAL]: product.price_agent || product.price_leader || product.price_member || product.retail_price
   };
 
   return parseFloat(priceMap[roleLevel] || product.retail_price || 0);

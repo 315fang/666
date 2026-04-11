@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const { queryOrderByOutTradeNo, loadPrivateKey } = require('./wechat-pay-v3');
+const { processPaidOrder } = require('./payment-callback');
 
 /**
  * 查询支付状态（优先查微信侧，回退查本地）

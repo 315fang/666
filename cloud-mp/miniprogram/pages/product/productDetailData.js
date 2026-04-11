@@ -44,6 +44,10 @@ function buildSkuText(sku) {
 }
 
 function resolvePayableUnitPrice(product, sku, roleLevel) {
+    const roleBasedPrice = Number(calculatePrice(product, sku, roleLevel));
+    if (Number.isFinite(roleBasedPrice) && roleBasedPrice > 0 && roleLevel > USER_ROLES.GUEST) {
+        return roleBasedPrice;
+    }
     if (sku) {
         const skuCentPrice = parseApiCentPrice(sku.price);
         const skuDisplayPrice = parseApiDisplayPrice(sku.displayPrice);
@@ -61,7 +65,7 @@ function resolvePayableUnitPrice(product, sku, roleLevel) {
     if (parseApiDisplayPrice(product.displayPrice) != null) {
         return parseApiDisplayPrice(product.displayPrice);
     }
-    return calculatePrice(product, sku, roleLevel);
+    return roleBasedPrice;
 }
 
 async function loadProduct(page, id) {
