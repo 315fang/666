@@ -81,6 +81,11 @@ function saveSingleton(name, value) {
     return dataStore.saveSingleton(name, value);
 }
 
+async function ensureFreshCollections(names = []) {
+    if (typeof dataStore.reloadCollection !== 'function') return;
+    await Promise.all(names.map((name) => Promise.resolve(dataStore.reloadCollection(name)).catch(() => null)));
+}
+
 function nextId(rows) {
     return rows.reduce((max, row) => {
         const numericId = Number(primaryId(row));
@@ -1505,7 +1510,16 @@ function buildDealerRecord(user) {
         approved_at: status === 'approved' ? pickString(user.dealer_approved_at || user.updated_at) : '',
         contact_phone: pickString(user.contact_phone || user.phone),
         contact_email: pickString(user.contact_email),
-        reject_reason: pickString(user.dealer_reject_reason)
+        reject_reason: pickString(user.dealer_reject_reason),
+        legal_person: pickString(user.legal_person),
+        company_address: pickString(user.company_address),
+        business_license_no: pickString(user.business_license_no),
+        tax_no: pickString(user.tax_no),
+        invoice_title: pickString(user.invoice_title || user.company_name || user.dealer_company_name),
+        invoice_email: pickString(user.invoice_email || user.contact_email),
+        bank_account_name: pickString(user.bank_account_name || user.company_name || user.dealer_company_name),
+        bank_account_no: pickString(user.bank_account_no),
+        bank_name: pickString(user.bank_name)
     };
 }
 
@@ -1646,6 +1660,127 @@ function buildBranchAgentClaimRecord(claim, users, stations) {
         status: pickString(claim.status || 'pending'),
         note: pickString(claim.note)
     };
+}
+
+function syncBranchStationToPickupStation(station) {
+    if (!station) return null;
+    const pickupRows = getCollection('stations');
+    const index = pickupRows.findIndex((row) => rowMatchesLookup(row, primaryId(station), [row.id, row._legacy_id]));
+    if (index === -1) return null;
+    pickupRows[index] = {
+        ...pickupRows[index],
+        claimant_id: station.claimant_id || pickupRows[index].claimant_id || null,
+        branch_type: pickString(station.branch_type || pickupRows[index].branch_type || 'area'),
+        region_name: pickString(station.region_name || pickupRows[index].region_name),
+        commission_rate: toNumber(station.commission_rate, pickupRows[index].commission_rate || 0),
+        pickup_commission_tier: pickString(station.pickup_commission_tier || pickupRows[index].pickup_commission_tier || 'A'),
+        status: pickString(station.status || pickupRows[index].status || 'active'),
+        updated_at: nowIso()
+    };
+    saveCollection('stations', pickupRows);
+    return pickupRows[index];
+}
+
+function getBranchAgentTargetUser(station, users) {
+    return findUserByAnyId(users, station?.claimant_id || station?.openid || station?.user_id);
+}
+
+function getOrderAddressText(order = {}) {
+    const addr = order.address_snapshot || order.address || {};
+    return [
+        pickString(addr.province),
+        pickString(addr.city),
+        pickString(addr.district),
+        pickString(addr.detail),
+        pickString(order.region_name)
+    ].filter(Boolean).join(' ');
+}
+
+function matchBranchAgentStationForOrder(order, options = {}) {
+    const policy = getBranchAgentPolicySnapshot();
+    if (!policy.enabled) return null;
+    const stations = getBranchAgentStationsSnapshot().filter((item) => pickString(item.status || 'active') === 'active');
+    if (!stations.length) return null;
+
+    if (options.preferPickup && order.pickup_station_id) {
+        const exact = findByLookup(stations, order.pickup_station_id);
+        if (exact) return exact;
+    }
+
+    const addressText = getOrderAddressText(order).toLowerCase();
+    if (!addressText) return null;
+    return stations.find((station) => {
+        const keyword = pickString(station.region_name || station.district || station.city || station.province).toLowerCase();
+        return keyword && addressText.includes(keyword);
+    }) || null;
+}
+
+function createBranchAgentCommission(order, station, users, options = {}) {
+    if (!order || !station) return null;
+    const claimant = getBranchAgentTargetUser(station, users);
+    if (!claimant || !claimant.openid) return null;
+
+    const rows = getCollection('commissions');
+    const type = options.type || 'region_agent';
+    const existing = rows.find((row) =>
+        rowMatchesLookup(row, order._id || order.id || order.order_no, [row.order_id, row.order_no])
+        && pickString(row.type).toLowerCase() === String(type).toLowerCase()
+        && rowMatchesLookup(row, claimant.openid, [row.openid, row.user_id])
+    );
+    if (existing) return existing;
+
+    const amount = Math.max(0, toNumber(options.amount, 0));
+    if (amount <= 0) return null;
+
+    const row = {
+        id: nextId(rows),
+        openid: claimant.openid,
+        user_id: primaryId(claimant) || claimant.openid,
+        from_openid: order.openid || order.buyer_id || '',
+        order_id: order._id || order.id || null,
+        order_no: pickString(order.order_no),
+        amount: Number(amount.toFixed(2)),
+        level: toNumber(claimant.role_level ?? claimant.distributor_level, 0),
+        status: 'pending_approval',
+        type,
+        branch_station_id: primaryId(station),
+        branch_type: pickString(station.branch_type),
+        description: pickString(options.description),
+        created_at: nowIso(),
+        updated_at: nowIso()
+    };
+    rows.push(row);
+    saveCollection('commissions', rows);
+    return row;
+}
+
+function ensureBranchAgentCommissionForOrder(order, options = {}) {
+    const policy = getBranchAgentPolicySnapshot();
+    if (!policy.enabled) return null;
+    const users = getCollection('users');
+    const station = matchBranchAgentStationForOrder(order, options);
+    if (!station) return null;
+
+    if (options.preferPickup) {
+        const tierKey = pickString(station.pickup_commission_tier || 'A');
+        const tier = policy.pickup_tiers?.[tierKey] || { rate: 0, fixed_yuan: 0 };
+        const amount = toNumber(order.actual_price ?? order.pay_amount ?? order.total_amount, 0) * toNumber(tier.rate, 0)
+            + toNumber(tier.fixed_yuan, 0);
+        return createBranchAgentCommission(order, station, users, {
+            amount,
+            type: 'pickup_subsidy',
+            description: `自提核销补贴：${pickString(station.name || station.region_name)}`
+        });
+    }
+
+    const fallbackRate = policy.type_commission_rate?.[pickString(station.branch_type || 'area')] ?? 0;
+    const rate = toNumber(station.commission_rate, fallbackRate || 0);
+    const amount = toNumber(order.actual_price ?? order.pay_amount ?? order.total_amount, 0) * rate;
+    return createBranchAgentCommission(order, station, users, {
+        amount,
+        type: 'region_agent',
+        description: `区域代理收益：${pickString(station.name || station.region_name)}`
+    });
 }
 
 function getNLeaderRef(user) {
@@ -1971,6 +2106,145 @@ function cancelCommissionsForOrder(orderId, reason) {
     return changed;
 }
 
+function getAgentSystemConfigValue(key, fallback) {
+    const row = getCollection('configs').find((item) => item.config_key === key || item.key === key)
+        || getCollection('app_configs').find((item) => item.config_key === key || item.key === key);
+    return parseConfigRowValue(row, fallback);
+}
+
+function normalizePercentToRate(value, fallback = 0) {
+    const num = toNumber(value, fallback);
+    return num > 1 ? num / 100 : num;
+}
+
+function createCommissionEntry(payload = {}) {
+    const rows = getCollection('commissions');
+    const row = {
+        id: nextId(rows),
+        status: 'pending_approval',
+        created_at: nowIso(),
+        updated_at: nowIso(),
+        ...payload
+    };
+    rows.push(row);
+    saveCollection('commissions', rows);
+    return row;
+}
+
+function resolveUserReferrer(user = {}) {
+    return user.referrer_openid
+        || user.parent_openid
+        || user.parent_id
+        || user.referrer_id
+        || user.inviter_openid
+        || user.inviter_id
+        || null;
+}
+
+function findAssistParentUser(childUser, users) {
+    const parentRef = resolveUserReferrer(childUser || {});
+    return parentRef ? findUserByAnyId(users, parentRef) : null;
+}
+
+function resolveAssistBonusAmount(config = {}, countBefore = 0) {
+    const tiers = Array.isArray(config.tiers) ? [...config.tiers] : [];
+    if (!tiers.length) return 0;
+    const countAfter = countBefore + 1;
+    const normalized = tiers
+        .map((item) => ({
+            max_orders: Math.max(1, Math.floor(toNumber(item.max_orders, 0))),
+            bonus: Math.max(0, toNumber(item.bonus, 0))
+        }))
+        .filter((item) => item.max_orders > 0 && item.bonus >= 0)
+        .sort((a, b) => a.max_orders - b.max_orders);
+    const matched = normalized.find((item) => countAfter <= item.max_orders);
+    return toNumber((matched || normalized[normalized.length - 1] || {}).bonus, 0);
+}
+
+function ensureAgentAssistCommissionForOrder(order) {
+    const fulfillmentType = pickString(order?.fulfillment_type || order?.type).trim().toLowerCase();
+    if (fulfillmentType !== 'agent') return null;
+
+    const assistConfig = getAgentSystemConfigValue('agent_system_assist-bonus', { enabled: false, tiers: [] });
+    if (!assistConfig || assistConfig.enabled === false) return null;
+
+    const users = getCollection('users');
+    const childRef = order?.agent?.openid || order?.distributor?.openid || order?.agent_info?.openid || order?.referrer_openid || null;
+    const childUser = childRef ? findUserByAnyId(users, childRef) : null;
+    if (!childUser) return null;
+    const parentUser = findAssistParentUser(childUser, users);
+    if (!parentUser || !parentUser.openid) return null;
+
+    const parentRole = toNumber(parentUser.role_level ?? parentUser.distributor_level, 0);
+    const childRole = toNumber(childUser.role_level ?? childUser.distributor_level, 0);
+    if (parentRole <= childRole) return null;
+
+    const rows = getCollection('commissions');
+    const existing = rows.find((row) =>
+        rowMatchesLookup(row, order._id || order.id || order.order_no, [row.order_id, row.order_no])
+        && pickString(row.type).toLowerCase() === 'agent_assist'
+        && rowMatchesLookup(row, parentUser.openid, [row.openid, row.user_id])
+    );
+    if (existing) return existing;
+
+    const historicalCount = rows.filter((row) =>
+        pickString(row.type).toLowerCase() === 'agent_assist'
+        && rowMatchesLookup(row, parentUser.openid, [row.openid, row.user_id])
+    ).length;
+    const amount = resolveAssistBonusAmount(assistConfig, historicalCount);
+    if (amount <= 0) return null;
+
+    return createCommissionEntry({
+        openid: parentUser.openid,
+        user_id: primaryId(parentUser) || parentUser.openid,
+        from_openid: childUser.openid || childRef,
+        order_id: order._id || order.id || null,
+        order_no: pickString(order.order_no),
+        amount,
+        level: parentRole,
+        type: 'agent_assist',
+        assist_child_role_level: childRole,
+        assist_parent_role_level: parentRole,
+        description: `协助奖：上级代理协助 ${pickString(childUser.role_name || getUserNickname(childUser))} 发货`
+    });
+}
+
+function getExitRefundPreview(user, commissions = []) {
+    const walletRaw = toNumber(user?.agent_wallet_balance ?? user?.wallet_balance, 0);
+    const hasSeparateCommissionBalance = user?.commission_balance != null || (
+        user?.balance != null
+        && user?.wallet_balance != null
+        && toNumber(user.balance, 0) !== toNumber(user.wallet_balance, 0)
+    );
+    const balanceRaw = hasSeparateCommissionBalance
+        ? toNumber(user?.commission_balance ?? user?.balance, 0)
+        : 0;
+    const pendingCommission = commissions
+        .filter((row) => ['pending', 'frozen', 'pending_approval', 'approved'].includes(pickString(row.status)))
+        .reduce((sum, row) => sum + toNumber(row.amount, 0), 0);
+
+    return {
+        walletRefund: Math.max(0, roundMoney(walletRaw)),
+        balanceRefund: Math.max(0, roundMoney(balanceRaw)),
+        pendingCommission,
+        refundAmount: Math.max(0, roundMoney(walletRaw + balanceRaw))
+    };
+}
+
+function revokeAgentIdentity(user = {}, exitRules = {}) {
+    if (exitRules.auto_revoke_identity === false) return user;
+    return {
+        ...user,
+        role_level: 0,
+        role_name: '普通用户',
+        distributor_level: 0,
+        agent_level: 0,
+        participate_distribution: 0,
+        discount_rate: 1,
+        updated_at: nowIso()
+    };
+}
+
 function restoreOrderStockForRefund(orderId) {
     const orders = getCollection('orders');
     const orderIndex = orders.findIndex((order) => rowMatchesLookup(order, orderId, [order.order_no]));
@@ -2063,28 +2337,12 @@ const uploadSingle = (req, res, next) => {
     return upload.single('file')(req, res, next);
 };
 
+// /health 对外只返回最小状态，不暴露内部路径；详细信息需登录查 /admin/api/runtime/data-source
 app.get('/health', (req, res) => {
-    const descriptor = dataStore.describe();
     const health = dataStore.health();
     ok(res, {
-        status: 'ok',
-        runtime: 'cloudrun-admin-service',
-        data_root: dataRoot,
-        normalized_data_root: normalizedDataRoot,
-        runtime_root: runtimeRoot,
-        data_source: {
-            source: descriptor.source,
-            collection_source: descriptor.collection_source,
-            singleton_source: descriptor.singleton_source
-        },
-        data_source_health: {
-            status: health.status,
-            mode: health.mode,
-            ready: health.ready,
-            mapped_collections: health.mapped_collections,
-            dirty_collections: health.dirty_collections,
-            warnings_count: Array.isArray(health.warnings) ? health.warnings.length : 0
-        },
+        status: health.status === 'ok' ? 'ok' : 'degraded',
+        ready: health.ready,
         time: nowIso()
     });
 });
@@ -2872,9 +3130,9 @@ app.delete('/admin/api/contents/:id', auth, requirePermission('content'), (req, 
     ok(res, { success: true });
 });
 
-app.get('/admin/api/logs', auth, (req, res) => ok(res, paginate(sortByUpdatedDesc(getCollection('admin_audit_logs')), req)));
+app.get('/admin/api/logs', auth, requirePermission('logs'), (req, res) => ok(res, paginate(sortByUpdatedDesc(getCollection('admin_audit_logs')), req)));
 
-app.get('/admin/api/logs/export', auth, (req, res) => {
+app.get('/admin/api/logs/export', auth, requirePermission('logs'), (req, res) => {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename=\"admin-logs.json\"');
     res.send(JSON.stringify(getCollection('admin_audit_logs'), null, 2));
@@ -3259,6 +3517,29 @@ app.put('/admin/api/dealers/:id/level', auth, requirePermission('dealers'), (req
     ok(res, buildDealerRecord(updated));
 });
 
+app.put('/admin/api/dealers/:id/profile', auth, requirePermission('dealers'), (req, res) => {
+    const updated = patchCollectionRow('users', req.params.id, (row) => ({
+        ...row,
+        company_name: req.body?.company_name != null ? pickString(req.body.company_name) : row.company_name,
+        contact_name: req.body?.contact_name != null ? pickString(req.body.contact_name) : row.contact_name,
+        contact_phone: req.body?.contact_phone != null ? pickString(req.body.contact_phone) : row.contact_phone,
+        contact_email: req.body?.contact_email != null ? pickString(req.body.contact_email) : row.contact_email,
+        legal_person: req.body?.legal_person != null ? pickString(req.body.legal_person) : row.legal_person,
+        company_address: req.body?.company_address != null ? pickString(req.body.company_address) : row.company_address,
+        business_license_no: req.body?.business_license_no != null ? pickString(req.body.business_license_no) : row.business_license_no,
+        tax_no: req.body?.tax_no != null ? pickString(req.body.tax_no) : row.tax_no,
+        invoice_title: req.body?.invoice_title != null ? pickString(req.body.invoice_title) : row.invoice_title,
+        invoice_email: req.body?.invoice_email != null ? pickString(req.body.invoice_email) : row.invoice_email,
+        bank_account_name: req.body?.bank_account_name != null ? pickString(req.body.bank_account_name) : row.bank_account_name,
+        bank_account_no: req.body?.bank_account_no != null ? pickString(req.body.bank_account_no) : row.bank_account_no,
+        bank_name: req.body?.bank_name != null ? pickString(req.body.bank_name) : row.bank_name,
+        updated_at: nowIso()
+    }));
+    if (!updated) return fail(res, '经销商不存在', 404);
+    createAuditLog(req.admin, 'dealer.profile.update', 'users', { dealer_user_id: primaryId(updated) });
+    ok(res, buildDealerRecord(updated));
+});
+
 app.get('/admin/api/admins', auth, requirePermission('admins'), (req, res) => {
     const keyword = pickString(req.query.keyword).trim().toLowerCase();
     const role = pickString(req.query.role).trim();
@@ -3393,6 +3674,11 @@ app.put('/admin/api/branch-agent-policy', auth, requirePermission('dealers'), (r
         }
     });
     saveSingleton('branch-agent-policy', nextPolicy);
+    upsertConfigRow('branch-agent-policy', nextPolicy, {
+        category: 'dealers',
+        group: 'dealers',
+        description: '分支代理策略'
+    });
     createAuditLog(req.admin, 'branch-agent.policy.update', 'branch-agent-policy', {});
     ok(res, nextPolicy);
 });
@@ -3417,6 +3703,7 @@ app.post('/admin/api/branch-agents/stations', auth, requirePermission('dealers')
     };
     rows.push(row);
     saveCollection('branch_agent_stations', rows);
+    syncBranchStationToPickupStation(row);
     createAuditLog(req.admin, 'branch-agent.station.create', 'branch_agent_stations', { station_id: row.id });
     ok(res, row);
 });
@@ -3429,6 +3716,7 @@ app.put('/admin/api/branch-agents/stations/:id', auth, requirePermission('dealer
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '点位不存在', 404);
+    syncBranchStationToPickupStation(updated);
     createAuditLog(req.admin, 'branch-agent.station.update', 'branch_agent_stations', { station_id: primaryId(updated) });
     ok(res, updated);
 });
@@ -3452,12 +3740,13 @@ app.put('/admin/api/branch-agents/claims/:id/review', auth, requirePermission('d
     }));
     if (!updated) return fail(res, '申请不存在', 404);
     if (action === 'approve' && updated.station_id) {
-        patchCollectionRow('branch_agent_stations', updated.station_id, (row) => ({
+        const stationUpdated = patchCollectionRow('branch_agent_stations', updated.station_id, (row) => ({
             ...row,
             claimant_id: updated.applicant_id || updated.user_id || updated.openid || row.claimant_id || null,
             status: 'active',
             updated_at: nowIso()
         }));
+        syncBranchStationToPickupStation(stationUpdated);
     }
     createAuditLog(req.admin, `branch-agent.claim.${action}`, 'branch_agent_claims', { claim_id: primaryId(updated) });
     ok(res, updated);
@@ -3614,7 +3903,8 @@ app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdraw
     ok(res, updated);
 });
 
-app.get('/admin/api/refunds', auth, requirePermission('refunds'), (req, res) => {
+app.get('/admin/api/refunds', auth, requirePermission('refunds'), async (req, res) => {
+    await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
     const users = getCollection('users');
     const orders = getCollection('orders');
     const products = getCollection('products');
@@ -3635,7 +3925,8 @@ app.get('/admin/api/refunds', auth, requirePermission('refunds'), (req, res) => 
     ok(res, paginate(rows, req));
 });
 
-app.get('/admin/api/refunds/:id', auth, requirePermission('refunds'), (req, res) => {
+app.get('/admin/api/refunds/:id', auth, requirePermission('refunds'), async (req, res) => {
+    await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
     const users = getCollection('users');
     const orders = getCollection('orders');
     const products = getCollection('products');
@@ -3725,7 +4016,27 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
             });
             if (!change) throw new Error('退款用户不存在，无法退回余额');
             saveCollection('users', users);
+
+            // 余额退款是内部操作，立即完成
+            const updated = patchCollectionRow('refunds', req.params.id, (row) => ({
+                ...row,
+                status: 'completed',
+                completed_at: nowIso(),
+                updated_at: nowIso()
+            }));
+            cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
+            restoreOrderStockForRefund(orderId);
+            patchCollectionRow('orders', orderId, (row) => ({
+                ...row,
+                status: 'refunded',
+                refunded_at: nowIso(),
+                updated_at: nowIso()
+            }));
+            createAuditLog(req.admin, 'refund.complete', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod });
+            await Promise.resolve(dataStore.flush?.());
+            ok(res, updated);
         } else {
+            // 微信支付退款是异步的：API 返回 PROCESSING，等微信回调确认后才真正完成
             const refundNo = pickString(refund.refund_no, `RF-${pickString(order.order_no)}-${Date.now()}`);
             const wxResult = await createWechatRefund({
                 orderNo: pickString(order.order_no),
@@ -3734,32 +4045,48 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
                 refundFee: Math.round(refundAmount * 100),
                 reason: pickString(refund.reason, '管理员退款')
             });
+            const wxStatus = pickString(wxResult.status || 'PROCESSING').toUpperCase();
+
             patchCollectionRow('refunds', req.params.id, (row) => ({
                 ...row,
                 refund_no: refundNo,
                 wx_refund_id: pickString(wxResult.refund_id || row.wx_refund_id),
-                wx_status: pickString(wxResult.status || 'PROCESSING'),
+                wx_status: wxStatus,
                 updated_at: nowIso()
             }));
-        }
 
-        const updated = patchCollectionRow('refunds', req.params.id, (row) => ({
-            ...row,
-            status: 'completed',
-            completed_at: nowIso(),
-            updated_at: nowIso()
-        }));
-        cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
-        restoreOrderStockForRefund(orderId);
-        patchCollectionRow('orders', orderId, (row) => ({
-            ...row,
-            status: 'refunded',
-            refunded_at: nowIso(),
-            updated_at: nowIso()
-        }));
-        createAuditLog(req.admin, 'refund.complete', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod });
-        await Promise.resolve(dataStore.flush?.());
-        ok(res, updated);
+            if (wxStatus === 'SUCCESS') {
+                // 极少数情况：微信同步返回成功（如零钱即时到账）
+                const updated = patchCollectionRow('refunds', req.params.id, (row) => ({
+                    ...row,
+                    status: 'completed',
+                    completed_at: nowIso(),
+                    updated_at: nowIso()
+                }));
+                cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
+                restoreOrderStockForRefund(orderId);
+                patchCollectionRow('orders', orderId, (row) => ({
+                    ...row,
+                    status: 'refunded',
+                    refunded_at: nowIso(),
+                    updated_at: nowIso()
+                }));
+                createAuditLog(req.admin, 'refund.complete', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod, wx_status: wxStatus });
+                await Promise.resolve(dataStore.flush?.());
+                ok(res, updated);
+            } else {
+                // 正常情况：微信返回 PROCESSING，等待异步回调确认
+                // 退款状态保持 processing，等微信回调将其更新为 completed 或 failed
+                const updated = patchCollectionRow('refunds', req.params.id, (row) => ({
+                    ...row,
+                    status: 'processing',
+                    updated_at: nowIso()
+                }));
+                createAuditLog(req.admin, 'refund.processing', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod, wx_refund_id: wxResult.refund_id, wx_status: wxStatus });
+                await Promise.resolve(dataStore.flush?.());
+                ok(res, { ...updated, note: '退款申请已提交微信，处理结果将通过回调通知更新' });
+            }
+        }
     } catch (error) {
         patchCollectionRow('refunds', req.params.id, (row) => ({
             ...row,
@@ -3777,7 +4104,78 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
     }
 });
 
-app.get('/admin/api/commissions', auth, requirePermission('commissions'), (req, res) => {
+// 微信退款回调通知处理：当微信完成退款后，将退款记录更新为 completed 或 failed
+app.post('/admin/api/refunds/wechat-notify', async (req, res) => {
+    try {
+        const db = require('wx-server-sdk').database ? require('wx-server-sdk').database() : null;
+        const body = req.body || {};
+        const eventType = pickString(body.event_type || '').toUpperCase();
+        if (!eventType.startsWith('REFUND.')) {
+            return res.json({ code: 'SUCCESS', message: 'Not a refund event' });
+        }
+        const resource = body.resource || {};
+        // 解密（如果是加密格式）
+        let refundData = body;
+        if (resource.ciphertext) {
+            // 直接读 associated_data，应为 'refund'
+            // 注意：此处用的是 payment 云函数的 decryptResource，admin-api 同样需要自行解密
+            // 简化处理：先尝试解析 resource 中的明文
+            try {
+                const crypto = require('crypto');
+                const apiV3Key = process.env.PAYMENT_WECHAT_API_V3_KEY || '';
+                if (apiV3Key && resource.nonce && resource.associated_data) {
+                    const key = Buffer.from(apiV3Key, 'utf8');
+                    const iv = Buffer.from(resource.nonce, 'utf8');
+                    const buf = Buffer.from(resource.ciphertext, 'base64');
+                    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+                    decipher.setAuthTag(buf.slice(buf.length - 16));
+                    decipher.setAAD(Buffer.from(resource.associated_data || 'refund', 'utf8'));
+                    const decrypted = Buffer.concat([decipher.update(buf.slice(0, buf.length - 16)), decipher.final()]);
+                    refundData = JSON.parse(decrypted.toString('utf8'));
+                }
+            } catch (_) { /* 解密失败时使用原始 body */ }
+        }
+        const outRefundNo = pickString(refundData.out_refund_no || body.out_refund_no);
+        const refundStatus = pickString(refundData.refund_status || '').toUpperCase();
+        if (!outRefundNo) return res.json({ code: 'SUCCESS', message: 'No refund no' });
+
+        // 查找退款记录并更新
+        await ensureFreshCollections(['refunds', 'orders']);
+        const refunds = getCollection('refunds');
+        const refund = refunds.find((row) => pickString(row.refund_no) === outRefundNo);
+        if (refund) {
+            const orderId = refund.order_id || refund.order_no;
+            if (refundStatus === 'SUCCESS') {
+                patchCollectionRow('refunds', primaryId(refund), (row) => ({
+                    ...row, status: 'completed', completed_at: nowIso(),
+                    wx_refund_status: refundStatus, updated_at: nowIso()
+                }));
+                cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
+                restoreOrderStockForRefund(orderId);
+                patchCollectionRow('orders', orderId, (row) => ({
+                    ...row, status: 'refunded', refunded_at: nowIso(), updated_at: nowIso()
+                }));
+            } else if (['ABNORMAL', 'CLOSED'].includes(refundStatus)) {
+                patchCollectionRow('refunds', primaryId(refund), (row) => ({
+                    ...row, status: 'failed', wx_refund_status: refundStatus, updated_at: nowIso()
+                }));
+                patchCollectionRow('orders', orderId, (row) => ({
+                    ...row,
+                    status: row.status === 'refunding' ? (row.shipped_at ? 'shipped' : (row.paid_at ? 'paid' : 'pending_payment')) : row.status,
+                    updated_at: nowIso()
+                }));
+            }
+            await Promise.resolve(dataStore.flush?.());
+        }
+        res.json({ code: 'SUCCESS', message: 'OK' });
+    } catch (err) {
+        console.error('[RefundNotify] 处理退款回调失败:', err.message);
+        res.json({ code: 'SUCCESS', message: 'Error handled' });
+    }
+});
+
+app.get('/admin/api/commissions', auth, requirePermission('commissions'), async (req, res) => {
+    await ensureFreshCollections(['commissions', 'users', 'orders']);
     const users = getCollection('users');
     const orders = getCollection('orders');
     let rows = sortByUpdatedDesc(getCollection('commissions')).map((item) => buildCommissionRecord(item, users, orders));
@@ -3867,7 +4265,8 @@ app.post('/admin/api/commissions/batch-reject', auth, requirePermission('commiss
     ok(res, { success: true, affected, blocked_ids: blockedIds });
 });
 
-app.get('/admin/api/orders', auth, requirePermission('orders'), (req, res) => {
+app.get('/admin/api/orders', auth, requirePermission('orders'), async (req, res) => {
+    await ensureFreshCollections(['orders', 'users', 'products', 'commissions', 'refunds']);
     const users = getCollection('users');
     const products = getCollection('products');
     const commissions = getCollection('commissions');
@@ -3927,11 +4326,12 @@ app.get('/admin/api/orders/export', auth, (req, res) => {
     res.send(JSON.stringify(getCollection('orders'), null, 2));
 });
 
-app.get('/admin/api/orders/:id', auth, requirePermission('orders'), (req, res) => {
+app.get('/admin/api/orders/:id', auth, requirePermission('orders'), async (req, res) => {
+    await ensureFreshCollections(['orders', 'users', 'products', 'commissions']);
     const users = getCollection('users');
     const products = getCollection('products');
     const commissions = getCollection('commissions');
-    const order = getCollection('orders').find((item) => Number(item.id) === Number(req.params.id));
+    const order = findByLookup(getCollection('orders'), req.params.id, (item) => [item.order_no]);
     if (!order) return fail(res, '订单不存在', 404);
     ok(res, buildOrderRecord(order, users, products, commissions));
 });
@@ -3948,6 +4348,8 @@ app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), (req, r
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '订单不存在', 404);
+    ensureAgentAssistCommissionForOrder(updated);
+    ensureBranchAgentCommissionForOrder(updated, { preferPickup: false });
     ok(res, updated);
 });
 
@@ -4028,7 +4430,7 @@ app.get('/admin/api/logistics/order/:id', auth, requirePermission('orders'), (re
     });
 });
 
-app.get('/admin/api/statistics/overview', auth, (req, res) => {
+app.get('/admin/api/statistics/overview', auth, requirePermission('statistics'), (req, res) => {
     const orders = getCollection('orders');
     const products = getCollection('products');
     const users = getCollection('users');
@@ -4056,12 +4458,12 @@ app.get('/admin/api/dashboard/notifications', auth, (req, res) => {
     });
 });
 
-app.get('/admin/api/statistics/sales-trend', auth, (req, res) => ok(res, { list: [] }));
-app.get('/admin/api/statistics/user-trend', auth, (req, res) => ok(res, { list: [] }));
-app.get('/admin/api/statistics/agent-ranking', auth, (req, res) => ok(res, { list: [] }));
-app.get('/admin/api/statistics/distribution-report', auth, (req, res) => ok(res, { list: [] }));
+app.get('/admin/api/statistics/sales-trend', auth, requirePermission('statistics'), (req, res) => ok(res, { list: [] }));
+app.get('/admin/api/statistics/user-trend', auth, requirePermission('statistics'), (req, res) => ok(res, { list: [] }));
+app.get('/admin/api/statistics/agent-ranking', auth, requirePermission('statistics'), (req, res) => ok(res, { list: [] }));
+app.get('/admin/api/statistics/distribution-report', auth, requirePermission('statistics'), (req, res) => ok(res, { list: [] }));
 
-app.get('/admin/api/statistics/product-ranking', auth, (req, res) => {
+app.get('/admin/api/statistics/product-ranking', auth, requirePermission('statistics'), (req, res) => {
     const rows = sortByUpdatedDesc(getCollection('products'))
         .sort((a, b) => toNumber(b.heat_score, 0) - toNumber(a.heat_score, 0))
         .slice(0, toNumber(req.query.limit, 10))
@@ -4069,7 +4471,7 @@ app.get('/admin/api/statistics/product-ranking', auth, (req, res) => {
     ok(res, { list: rows });
 });
 
-app.get('/admin/api/statistics/low-stock', auth, (req, res) => {
+app.get('/admin/api/statistics/low-stock', auth, requirePermission('statistics'), (req, res) => {
     const threshold = toNumber(req.query.threshold, 10);
     const rows = sortByUpdatedDesc(getCollection('products'))
         .filter((item) => toNumber(item.stock, 0) <= threshold)
@@ -4134,7 +4536,7 @@ app.get('/admin/api/system/status', auth, (req, res) => {
     });
 });
 
-app.get('/admin/api/payment-health', auth, (req, res) => {
+app.get('/admin/api/payment-health', auth, requirePermission('settings_manage'), (req, res) => {
     ok(res, getPaymentHealthSnapshot());
 });
 
@@ -4153,9 +4555,9 @@ app.put('/admin/api/settings', auth, requirePermission('settings_manage'), (req,
     ok(res, next);
 });
 
-app.get('/admin/api/mini-program-config', auth, (req, res) => ok(res, getMiniProgramConfigSnapshot()));
+app.get('/admin/api/mini-program-config', auth, requirePermission('settings_manage'), (req, res) => ok(res, getMiniProgramConfigSnapshot()));
 
-app.put('/admin/api/mini-program-config', auth, (req, res) => {
+app.put('/admin/api/mini-program-config', auth, requirePermission('settings_manage'), (req, res) => {
     const nextConfig = { ...getMiniProgramConfigSnapshot(), ...toObject(req.body, {}) };
     saveSingleton('mini-program-config', nextConfig);
     ok(res, nextConfig);
@@ -4280,14 +4682,14 @@ app.post('/admin/api/feature-toggles', auth, (req, res) => {
     ok(res, nextConfig);
 });
 
-app.get('/admin/api/debug/process', auth, (req, res) => ok(res, {
+app.get('/admin/api/debug/process', auth, requirePermission('settings_manage'), (req, res) => ok(res, {
     pid: process.pid,
     uptime: process.uptime(),
     uptime_human: formatUptimeHuman(process.uptime()),
     node_version: process.version,
     memory: process.memoryUsage()
 }));
-app.get('/admin/api/debug/anomalies', auth, (req, res) => {
+app.get('/admin/api/debug/anomalies', auth, requirePermission('settings_manage'), (req, res) => {
     const orders = getCollection('orders');
     const longPendingOrders = orders.filter((item) => pickString(item.status) === 'pending_payment').length;
     const recentPayments = orders.filter((item) => isPaidLikeOrder(item)).length;
@@ -4303,9 +4705,9 @@ app.get('/admin/api/debug/anomalies', auth, (req, res) => {
         }
     });
 });
-app.get('/admin/api/debug/db-ping', auth, (req, res) => ok(res, { status: 'ok', mode: dataStore.health().mode, checked_at: nowIso() }));
-app.get('/admin/api/debug/data-source', auth, (req, res) => ok(res, { descriptor: dataStore.describe(), health: dataStore.health(), checked_at: nowIso() }));
-app.get('/admin/api/debug/cron-status', auth, (req, res) => ok(res, {
+app.get('/admin/api/debug/db-ping', auth, requirePermission('settings_manage'), (req, res) => ok(res, { status: 'ok', mode: dataStore.health().mode, checked_at: nowIso() }));
+app.get('/admin/api/debug/data-source', auth, requirePermission('settings_manage'), (req, res) => ok(res, { descriptor: dataStore.describe(), health: dataStore.health(), checked_at: nowIso() }));
+app.get('/admin/api/debug/cron-status', auth, requirePermission('settings_manage'), (req, res) => ok(res, {
     tasks: [
         { label: '订单状态补偿', interval: '5m', status: 'ok', run_count: 24, error_count: 0, last_run_at: nowIso(), last_error: '' },
         { label: '素材临时链接刷新', interval: '30m', status: 'pending', run_count: 0, error_count: 0, last_run_at: '', last_error: '' },
@@ -4313,7 +4715,7 @@ app.get('/admin/api/debug/cron-status', auth, (req, res) => ok(res, {
     ],
     checked_at: nowIso()
 }));
-app.get('/admin/api/debug/logs', auth, (req, res) => {
+app.get('/admin/api/debug/logs', auth, requirePermission('settings_manage'), (req, res) => {
     const lines = sortByUpdatedDesc(getCollection('admin_audit_logs'))
         .slice(0, toNumber(req.query.lines, 100))
         .map((item) => `[${item.created_at || nowIso()}] ${item.admin_name || 'system'} ${item.action} ${item.target}`);

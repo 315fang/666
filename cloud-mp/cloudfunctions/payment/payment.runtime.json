@@ -4,7 +4,7 @@
   "PAYMENT_REQUIRE_FORMAL_CONFIG": true,
   "PAYMENT_WECHAT_APPID": "wx2483d9ca40c2a2a9",
   "PAYMENT_WECHAT_MCHID": "1107879389",
-  "PAYMENT_WECHAT_NOTIFY_URL": "https://cloud1-9gywyqe49638e46f.service.tcloudbase.com/payment-notify",
+  "PAYMENT_WECHAT_NOTIFY_URL": "https://cloud1-9gywyqe49638e46f.ap-shanghai.tcb.qcloud.la/payment",
   "PAYMENT_WECHAT_SERIAL_NO": "2D905DDB10658134EF361AA41BC474ED60288714",
   "PAYMENT_WECHAT_API_V3_KEY": "Hmmszkjyxgs202603170000000000000",
   "PAYMENT_WECHAT_PRIVATE_KEY_PATH": "certs/apiclient_key.pem",
@@ -20,7 +20,7 @@
   "WECHAT_PAY_PLATFORM_CERT_PATH": "certs/wechatpay_platform_cert.pem",
   "WECHAT_PAY_PUBLIC_KEY_PATH": "certs/wechatpay_pubkey.pem",
   "WECHAT_PAY_PUBLIC_KEY_ID": "PUB_KEY_ID_0111078793892026031700382162000400",
-  "WECHAT_PAY_NOTIFY_URL": "https://cloud1-9gywyqe49638e46f.service.tcloudbase.com/payment-notify",
+  "WECHAT_PAY_NOTIFY_URL": "https://cloud1-9gywyqe49638e46f.ap-shanghai.tcb.qcloud.la/payment",
   "WECHAT_PAY_CERT_AUTO_PERSIST": true,
   "WECHAT_PAY_CERT_REFRESH_INTERVAL_HOURS": 24
 }

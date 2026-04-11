@@ -16,19 +16,46 @@ const DEFAULT_ROLE_NAMES = {
 
 const DEFAULT_AGENT_UPGRADE_RULES = {
     enabled: true,
+    // C1 晋升：购买满299（文档要求为"爆单产品"，系统暂以总消费额近似）
     c1_min_purchase: 299,
+    // C2 晋升：直推 2 名 C1 + 销售额超580（文档要求需有"实物产品消耗"）
     c2_referee_count: 2,
     c2_min_sales: 580,
+    // B1 晋升：推荐10名C2 或 充值3000（代理加盟费）
     b1_referee_count: 10,
     b1_recharge: 3000,
+    // B2 晋升：推荐10名B1 或 充值30000
     b2_referee_count: 10,
     b2_recharge: 30000,
+    // B3 晋升：充值198000（19.8万）
     b3_recharge: 198000
 };
 
 const DEFAULT_AGENT_COMMISSION_CONFIG = {
+    // 直推佣金率（一级，直接上级按自身等级计算）
+    // C1=20%, C2=30%, B1/B2/B3=40%
     direct_pct_by_role: { 1: 20, 2: 30, 3: 40, 4: 40, 5: 40 },
-    indirect_pct_by_role: { 2: 0, 3: 0, 4: 0, 5: 0 }
+    // 动销奖励（二级，间接上级）：B2=10%，B3=10%
+    // 依据业务文档：B2协助B1每单40元(≈10%)，B3协助B1每单60元(≈15%)
+    // 当前取折中值10%，后续可在后台configs.agent_system_commission-config中精确配置
+    indirect_pct_by_role: { 2: 0, 3: 0, 4: 10, 5: 10 }
+};
+
+const DEFAULT_PEER_BONUS_CONFIG = {
+    enabled: true,
+    // 文档未定义 C1/C2 平级奖，保留为 0
+    level_1: 0,
+    level_2: 0,
+    // B1 平级奖：100元现金（另有2套产品机会，约赚160元，通过正常产品佣金流水体现）
+    level_3: 100,
+    // B2 平级奖：2000元现金（另有15套产品机会，约赚2400元，通过正常产品佣金流水体现）
+    level_4: 2000,
+    // B3 文档未定义平级奖，暂设 0
+    level_5: 0,
+    // 配套赠送产品套数（记录性质，不直接发货，需运营手动处理）
+    product_sets_3: 2,
+    product_sets_4: 15,
+    product_sets_5: 0
 };
 
 function toNumber(value, fallback = 0) {
@@ -97,21 +124,24 @@ function normalizePctMap(rawMap = {}, fallback = {}) {
 }
 
 async function loadAgentRuntimeConfig() {
-    const [upgradeRow, commissionRow, memberLevelRow] = await Promise.all([
+    const [upgradeRow, commissionRow, memberLevelRow, peerBonusRow] = await Promise.all([
         getConfigByKeys(['agent_system_upgrade-rules', 'agent_system_upgrade_rules']),
         getConfigByKeys(['agent_system_commission-config', 'agent_system_commission_config']),
-        getConfigByKeys(['member_level_config'])
+        getConfigByKeys(['member_level_config']),
+        getConfigByKeys(['agent_system_peer-bonus', 'agent_system_peer_bonus'])
     ]);
     const upgradeRules = { ...DEFAULT_AGENT_UPGRADE_RULES, ...parseConfigValue(upgradeRow, {}) };
     const commission = parseConfigValue(commissionRow, {});
     const memberLevels = Array.isArray(parseConfigValue(memberLevelRow, [])) ? parseConfigValue(memberLevelRow, []) : [];
+    const peerBonus = { ...DEFAULT_PEER_BONUS_CONFIG, ...parseConfigValue(peerBonusRow, {}) };
     return {
         upgradeRules,
         commissionConfig: {
             direct_pct_by_role: normalizePctMap(commission?.direct_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.direct_pct_by_role),
             indirect_pct_by_role: normalizePctMap(commission?.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role)
         },
-        memberLevels
+        memberLevels,
+        peerBonus
     };
 }
 
@@ -372,6 +402,61 @@ async function ensureAgentRoleSynced(orderId, order) {
         }
     });
     return { upgraded: true, previousRoleLevel: currentRoleLevel, nextRoleLevel, roleName: roleMeta.roleName };
+}
+
+async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
+    if (!roleSyncResult?.upgraded) return { skipped: true };
+    const buyer = await findUserByAny(order.openid || order.buyer_id || order.user_id);
+    if (!buyer) return { skipped: true };
+    const parent = await findUserByAny(getUserReferrer(buyer));
+    if (!parent || !parent.openid) return { skipped: true };
+
+    const { peerBonus } = await loadAgentRuntimeConfig();
+    if (peerBonus.enabled === false) return { skipped: true };
+
+    const bonusLevel = toNumber(roleSyncResult.nextRoleLevel, 0);
+    const targetParentRole = toNumber(parent.role_level ?? parent.distributor_level ?? parent.level, 0);
+    if (bonusLevel <= 0 || targetParentRole !== bonusLevel) {
+        return { skipped: true, reason: 'not_same_level' };
+    }
+
+    const amount = roundMoney(peerBonus[`level_${bonusLevel}`] || 0);
+    if (amount <= 0) return { skipped: true, reason: 'no_bonus_amount' };
+
+    const existing = await db.collection('commissions')
+        .where({
+            order_id: orderId,
+            openid: parent.openid,
+            type: 'same_level',
+            bonus_role_level: bonusLevel
+        })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    if (existing.data && existing.data.length > 0) {
+        return { skipped: true, reason: 'already_created' };
+    }
+
+    const productSets = toNumber(peerBonus[`product_sets_${bonusLevel}`], 0);
+    await db.collection('commissions').add({
+        data: {
+            openid: parent.openid,
+            user_id: parent.id || parent._legacy_id || parent._id || parent.openid,
+            from_openid: buyer.openid,
+            order_id: orderId,
+            order_no: order.order_no,
+            amount,
+            level: bonusLevel,
+            type: 'same_level',
+            status: 'pending_approval',
+            bonus_role_level: bonusLevel,
+            product_sets: productSets,
+            description: `平级奖：下级升级为 ${roleSyncResult.roleName}`,
+            created_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    });
+    return { created: true, amount, bonusLevel, productSets };
 }
 
 async function ensurePointsAwarded(orderId, order) {
@@ -681,12 +766,124 @@ async function processPaidOrder(orderId, order) {
     const stock = await ensureStockDeducted(orderId, latest);
     const points = await ensurePointsAwarded(orderId, { ...latest, stock_deducted_at: true });
     const roles = await ensureAgentRoleSynced(orderId, { ...latest, stock_deducted_at: true, points_awarded_at: true });
+    const peerBonus = await ensurePeerBonusCreated(orderId, { ...latest, stock_deducted_at: true, points_awarded_at: true }, roles);
     const commissions = await ensureCommissionsCreated(orderId, { ...latest, stock_deducted_at: true, points_awarded_at: true });
 
     await db.collection('orders').doc(orderId).update({
         data: { payment_post_processed_at: db.serverDate(), updated_at: db.serverDate() },
     });
-    return { group, slash, stock, points, roles, commissions };
+    return { group, slash, stock, points, roles, peerBonus, commissions };
+}
+
+/**
+ * 处理退款回调通知
+ * 微信退款回调格式（V3）解密后的数据结构：
+ * { out_trade_no, out_refund_no, refund_id, refund_status: 'SUCCESS'|'ABNORMAL'|'CLOSED', success_time, ... }
+ */
+async function handleRefundCallback(refundData, eventType) {
+    const outRefundNo = refundData.out_refund_no;
+    const outTradeNo = refundData.out_trade_no;
+    const refundStatus = (refundData.refund_status || '').toUpperCase();
+    const wxRefundId = refundData.refund_id || '';
+
+    console.log(`[RefundCallback] event_type=${eventType}, out_refund_no=${outRefundNo}, refund_status=${refundStatus}`);
+
+    if (!outRefundNo) {
+        console.error('[RefundCallback] 缺少 out_refund_no');
+        return { code: 'SUCCESS', message: 'Missing refund no' };
+    }
+
+    // 查找退款记录
+    const refundRes = await db.collection('refunds')
+        .where({ refund_no: outRefundNo })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+
+    const refund = refundRes.data && refundRes.data[0];
+    if (!refund) {
+        console.warn(`[RefundCallback] 退款记录不存在: ${outRefundNo}`);
+        return { code: 'SUCCESS', message: 'Refund record not found' };
+    }
+
+    // 已处于终态，幂等
+    if (refund.status === 'completed' || refund.status === 'failed') {
+        return { code: 'SUCCESS', message: 'Already in terminal state' };
+    }
+
+    const orderId = refund.order_id;
+
+    if (refundStatus === 'SUCCESS') {
+        // 退款成功：更新退款记录和订单状态
+        await db.collection('refunds').doc(refund._id).update({
+            data: {
+                status: 'completed',
+                completed_at: db.serverDate(),
+                wx_refund_id: wxRefundId || refund.wx_refund_id || '',
+                wx_refund_status: refundStatus,
+                wx_success_time: refundData.success_time || '',
+                updated_at: db.serverDate()
+            }
+        });
+
+        if (orderId) {
+            // 取消该订单的佣金
+            await db.collection('commissions')
+                .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval', 'approved']) })
+                .update({ data: { status: 'cancelled', cancelled_reason: '退款完成，佣金作废', updated_at: db.serverDate() } })
+                .catch(() => {});
+
+            // 回滚库存
+            const orderRes = await db.collection('orders').doc(String(orderId)).get().catch(() => ({ data: null }));
+            const order = orderRes.data;
+            if (order && Array.isArray(order.items)) {
+                for (const item of order.items) {
+                    const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+                    if (item.product_id) {
+                        await db.collection('products').doc(String(item.product_id)).update({
+                            data: { stock: _.inc(qty), sales_count: _.inc(-qty), updated_at: db.serverDate() }
+                        }).catch(() => {});
+                    }
+                    if (item.sku_id) {
+                        await db.collection('skus').doc(String(item.sku_id)).update({
+                            data: { stock: _.inc(qty), updated_at: db.serverDate() }
+                        }).catch(() => {});
+                    }
+                }
+            }
+
+            await db.collection('orders').doc(String(orderId)).update({
+                data: { status: 'refunded', refunded_at: db.serverDate(), updated_at: db.serverDate() }
+            }).catch(() => {});
+        }
+
+        console.log(`[RefundCallback] 退款成功处理完毕: ${outRefundNo}`);
+    } else if (['ABNORMAL', 'CLOSED'].includes(refundStatus)) {
+        // 退款失败/关闭：将订单恢复到之前状态
+        await db.collection('refunds').doc(refund._id).update({
+            data: {
+                status: 'failed',
+                wx_refund_id: wxRefundId || refund.wx_refund_id || '',
+                wx_refund_status: refundStatus,
+                updated_at: db.serverDate()
+            }
+        });
+
+        if (orderId) {
+            const orderRes = await db.collection('orders').doc(String(orderId)).get().catch(() => ({ data: null }));
+            const order = orderRes.data;
+            if (order && order.status === 'refunding') {
+                const revertStatus = order.shipped_at ? 'shipped' : (order.paid_at ? 'paid' : 'pending_payment');
+                await db.collection('orders').doc(String(orderId)).update({
+                    data: { status: revertStatus, updated_at: db.serverDate() }
+                }).catch(() => {});
+            }
+        }
+
+        console.warn(`[RefundCallback] 退款异常/关闭: ${outRefundNo}, status=${refundStatus}`);
+    }
+
+    return { code: 'SUCCESS', message: 'Refund callback processed' };
 }
 
 /**
@@ -722,13 +919,18 @@ async function handleCallback(event) {
                 const publicKey = await loadPublicKey(cloud);
                 const isValid = verifySignature(wxTimestamp, wxNonce, body, wxSignature, publicKey);
                 if (!isValid) {
-                    console.error('[PaymentCallback] 签名验证失败');
+                    console.error('[PaymentCallback] 签名验证失败，拒绝处理');
                     return { code: 'FAIL', message: 'Signature verification failed' };
                 }
             } catch (verifyErr) {
-                console.warn('[PaymentCallback] 签名验证异常（继续处理）:', verifyErr.message);
-                // 签名验证失败不阻断，记录日志后继续
+                // 签名验证异常时拒绝处理，防止伪造回调绕过验签触发改单等操作
+                console.error('[PaymentCallback] 签名验证异常，拒绝处理:', verifyErr.message);
+                return { code: 'FAIL', message: 'Signature verification error' };
             }
+        } else if (wxTimestamp || wxNonce || wxSignature) {
+            // 头信息不完整也拒绝（防止部分头攻击）
+            console.error('[PaymentCallback] 签名头信息不完整，拒绝处理');
+            return { code: 'FAIL', message: 'Incomplete signature headers' };
         }
 
         // 3. 解析回调数据
@@ -759,10 +961,17 @@ async function handleCallback(event) {
         }
 
         const eventType = callbackData.event_type || '';
+        console.log(`[PaymentCallback] event_type=${eventType}`);
+
+        // 5. 退款回调处理（REFUND.SUCCESS / REFUND.ABNORMAL / REFUND.CLOSED）
+        if (eventType.startsWith('REFUND.')) {
+            return handleRefundCallback(transaction, eventType);
+        }
+
         const outTradeNo = transaction.out_trade_no;
         const tradeState = transaction.trade_state;
 
-        console.log(`[PaymentCallback] event_type=${eventType}, out_trade_no=${outTradeNo}, trade_state=${tradeState}`);
+        console.log(`[PaymentCallback] out_trade_no=${outTradeNo}, trade_state=${tradeState}`);
 
         // 5. 处理支付成功
         if (tradeState === 'SUCCESS' && outTradeNo) {

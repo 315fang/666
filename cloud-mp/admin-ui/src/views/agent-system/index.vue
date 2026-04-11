@@ -435,7 +435,7 @@ import {
   getExitRulesConfig, updateExitRulesConfig,
   getRechargeConfig, updateRechargeConfig,
   getDividendPreview, executeDividend,
-  createExitApplication
+  createExitApplication, reviewExitApplication
 } from '@/api'
 
 const activeTab = ref('upgrade')
@@ -692,9 +692,11 @@ const executePartnerExit = async () => {
   if (!exitForm.userId) return ElMessage.warning('请输入用户ID')
   exitResult.value = null
   await withLoading(exitLoading, async () => {
-    const res = await createExitApplication(exitForm.userId, { reason: exitForm.reason })
-    exitResult.value = res?.data || res
-    ElMessage.success('退出申请已创建，请在列表中进行审核和打款确认')
+    const created = await createExitApplication(exitForm.userId, { reason: exitForm.reason })
+    const createdRow = created?.data || created || {}
+    const reviewed = await reviewExitApplication(createdRow.id, { status: 'approved', remark: exitForm.reason })
+    exitResult.value = reviewed?.data || reviewed
+    ElMessage.success('退出退款已执行')
   }).catch((e) => { ElMessage.error(e?.message || '执行失败') })
 }
 

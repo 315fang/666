@@ -381,6 +381,15 @@ function createCloudBaseStore(options) {
             }
             return cache.get(key);
         },
+        async reloadCollection(name) {
+            const key = normalizeSourceName(name);
+            if (key === 'admin_singletons') {
+                await loadCollection(key);
+                return singletonCache;
+            }
+            await loadCollection(key);
+            return cache.get(key) || [];
+        },
         saveCollection(name, rows) {
             const key = normalizeSourceName(name);
             cache.set(key, Array.isArray(rows) ? rows : []);

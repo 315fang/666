@@ -22,22 +22,29 @@ exports.main = async () => {
     const cutoff = new Date(Date.now() - confirmDays * 24 * 60 * 60 * 1000);
     console.log(`[OrderAutoConfirm] scan shipped before ${cutoff.toISOString()}`);
 
+    let confirmed = 0;
+    const errors = [];
+    const batchSize = 100;
+    let hasMore = true;
+
+    while (hasMore) {
     const res = await db.collection('orders')
         .where({
             status: 'shipped',
             shipped_at: _.lte(cutoff)
         })
-        .limit(100)
+        .limit(batchSize)
         .get()
         .catch((err) => {
             console.error('[OrderAutoConfirm] query failed:', err.message);
             return { data: [] };
         });
 
-    let confirmed = 0;
-    const errors = [];
+    const batch = res.data || [];
+    if (batch.length === 0) break;
+    hasMore = batch.length === batchSize;
 
-    for (const order of (res.data || [])) {
+    for (const order of batch) {
         try {
             const pendingRefund = await db.collection('refunds')
                 .where({
@@ -78,6 +85,7 @@ exports.main = async () => {
             errors.push({ order_id: order._id, error: err.message });
         }
     }
+    } // end while
 
     console.log(`[OrderAutoConfirm] confirmed=${confirmed}, errors=${errors.length}`);
     return { confirmed, errors };

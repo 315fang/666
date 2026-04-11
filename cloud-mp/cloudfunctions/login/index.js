@@ -163,7 +163,7 @@ exports.main = cloudFunctionWrapper(async (event) => {
                 agent_level: 0,
                 referrer_openid: referrerOpenid,
                 my_invite_code: createInviteCode(),
-                invite_code: createInviteCode(),
+                invite_code: '',  // invite_code 由 my_invite_code 统一读取，不重复生成
                 register_coupons_issued: false,
                 created_at: db.serverDate(),
                 updated_at: db.serverDate()

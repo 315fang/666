@@ -8,9 +8,10 @@ const { processPaidOrder } = require('./payment-callback');
 /**
  * 查询支付状态（优先查微信侧，回退查本地）
  * @param {string} orderId - 订单 ID
+ * @param {string} [callerOpenid] - 调用者 openid，用于归属校验（传 null 表示内部调用跳过校验）
  * @returns {object} 支付状态
  */
-async function queryPaymentStatus(orderId) {
+async function queryPaymentStatus(orderId, callerOpenid) {
     if (!orderId) {
         throw new Error('缺少订单 ID');
     }
@@ -21,6 +22,11 @@ async function queryPaymentStatus(orderId) {
         throw new Error('订单不存在');
     }
     const order = orderRes.data;
+
+    // 校验订单归属（callerOpenid 为 null 时为内部调用，跳过校验）
+    if (callerOpenid !== null && callerOpenid !== undefined && order.openid && order.openid !== callerOpenid) {
+        throw new Error('无权查询该订单');
+    }
 
     // 2. 如果是待支付，尝试查微信侧获取最新状态
     if (order.status === 'pending_payment' && order.order_no) {

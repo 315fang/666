@@ -246,6 +246,14 @@ function createMysqlStore(options) {
         return cache.get(key);
     }
 
+    async function reloadCollection(name) {
+        const key = normalizeSourceName(name);
+        if (!modelCollections.has(key)) return filesystemStore.getCollection(key);
+        const rows = await loadCollection(key);
+        cache.set(key, rows);
+        return rows;
+    }
+
     function saveCollection(name, rows) {
         const key = normalizeSourceName(name);
         if (!modelCollections.has(key)) {
@@ -310,6 +318,7 @@ function createMysqlStore(options) {
             };
         },
         getCollection,
+        reloadCollection,
         saveCollection,
         getSingleton,
         saveSingleton,

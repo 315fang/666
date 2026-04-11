@@ -252,10 +252,15 @@ const handleAction = {
 
         const withdrawNo = 'WD' + Date.now() + Math.floor(Math.random() * 1000);
 
-        // 扣减余额
-        await db.collection('users').where({ openid }).update({
-            data: { wallet_balance: _.inc(-amount), total_withdrawn: _.inc(amount), updated_at: db.serverDate() },
-        });
+        // 条件扣减余额（乐观锁：where wallet_balance >= amount，防止并发超扣）
+        const updateRes = await db.collection('users')
+            .where({ openid, wallet_balance: _.gte(amount) })
+            .update({
+                data: { wallet_balance: _.inc(-amount), total_withdrawn: _.inc(amount), updated_at: db.serverDate() },
+            });
+        if (!updateRes.stats || updateRes.stats.updated === 0) {
+            throw badRequest('余额不足或并发冲突，请稍后重试');
+        }
 
         // 创建提现记录
         const result = await db.collection('withdrawals').add({
@@ -519,6 +524,9 @@ exports.main = cloudFunctionWrapper(async (event) => {
         throw unauthorized('未登录');
     }
 
+    // action 必须在任何使用前先声明
+    const { action } = event;
+
     const internalActions = new Set(['createCommissions', 'unfreezeCommissions', 'cancelCommissions']);
     if (internalActions.has(action)) {
         const providedToken = String(event.internal_token || '').trim();
@@ -527,9 +535,8 @@ exports.main = cloudFunctionWrapper(async (event) => {
         }
     }
 
-    // 对于 center/dashboard 等查看类 action，非分销员也可访问（返回基础数据）
-    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench'];
-    const { action } = event;
+    // 查看类 action：非分销员也可访问（返回基础数据）
+    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench', 'stats', 'team', 'teamDetail', 'commissionPreview'];
 
     if (!viewActions.includes(action)) {
         // 写操作需要分销权限

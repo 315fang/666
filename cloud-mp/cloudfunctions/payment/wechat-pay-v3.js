@@ -316,6 +316,16 @@ async function createRefund(orderNo, refundNo, total, refund, reason, privateKey
     return request('POST', '/v3/refund/domestic/refunds', body, privateKey);
 }
 
+/**
+ * 查询退款状态（通过商户退款单号）
+ * @param {string} outRefundNo - 商户退款单号
+ * @param {string} privateKey - PEM 私钥
+ * @returns {Promise<object>} 退款详情，包含 status: 'PROCESSING'|'SUCCESS'|'ABNORMAL'|'CLOSED'
+ */
+async function queryRefundByOutRefundNo(outRefundNo, privateKey) {
+    return request('GET', `/v3/refund/domestic/refunds/${encodeURIComponent(outRefundNo)}`, null, privateKey);
+}
+
 // ==================== 导出 ====================
 
 module.exports = {
@@ -330,4 +340,5 @@ module.exports = {
     buildMiniPayParams,
     queryOrderByOutTradeNo,
     createRefund,
+    queryRefundByOutRefundNo,
 };

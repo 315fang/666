@@ -65,15 +65,23 @@ exports.main = async (event, context) => {
                 // 退还优惠券
                 await restoreUsedCoupon(order);
 
-                // 更新订单状态
-                await db.collection('orders').doc(order._id).update({
-                    data: {
-                        status: 'cancelled',
-                        cancel_reason: '超时未支付，系统自动取消',
-                        cancelled_at: db.serverDate(),
-                        updated_at: db.serverDate(),
-                    },
-                });
+                // 条件更新：仅当状态仍为 pending_payment 时才取消，防止与支付回调竞态
+                const updateRes = await db.collection('orders')
+                    .where({ _id: order._id, status: 'pending_payment' })
+                    .update({
+                        data: {
+                            status: 'cancelled',
+                            cancel_reason: '超时未支付，系统自动取消',
+                            cancelled_at: db.serverDate(),
+                            updated_at: db.serverDate(),
+                        },
+                    });
+
+                if (!updateRes.stats || updateRes.stats.updated === 0) {
+                    // 订单已被支付或其他状态变更，跳过（不计入取消数）
+                    console.log(`[OrderTimeoutCancel] 订单 ${order._id} 状态已变更，跳过取消`);
+                    continue;
+                }
 
                 cancelledCount += 1;
             } catch (err) {

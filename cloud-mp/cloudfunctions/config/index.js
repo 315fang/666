@@ -494,10 +494,10 @@ exports.main = cloudFunctionWrapper(async (event) => {
         'activityBubbles', 'activityLinks', 'festivalConfig', 'limitedSpotDetail', 'brandNews',
         'nInviteCard', 'questionnaireActive', 'rules', 'get'];
 
-    // lotteryRecords 需要 openid
-    if (action === 'lotteryRecords' && !params.openid) {
+    // lotteryRecords 必须使用当前登录用户的 openid，忽略 params.openid 防止枚举他人记录
+    if (action === 'lotteryRecords') {
         const wxContext = cloud.getWXContext();
-        params.openid = wxContext.OPENID;
+        params.openid = wxContext.OPENID || '';  // 强制覆盖，不允许查他人
     }
 
     const handler = handleAction[action];

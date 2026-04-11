@@ -110,21 +110,16 @@ async function refundPayment(openid, params) {
             },
         });
 
-        // 仍然更新订单状态为退款中（管理员可手动处理）
+        // 退款失败：将订单恢复为之前状态
         await db.collection('orders').doc(orderId).update({
             data: {
-                status: 'refunding',
+                status: order.status,  // 保持原状态
                 updated_at: db.serverDate(),
             },
         });
 
-        return {
-            success: true,
-            refundId: refundResult.refundId,
-            refund_no: refundResult.refund_no,
-            wx_error: wxErr.message,
-            note: '微信退款接口调用失败，请管理员手动处理',
-        };
+        // 微信退款接口失败，应抛出错误而不是返回 success:true，防止调用方误判
+        throw new Error(`微信退款接口调用失败：${wxErr.message}，请管理员手动处理`);
     }
 }
 

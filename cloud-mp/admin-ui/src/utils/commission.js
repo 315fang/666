@@ -10,7 +10,10 @@ const COMMISSION_TYPE_LABELS = {
   self: '自购返利',
   stock_diff: '库存差价',
   agent_assist: '代理协助奖',
-  b2_assist: 'B2协助奖'
+  b2_assist: 'B2协助奖',
+  region_agent: '区域代理收益',
+  pickup_subsidy: '自提核销补贴',
+  year_end_dividend: '年终分红'
 }
 
 export const COMMISSION_TYPE_OPTIONS = [
@@ -25,7 +28,10 @@ export const COMMISSION_TYPE_OPTIONS = [
   { value: 'self', label: COMMISSION_TYPE_LABELS.self },
   { value: 'Stock_Diff', label: COMMISSION_TYPE_LABELS.stock_diff },
   { value: 'agent_assist', label: COMMISSION_TYPE_LABELS.agent_assist },
-  { value: 'B2_Assist', label: COMMISSION_TYPE_LABELS.b2_assist }
+  { value: 'B2_Assist', label: COMMISSION_TYPE_LABELS.b2_assist },
+  { value: 'region_agent', label: COMMISSION_TYPE_LABELS.region_agent },
+  { value: 'pickup_subsidy', label: COMMISSION_TYPE_LABELS.pickup_subsidy },
+  { value: 'year_end_dividend', label: COMMISSION_TYPE_LABELS.year_end_dividend }
 ]
 
 export function getCommissionTypeLabel(type) {
