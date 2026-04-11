@@ -4,6 +4,7 @@ const {
     ContentBoardProduct,
     Product
 } = require('../../../models');
+const { ok, okList, okAction, fail } = require('../../../utils/adminResponse');
 const { ensureDefaultBoards } = require('../../../services/BoardService');
 const { deleteAssetIfUnreferenced } = require('../../../services/AssetReferenceService');
 const { ensureNoTemporaryAssetUrls } = require('../../../utils/assetUrlAudit');
@@ -35,10 +36,10 @@ const listBoards = async (req, res) => {
             where,
             order: [['sort_order', 'DESC'], ['id', 'ASC']]
         });
-        res.json({ code: 0, data: list });
+        return okList(res, list);
     } catch (error) {
         console.error('读取榜单失败:', error);
-        res.status(500).json({ code: -1, message: '读取榜单失败' });
+        return fail(res, 500, '读取榜单失败');
     }
 };
 
@@ -63,11 +64,11 @@ const getBoardDetail = async (req, res) => {
                 [{ model: ContentBoardProduct, as: 'products' }, 'sort_order', 'DESC']
             ]
         });
-        if (!board) return res.status(404).json({ code: -1, message: '榜单不存在' });
-        res.json({ code: 0, data: board });
+        if (!board) return fail(res, 404, '榜单不存在');
+        return ok(res, board);
     } catch (error) {
         console.error('读取榜单详情失败:', error);
-        res.status(500).json({ code: -1, message: '读取榜单详情失败' });
+        return fail(res, 500, '读取榜单详情失败');
     }
 };
 
@@ -75,7 +76,7 @@ const createBoard = async (req, res) => {
     try {
         const body = req.body || {};
         if (!body.board_key || !body.board_name) {
-            return res.status(400).json({ code: -1, message: 'board_key 与 board_name 必填' });
+            return fail(res, 400, 'board_key 与 board_name 必填');
         }
         const created = await ContentBoard.create({
             board_key: body.board_key.trim(),
@@ -86,17 +87,17 @@ const createBoard = async (req, res) => {
             is_active: body.is_active !== false,
             sort_order: Number(body.sort_order || 0)
         });
-        res.json({ code: 0, data: created, message: '创建成功' });
+        return ok(res, created, '创建成功');
     } catch (error) {
         console.error('创建榜单失败:', error);
-        res.status(500).json({ code: -1, message: '创建榜单失败' });
+        return fail(res, 500, '创建榜单失败');
     }
 };
 
 const updateBoard = async (req, res) => {
     try {
         const board = await ContentBoard.findByPk(req.params.id);
-        if (!board) return res.status(404).json({ code: -1, message: '榜单不存在' });
+        if (!board) return fail(res, 404, '榜单不存在');
         const body = req.body || {};
         await board.update({
             board_name: body.board_name ?? board.board_name,
@@ -106,22 +107,22 @@ const updateBoard = async (req, res) => {
             is_active: body.is_active ?? board.is_active,
             sort_order: body.sort_order === undefined ? board.sort_order : Number(body.sort_order)
         });
-        res.json({ code: 0, data: board, message: '更新成功' });
+        return ok(res, board, '更新成功');
     } catch (error) {
         console.error('更新榜单失败:', error);
-        res.status(500).json({ code: -1, message: '更新榜单失败' });
+        return fail(res, 500, '更新榜单失败');
     }
 };
 
 const deleteBoard = async (req, res) => {
     try {
         const board = await ContentBoard.findByPk(req.params.id);
-        if (!board) return res.status(404).json({ code: -1, message: '榜单不存在' });
+        if (!board) return fail(res, 404, '榜单不存在');
         await board.update({ is_active: false });
-        res.json({ code: 0, message: '已停用' });
+        return okAction(res, '已停用');
     } catch (error) {
         console.error('删除榜单失败:', error);
-        res.status(500).json({ code: -1, message: '删除榜单失败' });
+        return fail(res, 500, '删除榜单失败');
     }
 };
 
@@ -136,10 +137,10 @@ const updateBoardSort = async (req, res) => {
                 )
             )
         );
-        res.json({ code: 0, message: '排序更新成功' });
+        return okAction(res, '排序更新成功');
     } catch (error) {
         console.error('榜单排序更新失败:', error);
-        res.status(500).json({ code: -1, message: '榜单排序更新失败' });
+        return fail(res, 500, '榜单排序更新失败');
     }
 };
 
@@ -149,10 +150,10 @@ const listBoardItems = async (req, res) => {
             where: { board_id: req.params.id },
             order: [['sort_order', 'DESC'], ['id', 'ASC']]
         });
-        res.json({ code: 0, data: items });
+        return okList(res, items);
     } catch (error) {
         console.error('读取榜单图片项失败:', error);
-        res.status(500).json({ code: -1, message: '读取榜单图片项失败' });
+        return fail(res, 500, '读取榜单图片项失败');
     }
 };
 
@@ -173,10 +174,10 @@ const createBoardItem = async (req, res) => {
             is_active: body.is_active !== false,
             sort_order: Number(body.sort_order || 0)
         });
-        res.json({ code: 0, data: row, message: '新增成功' });
+        return ok(res, row, '新增成功');
     } catch (error) {
         console.error('新增榜单图片项失败:', error);
-        res.status(500).json({ code: -1, message: '新增榜单图片项失败' });
+        return fail(res, 500, '新增榜单图片项失败');
     }
 };
 
@@ -185,7 +186,7 @@ const updateBoardItem = async (req, res) => {
         const row = await ContentBoardItem.findOne({
             where: { id: req.params.itemId, board_id: req.params.id }
         });
-        if (!row) return res.status(404).json({ code: -1, message: '榜单图片项不存在' });
+        if (!row) return fail(res, 404, '榜单图片项不存在');
         const body = req.body || {};
         if (body.image_url !== undefined && body.image_url) {
             ensureNoTemporaryAssetUrls([body.image_url], '榜单图片');
@@ -200,10 +201,10 @@ const updateBoardItem = async (req, res) => {
             is_active: body.is_active ?? row.is_active,
             sort_order: body.sort_order === undefined ? row.sort_order : Number(body.sort_order)
         });
-        res.json({ code: 0, data: row, message: '更新成功' });
+        return ok(res, row, '更新成功');
     } catch (error) {
         console.error('更新榜单图片项失败:', error);
-        res.status(500).json({ code: -1, message: '更新榜单图片项失败' });
+        return fail(res, 500, '更新榜单图片项失败');
     }
 };
 
@@ -217,10 +218,10 @@ const deleteBoardItem = async (req, res) => {
             await item.destroy();
             if (imageUrl) await deleteAssetIfUnreferenced(imageUrl);
         }
-        res.json({ code: 0, message: '删除成功' });
+        return okAction(res, '删除成功');
     } catch (error) {
         console.error('删除榜单图片项失败:', error);
-        res.status(500).json({ code: -1, message: '删除榜单图片项失败' });
+        return fail(res, 500, '删除榜单图片项失败');
     }
 };
 
@@ -235,10 +236,10 @@ const updateBoardItemSort = async (req, res) => {
                 )
             )
         );
-        res.json({ code: 0, message: '排序更新成功' });
+        return okAction(res, '排序更新成功');
     } catch (error) {
         console.error('榜单图片项排序更新失败:', error);
-        res.status(500).json({ code: -1, message: '榜单图片项排序更新失败' });
+        return fail(res, 500, '榜单图片项排序更新失败');
     }
 };
 
@@ -257,10 +258,10 @@ const listBoardProducts = async (req, res) => {
                 product: plain.product ? { ...plain.product, images: imgs, cover_image: imgs[0] || '' } : null
             };
         });
-        res.json({ code: 0, data });
+        return okList(res, data);
     } catch (error) {
         console.error('读取上榜商品失败:', error);
-        res.status(500).json({ code: -1, message: '读取上榜商品失败' });
+        return fail(res, 500, '读取上榜商品失败');
     }
 };
 
@@ -270,7 +271,7 @@ const addBoardProducts = async (req, res) => {
             ? req.body.product_ids.map((id) => Number(id)).filter(Boolean)
             : [];
         if (!productIds.length) {
-            return res.status(400).json({ code: -1, message: 'product_ids 不能为空' });
+            return fail(res, 400, 'product_ids 不能为空');
         }
         const count = await ContentBoardProduct.count({ where: { board_id: req.params.id } });
         let sort = count + productIds.length;
@@ -285,10 +286,10 @@ const addBoardProducts = async (req, res) => {
                 }
             });
         }
-        res.json({ code: 0, message: '添加成功' });
+        return okAction(res, '添加成功');
     } catch (error) {
         console.error('添加上榜商品失败:', error);
-        res.status(500).json({ code: -1, message: '添加上榜商品失败' });
+        return fail(res, 500, '添加上榜商品失败');
     }
 };
 
@@ -297,15 +298,15 @@ const updateBoardProduct = async (req, res) => {
         const row = await ContentBoardProduct.findOne({
             where: { id: req.params.relationId, board_id: req.params.id }
         });
-        if (!row) return res.status(404).json({ code: -1, message: '记录不存在' });
+        if (!row) return fail(res, 404, '记录不存在');
         await row.update({
             is_active: req.body?.is_active ?? row.is_active,
             sort_order: req.body?.sort_order === undefined ? row.sort_order : Number(req.body.sort_order)
         });
-        res.json({ code: 0, data: row, message: '更新成功' });
+        return ok(res, row, '更新成功');
     } catch (error) {
         console.error('更新上榜商品失败:', error);
-        res.status(500).json({ code: -1, message: '更新上榜商品失败' });
+        return fail(res, 500, '更新上榜商品失败');
     }
 };
 
@@ -314,10 +315,10 @@ const deleteBoardProduct = async (req, res) => {
         await ContentBoardProduct.destroy({
             where: { id: req.params.relationId, board_id: req.params.id }
         });
-        res.json({ code: 0, message: '删除成功' });
+        return okAction(res, '删除成功');
     } catch (error) {
         console.error('删除上榜商品失败:', error);
-        res.status(500).json({ code: -1, message: '删除上榜商品失败' });
+        return fail(res, 500, '删除上榜商品失败');
     }
 };
 
@@ -332,10 +333,10 @@ const updateBoardProductSort = async (req, res) => {
                 )
             )
         );
-        res.json({ code: 0, message: '排序更新成功' });
+        return okAction(res, '排序更新成功');
     } catch (error) {
         console.error('上榜商品排序更新失败:', error);
-        res.status(500).json({ code: -1, message: '上榜商品排序更新失败' });
+        return fail(res, 500, '上榜商品排序更新失败');
     }
 };
 

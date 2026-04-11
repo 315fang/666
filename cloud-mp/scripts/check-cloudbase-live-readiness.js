@@ -20,15 +20,24 @@ function callMcporter(args) {
     }
     return arg;
   });
-  const output = execSync(`npx mcporter ${escapedArgs.join(' ')}`, {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-    shell: true
-  });
-  return JSON.parse(output);
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const output = execSync(`npx mcporter ${escapedArgs.join(' ')}`, {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: true
+      });
+      return JSON.parse(output);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 function main() {
+  const projectConfig = JSON.parse(fs.readFileSync(path.join(cloudRoot, 'project.config.json'), 'utf8'));
   const auth = callMcporter(['call', 'cloudbase.auth', 'action=status', '--output', 'json']);
   const results = [];
   for (const check of checks) {
@@ -58,9 +67,9 @@ function main() {
 
   const report = {
     generatedAt: new Date().toISOString(),
-    envId: auth.current_env_id,
-    authStatus: auth.auth_status,
-    envStatus: auth.env_status,
+    envId: auth.current_env_id || projectConfig.cloudbaseEnv || '',
+    authStatus: auth.auth_status || 'UNKNOWN',
+    envStatus: auth.env_status || 'UNKNOWN',
     ok: results.every((item) => item.ok),
     results
   };

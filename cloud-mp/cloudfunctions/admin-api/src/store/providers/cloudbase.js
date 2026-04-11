@@ -22,7 +22,8 @@ function createCloudBaseStore(options) {
         dataRoot,
         normalizedDataRoot,
         runtimeRoot,
-        preferNormalizedData
+        preferNormalizedData,
+        isFunctionRuntime = false
     } = options;
 
     const fallbackStore = createFilesystemStore({
@@ -148,18 +149,27 @@ function createCloudBaseStore(options) {
         };
     }
 
-    const initOptions = {
-        env: cloudbase.envId
-    };
-    if (cloudbase.secretId && cloudbase.secretKey) {
-        initOptions.secretId = cloudbase.secretId;
-        initOptions.secretKey = cloudbase.secretKey;
-        if (cloudbase.token) {
-            initOptions.token = cloudbase.token;
+    let app = null;
+    let db = null;
+    if (isFunctionRuntime) {
+        const wxCloud = require('wx-server-sdk');
+        wxCloud.init({ env: wxCloud.DYNAMIC_CURRENT_ENV });
+        app = wxCloud;
+        db = wxCloud.database();
+    } else {
+        const initOptions = {
+            env: cloudbase.envId
+        };
+        if (cloudbase.secretId && cloudbase.secretKey) {
+            initOptions.secretId = cloudbase.secretId;
+            initOptions.secretKey = cloudbase.secretKey;
+            if (cloudbase.token) {
+                initOptions.token = cloudbase.token;
+            }
         }
+        app = cloudbaseSdk.init(initOptions);
+        db = app.database();
     }
-    const app = cloudbaseSdk.init(initOptions);
-    const db = app.database();
 
     function getCollectionName(name) {
         const prefix = cloudbase.collectionPrefix || '';
@@ -322,7 +332,9 @@ function createCloudBaseStore(options) {
 
     return {
         kind: 'cloudbase',
-        description: 'CloudBase 文档数据库 + CloudBase 单例配置',
+        description: isFunctionRuntime
+            ? 'CloudBase 文档数据库（wx-server-sdk）+ CloudBase 单例配置'
+            : 'CloudBase 文档数据库（@cloudbase/node-sdk）+ CloudBase 单例配置',
         readyPromise,
         async flush() {
             const tasks = [

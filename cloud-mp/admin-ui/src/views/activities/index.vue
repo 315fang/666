@@ -7,7 +7,7 @@
       show-icon
       style="margin-bottom: 16px"
     />
-    <el-tabs v-model="activeTab" @tab-change="handleTabChange">
+    <el-tabs v-model="activeTab">
       <!-- ====== 砍价活动 ====== -->
       <el-tab-pane label="砍价活动" name="slash">
         <SlashActivityPanel
@@ -289,7 +289,8 @@ const fetchPrizes = async () => {
   prizeLoading.value = true
   try {
     const res = await getLotteryPrizes()
-    prizes.value = res.data || res || []
+    const data = res?.data || res
+    prizes.value = Array.isArray(data) ? data : (data?.list || [])
   } catch (e) {
     console.error('获取奖品失败:', e)
   } finally {
@@ -797,22 +798,28 @@ const applyOptionToItem = (item, key) => {
   }
 }
 
-const handleTabChange = (tab) => {
-  if (tab === 'lottery' && prizes.value.length === 0) fetchPrizes()
+const prizeTypeLabel = (t) => ({ miss: '未中奖', points: '积分', coupon: '优惠券', physical: '实物' }[t] || t)
+const prizeTagType = (t) => ({ miss: 'info', points: 'warning', coupon: 'success', physical: 'primary' }[t] || '')
+
+watch(activeTab, (tab) => {
+  if (tab === 'slash' && slashList.value.length === 0) {
+    fetchSlash()
+  }
+  if (tab === 'lottery' && prizes.value.length === 0) {
+    fetchPrizes()
+  }
   if (tab === 'festival') {
     fetchActivityOptions()
-    fetchFestival()
+    if (!festival.name && !festival.banner_title && !festival.tags.length) {
+      fetchFestival()
+    }
     fetchGlobalUi()
   }
   if (tab === 'links') {
     fetchActivityOptions()
     fetchLinks()
   }
-}
-
-const prizeTypeLabel = (t) => ({ miss: '未中奖', points: '积分', coupon: '优惠券', physical: '实物' }[t] || t)
-const prizeTagType = (t) => ({ miss: 'info', points: 'warning', coupon: 'success', physical: 'primary' }[t] || '')
-onMounted(fetchSlash)
+}, { immediate: true })
 </script>
 
 <style scoped>

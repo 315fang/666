@@ -69,7 +69,7 @@
               <tbody>
                 <tr v-for="order in recentOrders" :key="order.id" class="table-row" @click="$router.push('/orders')">
                   <td class="order-no">{{ order.order_no }}</td>
-                  <td class="amount">¥{{ formatFenToYuan(order.actual_price ?? order.total_amount ?? 0) }}</td>
+                  <td class="amount">¥{{ formatAmountYuan(order.actual_price ?? order.total_amount ?? 0) }}</td>
                   <td>
                     <span class="status-badge" :class="`status-${order.status}`">{{ getStatusText(order.status) }}</span>
                   </td>
@@ -159,7 +159,7 @@
                 <div class="rank-name">{{ p.name }}</div>
                 <div class="rank-meta">热度 {{ p.heat_score || 0 }} · 售出 {{ p.purchase_count || 0 }}</div>
               </div>
-              <div class="rank-price">¥{{ formatFenToYuan(p.retail_price ?? p.min_price ?? p.price ?? 0) }}</div>
+                <div class="rank-price">¥{{ formatAmountYuan(p.retail_price ?? p.min_price ?? p.price ?? 0) }}</div>
             </div>
             <div v-if="hotProducts.length === 0 && !dashLoading" class="empty-row">暂无商品数据</div>
           </div>
@@ -295,7 +295,7 @@ const DEFAULT_PAYMENT_HEALTH = {
 const paymentHealth = ref({ ...DEFAULT_PAYMENT_HEALTH })
 
 const todoItems = ref([
-  { title: '待发货订单', count: 0, path: '/orders', query: { status_group: 'paid' }, icon: 'Box', iconBg: 'rgba(245,158,11,0.12)' },
+  { title: '待发货订单', count: 0, path: '/orders', query: { status_group: 'pending_ship' }, icon: 'Box', iconBg: 'rgba(245,158,11,0.12)' },
   { title: '待提现审核', count: 0, path: '/withdrawals', query: { status: 'pending' }, icon: 'Money', iconBg: 'rgba(239,68,68,0.12)' },
   { title: '待退款审核', count: 0, path: '/refunds', query: { status: 'pending' }, icon: 'RefreshLeft', iconBg: 'rgba(99,102,241,0.12)' },
   { title: '待审批佣金', count: 0, path: '/commissions', icon: 'Wallet', iconBg: 'rgba(20,184,166,0.12)' }
@@ -337,7 +337,7 @@ const focusBarItems = computed(() => [
     label: '待发货',
     count: Number(todoItems.value[0]?.count || 0),
     path: '/orders',
-    query: { status_group: 'paid' }
+    query: { status_group: 'pending_ship' }
   },
   {
     key: 'pending_withdraw',
@@ -376,7 +376,7 @@ const fetchOperationsDashboard = async () => {
     const pendingShipCount = Number(d?.kpi?.pendingShip ?? d?.kpi?.paid ?? d?.kpi?.pending_ship ?? 0)
 
     statsCards.value[0].value = String(d?.kpi?.today_orders || 0)
-    statsCards.value[1].value = '¥' + formatFenToYuan(d?.kpi?.today_sales ?? 0)
+    statsCards.value[1].value = '¥' + formatAmountYuan(d?.kpi?.today_sales ?? 0)
     statsCards.value[2].value = String(d?.kpi?.total_users || 0)
     statsCards.value[3].value = String(pendingShipCount)
 
@@ -394,7 +394,7 @@ const fetchOperationsDashboard = async () => {
     try {
       const ov = await getDashboardOverview()
       statsCards.value[0].value = String(ov?.today_orders || 0)
-      statsCards.value[1].value = '¥' + formatFenToYuan(ov?.total_sales ?? 0)
+      statsCards.value[1].value = '¥' + formatAmountYuan(ov?.total_sales ?? 0)
       statsCards.value[2].value = String(ov?.total_users || 0)
       statsCards.value[3].value = String(ov?.pending_ship || 0)
     } catch (fallbackErr) {
@@ -408,9 +408,8 @@ const fetchOperationsDashboard = async () => {
 
 const fetchMemberTierConfig = async () => {
   try {
-    const res = await getMemberTierConfig()
-    const d = res
-    memberTierList.value = Array.isArray(d?.member_levels) ? d.member_levels : []
+    const d = await getMemberTierConfig()
+    memberTierList.value = Array.isArray(d.member_levels) ? d.member_levels : []
   } catch (e) {
     console.warn('获取会员等级配置失败:', e)
     memberTierList.value = []
@@ -480,13 +479,12 @@ const getProductImage = (p) => {
   }
 }
 
-const formatFenToYuan = (value) => {
+const formatAmountYuan = (value) => {
   if (value === null || value === undefined || value === '') return '0.00'
   const raw = String(value).trim()
   const amount = Number(raw)
   if (!Number.isFinite(amount)) return '0.00'
-  if (raw.includes('.')) return amount.toFixed(2)
-  return (amount / 100).toFixed(2)
+  return amount.toFixed(2)
 }
 
 const getStatusText = (status) => {

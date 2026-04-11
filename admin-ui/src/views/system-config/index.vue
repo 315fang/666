@@ -241,14 +241,6 @@ import dayjs from 'dayjs'
 
 const activeTab = ref('config')
 
-const unwrapListResponse = (res) => {
-  if (Array.isArray(res)) return res
-  if (Array.isArray(res?.list)) return res.list
-  if (Array.isArray(res?.rows)) return res.rows
-  return []
-}
-
-
 // ===== 系统配置 =====
 const configLoading = ref(false)
 const batchSaving = ref(false)
@@ -273,8 +265,7 @@ const fetchConfigs = async () => {
   configLoading.value = true
   try {
     const res = await getSystemConfigs()
-    const data = unwrapListResponse(res)
-    allConfigs.value = data.map(c => ({
+    allConfigs.value = res.list.map(c => ({
       ...c,
       _editValue: parseConfigValue(c.config_value, c.config_type),
       _originalValue: c.config_value,
@@ -336,7 +327,7 @@ const refreshCache = async () => {
 const showHistory = async (row) => {
   try {
     const res = await getSystemConfigHistory(row.config_key)
-    configHistory.value = unwrapListResponse(res)
+    configHistory.value = res.list
     historyDialogVisible.value = true
   } catch (e) {
     console.error('获取历史失败:', e)
@@ -395,7 +386,7 @@ const fetchTables = async () => {
   tablesLoading.value = true
   try {
     const res = await getDbIndexTables()
-    dbTables.value = unwrapListResponse(res)
+    dbTables.value = res.list
   } catch (e) {
     console.error('获取表列表失败:', e)
   } finally {
@@ -412,8 +403,8 @@ const selectTable = async (tableName) => {
       getDbIndexes(tableName),
       getDbIndexColumns(tableName)
     ])
-    tableIndexes.value = unwrapListResponse(idxRes)
-    tableColumns.value = unwrapListResponse(colRes)
+    tableIndexes.value = idxRes.list
+    tableColumns.value = colRes.list
   } catch (e) {
     console.error('获取索引/列信息失败:', e)
   } finally {

@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const { sendNotification } = require('../../../models/notificationUtil');
 const AdminOrderService = require('../../../services/AdminOrderService');
 const OrderCoreService = require('../../../services/OrderCoreService');
+const OrderFulfillmentService = require('../../../services/OrderFulfillmentService');
 const { queryLogistics } = require('../../../services/LogisticsService');
 const { loadMiniProgramConfig } = require('../../../utils/miniprogramConfig');
 const { scheduleUploadShippingInfoAfterShip } = require('../../../services/WechatShippingInfoService');
@@ -29,6 +30,39 @@ function buildManualTrackingPayload(order, logisticsConfig = {}) {
         manual_mode: true,
         query_time: new Date().toISOString()
     };
+}
+
+function roundYuan(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return NaN;
+    return Math.round((num + Number.EPSILON) * 100) / 100;
+}
+
+function normalizeAdminOrderAmountInput(rawValue, oldAmount, amountUnit = '') {
+    const raw = String(rawValue ?? '').trim();
+    if (!raw) return NaN;
+
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0) return NaN;
+
+    const unit = String(amountUnit || '').trim().toLowerCase();
+    if (unit === 'yuan') return roundYuan(parsed);
+    if (unit === 'fen') return roundYuan(parsed / 100);
+
+    // 兼容历史调用：优先使用更接近当前订单金额的解释方式
+    if (raw.includes('.')) return roundYuan(parsed);
+
+    const asYuan = roundYuan(parsed);
+    const asFenYuan = roundYuan(parsed / 100);
+    const baseline = roundYuan(oldAmount);
+
+    if (!Number.isFinite(baseline) || baseline <= 0) {
+        return parsed >= 10000 ? asFenYuan : asYuan;
+    }
+
+    return Math.abs(asFenYuan - baseline) < Math.abs(asYuan - baseline)
+        ? asFenYuan
+        : asYuan;
 }
 
 /**
@@ -213,7 +247,7 @@ const getOrders = async (req, res) => {
                     created_at: { [Op.between]: [today, tomorrow] }
                 }
             }),
-            Order.count({ where: { status: 'paid' } })
+            Order.count({ where: { status: { [Op.in]: ['paid', 'agent_confirmed', 'shipping_requested'] } } })
         ]);
 
         res.json({
@@ -315,7 +349,7 @@ const updateOrderStatus = async (req, res) => {
 
         order.status = status;
         if (status === 'completed') {
-            await OrderCoreService._completeShippedOrder(order, t);
+            await OrderFulfillmentService._completeShippedOrder(order, t);
         }
         if (status === 'shipped') order.shipped_at = new Date();
         if (remark) order.remark = (order.remark ? order.remark + ' | ' : '') + remark;
@@ -443,12 +477,12 @@ const getAdminOrderLogistics = async (req, res) => {
 /**
  * ★ 修改订单金额（活动补差/错价补偿）
  * PUT /admin/api/orders/:id/amount
- * body: { actual_price: 10000(分), reason: '说明' }
+ * body: { actual_price: 100.00, amount_unit?: 'yuan'|'fen', reason: '说明' }
  */
 const adjustOrderAmount = async (req, res) => {
     try {
         const { id } = req.params;
-        const { actual_price, reason } = req.body;
+        const { actual_price, amount_unit, reason } = req.body;
         const adminName = req.admin?.username || 'unknown';
 
         if (actual_price == null || !reason) {
@@ -465,17 +499,17 @@ const adjustOrderAmount = async (req, res) => {
             return res.status(400).json({ code: -1, message: '仅待支付订单允许修改金额' });
         }
 
-        const oldAmount = parseFloat(order.actual_price);
-        const adjustAmount = parseInt(actual_price, 10);
+        const oldAmount = roundYuan(order.actual_price);
+        const adjustAmount = normalizeAdminOrderAmountInput(actual_price, oldAmount, amount_unit);
 
-        if (isNaN(adjustAmount) || adjustAmount <= 0) {
-            return res.status(400).json({ code: -1, message: '金额必须为正整数(分)' });
+        if (!Number.isFinite(adjustAmount) || adjustAmount <= 0) {
+            return res.status(400).json({ code: -1, message: '金额必须为有效正数' });
         }
 
         await order.update({
             total_amount: adjustAmount,
             actual_price: adjustAmount,
-            remark: (order.remark || '') + ` [管理员${adminName}调价: ¥${(oldAmount / 100).toFixed(2)}→¥${(adjustAmount / 100).toFixed(2)} 原因:${reason}]`
+            remark: (order.remark || '') + ` [管理员${adminName}调价: ¥${oldAmount.toFixed(2)}→¥${adjustAmount.toFixed(2)} 原因:${reason}]`
         });
 
         res.json({

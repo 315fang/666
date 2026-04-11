@@ -1,18 +1,19 @@
 import request from '@/utils/request'
+import { normalizeItemResult, normalizeListResult } from '@/api/normalize'
 
 export const getUsers = (params) => {
   return request({
     url: '/users',
     method: 'get',
     params
-  })
+  }).then(normalizeListResult)
 }
 
 export const getUserById = (id) => {
   return request({
     url: `/users/${id}`,
     method: 'get'
-  })
+  }).then(normalizeItemResult)
 }
 
 export const getUserTeam = (id, params) => {
@@ -20,7 +21,7 @@ export const getUserTeam = (id, params) => {
     url: `/users/${id}/team`,
     method: 'get',
     params
-  })
+  }).then(normalizeListResult)
 }
 
 /** 推荐子树汇总（后代人数、用户累计、订单统计）；params: { range?: 'all'|'30d' } */
@@ -29,7 +30,7 @@ export const getUserTeamSummary = (id, params) => {
     url: `/users/${id}/team-summary`,
     method: 'get',
     params
-  })
+  }).then(normalizeItemResult)
 }
 
 export const updateUserRole = (id, data) => {

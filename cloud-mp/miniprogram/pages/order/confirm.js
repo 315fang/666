@@ -26,30 +26,6 @@ const {
     toggleWallet
 } = require('./orderConfirmAccount');
 
-function buildCheckoutGuide(page) {
-    const data = page.data || {};
-    const availableCount = Number((data.availableCoupons || []).length || 0);
-    const unusedCount = Number(data.unusedCouponCount || 0);
-    const estimatedReward = Math.max(0, Math.floor(Number(data.finalAmount || data.totalAmount || 0)));
-
-    let processTip = '';
-    if (data.selectedCoupon) {
-        processTip = `本单已使用优惠券，立省 ¥${data.couponDiscount || '0.00'}`;
-    } else if (availableCount > 0) {
-        processTip = `当前有 ${availableCount} 张优惠券可选，点击上方立即选择`;
-    } else if (unusedCount > 0) {
-        processTip = `你还有 ${unusedCount} 张优惠券暂不适用于本单`;
-    }
-
-    return {
-        processTip,
-        rewardTip: estimatedReward > 0 ? `支付完成预计获得 ${estimatedReward} 积分与成长值` : '',
-        resultTip: data.deliveryType === 'pickup'
-            ? '支付成功后可在“我的订单”查看，并按所选门店信息完成自提'
-            : '支付成功后可在“我的订单”查看发货与售后进度'
-    };
-}
-
 Page({
     data: {
         loading: true,
@@ -100,12 +76,7 @@ Page({
         pickupDistanceHint: false,
         lightTipShow: false,
         lightTipTitle: '',
-        lightTipContent: '',
-        checkoutGuide: {
-            processTip: '',
-            rewardTip: '',
-            resultTip: ''
-        }
+        lightTipContent: ''
     },
 
     onReady() {
@@ -136,7 +107,6 @@ Page({
                 });
                 this._refreshPickupAllowed();
                 this.loadAvailableCoupons();
-                this._syncCheckoutGuide();
             } else {
                 wx.showToast({ title: '商品信息丢失', icon: 'none' });
                 this.setData({ loading: false });
@@ -183,7 +153,6 @@ Page({
             this.loadAvailableCoupons();
         }
         this._tryAutoCouponUsagePrompt();
-        this._syncCheckoutGuide();
     },
 
     _tryAutoCouponUsagePrompt() {
@@ -229,7 +198,7 @@ Page({
             wx.showToast({ title: '当前商品不支持到店自提', icon: 'none' });
             return;
         }
-        this.setData({ deliveryType: v, pickupStation: v === 'pickup' ? this.data.pickupStation : null }, () => this._syncCheckoutGuide());
+        this.setData({ deliveryType: v, pickupStation: v === 'pickup' ? this.data.pickupStation : null });
         if (v === 'pickup') {
             this.loadPickupStations();
         }
@@ -280,15 +249,12 @@ Page({
 
     // 重新计算最终价格（全程用整数分运算，避免浮点误差）
     _recalcFinal() {
-        const result = recalcFinal(this);
-        this._syncCheckoutGuide();
-        return result;
+        return recalcFinal(this);
     },
 
     // 加载可用优惠券
     async loadAvailableCoupons() {
         await loadAvailableCoupons(this);
-        this._syncCheckoutGuide();
     },
 
     async _ensureCouponReady(tryLogin) {
@@ -363,9 +329,7 @@ Page({
     },
 
     async loadPointBalance() {
-        const result = await loadPointBalance(this);
-        this._syncCheckoutGuide();
-        return result;
+        return loadPointBalance(this);
     },
 
     onTogglePoints(e) {
@@ -373,16 +337,10 @@ Page({
     },
 
     async loadWalletBalance() {
-        const result = await loadWalletBalance(this, app);
-        this._syncCheckoutGuide();
-        return result;
+        return loadWalletBalance(this, app);
     },
 
     onToggleWallet(e) {
         return toggleWallet(this, e.detail.value);
-    },
-
-    _syncCheckoutGuide() {
-        this.setData({ checkoutGuide: buildCheckoutGuide(this) });
     }
 });

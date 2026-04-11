@@ -477,7 +477,7 @@ const searchForm = reactive({ keyword: '', category_id: '', status: '' })
 const loadCategories = async () => {
   try {
     const res = await getCategories()
-    categories.value = res?.data || res?.list || res || []
+    categories.value = res.list
   } catch (e) {
     ElMessage.error(e?.message || '加载分类失败')
   }

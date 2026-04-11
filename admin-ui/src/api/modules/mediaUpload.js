@@ -1,31 +1,26 @@
 import request from '@/utils/request'
-
-const fileToBase64 = (file) => new Promise((resolve, reject) => {
-  const reader = new FileReader()
-  reader.onload = () => resolve(reader.result || '')
-  reader.onerror = () => reject(reader.error || new Error('文件读取失败'))
-  reader.readAsDataURL(file)
-})
+import { normalizeItemResult, normalizeMultiUploadResult, normalizeUploadResult } from '@/api/normalize'
 
 export const uploadFile = async (file, options = {}) => {
-  const contentBase64 = await fileToBase64(file)
+  const formData = new FormData()
+  formData.append('file', file)
+  Object.entries(options.params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      formData.append(key, String(value))
+    }
+  })
   return request({
     url: '/upload',
     method: 'post',
-    data: {
-      name: file.name,
-      mime_type: file.type || 'application/octet-stream',
-      content_base64: contentBase64,
-      ...(options.params || {})
-    }
-  })
+    data: formData
+  }).then(normalizeUploadResult)
 }
 
 export const getStorageConfig = () => {
   return request({
     url: '/storage/config',
     method: 'get'
-  })
+  }).then(normalizeItemResult)
 }
 
 export const updateStorageConfig = (data) => {
@@ -41,7 +36,22 @@ export const testStorageConfig = (provider) => {
     url: '/storage/test',
     method: 'post',
     data: provider ? { provider } : {}
-  })
+  }).then(normalizeItemResult)
 }
 
 export const uploadSplashImage = (file) => uploadFile(file)
+
+export const uploadFiles = (files, options = {}) => {
+  const formData = new FormData()
+  files.forEach((file) => formData.append('files', file))
+  Object.entries(options.params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      formData.append(key, String(value))
+    }
+  })
+  return request({
+    url: '/upload/multiple',
+    method: 'post',
+    data: formData
+  }).then(normalizeMultiUploadResult)
+}

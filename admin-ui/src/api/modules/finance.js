@@ -1,11 +1,12 @@
 import request from '@/utils/request'
+import { normalizeItemResult, normalizeListResult } from '@/api/normalize'
 
 export const getWithdrawals = (params) => {
   return request({
     url: '/withdrawals',
     method: 'get',
     params
-  })
+  }).then(normalizeListResult)
 }
 
 export const approveWithdrawal = (id, data) => {
@@ -36,14 +37,14 @@ export const getRefunds = (params) => {
     url: '/refunds',
     method: 'get',
     params
-  })
+  }).then(normalizeListResult)
 }
 
 export const getRefundById = (id) => {
   return request({
     url: `/refunds/${id}`,
     method: 'get'
-  })
+  }).then(normalizeItemResult)
 }
 
 export const approveRefund = (id, data) => {
@@ -69,7 +70,7 @@ export const completeRefund = (id) => {
   })
 }
 
-export const getCommissions = (params) => request({ url: '/commissions', method: 'get', params })
+export const getCommissions = (params) => request({ url: '/commissions', method: 'get', params }).then(normalizeListResult)
 export const approveCommissionItem = (id) => request({ url: `/commissions/${id}/approve`, method: 'put' })
 export const rejectCommissionItem = (id, data) => request({ url: `/commissions/${id}/reject`, method: 'put', data })
 export const batchApproveCommissions = (data) => request({ url: '/commissions/batch-approve', method: 'post', data })

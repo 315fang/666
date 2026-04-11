@@ -109,7 +109,7 @@ import {
   updateSectionSort,
   getSettings,
   updateSettings
-} from '@/api/index'
+} from '@/api'
 
 const pageTab = ref('popup')
 
@@ -180,8 +180,7 @@ const brandConfig = reactive({
 
 const loadBrandConfig = async () => {
   try {
-    const res = await getSettings()
-    const d = res?.data || res || {}
+    const d = await getSettings()
     brandConfig.show_brand_logo = d.show_brand_logo !== 'false' && d.show_brand_logo !== false
     brandConfig.brand_logo = d.brand_logo || ''
     brandConfig.nav_brand_title = d.nav_brand_title || '问兰镜像'
@@ -259,8 +258,8 @@ const fetchData = async () => {
       getHomeSections(),
       getSectionSchemas()
     ])
-    sections.value = (res?.list || (Array.isArray(res) ? res : [])).sort((a, b) => b.sort_order - a.sort_order)
-    sectionSchemas.value = schemaRes.data || {}
+    sections.value = res.list.slice().sort((a, b) => b.sort_order - a.sort_order)
+    sectionSchemas.value = schemaRes || {}
   } catch (e) {
     console.error('获取首页配置失败:', e)
   } finally {

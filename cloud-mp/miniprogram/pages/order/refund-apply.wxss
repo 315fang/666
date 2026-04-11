@@ -232,6 +232,12 @@
   color: #92400E;
 }
 
+.tip-icon-img {
+  width: 28rpx;
+  height: 28rpx;
+  flex-shrink: 0;
+}
+
 .tip-icon {
   font-size: 28rpx;
 }

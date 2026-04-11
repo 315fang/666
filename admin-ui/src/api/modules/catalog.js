@@ -1,18 +1,19 @@
 import request from '@/utils/request'
+import { normalizeItemResult, normalizeListResult } from '@/api/normalize'
 
 export const getProducts = (params) => {
   return request({
     url: '/products',
     method: 'get',
     params
-  })
+  }).then(normalizeListResult)
 }
 
 export const getProductById = (id) => {
   return request({
     url: `/products/${id}`,
     method: 'get'
-  })
+  }).then(normalizeItemResult)
 }
 
 export const createProduct = (data) => {
@@ -47,7 +48,7 @@ export const getCategories = () => {
   return request({
     url: '/categories',
     method: 'get'
-  })
+  }).then(normalizeListResult)
 }
 
 export const createCategory = (data) => {

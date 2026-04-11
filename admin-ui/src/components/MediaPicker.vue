@@ -164,8 +164,8 @@ const fetchMaterials = async () => {
       type: 'image',
       sort: 'created_asc'
     })
-    list.value = res?.list || res?.data?.list || []
-    total.value = res?.pagination?.total || res?.total || 0
+    list.value = res.list
+    total.value = res?.pagination?.total || 0
 
   } catch (e) {
     console.error('加载素材库失败:', e)
@@ -178,7 +178,7 @@ const fetchMaterials = async () => {
 const fetchGroups = async () => {
   try {
     const res = await getMaterialGroups()
-    groups.value = Array.isArray(res) ? res : (res?.list || [])
+    groups.value = res.list
   } catch (e) {
     console.warn('加载素材分组失败:', e)
   }
@@ -227,7 +227,7 @@ const handleUpload = async (e) => {
     const appended = []
     for (const file of files) {
       const res = await uploadFile(file, { params: { skip_library: '1', folder: 'materials' } })
-      const url = res?.url || res?.data?.url
+      const url = res?.file?.url || res?.url
       if (!url) continue
 
       try {

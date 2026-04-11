@@ -1,6 +1,6 @@
 const app = getApp();
 const { get } = require('../../utils/request');
-const { ROLE_NAMES, USER_ROLES } = require('../../config/constants');
+const { ROLE_NAMES } = require('../../config/constants');
 const { ErrorHandler } = require('../../utils/errorHandler');
 const { fetchUserProfile } = require('../../utils/userProfile');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
@@ -69,88 +69,6 @@ function formatMoney(value, fallback = '0.00') {
 function buildDisplayNickname(info) {
     const rawName = info?.nick_name || info?.nickname || info?.nickName || '微信用户';
     return String(rawName).trim() || '微信用户';
-}
-
-function getUserRoleKind(roleLevel = 0) {
-    const role = Number(roleLevel) || 0;
-    if (role >= USER_ROLES.AGENT) return 'agent';
-    if (role >= USER_ROLES.MEMBER) return 'distribution';
-    return 'member';
-}
-
-function buildNextGuide(page) {
-    const data = page.data || {};
-    const roleLevel = Number(data.distributionInfo?.role_level || data.userInfo?.role_level || 0);
-    const roleKind = getUserRoleKind(roleLevel);
-    const isLoggedIn = !!data.isLoggedIn;
-    const couponCount = Number(data.unusedCouponCount || 0);
-
-    if (!isLoggedIn) {
-        return {
-            eyebrow: '登录后更完整',
-            title: '登录后查看订单、积分与专属优惠',
-            description: data.loginAgreementHint || '登录后可查看优惠券、积分与订单进度',
-            primary: { label: '立即登录', action: 'login' },
-            secondary: [
-                { label: '去逛商品', action: 'browse_hot' },
-                { label: '会员权益', action: 'membership' }
-            ]
-        };
-    }
-
-    if (roleKind === 'agent') {
-        return {
-            eyebrow: '经营路线',
-            title: `货款余额 ¥${data.balance || '0.00'}`,
-            description: '先处理货款与团队，再看经营动作',
-            primary: { label: '去处理经营事务', action: 'business_center' },
-            secondary: [
-                { label: '查看货款', action: 'goods_wallet' },
-                { label: '团队管理', action: 'team_manage' }
-            ]
-        };
-    }
-
-    if (roleKind === 'distribution') {
-        return {
-            eyebrow: '赚钱路线',
-            title: `当前可提现 ¥${data.commissionBalance || '0.00'}`,
-            description: '先看收益，再去邀请好友',
-            primary: { label: '去查看收益', action: 'earnings' },
-            secondary: [
-                { label: '去邀请', action: 'invite' },
-                { label: '查看订单', action: 'orders' }
-            ]
-        };
-    }
-
-    if (couponCount > 0) {
-        return {
-            eyebrow: '省钱路线',
-            title: `你还有 ${couponCount} 张券未用`,
-            description: '去逛商品，把当前可用优惠先用起来',
-            primary: { label: '去逛商品', action: 'browse_hot' },
-            secondary: [
-                { label: '查看订单', action: 'orders' },
-                { label: '会员权益', action: 'membership' }
-            ]
-        };
-    }
-
-    return {
-        eyebrow: '省钱路线',
-        title: '先看看会员权益与积分玩法',
-        description: '先熟悉权益和积分，再去下第一单',
-        primary: { label: '会员权益', action: 'membership' },
-        secondary: [
-            { label: '积分中心', action: 'points' },
-            { label: '查看订单', action: 'orders' }
-        ]
-    };
-}
-
-function syncNextGuide(page) {
-    page.setData({ nextGuide: buildNextGuide(page) });
 }
 
 function orderFirstThumb(order) {
@@ -255,7 +173,6 @@ async function loadUserInfo(page, forceRefresh = false) {
             notificationsCount: 0,
             orderStats: { pending: 0, paid: 0, shipped: 0, pendingReview: 0, refund: 0 }
         });
-        syncNextGuide(page);
         await loadQuadPreviews(page);
         return;
     }
@@ -285,7 +202,6 @@ async function loadUserInfo(page, forceRefresh = false) {
             });
             applyGrowthDisplay(page, info);
             refreshBusinessCenterVisibility(page);
-            syncNextGuide(page);
         } else {
             const cached = app.globalData.userInfo;
             const roleLevel = cached?.role_level != null ? cached.role_level : 0;
@@ -296,7 +212,6 @@ async function loadUserInfo(page, forceRefresh = false) {
             });
             applyGrowthDisplay(page, cached);
             refreshBusinessCenterVisibility(page);
-            syncNextGuide(page);
         }
         page._lastDashboardRefreshAt = Date.now();
     })().catch((error) => {
@@ -313,7 +228,6 @@ async function loadUserInfo(page, forceRefresh = false) {
         });
         applyGrowthDisplay(page, cached);
         refreshBusinessCenterVisibility(page);
-        syncNextGuide(page);
     }).finally(() => {
         page._dashboardRefreshPromise = null;
     });
@@ -353,7 +267,6 @@ async function loadAssetRow(page) {
             pointsBalanceDisplay: balance != null ? String(balance) : '0',
             couponBanner
         });
-        syncNextGuide(page);
     } catch (_) {
         // ignore
     }
@@ -554,7 +467,6 @@ async function loadDistributionInfo(page) {
             teamCount,
             isAgent: roleLevel >= 2
         });
-        syncNextGuide(page);
     } catch (error) {
         console.error('加载分销信息失败:', error);
     }

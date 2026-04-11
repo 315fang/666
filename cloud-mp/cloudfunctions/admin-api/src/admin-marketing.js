@@ -55,6 +55,31 @@ function registerMarketingRoutes(app, deps) {
         return value;
     }
 
+    function normalizeActivityLinksConfig(rawValue) {
+        const value = rawValue && typeof rawValue === 'object' ? rawValue : {};
+        const banners = Array.isArray(value.banners)
+            ? value.banners
+            : (Array.isArray(value.carousel) ? value.carousel : []);
+        const permanent = Array.isArray(value.permanent)
+            ? value.permanent
+            : (Array.isArray(value.primary) ? value.primary : []);
+        const limited = Array.isArray(value.limited)
+            ? value.limited
+            : (Array.isArray(value.secondary) ? value.secondary : []);
+        const brandNews = Array.isArray(value.brand_news)
+            ? value.brand_news
+            : (Array.isArray(value.posters) ? value.posters : []);
+        return {
+            permanent_section_enabled: value.permanent_section_enabled !== false,
+            activity_sections_order: value.activity_sections_order === 'limited_first' ? 'limited_first' : 'permanent_first',
+            brand_news_section_title: pickString(value.brand_news_section_title || '品牌动态'),
+            banners,
+            permanent,
+            limited,
+            brand_news: brandNews
+        };
+    }
+
     function parseCoordinate(value) {
         if (value === '' || value == null) return null;
         const num = Number(value);
@@ -239,6 +264,103 @@ function registerMarketingRoutes(app, deps) {
         };
     }
 
+    function normalizeLinkedProduct(product) {
+        if (!product) return null;
+        return {
+            ...product,
+            id: product.id || product._legacy_id || product._id,
+            images: toArray(product.images).map(assetUrl),
+            image_url: assetUrl(product.image_url || product.cover_image || product.image || toArray(product.images)[0] || ''),
+            retail_price: toNumber(product.retail_price ?? product.price, 0)
+        };
+    }
+
+    function buildActivityName(row, product, fallbackLabel) {
+        const explicitName = pickString(row.name || row.title).trim();
+        if (explicitName) return explicitName;
+        const productName = pickString(product?.name).trim();
+        if (productName) return `${productName}${fallbackLabel}`;
+        return fallbackLabel;
+    }
+
+    function normalizeMarketingActivity(row, products, options = {}) {
+        const {
+            fallbackLabel,
+            priceKeys = [],
+            defaultPrice = 0,
+            countKey = 'sold_count',
+            stockKey = 'stock_limit'
+        } = options;
+        const product = normalizeLinkedProduct(findByLookup(products, row.product_id));
+        const resolvedPrice = priceKeys
+            .map((key) => row[key])
+            .find((value) => value !== undefined && value !== null && value !== '');
+        return {
+            ...row,
+            id: row.id || row._legacy_id || row._id,
+            name: buildActivityName(row, product, fallbackLabel),
+            title: buildActivityName(row, product, fallbackLabel),
+            product_id: row.product_id,
+            product,
+            product_name: pickString(product?.name || ''),
+            product_image: pickString(product?.image_url || product?.images?.[0] || ''),
+            status: toBoolean(row.status) ? 1 : 0,
+            sold_count: toNumber(row[countKey], 0),
+            stock_limit: Math.max(0, toNumber(row[stockKey], 0)),
+            display_price: toNumber(resolvedPrice, defaultPrice)
+        };
+    }
+
+    function defaultPrizeVisual(row = {}) {
+        const type = pickString(row.type || 'miss').trim() || 'miss';
+        const presets = {
+            miss: {
+                emoji: '🍀',
+                badge: '好运签',
+                theme: '#6B7280',
+                accent: '#D1D5DB'
+            },
+            points: {
+                emoji: '⭐',
+                badge: '积分奖',
+                theme: '#2563EB',
+                accent: '#93C5FD'
+            },
+            coupon: {
+                emoji: '🎫',
+                badge: '优惠券',
+                theme: '#10B981',
+                accent: '#6EE7B7'
+            },
+            physical: {
+                emoji: '🎁',
+                badge: '实物奖',
+                theme: '#F59E0B',
+                accent: '#FDE68A'
+            }
+        };
+        return presets[type] || presets.miss;
+    }
+
+    function buildPrizeImageDataUri(row = {}) {
+        const visual = defaultPrizeVisual(row);
+        const title = pickString(row.name || visual.badge || '奖品').slice(0, 10);
+        const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${visual.theme}"/>
+      <stop offset="100%" stop-color="${visual.accent}"/>
+    </linearGradient>
+  </defs>
+  <rect width="160" height="160" rx="28" fill="url(#g)"/>
+  <circle cx="80" cy="58" r="34" fill="rgba(255,255,255,0.18)"/>
+  <text x="80" y="72" text-anchor="middle" font-size="34" font-family="Apple Color Emoji, Segoe UI Emoji, sans-serif">${visual.emoji}</text>
+  <text x="80" y="118" text-anchor="middle" font-size="16" font-family="PingFang SC, Microsoft YaHei, sans-serif" fill="#ffffff">${title}</text>
+</svg>`;
+        return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+    }
+
     function patchCollectionFlag(collection, id, patch) {
         const rows = getCollection(collection);
         const index = rows.findIndex((item) => rowMatchesLookup(item, id));
@@ -386,25 +508,20 @@ function registerMarketingRoutes(app, deps) {
     });
 
     function normalizeGroup(row, products) {
-        const product = findByLookup(products, row.product_id);
+        const normalized = normalizeMarketingActivity(row, products, {
+            fallbackLabel: '拼团活动',
+            priceKeys: ['group_price', 'price'],
+            defaultPrice: 0
+        });
         const requiredMembers = toNumber(row.required_members ?? row.min_members ?? row.group_size, 2);
         return {
-            ...row,
-            id: row.id || row._legacy_id || row._id,
-            name: pickString(row.name || row.title),
-            product_id: row.product_id,
-            product: product ? {
-                ...product,
-                id: product.id || product._legacy_id || product._id,
-                images: toArray(product.images).map(assetUrl)
-            } : null,
+            ...normalized,
             group_price: toNumber(row.group_price ?? row.price, 0),
             required_members: requiredMembers,
             min_members: requiredMembers,
             expire_hours: Math.max(1, toNumber(row.expire_hours, 24)),
-            stock_limit: Math.max(0, toNumber(row.stock_limit ?? row.stock, 0)),
-            sold_count: toNumber(row.sold_count, 0),
-            status: toBoolean(row.status) ? 1 : 0
+            stock_limit: Math.max(0, toNumber(row.stock_limit ?? row.stock, normalized.stock_limit)),
+            sold_count: toNumber(row.sold_count, normalized.sold_count)
         };
     }
 
@@ -485,17 +602,18 @@ function registerMarketingRoutes(app, deps) {
         permission: 'products',
         label: '砍价活动',
         normalize: row => ({
-            ...row,
-            id: row.id || row._legacy_id || row._id,
-            product: findByLookup(getCollection('products'), row.product_id) || null,
+            ...normalizeMarketingActivity(row, getCollection('products'), {
+                fallbackLabel: '砍价活动',
+                priceKeys: ['floor_price', 'initial_price'],
+                defaultPrice: 0
+            }),
             initial_price: toNumber(row.initial_price, 0),
             floor_price: toNumber(row.floor_price, 0),
             min_slash_per_helper: toNumber(row.min_slash_per_helper, 0.1),
             max_slash_per_helper: toNumber(row.max_slash_per_helper, 5),
             max_helpers: Math.max(1, toNumber(row.max_helpers, 10)),
             expire_hours: Math.max(1, toNumber(row.expire_hours, 24)),
-            stock_limit: Math.max(0, toNumber(row.stock_limit, 0)),
-            status: toBoolean(row.status) ? 1 : 0
+            stock_limit: Math.max(0, toNumber(row.stock_limit, 0))
         }),
         payload: (body, existing) => ({
             ...existing,
@@ -511,12 +629,13 @@ function registerMarketingRoutes(app, deps) {
         permission: 'products',
         label: '抽奖奖品',
         normalize: row => {
-            const imageUrl = assetUrl(row.image_url || row.image || row.cover_image || '');
+            const visual = defaultPrizeVisual(row);
+            const imageUrl = assetUrl(row.image_url || row.image || row.cover_image || '') || buildPrizeImageDataUri(row);
             const isActive = toBoolean(row.is_active ?? row.status ?? 1) ? 1 : 0;
             return {
                 ...row,
                 id: row.id || row._legacy_id || row._id,
-                name: pickString(row.name),
+                name: pickString(row.name || visual.badge || '未命名奖品'),
                 image_url: imageUrl,
                 image: imageUrl,
                 cover_image: imageUrl,
@@ -525,6 +644,10 @@ function registerMarketingRoutes(app, deps) {
                 probability: toNumber(row.probability, 0),
                 stock: row.stock == null ? -1 : toNumber(row.stock, -1),
                 sort_order: toNumber(row.sort_order, 0),
+                display_emoji: pickString(row.display_emoji || visual.emoji),
+                badge_text: pickString(row.badge_text || visual.badge),
+                theme_color: pickString(row.theme_color || visual.theme),
+                accent_color: pickString(row.accent_color || visual.accent),
                 is_active: isActive,
                 status: isActive
             };
@@ -563,8 +686,17 @@ function registerMarketingRoutes(app, deps) {
     app.post('/admin/api/lottery-prizes/:id/toggle', auth, requirePermission('products'), updateLotteryPrizeStatus);
 
     app.get('/admin/api/activity-options', auth, requirePermission('products'), (_req, res) => {
-        const groups = getCollection('group_activities').map((item) => ({ key: `group:${item.id || item._id}`, type: 'group', value: item.id || item._id, title: item.name || '拼团活动' }));
-        const slash = getCollection('slash_activities').map((item) => ({ key: `slash:${item.id || item._id}`, type: 'slash', value: item.id || item._id, title: item.name || '砍价活动' }));
+        const products = getCollection('products');
+        const groups = getCollection('group_activities')
+            .map((item) => normalizeGroup(item, products))
+            .map((item) => ({ key: `group:${item.id || item._id}`, type: 'group', value: item.id || item._id, title: item.name }));
+        const slash = getCollection('slash_activities')
+            .map((item) => normalizeMarketingActivity(item, products, {
+                fallbackLabel: '砍价活动',
+                priceKeys: ['floor_price', 'initial_price'],
+                defaultPrice: 0
+            }))
+            .map((item) => ({ key: `slash:${item.id || item._id}`, type: 'slash', value: item.id || item._id, title: item.name }));
         const lottery = getCollection('lottery_prizes').map((item) => ({ key: `lottery:${item.id || item._id}`, type: 'lottery', value: item.id || item._id, title: item.name || '抽奖奖品' }));
         ok(res, [...groups, ...slash, ...lottery]);
     });
@@ -586,11 +718,11 @@ function registerMarketingRoutes(app, deps) {
     });
 
     app.get('/admin/api/activity-links', auth, requirePermission('products'), (_req, res) => {
-        ok(res, getConfigValue('activity_links', { primary: [], secondary: [], posters: [] }));
+        ok(res, normalizeActivityLinksConfig(getConfigValue('activity_links', null)));
     });
 
     app.put('/admin/api/activity-links', auth, requirePermission('products'), (req, res) => {
-        ok(res, setConfigValue('activity_links', req.body || {}, 'marketing'));
+        ok(res, setConfigValue('activity_links', normalizeActivityLinksConfig(req.body || {}), 'marketing'));
     });
 
     app.get('/admin/api/splash', auth, requirePermission('content'), (_req, res) => {

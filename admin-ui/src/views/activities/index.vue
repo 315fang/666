@@ -170,9 +170,8 @@ const fetchSlash = async () => {
   slashLoading.value = true
   try {
     const res = await getSlashActivities({ page: slashPage.value, limit: slashPageSize })
-    const d = res.data || res
-    slashList.value = d.list || []
-    slashTotal.value = d.total || 0
+    slashList.value = res.list || []
+    slashTotal.value = res.pagination?.total || 0
   } catch (e) {
     console.error('获取砍价活动失败:', e)
   } finally {
@@ -212,7 +211,7 @@ const searchProducts = async (query) => {
   productSearchLoading.value = true
   try {
     const res = await getProducts({ keyword: query, limit: 20, status: 1 })
-    productOptions.value = res?.list || (Array.isArray(res) ? res : [])
+    productOptions.value = res.list
   } catch (e) { console.error(e) }
   finally { productSearchLoading.value = false }
 }
@@ -289,7 +288,7 @@ const fetchPrizes = async () => {
   prizeLoading.value = true
   try {
     const res = await getLotteryPrizes()
-    prizes.value = res.data || res || []
+    prizes.value = res.list
   } catch (e) {
     console.error('获取奖品失败:', e)
   } finally {
@@ -362,8 +361,8 @@ const deletePrize = async (row) => {
 const handlePrizeUpload = async ({ file }) => {
   try {
     const data = await uploadFile(file)
-    prizeForm.file_id = data.file_id || ''
-    prizeForm.image_url = data.url || data.image_url || ''
+    prizeForm.file_id = data.file?.url || data.url || data.file?.object_key || data.object_key || ''
+    prizeForm.image_url = data.file?.url || data.url || ''
   } catch (e) { console.error(e) }
 }
 
@@ -458,7 +457,7 @@ const fetchFestival = async () => {
   festivalLoading.value = true
   try {
     const res = await getFestivalConfig()
-    const d = res.data || res || {}
+    const d = res || {}
     Object.assign(festival, {
       active: d.active ?? false,
       name: d.name || '',
@@ -519,7 +518,7 @@ const fetchActivityOptions = async () => {
   activityOptionsLoading.value = true
   try {
     const res = await getActivityOptions()
-    activityOptions.value = Array.isArray(res) ? res : []
+    activityOptions.value = res.list
   } catch (e) {
     console.error('获取活动入口选项失败:', e)
     activityOptions.value = []
@@ -532,7 +531,7 @@ const fetchGlobalUi = async () => {
   globalUiLoading.value = true
   try {
     const res = await getGlobalUiConfig()
-    const d = res.data || res || {}
+    const d = res || {}
     Object.assign(globalUi, {
       wallpaper: { enabled: !!d.wallpaper?.enabled, preset: d.wallpaper?.preset || 'default' },
       card_style: {
@@ -612,16 +611,30 @@ const mkNewsItem = (overrides = {}) => ({
   ...overrides
 })
 
+const normalizeProductTarget = (item) => {
+  if (!item) return item
+  if (item.link_type === 'product') {
+    const normalizedId = String(item.direct_product_id ?? item.link_value ?? '').trim()
+    item.direct_product_id = normalizedId || null
+    item.link_value = normalizedId
+  } else {
+    item.direct_product_id = null
+    if (item.link_type !== 'page') {
+      item.link_value = String(item.link_value ?? '').trim()
+    }
+  }
+  return item
+}
+
 const fetchLinks = async () => {
   linksLoading.value = true
   try {
     const res = await getActivityLinks()
-    const d = res.data || res || {}
+    const d = res || {}
     const hydrate = (arr) => (arr || []).map((it) => {
-      let direct_product_id = it.direct_product_id != null && it.direct_product_id !== '' ? Number(it.direct_product_id) : null
+      let direct_product_id = it.direct_product_id != null && it.direct_product_id !== '' ? String(it.direct_product_id) : null
       if (!direct_product_id && it.link_type === 'product' && it.link_value && (!it.spot_products || !it.spot_products.length)) {
-        const n = parseInt(String(it.link_value), 10)
-        if (Number.isFinite(n) && n > 0) direct_product_id = n
+        direct_product_id = String(it.link_value).trim() || null
       }
       return mkItem({
         ...it,
@@ -647,13 +660,16 @@ const fetchLinks = async () => {
 const saveActivityLinks = async () => {
   linksSaving.value = true
   try {
+    ;['banners', 'permanent', 'limited'].forEach((section) => {
+      linksData[section].forEach((item) => normalizeProductTarget(item))
+    })
     linksData.limited.forEach((item) => {
       if (item.spot_products && item.spot_products.length) {
         item.link_type = 'page'
         item.link_value = `/pages/activity/limited-spot?id=${encodeURIComponent(item.id)}`
       } else if (item.direct_product_id) {
         item.link_type = 'product'
-        item.link_value = String(item.direct_product_id)
+        item.link_value = String(item.direct_product_id).trim()
       }
     })
     validateActivityLinks()
@@ -678,7 +694,10 @@ const saveActivityLinks = async () => {
 const validateActivityLinks = () => {
   const validateItem = (item, idx, section, requireEndTime = false) => {
     if (!item.title?.trim()) throw new Error(`${section} 第 ${idx + 1} 项缺少标题`)
-    if (!item.link_type || item.link_type === 'none' || !item.link_value?.trim()) {
+    const linkValue = item.link_type === 'product'
+      ? String(item.direct_product_id ?? item.link_value ?? '').trim()
+      : String(item.link_value ?? '').trim()
+    if (!item.link_type || item.link_type === 'none' || !linkValue) {
       throw new Error(`${section} 第 ${idx + 1} 项缺少跳转目标`)
     }
     if (!item.image?.trim() && !item.gradient?.trim()) {
@@ -787,11 +806,21 @@ const moveNewsItem = (idx, delta) => {
 }
 
 const applyOptionToItem = (item, key) => {
-  if (!key) { item.link_type = 'none'; item.link_value = ''; return }
+  if (!key) {
+    item.link_type = 'none'
+    item.link_value = ''
+    item.direct_product_id = null
+    return
+  }
   const option = activityOptions.value.find(opt => opt.key === key)
   if (option) {
     item.link_type  = option.link_type  || 'none'
     item.link_value = option.link_value || ''
+    if (item.link_type === 'product') {
+      item.direct_product_id = String(item.link_value || '').trim() || null
+    } else {
+      item.direct_product_id = null
+    }
     if (!item.title) item.title = option.title || ''
     if (!item.subtitle) item.subtitle = option.subtitle || ''
   }

@@ -1,4 +1,4 @@
-const { dataSource, singletonSource, dataRoot, normalizedDataRoot, runtimeRoot, preferNormalizedData, mysql, cloudbase, enforceCloudbaseRuntime } = require('../config');
+const { dataSource, singletonSource, dataRoot, normalizedDataRoot, runtimeRoot, preferNormalizedData, mysql, cloudbase, enforceCloudbaseRuntime, isFunctionRuntime } = require('../config');
 const { createFilesystemStore } = require('./providers/filesystem');
 const { createMysqlStore } = require('./providers/mysql');
 const { createCloudBaseStore } = require('./providers/cloudbase');
@@ -29,7 +29,8 @@ function createDataStore() {
             dataRoot,
             normalizedDataRoot,
             runtimeRoot,
-            preferNormalizedData
+            preferNormalizedData,
+            isFunctionRuntime
         });
     }
 
@@ -43,7 +44,8 @@ function createDataStore() {
             dataRoot,
             normalizedDataRoot,
             runtimeRoot,
-            preferNormalizedData
+            preferNormalizedData,
+            isFunctionRuntime
         });
     }
 

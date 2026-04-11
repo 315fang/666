@@ -23,7 +23,7 @@
         <el-radio-group v-model="searchForm.status_group" size="default" @change="onStatusGroupChange">
           <el-radio-button label="all">全部</el-radio-button>
           <el-radio-button label="pending_pay">待付款</el-radio-button>
-          <el-radio-button label="paid">待发货</el-radio-button>
+          <el-radio-button label="pending_ship">待发货</el-radio-button>
           <el-radio-button label="pending_receive">待收货</el-radio-button>
           <el-radio-button label="completed">已完成</el-radio-button>
           <el-radio-button label="closed">已关闭</el-radio-button>
@@ -474,6 +474,7 @@ const canForceCancelOrder = computed(() => userStore.hasPermission('order_force_
 const displayBuyer = (buyer) => normalizeUserDisplay(buyer || {})
 const displayBuyerName = (buyer, fallback = '-') => getUserNickname(displayBuyer(buyer), fallback)
 const displayBuyerAvatar = (buyer) => getUserAvatar(displayBuyer(buyer))
+const resolveOrderId = (row) => row?.id ?? row?._id
 
 const buildListQueryParams = (forExport = false) => {
   const params = {}
@@ -600,9 +601,12 @@ const handleReset = () => {
   handleSearch()
 }
 
-const money = (value) => (Number(value || 0) / 100).toFixed(2)
+const normalizeAmountYuan = (value) => {
+  const num = Number(value ?? 0)
+  return Number.isFinite(num) ? num : 0
+}
+const money = (value) => normalizeAmountYuan(value).toFixed(2)
 const moneyNumber = (value) => Number(money(value))
-const toFen = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100)
 const fmtDateTime = (value) => value ? formatDateTime(value) : '-'
 const paymentMethodText = (method) => ({
   wechat: '微信支付',
@@ -614,8 +618,8 @@ const deliveryTypeText = (type) => ({
 }[type] || '-')
 
 const orderTypeText = (row) => {
-  const r = row?.remark || ''
-  if (typeof r === 'string' && r.includes('group_no:')) return '拼团订单'
+  if (row?.order_type === 'group' || row?.group_no) return '拼团订单'
+  if (row?.order_type === 'slash' || row?.slash_record_id) return '砍价订单'
   return '普通订单'
 }
 const orderSourceText = () => '小程序商城'
@@ -648,11 +652,13 @@ const goProductManage = (row) => {
   router.push({ name: 'Products', query: name ? { keyword: name } : {} })
 }
 const fulfillmentText = (order) => (
-  order?.fulfillment_type === 'Company'
+  String(order?.fulfillment_type || '').toLowerCase() === 'company'
     ? '云仓发货'
-    : (order?.fulfillment_type === 'Agent'
+    : (String(order?.fulfillment_type || '').toLowerCase() === 'agent'
         ? '代理商发货'
-        : (order?.fulfillment_type === 'Agent_Pending' ? '代理待确认' : '自提/其他'))
+        : (String(order?.fulfillment_type || '').toLowerCase() === 'agent_pending'
+            ? '代理待确认'
+            : (order?.delivery_type === 'pickup' ? '到店自提' : '自提/其他')))
 )
 const resolvedAddress = (order) => order?.address || order?.address_snapshot || null
 const detailSkuText = (order) => {
@@ -715,8 +721,8 @@ const detailLineItems = computed(() => {
 
 const handleDetail = async (row) => {
   try {
-    const res = await getOrderDetail(row.id)
-    detailData.value = res?.data || res
+    const res = await getOrderDetail(resolveOrderId(row))
+    detailData.value = res
     if (detailData.value?.address_snapshot && !detailData.value.address) {
       detailData.value.address = detailData.value.address_snapshot
     }
@@ -758,7 +764,7 @@ const submitShip = async () => {
   if (logisticsCompanyRequired.value && !shipForm.tracking_company) {
     return ElMessage.warning('请输入承运方名称')
   }
-  await runOrderMutation(submittingShip, () => shipOrder(currentOrder.value.id, {
+  await runOrderMutation(submittingShip, () => shipOrder(resolveOrderId(currentOrder.value), {
       ...shipForm,
       type: shipForm.fulfillment_type === 'agent' ? 'Agent' : 'Company',
       fulfillment_type: shipForm.fulfillment_type
@@ -779,7 +785,7 @@ const submitAmount = async () => {
   if (!amountForm.reason.trim()) return ElMessage.warning('请填写调整原因')
   await runOrderMutation(
     submittingAmount,
-    () => adjustOrderAmount(currentOrder.value.id, { actual_price: toFen(amountForm.actual_price), reason: amountForm.reason }),
+    () => adjustOrderAmount(resolveOrderId(currentOrder.value), { actual_price: amountForm.actual_price, amount_unit: 'yuan', reason: amountForm.reason }),
     '金额修改成功',
     () => { amountVisible.value = false }
   )
@@ -798,7 +804,7 @@ const submitRemark = async () => {
   if (!remarkText.value.trim()) return ElMessage.warning('请填写备注')
   await runOrderMutation(
     submittingRemark,
-    () => addOrderRemark(currentOrder.value.id, { remark: remarkText.value }),
+    () => addOrderRemark(resolveOrderId(currentOrder.value), { remark: remarkText.value }),
     '备注添加成功',
     () => { remarkVisible.value = false }
   )
@@ -818,8 +824,8 @@ const handleForce = (row, type) => {
 const submitForce = async () => {
   if (!forceForm.reason.trim()) return ElMessage.warning('必填原因')
   const action = forceType.value === 'complete'
-    ? () => forceCompleteOrder(currentOrder.value.id, forceForm)
-    : () => forceCancelOrder(currentOrder.value.id, forceForm)
+    ? () => forceCompleteOrder(resolveOrderId(currentOrder.value), forceForm)
+    : () => forceCancelOrder(resolveOrderId(currentOrder.value), forceForm)
   const message = forceType.value === 'complete' ? '订单已强制完成' : '订单已强制取消并退款'
   await runOrderMutation(submittingForce, action, message, () => { forceVisible.value = false })
 }

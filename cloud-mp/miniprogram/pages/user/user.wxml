@@ -129,33 +129,6 @@
     </view>
   </view>
 
-  <view class="section-card guide-card" wx:if="{{nextGuide}}">
-    <view class="guide-card-head">
-      <text class="guide-card-kicker">{{nextGuide.eyebrow}}</text>
-      <text class="guide-card-title">推荐下一步</text>
-    </view>
-    <view class="guide-card-body">
-      <text class="guide-card-main">{{nextGuide.title}}</text>
-      <text class="guide-card-desc">{{nextGuide.description}}</text>
-      <view class="guide-card-primary" bindtap="onGuideActionTap" data-action="{{nextGuide.primary.action}}">
-        <text class="guide-card-primary-text">{{nextGuide.primary.label}}</text>
-        <text class="guide-card-primary-arrow">›</text>
-      </view>
-      <view class="guide-card-secondary-row">
-        <view
-          class="guide-card-secondary"
-          wx:for="{{nextGuide.secondary}}"
-          wx:key="label"
-          bindtap="onGuideActionTap"
-          data-action="{{item.action}}"
-        >
-          <text class="guide-card-secondary-text">{{item.label}}</text>
-          <text class="guide-card-secondary-arrow">›</text>
-        </view>
-      </view>
-    </view>
-  </view>
-
   <!-- ══ 我的订单 ══ -->
   <view class="section-card section-card--orders">
     <view class="section-row-header" bindtap="onOrderTap" data-type="all">

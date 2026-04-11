@@ -238,7 +238,7 @@ const membersLoaded = ref(false)
 const upgradesLoaded = ref(false)
 
 function normalizePagedResult(res) {
-  const list = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
+  const list = Array.isArray(res?.list) ? res.list : []
   const total = Number(res?.total ?? res?.pagination?.total ?? list.length)
   return { list, total }
 }

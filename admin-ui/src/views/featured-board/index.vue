@@ -121,7 +121,7 @@ const loadBoard = async () => {
   loading.value = true
   try {
     const boardsRes = await getFeaturedBoard()
-    const boards = Array.isArray(boardsRes) ? boardsRes : (boardsRes.data || boardsRes.list || [])
+    const boards = boardsRes.list
     const board = boards[0]
     if (!board?.id) {
       ElMessage.error('未找到首页精选商品榜，请先检查后端初始化')
@@ -139,7 +139,7 @@ const loadBoard = async () => {
 const loadRows = async () => {
   if (!boardId.value) return
   const res = await getBoardProducts(boardId.value)
-  rows.value = Array.isArray(res) ? res : (res?.list || [])
+  rows.value = res.list
 }
 
 const openAddDialog = () => {
@@ -153,7 +153,7 @@ const searchProducts = async (keyword) => {
   searchLoading.value = true
   try {
     const res = await getProducts({ keyword, limit: 20, status: 1 })
-    productOptions.value = res?.list || (Array.isArray(res) ? res : [])
+    productOptions.value = res.list
   } catch (_) {
     productOptions.value = []
   } finally {

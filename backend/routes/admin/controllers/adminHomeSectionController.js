@@ -1,5 +1,6 @@
 const { HomeSection } = require('../../../models');
 const { clearHomepageCache } = require('../../../controllers/configController');
+const { ok, okList, okAction, fail } = require('../../../utils/adminResponse');
 
 /**
  * 支持的区块类型与配置 Schema
@@ -152,10 +153,10 @@ const getHomeSections = async (req, res) => {
         const sections = await HomeSection.findAll({
             order: [['sort_order', 'DESC'], ['id', 'ASC']]
         });
-        res.json({ code: 0, data: sections });
+        return okList(res, sections);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ code: -1, message: '获取失败' });
+        return fail(res, 500, '获取失败');
     }
 };
 
@@ -163,7 +164,7 @@ const getHomeSections = async (req, res) => {
  * 获取区块类型 Schema（预览器使用）
  */
 const getSectionSchemas = async (req, res) => {
-    res.json({ code: 0, data: SECTION_SCHEMAS });
+    return ok(res, SECTION_SCHEMAS);
 };
 
 /**
@@ -174,14 +175,11 @@ const createHomeSection = async (req, res) => {
         const { section_key, section_name, section_type, title, subtitle, config, sort_order } = req.body;
 
         if (!section_key || !section_name || !section_type) {
-            return res.status(400).json({ code: -1, message: 'section_key / section_name / section_type 必填' });
+            return fail(res, 400, 'section_key / section_name / section_type 必填');
         }
 
         if (!SECTION_SCHEMAS[section_type]) {
-            return res.status(400).json({
-                code: -1,
-                message: `不支持的区块类型，可选如下: ${Object.keys(SECTION_SCHEMAS).join(', ')}`
-            });
+            return fail(res, 400, `不支持的区块类型，可选如下: ${Object.keys(SECTION_SCHEMAS).join(', ')}`);
         }
 
         // 如果 config 为空，用 Schema 默认値充填
@@ -208,13 +206,13 @@ const createHomeSection = async (req, res) => {
         // ★ 清除缓存
         clearHomepageCache();
 
-        res.json({ code: 0, message: '建立成功', data: section });
+        return ok(res, section, '建立成功');
     } catch (error) {
         if (error.name === 'SequelizeUniqueConstraintError') {
-            return res.status(400).json({ code: -1, message: 'section_key 已存在' });
+            return fail(res, 400, 'section_key 已存在');
         }
         console.error(error);
-        res.status(500).json({ code: -1, message: '创建失败' });
+        return fail(res, 500, '创建失败');
     }
 };
 
@@ -227,15 +225,15 @@ const updateHomeSection = async (req, res) => {
         const { title, subtitle, is_visible, sort_order, config, section_name } = req.body;
 
         const section = await HomeSection.findByPk(id);
-        if (!section) return res.status(404).json({ code: -1, message: '区块不存在' });
+        if (!section) return fail(res, 404, '区块不存在');
 
         await section.update({ title, subtitle, is_visible, sort_order, config, section_name });
         // ★ 清除缓存
         clearHomepageCache();
-        res.json({ code: 0, message: '更新成功', data: section });
+        return ok(res, section, '更新成功');
     } catch (error) {
         console.error(error);
-        res.status(500).json({ code: -1, message: '更新失败' });
+        return fail(res, 500, '更新失败');
     }
 };
 
@@ -246,13 +244,13 @@ const toggleSectionVisible = async (req, res) => {
     try {
         const { id } = req.params;
         const section = await HomeSection.findByPk(id);
-        if (!section) return res.status(404).json({ code: -1, message: '区块不存在' });
+        if (!section) return fail(res, 404, '区块不存在');
         await section.update({ is_visible: !section.is_visible });
         // ★ 清除缓存
         clearHomepageCache();
-        res.json({ code: 0, message: section.is_visible ? '已显示' : '已隐藏', data: { is_visible: section.is_visible } });
+        return okAction(res, section.is_visible ? '已显示' : '已隐藏', { success: true, is_visible: section.is_visible });
     } catch (error) {
-        res.status(500).json({ code: -1, message: '操作失败' });
+        return fail(res, 500, '操作失败');
     }
 };
 
@@ -263,14 +261,14 @@ const deleteHomeSection = async (req, res) => {
     try {
         const { id } = req.params;
         const section = await HomeSection.findByPk(id);
-        if (!section) return res.status(404).json({ code: -1, message: '区块不存在' });
+        if (!section) return fail(res, 404, '区块不存在');
         await section.update({ status: 0 });
         // ★ 清除缓存
         clearHomepageCache();
 
-        res.json({ code: 0, message: '已删除' });
+        return okAction(res, '已删除');
     } catch (error) {
-        res.status(500).json({ code: -1, message: '删除失败' });
+        return fail(res, 500, '删除失败');
     }
 };
 
@@ -286,9 +284,9 @@ const updateSortOrder = async (req, res) => {
         // ★ 清除缓存
         clearHomepageCache();
 
-        res.json({ code: 0, message: '排序更新成功' });
+        return okAction(res, '排序更新成功');
     } catch (error) {
-        res.status(500).json({ code: -1, message: '更新失败' });
+        return fail(res, 500, '更新失败');
     }
 };
 

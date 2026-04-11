@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ConfigService = require('../../services/ConfigService');
+const { ok, okList, okAction, fail } = require('../../utils/adminResponse');
 const { adminAuth, checkPermission } = require('../../middleware/adminAuth');
 const { sequelize } = require('../../config/database');
 const { QueryTypes } = require('sequelize');
@@ -13,16 +14,10 @@ const { QueryTypes } = require('sequelize');
 router.get('/system-configs', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         const configs = await ConfigService.getAllEditableConfigs();
-        res.json({
-            code: 0,
-            data: configs
-        });
+        return okList(res, configs);
     } catch (error) {
         console.error('[Config] 获取配置失败:', error);
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return fail(res, 500, error.message);
     }
 });
 
@@ -32,18 +27,9 @@ router.get('/system-configs/:key', adminAuth, checkPermission('settings_manage')
         const { key } = req.params;
         const value = await ConfigService.get(key);
 
-        res.json({
-            code: 0,
-            data: {
-                key,
-                value
-            }
-        });
+        return ok(res, { key, value });
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return fail(res, 500, error.message);
     }
 });
 
@@ -56,17 +42,10 @@ router.put('/system-configs/:key', adminAuth, checkPermission('settings_manage')
 
         const result = await ConfigService.set(key, value, adminId, reason);
 
-        res.json({
-            code: 0,
-            data: result,
-            message: result.changed ? '配置已更新并实时生效' : '配置未变化'
-        });
+        return ok(res, result, result.changed ? '配置已更新并实时生效' : '配置未变化');
     } catch (error) {
         console.error('[Config] 更新配置失败:', error);
-        res.status(400).json({
-            code: 400,
-            message: error.message
-        });
+        return fail(res, 400, error.message);
     }
 });
 
@@ -77,10 +56,7 @@ router.post('/system-configs/batch', adminAuth, checkPermission('settings_manage
         const adminId = req.user.id;
 
         if (!Array.isArray(updates) || updates.length === 0) {
-            return res.status(400).json({
-                code: 400,
-                message: '更新列表不能为空'
-            });
+            return fail(res, 400, '更新列表不能为空');
         }
 
         const results = await ConfigService.setMultiple(updates, adminId, reason);
@@ -89,24 +65,17 @@ router.post('/system-configs/batch', adminAuth, checkPermission('settings_manage
         const successCount = results.filter(r => r.success).length;
         const failCount = results.length - successCount;
 
-        res.json({
-            code: 0,
-            data: {
-                results,
-                summary: {
-                    total: results.length,
-                    success: successCount,
-                    failed: failCount
-                }
-            },
-            message: `批量更新完成：${successCount}成功, ${failCount}失败`
-        });
+        return ok(res, {
+            results,
+            summary: {
+                total: results.length,
+                success: successCount,
+                failed: failCount
+            }
+        }, `批量更新完成：${successCount}成功, ${failCount}失败`);
     } catch (error) {
         console.error('[Config] 批量更新失败:', error);
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return fail(res, 500, error.message);
     }
 });
 
@@ -118,16 +87,10 @@ router.get('/system-configs/:key/history', adminAuth, checkPermission('settings_
 
         const history = await ConfigService.getHistory(key, parseInt(limit));
 
-        res.json({
-            code: 0,
-            data: history
-        });
+        return okList(res, history);
     } catch (error) {
         console.error('[Config] 获取历史失败:', error);
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return fail(res, 500, error.message);
     }
 });
 
@@ -139,14 +102,14 @@ router.post('/system-configs/:key/rollback', adminAuth, checkPermission('setting
         const adminId = req.user.id;
 
         if (!history_id) {
-            return res.status(400).json({ code: 400, message: '缺少 history_id' });
+            return fail(res, 400, '缺少 history_id');
         }
 
         const { SystemConfigHistory } = require('../../models');
         const record = await SystemConfigHistory.findByPk(history_id);
 
         if (!record || record.config_key !== key) {
-            return res.status(404).json({ code: 404, message: '历史记录不存在或 key 不匹配' });
+            return fail(res, 404, '历史记录不存在或 key 不匹配');
         }
 
         const result = await ConfigService.set(
@@ -156,17 +119,10 @@ router.post('/system-configs/:key/rollback', adminAuth, checkPermission('setting
             `回滚到历史版本 #${history_id}（原值: ${record.old_value}）`
         );
 
-        res.json({
-            code: 0,
-            data: result,
-            message: result.changed ? `已回滚到 ${record.old_value}` : '目标值与当前值相同，无需回滚'
-        });
+        return ok(res, result, result.changed ? `已回滚到 ${record.old_value}` : '目标值与当前值相同，无需回滚');
     } catch (error) {
         console.error('[Config] 回滚配置失败:', error);
-        res.status(400).json({
-            code: 400,
-            message: error.message
-        });
+        return fail(res, 400, error.message);
     }
 });
 
@@ -174,15 +130,9 @@ router.post('/system-configs/:key/rollback', adminAuth, checkPermission('setting
 router.post('/system-configs/refresh-cache', adminAuth, checkPermission('settings_manage'), async (req, res) => {
     try {
         await ConfigService.refreshCache();
-        res.json({
-            code: 0,
-            message: '配置缓存已刷新'
-        });
+        return okAction(res, '配置缓存已刷新');
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return fail(res, 500, error.message);
     }
 });
 
@@ -204,21 +154,15 @@ router.get('/system-configs/health', adminAuth, checkPermission('settings_manage
         const totalConfigs = await SystemConfig.count();
         const editableConfigs = await SystemConfig.count({ where: { is_editable: true } });
 
-        res.json({
-            code: 0,
-            data: {
-                total: totalConfigs,
-                editable: editableConfigs,
-                groups: stats,
-                healthScore: 100, // 简化版
-                lastUpdated: new Date()
-            }
+        return ok(res, {
+            total: totalConfigs,
+            editable: editableConfigs,
+            groups: stats,
+            healthScore: 100,
+            lastUpdated: new Date()
         });
     } catch (error) {
-        res.status(500).json({
-            code: 500,
-            message: error.message
-        });
+        return fail(res, 500, error.message);
     }
 });
 
@@ -299,18 +243,15 @@ router.get('/db-indexes/tables', adminAuth, checkPermission('settings_manage'), 
              ORDER BY TABLE_NAME`,
             { replacements: { schema }, type: QueryTypes.SELECT }
         );
-        res.json({
-            code: 0,
-            data: rows.map(row => ({
-                name: row.TABLE_NAME,
-                rows: Number(row.TABLE_ROWS || 0),
-                dataLength: Number(row.DATA_LENGTH || 0),
-                indexLength: Number(row.INDEX_LENGTH || 0),
-                comment: row.TABLE_COMMENT || ''
-            }))
-        });
+        return okList(res, rows.map(row => ({
+            name: row.TABLE_NAME,
+            rows: Number(row.TABLE_ROWS || 0),
+            dataLength: Number(row.DATA_LENGTH || 0),
+            indexLength: Number(row.INDEX_LENGTH || 0),
+            comment: row.TABLE_COMMENT || ''
+        })));
     } catch (error) {
-        res.status(500).json({ code: 500, message: error.message });
+        return fail(res, 500, error.message);
     }
 });
 
@@ -320,12 +261,12 @@ router.get('/db-indexes/:table/columns', adminAuth, checkPermission('settings_ma
         const schema = await getDatabaseName();
         const exists = await tableExists(schema, table);
         if (!exists) {
-            return res.status(404).json({ code: 404, message: '数据表不存在' });
+            return fail(res, 404, '数据表不存在');
         }
         const columns = await getTableColumns(schema, table);
-        res.json({ code: 0, data: columns });
+        return okList(res, columns);
     } catch (error) {
-        res.status(400).json({ code: 400, message: error.message });
+        return fail(res, 400, error.message);
     }
 });
 
@@ -335,12 +276,12 @@ router.get('/db-indexes/:table', adminAuth, checkPermission('settings_manage'), 
         const schema = await getDatabaseName();
         const exists = await tableExists(schema, table);
         if (!exists) {
-            return res.status(404).json({ code: 404, message: '数据表不存在' });
+            return fail(res, 404, '数据表不存在');
         }
         const indexes = await getTableIndexes(schema, table);
-        res.json({ code: 0, data: indexes });
+        return okList(res, indexes);
     } catch (error) {
-        res.status(400).json({ code: 400, message: error.message });
+        return fail(res, 400, error.message);
     }
 });
 
@@ -351,15 +292,15 @@ router.post('/db-indexes', adminAuth, checkPermission('settings_manage'), async 
         const schema = await getDatabaseName();
         const exists = await tableExists(schema, tableName);
         if (!exists) {
-            return res.status(404).json({ code: 404, message: '数据表不存在' });
+            return fail(res, 404, '数据表不存在');
         }
         if (!Array.isArray(columns) || columns.length === 0) {
-            return res.status(400).json({ code: 400, message: '索引字段不能为空' });
+            return fail(res, 400, '索引字段不能为空');
         }
         const columnSet = new Set((await getTableColumns(schema, tableName)).map(c => c.name));
         const validColumns = columns.map(col => assertIdentifier(col, '字段名')).filter(col => columnSet.has(col));
         if (validColumns.length !== columns.length) {
-            return res.status(400).json({ code: 400, message: '索引字段不存在' });
+            return fail(res, 400, '索引字段不存在');
         }
         let indexName = name ? assertIdentifier(name, '索引名') : `idx_${tableName}_${validColumns.join('_')}`;
         if (indexName.length > 64) {
@@ -367,17 +308,17 @@ router.post('/db-indexes', adminAuth, checkPermission('settings_manage'), async 
         }
         const existingIndexes = await getTableIndexes(schema, tableName);
         if (existingIndexes.some(idx => idx.name === indexName)) {
-            return res.status(400).json({ code: 400, message: '索引已存在' });
+            return fail(res, 400, '索引已存在');
         }
         if (indexName === 'PRIMARY') {
-            return res.status(400).json({ code: 400, message: '索引名不可为PRIMARY' });
+            return fail(res, 400, '索引名不可为PRIMARY');
         }
         const columnSql = validColumns.map(col => `\`${col}\``).join(', ');
         const sql = `CREATE ${unique ? 'UNIQUE ' : ''}INDEX \`${indexName}\` ON \`${tableName}\` (${columnSql})`;
         await sequelize.query(sql);
-        res.json({ code: 0, data: { name: indexName }, message: '索引已创建' });
+        return ok(res, { name: indexName }, '索引已创建');
     } catch (error) {
-        res.status(400).json({ code: 400, message: error.message });
+        return fail(res, 400, error.message);
     }
 });
 
@@ -386,22 +327,22 @@ router.delete('/db-indexes/:table/:indexName', adminAuth, checkPermission('setti
         const tableName = assertIdentifier(req.params.table, '表名');
         const indexName = assertIdentifier(req.params.indexName, '索引名');
         if (indexName === 'PRIMARY') {
-            return res.status(400).json({ code: 400, message: '主键索引不可删除' });
+            return fail(res, 400, '主键索引不可删除');
         }
         const schema = await getDatabaseName();
         const exists = await tableExists(schema, tableName);
         if (!exists) {
-            return res.status(404).json({ code: 404, message: '数据表不存在' });
+            return fail(res, 404, '数据表不存在');
         }
         const indexes = await getTableIndexes(schema, tableName);
         if (!indexes.some(idx => idx.name === indexName)) {
-            return res.status(404).json({ code: 404, message: '索引不存在' });
+            return fail(res, 404, '索引不存在');
         }
         const sql = `DROP INDEX \`${indexName}\` ON \`${tableName}\``;
         await sequelize.query(sql);
-        res.json({ code: 0, message: '索引已删除' });
+        return okAction(res, '索引已删除');
     } catch (error) {
-        res.status(400).json({ code: 400, message: error.message });
+        return fail(res, 400, error.message);
     }
 });
 

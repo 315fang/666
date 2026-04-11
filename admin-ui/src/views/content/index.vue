@@ -356,7 +356,7 @@ const bannerForm = reactive({
 })
 const bannerRules = {}
 
-const resolveAssetUrl = (item = {}) => item.file_id || item.image_url || item.url || ''
+const resolveAssetUrl = (item = {}) => item.image_url || item.url || item.file_id || ''
 
 // 商品搜索
 const productSearchLoading = ref(false)
@@ -417,7 +417,7 @@ const searchProducts = async (query) => {
   productSearchLoading.value = true
   try {
     const res = await getProducts({ keyword: query, limit: 20, status: 1 })
-    productOptions.value = res?.list || (Array.isArray(res) ? res : [])
+    productOptions.value = res.list
   } catch (e) {
     console.error('搜索商品失败:', e)
   } finally {
@@ -473,7 +473,7 @@ const fetchBanners = async () => {
   try {
     const params = bannerFilter.value ? { position: bannerFilter.value } : {}
     const res = await getBanners(params)
-    const rows = Array.isArray(res) ? res : (res?.list || [])
+    const rows = res.list
     banners.value = rows.map(item => ({
       ...item,
       asset_url: resolveAssetUrl(item)
@@ -489,7 +489,7 @@ const fetchContents = async () => {
   contentLoading.value = true
   try {
     const res = await getContents()
-    contents.value = res?.list || (Array.isArray(res) ? res : [])
+    contents.value = res.list
   } catch (e) {
     console.error('获取内容列表失败:', e)
   } finally {
@@ -588,8 +588,8 @@ const handleDeleteBanner = async (row) => {
 const handleBannerUpload = async ({ file }) => {
   try {
     const data = await uploadFile(file)
-    bannerForm.file_id = data.file_id || ''
-    bannerForm.image_url = data.url || data.image_url || ''
+    bannerForm.file_id = data.file?.url || data.url || data.file?.object_key || data.object_key || ''
+    bannerForm.image_url = data.file?.url || data.url || ''
     ElMessage.success('上传成功')
   } catch (e) {
     console.error('上传失败:', e)

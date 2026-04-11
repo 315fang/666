@@ -79,7 +79,7 @@ const fetchList = async () => {
   loading.value = true
   try {
     const res = await getCategories()
-    const rows = Array.isArray(res) ? res : (res?.list || [])
+    const rows = res.list
     categories.value = rows.map(item => ({
       ...item,
       id: item.id ?? item._legacy_id ?? item._id ?? null

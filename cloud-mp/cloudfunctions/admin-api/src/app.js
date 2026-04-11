@@ -8,6 +8,7 @@ const http = require('http');
 const https = require('https');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const { createWechatRefund } = require('./payment-refund');
 
 const { dataRoot, normalizedDataRoot, runtimeRoot, uploadsRoot, jwtSecret, assetBaseUrl, preferNormalizedData } = require('./config');
 const { createDataStore } = require('./store');
@@ -1030,6 +1031,7 @@ function valueTokens(value) {
 function rowLookupTokens(row, extraValues = []) {
     const values = [
         primaryId(row),
+        row?._id,
         row?.openid,
         row?.user_id,
         row?.buyer_id,
@@ -1122,6 +1124,41 @@ function buildReviewRecord(review, users = [], products = [], orders = []) {
             order_no: pickString(order.order_no),
             status: pickString(order.status)
         } : null
+    };
+}
+
+function buildProductSummaryRecord(product, fallback = {}) {
+    if (!product && !fallback) return null;
+    const source = product || {};
+    const images = toArray(source.images).map(assetUrl).filter(Boolean);
+    const coverImage = assetUrl(
+        source.cover_image
+        || source.image_url
+        || source.image
+        || images[0]
+        || fallback.image
+        || fallback.snapshot_image
+        || ''
+    );
+    const name = pickString(
+        source.name
+        || source.title
+        || fallback.name
+        || fallback.snapshot_name
+        || fallback.product_name
+        || '未命名商品'
+    );
+    return {
+        ...source,
+        id: primaryId(source) || fallback.product_id || '',
+        _id: source._id || fallback.product_id || '',
+        name,
+        title: name,
+        image: coverImage,
+        image_url: coverImage,
+        cover_image: coverImage,
+        images: images.length ? images : (coverImage ? [coverImage] : []),
+        retail_price: toNumber(source.retail_price ?? source.price ?? fallback.price, 0)
     };
 }
 
@@ -2886,7 +2923,22 @@ app.put('/admin/api/reviews/:id/reply', auth, (req, res) => updateReviewRow(req,
 app.post('/admin/api/reviews/:id/reply', auth, (req, res) => updateReviewRow(req, res, () => ({ reply_content: pickString(req.body?.reply_content ?? req.body?.reply ?? req.body?.content) })));
 
 app.get('/admin/api/home-sections', auth, requirePermission('content'), (req, res) => {
-    const rows = sortByUpdatedDesc(getCollection('content_boards'));
+    const products = getCollection('products');
+    const rows = sortByUpdatedDesc(getCollection('content_boards')).map((row) => {
+        const linkedProducts = getCollection('content_board_products')
+            .filter((item) => rowMatchesLookup(item, row.id || row._id, [item.board_id]))
+            .map((item) => ({
+                ...item,
+                product: buildProductSummaryRecord(findByLookup(products, item.product_id), item)
+            }));
+        return {
+            ...row,
+            board_name: pickString(row.board_name || row.name || row.title || row.board_key || '未命名内容位'),
+            board_key: pickString(row.board_key || row.key || `board_${row.id || row._id}`),
+            linked_products: linkedProducts,
+            linked_product_count: linkedProducts.length
+        };
+    });
     ok(res, { list: rows, total: rows.length });
 });
 
@@ -3593,7 +3645,7 @@ app.get('/admin/api/refunds/:id', auth, requirePermission('refunds'), (req, res)
     ok(res, buildRefundRecord(row, users, orders, products, skus));
 });
 
-app.put('/admin/api/refunds/:id/approve', auth, requirePermission('refunds'), (req, res) => {
+app.put('/admin/api/refunds/:id/approve', auth, requirePermission('refunds'), async (req, res) => {
     const updated = patchCollectionRow('refunds', req.params.id, (row) => ({
         ...row,
         status: 'approved',
@@ -3602,10 +3654,11 @@ app.put('/admin/api/refunds/:id/approve', auth, requirePermission('refunds'), (r
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '退款记录不存在', 404);
+    await Promise.resolve(dataStore.flush?.());
     ok(res, updated);
 });
 
-app.put('/admin/api/refunds/:id/reject', auth, requirePermission('refunds'), (req, res) => {
+app.put('/admin/api/refunds/:id/reject', auth, requirePermission('refunds'), async (req, res) => {
     let rejectedRefund = null;
     const updated = patchCollectionRow('refunds', req.params.id, (row) => {
         rejectedRefund = row;
@@ -3627,36 +3680,101 @@ app.put('/admin/api/refunds/:id/reject', auth, requirePermission('refunds'), (re
         }));
     }
     createAuditLog(req.admin, 'refund.reject', 'refunds', { refund_id: req.params.id, order_id: orderId });
+    await Promise.resolve(dataStore.flush?.());
     ok(res, updated);
 });
 
-app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), (req, res) => {
-    let completedRefund = null;
-    const updated = patchCollectionRow('refunds', req.params.id, (row) => {
-        completedRefund = row;
-        return {
+app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), async (req, res) => {
+    const refunds = getCollection('refunds');
+    const refund = findByLookup(refunds, req.params.id);
+    if (!refund) return fail(res, '退款记录不存在', 404);
+    if (!['approved', 'processing'].includes(pickString(refund.status))) {
+        return fail(res, refund.status === 'completed' ? '退款已完成' : '当前状态不允许退款', 400);
+    }
+
+    const users = getCollection('users');
+    const orders = getCollection('orders');
+    const orderId = refund.order_id || refund.order_no;
+    const order = findByLookup(orders, orderId, (row) => [row.order_no]);
+    if (!order) return fail(res, '关联订单不存在', 400);
+
+    const paymentMethod = pickString(order.payment_method || order.pay_type || order.pay_channel || 'wechat').trim().toLowerCase();
+    const refundAmount = toNumber(refund.amount, 0);
+    const totalAmount = toNumber(order.actual_price || order.pay_amount || order.total_amount, 0);
+    if (refundAmount <= 0 || totalAmount <= 0) return fail(res, '退款金额不合法', 400);
+
+    patchCollectionRow('refunds', req.params.id, (row) => ({
+        ...row,
+        status: 'processing',
+        processing_at: row.processing_at || nowIso(),
+        return_company: pickString(req.body?.return_company || row.return_company),
+        return_tracking_no: pickString(req.body?.return_tracking_no || row.return_tracking_no),
+        updated_at: nowIso()
+    }));
+    patchCollectionRow('orders', orderId, (row) => ({
+        ...row,
+        status: 'refunding',
+        updated_at: nowIso()
+    }));
+    await Promise.resolve(dataStore.flush?.());
+
+    try {
+        if (['wallet', 'balance', 'credit', 'debt'].includes(paymentMethod)) {
+            const change = applyUserMoneyChange(users, order.openid || order.buyer_id || refund.openid || refund.user_id, refundAmount, {
+                reason: `订单退款 ${pickString(order.order_no)}`
+            });
+            if (!change) throw new Error('退款用户不存在，无法退回余额');
+            saveCollection('users', users);
+        } else {
+            const refundNo = pickString(refund.refund_no, `RF-${pickString(order.order_no)}-${Date.now()}`);
+            const wxResult = await createWechatRefund({
+                orderNo: pickString(order.order_no),
+                refundNo,
+                totalFee: Math.round(totalAmount * 100),
+                refundFee: Math.round(refundAmount * 100),
+                reason: pickString(refund.reason, '管理员退款')
+            });
+            patchCollectionRow('refunds', req.params.id, (row) => ({
+                ...row,
+                refund_no: refundNo,
+                wx_refund_id: pickString(wxResult.refund_id || row.wx_refund_id),
+                wx_status: pickString(wxResult.status || 'PROCESSING'),
+                updated_at: nowIso()
+            }));
+        }
+
+        const updated = patchCollectionRow('refunds', req.params.id, (row) => ({
             ...row,
             status: 'completed',
             completed_at: nowIso(),
-            return_company: pickString(req.body?.return_company || row.return_company),
-            return_tracking_no: pickString(req.body?.return_tracking_no || row.return_tracking_no),
             updated_at: nowIso()
-        };
-    });
-    if (!updated) return fail(res, '退款记录不存在', 404);
-    const orderId = completedRefund?.order_id || completedRefund?.order_no;
-    if (orderId) {
+        }));
         cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
         restoreOrderStockForRefund(orderId);
-        patchCollectionRow('orders', orderId, (order) => ({
-            ...order,
+        patchCollectionRow('orders', orderId, (row) => ({
+            ...row,
             status: 'refunded',
             refunded_at: nowIso(),
             updated_at: nowIso()
         }));
+        createAuditLog(req.admin, 'refund.complete', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod });
+        await Promise.resolve(dataStore.flush?.());
+        ok(res, updated);
+    } catch (error) {
+        patchCollectionRow('refunds', req.params.id, (row) => ({
+            ...row,
+            status: 'approved',
+            wx_error: pickString(error.message),
+            updated_at: nowIso()
+        }));
+        patchCollectionRow('orders', orderId, (row) => ({
+            ...row,
+            status: row.status === 'refunding' ? (row.shipped_at ? 'shipped' : (row.paid_at ? 'paid' : 'pending_payment')) : row.status,
+            updated_at: nowIso()
+        }));
+        await Promise.resolve(dataStore.flush?.());
+        return fail(res, `退款失败：${error.message || '未知错误'}`, 500);
     }
-    createAuditLog(req.admin, 'refund.complete', 'refunds', { refund_id: req.params.id, order_id: orderId });
-    ok(res, updated);
 });
 
 app.get('/admin/api/commissions', auth, requirePermission('commissions'), (req, res) => {

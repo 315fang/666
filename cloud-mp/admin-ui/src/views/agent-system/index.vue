@@ -669,7 +669,8 @@ const previewDividend = async () => {
   if (!dividendYear.value || dividendPool.value <= 0) return ElMessage.warning('请选择年份并填写金额')
   await withLoading(dividendLoading, async () => {
     const res = await getDividendPreview({ year: dividendYear.value, pool: dividendPool.value })
-    dividendPreviewData.value = Array.isArray(res) ? res : (res?.data || [])
+    const data = res?.data || res
+    dividendPreviewData.value = Array.isArray(data) ? data : (data?.list || [])
     if (!dividendPreviewData.value.length) ElMessage.info('暂无符合条件的合伙人')
   }).catch(() => { ElMessage.error('预览失败') })
 }

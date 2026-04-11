@@ -154,88 +154,48 @@ const rejectRefund = async (req, res) => {
     }
 };
 
-// 完成退款（★ 使用事务保证佣金扣回与退款状态的数据一致性）
-const completeRefund = async (req, res) => {
+const yuanToCents = (v) => {
+    const n = parseFloat(v);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    return Math.round(n * 100 + 1e-6);
+};
+
+function appendRemark(base, extra) {
+    return [base, extra].filter(Boolean).join(' | ').slice(0, 255);
+}
+
+async function finalizeRefundLocally(refundId) {
     const t = await sequelize.transaction();
     try {
-        const { id } = req.params;
-
-        const refund = await Refund.findByPk(id, {
+        const refund = await Refund.findByPk(refundId, {
             include: [{ model: Order, as: 'order' }],
             transaction: t,
             lock: t.LOCK.UPDATE
         });
 
         if (!refund) {
-            await t.rollback();
-            return res.status(404).json({ code: -1, message: '售后单不存在' });
+            throw new Error('售后单不存在');
+        }
+        if (refund.status !== 'processing') {
+            throw new Error(`退款状态异常(${refund.status})，无法完成本地收口`);
         }
 
-        if (refund.status !== 'approved') {
-            await t.rollback();
-            return res.status(400).json({ code: -1, message: '请先审核通过' });
-        }
-
-        // 更新订单状态
         const order = refund.order;
         if (!order) {
-            await t.rollback();
-            return res.status(400).json({ code: -1, message: '关联订单不存在' });
+            throw new Error('关联订单不存在');
         }
 
-        const refundableStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
-        if (!refundableStatuses.includes(order.status)) {
-            await t.rollback();
-            return res.status(400).json({ code: -1, message: `当前订单状态(${order.status})不支持退款完成` });
-        }
-
-        /** 元 → 分，避免浮点误差导致「实付与累计退款」差 1 分而不视为全额退 */
-        const yuanToCents = (v) => {
-            const n = parseFloat(v);
-            if (!Number.isFinite(n) || n <= 0) return 0;
-            return Math.round(n * 100 + 1e-6);
-        };
-        const totalFee = yuanToCents(order.actual_price || order.total_amount);
-        const refundFee = yuanToCents(refund.amount);
-        if (!totalFee || !refundFee || refundFee > totalFee) {
-            await t.rollback();
-            return res.status(400).json({ code: -1, message: '退款金额不合法' });
-        }
-
-        // 根据支付方式分流退款
-        if (order.payment_method === 'wallet') {
-            // 货款余额支付 → 退回货款钱包
-            const refundYuan = parseFloat((refundFee / 100).toFixed(2));
-            await AgentWalletService.recharge({
-                userId: order.buyer_id,
-                amount: refundYuan,
-                refType: 'order_refund',
-                refId: order.order_no,
-                remark: `订单退款 ${order.order_no} ¥${refundYuan}`,
-                transaction: t
-            });
-        } else {
-            // 微信支付 → 调用微信退款 API
-            await refundOrder({
-                orderNo: order.order_no,
-                refundNo: refund.refund_no,
-                totalFee,
-                refundFee
-            });
-        }
-
-        // ★ 是否已全额退款（按「历史已完成退款 + 本次退款」累计，避免多次部分退款永远不把订单标为 refunded）
         const orderPaidAmount = parseFloat(order.actual_price || order.total_amount);
         const paidCents = yuanToCents(orderPaidAmount);
+        const refundFee = yuanToCents(refund.amount);
         const prevCompletedYuan = parseFloat(
             (await Refund.sum('amount', {
-                where: { order_id: refund.order_id, status: 'completed' },
+                where: { order_id: refund.order_id, status: 'completed', id: { [Op.ne]: refund.id } },
                 transaction: t
             })) || 0
         );
         const prevCompletedCents = yuanToCents(prevCompletedYuan);
         const totalRefundedCents = prevCompletedCents + refundFee;
-        // 允许 1 分容差（各端四舍五入/ DECIMAL 串转数字）
         const isFullRefund = paidCents > 0 && totalRefundedCents + 1 >= paidCents;
 
         if (isFullRefund) {
@@ -244,15 +204,13 @@ const completeRefund = async (req, res) => {
                 { where: { id: refund.order_id }, transaction: t }
             );
 
-            // ★ 拆单（parent/child）：券与积分往往只在父单上；须整簇订单均已 refunded/cancelled 后再退券、退积分（与超时取消订单组一致）
             const pivotRow = await Order.findByPk(refund.order_id, {
                 attributes: ['id', 'parent_order_id', 'buyer_id'],
                 transaction: t,
                 lock: t.LOCK.UPDATE
             });
             if (!pivotRow) {
-                await t.rollback();
-                return res.status(400).json({ code: -1, message: '关联订单不存在' });
+                throw new Error('关联订单不存在');
             }
             const rootId = pivotRow.parent_order_id || pivotRow.id;
             const cluster = await Order.findAll({
@@ -311,10 +269,6 @@ const completeRefund = async (req, res) => {
             await order.reload({ transaction: t });
         }
 
-        // ★★★ 库存恢复逻辑 ★★★
-        // 规则 1: 仅退款 (refund_only) → 不退货 → 不恢复平台物理库存
-        // 规则 2: 退货退款 (return_refund) → 按 refund_quantity 恢复平台物理库存
-        // 注：代理商“云库存”体系已下线，发货改为扣货款，不再处理代理库存回滚
         if (order) {
             const shouldRestoreProductStock = refund.type === 'return_refund' && (refund.refund_quantity || 0) > 0;
             let restoreProductQty = 0;
@@ -337,7 +291,6 @@ const completeRefund = async (req, res) => {
                 });
             }
 
-            // 恢复平台商品物理库存（仅退货退款场景）
             if (restoreProductQty > 0) {
                 const product = await Product.findByPk(order.product_id, { transaction: t, lock: t.LOCK.UPDATE });
                 if (product) {
@@ -352,22 +305,15 @@ const completeRefund = async (req, res) => {
             }
         }
 
-        // ★★★ 修复漏洞: 佣金撤销逻辑 ★★★
-        // 全额退款 → 撤销所有佣金
-        // 部分退款 → 按退款比例撤销佣金（避免退1元就撤销全部佣金的漏洞）
-        const orderBaseAmount = parseFloat(order.actual_price || order.total_amount);
-        const refundRatio = orderBaseAmount > 0 ? parseFloat(refund.amount) / orderBaseAmount : 1;
-        // 单笔接近全额，或「累计退款」刚达实付全额（与 isFullRefund 一致）时走全额佣金撤销
+        const refundRatio = orderPaidAmount > 0 ? parseFloat(refund.amount) / orderPaidAmount : 1;
         const isFullRefundForCommission = isFullRefund || refundRatio >= 0.99;
 
         if (isFullRefundForCommission) {
-            // 全额退款：撤销所有未结算的佣金（frozen/pending_approval/approved）
             await CommissionLog.update(
                 { status: 'cancelled', remark: '订单全额退款，佣金已撤销' },
                 { where: { order_id: refund.order_id, status: { [Op.in]: ['frozen', 'pending_approval', 'approved', 'pending'] } }, transaction: t }
             );
 
-            // 已结算佣金全额扣回
             const settledLogs = await CommissionLog.findAll({
                 where: { order_id: refund.order_id, status: 'settled' },
                 transaction: t
@@ -396,8 +342,6 @@ const completeRefund = async (req, res) => {
                 }
             }
         } else {
-            // ★ 部分退款：按退款比例撤销佣金（不撤销全部，按比例扣减）
-            // 未结算的佣金按比例扣减金额
             const frozenLogs = await CommissionLog.findAll({
                 where: { order_id: refund.order_id, status: { [Op.in]: ['frozen', 'pending_approval', 'approved', 'pending'] } },
                 transaction: t
@@ -417,7 +361,6 @@ const completeRefund = async (req, res) => {
                 }
             }
 
-            // 已结算佣金按比例扣回
             const settledLogs = await CommissionLog.findAll({
                 where: { order_id: refund.order_id, status: 'settled' },
                 transaction: t
@@ -450,21 +393,162 @@ const completeRefund = async (req, res) => {
         await refund.save({ transaction: t });
 
         await t.commit();
-
-        // 通知用户（在事务外发送，通知失败不影响退款）
-        await sendNotification(
-            refund.user_id,
-            '退款已完成',
-            `您的退款 ¥${parseFloat(refund.amount).toFixed(2)} 已完成退款处理。`,
-            'refund',
-            String(refund.id)
-        );
-
-        res.json({ code: 0, message: '退款完成' });
+        return refund;
     } catch (error) {
-        await t.rollback();
-        console.error('完成退款失败:', error);
-        res.status(500).json({ code: -1, message: '操作失败' });
+        if (!t.finished) await t.rollback();
+        throw error;
+    }
+}
+
+// 完成退款（先落 processing，再执行外部退款，再做本地收口）
+const completeRefund = async (req, res) => {
+    const { id } = req.params;
+    let refundContext = null;
+
+    const prepareTx = await sequelize.transaction();
+    try {
+        const refund = await Refund.findByPk(id, {
+            include: [{ model: Order, as: 'order' }],
+            transaction: prepareTx,
+            lock: prepareTx.LOCK.UPDATE
+        });
+
+        if (!refund) {
+            await prepareTx.rollback();
+            return res.status(404).json({ code: -1, message: '售后单不存在' });
+        }
+
+        if (!['approved', 'processing'].includes(refund.status)) {
+            await prepareTx.rollback();
+            return res.status(400).json({ code: -1, message: refund.status === 'completed' ? '退款已完成' : '请先审核通过' });
+        }
+
+        const order = refund.order;
+        if (!order) {
+            await prepareTx.rollback();
+            return res.status(400).json({ code: -1, message: '关联订单不存在' });
+        }
+
+        const refundableStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
+        if (!refundableStatuses.includes(order.status)) {
+            await prepareTx.rollback();
+            return res.status(400).json({ code: -1, message: `当前订单状态(${order.status})不支持退款完成` });
+        }
+
+        const totalFee = yuanToCents(order.actual_price || order.total_amount);
+        const refundFee = yuanToCents(refund.amount);
+        if (!totalFee || !refundFee || refundFee > totalFee) {
+            await prepareTx.rollback();
+            return res.status(400).json({ code: -1, message: '退款金额不合法' });
+        }
+
+        const prevCompletedYuan = parseFloat(
+            (await Refund.sum('amount', {
+                where: {
+                    order_id: refund.order_id,
+                    status: 'completed',
+                    id: { [Op.ne]: refund.id }
+                },
+                transaction: prepareTx
+            })) || 0
+        );
+        const prevCompletedCents = yuanToCents(prevCompletedYuan);
+        if (prevCompletedCents + refundFee > totalFee + 1) {
+            await prepareTx.rollback();
+            return res.status(400).json({ code: -1, message: '累计退款金额不能超过订单实付金额' });
+        }
+
+        if (refund.status === 'approved') {
+            refund.status = 'processing';
+            refund.processed_at = refund.processed_at || new Date();
+            refund.admin_remark = appendRemark(refund.admin_remark, '退款处理中');
+            await refund.save({ transaction: prepareTx });
+        }
+        await prepareTx.commit();
+
+        refundContext = {
+          refundId: refund.id,
+          refundNo: refund.refund_no,
+          refundAmount: parseFloat(refund.amount),
+          refundFee,
+          totalFee,
+          userId: refund.user_id,
+          orderId: order.id,
+          orderNo: order.order_no,
+          orderPaymentMethod: order.payment_method,
+          buyerId: order.buyer_id
+        };
+    } catch (error) {
+        if (!prepareTx.finished) await prepareTx.rollback();
+        console.error('退款预处理失败:', error);
+        return res.status(500).json({ code: -1, message: '退款预处理失败' });
+    }
+
+    try {
+        if (refundContext.orderPaymentMethod === 'wallet') {
+            await AgentWalletService.recharge({
+                userId: refundContext.buyerId,
+                amount: refundContext.refundAmount,
+                refType: 'order_refund',
+                refId: refundContext.refundNo,
+                remark: `订单退款 ${refundContext.orderNo} ¥${refundContext.refundAmount}`
+            });
+        } else {
+            await refundOrder({
+                orderNo: refundContext.orderNo,
+                refundNo: refundContext.refundNo,
+                totalFee: refundContext.totalFee,
+                refundFee: refundContext.refundFee
+            });
+        }
+    } catch (error) {
+        const failTx = await sequelize.transaction();
+        try {
+            const refund = await Refund.findByPk(refundContext.refundId, {
+                transaction: failTx,
+                lock: failTx.LOCK.UPDATE
+            });
+            if (refund) {
+                refund.admin_remark = appendRemark(refund.admin_remark, `外部退款调用失败：${error.message}`);
+                await refund.save({ transaction: failTx });
+            }
+            await failTx.commit();
+        } catch (remarkError) {
+            if (!failTx.finished) await failTx.rollback();
+            console.error('记录退款失败备注失败:', remarkError);
+        }
+        console.error('调用外部退款失败:', error);
+        return res.status(500).json({ code: -1, message: '退款处理中，请核对外部退款结果后再继续' });
+    }
+
+    try {
+        const finalizedRefund = await finalizeRefundLocally(refundContext.refundId);
+        await sendNotification(
+            finalizedRefund.user_id,
+            '退款已完成',
+            `您的退款 ¥${parseFloat(finalizedRefund.amount).toFixed(2)} 已完成退款处理。`,
+            'refund',
+            String(finalizedRefund.id)
+        );
+        return res.json({ code: 0, message: '退款完成' });
+    } catch (error) {
+        const failTx = await sequelize.transaction();
+        try {
+            const refund = await Refund.findByPk(refundContext.refundId, {
+                transaction: failTx,
+                lock: failTx.LOCK.UPDATE
+            });
+            if (refund) {
+                refund.admin_remark = appendRemark(refund.admin_remark, `外部退款成功，但本地收口失败：${error.message}`);
+                await refund.save({ transaction: failTx });
+            }
+            await failTx.commit();
+        } catch (remarkError) {
+            if (!failTx.finished) await failTx.rollback();
+            console.error('记录本地收口失败备注失败:', remarkError);
+        }
+        console.error('完成退款本地收口失败:', error);
+        return res.status(500).json({ code: -1, message: '外部退款已执行，本地收口失败，请人工核对' });
     }
 };
 
