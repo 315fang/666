@@ -71,7 +71,7 @@
             <el-icon size="24"><Monitor /></el-icon>
           </div>
           <div class="stat-body">
-            <div class="stat-label">服务器可用内存</div>
+            <div class="stat-label">实例可用内存</div>
             <div class="stat-value">{{ sysStatus.os?.free_mem_mb ?? '--' }} MB</div>
             <div class="stat-sub">共 {{ sysStatus.os?.total_mem_mb ?? '--' }} MB</div>
           </div>
@@ -257,9 +257,7 @@ import {
 } from '@element-plus/icons-vue'
 import {
   getSystemStatus,
-  getDebugProcess,
   getDebugAnomalies,
-  getDebugDbPing,
   getCronStatus,
   getDebugLogs,
   getStorageConfig,

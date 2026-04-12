@@ -16,7 +16,8 @@ const {
     recalcFinal,
     loadAvailableCoupons,
     selectCoupon,
-    clearCoupon
+    clearCoupon,
+    getPointDeductionRule
 } = require('./orderConfirmPricing');
 const { submitOrder } = require('./orderConfirmSubmission');
 const {
@@ -55,6 +56,9 @@ Page({
         usePoints: false,
         pointsToUse: 0,
         pointsDeduction: '0.00',
+        // 是否允许积分抵扣（由商品属性决定）
+        allowPoints: true,
+        pointsRuleHint: '1积分抵0.1元，最多抵扣订单50%',
         // 活动单号
         slashNo: null,
         groupNo: null,
@@ -105,6 +109,7 @@ Page({
                     orderType: directBuy.type || '',
                     loading: false
                 });
+                this._updatePointsConfig([directBuy]);
                 this._refreshPickupAllowed();
                 this.loadAvailableCoupons();
             } else {
@@ -184,6 +189,19 @@ Page({
 
     onLightTipClose() {
         this.setData({ lightTipShow: false });
+    },
+
+    /** 根据商品属性更新积分抵扣权限和规则提示文案 */
+    _updatePointsConfig(items) {
+        // 只要有任一商品关闭了积分抵扣（allow_points === 0），整单禁用积分
+        const allowPoints = (items || []).every(item => item.allow_points !== 0);
+        const { yuanPerPoint, maxRatio } = getPointDeductionRule();
+        const pct = Math.round(maxRatio * 100);
+        const hint = `1积分抵${yuanPerPoint}元，最多抵扣订单${pct}%`;
+        this.setData({ allowPoints, pointsRuleHint: hint });
+        if (!allowPoints) {
+            this.setData({ usePoints: false });
+        }
     },
 
     /** 当前购物袋/直购是否全部支持自提 */

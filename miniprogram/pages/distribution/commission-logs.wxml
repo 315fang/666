@@ -1,7 +1,7 @@
-<!-- pages/distribution/commission-logs.wxml -->
+<!-- pages/distribution/commission-logs.wxml - 佣金明细 -->
 <view class="container">
 
-  <!-- 概览卡 -->
+  <!-- ═══ 顶部统计卡 ═══ -->
   <view class="overview-card">
     <view class="overview-inner">
       <view class="overview-block">
@@ -10,21 +10,44 @@
       </view>
       <view class="overview-divider"></view>
       <view class="overview-block">
-        <text class="overview-label">待结算</text>
+        <text class="overview-label">待解冻</text>
         <text class="overview-amount sub">¥{{frozenAmount}}</text>
+      </view>
+      <view class="overview-divider"></view>
+      <view class="overview-block">
+        <text class="overview-label">可提现</text>
+        <text class="overview-amount hi">¥{{availableAmount}}</text>
       </view>
     </view>
   </view>
 
-  <!-- 筛选 Tab -->
-  <view class="filter-bar">
-    <view class="filter-item {{currentType === 'all' ? 'active' : ''}}" bindtap="onTypeChange" data-type="all">全部</view>
-    <view class="filter-item {{currentType === 'Direct' ? 'active' : ''}}" bindtap="onTypeChange" data-type="Direct">直推佣金</view>
-    <view class="filter-item {{currentType === 'Indirect' ? 'active' : ''}}" bindtap="onTypeChange" data-type="Indirect">团队佣金</view>
-    <view class="filter-item {{currentType === 'Stock_Diff' ? 'active' : ''}}" bindtap="onTypeChange" data-type="Stock_Diff">级差利润</view>
+  <!-- ═══ 积分入口（若有积分余额）═══ -->
+  <view class="points-entry" wx:if="{{pointBalance > 0}}" bindtap="onGoPoints">
+    <view class="pe-left">
+      <view class="pe-icon">🎁</view>
+      <view class="pe-info">
+        <text class="pe-title">我的积分</text>
+        <text class="pe-sub">购物返积分，积分可抵扣</text>
+      </view>
+    </view>
+    <view class="pe-right">
+      <text class="pe-balance">{{pointBalance}} 分</text>
+      <text class="pe-arrow">›</text>
+    </view>
   </view>
 
-  <!-- 明细列表 -->
+  <!-- ═══ 筛选 Tab ═══ -->
+  <view class="filter-bar">
+    <view
+      class="filter-item {{currentType === item.key ? 'active' : ''}}"
+      wx:for="{{filterTabs}}"
+      wx:key="key"
+      bindtap="onTypeChange"
+      data-type="{{item.key}}"
+    >{{item.label}}</view>
+  </view>
+
+  <!-- ═══ 明细列表 ═══ -->
   <scroll-view class="log-scroll" scroll-y bindscrolltolower="onReachBottom">
     <view class="log-list">
 
@@ -34,41 +57,71 @@
           <view class="sk-icon"></view>
           <view class="sk-info">
             <view class="sk-line sk-long"></view>
+            <view class="sk-line sk-med"></view>
             <view class="sk-line sk-short"></view>
           </view>
           <view class="sk-amount-box"></view>
         </view>
       </view>
 
-      <!-- 列表项 -->
+      <!-- 流水列表 -->
       <view class="log-item" wx:for="{{logs}}" wx:key="id">
-        <view class="log-icon-wrap log-icon-{{item.type}}">
-          <image src="{{item.typeIcon}}" mode="aspectFit" class="log-icon"></image>
+        <!-- 左侧类型图标 -->
+        <view class="log-icon-wrap" style="background: {{item.typeColor}}18;">
+          <image src="{{item.typeIcon}}" mode="aspectFit" class="log-icon" style="opacity:0.75;"></image>
         </view>
+
+        <!-- 中间信息区 -->
         <view class="log-info">
-          <text class="log-type-name">{{item.typeName}}</text>
+          <!-- 第一行：类型名 + 状态角标 -->
+          <view class="log-row1">
+            <text class="log-type-name">{{item.typeName}}</text>
+            <view class="log-status {{item.statusCls}}">{{item.statusText}}</view>
+          </view>
+
+          <!-- 第二行：时间 -->
           <text class="log-time">{{item.created_at}}</text>
-          <text class="log-remark" wx:if="{{item.remark}}">{{item.remark}}</text>
+
+          <!-- 第三行：来源用户（直推/团队才显示下级信息）-->
+          <view class="log-detail-row" wx:if="{{item.fromDesc}}">
+            <text class="log-detail-icon">👤</text>
+            <text class="log-detail-text">{{item.fromDesc}}</text>
+          </view>
+
+          <!-- 第四行：关联商品摘要 -->
+          <view class="log-detail-row" wx:if="{{item.productSummary}}">
+            <text class="log-detail-icon">📦</text>
+            <text class="log-detail-text">{{item.productSummary}}</text>
+          </view>
+
+          <!-- 第五行：订单号 -->
+          <view class="log-detail-row" wx:if="{{item.orderShort}}">
+            <text class="log-detail-icon">🧾</text>
+            <text class="log-detail-text">订单 ···{{item.orderShort}}</text>
+          </view>
         </view>
+
+        <!-- 右侧金额 -->
         <view class="log-right">
-          <text class="log-amount">+¥{{item.amount}}</text>
-          <view class="log-status {{item.statusClass}}">{{item.statusText}}</view>
+          <text class="log-amount" style="color: {{item.typeColor}};">+¥{{item.amount}}</text>
+          <!-- 冻结解冻说明 -->
+          <text class="log-freeze-tip" wx:if="{{item.status === 'frozen'}}">T+15解冻</text>
         </view>
       </view>
 
-      <!-- 底部状态 -->
+      <!-- 底部加载状态 -->
       <view class="load-footer" wx:if="{{logs.length > 0}}">
         <view class="loading-row" wx:if="{{loading}}">
           <view class="loading-spinner"></view>
           <text class="loading-text">加载中</text>
         </view>
-        <text class="no-more" wx:elif="{{!hasMore}}">没有更多了</text>
+        <text class="no-more" wx:elif="{{!hasMore}}">— 没有更多了 —</text>
       </view>
 
       <!-- 空状态 -->
       <view class="empty-state" wx:if="{{!loading && logs.length === 0}}">
         <image src="/assets/icons/dollar-sign.svg" mode="aspectFit" class="empty-icon"></image>
-        <text class="empty-title">暂无佣金记录</text>
+        <text class="empty-title">暂无{{currentType === 'all' ? '' : filterTabs[filterTabs.findIndex(t => t.key === currentType)].label}}记录</text>
         <text class="empty-desc">分享商品或发展团队即可获得佣金</text>
       </view>
     </view>

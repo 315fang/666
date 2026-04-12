@@ -408,6 +408,8 @@ async function createOrder(openid, orderData) {
             quantity: qty,
             subtotal: lineTotal,
             item_amount: lineTotal,
+            // allow_points 为 null/undefined 时视为允许（兼容旧商品数据）
+            allow_points: product.allow_points == null ? 1 : (product.allow_points ? 1 : 0),
             activity_type: groupActivity ? 'group' : (slashRecord ? 'slash' : ''),
             group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : '',
             slash_no: slashRecord ? (slashRecord.slash_no || slash_no) : ''
@@ -446,11 +448,12 @@ async function createOrder(openid, orderData) {
         }
     }
 
-    // 3. 积分抵扣
+    // 3. 积分抵扣（需要所有商品都允许积分抵扣）
     let pointsDiscount = 0;
     let actualPoints = 0;
     const usePoints = toNumber(points_to_use, 0);
-    if (usePoints > 0) {
+    const pointsAllowedByProducts = orderItems.every(it => it.allow_points !== 0);
+    if (usePoints > 0 && pointsAllowedByProducts) {
         try {
             const userRes = await db.collection('users').where({ openid }).limit(1).get();
             if (userRes.data && userRes.data.length > 0) {

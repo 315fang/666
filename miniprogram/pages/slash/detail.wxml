@@ -76,7 +76,7 @@
       <!-- 倒计时 -->
       <view class="countdown-row" wx:if="{{detail.status === 'active' && !detail._expired}}">
         <image src="/assets/icons/clock.svg" class="icon-xs" mode="aspectFit"/>
-        <text class="countdown-text" wx:if="{{detail._remainSecs > 0 || detail._remainHours > 0 || detail._remainMins > 0}}">剩余 {{detail._remainHours}}小时{{detail._remainMins}}分{{detail._remainSecs}}秒</text>
+        <text class="countdown-text" wx:if="{{detail._remainSecs > 0 || detail._remainHours > 0 || detail._remainMins > 0}}">剩余 {{detail._remainHours}}小时{{detail._remainMinsStr}}分{{detail._remainSecsStr}}秒</text>
         <text class="countdown-text" wx:else>即将结束，请尽快邀请好友</text>
       </view>
       <view class="countdown-row expired-row" wx:if="{{detail.status === 'expired' || detail._expired}}">
@@ -141,22 +141,59 @@
 
   <!-- 底部操作栏 -->
   <view class="bottom-bar" wx:if="{{!loading && detail}}">
-    <view class="btn-col-share" wx:if="{{detail.status === 'active'}}" bindtap="onShare">
-      <image src="/assets/icons/users.svg" class="btn-icon" mode="aspectFit"/>
-      <text class="btn-col-main">邀请好友</text>
-      <text class="btn-col-sub">每刀随机减</text>
-    </view>
-    <view class="btn-buy-wrap" wx:if="{{detail.status === 'success' || detail.status === 'active'}}">
-      <view class="btn-buy {{detail.status === 'success' ? 'btn-buy-ready' : 'btn-buy-default'}}" bindtap="onBuy">
-        <text class="btn-buy-line1" wx:if="{{detail.status === 'success'}}">已到底价 · 立即抢购</text>
-        <text class="btn-buy-line1" wx:else>¥{{detail.current_price}} 抢先下单</text>
-        <text class="btn-buy-line2" wx:if="{{detail.status === 'active'}}">现价购买·不必等砍到底</text>
-        <text class="btn-buy-line2" wx:if="{{detail.status === 'success'}}">库存有限以结算为准</text>
+
+    <!-- ===== 发起人视角 ===== -->
+    <block wx:if="{{detail.is_owner}}">
+      <!-- 活动进行中：邀请好友 + 购买 -->
+      <view class="btn-col-share" wx:if="{{detail.status === 'active'}}" bindtap="onShare">
+        <image src="/assets/icons/users.svg" class="btn-icon" mode="aspectFit"/>
+        <text class="btn-col-main">邀请好友帮砍</text>
+        <text class="btn-col-sub">每刀随机减</text>
       </view>
-    </view>
-    <view class="btn-disabled" wx:if="{{detail.status === 'expired' || detail.status === 'purchased'}}">
-      <text wx:if="{{detail.status === 'expired'}}">活动已过期</text>
-      <text wx:else>已完成购买</text>
-    </view>
+      <view class="btn-buy-wrap" wx:if="{{detail.status === 'success' || detail.status === 'active'}}">
+        <view class="btn-buy {{detail.status === 'success' ? 'btn-buy-ready' : 'btn-buy-default'}}" bindtap="onBuy">
+          <text class="btn-buy-line1" wx:if="{{detail.status === 'success'}}">已到底价 · 立即抢购</text>
+          <text class="btn-buy-line1" wx:else>¥{{detail.current_price}} 抢先下单</text>
+          <text class="btn-buy-line2" wx:if="{{detail.status === 'active'}}">现价购买·不必等砍到底</text>
+          <text class="btn-buy-line2" wx:if="{{detail.status === 'success'}}">库存有限以结算为准</text>
+        </view>
+      </view>
+      <view class="btn-disabled" wx:if="{{detail.status === 'expired' || detail.status === 'purchased'}}">
+        <text wx:if="{{detail.status === 'expired'}}">活动已过期</text>
+        <text wx:else>已完成购买</text>
+      </view>
+    </block>
+
+    <!-- ===== 好友视角 ===== -->
+    <block wx:if="{{!detail.is_owner}}">
+      <!-- 活动进行中：帮砍一刀 -->
+      <block wx:if="{{detail.status === 'active'}}">
+        <view wx:if="{{detail.already_helped}}" class="btn-helped">
+          <text class="btn-helped-icon">✓</text>
+          <text class="btn-helped-text">已帮砍一刀</text>
+          <text class="btn-helped-sub">等待更多好友助力</text>
+        </view>
+        <view wx:elif="{{detail.helper_full}}" class="btn-disabled">
+          <text>帮砍名额已满</text>
+        </view>
+        <view wx:else class="btn-help-cut" bindtap="onHelpCut">
+          <text class="btn-help-icon">🔪</text>
+          <text class="btn-help-main">帮 TA 砍一刀</text>
+          <text class="btn-help-sub">随机砍掉一些</text>
+        </view>
+      </block>
+
+      <!-- 已到底价 -->
+      <view wx:if="{{detail.status === 'success'}}" class="btn-disabled btn-success-hint">
+        <text>好友已砍到底价啦 🎉</text>
+      </view>
+
+      <!-- 已过期或已购买 -->
+      <view class="btn-disabled" wx:if="{{detail.status === 'expired' || detail.status === 'purchased'}}">
+        <text wx:if="{{detail.status === 'expired'}}">活动已过期</text>
+        <text wx:else>好友已下单购买</text>
+      </view>
+    </block>
+
   </view>
 </view>

@@ -16,7 +16,8 @@
           </el-select>
         </el-form-item>
         <el-form-item label="关键词">
-          <el-input v-model="searchForm.keyword" placeholder="名称/编号" clearable style="width:150px" />
+          <!-- 后端按经销商名称或编号模糊匹配 -->
+          <el-input v-model="searchForm.keyword" placeholder="名称/编号" clearable style="width:150px" @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">搜索</el-button>

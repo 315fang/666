@@ -84,6 +84,8 @@ const fetchList = async () => {
       ...item,
       id: item.id ?? item._legacy_id ?? item._id ?? null
     }))
+  } catch (e) {
+    ElMessage.error('分类列表加载失败，请刷新重试')
   } finally {
     loading.value = false
   }

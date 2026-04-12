@@ -15,21 +15,29 @@
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="操作类型">
           <el-select v-model="searchForm.action" placeholder="全部" clearable style="width:130px">
-            <el-option label="登录" value="login" />
             <el-option label="创建" value="create" />
             <el-option label="更新" value="update" />
             <el-option label="删除" value="delete" />
             <el-option label="审批" value="approve" />
-            <el-option label="发货" value="ship" />
+            <el-option label="拒绝" value="reject" />
+            <el-option label="发放" value="issue" />
+            <el-option label="调整" value="adjust" />
+            <el-option label="完成" value="complete" />
+            <el-option label="重置" value="reset" />
           </el-select>
         </el-form-item>
         <el-form-item label="资源类型">
+          <!-- 后端存 target 字段，值如 users/products/coupons/refunds 等 -->
           <el-select v-model="searchForm.resource" placeholder="全部" clearable style="width:130px">
-            <el-option label="订单" value="order" />
-            <el-option label="用户" value="user" />
-            <el-option label="商品" value="product" />
-            <el-option label="提现" value="withdrawal" />
-            <el-option label="佣金" value="commission" />
+            <el-option label="商品" value="products" />
+            <el-option label="用户" value="users" />
+            <el-option label="订单" value="orders" />
+            <el-option label="退款" value="refunds" />
+            <el-option label="优惠券" value="coupons" />
+            <el-option label="佣金" value="commissions" />
+            <el-option label="管理员" value="admins" />
+            <el-option label="分销商" value="dealers" />
+            <el-option label="配置" value="configs" />
           </el-select>
         </el-form-item>
         <el-form-item label="时间范围">
@@ -60,12 +68,14 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作类型" width="100">
+        <el-table-column label="操作类型" min-width="130">
           <template #default="{ row }">
-            <el-tag :type="actionTagType(row.action)" size="small">{{ formatActionLabel(row.action) }}</el-tag>
+            <el-tag :type="actionTagType(row.action)" size="small" style="max-width:120px;overflow:hidden;text-overflow:ellipsis" :title="formatActionLabel(row.action)">
+              {{ formatActionLabel(row.action) }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="资源" width="100">
+        <el-table-column label="资源" width="90">
           <template #default="{ row }">
             <el-tag type="info" size="small">{{ formatResourceLabel(row.resourceType) }}</el-tag>
           </template>
@@ -126,45 +136,92 @@ const searchForm = reactive({ action: '', resource: '', dateRange: [] })
 const { pagination, resetPage, applyResponse } = usePagination()
 const tableData = ref([])
 
-const actionLabelMap = {
-  login: '登录',
-  create: '创建',
-  update: '更新',
-  delete: '删除',
-  approve: '审批',
-  ship: '发货',
-  export: '导出',
-  import: '导入',
-  upload: '上传',
-  download: '下载',
-  logout: '退出'
+// 资源模块映射：后端 target 字段 → 中文
+const TARGET_LABEL = {
+  products: '商品', product: '商品',
+  users: '用户', user: '用户',
+  orders: '订单', order: '订单',
+  refunds: '退款', refund: '退款',
+  coupons: '优惠券', coupon: '优惠券',
+  coupon_auto_rules: '优惠券自动规则',
+  commissions: '佣金', commission: '佣金',
+  admins: '管理员', admin: '管理员',
+  withdrawals: '提现', withdrawal: '提现',
+  configs: '配置', config: '配置',
+  group_activities: '团购活动', group_buy: '团购活动',
+  lottery_prizes: '抽奖奖品',
+  branch_agent_stations: '分仓站点',
+  'branch-agent-policy': '分销商政策',
+  branch_agent_claims: '分销申请',
+  upgrade_applications: '升级申请',
+  'upgrade-application': '升级申请',
+  slash_activities: '砍价活动',
+  banners: 'Banner',
+  contents: '内容',
+  categories: '分类',
+  pickup_stations: '自提点'
 }
 
-const resourceLabelMap = {
-  order: '订单',
-  user: '用户',
-  product: '商品',
-  withdrawal: '提现',
-  commission: '佣金',
-  banner: 'Banner',
-  theme: '主题',
-  config: '配置',
-  pickup: '自提',
-  activity_log: '活动日志'
+// 操作全称映射（优先使用完整 action key）
+const ACTION_LABEL_FULL = {
+  'product.create': '创建商品', 'product.update': '编辑商品', 'product.delete': '删除商品',
+  'product.skus.update': '更新商品SKU', 'product.sku.create': '添加SKU', 'product.sku.delete': '删除SKU',
+  'user.role.update': '修改用户等级', 'user.role.batch-update': '批量修改等级',
+  'user.balance.adjust': '调整用户余额', 'user.status.update': '修改用户状态',
+  'user.parent.update': '修改上级关系',
+  'dealer.approve': '审批通过分销商', 'dealer.reject': '拒绝分销商', 'dealer.level.update': '修改分销商等级', 'dealer.profile.update': '编辑分销商信息',
+  'admin.create': '创建管理员', 'admin.update': '编辑管理员', 'admin.delete': '删除管理员',
+  'admin.password.update': '修改密码', 'admin.password.reset': '重置密码',
+  'coupon.create': '创建优惠券', 'coupon.update': '编辑优惠券', 'coupon.delete': '删除优惠券',
+  'coupon.issue': '发放优惠券', 'coupon.status': '变更优惠券状态', 'coupon.auto_rules.update': '更新自动发券规则',
+  'refund.approve': '审批退款', 'refund.reject': '拒绝退款',
+  'refund.complete': '完成退款', 'refund.processing': '退款处理中',
+  'commission.approve_settle': '佣金结算审批', 'commission.reject_cancel': '佣金取消',
+  'commission.batch_approve_settle': '批量结算佣金', 'commission.batch_reject_cancel': '批量取消佣金',
+  'group_buy.create': '创建团购', 'group_buy.update': '编辑团购', 'group_buy.delete': '删除团购',
+  'branch-agent.policy.update': '更新分销商政策',
+  'branch-agent.station.create': '创建分仓站点', 'branch-agent.station.update': '编辑分仓站点',
+  'member-tier-config.update': '更新会员等级配置'
+}
+
+// 从复合 action 推断动词标签（用于 el-tag 颜色）
+function extractVerb(action) {
+  const parts = String(action || '').split(/[._-]/)
+  return parts[parts.length - 1] || action
+}
+
+const formatActionLabel = (action) => {
+  if (!action) return '-'
+  return ACTION_LABEL_FULL[action] || action
+}
+
+const formatResourceLabel = (target) => {
+  if (!target) return '-'
+  return TARGET_LABEL[target] || target
 }
 
 const normalizeLogRow = (row = {}) => {
   const status = String(row.status || '').toLowerCase()
-  const isSuccess = ['success', 'succeeded', 'ok'].includes(status)
-  const detailPayload = row.changes ?? row.details ?? row.before_data ?? row.after_data ?? null
+  // 已记录的操作默认成功，除非明确标记为 failed/error
+  const isFail = ['fail', 'failed', 'error'].includes(status)
+  const isSuccess = !isFail && (status === '' || ['success', 'succeeded', 'ok'].includes(status))
+  const detailPayload = row.detail ?? row.changes ?? row.details ?? null
+
+  // 后端 target 字段存资源类型
+  const resourceTarget = row.target || row.resource || row.resource_type || row.target_type || row.module || ''
+  const resourceId = row.resource_id || row.target_id || (row.detail?.product_id) || (row.detail?.coupon_id) || (row.detail?.user_id) || (row.detail?.admin_id) || (row.detail?.refund_id) || ''
+
+  const descriptionText = row.description || row.content
+    || ACTION_LABEL_FULL[row.action]
+    || `${formatResourceLabel(resourceTarget)} · ${row.action || ''}`
 
   return {
     ...row,
-    operatorName: row.username || row.admin_username || row.admin_name || row.admin_id || row.user_id || '-',
+    operatorName: row.admin_name || row.username || row.admin_username || row.admin_id || '-',
     operatorIp: row.ip_address || row.ip || '',
-    resourceType: row.resource || row.resource_type || row.target_type || row.module || '',
-    resourceId: row.resource_id || row.target_id || '',
-    descriptionText: row.description || row.content || `${formatActionLabel(row.action)}${formatResourceLabel(row.resource || row.target_type || row.module)}`,
+    resourceType: resourceTarget,
+    resourceId: String(resourceId || ''),
+    descriptionText,
     createdAt: row.created_at || row.createdAt,
     detailPayload,
     resultType: isSuccess ? 'success' : 'danger',
@@ -242,12 +299,21 @@ const showDetail = (row) => {
   detailDialogVisible.value = true
 }
 
-const actionTagType = (a) => ({
-  login: 'primary', create: 'success', update: 'warning', delete: 'danger', approve: 'success', ship: 'info'
-}[a] || '')
+const ACTION_VERB_TAG = {
+  create: 'success', update: 'warning', delete: 'danger',
+  approve: 'success', approve_settle: 'success', batch_approve_settle: 'success',
+  reject: 'danger', reject_cancel: 'danger', batch_reject_cancel: 'danger',
+  issue: 'primary', adjust: 'warning', complete: 'success',
+  reset: 'warning', login: 'primary', logout: 'info',
+  export: 'info', ship: 'info', status: 'warning', processing: 'warning'
+}
 
-const formatActionLabel = (action) => actionLabelMap[action] || action || '-'
-const formatResourceLabel = (resource) => resourceLabelMap[resource] || resource || '-'
+const actionTagType = (action) => {
+  if (!action) return ''
+  if (ACTION_VERB_TAG[action]) return ACTION_VERB_TAG[action]
+  const verb = extractVerb(action)
+  return ACTION_VERB_TAG[verb] || ''
+}
 
 onMounted(fetchData)
 </script>

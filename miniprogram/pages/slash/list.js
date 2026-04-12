@@ -94,7 +94,9 @@ Page({
             if (!app.globalData.isLoggedIn) { this.setData({ myRecords: [], loading: false }); return; }
             try {
                 const res = await get('/slash/my/list');
-                const records = res.code === 0 && Array.isArray(res.data) ? res.data.map(normalizeSlashRecord) : [];
+                // 后端返回 { list: [...], total: N }，不是数组，需取 .list
+                const raw = res.code === 0 ? (res.data?.list || res.data || []) : [];
+                const records = Array.isArray(raw) ? raw.map(normalizeSlashRecord) : [];
                 this.setData({ myRecords: records, loading: false });
             } catch { this.setData({ loading: false }); }
         }
@@ -108,7 +110,7 @@ Page({
         }
         try {
             const res = await post('/slash/start', { activity_id: activity.id });
-            if (res.code === 0 || res.code === 1) {
+            if (res.code === 0) {
                 const slashNo = res.data?.slash_no;
                 if (!slashNo) {
                     wx.showToast({ title: '活动数据异常', icon: 'none' });
@@ -118,8 +120,8 @@ Page({
             } else {
                 wx.showToast({ title: res.message || '发起失败', icon: 'none' });
             }
-        } catch (e) {
-            wx.showToast({ title: e?.message || '网络错误', icon: 'none' });
+        } catch (err) {
+            wx.showToast({ title: err?.message || '网络错误', icon: 'none' });
         }
     },
 

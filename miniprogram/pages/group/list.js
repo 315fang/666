@@ -110,7 +110,9 @@ Page({
             if (!app.globalData.isLoggedIn) return this.setData({ myGroups: [], loading: false });
             try {
                 const res = await get('/group/my');
-                this.setData({ myGroups: res.code === 0 ? res.data : [], loading: false });
+                // 后端返回 { list: [...], total: N }，需取 .list
+                const list = res.code === 0 ? (res.data?.list || res.data || []) : [];
+                this.setData({ myGroups: Array.isArray(list) ? list : [], loading: false });
             } catch { this.setData({ loading: false }); }
         }
     },

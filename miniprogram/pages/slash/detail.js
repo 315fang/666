@@ -1,28 +1,7 @@
 // pages/slash/detail.js - 砍价详情
 const { get, post } = require('../../utils/request');
+const { resolvePreferredSkuId, plainSummary } = require('../../utils/helpers');
 const app = getApp();
-
-function resolvePreferredSkuId(detail) {
-    if (!detail) return null;
-    const activitySkuId = detail.activity && detail.activity.sku_id != null && detail.activity.sku_id !== ''
-        ? detail.activity.sku_id
-        : null;
-    if (activitySkuId != null) return activitySkuId;
-    if (detail.sku_id != null && detail.sku_id !== '') return detail.sku_id;
-    if (detail.product && detail.product.sku_id != null && detail.product.sku_id !== '') return detail.product.sku_id;
-    const skus = detail.product && Array.isArray(detail.product.skus) ? detail.product.skus : [];
-    if (skus.length === 1) {
-        return skus[0]._id || skus[0].id || null;
-    }
-    return null;
-}
-
-function plainSummary(html, maxLen = 96) {
-    if (!html) return '';
-    const t = String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    if (!t) return '';
-    return t.length > maxLen ? `${t.slice(0, maxLen)}…` : t;
-}
 
 function formatHelperList(helpers = []) {
     return helpers.map((item) => ({
@@ -70,14 +49,66 @@ Page({
         }
     },
 
+    onHide() {
+        this._clearCountdown();
+    },
+
+    onUnload() {
+        this._clearCountdown();
+    },
+
+    _clearCountdown() {
+        if (this._countdownTimer) {
+            clearInterval(this._countdownTimer);
+            this._countdownTimer = null;
+        }
+    },
+
+    _startCountdown() {
+        this._clearCountdown();
+        const { detail } = this.data;
+        if (!detail || detail.status !== 'active' || detail._expired) return;
+
+        this._countdownTimer = setInterval(() => {
+            const d = this.data.detail;
+            if (!d || d.status !== 'active' || d._expired) {
+                this._clearCountdown();
+                return;
+            }
+
+            let h = d._remainHours;
+            let m = d._remainMins;
+            let s = d._remainSecs;
+
+            if (h === 0 && m === 0 && s === 0) {
+                this._clearCountdown();
+                this.setData({ 'detail._expired': true });
+                return;
+            }
+
+            s -= 1;
+            if (s < 0) { s = 59; m -= 1; }
+            if (m < 0) { m = 59; h -= 1; }
+            if (h < 0) { h = 0; m = 0; s = 0; }
+
+            this.setData({
+                'detail._remainHours': h,
+                'detail._remainMins': m,
+                'detail._remainSecs': s,
+                'detail._remainMinsStr': String(m).padStart(2, '0'),
+                'detail._remainSecsStr': String(s).padStart(2, '0')
+            });
+        }, 1000);
+    },
+
     async loadDetail(slashNo) {
+        this._clearCountdown();
         this.setData({ loading: true });
         try {
             const res = await get(`/slash/${slashNo}`);
             if (res.code === 0 && res.data) {
                 const d = res.data;
                 d.helpers = formatHelperList(d.helpers || []);
-                // 计算砍价进度百分比
                 const range = (d.original_price || 0) - (d.floor_price || 0);
                 const cut = (d.original_price || 0) - (d.current_price || d.original_price);
                 d._progressPct = range > 0 ? Math.min(100, Math.round(cut / range * 100)) : 0;
@@ -107,16 +138,20 @@ Page({
                 } else if (expireAt) {
                     const ms = new Date(expireAt) - Date.now();
                     d._expired = ms <= 0;
-                    d._remainHours = ms > 0 ? Math.floor(ms / 3600000) : 0;
-                    d._remainMins = ms > 0 ? Math.floor((ms % 3600000) / 60000) : 0;
-                    d._remainSecs = 0;
+                    const totalSecs = ms > 0 ? Math.floor(ms / 1000) : 0;
+                    d._remainHours = Math.floor(totalSecs / 3600);
+                    d._remainMins = Math.floor((totalSecs % 3600) / 60);
+                    d._remainSecs = totalSecs % 60;
                 } else {
                     d._expired = false;
                     d._remainHours = 0;
                     d._remainMins = 0;
                     d._remainSecs = 0;
                 }
+                d._remainMinsStr = String(d._remainMins).padStart(2, '0');
+                d._remainSecsStr = String(d._remainSecs).padStart(2, '0');
                 this.setData({ detail: d, loading: false });
+                this._startCountdown();
             } else {
                 wx.showToast({ title: res.message || '加载失败', icon: 'none' });
                 this.setData({ loading: false });
@@ -160,6 +195,61 @@ Page({
         };
         wx.setStorageSync('directBuyInfo', buyInfo);
         wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
+    },
+
+    // 好友帮砍入口
+    async onHelpCut() {
+        const { detail, slashNo } = this.data;
+        if (!detail) return;
+
+        if (!app.globalData.isLoggedIn) {
+            wx.showToast({ title: '请先登录再帮砍', icon: 'none' });
+            return;
+        }
+        if (detail.is_owner) {
+            wx.showToast({ title: '不能帮自己砍价', icon: 'none' });
+            return;
+        }
+        if (detail.already_helped) {
+            wx.showToast({ title: '您已经帮砍过了', icon: 'none' });
+            return;
+        }
+        if (detail.status !== 'active') {
+            wx.showToast({ title: '砍价活动已结束', icon: 'none' });
+            return;
+        }
+        if (detail.helper_full) {
+            wx.showToast({ title: '帮砍名额已满', icon: 'none' });
+            return;
+        }
+        if (this._helping) return;
+        this._helping = true;
+
+        wx.showLoading({ title: '正在帮砍...', mask: true });
+        try {
+            const res = await post(`/slash/${slashNo}/help`);
+            wx.hideLoading();
+            if (res.code === 0 && res.data) {
+                const cut = parseFloat(res.data.cut_amount || 0).toFixed(2);
+                wx.showModal({
+                    title: '帮砍成功 🎉',
+                    content: `砍掉了 ¥${cut}！当前价格 ¥${parseFloat(res.data.current_price || 0).toFixed(2)}`,
+                    showCancel: false,
+                    confirmText: '好的',
+                    success: () => {
+                        // 刷新页面数据
+                        this.loadDetail(slashNo);
+                    }
+                });
+            } else {
+                wx.showToast({ title: res.message || '帮砍失败', icon: 'none' });
+            }
+        } catch (e) {
+            wx.hideLoading();
+            wx.showToast({ title: e?.message || '帮砍失败，请重试', icon: 'none' });
+        } finally {
+            this._helping = false;
+        }
     },
 
     onShare() {

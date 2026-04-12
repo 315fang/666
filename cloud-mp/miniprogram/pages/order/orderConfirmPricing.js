@@ -57,7 +57,7 @@ function recalcFinal(page) {
 
     let pointsDeductionFen = 0;
     let pointsToUse = 0;
-    if (page.data.usePoints && page.data.pointBalance > 0) {
+    if (page.data.usePoints && page.data.pointBalance > 0 && page.data.allowPoints !== false) {
         const { yuanPerPoint, maxRatio } = getPointDeductionRule();
         const pointValueFen = Math.max(1, Math.round(yuanPerPoint * 100));
         const cappedDeductFen = Math.floor(afterCouponFen * maxRatio);
@@ -160,5 +160,6 @@ module.exports = {
     recalcFinal,
     loadAvailableCoupons,
     selectCoupon,
-    clearCoupon
+    clearCoupon,
+    getPointDeductionRule
 };

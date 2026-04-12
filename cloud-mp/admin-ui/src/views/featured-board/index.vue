@@ -192,10 +192,16 @@ const toggleActive = async (row, val) => {
 const removeRow = async (row) => {
   try {
     await ElMessageBox.confirm('确认将该商品下榜？', '提示', { type: 'warning' })
-    await deleteBoardProduct(boardId.value, row.id)
-    ElMessage.success('已下榜')
-    await loadRows()
-  } catch (_) {}
+    try {
+      await deleteBoardProduct(boardId.value, row.id)
+      ElMessage.success('已下榜')
+      await loadRows()
+    } catch (e) {
+      ElMessage.error('下榜失败，请重试')
+    }
+  } catch (_) {
+    // 用户点击取消，不做任何处理
+  }
 }
 
 const dragStart = (idx) => {

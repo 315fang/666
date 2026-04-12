@@ -481,11 +481,36 @@ const handleAction = {
     }),
 
     // ===== 邀请码 =====
-    'wxacodeInvite': asyncHandler(async (openid) => {
+    'wxacodeInvite': asyncHandler(async (openid, params) => {
         const user = await db.collection('users').where({ openid }).limit(1).get();
         if (!user.data || user.data.length === 0) throw notFound('用户不存在');
         const inviteCode = user.data[0].my_invite_code || user.data[0].invite_code || '';
-        return success({ invite_code: inviteCode, page: 'pages/index/index', scene: inviteCode });
+        const scene = params && params.scene ? String(params.scene) : (inviteCode || openid.slice(-8));
+        const page = (params && params.page) || 'pages/index/index';
+        const width = toNumber((params && params.width) || 280, 280);
+
+        // 尝试生成小程序码（需要 openapi.wxacode.getUnlimited 权限）
+        try {
+            const res = await cloud.openapi.wxacode.getUnlimited({
+                scene,
+                page,
+                width,
+                is_hyaline: false  // 白底，避免 canvas drawImage 透明渲染异常
+            });
+            // res.buffer 是 ArrayBuffer / Buffer，转为 base64
+            const buf = res.buffer;
+            if (!buf || (buf.byteLength === 0 && !Buffer.isBuffer(buf))) {
+                console.warn('[wxacodeInvite] buffer 为空');
+                return success({ invite_code: inviteCode, wxacode_base64: null, error: 'empty_buffer' });
+            }
+            const base64 = Buffer.isBuffer(buf)
+                ? buf.toString('base64')
+                : Buffer.from(buf).toString('base64');
+            return success({ invite_code: inviteCode, wxacode_base64: base64 });
+        } catch (wxacodeErr) {
+            console.warn('[wxacodeInvite] 生成小程序码失败:', wxacodeErr.errCode || wxacodeErr.message);
+            return success({ invite_code: inviteCode, wxacode_base64: null, error: wxacodeErr.message || 'wxacode_failed' });
+        }
     }),
 
     // ===== 佣金管理（供其他云函数调用） =====

@@ -669,20 +669,46 @@ function registerMarketingRoutes(app, deps) {
     app.put('/admin/api/coupons/:id/toggle', auth, requirePermission('products'), updateCouponStatus);
     app.post('/admin/api/coupons/:id/toggle', auth, requirePermission('products'), updateCouponStatus);
 
+    // 通用：解析发券目标用户列表（dry_run=true 时不实际发放，只返回目标用户摘要）
+    function resolveIssueTargets(body, users) {
+        const userIds = toArray(body?.user_ids).map(String);
+        const roleLevels = toArray(body?.role_levels ?? body?.roleLevels).map((item) => Number(item));
+        return users.filter((user) => {
+            const userIdMatch = userIds.length > 0 && userIds.some((id) => rowMatchesLookup(user, id, [user.openid, user.member_no]));
+            const level = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+            const levelMatch = roleLevels.length > 0 && roleLevels.includes(level);
+            return userIdMatch || levelMatch;
+        });
+    }
+
+    function formatUserPreview(user) {
+        return {
+            id: user.id || user._legacy_id || user._id,
+            nickname: pickString(user.nickname || user.nickName || user.name || '未知用户'),
+            member_no: pickString(user.member_no || ''),
+            role_level: toNumber(user.role_level ?? user.distributor_level ?? user.level, 0),
+            phone: pickString(user.phone || user.mobile || '').replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
+        };
+    }
+
     app.post('/admin/api/coupons/:id/issue', auth, requirePermission('products'), (req, res) => {
         const coupons = getCollection('coupons');
         const coupon = findByLookup(coupons, req.params.id);
         if (!coupon) return fail(res, '优惠券不存在', 404);
 
         const users = getCollection('users');
-        const userIds = toArray(req.body?.user_ids).map(String);
-        const roleLevels = toArray(req.body?.role_levels ?? req.body?.roleLevels).map((item) => Number(item));
-        const targets = users.filter((user) => {
-            const userIdMatch = userIds.some((id) => rowMatchesLookup(user, id, [user.openid, user.member_no]));
-            const level = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
-            const levelMatch = roleLevels.includes(level);
-            return userIdMatch || levelMatch;
-        });
+        const targets = resolveIssueTargets(req.body, users);
+
+        // dry_run=true：仅返回目标用户预览，不实际发放
+        const isDryRun = req.query.dry_run === 'true' || req.body?.dry_run === true;
+        if (isDryRun) {
+            const PREVIEW_LIMIT = 100;
+            return ok(res, {
+                count: targets.length,
+                preview: targets.slice(0, PREVIEW_LIMIT).map(formatUserPreview),
+                truncated: targets.length > PREVIEW_LIMIT
+            });
+        }
 
         const userCoupons = getCollection('user_coupons');
         let issued = 0;

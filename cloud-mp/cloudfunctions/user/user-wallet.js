@@ -79,15 +79,97 @@ async function getWalletInfo(openid) {
 }
 
 /**
- * 钱包佣金明细
+ * 钱包佣金明细（含分页、类型筛选、来源用户/订单信息）
  */
 async function walletCommissions(openid, params = {}) {
+    const page  = Math.max(1, parseInt(params.page)  || 1);
+    const limit = Math.min(50, parseInt(params.limit) || 20);
+    const skip  = (page - 1) * limit;
+    const typeFilter = params.type ? String(params.type).toLowerCase() : '';
+
+    // 先拉比 limit 多一点，客户端再筛 type（避免跳页）；如无筛选则直接按 skip+limit
+    const fetchLimit = typeFilter ? 50 : limit;
+    const fetchSkip  = typeFilter ? 0  : skip;
+
     const res = await db.collection('commissions')
         .where({ openid })
         .orderBy('created_at', 'desc')
-        .limit(50)
-        .get().catch(() => ({ data: [] }));
-    return res.data || [];
+        .skip(fetchSkip)
+        .limit(fetchLimit)
+        .get()
+        .catch(() => ({ data: [] }));
+
+    let list = res.data || [];
+
+    // 类型筛选（兼容大小写，如 'Direct'/'direct' 均可）
+    if (typeFilter && typeFilter !== 'all') {
+        list = list.filter(item => {
+            const t = String(item.type || '').toLowerCase();
+            return t === typeFilter;
+        });
+    }
+
+    // 分页截取（筛选后再截）
+    if (typeFilter) {
+        list = list.slice(skip, skip + limit);
+    }
+
+    if (list.length === 0) return { list: [], total: 0, page, limit };
+
+    // ── 批量拉取来源用户信息（谁的订单触发了这笔佣金）
+    const fromOpenids = uniqueValues(list.map(i => i.from_openid).filter(Boolean));
+    let fromUserMap = {};
+    if (fromOpenids.length > 0) {
+        try {
+            const userRes = await db.collection('users')
+                .where({ openid: _.in(fromOpenids) })
+                .field({ openid: true, nickName: true, nickname: true, phone: true, invite_code: true })
+                .limit(fromOpenids.length)
+                .get();
+            (userRes.data || []).forEach(u => {
+                fromUserMap[u.openid] = u.nickName || u.nickname || u.phone || '下级用户';
+            });
+        } catch (_) {}
+    }
+
+    // ── 批量拉取订单基本信息
+    const orderNos = uniqueValues(list.map(i => i.order_no).filter(Boolean));
+    let orderMap = {};
+    if (orderNos.length > 0) {
+        try {
+            const orderRes = await db.collection('orders')
+                .where({ order_no: _.in(orderNos) })
+                .field({ order_no: true, items: true, total_amount: true, pay_amount: true })
+                .limit(orderNos.length)
+                .get();
+            (orderRes.data || []).forEach(o => {
+                orderMap[o.order_no] = {
+                    order_no: o.order_no,
+                    // 取第一个商品名作摘要
+                    product_summary: (o.items && o.items[0]) ? (o.items[0].name || '') : '',
+                    pay_amount: o.pay_amount || o.total_amount || 0
+                };
+            });
+        } catch (_) {}
+    }
+
+    // ── 组合输出
+    const enriched = list.map(item => {
+        const typeKey = String(item.type || '').toLowerCase();
+        const fromNick = item.from_openid ? (fromUserMap[item.from_openid] || null) : null;
+        const order = item.order_no ? (orderMap[item.order_no] || null) : null;
+        return {
+            ...item,
+            // 规范化 type（统一小写，前端按此匹配）
+            type: typeKey,
+            from_user_nick: fromNick,
+            order_no_display: item.order_no || item.order_id || null,
+            product_summary: order ? order.product_summary : null,
+            order_pay_amount: order ? order.pay_amount : null
+        };
+    });
+
+    return { list: enriched, total: enriched.length, page, limit };
 }
 
 /**

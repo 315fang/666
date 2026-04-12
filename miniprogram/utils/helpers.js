@@ -235,6 +235,37 @@ function truncate(str, maxLength, suffix = '...') {
   return str.substring(0, maxLength - suffix.length) + suffix;
 }
 
+/**
+ * 从活动/砍价/拼团 detail 对象中解析首选 SKU ID
+ * @param {Object} detail
+ * @returns {string|number|null}
+ */
+function resolvePreferredSkuId(detail) {
+    if (!detail) return null;
+    const activitySkuId = detail.activity && detail.activity.sku_id != null && detail.activity.sku_id !== ''
+        ? detail.activity.sku_id
+        : null;
+    if (activitySkuId != null) return activitySkuId;
+    if (detail.sku_id != null && detail.sku_id !== '') return detail.sku_id;
+    if (detail.product && detail.product.sku_id != null && detail.product.sku_id !== '') return detail.product.sku_id;
+    const skus = detail.product && Array.isArray(detail.product.skus) ? detail.product.skus : [];
+    if (skus.length === 1) return skus[0]._id || skus[0].id || null;
+    return null;
+}
+
+/**
+ * 从 HTML 文本提取纯文字摘要
+ * @param {string} html
+ * @param {number} maxLen
+ * @returns {string}
+ */
+function plainSummary(html, maxLen = 96) {
+    if (!html) return '';
+    const t = String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!t) return '';
+    return t.length > maxLen ? `${t.slice(0, maxLen)}…` : t;
+}
+
 // CommonJS 导出（WeChat Mini Program 兼容）
 module.exports = {
   debounce,
@@ -252,7 +283,9 @@ module.exports = {
   serializeParams,
   parseParams,
   truncate,
-  copyAgentPortalLink
+  copyAgentPortalLink,
+  resolvePreferredSkuId,
+  plainSummary
 };
 
 /**

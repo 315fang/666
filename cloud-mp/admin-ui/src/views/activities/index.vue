@@ -35,6 +35,7 @@
           @create="openPrizeDialog()"
           @edit="openPrizeDialog"
           @delete="deletePrize"
+          @toggle="togglePrizeActive"
         />
       </el-tab-pane>
 
@@ -264,7 +265,12 @@ const prizeForm = reactive({
   theme_color: '#6B7280', accent_color: '#D1D5DB'
 })
 
-const totalProbability = computed(() => prizes.value.reduce((s, p) => s + parseFloat(p.probability || 0), 0))
+// 只统计已启用奖品的概率总和，禁用的奖品不参与抽奖，不计入概率
+const totalProbability = computed(() =>
+  prizes.value
+    .filter(p => p.is_active !== 0)
+    .reduce((s, p) => s + parseFloat(p.probability || 0), 0)
+)
 
 watch(() => prizeForm.type, (type, oldType) => {
   if (!prizeDialogVisible.value) return
@@ -342,11 +348,23 @@ const submitPrize = async () => {
       prizeDialogVisible.value = false
       fetchPrizes()
     } catch (e) {
-      console.error(e)
+      ElMessage.error('保存失败，请重试')
     } finally {
       submitting.value = false
     }
   })
+}
+
+const togglePrizeActive = async (row, val) => {
+  const prev = row.is_active
+  row.is_active = val
+  try {
+    await updateLotteryPrize(row.id, { ...row, is_active: val })
+    ElMessage.success(val === 1 ? '已启用' : '已禁用')
+  } catch (e) {
+    row.is_active = prev
+    ElMessage.error('状态更新失败')
+  }
 }
 
 const deletePrize = async (row) => {
@@ -365,7 +383,10 @@ const handlePrizeUpload = async ({ file }) => {
     const data = await uploadFile(file)
     prizeForm.file_id = data.file_id || ''
     prizeForm.image_url = data.url || data.image_url || ''
-  } catch (e) { console.error(e) }
+    ElMessage.success('上传成功')
+  } catch (e) {
+    ElMessage.error('图片上传失败，请重试')
+  }
 }
 
 const beforeUpload = (file) => {

@@ -475,6 +475,21 @@ const displayBuyer = (buyer) => normalizeUserDisplay(buyer || {})
 const displayBuyerName = (buyer, fallback = '-') => getUserNickname(displayBuyer(buyer), fallback)
 const displayBuyerAvatar = (buyer) => getUserAvatar(displayBuyer(buyer))
 
+/**
+ * 构建订单列表查询参数
+ *
+ * search_field 枚举（对应 UI 下拉"搜索方式"）：
+ *   auto        - 自动识别（后端按值格式判断是订单号、手机号还是昵称）
+ *   order_no    - 精确匹配订单号
+ *   phone       - 精确匹配买家手机号
+ *   nickname    - 模糊匹配买家昵称
+ *   member_no   - 精确匹配会员码（8位大写字母/数字）
+ *   invite_code - 精确匹配邀请码（用于追踪推广来源订单）
+ *
+ * product_name  - 独立字段，按订单中包含的商品名称模糊匹配（与 search_value 互不干扰）
+ * status_group  - Tab 级粗筛（all/pending/shipped/completed/cancelled），与精确 status 互斥
+ * status        - 精确订单状态，由精确状态下拉选中时设置，优先级高于 status_group
+ */
 const buildListQueryParams = (forExport = false) => {
   const params = {}
   if (!forExport) {

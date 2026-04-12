@@ -39,7 +39,8 @@ const ORDER_STATUS = {
   COMPLETED: 'completed',
   CANCELLED: 'cancelled',
   REFUNDING: 'refunding',
-  REFUNDED: 'refunded'
+  REFUNDED: 'refunded',
+  PENDING_REVIEW: 'pending_review'
 };
 
 const ORDER_STATUS_TEXT = {
@@ -51,7 +52,8 @@ const ORDER_STATUS_TEXT = {
   [ORDER_STATUS.COMPLETED]: '已完成',
   [ORDER_STATUS.CANCELLED]: '已取消',
   [ORDER_STATUS.REFUNDING]: '退款中',
-  [ORDER_STATUS.REFUNDED]: '已退款'
+  [ORDER_STATUS.REFUNDED]: '已退款',
+  [ORDER_STATUS.PENDING_REVIEW]: '待评价'
 };
 
 // ==================== 搜索历史配置 ====================

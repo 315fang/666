@@ -5,18 +5,23 @@
         <image class="back-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"></image>
       </view>
       <text class="nav-title">邀请海报</text>
+      <view class="nav-share" bindtap="onShareAppMessage" open-type="share">
+        <image class="share-icon" src="/assets/icons/share.svg" mode="aspectFit" wx:if="{{posterImagePath}}"></image>
+      </view>
     </view>
   </view>
 
-  <!-- 勿用 scroll-y：同层内 canvas 为原生组件，在 scroll-view 里常不随滚动，造成「海报钉住、说明在动」 -->
   <view class="page-body">
     <view class="poster-section">
-      <view class="invite-code-row" wx:if="{{inviteCode}}">
-        <text class="invite-code-label">我的邀请码</text>
-        <text class="invite-code-value">{{inviteCode}}</text>
-        <view class="invite-code-copy" bindtap="onCopyCode">复制</view>
+
+      <!-- 会员码展示栏 -->
+      <view class="member-code-bar" wx:if="{{memberCode}}">
+        <text class="member-code-label">我的会员码</text>
+        <text class="member-code-value">{{memberCode}}</text>
+        <view class="member-code-copy" bindtap="onCopyCode">复制</view>
       </view>
 
+      <!-- 变体切换标签 -->
       <view class="poster-variant-bar">
         <view
           class="poster-variant-item {{posterVariant === item.id ? 'active' : ''}}"
@@ -28,18 +33,29 @@
           <text class="poster-variant-text">{{item.name}}</text>
         </view>
       </view>
-      <view class="poster-variant-hint" wx:if="{{posterVariant === 'invite'}}">含头像、品牌、邀请小程序码与数字邀请码。</view>
-      <view class="poster-variant-hint" wx:if="{{posterVariant === 'wxacode'}}">小程序码海报，扫码即可进入（文案对好友尽量简短）。</view>
-      <view class="poster-variant-hint" wx:if="{{posterVariant === 'creative'}}">票根风格，适合朋友圈分享。</view>
 
+      <!-- 变体说明 -->
+      <view class="poster-variant-hint" wx:if="{{posterVariant === 'invite'}}">头像 · 邀请语 · 小程序码 · 数字邀请码</view>
+      <view class="poster-variant-hint" wx:if="{{posterVariant === 'wxacode'}}">大尺寸小程序码，扫一扫即可进入</view>
+      <view class="poster-variant-hint" wx:if="{{posterVariant === 'creative'}}">票根风格，适合朋友圈分享</view>
+
+      <!-- 海报预览区 -->
       <view class="poster-preview-wrap">
-        <!-- 生成完成后卸掉 canvas，避免原生层与 image 叠成「两张海报」 -->
+        <!-- canvas：生成中或尚未生成时显示 -->
         <canvas
-          wx:if="{{!posterImagePath || posterGenerating}}"
+          wx:if="{{!posterImagePath}}"
           id="posterCanvas"
           type="2d"
           class="poster-canvas"
         ></canvas>
+
+        <!-- 生成中遮罩 -->
+        <view class="poster-generating-mask" wx:if="{{posterGenerating}}">
+          <view class="poster-spin-ring"></view>
+          <text class="poster-gen-text">海报生成中…</text>
+        </view>
+
+        <!-- 生成结果图 -->
         <image
           wx:if="{{posterImagePath}}"
           class="poster-result-img"
@@ -47,52 +63,61 @@
           mode="aspectFit"
           show-menu-by-longpress
         ></image>
-        <view class="poster-generating" wx:if="{{posterGenerating && !posterImagePath}}">
-          <view class="poster-spin"></view>
-          <text class="poster-gen-text">海报生成中...</text>
-        </view>
       </view>
 
+      <!-- 操作按钮 -->
       <view class="poster-actions">
-        <view class="poster-action-btn poster-action-primary" bindtap="onGeneratePoster">
-          <text class="poster-action-text">{{posterImagePath ? '重新生成' : '生成海报'}}</text>
+        <view
+          class="poster-action-btn poster-action-outline {{posterGenerating ? 'btn-loading' : ''}}"
+          bindtap="onGeneratePoster"
+        >
+          <text class="poster-action-text">{{posterGenerating ? '生成中…' : (posterImagePath ? '重新生成' : '生成海报')}}</text>
         </view>
-        <view class="poster-action-btn poster-action-secondary {{!posterImagePath ? 'btn-disabled' : ''}}" bindtap="onSavePoster">
+        <view
+          class="poster-action-btn poster-action-primary {{!posterImagePath ? 'btn-disabled' : ''}}"
+          bindtap="onSavePoster"
+        >
           <text class="poster-action-text">保存到相册</text>
         </view>
       </view>
 
       <view class="poster-tip">长按海报可直接分享或保存</view>
 
+      <!-- 使用说明 -->
       <view class="poster-tips-card">
         <block wx:if="{{posterVariant === 'invite'}}">
           <view class="ptip-item">
             <text class="ptip-dot">·</text>
-            <text class="ptip-text">好友注册时可填写你的邀请码（绑定规则以平台为准）。</text>
+            <text class="ptip-text">好友注册时可填写你的邀请码，成功绑定后享分销佣金（以平台规则为准）。</text>
+          </view>
+          <view class="ptip-item">
+            <text class="ptip-dot">·</text>
+            <text class="ptip-text">小程序码失效时自动显示数字码，扫码后备用。</text>
           </view>
         </block>
         <block wx:if="{{posterVariant === 'wxacode'}}">
           <view class="ptip-item">
             <text class="ptip-dot">·</text>
-            <text class="ptip-text">（仅您可见）海报对外仅展示简短欢迎语；邀请关系由扫码参数在后台处理。</text>
+            <text class="ptip-text">好友通过此码进入即自动关联邀请关系，无需手填邀请码。</text>
           </view>
           <view class="ptip-item">
             <text class="ptip-dot">·</text>
-            <text class="ptip-text">开发版若扫码失败，请检查后端小程序码配置与体验版环境。</text>
+            <text class="ptip-text">开发版若扫码失败，请检查云函数 openapi 权限配置。</text>
           </view>
         </block>
         <block wx:if="{{posterVariant === 'creative'}}">
           <view class="ptip-item">
             <text class="ptip-dot">·</text>
-            <text class="ptip-text">可与「邀请语」「官方码」版搭配使用。</text>
+            <text class="ptip-text">可与「邀请语」版配合使用，分享到朋友圈效果更佳。</text>
           </view>
         </block>
         <view class="ptip-item">
           <text class="ptip-dot">·</text>
-          <text class="ptip-text">佣金与邀请规则以平台配置为准。</text>
+          <text class="ptip-text">佣金与邀请规则以平台配置为准，详情请咨询客服。</text>
         </view>
       </view>
     </view>
+
     <view class="page-bottom-spacer"></view>
   </view>
 </view>

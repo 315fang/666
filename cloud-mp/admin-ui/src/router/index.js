@@ -21,46 +21,16 @@ const routes = [
         meta: { title: '经营看板', icon: 'DataAnalysis', group: '经营概览', order: 1, permission: 'dashboard' }
       },
       {
+        path: 'finance',
+        name: 'Finance',
+        component: () => import('@/views/finance/index.vue'),
+        meta: { title: '财务看板', icon: 'Money', group: '经营概览', order: 2, permission: 'statistics' }
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('@/views/settings/index.vue'),
         meta: { title: '运营参数', icon: 'Setting', group: '经营概览', order: 2, permission: 'settings_manage' }
-      },
-      {
-        path: 'goods-pool',
-        name: 'GoodsPool',
-        component: () => import('@/views/core-center/index.vue'),
-        meta: { title: '商品中心说明', icon: 'Goods', group: '商品与营销', order: 0, centerKey: 'goods', nav: false }
-      },
-      {
-        path: 'content-pool',
-        name: 'ContentPool',
-        component: () => import('@/views/core-center/index.vue'),
-        meta: { title: '内容中心说明', icon: 'Picture', group: '内容与设计', order: 0, centerKey: 'content', nav: false }
-      },
-      {
-        path: 'board-pool',
-        name: 'BoardPool',
-        component: () => import('@/views/core-center/index.vue'),
-        meta: { title: '推荐位说明', icon: 'CollectionTag', group: '内容与设计', order: 0, centerKey: 'board', nav: false }
-      },
-      {
-        path: 'campaign-pool',
-        name: 'CampaignPool',
-        component: () => import('@/views/core-center/index.vue'),
-        meta: { title: '营销中心说明', icon: 'Promotion', group: '商品与营销', order: 0, centerKey: 'campaign', nav: false }
-      },
-      {
-        path: 'page-layout',
-        name: 'PageLayout',
-        component: () => import('@/views/core-center/index.vue'),
-        meta: { title: '页面装修说明', icon: 'Grid', group: '内容与设计', order: 0, centerKey: 'layout', nav: false }
-      },
-      {
-        path: 'rule-center',
-        name: 'RuleCenter',
-        component: () => import('@/views/core-center/index.vue'),
-        meta: { title: '规则配置说明', icon: 'SetUp', group: '系统与运维', order: 0, centerKey: 'rule', nav: false }
       },
       {
         path: 'products',
@@ -234,12 +204,6 @@ const routes = [
         component: () => import('@/views/system-config/index.vue'),
         meta: { title: '系统配置', icon: 'SetUp', group: '平台与运维', order: 4, permission: 'settings_manage' }
       },
-      {
-        path: 'content-map',
-        name: 'ContentMap',
-        component: () => import('@/views/content-map/index.vue'),
-        meta: { title: '内容归属表', icon: 'Document', group: '平台与运维', order: 5, permission: 'content' }
-      }
     ]
   },
   {

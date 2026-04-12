@@ -6,7 +6,8 @@
       <!-- 搜索查询 -->
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="活动名称">
-          <el-input v-model="searchForm.keyword" placeholder="活动名称" clearable />
+          <!-- 后端按活动名称模糊匹配 -->
+          <el-input v-model="searchForm.keyword" placeholder="活动名称" clearable @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="全部状态" clearable style="width:120px">

@@ -18,6 +18,46 @@ const app = express();
 const dataStore = createDataStore();
 let cachedManagedCloud = undefined;
 
+/**
+ * 精确直写：直接更新 CloudBase 单条文档，不走全量替换
+ * 同时同步内存缓存，兼容 filesystem 模式
+ * @param {string} collectionName - 集合名
+ * @param {string} docId - 文档 _id
+ * @param {object} updateData - 要更新的字段（patch，不覆盖整条文档）
+ * @returns {Promise<boolean>} 是否成功
+ */
+async function directPatchDocument(collectionName, docId, updateData) {
+    const db = dataStore._internals?.db;
+    if (db) {
+        // CloudBase 模式：直接精确更新单条文档
+        try {
+            await db.collection(collectionName).doc(String(docId)).update({
+                data: {
+                    ...updateData,
+                    updated_at: new Date().toISOString()
+                }
+            });
+            // 同步内存缓存
+            const cache = dataStore._internals?.cache;
+            if (cache && cache.has(collectionName)) {
+                const rows = cache.get(collectionName) || [];
+                const idx = rows.findIndex(r => String(r._id) === String(docId) || String(r.id) === String(docId));
+                if (idx !== -1) {
+                    rows[idx] = { ...rows[idx], ...updateData };
+                    cache.set(collectionName, rows);
+                }
+            }
+            return true;
+        } catch (err) {
+            console.error(`[directPatchDocument] ${collectionName}/${docId} 写入失败:`, err.message);
+            return false;
+        }
+    } else {
+        // Filesystem 模式：走原有 patchCollectionRow + flush
+        return true; // 让上层继续走原逻辑
+    }
+}
+
 const ADMIN_ROLE_PRESETS = {
     admin: ['dashboard', 'products', 'orders', 'logistics', 'pickup_stations', 'users', 'distribution', 'content', 'materials', 'dealers', 'refunds', 'withdrawals', 'commissions', 'statistics', 'logs', 'settings_manage', 'notification', 'order_amount_adjust', 'order_force_cancel', 'order_force_complete', 'user_balance_adjust', 'user_role_manage', 'user_parent_manage', 'user_status_manage'],
     operator: ['dashboard', 'products', 'orders', 'logistics', 'pickup_stations', 'content', 'materials', 'notification', 'statistics'],
@@ -433,6 +473,28 @@ async function resolveAssetValue(value) {
     return assetUrl(value);
 }
 
+/**
+ * 批量解析 URL 数组中的 cloud:// file ID，返回可直接展示的 https URL 数组。
+ * 普通 https/本地路径原样处理（走 assetUrl）。
+ * CloudBase getTempFileURL 单次最多 50 条，超出时自动分批。
+ */
+async function batchResolveCloudUrls(urls) {
+    if (!urls || !urls.length) return [];
+    const cloudIds = [...new Set(urls.filter(isCloudFileId))];
+    if (!cloudIds.length) return urls.map(assetUrl);
+    const cloud = getManagedCloud();
+    if (!cloud?.getTempFileURL) return urls.map(u => isCloudFileId(u) ? u : assetUrl(u));
+    const resolved = new Map();
+    for (let i = 0; i < cloudIds.length; i += 50) {
+        const chunk = cloudIds.slice(i, i + 50);
+        const result = await cloud.getTempFileURL({ fileList: chunk }).catch(() => ({ fileList: [] }));
+        for (const file of (result.fileList || [])) {
+            if (file.fileID) resolved.set(file.fileID, file.tempFileURL || file.download_url || file.fileID);
+        }
+    }
+    return urls.map(u => isCloudFileId(u) ? (resolved.get(u) || u) : assetUrl(u));
+}
+
 async function normalizeBannerRecordAsync(banner) {
     const fileId = banner.file_id || '';
     const imageUrl = await resolveAssetValue(banner.image_url || banner.url || banner.image || banner.cover_image || fileId);
@@ -467,8 +529,14 @@ async function normalizePopupAdConfigAsync(config) {
 }
 
 async function normalizeMaterialRecordAsync(item) {
-    const fileId = item.file_id || '';
-    const url = await resolveAssetValue(item.url || item.temp_url || fileId);
+    const fileId = pickString(item.file_id || '').trim();
+    let url;
+    if (isCloudFileId(fileId)) {
+        // 优先从 cloud:// file_id 重新解析，确保 URL 始终新鲜（不使用已存储的过期 COS 链接）
+        url = await resolveManagedFileUrl(fileId);
+    } else {
+        url = await resolveAssetValue(item.url || item.temp_url || '');
+    }
     return {
         ...item,
         id: item.id || item._legacy_id || item._id,
@@ -680,6 +748,7 @@ function createAuditLog(admin, action, target, detail) {
         action,
         target,
         detail,
+        status: 'success',
         created_at: nowIso()
     });
     saveCollection('admin_audit_logs', rows);
@@ -739,7 +808,14 @@ function sortByUpdatedDesc(rows) {
 
 function productWithRelations(product, categories, skus, reviews) {
     const productId = Number(product.id || product._legacy_id || product._id || 0);
-    const category = categories.find((item) => Number(item.id || item._legacy_id || item._id) === Number(product.category_id)) || null;
+    // 分类关联：同时支持数字 id 和 CloudBase UUID _id（用字符串比较兜底）
+    const catId = product.category_id != null ? String(product.category_id) : null;
+    const category = catId
+        ? categories.find((item) => {
+            const cid = item.id ?? item._legacy_id ?? item._id;
+            return cid != null && String(cid) === catId;
+        }) || null
+        : null;
     const productSkus = skus.filter((item) => Number(item.product_id) === productId);
     const productReviews = reviews.filter((item) => Number(item.product_id) === productId);
 
@@ -2407,43 +2483,77 @@ app.put('/admin/api/password', auth, (req, res) => {
     ok(res, { success: true });
 });
 
-app.get('/admin/api/products', auth, requirePermission('products'), (req, res) => {
+app.get('/admin/api/products', auth, requirePermission('products'), async (req, res) => {
+    await ensureFreshCollections(['products', 'categories', 'skus', 'reviews']);
     const products = getCollection('products');
     const categories = getCollection('categories');
     const skus = getCollection('skus');
     const reviews = getCollection('reviews');
+
+    // 收集所有 cloud:// 图片 ID，批量解析为可用 URL（避免单条逐一请求 getTempFileURL）
+    const allCloudIds = [];
+    for (const item of products) {
+        toArray(item.images).filter(isCloudFileId).forEach(id => allCloudIds.push(id));
+        toArray(item.detail_images).filter(isCloudFileId).forEach(id => allCloudIds.push(id));
+    }
+    const cloudUrlMap = new Map();
+    if (allCloudIds.length) {
+        const cloud = getManagedCloud();
+        if (cloud?.getTempFileURL) {
+            const unique = [...new Set(allCloudIds)];
+            for (let i = 0; i < unique.length; i += 50) {
+                const chunk = unique.slice(i, i + 50);
+                const result = await cloud.getTempFileURL({ fileList: chunk }).catch(() => ({ fileList: [] }));
+                for (const f of (result.fileList || [])) {
+                    if (f.fileID) cloudUrlMap.set(f.fileID, f.tempFileURL || f.download_url || f.fileID);
+                }
+            }
+        }
+    }
+    const resolveProductUrl = u => isCloudFileId(u) ? (cloudUrlMap.get(u) || u) : assetUrl(u);
+
     let rows = sortByUpdatedDesc(products).map((item) => productWithRelations({
         ...item,
-        images: toArray(item.images).map(assetUrl),
-        detail_images: toArray(item.detail_images).map(assetUrl)
+        images: toArray(item.images).map(resolveProductUrl),
+        detail_images: toArray(item.detail_images).map(resolveProductUrl)
     }, categories, skus, reviews));
 
     const keyword = pickString(req.query.keyword).trim().toLowerCase();
     if (keyword) rows = rows.filter((item) => `${item.name} ${item.description || ''}`.toLowerCase().includes(keyword));
-    if (req.query.category_id) rows = rows.filter((item) => Number(item.category_id) === Number(req.query.category_id));
+    // 分类过滤：用字符串比较，兼容数字 id 和 CloudBase UUID _id
+    if (req.query.category_id) {
+        const filterCatId = String(req.query.category_id);
+        rows = rows.filter((item) => item.category_id != null && String(item.category_id) === filterCatId);
+    }
     if (req.query.status !== undefined && req.query.status !== '') rows = rows.filter((item) => Number(item.status) === Number(req.query.status));
 
     ok(res, paginate(rows, req));
 });
 
-app.get('/admin/api/products/:id', auth, requirePermission('products'), (req, res) => {
+app.get('/admin/api/products/:id', auth, requirePermission('products'), async (req, res) => {
+    await ensureFreshCollections(['products']);
     const products = getCollection('products');
-    const product = products.find((item) => Number(item.id || item._legacy_id || item._id) === Number(req.params.id));
+    const product = findByLookup(products, req.params.id);
     if (!product) return fail(res, '商品不存在', 404);
+    const allUrls = [...toArray(product.images), ...toArray(product.detail_images)];
+    const resolvedAll = await batchResolveCloudUrls(allUrls);
+    const imgCount = toArray(product.images).length;
     ok(res, {
         ...product,
-        id: product.id || product._legacy_id || product._id,
-        images: toArray(product.images).map(assetUrl),
-        detail_images: toArray(product.detail_images).map(assetUrl)
+        id: product.id ?? product._legacy_id ?? product._id,
+        images: resolvedAll.slice(0, imgCount),
+        detail_images: resolvedAll.slice(imgCount)
     });
 });
 
-app.post('/admin/api/products', auth, requirePermission('products'), (req, res) => {
+app.post('/admin/api/products', auth, requirePermission('products'), async (req, res) => {
+    await ensureFreshCollections(['products']);
     const rows = getCollection('products');
     const row = {
         id: nextId(rows),
         ...req.body,
-        category_id: req.body?.category_id != null ? toNumber(req.body.category_id, 0) : null,
+        // category_id 保留原始值（字符串 UUID 或数字），不强制转数字
+        category_id: req.body?.category_id != null ? req.body.category_id : null,
         retail_price: toNumber(req.body?.retail_price, 0),
         market_price: toNumber(req.body?.market_price, 0),
         cost_price: toNumber(req.body?.cost_price, 0),
@@ -2457,18 +2567,25 @@ app.post('/admin/api/products', auth, requirePermission('products'), (req, res) 
     if (!pickString(row.name).trim()) return fail(res, '商品名称不能为空');
     rows.push(row);
     saveCollection('products', rows);
+    // 直写 CloudBase，确保新商品即时持久化（用数字 id 作为文档 _id 方便后续定点更新）
+    const db = dataStore._internals?.db;
+    if (db) {
+        await db.collection('products').doc(String(row.id)).set({ data: { ...row, _id: String(row.id) } }).catch((e) => {
+            console.error('[product.create] CloudBase write failed:', e.message);
+        });
+    }
     createAuditLog(req.admin, 'product.create', 'products', { product_id: row.id, name: row.name });
-    ok(res, row);
+    ok(res, { ...row, id: row.id });
 });
 
-app.put('/admin/api/products/:id', auth, requirePermission('products'), (req, res) => {
+app.put('/admin/api/products/:id', auth, requirePermission('products'), async (req, res) => {
     const rows = getCollection('products');
-    const index = rows.findIndex((item) => Number(item.id) === Number(req.params.id));
+    const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
     if (index === -1) return fail(res, '商品不存在', 404);
     rows[index] = {
         ...rows[index],
         ...req.body,
-        category_id: req.body?.category_id != null ? toNumber(req.body.category_id, 0) : rows[index].category_id,
+        category_id: req.body?.category_id != null ? req.body.category_id : rows[index].category_id,
         retail_price: req.body?.retail_price != null ? toNumber(req.body.retail_price, 0) : rows[index].retail_price,
         market_price: req.body?.market_price != null ? toNumber(req.body.market_price, 0) : rows[index].market_price,
         cost_price: req.body?.cost_price != null ? toNumber(req.body.cost_price, 0) : rows[index].cost_price,
@@ -2478,12 +2595,14 @@ app.put('/admin/api/products/:id', auth, requirePermission('products'), (req, re
         detail_images: req.body?.detail_images != null ? toArray(req.body.detail_images) : rows[index].detail_images,
         updated_at: nowIso()
     };
+    const docId = String(rows[index]._id || rows[index].id || req.params.id);
     saveCollection('products', rows);
-    createAuditLog(req.admin, 'product.update', 'products', { product_id: rows[index].id });
-    ok(res, rows[index]);
+    await directPatchDocument('products', docId, rows[index]);
+    createAuditLog(req.admin, 'product.update', 'products', { product_id: rows[index].id ?? rows[index]._id });
+    ok(res, { ...rows[index], id: rows[index].id ?? rows[index]._legacy_id ?? rows[index]._id });
 });
 
-function updateProductStatus(req, res) {
+async function updateProductStatus(req, res) {
     const nextStatus = toBoolean(req.body?.status ?? req.body?.is_active ?? req.body?.enabled ?? req.body?.value) ? 1 : 0;
     const row = patchCollectionRow('products', req.params.id, (item) => ({
         ...item,
@@ -2492,7 +2611,10 @@ function updateProductStatus(req, res) {
         updated_at: nowIso()
     }));
     if (!row) return fail(res, '商品不存在', 404);
-    ok(res, row);
+    // 同步写 CloudBase，确保上架/下架状态持久化
+    const docId = String(row._id || row.id || req.params.id);
+    await directPatchDocument('products', docId, { status: nextStatus, is_active: nextStatus });
+    ok(res, { ...row, id: row.id ?? row._legacy_id ?? row._id });
 }
 
 app.put('/admin/api/products/:id/status', auth, requirePermission('products'), updateProductStatus);
@@ -2500,12 +2622,20 @@ app.post('/admin/api/products/:id/status', auth, requirePermission('products'), 
 app.put('/admin/api/products/:id/toggle', auth, requirePermission('products'), updateProductStatus);
 app.post('/admin/api/products/:id/toggle', auth, requirePermission('products'), updateProductStatus);
 
-app.delete('/admin/api/products/:id', auth, requirePermission('products'), (req, res) => {
+app.delete('/admin/api/products/:id', auth, requirePermission('products'), async (req, res) => {
     const rows = getCollection('products');
-    const nextRows = rows.filter((item) => Number(item.id) !== Number(req.params.id));
-    if (rows.length === nextRows.length) return fail(res, '商品不存在', 404);
+    const target = findByLookup(rows, req.params.id);
+    if (!target) return fail(res, '商品不存在', 404);
+    const nextRows = rows.filter((item) => !rowMatchesLookup(item, req.params.id));
     saveCollection('products', nextRows);
-    createAuditLog(req.admin, 'product.delete', 'products', { product_id: Number(req.params.id) });
+    const docId = String(target._id || target.id || req.params.id);
+    const db = dataStore._internals?.db;
+    if (db) {
+        await db.collection('products').doc(docId).remove().catch((e) => {
+            console.error('[product.delete] CloudBase remove failed:', e.message);
+        });
+    }
+    createAuditLog(req.admin, 'product.delete', 'products', { product_id: target.id ?? target._id });
     ok(res, { success: true });
 });
 
@@ -2719,17 +2849,26 @@ app.delete('/admin/api/products/:productId/skus/:skuId', auth, requirePermission
     ok(res, { success: true });
 });
 
-app.get('/admin/api/categories', auth, requirePermission('products'), (req, res) => {
+app.get('/admin/api/categories', auth, requirePermission('products'), async (req, res) => {
+    await ensureFreshCollections(['categories', 'products']);
     const products = getCollection('products');
-    const rows = sortByUpdatedDesc(getCollection('categories')).map((item) => ({
-        ...item,
-        status: toBoolean(item.status) ? 1 : 0,
-        product_count: products.filter((product) => Number(product.category_id) === Number(item.id)).length
-    }));
+    const rows = sortByUpdatedDesc(getCollection('categories')).map((item) => {
+        const cid = item.id ?? item._legacy_id ?? item._id;
+        return {
+            ...item,
+            id: cid,           // 保证前端拿到可用的 id 字段（兼容 CloudBase UUID _id）
+            status: toBoolean(item.status) ? 1 : 0,
+            product_count: products.filter((product) => {
+                const pidCat = product.category_id;
+                return pidCat != null && cid != null && String(pidCat) === String(cid);
+            }).length
+        };
+    });
     ok(res, { list: rows, total: rows.length });
 });
 
-app.post('/admin/api/categories', auth, requirePermission('products'), (req, res) => {
+app.post('/admin/api/categories', auth, requirePermission('products'), async (req, res) => {
+    await ensureFreshCollections(['categories']);
     const rows = getCollection('categories');
     const row = {
         id: nextId(rows),
@@ -2744,27 +2883,45 @@ app.post('/admin/api/categories', auth, requirePermission('products'), (req, res
     if (!row.name) return fail(res, '分类名称不能为空');
     rows.push(row);
     saveCollection('categories', rows);
-    ok(res, row);
+    // 同步直写 CloudBase，确保数据即时持久化
+    const db = dataStore._internals?.db;
+    if (db) {
+        await db.collection('categories').doc(String(row.id)).set({ data: row }).catch((e) => {
+            console.error('[category.create] CloudBase write failed:', e.message);
+        });
+    }
+    ok(res, { ...row, id: row.id });
 });
 
-app.put('/admin/api/categories/:id', auth, requirePermission('products'), (req, res) => {
+app.put('/admin/api/categories/:id', auth, requirePermission('products'), async (req, res) => {
     const rows = getCollection('categories');
-    const index = rows.findIndex((item) => Number(item.id) === Number(req.params.id));
+    const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
     if (index === -1) return fail(res, '分类不存在', 404);
     rows[index] = { ...rows[index], ...req.body, updated_at: nowIso() };
+    const docId = String(rows[index]._id || rows[index].id || req.params.id);
     saveCollection('categories', rows);
-    ok(res, rows[index]);
+    await directPatchDocument('categories', docId, { ...req.body, updated_at: nowIso() });
+    ok(res, { ...rows[index], id: rows[index].id ?? rows[index]._id });
 });
 
-app.delete('/admin/api/categories/:id', auth, requirePermission('products'), (req, res) => {
+app.delete('/admin/api/categories/:id', auth, requirePermission('products'), async (req, res) => {
     const products = getCollection('products');
-    if (products.some((item) => Number(item.category_id) === Number(req.params.id))) {
+    const catIdStr = String(req.params.id);
+    if (products.some((item) => item.category_id != null && String(item.category_id) === catIdStr)) {
         return fail(res, '该分类下仍有关联商品，无法删除');
     }
     const rows = getCollection('categories');
-    const nextRows = rows.filter((item) => Number(item.id) !== Number(req.params.id));
-    if (rows.length === nextRows.length) return fail(res, '分类不存在', 404);
+    const target = rows.find((item) => rowMatchesLookup(item, req.params.id));
+    if (!target) return fail(res, '分类不存在', 404);
+    const nextRows = rows.filter((item) => !rowMatchesLookup(item, req.params.id));
     saveCollection('categories', nextRows);
+    const db = dataStore._internals?.db;
+    if (db) {
+        const docId = String(target._id || target.id || req.params.id);
+        await db.collection('categories').doc(docId).remove().catch((e) => {
+            console.error('[category.delete] CloudBase remove failed:', e.message);
+        });
+    }
     ok(res, { success: true });
 });
 
@@ -3130,7 +3287,37 @@ app.delete('/admin/api/contents/:id', auth, requirePermission('content'), (req, 
     ok(res, { success: true });
 });
 
-app.get('/admin/api/logs', auth, requirePermission('logs'), (req, res) => ok(res, paginate(sortByUpdatedDesc(getCollection('admin_audit_logs')), req)));
+app.get('/admin/api/logs', auth, requirePermission('logs'), (req, res) => {
+    let rows = sortByUpdatedDesc(getCollection('admin_audit_logs'));
+    const { action, resource, target, start_date, end_date, admin_id } = req.query;
+    // 按 action 前缀过滤（支持 "create" 匹配 "product.create" 等）
+    if (action) {
+        const a = String(action).toLowerCase();
+        rows = rows.filter((r) => {
+            const ra = String(r.action || '').toLowerCase();
+            return ra === a || ra.endsWith(`.${a}`) || ra.includes(`.${a}.`);
+        });
+    }
+    // 按资源类型（target 字段）过滤
+    const targetFilter = resource || target;
+    if (targetFilter) {
+        const t = String(targetFilter).toLowerCase();
+        rows = rows.filter((r) => String(r.target || '').toLowerCase().includes(t));
+    }
+    if (admin_id) {
+        rows = rows.filter((r) => String(r.admin_id) === String(admin_id));
+    }
+    if (start_date) {
+        const from = new Date(start_date).getTime();
+        rows = rows.filter((r) => new Date(r.created_at).getTime() >= from);
+    }
+    if (end_date) {
+        // 包含当天结束
+        const to = new Date(end_date).getTime() + 86400000;
+        rows = rows.filter((r) => new Date(r.created_at).getTime() < to);
+    }
+    ok(res, paginate(rows, req));
+});
 
 app.get('/admin/api/logs/export', auth, requirePermission('logs'), (req, res) => {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -3212,6 +3399,47 @@ app.delete('/admin/api/home-sections/:id', auth, requirePermission('content'), (
 app.post('/admin/api/home-sections/sort', auth, requirePermission('content'), (req, res) => ok(res, { success: true, sort: req.body || {} }));
 
 app.get('/admin/api/mass-messages', auth, (req, res) => ok(res, paginate(sortByUpdatedDesc(getCollection('mass_messages')), req)));
+
+// 群发消息：预览目标用户（不实际发送，只返回匹配用户名单）
+app.post('/admin/api/mass-messages/preview', auth, (req, res) => {
+    const users = getCollection('users');
+    const { targetType, targetRoles, targetUsers } = req.body || {};
+    const ROLE_LABEL = { 0: '普通用户', 1: '会员', 2: '团长', 3: '代理商', 4: '合伙人' };
+    const PREVIEW_LIMIT = 100;
+
+    let matched = [];
+    if (targetType === 'all') {
+        matched = users;
+    } else if (targetType === 'role') {
+        const levels = toArray(targetRoles).map(Number);
+        matched = users.filter((u) => levels.includes(toNumber(u.role_level ?? u.distributor_level ?? u.level, 0)));
+    } else if (targetType === 'specific') {
+        const ids = toArray(targetUsers).map(String);
+        matched = users.filter((u) => ids.some((id) => rowMatchesLookup(u, id, [u.openid, u.member_no])));
+    } else if (targetType === 'distributor') {
+        matched = users.filter((u) => toNumber(u.role_level ?? u.distributor_level ?? u.level, 0) >= 2);
+    } else if (targetType === 'active_30d') {
+        const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        matched = users.filter((u) => {
+            const ts = u.last_active_at || u.last_login_at || u.updated_at || u.created_at;
+            return ts && new Date(ts).getTime() >= since;
+        });
+    }
+
+    const level = (u) => toNumber(u.role_level ?? u.distributor_level ?? u.level, 0);
+    ok(res, {
+        count: matched.length,
+        preview: matched.slice(0, PREVIEW_LIMIT).map((u) => ({
+            id: u.id || u._legacy_id || u._id,
+            nickname: pickString(u.nickname || u.nickName || u.name || '未知用户'),
+            member_no: pickString(u.member_no || ''),
+            role_level: level(u),
+            role_label: ROLE_LABEL[level(u)] || `等级${level(u)}`,
+            phone: pickString(u.phone || u.mobile || '').replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
+        })),
+        truncated: matched.length > PREVIEW_LIMIT
+    });
+});
 
 app.post('/admin/api/mass-messages', auth, (req, res) => {
     const rows = getCollection('mass_messages');
@@ -3937,30 +4165,58 @@ app.get('/admin/api/refunds/:id', auth, requirePermission('refunds'), async (req
 });
 
 app.put('/admin/api/refunds/:id/approve', auth, requirePermission('refunds'), async (req, res) => {
-    const updated = patchCollectionRow('refunds', req.params.id, (row) => ({
-        ...row,
+    // 1. 重新从 CloudBase 加载退款集合，确保缓存里有这条记录
+    await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+
+    // 2. 校验记录存在
+    const refund = findByLookup(getCollection('refunds'), req.params.id);
+    if (!refund) return fail(res, '退款记录不存在', 404);
+    if (refund.status !== 'pending') {
+        return fail(res, refund.status === 'approved' ? '已经审核通过' : `当前状态不允许审核: ${refund.status}`, 400);
+    }
+
+    const updateData = {
         status: 'approved',
         approved_at: nowIso(),
-        remark: pickString(req.body?.remark || row.remark),
-        updated_at: nowIso()
-    }));
-    if (!updated) return fail(res, '退款记录不存在', 404);
-    await Promise.resolve(dataStore.flush?.());
-    ok(res, updated);
+        remark: pickString(req.body?.remark || refund.remark)
+    };
+
+    // 3. 精确直写到 CloudBase（不走全量替换，不会超时）
+    const writeOk = await directPatchDocument('refunds', String(refund._id), updateData);
+    if (!writeOk) {
+        return fail(res, '状态更新失败，CloudBase 写入错误，请稍后重试', 500);
+    }
+
+    // 4. filesystem 模式下补充走 patchCollectionRow
+    if (!dataStore._internals?.db) {
+        patchCollectionRow('refunds', req.params.id, (row) => ({ ...row, ...updateData }));
+        await Promise.resolve(dataStore.flush?.());
+    }
+
+    // 5. 重新加载并返回最新格式化记录
+    await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+    const users = getCollection('users');
+    const orders = getCollection('orders');
+    const products = getCollection('products');
+    const skus = getCollection('skus');
+    const freshRefund = findByLookup(getCollection('refunds'), req.params.id);
+    createAuditLog(req.admin, 'refund.approve', 'refunds', { refund_id: req.params.id });
+    ok(res, buildRefundRecord(freshRefund || { ...refund, ...updateData }, users, orders, products, skus));
 });
 
 app.put('/admin/api/refunds/:id/reject', auth, requirePermission('refunds'), async (req, res) => {
-    let rejectedRefund = null;
-    const updated = patchCollectionRow('refunds', req.params.id, (row) => {
-        rejectedRefund = row;
-        return {
-            ...row,
-            status: 'rejected',
-            reject_reason: pickString(req.body?.reason),
-            updated_at: nowIso()
-        };
-    });
-    if (!updated) return fail(res, '退款记录不存在', 404);
+    await ensureFreshCollections(['refunds', 'orders', 'users']);
+    const rejectedRefund = findByLookup(getCollection('refunds'), req.params.id);
+    if (!rejectedRefund) return fail(res, '退款记录不存在', 404);
+    if (!['pending', 'approved'].includes(pickString(rejectedRefund.status))) {
+        return fail(res, `当前状态不允许拒绝: ${rejectedRefund.status}`, 400);
+    }
+    const rejectData = { status: 'rejected', reject_reason: pickString(req.body?.reason) };
+    const writeOk = await directPatchDocument('refunds', String(rejectedRefund._id), rejectData);
+    if (!writeOk) return fail(res, '状态更新失败，请稍后重试', 500);
+    if (!dataStore._internals?.db) {
+        patchCollectionRow('refunds', req.params.id, (row) => ({ ...row, ...rejectData }));
+    }
     const orderId = rejectedRefund?.order_id || rejectedRefund?.order_no;
     if (orderId) {
         restoreFrozenCommissionsForOrder(orderId);
@@ -3972,10 +4228,17 @@ app.put('/admin/api/refunds/:id/reject', auth, requirePermission('refunds'), asy
     }
     createAuditLog(req.admin, 'refund.reject', 'refunds', { refund_id: req.params.id, order_id: orderId });
     await Promise.resolve(dataStore.flush?.());
-    ok(res, updated);
+    await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+    const freshReject = findByLookup(getCollection('refunds'), req.params.id);
+    const rUsers = getCollection('users');
+    const rOrders = getCollection('orders');
+    const rProducts = getCollection('products');
+    const rSkus = getCollection('skus');
+    ok(res, buildRefundRecord(freshReject || { ...rejectedRefund, ...rejectData }, rUsers, rOrders, rProducts, rSkus));
 });
 
 app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), async (req, res) => {
+    await ensureFreshCollections(['refunds', 'orders', 'users']);
     const refunds = getCollection('refunds');
     const refund = findByLookup(refunds, req.params.id);
     if (!refund) return fail(res, '退款记录不存在', 404);
@@ -3994,20 +4257,18 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
     const totalAmount = toNumber(order.actual_price || order.pay_amount || order.total_amount, 0);
     if (refundAmount <= 0 || totalAmount <= 0) return fail(res, '退款金额不合法', 400);
 
-    patchCollectionRow('refunds', req.params.id, (row) => ({
-        ...row,
+    // 先持久化 processing 状态，防止并发重复提交
+    const processingData = {
         status: 'processing',
-        processing_at: row.processing_at || nowIso(),
-        return_company: pickString(req.body?.return_company || row.return_company),
-        return_tracking_no: pickString(req.body?.return_tracking_no || row.return_tracking_no),
-        updated_at: nowIso()
-    }));
-    patchCollectionRow('orders', orderId, (row) => ({
-        ...row,
-        status: 'refunding',
-        updated_at: nowIso()
-    }));
-    await Promise.resolve(dataStore.flush?.());
+        processing_at: refund.processing_at || nowIso(),
+        return_company: pickString(req.body?.return_company || refund.return_company),
+        return_tracking_no: pickString(req.body?.return_tracking_no || refund.return_tracking_no)
+    };
+    await directPatchDocument('refunds', String(refund._id), processingData);
+    patchCollectionRow('refunds', req.params.id, (row) => ({ ...row, ...processingData, updated_at: nowIso() }));
+
+    await directPatchDocument('orders', String(order._id), { status: 'refunding' });
+    patchCollectionRow('orders', orderId, (row) => ({ ...row, status: 'refunding', updated_at: nowIso() }));
 
     try {
         if (['wallet', 'balance', 'credit', 'debt'].includes(paymentMethod)) {
@@ -4018,26 +4279,40 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
             saveCollection('users', users);
 
             // 余额退款是内部操作，立即完成
-            const updated = patchCollectionRow('refunds', req.params.id, (row) => ({
-                ...row,
-                status: 'completed',
-                completed_at: nowIso(),
-                updated_at: nowIso()
+            const completedData = { status: 'completed', completed_at: nowIso() };
+            const refundWriteOk = await directPatchDocument('refunds', String(refund._id), completedData);
+            if (!refundWriteOk && dataStore._internals?.db) {
+                throw new Error('退款记录更新失败');
+            }
+            patchCollectionRow('refunds', req.params.id, (row) => ({ ...row, ...completedData }));
+
+            const orderWriteOk = await directPatchDocument('orders', String(order._id), { status: 'refunded', refunded_at: nowIso() });
+            if (!orderWriteOk && dataStore._internals?.db) {
+                throw new Error('订单状态更新失败');
+            }
+            patchCollectionRow('orders', orderId, (row) => ({
+                ...row, status: 'refunded', refunded_at: nowIso(), updated_at: nowIso()
             }));
+
             cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
             restoreOrderStockForRefund(orderId);
-            patchCollectionRow('orders', orderId, (row) => ({
-                ...row,
-                status: 'refunded',
-                refunded_at: nowIso(),
-                updated_at: nowIso()
-            }));
             createAuditLog(req.admin, 'refund.complete', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod });
-            await Promise.resolve(dataStore.flush?.());
-            ok(res, updated);
+            await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+            const cFresh = findByLookup(getCollection('refunds'), req.params.id);
+            const cUsers = getCollection('users');
+            const cOrders = getCollection('orders');
+            const cProducts = getCollection('products');
+            const cSkus = getCollection('skus');
+            ok(res, buildRefundRecord(cFresh || { ...refund, ...completedData }, cUsers, cOrders, cProducts, cSkus));
         } else {
-            // 微信支付退款是异步的：API 返回 PROCESSING，等微信回调确认后才真正完成
-            const refundNo = pickString(refund.refund_no, `RF-${pickString(order.order_no)}-${Date.now()}`);
+            // 微信支付退款：先锁定 refund_no，再调用微信 API，防止重复提交产生双重退款
+            // 如果已有 refund_no（之前调用过），复用；否则生成新的
+            const refundNo = pickString(refund.refund_no) || `RF-${pickString(order.order_no)}-${Date.now()}`;
+
+            // 将 refund_no 先写入 CloudBase，后续重试时可复用同一单号（微信幂等）
+            await directPatchDocument('refunds', String(refund._id), { refund_no: refundNo });
+            patchCollectionRow('refunds', req.params.id, (row) => ({ ...row, refund_no: refundNo }));
+
             const wxResult = await createWechatRefund({
                 orderNo: pickString(order.order_no),
                 refundNo,
@@ -4046,60 +4321,53 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
                 reason: pickString(refund.reason, '管理员退款')
             });
             const wxStatus = pickString(wxResult.status || 'PROCESSING').toUpperCase();
-
-            patchCollectionRow('refunds', req.params.id, (row) => ({
-                ...row,
-                refund_no: refundNo,
-                wx_refund_id: pickString(wxResult.refund_id || row.wx_refund_id),
-                wx_status: wxStatus,
-                updated_at: nowIso()
-            }));
+            const wxRefundId = pickString(wxResult.refund_id || refund.wx_refund_id);
 
             if (wxStatus === 'SUCCESS') {
-                // 极少数情况：微信同步返回成功（如零钱即时到账）
-                const updated = patchCollectionRow('refunds', req.params.id, (row) => ({
-                    ...row,
-                    status: 'completed',
-                    completed_at: nowIso(),
-                    updated_at: nowIso()
-                }));
+                // 极少数情况：微信同步返回成功
+                const completedData = { status: 'completed', completed_at: nowIso(), wx_refund_id: wxRefundId, wx_status: wxStatus };
+                await directPatchDocument('refunds', String(refund._id), completedData);
+                patchCollectionRow('refunds', req.params.id, (row) => ({ ...row, ...completedData }));
+
                 cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
                 restoreOrderStockForRefund(orderId);
+                await directPatchDocument('orders', String(order._id), { status: 'refunded', refunded_at: nowIso() });
                 patchCollectionRow('orders', orderId, (row) => ({
-                    ...row,
-                    status: 'refunded',
-                    refunded_at: nowIso(),
-                    updated_at: nowIso()
+                    ...row, status: 'refunded', refunded_at: nowIso(), updated_at: nowIso()
                 }));
                 createAuditLog(req.admin, 'refund.complete', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod, wx_status: wxStatus });
-                await Promise.resolve(dataStore.flush?.());
-                ok(res, updated);
+                await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+                const freshComplete = findByLookup(getCollection('refunds'), req.params.id);
+                ok(res, buildRefundRecord(freshComplete || { ...refund, ...completedData }, getCollection('users'), getCollection('orders'), getCollection('products'), getCollection('skus')));
             } else {
                 // 正常情况：微信返回 PROCESSING，等待异步回调确认
-                // 退款状态保持 processing，等微信回调将其更新为 completed 或 failed
-                const updated = patchCollectionRow('refunds', req.params.id, (row) => ({
-                    ...row,
-                    status: 'processing',
-                    updated_at: nowIso()
-                }));
-                createAuditLog(req.admin, 'refund.processing', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod, wx_refund_id: wxResult.refund_id, wx_status: wxStatus });
-                await Promise.resolve(dataStore.flush?.());
-                ok(res, { ...updated, note: '退款申请已提交微信，处理结果将通过回调通知更新' });
+                const processingFinal = { status: 'processing', wx_refund_id: wxRefundId, wx_status: wxStatus };
+                await directPatchDocument('refunds', String(refund._id), processingFinal);
+                patchCollectionRow('refunds', req.params.id, (row) => ({ ...row, ...processingFinal }));
+
+                createAuditLog(req.admin, 'refund.processing', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod, wx_refund_id: wxRefundId, wx_status: wxStatus });
+                await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+                const freshProcessing = findByLookup(getCollection('refunds'), req.params.id);
+                ok(res, {
+                    ...(freshProcessing
+                        ? buildRefundRecord(freshProcessing, getCollection('users'), getCollection('orders'), getCollection('products'), getCollection('skus'))
+                        : { ...refund, ...processingFinal }),
+                    note: '退款申请已提交微信，处理结果将通过回调通知更新'
+                });
             }
         }
     } catch (error) {
-        patchCollectionRow('refunds', req.params.id, (row) => ({
-            ...row,
-            status: 'approved',
-            wx_error: pickString(error.message),
-            updated_at: nowIso()
-        }));
-        patchCollectionRow('orders', orderId, (row) => ({
-            ...row,
-            status: row.status === 'refunding' ? (row.shipped_at ? 'shipped' : (row.paid_at ? 'paid' : 'pending_payment')) : row.status,
-            updated_at: nowIso()
-        }));
-        await Promise.resolve(dataStore.flush?.());
+        // 出错时将状态回滚到 approved，保留错误信息
+        const revertData = { status: 'approved', wx_error: pickString(error.message) };
+        await directPatchDocument('refunds', String(refund._id), revertData);
+        patchCollectionRow('refunds', req.params.id, (row) => ({ ...row, ...revertData, updated_at: nowIso() }));
+
+        const prevOrderStatus = order.status === 'refunding'
+            ? (order.shipped_at ? 'shipped' : (order.paid_at ? 'paid' : 'pending_payment'))
+            : order.status;
+        await directPatchDocument('orders', String(order._id), { status: prevOrderStatus });
+        patchCollectionRow('orders', orderId, (row) => ({ ...row, status: prevOrderStatus, updated_at: nowIso() }));
+
         return fail(res, `退款失败：${error.message || '未知错误'}`, 500);
     }
 });
@@ -4143,30 +4411,71 @@ app.post('/admin/api/refunds/wechat-notify', async (req, res) => {
         await ensureFreshCollections(['refunds', 'orders']);
         const refunds = getCollection('refunds');
         const refund = refunds.find((row) => pickString(row.refund_no) === outRefundNo);
-        if (refund) {
-            const orderId = refund.order_id || refund.order_no;
-            if (refundStatus === 'SUCCESS') {
-                patchCollectionRow('refunds', primaryId(refund), (row) => ({
-                    ...row, status: 'completed', completed_at: nowIso(),
-                    wx_refund_status: refundStatus, updated_at: nowIso()
-                }));
-                cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
-                restoreOrderStockForRefund(orderId);
-                patchCollectionRow('orders', orderId, (row) => ({
-                    ...row, status: 'refunded', refunded_at: nowIso(), updated_at: nowIso()
-                }));
-            } else if (['ABNORMAL', 'CLOSED'].includes(refundStatus)) {
-                patchCollectionRow('refunds', primaryId(refund), (row) => ({
-                    ...row, status: 'failed', wx_refund_status: refundStatus, updated_at: nowIso()
-                }));
+        if (!refund) {
+            console.warn(`[RefundNotify] 未找到退款记录 refund_no=${outRefundNo}`);
+            return res.json({ code: 'SUCCESS', message: 'Refund not found' });
+        }
+
+        // 幂等：终态不重复处理
+        if (pickString(refund.status) === 'completed' || pickString(refund.status) === 'failed') {
+            return res.json({ code: 'SUCCESS', message: 'Already in terminal state' });
+        }
+
+        const refundDocId = String(refund._id || primaryId(refund));
+        const orderId = refund.order_id || refund.order_no;
+
+        // 找到关联订单（用于获取 _id 做精确更新）
+        const orders = getCollection('orders');
+        const order = orderId ? findByLookup(orders, orderId) : null;
+        const orderDocId = order ? String(order._id) : null;
+
+        if (refundStatus === 'SUCCESS') {
+            const refundCompleteData = {
+                status: 'completed',
+                completed_at: nowIso(),
+                wx_refund_id: pickString(refundData.refund_id || refund.wx_refund_id),
+                wx_refund_status: refundStatus,
+                wx_success_time: pickString(refundData.success_time || '')
+            };
+            // 优先 directPatchDocument 确保 CloudBase 持久化
+            await directPatchDocument('refunds', refundDocId, refundCompleteData);
+            patchCollectionRow('refunds', primaryId(refund), (row) => ({ ...row, ...refundCompleteData, updated_at: nowIso() }));
+
+            cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
+            restoreOrderStockForRefund(orderId);
+
+            if (orderDocId) {
+                await directPatchDocument('orders', orderDocId, { status: 'refunded', refunded_at: nowIso() });
+            }
+            patchCollectionRow('orders', orderId, (row) => ({
+                ...row, status: 'refunded', refunded_at: nowIso(), updated_at: nowIso()
+            }));
+            console.log(`[RefundNotify] 退款成功处理完毕: ${outRefundNo}, order=${orderId}`);
+        } else if (['ABNORMAL', 'CLOSED'].includes(refundStatus)) {
+            const refundFailData = {
+                status: 'failed',
+                wx_refund_id: pickString(refundData.refund_id || refund.wx_refund_id),
+                wx_refund_status: refundStatus
+            };
+            await directPatchDocument('refunds', refundDocId, refundFailData);
+            patchCollectionRow('refunds', primaryId(refund), (row) => ({ ...row, ...refundFailData, updated_at: nowIso() }));
+
+            // 恢复订单到退款前状态
+            if (orderDocId && order) {
+                const revertStatus = order.status === 'refunding'
+                    ? (order.shipped_at ? 'shipped' : (order.paid_at ? 'paid' : 'pending_payment'))
+                    : order.status;
+                await directPatchDocument('orders', orderDocId, { status: revertStatus });
                 patchCollectionRow('orders', orderId, (row) => ({
                     ...row,
-                    status: row.status === 'refunding' ? (row.shipped_at ? 'shipped' : (row.paid_at ? 'paid' : 'pending_payment')) : row.status,
+                    status: row.status === 'refunding' ? revertStatus : row.status,
                     updated_at: nowIso()
                 }));
             }
-            await Promise.resolve(dataStore.flush?.());
+            console.warn(`[RefundNotify] 退款异常/关闭: ${outRefundNo}, status=${refundStatus}`);
         }
+
+        await Promise.resolve(dataStore.flush?.());
         res.json({ code: 'SUCCESS', message: 'OK' });
     } catch (err) {
         console.error('[RefundNotify] 处理退款回调失败:', err.message);
@@ -4430,6 +4739,263 @@ app.get('/admin/api/logistics/order/:id', auth, requirePermission('orders'), (re
     });
 });
 
+// ===== 财务看板汇总接口 =====
+app.get('/admin/api/finance/overview', auth, requirePermission('statistics'), (req, res) => {
+    const orders = getCollection('orders');
+    const commissions = getCollection('commissions');
+    const withdrawals = getCollection('withdrawals');
+    const users = getCollection('users');
+    const dividendExecs = getCollection('dividend_executions');
+
+    // 从 configs 读取 agent-system 配置
+    const configs = getCollection('configs');
+    function getAgentConfig(key, fallback) {
+        const row = configs.find((c) => c.config_key === `agent_system_${key}` || c.key === `agent_system_${key}`);
+        if (!row) return fallback;
+        if (row.config_value !== undefined) {
+            try { return typeof row.config_value === 'string' ? JSON.parse(row.config_value) : row.config_value; } catch (_) { return row.config_value; }
+        }
+        return row.value !== undefined ? row.value : fallback;
+    }
+
+    // ── 销售 GMV ──
+    const paidStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
+    const paidOrders = orders.filter((o) => paidStatuses.includes(String(o.status || '')));
+    const since30d = Date.now() - 30 * 86400000;
+    const gmv = paidOrders.reduce((s, o) => s + toNumber(o.actual_price || o.total_amount, 0), 0);
+    const gmv_30d = paidOrders
+        .filter((o) => new Date(o.created_at || 0).getTime() >= since30d)
+        .reduce((s, o) => s + toNumber(o.actual_price || o.total_amount, 0), 0);
+
+    // ── 佣金 ──
+    const commissionStats = { total: 0, frozen: 0, pending_approval: 0, settled: 0, cancelled: 0 };
+    commissions.forEach((c) => {
+        const amt = toNumber(c.amount, 0);
+        commissionStats.total += amt;
+        const s = String(c.status || '');
+        if (s === 'frozen') commissionStats.frozen += amt;
+        else if (s === 'pending_approval') commissionStats.pending_approval += amt;
+        else if (['settled', 'completed', 'approved'].includes(s)) commissionStats.settled += amt;
+        else if (s === 'cancelled') commissionStats.cancelled += amt;
+    });
+
+    // ── 提现 ──
+    const withdrawalStats = { pending_amount: 0, completed_amount: 0, total_fee: 0, pending_count: 0 };
+    withdrawals.forEach((w) => {
+        const amt = toNumber(w.amount, 0);
+        const fee = toNumber(w.fee, 0);
+        const s = String(w.status || '');
+        if (s === 'pending') { withdrawalStats.pending_amount += amt; withdrawalStats.pending_count++; }
+        if (['completed', 'approved'].includes(s)) withdrawalStats.completed_amount += amt;
+        withdrawalStats.total_fee += fee;
+    });
+
+    // ── 代理商货款（debt_amount） ──
+    const debtors = users
+        .filter((u) => toNumber(u.debt_amount, 0) > 0)
+        .map((u) => ({
+            user_id: u.id || u._legacy_id || u._id,
+            nickname: pickString(u.nickname || u.nickName || u.name || ''),
+            member_no: pickString(u.member_no || ''),
+            role_level: toNumber(u.role_level ?? u.distributor_level, 0),
+            debt_amount: toNumber(u.debt_amount, 0),
+            debt_reason: pickString(u.debt_reason || '')
+        }))
+        .sort((a, b) => b.debt_amount - a.debt_amount);
+
+    // ── 基金池 ──
+    const fundPool = getAgentConfig('fund-pool', { enabled: false });
+
+    // ── 分红 ──
+    const sortedExecs = sortByUpdatedDesc(dividendExecs);
+    const lastExec = sortedExecs[0] || null;
+
+    ok(res, {
+        gmv,
+        gmv_30d,
+        commissions: commissionStats,
+        withdrawals: withdrawalStats,
+        agent_debt: {
+            total_debt: debtors.reduce((s, d) => s + d.debt_amount, 0),
+            debtor_count: debtors.length,
+            debtors
+        },
+        fund_pool: fundPool,
+        dividend: {
+            last_executed_year: lastExec?.year || null,
+            last_total_distributed: toNumber(lastExec?.totalDistributed, 0),
+            executions: sortedExecs.slice(0, 10)
+        }
+    });
+});
+
+// ─── 业绩贡献榜：按 agent 出单统计（日/月/季度） ───
+app.get('/admin/api/finance/agent-performance', auth, requirePermission('statistics'), (req, res) => {
+    const period = pickString(req.query.period || 'month'); // day | month | quarter
+    const refDate = req.query.date ? new Date(req.query.date) : new Date();
+    const limit = toNumber(req.query.limit, 50);
+
+    // 计算本期起止时间
+    let periodStart, periodEnd;
+    const y = refDate.getFullYear();
+    const m = refDate.getMonth(); // 0-indexed
+    const d = refDate.getDate();
+    if (period === 'day') {
+        const iso = refDate.toISOString().slice(0, 10);
+        periodStart = iso;
+        periodEnd = iso;
+    } else if (period === 'month') {
+        periodStart = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+        const lastDay = new Date(y, m + 1, 0).getDate();
+        periodEnd = `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    } else { // quarter
+        const q = Math.floor(m / 3);
+        const qStartM = q * 3;
+        const qEndM = qStartM + 2;
+        periodStart = `${y}-${String(qStartM + 1).padStart(2, '0')}-01`;
+        const qEndLastDay = new Date(y, qEndM + 1, 0).getDate();
+        periodEnd = `${y}-${String(qEndM + 1).padStart(2, '0')}-${String(qEndLastDay).padStart(2, '0')}`;
+    }
+
+    const paidStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
+    const orders = getCollection('orders');
+    const users = getCollection('users');
+
+    // 从订单提取 agent openid（多字段兼容）
+    function getOrderAgentOpenid(order) {
+        return order?.agent_info?.openid
+            || order?.agent?.openid
+            || order?.distributor?.openid
+            || order?.referrer_openid
+            || null;
+    }
+
+    // 过滤本期已付订单
+    const periodOrders = orders.filter((o) => {
+        if (!paidStatuses.includes(String(o.status || ''))) return false;
+        const dateStr = String(o.created_at || o.pay_time || '').slice(0, 10);
+        return dateStr >= periodStart && dateStr <= periodEnd;
+    });
+
+    // 按 agent openid 聚合业绩
+    const agentMap = {};
+    for (const o of periodOrders) {
+        const agentOid = getOrderAgentOpenid(o);
+        if (!agentOid) continue;
+        if (!agentMap[agentOid]) agentMap[agentOid] = { openid: agentOid, order_count: 0, gmv: 0 };
+        agentMap[agentOid].order_count += 1;
+        agentMap[agentOid].gmv += toNumber(o.actual_price || o.total_amount, 0);
+    }
+
+    // 关联用户信息，按 GMV 排名
+    const ranked = Object.values(agentMap)
+        .sort((a, b) => b.gmv - a.gmv)
+        .slice(0, limit)
+        .map((item, idx) => {
+            const u = users.find((x) => x.openid === item.openid) || {};
+            return {
+                rank: idx + 1,
+                openid: item.openid,
+                user_id: u.id || u._legacy_id || u._id || item.openid,
+                nickname: pickString(u.nickname || u.nickName || u.name || item.openid),
+                member_no: pickString(u.member_no || ''),
+                role_level: toNumber(u.role_level ?? u.distributor_level, 0),
+                order_count: item.order_count,
+                gmv: Number(item.gmv.toFixed(2))
+            };
+        });
+
+    ok(res, {
+        period,
+        period_start: periodStart,
+        period_end: periodEnd,
+        total_agents: Object.keys(agentMap).length,
+        list: ranked
+    });
+});
+
+// ─── 个人/团队池子贡献：分红资格预览 + 团队业绩贡献 ───
+app.get('/admin/api/finance/pool-contributions', auth, requirePermission('statistics'), (req, res) => {
+    const users = getCollection('users');
+    const configs = getCollection('configs');
+    const commissions = getCollection('commissions');
+
+    function getAgentCfg(key, fallback) {
+        const row = configs.find((c) => c.config_key === `agent_system_${key}` || c.key === `agent_system_${key}`);
+        if (!row) return fallback;
+        if (row.config_value !== undefined) {
+            try { return typeof row.config_value === 'string' ? JSON.parse(row.config_value) : row.config_value; } catch (_) { return row.config_value; }
+        }
+        return row.value !== undefined ? row.value : fallback;
+    }
+
+    const dividendRules = getAgentCfg('dividend-rules', { enabled: false, source_pct: 0, b_team_award: { enabled: false, ranks: [] }, b1_personal_award: { enabled: false, ranks: [] } });
+
+    // 广度优先展开邀请树，计算直系+团队总销售额
+    function getAllDescendants(userList, openid, visited = new Set()) {
+        visited.add(openid);
+        const result = [];
+        for (const u of userList) {
+            const parentOid = u.invited_by || u.referrer_openid || u.parent_openid || '';
+            if (parentOid === openid && !visited.has(u.openid)) {
+                result.push(u);
+                result.push(...getAllDescendants(userList, u.openid, visited));
+            }
+        }
+        return result;
+    }
+
+    // 合伙人（等级>=4）的团队业绩贡献
+    const partners = users.filter((u) => toNumber(u.role_level ?? u.distributor_level, 0) >= 4);
+    const partnerContributions = partners.map((u) => {
+        const descendants = getAllDescendants(users, u.openid, new Set());
+        const teamSales = [u, ...descendants].reduce((s, m) => s + toNumber(m.total_spent, 0), 0);
+        const personalSales = toNumber(u.total_spent, 0);
+        // 累计已结算佣金
+        const totalCommission = commissions
+            .filter((c) => (c.openid === u.openid || c.user_id === String(u.id || u._id)) && ['settled', 'completed', 'approved'].includes(String(c.status || '')))
+            .reduce((s, c) => s + toNumber(c.amount, 0), 0);
+        return {
+            user_id: u.id || u._legacy_id || u._id,
+            openid: u.openid,
+            nickname: pickString(u.nickname || u.nickName || u.name || ''),
+            member_no: pickString(u.member_no || ''),
+            role_level: toNumber(u.role_level ?? u.distributor_level, 0),
+            personal_sales: Number(personalSales.toFixed(2)),
+            team_size: descendants.length + 1,
+            team_sales: Number(teamSales.toFixed(2)),
+            settled_commission: Number(totalCommission.toFixed(2))
+        };
+    }).sort((a, b) => b.team_sales - a.team_sales);
+
+    // 代理商（等级3）个人贡献
+    const agentContributions = users
+        .filter((u) => toNumber(u.role_level ?? u.distributor_level, 0) === 3)
+        .map((u) => {
+            const personalSales = toNumber(u.total_spent, 0);
+            const totalCommission = commissions
+                .filter((c) => (c.openid === u.openid || c.user_id === String(u.id || u._id)) && ['settled', 'completed', 'approved'].includes(String(c.status || '')))
+                .reduce((s, c) => s + toNumber(c.amount, 0), 0);
+            return {
+                user_id: u.id || u._legacy_id || u._id,
+                openid: u.openid,
+                nickname: pickString(u.nickname || u.nickName || u.name || ''),
+                member_no: pickString(u.member_no || ''),
+                personal_sales: Number(personalSales.toFixed(2)),
+                settled_commission: Number(totalCommission.toFixed(2))
+            };
+        })
+        .sort((a, b) => b.personal_sales - a.personal_sales)
+        .slice(0, 50);
+
+    ok(res, {
+        dividend_enabled: !!dividendRules.enabled,
+        dividend_source_pct: toNumber(dividendRules.source_pct, 0),
+        partner_contributions: partnerContributions,
+        agent_contributions: agentContributions.slice(0, 50)
+    });
+});
+
 app.get('/admin/api/statistics/overview', auth, requirePermission('statistics'), (req, res) => {
     const orders = getCollection('orders');
     const products = getCollection('products');
@@ -4458,10 +5024,81 @@ app.get('/admin/api/dashboard/notifications', auth, (req, res) => {
     });
 });
 
-app.get('/admin/api/statistics/sales-trend', auth, requirePermission('statistics'), (req, res) => ok(res, { list: [] }));
-app.get('/admin/api/statistics/user-trend', auth, requirePermission('statistics'), (req, res) => ok(res, { list: [] }));
-app.get('/admin/api/statistics/agent-ranking', auth, requirePermission('statistics'), (req, res) => ok(res, { list: [] }));
-app.get('/admin/api/statistics/distribution-report', auth, requirePermission('statistics'), (req, res) => ok(res, { list: [] }));
+app.get('/admin/api/statistics/sales-trend', auth, requirePermission('statistics'), (req, res) => {
+    const days = toNumber(req.query.days, 30);
+    const orders = getCollection('orders');
+    const paidStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
+    const result = [];
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+        const dayOrders = orders.filter((o) => String(o.created_at || '').slice(0, 10) === d);
+        result.push({
+            date: d,
+            order_count: dayOrders.length,
+            sales: dayOrders
+                .filter((o) => paidStatuses.includes(o.status))
+                .reduce((s, o) => s + toNumber(o.actual_price || o.total_amount, 0), 0)
+        });
+    }
+    ok(res, { list: result });
+});
+
+app.get('/admin/api/statistics/user-trend', auth, requirePermission('statistics'), (req, res) => {
+    const days = toNumber(req.query.days, 30);
+    const users = getCollection('users');
+    const result = [];
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+        result.push({
+            date: d,
+            new_users: users.filter((u) => String(u.created_at || '').slice(0, 10) === d).length
+        });
+    }
+    ok(res, { list: result });
+});
+
+app.get('/admin/api/statistics/agent-ranking', auth, requirePermission('statistics'), (req, res) => {
+    const users = getCollection('users');
+    const commissions = getCollection('commissions');
+    const limit = toNumber(req.query.limit, 10);
+    const agentMap = {};
+    commissions
+        .filter((c) => ['settled', 'completed', 'approved'].includes(String(c.status || '')))
+        .forEach((c) => {
+            const uid = String(c.user_id || c.openid || '');
+            if (!uid) return;
+            agentMap[uid] = (agentMap[uid] || 0) + toNumber(c.amount, 0);
+        });
+    const list = Object.entries(agentMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, limit)
+        .map(([uid, total]) => {
+            const u = users.find((x) => String(x.id || x._id) === uid || x.openid === uid) || {};
+            return {
+                user_id: uid,
+                nickname: pickString(u.nickname || u.nickName || u.name || uid),
+                role_level: toNumber(u.role_level ?? u.distributor_level, 0),
+                total_commission: total
+            };
+        });
+    ok(res, { list });
+});
+
+app.get('/admin/api/statistics/distribution-report', auth, requirePermission('statistics'), (req, res) => {
+    const commissions = getCollection('commissions');
+    const TYPE_LABEL = { direct: '直推佣金', team: '团队佣金', peer: '平级奖励', assist: '辅助奖励', year_end_dividend: '年终分红' };
+    const byType = {};
+    commissions.forEach((c) => {
+        const t = pickString(c.type || 'other');
+        if (!byType[t]) byType[t] = { type: t, label: TYPE_LABEL[t] || t, count: 0, total: 0, settled: 0 };
+        byType[t].count += 1;
+        byType[t].total += toNumber(c.amount, 0);
+        if (['settled', 'completed', 'approved'].includes(String(c.status || ''))) {
+            byType[t].settled += toNumber(c.amount, 0);
+        }
+    });
+    ok(res, { list: Object.values(byType) });
+});
 
 app.get('/admin/api/statistics/product-ranking', auth, requirePermission('statistics'), (req, res) => {
     const rows = sortByUpdatedDesc(getCollection('products'))
