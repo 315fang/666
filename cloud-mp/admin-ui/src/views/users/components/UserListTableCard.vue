@@ -95,7 +95,10 @@
             <el-button text size="small">更多<el-icon><ArrowDown /></el-icon></el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="invite">修改历史邀请码</el-dropdown-item>
+                <el-dropdown-item v-if="canAdjustUserBalance" command="account_adjust">
+                  💰 账户调整（货款/佣金/积分/成长值）
+                </el-dropdown-item>
+                <el-dropdown-item divided command="invite">修改历史邀请码</el-dropdown-item>
                 <el-dropdown-item command="member_no">修改会员码</el-dropdown-item>
                 <el-dropdown-item command="remark">备注/标签</el-dropdown-item>
                 <el-dropdown-item v-if="canManageUserParent" command="parent">修改上级</el-dropdown-item>
@@ -103,6 +106,7 @@
                   v-if="canManageUserStatus"
                   :command="row.status === 1 ? 'ban' : 'unban'"
                   :class="row.status === 1 ? 'danger-item' : ''"
+                  divided
                 >
                   {{ row.status === 1 ? '封禁账号' : '解封账号' }}
                 </el-dropdown-item>

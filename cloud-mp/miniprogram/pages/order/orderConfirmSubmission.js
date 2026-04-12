@@ -79,12 +79,14 @@ async function submitOrder(page, app, brandAnimation) {
             orderData.points_to_use = page.data.pointsToUse;
         }
 
-        if (page.data.useWallet && page.data.isAgent) {
-            wx.setStorageSync('useWalletPay', true);
-        } else {
-            wx.removeStorageSync('useWalletPay');
-            wx.removeStorageSync('walletPayOrderIds');
+        // 代理商选择货款支付：直接在创单时扣款，无需跳支付页
+        const useGoodsFund = !!(page.data.useWallet && page.data.isAgent);
+        if (useGoodsFund) {
+            orderData.use_goods_fund = true;
         }
+        // 清除旧的 localStorage，货款支付不再依赖它做预支付跳转
+        wx.removeStorageSync('useWalletPay');
+        wx.removeStorageSync('walletPayOrderIds');
 
         const res = await post('/orders', orderData, { showError: false });
 
@@ -94,10 +96,11 @@ async function submitOrder(page, app, brandAnimation) {
 
         const createdOrders = Array.isArray(res.data) ? res.data : (res.data ? [res.data] : []);
         const orderId = createdOrders[0] && (createdOrders[0].id || createdOrders[0].order_id);
+        const goodsFundPaid = !!(createdOrders[0] && createdOrders[0].goods_fund_paid);
         const isSplitOrders = createdOrders.length > 1;
 
-        if (page.data.useWallet && page.data.isAgent) {
-            wx.setStorageSync('walletPayOrderIds', createdOrders.map((item) => item.id || item.order_id).filter(Boolean));
+        if (goodsFundPaid) {
+            wx.showToast({ title: '货款支付成功', icon: 'success' });
         }
         if (isSplitOrders) {
             wx.setStorageSync('latestCreatedOrderIds', createdOrders.map((item) => item.id || item.order_id).filter(Boolean));

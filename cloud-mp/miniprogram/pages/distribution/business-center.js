@@ -85,18 +85,26 @@ Page({
                     profilePromise
                 ]);
                 if (agentRes && agentRes.code === 0 && agentRes.data) {
-                    goodsAmount = formatMoney(agentRes.data.balance);
+                    goodsAmount = formatMoney(agentRes.data.agent_wallet_balance != null ? agentRes.data.agent_wallet_balance : agentRes.data.balance);
                 }
                 const info = walletRes?.code === 0
                     ? walletRes.data
                     : (profileResult?.info || app.globalData.userInfo || {});
-                purseAmount = formatMoney(info.balance);
+                purseAmount = formatMoney(
+                    info.commission_balance != null
+                        ? info.commission_balance
+                        : (info.available_balance != null ? info.available_balance : info.balance)
+                );
             } else {
                 const [walletRes, profileResult] = await Promise.all([walletPromise, profilePromise]);
                 const info = walletRes?.code === 0
                     ? walletRes.data
                     : (profileResult?.info || app.globalData.userInfo || {});
-                purseAmount = formatMoney(info.balance);
+                purseAmount = formatMoney(
+                    info.commission_balance != null
+                        ? info.commission_balance
+                        : (info.available_balance != null ? info.available_balance : info.balance)
+                );
             }
         } catch (_) {
             try {

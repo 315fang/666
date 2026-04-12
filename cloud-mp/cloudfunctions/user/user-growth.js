@@ -49,14 +49,17 @@ async function addPoints(openid, points) {
 function buildUserStats(user) {
     if (!user) return null;
     const points = toNumber(user.points != null ? user.points : user.growth_value, 0);
-    const balance = toNumber(user.wallet_balance != null ? user.wallet_balance : user.balance, 0);
+    const balance = toNumber(user.commission_balance != null ? user.commission_balance : user.balance, 0);
+    const goodsFundBalance = toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0);
     const totalSpent = toNumber(user.total_spent, 0);
     const orderCount = toNumber(user.order_count, 0);
 
     return {
         points,
         balance,
-        wallet_balance: balance,
+        commission_balance: balance,
+        wallet_balance: goodsFundBalance,
+        agent_wallet_balance: goodsFundBalance,
         total_spent: totalSpent,
         order_count: orderCount,
         growth_value: points

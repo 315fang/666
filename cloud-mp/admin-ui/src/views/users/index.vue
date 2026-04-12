@@ -91,6 +91,15 @@
       :on-submit-role="submitRole"
     />
 
+    <!-- 统一账户调整弹窗 -->
+    <UserBalanceAdjustDialog
+      v-model:visible="accountAdjustVisible"
+      :user="currentUser"
+      :role-text="roleText"
+      :role-tag-type="roleTagType"
+      @success="fetchUsers"
+    />
+
     <UserActionDialogsSecondary
       :current-user="currentUser"
       :submitting="submitting"
@@ -124,6 +133,7 @@
 import { ref, reactive, nextTick, onMounted, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, ArrowDown } from '@element-plus/icons-vue'
+import UserBalanceAdjustDialog from './components/UserBalanceAdjustDialog.vue'
 import {
   getUsers,
   getUserById,
@@ -617,6 +627,14 @@ const handleBan = async (row, ban) => {
   }
 }
 
+// ===== 账户调整（货款/佣金/积分/成长值）=====
+const accountAdjustVisible = ref(false)
+
+const openAccountAdjust = (row) => {
+  currentUser.value = row
+  accountAdjustVisible.value = true
+}
+
 // ===== Dropdown 分发 =====
 const handleDropdown = (cmd, row) => {
   if (cmd === 'invite') openInvite(row)
@@ -625,6 +643,7 @@ const handleDropdown = (cmd, row) => {
   else if (cmd === 'parent') openParent(row)
   else if (cmd === 'ban') handleBan(row, true)
   else if (cmd === 'unban') handleBan(row, false)
+  else if (cmd === 'account_adjust') openAccountAdjust(row)
 }
 
 // ===== 工具函数 =====

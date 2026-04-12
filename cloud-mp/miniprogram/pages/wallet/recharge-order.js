@@ -34,10 +34,15 @@ Page({
         this.setData({
             rechargeOrderId: decodeURIComponent(options.id || '')
         });
+        this._skipNextOnShowRefresh = true;
         this.loadOrder();
     },
 
     onShow() {
+        if (this._skipNextOnShowRefresh) {
+            this._skipNextOnShowRefresh = false;
+            return;
+        }
         if (this.data.rechargeOrderId) {
             this.loadOrder();
         }

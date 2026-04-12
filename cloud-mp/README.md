@@ -10,6 +10,7 @@
 - `cloudbase-seed/`: CloudBase 正式集合 seed 基线
 - `cloudbase-import/`: CloudBase 导入文件
 - `docs/CLOUD_MP_MIGRATION_MATRIX.md`: 旧工程对照迁移矩阵
+- `docs/CLOUD_MP_DEVELOPMENT_GUIDE.md`: 当前真实功能地图与开发入口说明
 
 ## 运行边界
 

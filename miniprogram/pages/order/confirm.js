@@ -23,7 +23,9 @@ const {
     loadPointBalance,
     togglePoints,
     loadWalletBalance,
-    toggleWallet
+    toggleWallet,
+    loadGoodsFundBalance,
+    toggleGoodsFund
 } = require('./orderConfirmAccount');
 
 Page({
@@ -60,10 +62,13 @@ Page({
         groupNo: null,
         groupActivityId: null,
         orderType: '',
-        // B端货款余额支付
+        // B端代理商钱包余额（旧）
         walletBalance: 0,
         useWallet: false,
         isAgent: false,
+        // 货款支付（agent_wallet_balance）
+        goodsFundBalance: 0,
+        useGoodsFund: false,
         // 到店自提（需商品 supports_pickup + 后台维护自提门店）
         pickupAllowed: false,
         deliveryType: 'express',
@@ -122,8 +127,10 @@ Page({
         this.loadDefaultAddress();
         // 加载积分余额
         this.loadPointBalance();
-        // 加载B端货款余额
+        // 加载B端钱包余额
         this.loadWalletBalance();
+        // 加载代理商货款余额
+        this.loadGoodsFundBalance();
     },
 
     onShow() {
@@ -342,5 +349,20 @@ Page({
 
     onToggleWallet(e) {
         return toggleWallet(this, e.detail.value);
+    },
+
+    async loadGoodsFundBalance() {
+        return loadGoodsFundBalance(this, app);
+    },
+
+    onToggleGoodsFund(e) {
+        const enabled = e.detail.value;
+        // 再校验一次余额是否足够（防止价格变化后用户仍开启）
+        const finalAmt = parseFloat(this.data.finalAmount || '0');
+        if (enabled && this.data.goodsFundBalance < finalAmt) {
+            wx.showToast({ title: `货款余额不足（¥${this.data.goodsFundBalance.toFixed(2)}）`, icon: 'none' });
+            return;
+        }
+        return toggleGoodsFund(this, enabled);
     }
 });

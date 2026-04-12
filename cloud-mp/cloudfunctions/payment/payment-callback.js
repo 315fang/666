@@ -398,6 +398,7 @@ async function ensureAgentRoleSynced(orderId, order) {
             agent_level: nextDistributorLevel,
             participate_distribution: 1,
             discount_rate: roleMeta.discountRate != null ? roleMeta.discountRate : user.discount_rate,
+            role_upgraded_at: db.serverDate(),
             updated_at: db.serverDate()
         }
     });
@@ -753,6 +754,61 @@ async function ensureSlashOrderPurchased(orderId, order) {
     return { updated: true, slash_no: record.slash_no || order.slash_no };
 }
 
+/**
+ * 代理升级时记录基金池入池（写 fund_pool_logs，原子更新基金池余额）
+ * 入池金额由 configs 中 agent_system_fund-pool 的 contribution_by_level 配置决定
+ * 默认：B1(role_level=3)→480元，B2(role_level=4)→4600元
+ */
+async function recordFundPoolEntry(openid, roleLevel, source, orderId) {
+    try {
+        const DEFAULT_CONTRIBUTIONS = { 3: 480, 4: 4600 };
+
+        // 读取基金池配置
+        const configRes = await db.collection('configs')
+            .where({ key: 'agent_system_fund-pool' })
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+        const config = (configRes.data && configRes.data[0]) || {};
+        const contributions = config.contribution_by_level || DEFAULT_CONTRIBUTIONS;
+        const amount = toNumber(contributions[roleLevel] || DEFAULT_CONTRIBUTIONS[roleLevel], 0);
+        if (amount <= 0) return { skipped: true, reason: 'amount_zero' };
+
+        // 写入流水日志
+        await db.collection('fund_pool_logs').add({
+            data: {
+                openid,
+                role_level: roleLevel,
+                amount,
+                source: source || 'upgrade_payment',
+                order_id: orderId || '',
+                created_at: db.serverDate(),
+            },
+        }).catch((err) => {
+            console.error('[FundPool] 写入fund_pool_logs失败:', err.message);
+        });
+
+        // 原子更新基金池余额（存于 configs 文档中的 balance 字段）
+        if (config._id) {
+            await db.collection('configs').doc(String(config._id)).update({
+                data: {
+                    balance: _.inc(amount),
+                    total_in: _.inc(amount),
+                    updated_at: db.serverDate(),
+                },
+            }).catch((err) => {
+                console.error('[FundPool] 更新基金池余额失败:', err.message);
+            });
+        }
+
+        console.log(`[FundPool] 入池成功: openid=${openid}, role_level=${roleLevel}, amount=${amount}, source=${source}`);
+        return { success: true, amount, roleLevel };
+    } catch (err) {
+        console.error('[FundPool] recordFundPoolEntry异常:', err.message);
+        return { error: err.message };
+    }
+}
+
 async function processPaidOrder(orderId, order) {
     const latest = await db.collection('orders').doc(orderId).get().then((res) => res.data || order).catch(() => order);
     const needsGroupJoin = isGroupOrder(latest) && !latest.group_joined_at;
@@ -766,6 +822,12 @@ async function processPaidOrder(orderId, order) {
     const stock = await ensureStockDeducted(orderId, latest);
     const points = await ensurePointsAwarded(orderId, { ...latest, stock_deducted_at: true });
     const roles = await ensureAgentRoleSynced(orderId, { ...latest, stock_deducted_at: true, points_awarded_at: true });
+
+    // 代理升级时记录基金池入池
+    if (roles && roles.upgraded && roles.nextRoleLevel >= 3) {
+        await recordFundPoolEntry(order.openid, roles.nextRoleLevel, 'upgrade_payment', orderId).catch(() => {});
+    }
+
     const peerBonus = await ensurePeerBonusCreated(orderId, { ...latest, stock_deducted_at: true, points_awarded_at: true }, roles);
     const commissions = await ensureCommissionsCreated(orderId, { ...latest, stock_deducted_at: true, points_awarded_at: true });
 
@@ -773,6 +835,113 @@ async function processPaidOrder(orderId, order) {
         data: { payment_post_processed_at: db.serverDate(), updated_at: db.serverDate() },
     });
     return { group, slash, stock, points, roles, peerBonus, commissions };
+}
+
+/**
+ * 退还已使用的优惠券（退款时调用）
+ */
+async function restoreCoupon(order) {
+    if (!order || !order.openid) return false;
+
+    if (order.user_coupon_id) {
+        const restored = await db.collection('user_coupons')
+            .doc(String(order.user_coupon_id))
+            .update({ data: { status: 'unused', used_at: db.command.remove() } })
+            .then(() => true)
+            .catch(() => false);
+        if (restored) return true;
+    }
+
+    if (!order.coupon_id) return false;
+
+    const couponIdStr = String(order.coupon_id);
+    const couponIdNum = Number(order.coupon_id);
+    const candidates = Number.isFinite(couponIdNum)
+        ? [couponIdStr, couponIdNum]
+        : [couponIdStr];
+
+    const results = await Promise.all(
+        candidates.map((cid) =>
+            db.collection('user_coupons')
+                .where({ openid: order.openid, coupon_id: cid, status: 'used' })
+                .update({ data: { status: 'unused', used_at: db.command.remove() } })
+                .then((r) => r && r.stats && r.stats.updated > 0)
+                .catch(() => false)
+        )
+    );
+    return results.some(Boolean);
+}
+
+/**
+ * 处理货款充值回调（order_no 以 RCH 开头，来自 wallet_recharge_orders）
+ */
+async function handleRechargeCallback(outTradeNo, transaction) {
+    console.log(`[RechargeCallback] 处理充值回调: ${outTradeNo}`);
+
+    const rechargeRes = await db.collection('wallet_recharge_orders')
+        .where({ order_no: outTradeNo })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+
+    const recharge = rechargeRes.data && rechargeRes.data[0];
+    if (!recharge) {
+        console.warn(`[RechargeCallback] 充值订单不存在: ${outTradeNo}`);
+        return { code: 'SUCCESS', message: 'Recharge order not found' };
+    }
+
+    // 幂等
+    if (recharge.status === 'paid') {
+        return { code: 'SUCCESS', message: 'Already processed' };
+    }
+
+    const amount = toNumber(recharge.amount, 0);
+    const openid = recharge.openid;
+
+    // 原子更新充值单状态（防并发）
+    const updateRes = await db.collection('wallet_recharge_orders')
+        .where({ _id: recharge._id, status: 'pending' })
+        .update({
+            data: {
+                status: 'paid',
+                paid_at: db.serverDate(),
+                trade_id: transaction.transaction_id || '',
+                updated_at: db.serverDate(),
+            },
+        }).catch(() => ({ stats: { updated: 0 } }));
+
+    if (!updateRes.stats || updateRes.stats.updated === 0) {
+        return { code: 'SUCCESS', message: 'Already processed' };
+    }
+
+    // 到账：原子增加 agent_wallet_balance
+    await db.collection('users')
+        .where({ openid })
+        .update({
+            data: {
+                agent_wallet_balance: _.inc(amount),
+                goods_fund_total_recharged: _.inc(amount),
+                updated_at: db.serverDate(),
+            },
+        }).catch((err) => {
+            console.error('[RechargeCallback] 到账失败:', err.message);
+        });
+
+    // 写流水日志
+    await db.collection('goods_fund_logs').add({
+        data: {
+            openid,
+            type: 'recharge',
+            amount,
+            recharge_order_id: recharge._id,
+            order_no: outTradeNo,
+            remark: '货款余额充值',
+            created_at: db.serverDate(),
+        },
+    }).catch(() => {});
+
+    console.log(`[RechargeCallback] 充值成功: ${outTradeNo}, 金额: ${amount}, openid: ${openid}`);
+    return { code: 'SUCCESS', message: 'Recharge processed' };
 }
 
 /**
@@ -827,13 +996,42 @@ async function handleRefundCallback(refundData, eventType) {
         });
 
         if (orderId) {
-            // 取消该订单的佣金
+            // 取消未结算佣金
             await db.collection('commissions')
                 .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval', 'approved']) })
                 .update({ data: { status: 'cancelled', cancelled_reason: '退款完成，佣金作废', updated_at: db.serverDate() } })
                 .catch(() => {});
 
-            // 回滚库存
+            // 追回已结算佣金（settled 状态已入账到用户余额，需原子扣回）
+            const settledRes = await db.collection('commissions')
+                .where({ order_id: orderId, status: 'settled' })
+                .get()
+                .catch(() => ({ data: [] }));
+            for (const comm of (settledRes.data || [])) {
+                const commAmount = toNumber(comm.amount, 0);
+                if (commAmount <= 0 || comm.clawed_back_at) continue;
+                // 原子扣回佣金余额（余额不足则允许出现负值/欠款）
+                await db.collection('users').where({ openid: comm.openid }).update({
+                    data: {
+                        commission_balance: _.inc(-commAmount),
+                        balance: _.inc(-commAmount),
+                        updated_at: db.serverDate()
+                    }
+                }).catch((err) => {
+                    console.error('[RefundCallback] 追回已结算佣金余额失败:', err.message);
+                });
+                // 标记已追回
+                await db.collection('commissions').doc(String(comm._id)).update({
+                    data: {
+                        status: 'cancelled',
+                        cancelled_reason: '退款追回已结算佣金',
+                        clawed_back_at: db.serverDate(),
+                        updated_at: db.serverDate()
+                    }
+                }).catch(() => {});
+            }
+
+            // 回滚库存 + 退积分 + 退优惠券
             const orderRes = await db.collection('orders').doc(String(orderId)).get().catch(() => ({ data: null }));
             const order = orderRes.data;
             if (order && Array.isArray(order.items)) {
@@ -848,6 +1046,32 @@ async function handleRefundCallback(refundData, eventType) {
                         await db.collection('skus').doc(String(item.sku_id)).update({
                             data: { stock: _.inc(qty), updated_at: db.serverDate() }
                         }).catch(() => {});
+                    }
+                }
+            }
+
+            if (order) {
+                // 退积分
+                const pointsUsed = toNumber(order.points_used, 0);
+                if (pointsUsed > 0) {
+                    await db.collection('users')
+                        .where({ openid: order.openid })
+                        .update({
+                            data: {
+                                points: _.inc(pointsUsed),
+                                growth_value: _.inc(pointsUsed),
+                                updated_at: db.serverDate(),
+                            },
+                        }).catch((err) => {
+                            console.error('[RefundCallback] 退积分失败:', err.message);
+                        });
+                }
+
+                // 退优惠券
+                if (order.user_coupon_id || order.coupon_id) {
+                    const couponRestored = await restoreCoupon(order).catch(() => false);
+                    if (!couponRestored) {
+                        console.warn('[RefundCallback] 优惠券退还失败或无需退还, order_id:', orderId);
                     }
                 }
             }
@@ -1044,6 +1268,11 @@ async function handleCallback(event) {
                 }
 
                 return { code: 'SUCCESS', message: 'Payment processed' };
+            }
+
+            // orders 表查不到 → 尝试货款充值订单（order_no 以 RCH 开头）
+            if (outTradeNo && outTradeNo.startsWith('RCH')) {
+                return handleRechargeCallback(outTradeNo, transaction);
             }
 
             return { code: 'FAIL', message: 'Order not found' };

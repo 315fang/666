@@ -23,6 +23,69 @@ function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
 }
 
+function uniqueValues(values = []) {
+    const seen = {};
+    const list = [];
+    values.forEach((value) => {
+        if (!hasValue(value)) return;
+        const key = `${typeof value}:${String(value)}`;
+        if (seen[key]) return;
+        seen[key] = true;
+        list.push(value);
+    });
+    return list;
+}
+
+function chunkArray(values = [], size = 100) {
+    const out = [];
+    for (let i = 0; i < values.length; i += size) {
+        out.push(values.slice(i, i + size));
+    }
+    return out;
+}
+
+function roundMoney(value) {
+    return Math.round(toNumber(value, 0) * 100) / 100;
+}
+
+function getAgentWalletBalance(user = {}) {
+    return roundMoney(toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0));
+}
+
+function hasExplicitCommissionBalance(user = {}) {
+    if (user.commission_balance != null) return true;
+    if (user.balance == null) return false;
+    if (user.wallet_balance == null) return true;
+    return roundMoney(user.balance) !== roundMoney(user.wallet_balance);
+}
+
+async function resolveCommissionWalletState(user = {}) {
+    const agentWalletBalance = getAgentWalletBalance(user);
+    const explicitCommission = hasExplicitCommissionBalance(user);
+    const stats = await distributionCommission.getStats(user.openid);
+    const derivedCommissionBalance = Math.max(0, roundMoney((stats.settled_commission || 0) - toNumber(user.total_withdrawn, 0)));
+    const storedCommissionBalance = roundMoney(toNumber(user.commission_balance != null ? user.commission_balance : user.balance, 0));
+    const shouldUseDerivedBalance = !explicitCommission || (storedCommissionBalance === 0 && derivedCommissionBalance > 0);
+    const commissionBalance = shouldUseDerivedBalance ? derivedCommissionBalance : storedCommissionBalance;
+
+    const updates = {};
+    if (user.agent_wallet_balance == null) updates.agent_wallet_balance = agentWalletBalance;
+    if (user.commission_balance == null || shouldUseDerivedBalance) updates.commission_balance = commissionBalance;
+    if (user.balance == null || shouldUseDerivedBalance) updates.balance = commissionBalance;
+
+    if (Object.keys(updates).length && user._id) {
+        await db.collection('users').doc(String(user._id)).update({
+            data: {
+                ...updates,
+                updated_at: db.serverDate()
+            }
+        }).catch(() => {});
+        return { ...user, ...updates, _commission_balance: commissionBalance, _agent_wallet_balance: agentWalletBalance };
+    }
+
+    return { ...user, _commission_balance: commissionBalance, _agent_wallet_balance: agentWalletBalance };
+}
+
 function userRelationIds(user = {}) {
     const ids = [user.id, user._legacy_id, user._id].filter(hasValue);
     const out = [];
@@ -174,6 +237,85 @@ function buildCommissionPreview(product = {}, baseAmount = 0) {
     ].filter((item) => item.amount > 0);
 }
 
+async function getEstimatedCommissionSummary(openid) {
+    const emptySummary = {
+        estimated_commission: 0,
+        direct_estimated_commission: 0,
+        indirect_estimated_commission: 0,
+        pending_payment_orders: 0,
+        direct_orders: 0,
+        indirect_orders: 0
+    };
+
+    const userRes = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
+    const currentUser = userRes.data && userRes.data[0];
+    if (!currentUser) return emptySummary;
+
+    const directMembers = await getAllRecords(db, 'users', directRelationWhere(currentUser)).catch(() => []);
+    const indirectMembers = directMembers.length
+        ? await getAllRecords(db, 'users', indirectRelationWhere(directMembers)).catch(() => [])
+        : [];
+    const candidateOpenids = uniqueValues(
+        directMembers.concat(indirectMembers).map((item) => item && item.openid).filter(Boolean)
+    );
+    if (!candidateOpenids.length) return emptySummary;
+
+    const orderGroups = await Promise.all(
+        chunkArray(candidateOpenids, 100).map((batch) => getAllRecords(db, 'orders', {
+            openid: _.in(batch),
+            status: _.in(['pending_payment', 'pending'])
+        }).catch(() => []))
+    );
+    const candidateOrders = orderGroups.flat().filter((order) => order && order._id && order.openid !== openid);
+    if (!candidateOrders.length) return emptySummary;
+
+    const existingCommissionGroups = await Promise.all(
+        chunkArray(uniqueValues(candidateOrders.map((order) => order._id)), 100).map((batch) => getAllRecords(db, 'commissions', {
+            openid,
+            order_id: _.in(batch)
+        }).catch(() => []))
+    );
+    const existingOrderIds = new Set(
+        existingCommissionGroups
+            .flat()
+            .filter((row) => String(row.status || '') !== 'cancelled')
+            .map((row) => String(row.order_id))
+    );
+
+    const summary = { ...emptySummary };
+    for (const order of candidateOrders) {
+        if (existingOrderIds.has(String(order._id))) continue;
+
+        const calculated = await distributionCommission.calculateOrderCommissions(order);
+        const rows = (calculated.rows || []).filter((row) => row.openid === openid);
+        if (!rows.length) continue;
+
+        let orderTotal = 0;
+        let directTotal = 0;
+        let indirectTotal = 0;
+        rows.forEach((row) => {
+            const amount = roundMoney(row.amount);
+            orderTotal += amount;
+            if (row.type === 'direct') directTotal += amount;
+            else if (row.type === 'indirect') indirectTotal += amount;
+        });
+
+        orderTotal = roundMoney(orderTotal);
+        directTotal = roundMoney(directTotal);
+        indirectTotal = roundMoney(indirectTotal);
+        if (orderTotal <= 0) continue;
+
+        summary.pending_payment_orders += 1;
+        summary.estimated_commission = roundMoney(summary.estimated_commission + orderTotal);
+        summary.direct_estimated_commission = roundMoney(summary.direct_estimated_commission + directTotal);
+        summary.indirect_estimated_commission = roundMoney(summary.indirect_estimated_commission + indirectTotal);
+        if (directTotal > 0) summary.direct_orders += 1;
+        if (indirectTotal > 0) summary.indirect_orders += 1;
+    }
+
+    return summary;
+}
+
 // ==================== 主处理函数 ====================
 const asyncHandler = (handler) => async (...args) => {
     try {
@@ -227,6 +369,11 @@ const handleAction = {
         });
     }),
 
+    'estimatedCommission': asyncHandler(async (openid) => {
+        const summary = await getEstimatedCommissionSummary(openid);
+        return success(summary);
+    }),
+
     'stats': asyncHandler(async (openid) => {
         const dashboard = await distributionQuery.getDashboard(openid);
         return success(dashboard);
@@ -246,17 +393,22 @@ const handleAction = {
         const userRes = await db.collection('users').where({ openid }).limit(1).get();
         if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
 
-        const user = userRes.data[0];
-        const balance = toNumber(user.wallet_balance != null ? user.wallet_balance : user.balance, 0);
-        if (amount > balance) throw badRequest('余额不足');
+        const user = await resolveCommissionWalletState(userRes.data[0]);
+        const balance = toNumber(user._commission_balance, 0);
+        if (amount > balance) throw badRequest('佣金余额不足');
 
         const withdrawNo = 'WD' + Date.now() + Math.floor(Math.random() * 1000);
 
-        // 条件扣减余额（乐观锁：where wallet_balance >= amount，防止并发超扣）
+        // 条件扣减佣金余额（乐观锁：where commission_balance >= amount，防止并发超扣）
         const updateRes = await db.collection('users')
-            .where({ openid, wallet_balance: _.gte(amount) })
+            .where({ openid, commission_balance: _.gte(amount) })
             .update({
-                data: { wallet_balance: _.inc(-amount), total_withdrawn: _.inc(amount), updated_at: db.serverDate() },
+                data: {
+                    commission_balance: _.inc(-amount),
+                    balance: _.inc(-amount),
+                    total_withdrawn: _.inc(amount),
+                    updated_at: db.serverDate()
+                },
             });
         if (!updateRes.stats || updateRes.stats.updated === 0) {
             throw badRequest('余额不足或并发冲突，请稍后重试');
@@ -419,12 +571,23 @@ const handleAction = {
     'agentWallet': asyncHandler(async (openid) => {
         const userRes = await db.collection('users').where({ openid }).limit(1).get();
         if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
-        const user = userRes.data[0];
+        const user = await resolveCommissionWalletState(userRes.data[0]);
         return success({
-            balance: toNumber(user.wallet_balance != null ? user.wallet_balance : user.balance, 0),
+            balance: toNumber(user._agent_wallet_balance, 0),
+            agent_wallet_balance: toNumber(user._agent_wallet_balance, 0),
+            commission_balance: toNumber(user._commission_balance, 0),
             total_earned: toNumber(user.total_earned, 0),
             total_withdrawn: toNumber(user.total_withdrawn, 0),
         });
+    }),
+
+    // 货款余额查询（用于订单确认页展示是否可以使用货款支付）
+    'agentGoodsFund': asyncHandler(async (openid) => {
+        const userRes = await db.collection('users').where({ openid }).limit(1).get();
+        if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
+        const u = userRes.data[0];
+        const balance = toNumber(u.agent_wallet_balance != null ? u.agent_wallet_balance : u.wallet_balance, 0);
+        return success({ balance, agent_wallet_balance: balance });
     }),
 
     'agentWalletLogs': asyncHandler(async (openid, params) => {
@@ -463,21 +626,76 @@ const handleAction = {
     }),
 
     'agentWalletPrepay': asyncHandler(async (openid, params) => {
-        const amount = toNumber(params.amount, 0);
-        if (amount <= 0) throw badRequest('充值金额必须大于0');
-        const orderNo = 'RCH' + Date.now();
-        const result = await db.collection('wallet_recharge_orders').add({
-            data: { openid, order_no: orderNo, amount, status: 'pending', created_at: db.serverDate() },
+        const wxPay = require('./wechat-pay-v3');
+
+        let rechargeId, orderNo, amount;
+
+        // 支持两种调用方式：
+        // 1. 传 recharge_order_id → 对已有充值单重新发起支付
+        // 2. 传 amount → 新建充值单并发起支付
+        if (params.recharge_order_id || params.id) {
+            const rid = params.recharge_order_id || params.id;
+            const existingRes = await db.collection('wallet_recharge_orders').doc(rid).get().catch(() => ({ data: null }));
+            if (!existingRes.data || existingRes.data.openid !== openid) throw notFound('充值订单不存在');
+            if (existingRes.data.status === 'paid') {
+                return success({ recharge_id: rid, order_no: existingRes.data.order_no, amount: existingRes.data.amount, already_paid: true });
+            }
+            rechargeId = rid;
+            orderNo = existingRes.data.order_no;
+            amount = toNumber(existingRes.data.amount, 0);
+        } else {
+            amount = toNumber(params.amount, 0);
+            if (amount <= 0) throw badRequest('充值金额必须大于0');
+            orderNo = 'RCH' + Date.now();
+            const result = await db.collection('wallet_recharge_orders').add({
+                data: { openid, order_no: orderNo, amount, status: 'pending', created_at: db.serverDate() },
+            });
+            rechargeId = result._id;
+        }
+
+        const amountInFen = Math.round(amount * 100);
+        if (amountInFen <= 0) throw badRequest('充值金额无效');
+
+        const privateKey = await wxPay.loadPrivateKey(cloud);
+        const wxResult = await wxPay.jsapiOrder(openid, orderNo, amountInFen, '货款余额充值', privateKey);
+        if (!wxResult.prepay_id) {
+            throw serverError('微信支付下单失败: ' + (wxResult.message || '未返回prepay_id'));
+        }
+
+        const payParams = wxPay.buildMiniPayParams(wxResult.prepay_id, privateKey);
+
+        await db.collection('wallet_recharge_orders').doc(rechargeId).update({
+            data: { prepay_id: wxResult.prepay_id, updated_at: db.serverDate() },
+        }).catch(() => {});
+
+        return success({
+            recharge_id: rechargeId,
+            order_no: orderNo,
+            amount,
+            ...payParams,
         });
-        return success({ recharge_id: result._id, order_no: orderNo, amount });
     }),
 
     'agentWalletRechargeOrderDetail': asyncHandler(async (openid, params) => {
         const id = params.recharge_order_id || params.id;
         if (!id) throw badRequest('缺少订单 ID');
-        const order = await db.collection('wallet_recharge_orders').doc(id).get().catch(() => ({ data: null }));
-        if (!order.data || order.data.openid !== openid) throw notFound('订单不存在');
-        return success(order.data);
+        const orderRes = await db.collection('wallet_recharge_orders').doc(id).get().catch(() => ({ data: null }));
+        if (!orderRes.data || orderRes.data.openid !== openid) throw notFound('订单不存在');
+        const order = orderRes.data;
+
+        // 计算超时（10分钟有效）
+        const createdAt = order.created_at instanceof Date ? order.created_at : new Date(order.created_at);
+        const expireMs = 10 * 60 * 1000;
+        const expiresAt = new Date(createdAt.getTime() + expireMs);
+        const now = Date.now();
+        const secondsRemaining = Math.max(0, Math.floor((expiresAt.getTime() - now) / 1000));
+
+        return success({
+            ...order,
+            can_continue_pay: order.status === 'pending' && secondsRemaining > 0,
+            seconds_remaining: secondsRemaining,
+            expires_at: expiresAt.toISOString(),
+        });
     }),
 
     // ===== 邀请码 =====
@@ -561,7 +779,7 @@ exports.main = cloudFunctionWrapper(async (event) => {
     }
 
     // 查看类 action：非分销员也可访问（返回基础数据）
-    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench', 'stats', 'team', 'teamDetail', 'commissionPreview'];
+    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench', 'stats', 'team', 'teamDetail', 'commissionPreview', 'estimatedCommission'];
 
     if (!viewActions.includes(action)) {
         // 写操作需要分销权限

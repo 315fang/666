@@ -1,17 +1,17 @@
 <!-- pages/wallet/index.wxml -->
 <view class="container">
-  <scroll-view class="main-scroll" scroll-y>
+  <scroll-view class="main-scroll" scroll-y enable-back-to-top>
 
-    <!-- 余额卡 -->
+    <!-- ═══ 顶部余额卡 ═══ -->
     <view class="balance-card">
       <view class="balance-card-inner">
-        <text class="balance-label">可提现余额（元）</text>
+        <text class="balance-label">可提现佣金（元）</text>
         <view class="balance-amount-row">
           <text class="balance-symbol">¥</text>
           <text class="balance-amount">{{balance}}</text>
         </view>
-        <view class="balance-pending-row" wx:if="{{pendingIn !== '0.00'}}">
-          <text class="balance-pending-text">待入账 ¥{{pendingIn}}</text>
+        <view class="balance-meta-row">
+          <text class="balance-meta-text">累计佣金 ¥{{commissionTotal}}</text>
         </view>
         <view class="balance-action-row">
           <view class="withdraw-btn" bindtap="onWithdrawTap">
@@ -21,36 +21,111 @@
       </view>
     </view>
 
-    <!-- 佣金概览 -->
-    <view class="section-card" wx:if="{{commissionOverview}}">
+    <!-- ═══ 佣金概览（四格）═══ -->
+    <view class="section-card">
       <text class="section-title">佣金概览</text>
       <view class="overview-grid">
         <view class="overview-item">
-          <text class="overview-val">¥{{commissionOverview.total}}</text>
+          <text class="overview-val">¥{{commissionTotal}}</text>
           <text class="overview-key">累计佣金</text>
         </view>
         <view class="overview-item">
-          <text class="overview-val overview-frozen">¥{{commissionOverview.frozen}}</text>
+          <text class="overview-val overview-frozen">¥{{commissionFrozen}}</text>
           <text class="overview-key">冻结中</text>
         </view>
         <view class="overview-item">
-          <text class="overview-val overview-pending">¥{{commissionOverview.pendingIn}}</text>
-          <text class="overview-key">待入账</text>
+          <text class="overview-val overview-estimated">¥{{commissionEstimated}}</text>
+          <text class="overview-key">预计收益</text>
+          <text class="overview-tip">以下级订单完成支付为准</text>
         </view>
         <view class="overview-item">
-          <text class="overview-val overview-settled">¥{{commissionOverview.approved}}</text>
-          <text class="overview-key">待结算</text>
+          <text class="overview-val overview-settled">¥{{commissionSettling}}</text>
+          <text class="overview-key">待打款</text>
         </view>
       </view>
     </view>
 
-    <!-- 佣金明细 -->
+    <!-- ═══ 收益阶段明细（可展开）═══ -->
+    <view class="pending-card" bindtap="togglePendingExpand">
+      <view class="pc-header">
+        <view class="pc-header-left">
+          <text class="pc-title">收益阶段明细</text>
+          <text class="pc-subtitle">点击查看预计收益与佣金流转状态</text>
+        </view>
+        <view class="pc-header-right">
+          <text class="pc-total">¥{{commissionFlowTotal}}</text>
+          <text class="pc-arrow {{pendingExpanded ? 'pc-arrow-up' : ''}}">›</text>
+        </view>
+      </view>
+      <view class="pc-detail {{pendingExpanded ? 'pc-detail-open' : ''}}">
+        <view class="pc-divider"></view>
+        <view class="pc-row">
+          <view class="pc-row-left">
+            <view class="pc-dot pc-dot-estimated"></view>
+            <view>
+              <text class="pc-row-label">预计收益</text>
+              <text class="pc-row-hint">团队订单已下单待支付，支付成功后才会生成真实佣金</text>
+            </view>
+          </view>
+          <text class="pc-row-amount pc-amount-estimated">¥{{commissionEstimated}}</text>
+        </view>
+        <view class="pc-row">
+          <view class="pc-row-left">
+            <view class="pc-dot pc-dot-frozen"></view>
+            <view>
+              <text class="pc-row-label">冻结中</text>
+              <text class="pc-row-hint">退款保护期内，到期自动解冻</text>
+            </view>
+          </view>
+          <text class="pc-row-amount pc-amount-frozen">¥{{commissionFrozen}}</text>
+        </view>
+        <view class="pc-row">
+          <view class="pc-row-left">
+            <view class="pc-dot pc-dot-pending"></view>
+            <view>
+              <text class="pc-row-label">审核中</text>
+              <text class="pc-row-hint">已解冻，等待平台审核</text>
+            </view>
+          </view>
+          <text class="pc-row-amount pc-amount-pending">¥{{commissionPending}}</text>
+        </view>
+        <view class="pc-row">
+          <view class="pc-row-left">
+            <view class="pc-dot pc-dot-settling"></view>
+            <view>
+              <text class="pc-row-label">待打款</text>
+              <text class="pc-row-hint">审核通过，等待平台打款</text>
+            </view>
+          </view>
+          <text class="pc-row-amount pc-amount-settling">¥{{commissionSettling}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- ═══ 代理商货款入口 ═══ -->
+    <view class="goods-fund-entry" wx:if="{{isAgent}}" bindtap="onGoGoodsFund">
+      <view class="gfe-left">
+        <text class="gfe-icon">💰</text>
+        <view class="gfe-info">
+          <text class="gfe-title">货款账户</text>
+          <text class="gfe-sub">代理商进货资金，与佣金独立核算</text>
+        </view>
+      </view>
+      <view class="gfe-right">
+        <text class="gfe-balance">¥{{goodsFundBalance}}</text>
+        <text class="gfe-arrow">›</text>
+      </view>
+    </view>
+
+    <!-- ═══ 佣金明细 ═══ -->
     <view class="section-card">
-      <text class="section-title">佣金明细</text>
+      <view class="section-header">
+        <text class="section-title">佣金明细</text>
+      </view>
 
       <!-- 骨架屏 -->
-      <view class="skeleton-wrap" wx:if="{{logsLoading}}">
-        <view class="sk-log" wx:for="{{[1,2,3,4,5]}}" wx:key="index">
+      <view class="skeleton-wrap" wx:if="{{logsLoading && logs.length === 0}}">
+        <view class="sk-log" wx:for="{{[1,2,3,4]}}" wx:key="index">
           <view class="sk-info">
             <view class="sk-line sk-long"></view>
             <view class="sk-line sk-short"></view>
@@ -60,18 +135,21 @@
       </view>
 
       <!-- 流水列表 -->
-      <view class="log-item" wx:for="{{logs}}" wx:key="id">
-        <view class="log-left">
-          <view class="log-type-row">
-            <text class="log-type">{{item.typeName}}</text>
-            <view class="log-status-badge log-status-{{item.status}}">{{item.statusText}}</view>
+      <view wx:if="{{logs.length > 0}}">
+        <view class="log-item" wx:for="{{logs}}" wx:key="id">
+          <view class="log-left">
+            <view class="log-type-row">
+              <text class="log-type">{{item.typeName}}</text>
+              <view class="log-status-badge {{item.statusClass}}">{{item.statusText}}</view>
+            </view>
+            <text class="log-time">{{item.created_at}}</text>
+            <text class="log-deadline" wx:if="{{item.refund_deadline}}">冻结至 {{item.refund_deadline}}</text>
           </view>
-          <text class="log-time">{{item.created_at}}</text>
-          <text class="log-deadline" wx:if="{{item.refund_deadline}}">冻结至 {{item.refund_deadline}}</text>
-        </view>
-        <view class="log-right">
-          <text class="log-amount log-positive" wx:if="{{item.type !== 'withdrawal'}}">+¥{{item.amount}}</text>
-          <text class="log-amount log-negative" wx:else>-¥{{item.amount}}</text>
+          <view class="log-right">
+            <text class="log-amount {{item.isWithdraw ? 'log-negative' : 'log-positive'}}">
+              {{item.isWithdraw ? '-' : '+'}}¥{{item.amount}}
+            </text>
+          </view>
         </view>
       </view>
 
@@ -82,24 +160,41 @@
       </view>
     </view>
 
+    <!-- 底部说明 -->
+    <view class="footer-note">
+      <text class="footer-note-text">佣金在退款保护期结束后自动解冻，解冻后可申请提现。</text>
+    </view>
+
     <view style="height: 80rpx;"></view>
   </scroll-view>
 
-  <!-- 提现弹窗 -->
+  <!-- ═══ 提现弹窗 ═══ -->
   <view class="popup-mask" wx:if="{{showWithdraw}}" bindtap="hideWithdraw">
     <view class="popup-panel" catchtap="">
-      <text class="popup-title">申请提现</text>
-      <view class="popup-balance-tip">可用余额 ¥{{balance}}</view>
+      <view class="popup-header">
+        <text class="popup-title">申请提现</text>
+        <view class="popup-close" bindtap="hideWithdraw">×</view>
+      </view>
+      <view class="popup-balance-tip">
+        可提现余额：<text class="popup-balance-num">¥{{balance}}</text>
+      </view>
       <view class="popup-input-wrap">
         <text class="popup-input-symbol">¥</text>
-        <input class="popup-input" type="digit" placeholder="输入提现金额" value="{{withdrawAmount}}" bindinput="onWithdrawInput" focus="{{showWithdraw}}"></input>
+        <input
+          class="popup-input"
+          type="digit"
+          placeholder="输入提现金额"
+          value="{{withdrawAmount}}"
+          bindinput="onWithdrawInput"
+          focus="{{showWithdraw}}"
+        />
       </view>
       <view class="popup-btn-row">
         <view class="popup-cancel" bindtap="hideWithdraw">
           <text class="popup-cancel-text">取消</text>
         </view>
-        <view class="popup-confirm" bindtap="confirmWithdraw">
-          <text class="popup-confirm-text">确认提现</text>
+        <view class="popup-confirm {{withdrawing ? 'btn-loading' : ''}}" bindtap="confirmWithdraw">
+          <text class="popup-confirm-text">{{withdrawing ? '提交中...' : '确认提现'}}</text>
         </view>
       </view>
     </view>

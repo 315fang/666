@@ -111,6 +111,7 @@ const ROUTE_TABLE = {
     'GET /wallet/commissions': { fn: 'user', action: 'walletCommissions' },
     'GET /user/member-tier-meta': { fn: 'user', action: 'memberTierMeta' },
     'GET /agent/wallet': { fn: 'distribution', action: 'agentWallet' },
+    'GET /agent/goods-fund': { fn: 'distribution', action: 'agentGoodsFund' },
     'GET /agent/wallet/logs': { fn: 'distribution', action: 'agentWalletLogs' },
     'GET /agent/wallet/recharge-config': { fn: 'distribution', action: 'agentWalletRechargeConfig' },
     'POST /agent/wallet/prepay': { fn: 'distribution', action: 'agentWalletPrepay' },

@@ -23,6 +23,19 @@ function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
 }
 
+function uniqueValues(values = []) {
+    const seen = {};
+    const list = [];
+    values.forEach((value) => {
+        if (!hasValue(value)) return;
+        const key = `${typeof value}:${String(value)}`;
+        if (seen[key]) return;
+        seen[key] = true;
+        list.push(value);
+    });
+    return list;
+}
+
 function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
 }
@@ -132,6 +145,54 @@ async function findUserByAny(value) {
         db.collection('users').doc(String(value)).get().then((res) => ({ data: res.data ? [res.data] : [] })).catch(() => ({ data: [] }))
     ]);
     return byOpenid.data[0] || byLegacyId.data[0] || byDoc.data[0] || null;
+}
+
+async function getCommissionIdentity(openid) {
+    const user = await findUserByAny(openid);
+    const userIds = [];
+    if (user) {
+        if (hasValue(user.id)) userIds.push(user.id, String(user.id));
+        if (hasValue(user._id)) userIds.push(user._id);
+        if (hasValue(user._legacy_id)) userIds.push(user._legacy_id, String(user._legacy_id));
+    }
+    return {
+        user,
+        openid,
+        userIds: uniqueValues(userIds)
+    };
+}
+
+function commissionRecordKey(row = {}) {
+    return String(row._id || `${row.openid || ''}:${row.user_id || ''}:${row.order_id || ''}:${row.type || ''}:${row.created_at || ''}`);
+}
+
+async function listCommissionRows(identity = {}, params = {}) {
+    const tasks = [];
+    if (identity.openid) {
+        tasks.push(getAllRecords(db, 'commissions', { openid: identity.openid }).catch(() => []));
+    }
+    if (identity.userIds && identity.userIds.length) {
+        tasks.push(getAllRecords(db, 'commissions', { user_id: _.in(identity.userIds) }).catch(() => []));
+    }
+    if (!tasks.length) return [];
+
+    let rows = (await Promise.all(tasks)).flat();
+    const merged = {};
+    rows.forEach((row) => {
+        merged[commissionRecordKey(row)] = row;
+    });
+    rows = Object.values(merged);
+
+    if (params.status) {
+        rows = rows.filter((row) => String(row.status || '') === String(params.status));
+    }
+
+    rows.sort((a, b) => {
+        const ta = new Date(a.created_at || 0).getTime();
+        const tb = new Date(b.created_at || 0).getTime();
+        return tb - ta;
+    });
+    return rows;
 }
 
 function getUserReferrer(user = {}) {
@@ -252,7 +313,8 @@ async function calculateCommission(orderId) {
 async function settleCommission(openid, amount) {
     await db.collection('users').where({ openid }).update({
         data: {
-            wallet_balance: _.inc(amount),
+            commission_balance: _.inc(amount),
+            balance: _.inc(amount),
             total_earned: _.inc(amount),
             updated_at: db.serverDate()
         }
@@ -261,15 +323,15 @@ async function settleCommission(openid, amount) {
 }
 
 async function getCommissions(openid, params = {}) {
-    let query = db.collection('commissions').where({ openid });
-    if (params.status) query = query.where({ status: params.status });
-    const res = await query.orderBy('created_at', 'desc').limit(100).get().catch(() => ({ data: [] }));
-    return res.data || [];
+    const identity = await getCommissionIdentity(openid);
+    const rows = await listCommissionRows(identity, params);
+    return rows.slice(0, 100);
 }
 
 async function getStats(openid) {
     try {
-        const commRes = await getAllRecords(db, 'commissions', { openid });
+        const identity = await getCommissionIdentity(openid);
+        const commRes = await listCommissionRows(identity);
         const stats = {
             total_commission: 0,
             pending_commission: 0,

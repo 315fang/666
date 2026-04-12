@@ -166,6 +166,7 @@ const ROUTE_TABLE = {
     'GET /points/tasks':                    { fn: 'user',         action: 'pointsTasks' },
     'GET /points/logs':                     { fn: 'user',         action: 'pointsLogs' },
     'GET /wallet/info':                     { fn: 'user',         action: 'walletInfo' },
+    'GET /wallet/estimated-commission':    { fn: 'distribution', action: 'estimatedCommission' },
     'GET /wallet/commissions':              { fn: 'user',         action: 'walletCommissions' },
     'GET /user/member-tier-meta':           { fn: 'user',         action: 'memberTierMeta' },
     'GET /agent/wallet':                    { fn: 'distribution', action: 'agentWallet' },

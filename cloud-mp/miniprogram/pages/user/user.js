@@ -5,6 +5,7 @@ const { getConfigSection, getFeatureFlags, syncCustomTabBar } = require('../../u
 const QUAD_PLACEHOLDER = '/assets/images/placeholder.svg';
 const {
     applyGrowthDisplay,
+    clearSecondaryLoadState,
     loadAssetRow,
     loadDistributionInfo,
     loadNotificationsCount,
@@ -113,6 +114,7 @@ Page({
         featureFlags: {
             show_station_entry: false,
             show_pickup_entry: false,
+            show_agent_service_entry: false,
             enable_lottery_entry: false
         },
         loginAgreementHint: '登录后查看订单、积分、佣金等信息',
@@ -173,11 +175,11 @@ Page({
     },
 
     onHide() {
-        clearTimeout(this._secondaryLoadTimer);
+        clearSecondaryLoadState(this);
     },
 
     onUnload() {
-        clearTimeout(this._secondaryLoadTimer);
+        clearSecondaryLoadState(this);
     },
 
     async loadPageLayoutConfig() {

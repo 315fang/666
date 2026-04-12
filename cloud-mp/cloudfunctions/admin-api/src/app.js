@@ -2070,7 +2070,7 @@ function applyUserMoneyChange(users, userRef, amount, options = {}) {
     const index = users.findIndex((user) => rowMatchesLookup(user, userRef, [user.openid, user.member_no]));
     if (index === -1) return null;
     const user = users[index];
-    const currentBalance = toNumber(user.wallet_balance ?? user.balance, 0);
+    const currentBalance = toNumber(user.commission_balance ?? user.balance, 0);
     const currentDebt = toNumber(user.debt_amount, 0);
 
     if (amount >= 0) {
@@ -2078,8 +2078,8 @@ function applyUserMoneyChange(users, userRef, amount, options = {}) {
         const credited = amount - debtOffset;
         users[index] = {
             ...user,
-            wallet_balance: currentBalance + credited,
             balance: currentBalance + credited,
+            commission_balance: currentBalance + credited,
             total_earned: toNumber(user.total_earned, 0) + credited,
             debt_amount: currentDebt - debtOffset,
             updated_at: nowIso()
@@ -2092,8 +2092,8 @@ function applyUserMoneyChange(users, userRef, amount, options = {}) {
     const debtAdded = debit - paidFromBalance;
     users[index] = {
         ...user,
-        wallet_balance: currentBalance - paidFromBalance,
         balance: currentBalance - paidFromBalance,
+        commission_balance: currentBalance - paidFromBalance,
         total_earned: Math.max(0, toNumber(user.total_earned, 0) - paidFromBalance),
         debt_amount: currentDebt + debtAdded,
         updated_at: nowIso()
@@ -2365,6 +2365,107 @@ function restoreOrderStockForRefund(orderId) {
     saveCollection('skus', skus);
     saveCollection('orders', orders);
     return { restored };
+}
+
+/**
+ * 退款完成后退还积分和优惠券（支持 CloudBase DB 原子操作）
+ * @param {string} orderId - 订单 ID 或 order_no
+ */
+async function refundOrderExtras(orderId) {
+    const orders = getCollection('orders');
+    const order = findByLookup(orders, orderId, (row) => [row.order_no]);
+    if (!order) return;
+
+    const db = dataStore._internals && dataStore._internals.db;
+
+    // 退积分
+    const pointsUsed = toNumber(order.points_used, 0);
+    if (pointsUsed > 0 && order.openid) {
+        const users = getCollection('users');
+        const userIndex = users.findIndex((u) => u.openid === order.openid);
+        if (userIndex !== -1) {
+            users[userIndex] = {
+                ...users[userIndex],
+                points: toNumber(users[userIndex].points, 0) + pointsUsed,
+                growth_value: toNumber(users[userIndex].growth_value, 0) + pointsUsed,
+                updated_at: nowIso(),
+            };
+            saveCollection('users', users);
+        }
+        if (db) {
+            const _ = db.command;
+            await db.collection('users').where({ openid: order.openid }).update({
+                data: { points: _.inc(pointsUsed), growth_value: _.inc(pointsUsed), updated_at: new Date().toISOString() }
+            }).catch((err) => { console.error('[refundOrderExtras] 退积分失败:', err.message); });
+        }
+    }
+
+    // 退优惠券
+    const userCouponId = order.user_coupon_id || order.coupon_id;
+    if (userCouponId && order.openid && db) {
+        if (order.user_coupon_id) {
+            await db.collection('user_coupons')
+                .doc(String(order.user_coupon_id))
+                .update({ data: { status: 'unused', used_at: db.command.remove(), updated_at: new Date().toISOString() } })
+                .catch((err) => { console.error('[refundOrderExtras] 退优惠券(id)失败:', err.message); });
+        } else if (order.coupon_id) {
+            const couponIdStr = String(order.coupon_id);
+            const couponIdNum = Number(order.coupon_id);
+            const candidates = Number.isFinite(couponIdNum) ? [couponIdStr, couponIdNum] : [couponIdStr];
+            for (const cid of candidates) {
+                await db.collection('user_coupons')
+                    .where({ openid: order.openid, coupon_id: cid, status: 'used' })
+                    .update({ data: { status: 'unused', used_at: db.command.remove(), updated_at: new Date().toISOString() } })
+                    .catch(() => {});
+            }
+        }
+    }
+}
+
+/**
+ * 管理员手动升级代理时记录基金池入池
+ * 默认入池金额：B1(role_level=3)→480元，B2(role_level=4)→4600元
+ */
+async function recordAdminFundPoolEntry(openid, newLevel, oldLevel) {
+    if (!openid || newLevel <= oldLevel || newLevel < 3) return;
+    const DEFAULT_CONTRIBUTIONS = { 3: 480, 4: 4600 };
+    const db = dataStore._internals && dataStore._internals.db;
+    if (!db) return;
+
+    try {
+        const configRes = await db.collection('configs').where({ key: 'agent_system_fund-pool' }).limit(1).get().catch(() => ({ data: [] }));
+        const config = (configRes.data && configRes.data[0]) || {};
+        const contributions = config.contribution_by_level || DEFAULT_CONTRIBUTIONS;
+
+        // 从旧等级+1逐级入池（防止跨级升级漏记）
+        for (let lv = Math.max(3, oldLevel + 1); lv <= newLevel; lv++) {
+            const amount = toNumber(contributions[lv] || DEFAULT_CONTRIBUTIONS[lv], 0);
+            if (amount <= 0) continue;
+
+            await db.collection('fund_pool_logs').add({
+                data: {
+                    openid,
+                    role_level: lv,
+                    amount,
+                    source: 'admin_upgrade',
+                    created_at: new Date().toISOString(),
+                },
+            }).catch((err) => { console.error('[FundPool] 写入fund_pool_logs失败:', err.message); });
+
+            if (config._id) {
+                await db.collection('configs').doc(String(config._id)).update({
+                    data: {
+                        balance: db.command.inc(amount),
+                        total_in: db.command.inc(amount),
+                        updated_at: new Date().toISOString(),
+                    },
+                }).catch((err) => { console.error('[FundPool] 更新基金池余额失败:', err.message); });
+            }
+            console.log(`[FundPool] 管理员入池: openid=${openid}, role_level=${lv}, amount=${amount}`);
+        }
+    } catch (err) {
+        console.error('[FundPool] recordAdminFundPoolEntry异常:', err.message);
+    }
 }
 
 ensureDir(runtimeRoot);
@@ -3542,16 +3643,24 @@ app.get('/admin/api/users/:id/team-summary', auth, requirePermission('users'), (
     ok(res, buildUserTeamSummary(user, users, orders, pickString(req.query.range || 'all')));
 });
 
-app.put('/admin/api/users/:id/role', auth, requirePermission('user_role_manage'), (req, res) => {
+app.put('/admin/api/users/:id/role', auth, requirePermission('user_role_manage'), async (req, res) => {
     const roleLevel = toNumber(req.body?.role_level, NaN);
     if (!Number.isFinite(roleLevel)) return fail(res, '请提供有效的角色等级');
+    const users = getCollection('users');
+    const existingUser = findByLookup(users, req.params.id);
+    const oldLevel = toNumber(existingUser && (existingUser.role_level ?? existingUser.distributor_level), 0);
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         role_level: roleLevel,
         distributor_level: req.body?.agent_level != null ? toNumber(req.body.agent_level, roleLevel) : row.distributor_level,
+        role_upgraded_at: roleLevel > oldLevel ? nowIso() : (row.role_upgraded_at || nowIso()),
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '用户不存在', 404);
+    const openid = updated.openid;
+    if (openid && roleLevel > oldLevel && roleLevel >= 3) {
+        recordAdminFundPoolEntry(openid, roleLevel, oldLevel).catch(() => {});
+    }
     createAuditLog(req.admin, 'user.role.update', 'users', { user_id: primaryId(updated), role_level: roleLevel });
     ok(res, updated);
 });
@@ -3560,13 +3669,13 @@ app.put('/admin/api/users/:id/balance', auth, requirePermission('user_balance_ad
     const amount = toNumber(req.body?.amount, NaN);
     if (!Number.isFinite(amount) || amount < 0) return fail(res, '请输入有效金额');
     const updated = patchCollectionRow('users', req.params.id, (row) => {
-        const current = toNumber(row.balance ?? row.wallet_balance, 0);
+        const current = toNumber(row.commission_balance ?? row.balance, 0);
         const delta = pickString(req.body?.type, 'add') === 'subtract' ? -amount : amount;
         const nextBalance = Math.max(0, current + delta);
         return {
             ...row,
             balance: nextBalance,
-            wallet_balance: nextBalance,
+            commission_balance: nextBalance,
             updated_at: nowIso()
         };
     });
@@ -3578,6 +3687,117 @@ app.put('/admin/api/users/:id/balance', auth, requirePermission('user_balance_ad
         reason: pickString(req.body?.reason)
     });
     ok(res, updated);
+});
+
+// ── 货款余额手动调整 ──
+app.put('/admin/api/users/:id/goods-fund', auth, requirePermission('user_balance_adjust'), (req, res) => {
+    const amount = toNumber(req.body?.amount, NaN);
+    if (!Number.isFinite(amount) || amount < 0) return fail(res, '请输入有效金额');
+    const type = pickString(req.body?.type, 'add');
+    const updated = patchCollectionRow('users', req.params.id, (row) => {
+        const current = toNumber(row.agent_wallet_balance != null ? row.agent_wallet_balance : row.wallet_balance, 0);
+        const delta = type === 'subtract' ? -amount : amount;
+        const next = Math.max(0, roundMoney(current + delta));
+        return { ...row, agent_wallet_balance: next, updated_at: nowIso() };
+    });
+    if (!updated) return fail(res, '用户不存在', 404);
+    createAuditLog(req.admin, 'user.goods_fund.adjust', 'users', {
+        user_id: primaryId(updated),
+        type,
+        amount,
+        reason: pickString(req.body?.reason)
+    });
+    ok(res, updated);
+});
+
+// ── 积分手动调整 ──
+app.put('/admin/api/users/:id/points', auth, requirePermission('user_balance_adjust'), (req, res) => {
+    const amount = toNumber(req.body?.amount, NaN);
+    if (!Number.isFinite(amount) || amount < 0 || !Number.isInteger(amount)) return fail(res, '积分必须为非负整数');
+    const type = pickString(req.body?.type, 'add');
+    const updated = patchCollectionRow('users', req.params.id, (row) => {
+        const current = toNumber(row.points, 0);
+        const delta = type === 'subtract' ? -amount : amount;
+        const next = Math.max(0, Math.round(current + delta));
+        return { ...row, points: next, updated_at: nowIso() };
+    });
+    if (!updated) return fail(res, '用户不存在', 404);
+    createAuditLog(req.admin, 'user.points.adjust', 'users', {
+        user_id: primaryId(updated),
+        type,
+        amount,
+        reason: pickString(req.body?.reason)
+    });
+    ok(res, updated);
+});
+
+// ── 成长值手动调整 ──
+app.put('/admin/api/users/:id/growth', auth, requirePermission('user_balance_adjust'), (req, res) => {
+    const amount = toNumber(req.body?.amount, NaN);
+    if (!Number.isFinite(amount) || amount < 0 || !Number.isInteger(amount)) return fail(res, '成长值必须为非负整数');
+    const type = pickString(req.body?.type, 'add');
+    const updated = patchCollectionRow('users', req.params.id, (row) => {
+        const current = toNumber(row.growth_value, 0);
+        const delta = type === 'subtract' ? -amount : amount;
+        const next = Math.max(0, Math.round(current + delta));
+        return { ...row, growth_value: next, updated_at: nowIso() };
+    });
+    if (!updated) return fail(res, '用户不存在', 404);
+    createAuditLog(req.admin, 'user.growth.adjust', 'users', {
+        user_id: primaryId(updated),
+        type,
+        amount,
+        reason: pickString(req.body?.reason)
+    });
+    ok(res, updated);
+});
+
+// ── 佣金手动调整（直接向 commissions 集合插入一条记录） ──
+app.post('/admin/api/users/:id/commission', auth, requirePermission('user_balance_adjust'), (req, res) => {
+    const amount = toNumber(req.body?.amount, NaN);
+    if (!Number.isFinite(amount) || amount <= 0) return fail(res, '金额必须大于0');
+    const type = pickString(req.body?.type, 'add'); // add | subtract
+    const userRows = getCollection('users');
+    const user = userRows.find((u) => rowMatchesLookup(u, req.params.id));
+    if (!user) return fail(res, '用户不存在', 404);
+
+    const comms = getCollection('commissions');
+    const newRecord = {
+        _id: String(Date.now()) + Math.random().toString(36).slice(2, 8),
+        openid: user.openid,
+        user_id: primaryId(user),
+        type: type === 'subtract' ? 'admin_deduct' : 'admin_credit',
+        amount: type === 'subtract' ? -Math.abs(amount) : Math.abs(amount),
+        status: 'settled',
+        source: 'admin_manual',
+        remark: pickString(req.body?.reason) || (type === 'subtract' ? '管理员扣减佣金' : '管理员增加佣金'),
+        operator_id: req.admin?.id || '',
+        operator_name: req.admin?.username || '管理员',
+        created_at: nowIso(),
+        updated_at: nowIso()
+    };
+    saveCollection('commissions', [...comms, newRecord]);
+
+    // 同步更新 users.commission_balance / balance
+    patchCollectionRow('users', req.params.id, (row) => {
+        const current = toNumber(row.commission_balance != null ? row.commission_balance : row.balance, 0);
+        const delta = type === 'subtract' ? -amount : amount;
+        const next = Math.max(0, roundMoney(current + delta));
+        return {
+            ...row,
+            commission_balance: next,
+            balance: next,
+            updated_at: nowIso()
+        };
+    });
+
+    createAuditLog(req.admin, 'user.commission.adjust', 'commissions', {
+        user_id: primaryId(user),
+        type,
+        amount,
+        reason: pickString(req.body?.reason)
+    });
+    ok(res, { success: true, record: newRecord });
 });
 
 app.put('/admin/api/users/:id/status', auth, requirePermission('user_status_manage'), (req, res) => {
@@ -3703,18 +3923,29 @@ app.get('/admin/api/dealers', auth, requirePermission('dealers'), (req, res) => 
     ok(res, paginate(rows, req));
 });
 
-app.put('/admin/api/dealers/:id/approve', auth, requirePermission('dealers'), (req, res) => {
+app.put('/admin/api/dealers/:id/approve', auth, requirePermission('dealers'), async (req, res) => {
     const approvedAt = nowIso();
-    const updated = patchCollectionRow('users', req.params.id, (row) => ({
-        ...row,
-        dealer_status: 'approved',
-        dealer_approved_at: approvedAt,
-        dealer_level: inferDealerLevel(row),
-        role_level: Math.max(toNumber(row.role_level, 0), 3),
-        distributor_level: Math.max(toNumber(row.distributor_level, 0), 2),
-        updated_at: approvedAt
-    }));
+    const users = getCollection('users');
+    const existingUser = findByLookup(users, req.params.id);
+    const oldLevel = toNumber(existingUser && (existingUser.role_level ?? existingUser.distributor_level), 0);
+    const updated = patchCollectionRow('users', req.params.id, (row) => {
+        const newLevel = Math.max(toNumber(row.role_level, 0), 3);
+        return {
+            ...row,
+            dealer_status: 'approved',
+            dealer_approved_at: approvedAt,
+            dealer_level: inferDealerLevel(row),
+            role_level: newLevel,
+            distributor_level: Math.max(toNumber(row.distributor_level, 0), 2),
+            role_upgraded_at: newLevel > oldLevel ? approvedAt : (row.role_upgraded_at || approvedAt),
+            updated_at: approvedAt
+        };
+    });
     if (!updated) return fail(res, '经销商不存在', 404);
+    const newLevel = toNumber(updated.role_level, 0);
+    if (updated.openid && newLevel > oldLevel && newLevel >= 3) {
+        recordAdminFundPoolEntry(updated.openid, newLevel, oldLevel).catch(() => {});
+    }
     createAuditLog(req.admin, 'dealer.approve', 'users', { dealer_user_id: primaryId(updated) });
     ok(res, buildDealerRecord(updated));
 });
@@ -3732,19 +3963,30 @@ app.put('/admin/api/dealers/:id/reject', auth, requirePermission('dealers'), (re
     ok(res, buildDealerRecord(updated));
 });
 
-app.put('/admin/api/dealers/:id/level', auth, requirePermission('dealers'), (req, res) => {
+app.put('/admin/api/dealers/:id/level', auth, requirePermission('dealers'), async (req, res) => {
     const level = toNumber(req.body?.level, NaN);
     if (!Number.isFinite(level) || level < 1 || level > 3) return fail(res, '请提供有效的经销商等级');
     const updatedAt = nowIso();
-    const updated = patchCollectionRow('users', req.params.id, (row) => ({
-        ...row,
-        dealer_level: level,
-        dealer_status: normalizeDealerStatus(row.dealer_status, 'approved'),
-        role_level: dealerRoleLevelForLevel(level),
-        distributor_level: Math.max(toNumber(row.distributor_level, 0), level),
-        updated_at: updatedAt
-    }));
+    const users = getCollection('users');
+    const existingUser = findByLookup(users, req.params.id);
+    const oldLevel = toNumber(existingUser && (existingUser.role_level ?? existingUser.distributor_level), 0);
+    const updated = patchCollectionRow('users', req.params.id, (row) => {
+        const newRoleLevel = dealerRoleLevelForLevel(level);
+        return {
+            ...row,
+            dealer_level: level,
+            dealer_status: normalizeDealerStatus(row.dealer_status, 'approved'),
+            role_level: newRoleLevel,
+            distributor_level: Math.max(toNumber(row.distributor_level, 0), level),
+            role_upgraded_at: newRoleLevel > oldLevel ? updatedAt : (row.role_upgraded_at || updatedAt),
+            updated_at: updatedAt
+        };
+    });
     if (!updated) return fail(res, '经销商不存在', 404);
+    const newLevel = toNumber(updated.role_level, 0);
+    if (updated.openid && newLevel > oldLevel && newLevel >= 3) {
+        recordAdminFundPoolEntry(updated.openid, newLevel, oldLevel).catch(() => {});
+    }
     createAuditLog(req.admin, 'dealer.level.update', 'users', { dealer_user_id: primaryId(updated), level });
     ok(res, buildDealerRecord(updated));
 });
@@ -4047,11 +4289,20 @@ app.put('/admin/api/upgrade-applications/:id/review', auth, requirePermission('d
     }));
     if (!updated) return fail(res, '申请不存在', 404);
     if (status === 'approved' && updated.user_id) {
+        const users = getCollection('users');
+        const existingUser = findByLookup(users, updated.user_id);
+        const oldLevel = toNumber(existingUser && (existingUser.role_level ?? existingUser.distributor_level), 0);
+        const newLevel = updated.path_type === 'n_upgrade' ? 7 : Math.max(6, toNumber(oldLevel, 0));
         patchCollectionRow('users', updated.user_id, (row) => ({
             ...row,
-            role_level: updated.path_type === 'n_upgrade' ? 7 : Math.max(6, toNumber(row.role_level, 0)),
+            role_level: newLevel,
+            role_upgraded_at: newLevel > oldLevel ? nowIso() : (row.role_upgraded_at || nowIso()),
             updated_at: nowIso()
         }));
+        const patchedUser = findByLookup(getCollection('users'), updated.user_id);
+        if (patchedUser && patchedUser.openid && newLevel > oldLevel && newLevel >= 3) {
+            recordAdminFundPoolEntry(patchedUser.openid, newLevel, oldLevel).catch(() => {});
+        }
     }
     createAuditLog(req.admin, `upgrade-application.${action}`, 'upgrade_applications', { application_id: primaryId(updated) });
     ok(res, updated);
@@ -4107,17 +4358,29 @@ app.put('/admin/api/withdrawals/:id/reject', auth, requirePermission('withdrawal
     saveCollection('withdrawals', rows);
 
     const refundAmount = toNumber(current.amount, 0);
+    const refundOpenid = current.openid || '';
     if (refundAmount > 0) {
         patchCollectionRow('users', current.user_id || current.openid, (row) => {
-            const currentBalance = toNumber(row.wallet_balance ?? row.balance, 0);
+            const currentBalance = toNumber(row.commission_balance ?? row.balance, 0);
             const nextBalance = Math.max(0, currentBalance + refundAmount);
             return {
                 ...row,
-                wallet_balance: nextBalance,
                 balance: nextBalance,
+                commission_balance: nextBalance,
+                total_withdrawn: Math.max(0, toNumber(row.total_withdrawn, 0) - refundAmount),
                 updated_at: nowIso()
             };
         });
+        // CloudBase DB 原子更新 total_withdrawn（防止内存与DB不一致）
+        const db = dataStore._internals && dataStore._internals.db;
+        if (db && refundOpenid) {
+            db.collection('users').where({ openid: refundOpenid }).update({
+                data: {
+                    total_withdrawn: db.command.inc(-refundAmount),
+                    updated_at: new Date().toISOString()
+                }
+            }).catch((err) => { console.error('[Withdrawal] total_withdrawn回滚失败:', err.message); });
+        }
     }
     if (!updated) return fail(res, '提现记录不存在', 404);
     ok(res, updated);
@@ -4275,7 +4538,66 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
     patchCollectionRow('orders', orderId, (row) => ({ ...row, status: 'refunding', updated_at: nowIso() }));
 
     try {
-        if (['wallet', 'balance', 'credit', 'debt'].includes(paymentMethod)) {
+        if (paymentMethod === 'goods_fund') {
+            // 货款支付订单：退回 agent_wallet_balance（内部余额），不发起微信退款
+            const buyerOpenid = pickString(order.openid || order.buyer_id || refund.openid || refund.user_id);
+            if (!buyerOpenid) throw new Error('货款退款：找不到买家 openid');
+
+            const db = dataStore._internals && dataStore._internals.db;
+            if (db) {
+                const _ = db.command;
+                await db.collection('users').where({ openid: buyerOpenid }).update({
+                    data: {
+                        agent_wallet_balance: _.inc(refundAmount),
+                        updated_at: new Date().toISOString()
+                    }
+                });
+                // 写货款流水日志
+                await db.collection('goods_fund_logs').add({
+                    data: {
+                        openid: buyerOpenid,
+                        type: 'refund',
+                        amount: refundAmount,
+                        order_id: String(order._id),
+                        order_no: pickString(order.order_no),
+                        remark: `订单退款 ${pickString(order.order_no)}`,
+                        created_at: new Date().toISOString()
+                    }
+                }).catch(() => {});
+            } else {
+                // Filesystem/开发模式：更新内存
+                const userIdx = users.findIndex((u) => u.openid === buyerOpenid);
+                if (userIdx !== -1) {
+                    users[userIdx] = {
+                        ...users[userIdx],
+                        agent_wallet_balance: toNumber(users[userIdx].agent_wallet_balance, 0) + refundAmount,
+                        updated_at: nowIso()
+                    };
+                    saveCollection('users', users);
+                }
+            }
+
+            const completedData = { status: 'completed', completed_at: nowIso() };
+            const refundWriteOk = await directPatchDocument('refunds', String(refund._id), completedData);
+            if (!refundWriteOk && dataStore._internals?.db) throw new Error('退款记录更新失败');
+            patchCollectionRow('refunds', req.params.id, (row) => ({ ...row, ...completedData }));
+
+            const orderWriteOk = await directPatchDocument('orders', String(order._id), { status: 'refunded', refunded_at: nowIso() });
+            if (!orderWriteOk && dataStore._internals?.db) throw new Error('订单状态更新失败');
+            patchCollectionRow('orders', orderId, (row) => ({
+                ...row, status: 'refunded', refunded_at: nowIso(), updated_at: nowIso()
+            }));
+
+            cancelCommissionsForOrder(orderId, '货款退款完成，佣金作废');
+            restoreOrderStockForRefund(orderId);
+            await refundOrderExtras(orderId);
+            createAuditLog(req.admin, 'refund.complete', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod });
+            await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+            const gfFresh = findByLookup(getCollection('refunds'), req.params.id);
+            const gfUsers = getCollection('users');
+            const gfOrders = getCollection('orders');
+            ok(res, buildRefundRecord(gfFresh || { ...refund, ...completedData }, gfUsers, gfOrders, getCollection('products'), getCollection('skus')));
+        } else if (['wallet', 'balance', 'credit', 'debt'].includes(paymentMethod)) {
             const change = applyUserMoneyChange(users, order.openid || order.buyer_id || refund.openid || refund.user_id, refundAmount, {
                 reason: `订单退款 ${pickString(order.order_no)}`
             });
@@ -4300,6 +4622,7 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
 
             cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
             restoreOrderStockForRefund(orderId);
+            await refundOrderExtras(orderId);
             createAuditLog(req.admin, 'refund.complete', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod });
             await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
             const cFresh = findByLookup(getCollection('refunds'), req.params.id);
@@ -4335,6 +4658,7 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
 
                 cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
                 restoreOrderStockForRefund(orderId);
+                await refundOrderExtras(orderId);
                 await directPatchDocument('orders', String(order._id), { status: 'refunded', refunded_at: nowIso() });
                 patchCollectionRow('orders', orderId, (row) => ({
                     ...row, status: 'refunded', refunded_at: nowIso(), updated_at: nowIso()
@@ -4447,6 +4771,7 @@ app.post('/admin/api/refunds/wechat-notify', async (req, res) => {
 
             cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
             restoreOrderStockForRefund(orderId);
+            await refundOrderExtras(orderId);
 
             if (orderDocId) {
                 await directPatchDocument('orders', orderDocId, { status: 'refunded', refunded_at: nowIso() });
@@ -5090,7 +5415,14 @@ app.get('/admin/api/statistics/agent-ranking', auth, requirePermission('statisti
 
 app.get('/admin/api/statistics/distribution-report', auth, requirePermission('statistics'), (req, res) => {
     const commissions = getCollection('commissions');
-    const TYPE_LABEL = { direct: '直推佣金', team: '团队佣金', peer: '平级奖励', assist: '辅助奖励', year_end_dividend: '年终分红' };
+    const TYPE_LABEL = {
+        direct: '直推佣金', indirect: '团队佣金', team: '团队佣金',
+        same_level: '平级奖励', peer: '平级奖励',
+        pickup_subsidy: '自提补贴', agent_assist: '动销奖励', assist: '动销奖励',
+        year_end_dividend: '年终分红',
+        admin_deduct: '系统扣除', admin_credit: '系统补发', admin_adjustment: '系统调整',
+        region_agent: '区域代理奖', agent_fulfillment: '发货利润'
+    };
     const byType = {};
     commissions.forEach((c) => {
         const t = pickString(c.type || 'other');

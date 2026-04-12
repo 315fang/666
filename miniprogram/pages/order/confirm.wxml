@@ -170,16 +170,37 @@
   </view>
 
   <!-- 积分抵扣 -->
-  <view class="section points-section" wx:if="{{pointBalance > 0}}">
+  <view class="section points-section" wx:if="{{pointBalance > 0 && !useGoodsFund}}">
     <text class="points-label">积分抵扣</text>
     <view class="points-right">
       <text class="points-balance">{{pointBalance}}积分可用</text>
       <switch checked="{{usePoints}}" bindchange="onTogglePoints" color="#B98B58" style="transform:scale(0.8)" />
     </view>
   </view>
-  <view class="section points-detail" wx:if="{{usePoints && pointBalance > 0}}">
+  <view class="section points-detail" wx:if="{{usePoints && pointBalance > 0 && !useGoodsFund}}">
     <text class="points-deduct-text">使用 {{pointsToUse}} 积分抵扣 ¥{{pointsDeduction}}</text>
     <text class="points-deduct-tip">（最多抵扣订单50%）</text>
+  </view>
+
+  <!-- 货款支付（仅代理商可见） -->
+  <view class="section goods-fund-section" wx:if="{{isAgent && goodsFundBalance > 0}}">
+    <view class="goods-fund-left">
+      <text class="goods-fund-label">货款余额支付</text>
+      <text class="goods-fund-balance">可用 ¥{{goodsFundBalance}}</text>
+    </view>
+    <view class="goods-fund-right">
+      <text class="goods-fund-tip" wx:if="{{goodsFundBalance < finalAmount}}">余额不足</text>
+      <switch
+        checked="{{useGoodsFund}}"
+        bindchange="onToggleGoodsFund"
+        disabled="{{goodsFundBalance < finalAmount}}"
+        color="#4CAF50"
+        style="transform:scale(0.8)"
+      />
+    </view>
+  </view>
+  <view class="section goods-fund-detail" wx:if="{{useGoodsFund}}">
+    <text class="goods-fund-detail-text">✓ 将使用货款余额全额支付，无需微信支付</text>
   </view>
 
   <view class="coupon-picker {{showCouponPicker ? 'show' : ''}}" wx:if="{{showCouponPicker}}">
