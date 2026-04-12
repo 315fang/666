@@ -62,8 +62,14 @@ function normalizePath(event) {
 }
 
 function normalizeBody(event) {
-    const body = event.body;
+    let body = event.body;
     if (body == null || body === '') return undefined;
+    // CloudBase HTTP 函数有时对非文本内容会设置 isBase64Encoded: true
+    if (event.isBase64Encoded && typeof body === 'string') {
+        try {
+            body = Buffer.from(body, 'base64').toString('utf-8');
+        } catch (_) {}
+    }
     if (typeof body === 'object') return body;
     try {
         return JSON.parse(body);

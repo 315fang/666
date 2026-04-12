@@ -86,7 +86,9 @@ async function loadPickupStations(page) {
         }
         const qs = params.length ? `?${params.join('&')}` : '';
         const res = await get(`/stations/pickup-options${qs}`, {}, { showError: false });
-        const list = (res && res.data) || [];
+        const list = Array.isArray(res && res.list)
+            ? res.list
+            : (Array.isArray(res && res.data && res.data.list) ? res.data.list : []);
         let pickupStation = page.data.pickupStation;
         if (pickupStation && !list.some((station) => station.id === pickupStation.id)) {
             pickupStation = list[0] || null;

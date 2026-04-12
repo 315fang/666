@@ -26,34 +26,46 @@
       </view>
     </view>
 
-    <!-- ═══ 佣金四阶段概览（生命周期） ═══ -->
-    <view class="lifecycle-section">
-      <view class="lifecycle-title">佣金流转状态</view>
-      <view class="lifecycle-hint">新订单佣金 → 冻结期(T+15) → 审核中 → 待结算 → 可提现</view>
-      <view class="lifecycle-grid">
-        <!-- 冻结中 -->
-        <view class="lc-item">
-          <view class="lc-badge lc-frozen">冻结中</view>
-          <text class="lc-value">¥{{commissionFrozen}}</text>
-          <text class="lc-desc">T+15 自动解冻</text>
+    <!-- ═══ 待入账卡片 ═══ -->
+    <view class="pending-card" bindtap="togglePendingExpand">
+      <!-- 顶部：合计 + 展开箭头 -->
+      <view class="pc-header">
+        <view class="pc-header-left">
+          <text class="pc-title">待入账佣金</text>
+          <text class="pc-subtitle">冻结中 + 审核中 + 待打款的合计</text>
         </view>
-        <!-- 审核中 -->
-        <view class="lc-item">
-          <view class="lc-badge lc-pending">审核中</view>
-          <text class="lc-value">¥{{commissionPending}}</text>
-          <text class="lc-desc">提现申请审核</text>
+        <view class="pc-header-right">
+          <text class="pc-total">¥{{commissionPendingTotal}}</text>
+          <text class="pc-arrow {{pendingExpanded ? 'pc-arrow-up' : ''}}">›</text>
         </view>
-        <!-- 待结算 -->
-        <view class="lc-item">
-          <view class="lc-badge lc-settling">待结算</view>
-          <text class="lc-value">¥{{commissionSettling}}</text>
-          <text class="lc-desc">审核通过等打款</text>
+      </view>
+
+      <!-- 明细展开（三行）-->
+      <view class="pc-detail {{pendingExpanded ? 'pc-detail-open' : ''}}">
+        <view class="pc-divider"></view>
+        <view class="pc-row">
+          <view class="pc-row-left">
+            <view class="pc-dot pc-dot-frozen"></view>
+            <text class="pc-row-label">冻结中</text>
+            <text class="pc-row-hint">退款保护期内，到期自动解冻</text>
+          </view>
+          <text class="pc-row-amount pc-amount-frozen">¥{{commissionFrozen}}</text>
         </view>
-        <!-- 可提现 -->
-        <view class="lc-item lc-item-highlight" bindtap="onWithdrawTap">
-          <view class="lc-badge lc-available">可提现</view>
-          <text class="lc-value lc-value-highlight">¥{{commissionAvailable}}</text>
-          <text class="lc-desc">点击立即提现</text>
+        <view class="pc-row">
+          <view class="pc-row-left">
+            <view class="pc-dot pc-dot-pending"></view>
+            <text class="pc-row-label">审核中</text>
+            <text class="pc-row-hint">提交提现申请，平台审核中</text>
+          </view>
+          <text class="pc-row-amount pc-amount-pending">¥{{commissionPending}}</text>
+        </view>
+        <view class="pc-row">
+          <view class="pc-row-left">
+            <view class="pc-dot pc-dot-settling"></view>
+            <text class="pc-row-label">待打款</text>
+            <text class="pc-row-hint">审核已通过，等待平台打款</text>
+          </view>
+          <text class="pc-row-amount pc-amount-settling">¥{{commissionSettling}}</text>
         </view>
       </view>
     </view>
@@ -127,7 +139,7 @@
     <!-- 底部说明 -->
     <view class="footer-note">
       <text class="footer-note-text">佣金账户仅记录分销佣金收益，与货款账户独立核算。</text>
-      <text class="footer-note-text">佣金冻结期 15 天，解冻后可申请提现，审核通过后打款至银行卡。</text>
+      <text class="footer-note-text">佣金在退款保护期结束后解冻，解冻后可申请提现，审核通过后打款至银行卡。</text>
     </view>
 
     <view style="height: 80rpx;"></view>

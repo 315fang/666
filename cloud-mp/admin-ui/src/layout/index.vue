@@ -275,7 +275,7 @@ const groupedMenuItems = computed(() => {
 const currentTitle = computed(() => route.meta?.title || '')
 const currentGroup = computed(() => route.meta?.group || '')
 const topbarActions = [
-  { label: '订单待处理', path: '/orders?status=paid' },
+  { label: '订单待处理', path: '/orders?status_group=pending_ship' },
   { label: '首页内容位', path: '/home-sections' },
   { label: '营销资源', path: '/activities' }
 ]
@@ -312,8 +312,8 @@ const handlePasswordSubmit = async () => {
       })
       ElMessage.success('密码修改成功，请使用新密码重新登录')
       passwordDialogVisible.value = false
-      userStore.logout()
-      router.push('/login')
+      await userStore.logout()
+      await router.replace('/login')
     } catch (e) {
       console.error('修改密码失败:', e)
       ElMessage.error(e?.message || '修改密码失败，请重试')

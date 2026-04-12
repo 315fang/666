@@ -55,26 +55,70 @@ function normalizeCoupon(coupon) {
     };
 }
 
+function roundMoney(val) {
+    return Math.round(toNumber(val, 0) * 100) / 100;
+}
+
 /**
  * 获取钱包信息
+ * 实时从 commissions 集合汇总各状态金额，保证数据准确。
+ * 返回结构与前端 wallet/index.js 的 loadWalletInfo 完全对应。
  */
 async function getWalletInfo(openid) {
-    const user = await db.collection('users').where({ openid }).limit(1).get();
-    if (!user.data || user.data.length === 0) throw new Error('用户不存在');
+    const [userRes, commRes] = await Promise.all([
+        db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] })),
+        db.collection('commissions').where({ openid }).get().catch(() => ({ data: [] }))
+    ]);
 
-    const userData = user.data[0];
+    if (!userRes.data || userRes.data.length === 0) throw new Error('用户不存在');
+    const userData = userRes.data[0];
+
+    // 从用户文档读取可提现余额（平台实际到账口径）
     const balance = toNumber(userData.wallet_balance != null ? userData.wallet_balance : userData.balance, 0);
-    const frozenAmount = toNumber(userData.frozen_amount, 0);
+    const totalWithdrawn = toNumber(userData.total_withdrawn, 0);
 
-    // 可提现余额
-    const availableBalance = Math.max(0, balance - frozenAmount);
+    // 实时汇总各佣金状态金额
+    const stats = {
+        frozen: 0,           // 冻结中（退款保护期内）
+        pendingApproval: 0,  // 待入账（退款期过，等平台审核）
+        approved: 0,         // 待结算（审核通过，等打款）
+        settled: 0,          // 已结算完成（历史）
+        cancelled: 0,        // 已取消
+        total: 0             // 历史累计（不含 cancelled）
+    };
+
+    (commRes.data || []).forEach(item => {
+        const amt = toNumber(item.amount, 0);
+        const s = String(item.status || '');
+        if (s === 'frozen')           stats.frozen += amt;
+        else if (s === 'pending_approval') stats.pendingApproval += amt;
+        else if (s === 'approved')    stats.approved += amt;
+        else if (s === 'settled' || s === 'completed') stats.settled += amt;
+        // pending 状态：佣金刚生成尚未冻结，归入冻结前暂存，也计入累计
+        else if (s === 'pending')     stats.frozen += amt;
+
+        if (s !== 'cancelled') stats.total += amt;
+    });
+
+    Object.keys(stats).forEach(k => { stats[k] = roundMoney(stats[k]); });
+
+    // 可提现余额以用户文档 balance 字段为准（经过平台审核和打款确认）
+    const available = roundMoney(balance);
 
     return {
         balance,
-        available_balance: availableBalance,
-        frozen_amount: frozenAmount,
-        total_earned: toNumber(userData.total_earned, 0),
-        total_withdrawn: toNumber(userData.total_withdrawn, 0),
+        available_balance: available,
+        total_withdrawn: totalWithdrawn,
+        commission: {
+            frozen: stats.frozen,                    // 冻结中（退款保护期内）
+            pendingApproval: stats.pendingApproval,  // 审核中（等平台审核）
+            approved: stats.approved,                // 待打款（审核通过等打款）
+            // 待入账合计 = 所有尚未到账的金额之和
+            pendingTotal: roundMoney(stats.frozen + stats.pendingApproval + stats.approved),
+            available,                               // 可提现（以实际余额为准）
+            total: stats.total,                      // 历史累计
+            settled: stats.settled,                  // 已结算
+        }
     };
 }
 

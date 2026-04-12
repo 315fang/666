@@ -20,9 +20,21 @@
  * @param {string}   [message]  - 未登录时的 Toast 文案，默认"请先登录"
  * @returns {boolean} 是否已登录
  */
-function requireLogin(callback, message) {
+function hasLoginSession() {
     const app = getApp();
     if (app && app.globalData && app.globalData.isLoggedIn) {
+        return true;
+    }
+
+    try {
+        return !!wx.getStorageSync('openid');
+    } catch (_err) {
+        return false;
+    }
+}
+
+function requireLogin(callback, message) {
+    if (hasLoginSession()) {
         if (typeof callback === 'function') callback();
         return true;
     }
@@ -40,6 +52,7 @@ async function triggerLogin() {
 }
 
 module.exports = {
+    hasLoginSession,
     requireLogin,
     triggerLogin
 };

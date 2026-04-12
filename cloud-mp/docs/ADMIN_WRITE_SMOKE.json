@@ -1,0 +1,31 @@
+{
+  "generatedAt": "2026-04-12T03:04:07.331Z",
+  "ok": true,
+  "steps": [
+    {
+      "name": "upload",
+      "ok": true,
+      "status": 200,
+      "message": "ok"
+    },
+    {
+      "name": "create_product",
+      "ok": true,
+      "status": 200,
+      "message": "ok"
+    },
+    {
+      "name": "product_detail",
+      "ok": true,
+      "status": 200,
+      "message": "ok"
+    },
+    {
+      "name": "delete_product",
+      "ok": true,
+      "status": 200,
+      "message": "ok"
+    }
+  ],
+  "productId": 12
+}

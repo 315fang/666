@@ -31,9 +31,10 @@ async function directPatchDocument(collectionName, docId, updateData) {
     if (db) {
         // CloudBase 模式：直接精确更新单条文档
         try {
+            const { _id, ...safeUpdateData } = (updateData && typeof updateData === 'object') ? updateData : {};
             await db.collection(collectionName).doc(String(docId)).update({
                 data: {
-                    ...updateData,
+                    ...safeUpdateData,
                     updated_at: new Date().toISOString()
                 }
             });
@@ -43,7 +44,7 @@ async function directPatchDocument(collectionName, docId, updateData) {
                 const rows = cache.get(collectionName) || [];
                 const idx = rows.findIndex(r => String(r._id) === String(docId) || String(r.id) === String(docId));
                 if (idx !== -1) {
-                    rows[idx] = { ...rows[idx], ...updateData };
+                    rows[idx] = { ...rows[idx], ...safeUpdateData };
                     cache.set(collectionName, rows);
                 }
             }
@@ -2570,7 +2571,7 @@ app.post('/admin/api/products', auth, requirePermission('products'), async (req,
     // 直写 CloudBase，确保新商品即时持久化（用数字 id 作为文档 _id 方便后续定点更新）
     const db = dataStore._internals?.db;
     if (db) {
-        await db.collection('products').doc(String(row.id)).set({ data: { ...row, _id: String(row.id) } }).catch((e) => {
+        await db.collection('products').doc(String(row.id)).set({ data: { ...row } }).catch((e) => {
             console.error('[product.create] CloudBase write failed:', e.message);
         });
     }
@@ -2579,6 +2580,7 @@ app.post('/admin/api/products', auth, requirePermission('products'), async (req,
 });
 
 app.put('/admin/api/products/:id', auth, requirePermission('products'), async (req, res) => {
+    await ensureFreshCollections(['products']);
     const rows = getCollection('products');
     const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
     if (index === -1) return fail(res, '商品不存在', 404);
@@ -2603,6 +2605,7 @@ app.put('/admin/api/products/:id', auth, requirePermission('products'), async (r
 });
 
 async function updateProductStatus(req, res) {
+    await ensureFreshCollections(['products']);
     const nextStatus = toBoolean(req.body?.status ?? req.body?.is_active ?? req.body?.enabled ?? req.body?.value) ? 1 : 0;
     const row = patchCollectionRow('products', req.params.id, (item) => ({
         ...item,
@@ -2623,6 +2626,7 @@ app.put('/admin/api/products/:id/toggle', auth, requirePermission('products'), u
 app.post('/admin/api/products/:id/toggle', auth, requirePermission('products'), updateProductStatus);
 
 app.delete('/admin/api/products/:id', auth, requirePermission('products'), async (req, res) => {
+    await ensureFreshCollections(['products']);
     const rows = getCollection('products');
     const target = findByLookup(rows, req.params.id);
     if (!target) return fail(res, '商品不存在', 404);

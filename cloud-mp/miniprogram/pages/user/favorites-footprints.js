@@ -1,4 +1,5 @@
 const { get, post, del } = require('../../utils/request');
+const { hasLoginSession } = require('../../utils/auth');
 const { listFavorites, removeFavorite, clearFavorites, listFootprints, removeFootprint, clearFootprints } = require('../../utils/localUserContent');
 
 function formatFavoriteTime(ts) {
@@ -47,11 +48,12 @@ Page({
     },
 
     async refreshFavorites() {
-        const token = wx.getStorageSync('token');
-        if (token) {
+        if (hasLoginSession()) {
             try {
                 const res = await get('/user/favorites', {}, { showError: false });
-                const list = (res && res.data) || [];
+                const list = Array.isArray(res && res.list)
+                    ? res.list
+                    : (Array.isArray(res && res.data && res.data.list) ? res.data.list : []);
                 const favoriteItems = list.map((x) => ({
                     ...x,
                     timeText: formatFavoriteTime(x.saved_at)
@@ -94,8 +96,7 @@ Page({
     async onRemoveFavorite(e) {
         const id = e.currentTarget.dataset.id;
         if (!id) return;
-        const token = wx.getStorageSync('token');
-        if (token) {
+        if (hasLoginSession()) {
             try {
                 await del(`/user/favorites/${id}`, {}, { showError: false });
             } catch (_) { /* ignore */ }
@@ -120,8 +121,7 @@ Page({
             content: '确定删除全部收藏？',
             success: async (res) => {
                 if (!res.confirm) return;
-                const token = wx.getStorageSync('token');
-                if (token) {
+                if (hasLoginSession()) {
                     try {
                         await post('/user/favorites/clear-all', {}, { showError: false });
                     } catch (_) { /* ignore */ }

@@ -214,10 +214,10 @@ function createCloudBaseStore(options) {
         for (const row of nextRows) {
             const docId = toDocumentId(row);
             nextIds.add(docId);
+            const { _id, ...safeRow } = row || {};
             await collection.doc(docId).set({
                 data: {
-                    ...row,
-                    _id: docId
+                    ...safeRow
                 }
             });
         }
@@ -308,7 +308,6 @@ function createCloudBaseStore(options) {
                 dirtySingletons.delete(key);
                 await collection.doc(key).set({
                     data: {
-                        _id: key,
                         key,
                         value: singletonCache.get(key),
                         updated_at: new Date().toISOString()

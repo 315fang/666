@@ -6,13 +6,17 @@ Page({
     data: {
         // 可提现余额（佣金）
         balance: '0.00',
-        // 佣金四阶段数据
-        commissionFrozen: '0.00',      // 冻结中（T+15 自动解冻）
-        commissionPending: '0.00',     // 审核中（提现审核）
-        commissionSettling: '0.00',    // 待结算（审核通过，等平台打款）
-        commissionAvailable: '0.00',   // 可提现（与余额一致）
+        // 佣金概览
         commissionTotal: '0.00',       // 历史累计佣金
-        // 佣金明细列表
+        commissionAvailable: '0.00',   // 可提现
+        // 待入账合计（冻结中 + 审核中 + 待打款 之和）
+        commissionPendingTotal: '0.00',
+        // 待入账明细（展开后显示）
+        commissionFrozen: '0.00',      // 冻结中（退款保护期）
+        commissionPending: '0.00',     // 审核中（等平台审核）
+        commissionSettling: '0.00',    // 待打款（审核通过等打款）
+        pendingExpanded: false,        // 是否展开待入账明细
+        // 佣金流水列表
         logs: [],
         logsLoading: false,
         // 提现弹窗
@@ -43,18 +47,24 @@ Page({
             const res = await get('/wallet/info');
             if (res.code === 0 && res.data) {
                 const c = res.data.commission || {};
+                const fmt = (v) => parseFloat(v || 0).toFixed(2);
                 this.setData({
-                    balance: parseFloat(res.data.balance || 0).toFixed(2),
-                    commissionFrozen: parseFloat(c.frozen || 0).toFixed(2),
-                    commissionPending: parseFloat(c.pendingApproval || 0).toFixed(2),
-                    commissionSettling: parseFloat(c.approved || 0).toFixed(2),
-                    commissionAvailable: parseFloat(c.available ?? res.data.balance ?? 0).toFixed(2),
-                    commissionTotal: parseFloat(c.total || 0).toFixed(2)
+                    balance: fmt(res.data.balance),
+                    commissionTotal: fmt(c.total),
+                    commissionAvailable: fmt(c.available ?? res.data.balance),
+                    commissionPendingTotal: fmt(c.pendingTotal),
+                    commissionFrozen: fmt(c.frozen),
+                    commissionPending: fmt(c.pendingApproval),
+                    commissionSettling: fmt(c.approved)
                 });
             }
         } catch (err) {
             console.error('[wallet] 加载佣金账户失败:', err);
         }
+    },
+
+    togglePendingExpand() {
+        this.setData({ pendingExpanded: !this.data.pendingExpanded });
     },
 
     async loadGoodsFund() {
