@@ -130,7 +130,7 @@ Page({
 
                 // ★ 待付款倒计时文字
                 if (order.status === 'pending') {
-                    order.countdownText = this._calcCountdownText(order.expire_at, order.created_at);
+                    order.countdownText = this._calcCountdownText(order.expire_at, order.created_at, order.payment_timeout_minutes);
                 }
 
                 // ★ 检查该订单是否有活跃退款
@@ -222,8 +222,8 @@ Page({
     },
 
     // ── 列表倒计时相关 ──
-    _calcCountdownText(expireAt, createdAt) {
-        const ORDER_TIMEOUT_MS = 30 * 60 * 1000;
+    _calcCountdownText(expireAt, createdAt, timeoutMinutes) {
+        const ORDER_TIMEOUT_MS = Math.max(1, Number(timeoutMinutes) || 30) * 60 * 1000;
         let targetTs = expireAt ? new Date(expireAt).getTime() : 0;
         if (!targetTs || isNaN(targetTs)) {
             const createdTs = createdAt ? new Date(createdAt).getTime() : 0;
@@ -248,7 +248,7 @@ Page({
             let needUpdate = false;
             const updated = orders.map(o => {
                 if (o.status !== 'pending') return o;
-                const text = this._calcCountdownText(o.expire_at, o.created_at);
+                const text = this._calcCountdownText(o.expire_at, o.created_at, o.payment_timeout_minutes);
                 if (text !== o.countdownText) {
                     needUpdate = true;
                     return { ...o, countdownText: text };

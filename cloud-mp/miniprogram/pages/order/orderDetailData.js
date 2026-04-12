@@ -95,13 +95,14 @@ async function loadOrder(page, idOrNo) {
             page._maybeSyncWechatPayAfterLoad(order.id);
             // 启动支付倒计时
             const expireAt = order.expire_at || '';
+            const timeoutMinutes = order.payment_timeout_minutes || 30;
             if (expireAt && typeof page.startPayCountdown === 'function') {
-                page.startPayCountdown(expireAt);
+                page.startPayCountdown(expireAt, timeoutMinutes);
             } else if (!expireAt && typeof page.startPayCountdown === 'function') {
-                // 兼容旧数据无 expire_at，用 created_at + 30分钟推算
+                // 兼容旧数据无 expire_at，用后端下发的超时分钟数推算
                 const createdTs = order.created_at ? new Date(order.created_at).getTime() : Date.now();
-                const fallbackExpire = new Date(createdTs + 30 * 60 * 1000).toISOString();
-                page.startPayCountdown(fallbackExpire);
+                const fallbackExpire = new Date(createdTs + Math.max(1, Number(timeoutMinutes) || 30) * 60 * 1000).toISOString();
+                page.startPayCountdown(fallbackExpire, timeoutMinutes);
             }
         } else {
             // 非待付款状态清除倒计时

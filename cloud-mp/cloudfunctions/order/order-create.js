@@ -120,6 +120,36 @@ async function getConfigByKey(key) {
     return legacyRes.data && legacyRes.data[0] ? legacyRes.data[0] : null;
 }
 
+function normalizeOrderAutoCancelMinutes(value, fallback = 30) {
+    const minutes = Math.floor(toNumber(value, fallback));
+    return Math.max(1, Math.min(1440, minutes));
+}
+
+function parseSingletonValue(row, fallback = {}) {
+    if (!row) return fallback;
+    const value = row.value !== undefined ? row.value : row.config_value;
+    if (value === undefined || value === null || value === '') return fallback;
+    if (typeof value === 'string') {
+        try {
+            const parsed = JSON.parse(value);
+            return parsed && typeof parsed === 'object' ? parsed : fallback;
+        } catch (_) {
+            return fallback;
+        }
+    }
+    return value && typeof value === 'object' ? value : fallback;
+}
+
+async function getOrderAutoCancelMinutes() {
+    const singleton = await db.collection('admin_singletons')
+        .doc('settings')
+        .get()
+        .catch(() => ({ data: null }));
+    const settings = parseSingletonValue(singleton.data, {});
+    const orderSettings = settings.ORDER && typeof settings.ORDER === 'object' ? settings.ORDER : {};
+    return normalizeOrderAutoCancelMinutes(orderSettings.AUTO_CANCEL_MINUTES, 30);
+}
+
 async function getPointDeductionRule() {
     const row = await getConfigByKey('point_rule_config');
     const rule = parseConfigValue(row, {}) || {};
@@ -289,8 +319,11 @@ async function createOrder(openid, orderData) {
         throw new Error('活动订单类型冲突');
     }
 
-    // 0. 提前获取买家信息（折扣率计算需要）
-    const earlyBuyerInfo = await findUserByOpenid(openid);
+    // 0. 提前获取买家信息（折扣率计算需要）和订单超时配置
+    const [earlyBuyerInfo, autoCancelMinutes] = await Promise.all([
+        findUserByOpenid(openid),
+        getOrderAutoCancelMinutes()
+    ]);
     const buyerRoleLevel = toNumber(
         earlyBuyerInfo?.role_level ?? earlyBuyerInfo?.distributor_level ?? earlyBuyerInfo?.level,
         0
@@ -463,7 +496,7 @@ async function createOrder(openid, orderData) {
                 const maxPointsByRatio = Math.floor((Math.max(0, totalAmount - couponDiscount) * maxRatio) / yuanPerPoint);
                 actualPoints = Math.max(0, Math.min(Math.floor(usePoints), userPoints, maxPointsByRatio));
                 pointsDiscount = Math.round(actualPoints * yuanPerPoint * 100) / 100;
-                // 扣减积分
+                // 扣减积分（原子写入，失败必须重置，否则订单金额会虚减）
                 if (actualPoints > 0) {
                     await db.collection('users').where({ openid }).update({
                         data: { points: _.inc(-actualPoints), growth_value: _.inc(-actualPoints), updated_at: db.serverDate() }
@@ -471,7 +504,10 @@ async function createOrder(openid, orderData) {
                 }
             }
         } catch (err) {
-            console.error('[OrderCreate] 积分抵扣失败:', err);
+            // 积分扣减失败时，清零已计算值，保证 payAmount 正确，不给用户虚假折扣
+            console.error('[OrderCreate] 积分抵扣失败，已回退为不使用积分:', err);
+            actualPoints = 0;
+            pointsDiscount = 0;
         }
     }
 
@@ -561,7 +597,8 @@ async function createOrder(openid, orderData) {
         slash_no: slashRecord ? (slashRecord.slash_no || slash_no) : '',
         slash_record_id: slashRecord ? slashRecord._id : '',
         slash_activity_id: slashRecord ? slashRecord.activity_id || slashRecord.legacy_activity_id || '' : '',
-        expire_at: db.serverDate({ offset: 30 * 60 }),
+        payment_timeout_minutes: autoCancelMinutes,
+        expire_at: db.serverDate({ offset: autoCancelMinutes * 60 * 1000 }),
         created_at: db.serverDate(),
         updated_at: db.serverDate()
     };
@@ -578,8 +615,8 @@ async function createOrder(openid, orderData) {
         }
         const freshUser = await db.collection('users').where({ openid }).limit(1).get();
         const u = freshUser.data[0] || {};
-        // 优先读 agent_wallet_balance，兜底 wallet_balance
-        const freshBalance = toNumber(u.agent_wallet_balance != null ? u.agent_wallet_balance : u.wallet_balance, 0);
+        // 只读 agent_wallet_balance，与原子扣款字段保持一致
+        const freshBalance = toNumber(u.agent_wallet_balance, 0);
         if (freshBalance < payAmount) {
             await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
                 db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
@@ -598,11 +635,22 @@ async function createOrder(openid, orderData) {
             console.error('[OrderCreate] 优惠券核销失败:', err.message, '订单已创建:', result._id);
         });
     }
-    // 积分已在步骤3扣减，若订单创建失败需手动退还（当前无事务，记录 order_id 便于核查）
+    // 积分已在步骤3扣减，写流水便于用户查询和对账
     if (actualPoints > 0) {
-        await db.collection('point_logs').where({ openid, source: 'order_pay' }).limit(1).get()
-            .then(() => {})
-            .catch(() => {});
+        await db.collection('point_logs').add({
+            data: {
+                openid,
+                type: 'deduct',
+                amount: -actualPoints,
+                source: 'order_pay',
+                order_id: result._id,
+                order_no: orderNo,
+                description: `购买商品抵扣 ${actualPoints} 积分`,
+                created_at: db.serverDate()
+            }
+        }).catch((err) => {
+            console.error('[OrderCreate] 积分流水写入失败（不影响下单）:', err.message);
+        });
     }
 
     // 7.8 货款支付：原子扣减余额并将订单直接标为已付款

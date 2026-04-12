@@ -32,6 +32,9 @@ Page({
         // 退款相关
         activeRefund: null,
         hasActiveRefund: false,
+        // 货款余额支付（代理商待付款时展示）
+        isAgent: false,
+        walletBalance: 0,
 
         statusMap: {
             pending: '待付款',
@@ -73,6 +76,12 @@ Page({
                 logisticsConfig.shipping_mode !== 'manual' || logisticsConfig.shipping_manual_tracking_page_enabled !== false
             )
         });
+        // 代理商（role_level >= 3）加载货款余额，用于详情页货款支付
+        const roleLevel = app.globalData.userInfo?.role_level || 0;
+        if (roleLevel >= 3) {
+            this.setData({ isAgent: true });
+            this._loadWalletBalance();
+        }
         // id 可为数字主键或商户订单号 order_no（与微信支付 out_trade_no 一致，微信订单中心跳转常用）
         if (options.id) {
             this.setData({ orderId: options.id });
@@ -80,6 +89,16 @@ Page({
         } else {
             this.setData({ loading: false, loadError: true });
         }
+    },
+
+    async _loadWalletBalance() {
+        try {
+            const { get: httpGet } = require('../../utils/request');
+            const res = await httpGet('/agent/wallet');
+            if (res && res.code === 0 && res.data) {
+                this.setData({ walletBalance: parseFloat(res.data.balance || 0) });
+            }
+        } catch (_e) { /* 静默 */ }
     },
 
     onReady() {
@@ -135,7 +154,7 @@ Page({
     },
 
     // ── 支付倒计时 ──
-    startPayCountdown(expireAtStr) {
+    startPayCountdown(expireAtStr, timeoutMinutes) {
         if (this._countdownTimer) clearInterval(this._countdownTimer);
         if (!expireAtStr) {
             this.setData({ payCountdownText: '' });
@@ -146,7 +165,7 @@ Page({
             this.setData({ payCountdownText: '' });
             return;
         }
-        const ORDER_TIMEOUT_MS = 30 * 60 * 1000; // 后端默认30分钟
+        const ORDER_TIMEOUT_MS = Math.max(1, Number(timeoutMinutes) || 30) * 60 * 1000;
         const fallbackExpireTs = Date.now() + ORDER_TIMEOUT_MS;
         const targetTs = expireTs > 0 ? expireTs : fallbackExpireTs;
 
@@ -183,6 +202,43 @@ Page({
     // 支付订单（微信 JSAPI 支付）
     async onPayOrder() {
         return onPayOrder(this, app);
+    },
+
+    // 货款余额支付（代理商专属，从详情页直接扣余额）
+    async onPayOrderWithWallet() {
+        const { order, walletBalance } = this.data;
+        if (!order) return;
+        if (walletBalance <= 0) {
+            wx.showToast({ title: '货款余额不足，请先充值', icon: 'none' });
+            return;
+        }
+        if (this._payingWallet) return;
+        this._payingWallet = true;
+        wx.showLoading({ title: '支付中...', mask: true });
+        try {
+            const { post } = require('../../utils/request');
+            const res = await post(`/orders/${order.id}/prepay`, { use_wallet_balance: true });
+            wx.hideLoading();
+            if (res.code !== 0) {
+                wx.showToast({ title: res.message || '货款支付失败', icon: 'none' });
+                return;
+            }
+            const payParams = res.data || {};
+            if (payParams.paid_by_wallet) {
+                wx.showToast({ title: '货款余额支付成功！', icon: 'success' });
+                this.startPayStatusPolling(order.id);
+                this._loadWalletBalance(); // 刷新余额显示
+            } else if (payParams.wallet_balance_insufficient) {
+                wx.showToast({ title: `货款余额不足（¥${Number(payParams.wallet_balance || 0).toFixed(2)}），请充值后重试`, icon: 'none', duration: 3000 });
+            } else {
+                wx.showToast({ title: '货款支付失败，请重试', icon: 'none' });
+            }
+        } catch (err) {
+            wx.hideLoading();
+            wx.showToast({ title: err.message || '支付失败，请重试', icon: 'none' });
+        } finally {
+            this._payingWallet = false;
+        }
     },
 
     // 确认收货

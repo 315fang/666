@@ -37,6 +37,7 @@ const ROUTE_TABLE = {
     'DELETE /user/favorites':               { fn: 'user',         action: 'removeFavorite' },
     'POST /user/claim-welcome-coupons':     { fn: 'user',         action: 'claimWelcomeCoupons' },
     'POST /coupons/claim':                  { fn: 'user',         action: 'claimCoupon' },
+    'GET /coupons/info':                    { fn: 'user',         action: 'getCouponInfo' },
 
     // ── 商品 ──────────────────────────────────
     'GET /products':                        { fn: 'products',     action: 'list' },

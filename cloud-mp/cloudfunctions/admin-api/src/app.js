@@ -2397,6 +2397,19 @@ async function refundOrderExtras(orderId) {
             await db.collection('users').where({ openid: order.openid }).update({
                 data: { points: _.inc(pointsUsed), growth_value: _.inc(pointsUsed), updated_at: new Date().toISOString() }
             }).catch((err) => { console.error('[refundOrderExtras] 退积分失败:', err.message); });
+            // 写积分退还流水
+            await db.collection('point_logs').add({
+                data: {
+                    openid: order.openid,
+                    type: 'refund',
+                    amount: pointsUsed,
+                    source: 'order_refund',
+                    order_id: String(order._id),
+                    order_no: pickString(order.order_no),
+                    description: `订单退款退还 ${pointsUsed} 积分`,
+                    created_at: new Date().toISOString()
+                }
+            }).catch((err) => { console.error('[refundOrderExtras] 积分流水写入失败:', err.message); });
         }
     }
 
@@ -2762,7 +2775,8 @@ registerMarketingRoutes(app, {
     assetUrl,
     createAuditLog,
     ok,
-    fail
+    fail,
+    getCloud: getManagedCloud
 });
 
 // ===== SKU 管理 API（多规格支持）=====

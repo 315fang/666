@@ -796,3 +796,11 @@
   line-height: 1.6;
   color: #54739E;
 }
+
+/* 货款余额支付 */
+.wallet-section { align-items: flex-start; }
+.wallet-label-col { display: flex; flex-direction: column; gap: 6rpx; flex: 1; }
+.wallet-balance-sub { font-size: 22rpx; color: #B98B58; font-weight: 600; }
+.wallet-balance-empty { color: #BBB; font-weight: 400; }
+.wallet-pay-tip { justify-content: flex-end; margin-top: 4rpx; }
+.wallet-pay-tag { font-size: 20rpx; color: #B98B58; background: rgba(185,139,88,0.1); border: 1rpx solid rgba(185,139,88,0.3); border-radius: 8rpx; padding: 4rpx 14rpx; font-weight: 600; }

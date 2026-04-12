@@ -2,14 +2,77 @@
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
+const _ = db.command;
 const { toNumber } = require('./shared/utils');
 const { jsapiOrder, buildMiniPayParams, loadPrivateKey } = require('./wechat-pay-v3');
 const { processPaidOrder } = require('./payment-callback');
 
 /**
+ * 货款余额支付（内部扣减，不走微信支付）
+ * 适用于：从订单详情页发起的货款支付
+ */
+async function payByWalletBalance(openid, orderId, order, payAmount) {
+    // 原子扣减：余额必须 >= payAmount
+    const deductRes = await db.collection('users')
+        .where({ openid, agent_wallet_balance: _.gte(payAmount) })
+        .update({
+            data: {
+                agent_wallet_balance: _.inc(-payAmount),
+                goods_fund_total_spent: _.inc(payAmount),
+                updated_at: db.serverDate()
+            }
+        });
+
+    if (!deductRes.stats || deductRes.stats.updated === 0) {
+        // 查询真实余额用于提示
+        const userSnap = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
+        const realBalance = toNumber(userSnap.data && userSnap.data[0] && userSnap.data[0].agent_wallet_balance, 0);
+        return {
+            paid_by_wallet: false,
+            wallet_balance_insufficient: true,
+            wallet_balance: realBalance
+        };
+    }
+
+    // 订单标为已付款
+    await db.collection('orders').doc(orderId).update({
+        data: {
+            status: 'paid',
+            payment_method: 'goods_fund',
+            pay_channel: 'goods_fund',
+            paid_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    });
+
+    // 写货款流水
+    await db.collection('goods_fund_logs').add({
+        data: {
+            openid,
+            type: 'spend',
+            amount: -payAmount,
+            order_id: orderId,
+            order_no: order.order_no || '',
+            remark: `货款支付订单 ${order.order_no || orderId}`,
+            created_at: db.serverDate()
+        }
+    }).catch(() => {});
+
+    // 触发订单后续处理（佣金计算、积分等）
+    await processPaidOrder(orderId, { ...order, status: 'paid', payment_method: 'goods_fund', paid_at: new Date() })
+        .catch((err) => console.error('[prepay] processPaidOrder 货款支付后处理失败:', err.message));
+
+    return {
+        paid_by_wallet: true,
+        order_id: orderId,
+        order_no: order.order_no
+    };
+}
+
+/**
  * 预支付 — 调用微信支付 V3 JSAPI 下单
  * @param {string} openid - 用户 openid
- * @param {Object} params - { order_id }
+ * @param {Object} params - { order_id, use_wallet_balance? }
  * @returns {Object} 小程序支付参数（供 wx.requestPayment 使用）
  */
 async function preparePay(openid, params) {
@@ -38,6 +101,20 @@ async function preparePay(openid, params) {
     // 4. 计算支付金额（元→分）
     const payAmount = toNumber(order.pay_amount || order.total_amount, 0);
     const amountInFen = Math.round(payAmount * 100);
+
+    // 4a. 货款余额支付分支（代理商专属）
+    if (params.use_wallet_balance) {
+        if (payAmount <= 0) {
+            // 零元订单直接完成
+            await db.collection('orders').doc(orderId).update({
+                data: { status: 'paid', paid_at: db.serverDate(), pay_channel: 'free', updated_at: db.serverDate() }
+            });
+            await processPaidOrder(orderId, { ...order, status: 'paid', paid_at: new Date() });
+            return { paid_by_free: true, paid_by_wallet: false, order_id: orderId };
+        }
+        return await payByWalletBalance(openid, orderId, order, payAmount);
+    }
+
     if (amountInFen <= 0) {
         await db.collection('orders').doc(orderId).update({
             data: {

@@ -31,7 +31,7 @@
             </view>
             <view class="hero-meta-row" wx:if="{{isLoggedIn && userInfo.invite_code}}">
               <view class="hero-member-code" catchtap="noop">
-                <text class="member-code-label">会员码</text>
+                <text class="member-code-label">邀请码</text>
                 <text class="member-code-value">{{userInfo.invite_code}}</text>
                 <view class="member-code-copy" catchtap="onCopyMemberCode">
                   <image src="/assets/icons/clipboard.svg" mode="aspectFit" class="member-code-copy-icon"></image>
