@@ -237,17 +237,20 @@ const handleUpload = async (e) => {
     for (const file of files) {
       const res = await uploadFile(file, { params: { skip_library: '1', folder: 'materials' } })
       const url = res?.url || res?.data?.url
+      const fileId = res?.file_id || res?.data?.file_id || ''
       if (!url) continue
 
       try {
         const mat = await createMaterial({
           type: 'image',
           title: file.name.replace(/\.[^.]+$/, ''),
-          url
+          url,
+          file_id: fileId
         })
         const row = mat && typeof mat === 'object' ? mat : null
         appended.push({
           id: row?.id,
+          file_id: row?.file_id || fileId || '',
           url: row?.url || url,
           title: row?.title || file.name.replace(/\.[^.]+$/, ''),
           name: row?.title || file.name.replace(/\.[^.]+$/, '')

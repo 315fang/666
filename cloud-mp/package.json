@@ -6,6 +6,7 @@
   "scripts": {
     "audit:all": "node scripts/run-all-audits.js",
     "audit:admin-api": "node scripts/audit-admin-api-smoke.js",
+    "audit:admin-write": "node scripts/audit-admin-write-smoke.js",
     "audit:business": "node scripts/audit-business-smoke.js",
     "audit:display": "node scripts/audit-admin-display-readiness.js",
     "audit:hosting": "node scripts/audit-admin-hosting.js",

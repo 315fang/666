@@ -33,6 +33,13 @@ export const useUserStore = defineStore('user', {
       return this.permissions.includes(perm)
     },
 
+    clearSession() {
+      this.token = ''
+      this.userInfo = {}
+      localStorage.removeItem('admin_token')
+      localStorage.removeItem('admin_info')
+    },
+
     async login(loginForm) {
       const data = await loginApi(loginForm)
       this.token = data.token
@@ -57,10 +64,7 @@ export const useUserStore = defineStore('user', {
       } catch (e) {
         // 即使后端注销失败，也继续清除本地状态
       }
-      this.token = ''
-      this.userInfo = {}
-      localStorage.removeItem('admin_token')
-      localStorage.removeItem('admin_info')
+      this.clearSession()
     }
   }
 })

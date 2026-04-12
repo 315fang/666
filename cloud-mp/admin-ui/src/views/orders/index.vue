@@ -615,9 +615,16 @@ const handleReset = () => {
   handleSearch()
 }
 
-const money = (value) => (Number(value || 0) / 100).toFixed(2)
+const money = (value) => {
+  const n = Number(value || 0)
+  return Number.isFinite(n) ? n.toFixed(2) : '0.00'
+}
 const moneyNumber = (value) => Number(money(value))
-const toFen = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100)
+const normalizeAmount = (value) => {
+  const n = Number(value || 0)
+  if (!Number.isFinite(n)) return 0
+  return Math.round((n + Number.EPSILON) * 100) / 100
+}
 const fmtDateTime = (value) => value ? formatDateTime(value) : '-'
 const paymentMethodText = (method) => ({
   wechat: '微信支付',
@@ -794,7 +801,7 @@ const submitAmount = async () => {
   if (!amountForm.reason.trim()) return ElMessage.warning('请填写调整原因')
   await runOrderMutation(
     submittingAmount,
-    () => adjustOrderAmount(currentOrder.value.id, { actual_price: toFen(amountForm.actual_price), reason: amountForm.reason }),
+    () => adjustOrderAmount(currentOrder.value.id, { actual_price: normalizeAmount(amountForm.actual_price), reason: amountForm.reason }),
     '金额修改成功',
     () => { amountVisible.value = false }
   )

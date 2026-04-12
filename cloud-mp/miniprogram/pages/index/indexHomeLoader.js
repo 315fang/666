@@ -172,7 +172,9 @@ async function loadBubbles(page) {
             maxRetries: 0,
             timeout: 10000
         });
-        const list = res && res.data || [];
+        const list = Array.isArray(res && res.list)
+            ? res.list
+            : (Array.isArray(res && res.data && res.data.list) ? res.data.list : []);
         if (!Array.isArray(list) || list.length === 0) return;
         const bubbles = list.map((bubble) => {
             if (bubble.text) return bubble.text;
@@ -246,7 +248,10 @@ async function loadCoupons(page) {
     try {
         const res = await get('/coupons/mine', { status: 'unused' });
         if (res.code === 0) {
-            const coupons = (res.data || []).map((c) => {
+            const source = Array.isArray(res && res.list)
+                ? res.list
+                : (Array.isArray(res && res.data && res.data.list) ? res.data.list : []);
+            const coupons = source.map((c) => {
                 let discount_text = '';
                 if (c.coupon_type === 'percent') {
                     const raw = parseFloat((toCouponNumber(c.coupon_value) * 10).toFixed(1));

@@ -85,7 +85,7 @@ request.interceptors.response.use(
       return Promise.reject(new Error(message || '请求失败'))
     }
   },
-  error => {
+  async error => {
     if (error.response) {
       const { status, data } = error.response
       const reqUrl = error.config?.url || ''
@@ -119,9 +119,16 @@ request.interceptors.response.use(
             break
           }
           ElMessage.error(data?.message || '登录已过期，请重新登录')
-          localStorage.removeItem('admin_token')
-          localStorage.removeItem('admin_info')
-          router.push('/login')
+          try {
+            const { useUserStore } = await import('@/store/user')
+            useUserStore().clearSession()
+          } catch (_) {
+            localStorage.removeItem('admin_token')
+            localStorage.removeItem('admin_info')
+          }
+          if (router.currentRoute.value.path !== '/login') {
+            await router.replace('/login')
+          }
           break
         case 403:
           ElMessage.error('没有权限访问')
