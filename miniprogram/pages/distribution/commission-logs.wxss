@@ -47,11 +47,62 @@
   color: #D4B896;
 }
 
+.overview-amount.hi {
+  font-size: 36rpx;
+  color: #A8D4A0;
+}
+
 .overview-divider {
   width: 1rpx;
   height: 56rpx;
   background: rgba(255, 255, 255, 0.10);
 }
+
+/* ═══ 积分入口 ═══ */
+.points-entry {
+  margin: 12rpx 24rpx 0;
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 18rpx;
+  padding: 20rpx 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2rpx 12rpx rgba(37, 29, 21, 0.04);
+  border-left: 4rpx solid #C8A258;
+}
+
+.pe-left {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.pe-icon { font-size: 36rpx; }
+
+.pe-info { display: flex; flex-direction: column; gap: 4rpx; }
+
+.pe-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #1C1917;
+}
+
+.pe-sub { font-size: 21rpx; color: #9A8D80; }
+
+.pe-right {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  flex-shrink: 0;
+}
+
+.pe-balance {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #8A6020;
+}
+
+.pe-arrow { font-size: 28rpx; color: #B0A090; }
 
 /* 筛选栏 */
 .filter-bar {
@@ -93,37 +144,32 @@
   padding: 0 24rpx;
 }
 
-/* 列表项 */
+/* ═══ 列表项 ═══ */
 .log-item {
   display: flex;
   align-items: flex-start;
   gap: 18rpx;
-  padding: 24rpx 24rpx;
+  padding: 22rpx 20rpx;
   background: rgba(255, 255, 255, 0.94);
   border-radius: 20rpx;
   margin-bottom: 12rpx;
-  box-shadow: 0 4rpx 16rpx rgba(37, 29, 21, 0.04);
+  box-shadow: 0 4rpx 14rpx rgba(37, 29, 21, 0.04);
 }
 
 .log-icon-wrap {
   width: 72rpx;
   height: 72rpx;
-  border-radius: 20rpx;
+  border-radius: 18rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  margin-top: 2rpx;
 }
-
-.log-icon-Direct { background: rgba(185, 139, 88, 0.12); }
-.log-icon-Indirect { background: rgba(90, 128, 96, 0.12); }
-.log-icon-Stock_Diff { background: rgba(183, 100, 71, 0.12); }
-.log-icon-agent_fulfillment { background: rgba(106, 126, 154, 0.12); }
 
 .log-icon {
   width: 36rpx;
   height: 36rpx;
-  opacity: 0.7;
 }
 
 .log-info {
@@ -134,6 +180,12 @@
   gap: 6rpx;
 }
 
+.log-row1 {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
 .log-type-name {
   font-size: 28rpx;
   font-weight: 600;
@@ -141,15 +193,24 @@
 }
 
 .log-time {
-  font-size: 22rpx;
+  font-size: 21rpx;
   color: #B0A396;
 }
 
-.log-remark {
+/* 明细行（来源用户/商品/订单号） */
+.log-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6rpx;
+  margin-top: 2rpx;
+}
+
+.log-detail-icon { font-size: 22rpx; line-height: 1.4; flex-shrink: 0; }
+
+.log-detail-text {
   font-size: 22rpx;
   color: #9A8D80;
   line-height: 1.5;
-  margin-top: 4rpx;
 }
 
 .log-right {
@@ -163,12 +224,16 @@
 .log-amount {
   font-size: 32rpx;
   font-weight: 700;
-  color: #5A8060;
+}
+
+.log-freeze-tip {
+  font-size: 19rpx;
+  color: #B0A090;
 }
 
 .log-status {
-  font-size: 20rpx;
-  padding: 4rpx 12rpx;
+  font-size: 19rpx;
+  padding: 3rpx 10rpx;
   border-radius: 999rpx;
 }
 
@@ -279,9 +344,10 @@
   flex: 1;
 }
 
-.sk-line { height: 24rpx; margin-bottom: 12rpx; }
+.sk-line { height: 22rpx; margin-bottom: 10rpx; }
 .sk-long { width: 55%; }
-.sk-short { width: 35%; height: 20rpx; }
+.sk-med  { width: 45%; height: 19rpx; }
+.sk-short { width: 30%; height: 19rpx; }
 
 .sk-amount-box {
   width: 80rpx;

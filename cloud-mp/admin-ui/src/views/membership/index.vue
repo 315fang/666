@@ -279,11 +279,22 @@
           <el-form label-width="200px" style="max-width:920px" size="small">
             <el-form-item label="订单积分抵扣">
               <el-input-number v-model="pointRules.deduction.yuan_per_point" :min="0.01" :step="0.01" :precision="2" style="width:140px" />
-              <span class="form-hint">每 1 积分可抵扣金额，默认 0.10 元</span>
+              <span class="form-hint">每 1 积分可抵扣金额，默认 0.10 元（即 1:10 兑换，1积分=0.1元）</span>
             </el-form-item>
             <el-form-item label="最高抵扣比例">
               <el-input-number v-model="pointRules.deduction.max_order_ratio" :min="0.01" :max="1" :step="0.05" :precision="2" style="width:140px" />
-              <span class="form-hint">按券后商品金额计算，0.50 表示最多抵扣 50%</span>
+              <span class="form-hint">
+                按券后商品金额计算，0.50 表示最多抵扣 50%；
+                小程序结算页将显示：「1积分抵 {{ pointRules.deduction.yuan_per_point }} 元，最多抵扣订单 {{ Math.round(pointRules.deduction.max_order_ratio * 100) }}%」
+              </span>
+            </el-form-item>
+            <el-form-item>
+              <el-alert type="info" :closable="false" style="max-width:520px">
+                <template #title>
+                  优惠券和积分共同抵扣时，先扣券再按剩余金额计算积分上限；
+                  商品关闭「允许积分抵扣」后，整单积分功能不可用，与此处比例无关。
+                </template>
+              </el-alert>
             </el-form-item>
             <el-form-item label="每日签到">
               <el-input-number v-model="pointRules.checkin.points" :min="0" style="width:140px" />

@@ -354,7 +354,10 @@ const bannerForm = reactive({
   product_id: null, position: 'home',
   sort_order: 0, status: 1, start_time: null, end_time: null
 })
-const bannerRules = {}
+const bannerRules = {
+  title: [{ required: true, message: '请填写 Banner 标题', trigger: 'blur' }],
+  image_url: [{ required: true, message: '请上传 Banner 图片', trigger: 'change' }]
+}
 
 const resolveAssetUrl = (item = {}) => item.file_id || item.image_url || item.url || ''
 
@@ -543,6 +546,8 @@ const handleEditBanner = (row) => {
 }
 
 const handleBannerSubmit = async () => {
+  const valid = await bannerFormRef.value?.validate().catch(() => false)
+  if (!valid) return
   const tempUrlMessage = warnTemporaryAssetUrls(bannerForm.image_url ? [bannerForm.image_url] : [], 'Banner 图片')
   if (tempUrlMessage) {
     ElMessage.warning(tempUrlMessage)
@@ -592,7 +597,7 @@ const handleBannerUpload = async ({ file }) => {
     bannerForm.image_url = data.url || data.image_url || ''
     ElMessage.success('上传成功')
   } catch (e) {
-    console.error('上传失败:', e)
+    ElMessage.error('图片上传失败，请重试')
   }
 }
 
@@ -627,7 +632,7 @@ const handleContentSubmit = async () => {
     contentDialogVisible.value = false
     fetchContents()
   } catch (e) {
-    console.error('提交失败:', e)
+    ElMessage.error('保存失败，请重试')
   } finally {
     submitting.value = false
   }

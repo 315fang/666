@@ -72,10 +72,16 @@ async function loadOrder(page, idOrNo) {
         }
 
         const allRefunds = refundsRes.data && refundsRes.data.list || [];
+        // allRefunds 已由云函数按 order_id 过滤，此处用字符串比较兜底（防止数字/字符串类型不一致）
+        const orderIdStr = String(order.id || order._id || '');
+        const orderNoStr = String(order.order_no || '');
+        const belongsToOrder = (refund) => !orderIdStr
+            || String(refund.order_id) === orderIdStr
+            || String(refund.order_no) === orderNoStr;
         const activeRefund = allRefunds.find(
-            (refund) => refund.order_id === order.id && ['pending', 'approved', 'processing'].includes(refund.status)
+            (refund) => belongsToOrder(refund) && ['pending', 'approved', 'processing'].includes(refund.status)
         );
-        const latestRefund = allRefunds.find((refund) => refund.order_id === order.id);
+        const latestRefund = allRefunds.find(belongsToOrder) || null;
 
         page.setData({
             order,
@@ -119,7 +125,7 @@ function maybeSyncWechatPayAfterLoad(page, orderId) {
     const now = Date.now();
     if (now - (page._pendingPaySyncTs[orderId] || 0) < 25000) return;
     page._pendingPaySyncTs[orderId] = now;
-    post(`/orders/${orderId}/sync-wechat-pay`, {}, { showError: false, maxRetries: 0, timeout: 12000 })
+    post(`/orders/${orderId}/sync-wechat-pay`, {}, { showError: false })
         .then((result) => {
             if (result && result.code === 0 && result.data && result.data.synced) {
                 page.loadOrder(orderId);

@@ -110,38 +110,6 @@
       <!-- 右列：热度榜 + 待处理 + 系统状态 -->
       <div class="right-col">
 
-        <!-- 支付检测 -->
-        <div class="card payment-card">
-          <div class="card-header">
-            <div class="card-title">
-              <span class="title-dot" :class="paymentStatusDotClass"></span>
-              <span>支付检测</span>
-            </div>
-            <button class="link-btn" @click="$router.push('/settings?tab=paymentHealth')">
-              去处理
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M3 8h10m-4-4l4 4-4 4"/></svg>
-            </button>
-          </div>
-          <div class="payment-summary" v-loading="paymentLoading">
-            <div class="payment-topline">
-              <span class="status-badge" :class="paymentBadgeClass">{{ paymentStatusText }}</span>
-              <span class="payment-time">最近检查 {{ formatDateTime(paymentHealth.checked_at) }}</span>
-            </div>
-            <div class="payment-title">{{ paymentHealth.summary || '尚未获取支付检测结果' }}</div>
-            <div class="payment-meta">
-              <span>错误 {{ paymentHealth.errors?.length || 0 }}</span>
-              <span>警告 {{ paymentHealth.warnings?.length || 0 }}</span>
-            </div>
-            <div class="payment-list" v-if="paymentHighlights.length > 0">
-              <div class="payment-item" v-for="item in paymentHighlights" :key="item.key">
-                <span class="payment-item-label">{{ item.label }}</span>
-                <span class="payment-item-message">{{ item.message }}</span>
-              </div>
-            </div>
-            <div v-else class="payment-empty">当前支付配置状态正常，暂时没有需要跟进的异常检查项。</div>
-          </div>
-        </div>
-
         <!-- 热度榜 -->
         <div class="card rank-card">
           <div class="card-header">
@@ -259,7 +227,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  getDashboardOverview, getSystemStatus, getPaymentHealth,
+  getDashboardOverview, getSystemStatus,
   getOperationsDashboard, getMemberTierConfig
 } from '@/api'
 import { ElMessage } from 'element-plus'
@@ -281,19 +249,6 @@ const recentOrders = ref([])
 const ordersLoading = ref(false)
 const lowStockList = ref([])
 const hotProducts = ref([])
-const paymentLoading = ref(false)
-const DEFAULT_PAYMENT_HEALTH = {
-  status: 'warning',
-  summary: '',
-  checked_at: '',
-  mode: '',
-  provider: '',
-  checks: [],
-  errors: [],
-  warnings: []
-}
-const paymentHealth = ref({ ...DEFAULT_PAYMENT_HEALTH })
-
 const todoItems = ref([
   { title: '待发货订单', count: 0, path: '/orders', query: { status_group: 'pending_ship' }, icon: 'Box', iconBg: 'rgba(245,158,11,0.12)' },
   { title: '待提现审核', count: 0, path: '/withdrawals', query: { status: 'pending' }, icon: 'Money', iconBg: 'rgba(239,68,68,0.12)' },
@@ -302,34 +257,12 @@ const todoItems = ref([
 ])
 const memberTierList = ref([])
 const quickActions = ref([
+  { title: '财务看板', path: '/finance', icon: 'Money', iconBg: 'rgba(16,185,129,0.12)' },
   { title: '会员等级配置', path: '/membership', icon: 'User', iconBg: 'rgba(99,102,241,0.12)' },
   { title: '优惠券自动化', path: '/coupons', icon: 'Tickets', iconBg: 'rgba(245,158,11,0.12)' },
-  { title: '物流与发货', path: '/orders', icon: 'Van', iconBg: 'rgba(16,185,129,0.12)' },
+  { title: '物流与发货', path: '/orders', icon: 'Van', iconBg: 'rgba(20,184,166,0.12)' },
   { title: '活动与开关', path: '/activities', icon: 'MagicStick', iconBg: 'rgba(236,72,153,0.12)' }
 ])
-
-const paymentStatusText = computed(() => {
-  if (paymentHealth.value.status === 'ok') return '正常'
-  if (paymentHealth.value.status === 'warning') return '警告'
-  return '异常'
-})
-
-const paymentBadgeClass = computed(() => {
-  if (paymentHealth.value.status === 'ok') return 'status-completed'
-  if (paymentHealth.value.status === 'warning') return 'status-paid'
-  return 'status-cancelled'
-})
-
-const paymentStatusDotClass = computed(() => {
-  if (paymentHealth.value.status === 'ok') return 'title-dot--green'
-  if (paymentHealth.value.status === 'warning') return 'title-dot--warn'
-  return 'title-dot--red'
-})
-
-const paymentHighlights = computed(() => {
-  const checks = Array.isArray(paymentHealth.value.checks) ? paymentHealth.value.checks : []
-  return checks.filter(item => item.status !== 'ok').slice(0, 3)
-})
 
 const focusBarItems = computed(() => [
   {
@@ -360,9 +293,6 @@ const focusTitle = computed(() => {
   const withCount = items.filter((i) => i.count > 0)
   if (withCount.length > 0) {
     return `优先处理 ${withCount.map((i) => `${i.label} ${i.count} 条`).join('，')}`
-  }
-  if (paymentHealth.value.status !== 'ok') {
-    return '暂无发货/提现/退款积压，建议检查右侧支付配置是否正常'
   }
   return '当前发货与资金类待办较少，可转向活动与用户运营'
 })
@@ -414,34 +344,6 @@ const fetchMemberTierConfig = async () => {
   } catch (e) {
     console.warn('获取会员等级配置失败:', e)
     memberTierList.value = []
-  }
-}
-
-const fetchPaymentHealth = async () => {
-  paymentLoading.value = true
-  try {
-    const data = await getPaymentHealth()
-    const d = data
-    paymentHealth.value = {
-      ...DEFAULT_PAYMENT_HEALTH,
-      status: d?.status || 'warning',
-      summary: d?.summary || '',
-      checked_at: d?.checked_at || '',
-      mode: d?.mode || '',
-      provider: d?.provider || '',
-      checks: Array.isArray(d?.checks) ? d.checks : [],
-      errors: Array.isArray(d?.errors) ? d.errors : [],
-      warnings: Array.isArray(d?.warnings) ? d.warnings : []
-    }
-  } catch (e) {
-    console.warn('获取支付状态失败:', e)
-    paymentHealth.value = {
-      ...DEFAULT_PAYMENT_HEALTH,
-      status: 'error',
-      summary: e?.message || '支付检测加载失败'
-    }
-  } finally {
-    paymentLoading.value = false
   }
 }
 
@@ -501,7 +403,6 @@ onMounted(() => {
   fetchOperationsDashboard()
   fetchSystemStatus()
   fetchMemberTierConfig()
-  fetchPaymentHealth()
 })
 </script>
 
@@ -696,18 +597,6 @@ button.focus-tag {
 .status-dot-label { font-size: 11.5px; font-weight: 600; padding: 3px 8px; border-radius: 20px; }
 .status-dot-label.ok { background: #ECFDF5; color: #059669; }
 .status-dot-label.err { background: #FEF2F2; color: #DC2626; }
-
-/* 支付检测 */
-.payment-summary { padding: 16px 20px 18px; }
-.payment-topline { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.payment-time { font-size: 11px; color: #94A3B8; }
-.payment-title { margin-top: 12px; font-size: 14px; line-height: 1.6; color: #1E293B; font-weight: 600; }
-.payment-meta { margin-top: 10px; display: flex; gap: 14px; font-size: 12px; color: #64748B; }
-.payment-list { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
-.payment-item { padding: 10px 12px; border-radius: 10px; background: #F8FAFC; }
-.payment-item-label { display: block; font-size: 12px; font-weight: 600; color: #334155; }
-.payment-item-message { display: block; margin-top: 4px; font-size: 12px; color: #64748B; line-height: 1.5; }
-.payment-empty { margin-top: 14px; font-size: 12px; color: #059669; background: #ECFDF5; border-radius: 10px; padding: 12px; }
 
 /* 会员等级快照 */
 .tier-list { padding: 8px 20px 14px; }

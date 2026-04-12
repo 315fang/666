@@ -32,16 +32,6 @@
           />
         </el-tab-pane>
 
-        <el-tab-pane label="支付检测" name="paymentHealth">
-          <PaymentHealthPanel
-            :loading="paymentHealthLoading"
-            :payment-health="paymentHealth"
-            :status-type="paymentStatusType"
-            :status-label="paymentStatusLabel"
-            :format-date-time="formatDateTime"
-          />
-        </el-tab-pane>
-
         <!-- 账号管理 -->
         <el-tab-pane label="账号管理" name="account">
           <AccountSettingsPanel
@@ -72,11 +62,10 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/store/user'
 import { useRoute } from 'vue-router'
-import { getSettings, updateSettings, getSystemStatus, getMiniProgramConfig, updateMiniProgramConfig, getPaymentHealth, getAlertConfig, saveAlertConfig, testAlertWebhook } from '@/api'
+import { getSettings, updateSettings, getSystemStatus, getMiniProgramConfig, updateMiniProgramConfig, getAlertConfig, saveAlertConfig, testAlertWebhook } from '@/api'
 import BasicInfoPanel from './components/BasicInfoPanel.vue'
 import OperationsConfigPanel from './components/OperationsConfigPanel.vue'
 import ProductDetailPledgesEditor from './components/ProductDetailPledgesEditor.vue'
-import PaymentHealthPanel from './components/PaymentHealthPanel.vue'
 import AccountSettingsPanel from './components/AccountSettingsPanel.vue'
 import AlertConfigPanel from './components/AlertConfigPanel.vue'
 import LightPromptModalsEditor from './components/LightPromptModalsEditor.vue'
@@ -84,7 +73,7 @@ import MiniProgramSettingsPanel from './components/MiniProgramSettingsPanel.vue'
 
 const userStore = useUserStore()
 const route = useRoute()
-const validTabs = ['basic', 'config', 'miniProgram', 'paymentHealth', 'account', 'alert']
+const validTabs = ['basic', 'config', 'miniProgram', 'account', 'alert']
 const activeTab = ref(validTabs.includes(route.query.tab) ? route.query.tab : 'basic')
 const settingsSnapshot = ref(null)
 const settingsLoading = ref(false)
@@ -93,20 +82,6 @@ const saving = ref(false)
 const systemStatus = ref({ status: 'ok' })
 const miniProgramLoading = ref(false)
 const miniProgramSaving = ref(false)
-const paymentHealthLoading = ref(false)
-const DEFAULT_PAYMENT_HEALTH = {
-  status: 'warning',
-  summary: '',
-  checked_at: '',
-  mode: '',
-  provider: '',
-  checks: [],
-  errors: [],
-  warnings: [],
-  detail: null
-}
-const paymentHealth = ref({ ...DEFAULT_PAYMENT_HEALTH })
-
 const settingsForm = reactive({
   commission_rate: 10,
   min_withdrawal: 100,
@@ -405,51 +380,11 @@ const fetchSystemStatus = async () => {
   }
 }
 
-const paymentStatusType = computed(() => {
-  if (paymentHealth.value.status === 'ok') return 'success'
-  if (paymentHealth.value.status === 'warning') return 'warning'
-  return 'error'
-})
-
-const paymentStatusLabel = computed(() => {
-  if (paymentHealth.value.status === 'ok') return '正常'
-  if (paymentHealth.value.status === 'warning') return '警告'
-  return '异常'
-})
-
 const formatDateTime = (value) => {
   if (!value) return '-'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString('zh-CN')
-}
-
-function normalizePaymentHealth(data, fallbackSummary = '') {
-  return {
-    ...DEFAULT_PAYMENT_HEALTH,
-    status: data?.status || 'warning',
-    summary: data?.summary || fallbackSummary,
-    checked_at: data?.checked_at || '',
-    mode: data?.mode || '',
-    provider: data?.provider || '',
-    checks: Array.isArray(data?.checks) ? data.checks : [],
-    errors: Array.isArray(data?.errors) ? data.errors : [],
-    warnings: Array.isArray(data?.warnings) ? data.warnings : [],
-    detail: data?.detail && typeof data.detail === 'object' ? data.detail : null
-  }
-}
-
-const fetchPaymentHealth = async () => {
-  await withLoading(paymentHealthLoading, async () => {
-    const data = await getPaymentHealth()
-    paymentHealth.value = normalizePaymentHealth(data, '尚未获取支付检测结果')
-  }).catch((error) => {
-    console.error('获取支付健康状态失败:', error)
-    paymentHealth.value = normalizePaymentHealth({
-      status: 'error',
-      summary: error?.message || '支付检测加载失败'
-    })
-  })
 }
 
 function ensureBrandTabBarShape(bc) {
@@ -589,7 +524,6 @@ onMounted(() => {
   accountForm.role = userStore.role === 'super_admin' ? '超级管理员' : '管理员'
   fetchSettings()
   fetchSystemStatus()
-  fetchPaymentHealth()
   fetchAlertConfig()
   fetchMiniProgramConfig()
 })

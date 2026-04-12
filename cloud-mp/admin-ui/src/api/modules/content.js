@@ -51,6 +51,7 @@ export const deleteMaterialGroup = (id) => request({ url: `/material-groups/${id
 export const moveMaterials = (data) => request({ url: '/material-groups/move', method: 'post', data })
 
 export const getMassMessages = (params) => request({ url: '/mass-messages', method: 'get', params })
+export const previewMassMessage = (data) => request({ url: '/mass-messages/preview', method: 'post', data })
 export const createMassMessage = (data) => request({ url: '/mass-messages', method: 'post', data })
 export const sendMassMessage = (id) => request({ url: `/mass-messages/${id}/send`, method: 'post' })
 export const deleteMassMessage = (id) => request({ url: `/mass-messages/${id}`, method: 'delete' })

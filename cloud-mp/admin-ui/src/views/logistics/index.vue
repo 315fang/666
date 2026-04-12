@@ -6,11 +6,13 @@
       <!-- 搜索表单 -->
       <el-form :inline="true" :model="searchForm" class="filter-container">
         <el-form-item label="运单/订单号">
+          <!-- 后端按运单号或订单号精确/模糊匹配 -->
           <el-input
             v-model="searchForm.keyword"
             placeholder="运单号 / 订单号"
             clearable
             style="width:200px"
+            @keyup.enter="handleSearch"
           />
         </el-form-item>
         <el-form-item label="快递公司">
@@ -231,6 +233,12 @@ import { usePagination } from '@/composables/usePagination'
 import { getUserNickname } from '@/utils/userDisplay'
 
 // ── 搜索表单 ──────────────────────────────────────
+/**
+ * keyword          - 按运单号或订单号模糊匹配（后端同时检索两个字段）
+ * company          - 快递公司编码（SF/YD/ZTO/YTO/STO/JTSD/CNSD/JD/EMS）
+ * logistics_status - 物流状态精确筛选（in_transit/delivering/delivered/exception/unknown）
+ *                    注意：此字段依赖第三方物流查询结果，手工发货模式下无效
+ */
 const searchForm = reactive({
   keyword: '',
   company: '',
@@ -266,6 +274,8 @@ async function fetchOrders() {
     }
     if (searchForm.keyword) params.keyword = searchForm.keyword
     if (searchForm.company) params.company = searchForm.company
+    // logistics_status：筛选物流状态（in_transit/delivering/delivered/exception/unknown）
+    if (searchForm.logistics_status) params.logistics_status = searchForm.logistics_status
 
     const res = await getOrders(params)
     tableData.value = (res?.list || res?.data?.list || []).map(o => ({ ...o, _logistics: null, _refreshing: false }))

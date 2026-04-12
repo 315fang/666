@@ -112,3 +112,16 @@ page { padding-bottom: 180rpx; }
 .btn-buy-ready { background: linear-gradient(135deg, #10B981, #34D399); }
 .btn-buy-default { background: linear-gradient(135deg, #FF6B35, #FF9A56); }
 .btn-disabled { flex: 1; display: flex; align-items: center; justify-content: center; background: #F0F0F0; color: #BBB; font-size: 26rpx; border-radius: 50rpx; min-height: 96rpx; }
+.btn-success-hint { background: rgba(16,185,129,0.1); color: #10B981; }
+
+/* 好友帮砍按钮 */
+.btn-help-cut { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4rpx; background: linear-gradient(135deg, #FF6B35, #FF9A56); border-radius: 20rpx; min-height: 96rpx; padding: 14rpx 20rpx; }
+.btn-help-icon { font-size: 44rpx; line-height: 1; }
+.btn-help-main { font-size: 30rpx; font-weight: 800; color: #FFFFFF; }
+.btn-help-sub { font-size: 20rpx; color: rgba(255,255,255,0.85); }
+
+/* 已帮砍状态 */
+.btn-helped { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4rpx; background: rgba(16,185,129,0.1); border-radius: 20rpx; min-height: 96rpx; padding: 14rpx 20rpx; }
+.btn-helped-icon { font-size: 36rpx; color: #10B981; }
+.btn-helped-text { font-size: 28rpx; font-weight: 700; color: #10B981; }
+.btn-helped-sub { font-size: 20rpx; color: #10B981; opacity: 0.7; }

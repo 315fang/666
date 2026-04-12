@@ -197,6 +197,59 @@
   background: #E7E5E4;
 }
 
+/* 货款快览条（仅代理可见） */
+.goods-fund-bar {
+  margin: -8rpx 32rpx 16rpx;
+  background: linear-gradient(135deg, #FDF8EF 0%, #F8F0DC 100%);
+  border-radius: 16rpx;
+  border: 1rpx solid rgba(200, 162, 88, 0.25);
+  padding: 20rpx 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  z-index: 2;
+}
+
+.gfb-left {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.gfb-tag {
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #7A5020;
+  background: rgba(200, 162, 88, 0.2);
+  border-radius: 6rpx;
+  padding: 4rpx 14rpx;
+  white-space: nowrap;
+}
+
+.gfb-tip {
+  font-size: 21rpx;
+  color: #9A8D80;
+}
+
+.gfb-right {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  flex-shrink: 0;
+}
+
+.gfb-balance {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #3A2E24;
+}
+
+.gfb-arrow {
+  font-size: 28rpx;
+  color: #B0A090;
+}
+
 /* ========== 3. 邀请码卡片 ========== */
 .invite-card {
   background: #FFFFFF;

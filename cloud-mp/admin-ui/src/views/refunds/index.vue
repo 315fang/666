@@ -57,11 +57,13 @@
         <el-table-column label="申请时间" width="170" class-name="hide-mobile">
           <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="230" fixed="right">
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <el-button v-if="row.status === 'pending'" text type="success" size="small" @click="handleApprove(row)">通过</el-button>
             <el-button v-if="row.status === 'pending'" text type="danger" size="small" @click="handleReject(row)">拒绝</el-button>
             <el-button v-if="row.status === 'approved'" text type="primary" size="small" @click="handleComplete(row)">确认退款</el-button>
+            <el-button v-if="row.status === 'processing'" text type="warning" size="small" disabled>退款中...</el-button>
+            <el-button v-if="row.status === 'failed'" text type="danger" size="small" @click="handleComplete(row)">重试退款</el-button>
             <el-button text size="small" @click="handleDetail(row)">详情</el-button>
           </template>
         </el-table-column>
@@ -138,6 +140,11 @@ const rejectDialogVisible = ref(false)
 const detailDialogVisible = ref(false)
 const currentRow = ref(null)
 
+/**
+ * 售后搜索字段说明：
+ *  keyword - 后端模糊匹配买家昵称或订单号（不支持手机号/会员码）
+ *  status  - 售后单状态精确筛选（pending/approved/processing/rejected/completed）
+ */
 const searchForm = reactive({
   status: '',
   keyword: ''
@@ -176,13 +183,15 @@ const refreshRefunds = () => fetchRefunds()
 
 const patchRefundRow = (id, patch) => {
   const applyPatch = (row) => ({ ...row, ...patch })
+  // 用 _id 或 id 都能匹配，兼容不同格式
+  const matchId = (row) => row.id === id || row._id === id
   tableData.value = tableData.value
-    .map((row) => (row.id === id ? applyPatch(row) : row))
+    .map((row) => (matchId(row) ? applyPatch(row) : row))
     .filter((row) => {
       if (!searchForm.status) return true
       return row.status === searchForm.status
     })
-  if (currentRow.value?.id === id) {
+  if (currentRow.value && matchId(currentRow.value)) {
     currentRow.value = applyPatch(currentRow.value)
   }
 }
@@ -190,12 +199,19 @@ const patchRefundRow = (id, patch) => {
 const runRefundMutation = async (task, successMessage, onSuccess) => {
   submitting.value = true
   try {
-    await task()
+    const result = await task()
+    // 先用后端返回的最新数据乐观更新本地行（避免等 refresh 期间闪烁）
+    if (result && (result.id || result._id)) {
+      const freshId = result.id || result._id
+      patchRefundRow(freshId, result)
+    }
     ElMessage.success(successMessage)
     await onSuccess?.()
+    // 延迟一点点再刷新，给 CloudBase 写入一点余量
+    await new Promise(resolve => setTimeout(resolve, 300))
     await refreshRefunds()
   } catch (error) {
-    ElMessage.error('操作失败')
+    ElMessage.error(error?.message || '操作失败')
     console.error('售后操作失败:', error)
   } finally {
     submitting.value = false
@@ -236,15 +252,8 @@ const handleApprove = async (row) => {
     )
     await runRefundMutation(
       () => approveRefund(row.id),
-      '审核通过，请尽快完成退款',
-      () => {
-        const nextTime = new Date().toISOString()
-        patchRefundRow(row.id, {
-          status: 'approved',
-          approved_at: nextTime,
-          updated_at: nextTime
-        })
-      }
+      '审核通过，请尽快完成退款'
+      // 不再手动 patchRefundRow — runRefundMutation 会用后端返回数据更新
     )
   } catch (error) {
     if (error !== 'cancel') {
@@ -268,15 +277,7 @@ const handleRejectSubmit = async () => {
   await runRefundMutation(
     () => rejectRefund(rejectForm.id, { reason: rejectForm.reason }),
     '已拒绝',
-    () => {
-      const nextTime = new Date().toISOString()
-      patchRefundRow(rejectForm.id, {
-        status: 'rejected',
-        reject_reason: rejectForm.reason,
-        updated_at: nextTime
-      })
-      rejectDialogVisible.value = false
-    }
+    () => { rejectDialogVisible.value = false }
   )
 }
 
@@ -293,15 +294,8 @@ const handleComplete = async (row) => {
     )
     await runRefundMutation(
       () => completeRefund(row.id),
-      '退款请求已执行',
-      () => {
-        const nextTime = new Date().toISOString()
-        patchRefundRow(row.id, {
-          status: 'completed',
-          completed_at: nextTime,
-          updated_at: nextTime
-        })
-      }
+      '退款请求已提交微信，处理中'
+      // runRefundMutation 会用后端返回的最新状态更新本地行
     )
   } catch (error) {
     if (error !== 'cancel') {

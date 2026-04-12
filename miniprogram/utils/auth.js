@@ -28,13 +28,6 @@ function updateUserInfo(data) {
     return require('./request').put('/user/profile', data);
 }
 
-module.exports = {
-    login,
-    getUserInfo,
-    updateUserInfo,
-    requireLogin
-};
-
 /**
  * 登录态守卫 — 消除页面中重复的 "if (!isLoggedIn)" 模板代码
  *
@@ -57,3 +50,10 @@ function requireLogin(callback, message) {
     wx.showToast({ title: message || '请先登录', icon: 'none' });
     return false;
 }
+
+module.exports = {
+    login,
+    getUserInfo,
+    updateUserInfo,
+    requireLogin
+};

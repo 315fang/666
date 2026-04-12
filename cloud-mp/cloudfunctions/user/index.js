@@ -561,7 +561,8 @@ const handleAction = {
 
     'walletCommissions': asyncHandler(async (openid, params) => {
         const result = await userWallet.walletCommissions(openid, params);
-        return success({ list: result });
+        // result 现在是 { list, total, page, limit }
+        return success(result);
     }),
 
     'pointsAccount': asyncHandler(async (openid) => {

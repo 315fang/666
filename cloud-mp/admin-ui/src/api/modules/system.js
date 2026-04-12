@@ -22,17 +22,7 @@ export const getSystemStatus = () => {
   })
 }
 
-export const getPaymentHealth = (params) => {
-  return request({
-    url: '/payment-health',
-    method: 'get',
-    params
-  })
-}
-
-export const getDebugProcess = () => request({ url: '/debug/process', method: 'get' })
 export const getDebugAnomalies = () => request({ url: '/debug/anomalies', method: 'get' })
-export const getDebugDbPing = () => request({ url: '/debug/db-ping', method: 'get' })
 export const getCronStatus = () => request({ url: '/debug/cron-status', method: 'get' })
 export const getDebugLogs = (lines = 100) =>
   request({ url: `/debug/logs?lines=${lines}`, method: 'get' })

@@ -12,6 +12,7 @@ export const createCoupon = (data) => request({ url: '/coupons', method: 'post',
 export const updateCoupon = (id, data) => request({ url: `/coupons/${id}`, method: 'put', data })
 export const deleteCoupon = (id) => request({ url: `/coupons/${id}`, method: 'delete' })
 export const issueCoupon = (id, data) => request({ url: `/coupons/${id}/issue`, method: 'post', data })
+export const previewCouponIssue = (id, data) => request({ url: `/coupons/${id}/issue`, method: 'post', params: { dry_run: true }, data })
 export const getCouponAutoRules = () => request({ url: '/coupon-auto-rules', method: 'get' })
 export const saveCouponAutoRules = (data) => request({ url: '/coupon-auto-rules', method: 'put', data })
 

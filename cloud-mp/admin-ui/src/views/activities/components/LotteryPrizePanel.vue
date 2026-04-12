@@ -60,9 +60,12 @@
       <el-table-column label="库存" width="80">
         <template #default="{ row }">{{ row.stock === -1 ? '无限' : row.stock }}</template>
       </el-table-column>
-      <el-table-column label="状态" width="80">
+      <el-table-column label="启用" width="80">
         <template #default="{ row }">
-          <el-tag size="small" :type="row.is_active ? 'success' : 'info'">{{ row.is_active ? '启用' : '禁用' }}</el-tag>
+          <el-switch
+            :model-value="row.is_active === 1 || row.is_active === true"
+            @change="(val) => emit('toggle', row, val ? 1 : 0)"
+          />
         </template>
       </el-table-column>
       <el-table-column label="操作" width="140" fixed="right">
@@ -86,5 +89,5 @@ defineProps({
   prizeTypeLabel: { type: Function, required: true }
 })
 
-const emit = defineEmits(['create', 'edit', 'delete'])
+const emit = defineEmits(['create', 'edit', 'delete', 'toggle'])
 </script>

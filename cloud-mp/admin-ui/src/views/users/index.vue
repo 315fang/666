@@ -151,13 +151,23 @@ import { usePagination } from '@/composables/usePagination'
 import { formatDateShort as formatDate } from '@/utils/format'
 import { getUserNickname, normalizeUserDisplay } from '@/utils/userDisplay'
 import { useUserStore } from '@/store/user'
+import { useRoute } from 'vue-router'
 
 // ===== 列表 =====
+const route = useRoute()
 const loading = ref(false)
 const userStore = useUserStore()
 const tableData = ref([])
 const { pagination, resetPage, applyResponse } = usePagination()
-const searchForm = reactive({ keyword: '', member_no: '', role_level: '', status: '', team_leader_id: '' })
+/**
+ * 搜索字段说明：
+ *  keyword     - 昵称 / 手机号 / 会员码，后端模糊匹配；支持从订单页跳转时携带 ?keyword=xxx 预填
+ *  member_no   - 精确匹配 8 位会员码（比 keyword 优先级高，建议已知会员码时使用）
+ *  role_level  - 用户角色等级（0普通 1会员 2团长 3代理 4合伙人 5区域代理）
+ *  status      - 账号状态（active/disabled）
+ *  team_leader_id - 按所属负责人 ID 筛选，远程搜索后选择
+ */
+const searchForm = reactive({ keyword: String(route.query.keyword || ''), member_no: '', role_level: '', status: '', team_leader_id: '' })
 const leaderOptions = ref([])
 const leaderSearchLoading = ref(false)
 const teamSummaryVisible = ref(false)

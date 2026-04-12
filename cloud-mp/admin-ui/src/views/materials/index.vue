@@ -442,13 +442,22 @@ const handleSubmit = async () => {
 }
 
 const handleUpload = async ({ file }) => {
-  const data = await uploadFile(file, { params: { skip_library: 1, folder: 'materials' } })
-  form.url = data.url
-  if (!form.title) form.title = file.name.replace(/\.[^.]+$/, '')
-  ElMessage.success('文件已上传')
+  try {
+    const data = await uploadFile(file, { params: { skip_library: 1, folder: 'materials' } })
+    form.url = data.url
+    if (!form.title) form.title = file.name.replace(/\.[^.]+$/, '')
+    ElMessage.success('文件已上传')
+  } catch (e) {
+    ElMessage.error('上传失败，请重试')
+  }
 }
 
+const ALLOWED_MIME_PREFIXES = ['image/', 'video/', 'audio/']
+const ALLOWED_MIME_LABEL = 'JPG/PNG/GIF/WebP/MP4 等图片或媒体文件'
+
 const beforeUpload = (file) => {
+  const isAllowed = ALLOWED_MIME_PREFIXES.some(prefix => file.type.startsWith(prefix))
+  if (!isAllowed) { ElMessage.error(`只能上传${ALLOWED_MIME_LABEL}`); return false }
   if (file.size > 50 * 1024 * 1024) { ElMessage.error('文件不能超过 50MB'); return false }
   return true
 }

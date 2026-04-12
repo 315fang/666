@@ -292,10 +292,44 @@ async function groupOrderDetail(openid, params) {
             product = await loadProductSummary(activityInfo.product_id);
         }
     }
-    const memberCount = (group.members || []).length;
+    const members = group.members || [];
+    const memberCount = members.length;
+
+    // 计算拼团过期时间和剩余秒数（由 created_at + expire_hours 推算）
+    const expireHours = toNumber(activityInfo?.expire_hours, 24);
+    let expire_at = null;
+    let remain_seconds = null;
+    if (group.created_at) {
+        const createdMs = new Date(group.created_at).getTime();
+        if (Number.isFinite(createdMs)) {
+            const expireMs = createdMs + expireHours * 3600 * 1000;
+            expire_at = new Date(expireMs).toISOString();
+            remain_seconds = Math.max(0, Math.floor((expireMs - Date.now()) / 1000));
+        }
+    }
+
+    // 批量拉取成员用户信息（昵称、头像）
+    const memberOpenids = members.map(m => m.openid).filter(Boolean);
+    let memberUserMap = {};
+    if (memberOpenids.length > 0) {
+        const usersRes = await db.collection('users')
+            .where({ openid: _.in(memberOpenids) })
+            .limit(memberOpenids.length + 5)
+            .get()
+            .catch(() => ({ data: [] }));
+        (usersRes.data || []).forEach(u => {
+            memberUserMap[u.openid] = {
+                openid: u.openid,
+                nickName: u.nickName || u.nickname || '团队成员',
+                nickname: u.nickName || u.nickname || '团队成员',
+                avatarUrl: u.avatarUrl || u.avatar_url || u.avatar || ''
+            };
+        });
+    }
 
     return {
         _id: group._id,
+        activity_id: group.activity_id || '',
         group_no: group.group_no,
         status: groupStatusForClient(group.status),
         raw_status: group.status,
@@ -304,11 +338,14 @@ async function groupOrderDetail(openid, params) {
         min_members: group.group_size || activityInfo?.min_members || activityInfo?.group_size || 2,
         group_size: group.group_size,
         is_leader: group.leader_openid === openid,
-        is_member: (group.members || []).some(m => m.openid === openid),
-        members: (group.members || []).map(m => ({
+        is_member: members.some(m => m.openid === openid),
+        expire_at,                   // 过期时间（ISO字符串）
+        remain_seconds,              // 剩余秒数
+        members: members.map(m => ({
             openid: m.openid,
             joined_at: m.joined_at,
             is_leader: m.openid === group.leader_openid,
+            user: memberUserMap[m.openid] || null
         })),
         orders: (ordersRes.data || []).map(o => ({
             _id: o._id,
@@ -328,7 +365,7 @@ async function groupOrderDetail(openid, params) {
             max_members: activityInfo.max_members || activityInfo.group_size || group.group_size || 10,
             stock_limit: activityInfo.stock_limit || 0,
             sold_count: activityInfo.sold_count || 0,
-            expire_hours: activityInfo.expire_hours || 24,
+            expire_hours: expireHours,
             image: activityInfo.image || (activityInfo.images || [])[0] || '',
         } : null,
         product,
@@ -512,6 +549,37 @@ async function slashDetail(openid, params) {
     if (status === 'completed') status = 'success';
     if (currentPrice <= floorPrice && floorPrice > 0) status = 'success';
 
+    const helpers = Array.isArray(record.helpers) ? record.helpers : [];
+    const maxHelpers = activity?.max_helpers;
+    const helperCount = record.slash_count || helpers.length;
+    const alreadyHelped = !!helpers.find((h) => h.openid === openid);
+    const isOwner = record.openid === openid;
+    const helperFull = maxHelpers > 0 && helperCount >= maxHelpers;
+
+    // 批量拉取帮砍好友的用户信息（昵称、头像）
+    const helperOpenids = helpers.map(h => h.openid).filter(Boolean);
+    let helperUserMap = {};
+    if (helperOpenids.length > 0) {
+        const usersRes = await db.collection('users')
+            .where({ openid: _.in(helperOpenids) })
+            .limit(helperOpenids.length + 5)
+            .get()
+            .catch(() => ({ data: [] }));
+        (usersRes.data || []).forEach(u => {
+            helperUserMap[u.openid] = {
+                openid: u.openid,
+                nickName: u.nickName || u.nickname || '好友',
+                nickname: u.nickName || u.nickname || '好友',
+                avatarUrl: u.avatarUrl || u.avatar_url || u.avatar || ''
+            };
+        });
+    }
+
+    const enrichedHelpers = helpers.map(h => ({
+        ...h,
+        user: helperUserMap[h.openid] || null
+    }));
+
     return {
         _id: record._id,
         id: record._id,
@@ -523,8 +591,11 @@ async function slashDetail(openid, params) {
         target_price: floorPrice,
         current_price: currentPrice,
         total_slashed: record.total_slashed || Math.max(0, originalPrice - currentPrice),
-        helper_count: record.slash_count || (Array.isArray(record.helpers) ? record.helpers.length : 0),
-        helpers: record.helpers || [],
+        helper_count: helperCount,
+        helpers: enrichedHelpers,   // 包含用户昵称头像
+        is_owner: isOwner,          // 当前用户是否是砍价发起人
+        already_helped: alreadyHelped, // 当前用户是否已帮砍过
+        helper_full: helperFull,    // 帮砍名额是否已满
         product,
         activity: activity ? {
             _id: activity._id,
@@ -533,7 +604,8 @@ async function slashDetail(openid, params) {
             min_slash_per_helper: activity.min_slash_per_helper,
             max_slash_per_helper: activity.max_slash_per_helper,
             stock_limit: activity.stock_limit || 0,
-            sold_count: activity.sold_count || 0
+            sold_count: activity.sold_count || 0,
+            expire_hours: activity.expire_hours || 0
         } : {},
         created_at: record.created_at,
         updated_at: record.updated_at

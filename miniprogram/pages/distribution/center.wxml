@@ -41,17 +41,29 @@
   <view class="stats-bar">
     <view class="stat-item" bindtap="onCommissionLogsTap">
       <view class="stat-value">¥{{stats.totalEarnings || '0.00'}}</view>
-      <view class="stat-label">累计收益</view>
+      <view class="stat-label">佣金累计</view>
     </view>
     <view class="stat-divider"></view>
-    <view class="stat-item">
+    <view class="stat-item" bindtap="onCommissionLogsTap">
       <view class="stat-value">¥{{stats.frozenAmount || '0.00'}}</view>
-      <view class="stat-label">待结算</view>
+      <view class="stat-label">待解冻</view>
     </view>
     <view class="stat-divider"></view>
     <view class="stat-item" bindtap="onTeamTap">
       <view class="stat-value">{{team.totalCount || 0}}<text class="unit">人</text></view>
       <view class="stat-label">我的团队</view>
+    </view>
+  </view>
+
+  <!-- 2b. 代理商货款余额快览（仅代理商可见；明确与佣金区分） -->
+  <view class="goods-fund-bar" wx:if="{{isAgent}}" bindtap="goWorkbench">
+    <view class="gfb-left">
+      <view class="gfb-tag">货款账户</view>
+      <text class="gfb-tip">代理商专属 · 独立于佣金</text>
+    </view>
+    <view class="gfb-right">
+      <text class="gfb-balance">¥{{goodsFundBalance || '0.00'}}</text>
+      <text class="gfb-arrow">›</text>
     </view>
   </view>
 

@@ -43,7 +43,8 @@ App({
             const status = windowInfo.statusBarHeight || 20;
             if (menuButton && menuButton.bottom) {
                 this.globalData.navTopPadding = menuButton.top || status;
-                this.globalData.navBarHeight = menuButton.height || 44;
+                // 标准公式：胶囊高度 + 胶囊上边距与状态栏之间的间距 × 2
+                this.globalData.navBarHeight = menuButton.height + (menuButton.top - status) * 2;
             } else {
                 this.globalData.navTopPadding = status;
                 this.globalData.navBarHeight = 44;

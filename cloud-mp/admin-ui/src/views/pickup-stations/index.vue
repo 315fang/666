@@ -10,7 +10,8 @@
 
       <el-form :inline="true" :model="searchForm" class="filter-container">
         <el-form-item label="关键词">
-          <el-input v-model="searchForm.keyword" placeholder="名称/地址/城市/联系人" clearable style="width:200px" />
+          <!-- 后端按门店名称、地址、城市、联系人模糊匹配 -->
+          <el-input v-model="searchForm.keyword" placeholder="名称/地址/城市/联系人" clearable style="width:200px" @keyup.enter="search" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="全部" clearable style="width:120px">

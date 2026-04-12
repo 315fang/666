@@ -3,7 +3,8 @@
     <el-card class="search-card">
       <el-form :inline="true" :model="searchForm">
         <el-form-item label="关键词">
-          <el-input v-model="searchForm.keyword" placeholder="评论内容" clearable style="width:220px" />
+          <!-- 后端按评论内容模糊匹配 -->
+          <el-input v-model="searchForm.keyword" placeholder="评论内容" clearable style="width:220px" @keyup.enter="fetchReviews" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" clearable style="width:120px">

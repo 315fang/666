@@ -114,10 +114,11 @@ Page({
                 } catch (_) { /* 退款状态查询失败不影响主列表 */ }
             }
 
-            // 建立 order_id → refund 映射
+            // 建立 order_id / order_no → refund 双键映射，防止 ID 类型不一致
             const refundMap = {};
             activeRefunds.forEach(r => {
-                refundMap[r.order_id] = r;
+                if (r.order_id) refundMap[String(r.order_id)] = r;
+                if (r.order_no) refundMap[String(r.order_no)] = r;
             });
 
             // 处理每个订单
@@ -133,8 +134,8 @@ Page({
                     order.countdownText = this._calcCountdownText(order.expire_at, order.created_at);
                 }
 
-                // ★ 检查该订单是否有活跃退款
-                const activeRefund = refundMap[order.id];
+                // ★ 检查该订单是否有活跃退款（用字符串比较兜底）
+                const activeRefund = refundMap[String(order.id)] || refundMap[String(order.order_no)] || null;
                 if (activeRefund) {
                     order.hasActiveRefund = true;
                     order.refundId = activeRefund.id;
@@ -243,20 +244,39 @@ Page({
         if (this._listCountdownTimer) clearInterval(this._listCountdownTimer);
         const hasPending = this.data.orders.some(o => o.status === 'pending');
         if (!hasPending) return;
-        this._listCountdownTimer = setInterval(() => {
+
+        const tick = () => {
             const orders = this.data.orders;
             let needUpdate = false;
+            let hasNearExpiry = false;
+
             const updated = orders.map(o => {
                 if (o.status !== 'pending') return o;
                 const text = this._calcCountdownText(o.expire_at, o.created_at);
+                // 检测是否进入最后60秒，以便调整刷新频率
+                const ORDER_TIMEOUT_MS = 30 * 60 * 1000;
+                let targetTs = o.expire_at ? new Date(o.expire_at).getTime() : 0;
+                if (!targetTs || isNaN(targetTs)) {
+                    const createdTs = o.created_at ? new Date(o.created_at).getTime() : 0;
+                    targetTs = createdTs > 0 ? createdTs + ORDER_TIMEOUT_MS : 0;
+                }
+                if (targetTs && (targetTs - Date.now()) < 60000) hasNearExpiry = true;
                 if (text !== o.countdownText) {
                     needUpdate = true;
                     return { ...o, countdownText: text };
                 }
                 return o;
             });
+
             if (needUpdate) this.setData({ orders: updated });
-        }, 10000); // 列表每10秒刷新一次倒计时
+
+            // 有待超时订单时缩短刷新间隔至1秒，否则10秒
+            if (this._listCountdownTimer) clearInterval(this._listCountdownTimer);
+            const interval = hasNearExpiry ? 1000 : 10000;
+            this._listCountdownTimer = setInterval(tick, interval);
+        };
+
+        this._listCountdownTimer = setInterval(tick, 10000);
     },
 
     _getRefundStatusText(status) {

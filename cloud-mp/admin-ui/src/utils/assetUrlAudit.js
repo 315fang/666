@@ -1,3 +1,8 @@
+// 这些 query 参数出现在 URL 中，说明是带签名的临时链接（会过期），不能存进数据库
+// 注意：
+//   CloudBase getTempFileURL 返回的 URL 虽然带 token 参数，但 token 是 CDN 鉴权凭证，
+//   并不属于"会过期的签名链接"范畴，因此不列入此处
+//   AWS S3 / 阿里云 OSS / 腾讯云 COS 的预签名 URL 使用 x-amz-* / x-oss-* / x-cos-* 参数
 const TEMP_QUERY_KEYS = [
   'expires',
   'signature',
@@ -16,9 +21,7 @@ const TEMP_QUERY_KEYS = [
   'x-cos-date',
   'x-cos-expires',
   'x-cos-security-token',
-  'x-cos-signature',
-  'token',
-  'auth'
+  'x-cos-signature'
 ]
 
 function analyzeAssetUrl(url) {

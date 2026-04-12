@@ -120,9 +120,26 @@
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
         <el-button @click="handleSaveDraft" :loading="submitting">存为草稿</el-button>
-        <el-button type="primary" @click="handleSubmitAndSend" :loading="submitting">{{ form.send_mode === 'now' ? '立即发送' : '保存并定时' }}</el-button>
+        <el-button type="primary" @click="handleSubmitAndSend" :loading="submitting">
+          下一步：预览目标用户
+        </el-button>
       </template>
     </el-dialog>
+
+    <!-- 群发目标用户确认弹窗 -->
+    <UserConfirmDialog
+      v-model="massConfirmVisible"
+      :title="massConfirmTitle"
+      :action-desc="`「${form.title || '(未填标题)'}」${form.send_mode === 'now' ? '立即' : '定时'}群发`"
+      :users="massPreviewUsers"
+      :count="massPreviewCount"
+      :truncated="massPreviewTruncated"
+      :loading="massPreviewLoading"
+      :confirming="massConfirming"
+      :require-confirm-threshold="20"
+      confirm-keyword="确认群发"
+      @confirm="doMassSend"
+    />
 
     <!-- 详情对话框 -->
     <el-dialog v-model="detailDialogVisible" title="群发详情" width="500px">
@@ -141,11 +158,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getMassMessages, createMassMessage, sendMassMessage, deleteMassMessage } from '@/api'
+import { getMassMessages, previewMassMessage, createMassMessage, sendMassMessage, deleteMassMessage } from '@/api'
 import { formatDate } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
+import UserConfirmDialog from '@/components/UserConfirmDialog.vue'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -225,6 +243,21 @@ const handleSaveDraft = async () => {
   })
 }
 
+// 群发确认弹窗状态
+const massConfirmVisible = ref(false)
+const massPreviewUsers = ref([])
+const massPreviewCount = ref(0)
+const massPreviewTruncated = ref(false)
+const massPreviewLoading = ref(false)
+const massConfirming = ref(false)
+let pendingMassPayload = null
+
+const massConfirmTitle = computed(() => {
+  const modeLabel = form.send_mode === 'now' ? '立即群发' : '定时群发'
+  const targetLabel = { all: '全部用户', by_level: '按等级筛选用户', by_ids: '指定用户', distributor: '分销商', active_30d: '近30天活跃用户' }[form.target_type] || '目标用户'
+  return `群发确认 — ${modeLabel} · ${targetLabel}`
+})
+
 const handleSubmitAndSend = async () => {
   await formRef.value?.validate(async (valid) => {
     if (!valid) return
@@ -234,18 +267,49 @@ const handleSubmitAndSend = async () => {
     if (form.target_type === 'by_ids' && !form.target_ids_text.trim()) {
       return ElMessage.warning('请输入目标用户ID')
     }
-    submitting.value = true
+
+    // 先获取目标用户预览，弹出确认弹窗
+    const payload = buildPayload()
+    pendingMassPayload = payload
+    massPreviewLoading.value = true
+    massConfirmVisible.value = true
+    massPreviewUsers.value = []
+    massPreviewCount.value = 0
+
     try {
-      await createMassMessage(buildPayload())
-      ElMessage.success(form.send_mode === 'now' ? '群发已开始！' : '定时群发已设置')
-      createDialogVisible.value = false
-      fetchData()
+      const previewPayload = {
+        targetType: payload.targetType,
+        targetRoles: payload.targetRoles,
+        targetUsers: payload.targetUsers
+      }
+      const res = await previewMassMessage(previewPayload)
+      massPreviewUsers.value = res?.preview || []
+      massPreviewCount.value = res?.count ?? 0
+      massPreviewTruncated.value = !!res?.truncated
     } catch (e) {
-      console.error('发送失败:', e)
+      massConfirmVisible.value = false
+      ElMessage.error('查询目标用户失败，请重试')
     } finally {
-      submitting.value = false
+      massPreviewLoading.value = false
     }
   })
+}
+
+// 确认名单后实际执行群发
+const doMassSend = async () => {
+  if (!pendingMassPayload) return
+  massConfirming.value = true
+  try {
+    await createMassMessage(pendingMassPayload)
+    ElMessage.success(form.send_mode === 'now' ? '群发已开始！' : '定时群发已设置')
+    massConfirmVisible.value = false
+    createDialogVisible.value = false
+    fetchData()
+  } catch (e) {
+    console.error('发送失败:', e)
+  } finally {
+    massConfirming.value = false
+  }
 }
 
 const handleSend = async (row) => {

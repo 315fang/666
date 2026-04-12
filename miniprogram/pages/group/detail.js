@@ -1,28 +1,7 @@
 // pages/group/detail.js - 拼团详情
 const { get } = require('../../utils/request');
+const { resolvePreferredSkuId, plainSummary } = require('../../utils/helpers');
 const app = getApp();
-
-function resolvePreferredSkuId(detail) {
-    if (!detail) return null;
-    const activitySkuId = detail.activity && detail.activity.sku_id != null && detail.activity.sku_id !== ''
-        ? detail.activity.sku_id
-        : null;
-    if (activitySkuId != null) return activitySkuId;
-    if (detail.sku_id != null && detail.sku_id !== '') return detail.sku_id;
-    if (detail.product && detail.product.sku_id != null && detail.product.sku_id !== '') return detail.product.sku_id;
-    const skus = detail.product && Array.isArray(detail.product.skus) ? detail.product.skus : [];
-    if (skus.length === 1) {
-        return skus[0]._id || skus[0].id || null;
-    }
-    return null;
-}
-
-function plainSummary(html, maxLen = 96) {
-    if (!html) return '';
-    const t = String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    if (!t) return '';
-    return t.length > maxLen ? `${t.slice(0, maxLen)}…` : t;
-}
 
 Page({
     data: {
@@ -138,8 +117,11 @@ Page({
         }
         if (!detail.product || !detail.product.id) return;
 
+        const actSku = resolvePreferredSkuId(detail);
+        const activityId = detail.activity_id || (detail.activity && (detail.activity._id || detail.activity.id));
+
         if (detail.status === 'success') {
-            const actSku = resolvePreferredSkuId(detail);
+            // 已成团：直接下单（不再走拼团流程，以结算价购买）
             const buyInfo = {
                 product_id: detail.product.id,
                 category_id: detail.product.category_id || null,
@@ -149,13 +131,29 @@ Page({
                 name: detail.product.name,
                 image: (detail.product.images && detail.product.images[0]) || '',
                 spec: actSku ? '拼团·指定规格' : '拼团特惠',
-                group_no: detail.group_no,
+                type: 'normal',
                 supports_pickup: detail.product.supports_pickup ? 1 : 0
             };
             wx.setStorageSync('directBuyInfo', buyInfo);
             wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
         } else {
-            wx.navigateTo({ url: `/pages/product/detail?id=${detail.product.id}` });
+            // 拼团中（open）：参加已有团，必须带 group_no 才能与后端拼团逻辑对齐
+            const buyInfo = {
+                product_id: detail.product.id,
+                category_id: detail.product.category_id || null,
+                sku_id: actSku,
+                quantity: 1,
+                price: parseFloat(detail.group_price),
+                name: detail.product.name,
+                image: (detail.product.images && detail.product.images[0]) || '',
+                spec: actSku ? '拼团·指定规格' : '拼团特惠',
+                type: 'group',
+                group_no: detail.group_no,         // 加入已有团，不新开团
+                group_activity_id: activityId,
+                supports_pickup: detail.product.supports_pickup ? 1 : 0
+            };
+            wx.setStorageSync('directBuyInfo', buyInfo);
+            wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
         }
     },
 

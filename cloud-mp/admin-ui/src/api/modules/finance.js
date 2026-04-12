@@ -74,3 +74,7 @@ export const approveCommissionItem = (id) => request({ url: `/commissions/${id}/
 export const rejectCommissionItem = (id, data) => request({ url: `/commissions/${id}/reject`, method: 'put', data })
 export const batchApproveCommissions = (data) => request({ url: '/commissions/batch-approve', method: 'post', data })
 export const batchRejectCommissions = (data) => request({ url: '/commissions/batch-reject', method: 'post', data })
+
+export const getFinanceOverview = () => request({ url: '/finance/overview', method: 'get' })
+export const getAgentPerformance = (params) => request({ url: '/finance/agent-performance', method: 'get', params })
+export const getPoolContributions = () => request({ url: '/finance/pool-contributions', method: 'get' })

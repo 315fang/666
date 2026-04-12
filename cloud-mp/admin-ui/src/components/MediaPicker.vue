@@ -168,7 +168,7 @@ const fetchMaterials = async () => {
     total.value = res?.pagination?.total || res?.total || 0
 
   } catch (e) {
-    console.error('加载素材库失败:', e)
+    ElMessage.error('素材列表加载失败，请刷新重试')
   } finally {
     loading.value = false
   }
@@ -206,8 +206,17 @@ const toggleSelect = (item) => {
   }
 }
 
+const isCloudFileId = (v) => /^cloud:\/\//i.test(String(v || ''))
+
 const confirm = () => {
-  emit('confirm', selected.value.map(s => s.url))
+  // 优先返回 cloud:// file_id 作为持久化引用（不会过期），同时传递临时显示 url
+  // 第一个参数：持久 ID（cloud:// 或 https://）
+  // 第二个参数：用于立即预览的 https url（始终是可展示的链接）
+  const persistIds = selected.value.map(s =>
+    (s.file_id && isCloudFileId(s.file_id)) ? s.file_id : s.url
+  )
+  const displayUrls = selected.value.map(s => s.url || '')
+  emit('confirm', persistIds, displayUrls)
   innerVisible.value = false
   selected.value = []
 }

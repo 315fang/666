@@ -1,23 +1,20 @@
 import request from '@/utils/request'
 
-const fileToBase64 = (file) => new Promise((resolve, reject) => {
-  const reader = new FileReader()
-  reader.onload = () => resolve(reader.result || '')
-  reader.onerror = () => reject(reader.error || new Error('文件读取失败'))
-  reader.readAsDataURL(file)
-})
+// 大文件上传超时：120 秒
+const UPLOAD_TIMEOUT = 120000
 
 export const uploadFile = async (file, options = {}) => {
-  const contentBase64 = await fileToBase64(file)
+  const formData = new FormData()
+  formData.append('file', file, file.name)
+  if (options.params) {
+    Object.entries(options.params).forEach(([k, v]) => formData.append(k, v))
+  }
   return request({
     url: '/upload',
     method: 'post',
-    data: {
-      name: file.name,
-      mime_type: file.type || 'application/octet-stream',
-      content_base64: contentBase64,
-      ...(options.params || {})
-    }
+    data: formData,
+    timeout: UPLOAD_TIMEOUT,
+    headers: { 'Content-Type': 'multipart/form-data' }
   })
 }
 

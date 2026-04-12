@@ -42,7 +42,8 @@
       <!-- 搜索查询 -->
       <el-form :inline="true" :model="searchForm" class="filter-container">
         <el-form-item label="关键字">
-          <el-input v-model="searchForm.keyword" placeholder="优惠券名称" clearable />
+          <!-- 后端按优惠券名称模糊匹配 -->
+          <el-input v-model="searchForm.keyword" placeholder="优惠券名称" clearable @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="全部" clearable style="width: 120px">
@@ -260,9 +261,22 @@
       </el-form>
       <template #footer>
         <el-button @click="issueVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitIssue" :loading="submitting">确 认 发 放</el-button>
+        <el-button type="primary" @click="submitIssue" :loading="submitting">下一步：预览名单</el-button>
       </template>
     </el-dialog>
+
+    <!-- 发券目标用户确认弹窗 -->
+    <UserConfirmDialog
+      v-model="issueConfirmVisible"
+      title="发券确认 — 请核查目标用户名单"
+      :action-desc="`发放优惠券「${currentCoupon?.name || ''}」`"
+      :users="issuePreviewUsers"
+      :count="issuePreviewCount"
+      :truncated="issuePreviewTruncated"
+      :loading="issuePreviewLoading"
+      :confirming="issueConfirming"
+      @confirm="doIssue"
+    />
   </div>
 </template>
 
@@ -275,6 +289,7 @@ import {
   updateCoupon,
   deleteCoupon,
   issueCoupon,
+  previewCouponIssue,
   getCouponAutoRules,
   saveCouponAutoRules,
   getProducts,
@@ -282,6 +297,7 @@ import {
   getProductById
 } from '@/api'
 import { usePagination } from '@/composables/usePagination'
+import UserConfirmDialog from '@/components/UserConfirmDialog.vue'
 
 // ====== 列表逻辑 ======
 const loading = ref(false)
@@ -421,7 +437,7 @@ const defaultForm = () => ({
   id: null,
   name: '',
   type: 'fixed',
-  value: 0,
+  value: 1,
   min_purchase: 0,
   scope: 'all',
   scope_ids: [],
@@ -434,7 +450,18 @@ const form = reactive(defaultForm())
 
 const rules = {
   name: [{ required: true, message: '请输入券名称', trigger: 'blur' }],
-  value: [{ required: true, message: '必填项', trigger: 'blur' }],
+  value: [
+    { required: true, message: '必填项', trigger: 'blur' },
+    {
+      validator: (_rule, val, callback) => {
+        const v = Number(val)
+        if (!Number.isFinite(v) || v <= 0) return callback(new Error('金额必须大于 0'))
+        if (form.type === 'percent' && v >= 1) return callback(new Error('折扣率必须小于 1（例如 0.8 表示 8折）'))
+        callback()
+      },
+      trigger: 'blur'
+    }
+  ],
   scope_ids: [{
     validator: (_rule, _val, callback) => {
       if (form.scope === 'all') return callback()
@@ -485,38 +512,48 @@ watch(() => form.scope, (next, prev) => {
 
 const submitForm = async () => {
   if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
-    submitting.value = true
-    try {
-      const data = { ...form }
-      if (data.type === 'no_threshold') {
-        data.min_purchase = 0
-      }
-      if (data.scope === 'all') {
-        data.scope_ids = null
-      } else {
-        data.scope_ids = normalizeScopeIds(data.scope_ids)
-      }
-      if (data.id) {
-        await updateCoupon(data.id, data)
-        ElMessage.success('更新成功')
-      } else {
-        await createCoupon(data)
-        ElMessage.success('创建成功')
-      }
-      formVisible.value = false
-      fetchData()
-    } finally {
-      submitting.value = false
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
+  submitting.value = true
+  try {
+    const data = { ...form }
+    if (data.type === 'no_threshold') {
+      data.min_purchase = 0
     }
-  })
+    if (data.scope === 'all') {
+      data.scope_ids = null
+    } else {
+      data.scope_ids = normalizeScopeIds(data.scope_ids)
+    }
+    if (data.id) {
+      await updateCoupon(data.id, data)
+      ElMessage.success('更新成功')
+    } else {
+      await createCoupon(data)
+      ElMessage.success('创建成功')
+    }
+    formVisible.value = false
+    fetchData()
+  } catch (e) {
+    ElMessage.error(e?.message || '保存失败，请重试')
+  } finally {
+    submitting.value = false
+  }
 }
 
 // ====== 人工发券 ======
 const issueVisible = ref(false)
 const currentCoupon = ref(null)
 const issueForm = reactive({ mode: 'ids', userIdsText: '', roleLevels: [] })
+
+// 发券确认弹窗状态
+const issueConfirmVisible = ref(false)
+const issuePreviewUsers = ref([])
+const issuePreviewCount = ref(0)
+const issuePreviewTruncated = ref(false)
+const issuePreviewLoading = ref(false)
+const issueConfirming = ref(false)
+let pendingIssuePayload = null
 
 const handleIssue = (row) => {
   currentCoupon.value = row
@@ -526,33 +563,66 @@ const handleIssue = (row) => {
   issueVisible.value = true
 }
 
-const submitIssue = async () => {
+const buildIssuePayload = () => {
   const payload = {}
-
   if (issueForm.mode !== 'level') {
     const ids = issueForm.userIdsText.split(',')
       .map(id => id.trim()).filter(Boolean).map(Number).filter(n => !isNaN(n) && n > 0)
+    if (ids.length > 0) payload.user_ids = ids
+  }
+  if (issueForm.mode !== 'ids') {
+    payload.role_levels = issueForm.roleLevels
+  }
+  return payload
+}
+
+// 点击"确认发放"：先查目标名单，弹出二次确认
+const submitIssue = async () => {
+  const payload = buildIssuePayload()
+
+  if (issueForm.mode !== 'level') {
+    const ids = payload.user_ids || []
     if (ids.length === 0 && issueForm.mode === 'ids') {
       return ElMessage.warning('请输入有效的用户ID')
     }
-    if (ids.length > 0) payload.user_ids = ids
+  }
+  if (issueForm.mode !== 'ids' && (!payload.role_levels || payload.role_levels.length === 0)) {
+    return ElMessage.warning('请至少选择一个用户等级')
   }
 
-  if (issueForm.mode !== 'ids') {
-    if (issueForm.roleLevels.length === 0) return ElMessage.warning('请至少选择一个用户等级')
-    payload.role_levels = issueForm.roleLevels
-  }
+  issuePreviewLoading.value = true
+  issueConfirmVisible.value = true
+  issuePreviewUsers.value = []
+  issuePreviewCount.value = 0
+  pendingIssuePayload = payload
 
-  submitting.value = true
   try {
-    const result = await issueCoupon(currentCoupon.value.id, payload)
+    const res = await previewCouponIssue(currentCoupon.value.id, payload)
+    issuePreviewUsers.value = res?.preview || []
+    issuePreviewCount.value = res?.count ?? 0
+    issuePreviewTruncated.value = !!res?.truncated
+  } catch (e) {
+    issueConfirmVisible.value = false
+    ElMessage.error('查询目标用户失败，请重试')
+  } finally {
+    issuePreviewLoading.value = false
+  }
+}
+
+// 确认名单后实际执行发放
+const doIssue = async () => {
+  if (!pendingIssuePayload) return
+  issueConfirming.value = true
+  try {
+    const result = await issueCoupon(currentCoupon.value.id, pendingIssuePayload)
     ElMessage.success(result?.message || '发放成功')
+    issueConfirmVisible.value = false
     issueVisible.value = false
     fetchData()
   } catch (e) {
     // error handled by interceptor
   } finally {
-    submitting.value = false
+    issueConfirming.value = false
   }
 }
 

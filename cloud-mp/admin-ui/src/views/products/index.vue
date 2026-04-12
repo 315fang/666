@@ -4,7 +4,8 @@
     <el-card class="search-card">
       <el-form :inline="true" :model="searchForm">
         <el-form-item>
-          <el-input v-model="searchForm.keyword" placeholder="商品名称" clearable style="width:200px" />
+          <!-- 后端按商品名称模糊匹配 -->
+          <el-input v-model="searchForm.keyword" placeholder="商品名称" clearable style="width:200px" @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item>
           <el-select v-model="searchForm.category_id" placeholder="全部分类" clearable style="width:140px">
@@ -59,6 +60,7 @@
             <el-tag v-if="row.discount_exempt" size="small" effect="plain" type="info" style="margin:2px">免折</el-tag>
             <el-tag v-if="row.supports_pickup" size="small" effect="plain" type="success" style="margin:2px">自提</el-tag>
             <el-tag v-if="row.enable_coupon"    size="small" effect="plain" type="danger"   style="margin:2px">券</el-tag>
+            <el-tag v-if="row.allow_points === 0" size="small" effect="plain" type="info"  style="margin:2px">无积分</el-tag>
             <el-tag v-if="row.enable_group_buy" size="small" effect="plain" type="warning"  style="margin:2px">拼团</el-tag>
             <el-tag v-if="row.custom_commissions" size="small" effect="plain" type="success" style="margin:2px">自定佣金</el-tag>
             <el-tag v-if="row.visible_in_mall === false || row.visible_in_mall === 0" size="small" effect="plain" type="info" style="margin:2px">商城隐藏</el-tag>
@@ -139,7 +141,7 @@
               :key="idx"
               class="img-thumb"
             >
-              <el-image :src="img" fit="cover" />
+              <el-image :src="resolvePreviewUrl(img)" fit="cover" />
               <span class="img-del" @click="removeImg('images', idx)">×</span>
             </div>
             <div
@@ -160,7 +162,7 @@
               :key="idx"
               class="img-thumb"
             >
-              <el-image :src="img" fit="cover" />
+              <el-image :src="resolvePreviewUrl(img)" fit="cover" />
               <span class="img-del" @click="removeImg('detail_images', idx)">×</span>
             </div>
             <div class="img-add" @click="openPicker('detail_images')">
@@ -334,6 +336,13 @@
           </div>
           <div class="sw-item">
             <div class="sw-label">
+              <span>允许积分抵扣</span>
+              <span class="sw-desc">爆款/折扣商品建议关闭，禁止叠加积分优惠</span>
+            </div>
+            <el-switch v-model="form.allow_points" :active-value="1" :inactive-value="0" />
+          </div>
+          <div class="sw-item">
+            <div class="sw-label">
               <span>参与拼团</span>
               <span class="sw-desc">作为拼团活动可用商品</span>
             </div>
@@ -376,7 +385,7 @@
             <el-option label="折扣品" value="discount" />
             <el-option label="新品" value="new" />
           </el-select>
-          <span style="margin-left:12px;font-size:12px;color:#909399">标记为爆品或折扣品时建议开启"免于复购折扣"</span>
+          <span style="margin-left:12px;font-size:12px;color:#909399">标记为爆品或折扣品时建议开启"免于复购折扣"，并关闭"允许优惠券"和"允许积分抵扣"</span>
         </el-form-item>
 
         <!-- 佣金设置（仅开启后展示）-->
@@ -462,17 +471,20 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import { useRoute } from 'vue-router'
 import { getProducts, createProduct, updateProduct, updateProductStatus, getCategories, deleteProduct, createCategory, updateCategory, deleteCategory } from '@/api'
 import { usePagination } from '@/composables/usePagination'
 import MediaPicker from '@/components/MediaPicker.vue'
 import { warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
 
 // ===== 列表 =====
+const route = useRoute()
 const loading = ref(false)
 const tableData = ref([])
 const categories = ref([])
 const { pagination, resetPage, applyResponse } = usePagination()
-const searchForm = reactive({ keyword: '', category_id: '', status: '' })
+// keyword：按商品名称模糊匹配；支持从订单页跳转时携带 ?keyword=xxx 预填
+const searchForm = reactive({ keyword: String(route.query.keyword || ''), category_id: '', status: '' })
 
 const loadCategories = async () => {
   try {
@@ -561,11 +573,12 @@ const defaultForm = () => ({
   manual_weight: 0,
   growth_value_reward: null,
   skus: [],
-  // 营销：全部默认关闭
+  // 营销：全部默认关闭（allow_points 默认开，爆款手动关）
   enable_coupon: 0,
   enable_group_buy: 0,
   custom_commissions: 0,
   discount_exempt: false,
+  allow_points: 1,
   supports_pickup: 0,
   visible_in_mall: true,
   product_tag: 'normal',
@@ -609,6 +622,7 @@ const openForm = (row) => {
       enable_group_buy: row.enable_group_buy || 0,
       custom_commissions: row.custom_commissions || 0,
       discount_exempt: !!row.discount_exempt,
+      allow_points: row.allow_points == null ? 1 : (row.allow_points ? 1 : 0),
       supports_pickup: row.supports_pickup ? 1 : 0,
       visible_in_mall: !(row.visible_in_mall === false || row.visible_in_mall === 0),
       product_tag: row.product_tag || 'normal',
@@ -619,6 +633,14 @@ const openForm = (row) => {
     })
     skuEnabled.value = (row.skus?.length > 0)
     showMorePrices.value = !!(row.price_member || row.price_leader || row.price_agent)
+    // 编辑已有商品时，从后端返回的数据里 images 已经是解析好的 https URL，
+    // 直接缓存到 imagePreviewCache，保证 cloud:// ID（若有）能正常预览
+    ;[...form.images, ...form.detail_images].forEach(url => {
+      if (url && !isCloudId(url)) {
+        // 这里 images 是经后端解析过的 https 链接，不需要额外处理
+        // 若日后存的是 cloud://，可在此根据 row._imageUrls 等字段回填缓存
+      }
+    })
   } else {
     Object.assign(form, defaultForm())
     skuEnabled.value = false
@@ -632,50 +654,84 @@ const removeSku = (i) => form.skus.splice(i, 1)
 const removeImg = (key, i) => form[key].splice(i, 1)
 
 const submitForm = async (status) => {
-  await formRef.value?.validate(async (valid) => {
-    if (!valid) return
-    if (!form.images.length) return ElMessage.warning('请至少添加一张主图')
-    const tempUrlMessage = warnTemporaryAssetUrls([...form.images, ...form.detail_images], '商品图片')
-    if (tempUrlMessage) return ElMessage.warning(tempUrlMessage)
+  // 使用 Promise 方式校验，避免 async callback 与 await 混用导致的校验结果丢失
+  try {
+    await formRef.value?.validate()
+  } catch {
+    ElMessage.warning('请检查必填项')
+    return
+  }
 
-    submitting.value = true
-    try {
-      const data = { ...form, status }
-      if (!skuEnabled.value) data.skus = []
-      data.commission_rate_1 = (Number(data.commission_rate_1) || 0) / 100
-      data.commission_rate_2 = (Number(data.commission_rate_2) || 0) / 100
-      data.commission_amount_1 = 0
-      data.commission_amount_2 = 0
+  if (!form.images.length) {
+    ElMessage.warning('请至少添加一张主图')
+    return
+  }
+  const tempUrlMessage = warnTemporaryAssetUrls([...form.images, ...form.detail_images], '商品图片')
+  if (tempUrlMessage) {
+    ElMessage.warning(tempUrlMessage)
+    return
+  }
 
-      if (data.id) {
-        await updateProduct(data.id, data)
-        ElMessage.success('更新成功')
-      } else {
-        await createProduct(data)
-        ElMessage.success(status === 1 ? '发布成功' : '已保存草稿')
-      }
-      formVisible.value = false
-      fetchProducts()
-    } catch (e) {
-      ElMessage.error(e?.message || '保存商品失败')
-    } finally {
-      submitting.value = false
+  submitting.value = true
+  try {
+    const data = { ...form, status }
+    if (!skuEnabled.value) data.skus = []
+    // 百分比 → 小数（后端存 0~1）
+    data.commission_rate_1 = (Number(data.commission_rate_1) || 0) / 100
+    data.commission_rate_2 = (Number(data.commission_rate_2) || 0) / 100
+    // 固定金额佣金保持原值，不强制清零
+
+    if (data.id) {
+      await updateProduct(data.id, data)
+      ElMessage.success('更新成功')
+    } else {
+      await createProduct(data)
+      ElMessage.success(status === 1 ? '发布成功' : '已保存草稿')
     }
-  })
+    formVisible.value = false
+    fetchProducts()
+  } catch (e) {
+    ElMessage.error(e?.message || '保存商品失败，请重试')
+  } finally {
+    submitting.value = false
+  }
 }
 
 // ===== 素材库选图 =====
 const pickerVisible = ref(false)
 const pickerTarget = ref('images')
 
+/**
+ * cloud:// file_id → 可展示 https URL 的本地缓存。
+ * 当 MediaPicker 返回 cloud:// file_id 作为持久引用时，同时将对应的临时显示 URL 缓存在这里，
+ * 让 el-image 能立即预览，而 form.images 存储的是不会过期的 cloud:// file_id。
+ */
+const imagePreviewCache = reactive({})
+
+const isCloudId = (v) => /^cloud:\/\//i.test(String(v || ''))
+
+/** 获取图片的可展示 URL：cloud:// 用缓存，否则直接用原 URL */
+const resolvePreviewUrl = (url) => isCloudId(url) ? (imagePreviewCache[url] || url) : url
+
 const openPicker = (target) => {
   pickerTarget.value = target
   pickerVisible.value = true
 }
 
-const onPickerConfirm = (urls) => {
-  const picked = Array.isArray(urls) ? urls.filter(Boolean) : []
+/**
+ * @param {string[]} persistIds - cloud:// file_id 或 https URL（用于存入数据库）
+ * @param {string[]} displayUrls - 对应的可立即展示 https URL
+ */
+const onPickerConfirm = (persistIds, displayUrls = []) => {
+  const picked = Array.isArray(persistIds) ? persistIds.filter(Boolean) : []
   if (!picked.length) return
+
+  // 建立 cloud:// → https 的预览缓存，保证刚选出的图片能立即显示
+  picked.forEach((id, i) => {
+    if (isCloudId(id) && displayUrls[i]) {
+      imagePreviewCache[id] = displayUrls[i]
+    }
+  })
 
   if (pickerTarget.value === 'images') {
     const merged = [...picked, ...form.images]

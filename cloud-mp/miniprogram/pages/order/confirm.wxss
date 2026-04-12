@@ -252,6 +252,15 @@
     color: #9A8D80;
 }
 
+.points-disabled {
+    opacity: 0.5;
+}
+
+.points-balance-disabled {
+    font-size: 24rpx;
+    color: #C0C4CC;
+}
+
 .points-detail {
     padding-top: 0 !important;
     padding-bottom: 16rpx !important;
