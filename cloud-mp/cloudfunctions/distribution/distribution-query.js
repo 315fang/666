@@ -8,6 +8,19 @@ function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
 }
 
+function uniqueValues(values = []) {
+    const seen = {};
+    const list = [];
+    values.forEach((value) => {
+        if (!hasValue(value)) return;
+        const key = `${typeof value}:${String(value)}`;
+        if (seen[key]) return;
+        seen[key] = true;
+        list.push(value);
+    });
+    return list;
+}
+
 function userRelationIds(user = {}) {
     const ids = [user.id, user._legacy_id, user._id].filter(hasValue);
     const out = [];
@@ -51,6 +64,44 @@ function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
 }
 
+function getAgentWalletBalance(user = {}) {
+    return roundMoney(toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0));
+}
+
+function getCommissionWalletBalance(user = {}) {
+    if (user.commission_balance != null) return roundMoney(user.commission_balance);
+    if (user.balance != null) return roundMoney(user.balance);
+    return 0;
+}
+
+function commissionRecordKey(row = {}) {
+    return String(row._id || `${row.openid || ''}:${row.user_id || ''}:${row.order_id || ''}:${row.type || ''}:${row.created_at || ''}`);
+}
+
+async function listCommissionRows(user = {}) {
+    const tasks = [];
+    if (user.openid) {
+        tasks.push(getAllRecords(db, 'commissions', { openid: user.openid }).catch(() => []));
+    }
+    const userIds = uniqueValues([
+        user.id,
+        hasValue(user.id) ? String(user.id) : null,
+        user._id,
+        user._legacy_id,
+        hasValue(user._legacy_id) ? String(user._legacy_id) : null
+    ]);
+    if (userIds.length) {
+        tasks.push(getAllRecords(db, 'commissions', { user_id: _.in(userIds) }).catch(() => []));
+    }
+    if (!tasks.length) return [];
+
+    const merged = {};
+    (await Promise.all(tasks)).flat().forEach((row) => {
+        merged[commissionRecordKey(row)] = row;
+    });
+    return Object.values(merged);
+}
+
 function summarizeMembers(members = [], monthStartTime = 0) {
     return {
         count: members.length,
@@ -91,14 +142,15 @@ async function getDashboard(openid) {
 
     const userData = user.data[0];
     const distLevel = toNumber(userData.distributor_level != null ? userData.distributor_level : userData.agent_level, 0);
-    const walletBalance = toNumber(userData.wallet_balance != null ? userData.wallet_balance : userData.balance, 0);
+    const walletBalance = getAgentWalletBalance(userData);
+    const commissionBalance = getCommissionWalletBalance(userData);
 
     // 查佣金统计
     let totalCommission = 0;
     let pendingCommission = 0;
     let settledCommission = 0;
     try {
-        const commRes = await getAllRecords(db, 'commissions', { openid });
+        const commRes = await listCommissionRows(userData);
         (commRes || []).forEach((c) => {
             const amount = toNumber(c.amount, 0);
             totalCommission += amount;
@@ -197,7 +249,9 @@ async function getDashboard(openid) {
         team,
         stats,
         wallet_balance: walletBalance,
-        balance: walletBalance,
+        agent_wallet_balance: walletBalance,
+        balance: commissionBalance,
+        commission_balance: commissionBalance,
         total_commission: roundMoney(totalCommission),
         pending_commission: roundMoney(pendingCommission),
         settled_commission: roundMoney(settledCommission),

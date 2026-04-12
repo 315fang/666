@@ -106,6 +106,23 @@ exports.main = async (event, context) => {
         return handlePaymentAction(event, '');
     }
 
+    // 兼容微信HTTP触发器直接 POST 过来的回调（event.body 为字符串）
+    if (event.httpMethod === 'POST' && event.body) {
+        try {
+            const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+            if (body && body.resource) {
+                return handlePaymentAction({ action: 'callback', ...body }, '');
+            }
+        } catch (e) {
+            console.error('[Payment] HTTP body 解析失败:', e.message);
+        }
+    }
+
+    // 兼容微信回调直接合并到 event 的情况（部分 CloudBase 版本行为）
+    if (!event.action && event.resource && event.event_type) {
+        return handlePaymentAction({ action: 'callback', ...event }, '');
+    }
+
     // 其他操作：需要用户登录
     const wxContext = cloud.getWXContext();
     const openid = wxContext.OPENID;

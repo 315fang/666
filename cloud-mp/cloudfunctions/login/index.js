@@ -98,7 +98,8 @@ async function ensureWelcomeCoupons(openid, userId) {
 
 function formatUser(user, openid, tierConfig) {
     const points = toNumber(user.points != null ? user.points : user.growth_value, 0);
-    const balance = toNumber(user.wallet_balance != null ? user.wallet_balance : user.balance, 0);
+    const goodsFundBalance = toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0);
+    const balance = toNumber(user.commission_balance != null ? user.commission_balance : user.balance, 0);
     const roleLevel = toNumber(user.role_level, 0);
     const distLevel = toNumber(user.distributor_level != null ? user.distributor_level : user.agent_level, 0);
     const ROLE_NAMES = { 0: '普通用户', 1: '会员', 2: '团长', 3: '代理商', 4: '高级代理', 5: '合伙人' };
@@ -122,7 +123,9 @@ function formatUser(user, openid, tierConfig) {
         register_coupons_issued: !!user.register_coupons_issued,
         growth_value: points,
         growth_progress: buildGrowthProgress(points, tierConfig),
-        wallet_balance: balance,
+        wallet_balance: goodsFundBalance,
+        agent_wallet_balance: goodsFundBalance,
+        commission_balance: balance,
         balance,
         points
     };
@@ -155,7 +158,9 @@ exports.main = cloudFunctionWrapper(async (event) => {
                 gender: '',
                 points: 0,
                 growth_value: 0,
+                agent_wallet_balance: 0,
                 wallet_balance: 0,
+                commission_balance: 0,
                 balance: 0,
                 role_level: 0,
                 role_name: '普通用户',

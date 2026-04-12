@@ -263,7 +263,8 @@ async function createOrder(openid, orderData) {
         type,
         group_activity_id,
         group_no,
-        slash_no
+        slash_no,
+        use_goods_fund   // 货款支付标志（仅代理商可用）
     } = orderData;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -565,6 +566,28 @@ async function createOrder(openid, orderData) {
         updated_at: db.serverDate()
     };
 
+    // 7.1 货款支付前置校验（在写库前验证，避免创建无效订单）
+    // 货款字段：users.agent_wallet_balance（代理商通过充值/平台调拨的进货资金）
+    if (use_goods_fund) {
+        if (buyerRoleLevel < 3) {
+            // 回滚已扣库存
+            await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
+                db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
+            ));
+            throw new Error('货款支付仅限代理商身份使用');
+        }
+        const freshUser = await db.collection('users').where({ openid }).limit(1).get();
+        const u = freshUser.data[0] || {};
+        // 优先读 agent_wallet_balance，兜底 wallet_balance
+        const freshBalance = toNumber(u.agent_wallet_balance != null ? u.agent_wallet_balance : u.wallet_balance, 0);
+        if (freshBalance < payAmount) {
+            await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
+                db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
+            ));
+            throw new Error(`货款余额不足，当前余额 ¥${freshBalance.toFixed(2)}，订单金额 ¥${payAmount.toFixed(2)}`);
+        }
+    }
+
     const result = await db.collection('orders').add({ data: order });
 
     // 7.5 订单创建成功后，执行优惠券核销（先创单后核销，失败不影响订单，但不应再用此券）
@@ -580,6 +603,60 @@ async function createOrder(openid, orderData) {
         await db.collection('point_logs').where({ openid, source: 'order_pay' }).limit(1).get()
             .then(() => {})
             .catch(() => {});
+    }
+
+    // 7.8 货款支付：原子扣减余额并将订单直接标为已付款
+    let goodsFundPaid = false;
+    if (use_goods_fund) {
+        const orderId = result._id;
+        try {
+            // 原子扣减：where agent_wallet_balance >= payAmount，防并发超扣
+            const deductRes = await db.collection('users')
+                .where({ openid, agent_wallet_balance: _.gte(payAmount) })
+                .update({
+                    data: {
+                        agent_wallet_balance: _.inc(-payAmount),
+                        goods_fund_total_spent: _.inc(payAmount),
+                        updated_at: db.serverDate()
+                    }
+                });
+            if (!deductRes.stats || deductRes.stats.updated === 0) {
+                // 极低概率并发场景：余额刚好被扣走，取消订单
+                await db.collection('orders').doc(orderId).update({
+                    data: { status: 'cancelled', cancel_reason: '货款余额不足（并发）', updated_at: db.serverDate() }
+                });
+                throw new Error('货款余额不足，请刷新后重试');
+            }
+            // 订单标为已付款
+            await db.collection('orders').doc(orderId).update({
+                data: {
+                    status: 'paid',
+                    payment_method: 'goods_fund',
+                    pay_channel: 'goods_fund',
+                    paid_at: db.serverDate(),
+                    pay_amount: payAmount,
+                    actual_price: payAmount,
+                    updated_at: db.serverDate()
+                }
+            });
+            goodsFundPaid = true;
+            // 写一条货款流水记录
+            await db.collection('goods_fund_logs').add({
+                data: {
+                    openid,
+                    type: 'spend',
+                    amount: -payAmount,
+                    order_id: orderId,
+                    order_no: orderNo,
+                    remark: '货款支付订单',
+                    created_at: db.serverDate()
+                }
+            }).catch(() => {});
+        } catch (err) {
+            if (err.message.includes('货款')) throw err;
+            console.error('[OrderCreate] 货款支付处理异常:', err.message);
+            throw new Error('货款支付处理失败，请联系客服');
+        }
     }
 
     // 8. 清除购物车中已下单的商品
@@ -607,7 +684,8 @@ async function createOrder(openid, orderData) {
         total_amount: totalAmount,
         pay_amount: payAmount,
         group_no: group_no || '',
-        slash_no: slashRecord ? (slashRecord.slash_no || slash_no || '') : ''
+        slash_no: slashRecord ? (slashRecord.slash_no || slash_no || '') : '',
+        goods_fund_paid: goodsFundPaid  // 货款已完成支付，前端可跳过微信支付步骤
     };
 }
 

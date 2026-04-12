@@ -2,7 +2,7 @@
 const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
-const { toNumber } = require('./shared/utils');
+const { toNumber, getAllRecords } = require('./shared/utils');
 
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
@@ -36,6 +36,50 @@ async function getUserCouponIds(openid) {
     return uniqueValues(values);
 }
 
+async function getCommissionIdentity(openid) {
+    const userRes = await db.collection('users')
+        .where({ openid })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    const user = userRes.data && userRes.data[0] ? userRes.data[0] : null;
+    const userIds = [];
+    if (user) {
+        if (hasValue(user.id)) userIds.push(user.id, String(user.id));
+        if (hasValue(user._id)) userIds.push(user._id);
+        if (hasValue(user._legacy_id)) userIds.push(user._legacy_id, String(user._legacy_id));
+    }
+    return {
+        user,
+        openid,
+        userIds: uniqueValues(userIds)
+    };
+}
+
+function commissionRecordKey(row = {}) {
+    return String(row._id || `${row.openid || ''}:${row.user_id || ''}:${row.order_id || ''}:${row.type || ''}:${row.created_at || ''}`);
+}
+
+async function listCommissionRows(identity = {}) {
+    const tasks = [];
+    if (identity.openid) {
+        tasks.push(getAllRecords(db, 'commissions', { openid: identity.openid }).catch(() => []));
+    }
+    if (identity.userIds && identity.userIds.length) {
+        identity.userIds.forEach((userId) => {
+            tasks.push(getAllRecords(db, 'commissions', { user_id: userId }).catch(() => []));
+        });
+    }
+    if (!tasks.length) return [];
+
+    const groups = await Promise.all(tasks);
+    const merged = {};
+    groups.flat().forEach((row) => {
+        merged[commissionRecordKey(row)] = row;
+    });
+    return Object.values(merged);
+}
+
 function isCouponExpired(coupon) {
     const raw = coupon.expire_at || coupon.end_at || coupon.valid_until;
     if (!raw) return false;
@@ -59,23 +103,79 @@ function roundMoney(val) {
     return Math.round(toNumber(val, 0) * 100) / 100;
 }
 
+function getAgentWalletBalance(user = {}) {
+    return roundMoney(toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0));
+}
+
+function hasExplicitCommissionBalance(user = {}) {
+    if (user.commission_balance != null) return true;
+    if (user.balance == null) return false;
+    if (user.wallet_balance == null) return true;
+    return roundMoney(user.balance) !== roundMoney(user.wallet_balance);
+}
+
+function deriveCommissionBalance(user = {}, stats = {}) {
+    const settled = roundMoney(stats.settled);
+    const withdrawn = roundMoney(user.total_withdrawn);
+    const total = roundMoney(stats.total);
+    const earned = roundMoney(user.total_earned);
+    if (total <= 0 && earned > 0) {
+        return Math.max(0, roundMoney(earned - withdrawn));
+    }
+    return Math.max(0, roundMoney(settled - withdrawn));
+}
+
+function shouldReconcileCommissionBalance(user = {}, stats = {}) {
+    const explicit = hasExplicitCommissionBalance(user);
+    const derived = deriveCommissionBalance(user, stats);
+    if (!explicit) return { explicit, derived, useDerived: true };
+
+    const stored = roundMoney(toNumber(user.commission_balance != null ? user.commission_balance : user.balance, 0));
+    const useDerived = stored === 0 && derived > 0;
+    return { explicit, derived, stored, useDerived };
+}
+
+async function syncWalletFields(user = {}, stats = {}) {
+    const updates = {};
+    const agentBalance = getAgentWalletBalance(user);
+    const { explicit, derived, stored, useDerived } = shouldReconcileCommissionBalance(user, stats);
+    const ambiguousLegacyBalance = !explicit && user.balance != null && user.wallet_balance != null;
+    const commissionBalance = useDerived
+        ? derived
+        : roundMoney(toNumber(user.commission_balance != null ? user.commission_balance : user.balance, stored || 0));
+
+    if (user.agent_wallet_balance == null) {
+        updates.agent_wallet_balance = agentBalance;
+    }
+    if (user.commission_balance == null || ambiguousLegacyBalance || useDerived) {
+        updates.commission_balance = commissionBalance;
+    }
+    if (user.balance == null || ambiguousLegacyBalance || useDerived) {
+        updates.balance = commissionBalance;
+    }
+
+    if (Object.keys(updates).length && user._id) {
+        await db.collection('users').doc(String(user._id)).update({
+            data: {
+                ...updates,
+                updated_at: db.serverDate()
+            }
+        }).catch(() => {});
+        return { ...user, ...updates };
+    }
+    return user;
+}
+
 /**
  * 获取钱包信息
  * 实时从 commissions 集合汇总各状态金额，保证数据准确。
  * 返回结构与前端 wallet/index.js 的 loadWalletInfo 完全对应。
  */
 async function getWalletInfo(openid) {
-    const [userRes, commRes] = await Promise.all([
-        db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] })),
-        db.collection('commissions').where({ openid }).get().catch(() => ({ data: [] }))
-    ]);
-
-    if (!userRes.data || userRes.data.length === 0) throw new Error('用户不存在');
-    const userData = userRes.data[0];
-
-    // 从用户文档读取可提现余额（平台实际到账口径）
-    const balance = toNumber(userData.wallet_balance != null ? userData.wallet_balance : userData.balance, 0);
-    const totalWithdrawn = toNumber(userData.total_withdrawn, 0);
+    const identity = await getCommissionIdentity(openid);
+    if (!identity.user) throw new Error('用户不存在');
+    let userData = identity.user;
+    const commissionRows = await listCommissionRows(identity);
 
     // 实时汇总各佣金状态金额
     const stats = {
@@ -87,7 +187,7 @@ async function getWalletInfo(openid) {
         total: 0             // 历史累计（不含 cancelled）
     };
 
-    (commRes.data || []).forEach(item => {
+    commissionRows.forEach(item => {
         const amt = toNumber(item.amount, 0);
         const s = String(item.status || '');
         if (s === 'frozen')           stats.frozen += amt;
@@ -102,19 +202,29 @@ async function getWalletInfo(openid) {
 
     Object.keys(stats).forEach(k => { stats[k] = roundMoney(stats[k]); });
 
-    // 可提现余额以用户文档 balance 字段为准（经过平台审核和打款确认）
-    const available = roundMoney(balance);
+    userData = await syncWalletFields(userData, stats);
+
+    const balance = roundMoney(toNumber(userData.commission_balance != null ? userData.commission_balance : userData.balance, 0));
+    const totalWithdrawn = roundMoney(userData.total_withdrawn);
+    const available = balance;
+    const goodsFundBalance = getAgentWalletBalance(userData);
+    const pendingIn = roundMoney(stats.frozen + stats.pendingApproval + stats.approved);
 
     return {
         balance,
         available_balance: available,
+        commission_balance: balance,
+        goods_fund_balance: goodsFundBalance,
+        agent_wallet_balance: goodsFundBalance,
+        pendingIn,
         total_withdrawn: totalWithdrawn,
         commission: {
             frozen: stats.frozen,                    // 冻结中（退款保护期内）
             pendingApproval: stats.pendingApproval,  // 审核中（等平台审核）
             approved: stats.approved,                // 待打款（审核通过等打款）
             // 待入账合计 = 所有尚未到账的金额之和
-            pendingTotal: roundMoney(stats.frozen + stats.pendingApproval + stats.approved),
+            pendingTotal: pendingIn,
+            pendingIn,
             available,                               // 可提现（以实际余额为准）
             total: stats.total,                      // 历史累计
             settled: stats.settled,                  // 已结算
@@ -130,20 +240,14 @@ async function walletCommissions(openid, params = {}) {
     const limit = Math.min(50, parseInt(params.limit) || 20);
     const skip  = (page - 1) * limit;
     const typeFilter = params.type ? String(params.type).toLowerCase() : '';
+    const identity = await getCommissionIdentity(openid);
+    let list = await listCommissionRows(identity);
 
-    // 先拉比 limit 多一点，客户端再筛 type（避免跳页）；如无筛选则直接按 skip+limit
-    const fetchLimit = typeFilter ? 50 : limit;
-    const fetchSkip  = typeFilter ? 0  : skip;
-
-    const res = await db.collection('commissions')
-        .where({ openid })
-        .orderBy('created_at', 'desc')
-        .skip(fetchSkip)
-        .limit(fetchLimit)
-        .get()
-        .catch(() => ({ data: [] }));
-
-    let list = res.data || [];
+    list.sort((a, b) => {
+        const ta = new Date(a.created_at || 0).getTime();
+        const tb = new Date(b.created_at || 0).getTime();
+        return tb - ta;
+    });
 
     // 类型筛选（兼容大小写，如 'Direct'/'direct' 均可）
     if (typeFilter && typeFilter !== 'all') {
@@ -154,11 +258,10 @@ async function walletCommissions(openid, params = {}) {
     }
 
     // 分页截取（筛选后再截）
-    if (typeFilter) {
-        list = list.slice(skip, skip + limit);
-    }
+    const total = list.length;
+    list = list.slice(skip, skip + limit);
 
-    if (list.length === 0) return { list: [], total: 0, page, limit };
+    if (list.length === 0) return { list: [], total, page, limit };
 
     // ── 批量拉取来源用户信息（谁的订单触发了这笔佣金）
     const fromOpenids = uniqueValues(list.map(i => i.from_openid).filter(Boolean));
@@ -213,7 +316,7 @@ async function walletCommissions(openid, params = {}) {
         };
     });
 
-    return { list: enriched, total: enriched.length, page, limit };
+    return { list: enriched, total, page, limit };
 }
 
 /**

@@ -63,3 +63,12 @@ export const updateUserInviteCode = (id, data) => request({ url: `/users/${id}/i
 export const updateUserMemberNo = (id, data) => request({ url: `/users/${id}/member-no`, method: 'put', data })
 export const updateUserParent = (id, data) => request({ url: `/users/${id}/parent`, method: 'put', data })
 export const updateUserPurchaseLevel = (id, data) => request({ url: `/users/${id}/purchase-level`, method: 'put', data })
+
+/** 调整代理商货款余额（仅代理商有效） */
+export const adjustUserGoodsFund = (id, data) => request({ url: `/users/${id}/goods-fund`, method: 'put', data })
+/** 调整用户积分（整数） */
+export const adjustUserPoints = (id, data) => request({ url: `/users/${id}/points`, method: 'put', data })
+/** 调整用户成长值（整数） */
+export const adjustUserGrowth = (id, data) => request({ url: `/users/${id}/growth`, method: 'put', data })
+/** 手动新增一笔佣金记录 */
+export const adjustUserCommission = (id, data) => request({ url: `/users/${id}/commission`, method: 'post', data })

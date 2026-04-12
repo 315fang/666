@@ -30,7 +30,8 @@ async function updateProfile(openid, data) {
 function formatUser(user) {
     if (!user) return null;
     const points = toNumber(user.points != null ? user.points : user.growth_value, 0);
-    const balance = toNumber(user.wallet_balance != null ? user.wallet_balance : user.balance, 0);
+    const goodsFundBalance = toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0);
+    const balance = toNumber(user.commission_balance != null ? user.commission_balance : user.balance, 0);
     const roleLevel = toNumber(user.role_level, 0);
     const ROLE_NAMES = {
         0: '普通用户',
@@ -60,7 +61,9 @@ function formatUser(user) {
         my_invite_code: user.my_invite_code || '',
         register_coupons_issued: !!user.register_coupons_issued,
         growth_value: points,
-        wallet_balance: balance,
+        wallet_balance: goodsFundBalance,
+        agent_wallet_balance: goodsFundBalance,
+        commission_balance: balance,
         balance,
         points
     };

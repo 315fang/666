@@ -26,6 +26,7 @@ const DEFAULT_CONFIG = {
   feature_flags: {
     show_station_entry: false,
     show_pickup_entry: false,
+    show_agent_service_entry: false,
     enable_logistics_entry: true,
     enable_lottery_entry: false
   },

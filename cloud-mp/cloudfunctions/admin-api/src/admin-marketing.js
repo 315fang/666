@@ -267,10 +267,26 @@ function registerMarketingRoutes(app, deps) {
         const sourcePct = Math.max(0.0001, toNumber(rules?.source_pct, 0));
         const rows = [];
         let displayRank = 1;
+        const now = Date.now();
+
+        // min_months：代理人在该等级上存续满 N 个月才有资格参与分红
+        const minMonths = toNumber(rules?.min_months, 0);
+        function meetsMinMonths(user) {
+            if (minMonths <= 0) return true;
+            const upgradedAt = user.role_upgraded_at || user.created_at;
+            if (!upgradedAt) return false;
+            const ts = typeof upgradedAt === 'object' && upgradedAt._seconds
+                ? upgradedAt._seconds * 1000
+                : new Date(upgradedAt).getTime();
+            if (!ts || isNaN(ts)) return false;
+            const monthsPassed = (now - ts) / (1000 * 60 * 60 * 24 * 30.44);
+            return monthsPassed >= minMonths;
+        }
 
         const teamCandidates = sortDividendCandidates(
             users
                 .filter((user) => toNumber(user.role_level ?? user.distributor_level, 0) >= 4)
+                .filter(meetsMinMonths)
                 .map((user) => ({
                     ...user,
                     teamSales: getAllDescendants(user, users).reduce((sum, item) => sum + toNumber(item.total_spent, 0), 0)
@@ -281,6 +297,7 @@ function registerMarketingRoutes(app, deps) {
         const personalCandidates = sortDividendCandidates(
             users
                 .filter((user) => toNumber(user.role_level ?? user.distributor_level, 0) === 3)
+                .filter(meetsMinMonths)
                 .map((user) => ({
                     ...user,
                     teamSales: toNumber(user.total_spent, 0)
@@ -292,11 +309,13 @@ function registerMarketingRoutes(app, deps) {
         const buildRowsForAward = (awardKey, awardLabel, candidates, ranks = []) => {
             let offset = 0;
             for (const rank of ranks) {
-                const count = Math.max(0, Math.floor(toNumber(rank.count, 0)));
+                const count = Math.max(1, Math.floor(toNumber(rank.count, 1)));
                 const pct = Math.max(0, toNumber(rank.pct, 0));
                 if (!count || pct <= 0) continue;
                 const bucket = candidates.slice(offset, offset + count);
                 offset += count;
+                // pct 是本名次组的总份额，每人应平分 pct/count
+                const perPersonAmount = Number((totalPool * pct / count / sourcePct).toFixed(2));
                 bucket.forEach((user) => {
                     rows.push({
                         awardKey,
@@ -308,8 +327,8 @@ function registerMarketingRoutes(app, deps) {
                         nickname: user.nickname || user.nickName || user.nick_name || '',
                         roleLevel: toNumber(user.role_level ?? user.distributor_level, 0),
                         teamSales: Number(toNumber(user.teamSales, 0).toFixed(2)),
-                        sharePercent: pct,
-                        dividendAmount: Number((totalPool * pct / sourcePct).toFixed(2)),
+                        sharePercent: Number((pct / count).toFixed(4)),
+                        dividendAmount: perPersonAmount,
                         rankLabel: pickString(rank.label || `${awardLabel}${displayRank}`)
                     });
                 });

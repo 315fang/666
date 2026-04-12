@@ -10,11 +10,21 @@ const COMMISSION_STATUS_MAP = {
 
 const TYPE_MAP = {
     'direct': { name: '直推佣金', icon: '/assets/icons/user.svg' },
-    'indirect': { name: '团队佣金', icon: '/assets/icons/users.svg' },
     'Direct': { name: '直推佣金', icon: '/assets/icons/user.svg' },
+    'indirect': { name: '团队佣金', icon: '/assets/icons/users.svg' },
     'Indirect': { name: '团队佣金', icon: '/assets/icons/users.svg' },
+    'team': { name: '团队佣金', icon: '/assets/icons/users.svg' },
+    'same_level': { name: '平级奖励', icon: '/assets/icons/users.svg' },
+    'peer': { name: '平级奖励', icon: '/assets/icons/users.svg' },
+    'pickup_subsidy': { name: '自提补贴', icon: '/assets/icons/truck.svg' },
+    'agent_assist': { name: '动销奖励', icon: '/assets/icons/bar-chart.svg' },
+    'assist': { name: '动销奖励', icon: '/assets/icons/bar-chart.svg' },
+    'year_end_dividend': { name: '年终分红', icon: '/assets/icons/dollar-sign.svg' },
     'Stock_Diff': { name: '级差利润', icon: '/assets/icons/bar-chart.svg' },
     'agent_fulfillment': { name: '发货利润', icon: '/assets/icons/truck.svg' },
+    'region_agent': { name: '区域代理奖', icon: '/assets/icons/bar-chart.svg' },
+    'admin_deduct': { name: '系统扣除', icon: '/assets/icons/dollar-sign.svg' },
+    'admin_credit': { name: '系统补发', icon: '/assets/icons/dollar-sign.svg' },
     'admin_adjustment': { name: '系统调整', icon: '/assets/icons/dollar-sign.svg' }
 };
 

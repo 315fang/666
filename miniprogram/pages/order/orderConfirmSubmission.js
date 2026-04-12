@@ -69,7 +69,13 @@ async function submitOrder(page, app, brandAnimation) {
             orderData.points_to_use = page.data.pointsToUse;
         }
 
-        if (page.data.useWallet && page.data.isAgent) {
+        // 货款支付
+        const useGoodsFund = page.data.useGoodsFund && page.data.isAgent;
+        if (useGoodsFund) {
+            orderData.use_goods_fund = true;
+        }
+
+        if (page.data.useWallet && page.data.isAgent && !useGoodsFund) {
             wx.setStorageSync('useWalletPay', true);
         } else {
             wx.removeStorageSync('useWalletPay');
@@ -83,10 +89,12 @@ async function submitOrder(page, app, brandAnimation) {
         }
 
         const createdOrders = Array.isArray(res.data) ? res.data : (res.data ? [res.data] : []);
-        const orderId = createdOrders[0] && (createdOrders[0].id || createdOrders[0].order_id);
+        const firstOrder = createdOrders[0] || {};
+        const orderId = firstOrder.id || firstOrder.order_id || firstOrder._id;
         const isSplitOrders = createdOrders.length > 1;
+        const goodsFundPaid = createdOrders.some((o) => o.goods_fund_paid);
 
-        if (page.data.useWallet && page.data.isAgent) {
+        if (page.data.useWallet && page.data.isAgent && !useGoodsFund) {
             wx.setStorageSync('walletPayOrderIds', createdOrders.map((item) => item.id || item.order_id).filter(Boolean));
         }
         if (isSplitOrders) {
@@ -100,7 +108,14 @@ async function submitOrder(page, app, brandAnimation) {
 
         setTimeout(() => {
             page.setData({ submitting: false });
-            if (isSplitOrders) {
+            if (goodsFundPaid) {
+                // 货款支付已在服务端完成，直接跳到订单详情
+                if (orderId) {
+                    wx.redirectTo({ url: `/pages/order/detail?id=${orderId}&paid=1` });
+                } else {
+                    wx.redirectTo({ url: '/pages/order/list?status=paid' });
+                }
+            } else if (isSplitOrders) {
                 wx.redirectTo({ url: '/pages/order/list?status=pending' });
             } else if (orderId) {
                 wx.redirectTo({ url: `/pages/order/detail?id=${orderId}` });

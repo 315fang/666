@@ -6759,5 +6759,563 @@
       ],
       "image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267022149_87d1c87b2545e176.png"
     }
+  },
+  {
+    "_id": "order-92",
+    "_legacy_id": 92,
+    "openid": 172,
+    "order_no": "ORD202604100826360003e97d21",
+    "status": "cancelled",
+    "total_amount": 98,
+    "pay_amount": 98,
+    "address_snapshot": {
+      "receiver_name": "王",
+      "phone": "18168181008",
+      "province": "江苏省",
+      "city": "苏州市",
+      "district": "姑苏区",
+      "detail": "因果巷65号"
+    },
+    "remark": "",
+    "delivery_type": "pickup",
+    "items": [
+      {
+        "sku_id": "",
+        "product_id": "3",
+        "qty": 1,
+        "unit_price": 98,
+        "item_amount": 98,
+        "snapshot_name": "问兰燕窝邂逅试用礼",
+        "snapshot_spec": "默认规格",
+        "snapshot_image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg",
+        "name": "问兰燕窝邂逅试用礼",
+        "image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg",
+        "spec": "默认规格",
+        "price": 98,
+        "quantity": 1,
+        "subtotal": 98
+      }
+    ],
+    "created_at": "2026-04-10T00:26:36.000Z",
+    "updated_at": "2026-04-10T00:26:36.000Z",
+    "quantity": 1,
+    "product_id": "3",
+    "product_name": "问兰燕窝邂逅试用礼",
+    "sku": {
+      "spec_value": "默认规格"
+    },
+    "address": {
+      "receiver_name": "王",
+      "phone": "18168181008",
+      "province": "江苏省",
+      "city": "苏州市",
+      "district": "姑苏区",
+      "detail": "因果巷65号"
+    },
+    "actual_price": 98,
+    "original_amount": 98,
+    "coupon_discount": 0,
+    "points_discount": 0,
+    "points_used": 0,
+    "paid_at": null,
+    "shipped_at": null,
+    "agent_confirmed_at": null,
+    "completed_at": null,
+    "confirmed_at": null,
+    "cancelled_at": null,
+    "expire_at": null,
+    "reviewed": false,
+    "reviewed_at": null,
+    "tracking_no": "",
+    "logistics_company": "",
+    "shipping_company": "",
+    "fulfillment_type": "Platform",
+    "pickupStation": null,
+    "pickup_station_id": "",
+    "pickup_code": "",
+    "pickup_qr_code": "",
+    "distributor": {
+      "id": "oc0ZD3RoaOZHNICfVi5zl3DoYExs",
+      "openid": "oc0ZD3RoaOZHNICfVi5zl3DoYExs",
+      "nick_name": "金水桥",
+      "nickname": "金水桥",
+      "avatar": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/users/avatars/1774186026704_ee990d2166376cf6.jpg",
+      "role_level": 7
+    },
+    "agent": {
+      "id": "oc0ZD3RoaOZHNICfVi5zl3DoYExs",
+      "openid": "oc0ZD3RoaOZHNICfVi5zl3DoYExs",
+      "nick_name": "金水桥",
+      "nickname": "金水桥",
+      "avatar": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/users/avatars/1774186026704_ee990d2166376cf6.jpg",
+      "role_level": 7
+    },
+    "agent_info": {
+      "id": "oc0ZD3RoaOZHNICfVi5zl3DoYExs",
+      "openid": "oc0ZD3RoaOZHNICfVi5zl3DoYExs",
+      "nick_name": "金水桥",
+      "nickname": "金水桥",
+      "avatar": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/users/avatars/1774186026704_ee990d2166376cf6.jpg",
+      "role_level": 7
+    },
+    "settlement_at": null,
+    "commission_settled": false,
+    "estimated_delivery": null,
+    "shipping_traces": [
+      {
+        "time": "2026-04-10T00:26:36.000Z",
+        "desc": "订单已创建",
+        "status": "created"
+      }
+    ],
+    "product": {
+      "id": "3",
+      "name": "问兰燕窝邂逅试用礼",
+      "images": [
+        "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg"
+      ],
+      "image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg"
+    }
+  },
+  {
+    "_id": "order-93",
+    "_legacy_id": 93,
+    "openid": 172,
+    "order_no": "ORD2026041008272000042ca90f",
+    "status": "paid",
+    "total_amount": 98,
+    "pay_amount": 98,
+    "address_snapshot": {
+      "receiver_name": "王",
+      "phone": "18168181008",
+      "province": "江苏省",
+      "city": "苏州市",
+      "district": "姑苏区",
+      "detail": "因果巷65号"
+    },
+    "remark": "",
+    "delivery_type": "pickup",
+    "items": [
+      {
+        "sku_id": "",
+        "product_id": "3",
+        "qty": 1,
+        "unit_price": 98,
+        "item_amount": 98,
+        "snapshot_name": "问兰燕窝邂逅试用礼",
+        "snapshot_spec": "默认规格",
+        "snapshot_image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg",
+        "name": "问兰燕窝邂逅试用礼",
+        "image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg",
+        "spec": "默认规格",
+        "price": 98,
+        "quantity": 1,
+        "subtotal": 98
+      }
+    ],
+    "created_at": "2026-04-10T00:27:20.000Z",
+    "updated_at": "2026-04-10T00:27:53.000Z",
+    "quantity": 1,
+    "product_id": "3",
+    "product_name": "问兰燕窝邂逅试用礼",
+    "sku": {
+      "spec_value": "默认规格"
+    },
+    "address": {
+      "receiver_name": "王",
+      "phone": "18168181008",
+      "province": "江苏省",
+      "city": "苏州市",
+      "district": "姑苏区",
+      "detail": "因果巷65号"
+    },
+    "actual_price": 98,
+    "original_amount": 98,
+    "coupon_discount": 0,
+    "points_discount": 0,
+    "points_used": 0,
+    "paid_at": "2026-04-10T00:27:53.000Z",
+    "shipped_at": null,
+    "agent_confirmed_at": null,
+    "completed_at": null,
+    "confirmed_at": null,
+    "cancelled_at": null,
+    "expire_at": null,
+    "reviewed": false,
+    "reviewed_at": null,
+    "tracking_no": "",
+    "logistics_company": "",
+    "shipping_company": "",
+    "fulfillment_type": "Platform",
+    "pickupStation": null,
+    "pickup_station_id": "",
+    "pickup_code": "",
+    "pickup_qr_code": "",
+    "distributor": {
+      "id": "oc0ZD3RoaOZHNICfVi5zl3DoYExs",
+      "openid": "oc0ZD3RoaOZHNICfVi5zl3DoYExs",
+      "nick_name": "金水桥",
+      "nickname": "金水桥",
+      "avatar": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/users/avatars/1774186026704_ee990d2166376cf6.jpg",
+      "role_level": 7
+    },
+    "agent": {
+      "id": "oc0ZD3RoaOZHNICfVi5zl3DoYExs",
+      "openid": "oc0ZD3RoaOZHNICfVi5zl3DoYExs",
+      "nick_name": "金水桥",
+      "nickname": "金水桥",
+      "avatar": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/users/avatars/1774186026704_ee990d2166376cf6.jpg",
+      "role_level": 7
+    },
+    "agent_info": {
+      "id": "oc0ZD3RoaOZHNICfVi5zl3DoYExs",
+      "openid": "oc0ZD3RoaOZHNICfVi5zl3DoYExs",
+      "nick_name": "金水桥",
+      "nickname": "金水桥",
+      "avatar": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/users/avatars/1774186026704_ee990d2166376cf6.jpg",
+      "role_level": 7
+    },
+    "settlement_at": null,
+    "commission_settled": false,
+    "estimated_delivery": null,
+    "shipping_traces": [
+      {
+        "time": "2026-04-10T00:27:20.000Z",
+        "desc": "订单已创建",
+        "status": "created"
+      },
+      {
+        "time": "2026-04-10T00:27:53.000Z",
+        "desc": "支付成功",
+        "status": "paid"
+      }
+    ],
+    "product": {
+      "id": "3",
+      "name": "问兰燕窝邂逅试用礼",
+      "images": [
+        "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg"
+      ],
+      "image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg"
+    }
+  },
+  {
+    "_id": "order-94",
+    "_legacy_id": 94,
+    "openid": 171,
+    "order_no": "ORD202604101008090005f02449",
+    "status": "paid",
+    "total_amount": 98,
+    "pay_amount": 98,
+    "address_snapshot": {
+      "receiver_name": "程程",
+      "phone": "18903314434",
+      "province": "河北省",
+      "city": "石家庄市",
+      "district": "晋州市",
+      "detail": "向阳绿洲小区"
+    },
+    "remark": "",
+    "delivery_type": "express",
+    "items": [
+      {
+        "sku_id": "",
+        "product_id": "3",
+        "qty": 1,
+        "unit_price": 98,
+        "item_amount": 98,
+        "snapshot_name": "问兰燕窝邂逅试用礼",
+        "snapshot_spec": "默认规格",
+        "snapshot_image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg",
+        "name": "问兰燕窝邂逅试用礼",
+        "image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg",
+        "spec": "默认规格",
+        "price": 98,
+        "quantity": 1,
+        "subtotal": 98
+      }
+    ],
+    "created_at": "2026-04-10T02:08:09.000Z",
+    "updated_at": "2026-04-10T02:08:28.000Z",
+    "quantity": 1,
+    "product_id": "3",
+    "product_name": "问兰燕窝邂逅试用礼",
+    "sku": {
+      "spec_value": "默认规格"
+    },
+    "address": {
+      "receiver_name": "程程",
+      "phone": "18903314434",
+      "province": "河北省",
+      "city": "石家庄市",
+      "district": "晋州市",
+      "detail": "向阳绿洲小区"
+    },
+    "actual_price": 98,
+    "original_amount": 98,
+    "coupon_discount": 0,
+    "points_discount": 0,
+    "points_used": 0,
+    "paid_at": "2026-04-10T02:08:28.000Z",
+    "shipped_at": null,
+    "agent_confirmed_at": null,
+    "completed_at": null,
+    "confirmed_at": null,
+    "cancelled_at": null,
+    "expire_at": null,
+    "reviewed": false,
+    "reviewed_at": null,
+    "tracking_no": "",
+    "logistics_company": "",
+    "shipping_company": "",
+    "fulfillment_type": "Platform",
+    "pickupStation": null,
+    "pickup_station_id": "",
+    "pickup_code": "",
+    "pickup_qr_code": "",
+    "distributor": null,
+    "agent": null,
+    "agent_info": null,
+    "settlement_at": null,
+    "commission_settled": false,
+    "estimated_delivery": null,
+    "shipping_traces": [
+      {
+        "time": "2026-04-10T02:08:09.000Z",
+        "desc": "订单已创建",
+        "status": "created"
+      },
+      {
+        "time": "2026-04-10T02:08:28.000Z",
+        "desc": "支付成功",
+        "status": "paid"
+      }
+    ],
+    "product": {
+      "id": "3",
+      "name": "问兰燕窝邂逅试用礼",
+      "images": [
+        "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg"
+      ],
+      "image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg"
+    }
+  },
+  {
+    "_id": "order-95",
+    "_legacy_id": 95,
+    "openid": 170,
+    "order_no": "ORD202604101640150006977d9f",
+    "status": "cancelled",
+    "total_amount": 98,
+    "pay_amount": 98,
+    "address_snapshot": {
+      "receiver_name": "秦紫超",
+      "phone": "18932412390",
+      "province": "山西省",
+      "city": "太原市",
+      "district": "万柏林区",
+      "detail": "南内环桥西 山西经济管理干部学院"
+    },
+    "remark": "",
+    "delivery_type": "express",
+    "items": [
+      {
+        "sku_id": "",
+        "product_id": "3",
+        "qty": 1,
+        "unit_price": 98,
+        "item_amount": 98,
+        "snapshot_name": "问兰燕窝邂逅试用礼",
+        "snapshot_spec": "默认规格",
+        "snapshot_image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg",
+        "name": "问兰燕窝邂逅试用礼",
+        "image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg",
+        "spec": "默认规格",
+        "price": 98,
+        "quantity": 1,
+        "subtotal": 98
+      }
+    ],
+    "created_at": "2026-04-10T08:40:15.000Z",
+    "updated_at": "2026-04-10T08:40:15.000Z",
+    "quantity": 1,
+    "product_id": "3",
+    "product_name": "问兰燕窝邂逅试用礼",
+    "sku": {
+      "spec_value": "默认规格"
+    },
+    "address": {
+      "receiver_name": "秦紫超",
+      "phone": "18932412390",
+      "province": "山西省",
+      "city": "太原市",
+      "district": "万柏林区",
+      "detail": "南内环桥西 山西经济管理干部学院"
+    },
+    "actual_price": 98,
+    "original_amount": 98,
+    "coupon_discount": 0,
+    "points_discount": 0,
+    "points_used": 0,
+    "paid_at": null,
+    "shipped_at": null,
+    "agent_confirmed_at": null,
+    "completed_at": null,
+    "confirmed_at": null,
+    "cancelled_at": null,
+    "expire_at": null,
+    "reviewed": false,
+    "reviewed_at": null,
+    "tracking_no": "",
+    "logistics_company": "",
+    "shipping_company": "",
+    "fulfillment_type": "Platform",
+    "pickupStation": null,
+    "pickup_station_id": "",
+    "pickup_code": "",
+    "pickup_qr_code": "",
+    "distributor": {
+      "id": "oc0ZD3fqS26hEFVgq0z_RzMBqCTI",
+      "openid": "oc0ZD3fqS26hEFVgq0z_RzMBqCTI",
+      "nick_name": "八宝周",
+      "nickname": "八宝周",
+      "avatar": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg",
+      "role_level": 3
+    },
+    "agent": {
+      "id": "oc0ZD3fqS26hEFVgq0z_RzMBqCTI",
+      "openid": "oc0ZD3fqS26hEFVgq0z_RzMBqCTI",
+      "nick_name": "八宝周",
+      "nickname": "八宝周",
+      "avatar": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg",
+      "role_level": 3
+    },
+    "agent_info": {
+      "id": "oc0ZD3fqS26hEFVgq0z_RzMBqCTI",
+      "openid": "oc0ZD3fqS26hEFVgq0z_RzMBqCTI",
+      "nick_name": "八宝周",
+      "nickname": "八宝周",
+      "avatar": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg",
+      "role_level": 3
+    },
+    "settlement_at": null,
+    "commission_settled": false,
+    "estimated_delivery": null,
+    "shipping_traces": [
+      {
+        "time": "2026-04-10T08:40:15.000Z",
+        "desc": "订单已创建",
+        "status": "created"
+      }
+    ],
+    "product": {
+      "id": "3",
+      "name": "问兰燕窝邂逅试用礼",
+      "images": [
+        "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg"
+      ],
+      "image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg"
+    }
+  },
+  {
+    "_id": "order-96",
+    "_legacy_id": 96,
+    "openid": 169,
+    "order_no": "ORD202604101642450007310df6",
+    "status": "paid",
+    "total_amount": 98,
+    "pay_amount": 98,
+    "address_snapshot": {
+      "receiver_name": "李思梦",
+      "phone": "13102796267",
+      "province": "河北省",
+      "city": "衡水市",
+      "district": "深州市",
+      "detail": "魏家桥镇锦绣花园"
+    },
+    "remark": "",
+    "delivery_type": "express",
+    "items": [
+      {
+        "sku_id": "",
+        "product_id": "3",
+        "qty": 1,
+        "unit_price": 98,
+        "item_amount": 98,
+        "snapshot_name": "问兰燕窝邂逅试用礼",
+        "snapshot_spec": "默认规格",
+        "snapshot_image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg",
+        "name": "问兰燕窝邂逅试用礼",
+        "image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg",
+        "spec": "默认规格",
+        "price": 98,
+        "quantity": 1,
+        "subtotal": 98
+      }
+    ],
+    "created_at": "2026-04-10T08:42:45.000Z",
+    "updated_at": "2026-04-10T08:43:04.000Z",
+    "quantity": 1,
+    "product_id": "3",
+    "product_name": "问兰燕窝邂逅试用礼",
+    "sku": {
+      "spec_value": "默认规格"
+    },
+    "address": {
+      "receiver_name": "李思梦",
+      "phone": "13102796267",
+      "province": "河北省",
+      "city": "衡水市",
+      "district": "深州市",
+      "detail": "魏家桥镇锦绣花园"
+    },
+    "actual_price": 98,
+    "original_amount": 98,
+    "coupon_discount": 0,
+    "points_discount": 0,
+    "points_used": 0,
+    "paid_at": "2026-04-10T08:43:04.000Z",
+    "shipped_at": null,
+    "agent_confirmed_at": null,
+    "completed_at": null,
+    "confirmed_at": null,
+    "cancelled_at": null,
+    "expire_at": null,
+    "reviewed": false,
+    "reviewed_at": null,
+    "tracking_no": "",
+    "logistics_company": "",
+    "shipping_company": "",
+    "fulfillment_type": "Platform",
+    "pickupStation": null,
+    "pickup_station_id": "",
+    "pickup_code": "",
+    "pickup_qr_code": "",
+    "distributor": null,
+    "agent": null,
+    "agent_info": null,
+    "settlement_at": null,
+    "commission_settled": false,
+    "estimated_delivery": null,
+    "shipping_traces": [
+      {
+        "time": "2026-04-10T08:42:45.000Z",
+        "desc": "订单已创建",
+        "status": "created"
+      },
+      {
+        "time": "2026-04-10T08:43:04.000Z",
+        "desc": "支付成功",
+        "status": "paid"
+      }
+    ],
+    "product": {
+      "id": "3",
+      "name": "问兰燕窝邂逅试用礼",
+      "images": [
+        "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg"
+      ],
+      "image": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg"
+    }
   }
 ]

@@ -787,3 +787,47 @@
   line-height: 1.6;
   color: #54739E;
 }
+
+/* ── 货款支付区块 ── */
+.goods-fund-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.goods-fund-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.goods-fund-label {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.goods-fund-balance {
+  font-size: 24rpx;
+  color: #4CAF50;
+}
+
+.goods-fund-right {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.goods-fund-tip {
+  font-size: 22rpx;
+  color: #F56C6C;
+}
+
+.goods-fund-detail {
+  padding-top: 0 !important;
+}
+
+.goods-fund-detail-text {
+  font-size: 24rpx;
+  color: #4CAF50;
+}

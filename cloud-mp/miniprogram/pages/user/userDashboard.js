@@ -10,6 +10,8 @@ const { listFavorites, listFootprints } = require('../../utils/localUserContent'
 const { parseImages } = require('../../utils/dataFormatter');
 
 const USER_DASHBOARD_TTL = 15 * 1000;
+const USER_SECONDARY_TTL = 60 * 1000;
+const USER_PAGE_LAYOUT_TTL = 5 * 60 * 1000;
 const QUAD_PLACEHOLDER = '/assets/images/placeholder.svg';
 const ORDER_BADGE_SNAPSHOT_KEY = 'user_order_badge_seen_snapshot';
 
@@ -127,31 +129,79 @@ function refreshBusinessCenterVisibility(page) {
     page.setData({ showBusinessCenter: loggedIn && roleLevel >= threshold });
 }
 
+function hasFreshTimestamp(timestamp, ttl) {
+    return !!timestamp && (Date.now() - timestamp) < ttl;
+}
+
+function clearSecondaryLoadState(page) {
+    if (page._secondaryLoadTimer) {
+        clearTimeout(page._secondaryLoadTimer);
+        page._secondaryLoadTimer = null;
+    }
+    const resolvePending = page._secondaryLoadDone;
+    page._secondaryLoadDone = null;
+    page._secondaryLoadPromise = null;
+    if (typeof resolvePending === 'function') {
+        resolvePending();
+    }
+}
+
 function scheduleSecondaryLoads(page, forceRefresh = false) {
-    clearTimeout(page._secondaryLoadTimer);
+    if (page._secondaryLoadPromise) {
+        return page._secondaryLoadPromise;
+    }
+    if (!forceRefresh && hasFreshTimestamp(page._lastSecondaryRefreshAt, USER_SECONDARY_TTL)) {
+        return Promise.resolve();
+    }
+
+    clearSecondaryLoadState(page);
     const delay = forceRefresh ? 0 : 180;
-    page._secondaryLoadTimer = setTimeout(() => {
-        const tasks = [
-            loadOrderCounts(page),
-            loadNotificationsCount(page),
-            loadAssetRow(page),
-            loadQuadPreviews(page),
-            loadDistributionInfo(page),
-            loadPickupVerifyScope(page)
-        ];
-        Promise.allSettled(tasks);
-    }, delay);
+    page._secondaryLoadPromise = new Promise((resolve) => {
+        page._secondaryLoadDone = resolve;
+        page._secondaryLoadTimer = setTimeout(() => {
+            page._secondaryLoadTimer = null;
+            const tasks = [
+                loadOrderCounts(page),
+                loadNotificationsCount(page),
+                loadAssetRow(page),
+                loadQuadPreviews(page),
+                loadDistributionInfo(page),
+                loadPickupVerifyScope(page)
+            ];
+            Promise.allSettled(tasks).finally(() => {
+                page._lastSecondaryRefreshAt = Date.now();
+                clearSecondaryLoadState(page);
+            });
+        }, delay);
+    });
+    return page._secondaryLoadPromise;
 }
 
 async function loadPageLayoutConfig(page) {
+    if (page._pageLayoutPromise) {
+        return page._pageLayoutPromise;
+    }
+    if (hasFreshTimestamp(page._lastPageLayoutAt, USER_PAGE_LAYOUT_TTL)) {
+        return page.data.pageLayout || null;
+    }
+
     try {
-        const response = await get('/page-content', { page_key: 'user' });
-        const pageData = response?.data || {};
-        page.setData({
-            pageLayout: pageData.layout || null
-        });
+        page._pageLayoutPromise = get('/page-content', { page_key: 'user' })
+            .then((response) => {
+                const pageData = response?.data || {};
+                page.setData({
+                    pageLayout: pageData.layout || null
+                });
+                page._lastPageLayoutAt = Date.now();
+                return pageData.layout || null;
+            })
+            .finally(() => {
+                page._pageLayoutPromise = null;
+            });
+        return await page._pageLayoutPromise;
     } catch (_) {
         // 页面编排接口失败时静默回退，避免影响“我的页”主流程
+        return null;
     }
 }
 
@@ -414,20 +464,28 @@ async function loadDistributionInfo(page) {
                 : ((page.data.userInfo || app.globalData.userInfo || {}).role_level || dashboardUserInfo.role || 0)
         ) || 0;
         const goodsFundBalance = formatMoney(
-            agentWalletInfo.balance != null
-                ? agentWalletInfo.balance
-                : (teamGoodsFund.goods_fund_balance != null ? teamGoodsFund.goods_fund_balance : '0.00')
+            agentWalletInfo.agent_wallet_balance != null
+                ? agentWalletInfo.agent_wallet_balance
+                : (
+                    agentWalletInfo.balance != null
+                        ? agentWalletInfo.balance
+                        : (teamGoodsFund.goods_fund_balance != null ? teamGoodsFund.goods_fund_balance : '0.00')
+                )
         );
         const commissionBalance = formatMoney(
-            walletInfo.balance != null
-                ? walletInfo.balance
+            walletInfo.commission_balance != null
+                ? walletInfo.commission_balance
                 : (
                     walletInfo.available_balance != null
                         ? walletInfo.available_balance
                         : (
                             walletInfo.commission && walletInfo.commission.available != null
                                 ? walletInfo.commission.available
-                                : stats.availableAmount
+                                : (
+                                    walletInfo.balance != null
+                                        ? walletInfo.balance
+                                        : stats.availableAmount
+                                )
                         )
                 )
         );
@@ -530,6 +588,7 @@ function clearUserCache() {
 module.exports = {
     applyGrowthDisplay,
     clearUserCache,
+    clearSecondaryLoadState,
     loadAssetRow,
     loadDistributionInfo,
     loadNotificationsCount,
