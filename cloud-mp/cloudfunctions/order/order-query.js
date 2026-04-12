@@ -120,6 +120,53 @@ function addMinutes(value, minutes) {
     return date.toISOString();
 }
 
+function pickNormalizedExpireAt(explicitExpireAt, createdAt, timeoutMinutes, shouldFallback) {
+    const fallbackExpireAt = shouldFallback ? addMinutes(createdAt, timeoutMinutes) : '';
+    if (!explicitExpireAt) return fallbackExpireAt;
+    if (!fallbackExpireAt) return explicitExpireAt;
+    const explicitTs = new Date(explicitExpireAt).getTime();
+    const fallbackTs = new Date(fallbackExpireAt).getTime();
+    if (!Number.isFinite(explicitTs)) return fallbackExpireAt;
+    if (!Number.isFinite(fallbackTs)) return explicitExpireAt;
+    return explicitTs >= fallbackTs ? explicitExpireAt : fallbackExpireAt;
+}
+
+function normalizeOrderAutoCancelMinutes(value, fallback = 30) {
+    const minutes = Math.floor(toNumber(value, fallback));
+    return Math.max(1, Math.min(1440, minutes));
+}
+
+function parseSingletonValue(row, fallback = {}) {
+    if (!row) return fallback;
+    const value = row.value !== undefined ? row.value : row.config_value;
+    if (value === undefined || value === null || value === '') return fallback;
+    if (typeof value === 'string') {
+        try {
+            const parsed = JSON.parse(value);
+            return parsed && typeof parsed === 'object' ? parsed : fallback;
+        } catch (_) {
+            return fallback;
+        }
+    }
+    return value && typeof value === 'object' ? value : fallback;
+}
+
+async function getDefaultOrderAutoCancelMinutes(cache) {
+    const key = 'singleton:settings:auto_cancel_minutes';
+    if (cache && cache.has(key)) return cache.get(key);
+    const loader = (async () => {
+        const singleton = await db.collection('admin_singletons')
+            .doc('settings')
+            .get()
+            .catch(() => ({ data: null }));
+        const settings = parseSingletonValue(singleton.data, {});
+        const orderSettings = settings.ORDER && typeof settings.ORDER === 'object' ? settings.ORDER : {};
+        return normalizeOrderAutoCancelMinutes(orderSettings.AUTO_CANCEL_MINUTES, 30);
+    })();
+    if (cache) cache.set(key, loader);
+    return loader;
+}
+
 function addDays(value, days) {
     const iso = toIsoString(value);
     if (!iso) return '';
@@ -230,7 +277,7 @@ async function findCollectionDocByAnyId(collectionName, rawId, cache) {
     return loader;
 }
 
-async function formatOrderForClient(order = {}, cache = new Map()) {
+async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCancelMinutes = 30) {
     const item = firstOrderItem(order);
     const [productDoc, skuDoc, buyerDoc, commissionDoc, pickupStation] = await Promise.all([
         findCollectionDocByAnyId('products', order.product_id || item.product_id, cache),
@@ -320,9 +367,19 @@ async function formatOrderForClient(order = {}, cache = new Map()) {
         toIsoString(order.agent_confirmed_at),
         ['agent_confirmed', 'shipping_requested'].includes(rawStatus) ? firstFilled(toIsoString(order.updated_at), paidAt) : ''
     );
+    const orderTimeoutMinutes = normalizeOrderAutoCancelMinutes(
+        order.payment_timeout_minutes || order.timeout_minutes,
+        defaultAutoCancelMinutes
+    );
+    const explicitExpireAt = toIsoString(order.expire_at);
     const expireAt = firstFilled(
-        toIsoString(order.expire_at),
-        rawStatus === 'pending_payment' || (rawStatus === 'cancelled' && !paidAt) ? addMinutes(order.created_at, 30) : ''
+        pickNormalizedExpireAt(
+            explicitExpireAt,
+            order.created_at,
+            orderTimeoutMinutes,
+            rawStatus === 'pending_payment' || (rawStatus === 'cancelled' && !paidAt)
+        ),
+        explicitExpireAt
     );
     const reviewed = order.reviewed === true || String(order.remark || '').includes('[已评价]');
     const reviewedAt = firstFilled(
@@ -388,6 +445,7 @@ async function formatOrderForClient(order = {}, cache = new Map()) {
         confirmed_at: confirmedAt || null,
         cancelled_at: cancelledAt || null,
         expire_at: expireAt || null,
+        payment_timeout_minutes: orderTimeoutMinutes,
         reviewed,
         reviewed_at: reviewedAt || null,
         fulfillment_type: fulfillmentType,
@@ -431,8 +489,9 @@ async function queryOrders(openid, params = {}) {
         });
         const offset = (page - 1) * limit;
         const cache = new Map();
+        const defaultAutoCancelMinutes = await getDefaultOrderAutoCancelMinutes(cache);
         return {
-            list: await Promise.all(sorted.slice(offset, offset + limit).map((order) => formatOrderForClient(order, cache))),
+            list: await Promise.all(sorted.slice(offset, offset + limit).map((order) => formatOrderForClient(order, cache, defaultAutoCancelMinutes))),
             pagination: {
                 total: sorted.length,
                 page,
@@ -451,7 +510,10 @@ async function queryOrders(openid, params = {}) {
  */
 async function getOrderDetail(openid, orderId) {
     const order = await getOrderByIdOrNo(openid, orderId);
-    return order ? formatOrderForClient(order, new Map()) : null;
+    if (!order) return null;
+    const cache = new Map();
+    const defaultAutoCancelMinutes = await getDefaultOrderAutoCancelMinutes(cache);
+    return formatOrderForClient(order, cache, defaultAutoCancelMinutes);
 }
 
 module.exports = {

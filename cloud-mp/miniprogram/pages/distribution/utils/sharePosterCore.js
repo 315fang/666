@@ -1,0 +1,316 @@
+/**
+ * 邀请海报 Canvas 绘制：顶部品牌视觉图 + 底部信息卡
+ */
+const { callFn } = require('../../../utils/cloud');
+
+const POSTER_W = 600;
+const POSTER_H = 760;
+const PAGE_PAD = 18;
+const CARD_RADIUS = 22;
+/** 顶部主视觉与下方信息卡之间的间距（像素，避免「糊在一起」） */
+const COVER_TO_CARD_GAP = 18;
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function ellipsis(text, max = 8) {
+    const value = String(text || '').trim();
+    if (!value) return '微信用户';
+    return value.length > max ? `${value.slice(0, max)}...` : value;
+}
+
+class SharePosterCore {
+    /**
+     * @param {WechatMiniprogram.Page.Instance} wxPage
+     * @param {{ canvasSelector?: string }} [options]
+     */
+    constructor(wxPage, options = {}) {
+        this.page = wxPage;
+        this.qrDrawError = null;
+        this.canvasSelector = options.canvasSelector || '#sharePosterCanvas';
+    }
+
+    async getPosterCanvas2d() {
+        await sleep(48);
+        const query = wx.createSelectorQuery().in(this.page);
+        const canvasNode = await new Promise((resolve, reject) => {
+            query.select(this.canvasSelector).fields({ node: true, size: true }, (res) => {
+                if (res && res.node) resolve(res);
+                else reject(new Error('canvas 节点获取失败，请重试'));
+            }).exec();
+        });
+        const canvas = canvasNode.node;
+        const dpr = (typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync()).pixelRatio || 2;
+        canvas.width = POSTER_W * dpr;
+        canvas.height = POSTER_H * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { canvas, ctx, W: POSTER_W, H: POSTER_H };
+    }
+
+    exportPoster(canvas) {
+        return new Promise((resolve, reject) => {
+            wx.canvasToTempFilePath({
+                canvas,
+                fileType: 'jpg',
+                quality: 0.94,
+                success: (res) => resolve(res.tempFilePath),
+                fail: reject
+            });
+        });
+    }
+
+    async normalizeImageSource(src) {
+        if (!src) return '';
+        if (/^https?:\/\//i.test(src)) {
+            try {
+                const info = await new Promise((resolve, reject) => {
+                    wx.getImageInfo({
+                        src,
+                        success: resolve,
+                        fail: reject
+                    });
+                });
+                return info.path || src;
+            } catch (_) {
+                return src;
+            }
+        }
+        return src;
+    }
+
+    async loadCanvasImage(canvas, src) {
+        const normalizedSrc = await this.normalizeImageSource(src);
+        return new Promise((resolve, reject) => {
+            const img = canvas.createImage();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error(`图片加载失败: ${src}`));
+            img.src = normalizedSrc;
+        });
+    }
+
+    async fetchWxaCodeToTempPath() {
+        const res = await callFn('distribution', { action: 'wxacodeInvite' }, { showError: false });
+        const fs = wx.getFileSystemManager();
+        const root = wx.env && wx.env.USER_DATA_PATH;
+        if (!root) throw new Error('请升级微信版本后重试');
+        const filePath = `${root}/share_wxacode_template.png`;
+
+        // 云函数 success({ wxacode_base64 })，callFn 会展开到顶层；旧版可能直接返回 buffer
+        const base64 = res && (res.wxacode_base64 || (res.data && res.data.wxacode_base64));
+        const buf = res && res.buffer;
+
+        if (buf) {
+            await new Promise((resolve, reject) => {
+                fs.writeFile({ filePath, data: buf, success: resolve, fail: reject });
+            });
+            return filePath;
+        }
+
+        if (base64) {
+            await new Promise((resolve, reject) => {
+                fs.writeFile({
+                    filePath,
+                    data: base64,
+                    encoding: 'base64',
+                    success: resolve,
+                    fail: reject
+                });
+            });
+            return filePath;
+        }
+
+        const apiErr = res && res.error;
+        const hint = apiErr && String(apiErr) !== 'empty_buffer' ? String(apiErr) : '';
+        throw new Error(hint ? `小程序码生成失败（${hint}）` : '小程序码暂不可用，请稍后重试');
+    }
+
+    roundRectPath(ctx, x, y, w, h, r) {
+        const radius = Math.min(r, w / 2, h / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + w - radius, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+        ctx.lineTo(x + w, y + h - radius);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+        ctx.lineTo(x + radius, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+    }
+
+    fillRoundRect(ctx, x, y, w, h, r, color) {
+        this.roundRectPath(ctx, x, y, w, h, r);
+        ctx.fillStyle = color;
+        ctx.fill();
+    }
+
+    strokeRoundRect(ctx, x, y, w, h, r, color, width = 1) {
+        this.roundRectPath(ctx, x, y, w, h, r);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.stroke();
+    }
+
+    async drawCoverSection(ctx, canvas, W, coverUrl, brandName) {
+        const coverX = PAGE_PAD;
+        const coverY = PAGE_PAD;
+        const coverW = W - PAGE_PAD * 2;
+        const coverH = 470;
+
+        this.fillRoundRect(ctx, coverX, coverY, coverW, coverH, CARD_RADIUS, '#DCE5EE');
+
+        if (coverUrl) {
+            try {
+                const img = await this.loadCanvasImage(canvas, coverUrl);
+                ctx.save();
+                this.roundRectPath(ctx, coverX, coverY, coverW, coverH, CARD_RADIUS);
+                ctx.clip();
+
+                const imgRatio = img.width / img.height;
+                const boxRatio = coverW / coverH;
+                let drawW = coverW;
+                let drawH = coverH;
+                let drawX = coverX;
+                let drawY = coverY;
+
+                if (imgRatio > boxRatio) {
+                    drawH = coverH;
+                    drawW = drawH * imgRatio;
+                    drawX = coverX - (drawW - coverW) / 2;
+                } else {
+                    drawW = coverW;
+                    drawH = drawW / imgRatio;
+                    drawY = coverY - (drawH - coverH) / 2;
+                }
+
+                ctx.drawImage(img, drawX, drawY, drawW, drawH);
+                ctx.restore();
+                return { coverX, coverY, coverW, coverH };
+            } catch (_) {
+                // fallback below
+            }
+        }
+
+        const grad = ctx.createLinearGradient(coverX, coverY, coverX + coverW, coverY + coverH);
+        grad.addColorStop(0, '#DCE7F2');
+        grad.addColorStop(0.52, '#A8BED6');
+        grad.addColorStop(1, '#6E88A6');
+        this.fillRoundRect(ctx, coverX, coverY, coverW, coverH, CARD_RADIUS, grad);
+
+        ctx.save();
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = '#FFFFFF';
+        for (let i = 0; i < 5; i += 1) {
+            ctx.beginPath();
+            ctx.arc(coverX + 90 + i * 96, coverY + 92 + (i % 2) * 40, 54 + i * 6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 96px serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(brandName || 'WL').slice(0, 2).toUpperCase(), coverX + coverW / 2, coverY + 275);
+
+        ctx.font = '600 22px sans-serif';
+        ctx.fillText('扫码了解品牌', coverX + coverW / 2, coverY + 326);
+        return { coverX, coverY, coverW, coverH };
+    }
+
+    async drawPoster(ctx, canvas, W, H, userInfo, brandName, inviteCode, brandConfig = {}) {
+        ctx.fillStyle = '#F6F4EF';
+        ctx.fillRect(0, 0, W, H);
+
+        const cover = await this.drawCoverSection(ctx, canvas, W, brandConfig.share_poster_cover_url || '', brandName);
+
+        const cardX = PAGE_PAD + 14;
+        // 信息区放在主视觉下方，与封面分离（不再用负偏移压在图上）
+        const cardY = cover.coverY + cover.coverH + COVER_TO_CARD_GAP;
+        const cardW = W - (PAGE_PAD + 14) * 2;
+        const cardH = 230;
+
+        this.fillRoundRect(ctx, cardX, cardY, cardW, cardH, CARD_RADIUS, '#FFFFFF');
+        this.strokeRoundRect(ctx, cardX, cardY, cardW, cardH, CARD_RADIUS, 'rgba(43,33,24,0.06)', 1);
+
+        const avatarSize = 66;
+        const avatarX = cardX + 28;
+        const avatarY = cardY + 44;
+        const nameX = avatarX + avatarSize + 18;
+        const nameY = avatarY + 28;
+        const memberCode = inviteCode || userInfo?.member_no || userInfo?.my_invite_code || '';
+        const name = ellipsis(userInfo?.nick_name || userInfo?.nickname || userInfo?.nickName || '微信用户', 9);
+        const introText = brandConfig.share_poster_intro || '合作共赢 共迎美好';
+        const codePrefix = brandConfig.share_poster_code_prefix || '邀请码：';
+        const qrHint = brandConfig.share_poster_qr_hint || '长按识别小程序码';
+
+        if (userInfo?.avatar || userInfo?.avatar_url || userInfo?.avatarUrl) {
+            try {
+                const avatar = await this.loadCanvasImage(canvas, userInfo.avatar || userInfo.avatar_url || userInfo.avatarUrl);
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+                ctx.clip();
+                ctx.drawImage(avatar, avatarX, avatarY, avatarSize, avatarSize);
+                ctx.restore();
+            } catch (_) {
+                this.fillRoundRect(ctx, avatarX, avatarY, avatarSize, avatarSize, avatarSize / 2, '#E9E1D6');
+            }
+        } else {
+            this.fillRoundRect(ctx, avatarX, avatarY, avatarSize, avatarSize, avatarSize / 2, '#E9E1D6');
+        }
+
+        ctx.fillStyle = '#2B2118';
+        ctx.font = '700 28px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(name, nameX, nameY);
+
+        ctx.fillStyle = '#3F3328';
+        ctx.font = '600 17px sans-serif';
+        ctx.fillText(introText, avatarX, cardY + 132);
+
+        ctx.fillStyle = '#B74848';
+        ctx.font = '600 17px sans-serif';
+        ctx.fillText(`${codePrefix}${memberCode || '未配置'}`, avatarX, cardY + 182);
+
+        const qrBoxSize = 170;
+        const qrBoxX = cardX + cardW - qrBoxSize - 22;
+        const qrBoxY = cardY + 28;
+        this.fillRoundRect(ctx, qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 18, '#FBFAF7');
+
+        try {
+            const qrPath = await this.fetchWxaCodeToTempPath();
+            const qrImage = await this.loadCanvasImage(canvas, qrPath);
+            ctx.drawImage(qrImage, qrBoxX + 8, qrBoxY + 8, qrBoxSize - 16, qrBoxSize - 16);
+        } catch (err) {
+            this.qrDrawError = err;
+            ctx.fillStyle = '#D9D0C3';
+            ctx.font = '600 16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('二维码生成失败', qrBoxX + qrBoxSize / 2, qrBoxY + qrBoxSize / 2);
+        }
+
+        ctx.fillStyle = '#8A7B6A';
+        ctx.font = '500 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(qrHint, qrBoxX + qrBoxSize / 2, qrBoxY + qrBoxSize + 18);
+
+        // 二维码失败时已在画布上占位提示，仍导出整张海报，避免因 throw 导致「Error: ok」类误报
+    }
+
+    async generateToTempPath({ userInfo, brandName, inviteCode, brandConfig }) {
+        this.qrDrawError = null;
+        await new Promise((resolve) => {
+            if (typeof wx.nextTick === 'function') wx.nextTick(resolve);
+            else resolve();
+        });
+        await sleep(32);
+        const { canvas, ctx, W, H } = await this.getPosterCanvas2d();
+        await this.drawPoster(ctx, canvas, W, H, userInfo, brandName, inviteCode, brandConfig);
+        return this.exportPoster(canvas);
+    }
+}
+
+module.exports = { SharePosterCore, POSTER_W, POSTER_H };

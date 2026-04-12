@@ -27,20 +27,30 @@ function plainSummary(html, maxLen = 96) {
 function formatHelperList(helpers = []) {
     return helpers.map((item) => ({
         ...item,
-        user: item.user || item.helper || null,
+        user: item.user || item.helper ? {
+            ...(item.user || item.helper),
+            avatarUrl: item.user?.avatarUrl || item.user?.avatar_url || item.user?.avatar
+                || item.helper?.avatarUrl || item.helper?.avatar_url || item.helper?.avatar || '',
+            nickname: item.user?.nickname || item.user?.nickName || item.user?.nick_name
+                || item.helper?.nickname || item.helper?.nickName || item.helper?.nick_name || '好友'
+        } : null,
         cut_amount: item.cut_amount ?? item.slash_amount ?? 0
     }));
 }
 
 Page({
     data: {
-        statusBarHeight: 20,
-        navTopPadding: 20,
-        navBarHeight: 44,
         slashNo: null,
         detail: null,
         loading: true,
         sharing: false,
+        helping: false,
+
+        // 角色标记（从后端返回字段提取到顶层，方便 wxml 直接使用）
+        isOwner: false,       // 当前用户是否是砍价发起人
+        alreadyHelped: false, // 当前用户是否已帮砍
+        helperFull: false,    // 帮砍名额是否已满
+        myHelpAmount: '0.00', // 本人帮砍金额（若已帮砍）
 
         statusTextMap: {
             active: '进行中',
@@ -51,11 +61,6 @@ Page({
     },
 
     onLoad(options) {
-        this.setData({
-            statusBarHeight: app.globalData.statusBarHeight || 20,
-            navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
-            navBarHeight: app.globalData.navBarHeight || 44
-        });
         if (options.slash_no) {
             this.setData({ slashNo: options.slash_no });
             this.loadDetail(options.slash_no);
@@ -116,7 +121,21 @@ Page({
                     d._remainMins = 0;
                     d._remainSecs = 0;
                 }
-                this.setData({ detail: d, loading: false });
+
+                // 提取角色标记到顶层（供底部按钮判断用）
+                const isOwner = !!d.is_owner;
+                const alreadyHelped = !!d.already_helped;
+                const helperFull = !!d.helper_full;
+                // 找到本人帮砍金额
+                let myHelpAmount = '0.00';
+                if (alreadyHelped && Array.isArray(d.helpers)) {
+                    const myHelp = d.helpers.find((h) => h.is_me || h.is_self);
+                    if (myHelp && myHelp.cut_amount != null) {
+                        myHelpAmount = parseFloat(myHelp.cut_amount).toFixed(2);
+                    }
+                }
+
+                this.setData({ detail: d, loading: false, isOwner, alreadyHelped, helperFull, myHelpAmount });
             } else {
                 wx.showToast({ title: res.message || '加载失败', icon: 'none' });
                 this.setData({ loading: false });
@@ -128,11 +147,57 @@ Page({
         }
     },
 
+    // 帮砍（被邀请者点击"帮 TA 砍一刀"）
+    async onHelp() {
+        const { detail, helping, alreadyHelped } = this.data;
+        if (!detail || helping) return;
+        if (!app.globalData.isLoggedIn) {
+            wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        if (alreadyHelped) {
+            wx.showToast({ title: '您已帮砍过了', icon: 'none' });
+            return;
+        }
+        this.setData({ helping: true });
+        wx.showLoading({ title: '帮砍中…', mask: true });
+        try {
+            const slashId = detail.id || detail._id || detail.slash_no;
+            const res = await post(`/slash/${slashId}/help`, { slash_no: detail.slash_no });
+            wx.hideLoading();
+            if (res.code === 0) {
+                const cutAmount = res.data && res.data.cut_amount != null
+                    ? parseFloat(res.data.cut_amount).toFixed(2)
+                    : '0.00';
+                wx.showModal({
+                    title: '帮砍成功！',
+                    content: `您帮 TA 砍了 ¥${cutAmount}，继续邀请好友砍得更多！`,
+                    showCancel: false,
+                    confirmText: '好的'
+                });
+                // 刷新详情（获取最新价格和帮砍记录）
+                this.loadDetail(this.data.slashNo);
+            } else {
+                wx.showToast({ title: res.message || '帮砍失败', icon: 'none' });
+                this.setData({ helping: false });
+            }
+        } catch (e) {
+            wx.hideLoading();
+            wx.showToast({ title: e?.message || '帮砍失败，请重试', icon: 'none' });
+            this.setData({ helping: false });
+        }
+    },
+
     async onBuy() {
-        const { detail } = this.data;
+        const { detail, isOwner } = this.data;
         if (!detail) return;
         if (!app.globalData.isLoggedIn) {
             wx.showToast({ title: '请先登录', icon: 'none' });
+            return;
+        }
+        // 非发起人不能以砍价价格下单
+        if (!isOwner) {
+            wx.showToast({ title: '只有发起人才能以砍价价格购买', icon: 'none' });
             return;
         }
         if (detail.status === 'purchased') {
@@ -171,9 +236,5 @@ Page({
             path: `/pages/slash/detail?slash_no=${detail.slash_no}`,
             imageUrl: detail.product?.images?.[0] || ''
         };
-    },
-
-    onBack() {
-        require('../../utils/navigator').safeBack('/pages/activity/activity');
     }
 });

@@ -70,9 +70,9 @@
           <div class="sub-text">{{ Number(row.growth_value || 0).toFixed(0) }}成长值</div>
         </template>
       </el-table-column>
-      <el-table-column label="会员码" width="90" class-name="hide-mobile">
+      <el-table-column label="邀请码" width="90" class-name="hide-mobile">
         <template #default="{ row }">
-          <el-tag size="small" type="info">{{ row.member_no || row.invite_code || '-' }}</el-tag>
+          <el-tag size="small" type="info">{{ row.invite_code || row.member_no || '-' }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="状态" width="80">
@@ -85,20 +85,17 @@
       <el-table-column label="注册时间" width="105" class-name="hide-mobile">
         <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="210" fixed="right">
+      <el-table-column label="操作" width="230" fixed="right">
         <template #default="{ row }">
           <el-button text type="primary" size="small" @click="onOpenDetail(row)">详情</el-button>
-          <el-button v-if="canAdjustUserBalance" text type="warning" size="small" @click="onOpenBalance(row)">余额</el-button>
+          <el-button v-if="canAdjustUserBalance" text type="warning" size="small" @click="onDropdown('account_adjust', row)">调账</el-button>
           <el-button v-if="canManageUserRole" text size="small" @click="onOpenRoleEdit(row)">升级</el-button>
           <el-button v-if="canManageUserRole" text size="small" @click="onOpenPurchaseLevel(row)">拿货等级</el-button>
           <el-dropdown size="small" @command="(cmd) => onDropdown(cmd, row)">
             <el-button text size="small">更多<el-icon><ArrowDown /></el-icon></el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item v-if="canAdjustUserBalance" command="account_adjust">
-                  💰 账户调整（货款/佣金/积分/成长值）
-                </el-dropdown-item>
-                <el-dropdown-item divided command="invite">修改历史邀请码</el-dropdown-item>
+                <el-dropdown-item command="invite">修改历史邀请码</el-dropdown-item>
                 <el-dropdown-item command="member_no">修改会员码</el-dropdown-item>
                 <el-dropdown-item command="remark">备注/标签</el-dropdown-item>
                 <el-dropdown-item v-if="canManageUserParent" command="parent">修改上级</el-dropdown-item>

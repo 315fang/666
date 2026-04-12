@@ -11,7 +11,7 @@ Component({
       type: String,
       value: '分享给好友，一起享受优惠'
     },
-    // 会员码
+    // 邀请码（与 ?invite= 一致）
     memberCode: {
       type: String,
       value: ''
@@ -67,12 +67,12 @@ Component({
 
   methods: {
     /**
-     * 复制会员码
+     * 复制邀请码
      */
     onCopyMemberCode() {
       const code = this.properties.memberCode;
       if (!code) {
-        wx.showToast({ title: '会员码为空', icon: 'none' });
+        wx.showToast({ title: '邀请码为空', icon: 'none' });
         return;
       }
 

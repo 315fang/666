@@ -10,23 +10,23 @@
 
   <view class="page-body">
     <view class="poster-section">
-      <!-- 会员码 -->
+      <!-- 与分享链接 ?invite= 一致，为邀请码（非后台「会员码 member_no」） -->
       <view class="invite-code-row" wx:if="{{memberCode}}">
-        <text class="invite-code-label">我的会员码</text>
+        <text class="invite-code-label">我的邀请码</text>
         <text class="invite-code-value">{{memberCode}}</text>
         <view class="invite-code-copy" bindtap="onCopyCode">复制</view>
       </view>
 
-      <!-- 海报预览 -->
+      <!-- 海报预览（静态整张图不挂载 Canvas） -->
       <view class="poster-preview-wrap">
         <canvas
-          wx:if="{{!posterImagePath || posterGenerating}}"
+          wx:if="{{!isStaticPoster && (!posterImagePath || posterGenerating)}}"
           id="posterCanvas"
           type="2d"
           class="poster-canvas"
         ></canvas>
         <image
-          wx:if="{{posterImagePath}}"
+          wx:if="{{posterImagePath && !posterGenerating}}"
           class="poster-result-img"
           src="{{posterImagePath}}"
           mode="aspectFit"
@@ -38,10 +38,14 @@
         </view>
       </view>
 
+      <view class="static-badge" wx:if="{{isStaticPoster}}">
+        <text class="static-badge-text">已使用后台上传的整张静态海报</text>
+      </view>
+
       <!-- 操作按钮 -->
       <view class="poster-actions">
-        <view class="poster-action-btn poster-action-secondary" bindtap="onRegeneratePoster">
-          <text class="poster-action-text-secondary">重新生成</text>
+        <view class="poster-action-btn poster-action-secondary {{isStaticPoster ? 'btn-muted' : ''}}" bindtap="onRegeneratePoster">
+          <text class="poster-action-text-secondary">{{isStaticPoster ? '后台管理' : '重新生成'}}</text>
         </view>
         <view class="poster-action-btn poster-action-primary {{!posterImagePath ? 'btn-disabled' : ''}}" bindtap="onSavePoster">
           <text class="poster-action-text">保存到相册</text>

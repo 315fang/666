@@ -1,0 +1,202 @@
+/* pages/coupon/claim.wxss */
+page {
+  background: #f7f7f7;
+  min-height: 100vh;
+}
+
+.claim-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60rpx 32rpx 40rpx;
+  min-height: 100vh;
+}
+
+/* ── 加载 ── */
+.loading-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 160rpx;
+  gap: 24rpx;
+}
+.loading-spinner {
+  width: 64rpx;
+  height: 64rpx;
+  border: 6rpx solid #eee;
+  border-top-color: #f56c6c;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text {
+  font-size: 28rpx;
+  color: #999;
+}
+
+/* ── 错误 ── */
+.error-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 100rpx;
+  gap: 24rpx;
+}
+.status-icon {
+  width: 160rpx;
+  height: 160rpx;
+  opacity: .6;
+}
+.status-title {
+  font-size: 32rpx;
+  color: #666;
+}
+
+/* ── 券卡片 ── */
+.coupon-card {
+  width: 100%;
+  background: #fff;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: stretch;
+  box-shadow: 0 4rpx 24rpx rgba(0,0,0,.08);
+  overflow: hidden;
+  margin-bottom: 48rpx;
+}
+
+.coupon-left {
+  width: 220rpx;
+  background: linear-gradient(135deg, #f56c6c 0%, #e04040 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40rpx 0;
+  flex-shrink: 0;
+}
+.value-text {
+  font-size: 52rpx;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.1;
+}
+.min-text {
+  font-size: 22rpx;
+  color: rgba(255,255,255,.85);
+  margin-top: 8rpx;
+}
+
+.coupon-divider {
+  width: 32rpx;
+  position: relative;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+}
+.coupon-hole {
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  background: #f7f7f7;
+  flex-shrink: 0;
+}
+.coupon-hole.top { margin-top: -16rpx; }
+.coupon-hole.bottom { margin-bottom: -16rpx; }
+.dashed-line {
+  flex: 1;
+  width: 2rpx;
+  background: repeating-linear-gradient(to bottom, #ddd 0, #ddd 8rpx, transparent 8rpx, transparent 16rpx);
+}
+
+.coupon-right {
+  flex: 1;
+  padding: 32rpx 28rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10rpx;
+}
+.coupon-name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+  line-height: 1.3;
+}
+.coupon-desc {
+  font-size: 24rpx;
+  color: #999;
+  line-height: 1.4;
+}
+.coupon-days {
+  font-size: 24rpx;
+  color: #bbb;
+}
+
+/* ── 操作区 ── */
+.action-area {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.status-badge {
+  padding: 16rpx 40rpx;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  text-align: center;
+}
+.status-badge.inactive, .status-badge.out-of-stock {
+  background: #f5f5f5;
+  color: #aaa;
+}
+.status-badge.success {
+  background: #f0f9eb;
+  color: #67c23a;
+}
+.status-badge.owned {
+  background: #fdf6ec;
+  color: #e6a23c;
+}
+.status-badge.error-badge {
+  background: #fef0f0;
+  color: #f56c6c;
+}
+
+.btn-primary {
+  width: 560rpx;
+  height: 96rpx;
+  line-height: 96rpx;
+  text-align: center;
+  background: linear-gradient(90deg, #f56c6c 0%, #e04040 100%);
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 600;
+  border-radius: 48rpx;
+  box-shadow: 0 8rpx 24rpx rgba(245, 108, 108, .3);
+  transition: opacity .2s;
+}
+.btn-primary.btn-loading {
+  opacity: .6;
+}
+
+.btn-back {
+  margin-top: 24rpx;
+  font-size: 28rpx;
+  color: #409eff;
+  padding: 12rpx 32rpx;
+}
+
+/* ── 分享提示 ── */
+.share-tip {
+  margin-top: 48rpx;
+  font-size: 26rpx;
+  color: #bbb;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}

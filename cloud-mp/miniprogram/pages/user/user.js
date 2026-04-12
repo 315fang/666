@@ -284,7 +284,7 @@ Page({
         const userInfo = this.data.userInfo || {};
         const memberCode = String(userInfo.invite_code || '').trim();
         if (!memberCode) {
-            wx.showToast({ title: '暂无会员码', icon: 'none' });
+            wx.showToast({ title: '暂无邀请码', icon: 'none' });
             return;
         }
         wx.setClipboardData({

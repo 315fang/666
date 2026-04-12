@@ -45,7 +45,7 @@ const handleAction = {
     }),
 
     'create': asyncHandler(async (openid, params) => {
-        const { items, address_id, coupon_id, user_coupon_id, memo, remark, delivery_type, pickup_station_id, points_to_use, type, group_activity_id, group_no, slash_no } = params;
+        const { items, address_id, coupon_id, user_coupon_id, memo, remark, delivery_type, pickup_station_id, points_to_use, type, group_activity_id, group_no, slash_no, use_goods_fund } = params;
         if (!items || !Array.isArray(items) || items.length === 0) {
             throw badRequest('缺少商品信息');
         }
@@ -64,9 +64,19 @@ const handleAction = {
             type,
             group_activity_id,
             group_no,
-            slash_no
+            slash_no,
+            use_goods_fund: !!use_goods_fund
         });
-        return success({ id: order._id, order_id: order._id, order_no: order.order_no, total_amount: order.total_amount, pay_amount: order.pay_amount, group_no: order.group_no || '', slash_no: order.slash_no || '' });
+        return success({
+            id: order._id,
+            order_id: order._id,
+            order_no: order.order_no,
+            total_amount: order.total_amount,
+            pay_amount: order.pay_amount,
+            group_no: order.group_no || '',
+            slash_no: order.slash_no || '',
+            goods_fund_paid: order.goods_fund_paid || false
+        });
     }),
 
     'status': asyncHandler(async (openid, params) => {

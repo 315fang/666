@@ -480,6 +480,33 @@ const handleAction = {
         return success({ list: coupons });
     }),
 
+    'getCouponInfo': asyncHandler(async (_openid, params) => {
+        const id = String(params.coupon_id || params.id || '');
+        if (!id) throw badRequest('缺少优惠券 ID');
+        // 先尝试按数字 id 字段查询（admin-api 存储格式）
+        const byNumericId = await db.collection('coupons').where({ id: isNaN(Number(id)) ? id : Number(id) }).limit(1).get().catch(() => ({ data: [] }));
+        const byDocId = byNumericId.data && byNumericId.data.length > 0
+            ? byNumericId
+            : await db.collection('coupons').doc(id).get().catch(() => ({ data: null }));
+        const coupon = (byNumericId.data && byNumericId.data[0]) || byDocId.data;
+        if (!coupon) return success({ coupon: null, found: false });
+        const couponId = coupon.id != null ? String(coupon.id) : coupon._id;
+        return success({
+            found: true,
+            coupon: {
+                id: couponId,
+                name: coupon.name,
+                type: coupon.type || coupon.coupon_type || 'fixed',
+                value: coupon.value ?? coupon.coupon_value ?? 0,
+                min_purchase: coupon.min_purchase ?? 0,
+                valid_days: coupon.valid_days ?? 30,
+                description: coupon.description || '',
+                stock: coupon.stock ?? -1,
+                is_active: coupon.is_active ?? 1
+            }
+        });
+    }),
+
     'claimCoupon': asyncHandler(async (openid, params) => {
         const id = params.coupon_id || params.id;
         if (!id) throw badRequest('缺少优惠券 ID');

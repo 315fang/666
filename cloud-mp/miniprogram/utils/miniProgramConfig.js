@@ -2,6 +2,11 @@ const DEFAULT_CONFIG = {
   brand_config: {
     brand_name: '问兰',
     share_title: '问兰 · 品牌甄选',
+    share_poster_url: '',
+    share_poster_cover_url: '',
+    share_poster_intro: '合作共赢 共迎美好',
+    share_poster_code_prefix: '邀请码：',
+    share_poster_qr_hint: '长按识别小程序码',
     customer_service_wechat: 'wl_service',
     customer_service_hours: '9:00-21:00',
     nav_brand_title: '问兰镜像',

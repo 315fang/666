@@ -103,10 +103,11 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button text type="primary" size="small" @click="openForm(row)">编辑</el-button>
             <el-button text type="success" size="small" @click="handleIssue(row)" v-if="row.is_active === 1">发券</el-button>
+            <el-button text type="warning" size="small" @click="handleShare(row)">分享</el-button>
             <el-popconfirm title="确定要删除此券吗？" @confirm="handleDelete(row)">
               <template #reference>
                 <el-button text type="danger" size="small">删除</el-button>
@@ -231,19 +232,43 @@
     </el-dialog>
 
     <!-- ======== 人工发券 ======== -->
-    <el-dialog v-model="issueVisible" title="定向发券" width="480px">
+    <el-dialog v-model="issueVisible" title="定向发券" width="520px">
       <el-form label-width="110px">
         <el-form-item label="目标优惠券">
           <el-tag type="danger">{{ currentCoupon?.name || '' }}</el-tag>
         </el-form-item>
         <el-form-item label="发放方式">
           <el-radio-group v-model="issueForm.mode">
+            <el-radio label="search">搜索用户名称</el-radio>
             <el-radio label="ids">指定用户ID</el-radio>
             <el-radio label="level">按用户等级</el-radio>
-            <el-radio label="both">两者合并</el-radio>
+            <el-radio label="both">ID + 等级合并</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="用户等级" v-if="issueForm.mode !== 'ids'">
+        <!-- 搜索用户名称模式 -->
+        <el-form-item label="搜索用户" v-if="issueForm.mode === 'search'">
+          <el-select
+            v-model="issueForm.selectedUsers"
+            multiple
+            filterable
+            remote
+            reserve-keyword
+            placeholder="输入昵称 / 手机号搜索"
+            :remote-method="searchUsers"
+            :loading="userSearchLoading"
+            value-key="id"
+            style="width:100%"
+          >
+            <el-option
+              v-for="u in userSearchOptions"
+              :key="u.id"
+              :label="`${u.nickname || '未知'} (${u.phone || u.member_no || '#' + u.id})`"
+              :value="u"
+            />
+          </el-select>
+          <div class="form-tip" style="margin-top:6px">已选 {{ issueForm.selectedUsers.length }} 位用户</div>
+        </el-form-item>
+        <el-form-item label="用户等级" v-if="issueForm.mode === 'level' || issueForm.mode === 'both'">
           <el-checkbox-group v-model="issueForm.roleLevels">
             <el-checkbox :label="0">普通用户(0)</el-checkbox>
             <el-checkbox :label="1">会员(1)</el-checkbox>
@@ -252,7 +277,7 @@
             <el-checkbox :label="4">合伙人(4)</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
-        <el-form-item label="指定用户 ID" v-if="issueForm.mode !== 'level'">
+        <el-form-item label="指定用户 ID" v-if="issueForm.mode === 'ids' || issueForm.mode === 'both'">
           <el-input v-model="issueForm.userIdsText" type="textarea" :rows="3"
             placeholder="输入用户ID，多个用英文逗号分隔（例如：1, 23, 45）" />
         </el-form-item>
@@ -263,6 +288,45 @@
         <el-button @click="issueVisible = false">取消</el-button>
         <el-button type="primary" @click="submitIssue" :loading="submitting">下一步：预览名单</el-button>
       </template>
+    </el-dialog>
+
+    <!-- ======== 分享优惠券 ======== -->
+    <el-dialog v-model="shareVisible" title="分享优惠券" width="420px" @close="shareDialogClose">
+      <div style="text-align:center; padding:8px 0">
+        <p style="margin-bottom:12px; color:#606266; font-size:14px">
+          券名称：<strong>{{ shareTarget?.name }}</strong>
+        </p>
+        <!-- 小程序码图片 -->
+        <div v-if="shareLoading" style="height:200px; display:flex; align-items:center; justify-content:center;">
+          <el-icon class="is-loading" style="font-size:36px; color:#409EFF"><Loading /></el-icon>
+        </div>
+        <div v-else-if="shareWxacodeBase64" style="margin-bottom:16px">
+          <img
+            ref="wxacodeImgRef"
+            :src="`data:image/png;base64,${shareWxacodeBase64}`"
+            alt="小程序码"
+            style="width:200px; height:200px; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,.12);"
+          />
+          <div style="margin-top:8px; font-size:12px; color:#909399">长按或右键图片可保存</div>
+        </div>
+        <div v-else style="height:100px; line-height:100px; color:#909399; font-size:13px">
+          小程序码生成失败（开发环境不支持）
+        </div>
+        <!-- 小程序路径 -->
+        <div style="display:flex; align-items:center; gap:8px; margin:12px 0; background:#f5f7fa; border-radius:6px; padding:8px 12px;">
+          <span style="flex:1; font-size:12px; color:#606266; word-break:break-all; text-align:left;">{{ shareMpPath }}</span>
+          <el-button size="small" type="primary" plain @click="copyMpPath">复制路径</el-button>
+        </div>
+        <div style="display:flex; gap:8px; justify-content:center; margin-top:8px">
+          <a
+            v-if="shareWxacodeBase64"
+            :href="`data:image/png;base64,${shareWxacodeBase64}`"
+            :download="`coupon-${shareTarget?.id}.png`"
+          >
+            <el-button type="success">下载小程序码</el-button>
+          </a>
+        </div>
+      </div>
     </el-dialog>
 
     <!-- 发券目标用户确认弹窗 -->
@@ -283,6 +347,7 @@
 <script setup>
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Loading } from '@element-plus/icons-vue'
 import {
   getCoupons,
   createCoupon,
@@ -294,8 +359,10 @@ import {
   saveCouponAutoRules,
   getProducts,
   getCategories,
-  getProductById
+  getProductById,
+  getCouponWxacode
 } from '@/api'
+import { getUsers } from '@/api/modules/users'
 import { usePagination } from '@/composables/usePagination'
 import UserConfirmDialog from '@/components/UserConfirmDialog.vue'
 
@@ -541,10 +608,68 @@ const submitForm = async () => {
   }
 }
 
+// ====== 分享优惠券 ======
+const shareVisible = ref(false)
+const shareTarget = ref(null)
+const shareLoading = ref(false)
+const shareWxacodeBase64 = ref('')
+const shareMpPath = ref('')
+const wxacodeImgRef = ref(null)
+
+const handleShare = async (row) => {
+  shareTarget.value = row
+  shareWxacodeBase64.value = ''
+  shareMpPath.value = `/pages/coupon/claim?id=${row.id}`
+  shareVisible.value = true
+  shareLoading.value = true
+  try {
+    const res = await getCouponWxacode(row.id)
+    shareWxacodeBase64.value = res?.wxacode_base64 || ''
+    if (res?.mp_path) shareMpPath.value = res.mp_path
+  } catch (e) {
+    ElMessage.warning('小程序码生成失败，可手动复制路径分享')
+  } finally {
+    shareLoading.value = false
+  }
+}
+
+const shareDialogClose = () => {
+  shareWxacodeBase64.value = ''
+}
+
+const copyMpPath = async () => {
+  try {
+    await navigator.clipboard.writeText(shareMpPath.value)
+    ElMessage.success('路径已复制，可在微信中粘贴发送')
+  } catch {
+    ElMessage.info(`请手动复制：${shareMpPath.value}`)
+  }
+}
+
 // ====== 人工发券 ======
 const issueVisible = ref(false)
 const currentCoupon = ref(null)
-const issueForm = reactive({ mode: 'ids', userIdsText: '', roleLevels: [] })
+const userSearchLoading = ref(false)
+const userSearchOptions = ref([])
+const issueForm = reactive({ mode: 'search', userIdsText: '', roleLevels: [], selectedUsers: [] })
+
+const searchUsers = async (query) => {
+  if (!query) return
+  userSearchLoading.value = true
+  try {
+    const res = await getUsers({ keyword: query, limit: 20, page: 1 })
+    userSearchOptions.value = (res?.list || []).map(u => ({
+      id: u.id || u._id,
+      nickname: u.nickname || u.nickName || u.name || '未知',
+      phone: (u.phone || u.mobile || '').replace(/(\d{3})\d{4}(\d{4})/, '$1****$2'),
+      member_no: u.member_no || ''
+    }))
+  } catch {
+    userSearchOptions.value = []
+  } finally {
+    userSearchLoading.value = false
+  }
+}
 
 // 发券确认弹窗状态
 const issueConfirmVisible = ref(false)
@@ -557,20 +682,25 @@ let pendingIssuePayload = null
 
 const handleIssue = (row) => {
   currentCoupon.value = row
-  issueForm.mode = 'ids'
+  issueForm.mode = 'search'
   issueForm.userIdsText = ''
   issueForm.roleLevels = []
+  issueForm.selectedUsers = []
+  userSearchOptions.value = []
   issueVisible.value = true
 }
 
 const buildIssuePayload = () => {
   const payload = {}
-  if (issueForm.mode !== 'level') {
+  if (issueForm.mode === 'search') {
+    const ids = issueForm.selectedUsers.map(u => u.id).filter(Boolean)
+    if (ids.length > 0) payload.user_ids = ids
+  } else if (issueForm.mode === 'ids' || issueForm.mode === 'both') {
     const ids = issueForm.userIdsText.split(',')
       .map(id => id.trim()).filter(Boolean).map(Number).filter(n => !isNaN(n) && n > 0)
     if (ids.length > 0) payload.user_ids = ids
   }
-  if (issueForm.mode !== 'ids') {
+  if (issueForm.mode === 'level' || issueForm.mode === 'both') {
     payload.role_levels = issueForm.roleLevels
   }
   return payload
@@ -580,14 +710,16 @@ const buildIssuePayload = () => {
 const submitIssue = async () => {
   const payload = buildIssuePayload()
 
-  if (issueForm.mode !== 'level') {
-    const ids = payload.user_ids || []
-    if (ids.length === 0 && issueForm.mode === 'ids') {
-      return ElMessage.warning('请输入有效的用户ID')
-    }
-  }
-  if (issueForm.mode !== 'ids' && (!payload.role_levels || payload.role_levels.length === 0)) {
-    return ElMessage.warning('请至少选择一个用户等级')
+  if (issueForm.mode === 'search') {
+    if ((payload.user_ids || []).length === 0) return ElMessage.warning('请先搜索并选择用户')
+  } else if (issueForm.mode === 'ids') {
+    if ((payload.user_ids || []).length === 0) return ElMessage.warning('请输入有效的用户ID')
+  } else if (issueForm.mode === 'level') {
+    if (!payload.role_levels || payload.role_levels.length === 0) return ElMessage.warning('请至少选择一个用户等级')
+  } else if (issueForm.mode === 'both') {
+    const hasIds = (payload.user_ids || []).length > 0
+    const hasLevels = (payload.role_levels || []).length > 0
+    if (!hasIds && !hasLevels) return ElMessage.warning('请填写用户ID或选择用户等级')
   }
 
   issuePreviewLoading.value = true

@@ -5,8 +5,8 @@
 <template>
   <el-dialog
     :model-value="visible"
-    title="账户调整"
-    width="460px"
+    title="账户调整（货款 / 佣金 / 积分 / 成长值）"
+    width="480px"
     @update:model-value="emit('update:visible', $event)"
     @close="resetForm"
   >
@@ -26,11 +26,11 @@
         <el-select v-model="form.account" style="width:100%" @change="onAccountChange">
           <el-option value="goods_fund" label="💰 货款余额">
             <span>💰 货款余额</span>
-            <span class="opt-hint">仅代理商有效，用于订单货款支付</span>
+            <span class="opt-hint">代理商下单时可使用</span>
           </el-option>
           <el-option value="commission" label="🏆 佣金">
             <span>🏆 佣金</span>
-            <span class="opt-hint">插入一条佣金记录，需人工审核后可提现</span>
+            <span class="opt-hint">插入佣金记录，申请提现后需审核</span>
           </el-option>
           <el-option value="points" label="⭐ 积分">
             <span>⭐ 积分</span>
@@ -39,6 +39,10 @@
           <el-option value="growth" label="📈 成长值">
             <span>📈 成长值</span>
             <span class="opt-hint">影响会员等级和权益</span>
+          </el-option>
+          <el-option value="balance" label="💳 普通余额">
+            <span>💳 普通余额</span>
+            <span class="opt-hint">平台通用余额</span>
           </el-option>
         </el-select>
       </el-form-item>
@@ -108,20 +112,29 @@ import {
   adjustUserGoodsFund,
   adjustUserPoints,
   adjustUserGrowth,
-  adjustUserCommission
+  adjustUserCommission,
+  adjustUserBalance
 } from '@/api'
 
 const props = defineProps({
-  visible:     { type: Boolean, default: false },
-  user:        { type: Object, default: null },
-  roleText:    { type: Function, required: true },
-  roleTagType: { type: Function, required: true }
+  visible:      { type: Boolean, default: false },
+  user:         { type: Object, default: null },
+  initAccount:  { type: String, default: 'goods_fund' },
+  roleText:     { type: Function, required: true },
+  roleTagType:  { type: Function, required: true }
 })
 const emit = defineEmits(['update:visible', 'success'])
 
 const formRef = ref(null)
 const submitting = ref(false)
 const form = ref({ account: 'goods_fund', type: 'add', amount: null, reason: '' })
+
+// 当弹窗打开时，根据 initAccount 预选账户类型
+watch(() => props.visible, (val) => {
+  if (val) {
+    form.value.account = props.initAccount || 'goods_fund'
+  }
+})
 
 const displayName = (u) => getUserNickname(u || {}, '-')
 
@@ -134,9 +147,10 @@ const currentRawValue = computed(() => {
   if (!u) return 0
   const map = {
     goods_fund: u.agent_wallet_balance ?? u.wallet_balance ?? 0,
-    commission: u.commission_balance ?? u.balance ?? 0,
+    commission: u.commission_balance ?? 0,
     points:     u.points ?? 0,
-    growth:     u.growth_value ?? 0
+    growth:     u.growth_value ?? 0,
+    balance:    u.balance ?? 0
   }
   return Number(map[form.value.account] || 0)
 })
@@ -148,11 +162,11 @@ const currentValueDisplay = computed(() => {
 })
 
 const unit = computed(() => {
-  return { goods_fund: '元', commission: '元', points: '积分', growth: '成长值' }[form.value.account] || ''
+  return { goods_fund: '元', commission: '元', points: '积分', growth: '成长值', balance: '元' }[form.value.account] || ''
 })
 
 const amountLabel = computed(() => {
-  return { goods_fund: '金额（元）', commission: '金额（元）', points: '积分数', growth: '成长值' }[form.value.account] || '数量'
+  return { goods_fund: '金额（元）', commission: '金额（元）', points: '积分数', growth: '成长值', balance: '金额（元）' }[form.value.account] || '数量'
 })
 
 const amountHint = computed(() => {
@@ -160,7 +174,8 @@ const amountHint = computed(() => {
     goods_fund: '货款余额直接变动，代理商下单时可使用',
     commission: '将插入一条 pending_approval 状态的佣金记录，用户申请提现后需审核',
     points:     '必须为正整数，1积分=0.1元，下单可抵扣最多50%',
-    growth:     '必须为正整数，影响会员等级'
+    growth:     '必须为正整数，影响会员等级',
+    balance:    '平台通用余额，直接变动'
   }
   return map[form.value.account] || ''
 })
@@ -199,7 +214,8 @@ const API_MAP = {
   goods_fund: adjustUserGoodsFund,
   points:     adjustUserPoints,
   growth:     adjustUserGrowth,
-  commission: adjustUserCommission
+  commission: adjustUserCommission,
+  balance:    adjustUserBalance
 }
 
 const handleSubmit = async () => {
@@ -218,7 +234,7 @@ const handleSubmit = async () => {
       amount: form.value.amount,
       reason: form.value.reason.trim()
     })
-    const labelMap = { goods_fund: '货款余额', commission: '佣金', points: '积分', growth: '成长值' }
+    const labelMap = { goods_fund: '货款余额', commission: '佣金', points: '积分', growth: '成长值', balance: '普通余额' }
     ElMessage.success(`${labelMap[form.value.account]}调整成功`)
     emit('update:visible', false)
     emit('success')

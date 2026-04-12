@@ -591,11 +591,13 @@ const handleAction = {
     }),
 
     'agentWalletLogs': asyncHandler(async (openid, params) => {
-        const res = await db.collection('wallet_logs')
-            .where({ openid })
-            .orderBy('created_at', 'desc')
-            .limit(50)
-            .get().catch(() => ({ data: [] }));
+        // 货款流水统一存储在 goods_fund_logs（扣款写入时即用此集合）
+        let query = db.collection('goods_fund_logs').where({ openid });
+        // 支持按类型筛选：spend（扣款）/ refund（退款）/ recharge（充值）
+        if (params && params.type && params.type !== 'all') {
+            query = query.where({ type: params.type });
+        }
+        const res = await query.orderBy('created_at', 'desc').limit(50).get().catch(() => ({ data: [] }));
         return success({ list: res.data || [] });
     }),
 

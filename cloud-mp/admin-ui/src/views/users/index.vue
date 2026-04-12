@@ -95,6 +95,7 @@
     <UserBalanceAdjustDialog
       v-model:visible="accountAdjustVisible"
       :user="currentUser"
+      :init-account="accountAdjustInitType"
       :role-text="roleText"
       :role-tag-type="roleTagType"
       @success="fetchUsers"
@@ -629,9 +630,11 @@ const handleBan = async (row, ban) => {
 
 // ===== 账户调整（货款/佣金/积分/成长值）=====
 const accountAdjustVisible = ref(false)
+const accountAdjustInitType = ref('goods_fund')
 
-const openAccountAdjust = (row) => {
+const openAccountAdjust = (row, accountType = 'goods_fund') => {
   currentUser.value = row
+  accountAdjustInitType.value = accountType
   accountAdjustVisible.value = true
 }
 
