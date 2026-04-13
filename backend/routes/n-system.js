@@ -34,7 +34,7 @@ router.get('/invite-card', async (req, res, next) => {
         }
 
         const leader = await User.findByPk(leaderId, {
-            attributes: ['id', 'nickname', 'avatar_url', 'phone', 'role_level', 'n_level']
+            attributes: ['id', 'nickname', 'avatar_url', 'phone', 'role_level']
         });
         if (!leader || leader.role_level !== ROLES.N_LEADER) {
             return res.status(404).json({ code: -1, message: '邀约人不存在或不是有效的大N' });

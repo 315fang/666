@@ -1,0 +1,10 @@
+﻿product_id,product_name,matched_image_count,has_json_cover,has_json_gallery,has_json_detail,has_json_sku,has_local_cover,has_local_gallery,has_local_detail,has_local_sku,source_json_file,notes
+1,镜像案例库奢护/体验理套装+赠瞬间抗皱神器,0,True,True,True,True,False,False,False,False,/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json,未匹配到本地素材图
+3,问兰燕窝邂逅试用礼,0,True,True,False,True,False,False,False,False,/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json,未匹配到本地素材图；json 中缺少 detail 图路径
+5,玻色因紧致面霜,0,True,True,True,True,False,False,False,False,/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json,未匹配到本地素材图
+6,问兰氨基酸洁面慕斯,0,True,True,True,True,False,False,False,False,/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json,未匹配到本地素材图
+7,问兰燕窝精萃露,0,True,True,True,True,False,False,False,False,/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json,未匹配到本地素材图
+8,绿魔方抗皱焕颜霜/,0,True,True,True,True,False,False,False,False,/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json,未匹配到本地素材图
+9,小极光焕彩面霜,0,True,True,True,True,False,False,False,False,/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json,未匹配到本地素材图
+10,皮脂膜精华液(次抛装),0,True,True,True,True,False,False,False,False,/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json,未匹配到本地素材图
+11,问兰护肤尊享礼盒,0,True,True,True,True,False,False,False,False,/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json,未匹配到本地素材图

@@ -1,0 +1,2881 @@
+{
+  "generated_at": "2026-04-12T06:58:45+00:00",
+  "image_roots": [
+    "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/小程序组合装",
+    "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24",
+    "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材"
+  ],
+  "data_roots": [
+    "/Users/ury/Downloads/project/问兰微信小程序/check04/666"
+  ],
+  "output_dir": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/artifacts/product_image_mapping",
+  "summary": {
+    "json_jsonl_files_scanned": 355,
+    "image_files_scanned": 127,
+    "products_detected": 11,
+    "matched_products": 2,
+    "detail_image_rows": 42,
+    "unmatched_images": 79,
+    "duplicate_rows": 10,
+    "missing_image_products": 9
+  },
+  "dataset_files": {
+    "categories": [
+      "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-import/categories.jsonl",
+      "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-seed/categories.json",
+      "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/categories.json"
+    ],
+    "products": [
+      "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-import/products.jsonl",
+      "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-seed/products.json",
+      "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json"
+    ],
+    "skus": [
+      "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-import/skus.jsonl",
+      "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-seed/skus.json"
+    ]
+  },
+  "products": [
+    {
+      "product_id": "1",
+      "product_name": "镜像案例库奢护/体验理套装+赠瞬间抗皱神器",
+      "category": "品牌推荐",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "merged_sources": [
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-import/products.jsonl",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-seed/products.json"
+      ],
+      "aliases": [
+        "送抗皱保湿精华液",
+        "镜像案例库奢护",
+        "赠瞬间抗皱神器",
+        "镜像案例库奢",
+        "像案例库奢护",
+        "赠瞬间抗皱神",
+        "瞬间抗皱神器",
+        "滋养修护组套",
+        "送抗皱保湿精",
+        "抗皱保湿精华",
+        "皱保湿精华液",
+        "镜像案例库",
+        "像案例库奢",
+        "案例库奢护",
+        "体验理套装",
+        "赠瞬间抗皱",
+        "瞬间抗皱神",
+        "间抗皱神器",
+        "滋养修护组",
+        "养修护组套"
+      ],
+      "unique_aliases": [
+        "送抗皱保湿精华液",
+        "镜像案例库奢护",
+        "赠瞬间抗皱神器",
+        "镜像案例库奢",
+        "像案例库奢护",
+        "赠瞬间抗皱神",
+        "瞬间抗皱神器",
+        "滋养修护组套",
+        "送抗皱保湿精",
+        "像案例库奢",
+        "案例库奢护",
+        "体验理套装",
+        "赠瞬间抗皱",
+        "瞬间抗皱神",
+        "间抗皱神器",
+        "滋养修护组",
+        "养修护组套",
+        "送抗皱保湿",
+        "案例库奢",
+        "例库奢护"
+      ],
+      "matched_images": []
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "merged_sources": [
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-import/products.jsonl",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-seed/products.json"
+      ],
+      "aliases": [
+        "镜像案例库特惠",
+        "抗皱保湿精华液",
+        "镜像案例库特",
+        "像案例库特惠",
+        "皮脂膜精华液",
+        "抗皱保湿精华",
+        "皱保湿精华液",
+        "镜像案例库",
+        "像案例库特",
+        "案例库特惠",
+        "皮脂膜精华",
+        "脂膜精华液",
+        "抗皱保湿精",
+        "皱保湿精华",
+        "保湿精华液",
+        "燕窝精萃露",
+        "镜像案例",
+        "像案例库",
+        "案例库特",
+        "例库特惠"
+      ],
+      "unique_aliases": [
+        "镜像案例库特惠",
+        "抗皱保湿精华液",
+        "镜像案例库特",
+        "像案例库特惠",
+        "像案例库特",
+        "案例库特惠",
+        "案例库特",
+        "例库特惠",
+        "例库特",
+        "库特惠",
+        "库特",
+        "特惠"
+      ],
+      "matched_images": [
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_11.jpg",
+          "detected_type": "detail",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_05.jpg",
+          "detected_type": "detail",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_04.jpg",
+          "detected_type": "detail",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_10.jpg",
+          "detected_type": "detail",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_06.jpg",
+          "detected_type": "detail",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_12.jpg",
+          "detected_type": "detail",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_13.jpg",
+          "detected_type": "detail",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_07.jpg",
+          "detected_type": "detail",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_03.jpg",
+          "detected_type": "detail",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_02.jpg",
+          "detected_type": "detail",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_14.jpg",
+          "detected_type": "detail",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_01.jpg",
+          "detected_type": "detail",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_09.jpg",
+          "detected_type": "detail",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_08.jpg",
+          "detected_type": "detail",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/备案信息/备案证明.png",
+          "detected_type": "unknown",
+          "score": 111.0,
+          "confidence": "high",
+          "basis": [
+            "unique_alias:抗皱保湿精华液",
+            "alias:抗皱保湿精华"
+          ]
+        }
+      ]
+    },
+    {
+      "product_id": "3",
+      "product_name": "问兰燕窝邂逅试用礼",
+      "category": "活动产品",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "merged_sources": [
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-import/products.jsonl",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-seed/products.json"
+      ],
+      "aliases": [
+        "问兰燕窝邂逅试用礼",
+        "问兰燕窝邂逅",
+        "兰燕窝邂逅试",
+        "燕窝邂逅试用",
+        "窝邂逅试用礼",
+        "问兰燕窝邂",
+        "兰燕窝邂逅",
+        "燕窝邂逅试",
+        "窝邂逅试用",
+        "邂逅试用礼",
+        "问兰燕窝",
+        "兰燕窝邂",
+        "燕窝邂逅",
+        "窝邂逅试",
+        "邂逅试用",
+        "逅试用礼",
+        "问兰燕",
+        "兰燕窝",
+        "燕窝邂",
+        "窝邂逅"
+      ],
+      "unique_aliases": [
+        "问兰燕窝邂逅试用礼",
+        "问兰燕窝邂逅",
+        "兰燕窝邂逅试",
+        "燕窝邂逅试用",
+        "窝邂逅试用礼",
+        "问兰燕窝邂",
+        "兰燕窝邂逅",
+        "燕窝邂逅试",
+        "窝邂逅试用",
+        "邂逅试用礼",
+        "兰燕窝邂",
+        "燕窝邂逅",
+        "窝邂逅试",
+        "邂逅试用",
+        "逅试用礼",
+        "燕窝邂",
+        "窝邂逅",
+        "邂逅试",
+        "逅试用",
+        "试用礼"
+      ],
+      "matched_images": []
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "merged_sources": [
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-import/products.jsonl",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-seed/products.json"
+      ],
+      "aliases": [
+        "紧致抗衰亮肤美白保湿滋养修护全效乳王",
+        "问兰灯塔皮脂膜精华乳",
+        "问兰灯塔皮脂",
+        "兰灯塔皮脂膜",
+        "灯塔皮脂膜精",
+        "塔皮脂膜精华",
+        "皮脂膜精华乳",
+        "紧致抗衰亮肤",
+        "致抗衰亮肤美",
+        "抗衰亮肤美白",
+        "衰亮肤美白保",
+        "亮肤美白保湿",
+        "肤美白保湿滋",
+        "美白保湿滋养",
+        "白保湿滋养修",
+        "保湿滋养修护",
+        "湿滋养修护全",
+        "滋养修护全效",
+        "养修护全效乳",
+        "修护全效乳王"
+      ],
+      "unique_aliases": [
+        "紧致抗衰亮肤美白保湿滋养修护全效乳王",
+        "问兰灯塔皮脂膜精华乳",
+        "问兰灯塔皮脂",
+        "兰灯塔皮脂膜",
+        "灯塔皮脂膜精",
+        "塔皮脂膜精华",
+        "皮脂膜精华乳",
+        "紧致抗衰亮肤",
+        "致抗衰亮肤美",
+        "抗衰亮肤美白",
+        "衰亮肤美白保",
+        "亮肤美白保湿",
+        "肤美白保湿滋",
+        "美白保湿滋养",
+        "白保湿滋养修",
+        "保湿滋养修护",
+        "湿滋养修护全",
+        "滋养修护全效",
+        "养修护全效乳",
+        "修护全效乳王"
+      ],
+      "matched_images": [
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/images/通用灯塔乳_01.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/详情页-assets/详情页.png",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页.jpg00_01.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_11.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_05.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_04.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_10.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_06.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_12.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_13.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_07.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_03.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_02.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_14.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_01.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_15.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_09.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_08.jpg",
+          "detected_type": "detail",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_08.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_09.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_13.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_07.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_06.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_12.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_04.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_10.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_11.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_05.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_01.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_15.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_14.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_02.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        },
+        {
+          "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳1/通用灯塔乳_03.jpg",
+          "detected_type": "gallery",
+          "score": 44.0,
+          "confidence": "low",
+          "basis": [
+            "unique_alias:灯塔"
+          ]
+        }
+      ]
+    },
+    {
+      "product_id": "5",
+      "product_name": "玻色因紧致面霜",
+      "category": "抗衰系列",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "merged_sources": [
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-import/products.jsonl",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-seed/products.json"
+      ],
+      "aliases": [
+        "玻色因紧致面霜",
+        "饱含30玻色因",
+        "玻色因紧致面",
+        "色因紧致面霜",
+        "饱含30玻色",
+        "含30玻色因",
+        "玻色因紧致",
+        "色因紧致面",
+        "因紧致面霜",
+        "饱含30玻",
+        "含30玻色",
+        "30玻色因",
+        "玻色因紧",
+        "色因紧致",
+        "因紧致面",
+        "紧致面霜",
+        "饱含30",
+        "含30玻",
+        "30玻色",
+        "0玻色因"
+      ],
+      "unique_aliases": [
+        "玻色因紧致面霜",
+        "饱含30玻色因",
+        "玻色因紧致面",
+        "色因紧致面霜",
+        "饱含30玻色",
+        "含30玻色因",
+        "玻色因紧致",
+        "色因紧致面",
+        "因紧致面霜",
+        "饱含30玻",
+        "含30玻色",
+        "30玻色因",
+        "玻色因紧",
+        "色因紧致",
+        "因紧致面",
+        "紧致面霜",
+        "饱含30",
+        "含30玻",
+        "30玻色",
+        "0玻色因"
+      ],
+      "matched_images": []
+    },
+    {
+      "product_id": "6",
+      "product_name": "问兰氨基酸洁面慕斯",
+      "category": "品牌推荐",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "merged_sources": [
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-import/products.jsonl",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-seed/products.json"
+      ],
+      "aliases": [
+        "问兰氨基酸洁面慕斯敏感肌温和舒缓清爽卸淡妆不紧绷",
+        "问兰氨基酸洁面慕斯",
+        "问兰氨基酸洁",
+        "兰氨基酸洁面",
+        "氨基酸洁面慕",
+        "基酸洁面慕斯",
+        "酸洁面慕斯敏",
+        "洁面慕斯敏感",
+        "面慕斯敏感肌",
+        "慕斯敏感肌温",
+        "斯敏感肌温和",
+        "敏感肌温和舒",
+        "感肌温和舒缓",
+        "肌温和舒缓清",
+        "温和舒缓清爽",
+        "和舒缓清爽卸",
+        "舒缓清爽卸淡",
+        "缓清爽卸淡妆",
+        "清爽卸淡妆不",
+        "爽卸淡妆不紧"
+      ],
+      "unique_aliases": [
+        "问兰氨基酸洁面慕斯敏感肌温和舒缓清爽卸淡妆不紧绷",
+        "问兰氨基酸洁面慕斯",
+        "问兰氨基酸洁",
+        "兰氨基酸洁面",
+        "氨基酸洁面慕",
+        "基酸洁面慕斯",
+        "酸洁面慕斯敏",
+        "洁面慕斯敏感",
+        "面慕斯敏感肌",
+        "慕斯敏感肌温",
+        "斯敏感肌温和",
+        "敏感肌温和舒",
+        "感肌温和舒缓",
+        "肌温和舒缓清",
+        "温和舒缓清爽",
+        "和舒缓清爽卸",
+        "舒缓清爽卸淡",
+        "缓清爽卸淡妆",
+        "清爽卸淡妆不",
+        "爽卸淡妆不紧"
+      ],
+      "matched_images": []
+    },
+    {
+      "product_id": "7",
+      "product_name": "问兰燕窝精萃露",
+      "category": "修复系列",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "merged_sources": [
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-import/products.jsonl",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-seed/products.json"
+      ],
+      "aliases": [
+        "问兰燕窝精萃露",
+        "深层修护不脱妆",
+        "问兰燕窝精萃",
+        "兰燕窝精萃露",
+        "深层修护不脱",
+        "层修护不脱妆",
+        "问兰燕窝精",
+        "兰燕窝精萃",
+        "燕窝精萃露",
+        "深层修护不",
+        "层修护不脱",
+        "修护不脱妆",
+        "问兰燕窝",
+        "兰燕窝精",
+        "燕窝精萃",
+        "窝精萃露",
+        "滋养紧致",
+        "长效保湿",
+        "清爽舒适",
+        "深层修护"
+      ],
+      "unique_aliases": [
+        "问兰燕窝精萃露",
+        "深层修护不脱妆",
+        "问兰燕窝精萃",
+        "兰燕窝精萃露",
+        "深层修护不脱",
+        "层修护不脱妆",
+        "问兰燕窝精",
+        "兰燕窝精萃",
+        "深层修护不",
+        "层修护不脱",
+        "修护不脱妆",
+        "兰燕窝精",
+        "滋养紧致",
+        "长效保湿",
+        "清爽舒适",
+        "深层修护",
+        "层修护不",
+        "修护不脱",
+        "护不脱妆",
+        "滋养紧"
+      ],
+      "matched_images": []
+    },
+    {
+      "product_id": "8",
+      "product_name": "绿魔方抗皱焕颜霜/",
+      "category": "魔方系列",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "merged_sources": [
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-import/products.jsonl",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-seed/products.json"
+      ],
+      "aliases": [
+        "清爽控油抗衰抗氧化抗细纹紧致亮肤",
+        "绿魔方抗皱焕颜霜",
+        "绿魔方抗皱焕",
+        "魔方抗皱焕颜",
+        "方抗皱焕颜霜",
+        "清爽控油抗衰",
+        "爽控油抗衰抗",
+        "控油抗衰抗氧",
+        "油抗衰抗氧化",
+        "抗衰抗氧化抗",
+        "衰抗氧化抗细",
+        "抗氧化抗细纹",
+        "氧化抗细纹紧",
+        "化抗细纹紧致",
+        "抗细纹紧致亮",
+        "细纹紧致亮肤",
+        "绿魔方抗皱",
+        "魔方抗皱焕",
+        "方抗皱焕颜",
+        "抗皱焕颜霜"
+      ],
+      "unique_aliases": [
+        "清爽控油抗衰抗氧化抗细纹紧致亮肤",
+        "绿魔方抗皱焕颜霜",
+        "绿魔方抗皱焕",
+        "魔方抗皱焕颜",
+        "方抗皱焕颜霜",
+        "清爽控油抗衰",
+        "爽控油抗衰抗",
+        "控油抗衰抗氧",
+        "油抗衰抗氧化",
+        "抗衰抗氧化抗",
+        "衰抗氧化抗细",
+        "抗氧化抗细纹",
+        "氧化抗细纹紧",
+        "化抗细纹紧致",
+        "抗细纹紧致亮",
+        "细纹紧致亮肤",
+        "绿魔方抗皱",
+        "魔方抗皱焕",
+        "方抗皱焕颜",
+        "抗皱焕颜霜"
+      ],
+      "matched_images": []
+    },
+    {
+      "product_id": "9",
+      "product_name": "小极光焕彩面霜",
+      "category": "淡斑亮白",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "merged_sources": [
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-import/products.jsonl",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-seed/products.json"
+      ],
+      "aliases": [
+        "小极光焕彩面霜",
+        "小极光焕彩面",
+        "极光焕彩面霜",
+        "小极光焕彩",
+        "极光焕彩面",
+        "光焕彩面霜",
+        "美白抗氧化",
+        "小极光焕",
+        "极光焕彩",
+        "光焕彩面",
+        "焕彩面霜",
+        "自然亮肤",
+        "美白抗氧",
+        "白抗氧化",
+        "安全淡斑",
+        "滋润保湿",
+        "小极光",
+        "极光焕",
+        "光焕彩",
+        "焕彩面"
+      ],
+      "unique_aliases": [
+        "小极光焕彩面霜",
+        "小极光焕彩面",
+        "极光焕彩面霜",
+        "小极光焕彩",
+        "极光焕彩面",
+        "光焕彩面霜",
+        "美白抗氧化",
+        "小极光焕",
+        "极光焕彩",
+        "光焕彩面",
+        "焕彩面霜",
+        "自然亮肤",
+        "美白抗氧",
+        "白抗氧化",
+        "安全淡斑",
+        "滋润保湿",
+        "小极光",
+        "极光焕",
+        "光焕彩",
+        "焕彩面"
+      ],
+      "matched_images": []
+    },
+    {
+      "product_id": "10",
+      "product_name": "皮脂膜精华液(次抛装)",
+      "category": "蜜露系列",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "merged_sources": [
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-import/products.jsonl",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-seed/products.json"
+      ],
+      "aliases": [
+        "敏感肌屏障修复退红镇敏过敏修护",
+        "皮脂膜精华液",
+        "敏感肌屏障修",
+        "感肌屏障修复",
+        "肌屏障修复退",
+        "屏障修复退红",
+        "障修复退红镇",
+        "修复退红镇敏",
+        "复退红镇敏过",
+        "退红镇敏过敏",
+        "红镇敏过敏修",
+        "镇敏过敏修护",
+        "皮脂膜精华",
+        "脂膜精华液",
+        "敏感肌屏障",
+        "感肌屏障修",
+        "肌屏障修复",
+        "屏障修复退",
+        "障修复退红",
+        "修复退红镇"
+      ],
+      "unique_aliases": [
+        "敏感肌屏障修复退红镇敏过敏修护",
+        "敏感肌屏障修",
+        "感肌屏障修复",
+        "肌屏障修复退",
+        "屏障修复退红",
+        "障修复退红镇",
+        "修复退红镇敏",
+        "复退红镇敏过",
+        "退红镇敏过敏",
+        "红镇敏过敏修",
+        "镇敏过敏修护",
+        "敏感肌屏障",
+        "感肌屏障修",
+        "肌屏障修复",
+        "屏障修复退",
+        "障修复退红",
+        "修复退红镇",
+        "复退红镇敏",
+        "退红镇敏过",
+        "红镇敏过敏"
+      ],
+      "matched_images": []
+    },
+    {
+      "product_id": "11",
+      "product_name": "问兰护肤尊享礼盒",
+      "category": "商务系列",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "merged_sources": [
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-import/products.jsonl",
+        "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/cloudbase-seed/products.json"
+      ],
+      "aliases": [
+        "问兰护肤尊享礼盒",
+        "问兰护肤尊享",
+        "兰护肤尊享礼",
+        "护肤尊享礼盒",
+        "问兰护肤尊",
+        "兰护肤尊享",
+        "护肤尊享礼",
+        "肤尊享礼盒",
+        "问兰护肤",
+        "兰护肤尊",
+        "护肤尊享",
+        "肤尊享礼",
+        "尊享礼盒",
+        "员工福利",
+        "客户随礼",
+        "客户体验",
+        "亲友馈赠",
+        "问兰护",
+        "兰护肤",
+        "护肤尊"
+      ],
+      "unique_aliases": [
+        "问兰护肤尊享礼盒",
+        "问兰护肤尊享",
+        "兰护肤尊享礼",
+        "护肤尊享礼盒",
+        "问兰护肤尊",
+        "兰护肤尊享",
+        "护肤尊享礼",
+        "肤尊享礼盒",
+        "问兰护肤",
+        "兰护肤尊",
+        "护肤尊享",
+        "肤尊享礼",
+        "尊享礼盒",
+        "员工福利",
+        "客户随礼",
+        "客户体验",
+        "亲友馈赠",
+        "问兰护",
+        "兰护肤",
+        "护肤尊"
+      ],
+      "matched_images": []
+    }
+  ],
+  "detail_images": [
+    {
+      "product_id": "1",
+      "product_name": "镜像案例库奢护/体验理套装+赠瞬间抗皱神器",
+      "category": "品牌推荐",
+      "detail_index": 1,
+      "detail_preview": "",
+      "json_image_path": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774074019910_9231dd64d8335181.jpg",
+      "matched_local_path": "",
+      "relative_path": "",
+      "extension": ".jpg",
+      "size_bytes": "",
+      "width": "",
+      "height": "",
+      "detected_type": "detail",
+      "match_confidence": "unmatched",
+      "match_basis": "[\"existing_detail_images\"]",
+      "source_type": "json_detail_only",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "json 中存在详情图路径，但未匹配到本地素材"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": 1,
+      "detail_preview": "",
+      "json_image_path": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774074009052_d9731bb253058045.jpg",
+      "matched_local_path": "",
+      "relative_path": "",
+      "extension": ".jpg",
+      "size_bytes": "",
+      "width": "",
+      "height": "",
+      "detected_type": "detail",
+      "match_confidence": "unmatched",
+      "match_basis": "[\"existing_detail_images\"]",
+      "source_type": "json_detail_only",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "json 中存在详情图路径，但未匹配到本地素材"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": "local-1",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_11.jpg",
+      "relative_path": "抗皱保湿精华液/抗皱保湿精华液详情页/详情页_11.jpg",
+      "extension": ".jpg",
+      "size_bytes": 316355,
+      "width": 800,
+      "height": 706,
+      "detected_type": "detail",
+      "match_confidence": "high",
+      "match_basis": "[\"unique_alias:抗皱保湿精华液\", \"alias:抗皱保湿精华\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": "local-2",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_05.jpg",
+      "relative_path": "抗皱保湿精华液/抗皱保湿精华液详情页/详情页_05.jpg",
+      "extension": ".jpg",
+      "size_bytes": 235549,
+      "width": 800,
+      "height": 734,
+      "detected_type": "detail",
+      "match_confidence": "high",
+      "match_basis": "[\"unique_alias:抗皱保湿精华液\", \"alias:抗皱保湿精华\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": "local-3",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_04.jpg",
+      "relative_path": "抗皱保湿精华液/抗皱保湿精华液详情页/详情页_04.jpg",
+      "extension": ".jpg",
+      "size_bytes": 351002,
+      "width": 800,
+      "height": 868,
+      "detected_type": "detail",
+      "match_confidence": "high",
+      "match_basis": "[\"unique_alias:抗皱保湿精华液\", \"alias:抗皱保湿精华\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": "local-4",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_10.jpg",
+      "relative_path": "抗皱保湿精华液/抗皱保湿精华液详情页/详情页_10.jpg",
+      "extension": ".jpg",
+      "size_bytes": 621124,
+      "width": 800,
+      "height": 838,
+      "detected_type": "detail",
+      "match_confidence": "high",
+      "match_basis": "[\"unique_alias:抗皱保湿精华液\", \"alias:抗皱保湿精华\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": "local-5",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_06.jpg",
+      "relative_path": "抗皱保湿精华液/抗皱保湿精华液详情页/详情页_06.jpg",
+      "extension": ".jpg",
+      "size_bytes": 429713,
+      "width": 800,
+      "height": 846,
+      "detected_type": "detail",
+      "match_confidence": "high",
+      "match_basis": "[\"unique_alias:抗皱保湿精华液\", \"alias:抗皱保湿精华\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": "local-6",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_12.jpg",
+      "relative_path": "抗皱保湿精华液/抗皱保湿精华液详情页/详情页_12.jpg",
+      "extension": ".jpg",
+      "size_bytes": 306814,
+      "width": 800,
+      "height": 835,
+      "detected_type": "detail",
+      "match_confidence": "high",
+      "match_basis": "[\"unique_alias:抗皱保湿精华液\", \"alias:抗皱保湿精华\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": "local-7",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_13.jpg",
+      "relative_path": "抗皱保湿精华液/抗皱保湿精华液详情页/详情页_13.jpg",
+      "extension": ".jpg",
+      "size_bytes": 394286,
+      "width": 800,
+      "height": 810,
+      "detected_type": "detail",
+      "match_confidence": "high",
+      "match_basis": "[\"unique_alias:抗皱保湿精华液\", \"alias:抗皱保湿精华\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": "local-8",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_07.jpg",
+      "relative_path": "抗皱保湿精华液/抗皱保湿精华液详情页/详情页_07.jpg",
+      "extension": ".jpg",
+      "size_bytes": 420246,
+      "width": 800,
+      "height": 660,
+      "detected_type": "detail",
+      "match_confidence": "high",
+      "match_basis": "[\"unique_alias:抗皱保湿精华液\", \"alias:抗皱保湿精华\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": "local-9",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_03.jpg",
+      "relative_path": "抗皱保湿精华液/抗皱保湿精华液详情页/详情页_03.jpg",
+      "extension": ".jpg",
+      "size_bytes": 646271,
+      "width": 800,
+      "height": 1169,
+      "detected_type": "detail",
+      "match_confidence": "high",
+      "match_basis": "[\"unique_alias:抗皱保湿精华液\", \"alias:抗皱保湿精华\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": "local-10",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_02.jpg",
+      "relative_path": "抗皱保湿精华液/抗皱保湿精华液详情页/详情页_02.jpg",
+      "extension": ".jpg",
+      "size_bytes": 495234,
+      "width": 800,
+      "height": 800,
+      "detected_type": "detail",
+      "match_confidence": "high",
+      "match_basis": "[\"unique_alias:抗皱保湿精华液\", \"alias:抗皱保湿精华\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": "local-11",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_14.jpg",
+      "relative_path": "抗皱保湿精华液/抗皱保湿精华液详情页/详情页_14.jpg",
+      "extension": ".jpg",
+      "size_bytes": 90309,
+      "width": 800,
+      "height": 195,
+      "detected_type": "detail",
+      "match_confidence": "high",
+      "match_basis": "[\"unique_alias:抗皱保湿精华液\", \"alias:抗皱保湿精华\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": "local-12",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_01.jpg",
+      "relative_path": "抗皱保湿精华液/抗皱保湿精华液详情页/详情页_01.jpg",
+      "extension": ".jpg",
+      "size_bytes": 397679,
+      "width": 800,
+      "height": 802,
+      "detected_type": "detail",
+      "match_confidence": "high",
+      "match_basis": "[\"unique_alias:抗皱保湿精华液\", \"alias:抗皱保湿精华\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": "local-13",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_09.jpg",
+      "relative_path": "抗皱保湿精华液/抗皱保湿精华液详情页/详情页_09.jpg",
+      "extension": ".jpg",
+      "size_bytes": 427439,
+      "width": 800,
+      "height": 817,
+      "detected_type": "detail",
+      "match_confidence": "high",
+      "match_basis": "[\"unique_alias:抗皱保湿精华液\", \"alias:抗皱保湿精华\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "2",
+      "product_name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "category": "品牌推荐",
+      "detail_index": "local-14",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱保湿精华液/抗皱保湿精华液详情页/详情页_08.jpg",
+      "relative_path": "抗皱保湿精华液/抗皱保湿精华液详情页/详情页_08.jpg",
+      "extension": ".jpg",
+      "size_bytes": 406506,
+      "width": 800,
+      "height": 954,
+      "detected_type": "detail",
+      "match_confidence": "high",
+      "match_basis": "[\"unique_alias:抗皱保湿精华液\", \"alias:抗皱保湿精华\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "3",
+      "product_name": "问兰燕窝邂逅试用礼",
+      "category": "活动产品",
+      "detail_index": "",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "",
+      "relative_path": "",
+      "extension": "",
+      "size_bytes": "",
+      "width": "",
+      "height": "",
+      "detected_type": "detail",
+      "match_confidence": "missing",
+      "match_basis": "[]",
+      "source_type": "missing_detail",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "缺少详情图"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": 1,
+      "detail_preview": "",
+      "json_image_path": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267110325_1f843d22fc3b46a7.png",
+      "matched_local_path": "",
+      "relative_path": "",
+      "extension": ".png",
+      "size_bytes": "",
+      "width": "",
+      "height": "",
+      "detected_type": "detail",
+      "match_confidence": "unmatched",
+      "match_basis": "[\"existing_detail_images\"]",
+      "source_type": "json_detail_only",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "json 中存在详情图路径，但未匹配到本地素材"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-1",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/详情页-assets/详情页.png",
+      "relative_path": "男士灯塔乳/详情页-assets/详情页.png",
+      "extension": ".png",
+      "size_bytes": 11829632,
+      "width": 1080,
+      "height": 16236,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-2",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页.jpg00_01.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页.jpg00_01.jpg",
+      "extension": ".jpg",
+      "size_bytes": 455118,
+      "width": 1080,
+      "height": 1079,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-3",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_11.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_11.jpg",
+      "extension": ".jpg",
+      "size_bytes": 480715,
+      "width": 1080,
+      "height": 1259,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-4",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_05.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_05.jpg",
+      "extension": ".jpg",
+      "size_bytes": 311611,
+      "width": 1080,
+      "height": 1207,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-5",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_04.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_04.jpg",
+      "extension": ".jpg",
+      "size_bytes": 738632,
+      "width": 1080,
+      "height": 1082,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-6",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_10.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_10.jpg",
+      "extension": ".jpg",
+      "size_bytes": 340677,
+      "width": 1080,
+      "height": 941,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-7",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_06.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_06.jpg",
+      "extension": ".jpg",
+      "size_bytes": 344372,
+      "width": 1080,
+      "height": 998,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-8",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_12.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_12.jpg",
+      "extension": ".jpg",
+      "size_bytes": 323545,
+      "width": 1080,
+      "height": 887,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-9",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_13.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_13.jpg",
+      "extension": ".jpg",
+      "size_bytes": 275482,
+      "width": 1080,
+      "height": 881,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-10",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_07.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_07.jpg",
+      "extension": ".jpg",
+      "size_bytes": 345437,
+      "width": 1080,
+      "height": 1094,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-11",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_03.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_03.jpg",
+      "extension": ".jpg",
+      "size_bytes": 432930,
+      "width": 1080,
+      "height": 933,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-12",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_02.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_02.jpg",
+      "extension": ".jpg",
+      "size_bytes": 516170,
+      "width": 1080,
+      "height": 1265,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-13",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_14.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_14.jpg",
+      "extension": ".jpg",
+      "size_bytes": 466910,
+      "width": 1080,
+      "height": 1081,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-14",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_01.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_01.jpg",
+      "extension": ".jpg",
+      "size_bytes": 538333,
+      "width": 1080,
+      "height": 1079,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-15",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_15.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_15.jpg",
+      "extension": ".jpg",
+      "size_bytes": 279386,
+      "width": 1080,
+      "height": 1068,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-16",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_09.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_09.jpg",
+      "extension": ".jpg",
+      "size_bytes": 448937,
+      "width": 1080,
+      "height": 1141,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "4",
+      "product_name": "问兰灯塔皮脂膜精华乳",
+      "category": "灯塔系列",
+      "detail_index": "local-17",
+      "detail_preview": "",
+      "json_image_path": "",
+      "matched_local_path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/男士灯塔乳/灯塔乳/详情页_08.jpg",
+      "relative_path": "男士灯塔乳/灯塔乳/详情页_08.jpg",
+      "extension": ".jpg",
+      "size_bytes": 386951,
+      "width": 1080,
+      "height": 1320,
+      "detected_type": "detail",
+      "match_confidence": "low",
+      "match_basis": "[\"unique_alias:灯塔\"]",
+      "source_type": "local_detail_without_json_path",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "本地匹配到详情图，但 json 中没有对应详情图路径"
+    },
+    {
+      "product_id": "5",
+      "product_name": "玻色因紧致面霜",
+      "category": "抗衰系列",
+      "detail_index": 1,
+      "detail_preview": "",
+      "json_image_path": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267056975_6d2efb7b60dadae8.png",
+      "matched_local_path": "",
+      "relative_path": "",
+      "extension": ".png",
+      "size_bytes": "",
+      "width": "",
+      "height": "",
+      "detected_type": "detail",
+      "match_confidence": "unmatched",
+      "match_basis": "[\"existing_detail_images\"]",
+      "source_type": "json_detail_only",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "json 中存在详情图路径，但未匹配到本地素材"
+    },
+    {
+      "product_id": "6",
+      "product_name": "问兰氨基酸洁面慕斯",
+      "category": "品牌推荐",
+      "detail_index": 1,
+      "detail_preview": "",
+      "json_image_path": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016199942_dddf0eef5b8d7014.png",
+      "matched_local_path": "",
+      "relative_path": "",
+      "extension": ".png",
+      "size_bytes": "",
+      "width": "",
+      "height": "",
+      "detected_type": "detail",
+      "match_confidence": "unmatched",
+      "match_basis": "[\"existing_detail_images\"]",
+      "source_type": "json_detail_only",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "json 中存在详情图路径，但未匹配到本地素材"
+    },
+    {
+      "product_id": "7",
+      "product_name": "问兰燕窝精萃露",
+      "category": "修复系列",
+      "detail_index": 1,
+      "detail_preview": "",
+      "json_image_path": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016137563_b18f4aff630ec286.png",
+      "matched_local_path": "",
+      "relative_path": "",
+      "extension": ".png",
+      "size_bytes": "",
+      "width": "",
+      "height": "",
+      "detected_type": "detail",
+      "match_confidence": "unmatched",
+      "match_basis": "[\"existing_detail_images\"]",
+      "source_type": "json_detail_only",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "json 中存在详情图路径，但未匹配到本地素材"
+    },
+    {
+      "product_id": "8",
+      "product_name": "绿魔方抗皱焕颜霜/",
+      "category": "魔方系列",
+      "detail_index": 1,
+      "detail_preview": "",
+      "json_image_path": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016064737_b4322a528a820ad4.png",
+      "matched_local_path": "",
+      "relative_path": "",
+      "extension": ".png",
+      "size_bytes": "",
+      "width": "",
+      "height": "",
+      "detected_type": "detail",
+      "match_confidence": "unmatched",
+      "match_basis": "[\"existing_detail_images\"]",
+      "source_type": "json_detail_only",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "json 中存在详情图路径，但未匹配到本地素材"
+    },
+    {
+      "product_id": "9",
+      "product_name": "小极光焕彩面霜",
+      "category": "淡斑亮白",
+      "detail_index": 1,
+      "detail_preview": "",
+      "json_image_path": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016004460_187ebf5a2880161c.png",
+      "matched_local_path": "",
+      "relative_path": "",
+      "extension": ".png",
+      "size_bytes": "",
+      "width": "",
+      "height": "",
+      "detected_type": "detail",
+      "match_confidence": "unmatched",
+      "match_basis": "[\"existing_detail_images\"]",
+      "source_type": "json_detail_only",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "json 中存在详情图路径，但未匹配到本地素材"
+    },
+    {
+      "product_id": "10",
+      "product_name": "皮脂膜精华液(次抛装)",
+      "category": "蜜露系列",
+      "detail_index": 1,
+      "detail_preview": "",
+      "json_image_path": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775015902443_d02ca95a69562f5d.png",
+      "matched_local_path": "",
+      "relative_path": "",
+      "extension": ".png",
+      "size_bytes": "",
+      "width": "",
+      "height": "",
+      "detected_type": "detail",
+      "match_confidence": "unmatched",
+      "match_basis": "[\"existing_detail_images\"]",
+      "source_type": "json_detail_only",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "json 中存在详情图路径，但未匹配到本地素材"
+    },
+    {
+      "product_id": "11",
+      "product_name": "问兰护肤尊享礼盒",
+      "category": "商务系列",
+      "detail_index": 1,
+      "detail_preview": "",
+      "json_image_path": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775013363041_1a43e5020c2494d4.png",
+      "matched_local_path": "",
+      "relative_path": "",
+      "extension": ".png",
+      "size_bytes": "",
+      "width": "",
+      "height": "",
+      "detected_type": "detail",
+      "match_confidence": "unmatched",
+      "match_basis": "[\"existing_detail_images\"]",
+      "source_type": "json_detail_only",
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "json 中存在详情图路径，但未匹配到本地素材"
+    }
+  ],
+  "unmatched_images": [
+    {
+      "file_name": "主图2.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/小程序组合装/主图2.jpg",
+      "extension": ".jpg",
+      "size_bytes": 504768,
+      "sha1": "8e058b6cc929dcd5ee5907aa223884d92c59cd6c",
+      "detected_type": "cover",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "主图222.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/小程序组合装/主图222.png",
+      "extension": ".png",
+      "size_bytes": 861382,
+      "sha1": "2867df8bb93f0fb76c83e2ab4c55fc8439bdfa77",
+      "detected_type": "cover",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "主图.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/小程序组合装/主图.jpg",
+      "extension": ".jpg",
+      "size_bytes": 511539,
+      "sha1": "1d2b00095f102930d490bb91c6d3a707bc62778d",
+      "detected_type": "cover",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "主图2.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/小程序组合装/主图2-assets/主图2.png",
+      "extension": ".png",
+      "size_bytes": 871622,
+      "sha1": "e2a0ce53c71bcf7f39d00b0ff2ed327851c16a35",
+      "detected_type": "cover",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "主图.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/小程序组合装/主图-assets/主图.png",
+      "extension": ".png",
+      "size_bytes": 858374,
+      "sha1": "de11eb2a8552e21592002303bd3db30cd0c86db4",
+      "detected_type": "cover",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "95cf51fc3578f5c1512fd15bd1d8c4b.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/95cf51fc3578f5c1512fd15bd1d8c4b.jpg",
+      "extension": ".jpg",
+      "size_bytes": 227718,
+      "sha1": "08423333ef933f561163ab6d39c7f1ccbafe4837",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "燕窝.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/燕窝.png",
+      "extension": ".png",
+      "size_bytes": 2842116,
+      "sha1": "15b859ea5f228b9bdf5c0aea016ac75cae64ccc3",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "4e0e71baf4371a169cea4d11194f524.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/4e0e71baf4371a169cea4d11194f524.png",
+      "extension": ".png",
+      "size_bytes": 4021399,
+      "sha1": "3a1ca86d94d982bfd59bbd853ca96305a730dafb",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "e314cfe287f10105090d0df28fe103a.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/e314cfe287f10105090d0df28fe103a.jpg",
+      "extension": ".jpg",
+      "size_bytes": 310210,
+      "sha1": "b2ce45cd743741330601830778364613b8e3f5d2",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "抗皱.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/抗皱.png",
+      "extension": ".png",
+      "size_bytes": 3407269,
+      "sha1": "365479ad7e6596ff56de8b86379d31a26b42bf99",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "975d5821b0abf52d55aceefe6ab96b0.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/975d5821b0abf52d55aceefe6ab96b0.png",
+      "extension": ".png",
+      "size_bytes": 11872788,
+      "sha1": "938f8bd666c05ad43827570de7607bd6bb17c41e",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "a99577c3e59cbb55e6f1e9bc0985240.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/a99577c3e59cbb55e6f1e9bc0985240.png",
+      "extension": ".png",
+      "size_bytes": 16343829,
+      "sha1": "15e3e8179fe42216f27ba56d35584dafd51be9cb",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "小样修护2.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/小样修护2.png",
+      "extension": ".png",
+      "size_bytes": 936109,
+      "sha1": "83c9691b833e246371fefa26a646fd56acacb3dd",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "袋子效果.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/袋子效果.png",
+      "extension": ".png",
+      "size_bytes": 1640367,
+      "sha1": "cdc3a59144833ef6edfd79ac6491961b4f320d01",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "2628384ba7dbebce9daeed44cc7e84d.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/2628384ba7dbebce9daeed44cc7e84d.png",
+      "extension": ".png",
+      "size_bytes": 10494057,
+      "sha1": "a1a961a075b6844b719c9168a3d3b1c5ce359518",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "1a4886e0efd9d55be6a5d8cfc528f50.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/1a4886e0efd9d55be6a5d8cfc528f50.png",
+      "extension": ".png",
+      "size_bytes": 3988160,
+      "sha1": "ee388b852eef879f65ec586df07a630bff2e9e9e",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "皮脂膜.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜.png",
+      "extension": ".png",
+      "size_bytes": 2415080,
+      "sha1": "79ce9e19beb29b0357a1741f072357d116b29ebf",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页_05.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/详情页/images/详情页_05.jpg",
+      "extension": ".jpg",
+      "size_bytes": 678505,
+      "sha1": "605ece787a4eb1d99563cee05914c5017e7cd78f",
+      "detected_type": "gallery",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页_04.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/详情页/images/详情页_04.jpg",
+      "extension": ".jpg",
+      "size_bytes": 594955,
+      "sha1": "e830f3aff8d8ef18ee651165ae76a23ca2460add",
+      "detected_type": "gallery",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页_03.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/详情页/images/详情页_03.jpg",
+      "extension": ".jpg",
+      "size_bytes": 445847,
+      "sha1": "dfb63b1dff3dcd6f3bb1daec2f5ea9a8d6b4409c",
+      "detected_type": "gallery",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页_02.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/详情页/images/详情页_02.jpg",
+      "extension": ".jpg",
+      "size_bytes": 559458,
+      "sha1": "f6cab734823d2921550231030e02541dc2f6930b",
+      "detected_type": "gallery",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页_01.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/详情页/images/详情页_01.jpg",
+      "extension": ".jpg",
+      "size_bytes": 541264,
+      "sha1": "5d63a05824c17b199fdacaaa8edc37c74672dcda",
+      "detected_type": "gallery",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页_05.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/images/详情页_05.jpg",
+      "extension": ".jpg",
+      "size_bytes": 678505,
+      "sha1": "605ece787a4eb1d99563cee05914c5017e7cd78f",
+      "detected_type": "gallery",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页_04.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/images/详情页_04.jpg",
+      "extension": ".jpg",
+      "size_bytes": 594955,
+      "sha1": "e830f3aff8d8ef18ee651165ae76a23ca2460add",
+      "detected_type": "gallery",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页_03.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/images/详情页_03.jpg",
+      "extension": ".jpg",
+      "size_bytes": 445847,
+      "sha1": "dfb63b1dff3dcd6f3bb1daec2f5ea9a8d6b4409c",
+      "detected_type": "gallery",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页_02.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/images/详情页_02.jpg",
+      "extension": ".jpg",
+      "size_bytes": 559458,
+      "sha1": "f6cab734823d2921550231030e02541dc2f6930b",
+      "detected_type": "gallery",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页_01.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/images/详情页_01.jpg",
+      "extension": ".jpg",
+      "size_bytes": 541264,
+      "sha1": "5d63a05824c17b199fdacaaa8edc37c74672dcda",
+      "detected_type": "gallery",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "皮脂膜精华液内袋22.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/PDF转曲/皮脂膜精华液内袋22.png",
+      "extension": ".png",
+      "size_bytes": 397496,
+      "sha1": "384dd5f68aa0a389b85d6bbab69789d92fa93373",
+      "detected_type": "unknown",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "详情页.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/详情页-assets/详情页.png",
+      "extension": ".png",
+      "size_bytes": 6087246,
+      "sha1": "06de3e73e1b5a552d149c0aad54351bdc6f620b7",
+      "detected_type": "detail",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "备案证明.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/备案信息/备案证明.png",
+      "extension": ".png",
+      "size_bytes": 87201,
+      "sha1": "1561d760dc48d0516df09e2ed6bd1c47165c86f5",
+      "detected_type": "unknown",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_06.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_06.jpg",
+      "extension": ".jpg",
+      "size_bytes": 384843,
+      "sha1": "1a93638e202d3209cfdc6ce5c9a56b034f5bdb25",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_12.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_12.jpg",
+      "extension": ".jpg",
+      "size_bytes": 231308,
+      "sha1": "026bedfa5051914a209c0b1ab8488954f3043acf",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_13.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_13.jpg",
+      "extension": ".jpg",
+      "size_bytes": 361207,
+      "sha1": "2a95f568d557c76af9b139056f5a892d6ea409fd",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_07.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_07.jpg",
+      "extension": ".jpg",
+      "size_bytes": 286455,
+      "sha1": "57c03af52aee0d9f119f0abd65caac96aec455b6",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_11.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_11.jpg",
+      "extension": ".jpg",
+      "size_bytes": 525135,
+      "sha1": "0707624d561229218a608f00d9b84360716ce5f2",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_05.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_05.jpg",
+      "extension": ".jpg",
+      "size_bytes": 283980,
+      "sha1": "da89cae88bbd19ba32367a1d56d7e7128de5e937",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_04.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_04.jpg",
+      "extension": ".jpg",
+      "size_bytes": 418104,
+      "sha1": "5d97afdefec2d730be510072d5685486e178ebed",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_10.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_10.jpg",
+      "extension": ".jpg",
+      "size_bytes": 786458,
+      "sha1": "82247d62bade9d51cee8426190320147b710471d",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_14.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_14.jpg",
+      "extension": ".jpg",
+      "size_bytes": 261288,
+      "sha1": "211a69fcb5f263b317fbe1b50a39efbc9c998765",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_01.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_01.jpg",
+      "extension": ".jpg",
+      "size_bytes": 297246,
+      "sha1": "f1a9243ef58e744cb908e1e900114a755173cb29",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_15.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_15.jpg",
+      "extension": ".jpg",
+      "size_bytes": 307426,
+      "sha1": "60c27d2c73df35019b27555095268bdc41276db8",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_03.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_03.jpg",
+      "extension": ".jpg",
+      "size_bytes": 273371,
+      "sha1": "4e1b7a1ed2164d73e23efc942899772877936f2c",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_16.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_16.jpg",
+      "extension": ".jpg",
+      "size_bytes": 42341,
+      "sha1": "36a6526a763ad2265b8e3e03abf23ba8fa077d31",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_02.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_02.jpg",
+      "extension": ".jpg",
+      "size_bytes": 9705,
+      "sha1": "245a4ebc35cc318cfa97c34e5e3782c2d1708774",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_09.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_09.jpg",
+      "extension": ".jpg",
+      "size_bytes": 543312,
+      "sha1": "8ff9fe8b110a76d1fcce0ff92fbc84230771e7fd",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "补水皮脂膜_08.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/皮脂膜精华液/产品详情页/补水皮脂膜_08.jpg",
+      "extension": ".jpg",
+      "size_bytes": 222795,
+      "sha1": "72b418e81e833640a0e461431edb449f4e5eb26b",
+      "detected_type": "detail",
+      "top_candidates": "[{\"product_id\": \"2\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}, {\"product_id\": \"10\", \"score\": 32.0, \"basis\": [\"alias:皮脂膜精华液\"]}]"
+    },
+    {
+      "file_name": "主图03.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/燕窝精萃露/主图03.png",
+      "extension": ".png",
+      "size_bytes": 648307,
+      "sha1": "4f4c6ee6d8cc45871f61026e23027ad37f400026",
+      "detected_type": "cover",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "主图02.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/燕窝精萃露/主图02.png",
+      "extension": ".png",
+      "size_bytes": 295545,
+      "sha1": "e7e46bb32cfed2b70afe1fc0a801e2926ddfff06",
+      "detected_type": "cover",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "主图01.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/燕窝精萃露/主图01.png",
+      "extension": ".png",
+      "size_bytes": 768321,
+      "sha1": "4d9f7f7c732e7bb1b8b8839256dddf39e94743e3",
+      "detected_type": "cover",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页01.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/燕窝精萃露/详情页01.png",
+      "extension": ".png",
+      "size_bytes": 724445,
+      "sha1": "f4dc70450e9fef88a65615733233c140391c8855",
+      "detected_type": "detail",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页00.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/燕窝精萃露/详情页00.png",
+      "extension": ".png",
+      "size_bytes": 3823194,
+      "sha1": "16f3a0babf4fc0b004319b2ecaa11679f9529aec",
+      "detected_type": "detail",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页02.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/燕窝精萃露/详情页02.png",
+      "extension": ".png",
+      "size_bytes": 805276,
+      "sha1": "0e125b1bbd23f094d2930706f8b9bf4d9950e554",
+      "detected_type": "detail",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页03.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/燕窝精萃露/详情页03.png",
+      "extension": ".png",
+      "size_bytes": 293957,
+      "sha1": "ebd3d9d2fa4f86548cd899f7d2356de7bb6f5fea",
+      "detected_type": "detail",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页07.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/燕窝精萃露/详情页07.png",
+      "extension": ".png",
+      "size_bytes": 371324,
+      "sha1": "7d1218dffb48509355427d1d6fabae3c6a9a0115",
+      "detected_type": "detail",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页06.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/燕窝精萃露/详情页06.png",
+      "extension": ".png",
+      "size_bytes": 545530,
+      "sha1": "0dde58b7486eaabbe7fad5bd07658f55e862bad1",
+      "detected_type": "detail",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页04.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/燕窝精萃露/详情页04.png",
+      "extension": ".png",
+      "size_bytes": 461361,
+      "sha1": "d09dfebc27a7555db118781bff7d4a0ca81ae1cc",
+      "detected_type": "detail",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "详情页05.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/燕窝精萃露/详情页05.png",
+      "extension": ".png",
+      "size_bytes": 557362,
+      "sha1": "6860d74c91287a02a6dabb9cad291b3bd737cd42",
+      "detected_type": "detail",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "e8c312bc99414e343c1cf827d08ded63.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/e8c312bc99414e343c1cf827d08ded63.jpg",
+      "extension": ".jpg",
+      "size_bytes": 11641091,
+      "sha1": "8d8a77f0d0a9a7c4b85fb64f89a1cab5aca285d7",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "1a30d1d281dbee95c4eecacf3f35cfcc.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/1a30d1d281dbee95c4eecacf3f35cfcc.jpg",
+      "extension": ".jpg",
+      "size_bytes": 3132911,
+      "sha1": "a5f8be2cab3a6d8d961c8b3e25e0272af7f39656",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "63bbe9fdffaa04adad7d2d80fa53f77d.png",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/63bbe9fdffaa04adad7d2d80fa53f77d.png",
+      "extension": ".png",
+      "size_bytes": 50827976,
+      "sha1": "2085d683e5855113d186616987eefadd18e9456b",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "82e87aa7af39a296d64e8228fbe02aad.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/82e87aa7af39a296d64e8228fbe02aad.jpg",
+      "extension": ".jpg",
+      "size_bytes": 8175391,
+      "sha1": "81a1f91860a79e5363e505f7457a7c7acfda72fe",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "e1928b457f1a5e5d21ccfd43fb4969c0.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/e1928b457f1a5e5d21ccfd43fb4969c0.jpg",
+      "extension": ".jpg",
+      "size_bytes": 209476,
+      "sha1": "138a8bf40c4b4d149d0e1c4ff92074b2cecf99a0",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "1bb46fef0a3152c78d5b7211d49868f7.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/1bb46fef0a3152c78d5b7211d49868f7.jpg",
+      "extension": ".jpg",
+      "size_bytes": 4566401,
+      "sha1": "c0a7624a6dfbb5fb4bc09d485a4547fbd554f685",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "f15133e0c3e524a938f05d64bb9700b5.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/f15133e0c3e524a938f05d64bb9700b5.jpg",
+      "extension": ".jpg",
+      "size_bytes": 2859858,
+      "sha1": "b4e2ae29e78cb0fd9bde5ce790996a66ae384ddc",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "a890dd1d3b3744604a948b5527410763.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/a890dd1d3b3744604a948b5527410763.jpg",
+      "extension": ".jpg",
+      "size_bytes": 5070461,
+      "sha1": "6af9cf0c2a49b77a1588cceb54c8a2c1a04a9b55",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "aa945523f1a60ba6fc1bbe098f308c34.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/aa945523f1a60ba6fc1bbe098f308c34.jpg",
+      "extension": ".jpg",
+      "size_bytes": 180363,
+      "sha1": "f4a9a391c5098787d21e91bbc8dff05a2dfc40cf",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "9c9da6d6448c4d68662ce1e0102f97a1.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/9c9da6d6448c4d68662ce1e0102f97a1.jpg",
+      "extension": ".jpg",
+      "size_bytes": 905915,
+      "sha1": "16cea381425cbd4753003187faba0dd97cbd2d17",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "18f594f992c6ef59bd2467ba3b5cd344.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/18f594f992c6ef59bd2467ba3b5cd344.jpg",
+      "extension": ".jpg",
+      "size_bytes": 3513865,
+      "sha1": "7293f1eb740c13d54a8bf7cd0261e5bbff42e3e1",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "69f45e035a6d2f03e22201f5f8f2d9e5.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/69f45e035a6d2f03e22201f5f8f2d9e5.jpg",
+      "extension": ".jpg",
+      "size_bytes": 1014993,
+      "sha1": "f938f78c7aac3628387f80756552cfde1a3002a6",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "6d4b308214e7762fdb1997ddd96b56e9.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/6d4b308214e7762fdb1997ddd96b56e9.jpg",
+      "extension": ".jpg",
+      "size_bytes": 7250815,
+      "sha1": "7589da078d673165ddaef7dcbff54baba31b5a05",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "0685be60f420d7f4b1bb11f9be92be1b.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/0685be60f420d7f4b1bb11f9be92be1b.jpg",
+      "extension": ".jpg",
+      "size_bytes": 143233,
+      "sha1": "6886bb10ceab9ebb8165b5c7c314c9c17e6ff8cc",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "ba96615ae933b01c0e352fc4dbaa482e.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/ba96615ae933b01c0e352fc4dbaa482e.jpg",
+      "extension": ".jpg",
+      "size_bytes": 863342,
+      "sha1": "e79c55d8be12c2b85f48ffb8735e73fff224764c",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "325c4b54df2bf19eb06bd37d43a89a74.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/325c4b54df2bf19eb06bd37d43a89a74.jpg",
+      "extension": ".jpg",
+      "size_bytes": 11462082,
+      "sha1": "4f50b790cf42529208f082820e5e6a5230246ed0",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "571f004baba8ccd0d744344b568ac9ec.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/571f004baba8ccd0d744344b568ac9ec.jpg",
+      "extension": ".jpg",
+      "size_bytes": 185146,
+      "sha1": "b076f6f7a8a19860540ac8b3ad7fb9d0304d1896",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "5a130641049ae8c93a3680eaf0799197.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/5a130641049ae8c93a3680eaf0799197.jpg",
+      "extension": ".jpg",
+      "size_bytes": 912163,
+      "sha1": "c2d7c4a3a855121b74b32f7413cadb11a154869f",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "0f33fe0d1e0f816b891ce2c522d31ea6.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/0f33fe0d1e0f816b891ce2c522d31ea6.jpg",
+      "extension": ".jpg",
+      "size_bytes": 4060349,
+      "sha1": "697e63ba33ea85ef801fbddd875947f1b4c6402e",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "11380d4b3f3a3668c9450b72ff072f9f.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/11380d4b3f3a3668c9450b72ff072f9f.jpg",
+      "extension": ".jpg",
+      "size_bytes": 4958483,
+      "sha1": "40e3bcb48b3bdbe9ea86accdac2c8823e7e7d705",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "a9808ebda387e8c4f6b0120bad07bc14.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/a9808ebda387e8c4f6b0120bad07bc14.jpg",
+      "extension": ".jpg",
+      "size_bytes": 1055072,
+      "sha1": "6d08d663c89a7d46645364d31153c935ad897ed5",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    },
+    {
+      "file_name": "a45d27e8b223bc231fe7db85fd75d4f0.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/蔚总照片素材/a45d27e8b223bc231fe7db85fd75d4f0.jpg",
+      "extension": ".jpg",
+      "size_bytes": 416752,
+      "sha1": "e121023137b19fc74c193203eef5ee2b0b8b3ab8",
+      "detected_type": "unknown",
+      "top_candidates": "[]"
+    }
+  ],
+  "duplicate_images": [
+    {
+      "duplicate_group": 1,
+      "sha1": "5d63a05824c17b199fdacaaa8edc37c74672dcda",
+      "size_bytes": 541264,
+      "file_name": "详情页_01.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/详情页/images/详情页_01.jpg",
+      "detected_type": "gallery",
+      "duplicate_count": 2
+    },
+    {
+      "duplicate_group": 1,
+      "sha1": "5d63a05824c17b199fdacaaa8edc37c74672dcda",
+      "size_bytes": 541264,
+      "file_name": "详情页_01.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/images/详情页_01.jpg",
+      "detected_type": "gallery",
+      "duplicate_count": 2
+    },
+    {
+      "duplicate_group": 2,
+      "sha1": "605ece787a4eb1d99563cee05914c5017e7cd78f",
+      "size_bytes": 678505,
+      "file_name": "详情页_05.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/详情页/images/详情页_05.jpg",
+      "detected_type": "gallery",
+      "duplicate_count": 2
+    },
+    {
+      "duplicate_group": 2,
+      "sha1": "605ece787a4eb1d99563cee05914c5017e7cd78f",
+      "size_bytes": 678505,
+      "file_name": "详情页_05.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/images/详情页_05.jpg",
+      "detected_type": "gallery",
+      "duplicate_count": 2
+    },
+    {
+      "duplicate_group": 3,
+      "sha1": "dfb63b1dff3dcd6f3bb1daec2f5ea9a8d6b4409c",
+      "size_bytes": 445847,
+      "file_name": "详情页_03.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/详情页/images/详情页_03.jpg",
+      "detected_type": "gallery",
+      "duplicate_count": 2
+    },
+    {
+      "duplicate_group": 3,
+      "sha1": "dfb63b1dff3dcd6f3bb1daec2f5ea9a8d6b4409c",
+      "size_bytes": 445847,
+      "file_name": "详情页_03.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/images/详情页_03.jpg",
+      "detected_type": "gallery",
+      "duplicate_count": 2
+    },
+    {
+      "duplicate_group": 4,
+      "sha1": "e830f3aff8d8ef18ee651165ae76a23ca2460add",
+      "size_bytes": 594955,
+      "file_name": "详情页_04.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/详情页/images/详情页_04.jpg",
+      "detected_type": "gallery",
+      "duplicate_count": 2
+    },
+    {
+      "duplicate_group": 4,
+      "sha1": "e830f3aff8d8ef18ee651165ae76a23ca2460add",
+      "size_bytes": 594955,
+      "file_name": "详情页_04.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/images/详情页_04.jpg",
+      "detected_type": "gallery",
+      "duplicate_count": 2
+    },
+    {
+      "duplicate_group": 5,
+      "sha1": "f6cab734823d2921550231030e02541dc2f6930b",
+      "size_bytes": 559458,
+      "file_name": "详情页_02.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/详情页/images/详情页_02.jpg",
+      "detected_type": "gallery",
+      "duplicate_count": 2
+    },
+    {
+      "duplicate_group": 5,
+      "sha1": "f6cab734823d2921550231030e02541dc2f6930b",
+      "size_bytes": 559458,
+      "file_name": "详情页_02.jpg",
+      "path": "/Users/ury/Downloads/project/问兰微信小程序/prod/问兰素材/素材2-24/images/详情页_02.jpg",
+      "detected_type": "gallery",
+      "duplicate_count": 2
+    }
+  ],
+  "missing_images_products": [
+    {
+      "product_id": "1",
+      "product_name": "镜像案例库奢护/体验理套装+赠瞬间抗皱神器",
+      "matched_image_count": 0,
+      "has_json_cover": true,
+      "has_json_gallery": true,
+      "has_json_detail": true,
+      "has_json_sku": true,
+      "has_local_cover": false,
+      "has_local_gallery": false,
+      "has_local_detail": false,
+      "has_local_sku": false,
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "未匹配到本地素材图"
+    },
+    {
+      "product_id": "3",
+      "product_name": "问兰燕窝邂逅试用礼",
+      "matched_image_count": 0,
+      "has_json_cover": true,
+      "has_json_gallery": true,
+      "has_json_detail": false,
+      "has_json_sku": true,
+      "has_local_cover": false,
+      "has_local_gallery": false,
+      "has_local_detail": false,
+      "has_local_sku": false,
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "未匹配到本地素材图；json 中缺少 detail 图路径"
+    },
+    {
+      "product_id": "5",
+      "product_name": "玻色因紧致面霜",
+      "matched_image_count": 0,
+      "has_json_cover": true,
+      "has_json_gallery": true,
+      "has_json_detail": true,
+      "has_json_sku": true,
+      "has_local_cover": false,
+      "has_local_gallery": false,
+      "has_local_detail": false,
+      "has_local_sku": false,
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "未匹配到本地素材图"
+    },
+    {
+      "product_id": "6",
+      "product_name": "问兰氨基酸洁面慕斯",
+      "matched_image_count": 0,
+      "has_json_cover": true,
+      "has_json_gallery": true,
+      "has_json_detail": true,
+      "has_json_sku": true,
+      "has_local_cover": false,
+      "has_local_gallery": false,
+      "has_local_detail": false,
+      "has_local_sku": false,
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "未匹配到本地素材图"
+    },
+    {
+      "product_id": "7",
+      "product_name": "问兰燕窝精萃露",
+      "matched_image_count": 0,
+      "has_json_cover": true,
+      "has_json_gallery": true,
+      "has_json_detail": true,
+      "has_json_sku": true,
+      "has_local_cover": false,
+      "has_local_gallery": false,
+      "has_local_detail": false,
+      "has_local_sku": false,
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "未匹配到本地素材图"
+    },
+    {
+      "product_id": "8",
+      "product_name": "绿魔方抗皱焕颜霜/",
+      "matched_image_count": 0,
+      "has_json_cover": true,
+      "has_json_gallery": true,
+      "has_json_detail": true,
+      "has_json_sku": true,
+      "has_local_cover": false,
+      "has_local_gallery": false,
+      "has_local_detail": false,
+      "has_local_sku": false,
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "未匹配到本地素材图"
+    },
+    {
+      "product_id": "9",
+      "product_name": "小极光焕彩面霜",
+      "matched_image_count": 0,
+      "has_json_cover": true,
+      "has_json_gallery": true,
+      "has_json_detail": true,
+      "has_json_sku": true,
+      "has_local_cover": false,
+      "has_local_gallery": false,
+      "has_local_detail": false,
+      "has_local_sku": false,
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "未匹配到本地素材图"
+    },
+    {
+      "product_id": "10",
+      "product_name": "皮脂膜精华液(次抛装)",
+      "matched_image_count": 0,
+      "has_json_cover": true,
+      "has_json_gallery": true,
+      "has_json_detail": true,
+      "has_json_sku": true,
+      "has_local_cover": false,
+      "has_local_gallery": false,
+      "has_local_detail": false,
+      "has_local_sku": false,
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "未匹配到本地素材图"
+    },
+    {
+      "product_id": "11",
+      "product_name": "问兰护肤尊享礼盒",
+      "matched_image_count": 0,
+      "has_json_cover": true,
+      "has_json_gallery": true,
+      "has_json_detail": true,
+      "has_json_sku": true,
+      "has_local_cover": false,
+      "has_local_gallery": false,
+      "has_local_detail": false,
+      "has_local_sku": false,
+      "source_json_file": "/Users/ury/Downloads/project/问兰微信小程序/check04/666/cloud-mp/mysql/jsonl/products.json",
+      "notes": "未匹配到本地素材图"
+    }
+  ]
+}

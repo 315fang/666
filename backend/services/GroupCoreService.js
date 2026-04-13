@@ -12,6 +12,7 @@ const MemberTierService = require('./MemberTierService');
 const { sendNotification } = require('../models/notificationUtil');
 const { error: logError, warn: logWarn } = require('../utils/logger');
 const { checkRoleUpgrade, handleSameLevelReferral } = require('../utils/commission');
+const { secureRandomHex } = require('../utils/secureRandom');
 
 // 生成团次号
 function genGroupNo() {
