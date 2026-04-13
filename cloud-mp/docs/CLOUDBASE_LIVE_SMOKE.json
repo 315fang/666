@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-11T08:04:24.987Z",
+  "generatedAt": "2026-04-13T14:25:10.778Z",
   "envId": "cloud1-9gywyqe49638e46f",
   "authStatus": "READY",
   "envStatus": "READY",
@@ -8,7 +8,7 @@
     {
       "collection": "admin_singletons",
       "exists": true,
-      "total": 4,
+      "total": 5,
       "ok": true
     },
     {

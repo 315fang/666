@@ -141,13 +141,17 @@ Page({
         const logisticsConfig = getConfigSection('logistics_config');
         const statusMap = {
             pending: '订单已创建，请尽快完成支付。',
+            pending_payment: '订单已创建，请尽快完成支付。',
+            pending_group: '已支付成功，等待其他成员加入成团。',
             paid: '订单已支付成功，正在等待发货。',
             agent_confirmed: '团队已确认订单，正在准备发货。',
             shipping_requested: '发货申请已提交，请耐心等待。',
             shipped: logisticsConfig.shipping_mode === 'manual'
                 ? (logisticsConfig.manual_status_desc || '当前订单走手工发货模式，可查看单号和发货时间')
                 : '商品已发出，可在此页查看物流。',
-            completed: '订单已完成，感谢您的信任。'
+            completed: '订单已完成，感谢您的信任。',
+            refunding: '退款申请已提交，正在处理中。',
+            refunded: '退款已完成。'
         };
         const text = statusMap[order.status] || '可在此查看订单状态与物流进度。';
         if (this._bubbleTimer) clearTimeout(this._bubbleTimer);
@@ -294,7 +298,7 @@ Page({
         if (activity.type === 'group') {
             if (!activity.targetNo) {
                 const order = this.data.order;
-                const isPaid = order && order.status !== 'pending' && order.status !== 'cancelled';
+                const isPaid = order && order.status !== 'pending' && order.status !== 'pending_payment' && order.status !== 'cancelled';
                 if (isPaid) {
                     wx.showLoading({ title: '正在生成拼团...' });
                     try {

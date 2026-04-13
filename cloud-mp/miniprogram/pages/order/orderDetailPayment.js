@@ -135,7 +135,7 @@ function startPayStatusPolling(page, orderId) {
             await post(`/orders/${orderId}/sync-wechat-pay`, {}, { showError: false, maxRetries: 0, timeout: 12000 }).catch(() => {});
             const res = await get(`/orders/${orderId}`, {}, { showError: false, maxRetries: 0, timeout: 8000 });
             const latestOrder = res && res.data;
-            if (latestOrder && latestOrder.status && latestOrder.status !== 'pending') {
+            if (latestOrder && latestOrder.status && latestOrder.status !== 'pending' && latestOrder.status !== 'pending_payment') {
                 clearWalletPreference(orderId);
                 const groupNo = latestOrder.group_no;
                 const isGroup = latestOrder.type === 'group' || !!latestOrder.group_activity_id || !!groupNo;

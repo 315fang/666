@@ -57,7 +57,7 @@
         <text class="order-status {{item.displayStatus || item.status}} {{item.hasActiveRefund ? 'refunding' : ''}}">{{item.statusText}}</text>
       </view>
       <!-- 待付款倒计时 -->
-      <view class="order-countdown" wx:if="{{item.status === 'pending' && item.countdownText}}">
+      <view class="order-countdown" wx:if="{{(item.status === 'pending' || item.status === 'pending_payment') && item.countdownText}}">
         <text class="countdown-text">剩余 {{item.countdownText}}</text>
       </view>
       <view class="activity-strip activity-strip-{{item.activityInfo.type}}" wx:if="{{item.activityInfo}}">

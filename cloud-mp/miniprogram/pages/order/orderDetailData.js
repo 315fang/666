@@ -14,7 +14,7 @@ function buildOrderActivityInfo(order = {}) {
     const slashNo = order.slash_no || firstItem.slash_no || '';
 
     if (type === 'group' || groupNo || order.group_activity_id || firstItem.group_activity_id) {
-        const isPaid = order.status && order.status !== 'pending' && order.status !== 'cancelled';
+        const isPaid = order.status && order.status !== 'pending' && order.status !== 'pending_payment' && order.status !== 'cancelled';
         let title, desc, actionText, disabled;
         if (groupNo && order.status === 'cancelled') {
             title = '订单已取消';
@@ -112,7 +112,7 @@ async function loadOrder(page, idOrNo) {
 
         page.showOrderBubble(order);
 
-        if (order && order.status === 'pending') {
+        if (order && (order.status === 'pending' || order.status === 'pending_payment')) {
             page._maybeSyncWechatPayAfterLoad(order.id);
             // 启动支付倒计时
             const expireAt = order.expire_at || '';

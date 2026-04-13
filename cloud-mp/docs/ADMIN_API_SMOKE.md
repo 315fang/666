@@ -1,15 +1,15 @@
 # Admin API Smoke
 
-生成时间：2026-04-12T02:49:50.519Z
+生成时间：2026-04-13T14:28:11.321Z
 入口：https://cloud1-9gywyqe49638e46f.service.tcloudbase.com/admin/api
 
 | 接口 | 结果 | 数量 | 问题 |
 | --- | --- | --- | --- |
-| products | 通过 | 11 | - |
+| products | 通过 | 12 | - |
 | orders | 通过 | 20 | - |
 | users | 通过 | 20 | - |
-| refunds | 通过 | 15 | - |
-| withdrawals | 通过 | 4 | - |
+| refunds | 通过 | 20 | - |
+| withdrawals | 通过 | 5 | - |
 | commissions | 通过 | 3 | - |
 | group-buys | 通过 | 2 | - |
 | lottery-prizes | 通过 | 13 | - |

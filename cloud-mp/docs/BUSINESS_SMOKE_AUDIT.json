@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-11T10:04:19.117Z",
+  "generatedAt": "2026-04-13T14:26:58.213Z",
   "envId": "cloud1-9gywyqe49638e46f",
   "ok": true,
   "results": [
@@ -13,7 +13,7 @@
       "area": "admin",
       "name": "products",
       "ok": true,
-      "count": 11,
+      "count": 12,
       "issues": []
     },
     {
@@ -34,14 +34,14 @@
       "area": "admin",
       "name": "refunds",
       "ok": true,
-      "count": 13,
+      "count": 20,
       "issues": []
     },
     {
       "area": "admin",
       "name": "withdrawals",
       "ok": true,
-      "count": 4,
+      "count": 5,
       "issues": []
     },
     {
@@ -75,7 +75,7 @@
       "area": "mini",
       "name": "products.list",
       "ok": true,
-      "count": 10,
+      "count": 2,
       "issues": []
     },
     {
@@ -101,7 +101,7 @@
       "area": "mini",
       "name": "config.groups",
       "ok": true,
-      "count": 2,
+      "count": 1,
       "issues": []
     },
     {

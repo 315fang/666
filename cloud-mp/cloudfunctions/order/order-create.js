@@ -631,6 +631,11 @@ async function createOrder(openid, orderData) {
         const u = freshUser.data[0] || {};
         const freshBalance = toNumber(u.agent_wallet_balance, 0);
         if (freshBalance < payAmount) {
+            if (actualPoints > 0) {
+                await db.collection('users').where({ openid }).update({
+                    data: { points: _.inc(actualPoints), growth_value: _.inc(actualPoints), updated_at: db.serverDate() }
+                }).catch(() => {});
+            }
             await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
                 db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
             ));
@@ -638,7 +643,21 @@ async function createOrder(openid, orderData) {
         }
     }
 
-    const result = await db.collection('orders').add({ data: order });
+    let result;
+    try {
+        result = await db.collection('orders').add({ data: order });
+    } catch (addErr) {
+        // 创单失败：回滚已扣积分和库存
+        if (actualPoints > 0) {
+            await db.collection('users').where({ openid }).update({
+                data: { points: _.inc(actualPoints), growth_value: _.inc(actualPoints), updated_at: db.serverDate() }
+            }).catch(() => {});
+        }
+        await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
+            db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
+        ));
+        throw new Error('创建订单失败，已回滚积分与库存: ' + addErr.message);
+    }
 
     // 7.5 订单创建成功后，执行优惠券核销（先创单后核销，失败不影响订单，但不应再用此券）
     if (pendingCouponDoc) {
@@ -682,10 +701,17 @@ async function createOrder(openid, orderData) {
                     }
                 });
             if (!deductRes.stats || deductRes.stats.updated === 0) {
-                // 极低概率并发场景：余额刚好被扣走，取消订单
                 await db.collection('orders').doc(orderId).update({
                     data: { status: 'cancelled', cancel_reason: '货款余额不足（并发）', updated_at: db.serverDate() }
                 });
+                if (actualPoints > 0) {
+                    await db.collection('users').where({ openid }).update({
+                        data: { points: _.inc(actualPoints), growth_value: _.inc(actualPoints), updated_at: db.serverDate() }
+                    }).catch(() => {});
+                }
+                await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
+                    db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
+                ));
                 throw new Error('货款余额不足，请刷新后重试');
             }
             // 拼团订单货款支付后进入 pending_group（待成团），普通订单直接 paid

@@ -2424,6 +2424,9 @@ async function refundOrderExtras(orderId) {
     const order = findByLookup(orders, orderId, (row) => [row.order_no]);
     if (!order) return;
 
+    // 幂等：防止重复回退
+    if (order.refund_extras_settled_at) return;
+
     const db = dataStore._internals && dataStore._internals.db;
     const openid = order.openid;
     if (!openid) return;
@@ -2531,6 +2534,12 @@ async function refundOrderExtras(orderId) {
                     .catch(() => {});
             }
         }
+    }
+
+    // 标记幂等
+    patchCollectionRow('orders', orderId, (row) => ({ ...row, refund_extras_settled_at: nowIso() }));
+    if (db) {
+        await directPatchDocument('orders', String(order._id), { refund_extras_settled_at: nowIso() }).catch(() => {});
     }
 }
 
@@ -4604,7 +4613,7 @@ app.put('/admin/api/refunds/:id/reject', auth, requirePermission('refunds'), asy
         restoreFrozenCommissionsForOrder(orderId);
         patchCollectionRow('orders', orderId, (order) => ({
             ...order,
-            status: order.status === 'refunding' ? (order.shipped_at ? 'shipped' : (order.paid_at ? 'paid' : 'pending_payment')) : order.status,
+            status: order.status === 'refunding' ? (order.prev_status || (order.confirmed_at || order.auto_confirmed_at ? 'completed' : (order.shipped_at ? 'shipped' : (order.paid_at ? 'paid' : 'pending_payment')))) : order.status,
             updated_at: nowIso()
         }));
     }
@@ -4638,6 +4647,7 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
     const refundAmount = toNumber(refund.amount, 0);
     const totalAmount = toNumber(order.actual_price || order.pay_amount || order.total_amount, 0);
     if (refundAmount <= 0 || totalAmount <= 0) return fail(res, '退款金额不合法', 400);
+    if (refundAmount > totalAmount) return fail(res, `退款金额(${refundAmount})不能超过订单金额(${totalAmount})`, 400);
 
     // 先持久化 processing 状态，防止并发重复提交
     const processingData = {
@@ -4806,7 +4816,7 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
         patchCollectionRow('refunds', req.params.id, (row) => ({ ...row, ...revertData, updated_at: nowIso() }));
 
         const prevOrderStatus = order.status === 'refunding'
-            ? (order.shipped_at ? 'shipped' : (order.paid_at ? 'paid' : 'pending_payment'))
+            ? (order.prev_status || (order.confirmed_at || order.auto_confirmed_at ? 'completed' : (order.shipped_at ? 'shipped' : (order.paid_at ? 'paid' : 'pending_payment'))))
             : order.status;
         await directPatchDocument('orders', String(order._id), { status: prevOrderStatus });
         patchCollectionRow('orders', orderId, (row) => ({ ...row, status: prevOrderStatus, updated_at: nowIso() }));
@@ -4907,7 +4917,7 @@ app.post('/admin/api/refunds/wechat-notify', async (req, res) => {
             // 恢复订单到退款前状态
             if (orderDocId && order) {
                 const revertStatus = order.status === 'refunding'
-                    ? (order.shipped_at ? 'shipped' : (order.paid_at ? 'paid' : 'pending_payment'))
+                    ? (order.prev_status || (order.confirmed_at || order.auto_confirmed_at ? 'completed' : (order.shipped_at ? 'shipped' : (order.paid_at ? 'paid' : 'pending_payment'))))
                     : order.status;
                 await directPatchDocument('orders', orderDocId, { status: revertStatus });
                 patchCollectionRow('orders', orderId, (row) => ({
@@ -5454,15 +5464,18 @@ app.get('/admin/api/statistics/overview', auth, requirePermission('statistics'),
     const orders = getCollection('orders');
     const products = getCollection('products');
     const users = getCollection('users');
-    const paidOrders = orders.filter((item) => ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'].includes(item.status));
+    const paidStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
+    const paidOrders = orders.filter((item) => paidStatuses.includes(String(item.status || '')));
     const today = nowIso().slice(0, 10);
     const todayOrders = orders.filter((item) => String(item.created_at || '').slice(0, 10) === today);
+    const todayPaidOrders = todayOrders.filter((item) => paidStatuses.includes(String(item.status || '')));
     ok(res, {
         total_sales: paidOrders.reduce((sum, item) => sum + toNumber(item.actual_price || item.total_amount, 0), 0),
         total_orders: orders.length,
         total_users: users.length,
         total_products: products.length,
         today_orders: todayOrders.length,
+        today_sales: todayPaidOrders.reduce((sum, item) => sum + toNumber(item.actual_price || item.total_amount, 0), 0),
         pending_ship: orders.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_ship').length,
         pending_refund: getCollection('refunds').filter((item) => item.status === 'pending').length,
         low_stock_count: products.filter((item) => toNumber(item.stock, 0) <= 10).length
@@ -5577,19 +5590,52 @@ app.get('/admin/api/statistics/low-stock', auth, requirePermission('statistics')
     ok(res, { list: rows });
 });
 
-app.get('/admin/api/operations/dashboard', auth, (req, res) => {
+app.get('/admin/api/operations/dashboard', auth, async (req, res) => {
+    await ensureFreshCollections(['orders', 'products', 'users', 'refunds', 'withdrawals', 'commissions']);
     const orders = getCollection('orders');
     const products = getCollection('products');
+    const users = getCollection('users');
+    const refunds = getCollection('refunds');
+    const withdrawals = getCollection('withdrawals');
+    const commissions = getCollection('commissions');
+    const today = nowIso().slice(0, 10);
+    const paidStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
+    const todayOrders = orders.filter((item) => String(item.created_at || '').slice(0, 10) === today);
+    const todayPaidOrders = todayOrders.filter((item) => paidStatuses.includes(String(item.status || '')));
+    const pendingShipCount = orders.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_ship').length;
+    const pendingReceiveCount = orders.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_receive').length;
+    const pendingRefundCount = refunds.filter((item) => pickString(item.status) === 'pending').length;
+    const pendingWithdrawalCount = withdrawals.filter((item) => pickString(item.status) === 'pending').length;
+    const pendingCommissionCount = commissions.filter((item) => pickString(item.status) === 'pending_approval').length;
+
     ok(res, {
+        kpi: {
+            today_orders: todayOrders.length,
+            today_sales: todayPaidOrders.reduce((sum, item) => sum + toNumber(item.actual_price || item.total_amount, 0), 0),
+            total_users: users.length,
+            pending_ship: pendingShipCount,
+            pendingShip: pendingShipCount
+        },
+        pending: {
+            withdrawals: pendingWithdrawalCount,
+            refunds: pendingRefundCount,
+            commissions: pendingCommissionCount
+        },
         recent_orders: sortByUpdatedDesc(orders).slice(0, 8),
+        low_stock: sortByUpdatedDesc(products)
+            .filter((item) => toNumber(item.stock, 0) <= 10)
+            .slice(0, 8)
+            .map((item) => ({ ...item, images: toArray(item.images).map(assetUrl) })),
         hot_products: sortByUpdatedDesc(products)
             .sort((a, b) => toNumber(b.heat_score, 0) - toNumber(a.heat_score, 0))
             .slice(0, 8)
             .map((item) => ({ ...item, images: toArray(item.images).map(assetUrl) })),
         todo: {
-            pending_ship: orders.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_ship').length,
-            pending_receive: orders.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_receive').length,
-            pending_refund: getCollection('refunds').filter((item) => item.status === 'pending').length
+            pending_ship: pendingShipCount,
+            pending_receive: pendingReceiveCount,
+            pending_refund: pendingRefundCount,
+            pending_withdrawal: pendingWithdrawalCount,
+            pending_commission: pendingCommissionCount
         }
     });
 });

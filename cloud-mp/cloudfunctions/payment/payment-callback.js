@@ -699,10 +699,8 @@ async function ensureCommissionsCreated(orderId, order) {
     const totals = new Map();
     const items = toArray(order.items);
 
-    // 佣金基数 = 实付金额（pay_amount 已扣除积分抵扣和优惠券）
-    // 若全积分支付则 pay_amount=0，跳过佣金
+    // 佣金基数 = 实付金额（pay_amount 已扣除积分抵扣和优惠券，无需再减 points_discount）
     const orderPayAmount = getOrderTotalAmount(order);
-    const pointsDiscount = toNumber(order.points_discount ?? order.pointsDiscount, 0);
     const commissionBase = orderPayAmount;
     if (commissionBase <= 0) {
         await db.collection('orders').doc(orderId).update({
@@ -854,12 +852,14 @@ async function promoteGroupOrdersToPaid(groupOrder) {
                 .update({ data: { status: 'paid', group_completed_at: db.serverDate(), updated_at: db.serverDate() } })
                 .catch(() => {});
         }
-        // 通过 activity_id 补充查找（group_no 未写回的情况）
-        if (activityId) {
-            await db.collection('orders')
-                .where({ group_activity_id: activityId, type: 'group', status: 'pending_group' })
-                .update({ data: { status: 'paid', group_completed_at: db.serverDate(), updated_at: db.serverDate() } })
-                .catch(() => {});
+        // 通过 members 列表精确更新（防止误更新同活动其他团的订单）
+        const members = Array.isArray(groupOrder.members) ? groupOrder.members : [];
+        for (const m of members) {
+            if (m.order_id) {
+                await db.collection('orders').doc(String(m.order_id))
+                    .update({ data: { status: 'paid', group_no: groupNo, group_completed_at: db.serverDate(), updated_at: db.serverDate() } })
+                    .catch(() => {});
+            }
         }
         console.log('[GroupJoin] 成团，已将参团订单从 pending_group 更新为 paid, group_no:', groupNo);
     } catch (err) {
@@ -1302,7 +1302,7 @@ async function handleRefundCallback(refundData, eventType) {
             // 取消未结算佣金
             await db.collection('commissions')
                 .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval', 'approved']) })
-                .update({ data: { status: 'cancelled', cancelled_reason: '退款完成，佣金作废', updated_at: db.serverDate() } })
+                .update({ data: { status: 'cancelled', cancel_reason: '退款完成，佣金作废', cancelled_reason: '退款完成，佣金作废', updated_at: db.serverDate() } })
                 .catch(() => {});
 
             // 追回已结算佣金（settled 状态已入账到用户余额，需原子扣回）
@@ -1327,6 +1327,7 @@ async function handleRefundCallback(refundData, eventType) {
                 await db.collection('commissions').doc(String(comm._id)).update({
                     data: {
                         status: 'cancelled',
+                        cancel_reason: '退款追回已结算佣金',
                         cancelled_reason: '退款追回已结算佣金',
                         clawed_back_at: db.serverDate(),
                         updated_at: db.serverDate()
@@ -1417,7 +1418,7 @@ async function handleRefundCallback(refundData, eventType) {
             const orderRes = await db.collection('orders').doc(String(orderId)).get().catch(() => ({ data: null }));
             const order = orderRes.data;
             if (order && order.status === 'refunding') {
-                const revertStatus = order.shipped_at ? 'shipped' : (order.paid_at ? 'paid' : 'pending_payment');
+                const revertStatus = order.prev_status || (order.confirmed_at || order.auto_confirmed_at ? 'completed' : (order.shipped_at ? 'shipped' : (order.paid_at ? 'paid' : 'pending_payment')));
                 await db.collection('orders').doc(String(orderId)).update({
                     data: { status: revertStatus, updated_at: db.serverDate() }
                 }).catch(() => {});
@@ -1550,13 +1551,15 @@ async function handleCallback(event) {
                 }
 
                 // 拼团订单支付后进入 pending_group（待成团），普通订单直接 paid
-                const isGroup = order.type === 'group' || hasValue(order.group_activity_id);
+                const isGroup = order.type === 'group' || hasValue(order.group_activity_id) || hasValue(order.group_no);
                 const postPayStatus = isGroup ? 'pending_group' : 'paid';
                 const updateRes = await db.collection('orders')
                     .where({ _id: order._id, status: 'pending_payment' })
                     .update({
                     data: {
                         status: postPayStatus,
+                        payment_method: 'wechat',
+                        pay_channel: 'wxpay',
                         paid_at: db.serverDate(),
                         trade_id: transaction.transaction_id || '',
                         pay_time: transaction.success_time ? new Date(transaction.success_time) : db.serverDate(),

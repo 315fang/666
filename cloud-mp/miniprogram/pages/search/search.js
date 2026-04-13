@@ -74,7 +74,7 @@ Page({
         try {
             const res = await cachedGet(
                 (url, params) => get(url, params),
-                '/products',
+                '/products/search',
                 { keyword, limit: 50 },
                 { cacheTTL: CACHE_STRATEGIES.search }
             );

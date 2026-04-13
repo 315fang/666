@@ -103,21 +103,7 @@ exports.main = async (event, context) => {
                     continue;
                 }
 
-                // 退还积分
-                if (order.points_used > 0) {
-                    await db.collection('users').where({ openid: order.openid }).update({
-                        data: {
-                            points: _.inc(order.points_used),
-                            growth_value: _.inc(order.points_used),
-                            updated_at: db.serverDate(),
-                        },
-                    }).catch(() => {});
-                }
-
-                // 退还优惠券
-                await restoreUsedCoupon(order);
-
-                // 条件更新：仅当状态仍为 pending_payment 时才取消，防止与支付回调竞态
+                // 先原子更新状态，防止与支付回调竞态
                 const updateRes = await db.collection('orders')
                     .where({ _id: order._id, status: 'pending_payment' })
                     .update({
@@ -130,9 +116,38 @@ exports.main = async (event, context) => {
                     });
 
                 if (!updateRes.stats || updateRes.stats.updated === 0) {
-                    // 订单已被支付或其他状态变更，跳过（不计入取消数）
                     console.log(`[OrderTimeoutCancel] 订单 ${order._id} 状态已变更，跳过取消`);
                     continue;
+                }
+
+                // 状态已锁定为 cancelled，安全地恢复资产
+                if (toNumber(order.points_used, 0) > 0 && order.openid) {
+                    await db.collection('users').where({ openid: order.openid }).update({
+                        data: {
+                            points: _.inc(toNumber(order.points_used, 0)),
+                            growth_value: _.inc(toNumber(order.points_used, 0)),
+                            updated_at: db.serverDate(),
+                        },
+                    }).catch((e) => console.error('[OrderTimeoutCancel] 退积分失败:', order._id, e.message));
+                }
+
+                await restoreUsedCoupon(order).catch(() => {});
+
+                // 恢复库存（创单时已扣 stock）
+                if (order.stock_deducted_at && Array.isArray(order.items)) {
+                    for (const item of order.items) {
+                        const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+                        if (item.product_id) {
+                            await db.collection('products').doc(String(item.product_id)).update({
+                                data: { stock: _.inc(qty), updated_at: db.serverDate() }
+                            }).catch(() => {});
+                        }
+                        if (item.sku_id) {
+                            await db.collection('skus').doc(String(item.sku_id)).update({
+                                data: { stock: _.inc(qty), updated_at: db.serverDate() }
+                            }).catch(() => {});
+                        }
+                    }
                 }
 
                 cancelledCount += 1;

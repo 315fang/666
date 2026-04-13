@@ -1,20 +1,23 @@
 {
-  "generatedAt": "2026-04-11T08:03:48.098Z",
-  "url": "https://cloud1-9gywyqe49638e46f-1419893803.tcloudbaseapp.com/admin/index.html?v=1775894626564",
-  "ok": true,
+  "generatedAt": "2026-04-13T14:26:12.760Z",
+  "url": "https://cloud1-9gywyqe49638e46f-1419893803.tcloudbaseapp.com/admin/index.html?v=1776090372079",
+  "ok": false,
   "localAssets": [
-    "assets/index-B4q57IVI.js",
-    "assets/vue-vendor-C5t8wCBm.js",
+    "assets/index-Drgiy7eY.js",
+    "assets/vue-vendor-BzYWW4rO.js",
     "assets/http-vendor-C0Zqfgkc.js",
-    "assets/element-plus-icons-UEi9pTXG.js",
+    "assets/element-plus-icons-b6I7lse-.js",
     "assets/index-XFU74PjQ.css"
   ],
   "remoteAssets": [
-    "assets/index-B4q57IVI.js",
-    "assets/vue-vendor-C5t8wCBm.js",
+    "assets/index-DOw-QlxV.js",
+    "assets/vue-vendor-BzYWW4rO.js",
     "assets/http-vendor-C0Zqfgkc.js",
-    "assets/element-plus-icons-UEi9pTXG.js",
+    "assets/element-plus-icons-b6I7lse-.js",
     "assets/index-XFU74PjQ.css"
   ],
-  "diff": []
+  "diff": [
+    "assets/index-Drgiy7eY.js",
+    "assets/index-DOw-QlxV.js"
+  ]
 }

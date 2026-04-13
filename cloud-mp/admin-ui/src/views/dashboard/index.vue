@@ -323,10 +323,15 @@ const fetchOperationsDashboard = async () => {
     // fallback：单独获取统计概况
     try {
       const ov = await getDashboardOverview()
+      const pendingShipCount = Number(ov?.pending_ship || 0)
+
       statsCards.value[0].value = String(ov?.today_orders || 0)
-      statsCards.value[1].value = '¥' + formatAmountYuan(ov?.total_sales ?? 0)
+      statsCards.value[1].value = '¥' + formatAmountYuan(ov?.today_sales ?? 0)
       statsCards.value[2].value = String(ov?.total_users || 0)
-      statsCards.value[3].value = String(ov?.pending_ship || 0)
+      statsCards.value[3].value = String(pendingShipCount)
+
+      todoItems.value[0].count = pendingShipCount
+      todoItems.value[2].count = Number(ov?.pending_refund || 0)
     } catch (fallbackErr) {
       ElMessage.error(fallbackErr?.message || '加载仪表盘失败')
     }

@@ -67,6 +67,7 @@ Page({
             this.setData({ slashNo: options.slash_no });
             this.loadDetail(options.slash_no);
         } else {
+            this.setData({ loading: false });
             wx.showToast({ title: '参数错误', icon: 'error' });
         }
     },

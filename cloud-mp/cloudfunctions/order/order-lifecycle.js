@@ -102,42 +102,42 @@ async function cancelOrder(openid, orderId) {
         throw new Error(`订单状态不允许取消: ${order.status}`);
     }
 
-    // 退还积分
-    if (order.points_used > 0) {
-        await db.collection('users').where({ openid }).update({
-            data: {
-                points: _.inc(order.points_used),
-                growth_value: _.inc(order.points_used),
-                updated_at: db.serverDate(),
-            },
-        });
-    }
-
-    // 退还优惠券
-    await restoreUsedCoupon(order).catch(() => {});
-
-    // 取消佣金
-    try {
-        await db.collection('commissions')
-            .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval']) })
-            .update({ data: { status: 'cancelled', cancelled_at: db.serverDate() } })
-            .catch(() => {});
-    } catch (commErr) {
-        console.error('[OrderLifecycle] 取消佣金失败:', commErr.message);
-    }
-
-    await restoreOrderStock(orderId, order).catch((stockErr) => {
-        console.error('[OrderLifecycle] 取消订单恢复库存失败:', stockErr.message);
-    });
-
-    // 更新订单状态
-    await db.collection('orders').doc(orderId).update({
+    // 先原子更新状态，防止与支付回调竞态
+    const updateRes = await db.collection('orders').doc(orderId).update({
         data: {
             status: 'cancelled',
             cancelled_at: db.serverDate(),
             cancel_reason: '用户取消',
             updated_at: db.serverDate(),
         },
+    });
+
+    // 如果状态已被其他流程修改（如支付成功），不再退还资产
+    if (!updateRes.stats || updateRes.stats.updated === 0) {
+        throw new Error('订单状态已变更，无法取消');
+    }
+
+    // 状态已锁定为 cancelled，安全退还资产
+    const pointsUsed = toNumber(order.points_used, 0);
+    if (pointsUsed > 0) {
+        await db.collection('users').where({ openid }).update({
+            data: {
+                points: _.inc(pointsUsed),
+                growth_value: _.inc(pointsUsed),
+                updated_at: db.serverDate(),
+            },
+        }).catch((e) => console.error('[OrderLifecycle] 退积分失败:', e.message));
+    }
+
+    await restoreUsedCoupon(order).catch(() => {});
+
+    await db.collection('commissions')
+        .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval']) })
+        .update({ data: { status: 'cancelled', cancelled_at: db.serverDate() } })
+        .catch(() => {});
+
+    await restoreOrderStock(orderId, order).catch((stockErr) => {
+        console.error('[OrderLifecycle] 取消订单恢复库存失败:', stockErr.message);
     });
 
     return { success: true, order_id: orderId, status: 'cancelled' };
@@ -311,6 +311,82 @@ async function applyRefund(openid, params) {
         await freezeCommissionsForOrder(canonicalOrderId);
     } catch (freezeErr) {
         console.error('[OrderLifecycle] 佣金冻结失败:', freezeErr.message);
+    }
+
+    // 货款支付订单：自动退款（不需要后台审批，直接退回余额）
+    const payMethod = (order.payment_method || order.pay_channel || '').toLowerCase();
+    if (payMethod === 'goods_fund') {
+        try {
+            await db.collection('users').where({ openid }).update({
+                data: { agent_wallet_balance: _.inc(refundAmount), updated_at: db.serverDate() }
+            });
+            await db.collection('goods_fund_logs').add({
+                data: {
+                    openid, type: 'refund', amount: refundAmount,
+                    order_id: canonicalOrderId, order_no: order.order_no,
+                    remark: `订单退款 ${order.order_no}`, created_at: db.serverDate()
+                }
+            }).catch(() => {});
+
+            // 退还奖励积分、成长值、消费统计
+            const pointsUsed = toNumber(order.points_used, 0);
+            const pointsEarned = toNumber(order.points_earned, 0);
+            const orderPayAmt = toNumber(order.pay_amount || order.actual_price || order.total_amount, 0);
+            const growthEarned = Math.floor(orderPayAmt);
+            const pointsDelta = pointsUsed - pointsEarned;
+            const growthDelta = pointsUsed - growthEarned;
+            const userReversal = { updated_at: db.serverDate() };
+            if (pointsDelta !== 0) userReversal.points = _.inc(pointsDelta);
+            if (growthDelta !== 0) userReversal.growth_value = _.inc(growthDelta);
+            if (orderPayAmt > 0) userReversal.total_spent = _.inc(-orderPayAmt);
+            userReversal.order_count = _.inc(-1);
+            await db.collection('users').where({ openid }).update({ data: userReversal }).catch(() => {});
+
+            // 退优惠券
+            if (order.user_coupon_id) {
+                await db.collection('user_coupons').doc(String(order.user_coupon_id))
+                    .update({ data: { status: 'unused', updated_at: db.serverDate() } }).catch(() => {});
+            }
+
+            // 取消佣金
+            await db.collection('commissions')
+                .where({ order_id: canonicalOrderId, status: _.in(['pending', 'frozen', 'pending_approval']) })
+                .update({ data: { status: 'cancelled', cancel_reason: '货款退款', cancelled_at: db.serverDate() } }).catch(() => {});
+
+            // 恢复库存（含 SKU）
+            if (order.stock_deducted_at && Array.isArray(order.items)) {
+                for (const item of order.items) {
+                    const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+                    if (item.product_id) {
+                        await db.collection('products').doc(String(item.product_id)).update({
+                            data: { stock: _.inc(qty), updated_at: db.serverDate() }
+                        }).catch(() => {});
+                    }
+                    if (item.sku_id) {
+                        await db.collection('skus').doc(String(item.sku_id)).update({
+                            data: { stock: _.inc(qty), updated_at: db.serverDate() }
+                        }).catch(() => {});
+                    }
+                }
+            }
+
+            // 更新退款和订单为已完成
+            await db.collection('refunds').doc(result._id).update({
+                data: { status: 'completed', completed_at: db.serverDate(), updated_at: db.serverDate() }
+            });
+            await db.collection('orders').doc(canonicalOrderId).update({
+                data: { status: 'refunded', refunded_at: db.serverDate(), updated_at: db.serverDate() }
+            });
+
+            return { success: true, id: result._id, refund_id: result._id, refund_no: refundNo, auto_refunded: true };
+        } catch (autoRefundErr) {
+            console.error('[OrderLifecycle] 货款自动退款失败，转人工处理:', autoRefundErr.message);
+            // 将退款标记为待人工处理，保持订单为 refunding 状态
+            await db.collection('refunds').doc(result._id).update({
+                data: { status: 'pending', auto_refund_error: autoRefundErr.message, updated_at: db.serverDate() }
+            }).catch(() => {});
+            return { success: true, id: result._id, refund_id: result._id, refund_no: refundNo, auto_refund_failed: true, error: autoRefundErr.message };
+        }
     }
 
     return { success: true, id: result._id, refund_id: result._id, refund_no: refundNo };

@@ -143,6 +143,8 @@ Page({
         });
 
         if (!options.id) {
+            this.setData({ pageLoading: false });
+            wx.showToast({ title: '商品参数错误', icon: 'none' });
             return;
         }
 

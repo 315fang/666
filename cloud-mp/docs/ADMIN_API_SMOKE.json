@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-12T02:49:50.519Z",
+  "generatedAt": "2026-04-13T14:28:11.321Z",
   "baseUrl": "https://cloud1-9gywyqe49638e46f.service.tcloudbase.com/admin/api",
   "ok": true,
   "results": [
@@ -7,7 +7,7 @@
       "name": "products",
       "ok": true,
       "status": 200,
-      "count": 11,
+      "count": 12,
       "issues": []
     },
     {
@@ -28,14 +28,14 @@
       "name": "refunds",
       "ok": true,
       "status": 200,
-      "count": 15,
+      "count": 20,
       "issues": []
     },
     {
       "name": "withdrawals",
       "ok": true,
       "status": 200,
-      "count": 4,
+      "count": 5,
       "issues": []
     },
     {

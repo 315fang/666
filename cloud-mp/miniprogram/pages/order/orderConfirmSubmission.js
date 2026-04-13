@@ -1,4 +1,4 @@
-const { post } = require('../../utils/request');
+const { get, post } = require('../../utils/request');
 const { ErrorHandler } = require('../../utils/errorHandler');
 const { ensurePrivacyAuthorization } = require('../../utils/privacy');
 
@@ -116,11 +116,26 @@ async function submitOrder(page, app, brandAnimation) {
             brandAnimation.show('success');
         }
 
-        setTimeout(() => {
+        setTimeout(async () => {
             page.setData({ submitting: false });
-            if (goodsFundPaid && isGroupOrder && createdGroupNo) {
-                wx.redirectTo({ url: `/pages/group/detail?group_no=${createdGroupNo}` });
-            } else if (isSplitOrders) {
+
+            // 货款支付的拼团订单：尝试获取 group_no 再跳转
+            if (goodsFundPaid && isGroupOrder) {
+                let groupNo = createdGroupNo;
+                if (!groupNo && orderId) {
+                    try {
+                        const orderRes = await get(`/orders/${orderId}`, {}, { showError: false, maxRetries: 1, timeout: 5000 });
+                        groupNo = orderRes && orderRes.data && orderRes.data.group_no;
+                    } catch (_) {}
+                }
+                if (groupNo) {
+                    wx.redirectTo({ url: `/pages/group/detail?group_no=${groupNo}` });
+                    return;
+                }
+            }
+
+            // 非货款支付的拼团订单：跳到订单详情，轮询会自动跳转拼团页
+            if (isSplitOrders) {
                 wx.redirectTo({ url: '/pages/order/list?status=pending' });
             } else if (orderId) {
                 wx.redirectTo({ url: `/pages/order/detail?id=${orderId}` });

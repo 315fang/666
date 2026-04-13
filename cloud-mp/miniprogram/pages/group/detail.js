@@ -55,6 +55,7 @@ Page({
                 wx.showShareMenu({ withShareTicket: true, menus: ['shareAppMessage'] });
             }
         } else {
+            this.setData({ loading: false });
             wx.showToast({ title: '参数错误', icon: 'error' });
         }
     },

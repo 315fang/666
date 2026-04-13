@@ -144,7 +144,7 @@ Page({
                 order.price = order.price || order.unit_price || Number(((parseFloat(order.actual_price || order.total_amount || 0)) / Math.max(quantity, 1)).toFixed(2));
 
                 // ★ 待付款倒计时文字
-                if (order.status === 'pending') {
+                if (order.status === 'pending' || order.status === 'pending_payment') {
                     order.countdownText = this._calcCountdownText(order.expire_at, order.created_at, order.payment_timeout_minutes);
                 }
 
@@ -256,13 +256,13 @@ Page({
 
     _startListCountdown() {
         if (this._listCountdownTimer) clearInterval(this._listCountdownTimer);
-        const hasPending = this.data.orders.some(o => o.status === 'pending');
+        const hasPending = this.data.orders.some(o => o.status === 'pending' || o.status === 'pending_payment');
         if (!hasPending) return;
         this._listCountdownTimer = setInterval(() => {
             const orders = this.data.orders;
             let needUpdate = false;
             const updated = orders.map(o => {
-                if (o.status !== 'pending') return o;
+                if (o.status !== 'pending' && o.status !== 'pending_payment') return o;
                 const text = this._calcCountdownText(o.expire_at, o.created_at, o.payment_timeout_minutes);
                 if (text !== o.countdownText) {
                     needUpdate = true;
@@ -405,7 +405,7 @@ Page({
         }
     },
 
-    onViewActivity(e) {
+    async onViewActivity(e) {
         const order = e.currentTarget.dataset.order || {};
         const activity = order.activityInfo || buildOrderActivityInfo(order);
         if (!activity) return;
@@ -414,6 +414,18 @@ Page({
                 const isPaid = order.status && order.status !== 'pending' && order.status !== 'pending_payment' && order.status !== 'cancelled';
                 if (isPaid) {
                     const orderId = order.id || order._id || order.order_no;
+                    wx.showLoading({ title: '正在获取拼团...' });
+                    try {
+                        const res = await post(`/orders/${encodeURIComponent(orderId)}/retry-group-join`);
+                        wx.hideLoading();
+                        const groupNo = res && res.data && res.data.group_no;
+                        if (groupNo) {
+                            wx.navigateTo({ url: `/pages/group/detail?group_no=${groupNo}` });
+                            return;
+                        }
+                    } catch (_) {
+                        wx.hideLoading();
+                    }
                     wx.navigateTo({ url: `/pages/order/detail?id=${orderId}` });
                 } else {
                     wx.showToast({ title: '请先完成支付', icon: 'none' });

@@ -381,11 +381,13 @@ async function loadOrderCounts(page) {
             get('/orders', { status: 'pending_review', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
             get('/refunds', { status: 'pending', page: 1, limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
             get('/refunds', { status: 'approved', page: 1, limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
-            get('/refunds', { status: 'processing', page: 1, limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } }))
+            get('/refunds', { status: 'processing', page: 1, limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
+            get('/orders', { status: 'pending_group', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } }))
         ]);
 
         const pending = results[0].data?.pagination?.total || 0;
-        const paid = results[1].data?.pagination?.total || 0;
+        const pendingGroup = results[7].data?.pagination?.total || 0;
+        const paid = (results[1].data?.pagination?.total || 0) + pendingGroup;
         const shipped = results[2].data?.pagination?.total || 0;
         const pendingReview = results[3].data?.pagination?.total || 0;
         const refund = (results[4].data?.pagination?.total || 0)
