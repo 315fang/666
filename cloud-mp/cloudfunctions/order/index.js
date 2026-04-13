@@ -17,14 +17,26 @@ const orderStatus = require('./order-status');
 const orderLifecycle = require('./order-lifecycle');
 const orderInteractive = require('./order-interactive');
 
-// 异步处理包装
+// 已知的业务验证错误关键词，匹配时返回 400 而非 500，让前端展示具体原因
+const VALIDATION_ERROR_PATTERNS = [
+    '不存在', '不可用', '不属于', '未达到', '不足', '缺少', '不匹配',
+    '已结束', '已过期', '已完成', '类型冲突', '仅限', '归属异常',
+    '请返回', '请刷新', '请选择'
+];
+
+function isValidationError(msg) {
+    if (!msg || typeof msg !== 'string') return false;
+    return VALIDATION_ERROR_PATTERNS.some(p => msg.includes(p));
+}
+
 const asyncHandler = (handler) => async (...args) => {
     try {
         return await handler(...args);
     } catch (err) {
         if (err instanceof CloudBaseError) throw err;
         if (err && typeof err === 'object' && 'code' in err && 'success' in err && 'message' in err) throw err;
-        throw serverError(err.message || '操作失败');
+        const msg = err.message || '操作失败';
+        throw isValidationError(msg) ? badRequest(msg) : serverError(msg);
     }
 };
 

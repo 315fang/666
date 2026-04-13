@@ -3,8 +3,10 @@ const { ErrorHandler } = require('../../utils/errorHandler');
 const { ensurePrivacyAuthorization } = require('../../utils/privacy');
 
 function resolveSubmitOrderMessage(error) {
-    const code = error && (error.code || error.statusCode);
-    if (code >= 400 && code < 500 && error && error.message) {
+    if (error && error.message
+        && error.message !== 'Internal server error'
+        && error.message !== '操作失败'
+        && error.message !== '云函数调用失败') {
         return error.message;
     }
     return '下单失败，请稍后重试';

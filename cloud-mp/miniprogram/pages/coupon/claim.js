@@ -37,10 +37,11 @@ Page({
     },
 
     onLoad(options) {
-        // 兼容扫码 scene 参数（小程序码）和直接路径 ?id=X（转发路径）
+        console.log('[coupon-claim] onLoad options:', JSON.stringify(options));
         const rawScene = options.scene ? decodeURIComponent(options.scene) : '';
         const parsed = parseScene(rawScene);
-        const couponId = String(options.id || parsed.id || '');
+        const couponId = String(options.id || parsed.id || parsed.cid || options.coupon_id || '');
+        console.log('[coupon-claim] parsed scene:', rawScene, '→', parsed, '→ couponId:', couponId);
         if (!couponId) {
             this.setData({ loading: false, claimStatus: 'error', claimMsg: '无效的优惠券链接' });
             return;

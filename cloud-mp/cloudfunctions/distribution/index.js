@@ -380,7 +380,32 @@ const handleAction = {
     }),
 
     'settleMatured': asyncHandler(async () => {
-        throw forbidden('该接口已停用，请使用佣金冻结期 + 后台审批结算主链');
+        const now = new Date();
+        // 查找已过退款期限的冻结佣金（refund_deadline < now 且状态为 frozen）
+        const frozenRes = await db.collection('commissions')
+            .where({ status: 'frozen', refund_deadline: _.lt(now) })
+            .limit(200)
+            .get().catch(() => ({ data: [] }));
+        // 同时处理旧流程 pending_approval 状态的佣金（兼容历史数据）
+        const pendingRes = await db.collection('commissions')
+            .where({ status: 'pending_approval', refund_deadline: _.lt(now) })
+            .limit(200)
+            .get().catch(() => ({ data: [] }));
+        const allComms = [...(frozenRes.data || []), ...(pendingRes.data || [])];
+        let settledCount = 0;
+        let totalAmount = 0;
+        for (const comm of allComms) {
+            const amount = toNumber(comm.amount, 0);
+            await db.collection('commissions').doc(comm._id).update({
+                data: { status: 'settled', settled_at: db.serverDate(), updated_at: db.serverDate() }
+            }).catch(() => {});
+            if (amount > 0) {
+                await distributionCommission.settleCommission(comm.openid, amount);
+                totalAmount += amount;
+            }
+            settledCount++;
+        }
+        return success({ settled: settledCount, total_amount: totalAmount });
     }),
 
     // ===== 提现 =====

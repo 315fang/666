@@ -17,5 +17,25 @@
     "checkInvalidKey": true,
     "ignoreDevUnusedFiles": true,
     "bigPackageSizeSupport": false
+  },
+  "condition": {
+    "miniprogram": {
+      "list": [
+        {
+          "name": "pages/coupon/claim",
+          "pathName": "pages/coupon/claim",
+          "query": "id=2",
+          "scene": null,
+          "launchMode": "default"
+        },
+        {
+          "name": "pages/coupon/claim?id=6",
+          "pathName": "pages/coupon/claim?id=6",
+          "query": "",
+          "launchMode": "default",
+          "scene": null
+        }
+      ]
+    }
   }
 }

@@ -483,12 +483,20 @@ const handleAction = {
     'getCouponInfo': asyncHandler(async (_openid, params) => {
         const id = String(params.coupon_id || params.id || '');
         if (!id) throw badRequest('缺少优惠券 ID');
-        // 先尝试按数字 id 字段查询（admin-api 存储格式）
-        const byNumericId = await db.collection('coupons').where({ id: isNaN(Number(id)) ? id : Number(id) }).limit(1).get().catch(() => ({ data: [] }));
-        const byDocId = byNumericId.data && byNumericId.data.length > 0
-            ? byNumericId
-            : await db.collection('coupons').doc(id).get().catch(() => ({ data: null }));
-        const coupon = (byNumericId.data && byNumericId.data[0]) || byDocId.data;
+        const numId = Number(id);
+        const hasNumeric = Number.isFinite(numId) && !isNaN(numId);
+        let coupon = null;
+        if (hasNumeric) {
+            const r = await db.collection('coupons').where({ id: numId }).limit(1).get().catch(() => ({ data: [] }));
+            coupon = r.data && r.data[0];
+        }
+        if (!coupon) {
+            const r2 = await db.collection('coupons').where({ id: id }).limit(1).get().catch(() => ({ data: [] }));
+            coupon = r2.data && r2.data[0];
+        }
+        if (!coupon) {
+            try { const r3 = await db.collection('coupons').doc(id).get(); coupon = r3.data; } catch (_) {}
+        }
         if (!coupon) return success({ coupon: null, found: false });
         const couponId = coupon.id != null ? String(coupon.id) : coupon._id;
         return success({

@@ -27,19 +27,16 @@ function plainSummary(html, maxLen = 96) {
 function formatHelperList(helpers = []) {
     return helpers.map((item) => ({
         ...item,
-        user: item.user || item.helper ? {
-            ...(item.user || item.helper),
-            avatarUrl: item.user?.avatarUrl || item.user?.avatar_url || item.user?.avatar
-                || item.helper?.avatarUrl || item.helper?.avatar_url || item.helper?.avatar || '',
-            nickname: item.user?.nickname || item.user?.nickName || item.user?.nick_name
-                || item.helper?.nickname || item.helper?.nickName || item.helper?.nick_name || '好友'
-        } : null,
+        user: item.user || item.helper || null,
         cut_amount: item.cut_amount ?? item.slash_amount ?? 0
     }));
 }
 
 Page({
     data: {
+        statusBarHeight: 20,
+        navTopPadding: 20,
+        navBarHeight: 44,
         slashNo: null,
         detail: null,
         loading: true,
@@ -61,6 +58,11 @@ Page({
     },
 
     onLoad(options) {
+        this.setData({
+            statusBarHeight: app.globalData.statusBarHeight || 20,
+            navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
+            navBarHeight: app.globalData.navBarHeight || 44
+        });
         if (options.slash_no) {
             this.setData({ slashNo: options.slash_no });
             this.loadDetail(options.slash_no);
@@ -236,5 +238,9 @@ Page({
             path: `/pages/slash/detail?slash_no=${detail.slash_no}`,
             imageUrl: detail.product?.images?.[0] || ''
         };
+    },
+
+    onBack() {
+        require('../../utils/navigator').safeBack('/pages/activity/activity');
     }
 });

@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
 const { toNumber, getAllRecords } = require('./shared/utils');
+const { normalizeCouponRecord } = require('./user-coupons');
 
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
@@ -34,6 +35,38 @@ async function getUserCouponIds(openid) {
         if (hasValue(user._id)) values.push(user._id);
     }
     return uniqueValues(values);
+}
+
+function normalizeScopeIds(value) {
+    if (Array.isArray(value)) return uniqueValues(value);
+    if (!hasValue(value)) return [];
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return [];
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) return uniqueValues(parsed);
+            } catch (_) {}
+        }
+        return uniqueValues(trimmed.split(',').map((item) => item.trim()));
+    }
+    return uniqueValues([value]);
+}
+
+function couponMatchesScope(coupon = {}, params = {}) {
+    const scope = String(coupon.scope || 'all').toLowerCase();
+    const scopeIds = normalizeScopeIds(coupon.scope_ids);
+    if (!scope || scope === 'all' || scopeIds.length === 0) return true;
+    if (scope === 'product') {
+        const productIds = normalizeScopeIds(params.product_ids);
+        return productIds.length === 0 || productIds.some((id) => scopeIds.includes(String(id)));
+    }
+    if (scope === 'category') {
+        const categoryIds = normalizeScopeIds(params.category_ids);
+        return categoryIds.length === 0 || categoryIds.some((id) => scopeIds.includes(String(id)));
+    }
+    return true;
 }
 
 async function getCommissionIdentity(openid) {
@@ -78,25 +111,6 @@ async function listCommissionRows(identity = {}) {
         merged[commissionRecordKey(row)] = row;
     });
     return Object.values(merged);
-}
-
-function isCouponExpired(coupon) {
-    const raw = coupon.expire_at || coupon.end_at || coupon.valid_until;
-    if (!raw) return false;
-    const time = new Date(raw).getTime();
-    return Number.isFinite(time) && time < Date.now();
-}
-
-function normalizeCoupon(coupon) {
-    return {
-        ...coupon,
-        status: isCouponExpired(coupon) ? 'expired' : (coupon.status || 'unused'),
-        coupon_name: coupon.coupon_name || coupon.name || '优惠券',
-        coupon_type: coupon.coupon_type || coupon.type || 'fixed',
-        coupon_value: toNumber(coupon.coupon_value != null ? coupon.coupon_value : coupon.value, 0),
-        min_purchase: toNumber(coupon.min_purchase, 0),
-        scope: coupon.scope || 'all'
-    };
 }
 
 function roundMoney(val) {
@@ -487,12 +501,12 @@ async function availableCoupons(openid, params = {}) {
         const key = String(coupon._id || coupon.id || `${coupon.user_id || coupon.openid || ''}:${coupon.coupon_id || ''}`);
         map[key] = coupon;
     });
-    let coupons = Object.keys(map)
-        .map((key) => normalizeCoupon(map[key]))
-        .filter((coupon) => coupon.status === 'unused');
+    let coupons = await Promise.all(Object.keys(map).map((key) => normalizeCouponRecord(map[key])));
+    coupons = coupons.filter((coupon) => coupon.status === 'unused');
     if (minPurchase > 0) {
         coupons = coupons.filter(c => toNumber(c.min_purchase, 0) <= minPurchase);
     }
+    coupons = coupons.filter((coupon) => couponMatchesScope(coupon, params));
 
     return coupons.sort((a, b) => {
         const ta = a.expire_at ? new Date(a.expire_at).getTime() : 0;

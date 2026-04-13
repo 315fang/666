@@ -21,6 +21,7 @@
         "pages/user/membership-center",
         "pages/user/member-levels",
         "pages/user/ticket-list",
+        "pages/user/share-poster",
         "pages/product/detail",
         "pages/product/reviews",
         "pages/search/search",
@@ -113,8 +114,7 @@
             "root": "pages/coupon",
             "name": "packageCoupon",
             "pages": [
-                "list",
-                "claim"
+                "list"
             ]
         },
         {

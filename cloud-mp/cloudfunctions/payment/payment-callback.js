@@ -1147,14 +1147,16 @@ async function handleCallback(event) {
                     return { code: 'FAIL', message: 'Signature verification failed' };
                 }
             } catch (verifyErr) {
-                // 签名验证异常时拒绝处理，防止伪造回调绕过验签触发改单等操作
                 console.error('[PaymentCallback] 签名验证异常，拒绝处理:', verifyErr.message);
                 return { code: 'FAIL', message: 'Signature verification error' };
             }
         } else if (wxTimestamp || wxNonce || wxSignature) {
-            // 头信息不完整也拒绝（防止部分头攻击）
             console.error('[PaymentCallback] 签名头信息不完整，拒绝处理');
             return { code: 'FAIL', message: 'Incomplete signature headers' };
+        } else if (event.headers && Object.keys(headers).length > 0) {
+            // HTTP 请求有 headers 但缺少全部签名头 → 外部伪造，拒绝
+            console.error('[PaymentCallback] HTTP 请求缺少微信签名头，拒绝处理');
+            return { code: 'FAIL', message: 'Missing signature headers' };
         }
 
         // 3. 解析回调数据

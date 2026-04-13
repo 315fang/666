@@ -19,6 +19,19 @@ const app = getApp();
 
 const INDEX_USER_INFO_TTL = 15 * 1000;
 
+function parseScene(scene) {
+    const result = {};
+    if (!scene) return result;
+    String(scene).split('&').forEach((pair) => {
+        const [rawKey, rawValue] = pair.split('=');
+        if (!rawKey) return;
+        const key = decodeURIComponent(rawKey);
+        const value = rawValue ? decodeURIComponent(rawValue) : '';
+        result[key] = value;
+    });
+    return result;
+}
+
 Page({
     data: {
         homeConfigs: {},
@@ -66,6 +79,7 @@ Page({
 
         // 小程序码 scene / 分享链接 invite：写入待绑定会员码，登录时由 app.wxLogin 带给后端
         app._captureInviteFromLaunch({ query: options || {} });
+        this._resolveCouponEntry(options);
 
         if (app.globalData.homeDataPromise) {
             app.globalData.homeDataPromise.then((data) => {
@@ -77,6 +91,7 @@ Page({
     },
 
     onShow() {
+        this._consumeCouponEntry();
         this.loadUserInfo();
         this.loadCoupons();
         wx.showShareMenu({ withShareTicket: true, menus: ['shareAppMessage', 'shareTimeline'] });
@@ -96,6 +111,37 @@ Page({
 
     onRegLightTipClose() {
         this.setData({ regLightTipShow: false });
+    },
+
+    _resolveCouponEntry(options = {}) {
+        const parsedScene = parseScene(options.scene ? decodeURIComponent(options.scene) : '');
+        const couponId = String(options.coupon_id || options.id || parsedScene.cid || parsedScene.id || parsedScene.coupon_id || '').trim();
+        console.log('[coupon-entry] resolve:', { raw: options.scene, couponId });
+        this._pendingCouponClaimId = couponId || '';
+        this._couponClaimConsumed = false;
+    },
+
+    _consumeCouponEntry() {
+        if (!this._pendingCouponClaimId || this._couponClaimConsumed) return;
+        this._couponClaimConsumed = true;
+        const couponId = this._pendingCouponClaimId;
+        this._pendingCouponClaimId = '';
+        const claimUrl = `/pages/coupon/claim?id=${encodeURIComponent(couponId)}`;
+        console.log('[coupon-entry] navigating to:', claimUrl);
+        setTimeout(() => {
+            wx.navigateTo({
+                url: claimUrl,
+                fail(err) {
+                    console.error('[coupon-entry] navigateTo failed:', err);
+                    // 子包页面不存在时降级为模态提示
+                    wx.showModal({
+                        title: '领取优惠券',
+                        content: `优惠券 ID：${couponId}，领券页暂未就绪，请升级到最新版小程序后重试。`,
+                        showCancel: false
+                    });
+                }
+            });
+        }, 800);
     },
 
     onReady() {

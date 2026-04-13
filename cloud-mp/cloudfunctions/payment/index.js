@@ -96,6 +96,19 @@ async function handlePaymentAction(event, openid) {
         }
     }
 
+    // 内部调用：其它云函数通过 callFunction 触发支付后处理（佣金、积分奖励、升级等）
+    if (action === '_postProcessPaid') {
+        const orderId = params.order_id || params.id;
+        if (!orderId) throw badRequest('缺少订单 ID');
+        try {
+            const result = await paymentCallback.processPaidOrder(orderId, { _id: orderId });
+            return success(result);
+        } catch (err) {
+            console.error('[Payment] _postProcessPaid error:', err.message);
+            return success({ error: err.message });
+        }
+    }
+
     throw badRequest(`未知 action: ${action}`);
 }
 
