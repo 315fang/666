@@ -39,5 +39,8 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "cos-nodejs-sdk-v5": "^2.15.4"
+  }
 }
