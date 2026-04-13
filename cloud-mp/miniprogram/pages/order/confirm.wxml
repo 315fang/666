@@ -190,12 +190,12 @@
     <text class="points-balance-disabled">当前商品不支持积分抵扣</text>
   </view>
 
-  <!-- 货款余额支付（代理商专属） -->
+  <!-- 货款余额支付 -->
   <view class="section points-section wallet-section" wx:if="{{isAgent}}">
     <view class="wallet-label-col">
       <text class="points-label">货款余额支付</text>
       <text class="wallet-balance-sub" wx:if="{{walletBalance > 0}}">可用余额 ¥{{walletBalance}}</text>
-      <text class="wallet-balance-sub wallet-balance-empty" wx:else>余额不足，请先充值</text>
+      <text class="wallet-balance-sub wallet-balance-empty" wx:else>余额不足</text>
     </view>
     <view class="points-right">
       <switch
@@ -209,7 +209,6 @@
   </view>
   <view class="section points-detail" wx:if="{{isAgent && useWallet && walletBalance > 0}}">
     <text class="points-deduct-text">从货款余额扣款，无需微信支付</text>
-    <text class="points-deduct-tip">（代理商专属付款方式，余额充值后方可使用）</text>
   </view>
 
   <view class="coupon-picker {{showCouponPicker ? 'show' : ''}}" wx:if="{{showCouponPicker}}">

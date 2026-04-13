@@ -71,6 +71,100 @@ page { padding-bottom: 180rpx; }
   animation: shimmer 1.6s infinite;
 }
 
+/* 用户订单状态横幅 */
+.my-status-banner {
+  margin: 16rpx 28rpx 0;
+  padding: 20rpx 24rpx;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.my-status-paid {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(36, 95, 147, 0.08));
+  border: 1rpx solid rgba(16, 185, 129, 0.18);
+}
+
+.my-status-unpaid {
+  background: linear-gradient(135deg, rgba(230, 126, 34, 0.14), rgba(211, 84, 0, 0.08));
+  border: 1rpx solid rgba(230, 126, 34, 0.25);
+}
+
+.my-status-cancelled {
+  background: linear-gradient(135deg, rgba(107, 130, 151, 0.2), rgba(36, 95, 147, 0.08));
+  border: 1rpx solid rgba(107, 130, 151, 0.24);
+}
+
+.my-status-unknown {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1rpx solid rgba(36, 95, 147, 0.08);
+}
+
+.my-status-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.my-status-role {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.my-status-text {
+  font-size: 22rpx;
+  color: rgba(248, 251, 255, 0.8);
+}
+
+.my-status-right {
+  flex-shrink: 0;
+}
+
+.my-status-btn {
+  padding: 10rpx 28rpx;
+  background: linear-gradient(135deg, #e67e22, #d35400);
+  color: #fff;
+  font-size: 24rpx;
+  font-weight: 700;
+  border-radius: 999rpx;
+}
+
+.my-status-btn-secondary {
+  background: linear-gradient(135deg, #245f93, #1e4a6d);
+}
+
+.my-status-order-link {
+  padding: 10rpx 24rpx;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1rpx solid rgba(255, 255, 255, 0.3);
+  color: #f8fafc;
+  font-size: 22rpx;
+  font-weight: 600;
+  border-radius: 999rpx;
+}
+
+/* 成员"我"标记 */
+.member-avatar--me {
+  border-color: #245f93;
+  border-width: 4rpx;
+}
+
+.me-tag {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  font-size: 18rpx;
+  font-weight: 700;
+  color: #fff;
+  background: #e67e22;
+  padding: 2rpx 8rpx;
+  border-radius: 8rpx;
+  line-height: 1.4;
+}
+
 .hero-shell {
   margin-top: 10rpx;
 }
@@ -485,6 +579,10 @@ page { padding-bottom: 180rpx; }
   min-width: 0;
 }
 
+.btn-join-wrap.full-width {
+  width: 100%;
+}
+
 .btn-join {
   width: 100%;
   display: flex;
@@ -497,6 +595,10 @@ page { padding-bottom: 180rpx; }
   min-height: 96rpx;
   padding: 14rpx 20rpx;
   box-sizing: border-box;
+}
+
+.btn-pay {
+  background: linear-gradient(135deg, #e67e22, #d35400);
 }
 
 .btn-line1 {
@@ -522,6 +624,11 @@ page { padding-bottom: 180rpx; }
   font-size: 26rpx;
   border-radius: 999rpx;
   min-height: 96rpx;
+}
+
+.btn-status-note {
+  background: rgba(36, 95, 147, 0.1);
+  color: #245f93;
 }
 
 .success-done {

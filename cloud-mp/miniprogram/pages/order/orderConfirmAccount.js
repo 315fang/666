@@ -20,14 +20,15 @@ function togglePoints(page, enabled) {
     }
 }
 
-async function loadWalletBalance(page, app) {
-    const roleLevel = app.globalData.userInfo?.role_level || 0;
-    if (roleLevel < 3) return;
-    page.setData({ isAgent: true });
+async function loadWalletBalance(page) {
     try {
         const res = await get('/agent/wallet');
         if (res && res.code === 0 && res.data) {
-            page.setData({ walletBalance: parseFloat(res.data.balance || 0) });
+            const balance = parseFloat(res.data.balance || 0);
+            page.setData({
+                isAgent: balance > 0,
+                walletBalance: balance
+            });
         }
     } catch (_e) {
         // 静默

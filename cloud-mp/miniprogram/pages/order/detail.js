@@ -38,6 +38,8 @@ Page({
 
         statusMap: {
             pending: '待付款',
+            pending_payment: '待付款',
+            pending_group: '待成团',
             paid: '待发货',
             agent_confirmed: '代理已确认',
             shipping_requested: '发货申请中',
@@ -49,6 +51,8 @@ Page({
         },
         statusDescMap: {
             pending: '请尽快完成支付',
+            pending_payment: '请尽快完成支付',
+            pending_group: '已支付成功，等待其他团员加入后成团',
             paid: '已支付成功，等待商家发货',
             agent_confirmed: '代理已确认，正在准备发货',
             shipping_requested: '发货申请已提交，等待仓库处理',
@@ -76,12 +80,7 @@ Page({
                 logisticsConfig.shipping_mode !== 'manual' || logisticsConfig.shipping_manual_tracking_page_enabled !== false
             )
         });
-        // 代理商（role_level >= 3）加载货款余额，用于详情页货款支付
-        const roleLevel = app.globalData.userInfo?.role_level || 0;
-        if (roleLevel >= 3) {
-            this.setData({ isAgent: true });
-            this._loadWalletBalance();
-        }
+        this._loadWalletBalance();
         // id 可为数字主键或商户订单号 order_no（与微信支付 out_trade_no 一致，微信订单中心跳转常用）
         if (options.id) {
             this.setData({ orderId: options.id });
@@ -96,9 +95,14 @@ Page({
             const { get: httpGet } = require('../../utils/request');
             const res = await httpGet('/agent/wallet');
             if (res && res.code === 0 && res.data) {
-                this.setData({ walletBalance: parseFloat(res.data.balance || 0) });
+                const balance = parseFloat(res.data.balance || 0);
+                this.setData({ isAgent: balance > 0, walletBalance: balance });
+            } else {
+                this.setData({ isAgent: false, walletBalance: 0 });
             }
-        } catch (_e) { /* 静默 */ }
+        } catch (_e) {
+            this.setData({ isAgent: false, walletBalance: 0 });
+        }
     },
 
     onReady() {

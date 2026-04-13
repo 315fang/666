@@ -15,6 +15,22 @@
   </view>
 
   <block wx:if="{{!loading && detail}}">
+    <!-- 用户订单状态横幅 -->
+    <view class="my-status-banner my-status-{{detail.my_payment_status}}" wx:if="{{detail.my_payment_status}}">
+      <view class="my-status-left">
+        <text class="my-status-role">{{detail.is_leader ? '我发起的团' : '我参与的团'}}</text>
+        <text class="my-status-text" wx:if="{{detail.my_payment_status === 'paid'}}">已支付 · 等待成团</text>
+        <text class="my-status-text" wx:elif="{{detail.my_payment_status === 'unpaid'}}">未支付 · 支付后自动加入</text>
+        <text class="my-status-text" wx:elif="{{detail.my_payment_status === 'cancelled'}}">原订单已取消 · 当前团状态独立继续</text>
+        <text class="my-status-text" wx:else>已加入拼团</text>
+      </view>
+      <view class="my-status-right">
+        <view class="my-status-btn" wx:if="{{detail.my_payment_status === 'unpaid'}}" bindtap="onGoPayMyOrder">去支付</view>
+        <view class="my-status-btn my-status-btn-secondary" wx:elif="{{detail.my_payment_status === 'cancelled' && detail.status === 'open'}}" bindtap="onJoin">重新参团</view>
+        <view class="my-status-order-link" wx:elif="{{detail.my_order_no}}" bindtap="onGoMyOrder">查看订单</view>
+      </view>
+    </view>
+
     <view class="hero-shell">
       <view class="hero-card">
         <image class="hero-product-img" src="{{detail.product && detail.product.images && detail.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
@@ -70,12 +86,13 @@
       </view>
 
       <view class="member-list" wx:if="{{detail.members && detail.members.length > 0}}">
-        <view class="member-item" wx:for="{{detail.members}}" wx:key="id">
+        <view class="member-item {{item.is_me ? 'member-item--me' : ''}}" wx:for="{{detail.members}}" wx:key="id">
           <view class="avatar-wrap">
-            <image class="member-avatar" src="{{item.user && (item.user.avatar || item.user.avatar_url) || '/assets/icons/user.svg'}}" mode="aspectFill"/>
+            <image class="member-avatar {{item.is_me ? 'member-avatar--me' : ''}}" src="{{item.user && (item.user.avatar || item.user.avatar_url || item.user.avatarUrl) || '/assets/icons/user.svg'}}" mode="aspectFill"/>
             <text class="owner-tag" wx:if="{{item.is_leader}}">团长</text>
+            <text class="me-tag" wx:elif="{{item.is_me}}">我</text>
           </view>
-          <text class="member-name">{{item.user && (item.user.nick_name || item.user.nickname) || '成员'}}</text>
+          <text class="member-name">{{item.is_me ? '我' : (item.user && (item.user.nick_name || item.user.nickname || item.user.nickName) || '成员')}}</text>
         </view>
         <view class="member-item" wx:for="{{detail._needMore}}" wx:key="*this">
           <view class="avatar-empty"/>
@@ -136,13 +153,36 @@
   </block>
 
   <view class="bottom-bar" wx:if="{{!loading && detail}}">
-    <block wx:if="{{detail.status === 'open'}}">
+    <block wx:if="{{detail.status === 'open' && detail.my_payment_status === 'paid'}}">
       <button class="btn-col-share share-button-reset" wx:if="{{detail.is_member}}" open-type="share">
         <image src="/assets/icons/share.svg" class="btn-icon" mode="aspectFit"/>
         <text class="btn-col-main">邀好友</text>
         <text class="btn-col-sub">差{{detail._needMore}}人</text>
       </button>
       <view class="btn-join-wrap">
+        <view class="btn-disabled btn-status-note">
+          <text>你已参团，等待成团</text>
+        </view>
+      </view>
+    </block>
+    <block wx:elif="{{detail.status === 'open' && detail.my_payment_status === 'unpaid'}}">
+      <view class="btn-join-wrap full-width">
+        <view class="btn-join btn-pay" bindtap="onGoPayMyOrder">
+          <text class="btn-line1">去支付</text>
+          <text class="btn-line2">完成支付后自动加入拼团</text>
+        </view>
+      </view>
+    </block>
+    <block wx:elif="{{detail.status === 'open' && detail.my_payment_status === 'cancelled'}}">
+      <view class="btn-join-wrap full-width">
+        <view class="btn-join" bindtap="onJoin">
+          <text class="btn-line1">重新参团</text>
+          <text class="btn-line2">当前订单已取消，可重新加入本团</text>
+        </view>
+      </view>
+    </block>
+    <block wx:elif="{{detail.status === 'open'}}">
+      <view class="btn-join-wrap full-width">
         <view class="btn-join" bindtap="onJoin">
           <text class="btn-line1">¥{{detail.group_price}} 去参团</text>
           <text class="btn-line2" wx:if="{{detail._saveNum > 0}}">拼团省¥{{detail._savePerUnit}} · 库存{{detail._stockRemain}}件</text>

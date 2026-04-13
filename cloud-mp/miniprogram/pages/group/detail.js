@@ -110,9 +110,14 @@ Page({
                     d._remainHours = 0;
                     d._remainMins = 0;
                 }
-                // 判断当前用户是否是发起人
-                const myId = app.globalData.userInfo?.id;
-                d._isOwner = d.members && d.members.some(m => m.is_leader && m.user_id === myId);
+                const myOpenid = app.globalData.userInfo?.openid || app.globalData.openid;
+                d._isOwner = d.is_leader === true;
+                if (d.members && myOpenid) {
+                    d.members = d.members.map(m => ({
+                        ...m,
+                        is_me: m.openid === myOpenid
+                    }));
+                }
                 this.setData({ detail: d, loading: false });
             } else {
                 wx.showToast({ title: res.message || '加载失败', icon: 'none' });
@@ -166,6 +171,24 @@ Page({
             path: `/pages/group/detail?group_no=${detail.group_no}`,
             imageUrl: detail.product?.images?.[0] || ''
         };
+    },
+
+    onGoMyOrder() {
+        const d = this.data.detail;
+        const orderId = d && (d.my_order_id || d.my_order_no);
+        if (orderId) {
+            wx.navigateTo({ url: `/pages/order/detail?id=${orderId}` });
+        }
+    },
+
+    onGoPayMyOrder() {
+        const d = this.data.detail;
+        const orderId = d && (d.my_order_id || d.my_order_no);
+        if (orderId) {
+            wx.navigateTo({ url: `/pages/order/detail?id=${orderId}` });
+        } else {
+            wx.showToast({ title: '订单信息缺失', icon: 'none' });
+        }
     },
 
     onBack() {

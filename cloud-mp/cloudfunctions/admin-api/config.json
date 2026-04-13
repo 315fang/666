@@ -3,5 +3,7 @@
     "openapi": [
       "wxacode.getUnlimited"
     ]
-  }
+  },
+  "timeout": 60,
+  "memorySize": 512
 }

@@ -9,16 +9,8 @@ function navigateIfLoggedIn(url) {
     return true;
 }
 
-function goBusinessCenter(page) {
+function goBusinessCenter() {
     if (!requireLogin()) return;
-    const membershipConfig = getConfigSection('membership_config');
-    const minRoleLevel = Number(membershipConfig.business_center_min_role_level);
-    const threshold = Number.isFinite(minRoleLevel) ? minRoleLevel : 1;
-    const roleLevel = page.data.userInfo?.role_level ?? app.globalData.userInfo?.role_level ?? 0;
-    if (roleLevel < threshold) {
-        wx.showToast({ title: '当前等级暂未开放', icon: 'none' });
-        return;
-    }
     wx.navigateTo({ url: '/pages/distribution/business-center' });
 }
 

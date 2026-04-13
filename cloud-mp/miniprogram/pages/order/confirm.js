@@ -355,7 +355,7 @@ Page({
     },
 
     async loadWalletBalance() {
-        return loadWalletBalance(this, app);
+        return loadWalletBalance(this);
     },
 
     onToggleWallet(e) {

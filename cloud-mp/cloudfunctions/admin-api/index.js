@@ -1,4 +1,7 @@
 'use strict';
+process.on('unhandledRejection', (reason) => {
+    console.error('[admin-api] unhandledRejection:', reason);
+});
 const cloud = require('wx-server-sdk');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
@@ -79,7 +82,13 @@ function normalizeBody(event) {
 }
 
 exports.main = async (event) => {
-    await Promise.resolve(app.locals.dataStore?.readyPromise);
+    const ready = app.locals.dataStore?.readyPromise;
+    if (ready) {
+        await Promise.race([
+            Promise.resolve(ready),
+            new Promise(r => setTimeout(r, 8000))
+        ]);
+    }
 
     const headers = normalizeHeaders(event.headers);
     const path = normalizePath(event);

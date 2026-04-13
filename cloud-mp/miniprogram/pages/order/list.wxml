@@ -8,6 +8,8 @@
             bindtap="onTabChange" data-status="">全部</view>
       <view class="tab-item {{currentStatus === 'pending' ? 'active' : ''}}"
             bindtap="onTabChange" data-status="pending">待付款</view>
+      <view class="tab-item {{currentStatus === 'pending_group' ? 'active' : ''}}"
+            bindtap="onTabChange" data-status="pending_group">待成团</view>
       <view class="tab-item {{currentStatus === 'paid' ? 'active' : ''}}"
             bindtap="onTabChange" data-status="paid">待发货</view>
       <view class="tab-item {{currentStatus === 'shipped' ? 'active' : ''}}"
@@ -60,7 +62,8 @@
       </view>
       <view class="activity-strip activity-strip-{{item.activityInfo.type}}" wx:if="{{item.activityInfo}}">
         <text class="activity-strip-label">{{item.activityInfo.label}}订单</text>
-        <text class="activity-strip-text" wx:if="{{item.activityInfo.type === 'group' && !item.activityInfo.targetNo}}">支付成功后生成拼团进度</text>
+        <text class="activity-strip-text" wx:if="{{item.activityInfo.type === 'group' && item.activityInfo.disabled}}">支付成功后生成拼团进度</text>
+        <text class="activity-strip-text" wx:elif="{{item.activityInfo.type === 'group' && !item.activityInfo.targetNo}}">拼团进度生成中</text>
         <text class="activity-strip-text" wx:else>可继续查看活动状态</text>
       </view>
 
@@ -107,12 +110,22 @@
                     catchtap="onViewActivity" data-order="{{item}}">{{item.activityInfo.actionText}}</view>
             </view>
             <!-- 待付款 -->
-            <block wx:if="{{item.status === 'pending'}}">
+            <block wx:if="{{item.status === 'pending' || item.status === 'pending_payment'}}">
               <view class="action-row">
                 <view class="btn btn-sm btn-ghost"
                       catchtap="onCancelOrder" data-order="{{item}}">取消订单</view>
                 <view class="btn btn-sm btn-primary"
                       catchtap="onPayOrder" data-order="{{item}}">去付款</view>
+              </view>
+            </block>
+
+            <!-- 待成团 -->
+            <block wx:if="{{item.status === 'pending_group'}}">
+              <view class="action-row">
+                <view class="btn btn-sm btn-ghost"
+                      catchtap="onApplyRefund" data-order="{{item}}">退出拼团</view>
+                <view class="btn btn-sm btn-primary"
+                      catchtap="onViewActivity" data-order="{{item}}">查看拼团</view>
               </view>
             </block>
             

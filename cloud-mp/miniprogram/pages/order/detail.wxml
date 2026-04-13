@@ -15,9 +15,32 @@
     <text class="status-desc" wx:else>{{statusDescMap[order.status] || ''}}</text>
   </view>
 
-  <!-- 订单流程进度 -->
-  <view class="progress-card" wx:if="{{!hasActiveRefund}}">
-    <view class="progress-step {{order.paid_at || (order.status !== 'pending' && order.status !== 'cancelled') ? 'done' : (order.status === 'pending' ? 'active' : '')}}">
+  <!-- 拼团订单流程进度 -->
+  <view class="progress-card" wx:if="{{!hasActiveRefund && order.type === 'group'}}">
+    <view class="progress-step {{order.paid_at || order.status !== 'pending_payment' ? 'done' : 'active'}}">
+      <view class="step-dot"></view>
+      <text class="step-label">付款</text>
+    </view>
+    <view class="progress-line {{order.group_completed_at || order.status === 'paid' || order.status === 'shipped' || order.status === 'completed' ? 'done' : ''}}"></view>
+    <view class="progress-step {{order.group_completed_at || order.status === 'paid' || order.status === 'shipped' || order.status === 'completed' ? 'done' : (order.status === 'pending_group' ? 'active' : '')}}">
+      <view class="step-dot"></view>
+      <text class="step-label">成团</text>
+    </view>
+    <view class="progress-line {{order.shipped_at ? 'done' : ''}}"></view>
+    <view class="progress-step {{order.shipped_at ? 'done' : (order.status === 'paid' || order.status === 'agent_confirmed' || order.status === 'shipping_requested' ? 'active' : '')}}">
+      <view class="step-dot"></view>
+      <text class="step-label">发货</text>
+    </view>
+    <view class="progress-line {{order.completed_at ? 'done' : ''}}"></view>
+    <view class="progress-step {{order.completed_at ? 'done' : (order.status === 'shipped' ? 'active' : '')}}">
+      <view class="step-dot"></view>
+      <text class="step-label">收货</text>
+    </view>
+  </view>
+
+  <!-- 普通订单流程进度 -->
+  <view class="progress-card" wx:if="{{!hasActiveRefund && order.type !== 'group'}}">
+    <view class="progress-step {{order.paid_at || (order.status !== 'pending' && order.status !== 'pending_payment' && order.status !== 'cancelled') ? 'done' : (order.status === 'pending' || order.status === 'pending_payment' ? 'active' : '')}}">
       <view class="step-dot"></view>
       <text class="step-label">付款</text>
     </view>
@@ -240,7 +263,7 @@
     <!-- 无活跃退款，正常按钮 -->
     <block wx:else>
       <!-- 待付款 -->
-      <block wx:if="{{order.status === 'pending'}}">
+      <block wx:if="{{order.status === 'pending' || order.status === 'pending_payment'}}">
         <!-- 代理商：货款余额支付 + 微信支付两个选项 -->
         <block wx:if="{{isAgent && walletBalance > 0}}">
           <view class="bar-action-group">
@@ -263,6 +286,15 @@
             </view>
           </view>
         </block>
+      </block>
+      <!-- 待成团：已支付等待拼团成功 -->
+      <block wx:if="{{order.status === 'pending_group'}}">
+        <view class="bar-action-group">
+          <view class="bar-action-row">
+            <view class="btn-outline" bindtap="onApplyRefund">退出拼团</view>
+            <view class="btn-primary" bindtap="onViewActivity">查看拼团</view>
+          </view>
+        </view>
       </block>
       <!-- 待发货：仅已支付未进入代理履约流程时可申请退款 -->
       <block wx:if="{{order.status === 'paid'}}">

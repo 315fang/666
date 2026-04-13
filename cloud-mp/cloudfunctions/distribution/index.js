@@ -662,7 +662,9 @@ const handleAction = {
         const userRes = await db.collection('users').where({ openid }).limit(1).get();
         if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
         const user = await resolveCommissionWalletState(userRes.data[0]);
+        const roleLevel = toNumber(user.role_level, 0);
         return success({
+            role_level: roleLevel,
             balance: toNumber(user._agent_wallet_balance, 0),
             agent_wallet_balance: toNumber(user._agent_wallet_balance, 0),
             commission_balance: toNumber(user._commission_balance, 0),
@@ -1011,7 +1013,7 @@ exports.main = cloudFunctionWrapper(async (event) => {
     }
 
     // 查看类 action：非分销员也可访问（返回基础数据）
-    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench', 'stats', 'team', 'teamDetail', 'commissionPreview', 'estimatedCommission', 'promotionProgress', 'promotionLogs', 'myFundPoolSummary'];
+    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench', 'stats', 'team', 'teamDetail', 'commissionPreview', 'estimatedCommission', 'promotionProgress', 'promotionLogs', 'myFundPoolSummary', 'agentWallet', 'agentGoodsFund', 'agentWalletLogs'];
 
     if (!viewActions.includes(action)) {
         // 写操作需要分销权限

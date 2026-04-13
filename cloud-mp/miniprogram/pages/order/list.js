@@ -11,9 +11,12 @@ function buildOrderActivityInfo(order = {}) {
     const slashNo = order.slash_no || firstItem.slash_no || '';
 
     if (type === 'group' || groupNo || order.group_activity_id || firstItem.group_activity_id) {
-        const isPaid = order.status && order.status !== 'pending' && order.status !== 'cancelled';
+        const isPaid = order.status && order.status !== 'pending' && order.status !== 'pending_payment' && order.status !== 'cancelled';
         let actionText, disabled;
-        if (groupNo) {
+        if (groupNo && order.status === 'cancelled') {
+            actionText = '查看当前团状态';
+            disabled = false;
+        } else if (groupNo) {
             actionText = '查看进度';
             disabled = false;
         } else if (isPaid) {
@@ -408,7 +411,7 @@ Page({
         if (!activity) return;
         if (activity.type === 'group') {
             if (!activity.targetNo) {
-                const isPaid = order.status && order.status !== 'pending' && order.status !== 'cancelled';
+                const isPaid = order.status && order.status !== 'pending' && order.status !== 'pending_payment' && order.status !== 'cancelled';
                 if (isPaid) {
                     const orderId = order.id || order._id || order.order_no;
                     wx.navigateTo({ url: `/pages/order/detail?id=${orderId}` });

@@ -127,13 +127,8 @@ function applyGrowthDisplay(page, info) {
 }
 
 function refreshBusinessCenterVisibility(page) {
-    const membershipConfig = getConfigSection('membership_config');
-    const minRoleLevel = Number(membershipConfig.business_center_min_role_level);
-    const threshold = Number.isFinite(minRoleLevel) ? minRoleLevel : 1;
     const loggedIn = !!(app.globalData && app.globalData.isLoggedIn);
-    const userInfo = page.data.userInfo || app.globalData.userInfo || {};
-    const roleLevel = userInfo.role_level != null ? userInfo.role_level : 0;
-    page.setData({ showBusinessCenter: loggedIn && roleLevel >= threshold });
+    page.setData({ showBusinessCenter: loggedIn });
 }
 
 function hasFreshTimestamp(timestamp, ttl) {

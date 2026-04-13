@@ -257,7 +257,7 @@ async function applyRefund(openid, params) {
     if (!order) throw new Error('订单不存在');
     if (order.openid !== openid) throw new Error('无权操作此订单');
 
-    if (order.status !== 'paid' && order.status !== 'shipped' && order.status !== 'completed') {
+    if (!['paid', 'pending_group', 'shipped', 'completed'].includes(order.status)) {
         throw new Error(`订单状态不允许退款: ${order.status}`);
     }
     const canonicalOrderId = order._id || String(orderId);

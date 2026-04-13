@@ -839,6 +839,34 @@ async function findGroupOrder(groupNo) {
     return res.data && res.data[0] ? res.data[0] : null;
 }
 
+/**
+ * 成团后将所有参团订单从 pending_group → paid
+ */
+async function promoteGroupOrdersToPaid(groupOrder) {
+    if (!groupOrder) return;
+    const groupNo = groupOrder.group_no;
+    const activityId = groupOrder.activity_id || groupOrder.legacy_activity_id || '';
+    try {
+        // 通过 group_no 查找关联订单
+        if (groupNo) {
+            await db.collection('orders')
+                .where({ group_no: groupNo, status: 'pending_group' })
+                .update({ data: { status: 'paid', group_completed_at: db.serverDate(), updated_at: db.serverDate() } })
+                .catch(() => {});
+        }
+        // 通过 activity_id 补充查找（group_no 未写回的情况）
+        if (activityId) {
+            await db.collection('orders')
+                .where({ group_activity_id: activityId, type: 'group', status: 'pending_group' })
+                .update({ data: { status: 'paid', group_completed_at: db.serverDate(), updated_at: db.serverDate() } })
+                .catch(() => {});
+        }
+        console.log('[GroupJoin] 成团，已将参团订单从 pending_group 更新为 paid, group_no:', groupNo);
+    } catch (err) {
+        console.error('[GroupJoin] promoteGroupOrdersToPaid 失败:', err.message);
+    }
+}
+
 async function ensurePaidGroupJoined(orderId, order) {
     if (!isGroupOrder(order)) return { skipped: true };
     if (order.group_joined_at) return { skipped: true };
@@ -855,6 +883,23 @@ async function ensurePaidGroupJoined(orderId, order) {
     let groupNo = order.group_no || '';
     let groupOrder = await findGroupOrder(groupNo);
 
+    // 若 group_no 查不到团但有 activity_id，尝试通过 activity_id 找到 open/pending 状态的团
+    if (!groupOrder && !groupNo) {
+        const actId = order.group_activity_id || order.legacy_group_activity_id || '';
+        if (actId) {
+            const fallbackRes = await db.collection('group_orders')
+                .where({ activity_id: actId, status: db.command.in(['pending', 'open']) })
+                .orderBy('created_at', 'desc')
+                .limit(1)
+                .get().catch(() => ({ data: [] }));
+            if (fallbackRes.data && fallbackRes.data[0]) {
+                groupOrder = fallbackRes.data[0];
+                groupNo = groupOrder.group_no;
+                console.log('[GroupJoin] 通过 activity_id 找到已有团:', groupNo);
+            }
+        }
+    }
+
     if (groupOrder && !['pending', 'open'].includes(groupOrder.status)) {
         throw new Error('拼团已结束');
     }
@@ -866,6 +911,21 @@ async function ensurePaidGroupJoined(orderId, order) {
         paid_at: db.serverDate(),
         joined_at: db.serverDate(),
     };
+
+    async function writeGroupNoToOrder(gno) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                await db.collection('orders').doc(orderId).update({
+                    data: { group_no: gno, group_joined_at: db.serverDate(), updated_at: db.serverDate() },
+                });
+                return;
+            } catch (err) {
+                console.warn(`[GroupJoin] 写回 group_no 到订单失败 (尝试 ${attempt + 1}/3):`, err.message);
+                if (attempt < 2) await new Promise(r => setTimeout(r, 500));
+            }
+        }
+        console.error('[GroupJoin] 写回 group_no 到订单最终失败，orderId:', orderId, 'groupNo:', gno);
+    }
 
     if (!groupOrder) {
         groupNo = groupNo || ('GRP' + Date.now() + Math.floor(Math.random() * 1000));
@@ -882,9 +942,10 @@ async function ensurePaidGroupJoined(orderId, order) {
             updated_at: db.serverDate(),
         };
         const createRes = await db.collection('group_orders').add({ data });
-        await db.collection('orders').doc(orderId).update({
-            data: { group_no: groupNo, group_joined_at: db.serverDate(), updated_at: db.serverDate() },
-        });
+        await writeGroupNoToOrder(groupNo);
+        if (data.status === 'completed') {
+            await promoteGroupOrdersToPaid({ ...data, _id: createRes._id });
+        }
         return { created: true, group_id: createRes._id, group_no: groupNo, member_count: 1, completed: data.status === 'completed' };
     }
 
@@ -906,11 +967,10 @@ async function ensurePaidGroupJoined(orderId, order) {
         await db.collection('group_orders').doc(groupOrder._id).update({
             data: { status: 'completed', completed_at: db.serverDate(), updated_at: db.serverDate() },
         });
+        await promoteGroupOrdersToPaid(groupOrder);
     }
 
-    await db.collection('orders').doc(orderId).update({
-        data: { group_no: groupOrder.group_no, group_joined_at: db.serverDate(), updated_at: db.serverDate() },
-    });
+    await writeGroupNoToOrder(groupOrder.group_no);
     return { joined: !exists, group_no: groupOrder.group_no, member_count: memberCount, completed };
 }
 
@@ -1294,20 +1354,37 @@ async function handleRefundCallback(refundData, eventType) {
             }
 
             if (order) {
-                // 退积分
                 const pointsUsed = toNumber(order.points_used, 0);
-                if (pointsUsed > 0) {
+                const pointsEarned = toNumber(order.points_earned, 0);
+                const orderPayAmount = toNumber(order.pay_amount || order.actual_price || order.total_amount, 0);
+                const growthEarned = Math.floor(orderPayAmount);
+
+                // 净变化：退还消费积分 - 扣回奖励积分
+                const pointsDelta = pointsUsed - pointsEarned;
+                const growthDelta = pointsUsed - growthEarned;
+
+                const userUpdates = { updated_at: db.serverDate() };
+                if (pointsDelta !== 0) userUpdates.points = _.inc(pointsDelta);
+                if (growthDelta !== 0) userUpdates.growth_value = _.inc(growthDelta);
+                if (orderPayAmount > 0) userUpdates.total_spent = _.inc(-orderPayAmount);
+                userUpdates.order_count = _.inc(-1);
+
+                if (Object.keys(userUpdates).length > 1) {
                     await db.collection('users')
                         .where({ openid: order.openid })
-                        .update({
-                            data: {
-                                points: _.inc(pointsUsed),
-                                growth_value: _.inc(pointsUsed),
-                                updated_at: db.serverDate(),
-                            },
-                        }).catch((err) => {
-                            console.error('[RefundCallback] 退积分失败:', err.message);
-                        });
+                        .update({ data: userUpdates })
+                        .catch((err) => { console.error('[RefundCallback] 用户数据回退失败:', err.message); });
+                }
+
+                if (pointsUsed > 0) {
+                    await db.collection('point_logs').add({
+                        data: { openid: order.openid, type: 'refund', amount: pointsUsed, source: 'order_refund', order_id: orderId, description: `退款退还 ${pointsUsed} 消费积分`, created_at: db.serverDate() }
+                    }).catch(() => {});
+                }
+                if (pointsEarned > 0) {
+                    await db.collection('point_logs').add({
+                        data: { openid: order.openid, type: 'deduct', amount: -pointsEarned, source: 'order_refund_revoke', order_id: orderId, description: `退款扣回 ${pointsEarned} 奖励积分`, created_at: db.serverDate() }
+                    }).catch(() => {});
                 }
 
                 // 退优惠券
@@ -1460,7 +1537,7 @@ async function handleCallback(event) {
                 }
 
                 // 幂等：已支付不重复处理
-                if (order.status === 'paid' || order.status === 'shipped' || order.status === 'completed') {
+                if (['paid', 'pending_group', 'shipped', 'completed', 'pickup_pending', 'agent_confirmed', 'shipping_requested'].includes(order.status)) {
                     await processPaidOrder(order._id, order).catch((postErr) => {
                         console.error('[PaymentCallback] 已支付订单后处理补偿失败:', postErr.message);
                     });
@@ -1472,12 +1549,14 @@ async function handleCallback(event) {
                     return { code: 'FAIL', message: 'Invalid order status' };
                 }
 
-                // 仅允许 pending_payment -> paid，避免重复回调重复后处理。
+                // 拼团订单支付后进入 pending_group（待成团），普通订单直接 paid
+                const isGroup = order.type === 'group' || hasValue(order.group_activity_id);
+                const postPayStatus = isGroup ? 'pending_group' : 'paid';
                 const updateRes = await db.collection('orders')
                     .where({ _id: order._id, status: 'pending_payment' })
                     .update({
                     data: {
-                        status: 'paid',
+                        status: postPayStatus,
                         paid_at: db.serverDate(),
                         trade_id: transaction.transaction_id || '',
                         pay_time: transaction.success_time ? new Date(transaction.success_time) : db.serverDate(),

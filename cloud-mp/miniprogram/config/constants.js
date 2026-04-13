@@ -32,6 +32,8 @@ const ROLE_NAMES = {
 // ==================== 订单状态 ====================
 const ORDER_STATUS = {
   PENDING: 'pending',
+  PENDING_PAYMENT: 'pending_payment',
+  PENDING_GROUP: 'pending_group',
   PAID: 'paid',
   AGENT_CONFIRMED: 'agent_confirmed',
   SHIPPING_REQUESTED: 'shipping_requested',
@@ -44,6 +46,8 @@ const ORDER_STATUS = {
 
 const ORDER_STATUS_TEXT = {
   [ORDER_STATUS.PENDING]: '待付款',
+  [ORDER_STATUS.PENDING_PAYMENT]: '待付款',
+  [ORDER_STATUS.PENDING_GROUP]: '待成团',
   [ORDER_STATUS.PAID]: '待发货',
   [ORDER_STATUS.AGENT_CONFIRMED]: '代理已确认',
   [ORDER_STATUS.SHIPPING_REQUESTED]: '发货申请中',

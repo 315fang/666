@@ -626,18 +626,9 @@ async function createOrder(openid, orderData) {
     };
 
     // 7.1 货款支付前置校验（在写库前验证，避免创建无效订单）
-    // 货款字段：users.agent_wallet_balance（代理商通过充值/平台调拨的进货资金）
     if (use_goods_fund) {
-        if (buyerRoleLevel < 3) {
-            // 回滚已扣库存
-            await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
-                db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
-            ));
-            throw new Error('货款支付仅限代理商身份使用');
-        }
         const freshUser = await db.collection('users').where({ openid }).limit(1).get();
         const u = freshUser.data[0] || {};
-        // 只读 agent_wallet_balance，与原子扣款字段保持一致
         const freshBalance = toNumber(u.agent_wallet_balance, 0);
         if (freshBalance < payAmount) {
             await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
@@ -697,10 +688,12 @@ async function createOrder(openid, orderData) {
                 });
                 throw new Error('货款余额不足，请刷新后重试');
             }
-            // 订单标为已付款
+            // 拼团订单货款支付后进入 pending_group（待成团），普通订单直接 paid
+            const isGroupOrder = !!(groupActivity || group_no || group_activity_id);
+            const postPayStatus = isGroupOrder ? 'pending_group' : 'paid';
             await db.collection('orders').doc(orderId).update({
                 data: {
-                    status: 'paid',
+                    status: postPayStatus,
                     payment_method: 'goods_fund',
                     pay_channel: 'goods_fund',
                     paid_at: db.serverDate(),

@@ -87,7 +87,7 @@
           <text class="quick-title">佣金明细</text>
           <text class="quick-desc">查看累计收益、可提现与结算记录</text>
         </view>
-        <view class="quick-card" wx:if="{{(userInfo.role_level || 0) >= 3}}" bindtap="goFundPool">
+        <view class="quick-card" bindtap="goFundPool">
           <text class="quick-title">我的基金池</text>
           <text class="quick-desc">查看个人贡献与四个池子当前余额</text>
         </view>

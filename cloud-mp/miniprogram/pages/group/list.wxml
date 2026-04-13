@@ -152,32 +152,108 @@
     </view>
 
     <view class="group-list">
-      <view class="group-record" wx:for="{{myGroups}}" wx:key="id" bindtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}">
-        <image class="record-img" src="{{item.groupOrder && item.groupOrder.product && item.groupOrder.product.images && item.groupOrder.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
-        <view class="record-info">
-          <text class="record-name">{{item.groupOrder && item.groupOrder.product && item.groupOrder.product.name || '商品'}}</text>
-          <view class="member-progress">
-            <view class="member-avatars">
-              <view class="avatar-placeholder" wx:for="{{item.groupOrder && item.groupOrder.current_members > 3 ? 3 : item.groupOrder.current_members}}" wx:key="*this">
-                <text class="avatar-letter">团</text>
-              </view>
-              <view class="avatar-more" wx:if="{{item.groupOrder && item.groupOrder.current_members > 3}}">+{{item.groupOrder.current_members - 3}}</view>
-            </view>
-            <text class="member-text">{{item.groupOrder && item.groupOrder.current_members || 0}}/{{item.groupOrder && item.groupOrder.min_members || 2}}人</text>
+      <!-- 未支付的拼团订单 -->
+      <view class="group-record group-record--unpaid" wx:for="{{myGroups}}" wx:key="id" wx:if="{{item.payment_status === 'unpaid'}}">
+        <view class="record-img-wrap">
+          <image class="record-img" src="{{item.groupOrder && item.groupOrder.product && item.groupOrder.product.images && item.groupOrder.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
+          <view class="record-overlay-unpaid">
+            <text>待支付</text>
           </view>
-          <view class="group-status {{item.groupOrder && item.groupOrder.status}}">
-            <text wx:if="{{item.groupOrder && item.groupOrder.status === 'open'}}">进行中</text>
+        </view>
+        <view class="record-info">
+          <view class="record-head-row">
+            <text class="record-name">{{item.groupOrder && item.groupOrder.product && item.groupOrder.product.name || '商品'}}</text>
+          </view>
+          <view class="record-badge-row">
+            <view class="record-badge record-badge--role" wx:if="{{item.is_leader}}">我发起的</view>
+            <view class="record-badge record-badge--role" wx:else>我参与的</view>
+          </view>
+          <view class="member-progress member-progress--unpaid">
+            <view class="member-pill">
+              <text class="member-pill-label">团</text>
+            </view>
+            <text class="member-text">平台人数 {{item._memberText}}</text>
+          </view>
+          <view class="unpaid-price-row">
+            <text class="unpaid-price">¥{{item.pay_amount || '0.00'}}</text>
+            <text class="unpaid-hint">支付后自动加入拼团</text>
+          </view>
+          <view class="record-action-row">
+            <view class="record-action record-action--pay" catchtap="onGoPayOrder" data-order-id="{{item.order_id}}" data-order-no="{{item.order_no}}">
+              <text>去支付</text>
+            </view>
+            <view class="record-action record-action--cancel" catchtap="onCancelUnpaidOrder" data-order-id="{{item.order_id}}">
+              <text>取消</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 已取消/已退款的拼团订单 -->
+      <view class="group-record group-record--cancelled" wx:for="{{myGroups}}" wx:key="id" wx:if="{{item.payment_status === 'cancelled'}}" bindtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}">
+        <view class="record-img-wrap">
+          <image class="record-img record-img--dimmed" src="{{item.groupOrder && item.groupOrder.product && item.groupOrder.product.images && item.groupOrder.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
+          <view class="record-overlay-cancelled">
+            <text>已取消</text>
+          </view>
+        </view>
+        <view class="record-info">
+          <view class="record-head-row">
+            <text class="record-name record-name--dimmed">{{item.groupOrder && item.groupOrder.product && item.groupOrder.product.name || '商品'}}</text>
+          </view>
+          <view class="record-badge-row">
+            <view class="record-badge record-badge--cancelled-tag">订单已取消</view>
+            <view class="record-badge record-badge--role" wx:if="{{item.is_leader}}">我发起的</view>
+            <view class="record-badge record-badge--role" wx:else>我参与的</view>
+          </view>
+          <view class="cancelled-hint">
+            <text>你的订单已取消，拼团可能仍在继续</text>
+          </view>
+          <view class="record-action-row">
+            <view class="record-action record-action--secondary" catchtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}">
+              <text>查看团状态</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 已支付的拼团订单 -->
+      <view class="group-record group-record--paid" wx:for="{{myGroups}}" wx:key="id" wx:if="{{item.payment_status === 'paid'}}" bindtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}">
+        <view class="record-img-wrap">
+          <image class="record-img" src="{{item.groupOrder && item.groupOrder.product && item.groupOrder.product.images && item.groupOrder.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
+          <view class="record-overlay-status record-overlay-{{item.groupOrder.status}}">
+            <text wx:if="{{item.groupOrder && item.groupOrder.status === 'open'}}">拼团中</text>
             <text wx:elif="{{item.groupOrder && item.groupOrder.status === 'success'}}">已成团</text>
-            <text wx:else>已失败</text>
+            <text wx:else>已结束</text>
+          </view>
+        </view>
+        <view class="record-info">
+          <view class="record-head-row">
+            <text class="record-name">{{item.groupOrder && item.groupOrder.product && item.groupOrder.product.name || '商品'}}</text>
+          </view>
+          <view class="record-badge-row">
+            <view class="record-badge record-badge--paid">已支付</view>
+            <view class="record-badge record-badge--role" wx:if="{{item.is_leader}}">我发起的</view>
+            <view class="record-badge record-badge--role" wx:else>我参与的</view>
+            <view class="record-badge record-badge--status record-badge--{{item.groupOrder.status}}">
+              <text wx:if="{{item.groupOrder && item.groupOrder.status === 'open'}}">进行中</text>
+              <text wx:elif="{{item.groupOrder && item.groupOrder.status === 'success'}}">已成团</text>
+              <text wx:else>已失败</text>
+            </view>
+          </view>
+          <view class="member-progress">
+            <view class="member-pill">
+              <text class="member-pill-label">团</text>
+            </view>
+            <text class="member-text">平台人数 {{item._memberText}}</text>
           </view>
           <view class="record-action-row">
             <view class="share-row" wx:if="{{item.groupOrder && item.groupOrder.status === 'open'}}" catchtap="onShare" data-no="{{item.groupOrder.group_no}}">
               <image class="share-icon" src="/assets/icons/share.svg" mode="aspectFit"/>
-              <text>继续拉人</text>
+              <text>分享给好友参团</text>
             </view>
             <view class="record-action" catchtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}">
-              <text wx:if="{{item.groupOrder && item.groupOrder.group_no}}">查看进度</text>
-              <text wx:else>支付后生成进度</text>
+              <text>查看进度</text>
             </view>
           </view>
         </view>

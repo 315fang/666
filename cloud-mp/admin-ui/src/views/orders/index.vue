@@ -23,6 +23,7 @@
         <el-radio-group v-model="searchForm.status_group" size="default" @change="onStatusGroupChange">
           <el-radio-button label="all">全部</el-radio-button>
           <el-radio-button label="pending_pay">待付款</el-radio-button>
+          <el-radio-button label="pending_group">待成团</el-radio-button>
           <el-radio-button label="pending_ship">待发货</el-radio-button>
           <el-radio-button label="pending_receive">待收货</el-radio-button>
           <el-radio-button label="completed">已完成</el-radio-button>
@@ -883,16 +884,20 @@ const handleDropdown = (cmd, row) => {
 const roleText = (r) => (['普通用户', '会员', '团长', '代理商', '合伙人', '区域代理'][r] ?? '未知')
 const roleTagType = (r) => (['', 'success', 'warning', 'danger', 'danger', 'danger'][r] ?? '')
 const getStatusType = (s) => (
-  ['pending'].includes(s)
+  ['pending', 'pending_payment'].includes(s)
     ? 'warning'
-    : ['paid', 'agent_confirmed', 'shipping_requested', 'shipped'].includes(s)
-      ? 'primary'
-      : ['completed'].includes(s)
-        ? 'success'
-        : 'info'
+    : s === 'pending_group'
+      ? 'warning'
+      : ['paid', 'agent_confirmed', 'shipping_requested', 'shipped'].includes(s)
+        ? 'primary'
+        : ['completed'].includes(s)
+          ? 'success'
+          : 'info'
 )
 const getStatusText = (s) => ({
   pending: '待付款',
+  pending_payment: '待付款',
+  pending_group: '待成团',
   paid: '待发货',
   agent_confirmed: '代理已确认',
   shipping_requested: '代理申请发货',

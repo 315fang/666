@@ -52,58 +52,26 @@ function createCloudBaseStore(options) {
         'admin_singletons',
         'admins',
         'admin_roles',
-        'admin_audit_logs',
-        'addresses',
-        'app_configs',
-        'banners',
-        'branch_agent_claims',
-        'branch_agent_stations',
-        'cart_items',
-        'categories',
-        'commissions',
         'configs',
-        'content_boards',
-        'content_board_products',
-        'contents',
-        'coupon_auto_rules',
-        'coupons',
-        'dividend_executions',
-        'group_activities',
-        'group_members',
-        'group_orders',
-        'agent_exit_applications',
-        'lottery_prizes',
-        'lottery_records',
-        'mass_messages',
-        'material_groups',
-        'materials',
-        'notifications',
-        'orders',
-        'page_layouts',
-        'pickup_stations',
-        'point_accounts',
-        'point_logs',
-        'portal_accounts',
-        'products',
-        'refunds',
-        'reviews',
-        'skus',
-        'slash_activities',
-        'slash_helpers',
-        'slash_records',
-        'splash_screens',
-        'stations',
-        'station_staff',
-        'user_coupons',
-        'user_favorites',
-        'user_mass_messages',
-        'users',
-        'upgrade_applications',
-        'wallet_accounts',
-        'wallet_logs',
-        'wallet_recharge_orders',
-        'withdrawals'
+        'app_configs'
     ];
+    const allKnownCollections = new Set([
+        ...preloadCollections,
+        'admin_audit_logs', 'addresses', 'banners',
+        'branch_agent_claims', 'branch_agent_stations', 'cart_items',
+        'categories', 'commissions', 'content_boards', 'content_board_products',
+        'contents', 'coupon_auto_rules', 'coupons', 'dividend_executions',
+        'group_activities', 'group_members', 'group_orders',
+        'agent_exit_applications', 'lottery_prizes', 'lottery_records',
+        'mass_messages', 'material_groups', 'materials', 'notifications',
+        'orders', 'page_layouts', 'pickup_stations', 'point_accounts',
+        'point_logs', 'portal_accounts', 'products', 'refunds', 'reviews',
+        'skus', 'slash_activities', 'slash_helpers', 'slash_records',
+        'splash_screens', 'stations', 'station_staff', 'user_coupons',
+        'user_favorites', 'user_mass_messages', 'users', 'upgrade_applications',
+        'wallet_accounts', 'wallet_logs', 'wallet_recharge_orders', 'withdrawals'
+    ]);
+    const lazyLoadPromises = new Map();
 
     if (!cloudbase.envId) {
         const error = new Error('ADMIN_DATA_SOURCE=cloudbase requires ADMIN_CLOUDBASE_ENV_ID');
@@ -262,10 +230,22 @@ function createCloudBaseStore(options) {
         }
     }
 
+    function ensureCollectionLoaded(name) {
+        if (cache.has(name)) return Promise.resolve();
+        if (lazyLoadPromises.has(name)) return lazyLoadPromises.get(name);
+        const p = loadCollection(name).then(() => {
+            lazyLoadPromises.delete(name);
+        }).catch(err => {
+            lazyLoadPromises.delete(name);
+            if (!cache.has(name)) cache.set(name, []);
+            console.warn(`[CloudBase] lazy-load ${name} failed:`, err.message);
+        });
+        lazyLoadPromises.set(name, p);
+        return p;
+    }
+
     async function initialize() {
-        for (const name of preloadCollections) {
-            await loadCollection(name);
-        }
+        await Promise.all(preloadCollections.map(name => loadCollection(name)));
         state.ready = true;
         state.loadedAt = new Date().toISOString();
         return {
@@ -375,8 +355,10 @@ function createCloudBaseStore(options) {
         getCollection(name) {
             const key = normalizeSourceName(name);
             if (!cache.has(key)) {
+                if (allKnownCollections.has(key)) {
+                    ensureCollectionLoaded(key);
+                }
                 cache.set(key, []);
-                state.warnings.push({ collection: key, message: 'collection requested before preload; verify preload list' });
             }
             return cache.get(key);
         },

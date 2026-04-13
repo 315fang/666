@@ -9,6 +9,22 @@ function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
 }
 
+function parseDate(val) {
+    if (!val) return null;
+    if (val instanceof Date) return val;
+    if (typeof val === 'string' || typeof val === 'number') {
+        const d = new Date(val);
+        return Number.isFinite(d.getTime()) ? d : null;
+    }
+    if (typeof val === 'object') {
+        if (val.$date) return parseDate(val.$date);
+        if (typeof val._seconds === 'number') return new Date(val._seconds * 1000);
+        if (typeof val.seconds === 'number') return new Date(val.seconds * 1000);
+        if (val.toDate && typeof val.toDate === 'function') return val.toDate();
+    }
+    return null;
+}
+
 function refundDeadlineDate() {
     const days = Math.max(0, toNumber(process.env.REFUND_MAX_DAYS || process.env.COMMISSION_FREEZE_DAYS, 7));
     return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
@@ -200,48 +216,104 @@ async function joinGroup(openid, params) {
 }
 
 /**
- * 我的拼团列表
+ * 我的拼团列表（含已支付的 group_orders 和未支付的 orders）
  */
 async function myGroups(openid, params = {}) {
     const page = toNumber(params.page, 1);
-    const pageSize = toNumber(params.pageSize || params.size, 20);
+    const pageSize = toNumber(params.pageSize || params.size, 50);
 
-    const res = await db.collection('group_orders')
-        .where({
-            'members.openid': openid,
-        })
-        .orderBy('created_at', 'desc')
-        .skip((page - 1) * pageSize)
-        .limit(pageSize)
-        .get().catch(() => ({ data: [] }));
+    const [groupRes, pendingOrdersRes, myOrdersRes] = await Promise.all([
+        db.collection('group_orders')
+            .where({ 'members.openid': openid })
+            .orderBy('created_at', 'desc')
+            .limit(pageSize)
+            .get().catch(() => ({ data: [] })),
+        db.collection('orders')
+            .where({
+                openid,
+                type: 'group',
+                status: 'pending_payment',
+            })
+            .orderBy('created_at', 'desc')
+            .limit(20)
+            .get().catch(() => ({ data: [] })),
+        db.collection('orders')
+            .where({
+                openid,
+                type: 'group',
+            })
+            .orderBy('created_at', 'desc')
+            .limit(100)
+            .get().catch(() => ({ data: [] }))
+    ]);
 
-    const totalRes = await db.collection('group_orders')
-        .where({ 'members.openid': openid })
-        .count().catch(() => ({ total: 0 }));
+    const groups = groupRes.data || [];
+    const pendingOrders = (pendingOrdersRes.data || []).filter(o => !o.group_joined_at);
+    const myOrders = myOrdersRes.data || [];
 
-    const groups = res.data || [];
-    const activityPairs = await Promise.all(groups.map(async (g) => {
-        const activity = await findOneByAnyId('group_activities', g.activity_id || g.legacy_activity_id);
+    const joinedGroupNos = new Set(groups.map(g => g.group_no));
+
+    const CANCELLED_STATUSES = new Set(['cancelled', 'refunding', 'refunded']);
+    const PAID_STATUSES = new Set(['paid', 'pending_group', 'pickup_pending', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed']);
+
+    function orderPriority(order) {
+        if (!order) return 99;
+        if (PAID_STATUSES.has(order.status)) return 0;
+        if (order.status === 'pending_payment') return 1;
+        if (CANCELLED_STATUSES.has(order.status)) return 2;
+        return 1;
+    }
+
+    const myOrderByGroupNo = {};
+    const myOrderByActivityId = {};
+
+    myOrders.forEach((order) => {
+        if (!order) return;
+        const pri = orderPriority(order);
+        if (order.group_no) {
+            const existing = myOrderByGroupNo[order.group_no];
+            if (!existing || pri < orderPriority(existing)) {
+                myOrderByGroupNo[order.group_no] = order;
+            }
+        }
+        const aid = order.group_activity_id || order.legacy_group_activity_id;
+        if (aid) {
+            const existing = myOrderByActivityId[aid];
+            if (!existing || pri < orderPriority(existing)) {
+                myOrderByActivityId[aid] = order;
+            }
+        }
+    });
+
+    const allActivityIds = new Set();
+    groups.forEach(g => { if (g.activity_id) allActivityIds.add(g.activity_id); });
+    pendingOrders.forEach(o => {
+        const aid = o.group_activity_id || o.legacy_group_activity_id;
+        if (aid) allActivityIds.add(aid);
+    });
+
+    const activityMap = {};
+    await Promise.all([...allActivityIds].map(async (aid) => {
+        const activity = await findOneByAnyId('group_activities', aid);
         const product = activity ? await loadProductSummary(activity.product_id) : null;
-        return [g.group_no, { activity, product }];
+        activityMap[aid] = { activity, product };
     }));
-    const activityMap = activityPairs.reduce((map, [groupNo, value]) => {
-        map[groupNo] = value;
-        return map;
-    }, {});
 
-    return {
-        list: groups.map(g => {
-            const related = activityMap[g.group_no] || {};
-            const memberCount = (g.members || []).length;
-            const groupOrder = {
-                group_no: g.group_no,
-                status: groupStatusForClient(g.status),
-                current_members: memberCount,
-                min_members: g.group_size || related.activity?.min_members || related.activity?.group_size || 2,
-                product: related.product
-            };
-            return {
+    const paidItems = groups.map(g => {
+        const related = activityMap[g.activity_id] || {};
+        const memberCount = (g.members || []).length;
+        const candidates = [
+            myOrderByGroupNo[g.group_no],
+            myOrderByActivityId[g.activity_id],
+            myOrderByActivityId[g.legacy_activity_id]
+        ].filter(Boolean);
+        const myOrder = candidates.length === 0 ? null
+            : candidates.reduce((best, cur) => orderPriority(cur) < orderPriority(best) ? cur : best);
+        const myPaymentStatus = myOrder
+            ? (myOrder.status === 'pending_payment' ? 'unpaid'
+                : (CANCELLED_STATUSES.has(myOrder.status) ? 'cancelled' : 'paid'))
+            : 'paid';
+        return {
             _id: g._id,
             id: g._id || g.group_no,
             group_no: g.group_no,
@@ -250,11 +322,65 @@ async function myGroups(openid, params = {}) {
             member_count: memberCount,
             group_size: g.group_size,
             is_leader: g.leader_openid === openid,
-            groupOrder,
+            payment_status: myPaymentStatus,
+            order_id: myOrder?._id || '',
+            order_no: myOrder?.order_no || '',
+            pay_amount: myOrder?.pay_amount || myOrder?.total_amount || 0,
+            my_order_status: myOrder?.status || '',
+            groupOrder: {
+                group_no: g.group_no,
+                status: groupStatusForClient(g.status),
+                current_members: memberCount,
+                min_members: g.group_size || related.activity?.min_members || related.activity?.group_size || 2,
+                product: related.product
+            },
             created_at: g.created_at,
         };
-        }),
-        total: totalRes.total || 0,
+    });
+
+    const unpaidItems = pendingOrders
+        .filter(o => !joinedGroupNos.has(o.group_no))
+        .map(o => {
+            const aid = o.group_activity_id || o.legacy_group_activity_id;
+            const related = activityMap[aid] || {};
+            const product = related.product || productSummary(o.product || {});
+            const firstItem = Array.isArray(o.items) ? o.items[0] : {};
+            return {
+                _id: o._id,
+                id: o._id,
+                group_no: o.group_no || '',
+                activity_id: aid || '',
+                order_id: o._id,
+                order_no: o.order_no,
+                status: 'pending_payment',
+                member_count: 0,
+                group_size: related.activity?.group_size || related.activity?.min_members || 2,
+                is_leader: !o.group_no,
+                payment_status: 'unpaid',
+                pay_amount: o.pay_amount || o.total_amount || 0,
+                groupOrder: {
+                    group_no: o.group_no || '',
+                    status: 'unpaid',
+                    current_members: 0,
+                    min_members: related.activity?.min_members || related.activity?.group_size || 2,
+                    product: product || {
+                        name: firstItem.name || firstItem.snapshot_name || o.product_name || '拼团商品',
+                        images: firstItem.image ? [firstItem.image] : [],
+                        image: firstItem.image || ''
+                    }
+                },
+                created_at: o.created_at,
+            };
+        });
+
+    const combined = [...unpaidItems, ...paidItems]
+        .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+    const total = combined.length;
+    const start = (page - 1) * pageSize;
+
+    return {
+        list: combined.slice(start, start + pageSize),
+        total,
         page,
         pageSize,
     };
@@ -277,11 +403,34 @@ async function groupOrderDetail(openid, params) {
 
     const group = groupRes.data[0];
 
-    // 查关联订单
-    const ordersRes = await db.collection('orders')
-        .where({ group_no: groupNo })
-        .orderBy('created_at', 'asc')
-        .get().catch(() => ({ data: [] }));
+    const activityId = group.activity_id || group.legacy_activity_id || '';
+    let allOrders = [];
+    const seenOrderIds = new Set();
+    try {
+        const res1 = await db.collection('orders')
+            .where({ group_no: groupNo })
+            .get().catch(() => ({ data: [] }));
+        (res1.data || []).forEach(o => {
+            if (o && o._id && !seenOrderIds.has(o._id)) {
+                seenOrderIds.add(o._id);
+                allOrders.push(o);
+            }
+        });
+    } catch (e) { console.warn('[groupOrderDetail] query by group_no failed:', e.message); }
+    if (activityId) {
+        try {
+            const res2 = await db.collection('orders')
+                .where({ group_activity_id: activityId })
+                .get().catch(() => ({ data: [] }));
+            (res2.data || []).forEach(o => {
+                if (o && o._id && !seenOrderIds.has(o._id)) {
+                    seenOrderIds.add(o._id);
+                    allOrders.push(o);
+                }
+            });
+        } catch (e) { console.warn('[groupOrderDetail] query by activity_id failed:', e.message); }
+    }
+    const ordersRes = { data: allOrders };
 
     // 查活动信息
     let activityInfo = null;
@@ -295,17 +444,15 @@ async function groupOrderDetail(openid, params) {
     const members = group.members || [];
     const memberCount = members.length;
 
-    // 计算拼团过期时间和剩余秒数（由 created_at + expire_hours 推算）
     const expireHours = toNumber(activityInfo?.expire_hours, 24);
     let expire_at = null;
     let remain_seconds = null;
-    if (group.created_at) {
-        const createdMs = new Date(group.created_at).getTime();
-        if (Number.isFinite(createdMs)) {
-            const expireMs = createdMs + expireHours * 3600 * 1000;
-            expire_at = new Date(expireMs).toISOString();
-            remain_seconds = Math.max(0, Math.floor((expireMs - Date.now()) / 1000));
-        }
+    const createdDate = parseDate(group.created_at);
+    if (createdDate) {
+        const createdMs = createdDate.getTime();
+        const expireMs = createdMs + expireHours * 3600 * 1000;
+        expire_at = new Date(expireMs).toISOString();
+        remain_seconds = Math.max(0, Math.floor((expireMs - Date.now()) / 1000));
     }
 
     // 批量拉取成员用户信息（昵称、头像）
@@ -327,6 +474,28 @@ async function groupOrderDetail(openid, params) {
         });
     }
 
+    const paidLikeStatuses = new Set(['paid', 'pending_group', 'pickup_pending', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed']);
+    const cancelledStatuses = new Set(['cancelled', 'refunding', 'refunded']);
+
+    function detailOrderPriority(o) {
+        if (!o) return 99;
+        if (paidLikeStatuses.has(o.status)) return 0;
+        if (o.status === 'pending_payment') return 1;
+        if (cancelledStatuses.has(o.status)) return 2;
+        return 1;
+    }
+
+    const myOrders = (ordersRes.data || [])
+        .filter((o) => o.openid === openid)
+        .sort((a, b) => detailOrderPriority(a) - detailOrderPriority(b)
+            || new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+    const myOrder = myOrders[0] || null;
+    const myPaymentStatus = myOrder
+        ? (myOrder.status === 'pending_payment'
+            ? 'unpaid'
+            : (paidLikeStatuses.has(myOrder.status) ? 'paid' : (cancelledStatuses.has(myOrder.status) ? 'cancelled' : 'unknown')))
+        : (members.some((m) => m.openid === openid) ? 'paid' : 'unknown');
+
     return {
         _id: group._id,
         activity_id: group.activity_id || '',
@@ -339,12 +508,16 @@ async function groupOrderDetail(openid, params) {
         group_size: group.group_size,
         is_leader: group.leader_openid === openid,
         is_member: members.some(m => m.openid === openid),
-        expire_at,                   // 过期时间（ISO字符串）
-        remain_seconds,              // 剩余秒数
+        my_payment_status: myPaymentStatus,
+        my_order_id: myOrder?._id || '',
+        my_order_no: myOrder?.order_no || '',
+        expire_at,
+        remain_seconds,
         members: members.map(m => ({
             openid: m.openid,
             joined_at: m.joined_at,
             is_leader: m.openid === group.leader_openid,
+            is_me: m.openid === openid,
             user: memberUserMap[m.openid] || null
         })),
         orders: (ordersRes.data || []).map(o => ({

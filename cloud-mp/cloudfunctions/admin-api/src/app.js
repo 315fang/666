@@ -14,6 +14,21 @@ const { dataRoot, normalizedDataRoot, runtimeRoot, uploadsRoot, jwtSecret, asset
 const { createDataStore } = require('./store');
 const { registerMarketingRoutes } = require('./admin-marketing');
 
+// Express 4 async handler patch: auto-catch rejected promises (Express 5 does this natively)
+const Layer = require('express/lib/router/layer');
+Layer.prototype.handle_request = function handle_request(req, res, next) {
+    const fn = this.handle;
+    if (fn.length > 3) return next();
+    try {
+        const ret = fn(req, res, next);
+        if (ret && typeof ret.catch === 'function') {
+            ret.catch(next);
+        }
+    } catch (err) {
+        next(err);
+    }
+};
+
 const app = express();
 const dataStore = createDataStore();
 let cachedManagedCloud = undefined;
@@ -225,6 +240,10 @@ function hashPassword(password, salt) {
 function toNumber(value, fallback = 0) {
     const num = Number(value);
     return Number.isFinite(num) ? num : fallback;
+}
+
+function roundMoney(v) {
+    return Math.round((Number(v) || 0) * 100) / 100;
 }
 
 function toArray(value) {
@@ -995,7 +1014,8 @@ function getSettingsSnapshot() {
 }
 
 function normalizeOrderStatusGroup(status) {
-    if (status === 'pending') return 'pending_pay';
+    if (status === 'pending' || status === 'pending_payment') return 'pending_pay';
+    if (status === 'pending_group') return 'pending_group';
     if (status === 'pending_ship') return 'pending_ship';
     if (['paid', 'agent_confirmed', 'shipping_requested'].includes(status)) return 'pending_ship';
     if (status === 'shipped') return 'pending_receive';
@@ -1276,7 +1296,7 @@ function getUserOrders(user, orders) {
 }
 
 function isPaidLikeOrder(order) {
-    return ['paid', 'pending_ship', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed', 'refunded'].includes(order?.status);
+    return ['paid', 'pending_group', 'pending_ship', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed', 'refunded'].includes(order?.status);
 }
 
 function getOrderAmount(order) {
@@ -2405,45 +2425,96 @@ async function refundOrderExtras(orderId) {
     if (!order) return;
 
     const db = dataStore._internals && dataStore._internals.db;
+    const openid = order.openid;
+    if (!openid) return;
 
-    // 退积分
     const pointsUsed = toNumber(order.points_used, 0);
-    if (pointsUsed > 0 && order.openid) {
-        const users = getCollection('users');
-        const userIndex = users.findIndex((u) => u.openid === order.openid);
-        if (userIndex !== -1) {
-            users[userIndex] = {
-                ...users[userIndex],
-                points: toNumber(users[userIndex].points, 0) + pointsUsed,
-                growth_value: toNumber(users[userIndex].growth_value, 0) + pointsUsed,
-                updated_at: nowIso(),
-            };
-            saveCollection('users', users);
-        }
-        if (db) {
-            const _ = db.command;
-            await db.collection('users').where({ openid: order.openid }).update({
-                data: { points: _.inc(pointsUsed), growth_value: _.inc(pointsUsed), updated_at: new Date().toISOString() }
-            }).catch((err) => { console.error('[refundOrderExtras] 退积分失败:', err.message); });
-            // 写积分退还流水
+    const pointsEarned = toNumber(order.points_earned, 0);
+    const payAmount = toNumber(order.pay_amount || order.actual_price || order.total_amount, 0);
+    const growthEarned = Math.floor(payAmount);
+
+    // 计算净变化：退还消费的积分 - 扣回奖励的积分
+    const pointsDelta = pointsUsed - pointsEarned;
+    // 退还消费的成长值(=pointsUsed) - 扣回奖励的成长值(=payAmount)
+    const growthDelta = pointsUsed - growthEarned;
+    // total_spent 和 order_count 也要回退
+    const spentDelta = -payAmount;
+
+    const users = getCollection('users');
+    const userIndex = users.findIndex((u) => u.openid === openid);
+
+    if (userIndex !== -1) {
+        const u = users[userIndex];
+        users[userIndex] = {
+            ...u,
+            points: Math.max(0, toNumber(u.points, 0) + pointsDelta),
+            growth_value: Math.max(0, toNumber(u.growth_value, 0) + growthDelta),
+            total_spent: Math.max(0, toNumber(u.total_spent, 0) + spentDelta),
+            order_count: Math.max(0, toNumber(u.order_count, 0) - 1),
+            updated_at: nowIso(),
+        };
+        saveCollection('users', users);
+    }
+
+    if (db) {
+        const _ = db.command;
+        const dbUpdates = { updated_at: new Date().toISOString() };
+        if (pointsDelta !== 0) dbUpdates.points = _.inc(pointsDelta);
+        if (growthDelta !== 0) dbUpdates.growth_value = _.inc(growthDelta);
+        if (spentDelta !== 0) dbUpdates.total_spent = _.inc(spentDelta);
+        dbUpdates.order_count = _.inc(-1);
+
+        await db.collection('users').where({ openid }).update({ data: dbUpdates })
+            .catch((err) => { console.error('[refundOrderExtras] 用户数据回退失败:', err.message); });
+
+        // 写积分流水
+        if (pointsUsed > 0) {
             await db.collection('point_logs').add({
                 data: {
-                    openid: order.openid,
+                    openid,
                     type: 'refund',
                     amount: pointsUsed,
                     source: 'order_refund',
                     order_id: String(order._id),
                     order_no: pickString(order.order_no),
-                    description: `订单退款退还 ${pointsUsed} 积分`,
+                    description: `订单退款退还 ${pointsUsed} 消费积分`,
                     created_at: new Date().toISOString()
                 }
-            }).catch((err) => { console.error('[refundOrderExtras] 积分流水写入失败:', err.message); });
+            }).catch((err) => { console.error('[refundOrderExtras] 积分退还流水写入失败:', err.message); });
+        }
+        if (pointsEarned > 0) {
+            await db.collection('point_logs').add({
+                data: {
+                    openid,
+                    type: 'deduct',
+                    amount: -pointsEarned,
+                    source: 'order_refund_revoke',
+                    order_id: String(order._id),
+                    order_no: pickString(order.order_no),
+                    description: `订单退款扣回 ${pointsEarned} 奖励积分`,
+                    created_at: new Date().toISOString()
+                }
+            }).catch((err) => { console.error('[refundOrderExtras] 积分扣回流水写入失败:', err.message); });
+        }
+        if (growthEarned > 0) {
+            await db.collection('point_logs').add({
+                data: {
+                    openid,
+                    type: 'deduct',
+                    amount: -growthEarned,
+                    source: 'order_refund_growth_revoke',
+                    order_id: String(order._id),
+                    order_no: pickString(order.order_no),
+                    description: `订单退款扣回 ${growthEarned} 成长值`,
+                    created_at: new Date().toISOString()
+                }
+            }).catch((err) => { console.error('[refundOrderExtras] 成长值扣回流水写入失败:', err.message); });
         }
     }
 
     // 退优惠券
     const userCouponId = order.user_coupon_id || order.coupon_id;
-    if (userCouponId && order.openid && db) {
+    if (userCouponId && openid && db) {
         if (order.user_coupon_id) {
             await db.collection('user_coupons')
                 .doc(String(order.user_coupon_id))
@@ -2455,7 +2526,7 @@ async function refundOrderExtras(orderId) {
             const candidates = Number.isFinite(couponIdNum) ? [couponIdStr, couponIdNum] : [couponIdStr];
             for (const cid of candidates) {
                 await db.collection('user_coupons')
-                    .where({ openid: order.openid, coupon_id: cid, status: 'used' })
+                    .where({ openid, coupon_id: cid, status: 'used' })
                     .update({ data: { status: 'unused', used_at: db.command.remove(), updated_at: new Date().toISOString() } })
                     .catch(() => {});
             }
@@ -4994,6 +5065,7 @@ app.get('/admin/api/orders', auth, requirePermission('orders'), async (req, res)
         ...paginate(rows, req),
         summary: {
             pending_pay: rows.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_pay').length,
+            pending_group: rows.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_group').length,
             pending_ship: rows.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_ship').length,
             pending_receive: rows.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_receive').length,
             completed: rows.filter((item) => normalizeOrderStatusGroup(item.status) === 'completed').length,
@@ -5132,7 +5204,7 @@ app.get('/admin/api/finance/overview', auth, requirePermission('statistics'), (r
     }
 
     // ── 销售 GMV ──
-    const paidStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
+    const paidStatuses = ['paid', 'pending_group', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
     const paidOrders = orders.filter((o) => paidStatuses.includes(String(o.status || '')));
     const since30d = Date.now() - 30 * 86400000;
     const gmv = paidOrders.reduce((s, o) => s + toNumber(o.actual_price || o.total_amount, 0), 0);
@@ -5874,6 +5946,14 @@ app.post('/admin/api/storage/migrate', auth, requirePermission('materials'), asy
 });
 
 app.use((req, res) => fail(res, `未实现的接口：${req.method} ${req.path}`, 404));
+
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, _next) => {
+    console.error(`[admin-api] Unhandled error on ${req.method} ${req.path}:`, err);
+    if (!res.headersSent) {
+        fail(res, err.message || '服务器内部错误', 500);
+    }
+});
 
 app.locals.dataStore = dataStore;
 

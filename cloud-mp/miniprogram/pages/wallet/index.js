@@ -28,11 +28,7 @@ Page({
         goodsFundBalance: '0.00'
     },
 
-    onLoad() {
-        const userInfo = (app.globalData && app.globalData.userInfo) || {};
-        const isAgent = (userInfo.role_level || 0) >= 3;
-        this.setData({ isAgent });
-    },
+    onLoad() {},
 
     onReady() {
         this.brandAnimation = this.selectComponent('#brandAnimation');
@@ -41,7 +37,7 @@ Page({
     onShow() {
         this.loadWalletInfo();
         this.loadLogs();
-        if (this.data.isAgent) this.loadGoodsFund();
+        this.loadGoodsFund();
     },
 
     async loadWalletInfo() {
@@ -86,7 +82,11 @@ Page({
         try {
             const res = await get('/agent/wallet');
             if (res.code === 0 && res.data) {
-                this.setData({ goodsFundBalance: parseFloat(res.data.balance || 0).toFixed(2) });
+                const bal = parseFloat(res.data.balance || 0);
+                this.setData({
+                    isAgent: bal > 0,
+                    goodsFundBalance: bal.toFixed(2)
+                });
             }
         } catch (_) {}
     },

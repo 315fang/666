@@ -1,14 +1,7 @@
 const app = getApp();
 const { get } = require('../../utils/request');
 const { requireLogin } = require('../../utils/auth');
-const { getConfigSection } = require('../../utils/miniProgramConfig');
 const { fetchUserProfile } = require('../../utils/userProfile');
-
-function businessCenterMinRoleLevel() {
-    const mc = getConfigSection('membership_config');
-    const n = Number(mc.business_center_min_role_level);
-    return Number.isFinite(n) ? n : 1;
-}
 
 function formatMoney(value) {
     const n = Number(value || 0);
@@ -48,13 +41,6 @@ Page({
 
     onShow() {
         if (!requireLogin()) return;
-        const rl = app.globalData.userInfo?.role_level || 0;
-        const minRl = businessCenterMinRoleLevel();
-        if (rl < minRl) {
-            wx.showToast({ title: '当前等级暂未开放团队中心', icon: 'none' });
-            setTimeout(() => wx.navigateBack(), 500);
-            return;
-        }
         wx.showShareMenu({ withShareTicket: true, menus: ['shareAppMessage', 'shareTimeline'] });
         this.refreshPage();
     },
@@ -70,42 +56,29 @@ Page({
     },
 
     async loadBalances() {
-        const roleLevel = app.globalData.userInfo?.role_level || 0;
-        const showGoods = roleLevel >= 3;
         let goodsAmount = '0.00';
         let purseAmount = '0.00';
+        let showGoods = false;
 
         try {
-            const walletPromise = get('/wallet/info').catch(() => null);
-            const profilePromise = fetchUserProfile();
-            if (showGoods) {
-                const [agentRes, walletRes, profileResult] = await Promise.all([
-                    get('/agent/wallet').catch(() => null),
-                    walletPromise,
-                    profilePromise
-                ]);
-                if (agentRes && agentRes.code === 0 && agentRes.data) {
-                    goodsAmount = formatMoney(agentRes.data.agent_wallet_balance != null ? agentRes.data.agent_wallet_balance : agentRes.data.balance);
-                }
-                const info = walletRes?.code === 0
-                    ? walletRes.data
-                    : (profileResult?.info || app.globalData.userInfo || {});
-                purseAmount = formatMoney(
-                    info.commission_balance != null
-                        ? info.commission_balance
-                        : (info.available_balance != null ? info.available_balance : info.balance)
-                );
-            } else {
-                const [walletRes, profileResult] = await Promise.all([walletPromise, profilePromise]);
-                const info = walletRes?.code === 0
-                    ? walletRes.data
-                    : (profileResult?.info || app.globalData.userInfo || {});
-                purseAmount = formatMoney(
-                    info.commission_balance != null
-                        ? info.commission_balance
-                        : (info.available_balance != null ? info.available_balance : info.balance)
-                );
+            const [agentRes, walletRes, profileResult] = await Promise.all([
+                get('/agent/wallet').catch(() => null),
+                get('/wallet/info').catch(() => null),
+                fetchUserProfile()
+            ]);
+            if (agentRes && agentRes.code === 0 && agentRes.data) {
+                const bal = parseFloat(agentRes.data.agent_wallet_balance != null ? agentRes.data.agent_wallet_balance : agentRes.data.balance) || 0;
+                goodsAmount = formatMoney(bal);
+                showGoods = bal > 0;
             }
+            const info = walletRes?.code === 0
+                ? walletRes.data
+                : (profileResult?.info || app.globalData.userInfo || {});
+            purseAmount = formatMoney(
+                info.commission_balance != null
+                    ? info.commission_balance
+                    : (info.available_balance != null ? info.available_balance : info.balance)
+            );
         } catch (_) {
             try {
                 const info = app.globalData.userInfo || {};

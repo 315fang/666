@@ -16,7 +16,12 @@ function buildOrderActivityInfo(order = {}) {
     if (type === 'group' || groupNo || order.group_activity_id || firstItem.group_activity_id) {
         const isPaid = order.status && order.status !== 'pending' && order.status !== 'cancelled';
         let title, desc, actionText, disabled;
-        if (groupNo) {
+        if (groupNo && order.status === 'cancelled') {
+            title = '订单已取消';
+            desc = '该订单已取消，但当前拼团状态可能仍在继续，可进入拼团页查看当前团状态。';
+            actionText = '查看当前团状态';
+            disabled = false;
+        } else if (groupNo) {
             title = '可查看拼团进度';
             desc = '支付后已生成拼团进度，可继续邀请或查看成团状态。';
             actionText = '查看拼团进度';

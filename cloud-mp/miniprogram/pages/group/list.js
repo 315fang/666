@@ -1,5 +1,5 @@
 // pages/group/list.js
-const { get } = require('../../utils/request');
+const { get, post } = require('../../utils/request');
 const { normalizeActivityList } = require('../../utils/activityList');
 const { requireLogin } = require('../../utils/auth');
 const app = getApp();
@@ -65,6 +65,28 @@ function buildGroupBuyInfo(activity = {}) {
     };
 }
 
+function normalizeMyGroupItem(item = {}) {
+    const paymentStatus = item.payment_status || 'paid';
+    const groupOrder = item.groupOrder || {};
+    const minMembers = Number(groupOrder.min_members || item.group_size || 2) || 2;
+    const rawCurrentMembers = Number(groupOrder.current_members || item.member_count || 0) || 0;
+    const currentMembers = paymentStatus === 'unpaid'
+        ? 0
+        : Math.max(1, rawCurrentMembers);
+
+    return {
+        ...item,
+        _memberCurrent: currentMembers,
+        _memberMin: minMembers,
+        _memberText: `${currentMembers}/${minMembers}人`,
+        groupOrder: {
+            ...groupOrder,
+            current_members: currentMembers,
+            min_members: minMembers
+        }
+    };
+}
+
 Page({
     data: {
         statusBarHeight: 20,
@@ -117,7 +139,10 @@ Page({
             if (!app.globalData.isLoggedIn) return this.setData({ myGroups: [], loading: false });
             try {
                 const res = await get('/group/my', { page: 1, pageSize: 20 });
-                this.setData({ myGroups: getPagedList(res), loading: false });
+                this.setData({
+                    myGroups: getPagedList(res).map(normalizeMyGroupItem),
+                    loading: false
+                });
             } catch { this.setData({ loading: false }); }
         }
     },
@@ -185,8 +210,38 @@ Page({
             wx.showToast({ title: '支付成功后再分享拼团', icon: 'none' });
             return;
         }
-        // 让微信处理分享，detail 页面会实现 onShareAppMessage
         wx.navigateTo({ url: `/pages/group/detail?group_no=${groupNo}&share=1` });
+    },
+
+    onGoPayOrder(e) {
+        const orderId = e.currentTarget.dataset.orderId || e.currentTarget.dataset.orderNo;
+        if (!orderId) {
+            wx.showToast({ title: '订单信息缺失', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: `/pages/order/detail?id=${orderId}` });
+    },
+
+    async onCancelUnpaidOrder(e) {
+        const orderId = e.currentTarget.dataset.orderId;
+        if (!orderId) return;
+        const res = await new Promise(resolve => {
+            wx.showModal({
+                title: '取消拼团订单',
+                content: '确定取消该拼团订单吗？',
+                confirmText: '确定取消',
+                confirmColor: '#e53e3e',
+                success: resolve
+            });
+        });
+        if (!res.confirm) return;
+        try {
+            await post(`/orders/${encodeURIComponent(orderId)}/cancel`);
+            wx.showToast({ title: '已取消', icon: 'success' });
+            this.loadData('my');
+        } catch (err) {
+            wx.showToast({ title: err.message || '取消失败', icon: 'none' });
+        }
     },
 
     onBack() { wx.switchTab({ url: '/pages/activity/activity' }); }
