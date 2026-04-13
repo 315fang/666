@@ -387,10 +387,16 @@ Page({
     onFeatureCardTap(e) {
         const item = e.currentTarget.dataset.item;
         if (!item) return;
+        const { isValidPagePath } = require('../../utils/navigator');
         switch (item.link_type) {
             case 'page':
-                if (item.link_value) wx.navigateTo({ url: item.link_value });
-                else wx.switchTab({ url: '/pages/activity/activity' });
+                if (item.link_value && isValidPagePath(String(item.link_value))) {
+                    wx.navigateTo({ url: item.link_value });
+                } else if (!item.link_value) {
+                    wx.switchTab({ url: '/pages/activity/activity' });
+                } else {
+                    console.warn('[Index] 功能卡片路径不在白名单:', item.link_value);
+                }
                 break;
             case 'copy':
                 if (item.link_value) {

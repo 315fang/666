@@ -24,10 +24,11 @@ export const rejectWithdrawal = (id, data) => {
   })
 }
 
-export const completeWithdrawal = (id) => {
+export const completeWithdrawal = (id, data) => {
   return request({
     url: `/withdrawals/${id}/complete`,
-    method: 'put'
+    method: 'put',
+    data
   })
 }
 
@@ -78,3 +79,4 @@ export const batchRejectCommissions = (data) => request({ url: '/commissions/bat
 export const getFinanceOverview = () => request({ url: '/finance/overview', method: 'get' })
 export const getAgentPerformance = (params) => request({ url: '/finance/agent-performance', method: 'get', params })
 export const getPoolContributions = () => request({ url: '/finance/pool-contributions', method: 'get' })
+export const settleAgentDebt = (id, data) => request({ url: `/users/${id}/debt-settlement`, method: 'post', data })

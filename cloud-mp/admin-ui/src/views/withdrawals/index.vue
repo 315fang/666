@@ -247,16 +247,21 @@ const handleRejectSubmit = async () => {
 
 const handleComplete = async (row) => {
   try {
-    await ElMessageBox.confirm(
-      `该操作将尝试向用户「${displayUserName(row.user, row.user_id)}」自动打款 ¥${parseFloat(row.actual_amount || 0).toFixed(2)}。仅微信收款方式支持自动打款，请先确认账户信息。`,
+    const { value } = await ElMessageBox.prompt(
+      `该操作将尝试向用户「${displayUserName(row.user, row.user_id)}」自动打款 ¥${parseFloat(row.actual_amount || 0).toFixed(2)}。仅微信收款方式支持自动打款，请先确认账户信息，并填写打款备注。`,
       '确认执行打款',
       {
-        confirmButtonText: '立即打款',
+        confirmButtonText: '确认打款',
         cancelButtonText: '取消',
-        type: 'warning'
+        type: 'warning',
+        inputPlaceholder: '例如：微信企业付款已执行 / 银行流水号',
+        inputValidator: (input) => {
+          if (!input || String(input).trim().length < 2) return '请填写至少 2 个字符的打款备注'
+          return true
+        }
       }
     )
-    await completeWithdrawal(row.id)
+    await completeWithdrawal(row.id, { remark: value })
     ElMessage.success('打款请求已执行')
     refreshWithdrawals()
   } catch (error) {

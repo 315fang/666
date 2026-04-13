@@ -7,7 +7,7 @@
       <!-- 头部 -->
       <view class="refund-header">
         <text class="refund-type">{{typeText[item.type] || '退款'}}</text>
-        <text class="refund-status status-{{item.status}}">{{statusText[item.status] || item.status}}</text>
+        <text class="refund-status status-{{item.status}}">{{item.statusText}}</text>
       </view>
 
       <!-- 商品信息 -->
@@ -17,6 +17,7 @@
         <view class="product-info">
           <text class="product-name">{{item.order.product.name}}</text>
           <text class="product-order">订单: {{item.order.order_no}}</text>
+          <text class="product-order" wx:if="{{item.paymentMethodText}}">{{item.paymentMethodText}}{{item.refundTargetText ? ' · ' + item.refundTargetText : ''}}</text>
         </view>
         <text class="refund-amount">¥{{item.amount}}</text>
       </view>

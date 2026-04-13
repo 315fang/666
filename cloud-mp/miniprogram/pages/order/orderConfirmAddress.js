@@ -22,6 +22,7 @@ function navigateToAddressList(isSelect = true) {
     wx.navigateTo({ url: `/pages/address/list?select=${isSelect}` });
 }
 
+const _productCache = {};
 async function resolveMissingSkuForCartItem(item) {
     const initialSkuId = item && item.sku_id != null && item.sku_id !== '' ? item.sku_id : null;
     if (!item || initialSkuId || !item.product_id) {
@@ -34,7 +35,11 @@ async function resolveMissingSkuForCartItem(item) {
     }
 
     try {
-        const detailRes = await get(`/products/${item.product_id}`, {}, { showError: false });
+        const pid = String(item.product_id);
+        if (!_productCache[pid]) {
+            _productCache[pid] = get(`/products/${pid}`, {}, { showError: false });
+        }
+        const detailRes = await _productCache[pid];
         const product = detailRes && detailRes.data ? detailRes.data : null;
         const skus = product && Array.isArray(product.skus) ? product.skus : [];
         if (skus.length === 1) {

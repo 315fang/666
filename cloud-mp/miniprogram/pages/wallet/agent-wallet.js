@@ -85,7 +85,7 @@ Page({
             if (res && res.code === 0 && res.data) {
                 const d = res.data;
                 this.setData({
-                    balance: d.balance || '0.00',
+                    balance: d.goods_fund_balance || d.balance || '0.00',
                     frozenBalance: d.frozen_balance || '0.00',
                     totalRecharge: d.total_recharge || '0.00',
                     totalDeduct: d.total_deduct || '0.00'

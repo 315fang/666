@@ -61,7 +61,7 @@
       </el-table-column>
       <el-table-column label="货款" width="90" class-name="hide-mobile">
         <template #default="{ row }">
-          <span>¥{{ Number(row.agent_wallet_balance || 0).toFixed(2) }}</span>
+          <span>¥{{ Number(row.goods_fund_balance ?? row.agent_wallet_balance ?? 0).toFixed(2) }}</span>
         </template>
       </el-table-column>
       <el-table-column label="积分" width="80" class-name="hide-mobile">
@@ -88,7 +88,7 @@
       <el-table-column label="状态" width="80">
         <template #default="{ row }">
           <el-tag :type="row.status === 0 ? 'danger' : 'success'" size="small">
-            {{ row.status === 0 ? '封禁' : '正常' }}
+            {{ row.status_text || (row.status === 0 ? '封禁' : '正常') }}
           </el-tag>
         </template>
       </el-table-column>

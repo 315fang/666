@@ -10,6 +10,13 @@ const {
     success, badRequest, unauthorized, forbidden, notFound, serverError
 } = require('./shared/response');
 const { toNumber, getAllRecords } = require('./shared/utils');
+const {
+    buildCanonicalUser,
+    resolveRoleLevel,
+    resolveRoleName,
+    resolveCommissionBalance,
+    resolveGoodsFundBalance
+} = require('./user-contract');
 
 const db = cloud.database();
 const _ = db.command;
@@ -46,6 +53,24 @@ function chunkArray(values = [], size = 100) {
 
 function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
+}
+
+async function appendWalletLog(entry) {
+    return db.collection('wallet_logs').add({
+        data: {
+            ...entry,
+            created_at: entry.created_at || db.serverDate()
+        }
+    });
+}
+
+async function appendGoodsFundLog(entry) {
+    return db.collection('goods_fund_logs').add({
+        data: {
+            ...entry,
+            created_at: entry.created_at || db.serverDate()
+        }
+    });
 }
 
 function getAgentWalletBalance(user = {}) {
@@ -146,29 +171,20 @@ function resolveJoinedAt(member = {}) {
 }
 
 function normalizeTeamMember(member = {}, level = 1, extra = {}) {
-    const nickname = member.nick_name || member.nickname || member.nickName || '团队成员';
-    const avatar = member.avatar || member.avatar_url || member.avatarUrl || '';
-    const roleLevel = toNumber(member.role_level, 0);
+    const canonical = buildCanonicalUser(member);
+    const roleLevel = resolveRoleLevel(member);
     return {
-        _id: member._id,
-        id: member._id,
+        ...canonical,
+        _id: canonical.id,
+        id: canonical.id,
         legacy_id: member.id || member._legacy_id || '',
         level,
         level_label: level === 2 ? '二级成员' : '一级成员',
         relation_text: level === 2 ? '由你的一级成员继续发展' : '你直接邀请并绑定的成员',
-        openid: member.openid,
-        nickName: nickname,
-        nickname,
-        nick_name: nickname,
-        avatarUrl: avatar,
-        avatar,
-        avatar_url: avatar,
         joined_at: resolveJoinedAt(member),
         created_at: member.created_at,
         role_level: roleLevel,
-        role_name: member.role_name || '',
-        invite_code: member.my_invite_code || member.invite_code || '',
-        phone: member.phone || '',
+        role_name: resolveRoleName(member),
         total_sales: toNumber(member.total_spent || member.total_sales, 0),
         order_count: toNumber(member.order_count, 0),
         ...extra
@@ -400,7 +416,12 @@ const handleAction = {
                 data: { status: 'settled', settled_at: db.serverDate(), updated_at: db.serverDate() }
             }).catch(() => {});
             if (amount > 0) {
-                await distributionCommission.settleCommission(comm.openid, amount);
+                await distributionCommission.settleCommission(comm.openid, amount, {
+                    order_id: comm.order_id,
+                    order_no: comm.order_no,
+                    type: comm.type,
+                    level: comm.level
+                });
                 totalAmount += amount;
             }
             settledCount++;
@@ -464,8 +485,8 @@ const handleAction = {
         });
 
         const feeDesc = fee > 0 ? `（手续费${fee}元，到账${actualAmount}元）` : '';
-        await db.collection('wallet_logs').add({
-            data: {
+        try {
+            await appendWalletLog({
                 openid,
                 type: 'withdraw',
                 amount: -amount,
@@ -473,9 +494,22 @@ const handleAction = {
                 actual_amount: actualAmount,
                 withdraw_id: result._id,
                 description: `提现${amount}元${feeDesc}`,
-                created_at: db.serverDate(),
-            },
-        });
+            });
+        } catch (logErr) {
+            await db.collection('users')
+                .where({ openid })
+                .update({
+                    data: {
+                        commission_balance: _.inc(amount),
+                        balance: _.inc(amount),
+                        total_withdrawn: _.inc(-amount),
+                        updated_at: db.serverDate()
+                    }
+                })
+                .catch(() => {});
+            await db.collection('withdrawals').doc(String(result._id)).remove().catch(() => {});
+            throw serverError(`提现流水写入失败：${logErr.message}`);
+        }
 
         return success({ withdraw_id: result._id, withdraw_no: withdrawNo, amount, fee, actual_amount: actualAmount });
     }),
@@ -518,24 +552,37 @@ const handleAction = {
 
         const transferNo = 'CT' + Date.now() + Math.floor(Math.random() * 1000);
 
-        await Promise.all([
-            db.collection('wallet_logs').add({
-                data: {
-                    openid, type: 'commission_transfer', amount: -amount,
+        try {
+            await Promise.all([
+                appendWalletLog({
+                    openid,
+                    type: 'commission_transfer',
+                    amount: -amount,
                     transfer_no: transferNo,
                     description: `佣金转货款${amount}元`,
-                    created_at: db.serverDate(),
-                },
-            }),
-            db.collection('goods_fund_logs').add({
-                data: {
-                    openid, type: 'commission_transfer', amount,
+                }),
+                appendGoodsFundLog({
+                    openid,
+                    type: 'commission_transfer',
+                    amount,
                     transfer_no: transferNo,
                     description: `佣金转入货款${amount}元`,
-                    created_at: db.serverDate(),
-                },
-            })
-        ]);
+                })
+            ]);
+        } catch (logErr) {
+            await db.collection('users')
+                .where({ openid })
+                .update({
+                    data: {
+                        commission_balance: _.inc(amount),
+                        balance: _.inc(amount),
+                        agent_wallet_balance: _.inc(-amount),
+                        updated_at: db.serverDate()
+                    }
+                })
+                .catch(() => {});
+            throw serverError(`佣金转货款流水写入失败：${logErr.message}`);
+        }
 
         return success({ transfer_no: transferNo, amount });
     }),
@@ -570,26 +617,7 @@ const handleAction = {
             .count().catch(() => ({ total: 0 }));
 
         return success({
-            list: (teamRes.data || []).map(m => ({
-                _id: m._id,
-                id: m._id,
-                level: level === 'indirect' ? 2 : 1,
-                openid: m.openid,
-                nickName: m.nickName || m.nickname || '新用户',
-                nickname: m.nickname || m.nickName || '新用户',
-                avatarUrl: m.avatarUrl || m.avatar_url || '',
-                avatar: m.avatar || m.avatarUrl || m.avatar_url || '',
-                avatar_url: m.avatar_url || m.avatarUrl || m.avatar || '',
-                nick_name: m.nick_name || m.nickname || m.nickName || '新用户',
-                joined_at: resolveJoinedAt(m),
-                created_at: m.created_at,
-                role_level: toNumber(m.role_level, 0),
-                role_name: m.role_name || '普通用户',
-                invite_code: m.my_invite_code || m.invite_code || '',
-                phone: m.phone || '',
-                total_sales: toNumber(m.total_spent || m.total_sales, 0),
-                order_count: toNumber(m.order_count, 0),
-            })),
+            list: (teamRes.data || []).map((member) => normalizeTeamMember(member, level === 'indirect' ? 2 : 1)),
             total: totalRes.total || 0,
             page,
             pageSize,
@@ -665,9 +693,11 @@ const handleAction = {
         const roleLevel = toNumber(user.role_level, 0);
         return success({
             role_level: roleLevel,
-            balance: toNumber(user._agent_wallet_balance, 0),
-            agent_wallet_balance: toNumber(user._agent_wallet_balance, 0),
-            commission_balance: toNumber(user._commission_balance, 0),
+            role_name: resolveRoleName(user),
+            balance: resolveGoodsFundBalance(user),
+            goods_fund_balance: resolveGoodsFundBalance(user),
+            agent_wallet_balance: resolveGoodsFundBalance(user),
+            commission_balance: resolveCommissionBalance(user),
             total_earned: toNumber(user.total_earned, 0),
             total_withdrawn: toNumber(user.total_withdrawn, 0),
         });
@@ -678,8 +708,8 @@ const handleAction = {
         const userRes = await db.collection('users').where({ openid }).limit(1).get();
         if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
         const u = userRes.data[0];
-        const balance = toNumber(u.agent_wallet_balance != null ? u.agent_wallet_balance : u.wallet_balance, 0);
-        return success({ balance, agent_wallet_balance: balance });
+        const balance = resolveGoodsFundBalance(u);
+        return success({ balance, goods_fund_balance: balance, agent_wallet_balance: balance });
     }),
 
     // ===== 晋升进度 =====

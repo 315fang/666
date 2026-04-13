@@ -50,6 +50,10 @@ Page({
                 if (refund.order && refund.order.product && typeof refund.order.product.images === 'string') {
                     try { refund.order.product.images = JSON.parse(refund.order.product.images); } catch(e) { refund.order.product.images = []; }
                 }
+                refund.statusText = refund.status_text || this.data.statusText[refund.status] || refund.status;
+                refund.paymentMethodText = refund.payment_method_text || '';
+                refund.refundTargetText = refund.refund_target_text || '';
+                refund.processedAt = refund.processing_at || refund.processed_at || '';
                 this.setData({
                     refund,
                     loading: false,

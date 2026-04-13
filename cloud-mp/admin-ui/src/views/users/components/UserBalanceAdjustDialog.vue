@@ -143,8 +143,8 @@ const currentRawValue = computed(() => {
   const u = props.user
   if (!u) return 0
   const map = {
-    goods_fund: u.agent_wallet_balance ?? u.wallet_balance ?? 0,
-    commission: u.commission_balance ?? 0,
+    goods_fund: u.goods_fund_balance ?? u.agent_wallet_balance ?? u.wallet_balance ?? 0,
+    commission: u.commission_balance ?? u.balance ?? 0,
     points:     u.points ?? 0,
     growth:     u.growth_value ?? 0
   }

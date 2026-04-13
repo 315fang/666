@@ -67,7 +67,11 @@ Page({
                 fetchUserProfile()
             ]);
             if (agentRes && agentRes.code === 0 && agentRes.data) {
-                const bal = parseFloat(agentRes.data.agent_wallet_balance != null ? agentRes.data.agent_wallet_balance : agentRes.data.balance) || 0;
+                const bal = parseFloat(
+                    agentRes.data.goods_fund_balance != null
+                        ? agentRes.data.goods_fund_balance
+                        : (agentRes.data.agent_wallet_balance != null ? agentRes.data.agent_wallet_balance : agentRes.data.balance)
+                ) || 0;
                 goodsAmount = formatMoney(bal);
                 showGoods = bal > 0;
             }
@@ -77,7 +81,7 @@ Page({
             purseAmount = formatMoney(
                 info.commission_balance != null
                     ? info.commission_balance
-                    : (info.available_balance != null ? info.available_balance : info.balance)
+                    : info.balance
             );
         } catch (_) {
             try {

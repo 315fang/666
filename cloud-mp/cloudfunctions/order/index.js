@@ -48,6 +48,22 @@ const handleAction = {
         return success(result);
     }),
 
+    'counts': asyncHandler(async (openid) => {
+        const db = cloud.database();
+        const statuses = ['pending_payment', 'pending_group', 'paid', 'shipped'];
+        const counts = {};
+        await Promise.all(statuses.map(async (s) => {
+            const res = await db.collection('orders').where({ openid, status: s }).count().catch(() => ({ total: 0 }));
+            counts[s] = res.total || 0;
+        }));
+        const refundRes = await db.collection('refunds')
+            .where({ openid, status: db.command.in(['pending', 'approved', 'processing']) })
+            .count().catch(() => ({ total: 0 }));
+        counts.pending = counts.pending_payment;
+        counts.refund = refundRes.total || 0;
+        return success(counts);
+    }),
+
     'detail': asyncHandler(async (openid, params) => {
         const id = params.order_id || params.id;
         if (!id) throw badRequest('缺少订单 ID');

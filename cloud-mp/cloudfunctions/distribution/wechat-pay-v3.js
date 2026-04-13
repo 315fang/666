@@ -10,15 +10,14 @@
 const crypto = require('crypto');
 const https = require('https');
 
-// ==================== 配置 ====================
+// ==================== 配置（全部从环境变量读取） ====================
 const CONFIG = {
-    appId: 'wx2483d9ca40c2a2a9',
-    mchId: '1107879389',
-    serialNo: '2D905DDB10658134EF361AA41BC474ED60288714',
-    apiV3Key: 'Hmmszkjyxgs202603170000000000000',
-    publicKeyId: 'PUB_KEY_ID_0111078793892026031700382162000400',
-    // 回调地址 — 云函数 HTTP 触发路径
-    notifyUrl: 'https://cloud1-9gywyqe49638e46f.ap-shanghai.tcb.qcloud.la/payment',
+    appId: process.env.PAYMENT_WECHAT_APPID || process.env.WECHAT_APPID || '',
+    mchId: process.env.PAYMENT_WECHAT_MCHID || process.env.WECHAT_MCH_ID || '',
+    serialNo: process.env.PAYMENT_WECHAT_SERIAL_NO || process.env.WECHAT_PAY_SERIAL_NO || '',
+    apiV3Key: process.env.PAYMENT_WECHAT_API_V3_KEY || process.env.WECHAT_PAY_API_V3_KEY || '',
+    publicKeyId: process.env.PAYMENT_WECHAT_PUBLIC_KEY_ID || process.env.WECHAT_PAY_PUBLIC_KEY_ID || '',
+    notifyUrl: process.env.PAYMENT_WECHAT_NOTIFY_URL || process.env.WECHAT_PAY_NOTIFY_URL || '',
 };
 
 // ==================== 证书缓存 ====================

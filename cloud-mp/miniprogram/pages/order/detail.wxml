@@ -9,10 +9,10 @@
 
   <!-- 订单状态（如有退款，覆盖为退款状态） -->
   <view class="status-card status-{{hasActiveRefund ? 'refunding' : order.status}}">
-    <text class="status-text">{{hasActiveRefund ? '退款中' : (statusMap[order.status] || order.status)}}</text>
+    <text class="status-text">{{hasActiveRefund ? (activeRefund.status_text || '退款中') : (order.status_text || statusMap[order.status] || order.status)}}</text>
     <text class="status-desc" wx:if="{{order.status === 'pending' && payCountdownText}}">剩余支付时间 {{payCountdownText}}</text>
-    <text class="status-desc" wx:elif="{{hasActiveRefund}}">{{statusDescMap['refunding']}}</text>
-    <text class="status-desc" wx:else>{{statusDescMap[order.status] || ''}}</text>
+    <text class="status-desc" wx:elif="{{hasActiveRefund}}">{{activeRefund.status_desc || statusDescMap['refunding']}}</text>
+    <text class="status-desc" wx:else>{{order.status_desc || statusDescMap[order.status] || ''}}</text>
   </view>
 
   <!-- 拼团订单流程进度 -->
@@ -66,11 +66,15 @@
     <view class="card-title card-title-danger">退款信息</view>
     <view class="info-row">
       <text class="info-label">退款状态</text>
-      <text class="info-value info-value-danger">{{refundStatusText[activeRefund.status] || '处理中'}}</text>
+      <text class="info-value info-value-danger">{{activeRefund.status_text || refundStatusText[activeRefund.status] || '处理中'}}</text>
     </view>
     <view class="info-row">
       <text class="info-label">退款金额</text>
       <text class="info-value info-value-danger">¥{{activeRefund.amount}}</text>
+    </view>
+    <view class="info-row" wx:if="{{activeRefund.refund_target_text}}">
+      <text class="info-label">退款去向</text>
+      <text class="info-value">{{activeRefund.refund_target_text}}</text>
     </view>
     <view class="info-row">
       <text class="info-label">退款类型</text>
@@ -195,12 +199,16 @@
     <view class="info-row" wx:if="{{order.status !== 'pending' && order.status !== 'cancelled'}}">
       <text class="info-label">支付方式</text>
       <view class="payment-method-tag-wrap">
-        <text wx:if="{{order.payment_method === 'goods_fund' || order.pay_channel === 'goods_fund'}}" class="payment-tag payment-tag-wallet">货款余额</text>
+        <text wx:if="{{order.payment_method === 'goods_fund'}}" class="payment-tag payment-tag-wallet">{{order.payment_method_text || '货款余额'}}</text>
         <text wx:elif="{{order.pay_channel === 'free' || order.pay_amount == 0}}" class="payment-tag payment-tag-free">免费</text>
-        <text wx:else class="payment-tag payment-tag-wechat">微信支付</text>
+        <text wx:else class="payment-tag payment-tag-wechat">{{order.payment_method_text || '微信支付'}}</text>
         <text wx:if="{{order.points_used > 0}}" class="payment-tag payment-tag-points">+积分抵扣</text>
         <text wx:if="{{order.coupon_discount > 0}}" class="payment-tag payment-tag-coupon">+优惠券</text>
       </view>
+    </view>
+    <view class="info-row" wx:if="{{order.status !== 'pending' && order.status !== 'cancelled' && order.refund_target_text}}">
+      <text class="info-label">退款去向</text>
+      <text class="info-value">{{order.refund_target_text}}</text>
     </view>
     <view class="info-row" wx:if="{{order.tracking_no}}">
       <text class="info-label">物流单号</text>

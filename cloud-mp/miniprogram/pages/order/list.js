@@ -155,11 +155,11 @@ Page({
                     order.refundId = activeRefund.id;
                     order.refundStatus = activeRefund.status;
                     // 覆盖状态文本为退款状态
-                    order.statusText = '退款中';
+                    order.statusText = activeRefund.status_text || '退款中';
                     order.displayStatus = 'refunding';
                 } else {
                     order.hasActiveRefund = false;
-                    order.statusText = ORDER_STATUS_TEXT[order.status] || '未知状态';
+                    order.statusText = order.status_text || ORDER_STATUS_TEXT[order.status] || '未知状态';
                     order.displayStatus = order.status;
                 }
                 order.activityInfo = buildOrderActivityInfo(order);
@@ -196,10 +196,12 @@ Page({
                     hasActiveRefund: ['pending', 'approved', 'processing'].includes(refund.status),
                     refundId: refund.id,
                     refundStatus: refund.status,
-                    statusText: this._getRefundStatusText(refund.status),
+                    statusText: refund.status_text || this._getRefundStatusText(refund.status),
                     displayStatus: 'refund_' + refund.status,
                     refundType: refund.type,
-                    refundAmount: refund.amount
+                    refundAmount: refund.amount,
+                    refundTargetText: refund.refund_target_text || '',
+                    paymentMethodText: refund.payment_method_text || ''
                 };
                 item.activityInfo = buildOrderActivityInfo(item);
                 return item;

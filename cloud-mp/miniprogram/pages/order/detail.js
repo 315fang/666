@@ -95,7 +95,7 @@ Page({
             const { get: httpGet } = require('../../utils/request');
             const res = await httpGet('/agent/wallet');
             if (res && res.code === 0 && res.data) {
-                const balance = parseFloat(res.data.balance || 0);
+                const balance = parseFloat(res.data.goods_fund_balance || res.data.balance || 0);
                 this.setData({ isAgent: balance > 0, walletBalance: balance });
             } else {
                 this.setData({ isAgent: false, walletBalance: 0 });
@@ -139,6 +139,7 @@ Page({
     showOrderBubble(order) {
         if (!order) return;
         const logisticsConfig = getConfigSection('logistics_config');
+        const canonicalDesc = order.status_desc || (this.data.activeRefund && this.data.activeRefund.status_desc) || '';
         const statusMap = {
             pending: '订单已创建，请尽快完成支付。',
             pending_payment: '订单已创建，请尽快完成支付。',
@@ -153,7 +154,7 @@ Page({
             refunding: '退款申请已提交，正在处理中。',
             refunded: '退款已完成。'
         };
-        const text = statusMap[order.status] || '可在此查看订单状态与物流进度。';
+        const text = canonicalDesc || statusMap[order.status] || '可在此查看订单状态与物流进度。';
         if (this._bubbleTimer) clearTimeout(this._bubbleTimer);
         this.setData({ orderBubbleText: text, orderBubbleVisible: true });
         this._bubbleTimer = setTimeout(() => {

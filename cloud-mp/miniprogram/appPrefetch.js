@@ -24,16 +24,12 @@ module.exports = {
         // ★ 改为调用云函数
         const promise = callFn('config', { action: 'homeContent' }, { showError: false })
             .then(res => {
-                const pageData = res && res.data;
+                const pageData = res && (res.data || res);
                 if (!pageData) throw new Error('empty home content');
 
-                const payload = pageData.resources
-                    ? (pageData.resources.legacy_payload || pageData.resources)
-                    : pageData;
-
-                this._cacheHomePayload(payload, now + cacheTtl, cacheKey);
+                this._cacheHomePayload(pageData, now + cacheTtl, cacheKey);
                 console.log('[Prefetch] 首页页面编排预拉取完成并缓存');
-                return payload;
+                return pageData;
             })
             .catch(err => {
                 console.warn('[Prefetch] 首页配置预拉取失败（不影响首页兜底渲染）', err);
@@ -84,10 +80,11 @@ module.exports = {
 
     _cacheHomePayload(payload, expireAt, cacheKey) {
         this.globalData.homePageData = payload;
-        if (payload && payload.configs) {
-            this.globalData.brandName = payload.configs.brand_name || this.globalData.brandName;
-            this.globalData.shareTitle = payload.configs.share_title || this.globalData.shareTitle;
-            this.globalData.customerServiceWechat = payload.configs.customer_service_wechat || this.globalData.customerServiceWechat;
+        const configs = payload?.configs || payload?.resources?.configs || {};
+        if (configs) {
+            this.globalData.brandName = configs.brand_name || this.globalData.brandName;
+            this.globalData.shareTitle = configs.share_title || this.globalData.shareTitle;
+            this.globalData.customerServiceWechat = configs.customer_service_wechat || this.globalData.customerServiceWechat;
         }
         wx.setStorageSync(cacheKey, { data: payload, expireAt });
     }

@@ -33,7 +33,11 @@ const {
 
 process.env.ADMIN_DATA_SOURCE = process.env.ADMIN_DATA_SOURCE
     || (process.env.ADMIN_CLOUDBASE_ENV_ID || process.env.TCB_ENV || process.env.SCF_NAMESPACE ? 'cloudbase' : 'filesystem');
-process.env.ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'admin-api-function-secret';
+if (!process.env.ADMIN_JWT_SECRET) {
+    const crypto = require('crypto');
+    process.env.ADMIN_JWT_SECRET = crypto.randomBytes(32).toString('hex');
+    console.warn('[admin-api] ADMIN_JWT_SECRET 未配置，已生成临时随机密钥。请在环境变量中配置固定密钥！');
+}
 
 const { EventEmitter } = require('events');
 const { createRequest, createResponse } = require('node-mocks-http');

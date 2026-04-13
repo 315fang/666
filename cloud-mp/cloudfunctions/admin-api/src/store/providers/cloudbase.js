@@ -61,6 +61,7 @@ function createCloudBaseStore(options) {
         'branch_agent_claims', 'branch_agent_stations', 'cart_items',
         'categories', 'commissions', 'content_boards', 'content_board_products',
         'contents', 'coupon_auto_rules', 'coupons', 'dividend_executions',
+        'goods_fund_logs',
         'group_activities', 'group_members', 'group_orders',
         'agent_exit_applications', 'lottery_prizes', 'lottery_records',
         'mass_messages', 'material_groups', 'materials', 'notifications',

@@ -2,8 +2,9 @@
 const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
-const { getOrderByIdOrNo } = require('./order-query');
+const { getOrderByIdOrNo, listRefunds, getRefundDetail } = require('./order-query');
 const { restoreUsedCoupon } = require('./order-coupon');
+const { normalizePaymentMethodCode, getRefundTargetText } = require('./order-contract');
 
 function toNumber(value, fallback = 0) {
     if (value === null || value === undefined || value === '') return fallback;
@@ -257,7 +258,8 @@ async function applyRefund(openid, params) {
     if (!order) throw new Error('订单不存在');
     if (order.openid !== openid) throw new Error('无权操作此订单');
 
-    if (!['paid', 'pending_group', 'shipped', 'completed'].includes(order.status)) {
+    const refundableStatuses = ['paid', 'pending_group', 'pickup_pending', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
+    if (!refundableStatuses.includes(order.status)) {
         throw new Error(`订单状态不允许退款: ${order.status}`);
     }
     const canonicalOrderId = order._id || String(orderId);
@@ -277,6 +279,8 @@ async function applyRefund(openid, params) {
     const refundAmount = toNumber(params.amount ?? params.refund_amount, toNumber(order.pay_amount || order.total_amount, 0));
     const type = params.type || 'refund_only';
     const refundQuantity = type === 'return_refund' ? Math.max(1, toNumber(params.refund_quantity, 1)) : 0;
+    const paymentMethod = normalizePaymentMethodCode(order.payment_method || order.pay_channel || order.pay_type || order.payment_channel || '');
+    const refundChannel = paymentMethod === 'goods_fund' ? 'goods_fund' : (paymentMethod === 'wallet' ? 'wallet' : 'wechat');
 
     const result = await db.collection('refunds').add({
         data: {
@@ -289,6 +293,9 @@ async function applyRefund(openid, params) {
             reason: params.reason || '用户申请退款',
             description: params.description || '',
             refund_quantity: refundQuantity,
+            payment_method: paymentMethod,
+            refund_channel: refundChannel,
+            refund_target_text: getRefundTargetText(paymentMethod),
             status: 'pending',
             images: params.images || [],
             created_at: db.serverDate(),
@@ -396,33 +403,14 @@ async function applyRefund(openid, params) {
  * 查询退款列表
  */
 async function queryRefundList(openid, params = {}) {
-    let query = db.collection('refunds').where({ openid });
-
-    if (params.status) {
-        query = query.where({ status: params.status });
-    }
-
-    const res = await query.orderBy('created_at', 'desc').limit(50).get().catch(() => ({ data: [] }));
-    let rows = res.data || [];
-    if (params.order_id) {
-        const order = await getOrderByIdOrNo(openid, params.order_id);
-        const orderTokens = [params.order_id, order && order._id, order && order.id, order && order.order_no]
-            .filter((value) => value !== undefined && value !== null && value !== '')
-            .map((value) => String(value));
-        rows = rows.filter((refund) => orderTokens.includes(String(refund.order_id)) || orderTokens.includes(String(refund.order_no)));
-    }
-    return rows.map((refund) => ({ ...refund, id: refund._id || refund.id }));
+    return listRefunds(openid, params);
 }
 
 /**
  * 查询退款详情
  */
 async function queryRefundDetail(openid, refundId) {
-    const refundRes = await db.collection('refunds').doc(refundId).get().catch(() => ({ data: null }));
-    if (!refundRes.data || refundRes.data.openid !== openid) {
-        throw new Error('退款记录不存在');
-    }
-    return { ...refundRes.data, id: refundRes.data._id || refundRes.data.id };
+    return getRefundDetail(openid, refundId);
 }
 
 /**
@@ -494,6 +482,8 @@ async function returnShipping(openid, refundId, shippingData) {
 
     await db.collection('refunds').doc(refundId).update({
         data: {
+            return_company: shippingData.company || '',
+            return_tracking_no: shippingData.tracking_no || '',
             return_shipping: {
                 company: shippingData.company || '',
                 tracking_no: shippingData.tracking_no || '',

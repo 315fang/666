@@ -161,12 +161,24 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="实付 / 状态" width="138">
+        <el-table-column label="实付 / 状态" width="180">
           <template #default="{ row }">
             <div class="text-price">¥{{ money(row.actual_price) }}</div>
-            <div class="text-secondary hide-mobile">{{ paymentMethodText(row.payment_method) }}</div>
             <div style="margin-top:6px">
-              <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</el-tag>
+              <el-tag :type="getStatusType(row.status)" size="small">{{ orderStatusText(row) }}</el-tag>
+            </div>
+            <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;">
+              <el-tag :type="paymentMethodTagType(detailPaymentMethod(row))" effect="plain" size="small">
+                {{ orderPaymentMethodText(row) }}
+              </el-tag>
+              <el-tag
+                v-if="['refunding', 'refunded'].includes(row.status)"
+                type="danger"
+                effect="plain"
+                size="small"
+              >
+                {{ orderRefundTargetText(row) }}
+              </el-tag>
             </div>
             <div class="text-secondary hide-mobile" style="margin-top:4px;font-size:12px">{{ fulfillmentText(row) }}</div>
           </template>
@@ -217,17 +229,18 @@
         <el-descriptions :column="2" border size="small" style="margin-bottom:20px">
           <el-descriptions-item label="订单号" :span="2">{{ detailData.order_no }}</el-descriptions-item>
           <el-descriptions-item label="订单状态">
-            <el-tag :type="getStatusType(detailData.status)">{{ getStatusText(detailData.status) }}</el-tag>
+            <el-tag :type="getStatusType(detailData.status)">{{ orderStatusText(detailData) }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="履约方式">{{ fulfillmentText(detailData) }}</el-descriptions-item>
           <el-descriptions-item label="支付方式">
-            <el-tag :type="detailPaymentMethod(detailData) === 'goods_fund' ? 'warning' : (detailPaymentMethod(detailData) === 'wechat' ? 'success' : 'info')" size="small">
-              {{ paymentMethodText(detailPaymentMethod(detailData)) }}
+            <el-tag :type="paymentMethodTagType(detailPaymentMethod(detailData))" size="small">
+              {{ orderPaymentMethodText(detailData) }}
             </el-tag>
             <span class="text-secondary" style="margin-left:8px">
               原值：{{ detailData.payment_method || detailData.pay_channel || detailData.pay_type || detailData.payment_channel || '-' }}
             </span>
           </el-descriptions-item>
+          <el-descriptions-item label="退款去向">{{ orderRefundTargetText(detailData) }}</el-descriptions-item>
           <el-descriptions-item label="配送方式">{{ deliveryTypeText(detailData.delivery_type) }}</el-descriptions-item>
           <el-descriptions-item label="下单时间">{{ fmtDateTime(detailData.created_at) }}</el-descriptions-item>
           <el-descriptions-item label="支付时间">{{ fmtDateTime(detailData.paid_at) }}</el-descriptions-item>
@@ -293,7 +306,7 @@
               <div class="amount-row total"><span>应付金额</span><span class="text-price">¥{{ money(detailData.actual_price) }}</span></div>
               <div class="amount-row">
                 <span>支付方式</span>
-                <span>{{ paymentMethodText(detailPaymentMethod(detailData)) }}</span>
+                <span>{{ orderPaymentMethodText(detailData) }}</span>
               </div>
             </div>
           </el-col>
@@ -372,7 +385,26 @@
             style="margin-bottom:12px"
           />
         <el-form-item label="快递公司">
-            <el-input v-model="shipForm.logistics_company" :placeholder="logisticsMode === 'manual' ? '如：顺丰速运 / 同城配送' : '如：顺丰速运'" />
+          <el-select
+            v-model="shipForm.logistics_company"
+            filterable
+            allow-create
+            clearable
+            default-first-option
+            :reserve-keyword="false"
+            style="width:100%"
+            :placeholder="logisticsMode === 'manual' ? '选择或输入承运方，如顺丰速运 / 同城配送' : '选择或输入快递公司，如顺丰速运'"
+          >
+            <el-option
+              v-for="company in shippingCompanyOptions"
+              :key="company"
+              :label="company"
+              :value="company"
+            />
+          </el-select>
+          <div class="text-secondary" style="font-size:12px; line-height:1.6; margin-top:6px;">
+            支持直接输入新公司；发货成功后会自动记住{{ canManageSettings ? '并同步到共享配置' : '' }}。
+          </div>
         </el-form-item>
         <el-form-item label="快递单号">
             <el-input v-model="shipForm.tracking_no" :placeholder="logisticsMode === 'manual' ? '输入运单号或手工单号' : '输入快递单号'" />
@@ -442,6 +474,7 @@ import {
   adjustOrderAmount,
   addOrderRemark,
   getMiniProgramConfig,
+  updateMiniProgramConfig,
   forceCompleteOrder,
   forceCancelOrder,
   exportOrders
@@ -480,12 +513,67 @@ const submittingForce = ref(false)
 const logisticsMode = ref('third_party')
 const logisticsTrackingRequired = ref(true)
 const logisticsCompanyRequired = ref(false)
+const miniProgramConfigSnapshot = ref(null)
 const canAdjustOrderAmount = computed(() => userStore.hasPermission('order_amount_adjust'))
 const canForceCompleteOrder = computed(() => userStore.hasPermission('order_force_complete'))
 const canForceCancelOrder = computed(() => userStore.hasPermission('order_force_cancel'))
+const canManageSettings = computed(() => userStore.hasPermission('settings_manage'))
 const displayBuyer = (buyer) => normalizeUserDisplay(buyer || {})
 const displayBuyerName = (buyer, fallback = '-') => getUserNickname(displayBuyer(buyer), fallback)
 const displayBuyerAvatar = (buyer) => getUserAvatar(displayBuyer(buyer))
+
+const SHIPPING_COMPANY_STORAGE_KEY = 'admin_shipping_company_options'
+const DEFAULT_SHIPPING_COMPANY_OPTIONS = [
+  '顺丰速运',
+  '申通快递',
+  '中通快递',
+  '圆通速递',
+  '韵达速递',
+  '京东快递',
+  '邮政EMS',
+  '极兔速递',
+  '德邦快递',
+  '同城配送'
+]
+
+function normalizeShippingCompanyName(value) {
+  return String(value || '').trim()
+}
+
+function dedupeStringList(list = []) {
+  return [...new Set(
+    list
+      .map((item) => normalizeShippingCompanyName(item))
+      .filter(Boolean)
+  )]
+}
+
+function mergeShippingCompanyOptions(...groups) {
+  return dedupeStringList(groups.flat())
+}
+
+function readLocalShippingCompanyOptions() {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = JSON.parse(localStorage.getItem(SHIPPING_COMPANY_STORAGE_KEY) || '[]')
+    return Array.isArray(raw) ? dedupeStringList(raw) : []
+  } catch (_) {
+    return []
+  }
+}
+
+function persistLocalShippingCompanyOptions(list) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(SHIPPING_COMPANY_STORAGE_KEY, JSON.stringify(dedupeStringList(list)))
+  } catch (_) {
+    // ignore local cache write failures
+  }
+}
+
+const shippingCompanyOptions = ref(
+  mergeShippingCompanyOptions(DEFAULT_SHIPPING_COMPANY_OPTIONS, readLocalShippingCompanyOptions())
+)
 
 /**
  * 构建订单列表查询参数
@@ -595,11 +683,51 @@ const handleExport = async () => {
 const fetchMiniProgramConfig = async () => {
   try {
     const data = await getMiniProgramConfig()
+    miniProgramConfigSnapshot.value = data || null
     logisticsMode.value = data?.logistics_config?.shipping_mode || 'third_party'
     logisticsTrackingRequired.value = data?.logistics_config?.shipping_tracking_no_required !== false
     logisticsCompanyRequired.value = !!data?.logistics_config?.shipping_company_name_required
+    shippingCompanyOptions.value = mergeShippingCompanyOptions(
+      DEFAULT_SHIPPING_COMPANY_OPTIONS,
+      data?.logistics_config?.shipping_company_options || [],
+      readLocalShippingCompanyOptions()
+    )
+    persistLocalShippingCompanyOptions(shippingCompanyOptions.value)
   } catch (e) {
     console.error('获取小程序物流配置失败:', e)
+  }
+}
+
+const rememberShippingCompanyOption = async (value) => {
+  const companyName = normalizeShippingCompanyName(value)
+  if (!companyName) return
+
+  const nextOptions = mergeShippingCompanyOptions(
+    shippingCompanyOptions.value,
+    [companyName]
+  )
+  shippingCompanyOptions.value = nextOptions
+  persistLocalShippingCompanyOptions(nextOptions)
+
+  if (!canManageSettings.value || !miniProgramConfigSnapshot.value) return
+
+  const remoteOptions = dedupeStringList(
+    miniProgramConfigSnapshot.value?.logistics_config?.shipping_company_options || []
+  )
+  if (remoteOptions.includes(companyName)) return
+
+  const nextConfig = JSON.parse(JSON.stringify(miniProgramConfigSnapshot.value))
+  nextConfig.logistics_config = {
+    ...(nextConfig.logistics_config || {}),
+    shipping_company_options: mergeShippingCompanyOptions(remoteOptions, [companyName])
+  }
+
+  try {
+    await updateMiniProgramConfig(nextConfig)
+    miniProgramConfigSnapshot.value = nextConfig
+  } catch (error) {
+    console.error('保存常用快递公司失败:', error)
+    ElMessage.warning('快递公司已在当前浏览器记住，未能同步到共享配置')
   }
 }
 
@@ -655,6 +783,19 @@ const paymentMethodText = (method) => ({
   goods_fund: '货款支付',
   wallet: '余额支付'
 }[method] || (method || '-'))
+const paymentMethodTagType = (method) => ({
+  wechat: 'success',
+  goods_fund: 'warning',
+  wallet: 'info'
+}[method] || 'info')
+const refundDestinationText = (method) => ({
+  wechat: '原路退回微信支付',
+  goods_fund: '退回货款余额',
+  wallet: '退回账户余额'
+}[method] || '-')
+const orderStatusText = (row = {}) => row.status_text || getStatusText(row.status)
+const orderPaymentMethodText = (row = {}) => row.payment_method_text || paymentMethodText(detailPaymentMethod(row))
+const orderRefundTargetText = (row = {}) => row.refund_target_text || refundDestinationText(detailPaymentMethod(row))
 const deliveryTypeText = (type) => ({
   express: '快递配送',
   pickup: '到店自提'
@@ -795,22 +936,30 @@ const shipFulfillmentLabel = computed(() => (
 const handleShip = (row) => {
   currentOrder.value = row
   shipForm.fulfillment_type = inferFulfillmentType(row)
-  shipForm.tracking_no = ''
-  shipForm.logistics_company = ''
+  shipForm.tracking_no = String(row?.tracking_no || '').trim()
+  shipForm.logistics_company = normalizeShippingCompanyName(row?.logistics_company)
   shipDialogVisible.value = true
 }
 const submitShip = async () => {
-  if (logisticsTrackingRequired.value && !shipForm.tracking_no) {
+  const trackingNo = String(shipForm.tracking_no || '').trim()
+  const logisticsCompany = normalizeShippingCompanyName(shipForm.logistics_company)
+
+  if (logisticsTrackingRequired.value && !trackingNo) {
     return ElMessage.warning('请输入物流单号')
   }
-  if (logisticsCompanyRequired.value && !shipForm.logistics_company) {
+  if (logisticsCompanyRequired.value && !logisticsCompany) {
     return ElMessage.warning('请输入承运方名称')
   }
   await runOrderMutation(submittingShip, () => shipOrder(currentOrder.value.id, {
       ...shipForm,
+      tracking_no: trackingNo,
+      logistics_company: logisticsCompany,
       type: shipForm.fulfillment_type === 'agent' ? 'Agent' : 'Company',
       fulfillment_type: shipForm.fulfillment_type
-    }), '发货成功', () => { shipDialogVisible.value = false })
+    }), '发货成功', async () => {
+      shipDialogVisible.value = false
+      await rememberShippingCompanyOption(logisticsCompany)
+    })
 }
 
 // ===== 改价 =====
@@ -915,9 +1064,7 @@ onMounted(() => {
     searchForm.status_group = String(q.status_group)
     searchForm.status = ''
   }
-  if (userStore.hasPermission('settings_manage')) {
-    fetchMiniProgramConfig()
-  }
+  fetchMiniProgramConfig()
   refreshOrders()
 })
 </script>

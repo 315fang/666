@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-04-13T17:09:56.962Z",
+  "summary": {
+    "missing_internal_wallet_logs": 0,
+    "missing_internal_goods_fund_logs": 0,
+    "missing_reopen_reversal_logs": 0,
+    "missing_adjustment_reasons": 0,
+    "missing_debt_reasons": 0,
+    "missing_dividend_remarks": 0,
+    "missing_exit_review_remarks": 0
+  },
+  "findings": {
+    "missingInternalWalletLogs": [],
+    "missingInternalGoodsFundLogs": [],
+    "missingReopenReversalLogs": [],
+    "missingAdjustmentReasons": [],
+    "missingDebtReasons": [],
+    "missingDividendRemarks": [],
+    "missingExitReviewRemarks": []
+  }
+}

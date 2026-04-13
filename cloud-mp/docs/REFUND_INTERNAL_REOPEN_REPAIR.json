@@ -1,0 +1,85 @@
+{
+  "generated_at": "2026-04-13T16:59:02.115Z",
+  "apply": true,
+  "allow_goods_fund_debt": true,
+  "target_refund_nos": [
+    "REF1775897852197731",
+    "SYSRF177510363794967505",
+    "SYSRF177512683468041091",
+    "REF1775993281617789",
+    "REF1776058290289539",
+    "REF1776083909694275",
+    "REF1776089368463924"
+  ],
+  "summary": {
+    "target_count": 7,
+    "reopenable_count": 2,
+    "applied_count": 2,
+    "skipped_count": 5
+  },
+  "results": [
+    {
+      "refund_no": "REF1775897852197731",
+      "order_no": "ORD202603301847220003575239",
+      "user_label": "小锚点",
+      "payment_method": "wallet",
+      "amount": 339.15,
+      "result": "skipped",
+      "reason": "退款状态不是 completed，而是 approved"
+    },
+    {
+      "refund_no": "SYSRF177510363794967505",
+      "order_no": "ORD202603301859370001586766",
+      "user_label": "小锚点",
+      "payment_method": "wallet",
+      "amount": 299,
+      "result": "skipped",
+      "reason": "退款状态不是 completed，而是 approved"
+    },
+    {
+      "refund_no": "SYSRF177512683468041091",
+      "order_no": "ORD202604021245010002973888",
+      "user_label": "小锚点",
+      "payment_method": "wallet",
+      "amount": 299,
+      "result": "skipped",
+      "reason": "退款状态不是 completed，而是 approved"
+    },
+    {
+      "refund_no": "REF1775993281617789",
+      "order_no": "ORD1775992929604326",
+      "user_label": "小锚点",
+      "payment_method": "goods_fund",
+      "amount": 126.64,
+      "result": "skipped",
+      "reason": "退款状态不是 completed，而是 approved"
+    },
+    {
+      "refund_no": "REF1776058290289539",
+      "order_no": "ORD1776006098733948",
+      "user_label": "小锚点",
+      "payment_method": "goods_fund",
+      "amount": 239.15,
+      "result": "skipped",
+      "reason": "退款状态不是 completed，而是 approved"
+    },
+    {
+      "refund_no": "REF1776083909694275",
+      "order_no": "ORD1776077635910944",
+      "user_label": "小锚点",
+      "payment_method": "goods_fund",
+      "amount": 299,
+      "result": "applied",
+      "reason": "货款不足，已计划转欠款 70.93"
+    },
+    {
+      "refund_no": "REF1776089368463924",
+      "order_no": "ORD1776088274225191",
+      "user_label": "姣姣娇娇",
+      "payment_method": "goods_fund",
+      "amount": 287.5,
+      "result": "applied",
+      "reason": "货款不足，已计划转欠款 275"
+    }
+  ]
+}

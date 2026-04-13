@@ -3,6 +3,17 @@ const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
 const { getAllRecords } = require('./shared/utils');
+const {
+    normalizePaymentMethodCode,
+    normalizeOrderStatusGroup,
+    normalizeOrderStatusForClient,
+    getOrderStatusText,
+    getOrderStatusDesc,
+    getRefundStatusText,
+    getRefundStatusDesc,
+    getPaymentMethodText,
+    getRefundTargetText
+} = require('./order-contract');
 
 function toNumber(value, fallback = 0) {
     const num = Number(value);
@@ -12,11 +23,6 @@ function toNumber(value, fallback = 0) {
 function normalizeStatusForQuery(status) {
     if (status === 'pending') return 'pending_payment';
     return status || null;
-}
-
-function normalizeStatusForClient(status) {
-    if (status === 'pending_payment') return 'pending';
-    return status || '';
 }
 
 function displayAmount(value) {
@@ -290,7 +296,11 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
 
     const quantity = toNumber(order.quantity || order.qty || item.qty || item.quantity, 1);
     const rawStatus = order.status || '';
-    const status = normalizeStatusForClient(rawStatus);
+    const status = normalizeOrderStatusForClient(rawStatus);
+    const statusGroup = normalizeOrderStatusGroup(rawStatus);
+    const statusText = getOrderStatusText(rawStatus);
+    const statusDesc = getOrderStatusDesc(rawStatus);
+    const paymentMethod = normalizePaymentMethodCode(order.payment_method || order.pay_channel || order.pay_type || order.payment_channel || '');
     const unitPrice = item.price != null
         ? item.price
         : (item.unit_price != null ? item.unit_price : (order.price || order.unit_price || order.total_amount || order.pay_amount));
@@ -415,6 +425,16 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         avatar: distributorDoc.avatarUrl || '',
         role_level: toNumber(distributorDoc.role_level || distributorDoc.distributor_level, 0)
     } : null;
+    const normalizedBuyer = buyerDoc ? {
+        id: buyerDoc._id || buyerDoc.id || '',
+        openid: buyerDoc.openid || '',
+        nick_name: buyerDoc.nickName || buyerDoc.nickname || '',
+        nickname: buyerDoc.nickName || buyerDoc.nickname || '',
+        avatar: buyerDoc.avatarUrl || buyerDoc.avatar || '',
+        phone: buyerDoc.phone || '',
+        role_level: toNumber(buyerDoc.role_level || buyerDoc.distributor_level, 0),
+        member_no: buyerDoc.member_no || buyerDoc.my_invite_code || buyerDoc.invite_code || ''
+    } : null;
     const normalizedAgent = normalizedDistributor ? {
         id: normalizedDistributor.id,
         openid: normalizedDistributor.openid,
@@ -435,8 +455,12 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
     return {
         ...order,
         id: order._id || order.id,
+        openid: order.openid || '',
         raw_status: rawStatus,
         status,
+        status_group: statusGroup,
+        status_text: statusText,
+        status_desc: statusDesc,
         quantity,
         paid_at: paidAt || null,
         shipped_at: shippedAt || null,
@@ -450,10 +474,12 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         reviewed_at: reviewedAt || null,
         fulfillment_type: fulfillmentType,
         pickupStation: pickupStation || null,
+        pickup_station: pickupStation || null,
         settlement_at: settlementAt || null,
         commission_settled: order.commission_settled === true || (commissionDoc && commissionDoc.status === 'settled'),
         estimated_delivery: estimatedDelivery || null,
         shipping_traces: shippingTraces,
+        buyer: normalizedBuyer,
         distributor: normalizedDistributor,
         agent: normalizedAgent,
         agent_info: normalizedAgent,
@@ -464,6 +490,9 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         logistics_company: logisticsCompany,
         shipping_company: firstFilled(order.shipping_company, logisticsCompany),
         product: mergedProduct,
+        payment_method: paymentMethod,
+        payment_method_text: getPaymentMethodText(paymentMethod),
+        refund_target_text: getRefundTargetText(paymentMethod),
         price: displayAmount(unitPrice),
         total_amount: displayAmount(totalAmount),
         pay_amount: displayAmount(payAmount),
@@ -516,8 +545,82 @@ async function getOrderDetail(openid, orderId) {
     return formatOrderForClient(order, cache, defaultAutoCancelMinutes);
 }
 
+async function formatRefundForClient(refund = {}, cache = new Map(), defaultAutoCancelMinutes = 30) {
+    const canonicalOrder = await getOrderByIdOrNo(refund.openid, refund.order_id || refund.order_no);
+    const formattedOrder = canonicalOrder
+        ? await formatOrderForClient(canonicalOrder, cache, defaultAutoCancelMinutes)
+        : null;
+    const paymentMethod = normalizePaymentMethodCode(
+        refund.payment_method
+        || formattedOrder?.payment_method
+        || canonicalOrder?.payment_method
+        || canonicalOrder?.pay_channel
+        || canonicalOrder?.pay_type
+        || canonicalOrder?.payment_channel
+        || ''
+    );
+    const status = refund.status || 'pending';
+    return {
+        ...refund,
+        id: refund._id || refund.id,
+        order_id: formattedOrder?.id || refund.order_id || '',
+        order_no: formattedOrder?.order_no || refund.order_no || '',
+        openid: refund.openid || formattedOrder?.openid || '',
+        amount: displayAmount(refund.amount),
+        status,
+        status_text: getRefundStatusText(status),
+        status_desc: getRefundStatusDesc(status),
+        payment_method: paymentMethod,
+        payment_method_text: getPaymentMethodText(paymentMethod),
+        refund_channel: refund.refund_channel || paymentMethod || '',
+        refund_target_text: getRefundTargetText(paymentMethod, refund.refund_target_text || refund.refund_target || refund.refund_to),
+        created_at: toIsoString(refund.created_at) || refund.created_at || null,
+        processing_at: toIsoString(refund.processing_at) || refund.processing_at || null,
+        completed_at: toIsoString(refund.completed_at) || refund.completed_at || null,
+        return_company: refund.return_company || refund.return_shipping?.company || '',
+        return_tracking_no: refund.return_tracking_no || refund.return_shipping?.tracking_no || '',
+        order: formattedOrder,
+        items: formattedOrder?.items || [],
+        order_item: Array.isArray(formattedOrder?.items) ? (formattedOrder.items[0] || null) : null,
+        wx_status: refund.wx_status || refund.wx_refund_status || ''
+    };
+}
+
+async function listRefunds(openid, params = {}) {
+    let query = db.collection('refunds').where({ openid });
+
+    if (params.status) {
+        query = query.where({ status: params.status });
+    }
+
+    const res = await query.orderBy('created_at', 'desc').limit(50).get().catch(() => ({ data: [] }));
+    let rows = res.data || [];
+    if (params.order_id) {
+        const order = await getOrderByIdOrNo(openid, params.order_id);
+        const orderTokens = [params.order_id, order && order._id, order && order.id, order && order.order_no]
+            .filter((value) => value !== undefined && value !== null && value !== '')
+            .map((value) => String(value));
+        rows = rows.filter((refund) => orderTokens.includes(String(refund.order_id)) || orderTokens.includes(String(refund.order_no)));
+    }
+    const cache = new Map();
+    const defaultAutoCancelMinutes = await getDefaultOrderAutoCancelMinutes(cache);
+    return Promise.all(rows.map((refund) => formatRefundForClient(refund, cache, defaultAutoCancelMinutes)));
+}
+
+async function getRefundDetail(openid, refundId) {
+    const refundRes = await db.collection('refunds').doc(refundId).get().catch(() => ({ data: null }));
+    if (!refundRes.data || refundRes.data.openid !== openid) {
+        throw new Error('退款记录不存在');
+    }
+    const cache = new Map();
+    const defaultAutoCancelMinutes = await getDefaultOrderAutoCancelMinutes(cache);
+    return formatRefundForClient(refundRes.data, cache, defaultAutoCancelMinutes);
+}
+
 module.exports = {
     queryOrders,
     getOrderDetail,
-    getOrderByIdOrNo
+    getOrderByIdOrNo,
+    listRefunds,
+    getRefundDetail
 };

@@ -118,16 +118,26 @@ async function handlePaymentAction(event, openid) {
         }
     }
 
-    // 内部调用：其它云函数通过 callFunction 触发支付后处理（佣金、积分奖励、升级等）
+    // 内部调用：其它云函数通过 callFunction 触发支付后处理
     if (action === '_postProcessPaid') {
         const orderId = params.order_id || params.id;
         if (!orderId) throw badRequest('缺少订单 ID');
         try {
-            const result = await paymentCallback.processPaidOrder(orderId, { _id: orderId });
+            const order = await db.collection('orders').doc(orderId).get().then(r => r.data).catch(() => null);
+            if (!order) throw badRequest('订单不存在');
+            const paidStatuses = ['paid', 'pending_group', 'pickup_pending', 'shipped', 'completed', 'agent_confirmed', 'shipping_requested'];
+            if (!paidStatuses.includes(order.status)) {
+                throw badRequest('订单未支付，不允许执行后处理');
+            }
+            if (openid && order.openid !== openid) {
+                throw badRequest('无权操作此订单');
+            }
+            const result = await paymentCallback.processPaidOrder(orderId, order);
             return success(result);
         } catch (err) {
+            if (err instanceof CloudBaseError) throw err;
             console.error('[Payment] _postProcessPaid error:', err.message);
-            return success({ error: err.message });
+            throw serverError('支付后处理失败: ' + err.message);
         }
     }
 

@@ -57,7 +57,7 @@ module.exports = {
     isFunctionRuntime,
     mysql,
     cloudbase,
-    jwtSecret: process.env.ADMIN_JWT_SECRET || 'cloudrun-admin-local-secret',
+    jwtSecret: process.env.ADMIN_JWT_SECRET,
     assetBaseUrl: process.env.ADMIN_UPLOAD_BASE_URL || '',
     preferNormalizedData: process.env.ADMIN_PREFER_NORMALIZED_DATA !== 'false'
 };

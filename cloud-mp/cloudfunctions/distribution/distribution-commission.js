@@ -49,6 +49,15 @@ function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
 }
 
+async function appendWalletLog(entry) {
+    return db.collection('wallet_logs').add({
+        data: {
+            ...entry,
+            created_at: entry.created_at || db.serverDate()
+        }
+    });
+}
+
 function parseConfigValue(row, fallback) {
     if (!row) return fallback;
     const value = row.config_value !== undefined ? row.config_value : row.value;
@@ -340,7 +349,7 @@ async function calculateCommission(orderId) {
     }
 }
 
-async function settleCommission(openid, amount) {
+async function settleCommission(openid, amount, meta = {}) {
     await db.collection('users').where({ openid }).update({
         data: {
             commission_balance: _.inc(amount),
@@ -349,6 +358,28 @@ async function settleCommission(openid, amount) {
             updated_at: db.serverDate()
         }
     });
+    try {
+        await appendWalletLog({
+            openid,
+            type: 'commission_settlement',
+            amount,
+            order_id: meta.order_id || meta.orderId || '',
+            order_no: meta.order_no || meta.orderNo || '',
+            commission_type: meta.type || '',
+            level: meta.level,
+            description: `佣金结算入账 ${roundMoney(amount)} 元`
+        });
+    } catch (logErr) {
+        await db.collection('users').where({ openid }).update({
+            data: {
+                commission_balance: _.inc(-amount),
+                balance: _.inc(-amount),
+                total_earned: _.inc(-amount),
+                updated_at: db.serverDate()
+            }
+        }).catch(() => {});
+        throw new Error(`佣金结算流水写入失败：${logErr.message}`);
+    }
     return { success: true };
 }
 
@@ -469,7 +500,12 @@ async function unfreezeCommissions(orderId) {
         });
         const amount = toNumber(comm.amount, 0);
         if (amount > 0) {
-            await settleCommission(comm.openid, amount);
+            await settleCommission(comm.openid, amount, {
+                order_id: comm.order_id,
+                order_no: comm.order_no,
+                type: comm.type,
+                level: comm.level
+            });
             totalSettled += amount;
         }
     }

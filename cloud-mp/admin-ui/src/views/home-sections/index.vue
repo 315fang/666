@@ -181,7 +181,8 @@ const brandConfig = reactive({
 const loadBrandConfig = async () => {
   try {
     const res = await getSettings()
-    const d = res?.data || res || {}
+    const root = res?.data || res || {}
+    const d = root.homepage || root.HOMEPAGE || {}
     brandConfig.show_brand_logo = d.show_brand_logo !== 'false' && d.show_brand_logo !== false
     brandConfig.brand_logo = d.brand_logo || ''
     brandConfig.nav_brand_title = d.nav_brand_title || '问兰镜像'

@@ -57,6 +57,7 @@ const ROUTE_TABLE = {
     // ── 订单 ──────────────────────────────────
     'POST /orders':                         { fn: 'order',        action: 'create' },
     'GET /orders':                          { fn: 'order',        action: 'list' },
+    'GET /orders/counts':                   { fn: 'order',        action: 'counts' },
     'GET /orders/:id':                      { fn: 'order',        action: 'detail',             idKey: 'order_id' },
     'POST /orders/:id/cancel':              { fn: 'order',        action: 'cancel',             idKey: 'order_id' },
     'POST /orders/:id/confirm':             { fn: 'order',        action: 'confirm',            idKey: 'order_id' },

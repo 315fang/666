@@ -48,10 +48,20 @@
         <el-table-column label="退款金额" width="110">
           <template #default="{ row }">¥{{ parseFloat(row.amount || 0).toFixed(2) }}</template>
         </el-table-column>
+        <el-table-column label="支付 / 退款去向" width="180" class-name="hide-mobile">
+          <template #default="{ row }">
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <el-tag :type="paymentMethodTagType(resolvePaymentMethod(row))" effect="plain" size="small">
+                {{ refundPaymentMethodText(row) }}
+              </el-tag>
+              <span class="text-gray">{{ refundTargetText(row) }}</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="reason" label="退款原因" width="150" show-overflow-tooltip class-name="hide-mobile" />
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
+            <el-tag :type="getStatusType(row.status)">{{ refundStatusText(row) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="申请时间" width="170" class-name="hide-mobile">
@@ -107,14 +117,23 @@
             {{ currentRow.order_item.sku.spec_value }}
           </span>
         </el-descriptions-item>
+        <el-descriptions-item label="支付方式">
+          <el-tag :type="paymentMethodTagType(resolvePaymentMethod(currentRow))" effect="plain" size="small">
+            {{ refundPaymentMethodText(currentRow) }}
+          </el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="退款去向">{{ refundTargetText(currentRow) }}</el-descriptions-item>
         <el-descriptions-item label="退款金额">¥{{ parseFloat(currentRow.amount || 0).toFixed(2) }}</el-descriptions-item>
         <el-descriptions-item label="退款原因">{{ currentRow.reason || '-' }}</el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-tag :type="getStatusType(currentRow.status)">{{ getStatusText(currentRow.status) }}</el-tag>
+          <el-tag :type="getStatusType(currentRow.status)">{{ refundStatusText(currentRow) }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="申请时间">{{ formatDateTime(currentRow.created_at) }}</el-descriptions-item>
         <el-descriptions-item label="处理时间" v-if="getProcessedTime(currentRow)">
           {{ formatDateTime(getProcessedTime(currentRow)) }}
+        </el-descriptions-item>
+        <el-descriptions-item label="微信退款状态" v-if="currentRow.wx_status || currentRow.wx_refund_status">
+          {{ currentRow.wx_status || currentRow.wx_refund_status }}
         </el-descriptions-item>
         <el-descriptions-item label="拒绝原因" v-if="currentRow.reject_reason">{{ currentRow.reject_reason }}</el-descriptions-item>
         <el-descriptions-item label="退货快递公司" v-if="currentRow.return_company">{{ currentRow.return_company }}</el-descriptions-item>
@@ -159,6 +178,37 @@ const rejectForm = reactive({
   reason: ''
 })
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
+const resolvePaymentMethod = (row = {}) => {
+  const raw = String(
+    row.payment_method
+    || row.order?.payment_method
+    || ''
+  ).trim().toLowerCase()
+  if (['wechat', 'wx', 'wxpay', 'jsapi', 'miniapp', 'wechatpay', 'wechat_pay', 'weixin'].includes(raw)) return 'wechat'
+  if (['goods_fund', 'goods-fund', 'goodsfund'].includes(raw)) return 'goods_fund'
+  if (['wallet', 'wallet_balance', 'account_balance', 'balance', 'credit', 'debt'].includes(raw)) return 'wallet'
+  return raw
+}
+const paymentMethodText = (method) => ({
+  wechat: '微信支付',
+  goods_fund: '货款支付',
+  wallet: '余额支付'
+}[method] || (method || '-'))
+const paymentMethodTagType = (method) => ({
+  wechat: 'success',
+  goods_fund: 'warning',
+  wallet: 'info'
+}[method] || 'info')
+const refundPaymentMethodText = (row = {}) => row.payment_method_text || paymentMethodText(resolvePaymentMethod(row))
+const refundTargetText = (row = {}) => (
+  row.refund_target_text
+  || ({
+    wechat: '原路退回微信支付',
+    goods_fund: '退回货款余额',
+    wallet: '退回账户余额'
+  }[resolvePaymentMethod(row)] || '-')
+)
+const refundStatusText = (row = {}) => row.status_text || getStatusText(row.status)
 
 const fetchRefunds = async () => {
   loading.value = true
@@ -205,7 +255,8 @@ const runRefundMutation = async (task, successMessage, onSuccess) => {
       const freshId = result.id || result._id
       patchRefundRow(freshId, result)
     }
-    ElMessage.success(successMessage)
+    const finalMessage = typeof successMessage === 'function' ? successMessage(result) : successMessage
+    ElMessage.success(finalMessage)
     await onSuccess?.()
     // 延迟一点点再刷新，给 CloudBase 写入一点余量
     await new Promise(resolve => setTimeout(resolve, 300))
@@ -284,7 +335,7 @@ const handleRejectSubmit = async () => {
 const handleComplete = async (row) => {
   try {
     await ElMessageBox.confirm(
-      `该操作将立即对用户「${displayUserName(row.user, row.user_id)}」发起退款，金额 ¥${parseFloat(row.amount || 0).toFixed(2)}。请确认当前售后单已审核无误。`,
+      `该操作将立即对用户「${displayUserName(row.user, row.user_id)}」发起退款，金额 ¥${parseFloat(row.amount || 0).toFixed(2)}。\n支付方式：${refundPaymentMethodText(row)}\n退款去向：${refundTargetText(row)}\n请确认当前售后单已审核无误。`,
       '确认发起退款',
       {
         confirmButtonText: '立即退款',
@@ -294,7 +345,16 @@ const handleComplete = async (row) => {
     )
     await runRefundMutation(
       () => completeRefund(row.id),
-      '退款请求已提交微信，处理中'
+      (result) => {
+        const method = resolvePaymentMethod(result || row)
+        if (result?.status === 'completed') {
+          if (method === 'goods_fund') return '退款已完成，金额已退回货款余额'
+          if (method === 'wallet') return '退款已完成，金额已退回账户余额'
+          return '退款已完成'
+        }
+        if (result?.status === 'failed') return '退款失败，请查看退款状态后重试'
+        return '退款请求已提交微信，处理中'
+      }
       // runRefundMutation 会用后端返回的最新状态更新本地行
     )
   } catch (error) {

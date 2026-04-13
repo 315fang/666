@@ -209,7 +209,7 @@ Page({
             const res = await get('/wallet/info');
             if (res.code === 0 && res.data) {
                 this.setData({
-                    balance: (res.data.balance || 0).toFixed(2),
+                    balance: (res.data.commission_balance ?? res.data.balance ?? 0).toFixed(2),
                     walletInfo: res.data,
                     pointsBalance: res.data.points || res.data.point_balance || 0
                 });
@@ -322,7 +322,7 @@ Page({
             if (res.code === 0) {
                 this.setData({
                     walletSummary: res.data,
-                    goodsFundBalance: res.data.balance || this.data.goodsFundBalance
+                    goodsFundBalance: res.data.goods_fund_balance || res.data.balance || this.data.goodsFundBalance
                 });
             }
         } catch (err) {

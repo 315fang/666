@@ -374,25 +374,14 @@ async function loadOrderCounts(page) {
     if (!app.globalData.isLoggedIn) return;
 
     try {
-        const results = await Promise.all([
-            get('/orders', { status: 'pending', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
-            get('/orders', { status: 'paid', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
-            get('/orders', { status: 'shipped', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
-            get('/orders', { status: 'pending_review', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
-            get('/refunds', { status: 'pending', page: 1, limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
-            get('/refunds', { status: 'approved', page: 1, limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
-            get('/refunds', { status: 'processing', page: 1, limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } })),
-            get('/orders', { status: 'pending_group', limit: 1 }).catch(() => ({ data: { pagination: { total: 0 } } }))
-        ]);
+        const countsRes = await get('/orders/counts').catch(() => ({ data: {} }));
+        const c = countsRes.data || {};
 
-        const pending = results[0].data?.pagination?.total || 0;
-        const pendingGroup = results[7].data?.pagination?.total || 0;
-        const paid = (results[1].data?.pagination?.total || 0) + pendingGroup;
-        const shipped = results[2].data?.pagination?.total || 0;
-        const pendingReview = results[3].data?.pagination?.total || 0;
-        const refund = (results[4].data?.pagination?.total || 0)
-            + (results[5].data?.pagination?.total || 0)
-            + (results[6].data?.pagination?.total || 0);
+        const pending = c.pending || c.pending_payment || 0;
+        const paid = (c.paid || 0) + (c.pending_group || 0);
+        const shipped = c.shipped || 0;
+        const pendingReview = 0;
+        const refund = c.refund || 0;
 
         const nextStats = {
             pending,
@@ -467,25 +456,29 @@ async function loadDistributionInfo(page) {
                 ? dashboardUserInfo.role_level
                 : ((page.data.userInfo || app.globalData.userInfo || {}).role_level || dashboardUserInfo.role || 0)
         ) || 0;
-        const goodsFundRaw = agentWalletInfo.agent_wallet_balance != null
-            ? agentWalletInfo.agent_wallet_balance
+        const goodsFundRaw = agentWalletInfo.goods_fund_balance != null
+            ? agentWalletInfo.goods_fund_balance
             : (
-                agentWalletInfo.balance != null
-                    ? agentWalletInfo.balance
-                    : (teamGoodsFund.goods_fund_balance != null ? teamGoodsFund.goods_fund_balance : '0.00')
+                agentWalletInfo.agent_wallet_balance != null
+                    ? agentWalletInfo.agent_wallet_balance
+                    : (
+                        agentWalletInfo.balance != null
+                            ? agentWalletInfo.balance
+                            : (teamGoodsFund.goods_fund_balance != null ? teamGoodsFund.goods_fund_balance : '0.00')
+                    )
             );
         const goodsFundBalance = formatMoney(goodsFundRaw);
         const commissionRaw = walletInfo.commission_balance != null
             ? walletInfo.commission_balance
             : (
-                walletInfo.available_balance != null
-                    ? walletInfo.available_balance
+                walletInfo.balance != null
+                    ? walletInfo.balance
                     : (
-                        walletInfo.commission && walletInfo.commission.available != null
-                            ? walletInfo.commission.available
+                        walletInfo.available_balance != null
+                            ? walletInfo.available_balance
                             : (
-                                walletInfo.balance != null
-                                    ? walletInfo.balance
+                                walletInfo.commission && walletInfo.commission.available != null
+                                    ? walletInfo.commission.available
                                     : stats.availableAmount
                             )
                     )

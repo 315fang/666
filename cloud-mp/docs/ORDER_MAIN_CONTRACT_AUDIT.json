@@ -1,0 +1,164 @@
+{
+  "generatedAt": "2026-04-13T17:11:26.726Z",
+  "ok": true,
+  "total": 26,
+  "failed": 0,
+  "findings": [
+    {
+      "module": "order",
+      "name": "pending payment status group",
+      "ok": true,
+      "detail": "normalizeOrderStatusGroup(\"pending_payment\") => \"pending_pay\""
+    },
+    {
+      "module": "order",
+      "name": "paid status group",
+      "ok": true,
+      "detail": "normalizeOrderStatusGroup(\"paid\") => \"pending_ship\""
+    },
+    {
+      "module": "order",
+      "name": "client pending status",
+      "ok": true,
+      "detail": "normalizeOrderStatusForClient(\"pending_payment\") => \"pending\""
+    },
+    {
+      "module": "order",
+      "name": "wechat payment alias",
+      "ok": true,
+      "detail": "normalizePaymentMethodCode(\"wxpay\") => \"wechat\""
+    },
+    {
+      "module": "order",
+      "name": "goods fund payment alias",
+      "ok": true,
+      "detail": "normalizePaymentMethodCode(\"goodsfund\") => \"goods_fund\""
+    },
+    {
+      "module": "order",
+      "name": "wallet refund target",
+      "ok": true,
+      "detail": "getRefundTargetText(\"wallet\") => \"退回账户余额\""
+    },
+    {
+      "module": "order",
+      "name": "refund pending text",
+      "ok": true,
+      "detail": "getRefundStatusText(\"pending\") => \"审核中\""
+    },
+    {
+      "module": "admin-api",
+      "name": "pending payment status group",
+      "ok": true,
+      "detail": "normalizeOrderStatusGroup(\"pending_payment\") => \"pending_pay\""
+    },
+    {
+      "module": "admin-api",
+      "name": "paid status group",
+      "ok": true,
+      "detail": "normalizeOrderStatusGroup(\"paid\") => \"pending_ship\""
+    },
+    {
+      "module": "admin-api",
+      "name": "wechat payment alias",
+      "ok": true,
+      "detail": "normalizePaymentMethodCode(\"wxpay\") => \"wechat\""
+    },
+    {
+      "module": "admin-api",
+      "name": "goods fund payment alias",
+      "ok": true,
+      "detail": "normalizePaymentMethodCode(\"goodsfund\") => \"goods_fund\""
+    },
+    {
+      "module": "admin-api",
+      "name": "wallet refund target",
+      "ok": true,
+      "detail": "getRefundTargetText(\"wallet\") => \"退回账户余额\""
+    },
+    {
+      "module": "admin-api",
+      "name": "refund pending text",
+      "ok": true,
+      "detail": "getRefundStatusText(\"pending\") => \"待审核\""
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/order/order-query.js contains status_group",
+      "ok": true,
+      "detail": "cloudfunctions/order/order-query.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/order/order-query.js contains status_text",
+      "ok": true,
+      "detail": "cloudfunctions/order/order-query.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/order/order-query.js contains payment_method_text",
+      "ok": true,
+      "detail": "cloudfunctions/order/order-query.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/order/order-query.js contains refund_target_text",
+      "ok": true,
+      "detail": "cloudfunctions/order/order-query.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/order/order-lifecycle.js contains payment_method",
+      "ok": true,
+      "detail": "cloudfunctions/order/order-lifecycle.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/order/order-lifecycle.js contains refund_channel",
+      "ok": true,
+      "detail": "cloudfunctions/order/order-lifecycle.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/order/order-lifecycle.js contains refund_target_text",
+      "ok": true,
+      "detail": "cloudfunctions/order/order-lifecycle.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/order/order-lifecycle.js contains return_company",
+      "ok": true,
+      "detail": "cloudfunctions/order/order-lifecycle.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/order/order-lifecycle.js contains return_tracking_no",
+      "ok": true,
+      "detail": "cloudfunctions/order/order-lifecycle.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/admin-api/src/app.js contains status_group",
+      "ok": true,
+      "detail": "cloudfunctions/admin-api/src/app.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/admin-api/src/app.js contains status_text",
+      "ok": true,
+      "detail": "cloudfunctions/admin-api/src/app.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/admin-api/src/app.js contains payment_method_text",
+      "ok": true,
+      "detail": "cloudfunctions/admin-api/src/app.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/admin-api/src/app.js contains refund_target_text",
+      "ok": true,
+      "detail": "cloudfunctions/admin-api/src/app.js"
+    }
+  ]
+}

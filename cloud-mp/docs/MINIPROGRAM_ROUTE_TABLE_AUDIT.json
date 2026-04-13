@@ -1,0 +1,99 @@
+{
+  "generatedAt": "2026-04-13T16:48:34.558Z",
+  "ok": true,
+  "total": 13,
+  "failed": 0,
+  "findings": [
+    {
+      "route": "POST /orders",
+      "action": "create",
+      "route_ok": true,
+      "action_ok": true,
+      "ok": true
+    },
+    {
+      "route": "GET /orders",
+      "action": "list",
+      "route_ok": true,
+      "action_ok": true,
+      "ok": true
+    },
+    {
+      "route": "GET /orders/:id",
+      "action": "detail",
+      "route_ok": true,
+      "action_ok": true,
+      "ok": true
+    },
+    {
+      "route": "POST /orders/:id/pay",
+      "action": "prepay",
+      "route_ok": true,
+      "action_ok": true,
+      "ok": true
+    },
+    {
+      "route": "POST /orders/:id/prepay",
+      "action": "prepay",
+      "route_ok": true,
+      "action_ok": true,
+      "ok": true
+    },
+    {
+      "route": "GET /orders/:id/pay-status",
+      "action": "queryStatus",
+      "route_ok": true,
+      "action_ok": true,
+      "ok": true
+    },
+    {
+      "route": "POST /orders/:id/sync-wechat-pay",
+      "action": "syncWechatPay",
+      "route_ok": true,
+      "action_ok": true,
+      "ok": true
+    },
+    {
+      "route": "POST /orders/:id/retry-group-join",
+      "action": "retryGroupJoin",
+      "route_ok": true,
+      "action_ok": true,
+      "ok": true
+    },
+    {
+      "route": "GET /refunds",
+      "action": "refundList",
+      "route_ok": true,
+      "action_ok": true,
+      "ok": true
+    },
+    {
+      "route": "POST /refunds",
+      "action": "applyRefund",
+      "route_ok": true,
+      "action_ok": true,
+      "ok": true
+    },
+    {
+      "route": "GET /refunds/:id",
+      "action": "refundDetail",
+      "route_ok": true,
+      "action_ok": true,
+      "ok": true
+    },
+    {
+      "route": "PUT /refunds/:id/cancel",
+      "action": "cancelRefund",
+      "route_ok": true,
+      "action_ok": true,
+      "ok": true
+    },
+    {
+      "route": "PUT /refunds/:id/return-shipping",
+      "action": "returnShipping",
+      "route_ok": true,
+      "action_ok": true,
+      "ok": true
+    }
+  ]
+}

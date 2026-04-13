@@ -13,17 +13,12 @@ Page({
     async _load() {
         this.setData({ loading: true });
         try {
-            const [progressRes, logsRes] = await Promise.all([
-                wx.cloud.callFunction({ name: 'distribution', data: { action: 'promotionProgress' } }),
-                wx.cloud.callFunction({ name: 'distribution', data: { action: 'promotionLogs' } })
+            const { callFn } = require('../../utils/cloud');
+            const [progress, logsData] = await Promise.all([
+                callFn('distribution', { action: 'promotionProgress' }).catch(() => null),
+                callFn('distribution', { action: 'promotionLogs' }).catch(() => ({ list: [] }))
             ]);
-            const pResult = progressRes.result || {};
-            const lResult = logsRes.result || {};
-            if (pResult.code !== 0 && pResult.code !== undefined) {
-                wx.showToast({ title: pResult.message || '加载晋升数据失败', icon: 'none' });
-            }
-            const progress = pResult.data || null;
-            const logs = (lResult.data?.list) || [];
+            const logs = (logsData?.list) || [];
             this.setData({ progress, logs, loading: false });
         } catch (err) {
             console.error('[PromotionProgress] load error:', err);

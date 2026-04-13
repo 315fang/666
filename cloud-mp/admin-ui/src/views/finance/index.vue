@@ -170,6 +170,11 @@
             </template>
           </el-table-column>
           <el-table-column prop="debt_reason" label="欠款原因" min-width="160" show-overflow-tooltip />
+          <el-table-column label="操作" width="180" fixed="right" v-if="canManageStrategicFunds">
+            <template #default="{ row }">
+              <el-button text type="primary" size="small" @click="openDebtDialog(row)">处理欠款</el-button>
+            </template>
+          </el-table-column>
         </el-table>
         <div v-if="data.agent_debt?.debtors?.length" class="total-row">
           合计欠款：<strong class="amount red">¥{{ fmt(data.agent_debt.total_debt) }}</strong>
@@ -393,18 +398,57 @@
         </el-col>
       </el-row>
     </div>
+
+    <el-dialog v-model="debtDialogVisible" title="处理代理商欠款" width="min(520px, 94vw)">
+      <el-form label-width="110px" v-if="debtTarget">
+        <el-form-item label="代理商">
+          <div>{{ debtTarget.nickname || '未知用户' }} <span v-if="debtTarget.member_no" style="color:#909399">({{ debtTarget.member_no }})</span></div>
+        </el-form-item>
+        <el-form-item label="当前欠款">
+          <span class="amount red">¥{{ fmt(debtTarget.debt_amount) }}</span>
+        </el-form-item>
+        <el-form-item label="处理方式">
+          <el-radio-group v-model="debtForm.source">
+            <el-radio label="goods_fund">货款抵扣</el-radio>
+            <el-radio label="offline">线下确认</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="处理金额">
+          <el-input-number v-model="debtForm.amount" :min="0.01" :precision="2" :step="1" :max="Number(debtTarget.debt_amount || 0)" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="处理原因">
+          <el-input v-model="debtForm.reason" type="textarea" :rows="3" placeholder="例如：已线下收回，或从货款余额抵扣" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="debtDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="debtSubmitting" @click="handleDebtSubmit">确认处理</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, computed, onMounted, reactive } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Money, Wallet, CreditCard, Coin, TrendCharts, Refresh, Trophy, DataAnalysis, User } from '@element-plus/icons-vue'
-import { getFinanceOverview, getAgentPerformance, getPoolContributions } from '@/api'
+import { getFinanceOverview, getAgentPerformance, getPoolContributions, settleAgentDebt } from '@/api'
 import { formatDate } from '@/utils/format'
+import { useUserStore } from '@/store/user'
 
 const loading = ref(false)
 const data = ref({})
+const userStore = useUserStore()
+const canManageStrategicFunds = computed(() => userStore.hasPermission('user_balance_adjust'))
+
+const debtDialogVisible = ref(false)
+const debtSubmitting = ref(false)
+const debtTarget = ref(null)
+const debtForm = reactive({
+  amount: 0,
+  source: 'goods_fund',
+  reason: ''
+})
 
 // 业绩榜
 const perfLoading = ref(false)
@@ -467,6 +511,52 @@ const fetchPoolContributions = async () => {
 
 const fetchAll = async () => {
   await Promise.all([fetchOverview(), fetchPerformance(), fetchPoolContributions()])
+}
+
+const openDebtDialog = (row) => {
+  debtTarget.value = row
+  debtForm.amount = Number(row?.debt_amount || 0)
+  debtForm.source = 'goods_fund'
+  debtForm.reason = ''
+  debtDialogVisible.value = true
+}
+
+const handleDebtSubmit = async () => {
+  if (!debtTarget.value) return
+  if (!Number(debtForm.amount) || Number(debtForm.amount) <= 0) {
+    ElMessage.warning('请输入有效的处理金额')
+    return
+  }
+  if (!debtForm.reason || String(debtForm.reason).trim().length < 2) {
+    ElMessage.warning('请输入至少 2 个字符的处理原因')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确认处理代理商「${debtTarget.value.nickname || debtTarget.value.user_id}」欠款 ¥${fmt(debtForm.amount)}？\n处理方式：${debtForm.source === 'goods_fund' ? '货款抵扣' : '线下确认'}`,
+      '确认处理欠款',
+      {
+        confirmButtonText: '确认处理',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    debtSubmitting.value = true
+    await settleAgentDebt(debtTarget.value.user_id, {
+      amount: Number(debtForm.amount),
+      source: debtForm.source,
+      reason: debtForm.reason
+    })
+    ElMessage.success('欠款处理成功')
+    debtDialogVisible.value = false
+    await fetchOverview()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error?.message || '欠款处理失败')
+    }
+  } finally {
+    debtSubmitting.value = false
+  }
 }
 
 // 佣金状态分布表格行

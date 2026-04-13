@@ -22,17 +22,8 @@ Page({
     async _load() {
         this.setData({ loading: true });
         try {
-            const res = await wx.cloud.callFunction({
-                name: 'distribution',
-                data: { action: 'myFundPoolSummary' }
-            });
-            const result = res.result || {};
-            if (result.code !== 0 && result.code !== undefined) {
-                wx.showToast({ title: result.message || '加载失败', icon: 'none' });
-                this.setData({ loading: false });
-                return;
-            }
-            const data = result.data || {};
+            const { callFn } = require('../../utils/cloud');
+            const data = await callFn('distribution', { action: 'myFundPoolSummary' });
             const entries = (data.entries || []).map(e => ({
                 ...e,
                 amountText: parseFloat(e.amount || 0).toFixed(2),

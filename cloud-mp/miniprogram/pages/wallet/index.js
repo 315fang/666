@@ -60,7 +60,7 @@ Page({
                 const flowTotal = estimatedCommission + frozen + pendingApproval + approved;
 
                 this.setData({
-                    balance:                fmt(walletRes.data.balance),
+                    balance:                fmt(walletRes.data.commission_balance ?? walletRes.data.balance),
                     commissionTotal:        fmt(c.total),
                     commissionEstimated:    fmt(estimatedCommission),
                     commissionFlowTotal:    fmt(flowTotal),
@@ -82,7 +82,7 @@ Page({
         try {
             const res = await get('/agent/wallet');
             if (res.code === 0 && res.data) {
-                const bal = parseFloat(res.data.balance || 0);
+                const bal = parseFloat(res.data.goods_fund_balance || res.data.balance || 0);
                 this.setData({
                     isAgent: bal > 0,
                     goodsFundBalance: bal.toFixed(2)
@@ -98,8 +98,8 @@ Page({
             if (res.code === 0) {
                 const logs = (res.data.list || []).map(item => ({
                     ...item,
-                    typeName:       this._typeName(item.type),
-                    statusText:     this._statusText(item.status),
+                    typeName:       item.type_text || this._typeName(item.type),
+                    statusText:     item.status_text || this._statusText(item.status),
                     statusClass:    this._statusClass(item.status),
                     isWithdraw:     item.type === 'withdrawal',
                     created_at:     item.created_at ? item.created_at.replace('T', ' ').slice(0, 16) : '',

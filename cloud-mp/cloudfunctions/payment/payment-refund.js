@@ -64,7 +64,8 @@ async function refundPayment(openid, params) {
         const privateKey = await loadPrivateKey(cloud);
         const payAmount = toNumber(order.pay_amount || order.total_amount, 0);
         const totalFen = Math.round(payAmount * 100);
-        const refundAmount = params.refund_amount ? Math.round(toNumber(params.refund_amount, payAmount) * 100) : totalFen;
+        const requestedFen = params.refund_amount ? Math.round(toNumber(params.refund_amount, payAmount) * 100) : totalFen;
+        const refundAmount = Math.min(Math.max(0, requestedFen), totalFen);
 
         const wxRefund = await createRefund(
             order.order_no,

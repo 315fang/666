@@ -16,6 +16,7 @@ const _ = db.command;
 // ==================== 子模块导入 ====================
 const configLoader = require('./config-loader');
 const configCache = require('./config-cache');
+const configContract = require('./config-contract');
 
 // ==================== 主处理函数 ====================
 const asyncHandler = (handler) => async (...args) => {
@@ -177,6 +178,25 @@ async function getAppConfigValue(key, fallback = null) {
     return fallback;
 }
 
+async function getSingletonValue(key, fallback = null) {
+    const doc = await db.collection('admin_singletons')
+        .doc(String(key))
+        .get()
+        .catch(() => ({ data: null }));
+    if (!doc.data) return fallback;
+    return doc.data.value !== undefined ? doc.data.value : fallback;
+}
+
+async function getHomepageSettings() {
+    const settings = await getSingletonValue('settings', {});
+    return (settings && (settings.homepage || settings.HOMEPAGE)) || {};
+}
+
+async function getPopupAdConfig() {
+    const popup = await getSingletonValue('popup-ad-config', null);
+    return configContract.normalizePopupAdConfig(popup || {});
+}
+
 async function findOneByAnyId(collectionName, rawId) {
     if (!hasValue(rawId)) return null;
     const id = String(rawId);
@@ -222,32 +242,51 @@ const handleAction = {
 
     'miniProgramConfig': asyncHandler(async (params) => {
         const config = await configLoader.loadConfig();
-        return success(config);
+        return success(configContract.normalizeMiniProgramConfig(config.mini_program_config || config));
     }),
 
     // ===== 首页内容 =====
     'homeContent': asyncHandler(async (params) => {
         // 兼容旧数据字段：banners 用 status, products 用 status:true, page_layouts 用 page_key+status
-        const [bannersRes, layoutsRes, productsRes] = await Promise.all([
+        const [homeBannerRes, midBannerRes, bottomBannerRes, layoutsRes, productsRes, miniProgramConfig, homepageSettings, popupAd] = await Promise.all([
             db.collection('banners').where({ status: true, position: 'home' }).orderBy('sort_order', 'asc').limit(10).get().catch(() => ({ data: [] })),
+            db.collection('banners').where({ status: true, position: 'home_mid' }).orderBy('sort_order', 'asc').limit(10).get().catch(() => ({ data: [] })),
+            db.collection('banners').where({ status: true, position: 'home_bottom' }).orderBy('sort_order', 'asc').limit(10).get().catch(() => ({ data: [] })),
             db.collection('page_layouts').where({ page_key: 'home', status: true }).limit(1).get().catch(() => ({ data: [] })),
             db.collection('products').where({ status: true }).orderBy('sales_count', 'desc').limit(10).get().catch(() => ({ data: [] })),
+            (async () => {
+                const allConfig = await configLoader.loadConfig();
+                return configContract.normalizeMiniProgramConfig(allConfig.mini_program_config || allConfig);
+            })(),
+            getHomepageSettings(),
+            getPopupAdConfig()
         ]);
 
         const layout = layoutsRes.data && layoutsRes.data[0] ? layoutsRes.data[0] : null;
+        const hotProducts = (productsRes.data || []).map((p) => ({
+            _id: p._id,
+            id: p.id || p._legacy_id || p._id,
+            name: p.name,
+            images: p.images || [],
+            min_price: p.min_price || p.retail_price,
+            retail_price: p.retail_price || p.min_price,
+            original_price: p.original_price || p.market_price,
+            sales_count: p.sales_count || p.purchase_count || 0,
+        }));
 
-        return success({
-            banners: bannersRes.data || [],
+        return success(configContract.normalizeHomeContentPayload({
+            miniProgramConfig,
+            homepageSettings,
+            bannersByPosition: {
+                home: homeBannerRes.data || [],
+                home_mid: midBannerRes.data || [],
+                home_bottom: bottomBannerRes.data || []
+            },
+            hotProducts,
+            popupAd,
             layout: layout ? layout.layout_schema || layout.sections || layout : null,
-            hot_products: (productsRes.data || []).map(p => ({
-                _id: p._id,
-                name: p.name,
-                images: p.images || [],
-                min_price: p.min_price || p.retail_price,
-                original_price: p.original_price || p.market_price,
-                sales_count: p.sales_count || p.purchase_count || 0,
-            })),
-        });
+            latestActivity: {}
+        }));
     }),
 
     // ===== Banners =====
@@ -266,12 +305,16 @@ const handleAction = {
 
     // ===== 开屏广告 =====
     'splash': asyncHandler(async (params) => {
+        const singletonConfig = await getSingletonValue('splash_config', null);
+        if (singletonConfig) {
+            return success(configContract.normalizeSplashConfig(singletonConfig));
+        }
         const res = await db.collection('splash_screens')
             .where({ is_active: true })
             .orderBy('created_at', 'desc')
             .limit(1)
             .get().catch(() => ({ data: [] }));
-        return success(res.data && res.data[0] ? res.data[0] : null);
+        return success(configContract.normalizeSplashConfig(res.data && res.data[0] ? res.data[0] : null));
     }),
 
     // ===== 主题 =====

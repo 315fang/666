@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
 const { toNumber, getAllRecords } = require('./shared/utils');
+const { buildCanonicalUser, resolveCommissionBalance, resolveGoodsFundBalance } = require('./user-contract');
 
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
@@ -231,27 +232,26 @@ async function getDashboard(openid) {
         indirectTeamSales: indirectSummary.totalSales
     };
 
+    const canonicalUser = buildCanonicalUser(userData, {
+        role_name: distLevel > 0 ? ['',
+            '普通分销员', '高级分销员', '团队长', '区域代理', '合伙人'
+        ][distLevel] || '分销员' : '非分销员'
+    });
+
     return {
         level: distLevel,
-        level_name: distLevel > 0 ? ['',
-            '普通分销员', '高级分销员', '团队长', '区域代理', '合伙人'
-        ][distLevel] || '分销员' : '非分销员',
+        level_name: canonicalUser.role_name,
         userInfo: {
-            _id: userData._id,
-            openid: userData.openid,
-            nickname: userData.nickname || userData.nickName || '新用户',
-            nickName: userData.nickName || userData.nickname || '新用户',
-            avatarUrl: userData.avatarUrl || userData.avatar_url || '',
-            invite_code: inviteCode,
-            role_level: toNumber(userData.role_level, 0),
-            role_name: userData.role_name || ''
+            ...canonicalUser,
+            invite_code: inviteCode
         },
         team,
         stats,
-        wallet_balance: walletBalance,
-        agent_wallet_balance: walletBalance,
-        balance: commissionBalance,
-        commission_balance: commissionBalance,
+        wallet_balance: resolveGoodsFundBalance(userData),
+        agent_wallet_balance: resolveGoodsFundBalance(userData),
+        goods_fund_balance: resolveGoodsFundBalance(userData),
+        balance: resolveCommissionBalance(userData),
+        commission_balance: resolveCommissionBalance(userData),
         total_commission: roundMoney(totalCommission),
         pending_commission: roundMoney(pendingCommission),
         settled_commission: roundMoney(settledCommission),

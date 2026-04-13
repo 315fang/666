@@ -711,7 +711,7 @@ const handleAction = {
     }),
 
     'applyInitialPassword': asyncHandler(async (openid, params) => {
-        return success({ success: true, password: '888888' });
+        throw badRequest('该功能暂未开放');
     }),
 
     'listStations': asyncHandler(async (openid, params) => {

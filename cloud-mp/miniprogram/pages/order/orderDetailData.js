@@ -95,9 +95,9 @@ async function loadOrder(page, idOrNo) {
 
         const allRefunds = refundsRes.data && refundsRes.data.list || [];
         const activeRefund = allRefunds.find(
-            (refund) => refund.order_id === order.id && ['pending', 'approved', 'processing'].includes(refund.status)
+            (refund) => String(refund.order_id) === String(order.id) && ['pending', 'approved', 'processing'].includes(refund.status)
         );
-        const latestRefund = allRefunds.find((refund) => refund.order_id === order.id);
+        const latestRefund = allRefunds.find((refund) => String(refund.order_id) === String(order.id));
 
         page.setData({
             order,

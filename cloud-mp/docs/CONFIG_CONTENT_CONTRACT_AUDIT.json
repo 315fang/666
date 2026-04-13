@@ -1,0 +1,74 @@
+{
+  "generatedAt": "2026-04-13T17:08:51.573Z",
+  "ok": true,
+  "total": 11,
+  "failed": 0,
+  "findings": [
+    {
+      "module": "config",
+      "name": "mini program config logistics options",
+      "ok": true,
+      "detail": "normalizeMiniProgramConfig => [\"顺丰速运\",\"申通快递\"]"
+    },
+    {
+      "module": "config",
+      "name": "popup ad canonical field",
+      "ok": true,
+      "detail": "normalizePopupAdConfig => \"cloud://img\""
+    },
+    {
+      "module": "admin-api",
+      "name": "mini program config logistics options",
+      "ok": true,
+      "detail": "normalizeMiniProgramConfig => [\"顺丰速运\",\"申通快递\"]"
+    },
+    {
+      "module": "admin-api",
+      "name": "popup ad canonical field",
+      "ok": true,
+      "detail": "normalizePopupAdConfig => \"cloud://img\""
+    },
+    {
+      "module": "admin-api",
+      "name": "home section canonical field",
+      "ok": true,
+      "detail": "normalizeHomeSectionRecord => \"home.hero\""
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/config/index.js contains normalizeMiniProgramConfig",
+      "ok": true,
+      "detail": "cloudfunctions/config/index.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/config/index.js contains normalizeHomeContentPayload",
+      "ok": true,
+      "detail": "cloudfunctions/config/index.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/config/index.js contains normalizeSplashConfig",
+      "ok": true,
+      "detail": "cloudfunctions/config/index.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/admin-api/src/app.js contains configContract.normalizeMiniProgramConfig",
+      "ok": true,
+      "detail": "cloudfunctions/admin-api/src/app.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/admin-api/src/app.js contains configContract.normalizePopupAdConfig",
+      "ok": true,
+      "detail": "cloudfunctions/admin-api/src/app.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/admin-api/src/app.js contains patchCollectionRow('content_boards'",
+      "ok": true,
+      "detail": "cloudfunctions/admin-api/src/app.js"
+    }
+  ]
+}

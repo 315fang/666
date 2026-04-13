@@ -8,6 +8,7 @@
  */
 const { cloneDefaults, mergeDeep } = require('./utils/miniProgramConfig');
 const { syncLocalFavoritesToCloud } = require('./utils/favoriteSync');
+const { normalizeUserInfo } = require('./utils/userProfile');
 
 function isPlainObject(value) {
     return value && typeof value === 'object' && !Array.isArray(value);
@@ -71,12 +72,14 @@ module.exports = {
             const openid = extractCachedOpenid(userInfo, cachedOpenid);
 
             if (userInfo && openid) {
+                const normalizedUser = normalizeUserInfo({ ...userInfo, openid });
                 if (!cachedOpenid) {
                     wx.setStorageSync('openid', openid);
                 }
-                this.globalData.userInfo = userInfo;
+                this.globalData.userInfo = normalizedUser;
                 this.globalData.openid = openid;
                 this.globalData.isLoggedIn = true;
+                wx.setStorageSync('userInfo', normalizedUser);
                 console.log('[Auth] 从缓存恢复登录状态');
             } else {
                 console.log('[Auth] 无登录缓存，等待用户主动触发登录');
@@ -143,11 +146,12 @@ module.exports = {
 
             userData.openid = userOpenid;
 
-            this.globalData.userInfo = userData;
+            const normalizedUser = normalizeUserInfo(userData);
+            this.globalData.userInfo = normalizedUser;
             this.globalData.openid = userOpenid;
             this.globalData.isLoggedIn = true;
 
-            wx.setStorageSync('userInfo', userData);
+            wx.setStorageSync('userInfo', normalizedUser);
             wx.setStorageSync('openid', userOpenid);
 
             // 新用户优惠券提示
@@ -163,9 +167,9 @@ module.exports = {
                 };
             }
 
-            console.log('[Auth] 云函数登录成功:', userData);
+            console.log('[Auth] 云函数登录成功:', normalizedUser);
             syncLocalFavoritesToCloud();
-            return { ...result, userInfo: userData, openid: userOpenid };
+            return { ...result, userInfo: normalizedUser, openid: userOpenid };
         } catch (err) {
             console.error('[Auth] 云函数登录失败:', err);
             throw err;

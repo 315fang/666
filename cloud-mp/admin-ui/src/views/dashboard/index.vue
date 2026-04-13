@@ -291,10 +291,13 @@ const focusBarItems = computed(() => [
 const focusTitle = computed(() => {
   const items = focusBarItems.value
   const withCount = items.filter((i) => i.count > 0)
+  const todayOrders = Number(statsCards.value[0]?.value || 0)
+  const todaySales = statsCards.value[1]?.value || '¥0.00'
+  const todaySummary = `今日 ${todayOrders} 单 · 销售额 ${todaySales}`
   if (withCount.length > 0) {
-    return `优先处理 ${withCount.map((i) => `${i.label} ${i.count} 条`).join('，')}`
+    return `${todaySummary}，优先处理 ${withCount.map((i) => `${i.label} ${i.count} 条`).join('，')}`
   }
-  return '当前发货与资金类待办较少，可转向活动与用户运营'
+  return `${todaySummary}，当前发货与资金类待办较少，可转向活动与用户运营`
 })
 
 const fetchOperationsDashboard = async () => {

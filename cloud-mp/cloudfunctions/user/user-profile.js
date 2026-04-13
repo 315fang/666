@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const { buildGrowthProgress, loadTierConfig } = require('./shared/growth');
 const { toNumber } = require('./shared/utils');
+const { buildCanonicalUser } = require('./user-contract');
 
 /**
  * 获取用户信息
@@ -30,42 +31,16 @@ async function updateProfile(openid, data) {
 function formatUser(user) {
     if (!user) return null;
     const points = toNumber(user.points != null ? user.points : user.growth_value, 0);
-    const goodsFundBalance = toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0);
-    const balance = toNumber(user.commission_balance != null ? user.commission_balance : user.balance, 0);
-    const roleLevel = toNumber(user.role_level, 0);
-    const ROLE_NAMES = {
-        0: 'VIP会员',
-        1: '初级会员 C1',
-        2: '高级会员 C2',
-        3: '推广合伙人 B1',
-        4: '运营合伙人 B2',
-        5: '区域合伙人 B3'
-    };
-
-    return {
-        _id: user._id,
-        openid: user.openid,
-        nickName: user.nickName || user.nickname || '新用户',
-        nickname: user.nickName || user.nickname || '新用户',
-        avatarUrl: user.avatarUrl || user.avatar_url || '',
-        avatar_url: user.avatarUrl || user.avatar_url || '',
-        phone: user.phone || '',
-        gender: user.gender || '',
-        level: roleLevel,
-        level_name: user.role_name || ROLE_NAMES[roleLevel] || '普通用户',
-        role_level: roleLevel,
-        role_name: user.role_name || ROLE_NAMES[roleLevel] || '普通用户',
-        is_distributor: toNumber(user.distributor_level != null ? user.distributor_level : user.agent_level, 0) > 0,
-        distributor_level: toNumber(user.distributor_level != null ? user.distributor_level : user.agent_level, 0),
-        invite_code: user.my_invite_code || user.invite_code || '',
-        my_invite_code: user.my_invite_code || '',
+    const canonical = buildCanonicalUser(user, {
         register_coupons_issued: !!user.register_coupons_issued,
         growth_value: points,
-        wallet_balance: goodsFundBalance,
-        agent_wallet_balance: goodsFundBalance,
-        commission_balance: balance,
-        balance,
         points
+    });
+    return {
+        ...canonical,
+        level: canonical.role_level,
+        level_name: canonical.role_name,
+        distributor_level: toNumber(user.distributor_level != null ? user.distributor_level : user.agent_level, 0)
     };
 }
 

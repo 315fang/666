@@ -117,6 +117,36 @@ function roundMoney(val) {
     return Math.round(toNumber(val, 0) * 100) / 100;
 }
 
+function getCommissionLogTypeText(type) {
+    const map = {
+        direct: '直推佣金',
+        Direct: '直推佣金',
+        indirect: '团队佣金',
+        Indirect: '团队佣金',
+        gap: '级差利润',
+        Stock_Diff: '级差利润',
+        agent_fulfillment: '发货利润',
+        self: '自购返利',
+        withdrawal: '提现申请',
+        admin_adjustment: '系统调整'
+    };
+    return map[type] || String(type || '');
+}
+
+function getCommissionLogStatusText(status) {
+    const map = {
+        frozen: '冻结中',
+        pending: '冻结中',
+        pending_approval: '审核中',
+        approved: '待打款',
+        settled: '已到账',
+        completed: '已到账',
+        cancelled: '已取消',
+        rejected: '已驳回'
+    };
+    return map[status] || String(status || '');
+}
+
 function getAgentWalletBalance(user = {}) {
     return roundMoney(toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0));
 }
@@ -323,6 +353,8 @@ async function walletCommissions(openid, params = {}) {
             ...item,
             // 规范化 type（统一小写，前端按此匹配）
             type: typeKey,
+            type_text: getCommissionLogTypeText(item.type),
+            status_text: getCommissionLogStatusText(item.status),
             from_user_nick: fromNick,
             order_no_display: item.order_no || item.order_id || null,
             product_summary: order ? order.product_summary : null,

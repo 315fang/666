@@ -45,13 +45,11 @@ async function loadData(page, forceRefresh = false) {
 
         if (!data || Object.keys(data).length === 0) {
             const pageRes = await get('/page-content/home').catch(() => null);
-            const unifiedPayload = pageRes && pageRes.data && pageRes.data.resources
-                ? (pageRes.data.resources.legacy_payload || null)
-                : null;
-            if (unifiedPayload && Object.keys(unifiedPayload).length) {
-                data = unifiedPayload;
-                page.homeResources = pageRes.data.resources || null;
-                page.setData({ pageLayout: pageRes.data.layout || null });
+            const canonicalPayload = pageRes && (pageRes.data || pageRes);
+            if (canonicalPayload && Object.keys(canonicalPayload).length) {
+                data = canonicalPayload;
+                page.homeResources = canonicalPayload.resources || null;
+                page.setData({ pageLayout: canonicalPayload.layout || canonicalPayload.resources?.layout || null });
             } else {
                 const res = await get('/homepage-config').catch(() => ({ data: {} }));
                 data = res.data || {};
@@ -191,10 +189,12 @@ function applyHomeConfig(page, data) {
     if (!data) return;
     app.globalData.homePageData = data;
     const brandConfig = getConfigSection('brand_config');
+    page.homeResources = data.resources || page.homeResources || null;
 
-    const bannerList = Array.isArray(data.banners)
-        ? data.banners
-        : (Array.isArray(data.banners && data.banners.home) ? data.banners.home : []);
+    const bannerGroup = data.banners || data.resources?.banners || {};
+    const bannerList = Array.isArray(bannerGroup)
+        ? bannerGroup
+        : (Array.isArray(bannerGroup.home) ? bannerGroup.home : []);
     const defaultBrandBanners = [
         {
             id: '__default_1',
@@ -216,7 +216,7 @@ function applyHomeConfig(page, data) {
         }))
         : defaultBrandBanners;
 
-    const configs = data.configs || {};
+    const configs = data.configs || data.resources?.configs || {};
     const showBrandLogo = configs.show_brand_logo !== 'false' && configs.show_brand_logo !== false;
     page.setData({
         homeConfigs: configs,
@@ -224,12 +224,12 @@ function applyHomeConfig(page, data) {
         brandLogo: configs.brand_logo || '',
         navBrandTitle: configs.nav_brand_title || brandConfig.nav_brand_title || '问兰镜像',
         navBrandSub: configs.nav_brand_sub || brandConfig.nav_brand_sub || '品牌甄选',
-        latestActivity: page._normalizeLatestActivity(data.latestActivity || {}),
+        latestActivity: page._normalizeLatestActivity(data.latestActivity || data.resources?.latest_activity || {}),
         heroBanners,
         loading: false
     });
 
-    const popupAd = data.popupAd || {};
+    const popupAd = data.popupAd || data.resources?.popup_ad || {};
     if (popupAd.enabled && (popupAd.file_id || popupAd.image_url || popupAd.url)) {
         page._checkAndShowPopupAd({
             ...popupAd,

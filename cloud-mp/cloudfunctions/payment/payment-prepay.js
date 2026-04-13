@@ -33,30 +33,52 @@ async function payByWalletBalance(openid, orderId, order, payAmount) {
             wallet_balance: realBalance
         };
     }
+    try {
+        // 订单标为已付款
+        await db.collection('orders').doc(orderId).update({
+            data: {
+                status: 'paid',
+                payment_method: 'goods_fund',
+                pay_channel: 'goods_fund',
+                paid_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        });
 
-    // 订单标为已付款
-    await db.collection('orders').doc(orderId).update({
-        data: {
-            status: 'paid',
-            payment_method: 'goods_fund',
-            pay_channel: 'goods_fund',
-            paid_at: db.serverDate(),
-            updated_at: db.serverDate()
-        }
-    });
-
-    // 写货款流水
-    await db.collection('goods_fund_logs').add({
-        data: {
-            openid,
-            type: 'spend',
-            amount: -payAmount,
-            order_id: orderId,
-            order_no: order.order_no || '',
-            remark: `货款支付订单 ${order.order_no || orderId}`,
-            created_at: db.serverDate()
-        }
-    }).catch(() => {});
+        // 写货款流水
+        await db.collection('goods_fund_logs').add({
+            data: {
+                openid,
+                type: 'spend',
+                amount: -payAmount,
+                order_id: orderId,
+                order_no: order.order_no || '',
+                remark: `货款支付订单 ${order.order_no || orderId}`,
+                created_at: db.serverDate()
+            }
+        });
+    } catch (err) {
+        await db.collection('users')
+            .where({ openid })
+            .update({
+                data: {
+                    agent_wallet_balance: _.inc(payAmount),
+                    goods_fund_total_spent: _.inc(-payAmount),
+                    updated_at: db.serverDate()
+                }
+            })
+            .catch(() => {});
+        await db.collection('orders').doc(orderId).update({
+            data: {
+                status: 'pending_payment',
+                payment_method: '',
+                pay_channel: '',
+                paid_at: null,
+                updated_at: db.serverDate()
+            }
+        }).catch(() => {});
+        throw new Error(`货款支付流水或订单状态写入失败：${err.message}`);
+    }
 
     // 触发订单后续处理（佣金计算、积分等）
     await processPaidOrder(orderId, { ...order, status: 'paid', payment_method: 'goods_fund', paid_at: new Date() })

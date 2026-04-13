@@ -9,6 +9,9 @@ const https = require('https');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { createWechatRefund } = require('./payment-refund');
+const orderContract = require('./order-contract');
+const userContract = require('./user-contract');
+const configContract = require('./config-contract');
 
 const { dataRoot, normalizedDataRoot, runtimeRoot, uploadsRoot, jwtSecret, assetBaseUrl, preferNormalizedData } = require('./config');
 const { createDataStore } = require('./store');
@@ -32,6 +35,13 @@ Layer.prototype.handle_request = function handle_request(req, res, next) {
 const app = express();
 const dataStore = createDataStore();
 let cachedManagedCloud = undefined;
+const ADMIN_REPORT_TIME_ZONE = 'Asia/Shanghai';
+const ADMIN_DATE_KEY_FORMATTER = new Intl.DateTimeFormat('en-US', {
+    timeZone: ADMIN_REPORT_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+});
 
 /**
  * 精确直写：直接更新 CloudBase 单条文档，不走全量替换
@@ -173,6 +183,141 @@ function normalizeDateValue(value, fallback = '') {
         if (typeof rawDate === 'string') return rawDate;
     }
     return fallback;
+}
+
+function getDateKey(value, fallback = '') {
+    if (value == null || value === '') return fallback;
+    const normalized = normalizeDateValue(value, '');
+    const date = new Date(normalized || value);
+    if (Number.isNaN(date.getTime())) {
+        return typeof normalized === 'string' ? normalized.slice(0, 10) : fallback;
+    }
+    const parts = ADMIN_DATE_KEY_FORMATTER.formatToParts(date);
+    const year = parts.find((part) => part.type === 'year')?.value;
+    const month = parts.find((part) => part.type === 'month')?.value;
+    const day = parts.find((part) => part.type === 'day')?.value;
+    return year && month && day ? `${year}-${month}-${day}` : fallback;
+}
+
+function normalizePaymentMethodCode(rawValue) {
+    const raw = pickString(rawValue).trim().toLowerCase();
+    if (['wechat', 'wx', 'wxpay', 'jsapi', 'miniapp', 'wechatpay', 'wechat_pay', 'weixin'].includes(raw)) return 'wechat';
+    if (['goods_fund', 'goods-fund', 'goodsfund'].includes(raw)) return 'goods_fund';
+    if (['wallet', 'wallet_balance', 'account_balance', 'balance', 'credit', 'debt'].includes(raw)) return 'wallet';
+    return raw;
+}
+
+function getPaymentMethodLabel(paymentMethod) {
+    return ({
+        wechat: '微信支付',
+        goods_fund: '货款支付',
+        wallet: '余额支付'
+    }[normalizePaymentMethodCode(paymentMethod)] || pickString(paymentMethod) || '-');
+}
+
+function getRefundRouteMeta(paymentMethod) {
+    const normalized = normalizePaymentMethodCode(paymentMethod);
+    if (normalized === 'goods_fund') {
+        return {
+            refund_channel: 'goods_fund',
+            refund_target_text: '退回货款余额'
+        };
+    }
+    if (normalized === 'wallet') {
+        return {
+            refund_channel: 'wallet',
+            refund_target_text: '退回账户余额'
+        };
+    }
+    return {
+        refund_channel: 'wechat',
+        refund_target_text: '原路退回微信支付'
+    };
+}
+
+function isSupportedRefundPaymentMethod(paymentMethod) {
+    return ['wechat', 'goods_fund', 'wallet'].includes(normalizePaymentMethodCode(paymentMethod));
+}
+
+function inferRefundResumeOrderStatus(order) {
+    if (!order || typeof order !== 'object') return 'paid';
+    if (pickString(order.prev_status)) return pickString(order.prev_status);
+    if (order.confirmed_at || order.auto_confirmed_at) return 'completed';
+    if (order.shipped_at) return 'shipped';
+    if (order.paid_at || order.pay_time) return 'paid';
+    return 'pending_payment';
+}
+
+async function appendWalletLogEntry(entry) {
+    const payload = {
+        ...entry,
+        created_at: pickString(entry?.created_at || nowIso())
+    };
+    const db = dataStore._internals?.db;
+    if (db) {
+        await db.collection('wallet_logs').add({ data: payload });
+        return true;
+    }
+    const rows = getCollection('wallet_logs');
+    rows.push({
+        id: nextId(rows),
+        ...payload
+    });
+    saveCollection('wallet_logs', rows);
+    return true;
+}
+
+async function appendGoodsFundLogEntry(entry) {
+    const payload = {
+        ...entry,
+        created_at: pickString(entry?.created_at || nowIso())
+    };
+    const db = dataStore._internals?.db;
+    if (db) {
+        await db.collection('goods_fund_logs').add({ data: payload });
+        return true;
+    }
+    try {
+        const rows = getCollection('goods_fund_logs');
+        rows.push({
+            id: nextId(rows),
+            ...payload
+        });
+        saveCollection('goods_fund_logs', rows);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
+async function appendPointLogEntry(entry) {
+    const payload = {
+        ...entry,
+        created_at: pickString(entry?.created_at || nowIso())
+    };
+    const db = dataStore._internals?.db;
+    if (db) {
+        await db.collection('point_logs').add({ data: payload });
+        return true;
+    }
+    const rows = getCollection('point_logs');
+    rows.push({
+        id: nextId(rows),
+        ...payload
+    });
+    saveCollection('point_logs', rows);
+    return true;
+}
+
+function requireManualAdjustmentReason(rawReason, label = '原因') {
+    const reason = pickString(rawReason).trim();
+    if (!reason) {
+        return { ok: false, message: `请输入${label}` };
+    }
+    if (reason.length < 2) {
+        return { ok: false, message: `${label}至少 2 个字符` };
+    }
+    return { ok: true, reason };
 }
 
 function normalizeAdminPermissionKey(permission) {
@@ -908,75 +1053,7 @@ function normalizePopupAdConfig(config) {
 }
 
 function getMiniProgramDefault() {
-    return {
-        brand_config: {
-            brand_name: '问兰',
-            share_title: '问兰 · 品牌甄选',
-            customer_service_wechat: 'wl_service',
-            customer_service_hours: '9:00-21:00',
-            nav_brand_title: '问兰镜像',
-            nav_brand_sub: '品牌甄选',
-            about_summary: '品牌甄选，值得信赖。',
-            activity_share_title: '问兰 · 当季品牌活动进行中',
-            logistics_page_title: '物流跟踪',
-            tab_bar: {
-                color: '#64748B',
-                selectedColor: '#C6A16E',
-                backgroundColor: '#F8FCFD',
-                borderStyle: 'white',
-                items: [
-                    { index: 0, text: '商城首页' },
-                    { index: 1, text: '全部商品' },
-                    { index: 2, text: '热门活动' },
-                    { index: 3, text: '我的会员' }
-                ]
-            }
-        },
-        feature_flags: {
-            show_station_entry: false,
-            show_pickup_entry: false,
-            enable_logistics_entry: true,
-            enable_lottery_entry: false
-        },
-        activity_page_config: {
-            permanent_section_title: '常驻活动',
-            permanent_section_desc: '长期可参与，随时进入',
-            limited_section_title: '限时活动',
-            limited_section_desc: '抓紧时间，过期即止',
-            pending_toast: '活动筹备中'
-        },
-        lottery_config: {
-            hero_title: '把积分换成一点仪式感',
-            hero_subtitle: '奖池支持后台配置 emoji、配色和标签，小奖池也能做出活动感。',
-            result_win_title: '恭喜，手气不错',
-            result_miss_title: '这次差一点点'
-        },
-        membership_config: {
-            login_agreement_hint: '登录后查看订单、积分、佣金等信息'
-        },
-        logistics_config: {
-            shipping_mode: 'third_party',
-            shipping_tracking_no_required: true,
-            shipping_company_name_required: false
-        },
-        customer_service_channel: {
-            channel_service_phone: '',
-            product_service_phone: '',
-            qr_code_url: ''
-        },
-        withdrawal_config: {
-            fee_rate_percent: 0,
-            fee_cap_max: 0
-        },
-        light_prompt_modals: {
-            coupon_usage: {
-                enabled: true,
-                title: '优惠券说明',
-                body: '在结算页「礼遇与优惠」中选择可用券。'
-            }
-        },
-        product_detail_pledges: { items: {} }
-    };
+    return configContract.normalizeMiniProgramConfig({});
 }
 
 function getMiniProgramConfigSnapshot() {
@@ -985,7 +1062,7 @@ function getMiniProgramConfigSnapshot() {
     const fallback = fromConfigRow && typeof fromConfigRow.config_value === 'object'
         ? fromConfigRow.config_value
         : getMiniProgramDefault();
-    return getSingleton('mini-program-config', fallback);
+    return configContract.normalizeMiniProgramConfig(getSingleton('mini-program-config', fallback));
 }
 
 function getSettingsSnapshot() {
@@ -1062,10 +1139,8 @@ function buildOrderRecord(order, users, products, commissions) {
     });
     const totalQty = normalizedItems.reduce((sum, item) => sum + toNumber(item.qty, 0), 0) || Math.max(1, toNumber(order.qty ?? order.quantity, 1));
     const productImages = product ? toArray(product.images).map(assetUrl) : [];
-    const paymentMethodRaw = pickString(order.payment_method || order.pay_type || order.pay_channel || order.payment_channel).trim().toLowerCase();
-    const paymentMethod = ['wechat', 'wx', 'jsapi', 'miniapp', 'wechatpay', 'weixin'].includes(paymentMethodRaw)
-        ? 'wechat'
-        : (['wallet', 'balance', 'credit', 'debt'].includes(paymentMethodRaw) ? 'wallet' : paymentMethodRaw);
+    const paymentMethod = normalizePaymentMethodCode(order.payment_method || order.pay_type || order.pay_channel || order.payment_channel);
+    const canonicalPayAmount = toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0);
     const normalizedBuyer = buyer ? {
         ...buyer,
         id: primaryId(buyer),
@@ -1088,6 +1163,10 @@ function buildOrderRecord(order, users, products, commissions) {
     return {
         ...order,
         id: orderId || order.id || order._legacy_id || order._id,
+        openid: pickString(order.openid),
+        status_group: orderContract.normalizeOrderStatusGroup(order.status),
+        status_text: orderContract.getOrderStatusText(order.status),
+        status_desc: orderContract.getOrderStatusDesc(order.status),
         buyer: normalizedBuyer,
         product: normalizedProduct,
         items: normalizedItems,
@@ -1097,10 +1176,15 @@ function buildOrderRecord(order, users, products, commissions) {
             spec_name: '规格',
             spec_value: pickString(primaryItem?.snapshot_spec || order.sku?.spec_value || '')
         },
-        actual_price: toNumber(order.actual_price ?? order.pay_amount ?? order.total_amount, 0),
+        total_amount: toNumber(order.total_amount ?? canonicalPayAmount, 0),
+        pay_amount: canonicalPayAmount,
+        actual_price: canonicalPayAmount,
         payment_method: paymentMethod,
+        payment_method_text: orderContract.getPaymentMethodText(paymentMethod),
+        refund_target_text: orderContract.getRefundTargetText(paymentMethod),
         address: parseAddressSnapshot(order.address_snapshot),
         address_snapshot: parseAddressSnapshot(order.address_snapshot),
+        pickup_station: order.pickupStation || order.pickup_station || null,
         commissions: orderCommissions
     };
 }
@@ -1296,7 +1380,7 @@ function getUserOrders(user, orders) {
 }
 
 function isPaidLikeOrder(order) {
-    return ['paid', 'pending_group', 'pending_ship', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed', 'refunded'].includes(order?.status);
+    return ['paid', 'pending_group', 'pickup_pending', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed', 'refunded'].includes(order?.status);
 }
 
 function getOrderAmount(order) {
@@ -1333,11 +1417,14 @@ function getUserDescendants(users, leader, maxDepth = Infinity) {
 
 function buildUserTiny(user) {
     if (!user) return null;
+    const canonical = userContract.buildCanonicalUser(user);
     return {
-        id: primaryId(user),
-        nickname: getUserNickname(user),
-        avatar_url: getUserAvatar(user),
-        openid: pickString(user.openid)
+        id: canonical.id,
+        nickname: canonical.nickname,
+        avatar_url: canonical.avatar_url,
+        openid: canonical.openid,
+        role_level: canonical.role_level,
+        role_name: canonical.role_name
     };
 }
 
@@ -1454,30 +1541,22 @@ function buildUserListContext(users, orders) {
 }
 
 function buildUserListRecord(user, context) {
+    const canonical = userContract.buildCanonicalUser(user);
     const userId = String(primaryId(user));
     const orderStat = context.orderStats.get(userId) || { order_count: 0, total_sales: 0 };
     const parent = context.graph.getParent(user);
     const refereeCount = context.directChildCount.get(userId) || 0;
 
     return {
-        ...user,
-        id: primaryId(user),
-        nickname: getUserNickname(user),
-        avatar_url: getUserAvatar(user),
-        openid: pickString(user.openid),
-        phone: pickString(user.phone),
-        member_no: pickString(user.member_no || user.my_invite_code || user.invite_code),
-        invite_code: pickString(user.my_invite_code || user.invite_code || user.member_no),
-        role_level: toNumber(user.role_level ?? user.distributor_level, 0),
+        ...canonical,
         purchase_level_code: pickString(user.purchase_level_code || user.purchase_level || ''),
-        balance: toNumber(user.balance ?? user.wallet_balance, 0),
-        commission_balance: toNumber(user.commission_balance ?? user.balance ?? 0, 0),
-        agent_wallet_balance: toNumber(user.agent_wallet_balance ?? user.wallet_balance ?? 0, 0),
+        goods_fund_balance: canonical.goods_fund_balance,
         points: toNumber(user.points, 0),
         total_sales: orderStat.total_sales,
         referee_count: refereeCount,
         growth_value: toNumber(user.growth_value, 0),
         status: getUserStatus(user),
+        status_text: canonical.status_text,
         discount_rate: toNumber(user.discount_rate, 1),
         order_count: orderStat.order_count,
         tags: toArray(user.tags),
@@ -1496,6 +1575,7 @@ function buildUserListRecord(user, context) {
 }
 
 function buildUserRecord(user, users, orders, commissions) {
+    const canonical = userContract.buildCanonicalUser(user);
     const userOrders = getUserOrders(user, orders);
     const paidOrders = userOrders.filter(isPaidLikeOrder);
     const directChildren = getDirectChildren(users, user);
@@ -1510,21 +1590,14 @@ function buildUserRecord(user, users, orders, commissions) {
         .reduce((sum, item) => sum + toNumber(item.amount, 0), 0);
 
     return {
-        ...user,
-        id: primaryId(user),
-        nickname: getUserNickname(user),
-        avatar_url: getUserAvatar(user),
-        openid: pickString(user.openid),
-        phone: pickString(user.phone),
-        member_no: pickString(user.member_no || user.my_invite_code || user.invite_code),
-        invite_code: pickString(user.my_invite_code || user.invite_code || user.member_no),
-        role_level: toNumber(user.role_level ?? user.distributor_level, 0),
+        ...canonical,
         purchase_level_code: pickString(user.purchase_level_code || user.purchase_level || ''),
-        balance: toNumber(user.balance ?? user.wallet_balance, 0),
+        goods_fund_balance: canonical.goods_fund_balance,
         total_sales: paidOrders.reduce((sum, item) => sum + getOrderAmount(item), 0),
         referee_count: directChildren.length,
         growth_value: toNumber(user.growth_value ?? user.points ?? 0, 0),
         status: getUserStatus(user),
+        status_text: canonical.status_text,
         discount_rate: toNumber(user.discount_rate, 1),
         order_count: userOrders.length,
         tags: toArray(user.tags),
@@ -2048,19 +2121,34 @@ function buildRefundRecord(refund, users, orders, products, skus) {
     const items = order ? toArray(order.items).map((item) => buildOrderItemSnapshot(item, products, skus)) : [];
     const user = findUserByAnyId(users, refund.openid || refund.user_id || order?.openid || order?.buyer_id);
     const firstItem = items[0] || null;
+    const paymentMethod = normalizePaymentMethodCode(refund.payment_method || order?.payment_method || order?.pay_type || order?.pay_channel || order?.payment_channel || 'wechat');
+    const refundRoute = getRefundRouteMeta(refund.refund_channel || refund.refund_method || paymentMethod);
     return {
         ...refund,
         id: primaryId(refund),
+        order_id: pickString(primaryId(order) || refund.order_id || refund.order_no),
+        openid: pickString(refund.openid || order?.openid || ''),
         amount: toNumber(refund.amount, 0),
         status: pickString(refund.status || 'pending'),
+        status_text: orderContract.getRefundStatusText(refund.status || 'pending'),
+        status_desc: orderContract.getRefundStatusDesc(refund.status || 'pending'),
         reason: pickString(refund.reason),
         images: toArray(refund.images).map(assetUrl),
         user_id: primaryId(user) || refund.user_id || refund.openid || null,
         user: buildUserTiny(user),
+        payment_method: paymentMethod,
+        payment_method_text: orderContract.getPaymentMethodText(paymentMethod),
+        refund_channel: refundRoute.refund_channel,
+        refund_target_text: orderContract.getRefundTargetText(paymentMethod, refund.refund_target_text || refund.refund_target || refund.refund_to || refund.refund_method_text || refundRoute.refund_target_text),
+        wx_status: pickString(refund.wx_status || refund.wx_refund_status),
         order: order ? {
             id: primaryId(order),
             order_no: pickString(order.order_no),
-            product: firstItem?.product || null
+            product: firstItem?.product || null,
+            payment_method: paymentMethod,
+            payment_method_text: orderContract.getPaymentMethodText(paymentMethod),
+            points_used: toNumber(order.points_used, 0),
+            coupon_discount: toNumber(order.coupon_discount, 0)
         } : {
             id: refund.order_id || null,
             order_no: pickString(refund.order_no)
@@ -2068,8 +2156,10 @@ function buildRefundRecord(refund, users, orders, products, skus) {
         items,
         order_item: firstItem,
         reject_reason: pickString(refund.reject_reason),
-        return_company: pickString(refund.return_company),
-        return_tracking_no: pickString(refund.return_tracking_no)
+        return_company: pickString(refund.return_company || refund.return_shipping?.company),
+        return_tracking_no: pickString(refund.return_tracking_no || refund.return_shipping?.tracking_no),
+        processing_at: normalizeDateValue(refund.processing_at),
+        completed_at: normalizeDateValue(refund.completed_at)
     };
 }
 
@@ -2593,7 +2683,22 @@ ensureDir(runtimeRoot);
 ensureDir(uploadsRoot);
 ensureDir(path.join(runtimeRoot, 'overrides'));
 
-app.use(cors());
+app.use(cors({
+    origin: function (origin, callback) {
+        const allowed = [
+            /^https?:\/\/localhost(:\d+)?$/,
+            /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
+            /\.tcb\.qcloud\.la$/,
+            /\.cloudbase\.net$/
+        ];
+        if (!origin || allowed.some(p => p.test(origin))) {
+            callback(null, true);
+        } else {
+            callback(null, false);
+        }
+    },
+    credentials: true
+}));
 const jsonParser = express.json({ limit: '10mb' });
 const urlencodedParser = express.urlencoded({ extended: true });
 app.use((req, res, next) => {
@@ -2883,6 +2988,7 @@ registerMarketingRoutes(app, {
     assetUrl,
     createAuditLog,
     directPatchDocument,
+    requireManualAdjustmentReason,
     ok,
     fail
 });
@@ -3552,7 +3658,7 @@ app.get('/admin/api/logs/export', auth, requirePermission('logs'), (req, res) =>
     res.send(JSON.stringify(getCollection('admin_audit_logs'), null, 2));
 });
 
-app.get('/admin/api/reviews', auth, (req, res) => {
+app.get('/admin/api/reviews', auth, requirePermission('content'), (req, res) => {
     const users = getCollection('users');
     const products = getCollection('products');
     const orders = getCollection('orders');
@@ -3585,14 +3691,14 @@ function updateReviewRow(req, res, patcher) {
     ok(res, buildReviewRecord(row, users, products, orders));
 }
 
-app.put('/admin/api/reviews/:id', auth, (req, res) => updateReviewRow(req, res, () => ({ ...toObject(req.body, {}) })));
-app.post('/admin/api/reviews/:id', auth, (req, res) => updateReviewRow(req, res, () => ({ ...toObject(req.body, {}) })));
-app.put('/admin/api/reviews/:id/status', auth, (req, res) => updateReviewRow(req, res, () => ({ status: toBoolean(req.body?.status ?? req.body?.visible ?? req.body?.enabled ?? 1) ? 1 : 0 })));
-app.post('/admin/api/reviews/:id/status', auth, (req, res) => updateReviewRow(req, res, () => ({ status: toBoolean(req.body?.status ?? req.body?.visible ?? req.body?.enabled ?? 1) ? 1 : 0 })));
-app.put('/admin/api/reviews/:id/featured', auth, (req, res) => updateReviewRow(req, res, () => ({ is_featured: toBoolean(req.body?.is_featured ?? req.body?.featured ?? req.body?.value ?? 1) ? 1 : 0 })));
-app.post('/admin/api/reviews/:id/featured', auth, (req, res) => updateReviewRow(req, res, () => ({ is_featured: toBoolean(req.body?.is_featured ?? req.body?.featured ?? req.body?.value ?? 1) ? 1 : 0 })));
-app.put('/admin/api/reviews/:id/reply', auth, (req, res) => updateReviewRow(req, res, () => ({ reply_content: pickString(req.body?.reply_content ?? req.body?.reply ?? req.body?.content) })));
-app.post('/admin/api/reviews/:id/reply', auth, (req, res) => updateReviewRow(req, res, () => ({ reply_content: pickString(req.body?.reply_content ?? req.body?.reply ?? req.body?.content) })));
+app.put('/admin/api/reviews/:id', auth, requirePermission('content'), (req, res) => updateReviewRow(req, res, () => ({ ...toObject(req.body, {}) })));
+app.post('/admin/api/reviews/:id', auth, requirePermission('content'), (req, res) => updateReviewRow(req, res, () => ({ ...toObject(req.body, {}) })));
+app.put('/admin/api/reviews/:id/status', auth, requirePermission('content'), (req, res) => updateReviewRow(req, res, () => ({ status: toBoolean(req.body?.status ?? req.body?.visible ?? req.body?.enabled ?? 1) ? 1 : 0 })));
+app.post('/admin/api/reviews/:id/status', auth, requirePermission('content'), (req, res) => updateReviewRow(req, res, () => ({ status: toBoolean(req.body?.status ?? req.body?.visible ?? req.body?.enabled ?? 1) ? 1 : 0 })));
+app.put('/admin/api/reviews/:id/featured', auth, requirePermission('content'), (req, res) => updateReviewRow(req, res, () => ({ is_featured: toBoolean(req.body?.is_featured ?? req.body?.featured ?? req.body?.value ?? 1) ? 1 : 0 })));
+app.post('/admin/api/reviews/:id/featured', auth, requirePermission('content'), (req, res) => updateReviewRow(req, res, () => ({ is_featured: toBoolean(req.body?.is_featured ?? req.body?.featured ?? req.body?.value ?? 1) ? 1 : 0 })));
+app.put('/admin/api/reviews/:id/reply', auth, requirePermission('content'), (req, res) => updateReviewRow(req, res, () => ({ reply_content: pickString(req.body?.reply_content ?? req.body?.reply ?? req.body?.content) })));
+app.post('/admin/api/reviews/:id/reply', auth, requirePermission('content'), (req, res) => updateReviewRow(req, res, () => ({ reply_content: pickString(req.body?.reply_content ?? req.body?.reply ?? req.body?.content) })));
 
 app.get('/admin/api/home-sections', auth, requirePermission('content'), (req, res) => {
     const products = getCollection('products');
@@ -3603,13 +3709,13 @@ app.get('/admin/api/home-sections', auth, requirePermission('content'), (req, re
                 ...item,
                 product: buildProductSummaryRecord(findByLookup(products, item.product_id), item)
             }));
-        return {
+        return configContract.normalizeHomeSectionRecord({
             ...row,
             board_name: pickString(row.board_name || row.name || row.title || row.board_key || '未命名内容位'),
             board_key: pickString(row.board_key || row.key || `board_${row.id || row._id}`),
             linked_products: linkedProducts,
             linked_product_count: linkedProducts.length
-        };
+        });
     });
     ok(res, { list: rows, total: rows.length });
 });
@@ -3619,11 +3725,59 @@ app.get('/admin/api/home-sections/schemas', auth, requirePermission('content'), 
     { key: 'product_board', label: '商品板块', fields: ['board_key', 'board_name'] }
 ]));
 
-app.post('/admin/api/home-sections', auth, requirePermission('content'), (req, res) => ok(res, req.body || {}));
-app.put('/admin/api/home-sections/:id', auth, requirePermission('content'), (req, res) => ok(res, { id: Number(req.params.id), ...(req.body || {}) }));
-app.put('/admin/api/home-sections/:id/toggle', auth, requirePermission('content'), (req, res) => ok(res, { success: true, id: Number(req.params.id) }));
-app.delete('/admin/api/home-sections/:id', auth, requirePermission('content'), (req, res) => ok(res, { success: true, id: Number(req.params.id) }));
-app.post('/admin/api/home-sections/sort', auth, requirePermission('content'), (req, res) => ok(res, { success: true, sort: req.body || {} }));
+app.post('/admin/api/home-sections', auth, requirePermission('content'), (req, res) => {
+    const rows = getCollection('content_boards');
+    const nextRow = configContract.normalizeHomeSectionRecord({
+        id: nextId(rows),
+        ...toObject(req.body, {}),
+        created_at: nowIso(),
+        updated_at: nowIso()
+    });
+    rows.push(nextRow);
+    saveCollection('content_boards', rows);
+    ok(res, nextRow);
+});
+app.put('/admin/api/home-sections/:id', auth, requirePermission('content'), (req, res) => {
+    const updated = patchCollectionRow('content_boards', req.params.id, (row) => configContract.normalizeHomeSectionRecord({
+        ...row,
+        ...toObject(req.body, {}),
+        updated_at: nowIso()
+    }));
+    if (!updated) return fail(res, '首页内容位不存在', 404);
+    ok(res, updated);
+});
+app.put('/admin/api/home-sections/:id/toggle', auth, requirePermission('content'), (req, res) => {
+    const updated = patchCollectionRow('content_boards', req.params.id, (row) => configContract.normalizeHomeSectionRecord({
+        ...row,
+        is_visible: row.is_visible ? 0 : 1,
+        updated_at: nowIso()
+    }));
+    if (!updated) return fail(res, '首页内容位不存在', 404);
+    ok(res, { success: true, id: updated.id, is_visible: updated.is_visible });
+});
+app.delete('/admin/api/home-sections/:id', auth, requirePermission('content'), (req, res) => {
+    const rows = getCollection('content_boards');
+    const before = rows.length;
+    const nextRows = rows.filter((item) => !rowMatchesLookup(item, req.params.id));
+    if (nextRows.length === before) return fail(res, '首页内容位不存在', 404);
+    saveCollection('content_boards', nextRows);
+    ok(res, { success: true, id: req.params.id });
+});
+app.post('/admin/api/home-sections/sort', auth, requirePermission('content'), (req, res) => {
+    const orders = Array.isArray(req.body?.orders) ? req.body.orders : [];
+    const rows = getCollection('content_boards').map((item) => {
+        const hit = orders.find((order) => rowMatchesLookup(item, order.id));
+        if (!hit) return item;
+        return configContract.normalizeHomeSectionRecord({
+            ...item,
+            sort_order: Number(hit.sort_order || item.sort_order || 0),
+            is_visible: hit.is_visible === undefined ? item.is_visible : hit.is_visible,
+            updated_at: nowIso()
+        });
+    });
+    saveCollection('content_boards', rows);
+    ok(res, { success: true, sort: orders });
+});
 
 app.get('/admin/api/mass-messages', auth, (req, res) => ok(res, paginate(sortByUpdatedDesc(getCollection('mass_messages')), req)));
 
@@ -3787,101 +3941,259 @@ app.put('/admin/api/users/:id/role', auth, requirePermission('user_role_manage')
     ok(res, updated);
 });
 
-app.put('/admin/api/users/:id/balance', auth, requirePermission('user_balance_adjust'), (req, res) => {
+app.put('/admin/api/users/:id/balance', auth, requirePermission('user_balance_adjust'), async (req, res) => {
     const amount = toNumber(req.body?.amount, NaN);
     if (!Number.isFinite(amount) || amount < 0) return fail(res, '请输入有效金额');
-    const updated = patchCollectionRow('users', req.params.id, (row) => {
-        const current = toNumber(row.commission_balance ?? row.balance, 0);
-        const delta = pickString(req.body?.type, 'add') === 'subtract' ? -amount : amount;
-        const nextBalance = Math.max(0, current + delta);
-        return {
-            ...row,
-            balance: nextBalance,
-            commission_balance: nextBalance,
+    const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '调整原因');
+    if (!reasonCheck.ok) return fail(res, reasonCheck.message);
+    const type = pickString(req.body?.type, 'add');
+    const user = findUserByAnyId(getCollection('users'), req.params.id);
+    if (!user) return fail(res, '用户不存在', 404);
+    const userDocId = pickString(user._id || user.id);
+    const userOpenid = pickString(user.openid);
+    if (!userOpenid) return fail(res, '用户缺少 openid，不能调整余额', 400);
+    const current = toNumber(user.commission_balance ?? user.balance, 0);
+    if (type === 'subtract' && amount > current) {
+        return fail(res, `账户余额不足，当前余额 ${roundMoney(current)}，不能扣减 ${roundMoney(amount)}`, 400);
+    }
+    const delta = type === 'subtract' ? -amount : amount;
+    const nextBalance = roundMoney(current + delta);
+    const patch = {
+        balance: nextBalance,
+        commission_balance: nextBalance,
+        updated_at: nowIso()
+    };
+    if (dataStore._internals?.db) {
+        if (!userDocId) return fail(res, '用户文档不存在，无法更新余额', 500);
+        const writeOk = await directPatchDocument('users', userDocId, patch);
+        if (!writeOk) return fail(res, '余额更新失败，请稍后重试', 500);
+    } else {
+        const updated = patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...patch }));
+        if (!updated) return fail(res, '用户不存在', 404);
+    }
+    try {
+        await appendWalletLogEntry({
+            openid: userOpenid,
+            type: 'admin_adjustment',
+            amount: delta,
+            balance_before: current,
+            balance_after: nextBalance,
+            ref_type: 'admin_manual_balance',
+            ref_id: primaryId(user),
+            description: `管理员${type === 'subtract' ? '扣减' : '增加'}余额 ${roundMoney(amount)} 元`,
+            remark: reasonCheck.reason,
+            operator_id: req.admin?.id || '',
+            operator_name: req.admin?.username || '管理员'
+        });
+    } catch (error) {
+        const rollbackPatch = {
+            balance: current,
+            commission_balance: current,
             updated_at: nowIso()
         };
-    });
-    if (!updated) return fail(res, '用户不存在', 404);
+        if (dataStore._internals?.db && userDocId) {
+            await directPatchDocument('users', userDocId, rollbackPatch);
+        } else {
+            patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...rollbackPatch }));
+        }
+        return fail(res, `余额流水写入失败：${error.message || '未知错误'}`, 500);
+    }
+    const updatedUser = { ...user, ...patch };
     createAuditLog(req.admin, 'user.balance.adjust', 'users', {
-        user_id: primaryId(updated),
-        type: pickString(req.body?.type, 'add'),
+        user_id: primaryId(updatedUser),
+        type,
         amount,
-        reason: pickString(req.body?.reason)
+        reason: reasonCheck.reason
     });
-    ok(res, updated);
+    ok(res, updatedUser);
 });
 
 // ── 货款余额手动调整 ──
-app.put('/admin/api/users/:id/goods-fund', auth, requirePermission('user_balance_adjust'), (req, res) => {
+app.put('/admin/api/users/:id/goods-fund', auth, requirePermission('user_balance_adjust'), async (req, res) => {
     const amount = toNumber(req.body?.amount, NaN);
     if (!Number.isFinite(amount) || amount < 0) return fail(res, '请输入有效金额');
+    const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '调整原因');
+    if (!reasonCheck.ok) return fail(res, reasonCheck.message);
     const type = pickString(req.body?.type, 'add');
-    const updated = patchCollectionRow('users', req.params.id, (row) => {
-        const current = toNumber(row.agent_wallet_balance != null ? row.agent_wallet_balance : row.wallet_balance, 0);
-        const delta = type === 'subtract' ? -amount : amount;
-        const next = Math.max(0, roundMoney(current + delta));
-        return { ...row, agent_wallet_balance: next, updated_at: nowIso() };
-    });
-    if (!updated) return fail(res, '用户不存在', 404);
+    const user = findUserByAnyId(getCollection('users'), req.params.id);
+    if (!user) return fail(res, '用户不存在', 404);
+    const userDocId = pickString(user._id || user.id);
+    const userOpenid = pickString(user.openid);
+    if (!userOpenid) return fail(res, '用户缺少 openid，不能调整货款余额', 400);
+    const current = toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0);
+    if (type === 'subtract' && amount > current) {
+        return fail(res, `货款余额不足，当前余额 ${roundMoney(current)}，不能扣减 ${roundMoney(amount)}`, 400);
+    }
+    const delta = type === 'subtract' ? -amount : amount;
+    const next = roundMoney(current + delta);
+    const patch = { agent_wallet_balance: next, updated_at: nowIso() };
+    if (dataStore._internals?.db) {
+        if (!userDocId) return fail(res, '用户文档不存在，无法更新货款余额', 500);
+        const writeOk = await directPatchDocument('users', userDocId, patch);
+        if (!writeOk) return fail(res, '货款余额更新失败，请稍后重试', 500);
+    } else {
+        const updated = patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...patch }));
+        if (!updated) return fail(res, '用户不存在', 404);
+    }
+    try {
+        await appendGoodsFundLogEntry({
+            openid: userOpenid,
+            type: 'admin_adjustment',
+            amount: delta,
+            balance_before: current,
+            balance_after: next,
+            user_id: primaryId(user),
+            remark: `管理员${type === 'subtract' ? '扣减' : '增加'}货款 ${roundMoney(amount)} 元：${reasonCheck.reason}`,
+            operator_id: req.admin?.id || '',
+            operator_name: req.admin?.username || '管理员'
+        });
+    } catch (error) {
+        const rollbackPatch = { agent_wallet_balance: current, updated_at: nowIso() };
+        if (dataStore._internals?.db && userDocId) {
+            await directPatchDocument('users', userDocId, rollbackPatch);
+        } else {
+            patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...rollbackPatch }));
+        }
+        return fail(res, `货款流水写入失败：${error.message || '未知错误'}`, 500);
+    }
+    const updatedUser = { ...user, ...patch };
     createAuditLog(req.admin, 'user.goods_fund.adjust', 'users', {
-        user_id: primaryId(updated),
+        user_id: primaryId(updatedUser),
         type,
         amount,
-        reason: pickString(req.body?.reason)
+        reason: reasonCheck.reason
     });
-    ok(res, updated);
+    ok(res, updatedUser);
 });
 
 // ── 积分手动调整 ──
-app.put('/admin/api/users/:id/points', auth, requirePermission('user_balance_adjust'), (req, res) => {
+app.put('/admin/api/users/:id/points', auth, requirePermission('user_balance_adjust'), async (req, res) => {
     const amount = toNumber(req.body?.amount, NaN);
     if (!Number.isFinite(amount) || amount < 0 || !Number.isInteger(amount)) return fail(res, '积分必须为非负整数');
+    const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '调整原因');
+    if (!reasonCheck.ok) return fail(res, reasonCheck.message);
     const type = pickString(req.body?.type, 'add');
-    const updated = patchCollectionRow('users', req.params.id, (row) => {
-        const current = toNumber(row.points, 0);
-        const delta = type === 'subtract' ? -amount : amount;
-        const next = Math.max(0, Math.round(current + delta));
-        return { ...row, points: next, updated_at: nowIso() };
-    });
-    if (!updated) return fail(res, '用户不存在', 404);
+    const user = findUserByAnyId(getCollection('users'), req.params.id);
+    if (!user) return fail(res, '用户不存在', 404);
+    const userDocId = pickString(user._id || user.id);
+    const userOpenid = pickString(user.openid);
+    if (!userOpenid) return fail(res, '用户缺少 openid，不能调整积分', 400);
+    const current = toNumber(user.points, 0);
+    if (type === 'subtract' && amount > current) {
+        return fail(res, `积分不足，当前积分 ${Math.round(current)}，不能扣减 ${Math.round(amount)}`, 400);
+    }
+    const delta = type === 'subtract' ? -amount : amount;
+    const next = Math.round(current + delta);
+    const patch = { points: next, updated_at: nowIso() };
+    if (dataStore._internals?.db) {
+        if (!userDocId) return fail(res, '用户文档不存在，无法更新积分', 500);
+        const writeOk = await directPatchDocument('users', userDocId, patch);
+        if (!writeOk) return fail(res, '积分更新失败，请稍后重试', 500);
+    } else {
+        const updated = patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...patch }));
+        if (!updated) return fail(res, '用户不存在', 404);
+    }
+    try {
+        await appendPointLogEntry({
+            openid: userOpenid,
+            type: delta >= 0 ? 'admin_adjust' : 'admin_deduct',
+            amount: delta,
+            source: 'admin_manual_points',
+            user_id: primaryId(user),
+            description: `管理员${type === 'subtract' ? '扣减' : '增加'}积分 ${Math.round(amount)}：${reasonCheck.reason}`,
+            operator_id: req.admin?.id || '',
+            operator_name: req.admin?.username || '管理员'
+        });
+    } catch (error) {
+        const rollbackPatch = { points: current, updated_at: nowIso() };
+        if (dataStore._internals?.db && userDocId) {
+            await directPatchDocument('users', userDocId, rollbackPatch);
+        } else {
+            patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...rollbackPatch }));
+        }
+        return fail(res, `积分流水写入失败：${error.message || '未知错误'}`, 500);
+    }
+    const updatedUser = { ...user, ...patch };
     createAuditLog(req.admin, 'user.points.adjust', 'users', {
-        user_id: primaryId(updated),
+        user_id: primaryId(updatedUser),
         type,
         amount,
-        reason: pickString(req.body?.reason)
+        reason: reasonCheck.reason
     });
-    ok(res, updated);
+    ok(res, updatedUser);
 });
 
 // ── 成长值手动调整 ──
-app.put('/admin/api/users/:id/growth', auth, requirePermission('user_balance_adjust'), (req, res) => {
+app.put('/admin/api/users/:id/growth', auth, requirePermission('user_balance_adjust'), async (req, res) => {
     const amount = toNumber(req.body?.amount, NaN);
     if (!Number.isFinite(amount) || amount < 0 || !Number.isInteger(amount)) return fail(res, '成长值必须为非负整数');
+    const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '调整原因');
+    if (!reasonCheck.ok) return fail(res, reasonCheck.message);
     const type = pickString(req.body?.type, 'add');
-    const updated = patchCollectionRow('users', req.params.id, (row) => {
-        const current = toNumber(row.growth_value, 0);
-        const delta = type === 'subtract' ? -amount : amount;
-        const next = Math.max(0, Math.round(current + delta));
-        return { ...row, growth_value: next, updated_at: nowIso() };
-    });
-    if (!updated) return fail(res, '用户不存在', 404);
+    const user = findUserByAnyId(getCollection('users'), req.params.id);
+    if (!user) return fail(res, '用户不存在', 404);
+    const userDocId = pickString(user._id || user.id);
+    const userOpenid = pickString(user.openid);
+    if (!userOpenid) return fail(res, '用户缺少 openid，不能调整成长值', 400);
+    const current = toNumber(user.growth_value, 0);
+    if (type === 'subtract' && amount > current) {
+        return fail(res, `成长值不足，当前成长值 ${Math.round(current)}，不能扣减 ${Math.round(amount)}`, 400);
+    }
+    const delta = type === 'subtract' ? -amount : amount;
+    const next = Math.round(current + delta);
+    const patch = { growth_value: next, updated_at: nowIso() };
+    if (dataStore._internals?.db) {
+        if (!userDocId) return fail(res, '用户文档不存在，无法更新成长值', 500);
+        const writeOk = await directPatchDocument('users', userDocId, patch);
+        if (!writeOk) return fail(res, '成长值更新失败，请稍后重试', 500);
+    } else {
+        const updated = patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...patch }));
+        if (!updated) return fail(res, '用户不存在', 404);
+    }
+    try {
+        await appendPointLogEntry({
+            openid: userOpenid,
+            type: 'admin_growth_adjust',
+            amount: delta,
+            source: 'admin_manual_growth',
+            user_id: primaryId(user),
+            description: `管理员${type === 'subtract' ? '扣减' : '增加'}成长值 ${Math.round(amount)}：${reasonCheck.reason}`,
+            operator_id: req.admin?.id || '',
+            operator_name: req.admin?.username || '管理员'
+        });
+    } catch (error) {
+        const rollbackPatch = { growth_value: current, updated_at: nowIso() };
+        if (dataStore._internals?.db && userDocId) {
+            await directPatchDocument('users', userDocId, rollbackPatch);
+        } else {
+            patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...rollbackPatch }));
+        }
+        return fail(res, `成长值流水写入失败：${error.message || '未知错误'}`, 500);
+    }
+    const updatedUser = { ...user, ...patch };
     createAuditLog(req.admin, 'user.growth.adjust', 'users', {
-        user_id: primaryId(updated),
+        user_id: primaryId(updatedUser),
         type,
         amount,
-        reason: pickString(req.body?.reason)
+        reason: reasonCheck.reason
     });
-    ok(res, updated);
+    ok(res, updatedUser);
 });
 
 // ── 佣金手动调整（直接向 commissions 集合插入一条记录） ──
-app.post('/admin/api/users/:id/commission', auth, requirePermission('user_balance_adjust'), (req, res) => {
+app.post('/admin/api/users/:id/commission', auth, requirePermission('user_balance_adjust'), async (req, res) => {
     const amount = toNumber(req.body?.amount, NaN);
     if (!Number.isFinite(amount) || amount <= 0) return fail(res, '金额必须大于0');
+    const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '调整原因');
+    if (!reasonCheck.ok) return fail(res, reasonCheck.message);
     const type = pickString(req.body?.type, 'add'); // add | subtract
     const userRows = getCollection('users');
     const user = userRows.find((u) => rowMatchesLookup(u, req.params.id));
     if (!user) return fail(res, '用户不存在', 404);
+    const currentCommission = toNumber(user.commission_balance != null ? user.commission_balance : user.balance, 0);
+    if (type === 'subtract' && amount > currentCommission) {
+        return fail(res, `佣金余额不足，当前余额 ${roundMoney(currentCommission)}，不能扣减 ${roundMoney(amount)}`, 400);
+    }
 
     const comms = getCollection('commissions');
     const newRecord = {
@@ -3892,34 +4204,139 @@ app.post('/admin/api/users/:id/commission', auth, requirePermission('user_balanc
         amount: type === 'subtract' ? -Math.abs(amount) : Math.abs(amount),
         status: 'settled',
         source: 'admin_manual',
-        remark: pickString(req.body?.reason) || (type === 'subtract' ? '管理员扣减佣金' : '管理员增加佣金'),
+        remark: reasonCheck.reason,
         operator_id: req.admin?.id || '',
         operator_name: req.admin?.username || '管理员',
         created_at: nowIso(),
         updated_at: nowIso()
     };
-    saveCollection('commissions', [...comms, newRecord]);
+    if (dataStore._internals?.db) {
+        await dataStore._internals.db.collection('commissions').add({ data: newRecord });
+    } else {
+        saveCollection('commissions', [...comms, newRecord]);
+    }
 
     // 同步更新 users.commission_balance / balance
-    patchCollectionRow('users', req.params.id, (row) => {
-        const current = toNumber(row.commission_balance != null ? row.commission_balance : row.balance, 0);
-        const delta = type === 'subtract' ? -amount : amount;
-        const next = Math.max(0, roundMoney(current + delta));
-        return {
-            ...row,
-            commission_balance: next,
-            balance: next,
-            updated_at: nowIso()
-        };
-    });
+    const delta = type === 'subtract' ? -amount : amount;
+    const next = roundMoney(currentCommission + delta);
+    const userPatch = {
+        commission_balance: next,
+        balance: next,
+        updated_at: nowIso()
+    };
+    if (dataStore._internals?.db) {
+        const userDocId = pickString(user._id || user.id);
+        if (!userDocId) return fail(res, '用户文档不存在，无法更新佣金余额', 500);
+        const writeOk = await directPatchDocument('users', userDocId, userPatch);
+        if (!writeOk) return fail(res, '佣金余额更新失败，请稍后重试', 500);
+    } else {
+        patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...userPatch }));
+    }
 
     createAuditLog(req.admin, 'user.commission.adjust', 'commissions', {
         user_id: primaryId(user),
         type,
         amount,
-        reason: pickString(req.body?.reason)
+        reason: reasonCheck.reason
     });
     ok(res, { success: true, record: newRecord });
+});
+
+app.post('/admin/api/users/:id/debt-settlement', auth, requirePermission('user_balance_adjust'), async (req, res) => {
+    const amount = roundMoney(toNumber(req.body?.amount, NaN));
+    if (!Number.isFinite(amount) || amount <= 0) return fail(res, '处理金额必须大于 0');
+    const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '处理原因');
+    if (!reasonCheck.ok) return fail(res, reasonCheck.message);
+    const source = pickString(req.body?.source || 'goods_fund').trim();
+    if (!['goods_fund', 'offline'].includes(source)) return fail(res, '仅支持货款抵扣或线下确认两种处理方式');
+
+    const users = getCollection('users');
+    const orders = getCollection('orders');
+    const commissions = getCollection('commissions');
+    const user = findUserByAnyId(users, req.params.id);
+    if (!user) return fail(res, '用户不存在', 404);
+
+    const userDocId = pickString(user._id || user.id);
+    const userOpenid = pickString(user.openid);
+    if (!userOpenid) return fail(res, '用户缺少 openid，不能处理欠款', 400);
+
+    const currentDebt = roundMoney(toNumber(user.debt_amount, 0));
+    if (currentDebt <= 0) return fail(res, '当前用户没有待处理欠款', 400);
+    if (amount > currentDebt) return fail(res, `处理金额不能超过当前欠款 ${currentDebt}`, 400);
+
+    const currentGoodsFund = roundMoney(toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0));
+    if (source === 'goods_fund' && amount > currentGoodsFund) {
+        return fail(res, `货款余额不足，当前余额 ${currentGoodsFund}，不能抵扣 ${amount}`, 400);
+    }
+
+    const nextDebt = roundMoney(currentDebt - amount);
+    const nextGoodsFund = source === 'goods_fund'
+        ? roundMoney(currentGoodsFund - amount)
+        : currentGoodsFund;
+
+    const patch = {
+        debt_amount: nextDebt,
+        debt_reason: nextDebt > 0 ? pickString(user.debt_reason || reasonCheck.reason) : '',
+        updated_at: nowIso()
+    };
+    if (source === 'goods_fund') {
+        patch.agent_wallet_balance = nextGoodsFund;
+    }
+
+    if (dataStore._internals?.db) {
+        if (!userDocId) return fail(res, '用户文档不存在，无法更新欠款', 500);
+        const writeOk = await directPatchDocument('users', userDocId, patch);
+        if (!writeOk) return fail(res, '欠款处理失败，请稍后重试', 500);
+    } else {
+        const updated = patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...patch }));
+        if (!updated) return fail(res, '用户不存在', 404);
+    }
+
+    try {
+        await appendGoodsFundLogEntry({
+            openid: userOpenid,
+            type: 'debt_settlement',
+            amount: source === 'goods_fund' ? -amount : 0,
+            debt_offset: amount,
+            settlement_source: source,
+            balance_before: currentGoodsFund,
+            balance_after: nextGoodsFund,
+            debt_before: currentDebt,
+            debt_after: nextDebt,
+            user_id: primaryId(user),
+            remark: `欠款处理 ${amount} 元：${reasonCheck.reason}`,
+            operator_id: req.admin?.id || '',
+            operator_name: req.admin?.username || '管理员'
+        });
+    } catch (error) {
+        const rollback = {
+            debt_amount: currentDebt,
+            debt_reason: pickString(user.debt_reason),
+            updated_at: nowIso()
+        };
+        if (source === 'goods_fund') {
+            rollback.agent_wallet_balance = currentGoodsFund;
+        }
+        if (dataStore._internals?.db && userDocId) {
+            await directPatchDocument('users', userDocId, rollback);
+        } else {
+            patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...rollback }));
+        }
+        return fail(res, `欠款处理流水写入失败：${error.message || '未知错误'}`, 500);
+    }
+
+    const updatedUser = buildUserRecord({ ...user, ...patch }, getCollection('users'), orders, commissions);
+    createAuditLog(req.admin, 'user.debt.settle', 'users', {
+        user_id: primaryId(user),
+        amount,
+        source,
+        debt_before: currentDebt,
+        debt_after: nextDebt,
+        goods_fund_before: currentGoodsFund,
+        goods_fund_after: nextGoodsFund,
+        reason: reasonCheck.reason
+    });
+    ok(res, updatedUser);
 });
 
 app.put('/admin/api/users/:id/status', auth, requirePermission('user_status_manage'), (req, res) => {
@@ -4448,78 +4865,107 @@ app.get('/admin/api/withdrawals', auth, requirePermission('withdrawals'), (req, 
     ok(res, paginate(rows, req));
 });
 
-app.put('/admin/api/withdrawals/:id/approve', auth, requirePermission('withdrawals'), (req, res) => {
-    ensureWithdrawalNumericIds();
-    const updated = patchCollectionRow('withdrawals', req.params.id, (row) => ({
-        ...row,
+app.put('/admin/api/withdrawals/:id/approve', auth, requirePermission('withdrawals'), async (req, res) => {
+    await ensureFreshCollections(['withdrawals']);
+    const current = findByLookup(ensureWithdrawalNumericIds(), req.params.id);
+    if (!current) return fail(res, '提现记录不存在', 404);
+    if (pickString(current.status) !== 'pending') return fail(res, '当前状态不可审核通过', 400);
+    const patch = {
         status: 'approved',
         approved_at: nowIso(),
-        remark: pickString(req.body?.remark || row.remark),
+        remark: pickString(req.body?.remark || current.remark),
         updated_at: nowIso()
-    }));
-    if (!updated) return fail(res, '提现记录不存在', 404);
-    ok(res, updated);
+    };
+    const writeOk = await directPatchDocument('withdrawals', String(current._id || current.id), patch);
+    if (!writeOk && dataStore._internals?.db) return fail(res, '提现状态更新失败，请稍后重试', 500);
+    const updated = patchCollectionRow('withdrawals', req.params.id, (row) => ({ ...row, ...patch }));
+    createAuditLog(req.admin, 'withdrawal.approve', 'withdrawals', { withdrawal_id: primaryId(updated || current), amount: toNumber(current.amount, 0) });
+    ok(res, updated || { ...current, ...patch });
 });
 
-app.put('/admin/api/withdrawals/:id/reject', auth, requirePermission('withdrawals'), (req, res) => {
-    const rows = ensureWithdrawalNumericIds();
-    const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
-    if (index < 0) return fail(res, '提现记录不存在', 404);
-    const current = rows[index];
+app.put('/admin/api/withdrawals/:id/reject', auth, requirePermission('withdrawals'), async (req, res) => {
+    await ensureFreshCollections(['withdrawals', 'users']);
+    const current = findByLookup(ensureWithdrawalNumericIds(), req.params.id);
+    if (!current) return fail(res, '提现记录不存在', 404);
     if (['completed', 'rejected', 'failed', 'cancelled'].includes(pickString(current.status))) {
         return fail(res, '当前状态不可驳回', 400);
     }
-    const updated = {
+    const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '拒绝原因');
+    if (!reasonCheck.ok) return fail(res, reasonCheck.message);
+    const withdrawalPatch = {
         ...current,
         status: 'rejected',
-        reject_reason: pickString(req.body?.reason),
-        remark: pickString(req.body?.reason || current.remark),
+        reject_reason: reasonCheck.reason,
+        remark: reasonCheck.reason,
         refunded_at: nowIso(),
         updated_at: nowIso()
     };
-    rows[index] = updated;
-    saveCollection('withdrawals', rows);
+    const writeOk = await directPatchDocument('withdrawals', String(current._id || current.id), withdrawalPatch);
+    if (!writeOk && dataStore._internals?.db) return fail(res, '提现状态更新失败，请稍后重试', 500);
+    const updated = patchCollectionRow('withdrawals', req.params.id, (row) => ({ ...row, ...withdrawalPatch })) || withdrawalPatch;
 
     const refundAmount = toNumber(current.amount, 0);
     const refundOpenid = current.openid || '';
     if (refundAmount > 0) {
-        patchCollectionRow('users', current.user_id || current.openid, (row) => {
-            const currentBalance = toNumber(row.commission_balance ?? row.balance, 0);
-            const nextBalance = Math.max(0, currentBalance + refundAmount);
-            return {
-                ...row,
-                balance: nextBalance,
-                commission_balance: nextBalance,
-                total_withdrawn: Math.max(0, toNumber(row.total_withdrawn, 0) - refundAmount),
-                updated_at: nowIso()
-            };
-        });
-        // CloudBase DB 原子更新 total_withdrawn（防止内存与DB不一致）
-        const db = dataStore._internals && dataStore._internals.db;
-        if (db && refundOpenid) {
-            db.collection('users').where({ openid: refundOpenid }).update({
-                data: {
-                    total_withdrawn: db.command.inc(-refundAmount),
-                    updated_at: new Date().toISOString()
-                }
-            }).catch((err) => { console.error('[Withdrawal] total_withdrawn回滚失败:', err.message); });
+        const user = findUserByAnyId(getCollection('users'), current.user_id || current.openid);
+        if (!user) return fail(res, '提现用户不存在，无法回退余额', 400);
+        const userDocId = pickString(user._id || user.id);
+        const currentBalance = toNumber(user.commission_balance ?? user.balance, 0);
+        const currentWithdrawn = toNumber(user.total_withdrawn, 0);
+        const userPatch = {
+            balance: roundMoney(currentBalance + refundAmount),
+            commission_balance: roundMoney(currentBalance + refundAmount),
+            total_withdrawn: Math.max(0, roundMoney(currentWithdrawn - refundAmount)),
+            updated_at: nowIso()
+        };
+        if (dataStore._internals?.db) {
+            if (!userDocId) return fail(res, '提现用户文档不存在，无法回退余额', 500);
+            const userWriteOk = await directPatchDocument('users', userDocId, userPatch);
+            if (!userWriteOk) return fail(res, '提现余额回退失败，请稍后重试', 500);
+        } else {
+            patchCollectionRow('users', current.user_id || current.openid, (row) => ({ ...row, ...userPatch }));
+        }
+        if (refundOpenid) {
+            await appendWalletLogEntry({
+                openid: refundOpenid,
+                type: 'withdraw_reject_refund',
+                amount: refundAmount,
+                withdraw_id: primaryId(current),
+                description: `提现驳回退回 ${refundAmount} 元`,
+                remark: reasonCheck.reason
+            }).catch(() => {});
         }
     }
-    if (!updated) return fail(res, '提现记录不存在', 404);
+    createAuditLog(req.admin, 'withdrawal.reject', 'withdrawals', {
+        withdrawal_id: primaryId(current),
+        amount: refundAmount,
+        reason: reasonCheck.reason
+    });
     ok(res, updated);
 });
 
-app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdrawals'), (req, res) => {
-    ensureWithdrawalNumericIds();
-    const updated = patchCollectionRow('withdrawals', req.params.id, (row) => ({
-        ...row,
+app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdrawals'), async (req, res) => {
+    await ensureFreshCollections(['withdrawals']);
+    const current = findByLookup(ensureWithdrawalNumericIds(), req.params.id);
+    if (!current) return fail(res, '提现记录不存在', 404);
+    if (pickString(current.status) !== 'approved') return fail(res, '当前状态不可确认打款', 400);
+    const reasonCheck = requireManualAdjustmentReason(req.body?.remark, '打款备注');
+    if (!reasonCheck.ok) return fail(res, reasonCheck.message);
+    const patch = {
         status: 'completed',
         completed_at: nowIso(),
-        remark: pickString(req.body?.remark || row.remark),
+        remark: reasonCheck.reason,
         updated_at: nowIso()
-    }));
-    if (!updated) return fail(res, '提现记录不存在', 404);
-    ok(res, updated);
+    };
+    const writeOk = await directPatchDocument('withdrawals', String(current._id || current.id), patch);
+    if (!writeOk && dataStore._internals?.db) return fail(res, '提现完成状态更新失败，请稍后重试', 500);
+    const updated = patchCollectionRow('withdrawals', req.params.id, (row) => ({ ...row, ...patch }));
+    createAuditLog(req.admin, 'withdrawal.complete', 'withdrawals', {
+        withdrawal_id: primaryId(updated || current),
+        amount: toNumber(current.amount, 0),
+        remark: reasonCheck.reason
+    });
+    ok(res, updated || { ...current, ...patch });
 });
 
 app.get('/admin/api/refunds', auth, requirePermission('refunds'), async (req, res) => {
@@ -4643,7 +5089,11 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
     const order = findByLookup(orders, orderId, (row) => [row.order_no]);
     if (!order) return fail(res, '关联订单不存在', 400);
 
-    const paymentMethod = pickString(order.payment_method || order.pay_type || order.pay_channel || 'wechat').trim().toLowerCase();
+    const paymentMethod = normalizePaymentMethodCode(order.payment_method || order.pay_type || order.pay_channel || order.payment_channel || 'wechat');
+    if (!isSupportedRefundPaymentMethod(paymentMethod)) {
+        return fail(res, '订单缺少有效支付方式，不能继续退款。请先修复订单支付信息后再处理退款', 400);
+    }
+    const refundRoute = getRefundRouteMeta(paymentMethod);
     const refundAmount = toNumber(refund.amount, 0);
     const totalAmount = toNumber(order.actual_price || order.pay_amount || order.total_amount, 0);
     if (refundAmount <= 0 || totalAmount <= 0) return fail(res, '退款金额不合法', 400);
@@ -4653,15 +5103,25 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
     const processingData = {
         status: 'processing',
         processing_at: refund.processing_at || nowIso(),
+        payment_method: paymentMethod,
+        refund_channel: refundRoute.refund_channel,
+        refund_target_text: refundRoute.refund_target_text,
         return_company: pickString(req.body?.return_company || refund.return_company),
         return_tracking_no: pickString(req.body?.return_tracking_no || refund.return_tracking_no)
     };
     await directPatchDocument('refunds', String(refund._id), processingData);
     patchCollectionRow('refunds', req.params.id, (row) => ({ ...row, ...processingData, updated_at: nowIso() }));
 
-    await directPatchDocument('orders', String(order._id), { status: 'refunding' });
-    patchCollectionRow('orders', orderId, (row) => ({ ...row, status: 'refunding', updated_at: nowIso() }));
+    const orderRefundingPatch = {
+        status: 'refunding',
+        prev_status: pickString(order.status).toLowerCase() === 'refunded'
+            ? inferRefundResumeOrderStatus(order)
+            : (pickString(order.prev_status) || (pickString(order.status).toLowerCase() === 'refunding' ? inferRefundResumeOrderStatus(order) : pickString(order.status || inferRefundResumeOrderStatus(order))))
+    };
+    await directPatchDocument('orders', String(order._id), orderRefundingPatch);
+    patchCollectionRow('orders', orderId, (row) => ({ ...row, ...orderRefundingPatch, updated_at: nowIso() }));
 
+    let rollbackInternalFunds = null;
     try {
         if (paymentMethod === 'goods_fund') {
             // 货款支付订单：退回 agent_wallet_balance（内部余额），不发起微信退款
@@ -4677,18 +5137,24 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
                         updated_at: new Date().toISOString()
                     }
                 });
+                rollbackInternalFunds = async () => {
+                    await db.collection('users').where({ openid: buyerOpenid }).update({
+                        data: {
+                            agent_wallet_balance: _.inc(-refundAmount),
+                            updated_at: new Date().toISOString()
+                        }
+                    }).catch(() => {});
+                };
                 // 写货款流水日志
-                await db.collection('goods_fund_logs').add({
-                    data: {
-                        openid: buyerOpenid,
-                        type: 'refund',
-                        amount: refundAmount,
-                        order_id: String(order._id),
-                        order_no: pickString(order.order_no),
-                        remark: `订单退款 ${pickString(order.order_no)}`,
-                        created_at: new Date().toISOString()
-                    }
-                }).catch(() => {});
+                await appendGoodsFundLogEntry({
+                    openid: buyerOpenid,
+                    type: 'refund',
+                    amount: refundAmount,
+                    order_id: String(order._id),
+                    order_no: pickString(order.order_no),
+                    remark: `订单退款 ${pickString(order.order_no)}`,
+                    created_at: new Date().toISOString()
+                });
             } else {
                 // Filesystem/开发模式：更新内存
                 const userIdx = users.findIndex((u) => u.openid === buyerOpenid);
@@ -4699,6 +5165,17 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
                         updated_at: nowIso()
                     };
                     saveCollection('users', users);
+                    rollbackInternalFunds = async () => {
+                        const rollbackIdx = users.findIndex((u) => u.openid === buyerOpenid);
+                        if (rollbackIdx !== -1) {
+                            users[rollbackIdx] = {
+                                ...users[rollbackIdx],
+                                agent_wallet_balance: roundMoney(toNumber(users[rollbackIdx].agent_wallet_balance, 0) - refundAmount),
+                                updated_at: nowIso()
+                            };
+                            saveCollection('users', users);
+                        }
+                    };
                 }
             }
 
@@ -4723,11 +5200,68 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
             const gfOrders = getCollection('orders');
             ok(res, buildRefundRecord(gfFresh || { ...refund, ...completedData }, gfUsers, gfOrders, getCollection('products'), getCollection('skus')));
         } else if (['wallet', 'balance', 'credit', 'debt'].includes(paymentMethod)) {
+            const walletOwner = findUserByAnyId(users, order.openid || order.buyer_id || refund.openid || refund.user_id);
+            const walletOwnerDocId = pickString(walletOwner?._id || walletOwner?.id);
+            const walletOwnerOpenid = pickString(walletOwner?.openid || order.openid || refund.openid);
+            const previousBalance = toNumber(walletOwner?.balance ?? walletOwner?.commission_balance, 0);
+            const previousCommissionBalance = toNumber(walletOwner?.commission_balance ?? walletOwner?.balance, 0);
+            const previousTotalEarned = toNumber(walletOwner?.total_earned, 0);
+            const previousDebtAmount = toNumber(walletOwner?.debt_amount, 0);
+            const previousDebtReason = pickString(walletOwner?.debt_reason);
             const change = applyUserMoneyChange(users, order.openid || order.buyer_id || refund.openid || refund.user_id, refundAmount, {
                 reason: `订单退款 ${pickString(order.order_no)}`
             });
             if (!change) throw new Error('退款用户不存在，无法退回余额');
-            saveCollection('users', users);
+            if (!walletOwnerOpenid) throw new Error('退款用户 openid 缺失，无法写余额流水');
+
+            if (dataStore._internals?.db) {
+                if (!walletOwnerDocId) throw new Error('退款用户文档不存在，无法持久化余额变更');
+                const userWriteOk = await directPatchDocument('users', walletOwnerDocId, {
+                    balance: toNumber(change.user.balance, 0),
+                    commission_balance: toNumber(change.user.commission_balance, 0),
+                    total_earned: toNumber(change.user.total_earned, 0),
+                    debt_amount: toNumber(change.user.debt_amount, 0),
+                    debt_reason: pickString(change.user.debt_reason)
+                });
+                if (!userWriteOk) throw new Error('退款用户余额更新失败');
+                rollbackInternalFunds = async () => {
+                    await directPatchDocument('users', walletOwnerDocId, {
+                        balance: previousBalance,
+                        commission_balance: previousCommissionBalance,
+                        total_earned: previousTotalEarned,
+                        debt_amount: previousDebtAmount,
+                        debt_reason: previousDebtReason
+                    });
+                };
+            } else {
+                saveCollection('users', users);
+                rollbackInternalFunds = async () => {
+                    const rollbackUser = findUserByAnyId(users, walletOwnerOpenid || walletOwnerDocId || order.openid || refund.openid);
+                    if (rollbackUser) {
+                        const rollbackKey = primaryId(rollbackUser) || walletOwnerOpenid;
+                        patchCollectionRow('users', rollbackKey, (row) => ({
+                            ...row,
+                            balance: previousBalance,
+                            commission_balance: previousCommissionBalance,
+                            total_earned: previousTotalEarned,
+                            debt_amount: previousDebtAmount,
+                            debt_reason: previousDebtReason,
+                            updated_at: nowIso()
+                        }));
+                    }
+                };
+            }
+
+            await appendWalletLogEntry({
+                openid: walletOwnerOpenid,
+                type: 'refund',
+                amount: refundAmount,
+                refund_id: pickString(refund._id || refund.id),
+                refund_no: pickString(refund.refund_no),
+                order_id: pickString(order._id || order.id || orderId),
+                order_no: pickString(order.order_no),
+                description: `订单退款 ${pickString(order.order_no)}`
+            });
 
             // 余额退款是内部操作，立即完成
             const completedData = { status: 'completed', completed_at: nowIso() };
@@ -4810,6 +5344,9 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
             }
         }
     } catch (error) {
+        if (rollbackInternalFunds) {
+            await rollbackInternalFunds().catch(() => {});
+        }
         // 出错时将状态回滚到 approved，保留错误信息
         const revertData = { status: 'approved', wx_error: pickString(error.message) };
         await directPatchDocument('refunds', String(refund._id), revertData);
@@ -5049,11 +5586,15 @@ app.get('/admin/api/orders', auth, requirePermission('orders'), async (req, res)
     if (!includeSuborders) rows = rows.filter((item) => !item.parent_order_id);
     if (status) rows = rows.filter((item) => item.status === status);
     else if (statusGroup && statusGroup !== 'all') rows = rows.filter((item) => normalizeOrderStatusGroup(item.status) === statusGroup);
-    if (paymentMethod) rows = rows.filter((item) => (item.payment_method || 'wechat') === paymentMethod);
+    if (paymentMethod) {
+        rows = rows.filter((item) => normalizePaymentMethodCode(
+            item.payment_method || item.pay_channel || item.pay_type || item.payment_channel || ''
+        ) === paymentMethod);
+    }
     if (deliveryType) rows = rows.filter((item) => (item.delivery_type || 'express') === deliveryType);
     if (productName) rows = rows.filter((item) => `${item.product?.name || ''}`.toLowerCase().includes(productName));
-    if (startDate) rows = rows.filter((item) => String(item.created_at || '').slice(0, 10) >= startDate);
-    if (endDate) rows = rows.filter((item) => String(item.created_at || '').slice(0, 10) <= endDate);
+    if (startDate) rows = rows.filter((item) => getDateKey(item.created_at, '') >= startDate);
+    if (endDate) rows = rows.filter((item) => getDateKey(item.created_at, '') <= endDate);
 
     if (searchValue) {
         rows = rows.filter((item) => {
@@ -5084,7 +5625,7 @@ app.get('/admin/api/orders', auth, requirePermission('orders'), async (req, res)
     });
 });
 
-app.get('/admin/api/orders/export', auth, (req, res) => {
+app.get('/admin/api/orders/export', auth, requirePermission('orders'), (req, res) => {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename=\"orders.json\"');
     res.send(JSON.stringify(getCollection('orders'), null, 2));
@@ -5466,9 +6007,9 @@ app.get('/admin/api/statistics/overview', auth, requirePermission('statistics'),
     const users = getCollection('users');
     const paidStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
     const paidOrders = orders.filter((item) => paidStatuses.includes(String(item.status || '')));
-    const today = nowIso().slice(0, 10);
-    const todayOrders = orders.filter((item) => String(item.created_at || '').slice(0, 10) === today);
-    const todayPaidOrders = todayOrders.filter((item) => paidStatuses.includes(String(item.status || '')));
+    const today = getDateKey(Date.now(), nowIso().slice(0, 10));
+    const todayOrders = orders.filter((item) => getDateKey(item.created_at, '') === today);
+    const todayPaidOrders = paidOrders.filter((item) => getDateKey(item.paid_at || item.pay_time || item.created_at, '') === today);
     ok(res, {
         total_sales: paidOrders.reduce((sum, item) => sum + toNumber(item.actual_price || item.total_amount, 0), 0),
         total_orders: orders.length,
@@ -5497,8 +6038,8 @@ app.get('/admin/api/statistics/sales-trend', auth, requirePermission('statistics
     const paidStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
     const result = [];
     for (let i = days - 1; i >= 0; i--) {
-        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
-        const dayOrders = orders.filter((o) => String(o.created_at || '').slice(0, 10) === d);
+        const d = getDateKey(Date.now() - i * 86400000, '');
+        const dayOrders = orders.filter((o) => getDateKey(o.created_at, '') === d);
         result.push({
             date: d,
             order_count: dayOrders.length,
@@ -5515,10 +6056,10 @@ app.get('/admin/api/statistics/user-trend', auth, requirePermission('statistics'
     const users = getCollection('users');
     const result = [];
     for (let i = days - 1; i >= 0; i--) {
-        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+        const d = getDateKey(Date.now() - i * 86400000, '');
         result.push({
             date: d,
-            new_users: users.filter((u) => String(u.created_at || '').slice(0, 10) === d).length
+            new_users: users.filter((u) => getDateKey(u.created_at, '') === d).length
         });
     }
     ok(res, { list: result });
@@ -5598,10 +6139,13 @@ app.get('/admin/api/operations/dashboard', auth, async (req, res) => {
     const refunds = getCollection('refunds');
     const withdrawals = getCollection('withdrawals');
     const commissions = getCollection('commissions');
-    const today = nowIso().slice(0, 10);
+    const today = getDateKey(Date.now(), nowIso().slice(0, 10));
     const paidStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
-    const todayOrders = orders.filter((item) => String(item.created_at || '').slice(0, 10) === today);
-    const todayPaidOrders = todayOrders.filter((item) => paidStatuses.includes(String(item.status || '')));
+    const todayOrders = orders.filter((item) => getDateKey(item.created_at, '') === today);
+    const todayPaidOrders = orders.filter((item) => {
+        return paidStatuses.includes(String(item.status || ''))
+            && getDateKey(item.paid_at || item.pay_time || item.created_at, '') === today;
+    });
     const pendingShipCount = orders.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_ship').length;
     const pendingReceiveCount = orders.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_receive').length;
     const pendingRefundCount = refunds.filter((item) => pickString(item.status) === 'pending').length;
@@ -5699,10 +6243,10 @@ app.put('/admin/api/settings', auth, requirePermission('settings_manage'), (req,
     ok(res, next);
 });
 
-app.get('/admin/api/mini-program-config', auth, requirePermission('settings_manage'), (req, res) => ok(res, getMiniProgramConfigSnapshot()));
+app.get('/admin/api/mini-program-config', auth, (req, res) => ok(res, getMiniProgramConfigSnapshot()));
 
 app.put('/admin/api/mini-program-config', auth, requirePermission('settings_manage'), (req, res) => {
-    const nextConfig = { ...getMiniProgramConfigSnapshot(), ...toObject(req.body, {}) };
+    const nextConfig = configContract.normalizeMiniProgramConfig({ ...getMiniProgramConfigSnapshot(), ...toObject(req.body, {}) });
     saveSingleton('mini-program-config', nextConfig);
     ok(res, nextConfig);
 });
@@ -5760,9 +6304,9 @@ function getMemberTierConfigSnapshot() {
     };
 }
 
-app.get('/admin/api/member-tier-config', auth, (req, res) => ok(res, getMemberTierConfigSnapshot()));
+app.get('/admin/api/member-tier-config', auth, requirePermission('settings_manage'), (req, res) => ok(res, getMemberTierConfigSnapshot()));
 
-app.put('/admin/api/member-tier-config', auth, (req, res) => {
+app.put('/admin/api/member-tier-config', auth, requirePermission('settings_manage'), (req, res) => {
     const nextConfig = toObject(req.body, {});
     saveSingleton('member-tier-config', nextConfig);
     upsertConfigRow('member_level_config', toArray(nextConfig.member_levels), {
@@ -5869,17 +6413,17 @@ app.get('/admin/api/debug/logs', auth, requirePermission('settings_manage'), (re
     });
 });
 
-app.get('/admin/api/popup-ad-config', auth, requirePermission('content'), async (req, res) => ok(res, await normalizePopupAdConfigAsync(getSingleton('popup-ad-config', {
+app.get('/admin/api/popup-ad-config', auth, requirePermission('content'), async (req, res) => ok(res, configContract.normalizePopupAdConfig(await normalizePopupAdConfigAsync(getSingleton('popup-ad-config', {
     enabled: false,
     title: '',
     file_id: '',
     image_url: '',
     link_type: '',
     link_value: ''
-}))));
+})))));
 
 app.put('/admin/api/popup-ad-config', auth, requirePermission('content'), async (req, res) => {
-    const nextConfig = await normalizePopupAdConfigAsync({ ...getSingleton('popup-ad-config', {}), ...toObject(req.body, {}) });
+    const nextConfig = configContract.normalizePopupAdConfig(await normalizePopupAdConfigAsync({ ...getSingleton('popup-ad-config', {}), ...toObject(req.body, {}) }));
     saveSingleton('popup-ad-config', nextConfig);
     ok(res, nextConfig);
 });

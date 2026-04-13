@@ -21,6 +21,7 @@ function registerMarketingRoutes(app, deps) {
         assetUrl,
         createAuditLog,
         directPatchDocument,
+        requireManualAdjustmentReason,
         ok,
         fail
     } = deps;
@@ -1224,6 +1225,9 @@ function registerMarketingRoutes(app, deps) {
         const users = getCollection('users');
         const commissions = getCollection('commissions');
         const amount = toNumber(req.body?.pool || req.body?.pool_amount || req.body?.amount, 0);
+        const reasonCheck = requireManualAdjustmentReason(req.body?.remark || req.body?.reason, '分红说明');
+        if (!reasonCheck.ok) return fail(res, reasonCheck.message);
+        if (amount <= 0) return fail(res, '分红金额必须大于 0');
         const year = Math.max(2000, Math.floor(toNumber(req.body?.year, new Date().getFullYear() - 1)));
         const rules = {
             enabled: false,
@@ -1280,15 +1284,32 @@ function registerMarketingRoutes(app, deps) {
                 type: 'year_end_dividend',
                 amount: amountValue,
                 description: `${year} 年终分红 · ${item.awardLabel} ¥${amountValue}`,
+                remark: reasonCheck.reason,
                 created_at: nowIso()
             });
             saveCollection('wallet_logs', walletLogs);
         });
         saveCollection('users', users);
         saveCollection('commissions', commissions);
-        const row = { id: nextId(executions), ...req.body, year, totalDistributed: Number(totalDistributed.toFixed(2)), distributedCount: previewRows.length, status: 'completed', created_at: nowIso(), updated_at: nowIso() };
+        const row = {
+            id: nextId(executions),
+            ...req.body,
+            year,
+            remark: reasonCheck.reason,
+            totalDistributed: Number(totalDistributed.toFixed(2)),
+            distributedCount: previewRows.length,
+            status: 'completed',
+            created_at: nowIso(),
+            updated_at: nowIso()
+        };
         executions.push(row);
         saveCollection('dividend_executions', executions);
+        createAuditLog(req.admin, 'agent-system.dividend.execute', 'dividend_executions', {
+            year,
+            total_distributed: row.totalDistributed,
+            distributed_count: row.distributedCount,
+            remark: reasonCheck.reason
+        });
         ok(res, row);
     });
 
@@ -1316,7 +1337,9 @@ function registerMarketingRoutes(app, deps) {
         const commissions = getCollection('commissions');
         const walletLogs = getCollection('wallet_logs');
         const status = req.body?.status || req.body?.result || 'approved';
-        rows[index] = { ...rows[index], status, review_remark: req.body?.remark || '', reviewed_at: nowIso(), updated_at: nowIso() };
+        const reasonCheck = requireManualAdjustmentReason(req.body?.remark, status === 'approved' ? '审批备注' : '拒绝原因');
+        if (!reasonCheck.ok) return fail(res, reasonCheck.message);
+        rows[index] = { ...rows[index], status, review_remark: reasonCheck.reason, reviewed_at: nowIso(), updated_at: nowIso() };
         let settlement = null;
         if (status === 'approved' && !rows[index].settled_at) {
             settlement = applyExitSettlement(rows[index], { users, commissions, walletLogs });
@@ -1326,6 +1349,12 @@ function registerMarketingRoutes(app, deps) {
             saveCollection('wallet_logs', walletLogs);
         }
         saveCollection('agent_exit_applications', rows);
+        createAuditLog(req.admin, 'agent-system.exit.review', 'agent_exit_applications', {
+            application_id: rows[index].id || rows[index]._id,
+            status,
+            refund_amount: settlement?.refundAmount || 0,
+            remark: reasonCheck.reason
+        });
         ok(res, buildExitApplicationResponse(rows[index], users, commissions));
     });
 }

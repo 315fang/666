@@ -1,0 +1,158 @@
+{
+  "generatedAt": "2026-04-13T16:58:21.644Z",
+  "ok": true,
+  "total": 25,
+  "failed": 0,
+  "findings": [
+    {
+      "module": "user",
+      "name": "commission balance canonical",
+      "ok": true,
+      "detail": "resolveCommissionBalance({\"commission_balance\":18.6,\"balance\":99}) => 18.6"
+    },
+    {
+      "module": "user",
+      "name": "goods fund balance canonical",
+      "ok": true,
+      "detail": "resolveGoodsFundBalance({\"goods_fund_balance\":0,\"agent_wallet_balance\":56.2,\"wallet_balance\":11}) => 56.2"
+    },
+    {
+      "module": "user",
+      "name": "role level canonical",
+      "ok": true,
+      "detail": "resolveRoleLevel({\"role_level\":4,\"distributor_level\":2}) => 4"
+    },
+    {
+      "module": "login",
+      "name": "commission balance canonical",
+      "ok": true,
+      "detail": "resolveCommissionBalance({\"commission_balance\":18.6,\"balance\":99}) => 18.6"
+    },
+    {
+      "module": "login",
+      "name": "goods fund balance canonical",
+      "ok": true,
+      "detail": "resolveGoodsFundBalance({\"goods_fund_balance\":0,\"agent_wallet_balance\":56.2,\"wallet_balance\":11}) => 56.2"
+    },
+    {
+      "module": "login",
+      "name": "role level canonical",
+      "ok": true,
+      "detail": "resolveRoleLevel({\"role_level\":4,\"distributor_level\":2}) => 4"
+    },
+    {
+      "module": "distribution",
+      "name": "commission balance canonical",
+      "ok": true,
+      "detail": "resolveCommissionBalance({\"commission_balance\":18.6,\"balance\":99}) => 18.6"
+    },
+    {
+      "module": "distribution",
+      "name": "goods fund balance canonical",
+      "ok": true,
+      "detail": "resolveGoodsFundBalance({\"goods_fund_balance\":0,\"agent_wallet_balance\":56.2,\"wallet_balance\":11}) => 56.2"
+    },
+    {
+      "module": "distribution",
+      "name": "role level canonical",
+      "ok": true,
+      "detail": "resolveRoleLevel({\"role_level\":4,\"distributor_level\":2}) => 4"
+    },
+    {
+      "module": "admin-api",
+      "name": "commission balance canonical",
+      "ok": true,
+      "detail": "resolveCommissionBalance({\"commission_balance\":18.6,\"balance\":99}) => 18.6"
+    },
+    {
+      "module": "admin-api",
+      "name": "goods fund balance canonical",
+      "ok": true,
+      "detail": "resolveGoodsFundBalance({\"goods_fund_balance\":0,\"agent_wallet_balance\":56.2,\"wallet_balance\":11}) => 56.2"
+    },
+    {
+      "module": "admin-api",
+      "name": "role level canonical",
+      "ok": true,
+      "detail": "resolveRoleLevel({\"role_level\":4,\"distributor_level\":2}) => 4"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/login/index.js contains buildCanonicalUser",
+      "ok": true,
+      "detail": "cloudfunctions/login/index.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/login/index.js contains user-contract",
+      "ok": true,
+      "detail": "cloudfunctions/login/index.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/user/user-profile.js contains buildCanonicalUser",
+      "ok": true,
+      "detail": "cloudfunctions/user/user-profile.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/user/user-profile.js contains user-contract",
+      "ok": true,
+      "detail": "cloudfunctions/user/user-profile.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/distribution/distribution-query.js contains buildCanonicalUser",
+      "ok": true,
+      "detail": "cloudfunctions/distribution/distribution-query.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/distribution/distribution-query.js contains goods_fund_balance",
+      "ok": true,
+      "detail": "cloudfunctions/distribution/distribution-query.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/distribution/distribution-query.js contains commission_balance",
+      "ok": true,
+      "detail": "cloudfunctions/distribution/distribution-query.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/distribution/index.js contains normalizeTeamMember",
+      "ok": true,
+      "detail": "cloudfunctions/distribution/index.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/distribution/index.js contains goods_fund_balance",
+      "ok": true,
+      "detail": "cloudfunctions/distribution/index.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/distribution/index.js contains role_name",
+      "ok": true,
+      "detail": "cloudfunctions/distribution/index.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/admin-api/src/app.js contains buildCanonicalUser",
+      "ok": true,
+      "detail": "cloudfunctions/admin-api/src/app.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/admin-api/src/app.js contains goods_fund_balance",
+      "ok": true,
+      "detail": "cloudfunctions/admin-api/src/app.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/admin-api/src/app.js contains status_text",
+      "ok": true,
+      "detail": "cloudfunctions/admin-api/src/app.js"
+    }
+  ]
+}

@@ -689,6 +689,7 @@ async function createOrder(openid, orderData) {
     let goodsFundPaid = false;
     if (use_goods_fund) {
         const orderId = result._id;
+        let goodsFundDeducted = false;
         try {
             // 原子扣减：where agent_wallet_balance >= payAmount，防并发超扣
             const deductRes = await db.collection('users')
@@ -714,6 +715,7 @@ async function createOrder(openid, orderData) {
                 ));
                 throw new Error('货款余额不足，请刷新后重试');
             }
+            goodsFundDeducted = true;
             // 拼团订单货款支付后进入 pending_group（待成团），普通订单直接 paid
             const isGroupOrder = !!(groupActivity || group_no || group_activity_id);
             const postPayStatus = isGroupOrder ? 'pending_group' : 'paid';
@@ -740,7 +742,7 @@ async function createOrder(openid, orderData) {
                     remark: '货款支付订单',
                     created_at: db.serverDate()
                 }
-            }).catch(() => {});
+            });
             // 触发支付后处理（佣金创建、积分奖励、代理升级、拼团/砍价等）
             cloud.callFunction({
                 name: 'payment',
@@ -749,6 +751,26 @@ async function createOrder(openid, orderData) {
                 console.error('[OrderCreate] 货款支付后处理调用失败（不影响下单）:', err.message);
             });
         } catch (err) {
+            if (goodsFundDeducted && !goodsFundPaid) {
+                await db.collection('users').where({ openid }).update({
+                    data: {
+                        agent_wallet_balance: _.inc(payAmount),
+                        goods_fund_total_spent: _.inc(-payAmount),
+                        updated_at: db.serverDate()
+                    }
+                }).catch(() => {});
+                await db.collection('orders').doc(orderId).update({
+                    data: { status: 'cancelled', cancel_reason: '货款支付处理失败', updated_at: db.serverDate() }
+                }).catch(() => {});
+                if (actualPoints > 0) {
+                    await db.collection('users').where({ openid }).update({
+                        data: { points: _.inc(actualPoints), growth_value: _.inc(actualPoints), updated_at: db.serverDate() }
+                    }).catch(() => {});
+                }
+                await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
+                    db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
+                ));
+            }
             if (err.message.includes('货款')) throw err;
             console.error('[OrderCreate] 货款支付处理异常:', err.message);
             throw new Error('货款支付处理失败，请联系客服');
