@@ -40,10 +40,6 @@
             <span>📈 成长值</span>
             <span class="opt-hint">影响会员等级和权益</span>
           </el-option>
-          <el-option value="balance" label="💳 普通余额">
-            <span>💳 普通余额</span>
-            <span class="opt-hint">平台通用余额</span>
-          </el-option>
         </el-select>
       </el-form-item>
 
@@ -112,9 +108,10 @@ import {
   adjustUserGoodsFund,
   adjustUserPoints,
   adjustUserGrowth,
-  adjustUserCommission,
-  adjustUserBalance
+  adjustUserCommission
 } from '@/api'
+
+const VALID_ACCOUNTS = ['goods_fund', 'commission', 'points', 'growth']
 
 const props = defineProps({
   visible:      { type: Boolean, default: false },
@@ -132,7 +129,7 @@ const form = ref({ account: 'goods_fund', type: 'add', amount: null, reason: '' 
 // 当弹窗打开时，根据 initAccount 预选账户类型
 watch(() => props.visible, (val) => {
   if (val) {
-    form.value.account = props.initAccount || 'goods_fund'
+    form.value.account = VALID_ACCOUNTS.includes(props.initAccount) ? props.initAccount : 'goods_fund'
   }
 })
 
@@ -149,8 +146,7 @@ const currentRawValue = computed(() => {
     goods_fund: u.agent_wallet_balance ?? u.wallet_balance ?? 0,
     commission: u.commission_balance ?? 0,
     points:     u.points ?? 0,
-    growth:     u.growth_value ?? 0,
-    balance:    u.balance ?? 0
+    growth:     u.growth_value ?? 0
   }
   return Number(map[form.value.account] || 0)
 })
@@ -162,11 +158,11 @@ const currentValueDisplay = computed(() => {
 })
 
 const unit = computed(() => {
-  return { goods_fund: '元', commission: '元', points: '积分', growth: '成长值', balance: '元' }[form.value.account] || ''
+  return { goods_fund: '元', commission: '元', points: '积分', growth: '成长值' }[form.value.account] || ''
 })
 
 const amountLabel = computed(() => {
-  return { goods_fund: '金额（元）', commission: '金额（元）', points: '积分数', growth: '成长值', balance: '金额（元）' }[form.value.account] || '数量'
+  return { goods_fund: '金额（元）', commission: '金额（元）', points: '积分数', growth: '成长值' }[form.value.account] || '数量'
 })
 
 const amountHint = computed(() => {
@@ -174,8 +170,7 @@ const amountHint = computed(() => {
     goods_fund: '货款余额直接变动，代理商下单时可使用',
     commission: '将插入一条 pending_approval 状态的佣金记录，用户申请提现后需审核',
     points:     '必须为正整数，1积分=0.1元，下单可抵扣最多50%',
-    growth:     '必须为正整数，影响会员等级',
-    balance:    '平台通用余额，直接变动'
+    growth:     '必须为正整数，影响会员等级'
   }
   return map[form.value.account] || ''
 })
@@ -214,8 +209,7 @@ const API_MAP = {
   goods_fund: adjustUserGoodsFund,
   points:     adjustUserPoints,
   growth:     adjustUserGrowth,
-  commission: adjustUserCommission,
-  balance:    adjustUserBalance
+  commission: adjustUserCommission
 }
 
 const handleSubmit = async () => {
@@ -234,7 +228,7 @@ const handleSubmit = async () => {
       amount: form.value.amount,
       reason: form.value.reason.trim()
     })
-    const labelMap = { goods_fund: '货款余额', commission: '佣金', points: '积分', growth: '成长值', balance: '普通余额' }
+    const labelMap = { goods_fund: '货款余额', commission: '佣金', points: '积分', growth: '成长值' }
     ElMessage.success(`${labelMap[form.value.account]}调整成功`)
     emit('update:visible', false)
     emit('success')

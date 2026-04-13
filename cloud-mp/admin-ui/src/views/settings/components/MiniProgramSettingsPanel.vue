@@ -13,8 +13,8 @@
       <el-input v-model="miniProgramForm.brand_config.share_title" />
     </el-form-item>
 
-    <!-- 邀请海报（小程序「我的」→ 好友邀请） -->
-    <el-form-item label="邀请海报整张静态图（旧版兼容）">
+    <!-- 分享名片海报图 -->
+    <el-form-item label="分享名片海报图">
       <div class="poster-upload-wrap">
         <div class="poster-preview" v-if="miniProgramForm.brand_config.share_poster_url">
           <img :src="miniProgramForm.brand_config.share_poster_url" class="poster-thumb" alt="海报预览" />
@@ -33,7 +33,7 @@
           <div class="poster-upload-trigger" v-loading="posterUploading">
             <el-icon class="poster-upload-icon"><Plus /></el-icon>
             <span class="poster-upload-text">点击上传海报图</span>
-            <span class="poster-upload-sub">建议 600×760px，JPG/PNG，≤2MB</span>
+            <span class="poster-upload-sub">建议 600×960px，JPG/PNG，≤2MB</span>
           </div>
         </el-upload>
         <div class="poster-upload-tip" v-if="miniProgramForm.brand_config.share_poster_url">
@@ -50,73 +50,9 @@
           />
         </div>
         <div class="field-hint" style="margin-top:8px;">
-          仅上传本项、不配置下方「顶部主视觉图」时，小程序邀请海报页将直接展示该静态图。若同时配置了顶部主视觉，则优先使用上图下文模板动态生成。
+          上传后小程序「分享名片」页将优先显示此图，可直接发送给好友或保存到相册。留空则自动用 Canvas 动态生成。
         </div>
       </div>
-    </el-form-item>
-
-    <el-form-item label="邀请海报顶部主视觉图">
-      <div class="poster-upload-wrap">
-        <div class="poster-preview" v-if="miniProgramForm.brand_config.share_poster_cover_url">
-          <img :src="miniProgramForm.brand_config.share_poster_cover_url" class="poster-thumb poster-thumb-cover" alt="顶部海报预览" />
-          <div class="poster-actions">
-            <el-button size="small" type="danger" plain @click="clearPosterCover" :disabled="posterCoverUploading">移除</el-button>
-          </div>
-        </div>
-        <el-upload
-          v-else
-          class="poster-uploader"
-          :show-file-list="false"
-          :before-upload="beforePosterUpload"
-          :http-request="handlePosterCoverUpload"
-          accept="image/jpeg,image/png,image/webp"
-        >
-          <div class="poster-upload-trigger poster-upload-trigger-cover" v-loading="posterCoverUploading">
-            <el-icon class="poster-upload-icon"><Plus /></el-icon>
-            <span class="poster-upload-text">点击上传顶部海报图</span>
-            <span class="poster-upload-sub">建议 600×560px，JPG/PNG，≤2MB</span>
-          </div>
-        </el-upload>
-        <div class="poster-upload-tip" v-if="miniProgramForm.brand_config.share_poster_cover_url">
-          <el-button size="small" plain @click="triggerReplaceCover" :disabled="posterCoverUploading">
-            <el-icon><RefreshRight /></el-icon> 替换图片
-          </el-button>
-          <el-upload
-            ref="replaceCoverUploadRef"
-            style="display:none"
-            :show-file-list="false"
-            :before-upload="beforePosterUpload"
-            :http-request="handlePosterCoverUpload"
-            accept="image/jpeg,image/png,image/webp"
-          />
-        </div>
-        <div class="field-hint" style="margin-top:8px;">
-          邀请海报上半区品牌主视觉。建议上传已含 Logo/主题的成图；小程序会在下半区自动拼接头像、昵称、说明文案、邀请码与小程序码（路径：我的 → 好友邀请）。
-        </div>
-      </div>
-    </el-form-item>
-
-    <el-form-item label="海报说明文案">
-      <el-input
-        v-model="miniProgramForm.brand_config.share_poster_intro"
-        placeholder="如：合作共赢 共迎美好"
-        style="width:min(420px, 100%);"
-      />
-    </el-form-item>
-    <el-form-item label="海报邀请码前缀">
-      <el-input
-        v-model="miniProgramForm.brand_config.share_poster_code_prefix"
-        placeholder="如：邀请码："
-        style="width:min(240px, 100%);"
-      />
-      <div class="field-hint" style="margin-top:6px;">显示在海报上的那一行（对应用户 invite_code，与后台用户表「会员码 member_no」不是同一字段）。</div>
-    </el-form-item>
-    <el-form-item label="扫码提示文案">
-      <el-input
-        v-model="miniProgramForm.brand_config.share_poster_qr_hint"
-        placeholder="如：长按识别小程序码"
-        style="width:min(320px, 100%);"
-      />
     </el-form-item>
 
     <el-form-item label="客服微信">
@@ -399,9 +335,7 @@ const props = defineProps({
 })
 
 const posterUploading = ref(false)
-const posterCoverUploading = ref(false)
 const replaceUploadRef = ref(null)
-const replaceCoverUploadRef = ref(null)
 
 function beforePosterUpload(file) {
   const isImage = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
@@ -411,43 +345,27 @@ function beforePosterUpload(file) {
   return true
 }
 
-async function uploadPosterField(file, targetKey, loadingRef) {
-  loadingRef.value = true
+async function handlePosterUpload({ file }) {
+  posterUploading.value = true
   try {
     const res = await uploadFile(file, { params: { folder: 'share_poster', skip_library: 1 } })
     const url = res?.data?.url || res?.url || ''
     if (!url) throw new Error('上传返回 URL 为空')
-    props.miniProgramForm.brand_config[targetKey] = url
+    props.miniProgramForm.brand_config.share_poster_url = url
     ElMessage.success('海报图上传成功')
   } catch (e) {
     ElMessage.error('上传失败：' + (e?.message || '请重试'))
   } finally {
-    loadingRef.value = false
+    posterUploading.value = false
   }
-}
-
-async function handlePosterUpload({ file }) {
-  return uploadPosterField(file, 'share_poster_url', posterUploading)
-}
-
-async function handlePosterCoverUpload({ file }) {
-  return uploadPosterField(file, 'share_poster_cover_url', posterCoverUploading)
 }
 
 function clearPoster() {
   props.miniProgramForm.brand_config.share_poster_url = ''
 }
 
-function clearPosterCover() {
-  props.miniProgramForm.brand_config.share_poster_cover_url = ''
-}
-
 function triggerReplace() {
   replaceUploadRef.value?.$el?.querySelector('input[type="file"]')?.click()
-}
-
-function triggerReplaceCover() {
-  replaceCoverUploadRef.value?.$el?.querySelector('input[type="file"]')?.click()
 }
 </script>
 
@@ -455,11 +373,9 @@ function triggerReplaceCover() {
 .poster-upload-wrap { display: flex; flex-direction: column; gap: 8px; }
 .poster-preview { display: flex; align-items: flex-start; gap: 16px; }
 .poster-thumb { width: 120px; border-radius: 8px; border: 1px solid #e4e7ed; object-fit: cover; display: block; }
-.poster-thumb-cover { width: 200px; }
 .poster-actions { display: flex; flex-direction: column; gap: 8px; }
 .poster-uploader { display: block; }
 .poster-upload-trigger { width: 160px; height: 200px; border: 1px dashed #d9d9d9; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; background: #fafafa; transition: border-color .2s; }
-.poster-upload-trigger-cover { width: 220px; height: 180px; }
 .poster-upload-trigger:hover { border-color: #409eff; }
 .poster-upload-icon { font-size: 28px; color: #c0c4cc; }
 .poster-upload-text { font-size: 13px; color: #606266; }

@@ -427,8 +427,9 @@ async function createCommissions(referrerOpenid, fromOpenid, orderId, orderNo, p
 
 async function unfreezeCommissions(orderId) {
     if (!orderId) return { settled: 0 };
+    // frozen: 确认收货后冻结的佣金；pending_approval: 旧流程/手动审批的佣金
     const res = await db.collection('commissions')
-        .where({ order_id: orderId, status: 'pending_approval' })
+        .where({ order_id: orderId, status: _.in(['frozen', 'pending_approval']) })
         .get().catch(() => ({ data: [] }));
 
     let totalSettled = 0;

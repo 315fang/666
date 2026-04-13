@@ -337,6 +337,7 @@ async function createOrder(openid, orderData) {
 
     // 1. 查商品和 SKU，计算金额
     let totalAmount = 0;
+    let originalTotalAmount = 0; // 折扣前原价合计，用于优惠券门槛校验
     const orderItems = [];
     const stockDeductions = [];  // 记录已扣减的库存，供回滚用
 
@@ -388,17 +389,17 @@ async function createOrder(openid, orderData) {
         const slashPrice = slashRecord ? toNumber(slashRecord.current_price || slashRecord.price, 0) : null;
 
         let unitPrice;
+        let originalUnitPrice; // 折扣前原价，用于优惠券门槛校验
         if (groupActivity) {
-            // 拼团价：使用活动价，不叠加折扣
             unitPrice = activityPrice;
+            originalUnitPrice = activityPrice;
         } else if (slashRecord) {
-            // 砍价价：使用砍后价，不叠加折扣
             unitPrice = slashPrice;
+            originalUnitPrice = slashPrice;
         } else {
             const basePrice = resolveSkuUnitPrice(sku, product);
-            // 商品标记了 skip_member_discount=true（爆单/折扣装）则跳过折扣
+            originalUnitPrice = basePrice;
             const skipDiscount = product.skip_member_discount === true || product.skip_role_discount === true;
-            // 商品自身也可以配置各角色的专属价（如 price_agent、price_leader）
             const agentLevelPrice = buyerRoleLevel >= 3
                 ? toNumber(sku?.price_agent ?? product?.price_agent ?? sku?.price_leader ?? product?.price_leader, NaN)
                 : NaN;
@@ -420,6 +421,7 @@ async function createOrder(openid, orderData) {
         const lineTotal = Math.round(unitPrice * qty * 100) / 100;
 
         totalAmount += lineTotal;
+        originalTotalAmount += Math.round(originalUnitPrice * qty * 100) / 100;
 
         const productId = String(product._id || product.id || item.product_id || '');
         const productImages = normalizeImages(product.images);
@@ -451,6 +453,7 @@ async function createOrder(openid, orderData) {
     }
 
     totalAmount = Math.round(totalAmount * 100) / 100;
+    originalTotalAmount = Math.round(originalTotalAmount * 100) / 100;
 
     // 2. 优惠券抵扣（先计算折扣金额，暂不核销；核销放在订单创建成功之后，防止无回滚丢券）
     let couponDiscount = 0;
@@ -464,7 +467,8 @@ async function createOrder(openid, orderData) {
             if (uc) {
                 if (uc.openid && uc.openid !== openid) throw new Error('优惠券不属于当前用户');
                 if (uc.status !== 'unused') throw new Error('优惠券不可用');
-                if (toNumber(uc.min_purchase, 0) > totalAmount) throw new Error('订单金额未达到优惠券门槛');
+                // 门槛用折扣前原价校验，与前端展示的商品标价一致
+                if (toNumber(uc.min_purchase, 0) > originalTotalAmount) throw new Error('订单金额未达到优惠券门槛');
                 if (uc.coupon_type === 'percent') {
                     couponDiscount = Math.round(totalAmount * (1 - toNumber(uc.coupon_value, 100) / 100) * 100) / 100;
                 } else {
@@ -496,11 +500,19 @@ async function createOrder(openid, orderData) {
                 const maxPointsByRatio = Math.floor((Math.max(0, totalAmount - couponDiscount) * maxRatio) / yuanPerPoint);
                 actualPoints = Math.max(0, Math.min(Math.floor(usePoints), userPoints, maxPointsByRatio));
                 pointsDiscount = Math.round(actualPoints * yuanPerPoint * 100) / 100;
-                // 扣减积分（原子写入，失败必须重置，否则订单金额会虚减）
+                // 扣减积分（条件写入：points >= actualPoints，防并发扣成负数）
                 if (actualPoints > 0) {
-                    await db.collection('users').where({ openid }).update({
-                        data: { points: _.inc(-actualPoints), growth_value: _.inc(-actualPoints), updated_at: db.serverDate() }
-                    });
+                    const pointDeductRes = await db.collection('users')
+                        .where({ openid, points: _.gte(actualPoints) })
+                        .update({
+                            data: { points: _.inc(-actualPoints), growth_value: _.inc(-actualPoints), updated_at: db.serverDate() }
+                        });
+                    if (!pointDeductRes.stats || pointDeductRes.stats.updated === 0) {
+                        // 积分不足（被并发抢占），回退为不使用积分
+                        console.warn('[OrderCreate] 积分余额不足（并发），回退为不使用积分');
+                        actualPoints = 0;
+                        pointsDiscount = 0;
+                    }
                 }
             }
         } catch (err) {
@@ -599,6 +611,8 @@ async function createOrder(openid, orderData) {
         slash_activity_id: slashRecord ? slashRecord.activity_id || slashRecord.legacy_activity_id || '' : '',
         payment_timeout_minutes: autoCancelMinutes,
         expire_at: db.serverDate({ offset: autoCancelMinutes * 60 * 1000 }),
+        // 标记库存已在创单时扣减，防止 payment-callback 的 ensureStockDeducted 重复扣
+        stock_deducted_at: stockDeductions.length > 0 ? db.serverDate() : null,
         created_at: db.serverDate(),
         updated_at: db.serverDate()
     };
@@ -700,6 +714,13 @@ async function createOrder(openid, orderData) {
                     created_at: db.serverDate()
                 }
             }).catch(() => {});
+            // 触发支付后处理（佣金创建、积分奖励、代理升级、拼团/砍价等）
+            cloud.callFunction({
+                name: 'payment',
+                data: { action: '_postProcessPaid', order_id: orderId }
+            }).catch((err) => {
+                console.error('[OrderCreate] 货款支付后处理调用失败（不影响下单）:', err.message);
+            });
         } catch (err) {
             if (err.message.includes('货款')) throw err;
             console.error('[OrderCreate] 货款支付处理异常:', err.message);

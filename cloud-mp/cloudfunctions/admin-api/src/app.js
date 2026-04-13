@@ -2775,8 +2775,7 @@ registerMarketingRoutes(app, {
     assetUrl,
     createAuditLog,
     ok,
-    fail,
-    getCloud: getManagedCloud
+    fail
 });
 
 // ===== SKU 管理 API（多规格支持）=====

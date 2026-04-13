@@ -569,11 +569,8 @@ async function slashDetail(openid, params) {
             helperUserMap[u.openid] = {
                 openid: u.openid,
                 nickName: u.nickName || u.nickname || '好友',
-                nick_name: u.nickName || u.nickname || '好友',
                 nickname: u.nickName || u.nickname || '好友',
-                avatarUrl: u.avatarUrl || u.avatar_url || u.avatar || '',
-                avatar_url: u.avatarUrl || u.avatar_url || u.avatar || '',
-                avatar: u.avatarUrl || u.avatar_url || u.avatar || ''
+                avatarUrl: u.avatarUrl || u.avatar_url || u.avatar || ''
             };
         });
     }

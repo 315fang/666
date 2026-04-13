@@ -42,7 +42,7 @@ function buildCouponView(c = {}) {
         coupon_value: c.coupon_value != null ? c.coupon_value : (c.value || 0),
         min_purchase: c.min_purchase != null ? c.min_purchase : 0,
         scope: c.scope || 'all',
-        expire_at_formatted: formatExpire(c.expire_at || c.end_at || c.valid_until),
+        expire_at_formatted: formatExpire(c.expire_at || c.expires_at || c.end_at || c.valid_until),
         discount_text
     };
 }

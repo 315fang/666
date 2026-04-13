@@ -60,7 +60,14 @@
 
       <!-- 列表内容 -->
       <el-table :data="tableData" v-loading="loading" stripe>
-        <el-table-column prop="id" label="ID" width="60" />
+        <el-table-column label="ID" width="72">
+          <template #default="{ row }">
+            <el-tooltip v-if="String(row.id).length > 6" :content="String(row.id)" placement="top">
+              <span class="id-cell">{{ String(row.id).slice(0, 6) }}…</span>
+            </el-tooltip>
+            <span v-else class="id-cell">{{ row.id }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="name" label="优惠券名称" min-width="120" />
         <el-table-column label="价值/类型" width="120">
           <template #default="{ row }">
@@ -767,4 +774,5 @@ onMounted(() => {
 <style scoped>
 .filter-container { margin-bottom: 20px; }
 .form-tip { font-size: 12px; color: #909399; margin-top: 4px; line-height: 1.2; }
+.id-cell { font-family: ui-monospace, monospace; font-size: 12px; color: #606266; cursor: default; }
 </style>

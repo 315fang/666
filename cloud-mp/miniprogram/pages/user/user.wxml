@@ -31,7 +31,7 @@
             </view>
             <view class="hero-meta-row" wx:if="{{isLoggedIn && userInfo.invite_code}}">
               <view class="hero-member-code" catchtap="noop">
-                <text class="member-code-label">邀请码</text>
+                <text class="member-code-label">会员码</text>
                 <text class="member-code-value">{{userInfo.invite_code}}</text>
                 <view class="member-code-copy" catchtap="onCopyMemberCode">
                   <image src="/assets/icons/clipboard.svg" mode="aspectFit" class="member-code-copy-icon"></image>
@@ -257,6 +257,12 @@
     <view class="func-row" bindtap="goInvitePoster" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
       <text class="func-label">好友邀请</text>
+      <text class="func-arrow">›</text>
+    </view>
+    <view class="func-divider"></view>
+    <view class="func-row" bindtap="goSharePoster" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/sparkle.svg" mode="aspectFit"></image>
+      <text class="func-label">分享名片</text>
       <text class="func-arrow">›</text>
     </view>
     <view class="func-divider"></view>

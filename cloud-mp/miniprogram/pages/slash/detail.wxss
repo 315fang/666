@@ -2,6 +2,13 @@
 page { padding-bottom: 180rpx; }
 .container { min-height: 100vh; background: #F7F7F7; }
 
+/* Nav */
+.nav-bar { display: flex; align-items: center; justify-content: space-between; padding: 12rpx 24rpx; background: #FFFFFF; border-bottom: 1rpx solid #F0F0F0; }
+.nav-back { width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; }
+.nav-icon { width: 32rpx; height: 32rpx; }
+.nav-title { font-size: 32rpx; font-weight: 700; color: #1A1A1A; }
+.nav-placeholder { width: 56rpx; }
+
 /* Loading */
 .loading-wrap { padding: 0; }
 .skeleton-block { background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%); border-radius: 20rpx; animation: shimmer 1.5s infinite; }

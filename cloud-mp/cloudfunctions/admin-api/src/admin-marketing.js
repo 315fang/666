@@ -21,8 +21,7 @@ function registerMarketingRoutes(app, deps) {
         assetUrl,
         createAuditLog,
         ok,
-        fail,
-        getCloud
+        fail
     } = deps;
 
     function getConfigValue(key, fallback) {
@@ -626,7 +625,25 @@ function registerMarketingRoutes(app, deps) {
     }
 
     app.get('/admin/api/coupons', auth, requirePermission('products'), (req, res) => {
-        let rows = sortByUpdatedDesc(getCollection('coupons')).map(normalizeCoupon);
+        const rawRows = getCollection('coupons');
+        // 自愈：对 CloudBase 直接创建（无数字 id 只有 UUID _id）的优惠券，补写自增数字 id
+        const maxNumericId = rawRows.reduce((max, r) => {
+            const n = Number(r.id);
+            return Number.isFinite(n) ? Math.max(max, n) : max;
+        }, 0);
+        let patchCounter = maxNumericId;
+        for (const r of rawRows) {
+            const hasNumericId = Number.isFinite(Number(r.id)) && r.id != null && r.id !== '';
+            if (!hasNumericId) {
+                patchCounter += 1;
+                r.id = patchCounter;
+                // 异步回写到 CloudBase（不阻塞响应）
+                if (r._id) {
+                    directPatchDocument('coupons', String(r._id), { id: patchCounter }).catch(() => {});
+                }
+            }
+        }
+        let rows = sortByUpdatedDesc(rawRows).map(normalizeCoupon);
         const keyword = pickString(req.query.keyword).trim().toLowerCase();
         const status = pickString(req.query.status).trim();
         if (keyword) rows = rows.filter((item) => `${item.name} ${item.description || ''}`.toLowerCase().includes(keyword));
@@ -764,39 +781,6 @@ function registerMarketingRoutes(app, deps) {
             : item));
         createAuditLog(req.admin, 'coupon.issue', 'coupons', { coupon_id: couponId, issued });
         ok(res, { success: true, issued, skipped: targets.length - issued, message: `已发放 ${issued} 张优惠券` });
-    });
-
-    // 生成优惠券专属小程序码（base64），供后台分享弹窗使用
-    app.get('/admin/api/coupons/:id/wxacode', auth, requirePermission('products'), async (req, res) => {
-        const coupons = getCollection('coupons');
-        const coupon = findByLookup(coupons, req.params.id);
-        if (!coupon) return fail(res, '优惠券不存在', 404);
-
-        const couponId = coupon.id || coupon._legacy_id || coupon._id;
-        const page = 'pages/coupon/claim';
-        const scene = `id=${couponId}`;
-        const mpPath = `/${page}?id=${couponId}`;
-
-        const cloud = getCloud ? getCloud() : null;
-        if (!cloud || !cloud.openapi) {
-            // 无 cloud 环境（本地开发）时返回路径信息，不返回图片
-            return ok(res, { mp_path: mpPath, wxacode_base64: null, note: '开发环境：小程序码仅在云端生成' });
-        }
-
-        try {
-            const result = await cloud.openapi.wxacode.getUnlimited({
-                scene,
-                page,
-                width: 280,
-                is_hyaline: false
-            });
-            const buffer = result.buffer || result;
-            const base64 = Buffer.isBuffer(buffer) ? buffer.toString('base64') : null;
-            ok(res, { mp_path: mpPath, wxacode_base64: base64 });
-        } catch (e) {
-            console.error('[coupon.wxacode] 生成失败:', e.message);
-            fail(res, `小程序码生成失败：${e.message || '未知错误'}`, 500);
-        }
     });
 
     app.get('/admin/api/coupon-auto-rules', auth, requirePermission('products'), (_req, res) => {

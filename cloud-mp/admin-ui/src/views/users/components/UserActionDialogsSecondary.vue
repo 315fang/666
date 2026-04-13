@@ -63,22 +63,55 @@
     </template>
   </el-dialog>
 
-  <el-dialog v-model="parentVisibleProxy" title="修改上级绑定" width="380px">
+  <el-dialog v-model="parentVisibleProxy" title="修改上级绑定" width="460px" @closed="onParentDialogClosed">
     <el-alert type="warning" :closable="false" style="margin-bottom:16px">
       修改上级后，原上级直推人数-1，新上级+1，请谨慎操作。
     </el-alert>
     <el-form :model="parentForm" label-width="90px">
-      <el-form-item label="当前上级">{{ displayUserName(currentUser?.parent, '无') }}</el-form-item>
-      <el-form-item label="新上级ID">
-        <el-input v-model="parentForm.new_parent_id" placeholder="输入用户ID，留空为解绑" />
+      <el-form-item label="当前上级">
+        <span style="color:var(--el-text-color-regular)">{{ displayUserName(currentUser?.parent, '无') }}</span>
+      </el-form-item>
+      <el-form-item label="搜索新上级">
+        <el-select
+          v-model="parentForm.new_parent_id"
+          filterable
+          remote
+          clearable
+          reserve-keyword
+          placeholder="输入昵称 / 手机号 / 用户ID 搜索"
+          :remote-method="remoteSearchParent"
+          :loading="parentSearchLoading"
+          no-data-text="无匹配用户，请继续输入"
+          style="width:100%"
+        >
+          <el-option
+            v-for="user in parentSearchOptions"
+            :key="user.id"
+            :label="`${displayUserName(user)}  #${user.id}`"
+            :value="user.id"
+          >
+            <div class="parent-opt-row">
+              <span class="parent-opt-name">{{ displayUserName(user) }}</span>
+              <span class="parent-opt-meta">#{{ user.id }} · {{ ROLE_LABELS[user.role_level] || '用户' }}</span>
+            </div>
+          </el-option>
+        </el-select>
+      </el-form-item>
+      <el-form-item label=" " v-if="selectedParentPreview">
+        <el-tag type="success" size="large" style="max-width:100%;overflow:hidden;text-overflow:ellipsis">
+          已选：{{ displayUserName(selectedParentPreview) }}（#{{ selectedParentPreview.id }} · {{ ROLE_LABELS[selectedParentPreview.role_level] || '用户' }}）
+        </el-tag>
+      </el-form-item>
+      <el-form-item label=" " v-else-if="!parentForm.new_parent_id">
+        <span class="parent-unset-hint">留空并确认将解绑当前上级关系</span>
       </el-form-item>
       <el-form-item label="操作原因">
-        <el-input v-model="parentForm.reason" placeholder="必填" />
+        <el-input v-model="parentForm.reason" placeholder="必填，便于日后审计" />
       </el-form-item>
     </el-form>
     <template #footer>
       <el-button @click="parentVisibleProxy = false">取消</el-button>
-      <el-button type="primary" @click="onSubmitParent" :loading="submitting">确认</el-button>
+      <el-button type="primary" @click="onSubmitParent" :loading="submitting">确认修改</el-button>
     </template>
   </el-dialog>
 </template>
@@ -86,6 +119,8 @@
 <script setup>
 import { computed } from 'vue'
 import { getUserNickname } from '@/utils/userDisplay'
+
+const ROLE_LABELS = { 0: '普通用户', 1: '会员', 2: '团长', 3: '代理商', 4: '合伙人', 5: '区域代理' }
 
 const props = defineProps({
   currentUser: { type: Object, default: null },
@@ -100,6 +135,9 @@ const props = defineProps({
   memberNoForm: { type: Object, required: true },
   parentVisible: { type: Boolean, default: false },
   parentForm: { type: Object, required: true },
+  parentSearchLoading: { type: Boolean, default: false },
+  parentSearchOptions: { type: Array, default: () => [] },
+  remoteSearchParent: { type: Function, required: true },
   onShowTagInput: { type: Function, required: true },
   onAddTag: { type: Function, required: true },
   onRemoveTag: { type: Function, required: true },
@@ -114,7 +152,8 @@ const emit = defineEmits([
   'update:inviteVisible',
   'update:memberNoVisible',
   'update:parentVisible',
-  'update:tagInputValue'
+  'update:tagInputValue',
+  'clear-parent-search'
 ])
 
 const remarkVisibleProxy = computed({
@@ -142,5 +181,41 @@ const tagInputValue = computed({
   set: (value) => emit('update:tagInputValue', value)
 })
 
+/** 当前已选中的用户对象（用于预览卡片） */
+const selectedParentPreview = computed(() => {
+  if (!props.parentForm.new_parent_id) return null
+  return props.parentSearchOptions.find(u => String(u.id) === String(props.parentForm.new_parent_id)) || null
+})
+
+const onParentDialogClosed = () => emit('clear-parent-search')
+
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 </script>
+
+<style scoped>
+.parent-opt-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.parent-opt-name {
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+.parent-opt-meta {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-family: ui-monospace, monospace;
+}
+.parent-unset-hint {
+  font-size: 12px;
+  color: var(--el-color-warning);
+}
+</style>
