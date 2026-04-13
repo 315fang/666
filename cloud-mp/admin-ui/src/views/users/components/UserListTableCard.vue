@@ -54,7 +54,7 @@
           <el-tag size="small" type="info">{{ purchaseLevelText(row.purchase_level_code) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="余额" width="100">
+      <el-table-column label="佣金余额" width="100">
         <template #default="{ row }">
           <span class="text-price">¥{{ Number(row.balance || 0).toFixed(2) }}</span>
         </template>
@@ -202,10 +202,6 @@ const props = defineProps({
     required: true
   },
   onOpenDetail: {
-    type: Function,
-    required: true
-  },
-  onOpenBalance: {
     type: Function,
     required: true
   },

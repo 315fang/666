@@ -1,29 +1,5 @@
 <template>
   <div>
-    <el-dialog :model-value="balanceVisible" title="调整用户余额" width="420px" @update:model-value="onBalanceVisibilityChange">
-      <el-form :model="balanceForm" label-width="90px">
-        <el-form-item label="当前余额">
-          <span class="text-price">¥{{ Number(currentUser?.balance || 0).toFixed(2) }}</span>
-        </el-form-item>
-        <el-form-item label="操作类型">
-          <el-radio-group v-model="balanceForm.type">
-            <el-radio value="add">充值（+）</el-radio>
-            <el-radio value="subtract">扣减（-）</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="金额">
-          <el-input-number v-model="balanceForm.amount" :min="0.01" :precision="2" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="原因">
-          <el-input v-model="balanceForm.reason" placeholder="请填写操作原因，将记录日志" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="onBalanceVisibilityChange(false)">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="onSubmitBalance">确认操作</el-button>
-      </template>
-    </el-dialog>
-
     <el-dialog :model-value="purchaseLevelVisible" title="设置拿货等级" width="420px" @update:model-value="onPurchaseLevelVisibilityChange">
       <el-form :model="purchaseLevelForm" label-width="100px">
         <el-form-item label="用户">{{ displayUserName(currentUser, '-') }}</el-form-item>
@@ -87,14 +63,6 @@ defineProps({
     type: Boolean,
     default: false
   },
-  balanceVisible: {
-    type: Boolean,
-    default: false
-  },
-  balanceForm: {
-    type: Object,
-    required: true
-  },
   purchaseLevelVisible: {
     type: Boolean,
     default: false
@@ -127,19 +95,11 @@ defineProps({
     type: Function,
     required: true
   },
-  onBalanceVisibilityChange: {
-    type: Function,
-    required: true
-  },
   onPurchaseLevelVisibilityChange: {
     type: Function,
     required: true
   },
   onRoleVisibilityChange: {
-    type: Function,
-    required: true
-  },
-  onSubmitBalance: {
     type: Function,
     required: true
   },
