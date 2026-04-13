@@ -166,3 +166,7 @@
   height: 100vh;
   color: #94A3B8;
 }
+
+.refund-restore-card .restore-tag { color: #B98B58; font-weight: 500; }
+.refund-restore-card .restore-points { color: #10b981; font-weight: 500; }
+.refund-restore-card .restore-coupon { color: #8b5cf6; font-weight: 500; }

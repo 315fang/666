@@ -56,17 +56,21 @@ Page({
         statusBarHeight: 20,
         navTopPadding: 20,
         navBarHeight: 44,
-        heroTitle: '把积分换成一点仪式感',
-        heroSubtitle: '奖池支持后台配置 emoji、配色和标签，小奖池也能做出活动感。',
-        panelTitle: '幸运转盘',
-        panelSubtitle: '命中后会停在对应奖格，结果直接同步到记录里',
-        resultWinTitle: '恭喜，手气不错',
-        resultMissTitle: '这次差一点点',
+        heroTitle: '用积分试一次手气',
+        heroSubtitle: '把账户里的积分换成一次轻量抽奖，命中结果后会同步进入中奖记录。',
+        panelTitle: '积分抽奖机',
+        panelSubtitle: '点击开始后会先出球，再揭晓这次抽到的奖项。',
+        resultWinTitle: '抽中了',
+        resultMissTitle: '这次未命中',
         emptyRecordText: '暂无记录，快来抽奖吧',
+        defaultRecordCount: 3,
+        defaultPrizeCount: 4,
         mode: 'spin',
         prizes: [],
+        prizesExpanded: false,
         machineCapsules: [],
         records: [],
+        recordsExpanded: false,
         pointBalance: 0,
         costPoints: 50,
         spinning: false,
@@ -85,12 +89,12 @@ Page({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
             navBarHeight: app.globalData.navBarHeight || 44,
-            heroTitle: lotteryConfig.hero_title || '把积分换成一点仪式感',
-            heroSubtitle: lotteryConfig.hero_subtitle || '奖池支持后台配置 emoji、配色和标签，小奖池也能做出活动感。',
-            panelTitle: lotteryConfig.panel_title || '幸运转盘',
-            panelSubtitle: lotteryConfig.panel_subtitle || '命中后会停在对应奖格，结果直接同步到记录里',
-            resultWinTitle: lotteryConfig.result_win_title || '恭喜，手气不错',
-            resultMissTitle: lotteryConfig.result_miss_title || '这次差一点点',
+            heroTitle: lotteryConfig.hero_title || '用积分试一次手气',
+            heroSubtitle: lotteryConfig.hero_subtitle || '把账户里的积分换成一次轻量抽奖，命中结果后会同步进入中奖记录。',
+            panelTitle: lotteryConfig.panel_title || '积分抽奖机',
+            panelSubtitle: lotteryConfig.panel_subtitle || '点击开始后会先出球，再揭晓这次抽到的奖项。',
+            resultWinTitle: lotteryConfig.result_win_title || '抽中了',
+            resultMissTitle: lotteryConfig.result_miss_title || '这次未命中',
             emptyRecordText: lotteryConfig.empty_record_text || '暂无记录，快来抽奖吧'
         });
         this.loadData();
@@ -145,6 +149,18 @@ Page({
         } catch (e) {
             console.error('加载记录失败:', e);
         }
+    },
+
+    toggleRecords() {
+        this.setData({
+            recordsExpanded: !this.data.recordsExpanded
+        });
+    },
+
+    togglePrizes() {
+        this.setData({
+            prizesExpanded: !this.data.prizesExpanded
+        });
     },
 
     async loadPointBalance() {

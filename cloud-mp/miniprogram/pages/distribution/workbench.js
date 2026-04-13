@@ -103,11 +103,6 @@ Page({
         this.loadOrders();
     },
 
-    // 跳转采购入仓
-    goRestock() {
-        wx.navigateTo({ url: '/pages/distribution/restock' });
-    },
-
     // 跳转库存明细
     goStockLogs() {
         wx.navigateTo({ url: '/pages/distribution/stock-logs' });

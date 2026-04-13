@@ -80,10 +80,14 @@
     </view>
 
     <view class="product-title-area">
-      <view class="product-tags" wx:if="{{product.product_tag && product.product_tag !== 'normal'}}">
-        <text class="tag-hot" wx:if="{{product.product_tag === 'hot'}}">爆品</text>
+      <view class="product-tags" wx:if="{{product.product_tag && product.product_tag !== 'normal' || product.is_explosive}}">
+        <text class="tag-explosive" wx:if="{{product.is_explosive}}">爆单品</text>
+        <text class="tag-hot" wx:if="{{product.product_tag === 'hot' && !product.is_explosive}}">爆品</text>
         <text class="tag-discount" wx:if="{{product.product_tag === 'discount'}}">折扣</text>
         <text class="tag-new" wx:if="{{product.product_tag === 'new'}}">新品</text>
+      </view>
+      <view class="explosive-notice" wx:if="{{product.is_explosive}}">
+        <text class="explosive-notice-text">此商品不参与会员折扣、优惠券及积分抵扣</text>
       </view>
       <view class="product-title">{{product.name}}</view>
       <view class="product-spec-summary" wx:if="{{product.specSummary}}">

@@ -1,5 +1,5 @@
 // pages/order/detail.js - 订单详情
-const { get } = require('../../utils/request');
+const { get, post } = require('../../utils/request');
 const { getConfigSection, getFeatureFlags } = require('../../utils/miniProgramConfig');
 const { loadOrder, maybeSyncWechatPayAfterLoad } = require('./orderDetailData');
 const {
@@ -284,12 +284,34 @@ Page({
         return onPickupCredentialTap(this);
     },
 
-    onViewActivity() {
+    async onViewActivity() {
         const activity = this.data.order && this.data.order.activityInfo;
         if (!activity) return;
         if (activity.type === 'group') {
             if (!activity.targetNo) {
-                wx.showToast({ title: '支付成功后可查看拼团进度', icon: 'none' });
+                const order = this.data.order;
+                const isPaid = order && order.status !== 'pending' && order.status !== 'cancelled';
+                if (isPaid) {
+                    wx.showLoading({ title: '正在生成拼团...' });
+                    try {
+                        const orderId = order.id || order._id || order.order_no;
+                        const res = await post(`/orders/${encodeURIComponent(orderId)}/retry-group-join`);
+                        wx.hideLoading();
+                        const groupNo = res && res.data && res.data.group_no;
+                        if (groupNo) {
+                            wx.navigateTo({ url: `/pages/group/detail?group_no=${groupNo}` });
+                            return;
+                        }
+                        wx.showToast({ title: '拼团进度生成中，请稍后再试', icon: 'none' });
+                        this.loadOrder(orderId);
+                    } catch (err) {
+                        wx.hideLoading();
+                        wx.showToast({ title: err.message || '操作失败', icon: 'none' });
+                        this.loadOrder(order.id || order._id || order.order_no);
+                    }
+                } else {
+                    wx.showToast({ title: '请先完成支付', icon: 'none' });
+                }
                 return;
             }
             wx.navigateTo({ url: `/pages/group/detail?group_no=${activity.targetNo}` });

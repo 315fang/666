@@ -174,6 +174,7 @@ async function loadCartItems(page, cartIds) {
                     const specText = sku
                         ? `${sku.spec_name || '规格'}: ${sku.spec_value || sku.spec || sku.specs || ''}`.replace(/: $/, '')
                         : (item.snapshot_spec || '');
+                    const isExplosive = !!(product?.is_explosive);
                     return {
                         cart_id: item.id,
                         product_id: item.product_id,
@@ -181,8 +182,8 @@ async function loadCartItems(page, cartIds) {
                         sku_id: resolved.skuId,
                         quantity: item.quantity,
                         supports_pickup: product?.supports_pickup ? 1 : 0,
-                        // allow_points 为 null/undefined 时视为允许（兼容旧商品数据）
-                        allow_points: product?.allow_points == null ? 1 : (product.allow_points ? 1 : 0),
+                        allow_points: isExplosive ? 0 : (product?.allow_points == null ? 1 : (product.allow_points ? 1 : 0)),
+                        is_explosive: isExplosive ? 1 : 0,
                         price: parseFloat(item.effective_price || processed.displayPrice || item.price || 0),
                         name: processed.name || item.snapshot_name || '商品',
                         image: sku?.image || item.snapshot_image || processed.firstImage,

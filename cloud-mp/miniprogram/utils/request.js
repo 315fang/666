@@ -71,6 +71,7 @@ const ROUTE_TABLE = {
     'POST /orders/:id/prepay':              { fn: 'payment',      action: 'prepay',             idKey: 'order_id' },
     'GET /orders/:id/pay-status':           { fn: 'payment',      action: 'queryStatus',        idKey: 'order_id' },
     'POST /orders/:id/sync-wechat-pay':     { fn: 'payment',      action: 'syncWechatPay',      idKey: 'order_id' },
+    'POST /orders/:id/retry-group-join':    { fn: 'payment',      action: 'retryGroupJoin',     idKey: 'order_id' },
 
     // ── 地址 ──────────────────────────────────
     'GET /addresses':                       { fn: 'user',         action: 'listAddresses' },
@@ -83,6 +84,7 @@ const ROUTE_TABLE = {
     // ── 分销 ──────────────────────────────────
     'GET /distribution/overview':           { fn: 'distribution', action: 'center' },
     'GET /distribution/center':             { fn: 'distribution', action: 'center' },
+    'GET /distribution/fund-pool':         { fn: 'distribution', action: 'myFundPoolSummary' },
     'GET /distribution/team':               { fn: 'distribution', action: 'team' },
     'GET /distribution/team/:id':           { fn: 'distribution', action: 'teamDetail',         idKey: 'member_id' },
     'GET /distribution/commission-logs':    { fn: 'distribution', action: 'commLogs' },
@@ -93,7 +95,6 @@ const ROUTE_TABLE = {
     'GET /agent':                           { fn: 'distribution', action: 'center' },
     'GET /agent/workbench':                 { fn: 'distribution', action: 'agentWorkbench' },
     'GET /agent/orders':                    { fn: 'distribution', action: 'agentOrders' },
-    'POST /agent/restock':                  { fn: 'distribution', action: 'agentRestock' },
     'GET /commissions':                     { fn: 'distribution', action: 'commLogs' },
 
     // ── 钱包/积分 ──────────────────────────────

@@ -13,8 +13,8 @@
       <el-input v-model="miniProgramForm.brand_config.share_title" />
     </el-form-item>
 
-    <!-- 分享名片海报图 -->
-    <el-form-item label="分享名片海报图">
+    <!-- 好友邀请海报静态图（invite-poster） -->
+    <el-form-item label="好友邀请海报图">
       <div class="poster-upload-wrap">
         <div class="poster-preview" v-if="miniProgramForm.brand_config.share_poster_url">
           <img :src="miniProgramForm.brand_config.share_poster_url" class="poster-thumb" alt="海报预览" />
@@ -50,7 +50,7 @@
           />
         </div>
         <div class="field-hint" style="margin-top:8px;">
-          上传后小程序「分享名片」页将优先显示此图，可直接发送给好友或保存到相册。留空则自动用 Canvas 动态生成。
+          上传后小程序「好友邀请」海报页将优先显示此图，可直接发送给好友或保存到相册。留空则自动用 Canvas 动态生成。
         </div>
       </div>
     </el-form-item>

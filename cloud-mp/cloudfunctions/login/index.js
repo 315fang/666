@@ -102,7 +102,7 @@ function formatUser(user, openid, tierConfig) {
     const balance = toNumber(user.commission_balance != null ? user.commission_balance : user.balance, 0);
     const roleLevel = toNumber(user.role_level, 0);
     const distLevel = toNumber(user.distributor_level != null ? user.distributor_level : user.agent_level, 0);
-    const ROLE_NAMES = { 0: '普通用户', 1: '会员', 2: '团长', 3: '代理商', 4: '高级代理', 5: '合伙人' };
+    const ROLE_NAMES = { 0: 'VIP会员', 1: '初级会员 C1', 2: '高级会员 C2', 3: '推广合伙人 B1', 4: '运营合伙人 B2', 5: '区域合伙人 B3' };
     return {
         openid,
         _id: user._id,

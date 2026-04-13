@@ -152,7 +152,7 @@
     <input class="remark-input" placeholder="选填，可留言给卖家" value="{{remark}}" bindinput="onRemarkInput" maxlength="100" />
   </view>
 
-  <view class="section coupon-section">
+  <view class="section coupon-section" wx:if="{{allowCoupon !== false}}">
     <view class="coupon-top" bindtap="onCouponTap">
       <view class="coupon-label-row">
         <text class="coupon-label">礼遇与优惠</text>
@@ -167,6 +167,10 @@
     </view>
     <text class="coupon-tip coupon-tip-active" wx:if="{{!selectedCoupon && availableCoupons.length > 0}}">您有{{availableCoupons.length}}张优惠券可用，点击立即选择</text>
     <text class="coupon-tip" wx:elif="{{!selectedCoupon && unusedCouponCount > 0}}">您有{{unusedCouponCount}}张优惠券不适用于本单（金额/范围不符）</text>
+  </view>
+  <view class="section coupon-section coupon-disabled" wx:if="{{allowCoupon === false}}">
+    <text class="coupon-label">礼遇与优惠</text>
+    <text class="coupon-none">爆单品不参与优惠券活动</text>
   </view>
 
   <!-- 积分抵扣 -->

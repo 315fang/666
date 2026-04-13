@@ -1,4 +1,7 @@
 {
   "navigationBarTitleText": "专属客服",
+  "navigationBarBackgroundColor": "#184C78",
+  "navigationBarTextStyle": "white",
+  "backgroundColor": "#184C78",
   "usingComponents": {}
 }

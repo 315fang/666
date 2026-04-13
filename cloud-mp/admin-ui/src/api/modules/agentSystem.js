@@ -4,6 +4,8 @@ export const getUpgradeRules = () => request({ url: '/agent-system/upgrade-rules
 export const updateUpgradeRules = (data) => request({ url: '/agent-system/upgrade-rules', method: 'put', data })
 export const getCommissionConfig = () => request({ url: '/agent-system/commission-config', method: 'get' })
 export const updateCommissionConfig = (data) => request({ url: '/agent-system/commission-config', method: 'put', data })
+export const getCommissionMatrixConfig = () => request({ url: '/agent-system/commission-matrix', method: 'get' })
+export const updateCommissionMatrixConfig = (data) => request({ url: '/agent-system/commission-matrix', method: 'put', data })
 export const getPeerBonusConfig = () => request({ url: '/agent-system/peer-bonus', method: 'get' })
 export const updatePeerBonusConfig = (data) => request({ url: '/agent-system/peer-bonus', method: 'put', data })
 export const getAssistBonusConfig = () => request({ url: '/agent-system/assist-bonus', method: 'get' })

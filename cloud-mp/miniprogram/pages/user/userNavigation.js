@@ -86,7 +86,8 @@ function onLogout(page) {
                     growthDisplay: null,
                     unusedCouponCount: 0,
                     pointsBalanceDisplay: '--',
-                    commissionBalance: '0.00',
+                    balance: '0',
+                    commissionBalance: '0',
                     couponBanner: null,
                     orderStats: { pending: 0, paid: 0, shipped: 0, pendingReview: 0, refund: 0 }
                 });
@@ -118,7 +119,7 @@ function goAllProducts() {
 }
 
 function goCart() {
-    wx.switchTab({ url: '/pages/cart/cart' });
+    wx.navigateTo({ url: '/pages/cart/cart' });
 }
 
 function goLottery(page) {

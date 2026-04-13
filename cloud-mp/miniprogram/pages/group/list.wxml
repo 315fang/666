@@ -8,35 +8,64 @@
     <view class="nav-placeholder"/>
   </view>
 
-  <!-- 说明卡 -->
-  <view class="intro-card">
-    <view class="intro-left">
-      <text class="intro-badge">会员可发起</text>
-      <text class="intro-title">组团买，享折扣</text>
-      <text class="intro-desc">会员发起拼团，好友参团，凑够人数即成团享超低价；支付后可在订单或“我的拼团”继续查看进度。</text>
-      <view class="intro-actions">
-        <view class="intro-action intro-action-primary" bindtap="onGoMyGroups">我的拼团</view>
-        <view class="intro-action" bindtap="onGoActivities">去发起</view>
+  <view class="hero-shell">
+    <view class="hero-badge-row">
+      <view class="hero-badge">
+        <image class="hero-badge-icon" src="/assets/icons/users.svg" mode="aspectFit"></image>
+        <text class="hero-badge-text">会员可发起</text>
+      </view>
+      <view class="hero-badge hero-badge--soft">
+        <image class="hero-badge-icon" src="/assets/icons/gift.svg" mode="aspectFit"></image>
+        <text class="hero-badge-text">{{activities.length || 0}} 个活动</text>
       </view>
     </view>
-    <image class="intro-icon" src="/assets/icons/users.svg" mode="aspectFit"/>
+
+    <view class="hero-card">
+      <view class="hero-copy">
+        <text class="hero-title">组团下单，价格更直接</text>
+        <text class="hero-subtitle">会员开团，好友参团，人数凑齐后立即按拼团价成交；发起后可在“我的拼团”持续查看进度。</text>
+      </view>
+
+      <view class="hero-stats">
+        <view class="stat-card">
+          <text class="stat-label">专区活动</text>
+          <text class="stat-value">{{activities.length || 0}}</text>
+        </view>
+        <view class="stat-card">
+          <text class="stat-label">我的拼团</text>
+          <text class="stat-value">{{myGroups.length || 0}}</text>
+        </view>
+        <view class="stat-card stat-card--member">
+          <text class="stat-label">当前身份</text>
+          <text class="stat-value stat-value--small">{{isMember ? '会员' : '未开通'}}</text>
+        </view>
+      </view>
+
+      <view class="hero-actions">
+        <view class="hero-btn hero-btn-primary" bindtap="onGoMyGroups">我的拼团</view>
+        <view class="hero-btn" bindtap="onGoActivities">去发起</view>
+      </view>
+    </view>
   </view>
 
-  <!-- 会员提示（未登录/非会员） -->
   <view class="member-tip" wx:if="{{showMemberTip}}">
     <image class="tip-icon" src="/assets/icons/star.svg" mode="aspectFit"/>
-    <text class="tip-text">您当前未达到会员等级\n完成首单消费即可升级为会员，解锁发起拼团权限</text>
+    <text class="tip-text">完成首单消费即可升级为会员，解锁发起拼团权限。</text>
   </view>
 
-  <!-- Tab -->
   <view class="tab-row">
     <view class="tab-item {{tab === 'activities' ? 'active' : ''}}" bindtap="switchTab" data-tab="activities">拼团商品</view>
     <view class="tab-item {{tab === 'my' ? 'active' : ''}}" bindtap="switchTab" data-tab="my">我的拼团</view>
   </view>
 
-  <!-- 拼团活动列表 -->
   <view wx:if="{{tab === 'activities'}}">
-    <!-- 骨架屏 -->
+    <view class="section-head">
+      <view>
+        <text class="section-title">可发起活动</text>
+        <text class="section-subtitle">先看人数门槛和拼团价，再决定是否开团。</text>
+      </view>
+    </view>
+
     <view class="skeleton-list" wx:if="{{loading && !activities.length}}">
       <view class="skeleton-card" wx:for="{{[1,2,3]}}" wx:key="*this">
         <view class="skeleton-img"></view>
@@ -52,6 +81,7 @@
       <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
       <text class="empty-text">暂无拼团活动\n活动上线后可从这里发起，已参与记录看“我的拼团”</text>
     </view>
+
     <view class="activity-list">
       <view class="activity-card" wx:for="{{activities}}" wx:key="id" bindtap="onStartGroup" data-activity="{{item}}">
         <view class="img-wrap">
@@ -61,7 +91,7 @@
         <view class="activity-info">
           <text class="product-name line-2">{{item.product && item.product.name || '商品'}}</text>
           <view class="tag-row">
-            <text class="tag tag-hot" wx:if="{{item._saveNum > 0}}">拼团省¥{{item._saveYuan}}</text>
+            <text class="tag tag-hot" wx:if="{{item._saveNum > 0}}">省 ¥{{item._saveYuan}}</text>
             <text class="tag">{{item.min_members}}人起拼</text>
             <text class="tag tag-muted">最多{{item._maxCap}}人</text>
           </view>
@@ -71,6 +101,7 @@
               <text class="group-price-val">¥{{item.group_price}}</text>
             </view>
             <view class="original-price">
+              <text class="original-price-label">单买价</text>
               <text wx:if="{{item._linePrice}}">¥{{item._linePrice}}</text>
               <text wx:else>¥{{item.original_price || (item.product && item.product.retail_price) || '-'}}</text>
             </view>
@@ -79,13 +110,15 @@
             <view class="stock-bar">
               <view class="stock-fill" style="width: {{item._soldPct}}%;"/>
             </view>
-            <text class="stock-text">全网已拼{{item._soldCount}}件 · 库存剩{{item._stockRemain}}件</text>
+            <text class="stock-text">已拼 {{item._soldCount}} 件 · 剩余 {{item._stockRemain}} 件</text>
           </view>
           <text class="one-line-desc" wx:if="{{item._summary}}">{{item._summary}}</text>
           <view class="meta-row">
-            <text class="meta-item">{{item.min_members}}人成团</text>
-            <text class="meta-dot">·</text>
-            <text class="meta-item">开团后{{item.expire_hours}}h有效</text>
+            <view class="meta-copy">
+              <text class="meta-item">{{item.min_members}}人成团</text>
+              <text class="meta-dot">·</text>
+              <text class="meta-item">开团后{{item.expire_hours}}h有效</text>
+            </view>
             <view class="start-btn">{{isMember ? '发起拼团' : '需要会员'}}</view>
           </view>
         </view>
@@ -93,9 +126,14 @@
     </view>
   </view>
 
-  <!-- 我参与的拼团 -->
   <view wx:if="{{tab === 'my'}}">
-    <!-- 骨架屏 -->
+    <view class="section-head">
+      <view>
+        <text class="section-title">我的拼团</text>
+        <text class="section-subtitle">查看开团进度、分享状态和成团结果。</text>
+      </view>
+    </view>
+
     <view class="skeleton-list" wx:if="{{loading && !myGroups.length}}">
       <view class="skeleton-card" wx:for="{{[1,2,3]}}" wx:key="*this">
         <view class="skeleton-img"></view>
@@ -112,6 +150,7 @@
       <text class="empty-text">还没有参与拼团\n快去发起一个吧</text>
       <view class="empty-action" bindtap="onGoActivities">去发起拼团</view>
     </view>
+
     <view class="group-list">
       <view class="group-record" wx:for="{{myGroups}}" wx:key="id" bindtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}">
         <image class="record-img" src="{{item.groupOrder && item.groupOrder.product && item.groupOrder.product.images && item.groupOrder.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
@@ -133,8 +172,8 @@
           </view>
           <view class="record-action-row">
             <view class="share-row" wx:if="{{item.groupOrder && item.groupOrder.status === 'open'}}" catchtap="onShare" data-no="{{item.groupOrder.group_no}}">
-              <image class="share-icon" src="/assets/icons/users.svg" mode="aspectFit"/>
-              <text>分享给好友参团</text>
+              <image class="share-icon" src="/assets/icons/share.svg" mode="aspectFit"/>
+              <text>继续拉人</text>
             </view>
             <view class="record-action" catchtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}">
               <text wx:if="{{item.groupOrder && item.groupOrder.group_no}}">查看进度</text>

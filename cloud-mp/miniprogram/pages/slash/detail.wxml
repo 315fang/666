@@ -1,6 +1,5 @@
-<!--pages/slash/detail.wxml - 砍价详情-->
+<!--pages/slash/detail.wxml-->
 <view class="container">
-  <!-- 导航栏 -->
   <view class="nav-bar" style="padding-top: {{navTopPadding}}px;">
     <view class="nav-back" bindtap="onBack">
       <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
@@ -9,60 +8,57 @@
     <view class="nav-placeholder"/>
   </view>
 
-  <!-- 加载中 -->
   <view class="loading-wrap" wx:if="{{loading}}">
-    <view class="skeleton-block" style="height:300rpx; margin:24rpx;"/>
-    <view class="skeleton-block" style="height:200rpx; margin:0 24rpx;"/>
+    <view class="skeleton-block hero-skeleton"></view>
+    <view class="skeleton-block card-skeleton"></view>
+    <view class="skeleton-block card-skeleton"></view>
   </view>
 
   <block wx:if="{{!loading && detail}}">
-    <!-- 商品信息卡 -->
-    <view class="product-card">
-      <image class="product-img" src="{{detail.product && detail.product.images && detail.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
-      <view class="product-info">
-        <view class="title-row">
-          <text class="corn-tag">砍价特惠</text>
-          <text class="product-name line-2">{{detail.product && detail.product.name || '商品'}}</text>
-        </view>
-        <view class="sub-price-row" wx:if="{{detail.product && detail.product.retail_price}}">
-          <text class="sub-muted">零售价参考</text>
-          <text class="sub-strike">¥{{detail.product.retail_price}}</text>
-        </view>
-        <view class="status-badge status-{{detail.status}}">
-          <text>{{statusTextMap[detail.status] || detail.status}}</text>
+    <view class="hero-shell">
+      <view class="hero-card">
+        <image class="hero-product-img" src="{{detail.product && detail.product.images && detail.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
+        <view class="hero-copy">
+          <view class="hero-badge-row">
+            <text class="hero-badge">砍价特惠</text>
+            <view class="status-badge status-{{detail.status}}">
+              <text>{{statusTextMap[detail.status] || detail.status}}</text>
+            </view>
+          </view>
+          <text class="hero-title">{{detail.product && detail.product.name || '商品'}}</text>
+          <view class="sub-price-row" wx:if="{{detail.product && detail.product.retail_price}}">
+            <text class="sub-muted">零售价参考</text>
+            <text class="sub-strike">¥{{detail.product.retail_price}}</text>
+          </view>
+          <view class="hero-stats">
+            <view class="stat-card">
+              <text class="stat-label">当前价格</text>
+              <text class="stat-value">¥{{detail.current_price}}</text>
+            </view>
+            <view class="stat-card">
+              <text class="stat-label">底价目标</text>
+              <text class="stat-value">¥{{detail.floor_price}}</text>
+            </view>
+            <view class="stat-card">
+              <text class="stat-label">已帮砍</text>
+              <text class="stat-value">{{detail.helper_count || 0}}人</text>
+            </view>
+          </view>
         </view>
       </view>
     </view>
 
-    <!-- 价格进度卡 -->
-    <view class="price-card">
-      <view class="price-row">
-        <view class="price-col">
-          <text class="price-label">当前价格</text>
-          <text class="price-current">¥{{detail.current_price}}</text>
-        </view>
-        <view class="price-col">
-          <text class="price-label">目标底价</text>
-          <text class="price-floor">¥{{detail.floor_price}}</text>
-        </view>
-        <view class="price-col price-col-right">
-          <text class="price-label">原价</text>
-          <text class="price-original">¥{{detail.original_price}}</text>
-        </view>
+    <view class="section-card">
+      <view class="section-head">
+        <text class="section-title">价格进度</text>
+        <text class="section-side">{{detail._progressPct}}%</text>
       </view>
 
-      <!-- 进度条 -->
-      <view class="progress-section">
-        <view class="progress-bar">
-          <view class="progress-fill" style="width: {{detail._progressPct}}%;"/>
-        </view>
-        <view class="progress-meta">
-          <text class="helper-count">{{detail.helper_count || 0}}人已帮砍</text>
-          <text class="progress-pct">{{detail._progressPct}}%</text>
-        </view>
+      <view class="progress-bar">
+        <view class="progress-fill" style="width: {{detail._progressPct}}%;"/>
       </view>
 
-      <view class="save-stats" wx:if="{{detail.status === 'active' || detail.status === 'success'}}">
+      <view class="save-stats">
         <view class="save-pill">
           <text class="save-pill-label">已砍掉</text>
           <text class="save-pill-val">¥{{detail._alreadySaved}}</text>
@@ -73,38 +69,38 @@
         </view>
       </view>
 
-      <!-- 倒计时 -->
-      <view class="countdown-row" wx:if="{{detail.status === 'active' && !detail._expired}}">
+      <view class="notice-row" wx:if="{{detail.status === 'active' && !detail._expired}}">
         <image src="/assets/icons/clock.svg" class="icon-xs" mode="aspectFit"/>
-        <text class="countdown-text" wx:if="{{detail._remainSecs > 0 || detail._remainHours > 0 || detail._remainMins > 0}}">剩余 {{detail._remainHours}}小时{{detail._remainMins}}分{{detail._remainSecs}}秒</text>
-        <text class="countdown-text" wx:else>即将结束，请尽快邀请好友</text>
+        <text class="notice-text" wx:if="{{detail._remainSecs > 0 || detail._remainHours > 0 || detail._remainMins > 0}}">剩余 {{detail._remainHours}}小时{{detail._remainMins}}分{{detail._remainSecs}}秒</text>
+        <text class="notice-text" wx:else>即将结束，请尽快邀请好友</text>
       </view>
-      <view class="countdown-row expired-row" wx:if="{{detail.status === 'expired' || detail._expired}}">
-        <text class="expired-text">活动已结束</text>
-      </view>
-    </view>
-
-    <view class="rule-card" wx:if="{{detail.activity}}">
-      <text class="rule-title">活动说明</text>
-      <view class="rule-line" wx:if="{{detail.activity.expire_hours}}"><text class="rule-dot">·</text>发起后 {{detail.activity.expire_hours}} 小时内有效（以页面倒计时为准）</view>
-      <view class="rule-line" wx:if="{{detail._maxHelpersText}}"><text class="rule-dot">·</text>帮砍名额：{{detail._maxHelpersText}}</view>
-      <view class="rule-line" wx:if="{{detail._slashRangeHint}}"><text class="rule-dot">·</text>{{detail._slashRangeHint}}</view>
-      <view class="rule-line" wx:if="{{detail.activity.stock_limit > 0}}"><text class="rule-dot">·</text>活动库存有限，已抢 {{detail._soldPct}}%（{{detail._soldCount}}/{{detail.activity.stock_limit}} 件）</view>
-      <view class="rule-line"><text class="rule-dot">·</text>砍至底价后可按当前价下单，价格以结算页为准</view>
-    </view>
-
-    <view class="stock-card" wx:if="{{detail.activity && detail.activity.stock_limit > 0}}">
-      <view class="stock-head">
-        <text class="stock-title">抢购进度</text>
-        <text class="stock-sub">仅剩 {{detail._stockRemain}} 件</text>
-      </view>
-      <view class="stock-bar">
-        <view class="stock-fill" style="width: {{detail._soldPct}}%;"/>
+      <view class="notice-row" wx:if="{{detail.status === 'expired' || detail._expired}}">
+        <image src="/assets/icons/info.svg" class="icon-xs" mode="aspectFit"/>
+        <text class="notice-text">活动已结束</text>
       </view>
     </view>
 
-    <view class="desc-card" wx:if="{{detail._productSummary}}">
-      <text class="desc-title">商品亮点</text>
+    <view class="section-card" wx:if="{{detail.activity}}">
+      <text class="section-title block-title">活动说明</text>
+      <view class="rule-line" wx:if="{{detail.activity.expire_hours}}"><text class="rule-dot"></text><text>发起后 {{detail.activity.expire_hours}} 小时内有效。</text></view>
+      <view class="rule-line" wx:if="{{detail._maxHelpersText}}"><text class="rule-dot"></text><text>帮砍名额：{{detail._maxHelpersText}}</text></view>
+      <view class="rule-line" wx:if="{{detail._slashRangeHint}}"><text class="rule-dot"></text><text>{{detail._slashRangeHint}}</text></view>
+      <view class="rule-line" wx:if="{{detail.activity.stock_limit > 0}}"><text class="rule-dot"></text><text>活动库存有限，已抢 {{detail._soldPct}}%（{{detail._soldCount}}/{{detail.activity.stock_limit}} 件）。</text></view>
+      <view class="rule-line"><text class="rule-dot"></text><text>砍至底价后可按当前价下单，最终价格以结算页为准。</text></view>
+    </view>
+
+    <view class="section-card" wx:if="{{detail.activity && detail.activity.stock_limit > 0}}">
+      <view class="section-head">
+        <text class="section-title">抢购进度</text>
+        <text class="section-side">剩余 {{detail._stockRemain}} 件</text>
+      </view>
+      <view class="progress-bar">
+        <view class="progress-fill" style="width: {{detail._soldPct}}%;"/>
+      </view>
+    </view>
+
+    <view class="section-card" wx:if="{{detail._productSummary}}">
+      <text class="section-title block-title">商品亮点</text>
       <text class="desc-body">{{detail._productSummary}}</text>
     </view>
 
@@ -116,9 +112,8 @@
       <text class="trust-item">好友助力更划算</text>
     </view>
 
-    <!-- 帮砍记录 -->
-    <view class="helpers-card" wx:if="{{detail.helpers && detail.helpers.length > 0}}">
-      <text class="card-title">帮砍好友</text>
+    <view class="section-card" wx:if="{{detail.helpers && detail.helpers.length > 0}}">
+      <text class="section-title block-title">帮砍好友</text>
       <view class="helper-list">
         <view class="helper-item" wx:for="{{detail.helpers}}" wx:key="id">
           <image class="helper-avatar" src="{{item.user && (item.user.avatar || item.user.avatar_url) || '/assets/icons/user.svg'}}" mode="aspectFill"/>
@@ -130,8 +125,9 @@
         </view>
       </view>
     </view>
-    <view class="helpers-card" wx:if="{{!detail.helpers || detail.helpers.length === 0}}">
-      <text class="card-title">帮砍好友</text>
+
+    <view class="section-card" wx:if="{{!detail.helpers || detail.helpers.length === 0}}">
+      <text class="section-title block-title">帮砍好友</text>
       <view class="empty-helpers">
         <image src="/assets/icons/users.svg" class="empty-icon" mode="aspectFit"/>
         <text class="empty-text">还没有好友帮砍\n快去分享给朋友吧</text>
@@ -139,13 +135,10 @@
     </view>
   </block>
 
-  <!-- 底部操作栏 -->
   <view class="bottom-bar" wx:if="{{!loading && detail}}">
-
-    <!-- ===== 发起人视图 ===== -->
     <block wx:if="{{isOwner}}">
       <button class="btn-col-share share-button-reset" wx:if="{{detail.status === 'active'}}" open-type="share">
-        <image src="/assets/icons/users.svg" class="btn-icon" mode="aspectFit"/>
+        <image src="/assets/icons/share.svg" class="btn-icon" mode="aspectFit"/>
         <text class="btn-col-main">邀请好友</text>
         <text class="btn-col-sub">每刀随机减</text>
       </button>
@@ -153,7 +146,7 @@
         <view class="btn-buy {{detail.status === 'success' ? 'btn-buy-ready' : 'btn-buy-default'}}" bindtap="onBuy">
           <text class="btn-buy-line1" wx:if="{{detail.status === 'success'}}">已到底价 · 立即抢购</text>
           <text class="btn-buy-line1" wx:else>¥{{detail.current_price}} 抢先下单</text>
-          <text class="btn-buy-line2" wx:if="{{detail.status === 'active'}}">现价购买·不必等砍到底</text>
+          <text class="btn-buy-line2" wx:if="{{detail.status === 'active'}}">现价购买 · 不必等砍到底</text>
           <text class="btn-buy-line2" wx:if="{{detail.status === 'success'}}">库存有限以结算为准</text>
         </view>
       </view>
@@ -163,11 +156,8 @@
       </view>
     </block>
 
-    <!-- ===== 被邀请者（助力者）视图 ===== -->
     <block wx:else>
-      <!-- 进行中：可帮砍 / 已帮砍 / 名额已满 -->
       <block wx:if="{{detail.status === 'active'}}">
-        <!-- 已帮砍 -->
         <view class="btn-helped-wrap" wx:if="{{alreadyHelped}}">
           <view class="btn-helped">
             <image src="/assets/icons/check-circle.svg" class="btn-icon-sm" mode="aspectFit"/>
@@ -178,12 +168,10 @@
           </button>
         </view>
 
-        <!-- 名额已满 -->
         <view class="btn-disabled btn-full-wrap" wx:elif="{{helperFull}}">
           <text>帮砍名额已满</text>
         </view>
 
-        <!-- 可帮砍 -->
         <view class="btn-help-wrap" wx:else>
           <view class="btn-help {{helping ? 'btn-help-loading' : ''}}" bindtap="onHelp">
             <image src="/assets/icons/tag.svg" class="btn-icon" mode="aspectFit" wx:if="{{!helping}}"/>
@@ -193,17 +181,14 @@
         </view>
       </block>
 
-      <!-- 已到底价 -->
       <view class="btn-disabled btn-success-wrap" wx:elif="{{detail.status === 'success'}}">
-        <text>好友已砍到底价 🎉</text>
+        <text>好友已砍到底价</text>
       </view>
 
-      <!-- 已过期 / 已购买 -->
       <view class="btn-disabled" wx:elif="{{detail.status === 'expired' || detail.status === 'purchased'}}">
         <text wx:if="{{detail.status === 'expired'}}">活动已过期</text>
         <text wx:else>好友已完成购买</text>
       </view>
     </block>
-
   </view>
 </view>

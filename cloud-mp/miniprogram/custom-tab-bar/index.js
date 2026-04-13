@@ -8,26 +8,26 @@ const TAB_META = [
   {
     pagePath: 'pages/index/index',
     tabIndex: 0,
-    iconPath: '/assets/tabbar-icons/home.png',
-    selectedIconPath: '/assets/tabbar-icons/home-active.png'
+    iconPath: '/assets/tabbar-icons/home.svg',
+    selectedIconPath: '/assets/tabbar-icons/home-active.svg'
   },
   {
     pagePath: 'pages/category/category',
     tabIndex: 1,
-    iconPath: '/assets/tabbar-icons/category.png',
-    selectedIconPath: '/assets/tabbar-icons/category-active.png'
+    iconPath: '/assets/tabbar-icons/category.svg',
+    selectedIconPath: '/assets/tabbar-icons/category-active.svg'
   },
   {
     pagePath: 'pages/activity/activity',
     tabIndex: 2,
-    iconPath: '/assets/tabbar-icons/activity.png',
-    selectedIconPath: '/assets/tabbar-icons/activity-active.png'
+    iconPath: '/assets/tabbar-icons/activity.svg',
+    selectedIconPath: '/assets/tabbar-icons/activity-active.svg'
   },
   {
     pagePath: 'pages/user/user',
     tabIndex: 3,
-    iconPath: '/assets/tabbar-icons/user.png',
-    selectedIconPath: '/assets/tabbar-icons/user-active.png'
+    iconPath: '/assets/tabbar-icons/user.svg',
+    selectedIconPath: '/assets/tabbar-icons/user-active.svg'
   }
 ];
 

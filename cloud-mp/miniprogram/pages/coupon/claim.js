@@ -85,11 +85,13 @@ Page({
         if (claiming || claimStatus === 'success' || claimStatus === 'already_owned') return;
 
         // 检查登录状态
-        const userInfo = app.globalData && app.globalData.userInfo;
-        if (!userInfo) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            wx.navigateTo({ url: '/pages/login/login' });
-            return;
+        if (!app.globalData.isLoggedIn) {
+            try {
+                await app.wxLogin(true);
+            } catch (_e) {
+                wx.showToast({ title: '请先登录', icon: 'none' });
+                return;
+            }
         }
 
         this.setData({ claiming: true });

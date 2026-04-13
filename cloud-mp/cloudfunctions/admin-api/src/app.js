@@ -1451,9 +1451,12 @@ function buildUserListRecord(user, context) {
         role_level: toNumber(user.role_level ?? user.distributor_level, 0),
         purchase_level_code: pickString(user.purchase_level_code || user.purchase_level || ''),
         balance: toNumber(user.balance ?? user.wallet_balance, 0),
+        commission_balance: toNumber(user.commission_balance ?? user.balance ?? 0, 0),
+        agent_wallet_balance: toNumber(user.agent_wallet_balance ?? user.wallet_balance ?? 0, 0),
+        points: toNumber(user.points, 0),
         total_sales: orderStat.total_sales,
         referee_count: refereeCount,
-        growth_value: toNumber(user.growth_value ?? user.points ?? 0, 0),
+        growth_value: toNumber(user.growth_value, 0),
         status: getUserStatus(user),
         discount_rate: toNumber(user.discount_rate, 1),
         order_count: orderStat.order_count,
@@ -1993,6 +1996,31 @@ function buildWithdrawalRecord(withdrawal, users) {
         remark: pickString(withdrawal.remark),
         reject_reason: pickString(withdrawal.reject_reason)
     };
+}
+
+function ensureWithdrawalNumericIds() {
+    const rows = getCollection('withdrawals');
+    let maxId = rows.reduce((max, row) => {
+        const candidates = [row.id, row._legacy_id]
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value));
+        const currentMax = candidates.length ? Math.max(...candidates) : max;
+        return Math.max(max, currentMax);
+    }, 0);
+    let changed = false;
+    rows.forEach((row) => {
+        const hasNumericId = (row.id != null && row.id !== '') || (row._legacy_id != null && row._legacy_id !== '');
+        if (hasNumericId) return;
+        maxId += 1;
+        row.id = maxId;
+        row._legacy_id = maxId;
+        row.updated_at = row.updated_at || nowIso();
+        changed = true;
+    });
+    if (changed) {
+        saveCollection('withdrawals', rows);
+    }
+    return rows;
 }
 
 function buildRefundRecord(refund, users, orders, products, skus) {
@@ -2774,6 +2802,7 @@ registerMarketingRoutes(app, {
     sortByUpdatedDesc,
     assetUrl,
     createAuditLog,
+    directPatchDocument,
     ok,
     fail
 });
@@ -4323,7 +4352,7 @@ app.put('/admin/api/upgrade-applications/:id/review', auth, requirePermission('d
 
 app.get('/admin/api/withdrawals', auth, requirePermission('withdrawals'), (req, res) => {
     const users = getCollection('users');
-    let rows = sortByUpdatedDesc(getCollection('withdrawals')).map((item) => buildWithdrawalRecord(item, users));
+    let rows = sortByUpdatedDesc(ensureWithdrawalNumericIds()).map((item) => buildWithdrawalRecord(item, users));
     const keyword = pickString(req.query.keyword).trim().toLowerCase();
     const status = pickString(req.query.status).trim();
     if (keyword) {
@@ -4340,6 +4369,7 @@ app.get('/admin/api/withdrawals', auth, requirePermission('withdrawals'), (req, 
 });
 
 app.put('/admin/api/withdrawals/:id/approve', auth, requirePermission('withdrawals'), (req, res) => {
+    ensureWithdrawalNumericIds();
     const updated = patchCollectionRow('withdrawals', req.params.id, (row) => ({
         ...row,
         status: 'approved',
@@ -4352,7 +4382,7 @@ app.put('/admin/api/withdrawals/:id/approve', auth, requirePermission('withdrawa
 });
 
 app.put('/admin/api/withdrawals/:id/reject', auth, requirePermission('withdrawals'), (req, res) => {
-    const rows = getCollection('withdrawals');
+    const rows = ensureWithdrawalNumericIds();
     const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
     if (index < 0) return fail(res, '提现记录不存在', 404);
     const current = rows[index];
@@ -4400,6 +4430,7 @@ app.put('/admin/api/withdrawals/:id/reject', auth, requirePermission('withdrawal
 });
 
 app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdrawals'), (req, res) => {
+    ensureWithdrawalNumericIds();
     const updated = patchCollectionRow('withdrawals', req.params.id, (row) => ({
         ...row,
         status: 'completed',
@@ -5147,6 +5178,7 @@ app.get('/admin/api/finance/overview', auth, requirePermission('statistics'), (r
 
     // ── 基金池 ──
     const fundPool = getAgentConfig('fund-pool', { enabled: false });
+    const fundPoolRow = configs.find((c) => c.config_key === 'agent_system_fund-pool' || c.key === 'agent_system_fund-pool') || {};
 
     // ── 分红 ──
     const sortedExecs = sortByUpdatedDesc(dividendExecs);
@@ -5163,6 +5195,14 @@ app.get('/admin/api/finance/overview', auth, requirePermission('statistics'), (r
             debtors
         },
         fund_pool: fundPool,
+        fund_pool_sub: {
+            mirror_ops: toNumber(fundPoolRow.sub_mirror_ops, 0),
+            travel: toNumber(fundPoolRow.sub_travel, 0),
+            parent: toNumber(fundPoolRow.sub_parent, 0),
+            personal: toNumber(fundPoolRow.sub_personal, 0),
+            total_balance: toNumber(fundPoolRow.balance, 0),
+            total_in: toNumber(fundPoolRow.total_in, 0),
+        },
         dividend: {
             last_executed_year: lastExec?.year || null,
             last_total_distributed: toNumber(lastExec?.totalDistributed, 0),

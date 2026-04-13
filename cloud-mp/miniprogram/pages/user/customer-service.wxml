@@ -1,62 +1,88 @@
 <view class="service-page">
-  <view class="hero-panel">
-    <view class="hero-bg-orb hero-bg-orb-left"></view>
-    <view class="hero-bg-orb hero-bg-orb-right"></view>
-
-    <view class="hero-topbar">
-      <view class="hero-topbar-left">
-        <text class="hero-title">专属客服</text>
-        <text class="hero-subtitle">{{brandName}} 专属客服顾问为您服务</text>
-      </view>
-      <view class="hero-hours-pill">
-        <text>服务时段 {{customerServiceHours}}</text>
-      </view>
-    </view>
-
-    <view class="hero-main-card">
-      <view class="hero-avatar">
-        <image class="hero-avatar-icon" src="/assets/icons/headphones.svg" mode="aspectFit"></image>
+  <view class="content-stack">
+    <view class="hero-shell">
+      <view class="hero-ribbon">
+        <text class="hero-ribbon-text">{{brandName}} 客服中心</text>
       </view>
 
-      <view class="hero-main-copy">
-        <view class="hero-badge-row">
-          <text class="hero-name">专属服务顾问</text>
-          <text class="hero-badge">在线响应</text>
+      <view class="hero-header">
+        <view class="hero-copy">
+          <text class="screen-title">专属客服</text>
+          <text class="screen-subtitle">订单、售后、商品使用问题，都从这里快速找到正确入口。</text>
         </view>
-        <text class="hero-desc">可处理产品咨询、售后问题与服务引导。页面只保留一个主联系区，不再拆多模块。</text>
-
-        <view class="hero-contact-line" wx:if="{{primaryContactText}}">
-          <text class="hero-contact-label">{{primaryContactLabel}}</text>
-          <text class="hero-contact-value">{{primaryContactText}}</text>
+        <view class="hero-mark">
+          <image class="hero-mark-icon" src="/assets/icons/headphones.svg" mode="aspectFit"></image>
         </view>
+      </view>
 
-        <view class="hero-action-row">
-          <view class="hero-primary-btn" bindtap="onPrimaryContactTap">{{primaryActionText}}</view>
-          <view class="hero-secondary-btn" bindtap="onSecondaryContactTap" wx:if="{{secondaryActionText}}">{{secondaryActionText}}</view>
+      <view class="hero-meta-row">
+        <view class="meta-pill" wx:if="{{customerServiceHours}}">
+          <image class="meta-pill-icon" src="/assets/icons/clock.svg" mode="aspectFit"></image>
+          <text class="meta-pill-text">{{customerServiceHours}}</text>
+        </view>
+        <view class="meta-pill meta-pill--soft">
+          <image class="meta-pill-icon" src="/assets/icons/shield.svg" mode="aspectFit"></image>
+          <text class="meta-pill-text">优先人工支持</text>
         </view>
       </view>
     </view>
-  </view>
 
-  <view class="faq-panel">
-    <view class="faq-head">
-      <text class="faq-title">常见问题</text>
-      <text class="faq-subtitle">先看处理建议，需要时再联系人工</text>
-    </view>
-
-    <view class="faq-list">
-      <view class="faq-item" wx:for="{{faqList}}" wx:key="question" bindtap="onFaqTap" data-index="{{index}}">
-        <view class="faq-copy">
-          <text class="faq-question">{{item.question}}</text>
-          <text class="faq-preview">{{item.preview}}</text>
+    <view class="surface-card command-card" wx:if="{{hasAny}}">
+      <view class="command-head">
+        <view>
+          <text class="command-title">当前推荐联系渠道</text>
+          <text class="command-subtitle">优先使用当前已配置的官方客服方式，响应路径更短。</text>
         </view>
-        <text class="faq-arrow">›</text>
+        <view class="advisor-status">可用</view>
+      </view>
+
+      <view class="command-core">
+        <view class="command-contact">
+          <text class="field-label">{{primaryContactLabel}}</text>
+          <text class="field-value" selectable>{{primaryContactText || '请先在后台配置客服方式'}}</text>
+          <text class="command-note">产品咨询、订单跟进、售后处理都可直接从这里发起。</text>
+        </view>
+
+        <view class="cta-stack">
+          <view class="btn btn-primary" bindtap="onPrimaryContactTap" hover-class="btn-primary-hover">
+            <text class="btn-label">{{primaryActionText}}</text>
+          </view>
+          <view
+            class="btn btn-secondary"
+            bindtap="onSecondaryContactTap"
+            hover-class="btn-secondary-hover"
+            wx:if="{{secondaryActionText}}"
+          >
+            <text class="btn-label">{{secondaryActionText}}</text>
+          </view>
+        </view>
       </view>
     </view>
-  </view>
 
-  <view class="empty-panel" wx:if="{{loaded && !hasAny}}">
-    <text class="empty-title">暂未配置客服通道</text>
-    <text class="empty-desc">请在后台「系统设置 → 小程序配置 → 客服通道」补充电话、微信号或二维码。</text>
+    <view class="surface-card surface-card--empty" wx:if="{{loaded && !hasAny}}">
+      <text class="empty-title">尚未配置客服方式</text>
+      <text class="empty-desc">请在管理后台「系统设置 → 小程序配置 → 客服通道」填写电话、微信号或二维码图片。</text>
+    </view>
+
+    <view class="section-heading section-heading--faq">
+      <text class="section-heading-title">常见问题</text>
+      <text class="section-heading-desc">先看处理路径，再联系顾问，沟通会更快。</text>
+    </view>
+
+    <view class="surface-card surface-card--list">
+      <view
+        class="list-row"
+        wx:for="{{faqList}}"
+        wx:key="question"
+        bindtap="onFaqTap"
+        data-index="{{index}}"
+      >
+        <view class="list-row-body">
+          <text class="list-row-title">{{item.question}}</text>
+          <text class="list-row-sub">{{item.preview}}</text>
+        </view>
+        <text class="list-row-chevron">›</text>
+      </view>
+    </view>
   </view>
 </view>

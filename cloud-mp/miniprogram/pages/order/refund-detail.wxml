@@ -22,6 +22,27 @@
     <text class="amount-value">¥{{refund.amount}}</text>
   </view>
 
+  <!-- 退回明细 -->
+  <view class="card refund-restore-card" wx:if="{{refund.order && (refund.order.points_used > 0 || refund.order.coupon_discount > 0 || refund.order.payment_method === 'goods_fund' || refund.order.pay_channel === 'goods_fund')}}">
+    <view class="card-title">退回明细</view>
+    <view class="info-row" wx:if="{{refund.order.payment_method === 'goods_fund' || refund.order.pay_channel === 'goods_fund'}}">
+      <text class="info-label">退回方式</text>
+      <text class="info-value restore-tag">退回至货款余额</text>
+    </view>
+    <view class="info-row" wx:else>
+      <text class="info-label">退回方式</text>
+      <text class="info-value restore-tag">原路退回微信</text>
+    </view>
+    <view class="info-row" wx:if="{{refund.order.points_used > 0}}">
+      <text class="info-label">退回积分</text>
+      <text class="info-value restore-points">+{{refund.order.points_used}} 积分</text>
+    </view>
+    <view class="info-row" wx:if="{{refund.order.coupon_discount > 0}}">
+      <text class="info-label">退回优惠券</text>
+      <text class="info-value restore-coupon">优惠券已退回（¥{{refund.order.coupon_discount}}）</text>
+    </view>
+  </view>
+
   <view class="card" wx:if="{{refund.type === 'return_refund' && refund.status === 'approved'}}">
     <view class="card-title">退货物流</view>
     <view class="form-row">

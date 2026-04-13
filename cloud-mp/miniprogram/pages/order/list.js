@@ -11,12 +11,24 @@ function buildOrderActivityInfo(order = {}) {
     const slashNo = order.slash_no || firstItem.slash_no || '';
 
     if (type === 'group' || groupNo || order.group_activity_id || firstItem.group_activity_id) {
+        const isPaid = order.status && order.status !== 'pending' && order.status !== 'cancelled';
+        let actionText, disabled;
+        if (groupNo) {
+            actionText = '查看进度';
+            disabled = false;
+        } else if (isPaid) {
+            actionText = '查看拼团';
+            disabled = false;
+        } else {
+            actionText = '支付后查看';
+            disabled = true;
+        }
         return {
             type: 'group',
             label: '拼团',
-            actionText: groupNo ? '查看进度' : '支付后查看',
+            actionText,
             targetNo: groupNo,
-            disabled: !groupNo
+            disabled
         };
     }
 
@@ -396,7 +408,13 @@ Page({
         if (!activity) return;
         if (activity.type === 'group') {
             if (!activity.targetNo) {
-                wx.showToast({ title: '支付成功后可查看拼团进度', icon: 'none' });
+                const isPaid = order.status && order.status !== 'pending' && order.status !== 'cancelled';
+                if (isPaid) {
+                    const orderId = order.id || order._id || order.order_no;
+                    wx.navigateTo({ url: `/pages/order/detail?id=${orderId}` });
+                } else {
+                    wx.showToast({ title: '请先完成支付', icon: 'none' });
+                }
                 return;
             }
             wx.navigateTo({ url: `/pages/group/detail?group_no=${activity.targetNo}` });

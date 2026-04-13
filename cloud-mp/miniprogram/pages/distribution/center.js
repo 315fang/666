@@ -38,6 +38,7 @@ Page({
         // 钱包
         balance: '0.00',
         walletInfo: null,
+        pointsBalance: 0,
         // 佣金明细
         commissionLogs: [],
         // Tab: overview / logs / withdraw
@@ -176,9 +177,8 @@ Page({
             if (res.code === 0 && res.data) {
                 const hasParent = !!(res.data.userInfo && res.data.userInfo.inviter);
                 const userInfo = res.data.userInfo || {};
-                const roleLevel = userInfo.role || 0;
+                const roleLevel = userInfo.role_level ?? userInfo.distributor_level ?? userInfo.role ?? 0;
 
-                // 以全局 userInfo 的 role_name 为主，如果缺失则使用接口返回或常量映射
                 const roleName = app.globalData.userInfo?.role_name || userInfo.role_name || ROLE_NAMES[roleLevel] || '普通用户';
 
                 this.setData({
@@ -210,7 +210,8 @@ Page({
             if (res.code === 0 && res.data) {
                 this.setData({
                     balance: (res.data.balance || 0).toFixed(2),
-                    walletInfo: res.data
+                    walletInfo: res.data,
+                    pointsBalance: res.data.points || res.data.point_balance || 0
                 });
             }
         } catch (err) {
@@ -225,7 +226,18 @@ Page({
         this.setData({ showWithdraw: false });
     },
     onWithdrawInput(e) {
-        this.setData({ withdrawAmount: e.detail.value });
+        const val = e.detail.value;
+        const amount = parseFloat(val) || 0;
+        const roleLevel = this.data.userInfo?.role ?? 0;
+        let fee = 0;
+        if (roleLevel < 4 && amount > 0) {
+            fee = Math.min(amount * 0.03, 100);
+        }
+        this.setData({
+            withdrawAmount: val,
+            withdrawFee: fee.toFixed(2),
+            withdrawActual: Math.max(0, amount - fee).toFixed(2)
+        });
     },
 
     async confirmWithdraw() {
@@ -244,12 +256,16 @@ Page({
             if (res.code === 0) {
                 this.hideWithdraw();
                 this.loadWalletInfo();
+                this.refreshDashboard(true);
 
-                // ★ 触发「提现成功」品牌动画 — 金币弹出
+                const actualAmount = res.actual_amount ?? res.data?.actual_amount ?? amount;
+                const fee = res.fee ?? res.data?.fee ?? 0;
+                const displayAmount = parseFloat(actualAmount).toFixed(2);
+                const feeText = fee > 0 ? `（手续费¥${parseFloat(fee).toFixed(2)}）` : '';
                 if (this.brandAnimation) {
-                    this.brandAnimation.show('withdraw', { amount: amount.toFixed(2) });
+                    this.brandAnimation.show('withdraw', { amount: displayAmount });
                 } else {
-                    wx.showToast({ title: '申请成功', icon: 'success' });
+                    wx.showToast({ title: `提现¥${displayAmount}${feeText}`, icon: 'success', duration: 3000 });
                 }
             } else {
                 wx.showToast({ title: res.message || '申请失败', icon: 'none' });
@@ -329,6 +345,41 @@ Page({
 
     goAgentPortal() {
         copyAgentPortalLink({ mode: 'modal' });
+    },
+
+    onCommissionToFund() {
+        wx.showModal({
+            title: '佣金转货款',
+            editable: true,
+            placeholderText: '请输入转入金额',
+            success: async (res) => {
+                if (!res.confirm || !res.content) return;
+                const amount = parseFloat(res.content);
+                if (!amount || amount <= 0) return wx.showToast({ title: '请输入有效金额', icon: 'none' });
+                try {
+                    const r = await wx.cloud.callFunction({
+                        name: 'distribution',
+                        data: { action: 'commissionToGoodsFund', amount }
+                    });
+                    if (r.result && r.result.code === 0) {
+                        wx.showToast({ title: `成功转入${amount}元`, icon: 'success' });
+                        this.refreshDashboard(true);
+                    } else {
+                        wx.showToast({ title: r.result?.message || '转入失败', icon: 'none' });
+                    }
+                } catch (err) {
+                    wx.showToast({ title: '操作失败', icon: 'none' });
+                }
+            }
+        });
+    },
+
+    onPromotionProgress() {
+        wx.navigateTo({ url: '/pages/distribution/promotion-progress' });
+    },
+
+    onFundPoolTap() {
+        wx.navigateTo({ url: '/pages/distribution/fund-pool' });
     },
 
     // 打开分享弹窗

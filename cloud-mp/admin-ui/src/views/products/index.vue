@@ -54,6 +54,7 @@
         <el-table-column prop="stock" label="库存" width="80" align="center" />
         <el-table-column label="标签" width="150" class-name="hide-mobile">
           <template #default="{ row }">
+            <el-tag v-if="row.is_explosive" size="small" type="danger" effect="dark" style="margin:2px">爆单品</el-tag>
             <el-tag v-if="row.product_tag === 'hot'" size="small" type="danger" style="margin:2px">爆品</el-tag>
             <el-tag v-if="row.product_tag === 'discount'" size="small" type="warning" style="margin:2px">折扣</el-tag>
             <el-tag v-if="row.product_tag === 'new'" size="small" type="success" style="margin:2px">新品</el-tag>
@@ -378,7 +379,11 @@
           </div>
         </div>
 
-        <el-form-item label="商品标签" style="margin-top:12px">
+        <el-form-item label="爆单品" style="margin-top:12px">
+          <el-switch v-model="form.is_explosive" :active-value="1" :inactive-value="0" />
+          <span style="margin-left:8px;color:#909399;font-size:12px">开启后自动禁用会员价、优惠券、积分抵扣</span>
+        </el-form-item>
+        <el-form-item label="商品标签">
           <el-select v-model="form.product_tag" style="width:180px">
             <el-option label="普通" value="normal" />
             <el-option label="爆品" value="hot" />
@@ -582,6 +587,7 @@ const defaultForm = () => ({
   supports_pickup: 0,
   visible_in_mall: true,
   product_tag: 'normal',
+  is_explosive: 0,
   commission_rate_1: 0,
   commission_rate_2: 0,
   commission_amount_1: 0,
@@ -626,6 +632,7 @@ const openForm = (row) => {
       supports_pickup: row.supports_pickup ? 1 : 0,
       visible_in_mall: !(row.visible_in_mall === false || row.visible_in_mall === 0),
       product_tag: row.product_tag || 'normal',
+      is_explosive: row.is_explosive ? 1 : 0,
       commission_rate_1: commissionRateApiToForm(row.commission_rate_1),
       commission_rate_2: commissionRateApiToForm(row.commission_rate_2),
       commission_amount_1: row.commission_amount_1 || 0,
@@ -685,6 +692,7 @@ const submitForm = async (status) => {
       await updateProduct(data.id, data)
       ElMessage.success('更新成功')
     } else {
+      delete data.id
       await createProduct(data)
       ElMessage.success(status === 1 ? '发布成功' : '已保存草稿')
     }

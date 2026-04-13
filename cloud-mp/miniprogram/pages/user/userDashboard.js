@@ -68,6 +68,13 @@ function formatMoney(value, fallback = '0.00') {
     return Number.isFinite(n) ? n.toFixed(2) : fallback;
 }
 
+/** 「我的」资产卡片展示：只显示整数部分（截断小数，非四舍五入） */
+function formatMoneyInt(value, fallback = '0') {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return String(Math.trunc(n));
+}
+
 function buildDisplayNickname(info) {
     const rawName = info?.nick_name || info?.nickname || info?.nickName || '微信用户';
     return String(rawName).trim() || '微信用户';
@@ -217,8 +224,8 @@ async function loadUserInfo(page, forceRefresh = false) {
             growthDisplay: null,
             unusedCouponCount: 0,
             pointsBalanceDisplay: '--',
-            balance: '0.00',
-            commissionBalance: '0.00',
+            balance: '0',
+            commissionBalance: '0',
             couponBanner: null,
             notificationsCount: 0,
             orderStats: { pending: 0, paid: 0, shipped: 0, pendingReview: 0, refund: 0 }
@@ -463,39 +470,36 @@ async function loadDistributionInfo(page) {
                 ? dashboardUserInfo.role_level
                 : ((page.data.userInfo || app.globalData.userInfo || {}).role_level || dashboardUserInfo.role || 0)
         ) || 0;
-        const goodsFundBalance = formatMoney(
-            agentWalletInfo.agent_wallet_balance != null
-                ? agentWalletInfo.agent_wallet_balance
-                : (
-                    agentWalletInfo.balance != null
-                        ? agentWalletInfo.balance
-                        : (teamGoodsFund.goods_fund_balance != null ? teamGoodsFund.goods_fund_balance : '0.00')
-                )
-        );
-        const commissionBalance = formatMoney(
-            walletInfo.commission_balance != null
-                ? walletInfo.commission_balance
-                : (
-                    walletInfo.available_balance != null
-                        ? walletInfo.available_balance
-                        : (
-                            walletInfo.commission && walletInfo.commission.available != null
-                                ? walletInfo.commission.available
-                                : (
-                                    walletInfo.balance != null
-                                        ? walletInfo.balance
-                                        : stats.availableAmount
-                                )
-                        )
-                )
-        );
+        const goodsFundRaw = agentWalletInfo.agent_wallet_balance != null
+            ? agentWalletInfo.agent_wallet_balance
+            : (
+                agentWalletInfo.balance != null
+                    ? agentWalletInfo.balance
+                    : (teamGoodsFund.goods_fund_balance != null ? teamGoodsFund.goods_fund_balance : '0.00')
+            );
+        const goodsFundBalance = formatMoney(goodsFundRaw);
+        const commissionRaw = walletInfo.commission_balance != null
+            ? walletInfo.commission_balance
+            : (
+                walletInfo.available_balance != null
+                    ? walletInfo.available_balance
+                    : (
+                        walletInfo.commission && walletInfo.commission.available != null
+                            ? walletInfo.commission.available
+                            : (
+                                walletInfo.balance != null
+                                    ? walletInfo.balance
+                                    : stats.availableAmount
+                            )
+                    )
+            );
         const availableAmount = formatMoney(
             stats.availableAmount != null
                 ? stats.availableAmount
                 : (
                     walletInfo.commission && walletInfo.commission.available != null
                         ? walletInfo.commission.available
-                        : commissionBalance
+                        : commissionRaw
                 )
         );
         const totalEarnings = formatMoney(stats.totalEarnings);
@@ -520,8 +524,8 @@ async function loadDistributionInfo(page) {
                 role_name: dashboardUserInfo.role_name || ROLE_NAMES[roleLevel] || '普通用户'
             },
             stats: { frozenAmount },
-            balance: goodsFundBalance,
-            commissionBalance,
+            balance: formatMoneyInt(goodsFundRaw),
+            commissionBalance: formatMoneyInt(commissionRaw),
             teamCount,
             isAgent: roleLevel >= 2
         });

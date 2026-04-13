@@ -1,0 +1,101 @@
+<view class="page">
+  <view class="loading" wx:if="{{loading}}">加载中...</view>
+
+  <block wx:if="{{!loading}}">
+    <!-- 总贡献卡片 -->
+    <view class="summary-card">
+      <view class="summary-amount">¥{{totalContribution}}</view>
+      <view class="summary-label">我的累计基金池贡献</view>
+      <view class="summary-count">共 {{count}} 笔记录</view>
+    </view>
+
+    <view class="pool-section" wx:if="{{poolOverview}}">
+      <view class="section-head">
+        <view class="section-title-row">
+          <view class="section-title">当前池子概览</view>
+          <view class="pool-badge {{poolOverview.enabled ? 'enabled' : 'disabled'}}">{{poolOverview.enabled ? '已启用' : '未启用'}}</view>
+        </view>
+        <view class="section-tip">这里展示基金池当前余额和累计进出情况，不等于个人可提现金额。</view>
+      </view>
+
+      <view class="overview-grid">
+        <view class="overview-item">
+          <view class="overview-label">当前总余额</view>
+          <view class="overview-value">¥{{poolOverview.currentBalance}}</view>
+        </view>
+        <view class="overview-item">
+          <view class="overview-label">累计入池</view>
+          <view class="overview-value">¥{{poolOverview.totalIn}}</view>
+        </view>
+        <view class="overview-item">
+          <view class="overview-label">累计支出</view>
+          <view class="overview-value">¥{{poolOverview.totalOut}}</view>
+        </view>
+      </view>
+
+      <view class="sub-grid">
+        <view class="sub-item">
+          <view class="sub-amount">¥{{poolOverview.subBalances.mirror_ops}}</view>
+          <view class="sub-label">镜像运营基金</view>
+        </view>
+        <view class="sub-item">
+          <view class="sub-amount">¥{{poolOverview.subBalances.travel}}</view>
+          <view class="sub-label">旅行基金</view>
+        </view>
+        <view class="sub-item">
+          <view class="sub-amount">¥{{poolOverview.subBalances.parent}}</view>
+          <view class="sub-label">父母奖</view>
+        </view>
+        <view class="sub-item">
+          <view class="sub-amount">¥{{poolOverview.subBalances.personal}}</view>
+          <view class="sub-label">个人奖励</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 子账户概览 -->
+    <view class="sub-section" wx:if="{{mySubTotals && (mySubTotals.mirror_ops !== '0.00' || mySubTotals.travel !== '0.00' || mySubTotals.parent !== '0.00' || mySubTotals.personal !== '0.00')}}">
+      <view class="section-title">我的四池累计贡献</view>
+      <view class="sub-grid">
+        <view class="sub-item" wx:if="{{mySubTotals.mirror_ops !== '0.00'}}">
+          <view class="sub-amount">¥{{mySubTotals.mirror_ops}}</view>
+          <view class="sub-label">镜像运营基金</view>
+        </view>
+        <view class="sub-item" wx:if="{{mySubTotals.travel !== '0.00'}}">
+          <view class="sub-amount">¥{{mySubTotals.travel}}</view>
+          <view class="sub-label">旅行基金</view>
+        </view>
+        <view class="sub-item" wx:if="{{mySubTotals.parent !== '0.00'}}">
+          <view class="sub-amount">¥{{mySubTotals.parent}}</view>
+          <view class="sub-label">父母奖</view>
+        </view>
+        <view class="sub-item" wx:if="{{mySubTotals.personal !== '0.00'}}">
+          <view class="sub-amount">¥{{mySubTotals.personal}}</view>
+          <view class="sub-label">个人奖励</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 流水记录 -->
+    <view class="entries-section">
+      <view class="section-title">贡献记录</view>
+      <view class="empty-entries" wx:if="{{entries.length === 0}}">
+        <text>暂无基金池贡献记录</text>
+      </view>
+      <view class="entry-list" wx:else>
+        <view class="entry-item" wx:for="{{entries}}" wx:key="_id">
+          <view class="entry-header">
+            <text class="entry-source">{{item.sourceText}}</text>
+            <text class="entry-amount">+¥{{item.amountText}}</text>
+          </view>
+          <view class="entry-sub" wx:if="{{item.subText}}">
+            <text class="entry-sub-text">{{item.subText}}</text>
+          </view>
+          <view class="entry-footer">
+            <text class="entry-date">{{item.dateText}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

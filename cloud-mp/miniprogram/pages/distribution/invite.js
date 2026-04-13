@@ -118,7 +118,7 @@ Page({
     const userId = userInfo ? userInfo.id : '';
     return {
       title: `${userInfo?.nick_name || userInfo?.nickname || '我'}邀请你加入团队`,
-      path: `/pages/questionnaire/fill?inviter_id=${userId}`,
+      path: `/pages/index/index?inviter_id=${userId}`,
       imageUrl: ''
     };
   },

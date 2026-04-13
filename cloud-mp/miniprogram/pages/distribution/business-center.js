@@ -169,6 +169,10 @@ Page({
         wx.navigateTo({ url: '/pages/distribution/commission-logs' });
     },
 
+    goFundPool() {
+        wx.navigateTo({ url: '/pages/distribution/fund-pool' });
+    },
+
     goDistributionCenter() {
         wx.navigateTo({ url: '/pages/distribution/center' });
     },

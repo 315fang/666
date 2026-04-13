@@ -59,6 +59,16 @@
           <span class="text-price">¥{{ Number(row.balance || 0).toFixed(2) }}</span>
         </template>
       </el-table-column>
+      <el-table-column label="货款" width="90" class-name="hide-mobile">
+        <template #default="{ row }">
+          <span>¥{{ Number(row.agent_wallet_balance || 0).toFixed(2) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="积分" width="80" class-name="hide-mobile">
+        <template #default="{ row }">
+          <span>{{ Number(row.points || 0).toFixed(0) }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="累计消费" width="110" class-name="hide-mobile">
         <template #default="{ row }">
           <span>¥{{ Number(row.total_sales || 0).toFixed(0) }}</span>

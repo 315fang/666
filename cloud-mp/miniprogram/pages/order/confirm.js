@@ -58,7 +58,7 @@ Page({
         pointsDeduction: '0.00',
         // 是否允许积分抵扣（由商品属性决定）
         allowPoints: true,
-        pointsRuleHint: '1积分抵0.1元，最多抵扣订单50%',
+        pointsRuleHint: '1积分抵0.1元，最多抵扣订单70%',
         // 活动单号
         slashNo: null,
         groupNo: null,

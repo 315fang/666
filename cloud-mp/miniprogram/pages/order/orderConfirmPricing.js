@@ -17,11 +17,11 @@ function getPointDeductionRule() {
         ?? deduction.max_deduction_ratio
         ?? rule.max_order_ratio
         ?? rule.max_deduction_ratio
-        ?? 0.5
+        ?? 0.7
     );
     return {
         yuanPerPoint: Number.isFinite(yuanPerPoint) && yuanPerPoint > 0 ? yuanPerPoint : 0.1,
-        maxRatio: Number.isFinite(maxRatio) && maxRatio > 0 ? Math.min(1, maxRatio) : 0.5
+        maxRatio: Number.isFinite(maxRatio) && maxRatio > 0 ? Math.min(1, maxRatio) : 0.7
     };
 }
 
@@ -76,6 +76,12 @@ function recalcFinal(page) {
 
 async function loadAvailableCoupons(page) {
     try {
+        const hasExplosive = (page.data.orderItems || []).some(item => item.is_explosive === 1 || item.is_explosive === true);
+        if (hasExplosive) {
+            page.setData({ availableCoupons: [], unusedCouponCount: 0, selectedCoupon: null, couponDiscount: '0.00', allowCoupon: false });
+            recalcFinal(page);
+            return;
+        }
         const amount = page.data.totalAmount;
         const productIds = [...new Set((page.data.orderItems || []).map((item) => item.product_id).filter(Boolean))];
         const categoryIds = [...new Set((page.data.orderItems || []).map((item) => item.category_id).filter(Boolean))];

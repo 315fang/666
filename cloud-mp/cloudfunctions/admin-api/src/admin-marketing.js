@@ -20,6 +20,7 @@ function registerMarketingRoutes(app, deps) {
         sortByUpdatedDesc,
         assetUrl,
         createAuditLog,
+        directPatchDocument,
         ok,
         fail
     } = deps;
@@ -264,7 +265,6 @@ function registerMarketingRoutes(app, deps) {
     }
 
     function buildDividendPreviewRows(users, rules, totalPool) {
-        const sourcePct = Math.max(0.0001, toNumber(rules?.source_pct, 0));
         const rows = [];
         let displayRank = 1;
         const now = Date.now();
@@ -314,8 +314,8 @@ function registerMarketingRoutes(app, deps) {
                 if (!count || pct <= 0) continue;
                 const bucket = candidates.slice(offset, offset + count);
                 offset += count;
-                // pct 是本名次组的总份额，每人应平分 pct/count
-                const perPersonAmount = Number((totalPool * pct / count / sourcePct).toFixed(2));
+                // pct 是本名次组占总分红池的百分比，每人平分
+                const perPersonAmount = Number((totalPool * pct / 100 / count).toFixed(2));
                 bucket.forEach((user) => {
                     rows.push({
                         awardKey,
@@ -1187,6 +1187,7 @@ function registerMarketingRoutes(app, deps) {
     const agentConfigDefaults = {
         'upgrade-rules': { enabled: true },
         'commission-config': { enabled: true },
+        'commission-matrix': {},
         'peer-bonus': { enabled: false },
         'assist-bonus': { enabled: false },
         'fund-pool': { enabled: false },
@@ -1249,6 +1250,7 @@ function registerMarketingRoutes(app, deps) {
             totalDistributed += amountValue;
             users[userIndex] = {
                 ...users[userIndex],
+                commission_balance: toNumber(users[userIndex].commission_balance, 0) + amountValue,
                 wallet_balance: toNumber(users[userIndex].wallet_balance ?? users[userIndex].balance, 0) + amountValue,
                 balance: toNumber(users[userIndex].balance ?? users[userIndex].wallet_balance, 0) + amountValue,
                 total_earned: toNumber(users[userIndex].total_earned, 0) + amountValue,
@@ -1270,6 +1272,17 @@ function registerMarketingRoutes(app, deps) {
                 updated_at: nowIso(),
                 description: `${year} 年终分红 · ${item.awardLabel}`
             });
+            // 记录钱包流水
+            const walletLogs = getCollection('wallet_logs');
+            walletLogs.push({
+                id: nextId(walletLogs),
+                openid: users[userIndex].openid,
+                type: 'year_end_dividend',
+                amount: amountValue,
+                description: `${year} 年终分红 · ${item.awardLabel} ¥${amountValue}`,
+                created_at: nowIso()
+            });
+            saveCollection('wallet_logs', walletLogs);
         });
         saveCollection('users', users);
         saveCollection('commissions', commissions);

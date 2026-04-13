@@ -87,6 +87,8 @@
         <view class="order-total">
           <text class="total-label">共{{item.quantity}}件 实付:</text>
           <text class="total-amount">¥{{item.total_amount}}</text>
+          <text class="pay-method-tag pay-method-wallet" wx:if="{{item.payment_method === 'goods_fund' || item.pay_channel === 'goods_fund'}}">货款</text>
+          <text class="pay-method-tag pay-method-wechat" wx:elif="{{item.status !== 'pending' && item.status !== 'cancelled' && item.pay_amount > 0}}">微信</text>
           <text class="fulfillment-tag" wx:if="{{item.fulfillment_type === 'Agent'}}">团队发货</text>
         </view>
         <view class="order-actions">

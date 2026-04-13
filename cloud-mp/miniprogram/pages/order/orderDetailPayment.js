@@ -137,6 +137,12 @@ function startPayStatusPolling(page, orderId) {
             const latestOrder = res && res.data;
             if (latestOrder && latestOrder.status && latestOrder.status !== 'pending') {
                 clearWalletPreference(orderId);
+                const groupNo = latestOrder.group_no;
+                const isGroup = latestOrder.type === 'group' || !!latestOrder.group_activity_id || !!groupNo;
+                if (isGroup && groupNo) {
+                    wx.redirectTo({ url: `/pages/group/detail?group_no=${groupNo}` });
+                    return;
+                }
                 page.loadOrder(orderId);
                 return;
             }

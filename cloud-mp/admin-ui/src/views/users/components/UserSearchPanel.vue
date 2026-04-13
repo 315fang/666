@@ -5,7 +5,7 @@
         <el-input v-model="searchForm.member_no" placeholder="8位数字/大写字母" clearable style="width:160px" />
       </el-form-item>
       <el-form-item label="关键词">
-        <el-input v-model="searchForm.keyword" placeholder="昵称 / 手机号 / 邀请码" clearable style="width:200px" />
+        <el-input v-model="searchForm.keyword" placeholder="昵称 / 手机号 / 邀请码 / 用户ID" clearable style="width:200px" />
       </el-form-item>
       <el-form-item label="角色">
         <el-select v-model="searchForm.role_level" placeholder="全部" clearable style="width:120px">

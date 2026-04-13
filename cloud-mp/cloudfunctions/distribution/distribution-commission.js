@@ -6,17 +6,26 @@ const _ = db.command;
 const { toNumber, getAllRecords } = require('./shared/utils');
 
 const DEFAULT_ROLE_NAMES = {
-    0: '普通用户',
-    1: '初级代理',
-    2: '高级代理',
-    3: '推广合伙人',
-    4: '运营合伙人',
-    5: '区域合伙人'
+    0: 'VIP会员',
+    1: '初级会员 C1',
+    2: '高级会员 C2',
+    3: '推广合伙人 B1',
+    4: '运营合伙人 B2',
+    5: '区域合伙人 B3'
+};
+
+const DEFAULT_COMMISSION_MATRIX = {
+    1: { 0: 20 },
+    2: { 0: 30, 1: 5 },
+    3: { 1: 20, 2: 10 },
+    4: { 1: 30, 2: 20, 3: 10 },
+    5: { 1: 35, 2: 25, 3: 15, 4: 5 }
 };
 
 const DEFAULT_AGENT_COMMISSION_CONFIG = {
     direct_pct_by_role: { 1: 20, 2: 30, 3: 40, 4: 40, 5: 40 },
-    indirect_pct_by_role: { 2: 0, 3: 0, 4: 0, 5: 0 }
+    indirect_pct_by_role: { 2: 0, 3: 0, 4: 10, 5: 10 },
+    commission_matrix: DEFAULT_COMMISSION_MATRIX
 };
 
 function hasValue(value) {
@@ -89,15 +98,36 @@ function normalizePctMap(rawMap = {}, fallback = {}) {
     return merged;
 }
 
+function normalizeCommissionMatrix(dbMatrix, fallback) {
+    const result = {};
+    const allKeys = new Set([...Object.keys(fallback || {}), ...Object.keys(dbMatrix || {})]);
+    for (const parentRole of allKeys) {
+        const base = fallback[parentRole] || {};
+        const override = (dbMatrix || {})[parentRole] || {};
+        const merged = {};
+        for (const buyerRole of new Set([...Object.keys(base), ...Object.keys(override)])) {
+            const val = toNumber(override[buyerRole] ?? base[buyerRole], NaN);
+            if (Number.isFinite(val)) merged[buyerRole] = val;
+        }
+        if (Object.keys(merged).length) result[parentRole] = merged;
+    }
+    return result;
+}
+
 async function loadAgentCommissionConfig() {
-    const row = await getConfigByKeys([
-        'agent_system_commission-config',
-        'agent_system_commission_config'
+    const [configRow, matrixRow] = await Promise.all([
+        getConfigByKeys(['agent_system_commission-config', 'agent_system_commission_config']),
+        getConfigByKeys(['agent_system_commission-matrix', 'agent_system_commission_matrix'])
     ]);
-    const config = parseConfigValue(row, {});
+    const config = parseConfigValue(configRow, {});
+    const dbMatrix = parseConfigValue(matrixRow, null);
     return {
         direct_pct_by_role: normalizePctMap(config?.direct_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.direct_pct_by_role),
-        indirect_pct_by_role: normalizePctMap(config?.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role)
+        indirect_pct_by_role: normalizePctMap(config?.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role),
+        commission_matrix: normalizeCommissionMatrix(
+            dbMatrix || config?.commission_matrix,
+            DEFAULT_COMMISSION_MATRIX
+        )
     };
 }
 

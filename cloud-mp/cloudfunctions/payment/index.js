@@ -96,6 +96,27 @@ async function handlePaymentAction(event, openid) {
         }
     }
 
+    if (action === 'retryGroupJoin') {
+        const orderId = params.order_id || params.id;
+        if (!orderId) throw badRequest('缺少订单 ID');
+        try {
+            const order = await db.collection('orders').doc(orderId).get().then(r => r.data).catch(() => null);
+            if (!order) throw badRequest('订单不存在');
+            if (order.openid !== openid) throw badRequest('无权操作');
+            if (order.status === 'pending_payment' || order.status === 'cancelled') throw badRequest('订单未支付');
+            if (order.group_no && order.group_joined_at) {
+                return success({ group_no: order.group_no, already_joined: true });
+            }
+            const result = await paymentCallback.processPaidOrder(orderId, order);
+            const updated = await db.collection('orders').doc(orderId).get().then(r => r.data).catch(() => order);
+            return success({ group_no: updated.group_no || '', result });
+        } catch (err) {
+            if (err instanceof CloudBaseError) throw err;
+            console.error('[Payment] retryGroupJoin error:', err.message);
+            throw serverError('重试拼团入团失败: ' + err.message);
+        }
+    }
+
     // 内部调用：其它云函数通过 callFunction 触发支付后处理（佣金、积分奖励、升级等）
     if (action === '_postProcessPaid') {
         const orderId = params.order_id || params.id;

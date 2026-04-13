@@ -769,3 +769,22 @@
 .popup-btn:active {
   opacity: 0.9;
 }
+
+.popup-fee-hint {
+  margin-bottom: 20rpx;
+}
+.popup-fee-hint .fee-text {
+  font-size: 24rpx;
+  color: #A3A3A3;
+}
+.popup-fee-calc {
+  margin-bottom: 20rpx;
+}
+.popup-fee-calc .fee-calc-text {
+  font-size: 24rpx;
+  color: #B98B58;
+}
+
+.menu-icon.promotion {
+  background: linear-gradient(135deg, #10b981, #059669);
+}

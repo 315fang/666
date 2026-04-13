@@ -73,7 +73,7 @@ const DEFAULT_CONFIG = {
   point_rule_config: {
     deduction: {
       yuan_per_point: 0.1,
-      max_order_ratio: 0.5
+      max_order_ratio: 0.7
     }
   },
   slash_config: {

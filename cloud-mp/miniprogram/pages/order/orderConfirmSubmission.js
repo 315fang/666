@@ -109,13 +109,18 @@ async function submitOrder(page, app, brandAnimation) {
             wx.setStorageSync('latestCreatedOrderHint', `已创建 ${createdOrders.length} 个待支付订单，请在订单列表中逐个完成支付`);
         }
 
+        const isGroupOrder = !!(page.data.groupActivityId || page.data.groupNo);
+        const createdGroupNo = createdOrders[0] && createdOrders[0].group_no;
+
         if (brandAnimation) {
             brandAnimation.show('success');
         }
 
         setTimeout(() => {
             page.setData({ submitting: false });
-            if (isSplitOrders) {
+            if (goodsFundPaid && isGroupOrder && createdGroupNo) {
+                wx.redirectTo({ url: `/pages/group/detail?group_no=${createdGroupNo}` });
+            } else if (isSplitOrders) {
                 wx.redirectTo({ url: '/pages/order/list?status=pending' });
             } else if (orderId) {
                 wx.redirectTo({ url: `/pages/order/detail?id=${orderId}` });

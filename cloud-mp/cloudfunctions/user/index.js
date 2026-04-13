@@ -8,12 +8,12 @@ const db = cloud.database();
 const _ = db.command;
 
 const DEFAULT_ROLE_NAMES = {
-    0: '普通用户',
-    1: '初级代理',
-    2: '高级代理',
-    3: '推广合伙人',
-    4: '运营合伙人',
-    5: '区域合伙人'
+    0: 'VIP会员',
+    1: '初级会员 C1',
+    2: '高级会员 C2',
+    3: '推广合伙人 B1',
+    4: '运营合伙人 B2',
+    5: '区域合伙人 B3'
 };
 
 const DEFAULT_AGENT_UPGRADE_RULES = {

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="S2B2C 数字化加盟系统 - 企业级后台管理平台">
+  <title>S2B2C 管理台</title>
+  <!-- Plus Jakarta Sans - 设计系统字体（Enterprise Gateway） -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', 'PingFang SC', sans-serif;
+    }
+
+    #app {
+      height: 100vh;
+    }
+  </style>
+  <script>
+    (function () {
+      var RELOAD_KEY = 'admin-chunk-reload-at';
+      var RELOAD_WINDOW_MS = 15000;
+      var errorPattern = /Failed to fetch dynamically imported module|Importing a module script failed|Unable to preload CSS/i;
+
+      function shouldRecover(err) {
+        var message = String((err && err.message) || err || '');
+        return errorPattern.test(message);
+      }
+
+      function reloadOnce() {
+        try {
+          var last = Number(window.sessionStorage.getItem(RELOAD_KEY) || 0);
+          var now = Date.now();
+          if (last && now - last < RELOAD_WINDOW_MS) return;
+          window.sessionStorage.setItem(RELOAD_KEY, String(now));
+        } catch (_) {}
+
+        var url = new URL(window.location.href);
+        url.searchParams.delete('v');
+        window.location.replace(url.toString());
+      }
+
+      window.addEventListener('error', function (event) {
+        if (shouldRecover((event && event.error) || (event && event.message))) {
+          reloadOnce();
+        }
+      }, true);
+
+      window.addEventListener('unhandledrejection', function (event) {
+        if (shouldRecover(event && event.reason)) {
+          if (event && typeof event.preventDefault === 'function') event.preventDefault();
+          reloadOnce();
+        }
+      });
+    })();
+  </script>
+  <script type="module" crossorigin src="/admin/assets/index-DOw-QlxV.js"></script>
+  <link rel="modulepreload" crossorigin href="/admin/assets/vue-vendor-BzYWW4rO.js">
+  <link rel="modulepreload" crossorigin href="/admin/assets/http-vendor-C0Zqfgkc.js">
+  <link rel="modulepreload" crossorigin href="/admin/assets/element-plus-icons-b6I7lse-.js">
+  <link rel="stylesheet" crossorigin href="/admin/assets/index-XFU74PjQ.css">
+</head>
+
+<body>
+  <div id="app"></div>
+</body>
+
+</html>

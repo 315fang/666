@@ -941,3 +941,6 @@
 .tag-hot { display: inline-block; padding: 4rpx 14rpx; border-radius: 6rpx; font-size: 22rpx; font-weight: 600; color: #fff; background: linear-gradient(135deg, #FF4D4F, #FF7A45); }
 .tag-discount { display: inline-block; padding: 4rpx 14rpx; border-radius: 6rpx; font-size: 22rpx; font-weight: 600; color: #fff; background: linear-gradient(135deg, #FA8C16, #FAAD14); }
 .tag-new { display: inline-block; padding: 4rpx 14rpx; border-radius: 6rpx; font-size: 22rpx; font-weight: 600; color: #fff; background: linear-gradient(135deg, #52C41A, #73D13D); }
+.tag-explosive { display: inline-block; padding: 4rpx 14rpx; border-radius: 6rpx; font-size: 22rpx; font-weight: 600; color: #fff; background: linear-gradient(135deg, #F5222D, #CF1322); }
+.explosive-notice { margin-bottom: 12rpx; padding: 12rpx 16rpx; background: #FFF2F0; border-radius: 8rpx; }
+.explosive-notice-text { font-size: 24rpx; color: #F5222D; }

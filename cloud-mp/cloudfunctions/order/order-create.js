@@ -7,12 +7,12 @@ const { findUserCouponDoc } = require('./order-coupon');
 
 /**
  * 各角色等级默认折扣率（可通过 configs.member_level_config 覆盖）
- * C0=9.8折, C1=9折, C2=8.5折, B1/B2/B3=6折（代理拿货价）
+ * C 级别不打折（改为购买后按等级赠送积分），B 级别 6 折拿货价
  */
 const DEFAULT_ROLE_DISCOUNT_RATES = {
-    0: 0.98,
-    1: 0.90,
-    2: 0.85,
+    0: 1.0,
+    1: 1.0,
+    2: 1.0,
     3: 0.60,
     4: 0.60,
     5: 0.60
@@ -166,11 +166,11 @@ async function getPointDeductionRule() {
         ?? deduction.max_deduction_ratio
         ?? rule.max_order_ratio
         ?? rule.max_deduction_ratio,
-        0.5
+        0.7
     );
     return {
         yuanPerPoint: yuanPerPoint > 0 ? yuanPerPoint : 0.1,
-        maxRatio: maxRatio > 0 ? Math.min(1, maxRatio) : 0.5
+        maxRatio: maxRatio > 0 ? Math.min(1, maxRatio) : 0.7
     };
 }
 
@@ -328,8 +328,9 @@ async function createOrder(openid, orderData) {
         earlyBuyerInfo?.role_level ?? earlyBuyerInfo?.distributor_level ?? earlyBuyerInfo?.level,
         0
     );
-    // 优先使用用户记录上已算好的折扣率（由升级时写入），兜底用默认表
+    // C级(0/1/2)不打折，仅B级(3+)使用存储的折扣率或默认表
     const buyerDiscountRate = (() => {
+        if (buyerRoleLevel <= 2) return 1;
         const stored = toNumber(earlyBuyerInfo?.discount_rate, NaN);
         if (Number.isFinite(stored) && stored > 0 && stored <= 1) return stored;
         return DEFAULT_ROLE_DISCOUNT_RATES[buyerRoleLevel] ?? 1;
@@ -399,11 +400,14 @@ async function createOrder(openid, orderData) {
         } else {
             const basePrice = resolveSkuUnitPrice(sku, product);
             originalUnitPrice = basePrice;
-            const skipDiscount = product.skip_member_discount === true || product.skip_role_discount === true;
-            const agentLevelPrice = buyerRoleLevel >= 3
+            const isExplosive = product.is_explosive === true || product.is_explosive === 1;
+            const skipDiscount = isExplosive || product.skip_member_discount === true || product.skip_role_discount === true;
+
+            // 爆单品不参与会员价，直接用零售价
+            const agentLevelPrice = (!isExplosive && buyerRoleLevel >= 3)
                 ? toNumber(sku?.price_agent ?? product?.price_agent ?? sku?.price_leader ?? product?.price_leader, NaN)
                 : NaN;
-            const memberLevelPrice = buyerRoleLevel >= 1 && buyerRoleLevel <= 2
+            const memberLevelPrice = (!isExplosive && buyerRoleLevel >= 1 && buyerRoleLevel <= 2)
                 ? toNumber(sku?.price_member ?? product?.price_member, NaN)
                 : NaN;
 
@@ -444,8 +448,9 @@ async function createOrder(openid, orderData) {
             quantity: qty,
             subtotal: lineTotal,
             item_amount: lineTotal,
-            // allow_points 为 null/undefined 时视为允许（兼容旧商品数据）
-            allow_points: product.allow_points == null ? 1 : (product.allow_points ? 1 : 0),
+            is_explosive: (product.is_explosive === true || product.is_explosive === 1) ? 1 : 0,
+            allow_points: (product.is_explosive === true || product.is_explosive === 1) ? 0
+                : (product.allow_points == null ? 1 : (product.allow_points ? 1 : 0)),
             activity_type: groupActivity ? 'group' : (slashRecord ? 'slash' : ''),
             group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : '',
             slash_no: slashRecord ? (slashRecord.slash_no || slash_no) : ''
@@ -455,9 +460,12 @@ async function createOrder(openid, orderData) {
     totalAmount = Math.round(totalAmount * 100) / 100;
     originalTotalAmount = Math.round(originalTotalAmount * 100) / 100;
 
+    // 爆单品订单自动禁用优惠券
+    const hasExplosiveItem = orderItems.some(it => it.is_explosive === 1);
+
     // 2. 优惠券抵扣（先计算折扣金额，暂不核销；核销放在订单创建成功之后，防止无回滚丢券）
     let couponDiscount = 0;
-    const selectedCouponId = user_coupon_id || coupon_id;
+    const selectedCouponId = hasExplosiveItem ? '' : (user_coupon_id || coupon_id);
     let usedCouponDocId = '';
     let usedCouponTemplateId = '';
     let pendingCouponDoc = null;  // 延迟核销的优惠券文档

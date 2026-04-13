@@ -23,7 +23,7 @@
         <el-radio-group v-model="searchForm.status_group" size="default" @change="onStatusGroupChange">
           <el-radio-button label="all">全部</el-radio-button>
           <el-radio-button label="pending_pay">待付款</el-radio-button>
-          <el-radio-button label="paid">待发货</el-radio-button>
+          <el-radio-button label="pending_ship">待发货</el-radio-button>
           <el-radio-button label="pending_receive">待收货</el-radio-button>
           <el-radio-button label="completed">已完成</el-radio-button>
           <el-radio-button label="closed">已关闭</el-radio-button>
@@ -73,6 +73,7 @@
             <el-form-item label="付款方式">
               <el-select v-model="searchForm.payment_method" placeholder="全部" clearable style="width:100%">
                 <el-option label="微信支付" value="wechat" />
+                <el-option label="货款支付" value="goods_fund" />
                 <el-option label="余额支付" value="wallet" />
               </el-select>
             </el-form-item>
@@ -218,7 +219,14 @@
             <el-tag :type="getStatusType(detailData.status)">{{ getStatusText(detailData.status) }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="履约方式">{{ fulfillmentText(detailData) }}</el-descriptions-item>
-          <el-descriptions-item label="支付方式">{{ paymentMethodText(detailData.payment_method) }}</el-descriptions-item>
+          <el-descriptions-item label="支付方式">
+            <el-tag :type="detailPaymentMethod(detailData) === 'goods_fund' ? 'warning' : (detailPaymentMethod(detailData) === 'wechat' ? 'success' : 'info')" size="small">
+              {{ paymentMethodText(detailPaymentMethod(detailData)) }}
+            </el-tag>
+            <span class="text-secondary" style="margin-left:8px">
+              原值：{{ detailData.payment_method || detailData.pay_channel || detailData.pay_type || detailData.payment_channel || '-' }}
+            </span>
+          </el-descriptions-item>
           <el-descriptions-item label="配送方式">{{ deliveryTypeText(detailData.delivery_type) }}</el-descriptions-item>
           <el-descriptions-item label="下单时间">{{ fmtDateTime(detailData.created_at) }}</el-descriptions-item>
           <el-descriptions-item label="支付时间">{{ fmtDateTime(detailData.paid_at) }}</el-descriptions-item>
@@ -282,7 +290,10 @@
               <div class="amount-row danger"><span>优惠金额</span><span>-¥{{ money(detailData.coupon_discount) }}</span></div>
               <div class="amount-row danger"><span>积分抵扣</span><span>-¥{{ money(detailData.points_discount) }}</span></div>
               <div class="amount-row total"><span>应付金额</span><span class="text-price">¥{{ money(detailData.actual_price) }}</span></div>
-              <div class="amount-row"><span>支付方式</span><span>{{ paymentMethodText(detailData.payment_method) }}</span></div>
+              <div class="amount-row">
+                <span>支付方式</span>
+                <span>{{ paymentMethodText(detailPaymentMethod(detailData)) }}</span>
+              </div>
             </div>
           </el-col>
         </el-row>
@@ -360,7 +371,7 @@
             style="margin-bottom:12px"
           />
         <el-form-item label="快递公司">
-            <el-input v-model="shipForm.tracking_company" :placeholder="logisticsMode === 'manual' ? '如：顺丰速运 / 同城配送' : '如：顺丰速运'" />
+            <el-input v-model="shipForm.logistics_company" :placeholder="logisticsMode === 'manual' ? '如：顺丰速运 / 同城配送' : '如：顺丰速运'" />
         </el-form-item>
         <el-form-item label="快递单号">
             <el-input v-model="shipForm.tracking_no" :placeholder="logisticsMode === 'manual' ? '输入运单号或手工单号' : '输入快递单号'" />
@@ -525,9 +536,8 @@ const fetchOrders = async () => {
     const res = await getOrders(buildListQueryParams(false))
     tableData.value = res?.list || []
     applyResponse(res)
-    if (res && Object.prototype.hasOwnProperty.call(res, 'pendingShip')) {
-      summaryPendingShip.value = res.pendingShip
-    }
+    const pShip = res?.pendingShip ?? res?.pending_ship ?? res?.summary?.pending_ship
+    if (pShip != null) summaryPendingShip.value = pShip
   } catch (error) {
     console.error(error)
     ElMessage.error(error?.message || '加载订单列表失败')
@@ -626,9 +636,23 @@ const normalizeAmount = (value) => {
   return Math.round((n + Number.EPSILON) * 100) / 100
 }
 const fmtDateTime = (value) => value ? formatDateTime(value) : '-'
+const detailPaymentMethod = (row = {}) => {
+  const raw = String(
+    row.payment_method
+    || row.pay_channel
+    || row.pay_type
+    || row.payment_channel
+    || ''
+  ).trim().toLowerCase()
+  if (['wechat', 'wx', 'jsapi', 'miniapp', 'wechatpay', 'weixin'].includes(raw)) return 'wechat'
+  if (['goods_fund'].includes(raw)) return 'goods_fund'
+  if (['wallet', 'balance', 'credit', 'debt'].includes(raw)) return 'wallet'
+  return raw || ''
+}
 const paymentMethodText = (method) => ({
   wechat: '微信支付',
-  wallet: '货款余额支付'
+  goods_fund: '货款支付',
+  wallet: '余额支付'
 }[method] || (method || '-'))
 const deliveryTypeText = (type) => ({
   express: '快递配送',
@@ -745,13 +769,14 @@ const handleDetail = async (row) => {
     detailVisible.value = true
   } catch (e) {
     console.error(e)
+    ElMessage.error(e?.message || '加载订单详情失败')
   }
 }
 
 // ===== 发货 =====
 const shipDialogVisible = ref(false)
 const currentOrder = ref(null)
-const shipForm = reactive({ fulfillment_type: 'company', tracking_no: '', tracking_company: '' })
+const shipForm = reactive({ fulfillment_type: 'company', tracking_no: '', logistics_company: '' })
 
 const inferFulfillmentType = (row) => {
   const type = String(row?.fulfillment_type || '').toLowerCase()
@@ -770,14 +795,14 @@ const handleShip = (row) => {
   currentOrder.value = row
   shipForm.fulfillment_type = inferFulfillmentType(row)
   shipForm.tracking_no = ''
-  shipForm.tracking_company = ''
+  shipForm.logistics_company = ''
   shipDialogVisible.value = true
 }
 const submitShip = async () => {
   if (logisticsTrackingRequired.value && !shipForm.tracking_no) {
     return ElMessage.warning('请输入物流单号')
   }
-  if (logisticsCompanyRequired.value && !shipForm.tracking_company) {
+  if (logisticsCompanyRequired.value && !shipForm.logistics_company) {
     return ElMessage.warning('请输入承运方名称')
   }
   await runOrderMutation(submittingShip, () => shipOrder(currentOrder.value.id, {

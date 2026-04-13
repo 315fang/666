@@ -14,14 +14,30 @@ function buildOrderActivityInfo(order = {}) {
     const slashNo = order.slash_no || firstItem.slash_no || '';
 
     if (type === 'group' || groupNo || order.group_activity_id || firstItem.group_activity_id) {
+        const isPaid = order.status && order.status !== 'pending' && order.status !== 'cancelled';
+        let title, desc, actionText, disabled;
+        if (groupNo) {
+            title = '可查看拼团进度';
+            desc = '支付后已生成拼团进度，可继续邀请或查看成团状态。';
+            actionText = '查看拼团进度';
+            disabled = false;
+        } else if (isPaid) {
+            title = '拼团进度生成中';
+            desc = '支付已完成，拼团进度正在生成，请稍后刷新查看。';
+            actionText = '刷新查看';
+            disabled = false;
+        } else {
+            title = '拼团进度待生成';
+            desc = '完成支付后会生成拼团进度，可从订单或我的拼团继续查看。';
+            actionText = '支付后查看';
+            disabled = true;
+        }
         return {
             type: 'group',
             label: '拼团订单',
-            title: groupNo ? '可查看拼团进度' : '拼团进度待生成',
-            desc: groupNo ? '支付后已生成拼团进度，可继续邀请或查看成团状态。' : '完成支付后会生成拼团进度，可从订单或我的拼团继续查看。',
-            actionText: groupNo ? '查看拼团进度' : '支付后查看',
+            title, desc, actionText,
             targetNo: groupNo,
-            disabled: !groupNo
+            disabled
         };
     }
 

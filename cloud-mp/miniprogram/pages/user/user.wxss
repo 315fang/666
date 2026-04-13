@@ -519,12 +519,15 @@
 
 .vip-assets-matrix {
   flex: 1;
+  min-width: 0;
   display: flex;
-  justify-content: space-between;
-  padding-right: 20rpx;
+  gap: 24rpx;
+  padding-right: 12rpx;
 }
 
 .vip-asset-item {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 10rpx;
@@ -555,25 +558,41 @@
 }
 
 .vip-asset-all {
-  width: 44rpx;
-  padding: 0 20rpx 0 16rpx;
+  /* 过窄会导致「分红权益」逐字换行/被裁切；略小于初版 188rpx，仍保证单行可读 */
+  width: 176rpx;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 4rpx 26rpx 0 14rpx;
   border-left: 1rpx solid rgba(255,255,255,0.2);
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 20rpx;
   position: relative;
 }
 
-.all-text {
-  text-align: center;
-  line-height: 1.2;
+.dividend-title {
+  font-size: 23rpx;
+  color: #FFFFFF;
+  font-weight: 700;
+  margin-bottom: 6rpx;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.dividend-tip {
+  font-size: 20rpx;
+  color: rgba(191, 219, 254, 0.82);
+  margin-top: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .all-arrow {
   position: absolute;
-  right: 4rpx;
+  right: 6rpx;
   top: 50%;
   transform: translateY(-50%);
   font-size: 20rpx;

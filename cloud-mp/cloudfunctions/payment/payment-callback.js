@@ -6,12 +6,12 @@ const _ = db.command;
 const { verifySignature, decryptResource, loadPublicKey } = require('./wechat-pay-v3');
 
 const DEFAULT_ROLE_NAMES = {
-    0: '普通用户',
-    1: '初级代理',
-    2: '高级代理',
-    3: '推广合伙人',
-    4: '运营合伙人',
-    5: '区域合伙人'
+    0: 'VIP会员',
+    1: '初级会员 C1',
+    2: '高级会员 C2',
+    3: '推广合伙人 B1',
+    4: '运营合伙人 B2',
+    5: '区域合伙人 B3'
 };
 
 const DEFAULT_AGENT_UPGRADE_RULES = {
@@ -21,7 +21,7 @@ const DEFAULT_AGENT_UPGRADE_RULES = {
     // C2 晋升：直推 2 名 C1 + 销售额超580（文档要求需有"实物产品消耗"）
     c2_referee_count: 2,
     c2_min_sales: 580,
-    // B1 晋升：推荐10名C2 或 充值3000（代理加盟费）
+    // B1 晋升：推荐10名C1及以上 或 充值3000（代理加盟费）
     b1_referee_count: 10,
     b1_recharge: 3000,
     // B2 晋升：推荐10名B1 或 充值30000
@@ -31,31 +31,42 @@ const DEFAULT_AGENT_UPGRADE_RULES = {
     b3_recharge: 198000
 };
 
+// 级差矩阵制：MATRIX[上级等级][买家等级] = 佣金百分比（整数，如 20 表示 20%）
+// 直接上级获得 matrix[parent_role][buyer_role]% ；
+// 间接上级获得 max(0, matrix[gp_role][buyer_role] - matrix[parent_role][buyer_role])%（级差）
+const DEFAULT_COMMISSION_MATRIX = {
+    1: { 0: 20 },                              // C1 从 VIP 购买中赚 20%
+    2: { 0: 30, 1: 5 },                        // C2 直推 30%，C1 间推固定 5%
+    3: { 1: 20, 2: 10 },                       // B1 从 C1 赚 20%，C2 赚 10%
+    4: { 1: 30, 2: 20, 3: 10 },                // B2 从 C1 赚 30%，C2 赚 20%，B1 赚 10%
+    5: { 1: 35, 2: 25, 3: 15, 4: 5 }           // B3 从 C1 赚 35%，C2 赚 25%，B1 赚 15%，B2 赚 5%
+};
+
+// 兼容旧格式（供 distribution-commission.js 等引用）
 const DEFAULT_AGENT_COMMISSION_CONFIG = {
-    // 直推佣金率（一级，直接上级按自身等级计算）
-    // C1=20%, C2=30%, B1/B2/B3=40%
     direct_pct_by_role: { 1: 20, 2: 30, 3: 40, 4: 40, 5: 40 },
-    // 动销奖励（二级，间接上级）：B2=10%，B3=10%
-    // 依据业务文档：B2协助B1每单40元(≈10%)，B3协助B1每单60元(≈15%)
-    // 当前取折中值10%，后续可在后台configs.agent_system_commission-config中精确配置
-    indirect_pct_by_role: { 2: 0, 3: 0, 4: 10, 5: 10 }
+    indirect_pct_by_role: { 2: 0, 3: 0, 4: 10, 5: 10 },
+    commission_matrix: DEFAULT_COMMISSION_MATRIX
 };
 
 const DEFAULT_PEER_BONUS_CONFIG = {
     enabled: true,
-    // 文档未定义 C1/C2 平级奖，保留为 0
-    level_1: 0,
-    level_2: 0,
-    // B1 平级奖：100元现金（另有2套产品机会，约赚160元，通过正常产品佣金流水体现）
-    level_3: 100,
-    // B2 平级奖：2000元现金（另有15套产品机会，约赚2400元，通过正常产品佣金流水体现）
-    level_4: 2000,
-    // B3 文档未定义平级奖，暂设 0
-    level_5: 0,
-    // 配套赠送产品套数（记录性质，不直接发货，需运营手动处理）
-    product_sets_3: 2,
-    product_sets_4: 15,
-    product_sets_5: 0
+    default_version: 'team',
+    cooldown_days: 90,
+    social: {
+        level_3: { pct: 10 },
+        level_4: { pct: 20 },
+        level_5: { pct: 20 },
+    },
+    team: {
+        level_3: { cash: 100, exchange_coupons: 2, coupon_product_value: 399, unlock_reward: 160 },
+        level_4: { cash: 2400, exchange_coupons: 15, coupon_product_value: 399, unlock_reward: 160 },
+        level_5: { cash: 0, exchange_coupons: 0, coupon_product_value: 0, unlock_reward: 0 },
+    },
+    refund_dev_fee_pct: 1.5,
+    // 兼容旧格式
+    level_1: 0, level_2: 0, level_3: 100, level_4: 2000, level_5: 0,
+    product_sets_3: 2, product_sets_4: 15, product_sets_5: 0
 };
 
 function toNumber(value, fallback = 0) {
@@ -123,23 +134,55 @@ function normalizePctMap(rawMap = {}, fallback = {}) {
     return merged;
 }
 
+function normalizeCommissionMatrix(dbMatrix, fallback) {
+    const result = {};
+    const allKeys = new Set([...Object.keys(fallback || {}), ...Object.keys(dbMatrix || {})]);
+    for (const parentRole of allKeys) {
+        const base = fallback[parentRole] || {};
+        const override = (dbMatrix || {})[parentRole] || {};
+        const merged = {};
+        for (const buyerRole of new Set([...Object.keys(base), ...Object.keys(override)])) {
+            const val = toNumber(override[buyerRole] ?? base[buyerRole], NaN);
+            if (Number.isFinite(val)) merged[buyerRole] = val;
+        }
+        if (Object.keys(merged).length) result[parentRole] = merged;
+    }
+    return result;
+}
+
+function matrixRate(matrix, parentRole, buyerRole) {
+    const row = matrix[parentRole];
+    if (!row) return 0;
+    const val = toNumber(row[buyerRole], NaN);
+    if (Number.isFinite(val)) return val > 1 ? val / 100 : val;
+    return 0;
+}
+
 async function loadAgentRuntimeConfig() {
-    const [upgradeRow, commissionRow, memberLevelRow, peerBonusRow] = await Promise.all([
+    const [upgradeRow, commissionRow, matrixRow, memberLevelRow, peerBonusRow] = await Promise.all([
         getConfigByKeys(['agent_system_upgrade-rules', 'agent_system_upgrade_rules']),
         getConfigByKeys(['agent_system_commission-config', 'agent_system_commission_config']),
+        getConfigByKeys(['agent_system_commission-matrix', 'agent_system_commission_matrix']),
         getConfigByKeys(['member_level_config']),
         getConfigByKeys(['agent_system_peer-bonus', 'agent_system_peer_bonus'])
     ]);
     const upgradeRules = { ...DEFAULT_AGENT_UPGRADE_RULES, ...parseConfigValue(upgradeRow, {}) };
     const commission = parseConfigValue(commissionRow, {});
+    const dbMatrix = parseConfigValue(matrixRow, null);
     const memberLevels = Array.isArray(parseConfigValue(memberLevelRow, [])) ? parseConfigValue(memberLevelRow, []) : [];
     const peerBonus = { ...DEFAULT_PEER_BONUS_CONFIG, ...parseConfigValue(peerBonusRow, {}) };
+    const commissionMatrix = normalizeCommissionMatrix(
+        dbMatrix || commission?.commission_matrix,
+        DEFAULT_COMMISSION_MATRIX
+    );
     return {
         upgradeRules,
         commissionConfig: {
             direct_pct_by_role: normalizePctMap(commission?.direct_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.direct_pct_by_role),
-            indirect_pct_by_role: normalizePctMap(commission?.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role)
+            indirect_pct_by_role: normalizePctMap(commission?.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role),
+            commission_matrix: commissionMatrix
         },
+        commissionMatrix,
         memberLevels,
         peerBonus
     };
@@ -216,14 +259,15 @@ function deriveEligibleRoleLevel(user = {}, directMembers = [], rechargeTotal = 
         nextRoleLevel = Math.max(nextRoleLevel, 2);
     }
 
-    const c2OrAboveCount = directMembers.filter((member) => toNumber(member.role_level ?? member.distributor_level, 0) >= 2).length;
+    // B1 晋级：推荐 10 个 C1（及以上）或充值 3000
     if (
-        c2OrAboveCount >= toNumber(upgradeRules.b1_referee_count, DEFAULT_AGENT_UPGRADE_RULES.b1_referee_count)
+        c1OrAboveCount >= toNumber(upgradeRules.b1_referee_count, DEFAULT_AGENT_UPGRADE_RULES.b1_referee_count)
         || rechargeTotal >= toNumber(upgradeRules.b1_recharge, DEFAULT_AGENT_UPGRADE_RULES.b1_recharge)
     ) {
         nextRoleLevel = Math.max(nextRoleLevel, 3);
     }
 
+    // B2 晋级：推荐 10 个 B1（及以上）或充值 30000
     const b1OrAboveCount = directMembers.filter((member) => toNumber(member.role_level ?? member.distributor_level, 0) >= 3).length;
     if (
         b1OrAboveCount >= toNumber(upgradeRules.b2_referee_count, DEFAULT_AGENT_UPGRADE_RULES.b2_referee_count)
@@ -232,7 +276,13 @@ function deriveEligibleRoleLevel(user = {}, directMembers = [], rechargeTotal = 
         nextRoleLevel = Math.max(nextRoleLevel, 4);
     }
 
-    if (rechargeTotal >= toNumber(upgradeRules.b3_recharge, DEFAULT_AGENT_UPGRADE_RULES.b3_recharge)) {
+    // B3 晋级：推荐 3 个 B2 或 30 个 B1 或充值 198000
+    const b2OrAboveCount = directMembers.filter((member) => toNumber(member.role_level ?? member.distributor_level, 0) >= 4).length;
+    if (
+        b2OrAboveCount >= toNumber(upgradeRules.b3_referee_b2_count, 3)
+        || b1OrAboveCount >= toNumber(upgradeRules.b3_referee_b1_count, 30)
+        || rechargeTotal >= toNumber(upgradeRules.b3_recharge, DEFAULT_AGENT_UPGRADE_RULES.b3_recharge)
+    ) {
         nextRoleLevel = Math.max(nextRoleLevel, 5);
     }
 
@@ -360,6 +410,9 @@ function commissionConfigForLevel(product = {}, level, baseAmount) {
 
 function roleBasedCommission(user = {}, level, baseAmount, commissionConfig = DEFAULT_AGENT_COMMISSION_CONFIG) {
     const role = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+    if (commissionConfig.commission_matrix) {
+        return 0;
+    }
     const directRates = normalizePctMap(commissionConfig.direct_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.direct_pct_by_role);
     const indirectRates = normalizePctMap(commissionConfig.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role);
     const rates = level === 1 ? directRates : indirectRates;
@@ -402,6 +455,26 @@ async function ensureAgentRoleSynced(orderId, order) {
             updated_at: db.serverDate()
         }
     });
+
+    // 记录晋升日志
+    await db.collection('promotion_logs').add({
+        data: {
+            openid: order.openid,
+            user_id: user.id || user._legacy_id || user._id || order.openid,
+            from_level: currentRoleLevel,
+            to_level: nextRoleLevel,
+            from_name: DEFAULT_ROLE_NAMES[currentRoleLevel] || '普通用户',
+            to_name: roleMeta.roleName,
+            trigger_type: rechargeTotal >= toNumber(upgradeRules.b1_recharge, 3000) ? 'recharge' : 'referral',
+            trigger_order_id: orderId,
+            total_spent: roundMoney(user.total_spent || 0),
+            recharge_total: rechargeTotal,
+            direct_member_count: directMembers.length,
+            promoted_at: db.serverDate(),
+            created_at: db.serverDate()
+        }
+    }).catch((err) => console.error('[RoleSync] 晋升日志写入失败:', err.message));
+
     return { upgraded: true, previousRoleLevel: currentRoleLevel, nextRoleLevel, roleName: roleMeta.roleName };
 }
 
@@ -421,24 +494,61 @@ async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
         return { skipped: true, reason: 'not_same_level' };
     }
 
-    const amount = roundMoney(peerBonus[`level_${bonusLevel}`] || 0);
-    if (amount <= 0) return { skipped: true, reason: 'no_bonus_amount' };
-
     const existing = await db.collection('commissions')
-        .where({
-            order_id: orderId,
-            openid: parent.openid,
-            type: 'same_level',
-            bonus_role_level: bonusLevel
-        })
-        .limit(1)
-        .get()
-        .catch(() => ({ data: [] }));
+        .where({ order_id: orderId, openid: parent.openid, type: 'same_level', bonus_role_level: bonusLevel })
+        .limit(1).get().catch(() => ({ data: [] }));
     if (existing.data && existing.data.length > 0) {
         return { skipped: true, reason: 'already_created' };
     }
 
-    const productSets = toNumber(peerBonus[`product_sets_${bonusLevel}`], 0);
+    // 确定版本：用户个人设定 > 全局默认
+    const version = parent.peer_bonus_version || peerBonus.default_version || 'team';
+    const upgradePayment = getOrderTotalAmount(order);
+    const cooldownDays = toNumber(peerBonus.cooldown_days, 90);
+    const releaseAt = new Date(Date.now() + cooldownDays * 24 * 60 * 60 * 1000);
+
+    let amount = 0;
+    let exchangeCoupons = 0;
+    let description = '';
+
+    if (version === 'social') {
+        const socialConfig = (peerBonus.social || {})[`level_${bonusLevel}`] || {};
+        const pct = toNumber(socialConfig.pct, 0);
+        amount = roundMoney(upgradePayment * pct / 100);
+        description = `平级奖（社会版${pct}%）：下级升级为 ${roleSyncResult.roleName}`;
+    } else {
+        const teamConfig = (peerBonus.team || {})[`level_${bonusLevel}`] || {};
+        amount = roundMoney(toNumber(teamConfig.cash, peerBonus[`level_${bonusLevel}`] || 0));
+        exchangeCoupons = toNumber(teamConfig.exchange_coupons, peerBonus[`product_sets_${bonusLevel}`] || 0);
+        description = `平级奖（团队版）：下级升级为 ${roleSyncResult.roleName}`;
+
+        // 团队版：为上级创建特殊兑换券
+        if (exchangeCoupons > 0) {
+            const couponValue = toNumber(teamConfig.coupon_product_value, 399);
+            for (let i = 0; i < exchangeCoupons; i++) {
+                await db.collection('user_coupons').add({
+                    data: {
+                        openid: parent.openid,
+                        coupon_type: 'exchange',
+                        coupon_value: couponValue,
+                        min_purchase: 0,
+                        status: 'unused',
+                        source: 'peer_bonus',
+                        source_order_id: orderId,
+                        bonus_role_level: bonusLevel,
+                        unlock_reward: toNumber(teamConfig.unlock_reward, 160),
+                        title: `平级奖兑换券（${couponValue}元产品）`,
+                        description: `升级奖励兑换券，可兑换${couponValue}元指定产品`,
+                        created_at: db.serverDate(),
+                        expires_at: null,
+                    },
+                }).catch((err) => console.error('[PeerBonus] 创建兑换券失败:', err.message));
+            }
+        }
+    }
+
+    if (amount <= 0 && exchangeCoupons <= 0) return { skipped: true, reason: 'no_bonus_amount' };
+
     await db.collection('commissions').add({
         data: {
             openid: parent.openid,
@@ -446,40 +556,65 @@ async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
             from_openid: buyer.openid,
             order_id: orderId,
             order_no: order.order_no,
-            amount,
+            amount: Math.max(0, amount),
             level: bonusLevel,
             type: 'same_level',
-            status: 'pending_approval',
+            status: 'frozen',
             bonus_role_level: bonusLevel,
-            product_sets: productSets,
-            description: `平级奖：下级升级为 ${roleSyncResult.roleName}`,
+            peer_bonus_version: version,
+            exchange_coupons: exchangeCoupons,
+            peer_bonus_release_at: releaseAt,
+            refund_deadline: releaseAt,
+            description,
             created_at: db.serverDate(),
             updated_at: db.serverDate()
         }
     });
-    return { created: true, amount, bonusLevel, productSets };
+    return { created: true, amount, bonusLevel, version, exchangeCoupons };
 }
+
+const POINTS_MULTIPLIER_BY_ROLE = {
+    0: 0.5,   // VIP: 每100元返50积分
+    1: 1.0,   // C1: 每100元返100积分
+    2: 1.5,   // C2: 每100元返150积分
+    3: 3.0,   // B1: 每100元返300积分
+    4: 4.0,   // B2: 每100元返400积分
+    5: 5.0    // B3: 每100元返500积分
+};
 
 async function ensurePointsAwarded(orderId, order) {
     if (order.points_awarded_at) return { skipped: true };
     const payAmount = getOrderTotalAmount(order);
-    const pointsEarned = Math.floor(payAmount);
-    if (pointsEarned <= 0 || !order.openid) {
+    if (payAmount <= 0 || !order.openid) {
         await db.collection('orders').doc(orderId).update({
             data: { points_awarded_at: db.serverDate(), updated_at: db.serverDate() },
         });
         return { awarded: 0 };
     }
 
-    await db.collection('users').where({ openid: order.openid }).update({
-        data: {
-            points: _.inc(pointsEarned),
-            growth_value: _.inc(pointsEarned),
-            total_spent: _.inc(payAmount),
-            order_count: _.inc(1),
-            updated_at: db.serverDate(),
-        },
-    });
+    // 查买家等级，按等级倍率赠送积分
+    const buyerRes = await db.collection('users').where({ openid: order.openid }).limit(1).get().catch(() => ({ data: [] }));
+    const buyerRole = buyerRes.data && buyerRes.data[0]
+        ? toNumber(buyerRes.data[0].role_level ?? buyerRes.data[0].distributor_level ?? buyerRes.data[0].level, 0)
+        : 0;
+    const multiplier = POINTS_MULTIPLIER_BY_ROLE[buyerRole] ?? POINTS_MULTIPLIER_BY_ROLE[0];
+    const pointsEarned = Math.floor(payAmount * multiplier);
+
+    // 成长值始终 1:1（实际消费金额产生成长值）
+    const growthEarned = Math.floor(payAmount);
+
+    if (pointsEarned <= 0 && growthEarned <= 0) {
+        await db.collection('orders').doc(orderId).update({
+            data: { points_awarded_at: db.serverDate(), updated_at: db.serverDate() },
+        });
+        return { awarded: 0 };
+    }
+
+    const updates = { total_spent: _.inc(payAmount), order_count: _.inc(1), updated_at: db.serverDate() };
+    if (pointsEarned > 0) updates.points = _.inc(pointsEarned);
+    if (growthEarned > 0) updates.growth_value = _.inc(growthEarned);
+
+    await db.collection('users').where({ openid: order.openid }).update({ data: updates });
 
     const existingLog = await db.collection('point_logs')
         .where({ openid: order.openid, source: 'order_pay', order_id: orderId })
@@ -492,16 +627,18 @@ async function ensurePointsAwarded(orderId, order) {
                 amount: pointsEarned,
                 source: 'order_pay',
                 order_id: orderId,
-                description: `订单支付获得${pointsEarned}积分`,
+                buyer_role: buyerRole,
+                multiplier,
+                description: `订单支付获得${pointsEarned}积分（${buyerRole >= 3 ? 'B' : 'C'}级${multiplier}倍率）`,
                 created_at: db.serverDate(),
             },
         });
     }
 
     await db.collection('orders').doc(orderId).update({
-        data: { points_awarded_at: db.serverDate(), updated_at: db.serverDate() },
+        data: { points_awarded_at: db.serverDate(), points_earned: pointsEarned, updated_at: db.serverDate() },
     });
-    return { awarded: pointsEarned };
+    return { awarded: pointsEarned, growth: growthEarned, multiplier, buyerRole };
 }
 
 async function ensureStockDeducted(orderId, order) {
@@ -547,7 +684,7 @@ async function ensureCommissionsCreated(orderId, order) {
     const beneficiaries = [
         { level: 1, type: 'direct', user: parent },
         { level: 2, type: 'indirect', user: grandparent }
-    ].filter((item) => item.user && item.user.openid && item.user.openid !== order.openid);
+    ].filter((b) => b.user && b.user.openid && b.user.openid !== order.openid);
 
     if (!beneficiaries.length) {
         await db.collection('orders').doc(orderId).update({
@@ -556,39 +693,94 @@ async function ensureCommissionsCreated(orderId, order) {
         return { created: 0 };
     }
 
-    const { commissionConfig } = await loadAgentRuntimeConfig();
+    const { commissionConfig, commissionMatrix } = await loadAgentRuntimeConfig();
+    const useMatrix = commissionMatrix && Object.keys(commissionMatrix).length > 0;
+    const buyerRole = toNumber(buyer.role_level ?? buyer.distributor_level ?? buyer.level, 0);
     const totals = new Map();
     const items = toArray(order.items);
+
+    // 佣金基数 = 实付金额（pay_amount 已扣除积分抵扣和优惠券）
+    // 若全积分支付则 pay_amount=0，跳过佣金
     const orderPayAmount = getOrderTotalAmount(order);
+    const pointsDiscount = toNumber(order.points_discount ?? order.pointsDiscount, 0);
+    const commissionBase = orderPayAmount;
+    if (commissionBase <= 0) {
+        await db.collection('orders').doc(orderId).update({
+            data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
+        });
+        return { created: 0, reason: 'all_points_payment' };
+    }
+
     const itemBaseTotal = items.reduce((sum, item) => {
         const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
         return sum + roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
-    }, 0) || orderPayAmount;
+    }, 0) || commissionBase;
 
     for (const item of items) {
         const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
         const product = await getDocByIdOrLegacy('products', item.product_id) || {};
         const sku = item.sku_id ? await getDocByIdOrLegacy('skus', item.sku_id) || {} : {};
         const rawBase = roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
-        const allocatedBase = itemBaseTotal > 0 ? roundMoney(orderPayAmount * rawBase / itemBaseTotal) : rawBase;
+        const allocatedBase = itemBaseTotal > 0 ? roundMoney(commissionBase * rawBase / itemBaseTotal) : rawBase;
         const cost = roundMoney(resolveUnitCost(product, sku, item, order) * qty);
         let remainingProfit = Math.max(0, roundMoney(allocatedBase - cost));
 
-        for (const beneficiary of beneficiaries) {
-            if (remainingProfit <= 0) break;
-            const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
-            const roleBased = roleBasedCommission(beneficiary.user, beneficiary.level, allocatedBase, commissionConfig);
-            const amount = Math.min(remainingProfit, configured > 0 ? configured : roleBased);
-            if (amount <= 0) continue;
-            const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
-            totals.set(key, {
-                openid: beneficiary.user.openid,
-                user_id: beneficiary.user.id || beneficiary.user._legacy_id || beneficiary.user._id || beneficiary.user.openid,
-                amount: roundMoney((totals.get(key)?.amount || 0) + amount),
-                level: beneficiary.level,
-                type: beneficiary.type
-            });
-            remainingProfit = roundMoney(remainingProfit - amount);
+        if (useMatrix) {
+            // 级差矩阵制：parent 拿 matrix[parentRole][buyerRole]%，grandparent 拿级差
+            // 即便父级被跳过（因为 openid == buyer 等），也要用父级应得比例计算级差
+            const parentBeneficiary = beneficiaries.find(b => b.level === 1);
+            const parentRole = parentBeneficiary
+                ? toNumber(parentBeneficiary.user.role_level ?? parentBeneficiary.user.distributor_level ?? parentBeneficiary.user.level, 0)
+                : 0;
+            // 无论是否使用商品级配置，都应基于矩阵比例计算级差基准
+            const parentMatrixRate = parentBeneficiary ? matrixRate(commissionMatrix, parentRole, buyerRole) : 0;
+
+            for (const beneficiary of beneficiaries) {
+                if (remainingProfit <= 0) break;
+                const bRole = toNumber(beneficiary.user.role_level ?? beneficiary.user.distributor_level ?? beneficiary.user.level, 0);
+
+                const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
+                let amount;
+                if (configured > 0) {
+                    amount = Math.min(remainingProfit, configured);
+                } else {
+                    const myRate = matrixRate(commissionMatrix, bRole, buyerRole);
+                    const effectiveRate = beneficiary.level === 1
+                        ? myRate
+                        : Math.max(0, myRate - parentMatrixRate);
+                    amount = roundMoney(allocatedBase * effectiveRate);
+                    amount = Math.min(remainingProfit, amount);
+                }
+
+                if (amount <= 0) continue;
+                const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
+                totals.set(key, {
+                    openid: beneficiary.user.openid,
+                    user_id: beneficiary.user.id || beneficiary.user._legacy_id || beneficiary.user._id || beneficiary.user.openid,
+                    amount: roundMoney((totals.get(key)?.amount || 0) + amount),
+                    level: beneficiary.level,
+                    type: beneficiary.type
+                });
+                remainingProfit = roundMoney(remainingProfit - amount);
+            }
+        } else {
+            // 兼容旧模式
+            for (const beneficiary of beneficiaries) {
+                if (remainingProfit <= 0) break;
+                const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
+                const roleBased = roleBasedCommission(beneficiary.user, beneficiary.level, allocatedBase, commissionConfig);
+                const amount = Math.min(remainingProfit, configured > 0 ? configured : roleBased);
+                if (amount <= 0) continue;
+                const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
+                totals.set(key, {
+                    openid: beneficiary.user.openid,
+                    user_id: beneficiary.user.id || beneficiary.user._legacy_id || beneficiary.user._id || beneficiary.user.openid,
+                    amount: roundMoney((totals.get(key)?.amount || 0) + amount),
+                    level: beneficiary.level,
+                    type: beneficiary.type
+                });
+                remainingProfit = roundMoney(remainingProfit - amount);
+            }
         }
     }
 
@@ -604,6 +796,7 @@ async function ensureCommissionsCreated(orderId, order) {
                 openid: commission.openid,
                 user_id: commission.user_id,
                 from_openid: order.openid,
+                buyer_role: buyerRole,
                 order_id: orderId,
                 order_no: order.order_no,
                 amount: commission.amount,
@@ -620,7 +813,7 @@ async function ensureCommissionsCreated(orderId, order) {
     await db.collection('orders').doc(orderId).update({
         data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
     });
-    return { created };
+    return { created, commission_base: commissionBase };
 }
 
 function isGroupOrder(order = {}) {
@@ -651,10 +844,14 @@ async function ensurePaidGroupJoined(orderId, order) {
     if (order.group_joined_at) return { skipped: true };
 
     const activity = await getDocByIdOrLegacy('group_activities', order.group_activity_id || order.legacy_group_activity_id || order.activity_id);
-    if (!activity) throw new Error('拼团活动不存在');
-    if (!isActivityOpen(activity)) throw new Error('拼团活动已结束');
+    if (!activity) {
+        console.warn('[GroupJoin] 活动记录未找到，基于订单信息降级创建拼团');
+    }
+    if (activity && !isActivityOpen(activity)) {
+        console.warn('[GroupJoin] 活动已结束，但订单已支付，继续处理拼团');
+    }
 
-    const groupSize = Math.max(2, toNumber(activity.group_size || activity.min_members || order.group_size, 2));
+    const groupSize = Math.max(2, toNumber(activity?.group_size || activity?.min_members || order.group_size, 2));
     let groupNo = order.group_no || '';
     let groupOrder = await findGroupOrder(groupNo);
 
@@ -674,8 +871,8 @@ async function ensurePaidGroupJoined(orderId, order) {
         groupNo = groupNo || ('GRP' + Date.now() + Math.floor(Math.random() * 1000));
         const data = {
             group_no: groupNo,
-            activity_id: activity._id,
-            legacy_activity_id: activity.id || activity._legacy_id || order.legacy_group_activity_id || '',
+            activity_id: activity?._id || order.group_activity_id || '',
+            legacy_activity_id: activity?.id || activity?._legacy_id || order.legacy_group_activity_id || '',
             leader_openid: order.openid,
             status: groupSize <= 1 ? 'completed' : 'pending',
             members: [member],
@@ -762,24 +959,60 @@ async function ensureSlashOrderPurchased(orderId, order) {
 async function recordFundPoolEntry(openid, roleLevel, source, orderId) {
     try {
         const DEFAULT_CONTRIBUTIONS = { 3: 480, 4: 4600 };
+        const DEFAULT_SUB_PCT = { mirror_ops_pct: 42, travel_pct: 31, parent_pct: 11, personal_pct: 16 };
+        const LEVEL_KEY = { 3: 'b1', 4: 'b2', 5: 'b3' };
 
-        // 读取基金池配置
         const configRes = await db.collection('configs')
-            .where({ key: 'agent_system_fund-pool' })
+            .where(_.or([{ key: 'agent_system_fund-pool' }, { config_key: 'agent_system_fund-pool' }]))
             .limit(1)
             .get()
             .catch(() => ({ data: [] }));
-        const config = (configRes.data && configRes.data[0]) || {};
+        const rawConfig = (configRes.data && configRes.data[0]) || {};
+        const config = rawConfig.config_value || rawConfig.value || rawConfig;
+        const levelKey = LEVEL_KEY[roleLevel] || '';
+
+        // 从后台配置中读取该等级的基金池总额和子账户比例
+        const levelConfig = (config && typeof config === 'object' && levelKey) ? config[levelKey] : null;
         const contributions = config.contribution_by_level || DEFAULT_CONTRIBUTIONS;
-        const amount = toNumber(contributions[roleLevel] || DEFAULT_CONTRIBUTIONS[roleLevel], 0);
+        let amount = 0;
+        let subPct = DEFAULT_SUB_PCT;
+
+        if (levelConfig && toNumber(levelConfig.total, 0) > 0) {
+            amount = toNumber(levelConfig.total, 0);
+            subPct = {
+                mirror_ops_pct: toNumber(levelConfig.mirror_ops_pct, DEFAULT_SUB_PCT.mirror_ops_pct),
+                travel_pct: toNumber(levelConfig.travel_pct, DEFAULT_SUB_PCT.travel_pct),
+                parent_pct: toNumber(levelConfig.parent_pct, DEFAULT_SUB_PCT.parent_pct),
+                personal_pct: toNumber(levelConfig.personal_pct, DEFAULT_SUB_PCT.personal_pct),
+            };
+        } else {
+            amount = toNumber(contributions[roleLevel] || DEFAULT_CONTRIBUTIONS[roleLevel], 0);
+        }
+
         if (amount <= 0) return { skipped: true, reason: 'amount_zero' };
 
-        // 写入流水日志
+        // 拆分到四维子账户
+        const pctTotal = subPct.mirror_ops_pct + subPct.travel_pct + subPct.parent_pct + subPct.personal_pct;
+        const normalize = pctTotal > 0 ? 100 / pctTotal : 1;
+        const subAmounts = {
+            mirror_ops: roundMoney(amount * subPct.mirror_ops_pct * normalize / 100),
+            travel: roundMoney(amount * subPct.travel_pct * normalize / 100),
+            parent: roundMoney(amount * subPct.parent_pct * normalize / 100),
+            personal: roundMoney(amount * subPct.personal_pct * normalize / 100),
+        };
+        // 修正舍入误差
+        const subSum = subAmounts.mirror_ops + subAmounts.travel + subAmounts.parent + subAmounts.personal;
+        if (subSum !== amount) {
+            subAmounts.personal = roundMoney(subAmounts.personal + (amount - subSum));
+        }
+
+        // 写入总流水日志
         await db.collection('fund_pool_logs').add({
             data: {
                 openid,
                 role_level: roleLevel,
                 amount,
+                sub_amounts: subAmounts,
                 source: source || 'upgrade_payment',
                 order_id: orderId || '',
                 created_at: db.serverDate(),
@@ -788,12 +1021,16 @@ async function recordFundPoolEntry(openid, roleLevel, source, orderId) {
             console.error('[FundPool] 写入fund_pool_logs失败:', err.message);
         });
 
-        // 原子更新基金池余额（存于 configs 文档中的 balance 字段）
-        if (config._id) {
-            await db.collection('configs').doc(String(config._id)).update({
+        // 原子更新基金池总余额和子账户余额
+        if (rawConfig._id) {
+            await db.collection('configs').doc(String(rawConfig._id)).update({
                 data: {
                     balance: _.inc(amount),
                     total_in: _.inc(amount),
+                    sub_mirror_ops: _.inc(subAmounts.mirror_ops),
+                    sub_travel: _.inc(subAmounts.travel),
+                    sub_parent: _.inc(subAmounts.parent),
+                    sub_personal: _.inc(subAmounts.personal),
                     updated_at: db.serverDate(),
                 },
             }).catch((err) => {
@@ -801,8 +1038,8 @@ async function recordFundPoolEntry(openid, roleLevel, source, orderId) {
             });
         }
 
-        console.log(`[FundPool] 入池成功: openid=${openid}, role_level=${roleLevel}, amount=${amount}, source=${source}`);
-        return { success: true, amount, roleLevel };
+        console.log(`[FundPool] 入池成功: openid=${openid}, role=${roleLevel}, total=${amount}, sub=${JSON.stringify(subAmounts)}`);
+        return { success: true, amount, roleLevel, subAmounts };
     } catch (err) {
         console.error('[FundPool] recordFundPoolEntry异常:', err.message);
         return { error: err.message };
@@ -815,8 +1052,14 @@ async function processPaidOrder(orderId, order) {
     const needsSlashPurchase = hasValue(latest.slash_no) && !latest.slash_purchased_at;
     if (latest.payment_post_processed_at && !needsGroupJoin && !needsSlashPurchase) return { skipped: true };
 
-    const group = needsGroupJoin ? await ensurePaidGroupJoined(orderId, latest) : { skipped: true };
-    const slash = needsSlashPurchase ? await ensureSlashOrderPurchased(orderId, latest) : { skipped: true };
+    const group = needsGroupJoin ? await ensurePaidGroupJoined(orderId, latest).catch(err => {
+        console.error('[PostPay] ensurePaidGroupJoined 失败:', err.message);
+        return { error: err.message };
+    }) : { skipped: true };
+    const slash = needsSlashPurchase ? await ensureSlashOrderPurchased(orderId, latest).catch(err => {
+        console.error('[PostPay] ensureSlashOrderPurchased 失败:', err.message);
+        return { error: err.message };
+    }) : { skipped: true };
     if (latest.payment_post_processed_at) return { group, slash };
 
     const stock = await ensureStockDeducted(orderId, latest);

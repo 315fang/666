@@ -24,6 +24,49 @@ const FAQ_LIST = [
     }
 ];
 
+function buildQuickChannels({ wechat, qr, product, channel, hours }) {
+    const cards = [];
+    const phone = product || channel;
+
+    if (wechat) {
+        cards.push({
+            key: 'wechat',
+            title: '客服微信',
+            value: wechat,
+            hint: '复制后添加专属顾问',
+            action: 'copy_wechat',
+            actionText: '复制微信号',
+            icon: '/assets/icons/message.svg'
+        });
+    }
+
+    if (phone) {
+        cards.push({
+            key: 'phone',
+            title: '服务热线',
+            value: phone,
+            hint: hours ? `服务时段 ${hours}` : '工作时间内优先接听',
+            action: 'call_phone',
+            actionText: '立即拨打',
+            icon: '/assets/icons/headphones.svg'
+        });
+    }
+
+    if (qr) {
+        cards.push({
+            key: 'qr',
+            title: '客服二维码',
+            value: '扫码添加顾问',
+            hint: '保存后可在微信内识别',
+            action: 'preview_qr',
+            actionText: '查看二维码',
+            image: qr
+        });
+    }
+
+    return cards;
+}
+
 function resolveContactModel({ channel, product, qr, wechat }) {
     if (wechat) {
         return {
@@ -80,6 +123,7 @@ Page({
         product_service_phone: '',
         qr_code_url: '',
         faqList: FAQ_LIST,
+        quickChannels: [],
         primaryContactLabel: '',
         primaryContactText: '',
         primaryActionText: '联系客服',
@@ -111,6 +155,13 @@ Page({
                     qr,
                     wechat: customerServiceWechat
                 });
+                const quickChannels = buildQuickChannels({
+                    wechat: customerServiceWechat,
+                    qr,
+                    product,
+                    channel,
+                    hours: customerServiceHours
+                });
 
                 this.setData({
                     loaded: true,
@@ -121,22 +172,32 @@ Page({
                     channel_service_phone: channel,
                     product_service_phone: product,
                     qr_code_url: qr,
+                    quickChannels,
                     ...contactModel
                 });
             })
             .catch(() => {
+                const customerServiceWechat = app.globalData.customerServiceWechat || '';
+                const customerServiceHours = app.globalData.customerServiceHours || '9:00-21:00';
                 const contactModel = resolveContactModel({
                     channel: '',
                     product: '',
                     qr: '',
-                    wechat: app.globalData.customerServiceWechat || ''
+                    wechat: customerServiceWechat
                 });
                 this.setData({
                     loaded: true,
                     hasAny: false,
                     brandName: app.globalData.brandName || '问兰',
-                    customerServiceHours: app.globalData.customerServiceHours || '9:00-21:00',
-                    customerServiceWechat: app.globalData.customerServiceWechat || '',
+                    customerServiceHours,
+                    customerServiceWechat,
+                    quickChannels: buildQuickChannels({
+                        wechat: customerServiceWechat,
+                        qr: '',
+                        product: '',
+                        channel: '',
+                        hours: customerServiceHours
+                    }),
                     ...contactModel
                 });
             });
@@ -166,6 +227,11 @@ Page({
 
     onSecondaryContactTap() {
         this._runAction(this.data.secondaryAction);
+    },
+
+    onQuickActionTap(e) {
+        const action = e.currentTarget.dataset.action;
+        this._runAction(action);
     },
 
     _runAction(action) {

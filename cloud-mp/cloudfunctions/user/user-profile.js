@@ -34,12 +34,12 @@ function formatUser(user) {
     const balance = toNumber(user.commission_balance != null ? user.commission_balance : user.balance, 0);
     const roleLevel = toNumber(user.role_level, 0);
     const ROLE_NAMES = {
-        0: '普通用户',
-        1: '初级代理',
-        2: '高级代理',
-        3: '推广合伙人',
-        4: '运营合伙人',
-        5: '区域合伙人'
+        0: 'VIP会员',
+        1: '初级会员 C1',
+        2: '高级会员 C2',
+        3: '推广合伙人 B1',
+        4: '运营合伙人 B2',
+        5: '区域合伙人 B3'
     };
 
     return {

@@ -36,7 +36,6 @@
     </view>
 
     <view class="hero-actions">
-      <view class="hero-btn hero-btn-primary" bindtap="goRestock">采购入仓</view>
       <view class="hero-btn hero-btn-ghost" bindtap="goStockLogs">库存明细</view>
     </view>
   </view>

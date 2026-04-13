@@ -53,6 +53,14 @@
       <text class="info-label">退款类型</text>
       <text class="info-value">{{activeRefund.type === 'return_refund' ? '退货退款' : '仅退款'}}</text>
     </view>
+    <view class="info-row" wx:if="{{order.points_used > 0}}">
+      <text class="info-label">退回积分</text>
+      <text class="info-value" style="color:#10b981">+{{order.points_used}} 积分</text>
+    </view>
+    <view class="info-row" wx:if="{{order.coupon_discount > 0}}">
+      <text class="info-label">退回优惠券</text>
+      <text class="info-value" style="color:#8b5cf6">已退回（¥{{order.coupon_discount}}）</text>
+    </view>
     <view class="refund-action" bindtap="onViewRefund">
       <text class="refund-link">查看退款详情 ›</text>
     </view>

@@ -116,7 +116,9 @@ function onBuyNow(page, resolvePayableUnitPrice) {
         name: product.name,
         image: product.images && product.images[0] || '',
         spec: selectedSku ? buildSkuText(selectedSku) : '',
-        supports_pickup: product.supports_pickup ? 1 : 0
+        supports_pickup: product.supports_pickup ? 1 : 0,
+        allow_points: product.is_explosive ? 0 : (product.allow_points == null ? 1 : (product.allow_points ? 1 : 0)),
+        is_explosive: product.is_explosive ? 1 : 0
     };
     wx.setStorageSync('directBuyInfo', buyInfo);
 

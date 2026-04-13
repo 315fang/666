@@ -67,7 +67,7 @@ Page({
         statusBarHeight: 20,
         // 资产卡数据（WXML 绑定用）
         stats: { frozenAmount: '0.00' },
-        balance: '0.00',
+        balance: '0',
         teamCount: 0,
         // 订单统计（WXML 用 orderStats）
         orderStats: {
@@ -86,7 +86,7 @@ Page({
         },
         unusedCouponCount: 0,
         pointsBalanceDisplay: '0',
-        commissionBalance: '0.00',
+        commissionBalance: '0',
         quadExpress: { sub: '暂无在途订单', image: QUAD_PLACEHOLDER, orderId: null },
         quadFavorite: { sub: '暂无收藏', image: QUAD_PLACEHOLDER, count: 0 },
         quadFootprint: { sub: '看过的商品', image: QUAD_PLACEHOLDER, count: 0 },
@@ -200,7 +200,7 @@ Page({
         wx.navigateTo({ url: '/pages/user/membership-center' });
     },
 
-    /** 商务中心入口：由后台 membership_config.business_center_min_role_level 控制（默认 1 = C1/初级代理） */
+    /** 商务中心入口：由后台 membership_config.business_center_min_role_level 控制（默认 1 = C1/初级会员） */
     _refreshBusinessCenterVisibility() {
         return refreshBusinessCenterVisibility(this);
     },
@@ -232,6 +232,10 @@ Page({
 
     onCommissionWalletTap() {
         this.onWalletTap();
+    },
+
+    onDividendRightsTap() {
+        navigateIfLoggedIn('/pages/distribution/fund-pool');
     },
 
     onQuadExpressTap() {
@@ -481,10 +485,6 @@ Page({
 
     goInvitePoster() {
         navigateIfLoggedIn('/pages/distribution/invite-poster');
-    },
-
-    goSharePoster() {
-        wx.navigateTo({ url: '/pages/user/share-poster' });
     },
 
     // ★ 跳转积分中心

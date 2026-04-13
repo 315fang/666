@@ -16,7 +16,7 @@
             <el-form-item label="直推C2级别人数"><el-input-number v-model="upgradeRules.c2_referee_count" :min="1" /></el-form-item>
             <el-form-item label="累计销售额（元）"><el-input-number v-model="upgradeRules.c2_min_sales" :min="0" :step="50" /></el-form-item>
             <el-divider content-position="left">C2 → B1 推广合伙人</el-divider>
-            <el-form-item label="推荐C2人数"><el-input-number v-model="upgradeRules.b1_referee_count" :min="1" /></el-form-item>
+            <el-form-item label="推荐C1及以上人数"><el-input-number v-model="upgradeRules.b1_referee_count" :min="1" /></el-form-item>
             <el-form-item label="或 缴纳金额（元）"><el-input-number v-model="upgradeRules.b1_recharge" :min="0" :step="500" /></el-form-item>
             <el-divider content-position="left">B1 → B2 运营合伙人</el-divider>
             <el-form-item label="推荐B1人数"><el-input-number v-model="upgradeRules.b2_referee_count" :min="1" /></el-form-item>
@@ -170,6 +170,25 @@
         </el-card>
       </el-tab-pane>
 
+      <!-- ====== 佣金矩阵 ====== -->
+      <el-tab-pane label="佣金矩阵" name="matrix">
+        <el-card>
+          <template #header><div class="card-header">
+            <div>级差佣金矩阵（行=上级等级，列=买家等级，值=百分比%）</div>
+            <el-button type="primary" :loading="saving" @click="saveMatrix">保存</el-button>
+          </div></template>
+          <el-alert type="info" :closable="false" style="margin-bottom:16px" title="直接上级获得 matrix[上级][买家]%；间接上级获得 max(0, matrix[上上级][买家] - matrix[上级][买家])%（级差）。佣金基数=实付金额-积分抵扣。" />
+          <el-table :data="matrixRows" border style="max-width:800px">
+            <el-table-column prop="parentLabel" label="上级等级" width="150" fixed />
+            <el-table-column v-for="buyer in matrixBuyerCols" :key="'mc'+buyer.role" :label="buyer.label" width="110" align="center">
+              <template #default="{ row }">
+                <el-input-number v-model="row.rates[buyer.role]" :min="0" :max="100" :step="1" size="small" style="width:80px" controls-position="right" />
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-tab-pane>
+
       <!-- ====== 平级奖 ====== -->
       <el-tab-pane label="平级奖" name="peer">
         <el-card>
@@ -177,16 +196,31 @@
             <div><el-switch v-model="peerBonus.enabled" active-text="启用" inactive-text="停用" style="margin-right:12px" />同级直推奖金</div>
             <el-button type="primary" :loading="saving" @click="save('peer')">保存</el-button>
           </div></template>
-          <el-form label-width="260px" style="max-width:650px" :disabled="!peerBonus.enabled">
-            <el-form-item label="C1推C1 现金（元）"><el-input-number v-model="peerBonus.level_1" :min="0" /></el-form-item>
-            <el-form-item label="C2推C2 现金（元）"><el-input-number v-model="peerBonus.level_2" :min="0" /></el-form-item>
-            <el-form-item label="B1推B1 现金（元）"><el-input-number v-model="peerBonus.level_3" :min="0" /><span class="form-tip">+产品奖励见下方</span></el-form-item>
-            <el-form-item label="B2推B2 现金（元）"><el-input-number v-model="peerBonus.level_4" :min="0" /></el-form-item>
-            <el-form-item label="B3推B3 现金（元）"><el-input-number v-model="peerBonus.level_5" :min="0" /></el-form-item>
-            <el-divider content-position="left">产品奖励套数</el-divider>
-            <el-form-item label="B1平级奖 产品套数"><el-input-number v-model="peerBonus.product_sets_3" :min="0" :max="50" /></el-form-item>
-            <el-form-item label="B2平级奖 产品套数"><el-input-number v-model="peerBonus.product_sets_4" :min="0" :max="50" /></el-form-item>
-            <el-form-item label="B3平级奖 产品套数"><el-input-number v-model="peerBonus.product_sets_5" :min="0" :max="50" /></el-form-item>
+          <el-form label-width="260px" style="max-width:700px" :disabled="!peerBonus.enabled">
+            <el-divider content-position="left">全局设置</el-divider>
+            <el-form-item label="默认版本">
+              <el-select v-model="peerBonus.default_version" style="width:200px">
+                <el-option label="团队版（现金+兑换券）" value="team" />
+                <el-option label="社会版（按比例）" value="social" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="犹豫期（天）"><el-input-number v-model="peerBonus.cooldown_days" :min="0" :max="365" /></el-form-item>
+            <el-form-item label="退出手续费 %"><el-input-number v-model="peerBonus.refund_dev_fee_pct" :min="0" :max="100" :step="0.5" :precision="1" /></el-form-item>
+
+            <el-divider content-position="left">社会版（按升级订单实付 % 计算）</el-divider>
+            <el-form-item label="B1 社会版佣金 %"><el-input-number v-model="peerBonus.social.level_3.pct" :min="0" :max="100" /></el-form-item>
+            <el-form-item label="B2 社会版佣金 %"><el-input-number v-model="peerBonus.social.level_4.pct" :min="0" :max="100" /></el-form-item>
+            <el-form-item label="B3 社会版佣金 %"><el-input-number v-model="peerBonus.social.level_5.pct" :min="0" :max="100" /></el-form-item>
+
+            <el-divider content-position="left">团队版（固定现金 + 兑换券）</el-divider>
+            <el-form-item label="B1 现金（元）"><el-input-number v-model="peerBonus.team.level_3.cash" :min="0" /></el-form-item>
+            <el-form-item label="B1 兑换券数量"><el-input-number v-model="peerBonus.team.level_3.exchange_coupons" :min="0" :max="50" /></el-form-item>
+            <el-form-item label="B1 单张券面值"><el-input-number v-model="peerBonus.team.level_3.coupon_product_value" :min="0" :step="50" /></el-form-item>
+            <el-form-item label="B2 现金（元）"><el-input-number v-model="peerBonus.team.level_4.cash" :min="0" /></el-form-item>
+            <el-form-item label="B2 兑换券数量"><el-input-number v-model="peerBonus.team.level_4.exchange_coupons" :min="0" :max="50" /></el-form-item>
+            <el-form-item label="B2 单张券面值"><el-input-number v-model="peerBonus.team.level_4.coupon_product_value" :min="0" :step="50" /></el-form-item>
+            <el-form-item label="B3 现金（元）"><el-input-number v-model="peerBonus.team.level_5.cash" :min="0" /></el-form-item>
+            <el-form-item label="B3 兑换券数量"><el-input-number v-model="peerBonus.team.level_5.exchange_coupons" :min="0" :max="50" /></el-form-item>
           </el-form>
         </el-card>
       </el-tab-pane>
@@ -291,7 +325,7 @@
           </div></template>
           <el-form label-width="200px" style="max-width:650px" :disabled="!dividendRules.enabled">
             <el-form-item label="分红来源比例 %"><el-input-number v-model="dividendRules.source_pct" :min="0" :max="10" :step="0.5" :precision="1" /></el-form-item>
-            <el-form-item label="最低参与月数"><el-input-number v-model="dividendRules.min_months" :min="0" :max="12" /><span class="form-tip">需平足此月数才有资格</span></el-form-item>
+            <el-form-item label="最低参与月数"><el-input-number v-model="dividendRules.min_months" :min="0" :max="12" /><span class="form-tip">需满足此月数才有资格</span></el-form-item>
             <el-divider content-position="left">B波团队奖（占 {{ dividendRules.b_team_award.pool_pct }}%）</el-divider>
             <el-form-item label="启用"><el-switch v-model="dividendRules.b_team_award.enabled" /></el-form-item>
             <el-form-item label="占分红池比例 %"><el-input-number v-model="dividendRules.b_team_award.pool_pct" :min="0" :max="10" :step="0.5" :precision="1" /></el-form-item>
@@ -428,6 +462,7 @@ import { useUserStore } from '@/store/user'
 import {
   getUpgradeRules, updateUpgradeRules,
   getCommissionConfig, updateCommissionConfig,
+  getCommissionMatrixConfig, updateCommissionMatrixConfig,
   getPeerBonusConfig, updatePeerBonusConfig,
   getAssistBonusConfig, updateAssistBonusConfig,
   getFundPoolConfig, updateFundPoolConfig,
@@ -465,7 +500,42 @@ const commission = reactive({
   agent_cost_discount_rate: 0.60,
   cost_split: { enabled: true, direct_sales_pct: 40, operations_pct: 25, mirror_operations_pct: 5, profit_pct: 30 }
 })
-const peerBonus = reactive({ enabled: true, level_1: 20, level_2: 50, level_3: 100, level_4: 2000, level_5: 5000, product_sets_3: 2, product_sets_4: 15, product_sets_5: 20 })
+const peerBonus = reactive({
+  enabled: true, default_version: 'team', cooldown_days: 90, refund_dev_fee_pct: 1.5,
+  social: { level_3: { pct: 10 }, level_4: { pct: 20 }, level_5: { pct: 20 } },
+  team: {
+    level_3: { cash: 100, exchange_coupons: 2, coupon_product_value: 399 },
+    level_4: { cash: 2400, exchange_coupons: 15, coupon_product_value: 399 },
+    level_5: { cash: 0, exchange_coupons: 0, coupon_product_value: 0 }
+  },
+  level_1: 0, level_2: 0, level_3: 100, level_4: 2000, level_5: 0,
+  product_sets_3: 2, product_sets_4: 15, product_sets_5: 0
+})
+
+const MATRIX_ROLE_LABELS = { 1: 'C1 初级', 2: 'C2 高级', 3: 'B1 推广', 4: 'B2 运营', 5: 'B3 区域' }
+const MATRIX_BUYER_LABELS = { 0: 'VIP', 1: 'C1', 2: 'C2', 3: 'B1', 4: 'B2' }
+const commissionMatrix = reactive({
+  1: { 0: 20 },
+  2: { 0: 30, 1: 5 },
+  3: { 1: 20, 2: 10 },
+  4: { 1: 30, 2: 20, 3: 10 },
+  5: { 1: 35, 2: 25, 3: 15, 4: 5 }
+})
+
+const matrixBuyerCols = computed(() => Object.entries(MATRIX_BUYER_LABELS).map(([role, label]) => ({ role: Number(role), label })))
+const matrixRows = computed(() =>
+  Object.entries(MATRIX_ROLE_LABELS).map(([role, label]) => {
+    if (!commissionMatrix[role]) commissionMatrix[role] = {}
+    return { parentRole: Number(role), parentLabel: label, rates: commissionMatrix[role] }
+  })
+)
+async function saveMatrix () {
+  await withLoading(saving, async () => {
+    const payload = JSON.parse(JSON.stringify(commissionMatrix))
+    await updateCommissionMatrixConfig(payload)
+    ElMessage.success('佣金矩阵已保存')
+  }).catch(() => { ElMessage.error('保存失败') })
+}
 const assistBonus = reactive({ enabled: true, tiers: [{ max_orders: 30, bonus: 40 }, { max_orders: 50, bonus: 50 }, { max_orders: 100, bonus: 60 }] })
 const fundPool = reactive({ enabled: true, b1: { total: 480, mirror_ops_pct: 42, travel_pct: 31, parent_pct: 11, personal_pct: 16 }, b2: { total: 4600, mirror_ops_pct: 42, travel_pct: 31, parent_pct: 11, personal_pct: 16 }, b3: { total: 0, mirror_ops_pct: 42, travel_pct: 31, parent_pct: 11, personal_pct: 16 } })
 const dividendRules = reactive({ enabled: true, min_months: 2, source_pct: 3, b_team_award: { enabled: true, pool_pct: 2, ranks: [{ rank: 1, count: 1, pct: 1.0, label: '冠军' }, { rank: 2, count: 2, pct: 0.6, label: '亚军' }, { rank: 3, count: 3, pct: 0.4, label: '季军' }] }, b1_personal_award: { enabled: true, pool_pct: 1, ranks: [{ rank: 1, count: 1, pct: 0.5, label: '冠军' }, { rank: 2, count: 2, pct: 0.3, label: '亚军' }, { rank: 3, count: 3, pct: 0.2, label: '季军' }] } })
@@ -645,7 +715,18 @@ function deepAssign(target, source) {
 }
 
 const loadAll = async () => {
-  const results = await Promise.allSettled(Object.values(configMap).map(c => c.get()))
+  const [matrixRes, ...results] = await Promise.allSettled([
+    getCommissionMatrixConfig(),
+    ...Object.values(configMap).map(c => c.get())
+  ])
+  if (matrixRes.status === 'fulfilled' && matrixRes.value) {
+    const m = matrixRes.value.data ?? matrixRes.value
+    if (m && typeof m === 'object') {
+      Object.keys(m).forEach(k => {
+        if (m[k] && typeof m[k] === 'object') commissionMatrix[k] = { ...(commissionMatrix[k] || {}), ...m[k] }
+      })
+    }
+  }
   const keys = Object.keys(configMap)
   results.forEach((r, i) => {
     if (r.status === 'fulfilled' && r.value) {
@@ -684,7 +765,11 @@ const confirmExecuteDividend = async () => {
       ElMessage.success(`已发放 ¥${res?.totalDistributed ?? res?.data?.totalDistributed ?? 0}`)
       dividendPreviewData.value = []
     })
-  } catch (_) {}
+  } catch (e) {
+    if (e !== 'cancel' && e?.toString() !== 'cancel') {
+      ElMessage.error(e?.message || '分红发放失败')
+    }
+  }
 }
 
 const executePartnerExit = async () => {

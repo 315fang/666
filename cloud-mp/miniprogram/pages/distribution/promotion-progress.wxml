@@ -1,0 +1,73 @@
+<view class="page" wx:if="{{!loading}}">
+
+  <!-- 当前等级 -->
+  <view class="current-level" wx:if="{{progress}}">
+    <view class="level-badge">{{progress.current_name}}</view>
+    <view class="level-stats">
+      <view class="stat">
+        <text class="stat-val">¥{{progress.stats.total_spent || 0}}</text>
+        <text class="stat-lbl">累计消费</text>
+      </view>
+      <view class="stat">
+        <text class="stat-val">¥{{progress.stats.recharge_total || 0}}</text>
+        <text class="stat-lbl">累计充值</text>
+      </view>
+      <view class="stat">
+        <text class="stat-val">{{progress.stats.c1_count || 0}}</text>
+        <text class="stat-lbl">C1推荐数</text>
+      </view>
+      <view class="stat">
+        <text class="stat-val">{{progress.stats.b1_count || 0}}</text>
+        <text class="stat-lbl">B1推荐数</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 下一级目标 -->
+  <view class="next-target" wx:if="{{progress && progress.next_level != null}}">
+    <view class="section-title">距离 {{progress.next_name}}</view>
+    <view class="conditions">
+      <view class="condition" wx:for="{{progress.conditions}}" wx:key="label">
+        <view class="cond-header">
+          <text class="cond-label">{{item.label}}</text>
+          <text class="cond-status {{item.met ? 'met' : ''}}">{{item.met ? '✓ 已达成' : item.current + ' / ' + item.target}}</text>
+        </view>
+        <view class="progress-bar">
+          <view class="progress-fill {{item.met ? 'full' : ''}}" style="width: {{item.met ? 100 : (item.current / item.target * 100 > 100 ? 100 : item.current / item.target * 100)}}%"></view>
+        </view>
+      </view>
+    </view>
+  </view>
+  <view class="max-level" wx:elif="{{progress && progress.next_level == null}}">
+    <text>🎉 已达最高等级</text>
+  </view>
+
+  <!-- 晋升历史 -->
+  <view class="history-section" wx:if="{{logs.length > 0}}">
+    <view class="section-title">晋升记录</view>
+    <view class="timeline">
+      <view class="timeline-item" wx:for="{{logs}}" wx:key="_id">
+        <view class="timeline-dot"></view>
+        <view class="timeline-content">
+          <view class="timeline-title">{{item.from_name}} → {{item.to_name}}</view>
+          <view class="timeline-desc">
+            <text wx:if="{{item.trigger_type === 'recharge'}}">通过充值晋升</text>
+            <text wx:else>通过推荐业绩晋升</text>
+          </view>
+          <view class="timeline-meta">
+            <text>消费 ¥{{item.total_spent || 0}}</text>
+            <text>充值 ¥{{item.recharge_total || 0}}</text>
+            <text>下级 {{item.direct_member_count || 0}} 人</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+  <view class="empty" wx:elif="{{!progress}}">
+    <text>暂无晋升数据</text>
+  </view>
+</view>
+
+<view class="loading" wx:else>
+  <text>加载中...</text>
+</view>

@@ -178,7 +178,7 @@
 
       <!-- ===== 区域 4：基金池 & 分红记录 ===== -->
       <el-row :gutter="16" style="margin-top: 16px">
-        <!-- 基金池配置 -->
+        <!-- 基金池配置 & 子账户 -->
         <el-col :span="10">
           <el-card class="section-card">
             <template #header>
@@ -189,18 +189,26 @@
               </div>
             </template>
             <el-empty v-if="!data.fund_pool" description="暂无基金池配置" :image-size="50" />
-            <el-descriptions v-else :column="1" border size="small">
-              <el-descriptions-item label="状态">
-                <el-tag :type="data.fund_pool.enabled ? 'success' : 'info'" size="small">
-                  {{ data.fund_pool.enabled ? '已启用' : '已禁用' }}
-                </el-tag>
-              </el-descriptions-item>
-              <template v-for="(val, key) in fundPoolDisplayItems" :key="key">
-                <el-descriptions-item :label="val.label">
-                  {{ val.value }}
+            <template v-else>
+              <el-descriptions :column="1" border size="small">
+                <el-descriptions-item label="状态">
+                  <el-tag :type="data.fund_pool.enabled ? 'success' : 'info'" size="small">
+                    {{ data.fund_pool.enabled ? '已启用' : '已禁用' }}
+                  </el-tag>
                 </el-descriptions-item>
-              </template>
-            </el-descriptions>
+                <template v-for="(val, key) in fundPoolDisplayItems" :key="key">
+                  <el-descriptions-item :label="val.label">
+                    {{ val.value }}
+                  </el-descriptions-item>
+                </template>
+              </el-descriptions>
+              <div v-if="data.fund_pool_sub" class="fund-sub-grid" style="margin-top:12px;">
+                <div v-for="sub in fundSubAccounts" :key="sub.key" class="fund-sub-card" :style="{borderLeft: `3px solid ${sub.color}`}">
+                  <div class="fund-sub-label">{{ sub.label }}</div>
+                  <div class="fund-sub-value">¥{{ fmt(sub.amount) }}</div>
+                </div>
+              </div>
+            </template>
           </el-card>
         </el-col>
 
@@ -390,13 +398,11 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Money, Wallet, CreditCard, Coin, TrendCharts, Refresh, Trophy, DataAnalysis, User } from '@element-plus/icons-vue'
 import { getFinanceOverview, getAgentPerformance, getPoolContributions } from '@/api'
 import { formatDate } from '@/utils/format'
 
-const router = useRouter()
 const loading = ref(false)
 const data = ref({})
 
@@ -501,6 +507,18 @@ const fundPoolDisplayItems = computed(() => {
   return result
 })
 
+const fundSubAccounts = computed(() => {
+  const sub = data.value.fund_pool_sub || {}
+  return [
+    { key: 'total_balance', label: '池总余额', amount: sub.total_balance || 0, color: '#303133' },
+    { key: 'total_in', label: '累计入池', amount: sub.total_in || 0, color: '#606266' },
+    { key: 'mirror_ops', label: '镜像运营', amount: sub.mirror_ops || 0, color: '#409eff' },
+    { key: 'travel', label: '旅行基金', amount: sub.travel || 0, color: '#67c23a' },
+    { key: 'parent', label: '父母奖', amount: sub.parent || 0, color: '#e6a23c' },
+    { key: 'personal', label: '个人奖励', amount: sub.personal || 0, color: '#9c59d1' }
+  ]
+})
+
 onMounted(fetchAll)
 </script>
 
@@ -600,4 +618,9 @@ onMounted(fetchAll)
 .rank-badge.rank-1 { background: #f5d020; color: #8a5900; }
 .rank-badge.rank-2 { background: #c0c0c0; color: #444; }
 .rank-badge.rank-3 { background: #cd7f32; color: #fff; }
+
+.fund-sub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fund-sub-card { padding: 10px 12px; background: #fafafa; border-radius: 4px; }
+.fund-sub-label { font-size: 12px; color: #909399; }
+.fund-sub-value { font-size: 16px; font-weight: 600; color: #303133; margin-top: 2px; }
 </style>

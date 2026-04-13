@@ -412,19 +412,29 @@ const handleAction = {
     'withdraw': asyncHandler(async (openid, params) => {
         const amount = toNumber(params.amount, 0);
         if (amount <= 0) throw badRequest('提现金额必须大于0');
-        if (amount < 1) throw badRequest('最低提现1元');
 
-        // 查询余额
         const userRes = await db.collection('users').where({ openid }).limit(1).get();
         if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
 
         const user = await resolveCommissionWalletState(userRes.data[0]);
         const balance = toNumber(user._commission_balance, 0);
+        const roleLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+
+        // B1(3) 及以下：100元起提，3%税费（封顶100元）
+        // B2(4) 及以上：免手续费（需人工审核资质）
+        let fee = 0;
+        if (roleLevel < 4) {
+            if (amount < 100) throw badRequest('最低提现100元');
+            fee = Math.min(roundMoney(amount * 0.03), 100);
+        } else {
+            if (amount < 1) throw badRequest('提现金额必须大于0');
+        }
+
+        const actualAmount = roundMoney(amount - fee);
         if (amount > balance) throw badRequest('佣金余额不足');
 
         const withdrawNo = 'WD' + Date.now() + Math.floor(Math.random() * 1000);
 
-        // 条件扣减佣金余额（乐观锁：where commission_balance >= amount，防止并发超扣）
         const updateRes = await db.collection('users')
             .where({ openid, commission_balance: _.gte(amount) })
             .update({
@@ -439,31 +449,35 @@ const handleAction = {
             throw badRequest('余额不足或并发冲突，请稍后重试');
         }
 
-        // 创建提现记录
         const result = await db.collection('withdrawals').add({
             data: {
                 openid,
                 withdraw_no: withdrawNo,
                 amount,
+                fee,
+                actual_amount: actualAmount,
+                role_level: roleLevel,
                 type: params.type || 'wechat',
                 status: 'pending',
                 created_at: db.serverDate(),
             },
         });
 
-        // 记录钱包日志
+        const feeDesc = fee > 0 ? `（手续费${fee}元，到账${actualAmount}元）` : '';
         await db.collection('wallet_logs').add({
             data: {
                 openid,
                 type: 'withdraw',
                 amount: -amount,
+                fee,
+                actual_amount: actualAmount,
                 withdraw_id: result._id,
-                description: `提现${amount}元`,
+                description: `提现${amount}元${feeDesc}`,
                 created_at: db.serverDate(),
             },
         });
 
-        return success({ withdraw_id: result._id, withdraw_no: withdrawNo, amount });
+        return success({ withdraw_id: result._id, withdraw_no: withdrawNo, amount, fee, actual_amount: actualAmount });
     }),
 
     'withdrawList': asyncHandler(async (openid, params) => {
@@ -473,6 +487,57 @@ const handleAction = {
             .limit(50)
             .get().catch(() => ({ data: [] }));
         return success({ list: res.data || [] });
+    }),
+
+    // ===== 佣金 1:1 转货款 =====
+    'commissionToGoodsFund': asyncHandler(async (openid, params) => {
+        const amount = toNumber(params.amount, 0);
+        if (amount <= 0) throw badRequest('转入金额必须大于0');
+        if (amount < 1) throw badRequest('最低转入1元');
+
+        const userRes = await db.collection('users').where({ openid }).limit(1).get();
+        if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
+
+        const user = await resolveCommissionWalletState(userRes.data[0]);
+        const balance = toNumber(user._commission_balance, 0);
+        if (amount > balance) throw badRequest('佣金余额不足');
+
+        const updateRes = await db.collection('users')
+            .where({ openid, commission_balance: _.gte(amount) })
+            .update({
+                data: {
+                    commission_balance: _.inc(-amount),
+                    balance: _.inc(-amount),
+                    agent_wallet_balance: _.inc(amount),
+                    updated_at: db.serverDate()
+                },
+            });
+        if (!updateRes.stats || updateRes.stats.updated === 0) {
+            throw badRequest('余额不足或并发冲突，请稍后重试');
+        }
+
+        const transferNo = 'CT' + Date.now() + Math.floor(Math.random() * 1000);
+
+        await Promise.all([
+            db.collection('wallet_logs').add({
+                data: {
+                    openid, type: 'commission_transfer', amount: -amount,
+                    transfer_no: transferNo,
+                    description: `佣金转货款${amount}元`,
+                    created_at: db.serverDate(),
+                },
+            }),
+            db.collection('goods_fund_logs').add({
+                data: {
+                    openid, type: 'commission_transfer', amount,
+                    transfer_no: transferNo,
+                    description: `佣金转入货款${amount}元`,
+                    created_at: db.serverDate(),
+                },
+            })
+        ]);
+
+        return success({ transfer_no: transferNo, amount });
     }),
 
     // ===== 团队 =====
@@ -613,6 +678,146 @@ const handleAction = {
         const u = userRes.data[0];
         const balance = toNumber(u.agent_wallet_balance != null ? u.agent_wallet_balance : u.wallet_balance, 0);
         return success({ balance, agent_wallet_balance: balance });
+    }),
+
+    // ===== 晋升进度 =====
+    'promotionProgress': asyncHandler(async (openid) => {
+        const userRes = await db.collection('users').where({ openid }).limit(1).get();
+        if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
+        const user = userRes.data[0];
+        const currentLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+        const totalSpent = toNumber(user.total_spent ?? user.growth_value, 0);
+
+        // 查直属下级
+        const clauses = [];
+        if (user.openid) clauses.push({ referrer_openid: user.openid });
+        const ids = [user.openid, user.id, user._legacy_id, user._id].filter(v => v != null && v !== '');
+        if (ids.length) clauses.push({ parent_id: _.in(ids) });
+        const directRes = clauses.length > 0
+            ? await db.collection('users').where(clauses.length === 1 ? clauses[0] : _.or(clauses)).limit(200).get().catch(() => ({ data: [] }))
+            : { data: [] };
+        const directMembers = directRes.data || [];
+
+        const c1Count = directMembers.filter(m => toNumber(m.role_level ?? m.distributor_level, 0) >= 1).length;
+        const b1Count = directMembers.filter(m => toNumber(m.role_level ?? m.distributor_level, 0) >= 3).length;
+        const b2Count = directMembers.filter(m => toNumber(m.role_level ?? m.distributor_level, 0) >= 4).length;
+
+        const rechargeRes = await db.collection('wallet_recharge_orders')
+            .where({ openid, status: _.in(['paid', 'completed', 'success']) })
+            .limit(200).get().catch(() => ({ data: [] }));
+        const rechargeTotal = (rechargeRes.data || []).reduce((s, r) => s + toNumber(r.amount, 0), 0);
+
+        const ROLE_NAMES = { 0: 'VIP会员', 1: '初级会员 C1', 2: '高级会员 C2', 3: '推广合伙人 B1', 4: '运营合伙人 B2', 5: '区域合伙人 B3' };
+        const nextLevel = Math.min(currentLevel + 1, 5);
+        const conditions = [];
+        if (nextLevel === 1) {
+            conditions.push({ type: 'spend', label: '消费满299元', current: totalSpent, target: 299, met: totalSpent >= 299 });
+        } else if (nextLevel === 2) {
+            conditions.push({ type: 'spend', label: '销售额超580元', current: totalSpent, target: 580, met: totalSpent >= 580 });
+            conditions.push({ type: 'referral', label: '直推2个C1', current: c1Count, target: 2, met: c1Count >= 2 });
+        } else if (nextLevel === 3) {
+            conditions.push({ type: 'referral', label: '推荐10个C1', current: c1Count, target: 10, met: c1Count >= 10 });
+            conditions.push({ type: 'recharge', label: '充值3000元', current: rechargeTotal, target: 3000, met: rechargeTotal >= 3000 });
+        } else if (nextLevel === 4) {
+            conditions.push({ type: 'referral', label: '推荐10个B1', current: b1Count, target: 10, met: b1Count >= 10 });
+            conditions.push({ type: 'recharge', label: '充值30000元', current: rechargeTotal, target: 30000, met: rechargeTotal >= 30000 });
+        } else if (nextLevel === 5) {
+            conditions.push({ type: 'referral', label: '推荐3个B2', current: b2Count, target: 3, met: b2Count >= 3 });
+            conditions.push({ type: 'referral', label: '推荐30个B1', current: b1Count, target: 30, met: b1Count >= 30 });
+            conditions.push({ type: 'recharge', label: '充值198000元', current: rechargeTotal, target: 198000, met: rechargeTotal >= 198000 });
+        }
+
+        return success({
+            current_level: currentLevel,
+            current_name: ROLE_NAMES[currentLevel] || '普通用户',
+            next_level: currentLevel >= 5 ? null : nextLevel,
+            next_name: currentLevel >= 5 ? null : (ROLE_NAMES[nextLevel] || ''),
+            conditions,
+            stats: { total_spent: totalSpent, recharge_total: rechargeTotal, c1_count: c1Count, b1_count: b1Count, b2_count: b2Count }
+        });
+    }),
+
+    // ===== 晋升日志 =====
+    'promotionLogs': asyncHandler(async (openid) => {
+        const res = await db.collection('promotion_logs')
+            .where({ openid })
+            .orderBy('promoted_at', 'desc')
+            .limit(50)
+            .get().catch(() => ({ data: [] }));
+        return success({ list: res.data || [] });
+    }),
+
+    // ===== 我的基金池汇总 =====
+    'myFundPoolSummary': asyncHandler(async (openid) => {
+        const [logs, configRes] = await Promise.all([
+            db.collection('fund_pool_logs')
+                .where({ openid })
+                .orderBy('created_at', 'desc')
+                .limit(200)
+                .get()
+                .catch(() => ({ data: [] })),
+            db.collection('configs')
+                .where(_.or([{ key: 'agent_system_fund-pool' }, { config_key: 'agent_system_fund-pool' }]))
+                .limit(1)
+                .get()
+                .catch(() => ({ data: [] }))
+        ]);
+
+        const entries = logs.data || [];
+        const fundPoolRow = (configRes.data && configRes.data[0]) || {};
+        let totalContribution = 0;
+        const mySubTotals = {
+            mirror_ops: 0,
+            travel: 0,
+            parent: 0,
+            personal: 0
+        };
+
+        entries.forEach((entry) => {
+            totalContribution += toNumber(entry.amount, 0);
+            const subAmounts = entry.sub_amounts || {};
+            mySubTotals.mirror_ops += toNumber(subAmounts.mirror_ops, 0);
+            mySubTotals.travel += toNumber(subAmounts.travel, 0);
+            mySubTotals.parent += toNumber(subAmounts.parent, 0);
+            mySubTotals.personal += toNumber(subAmounts.personal, 0);
+        });
+
+        let fundPoolConfig = fundPoolRow.config_value !== undefined ? fundPoolRow.config_value : fundPoolRow.value;
+        if (typeof fundPoolConfig === 'string') {
+            try {
+                fundPoolConfig = JSON.parse(fundPoolConfig);
+            } catch (_) {
+                fundPoolConfig = {};
+            }
+        }
+
+        const currentBalance = roundMoney(toNumber(fundPoolRow.balance, 0));
+        const totalIn = roundMoney(toNumber(fundPoolRow.total_in, currentBalance));
+        const totalOut = roundMoney(Math.max(0, totalIn - currentBalance));
+
+        return success({
+            total_contribution: roundMoney(totalContribution),
+            my_sub_totals: {
+                mirror_ops: roundMoney(mySubTotals.mirror_ops),
+                travel: roundMoney(mySubTotals.travel),
+                parent: roundMoney(mySubTotals.parent),
+                personal: roundMoney(mySubTotals.personal)
+            },
+            pool_overview: {
+                enabled: !!(fundPoolConfig && typeof fundPoolConfig === 'object' ? fundPoolConfig.enabled : fundPoolRow.enabled),
+                current_balance: currentBalance,
+                total_in: totalIn,
+                total_out: totalOut,
+                sub_balances: {
+                    mirror_ops: roundMoney(toNumber(fundPoolRow.sub_mirror_ops, 0)),
+                    travel: roundMoney(toNumber(fundPoolRow.sub_travel, 0)),
+                    parent: roundMoney(toNumber(fundPoolRow.sub_parent, 0)),
+                    personal: roundMoney(toNumber(fundPoolRow.sub_personal, 0))
+                }
+            },
+            entries: entries.slice(0, 20),
+            count: entries.length
+        });
     }),
 
     'agentWalletLogs': asyncHandler(async (openid, params) => {
@@ -806,7 +1011,7 @@ exports.main = cloudFunctionWrapper(async (event) => {
     }
 
     // 查看类 action：非分销员也可访问（返回基础数据）
-    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench', 'stats', 'team', 'teamDetail', 'commissionPreview', 'estimatedCommission'];
+    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench', 'stats', 'team', 'teamDetail', 'commissionPreview', 'estimatedCommission', 'promotionProgress', 'promotionLogs', 'myFundPoolSummary'];
 
     if (!viewActions.includes(action)) {
         // 写操作需要分销权限
