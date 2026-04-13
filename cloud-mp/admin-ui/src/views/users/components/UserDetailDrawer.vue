@@ -57,7 +57,7 @@
 
           <div class="detail-section-title" style="margin-top:20px">钱包与消费</div>
           <el-descriptions :column="2" border size="small">
-            <el-descriptions-item label="余额">¥{{ Number(detailUser.balance || 0).toFixed(2) }}</el-descriptions-item>
+            <el-descriptions-item label="佣金余额">¥{{ Number(detailUser.balance || 0).toFixed(2) }}</el-descriptions-item>
             <el-descriptions-item label="欠款">¥{{ Number(detailUser.debt_amount || 0).toFixed(2) }}</el-descriptions-item>
             <el-descriptions-item label="累计消费(用户表)">¥{{ Number(detailUser.total_sales || 0).toFixed(2) }}</el-descriptions-item>
             <el-descriptions-item label="客单价(估)">¥{{ detailAvgOrderAmount }}</el-descriptions-item>

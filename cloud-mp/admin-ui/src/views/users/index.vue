@@ -29,7 +29,6 @@
       :on-batch-role="handleBatchRole"
       :on-refresh="fetchUsers"
       :on-open-detail="openDetail"
-      :on-open-balance="openBalance"
       :on-open-role-edit="openRoleEdit"
       :on-open-purchase-level="openPurchaseLevel"
       :on-dropdown="handleDropdown"
@@ -73,8 +72,6 @@
     <UserActionDialogsPrimary
       :current-user="currentUser"
       :submitting="submitting"
-      :balance-visible="balanceVisible"
-      :balance-form="balanceForm"
       :purchase-level-visible="purchaseLevelVisible"
       :purchase-level-form="purchaseLevelForm"
       :purchase-level-options="purchaseLevelOptions"
@@ -83,10 +80,8 @@
       :purchase-level-text="purchaseLevelText"
       :role-text="roleText"
       :role-tag-type="roleTagType"
-      :on-balance-visibility-change="handleBalanceVisibilityChange"
       :on-purchase-level-visibility-change="handlePurchaseLevelVisibilityChange"
       :on-role-visibility-change="handleRoleVisibilityChange"
-      :on-submit-balance="submitBalance"
       :on-submit-purchase-level="submitPurchaseLevel"
       :on-submit-role="submitRole"
     />
@@ -396,10 +391,6 @@ const handleDetailTabChange = (value) => {
   detailTab.value = value
 }
 
-const handleBalanceVisibilityChange = (value) => {
-  balanceVisible.value = value
-}
-
 const handlePurchaseLevelVisibilityChange = (value) => {
   purchaseLevelVisible.value = value
 }
@@ -475,26 +466,8 @@ const onCommerceToggle = async (enabled) => {
   }
 }
 
-// ===== 余额调整 =====
-const balanceVisible = ref(false)
 const submitting = ref(false)
 const currentUser = ref(null)
-const balanceForm = reactive({ type: 'add', amount: 10, reason: '' })
-
-const openBalance = (row) => {
-  currentUser.value = row
-  Object.assign(balanceForm, { type: 'add', amount: 10, reason: '' })
-  balanceVisible.value = true
-}
-
-const submitBalance = async () => {
-  if (!balanceForm.reason.trim()) return ElMessage.warning('请填写操作原因')
-  await runUserMutation(
-    () => adjustUserBalance(currentUser.value.id, balanceForm),
-    '余额操作成功',
-    () => { balanceVisible.value = false }
-  )
-}
 
 // ===== 角色修改 =====
 const roleVisible = ref(false)
