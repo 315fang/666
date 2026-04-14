@@ -17,24 +17,42 @@
         <view class="invite-code-copy" bindtap="onCopyCode">复制</view>
       </view>
 
-      <!-- 海报预览（静态整张图不挂载 Canvas） -->
+      <view class="poster-variant-row">
+        <text class="poster-variant-label">海报版本</text>
+        <view class="poster-variant-switch">
+          <view
+            wx:for="{{posterVariantOptions}}"
+            wx:key="value"
+            class="poster-variant-chip {{posterVariant === item.value ? 'poster-variant-chip--active' : ''}}"
+            data-variant="{{item.value}}"
+            bindtap="onPosterVariantChange"
+          >
+            <text class="poster-variant-chip-text {{posterVariant === item.value ? 'poster-variant-chip-text--active' : ''}}">
+              {{item.label}}
+            </text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 海报预览：保留 Canvas 作为导出底图，预览图加载成功后覆盖显示 -->
       <view class="poster-preview-wrap">
         <canvas
-          wx:if="{{!posterImagePath || posterGenerating}}"
           id="posterCanvas"
           type="2d"
           class="poster-canvas"
         ></canvas>
         <image
-          wx:if="{{posterImagePath && !posterGenerating}}"
+          wx:if="{{posterImagePath}}"
           class="poster-result-img"
           src="{{posterImagePath}}"
           mode="aspectFit"
           show-menu-by-longpress
+          bindload="onPosterImageLoad"
+          binderror="onPosterImageError"
         ></image>
-        <view class="poster-generating" wx:if="{{posterGenerating && !posterImagePath}}">
+        <view class="poster-generating" wx:if="{{posterGenerating || (posterImagePath && !posterPreviewReady)}}">
           <view class="poster-spin"></view>
-          <text class="poster-gen-text">海报生成中...</text>
+          <text class="poster-gen-text">{{posterGenerating ? '海报生成中...' : '海报加载中...'}}</text>
         </view>
       </view>
 
@@ -43,7 +61,7 @@
         <view class="poster-action-btn poster-action-secondary" bindtap="onRegeneratePoster">
           <text class="poster-action-text-secondary">重新生成</text>
         </view>
-        <view class="poster-action-btn poster-action-primary {{!posterImagePath ? 'btn-disabled' : ''}}" bindtap="onSavePoster">
+        <view class="poster-action-btn poster-action-primary {{!posterPreviewReady ? 'btn-disabled' : ''}}" bindtap="onSavePoster">
           <text class="poster-action-text">保存到相册</text>
         </view>
       </view>

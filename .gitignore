@@ -30,6 +30,7 @@ cloud-mp/cloudfunctions/payment/certs/
 .codebuddy/
 .cursor/
 .opencode/
+.omx/
 skill/
 
 # 仓库内历史快照/重复副本（避免误改错目录；若确需纳入版本可删去对应行）

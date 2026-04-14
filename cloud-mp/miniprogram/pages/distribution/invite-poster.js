@@ -5,6 +5,11 @@ const { getConfigSection } = require('../../utils/miniProgramConfig');
 const { getTempUrls } = require('../../utils/cloud');
 const app = getApp();
 
+const POSTER_VARIANT_OPTIONS = [
+    { value: 'personal', label: '个人头像版' },
+    { value: 'brand', label: '品牌头像版' }
+];
+
 function resolveBrandConfig() {
     return getConfigSection('brand_config') || {};
 }
@@ -14,16 +19,34 @@ function resolveBrandName() {
     return bc.brand_name || app.globalData.brandName || '品牌臻选';
 }
 
+function resolveHomeConfigs() {
+    const homeData = app.globalData.homePageData;
+    const cached = homeData
+        || (() => {
+            try {
+                const stored = wx.getStorageSync('home_config_cache');
+                return stored && stored.data ? stored.data : null;
+            } catch (_) {
+                return null;
+            }
+        })();
+    return (cached && (cached.configs || (cached.resources && cached.resources.configs))) || {};
+}
+
 Page({
     data: {
         statusBarHeight: 20,
         navBarHeight: 44,
         memberCode: '',
+        posterVariant: 'personal',
+        posterVariantOptions: POSTER_VARIANT_OPTIONS,
         posterGenerating: false,
-        posterImagePath: ''
+        posterImagePath: '',
+        posterPreviewReady: false
     },
 
     onLoad() {
+        this.posterImageCache = {};
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navBarHeight: app.globalData.navBarHeight || 44
@@ -46,6 +69,31 @@ Page({
         return resolveBrandConfig();
     },
 
+    async refreshHomeConfigs() {
+        if (app.globalData.homePageData) {
+            return resolveHomeConfigs();
+        }
+
+        if (app.globalData.homeDataPromise) {
+            try {
+                await app.globalData.homeDataPromise;
+            } catch (_) {
+                // ignore
+            }
+            return resolveHomeConfigs();
+        }
+
+        if (typeof app.prefetchHomeData === 'function') {
+            try {
+                await app.prefetchHomeData();
+            } catch (_) {
+                // ignore
+            }
+        }
+
+        return resolveHomeConfigs();
+    },
+
     async resolvePosterAsset(source) {
         const raw = String(source || '').trim();
         if (!raw) return '';
@@ -61,15 +109,20 @@ Page({
 
     async buildPosterBrandConfig() {
         const bc = await this.refreshBrandConfig();
+        const homeConfigs = await this.refreshHomeConfigs();
         const coverSource = bc.share_poster_cover_file_id
             || bc.share_poster_cover_url
             || bc.share_poster_file_id
             || bc.share_poster_url
             || '';
+        const brandLogoSource = homeConfigs.brand_logo || bc.brand_logo || '';
         const resolvedCover = await this.resolvePosterAsset(coverSource);
+        const resolvedBrandLogo = await this.resolvePosterAsset(brandLogoSource);
         return {
             ...bc,
-            share_poster_cover_url: resolvedCover
+            share_poster_cover_url: resolvedCover,
+            brand_logo_url: resolvedBrandLogo,
+            poster_brand_display_name: homeConfigs.nav_brand_title || bc.nav_brand_title || bc.brand_name || app.globalData.brandName || '品牌官方'
         };
     },
 
@@ -132,9 +185,24 @@ Page({
         await this.generatePoster();
     },
 
-    async generatePoster() {
+    async generatePoster(options = {}) {
         if (this.data.posterGenerating) return;
-        this.setData({ posterGenerating: true, posterImagePath: '' });
+        const { force = false } = options;
+        const { posterVariant } = this.data;
+
+        if (!force && this.posterImageCache[posterVariant]) {
+            this.setData({
+                posterImagePath: this.posterImageCache[posterVariant],
+                posterPreviewReady: false
+            });
+            return;
+        }
+
+        this.setData({
+            posterGenerating: true,
+            posterImagePath: '',
+            posterPreviewReady: false
+        });
         try {
             const bc = await this.buildPosterBrandConfig();
             const brandName = resolveBrandName();
@@ -145,9 +213,14 @@ Page({
                 userInfo,
                 brandName,
                 inviteCode,
-                brandConfig: bc
+                brandConfig: bc,
+                posterVariant
             });
-            this.setData({ posterImagePath: tempPath });
+            this.posterImageCache[posterVariant] = tempPath;
+            this.setData({
+                posterImagePath: tempPath,
+                posterPreviewReady: false
+            });
         } catch (err) {
             console.error('生成海报失败:', err);
             const msg = (err && err.message) ? String(err.message) : '';
@@ -160,14 +233,46 @@ Page({
         }
     },
 
+    onPosterVariantChange(e) {
+        const variant = e && e.currentTarget && e.currentTarget.dataset
+            ? String(e.currentTarget.dataset.variant || '')
+            : '';
+        if (!variant || variant === this.data.posterVariant) return;
+        this.setData(
+            {
+                posterVariant: variant,
+                posterImagePath: '',
+                posterPreviewReady: false
+            },
+            () => this.generatePoster()
+        );
+    },
+
+    onPosterImageLoad() {
+        if (!this.data.posterPreviewReady) {
+            this.setData({ posterPreviewReady: true });
+        }
+    },
+
+    onPosterImageError(err) {
+        console.error('海报预览加载失败:', err);
+        delete this.posterImageCache[this.data.posterVariant];
+        this.setData({
+            posterImagePath: '',
+            posterPreviewReady: false
+        });
+        wx.showToast({ title: '海报预览失败，请重试', icon: 'none' });
+    },
+
     onRegeneratePoster() {
-        this.generatePoster();
+        delete this.posterImageCache[this.data.posterVariant];
+        this.generatePoster({ force: true });
     },
 
     onSavePoster() {
-        const { posterImagePath } = this.data;
-        if (!posterImagePath) {
-            wx.showToast({ title: '海报生成中，请稍候', icon: 'none' });
+        const { posterImagePath, posterPreviewReady } = this.data;
+        if (!posterImagePath || !posterPreviewReady) {
+            wx.showToast({ title: '海报加载中，请稍候', icon: 'none' });
             return;
         }
         wx.saveImageToPhotosAlbum({

@@ -46,19 +46,61 @@ class SharePosterCore {
         canvas.height = POSTER_H * dpr;
         const ctx = canvas.getContext('2d');
         ctx.scale(dpr, dpr);
-        return { canvas, ctx, W: POSTER_W, H: POSTER_H };
+        return { canvas, ctx, W: POSTER_W, H: POSTER_H, dpr };
     }
 
-    exportPoster(canvas) {
-        return new Promise((resolve, reject) => {
-            wx.canvasToTempFilePath({
-                canvas,
-                fileType: 'jpg',
-                quality: 0.94,
-                success: (res) => resolve(res.tempFilePath),
+    async ensureTempFileReady(filePath) {
+        if (!filePath) throw new Error('海报导出失败，未获得图片路径');
+        const fs = typeof wx.getFileSystemManager === 'function' ? wx.getFileSystemManager() : null;
+        if (!fs || typeof fs.getFileInfo !== 'function') return filePath;
+
+        const info = await new Promise((resolve, reject) => {
+            fs.getFileInfo({
+                filePath,
+                success: resolve,
                 fail: reject
             });
         });
+
+        if (!info || Number(info.size || 0) <= 0) {
+            throw new Error('海报导出失败，图片文件为空');
+        }
+        return filePath;
+    }
+
+    async exportPoster(canvas, W, H, dpr) {
+        let lastError = null;
+
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            if (attempt > 0) {
+                await sleep(120);
+            }
+
+            try {
+                const tempFilePath = await new Promise((resolve, reject) => {
+                    wx.canvasToTempFilePath({
+                        canvas,
+                        x: 0,
+                        y: 0,
+                        width: W,
+                        height: H,
+                        destWidth: Math.round(W * dpr),
+                        destHeight: Math.round(H * dpr),
+                        fileType: 'jpg',
+                        quality: 0.94,
+                        success: (res) => resolve(res.tempFilePath),
+                        fail: reject
+                    });
+                });
+
+                await sleep(48);
+                return await this.ensureTempFileReady(tempFilePath);
+            } catch (err) {
+                lastError = err;
+            }
+        }
+
+        throw lastError || new Error('海报导出失败');
     }
 
     async normalizeImageSource(src) {
@@ -154,6 +196,45 @@ class SharePosterCore {
         ctx.stroke();
     }
 
+    async drawIdentityAvatar(ctx, canvas, options = {}) {
+        const {
+            x = 0,
+            y = 0,
+            size = 64,
+            avatarSource = '',
+            fallbackLabel = '',
+            fallbackBg = '#E9E1D6',
+            fallbackColor = '#6D5A45'
+        } = options;
+
+        if (avatarSource) {
+            try {
+                const avatar = await this.loadCanvasImage(canvas, avatarSource);
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+                ctx.clip();
+                ctx.drawImage(avatar, x, y, size, size);
+                ctx.restore();
+                return;
+            } catch (_) {
+                // fallback below
+            }
+        }
+
+        this.fillRoundRect(ctx, x, y, size, size, size / 2, fallbackBg);
+
+        if (fallbackLabel) {
+            ctx.save();
+            ctx.fillStyle = fallbackColor;
+            ctx.font = '700 22px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(String(fallbackLabel).slice(0, 2), x + size / 2, y + size / 2 + 1);
+            ctx.restore();
+        }
+    }
+
     async drawCoverSection(ctx, canvas, W, coverUrl, brandName) {
         const coverX = PAGE_PAD;
         const coverY = PAGE_PAD;
@@ -220,7 +301,7 @@ class SharePosterCore {
         return { coverX, coverY, coverW, coverH };
     }
 
-    async drawPoster(ctx, canvas, W, H, userInfo, brandName, inviteCode, brandConfig = {}) {
+    async drawPoster(ctx, canvas, W, H, userInfo, brandName, inviteCode, brandConfig = {}, posterVariant = 'personal') {
         ctx.fillStyle = '#F6F4EF';
         ctx.fillRect(0, 0, W, H);
 
@@ -240,27 +321,26 @@ class SharePosterCore {
         const avatarY = cardY + 44;
         const nameX = avatarX + avatarSize + 18;
         const nameY = avatarY + 28;
+        const isBrandVariant = posterVariant === 'brand';
         const memberCode = inviteCode || userInfo?.member_no || userInfo?.my_invite_code || '';
-        const name = ellipsis(userInfo?.nick_name || userInfo?.nickname || userInfo?.nickName || '微信用户', 9);
+        const name = isBrandVariant
+            ? ellipsis(brandConfig.poster_brand_display_name || brandName || '品牌官方', 9)
+            : ellipsis(userInfo?.nick_name || userInfo?.nickname || userInfo?.nickName || '微信用户', 9);
         const introText = brandConfig.share_poster_intro || '专注于大学生（产教融合）实战落地';
         const codePrefix = brandConfig.share_poster_code_prefix || '邀请码：';
         const qrHint = brandConfig.share_poster_qr_hint || '长按识别小程序码';
 
-        if (userInfo?.avatar || userInfo?.avatar_url || userInfo?.avatarUrl) {
-            try {
-                const avatar = await this.loadCanvasImage(canvas, userInfo.avatar || userInfo.avatar_url || userInfo.avatarUrl);
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
-                ctx.clip();
-                ctx.drawImage(avatar, avatarX, avatarY, avatarSize, avatarSize);
-                ctx.restore();
-            } catch (_) {
-                this.fillRoundRect(ctx, avatarX, avatarY, avatarSize, avatarSize, avatarSize / 2, '#E9E1D6');
-            }
-        } else {
-            this.fillRoundRect(ctx, avatarX, avatarY, avatarSize, avatarSize, avatarSize / 2, '#E9E1D6');
-        }
+        await this.drawIdentityAvatar(ctx, canvas, {
+            x: avatarX,
+            y: avatarY,
+            size: avatarSize,
+            avatarSource: isBrandVariant
+                ? (brandConfig.brand_logo_url || brandConfig.brand_logo || '')
+                : (userInfo.avatar || userInfo.avatar_url || userInfo.avatarUrl || ''),
+            fallbackLabel: isBrandVariant ? String(brandName || '品牌').slice(0, 2) : '',
+            fallbackBg: isBrandVariant ? '#E5D5BB' : '#E9E1D6',
+            fallbackColor: isBrandVariant ? '#70542E' : '#6D5A45'
+        });
 
         ctx.fillStyle = '#2B2118';
         ctx.font = '700 28px sans-serif';
@@ -300,16 +380,17 @@ class SharePosterCore {
         // 二维码失败时已在画布上占位提示，仍导出整张海报，避免因 throw 导致「Error: ok」类误报
     }
 
-    async generateToTempPath({ userInfo, brandName, inviteCode, brandConfig }) {
+    async generateToTempPath({ userInfo, brandName, inviteCode, brandConfig, posterVariant = 'personal' }) {
         this.qrDrawError = null;
         await new Promise((resolve) => {
             if (typeof wx.nextTick === 'function') wx.nextTick(resolve);
             else resolve();
         });
         await sleep(32);
-        const { canvas, ctx, W, H } = await this.getPosterCanvas2d();
-        await this.drawPoster(ctx, canvas, W, H, userInfo, brandName, inviteCode, brandConfig);
-        return this.exportPoster(canvas);
+        const { canvas, ctx, W, H, dpr } = await this.getPosterCanvas2d();
+        await this.drawPoster(ctx, canvas, W, H, userInfo, brandName, inviteCode, brandConfig, posterVariant);
+        await sleep(80);
+        return this.exportPoster(canvas, W, H, dpr);
     }
 }
 
