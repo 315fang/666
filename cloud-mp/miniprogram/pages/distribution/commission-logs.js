@@ -100,7 +100,13 @@ Page({
                         statusClass: statusConfig.class,
                         typeName: typeConfig.name,
                         typeIcon: typeConfig.icon,
-                        created_at: item.created_at ? item.created_at.substring(0, 16).replace('T', ' ') : ''
+                        created_at: item.created_at ? item.created_at.substring(0, 16).replace('T', ' ') : '',
+                        sourceText: item.source_text || '',
+                        fromUserNick: item.from_user_nick || '',
+                        fromUserMemberNo: item.from_user_member_no || '',
+                        orderNoDisplay: item.order_no_display || '',
+                        orderSourceText: item.order_source_text || '',
+                        productSummary: item.product_summary || ''
                     };
                 });
 

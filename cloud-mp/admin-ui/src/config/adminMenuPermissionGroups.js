@@ -102,11 +102,14 @@ export function buildMenuPermissionGroups() {
 export function flattenPermissionDefs(groups) {
   const seen = new Set()
   const list = []
-  for (const g of groups) {
-    for (const it of g.items) {
+  const safeGroups = Array.isArray(groups) ? groups.filter((group) => group && typeof group === 'object') : []
+  for (const g of safeGroups) {
+    const items = Array.isArray(g.items) ? g.items : []
+    for (const it of items) {
+      if (!it?.key) continue
       if (seen.has(it.key)) continue
       seen.add(it.key)
-      list.push({ key: it.key, name: it.label, group: g.name })
+      list.push({ key: it.key, name: it.label || it.key, group: g.name || '其他' })
     }
   }
   list.sort((a, b) => a.key.localeCompare(b.key))

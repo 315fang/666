@@ -169,7 +169,7 @@ const amountHint = computed(() => {
   const map = {
     goods_fund: '货款余额直接变动，代理商下单时可使用',
     commission: '将插入一条 pending_approval 状态的佣金记录，用户申请提现后需审核',
-    points:     '必须为正整数，1积分=0.1元，下单可抵扣最多50%',
+    points:     '必须为正整数，1积分=0.1元，下单可抵扣最多70%',
     growth:     '必须为正整数，影响会员等级'
   }
   return map[form.value.account] || ''

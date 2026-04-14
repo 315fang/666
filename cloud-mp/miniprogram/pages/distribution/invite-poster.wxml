@@ -20,7 +20,7 @@
       <!-- 海报预览（静态整张图不挂载 Canvas） -->
       <view class="poster-preview-wrap">
         <canvas
-          wx:if="{{!isStaticPoster && (!posterImagePath || posterGenerating)}}"
+          wx:if="{{!posterImagePath || posterGenerating}}"
           id="posterCanvas"
           type="2d"
           class="poster-canvas"
@@ -38,14 +38,10 @@
         </view>
       </view>
 
-      <view class="static-badge" wx:if="{{isStaticPoster}}">
-        <text class="static-badge-text">已使用后台上传的整张静态海报</text>
-      </view>
-
       <!-- 操作按钮 -->
       <view class="poster-actions">
-        <view class="poster-action-btn poster-action-secondary {{isStaticPoster ? 'btn-muted' : ''}}" bindtap="onRegeneratePoster">
-          <text class="poster-action-text-secondary">{{isStaticPoster ? '后台管理' : '重新生成'}}</text>
+        <view class="poster-action-btn poster-action-secondary" bindtap="onRegeneratePoster">
+          <text class="poster-action-text-secondary">重新生成</text>
         </view>
         <view class="poster-action-btn poster-action-primary {{!posterImagePath ? 'btn-disabled' : ''}}" bindtap="onSavePoster">
           <text class="poster-action-text">保存到相册</text>

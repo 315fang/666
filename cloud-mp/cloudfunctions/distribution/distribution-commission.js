@@ -304,15 +304,11 @@ async function calculateOrderCommissions(order, explicitReferrerOpenid) {
         const product = await getDocByIdOrLegacy('products', item.product_id) || {};
         const rawBase = roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price || orderAmount, 0) * qty));
         const allocatedBase = itemBaseTotal > 0 ? roundMoney(orderAmount * rawBase / itemBaseTotal) : rawBase;
-        const cost = roundMoney(resolveUnitCost(product, item, order) * qty);
-        let remainingProfit = Math.max(0, roundMoney(allocatedBase - cost));
-
         for (const beneficiary of beneficiaries) {
-            if (remainingProfit <= 0) break;
-            const amount = Math.min(
-                remainingProfit,
-                configuredCommission(product, beneficiary.level, allocatedBase) || roleCommission(beneficiary.user, beneficiary.level, allocatedBase, commissionConfig)
-            );
+            const configured = configuredCommission(product, beneficiary.level, allocatedBase);
+            const amount = configured > 0
+                ? Math.min(allocatedBase, configured)
+                : roleCommission(beneficiary.user, beneficiary.level, allocatedBase, commissionConfig);
             if (amount <= 0) continue;
             const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
             totals.set(key, {
@@ -326,7 +322,6 @@ async function calculateOrderCommissions(order, explicitReferrerOpenid) {
                 type: beneficiary.type,
                 role_name: beneficiary.user.role_name || DEFAULT_ROLE_NAMES[toNumber(beneficiary.user.role_level, 0)] || '代理'
             });
-            remainingProfit = roundMoney(remainingProfit - amount);
         }
     }
 

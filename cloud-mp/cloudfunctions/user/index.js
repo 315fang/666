@@ -34,7 +34,7 @@ const {
 const {
     success, badRequest, unauthorized, notFound, serverError
 } = require('./shared/response');
-const { calculateTier, toNumber } = require('./shared/growth');
+const { calculateTier } = require('./shared/growth');
 const { toNumber: toNum, getAllRecords } = require('./shared/utils');
 
 // 子模块导入
@@ -60,19 +60,72 @@ function parseConfigValue(row, fallback) {
     return value;
 }
 
+function parseTimestamp(value) {
+    if (!value) return 0;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+        const ts = new Date(value).getTime();
+        return Number.isFinite(ts) ? ts : 0;
+    }
+    if (typeof value === 'object') {
+        if (typeof value._seconds === 'number') return value._seconds * 1000;
+        if (typeof value.seconds === 'number') return value.seconds * 1000;
+        if (value.$date !== undefined) return parseTimestamp(value.$date);
+        if (typeof value.toDate === 'function') {
+            const date = value.toDate();
+            return date instanceof Date ? date.getTime() : 0;
+        }
+    }
+    return 0;
+}
+
+function isEnabledFlag(value, fallback = true) {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (value === true || value === 1 || value === '1') return true;
+    if (value === false || value === 0 || value === '0') return false;
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized) return fallback;
+    if (['true', 'yes', 'y', 'on', 'enabled', 'enable', 'active', 'show', 'visible'].includes(normalized)) return true;
+    if (['false', 'no', 'n', 'off', 'disabled', 'disable', 'inactive', 'hidden'].includes(normalized)) return false;
+    return fallback;
+}
+
+function isConfigRowEnabled(row = {}) {
+    if (row.active !== undefined && row.active !== null && row.active !== '') {
+        return isEnabledFlag(row.active, true);
+    }
+    if (row.status !== undefined && row.status !== null && row.status !== '') {
+        return isEnabledFlag(row.status, true);
+    }
+    return true;
+}
+
+function pickPreferredConfigRow(rows = []) {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const enabledRows = rows.filter(isConfigRowEnabled);
+    const source = enabledRows.length ? enabledRows : rows.slice();
+    return source.sort((a, b) => {
+        const timeDiff = parseTimestamp(b.updated_at || b.created_at) - parseTimestamp(a.updated_at || a.created_at);
+        if (timeDiff !== 0) return timeDiff;
+        return String(b._id || b.id || '').localeCompare(String(a._id || a.id || ''));
+    })[0] || null;
+}
+
 async function getConfigByKey(key) {
     const res = await db.collection('configs')
-        .where({ config_key: key })
-        .limit(1)
+        .where(_.or([{ config_key: key }, { key }]))
+        .limit(20)
         .get()
         .catch(() => ({ data: [] }));
-    if (res.data && res.data[0]) return res.data[0];
+    const row = pickPreferredConfigRow(res.data || []);
+    if (row) return row;
     const legacyRes = await db.collection('app_configs')
-        .where({ config_key: key, status: true })
-        .limit(1)
+        .where(_.or([{ config_key: key }, { key }]))
+        .limit(20)
         .get()
         .catch(() => ({ data: [] }));
-    return legacyRes.data && legacyRes.data[0] ? legacyRes.data[0] : null;
+    return pickPreferredConfigRow(legacyRes.data || []);
 }
 
 async function getConfigByKeys(keys = []) {
@@ -275,6 +328,52 @@ function normalizeStation(row = {}) {
         province: row.province || '',
         city: row.city || '',
         district: row.district || ''
+    };
+}
+
+async function findUserByOpenid(openid) {
+    if (!openid) return null;
+    const res = await db.collection('users')
+        .where({ openid })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return res.data && res.data[0] ? res.data[0] : null;
+}
+
+function buildUserIdCandidates(user = {}) {
+    return [user.id, user._legacy_id, user._id]
+        .filter((id) => id !== null && id !== undefined && id !== '');
+}
+
+async function getPickupVerifyScope(openid) {
+    if (!openid) {
+        return {
+            hasVerifyAccess: false,
+            stations: [],
+            stationCount: 0,
+            requiresStationSelection: false
+        };
+    }
+    const [stationRes, staffRes, user] = await Promise.all([
+        getAllRecords(db, 'stations', { status: 'active' }).catch(() => []),
+        getAllRecords(db, 'station_staff', { status: 'active' }).catch(() => []),
+        findUserByOpenid(openid)
+    ]);
+    const stations = (stationRes || []).map(normalizeStation);
+    const userIds = user ? buildUserIdCandidates(user).map((id) => String(id)) : [];
+    const activeStaff = (staffRes || []).filter((row) => {
+        if (toNum(row.can_verify, 0) !== 1) return false;
+        if (String(row.openid || '') === String(openid)) return true;
+        return userIds.includes(String(row.user_id || ''));
+    });
+    const allowedStationIds = new Set(activeStaff.map((row) => String(row.station_id || '')));
+    const scopedStations = stations.filter((station) => allowedStationIds.has(String(station.id)));
+    return {
+        hasVerifyAccess: scopedStations.length > 0,
+        stations: scopedStations,
+        stationCount: scopedStations.length,
+        requiresStationSelection: scopedStations.length > 1
     };
 }
 
@@ -781,44 +880,18 @@ const handleAction = {
     }),
 
     'getPickupScope': asyncHandler(async (openid, params) => {
-        const res = await db.collection('stations').where({ status: 'active' }).limit(10).get().catch(() => ({ data: [] }));
-        const stations = (res.data || []).map(normalizeStation);
-        // 检查用户是否有关联的站点验证权限（pickup_verifiers）
-        let hasVerifyAccess = false;
-        if (openid && stations.length > 0) {
-            const activeStatuses = [true, 'active', 1, '1'];
-            const verifierRes = await db.collection('pickup_verifiers')
-                .where({ openid, status: _.in(activeStatuses) })
-                .limit(1)
-                .get().catch(() => ({ data: [] }));
-            hasVerifyAccess = verifierRes.data && verifierRes.data.length > 0;
-
-            if (!hasVerifyAccess) {
-                const userRes = await db.collection('users')
-                    .where({ openid })
-                    .limit(1)
-                    .get().catch(() => ({ data: [] }));
-                const user = userRes.data && userRes.data[0];
-                const userIds = user
-                    ? [user.id, user._legacy_id, user._id]
-                    : [];
-                const validUserIds = userIds
-                    .filter((id) => id !== null && id !== undefined && id !== '');
-                if (validUserIds.length > 0) {
-                    const userVerifierRes = await db.collection('pickup_verifiers')
-                        .where({ user_id: _.in(validUserIds), status: _.in(activeStatuses) })
-                        .limit(1)
-                        .get().catch(() => ({ data: [] }));
-                    hasVerifyAccess = userVerifierRes.data && userVerifierRes.data.length > 0;
-                }
-            }
-        }
-        return success({ has_verify_access: hasVerifyAccess, stations });
+        const scope = await getPickupVerifyScope(openid);
+        return success({
+            has_verify_access: scope.hasVerifyAccess,
+            stations: scope.stations,
+            station_count: scope.stationCount,
+            requires_station_selection: scope.requiresStationSelection
+        });
     }),
 
     'pickupOptions': asyncHandler(async (openid, params) => {
         const res = await getAllRecords(db, 'stations', { status: 'active' }).catch(() => []);
-        return success({ list: (res || []).map(normalizeStation) });
+        return success({ list: (res || []).map(normalizeStation).filter((row) => Number(row.is_pickup_point ?? row.pickup_enabled ?? 1) === 1) });
     }),
 
     'regionFromPoint': asyncHandler(async (openid, params) => {
@@ -828,14 +901,6 @@ const handleAction = {
             throw badRequest('请提供有效 lat、lng');
         }
         return success(await reverseGeocode(lat, lng));
-    }),
-
-    'shareEligibility': asyncHandler(async (openid) => {
-        return success({ eligible: true, reward_points: 5 });
-    }),
-
-    'submitQuestionnaire': asyncHandler(async (openid, params) => {
-        return success({ success: true, reward_points: 10 });
     }),
 
     'listTickets': asyncHandler(async (openid, params) => {

@@ -227,7 +227,7 @@ async function doSearch() {
     markerLayer.updateGeometries([{ id: 'pick-main', styleId: 'pick', position: pos }])
   } catch (e) {
     console.error(e)
-    ElMessage.error('搜索失败')
+    ElMessage.error(e?.message || '搜索失败')
   } finally {
     searching.value = false
   }
@@ -253,7 +253,7 @@ async function apply() {
     close()
   } catch (e) {
     console.error(e)
-    ElMessage.error('逆地理解析失败，仍可手动保存')
+    ElMessage.error(e?.message || '逆地理解析失败，仍可手动保存')
   } finally {
     applying.value = false
   }

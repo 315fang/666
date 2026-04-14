@@ -14,31 +14,12 @@
         <image class="hero-badge-icon" src="/assets/icons/users.svg" mode="aspectFit"></image>
         <text class="hero-badge-text">会员可发起</text>
       </view>
-      <view class="hero-badge hero-badge--soft">
-        <image class="hero-badge-icon" src="/assets/icons/gift.svg" mode="aspectFit"></image>
-        <text class="hero-badge-text">{{activities.length || 0}} 个活动</text>
-      </view>
     </view>
 
     <view class="hero-card">
       <view class="hero-copy">
         <text class="hero-title">组团下单，价格更直接</text>
         <text class="hero-subtitle">会员开团，好友参团，人数凑齐后立即按拼团价成交；发起后可在“我的拼团”持续查看进度。</text>
-      </view>
-
-      <view class="hero-stats">
-        <view class="stat-card">
-          <text class="stat-label">专区活动</text>
-          <text class="stat-value">{{activities.length || 0}}</text>
-        </view>
-        <view class="stat-card">
-          <text class="stat-label">我的拼团</text>
-          <text class="stat-value">{{myGroups.length || 0}}</text>
-        </view>
-        <view class="stat-card stat-card--member">
-          <text class="stat-label">当前身份</text>
-          <text class="stat-value stat-value--small">{{isMember ? '会员' : '未开通'}}</text>
-        </view>
       </view>
 
       <view class="hero-actions">
@@ -190,7 +171,7 @@
       </view>
 
       <!-- 已取消/已退款的拼团订单 -->
-      <view class="group-record group-record--cancelled" wx:for="{{myGroups}}" wx:key="id" wx:if="{{item.payment_status === 'cancelled'}}" bindtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}">
+      <view class="group-record group-record--cancelled" wx:for="{{myGroups}}" wx:key="id" wx:if="{{item.payment_status === 'cancelled'}}" bindtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}" data-order-id="{{item.order_id}}" data-payment-status="{{item.payment_status}}">
         <view class="record-img-wrap">
           <image class="record-img record-img--dimmed" src="{{item.groupOrder && item.groupOrder.product && item.groupOrder.product.images && item.groupOrder.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
           <view class="record-overlay-cancelled">
@@ -210,7 +191,7 @@
             <text>你的订单已取消，拼团可能仍在继续</text>
           </view>
           <view class="record-action-row">
-            <view class="record-action record-action--secondary" catchtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}">
+            <view class="record-action record-action--secondary" catchtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}" data-order-id="{{item.order_id}}" data-payment-status="{{item.payment_status}}">
               <text>查看团状态</text>
             </view>
           </view>
@@ -218,7 +199,7 @@
       </view>
 
       <!-- 已支付的拼团订单 -->
-      <view class="group-record group-record--paid" wx:for="{{myGroups}}" wx:key="id" wx:if="{{item.payment_status === 'paid'}}" bindtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}">
+      <view class="group-record group-record--paid" wx:for="{{myGroups}}" wx:key="id" wx:if="{{item.payment_status === 'paid'}}" bindtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}" data-order-id="{{item.order_id}}" data-payment-status="{{item.payment_status}}">
         <view class="record-img-wrap">
           <image class="record-img" src="{{item.groupOrder && item.groupOrder.product && item.groupOrder.product.images && item.groupOrder.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
           <view class="record-overlay-status record-overlay-{{item.groupOrder.status}}">
@@ -248,11 +229,11 @@
             <text class="member-text">平台人数 {{item._memberText}}</text>
           </view>
           <view class="record-action-row">
-            <view class="share-row" wx:if="{{item.groupOrder && item.groupOrder.status === 'open'}}" catchtap="onShare" data-no="{{item.groupOrder.group_no}}">
+            <view class="share-row" wx:if="{{item.groupOrder && item.groupOrder.status === 'open'}}" catchtap="onShare" data-no="{{item.groupOrder.group_no}}" data-order-id="{{item.order_id}}" data-payment-status="{{item.payment_status}}">
               <image class="share-icon" src="/assets/icons/share.svg" mode="aspectFit"/>
               <text>分享给好友参团</text>
             </view>
-            <view class="record-action" catchtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}">
+            <view class="record-action" catchtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}" data-order-id="{{item.order_id}}" data-payment-status="{{item.payment_status}}">
               <text>查看进度</text>
             </view>
           </view>

@@ -36,7 +36,7 @@
             <el-avatar :src="displayUserAvatar(row)" :size="32" />
             <div>
               <div class="cell-info__title">{{ displayUserName(row) }}</div>
-              <div class="member-no">{{ row.member_no || '未生成' }}</div>
+              <div class="member-no">{{ row.invite_code || row.member_no || '未生成' }}</div>
             </div>
           </div>
         </template>

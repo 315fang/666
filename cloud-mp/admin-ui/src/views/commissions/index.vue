@@ -62,8 +62,8 @@
             <el-option v-for="item in commissionTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="用户ID">
-          <el-input v-model="searchForm.user_id" placeholder="用户ID" clearable style="width:120px" />
+        <el-form-item label="关键词">
+          <el-input v-model="searchForm.keyword" placeholder="邀请码/昵称/订单号" clearable style="width:180px" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">搜索</el-button>
@@ -79,15 +79,41 @@
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="50" :selectable="(row) => row.status === 'pending_approval'" />
-        <el-table-column prop="id" label="ID" width="70" />
-        <el-table-column label="收益人" width="130">
+        <el-table-column label="ID" width="90">
           <template #default="{ row }">
-            {{ displayUserName(row.user, row.user_id) }}
+            <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
           </template>
         </el-table-column>
-        <el-table-column label="来源订单" width="180" class-name="hide-mobile">
+        <el-table-column label="收益人" width="130">
           <template #default="{ row }">
-            <span class="order-no">{{ row.order?.order_no || '-' }}</span>
+            <el-button text type="primary" size="small" @click="goUserManage(row)">
+              {{ displayUserName(row.user, row.user_id) }}
+            </el-button>
+            <el-tag v-if="row.user?.invite_code || row.user?.member_no" size="small" type="info" style="margin-left:4px">
+              {{ row.user?.invite_code || row.user?.member_no }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="来源信息" min-width="260" class-name="hide-mobile">
+          <template #default="{ row }">
+            <div class="source-block">
+              <div>
+                <span class="source-label">来源用户</span>
+                <span>{{ displayUserName(row.from_user, '-') }}</span>
+                <el-tag v-if="row.from_user?.invite_code || row.from_user?.member_no" size="small" type="info" style="margin-left:4px">
+                  {{ row.from_user?.invite_code || row.from_user?.member_no }}
+                </el-tag>
+              </div>
+              <div>
+                <span class="source-label">来源订单</span>
+                <el-button v-if="row.order?.order_no" text type="primary" size="small" class="order-link" @click="goOrderManage(row)">
+                  {{ row.order.order_no }}
+                </el-button>
+                <span v-else class="order-no">-</span>
+              </div>
+              <div><span class="source-label">订单归类</span>{{ row.order_source_text || row.order?.source_text || '-' }}</div>
+              <div v-if="row.order?.product_summary"><span class="source-label">商品</span>{{ row.order.product_summary }}</div>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="佣金金额" width="120">
@@ -165,16 +191,21 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
 import { getCommissions, approveCommissionItem, rejectCommissionItem, batchApproveCommissions, batchRejectCommissions } from '@/api'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import { formatDate } from '@/utils/format'
 import { COMMISSION_TYPE_OPTIONS, getCommissionTypeLabel } from '@/utils/commission'
 import { usePagination } from '@/composables/usePagination'
 import { getUserNickname } from '@/utils/userDisplay'
+import { buildUserManagementQuery } from '@/utils/userRouting'
 
 const loading = ref(false)
 const submitting = ref(false)
+const route = useRoute()
+const router = useRouter()
 const rejectDialogVisible = ref(false)
 const rejectReason = ref('')
 const selectedIds = ref([])
@@ -189,11 +220,48 @@ const statsCards = ref([
 ])
 const commissionTypeOptions = COMMISSION_TYPE_OPTIONS
 
-const searchForm = reactive({ status: '', type: '', user_id: '' })
+const searchForm = reactive({ status: '', type: '', keyword: '' })
 const { pagination, resetPage, applyResponse } = usePagination({ defaultLimit: 10 })
 const tableData = ref([])
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 const commissionTypeText = (type) => getCommissionTypeLabel(type)
+
+const patchCommissionRow = (id, patch) => {
+  const matchId = (row) => row.id === id || row._id === id
+  tableData.value = tableData.value.map((row) => (matchId(row) ? { ...row, ...patch } : row))
+}
+
+const runCommissionMutation = async (task, successMessage) => {
+  try {
+    const result = await task()
+    if (result && (result.id || result._id)) {
+      patchCommissionRow(result.id || result._id, result)
+    }
+    ElMessage.success(successMessage)
+    await fetchData()
+  } catch (e) {
+    ElMessage.error(e?.message || '操作失败')
+    console.error('佣金操作失败:', e)
+  }
+}
+
+const goUserManage = (row) => {
+  const query = buildUserManagementQuery(row?.user || {}, displayUserName(row?.user, ''), [row?.user_id])
+  if (Object.keys(query).length === 0) {
+    ElMessage.warning('无用户信息可跳转')
+    return
+  }
+  router.push({ name: 'Users', query })
+}
+
+const goOrderManage = (row) => {
+  const orderNo = String(row?.order?.order_no || '').trim()
+  if (!orderNo) {
+    ElMessage.warning('无订单号可跳转')
+    return
+  }
+  router.push({ name: 'Orders', query: { search_field: 'order_no', search_value: orderNo } })
+}
 
 const fetchData = async () => {
   loading.value = true
@@ -218,7 +286,7 @@ const fetchData = async () => {
 }
 
 const handleSearch = () => { resetPage(); fetchData() }
-const handleReset = () => { searchForm.status = ''; searchForm.type = ''; searchForm.user_id = ''; handleSearch() }
+const handleReset = () => { searchForm.status = ''; searchForm.type = ''; searchForm.keyword = ''; handleSearch() }
 const handleSelectionChange = (rows) => { selectedIds.value = rows.filter(r => r.status === 'pending_approval').map(r => r.id) }
 
 const handleApprove = async (row) => {
@@ -228,9 +296,7 @@ const handleApprove = async (row) => {
       cancelButtonText: '取消',
       type: 'success'
     })
-    await approveCommissionItem(row.id)
-    ElMessage.success('审批成功')
-    fetchData()
+    await runCommissionMutation(() => approveCommissionItem(row.id), '审批成功')
   } catch (e) {
     if (e !== 'cancel') console.error('审批失败:', e)
   }
@@ -250,9 +316,9 @@ const handleBatchApprove = async () => {
       cancelButtonText: '取消',
       type: 'success'
     })
-    await batchApproveCommissions({ ids: selectedIds.value })
-    ElMessage.success('批量审批成功')
-    fetchData()
+      await batchApproveCommissions({ ids: selectedIds.value })
+      ElMessage.success('批量审批成功')
+      fetchData()
   } catch (e) {
     if (e !== 'cancel') console.error('批量审批失败:', e)
   }
@@ -290,7 +356,26 @@ const submitReject = async () => {
 const statusText = (s) => ({ frozen: '冻结中', pending_approval: '待审批', approved: '已审批', settled: '已结算', cancelled: '已撤销' }[s] || s)
 const statusTagType = (s) => ({ frozen: 'info', pending_approval: 'warning', approved: 'primary', settled: 'success', cancelled: 'danger' }[s] || '')
 
-onMounted(fetchData)
+const syncRouteQueryToSearch = () => {
+  const q = route.query || {}
+  searchForm.status = q.status ? String(q.status) : ''
+  searchForm.type = q.type ? String(q.type) : ''
+  searchForm.keyword = q.keyword ? String(q.keyword) : ''
+}
+
+onMounted(() => {
+  syncRouteQueryToSearch()
+  fetchData()
+})
+
+watch(
+  () => route.query,
+  () => {
+    syncRouteQueryToSearch()
+    resetPage()
+    fetchData()
+  }
+)
 </script>
 
 <style scoped>
@@ -300,7 +385,10 @@ onMounted(fetchData)
 .search-form { margin-bottom: 20px; }
 .amount { font-weight: 600; color: #f56c6c; }
 .order-no { font-size: 12px; color: #909399; font-family: monospace; }
+.source-block { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #606266; line-height: 1.5; }
+.source-label { color: #909399; margin-right: 6px; }
 .no-action { color: #c0c4cc; font-size: 12px; }
+.order-link { padding: 0; min-height: auto; }
 .stat-card { cursor: default; }
 .stat-inner { display: flex; justify-content: space-between; align-items: center; }
 .stat-label { font-size: 13px; color: #909399; margin-bottom: 6px; }

@@ -145,6 +145,14 @@
   color: #B0A396;
 }
 
+.log-source,
+.log-order,
+.log-product {
+  font-size: 22rpx;
+  color: #8C7E72;
+  line-height: 1.5;
+}
+
 .log-remark {
   font-size: 22rpx;
   color: #9A8D80;

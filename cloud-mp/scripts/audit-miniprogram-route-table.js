@@ -14,7 +14,6 @@ const requiredRoutes = [
   { route: "'POST /orders'", fn: "'order'", action: "'create'", owner: 'order' },
   { route: "'GET /orders'", fn: "'order'", action: "'list'", owner: 'order' },
   { route: "'GET /orders/:id'", fn: "'order'", action: "'detail'", owner: 'order' },
-  { route: "'POST /orders/:id/pay'", fn: "'payment'", action: "'prepay'", owner: 'payment' },
   { route: "'POST /orders/:id/prepay'", fn: "'payment'", action: "'prepay'", owner: 'payment' },
   { route: "'GET /orders/:id/pay-status'", fn: "'payment'", action: "'queryStatus'", owner: 'payment' },
   { route: "'POST /orders/:id/sync-wechat-pay'", fn: "'payment'", action: "'syncWechatPay'", owner: 'payment' },

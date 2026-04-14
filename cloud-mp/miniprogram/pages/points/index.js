@@ -2,12 +2,36 @@
 const { get } = require('../../utils/request');
 const { safeBack } = require('../../utils/navigator');
 const { fetchPointSummary, checkinPoints } = require('../../utils/points');
-const { getFeatureFlags, getLightPromptModals } = require('../../utils/miniProgramConfig');
+const { getFeatureFlags, getLightPromptModals, getConfigSection } = require('../../utils/miniProgramConfig');
 const { shouldShowDaily, markDailyShown } = require('../../utils/lightPrompt');
 
+function getPointDeductionRule() {
+    const rule = getConfigSection('point_rule_config') || {};
+    const deduction = rule.deduction || rule.redeem || {};
+    const yuanPerPoint = Number(
+        deduction.yuan_per_point
+        ?? deduction.value_per_point
+        ?? rule.yuan_per_point
+        ?? rule.point_value
+        ?? 0.1
+    );
+    const maxRatio = Number(
+        deduction.max_order_ratio
+        ?? deduction.max_deduction_ratio
+        ?? rule.max_order_ratio
+        ?? rule.max_deduction_ratio
+        ?? 0.7
+    );
+    return {
+        yuanPerPoint: Number.isFinite(yuanPerPoint) && yuanPerPoint > 0 ? yuanPerPoint : 0.1,
+        maxRatio: Number.isFinite(maxRatio) && maxRatio > 0 ? Math.max(0.7, Math.min(1, maxRatio)) : 0.7
+    };
+}
+
 function buildEffectiveBenefits(account = {}, featureFlags = {}) {
+    const { yuanPerPoint, maxRatio } = getPointDeductionRule();
     const benefits = [
-        '下单时可使用积分抵扣，当前最多可抵订单金额的 50%',
+        `下单时可使用积分抵扣，当前 1 积分可抵 ${yuanPerPoint} 元，最多可抵订单金额的 ${Math.round(maxRatio * 100)}%`,
         '部分活动商品支持积分兑换或积分加现金购买'
     ];
     if (featureFlags.enable_lottery_entry === true) {

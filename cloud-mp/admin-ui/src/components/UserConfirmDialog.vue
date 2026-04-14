@@ -26,7 +26,7 @@
       <el-table-column label="昵称" min-width="120">
         <template #default="{ row }">
           <span>{{ row.nickname || '未知用户' }}</span>
-          <el-tag v-if="row.member_no" size="small" type="info" style="margin-left:4px">{{ row.member_no }}</el-tag>
+          <el-tag v-if="row.invite_code || row.member_no" size="small" type="info" style="margin-left:4px">{{ row.invite_code || row.member_no }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="等级" width="100">

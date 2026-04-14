@@ -87,7 +87,7 @@ Page({
         this.brandAnimation = this.selectComponent('#brandAnimation');
     },
 
-    onLoad(options) {
+    async onLoad(options) {
         const roleLevel = app.globalData.userInfo?.role_level || 0;
         this.setData({ 
             from: options.from || 'cart',
@@ -111,6 +111,7 @@ Page({
                 });
                 this._updatePointsConfig([directBuy]);
                 this._refreshPickupAllowed();
+                await this._refreshMiniProgramConfigAndPricing([directBuy]);
                 this.loadAvailableCoupons();
             } else {
                 wx.showToast({ title: '商品信息丢失', icon: 'none' });
@@ -118,7 +119,8 @@ Page({
             }
         } else if (options.cart_ids) {
             // 购物袋结算 - 加载选中的购物袋项
-            this.loadCartItems(options.cart_ids);
+            await this.loadCartItems(options.cart_ids);
+            await this._refreshMiniProgramConfigAndPricing(this.data.orderItems || []);
         } else {
             this.setData({ loading: false });
         }
@@ -131,7 +133,7 @@ Page({
         this.loadWalletBalance();
     },
 
-    onShow() {
+    async onShow() {
         const roleLevel = app.globalData.userInfo?.role_level || 0;
         if (roleLevel !== this.data.roleLevel) {
             this.setData({ roleLevel });
@@ -153,6 +155,7 @@ Page({
         if ((this.data.orderItems || []).length > 0) {
             this.loadPointBalance();
             this.loadWalletBalance();
+            await this._refreshMiniProgramConfigAndPricing(this.data.orderItems || []);
         }
         if ((this.data.orderItems || []).length > 0 && ((app.globalData.isLoggedIn && (this.data.availableCoupons || []).length === 0) || (this.data.availableCoupons || []).length === 0)) {
             this.loadAvailableCoupons();
@@ -201,6 +204,16 @@ Page({
         this.setData({ allowPoints, pointsRuleHint: hint });
         if (!allowPoints) {
             this.setData({ usePoints: false });
+        }
+    },
+
+    async _refreshMiniProgramConfigAndPricing(items) {
+        if (typeof app.fetchMiniProgramConfig === 'function') {
+            await app.fetchMiniProgramConfig();
+        }
+        if ((items || []).length > 0) {
+            this._updatePointsConfig(items);
+            this._recalcFinal();
         }
     },
 

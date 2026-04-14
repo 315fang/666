@@ -1,10 +1,35 @@
 const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
 const { getFirstImage, genHeatLabel, calculatePrice } = require('../../utils/dataFormatter');
+const { getMiniProgramConfig } = require('../../utils/miniProgramConfig');
 const app = getApp();
 
 const CATEGORY_BACKGROUND_BATCH_SIZE = 2;
 const CATEGORY_PRODUCTS_CACHE_TTL = 2 * 60 * 1000;
+
+function getPointDeductionRule() {
+    const config = getMiniProgramConfig();
+    const rule = config.point_rule_config || {};
+    const deduction = rule.deduction || rule.redeem || {};
+    const yuanPerPoint = Number(
+        deduction.yuan_per_point
+        ?? deduction.value_per_point
+        ?? rule.yuan_per_point
+        ?? rule.point_value
+        ?? 0.1
+    );
+    const maxRatio = Number(
+        deduction.max_order_ratio
+        ?? deduction.max_deduction_ratio
+        ?? rule.max_order_ratio
+        ?? rule.max_deduction_ratio
+        ?? 0.7
+    );
+    return {
+        yuanPerPoint: Number.isFinite(yuanPerPoint) && yuanPerPoint > 0 ? yuanPerPoint : 0.1,
+        maxRatio: Number.isFinite(maxRatio) && maxRatio > 0 ? Math.max(0.7, Math.min(1, maxRatio)) : 0.7
+    };
+}
 
 // 生成规格摘要文本
 function buildSpecSummary(item) {
@@ -42,8 +67,9 @@ function mapProductsForCategory(page, list) {
         let lowestTip = '';
 
         if (showPreview && (pointBalance > 0 || bestCoupon > 0)) {
+            const { yuanPerPoint, maxRatio } = getPointDeductionRule();
             const afterCoupon = Math.max(0, retailPrice - bestCoupon);
-            const pointDeduct = Math.min(pointBalance * 0.01, afterCoupon * 0.5);
+            const pointDeduct = Math.min(pointBalance * yuanPerPoint, afterCoupon * maxRatio);
             const lowest = Math.max(0, afterCoupon - pointDeduct);
             if (lowest < retailPrice) {
                 lowestTip = lowest.toFixed(1);

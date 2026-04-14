@@ -1,15 +1,15 @@
 export const ADMIN_ROLE_PRESETS = {
   admin: [
-    'dashboard', 'products', 'orders', 'logistics', 'pickup_stations', 'users', 'distribution', 'content', 'materials',
+    'dashboard', 'products', 'orders', 'pickup_stations', 'users', 'distribution', 'content', 'materials',
     'dealers', 'commissions', 'statistics', 'logs',
     'settings_manage', 'notification',
     'order_amount_adjust', 'order_force_cancel', 'order_force_complete',
     'user_balance_adjust', 'user_role_manage', 'user_parent_manage', 'user_status_manage'
   ],
-  operator: ['dashboard', 'products', 'orders', 'logistics', 'pickup_stations', 'content', 'materials', 'notification', 'statistics'],
-  finance: ['dashboard', 'orders', 'logistics', 'pickup_stations', 'withdrawals', 'commissions', 'statistics'],
-  customer_service: ['dashboard', 'orders', 'logistics', 'pickup_stations', 'refunds', 'users', 'notification'],
-  warehouse: ['orders', 'logistics', 'pickup_stations'],
+  operator: ['dashboard', 'products', 'orders', 'pickup_stations', 'content', 'materials', 'notification', 'statistics'],
+  finance: ['dashboard', 'orders', 'pickup_stations', 'withdrawals', 'commissions', 'statistics'],
+  customer_service: ['dashboard', 'orders', 'pickup_stations', 'refunds', 'users', 'notification'],
+  warehouse: ['orders', 'pickup_stations'],
   designer: ['content', 'materials']
 }
 

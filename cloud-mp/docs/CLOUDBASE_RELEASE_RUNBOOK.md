@@ -8,6 +8,7 @@ This runbook closes the gap between local P0 readiness and CloudBase console dep
 
 - `npm run release:check` passes with `P0 blockers: 0` and `Warnings: 0`.
 - `admin-ui` production build passes.
+- `admin-ui` production API base URL must use `https://jxalk.wenlan.store/admin/api`; do not use `*.service.tcloudbase.com` as the formal upload entry.
 - CloudBase MCP is configured in `config/mcporter.json`, but MCP auth may still report `AUTH_REQUIRED`.
 - CloudBase CLI login is working on this machine and was used for deployment.
 
@@ -62,6 +63,8 @@ The three timer functions must retain package trigger config. Current cloud trig
 
 In CloudBase console:
 
+- Confirm custom domain `jxalk.wenlan.store` routes `/admin/api/*` to `admin-api` with path passthrough enabled.
+- Confirm custom domain `jxalk.wenlan.store` routes `/admin/*` to the admin UI static hosting site.
 - Confirm `payment` has HTTP access path `/payment`.
 - Confirm WeChat Pay notify URL points to the payment HTTP access URL.
 - Confirm payment private key/public key/API v3 key are configured through secure env/config, not copied into public code.
@@ -123,3 +126,4 @@ After deployment:
 8. Complete a refund and verify commissions become `cancelled`.
 9. Run `commission-deadline-process` manually once and verify due `frozen` commissions become `pending_approval`.
 10. Run `order-auto-confirm` manually once with a test shipped order and verify it becomes `completed`.
+11. Open `https://jxalk.wenlan.store/admin/` and upload an approximately `100KB` JPG/PNG from the materials page; confirm the request hits `admin-api` and returns a valid material URL instead of `413`.

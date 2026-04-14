@@ -59,7 +59,11 @@
 
       <!-- 表格 -->
       <el-table :data="tableData" v-loading="loading" stripe>
-        <el-table-column prop="id" label="ID" width="70" class-name="hide-mobile" />
+        <el-table-column label="ID" width="90" class-name="hide-mobile">
+          <template #default="{ row }">
+            <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+          </template>
+        </el-table-column>
         <el-table-column label="操作人" width="130" class-name="hide-mobile">
           <template #default="{ row }">
             <div>
@@ -122,6 +126,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import { getLogs, exportLogs } from '@/api'
 import { usePagination } from '@/composables/usePagination'
 import { formatDate } from '@/utils/format'

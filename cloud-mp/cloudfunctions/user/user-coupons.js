@@ -43,14 +43,16 @@ async function getCouponIdentity(openid) {
         .get()
         .catch(() => ({ data: [] }));
     const user = userRes.data && userRes.data[0] ? userRes.data[0] : null;
-    const rawUserIds = [openid];
+    const rawUserIds = [];
     if (user) {
         if (hasValue(user.id)) {
             rawUserIds.push(user.id, String(user.id));
         }
         if (hasValue(user._id)) rawUserIds.push(user._id);
+        if (hasValue(user._legacy_id)) rawUserIds.push(user._legacy_id, String(user._legacy_id));
     }
     const userIds = uniqueValues(rawUserIds);
+    if (userIds.length === 0 && hasValue(openid)) userIds.push(openid);
     return {
         user,
         openids: [openid],
@@ -60,6 +62,147 @@ async function getCouponIdentity(openid) {
 
 function couponKey(coupon) {
     return String(coupon._id || coupon.id || `${coupon.user_id || coupon.openid || ''}:${coupon.coupon_id || ''}`);
+}
+
+function parseDate(value) {
+    if (!value) return null;
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? null : value;
+    }
+    if (typeof value === 'object') {
+        if (value.$date) return parseDate(value.$date);
+        if (typeof value._seconds === 'number') return new Date(value._seconds * 1000);
+        if (typeof value.seconds === 'number') return new Date(value.seconds * 1000);
+        if (typeof value.toDate === 'function') {
+            try { return value.toDate(); } catch (_) {}
+        }
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function addDays(date, days) {
+    if (!date) return '';
+    const next = new Date(date.getTime() + Math.max(1, days) * 24 * 60 * 60 * 1000);
+    return next.toISOString();
+}
+
+async function queryUserCouponsByUserIds(userIds = [], extraWhere = null, limit = null) {
+    if (!Array.isArray(userIds) || userIds.length === 0) return [];
+    const tasks = userIds.map(async (userId) => {
+        let query = db.collection('user_coupons').where(extraWhere ? { user_id: userId, ...extraWhere } : { user_id: userId });
+        if (limit != null) query = query.limit(limit);
+        const res = await query.get().catch(() => ({ data: [] }));
+        return res.data || [];
+    });
+    return (await Promise.all(tasks)).flat();
+}
+
+async function findLotteryPrize(prizeId) {
+    if (!hasValue(prizeId)) return null;
+    const key = String(prizeId);
+    const numericId = Number(key);
+    const [docRes, legacyRes] = await Promise.all([
+        db.collection('lottery_prizes').doc(key).get().catch(() => ({ data: null })),
+        Number.isFinite(numericId)
+            ? db.collection('lottery_prizes').where({ id: numericId }).limit(1).get().catch(() => ({ data: [] }))
+            : Promise.resolve({ data: [] })
+    ]);
+    return docRes.data || (legacyRes.data && legacyRes.data[0]) || null;
+}
+
+function resolveLotteryCouponTemplateId(prize = {}, record = {}) {
+    const candidates = [
+        prize.coupon_id,
+        prize.prize_value,
+        prize.value,
+        record.coupon_id,
+        record.prize_value,
+        record.value
+    ];
+    for (const candidate of candidates) {
+        if (hasValue(candidate)) return candidate;
+    }
+    return null;
+}
+
+async function fetchLotteryCouponRecords(identity = {}) {
+    const tasks = [];
+    if (identity.openids && identity.openids.length) {
+        tasks.push(getAllRecords(db, 'lottery_records', { openid: _.in(identity.openids), prize_type: 'coupon' }).catch(() => []));
+    }
+    if (identity.userIds && identity.userIds.length) {
+        tasks.push(...identity.userIds.map((userId) =>
+            getAllRecords(db, 'lottery_records', { user_id: userId, prize_type: 'coupon' }).catch(() => [])
+        ));
+    }
+    if (!tasks.length) return [];
+    const map = {};
+    (await Promise.all(tasks)).flat().forEach((record) => {
+        map[String(record._id || record.id || `${record.user_id || record.openid || ''}:${record.prize_id || ''}:${record.created_at || ''}`)] = record;
+    });
+    return Object.values(map);
+}
+
+async function reconcileLotteryCoupons(openid) {
+    const identity = await getCouponIdentity(openid);
+    const [existingCoupons, lotteryCouponRecords] = await Promise.all([
+        fetchCouponsByIdentity(openid),
+        fetchLotteryCouponRecords(identity)
+    ]);
+    if (!lotteryCouponRecords.length) return 0;
+
+    const existingSourceIds = new Set(
+        existingCoupons
+            .map((coupon) => coupon.source_lottery_record_id)
+            .filter(hasValue)
+            .map((value) => String(value))
+    );
+
+    let createdCount = 0;
+    for (const record of lotteryCouponRecords) {
+        const sourceRecordId = String(record._id || record.id || '');
+        if (sourceRecordId && existingSourceIds.has(sourceRecordId)) continue;
+
+        const prize = await findLotteryPrize(record.prize_id);
+        const templateId = resolveLotteryCouponTemplateId(prize || {}, record);
+        if (!hasValue(templateId)) continue;
+
+        const template = await findCouponTemplate(templateId);
+        if (!template) continue;
+
+        const userId = identity.user && (identity.user.id || identity.user._id || identity.user._legacy_id)
+            ? (identity.user.id || identity.user._id || identity.user._legacy_id)
+            : openid;
+        const createdAt = parseDate(record.claimed_at) || parseDate(record.created_at) || new Date();
+        const validDays = Math.max(1, toNumber(template.valid_days, 30));
+
+        await db.collection('user_coupons').add({
+            data: {
+                openid,
+                user_id: userId,
+                coupon_id: template.id != null ? template.id : (template._id || templateId),
+                coupon_name: template.name || record.prize_name || '优惠券',
+                coupon_type: template.type === 'percent' ? 'percent' : (template.type || template.coupon_type || 'fixed'),
+                coupon_value: toNumber(template.value != null ? template.value : template.coupon_value, 0),
+                min_purchase: toNumber(template.min_purchase, 0),
+                scope: template.scope || 'all',
+                scope_ids: Array.isArray(template.scope_ids) ? template.scope_ids : [],
+                status: 'unused',
+                source: 'lottery',
+                source_lottery_record_id: sourceRecordId,
+                source_prize_id: record.prize_id || '',
+                created_at: createdAt.toISOString(),
+                expire_at: addDays(createdAt, validDays),
+                updated_at: createdAt.toISOString()
+            }
+        }).catch(() => null);
+
+        if (sourceRecordId) existingSourceIds.add(sourceRecordId);
+        createdCount += 1;
+    }
+
+    return createdCount;
 }
 
 function expireTime(coupon) {
@@ -174,11 +317,7 @@ async function hasOwnedCoupon(identity, couponId) {
 
     if (identity.userIds.length) {
         queries.push(
-            db.collection('user_coupons')
-                .where({ user_id: _.in(identity.userIds), coupon_id: _.in(couponIdCandidates) })
-                .limit(1)
-                .get()
-                .catch(() => ({ data: [] }))
+            Promise.resolve({ data: await queryUserCouponsByUserIds(identity.userIds, { coupon_id: _.in(couponIdCandidates) }, 1) })
         );
     }
 
@@ -202,7 +341,7 @@ async function fetchCouponsByIdentity(openid) {
         getAllRecords(db, 'user_coupons', { openid: _.in(identity.openids) })
     ];
     if (identity.userIds.length) {
-        queries.push(getAllRecords(db, 'user_coupons', { user_id: _.in(identity.userIds) }));
+        queries.push(queryUserCouponsByUserIds(identity.userIds));
     }
 
     const results = await Promise.all(queries.map((query) => query.catch(() => [])));
@@ -220,6 +359,7 @@ async function fetchCouponsByIdentity(openid) {
  */
 async function listCoupons(openid, status = 'unused') {
     try {
+        await reconcileLotteryCoupons(openid).catch(() => 0);
         const allCoupons = await fetchCouponsByIdentity(openid);
         const normalizedCoupons = await Promise.all(allCoupons.map((coupon) => normalizeCouponRecord(coupon)));
         return normalizedCoupons
@@ -342,5 +482,6 @@ module.exports = {
     listCoupons,
     claimCoupon,
     claimWelcomeCoupons,
-    normalizeCouponRecord
+    normalizeCouponRecord,
+    reconcileLotteryCoupons
 };

@@ -242,7 +242,7 @@ class SharePosterCore {
         const nameY = avatarY + 28;
         const memberCode = inviteCode || userInfo?.member_no || userInfo?.my_invite_code || '';
         const name = ellipsis(userInfo?.nick_name || userInfo?.nickname || userInfo?.nickName || '微信用户', 9);
-        const introText = brandConfig.share_poster_intro || '合作共赢 共迎美好';
+        const introText = brandConfig.share_poster_intro || '专注于大学生（产教融合）实战落地';
         const codePrefix = brandConfig.share_poster_code_prefix || '邀请码：';
         const qrHint = brandConfig.share_poster_qr_hint || '长按识别小程序码';
 

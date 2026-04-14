@@ -12,6 +12,129 @@ const {
     resolvePostPayStatus
 } = require('./shared/order-payment');
 
+async function getWalletAccountByOpenid(openid) {
+    const userRes = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
+    const user = userRes.data && userRes.data[0] ? userRes.data[0] : null;
+    if (!user) return { user: null, account: null };
+    const candidates = [user.id, user._id, user._legacy_id].filter((value) => value !== null && value !== undefined && value !== '');
+    for (const candidate of candidates) {
+        const accountRes = await db.collection('wallet_accounts')
+            .where({ user_id: candidate })
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+        if (accountRes.data && accountRes.data[0]) {
+            return { user, account: accountRes.data[0] };
+        }
+    }
+    return { user, account: null };
+}
+
+function getUserGoodsFundBalance(user = {}) {
+    return toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0);
+}
+
+function sanitizeWalletAccountDocId(value) {
+    return String(value).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+async function ensureWalletAccountForUser(user, seedBalance) {
+    if (!user) return null;
+    const candidates = [user.id, user._id, user._legacy_id].filter((value) => value !== null && value !== undefined && value !== '');
+    if (!candidates.length) return null;
+    const userId = candidates[0];
+    const docId = `wallet-${sanitizeWalletAccountDocId(userId)}`;
+    const balance = Math.max(0, Math.round(toNumber(seedBalance, 0) * 100) / 100);
+    const now = db.serverDate();
+    await db.collection('wallet_accounts').doc(docId).set({
+        data: {
+            user_id: userId,
+            openid: user.openid || '',
+            balance,
+            account_type: 'goods_fund',
+            status: 'active',
+            created_at: now,
+            updated_at: now
+        }
+    });
+    return {
+        _id: docId,
+        id: docId,
+        user_id: userId,
+        openid: user.openid || '',
+        balance
+    };
+}
+
+async function decreaseGoodsFundLedger(openid, amount, refId, remark) {
+    const { user, account: existingAccount } = await getWalletAccountByOpenid(openid);
+    if (!user) throw new Error('货款账本同步失败：用户不存在');
+    const account = existingAccount || await ensureWalletAccountForUser(user, getUserGoodsFundBalance(user) + amount);
+    if (!account) throw new Error('货款账本同步失败：无法创建钱包账户');
+    const before = toNumber(account.balance, 0);
+    const after = before - amount;
+    if (after < -0.0001) throw new Error('货款账本同步失败：钱包账户余额不足');
+
+    await db.collection('wallet_accounts').doc(String(account._id)).update({
+        data: {
+            balance: _.inc(-amount),
+            updated_at: db.serverDate()
+        }
+    });
+
+    await db.collection('wallet_logs').add({
+        data: {
+            user_id: user.id || user._legacy_id || user._id || '',
+            account_id: account.id || account._id || '',
+            change_type: 'deduct',
+            amount,
+            balance_before: before,
+            balance_after: after,
+            ref_type: 'order_payment',
+            ref_id: refId,
+            remark,
+            created_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    });
+
+    return true;
+}
+
+async function rollbackGoodsFundLedger(openid, amount, refId, remark) {
+    const { user, account: existingAccount } = await getWalletAccountByOpenid(openid);
+    if (!user) throw new Error('货款账本回滚失败：用户不存在');
+    const account = existingAccount || await ensureWalletAccountForUser(user, getUserGoodsFundBalance(user) - amount);
+    if (!account) throw new Error('货款账本回滚失败：无法创建钱包账户');
+    const before = toNumber(account.balance, 0);
+    const after = before + amount;
+
+    await db.collection('wallet_accounts').doc(String(account._id)).update({
+        data: {
+            balance: _.inc(amount),
+            updated_at: db.serverDate()
+        }
+    });
+
+    await db.collection('wallet_logs').add({
+        data: {
+            user_id: user.id || user._legacy_id || user._id || '',
+            account_id: account.id || account._id || '',
+            change_type: 'refund',
+            amount,
+            balance_before: before,
+            balance_after: after,
+            ref_type: 'order_payment_rollback',
+            ref_id: refId,
+            remark,
+            created_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    });
+
+    return true;
+}
+
 /**
  * 货款余额支付（内部扣减，不走微信支付）
  * 适用于：从订单详情页发起的货款支付
@@ -40,6 +163,7 @@ async function payByWalletBalance(openid, orderId, order, payAmount) {
     }
     try {
         const postPayStatus = resolvePostPayStatus(order);
+        await decreaseGoodsFundLedger(openid, payAmount, order.order_no || orderId, `货款余额支付订单 ${order.order_no || orderId}`);
         // 订单标为已付款
         await db.collection('orders').doc(orderId).update({
             data: buildPaymentWritePatch('goods_fund', payAmount, {
@@ -72,6 +196,9 @@ async function payByWalletBalance(openid, orderId, order, payAmount) {
                 }
             })
             .catch(() => {});
+        await rollbackGoodsFundLedger(openid, payAmount, order.order_no || orderId, `货款支付回滚 ${order.order_no || orderId}`).catch((rollbackErr) => {
+            console.error('[prepay] 货款账本回滚失败:', rollbackErr.message);
+        });
         await db.collection('orders').doc(orderId).update({
             data: buildPaymentWritePatch('', payAmount, {
                 status: 'pending_payment',

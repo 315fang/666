@@ -47,6 +47,10 @@
         <view class="log-info">
           <text class="log-type-name">{{item.typeName}}</text>
           <text class="log-time">{{item.created_at}}</text>
+          <text class="log-source" wx:if="{{item.sourceText}}">{{item.sourceText}}</text>
+          <text class="log-order" wx:if="{{item.orderNoDisplay}}">订单：{{item.orderNoDisplay}}{{item.orderSourceText ? ' · ' + item.orderSourceText : ''}}</text>
+          <text class="log-order" wx:if="{{item.fromUserNick}}">来源用户：{{item.fromUserNick}}{{item.fromUserMemberNo ? '（' + item.fromUserMemberNo + '）' : ''}}</text>
+          <text class="log-product" wx:if="{{item.productSummary}}">商品：{{item.productSummary}}</text>
           <text class="log-remark" wx:if="{{item.remark}}">{{item.remark}}</text>
         </view>
         <view class="log-right">

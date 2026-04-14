@@ -1,11 +1,17 @@
 'use strict';
 
 const https = require('https');
+const {
+    buildCouponWxacodeFallback,
+    generateCouponWxacode: defaultGenerateCouponWxacode,
+    normalizeEnvVersion
+} = require('./coupon-wxacode');
 
 function registerMarketingRoutes(app, deps) {
     const {
         auth,
         requirePermission,
+        ensureFreshCollections = async () => {},
         getCollection,
         saveCollection,
         nextId,
@@ -23,6 +29,7 @@ function registerMarketingRoutes(app, deps) {
         directPatchDocument,
         appendWalletLogEntry,
         requireManualAdjustmentReason,
+        generateCouponWxacode = defaultGenerateCouponWxacode,
         ok,
         fail
     } = deps;
@@ -67,6 +74,25 @@ function registerMarketingRoutes(app, deps) {
             return row.config_value;
         }
         return row.value !== undefined ? row.value : fallback;
+    }
+
+    function requireAnyPermission(requiredPermissions = []) {
+        const normalized = toArray(requiredPermissions)
+            .map((item) => pickString(item).trim())
+            .filter(Boolean);
+
+        return (req, res, next) => {
+            const current = Array.isArray(req.permissions) ? req.permissions : [];
+            if (
+                normalized.length === 0
+                || current.includes('*')
+                || normalized.some((permission) => current.includes(permission))
+            ) {
+                next();
+                return;
+            }
+            fail(res, '没有权限访问该资源', 403);
+        };
     }
 
     function getExitRulesSnapshot() {
@@ -348,34 +374,152 @@ function registerMarketingRoutes(app, deps) {
     }
 
     function geocodeAddress(fullAddress) {
-        const key = pickString(process.env.TENCENT_MAP_KEY).trim();
-        if (!key || !fullAddress) {
-            return Promise.resolve({ location: null, configured: !!key, error: '' });
+        const address = pickString(fullAddress).trim();
+        if (!address) {
+            return Promise.resolve({ location: null, configured: !!pickString(process.env.TENCENT_MAP_KEY).trim(), error: '' });
         }
-        const url = `https://apis.map.qq.com/ws/geocoder/v1/?address=${encodeURIComponent(fullAddress)}&key=${encodeURIComponent(key)}`;
+        return requestTencentMapService('/ws/geocoder/v1/', { address })
+            .then((result) => {
+                if (!result.configured) return { location: null, configured: false, error: '' };
+                const location = result.payload?.result?.location;
+                const lat = Number(location?.lat);
+                const lng = Number(location?.lng);
+                if (result.payload?.status === 0 && Number.isFinite(lat) && Number.isFinite(lng)) {
+                    return { location: { latitude: lat, longitude: lng }, configured: true, error: '' };
+                }
+                return {
+                    location: null,
+                    configured: true,
+                    error: pickString(result.payload?.message || result.error || '地址解析失败')
+                };
+            });
+    }
+
+    function requestTencentMapService(pathname, params = {}) {
+        const key = pickString(process.env.TENCENT_MAP_KEY).trim();
+        if (!key) {
+            return Promise.resolve({ configured: false, payload: null, error: '' });
+        }
+
+        const searchParams = new URLSearchParams();
+        Object.entries({ ...params, key }).forEach(([paramKey, value]) => {
+            if (value === undefined || value === null) return;
+            const text = String(value).trim();
+            if (!text) return;
+            searchParams.append(paramKey, text);
+        });
+
+        const path = `${pathname}?${searchParams.toString()}`;
         return new Promise((resolve) => {
-            https.get(url, { headers: { 'User-Agent': 'cloud-mp-admin-api/1.0' } }, (resp) => {
+            const req = https.request({
+                hostname: 'apis.map.qq.com',
+                path,
+                method: 'GET',
+                timeout: 10000,
+                headers: { 'User-Agent': 'cloud-mp-admin-api/1.0' }
+            }, (resp) => {
                 let body = '';
                 resp.on('data', (chunk) => { body += chunk; });
                 resp.on('end', () => {
                     try {
                         const parsed = JSON.parse(body);
-                        const location = parsed?.result?.location;
-                        const lat = Number(location?.lat);
-                        const lng = Number(location?.lng);
-                        if (parsed?.status === 0 && Number.isFinite(lat) && Number.isFinite(lng)) {
-                            resolve({ location: { latitude: lat, longitude: lng }, configured: true, error: '' });
-                            return;
-                        }
-                        resolve({ location: null, configured: true, error: pickString(parsed?.message) });
+                        resolve({ configured: true, payload: parsed, error: '' });
                         return;
                     } catch (_) {
-                        // Ignore geocoder parse errors and keep the station save path available.
+                        // Ignore upstream parse errors and let callers decide the UX fallback.
                     }
-                    resolve({ location: null, configured: true, error: '地图接口返回异常' });
+                    resolve({ configured: true, payload: null, error: '地图接口返回异常' });
                 });
-            }).on('error', () => resolve({ location: null, configured: true, error: '地图接口请求失败' }));
+            });
+            req.on('error', () => resolve({ configured: true, payload: null, error: '地图接口请求失败' }));
+            req.on('timeout', () => {
+                req.destroy();
+                resolve({ configured: true, payload: null, error: '地图接口请求超时' });
+            });
+            req.end();
         });
+    }
+
+    async function reverseGeocodeCoordinate(latitude, longitude) {
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+            return { detail: null, configured: !!pickString(process.env.TENCENT_MAP_KEY).trim(), error: '' };
+        }
+        const result = await requestTencentMapService('/ws/geocoder/v1/', {
+            location: `${latitude},${longitude}`
+        });
+        if (!result.configured) return { detail: null, configured: false, error: '' };
+        const payload = result.payload;
+        const addressComponent = payload?.result?.address_component || {};
+        const formattedAddress = payload?.result?.formatted_addresses?.recommend || payload?.result?.address || '';
+        if (payload?.status === 0 && payload?.result) {
+            return {
+                detail: {
+                    province: pickString(addressComponent.province),
+                    city: pickString(addressComponent.city),
+                    district: pickString(addressComponent.district),
+                    address: pickString(formattedAddress)
+                },
+                configured: true,
+                error: ''
+            };
+        }
+        return {
+            detail: null,
+            configured: true,
+            error: pickString(payload?.message || result.error || '逆地理解析失败')
+        };
+    }
+
+    async function placeSearch(keyword, options = {}) {
+        const normalizedKeyword = pickString(keyword).trim();
+        if (!normalizedKeyword) {
+            return { place: null, configured: !!pickString(process.env.TENCENT_MAP_KEY).trim(), error: '' };
+        }
+
+        let boundary = 'nearby(31.29834,120.58531,500000)';
+        const latitude = Number(options.latitude);
+        const longitude = Number(options.longitude);
+        const region = [options.province, options.city]
+            .map((item) => pickString(item).trim())
+            .filter(Boolean)
+            .join('');
+        if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+            boundary = `nearby(${latitude},${longitude},80000)`;
+        } else if (region) {
+            boundary = `region(${region},0)`;
+        }
+
+        const result = await requestTencentMapService('/ws/place/v1/search', {
+            keyword: normalizedKeyword,
+            boundary,
+            page_size: 10,
+            page_index: 1
+        });
+        if (!result.configured) return { place: null, configured: false, error: '' };
+        const payload = result.payload;
+        const first = Array.isArray(payload?.data) ? payload.data[0] : null;
+        const latitudeValue = Number(first?.location?.lat);
+        const longitudeValue = Number(first?.location?.lng);
+        if (payload?.status === 0 && first && Number.isFinite(latitudeValue) && Number.isFinite(longitudeValue)) {
+            return {
+                place: {
+                    latitude: latitudeValue,
+                    longitude: longitudeValue,
+                    title: pickString(first.title || normalizedKeyword),
+                    address: pickString(first.address)
+                },
+                configured: true,
+                error: ''
+            };
+        }
+        if (payload?.status === 0) {
+            return { place: null, configured: true, error: '' };
+        }
+        return {
+            place: null,
+            configured: true,
+            error: pickString(payload?.message || result.error || '地点搜索失败')
+        };
     }
 
     async function normalizeStationPayload(body = {}, existing = {}) {
@@ -418,6 +562,53 @@ function registerMarketingRoutes(app, deps) {
         };
     }
 
+    const mapPickerPermission = requireAnyPermission(['pickup_stations', 'dealers']);
+
+    app.get('/admin/api/map/geocode', auth, mapPickerPermission, async (req, res) => {
+        const address = pickString(req.query.address).trim();
+        if (!address) return fail(res, '缺少 address 参数');
+
+        const result = await geocodeAddress(address);
+        if (result.location) {
+            ok(res, result.location);
+            return;
+        }
+        if (!result.configured) return fail(res, '服务端未配置 TENCENT_MAP_KEY，无法进行地址解析', 503);
+        if (result.error) return fail(res, `地址解析失败：${result.error}`, 502);
+        ok(res, null);
+    });
+
+    app.get('/admin/api/map/reverse-geocode', auth, mapPickerPermission, async (req, res) => {
+        const latitude = Number(req.query.latitude);
+        const longitude = Number(req.query.longitude);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+            return fail(res, '缺少有效的 latitude / longitude 参数');
+        }
+
+        const result = await reverseGeocodeCoordinate(latitude, longitude);
+        if (result.detail) {
+            ok(res, result.detail);
+            return;
+        }
+        if (!result.configured) return fail(res, '服务端未配置 TENCENT_MAP_KEY，无法进行逆地理解析', 503);
+        if (result.error) return fail(res, `逆地理解析失败：${result.error}`, 502);
+        ok(res, null);
+    });
+
+    app.get('/admin/api/map/place-search', auth, mapPickerPermission, async (req, res) => {
+        const keyword = pickString(req.query.keyword).trim();
+        if (!keyword) return fail(res, '缺少 keyword 参数');
+
+        const result = await placeSearch(keyword, req.query || {});
+        if (result.place) {
+            ok(res, result.place);
+            return;
+        }
+        if (!result.configured) return fail(res, '服务端未配置 TENCENT_MAP_KEY，无法进行地点搜索', 503);
+        if (result.error) return fail(res, `地点搜索失败：${result.error}`, 502);
+        ok(res, null);
+    });
+
     function crudCollection(options) {
         const {
             basePath,
@@ -425,10 +616,12 @@ function registerMarketingRoutes(app, deps) {
             permission,
             label,
             normalize = row => row,
-            payload = (body, existing) => ({ ...existing, ...body, updated_at: nowIso() })
+            payload = (body, existing) => ({ ...existing, ...body, updated_at: nowIso() }),
+            refreshCollections = [collection]
         } = options;
 
-        app.get(`/admin/api/${basePath}`, auth, requirePermission(permission), (req, res) => {
+        app.get(`/admin/api/${basePath}`, auth, requirePermission(permission), async (req, res) => {
+            await ensureFreshCollections(refreshCollections);
             let rows = sortByUpdatedDesc(getCollection(collection)).map(normalize);
             const keyword = pickString(req.query.keyword).trim().toLowerCase();
             if (keyword) rows = rows.filter((item) => `${item.name || item.title || item.description || ''}`.toLowerCase().includes(keyword));
@@ -436,13 +629,15 @@ function registerMarketingRoutes(app, deps) {
             ok(res, paginate(rows, req));
         });
 
-        app.get(`/admin/api/${basePath}/:id`, auth, requirePermission(permission), (req, res) => {
+        app.get(`/admin/api/${basePath}/:id`, auth, requirePermission(permission), async (req, res) => {
+            await ensureFreshCollections(refreshCollections);
             const row = findByLookup(getCollection(collection), req.params.id);
             if (!row) return fail(res, `${label}不存在`, 404);
             ok(res, normalize(row));
         });
 
-        app.post(`/admin/api/${basePath}`, auth, requirePermission(permission), (req, res) => {
+        app.post(`/admin/api/${basePath}`, auth, requirePermission(permission), async (req, res) => {
+            await ensureFreshCollections(refreshCollections);
             const rows = getCollection(collection);
             const row = payload(req.body || {}, { id: nextId(rows), created_at: nowIso() });
             rows.push(row);
@@ -451,7 +646,8 @@ function registerMarketingRoutes(app, deps) {
             ok(res, normalize(row));
         });
 
-        app.put(`/admin/api/${basePath}/:id`, auth, requirePermission(permission), (req, res) => {
+        app.put(`/admin/api/${basePath}/:id`, auth, requirePermission(permission), async (req, res) => {
+            await ensureFreshCollections(refreshCollections);
             const rows = getCollection(collection);
             const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
             if (index === -1) return fail(res, `${label}不存在`, 404);
@@ -461,7 +657,8 @@ function registerMarketingRoutes(app, deps) {
             ok(res, normalize(rows[index]));
         });
 
-        app.delete(`/admin/api/${basePath}/:id`, auth, requirePermission(permission), (req, res) => {
+        app.delete(`/admin/api/${basePath}/:id`, auth, requirePermission(permission), async (req, res) => {
+            await ensureFreshCollections(refreshCollections);
             const rows = getCollection(collection);
             const nextRows = rows.filter((item) => !rowMatchesLookup(item, req.params.id));
             if (rows.length === nextRows.length) return fail(res, `${label}不存在`, 404);
@@ -659,6 +856,31 @@ function registerMarketingRoutes(app, deps) {
         ok(res, normalizeCoupon(row));
     });
 
+    app.get('/admin/api/coupons/:id/wxacode', auth, requirePermission('products'), async (req, res) => {
+        const coupon = findByLookup(getCollection('coupons'), req.params.id);
+        if (!coupon) return fail(res, '优惠券不存在', 404);
+
+        const couponId = coupon.id || coupon._legacy_id || coupon._id || req.params.id;
+        const envVersion = normalizeEnvVersion(req.query.env || req.query.env_version);
+
+        let payload;
+        try {
+            payload = await generateCouponWxacode({ couponId, envVersion });
+        } catch (error) {
+            payload = buildCouponWxacodeFallback({
+                couponId,
+                envVersion,
+                error: error?.message || 'wxacode_failed'
+            });
+        }
+
+        if (payload?.error) {
+            console.warn('[coupon.wxacode] 生成失败:', payload.error);
+        }
+
+        ok(res, payload);
+    });
+
     app.post('/admin/api/coupons', auth, requirePermission('products'), (req, res) => {
         const rows = getCollection('coupons');
         const row = normalizeCouponPayload(req.body, {
@@ -838,7 +1060,8 @@ function registerMarketingRoutes(app, deps) {
         };
     }
 
-    app.get('/admin/api/group-buys', auth, requirePermission('products'), (req, res) => {
+    app.get('/admin/api/group-buys', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['group_activities', 'products']);
         const products = getCollection('products');
         let rows = sortByUpdatedDesc(getCollection('group_activities')).map((item) => normalizeGroup(item, products));
         const keyword = pickString(req.query.keyword).trim().toLowerCase();
@@ -848,13 +1071,15 @@ function registerMarketingRoutes(app, deps) {
         ok(res, paginate(rows, req));
     });
 
-    app.get('/admin/api/group-buys/:id', auth, requirePermission('products'), (req, res) => {
+    app.get('/admin/api/group-buys/:id', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['group_activities', 'products']);
         const row = findByLookup(getCollection('group_activities'), req.params.id);
         if (!row) return fail(res, '拼团活动不存在', 404);
         ok(res, normalizeGroup(row, getCollection('products')));
     });
 
-    app.post('/admin/api/group-buys', auth, requirePermission('products'), (req, res) => {
+    app.post('/admin/api/group-buys', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['group_activities', 'products']);
         const products = getCollection('products');
         if (!findByLookup(products, req.body?.product_id)) return fail(res, '关联商品不存在或未同步', 404);
         const rows = getCollection('group_activities');
@@ -870,7 +1095,8 @@ function registerMarketingRoutes(app, deps) {
         ok(res, normalizeGroup(row, products));
     });
 
-    app.put('/admin/api/group-buys/:id', auth, requirePermission('products'), (req, res) => {
+    app.put('/admin/api/group-buys/:id', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['group_activities', 'products']);
         const rows = getCollection('group_activities');
         const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
         if (index === -1) return fail(res, '拼团活动不存在', 404);
@@ -883,7 +1109,8 @@ function registerMarketingRoutes(app, deps) {
         ok(res, normalizeGroup(rows[index], getCollection('products')));
     });
 
-    app.delete('/admin/api/group-buys/:id', auth, requirePermission('products'), (req, res) => {
+    app.delete('/admin/api/group-buys/:id', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['group_activities']);
         const rows = getCollection('group_activities');
         const nextRows = rows.filter((item) => !rowMatchesLookup(item, req.params.id));
         if (rows.length === nextRows.length) return fail(res, '拼团活动不存在', 404);
@@ -897,6 +1124,7 @@ function registerMarketingRoutes(app, deps) {
         collection: 'slash_activities',
         permission: 'products',
         label: '砍价活动',
+        refreshCollections: ['slash_activities', 'products'],
         normalize: row => ({
             ...normalizeMarketingActivity(row, getCollection('products'), {
                 fallbackLabel: '砍价活动',
@@ -924,14 +1152,16 @@ function registerMarketingRoutes(app, deps) {
         collection: 'lottery_prizes',
         permission: 'products',
         label: '抽奖奖品',
+        refreshCollections: ['lottery_prizes'],
         normalize: row => {
             const visual = defaultPrizeVisual(row);
-            const imageUrl = assetUrl(row.image_url || row.image || row.cover_image || '') || buildPrizeImageDataUri(row);
+            const imageUrl = assetUrl(row.file_id || row.image_url || row.image || row.cover_image || '') || buildPrizeImageDataUri(row);
             const isActive = toBoolean(row.is_active ?? row.status ?? 1) ? 1 : 0;
             return {
                 ...row,
                 id: row.id || row._legacy_id || row._id,
                 name: pickString(row.name || visual.badge || '未命名奖品'),
+                file_id: pickString(row.file_id),
                 image_url: imageUrl,
                 image: imageUrl,
                 cover_image: imageUrl,
@@ -964,10 +1194,11 @@ function registerMarketingRoutes(app, deps) {
         });
         if (!row) return fail(res, '抽奖奖品不存在', 404);
         createAuditLog(req.admin, 'lottery_prize.status', 'lottery_prizes', { prize_id: req.params.id, status: row.status });
-        const imageUrl = assetUrl(row.image_url || row.image || row.cover_image || '');
+        const imageUrl = assetUrl(row.file_id || row.image_url || row.image || row.cover_image || '');
         ok(res, {
             ...row,
             id: row.id || row._legacy_id || row._id,
+            file_id: pickString(row.file_id),
             image_url: imageUrl,
             image: imageUrl,
             cover_image: imageUrl,
@@ -981,7 +1212,8 @@ function registerMarketingRoutes(app, deps) {
     app.put('/admin/api/lottery-prizes/:id/toggle', auth, requirePermission('products'), updateLotteryPrizeStatus);
     app.post('/admin/api/lottery-prizes/:id/toggle', auth, requirePermission('products'), updateLotteryPrizeStatus);
 
-    app.get('/admin/api/activity-options', auth, requirePermission('products'), (_req, res) => {
+    app.get('/admin/api/activity-options', auth, requirePermission('products'), async (_req, res) => {
+        await ensureFreshCollections(['group_activities', 'slash_activities', 'lottery_prizes', 'products']);
         const products = getCollection('products');
         const groups = getCollection('group_activities')
             .map((item) => normalizeGroup(item, products))
@@ -997,27 +1229,33 @@ function registerMarketingRoutes(app, deps) {
         ok(res, [...groups, ...slash, ...lottery]);
     });
 
-    app.get('/admin/api/festival-config', auth, requirePermission('products'), (_req, res) => {
+    app.get('/admin/api/festival-config', auth, requirePermission('products'), async (_req, res) => {
+        await ensureFreshCollections(['configs']);
         ok(res, getConfigValue('festival_config', { active: false, name: '', theme: '', theme_colors: {}, tags: [], card_posters: [] }));
     });
 
-    app.put('/admin/api/festival-config', auth, requirePermission('products'), (req, res) => {
+    app.put('/admin/api/festival-config', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['configs']);
         ok(res, setConfigValue('festival_config', req.body || {}, 'marketing'));
     });
 
-    app.get('/admin/api/global-ui-config', auth, requirePermission('products'), (_req, res) => {
+    app.get('/admin/api/global-ui-config', auth, requirePermission('products'), async (_req, res) => {
+        await ensureFreshCollections(['configs']);
         ok(res, getConfigValue('global_ui_config', { enabled: false, theme: 'default' }));
     });
 
-    app.put('/admin/api/global-ui-config', auth, requirePermission('products'), (req, res) => {
+    app.put('/admin/api/global-ui-config', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['configs']);
         ok(res, setConfigValue('global_ui_config', req.body || {}, 'marketing'));
     });
 
-    app.get('/admin/api/activity-links', auth, requirePermission('products'), (_req, res) => {
+    app.get('/admin/api/activity-links', auth, requirePermission('products'), async (_req, res) => {
+        await ensureFreshCollections(['configs']);
         ok(res, normalizeActivityLinksConfig(getConfigValue('activity_links', null)));
     });
 
-    app.put('/admin/api/activity-links', auth, requirePermission('products'), (req, res) => {
+    app.put('/admin/api/activity-links', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['configs']);
         ok(res, setConfigValue('activity_links', normalizeActivityLinksConfig(req.body || {}), 'marketing'));
     });
 
@@ -1029,7 +1267,8 @@ function registerMarketingRoutes(app, deps) {
         ok(res, setConfigValue('splash_config', req.body || {}, 'content'));
     });
 
-    app.get('/admin/api/pickup-stations', auth, requirePermission('pickup_stations'), (req, res) => {
+    app.get('/admin/api/pickup-stations', auth, requirePermission('pickup_stations'), async (req, res) => {
+        await ensureFreshCollections(['stations', 'station_staff', 'users']);
         const users = getCollection('users');
         const staffRows = getCollection('station_staff');
         let rows = sortByUpdatedDesc(getCollection('stations')).map((row) => ({
@@ -1047,7 +1286,8 @@ function registerMarketingRoutes(app, deps) {
         ok(res, paginate(rows, req));
     });
 
-    app.get('/admin/api/pickup-stations/:id', auth, requirePermission('pickup_stations'), (req, res) => {
+    app.get('/admin/api/pickup-stations/:id', auth, requirePermission('pickup_stations'), async (req, res) => {
+        await ensureFreshCollections(['stations', 'users']);
         const row = findByLookup(getCollection('stations'), req.params.id);
         if (!row) return fail(res, '自提门店不存在', 404);
         ok(res, {
@@ -1058,6 +1298,7 @@ function registerMarketingRoutes(app, deps) {
     });
 
     app.post('/admin/api/pickup-stations', auth, requirePermission('pickup_stations'), async (req, res) => {
+        await ensureFreshCollections(['stations']);
         const rows = getCollection('stations');
         const baseRow = {
             id: nextId(rows),
@@ -1071,6 +1312,7 @@ function registerMarketingRoutes(app, deps) {
     });
 
     app.put('/admin/api/pickup-stations/:id', auth, requirePermission('pickup_stations'), async (req, res) => {
+        await ensureFreshCollections(['stations']);
         const rows = getCollection('stations');
         const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
         if (index === -1) return fail(res, '自提门店不存在', 404);
@@ -1080,24 +1322,48 @@ function registerMarketingRoutes(app, deps) {
         ok(res, { ...rows[index], geocode_note: geocodeNote });
     });
 
-    app.get('/admin/api/pickup-stations/:id/staff', auth, requirePermission('pickup_stations'), (req, res) => {
+    app.get('/admin/api/pickup-stations/:id/staff', auth, requirePermission('pickup_stations'), async (req, res) => {
+        await ensureFreshCollections(['stations', 'station_staff', 'users']);
         const station = findByLookup(getCollection('stations'), req.params.id);
         if (!station) return fail(res, '自提门店不存在', 404);
         const users = getCollection('users');
         const list = getCollection('station_staff')
             .filter((row) => rowMatchesLookup(row, req.params.id, [row.station_id]))
-            .map((row) => ({ ...row, id: row.id || row._id, user: findByLookup(users, row.user_id || row.openid, (user) => [user.openid]) || null }));
+            .map((row) => ({
+                ...row,
+                id: row.id || row._id,
+                user: findByLookup(users, row.user_id || row.openid, (user) => [user.openid, row.openid]) || null
+            }));
         ok(res, { station_id: req.params.id, station_name: station.name, list });
     });
 
-    app.post('/admin/api/pickup-stations/:id/staff', auth, requirePermission('pickup_stations'), (req, res) => {
+    app.post('/admin/api/pickup-stations/:id/staff', auth, requirePermission('pickup_stations'), async (req, res) => {
+        await ensureFreshCollections(['stations', 'station_staff', 'users']);
         if (!findByLookup(getCollection('stations'), req.params.id)) return fail(res, '自提门店不存在', 404);
         const rows = getCollection('station_staff');
-        const existingIndex = rows.findIndex((row) => rowMatchesLookup(row, req.body?.id) || (String(row.station_id) === String(req.params.id) && String(row.user_id) === String(req.body?.user_id)));
+        const users = getCollection('users');
+        const requestOpenid = pickString(req.body?.openid);
+        const requestUserId = req.body?.user_id;
+        const matchedUser = requestOpenid
+            ? findByLookup(users, requestOpenid, (user) => [user.openid, user.member_no])
+            : findByLookup(users, requestUserId, (user) => [user.openid, user.member_no]);
+        const normalizedOpenid = pickString(requestOpenid || matchedUser?.openid);
+        const normalizedUserId = requestUserId != null && requestUserId !== ''
+            ? requestUserId
+            : (matchedUser?.id || matchedUser?._legacy_id || matchedUser?._id || normalizedOpenid);
+        const existingIndex = rows.findIndex((row) => {
+            if (!rowMatchesLookup(row, req.params.id, [row.station_id])) return false;
+            if (rowMatchesLookup(row, req.body?.id)) return true;
+            if (normalizedOpenid && rowMatchesLookup(row, normalizedOpenid, [row.user_id, row.openid])) return true;
+            return normalizedUserId != null && normalizedUserId !== ''
+                ? rowMatchesLookup(row, normalizedUserId, [row.user_id, row.openid])
+                : false;
+        });
         const row = {
             ...(existingIndex === -1 ? { id: nextId(rows), created_at: nowIso() } : rows[existingIndex]),
             station_id: req.params.id,
-            user_id: req.body?.user_id,
+            user_id: normalizedUserId,
+            openid: pickString(normalizedOpenid || (existingIndex === -1 ? '' : rows[existingIndex].openid)),
             role: req.body?.role || 'staff',
             can_verify: toBoolean(req.body?.can_verify ?? 1) ? 1 : 0,
             status: req.body?.status || 'active',
@@ -1110,7 +1376,8 @@ function registerMarketingRoutes(app, deps) {
         ok(res, row);
     });
 
-    app.delete('/admin/api/pickup-stations/:id/staff/:staffId', auth, requirePermission('pickup_stations'), (req, res) => {
+    app.delete('/admin/api/pickup-stations/:id/staff/:staffId', auth, requirePermission('pickup_stations'), async (req, res) => {
+        await ensureFreshCollections(['station_staff']);
         const rows = getCollection('station_staff');
         const nextRows = rows.filter((row) => !(String(row.station_id) === String(req.params.id) && rowMatchesLookup(row, req.params.staffId)));
         if (rows.length === nextRows.length) return fail(res, '门店成员不存在', 404);

@@ -61,6 +61,7 @@
               <el-select v-model="searchForm.status" placeholder="不选则按上方 Tab" clearable style="width:100%">
                 <el-option label="待支付" value="pending" />
                 <el-option label="待发货(paid)" value="paid" />
+                <el-option label="待核销" value="pickup_pending" />
                 <el-option label="代理已确认" value="agent_confirmed" />
                 <el-option label="申请发货" value="shipping_requested" />
                 <el-option label="已发货" value="shipped" />
@@ -115,7 +116,11 @@
 
       <!-- 订单表格 -->
       <el-table :data="tableData" v-loading="loading" stripe empty-text="暂无订单数据" class="orders-table">
-        <el-table-column prop="id" label="ID" width="72" />
+        <el-table-column label="ID" width="90">
+          <template #default="{ row }">
+            <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+          </template>
+        </el-table-column>
         <el-table-column label="订单信息" min-width="200">
           <template #default="{ row }">
             <div class="stack-block">
@@ -186,16 +191,18 @@
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button text type="primary" size="small" @click="handleDetail(row)">订单详情</el-button>
-            <el-button text type="success" size="small" v-if="['paid', 'agent_confirmed', 'shipping_requested'].includes(row.status)" @click="handleShip(row)">发货</el-button>
+            <el-button text type="primary" size="small" v-if="canViewLogistics(row)" @click="openLogisticsDrawer(row)">物流轨迹</el-button>
+            <el-button text type="success" size="small" v-if="['paid', 'agent_confirmed', 'shipping_requested'].includes(row.status) && row.delivery_type !== 'pickup'" @click="handleShip(row)">发货</el-button>
             <el-dropdown size="small" @command="(cmd) => handleDropdown(cmd, row)">
               <el-button text size="small">更多<el-icon><ArrowDown /></el-icon></el-button>
               <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item v-if="canAdjustOrderAmount" command="amount" :disabled="!['pending', 'pending_payment'].includes(row.status)">改价</el-dropdown-item>
-                  <el-dropdown-item command="remark">备注</el-dropdown-item>
-                  <el-dropdown-item v-if="canForceCompleteOrder && row.status === 'shipped'" command="force_complete" class="warning-text">强制完成</el-dropdown-item>
-                  <el-dropdown-item v-if="canForceCancelOrder" command="force_cancel" :disabled="['completed', 'cancelled', 'refunded'].includes(row.status)" class="danger-text">强制取消</el-dropdown-item>
-                </el-dropdown-menu>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-if="canAdjustOrderAmount" command="amount" :disabled="!['pending', 'pending_payment'].includes(row.status)">改价</el-dropdown-item>
+                    <el-dropdown-item command="remark">备注</el-dropdown-item>
+                    <el-dropdown-item command="repair_fulfillment" :disabled="['shipped', 'completed', 'refunding', 'refunded', 'cancelled'].includes(row.status)">修复履约</el-dropdown-item>
+                    <el-dropdown-item v-if="canForceCompleteOrder && row.status === 'shipped'" command="force_complete" class="warning-text">强制完成</el-dropdown-item>
+                    <el-dropdown-item v-if="canForceCancelOrder" command="force_cancel" :disabled="['completed', 'cancelled', 'refunded'].includes(row.status)" class="danger-text">强制取消</el-dropdown-item>
+                  </el-dropdown-menu>
               </template>
             </el-dropdown>
           </template>
@@ -223,7 +230,7 @@
           :closable="false"
           show-icon
           style="margin-bottom: 16px;"
-          title="请核对状态、履约、收货与金额后再操作；买家留言与系统备注可能在同一字段中混排。"
+          title="请核对状态、履约、收货与金额后再操作；当前已区分买家留言、内部备注和历史旧备注。"
         />
 
         <el-descriptions :column="2" border size="small" style="margin-bottom:20px">
@@ -236,9 +243,6 @@
             <el-tag :type="paymentMethodTagType(detailData.display_payment_method_code || detailPaymentMethod(detailData))" size="small">
               {{ detailData.display_payment_method_text }}
             </el-tag>
-            <span class="text-secondary" style="margin-left:8px">
-              字段值：{{ detailData.payment_method || '-' }}
-            </span>
           </el-descriptions-item>
           <el-descriptions-item label="退款去向">{{ detailData.display_refund_target_text }}</el-descriptions-item>
           <el-descriptions-item label="配送方式">{{ deliveryTypeText(detailData.delivery_type) }}</el-descriptions-item>
@@ -312,10 +316,25 @@
           </el-col>
         </el-row>
 
-        <div class="detail-section-bar" style="margin-top:20px">订单备注（买家留言与后台追加在同一字段）</div>
+        <div class="detail-section-bar" style="margin-top:20px">买家留言</div>
         <div class="buyer-remark-block">
-          {{ detailData.remark?.trim() ? detailData.remark : '无' }}
+          {{ detailData.memo?.trim() ? detailData.memo : '无' }}
         </div>
+
+        <div class="detail-section-bar" style="margin-top:20px">内部备注</div>
+        <div class="buyer-remark-block">
+          {{ detailData.admin_remark?.trim() ? detailData.admin_remark : '无' }}
+        </div>
+
+        <template v-if="detailData.remark?.trim()">
+          <div class="detail-section-bar" style="margin-top:20px">历史备注（旧字段）</div>
+          <div class="buyer-remark-block buyer-remark-block--legacy">
+            {{ detailData.remark }}
+          </div>
+          <div class="text-secondary" style="margin-top:8px;font-size:12px">
+            该字段来自旧数据，可能混有历史物流、系统自动处理和旧版后台备注，仅用于追溯。
+          </div>
+        </template>
 
         <el-divider content-position="left">收货信息</el-divider>
         <div class="info-block detail-address">
@@ -334,11 +353,22 @@
         <el-descriptions :column="2" border size="small" style="margin-bottom:20px">
           <el-descriptions-item label="承运方">{{ detailData.logistics_company || '-' }}</el-descriptions-item>
           <el-descriptions-item label="物流单号">{{ detailData.tracking_no || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="所属代理ID">{{ detailData.agent_id || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="自提门店" v-if="detailData.delivery_type === 'pickup'">{{ detailData.pickup_station?.name || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="核销人ID" v-if="detailData.delivery_type === 'pickup'">{{ detailData.pickup_verified_by || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="直属推荐人ID">{{ detailData.direct_referrer_id || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="间推上级ID">{{ detailData.indirect_referrer_id || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="最近代理商ID">{{ detailData.nearest_agent_id || '-' }}</el-descriptions-item>
           <el-descriptions-item label="实际履约人ID">{{ detailData.fulfillment_partner_id || '-' }}</el-descriptions-item>
           <el-descriptions-item label="锁定进货价">¥{{ money(detailData.locked_agent_cost) }}</el-descriptions-item>
-          <el-descriptions-item label="中间佣金">¥{{ money(detailData.middle_commission_total) }}</el-descriptions-item>
+          <el-descriptions-item label="代理发货利润">¥{{ money(agentFulfillmentProfit(detailData)) }}</el-descriptions-item>
+          <el-descriptions-item label="推荐佣金合计">¥{{ money(referralCommissionTotal(detailData)) }}</el-descriptions-item>
         </el-descriptions>
+        <div v-if="fulfillmentProfitNote(detailData)" class="text-secondary" style="margin-bottom:12px;font-size:12px;line-height:1.6">
+          {{ fulfillmentProfitNote(detailData) }}
+        </div>
+        <div v-if="canViewLogistics(detailData)" class="detail-inline-actions">
+          <el-button type="primary" plain size="small" @click="openLogisticsDrawer(detailData)">查看物流轨迹</el-button>
+        </div>
 
         <el-divider content-position="left">订单时间线</el-divider>
         <el-timeline style="margin-bottom: 20px;">
@@ -368,6 +398,54 @@
         </div>
         <el-empty v-else description="暂无佣金记录" :image-size="80" />
       </template>
+    </el-drawer>
+
+    <el-drawer v-model="logisticsVisible" :title="`物流轨迹 · ${logisticsOrder?.order_no || ''}`" size="460px" destroy-on-close>
+      <div v-if="logisticsOrder" class="logistics-drawer" v-loading="logisticsLoading">
+        <el-descriptions :column="1" border size="small" style="margin-bottom:20px">
+          <el-descriptions-item label="订单号">{{ logisticsOrder.order_no || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="快递公司">{{ logisticsOrder.logistics_company || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="运单号">{{ logisticsOrder.tracking_no || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="收件人">
+            {{ resolvedAddress(logisticsOrder)?.receiver_name || resolvedAddress(logisticsOrder)?.name || displayBuyerName(logisticsOrder.buyer) }} · {{ resolvedAddress(logisticsOrder)?.phone || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="收货地址">
+            <template v-if="resolvedAddress(logisticsOrder)">
+              {{ resolvedAddress(logisticsOrder).province }} {{ resolvedAddress(logisticsOrder).city }} {{ resolvedAddress(logisticsOrder).district }} {{ resolvedAddress(logisticsOrder).detail }}
+            </template>
+            <template v-else>-</template>
+          </el-descriptions-item>
+          <el-descriptions-item label="物流状态">
+            <el-tag v-if="logisticsData" :type="getLogisticsTagType(logisticsData.status)" size="small">
+              {{ logisticsData.statusText || '未查询' }}
+            </el-tag>
+            <span v-else>-</span>
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <div v-if="logisticsData?.traces?.length">
+          <div class="detail-section-bar" style="margin-top:0">物流轨迹</div>
+          <el-timeline>
+            <el-timeline-item
+              v-for="(trace, idx) in logisticsData.traces"
+              :key="`${trace.time || idx}-${idx}`"
+              :timestamp="trace.time || ''"
+              :type="idx === 0 ? 'primary' : ''"
+              placement="top"
+            >
+              {{ trace.desc || trace.status || '-' }}
+            </el-timeline-item>
+          </el-timeline>
+        </div>
+        <el-empty v-else-if="!logisticsLoading" description="暂无物流轨迹" :image-size="80" />
+
+        <div class="detail-inline-actions">
+          <el-button type="primary" size="small" :loading="logisticsLoading" @click="refreshLogisticsDrawer">
+            刷新物流
+          </el-button>
+          <el-button size="small" @click="logisticsVisible = false">关闭</el-button>
+        </div>
+      </div>
     </el-drawer>
 
     <!-- ===== 发货弹窗 ===== -->
@@ -438,7 +516,7 @@
     <!-- ===== 添加备注弹窗 ===== -->
     <el-dialog v-model="remarkVisible" title="添加内部备注" width="400px">
       <el-form>
-        <el-input v-model="remarkText" type="textarea" :rows="4" placeholder="备注内容仅管理员可见，会追加到历史备注末尾" />
+        <el-input v-model="remarkText" type="textarea" :rows="4" placeholder="备注内容仅管理员可见，会追加到已有内部备注末尾" />
       </el-form>
       <template #footer>
         <el-button @click="remarkVisible = false">取消</el-button>
@@ -471,16 +549,21 @@ import {
   getOrders,
   getOrderDetail,
   shipOrder,
+  getAdminOrderLogistics,
+  refreshAdminLogistics,
   adjustOrderAmount,
   addOrderRemark,
+  repairOrderFulfillment,
   getMiniProgramConfig,
   updateMiniProgramConfig,
   forceCompleteOrder,
   forceCancelOrder,
   exportOrders
 } from '@/api'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import { getCommissionTypeLabel } from '@/utils/commission'
 import { formatDateTime } from '@/utils/format'
+import { buildUserManagementQuery } from '@/utils/userRouting'
 import { getUserAvatar, getUserNickname, normalizeUserDisplay } from '@/utils/userDisplay'
 import { usePagination } from '@/composables/usePagination'
 import { useUserStore } from '@/store/user'
@@ -514,6 +597,10 @@ const logisticsMode = ref('third_party')
 const logisticsTrackingRequired = ref(true)
 const logisticsCompanyRequired = ref(false)
 const miniProgramConfigSnapshot = ref(null)
+const logisticsVisible = ref(false)
+const logisticsLoading = ref(false)
+const logisticsOrder = ref(null)
+const logisticsData = ref(null)
 const canAdjustOrderAmount = computed(() => userStore.hasPermission('order_amount_adjust'))
 const canForceCompleteOrder = computed(() => userStore.hasPermission('order_force_complete'))
 const canForceCancelOrder = computed(() => userStore.hasPermission('order_force_cancel'))
@@ -759,6 +846,36 @@ const money = (value) => {
   return Number.isFinite(n) ? n.toFixed(2) : '0.00'
 }
 const moneyNumber = (value) => Number(money(value))
+const activeCommissionRows = (order = {}) => {
+  const rows = Array.isArray(order?.commissions) ? order.commissions : []
+  return rows.filter((item) => !['cancelled', 'void', 'revoked'].includes(String(item?.status || '').trim().toLowerCase()))
+}
+const commissionAmountByTypes = (order = {}, types = []) => {
+  const typeSet = new Set(types.map((item) => String(item || '').trim().toLowerCase()).filter(Boolean))
+  return normalizeAmount(
+    activeCommissionRows(order)
+      .filter((item) => typeSet.has(String(item?.type || '').trim().toLowerCase()))
+      .reduce((sum, item) => sum + Number(item?.amount || 0), 0)
+  )
+}
+const referralCommissionTotal = (order = {}) => commissionAmountByTypes(order, ['direct', 'indirect'])
+const agentFulfillmentProfit = (order = {}) => {
+  const fromCommissions = commissionAmountByTypes(order, ['agent_fulfillment'])
+  if (fromCommissions > 0) return fromCommissions
+  return normalizeAmount(order?.middle_commission_total)
+}
+const fulfillmentProfitNote = (order = {}) => {
+  const hasFulfillmentPartner = !!String(order?.fulfillment_partner_id || order?.fulfillment_partner_openid || '').trim()
+  const referralTotal = referralCommissionTotal(order)
+  const fulfillmentTotal = agentFulfillmentProfit(order)
+  if (!hasFulfillmentPartner && referralTotal > 0) {
+    return '当前订单是平台履约，所以代理发货利润为 0；上级收益走的是推荐佣金，金额已计入“推荐佣金合计”和下方佣金记录。'
+  }
+  if (hasFulfillmentPartner && fulfillmentTotal <= 0) {
+    return '当前订单已锁定代理履约，但还没有生成代理发货利润，请核对发货动作、锁定进货价和佣金记录。'
+  }
+  return ''
+}
 const normalizeAmount = (value) => {
   const n = Number(value || 0)
   if (!Number.isFinite(n)) return 0
@@ -807,8 +924,10 @@ const deliveryTypeText = (type) => ({
 }[type] || '-')
 
 const orderTypeText = (row) => {
-  const r = row?.remark || ''
-  if (typeof r === 'string' && r.includes('group_no:')) return '拼团订单'
+  const type = String(row?.type || row?.order_type || '').trim().toLowerCase()
+  if (type === 'group' || row?.group_no || row?.group_activity_id) return '拼团订单'
+  if (type === 'slash' || row?.slash_no || row?.slash_activity_id) return '砍价订单'
+  if (String(row?.delivery_type || '').trim().toLowerCase() === 'pickup') return '自提订单'
   return '普通订单'
 }
 const orderSourceText = () => '小程序商城'
@@ -828,26 +947,103 @@ const lineUnitPrice = (row) => {
 }
 
 const goUserManage = (row) => {
-  const k = row.buyer?.member_no || row.buyer?.phone || displayBuyerName(row.buyer, '')
-  if (!k) {
+  const query = buildUserManagementQuery(
+    row?.buyer || {},
+    displayBuyerName(row?.buyer, ''),
+    [row?.user_id, row?.buyer_id]
+  )
+  if (Object.keys(query).length === 0) {
     ElMessage.warning('无会员信息可跳转')
     return
   }
-  router.push({ name: 'Users', query: { keyword: String(k) } })
+  router.push({ name: 'Users', query })
 }
 
 const goProductManage = (row) => {
   const name = row.product?.name
   router.push({ name: 'Products', query: name ? { keyword: name } : {} })
 }
-const fulfillmentText = (order) => (
-  order?.fulfillment_type === 'Company'
-    ? '云仓发货'
-    : (order?.fulfillment_type === 'Agent'
-        ? '代理商发货'
-        : (order?.fulfillment_type === 'Agent_Pending' ? '代理待确认' : '自提/其他'))
-)
+const normalizeFulfillmentType = (order = {}) => {
+  const raw = String(order?.fulfillment_type || '').trim().toLowerCase()
+  if (raw === 'agent') return 'agent'
+  if (['agent_pending', 'agent-pending'].includes(raw)) return 'agent_pending'
+  if (['company', 'platform'].includes(raw)) return 'company'
+  if (['agent_confirmed', 'shipping_requested'].includes(order?.status)) return 'agent_pending'
+  if (String(order?.delivery_type || '').trim().toLowerCase() === 'pickup') return 'pickup'
+  return ''
+}
+const fulfillmentText = (order = {}) => ({
+  company: '云仓发货',
+  agent: '代理商发货',
+  agent_pending: '代理待确认',
+  pickup: '到店自提'
+}[normalizeFulfillmentType(order)] || '待确认')
 const resolvedAddress = (order) => order?.address || order?.address_snapshot || null
+const canViewLogistics = (order = {}) => !!String(order?.tracking_no || '').trim()
+const getLogisticsTagType = (status) => ({
+  in_transit: 'primary',
+  delivering: 'warning',
+  delivered: 'success',
+  exception: 'danger',
+  unknown: 'info',
+  manual: 'info'
+}[status] || 'info')
+
+function buildManualLogistics(order = {}) {
+  return {
+    status: 'manual',
+    statusText: '手工发货',
+    traces: order?.shipped_at
+      ? [{ time: fmtDateTime(order.shipped_at), desc: '当前订单走手工发货模式，可查看单号和发货时间' }]
+      : []
+  }
+}
+
+function syncOrderLogistics(orderId, nextData) {
+  const normalizedId = String(orderId || '')
+  if (!normalizedId) return
+  const target = tableData.value.find((row) => String(row.id) === normalizedId || String(row.order_no) === normalizedId)
+  if (target) target._logistics = nextData
+  if (detailData.value && (String(detailData.value.id) === normalizedId || String(detailData.value.order_no) === normalizedId)) {
+    detailData.value._logistics = nextData
+  }
+}
+
+async function loadLogistics(order, forceRefresh = false) {
+  logisticsLoading.value = true
+  try {
+    if (logisticsMode.value === 'manual') {
+      const manual = buildManualLogistics(order)
+      logisticsData.value = manual
+      syncOrderLogistics(order?.id || order?.order_no, manual)
+      return
+    }
+    const res = forceRefresh
+      ? await refreshAdminLogistics(order.id)
+      : await getAdminOrderLogistics(order.id)
+    const data = res?.data || res || null
+    logisticsData.value = data
+    syncOrderLogistics(order?.id || order?.order_no, data)
+  } catch (error) {
+    console.error('加载物流轨迹失败:', error)
+    ElMessage.error(error?.message || '物流查询失败')
+  } finally {
+    logisticsLoading.value = false
+  }
+}
+
+async function openLogisticsDrawer(order) {
+  logisticsOrder.value = order
+  logisticsData.value = order?._logistics || null
+  logisticsVisible.value = true
+  await loadLogistics(order, false)
+}
+
+async function refreshLogisticsDrawer() {
+  if (!logisticsOrder.value) return
+  await loadLogistics(logisticsOrder.value, true)
+}
+
 const detailSkuText = (order) => {
   if (order?.sku?.spec_name || order?.sku?.spec_value) {
     return `${order.sku.spec_name || '规格'}：${order.sku.spec_value || '-'}`
@@ -926,9 +1122,8 @@ const currentOrder = ref(null)
 const shipForm = reactive({ fulfillment_type: 'company', tracking_no: '', logistics_company: '' })
 
 const inferFulfillmentType = (row) => {
-  const type = String(row?.fulfillment_type || '').toLowerCase()
+  const type = normalizeFulfillmentType(row)
   if (type === 'agent' || type === 'agent_pending') return 'agent'
-  if (['agent_confirmed', 'shipping_requested'].includes(row?.status)) return 'agent'
   return 'company'
 }
 
@@ -961,7 +1156,7 @@ const submitShip = async () => {
       logistics_company: logisticsCompany,
       type: shipForm.fulfillment_type === 'agent' ? 'Agent' : 'Company',
       fulfillment_type: shipForm.fulfillment_type
-    }), '发货成功', async () => {
+    }, currentOrder.value.order_no), '发货成功', async () => {
       shipDialogVisible.value = false
       await rememberShippingCompanyOption(logisticsCompany)
     })
@@ -1006,6 +1201,21 @@ const submitRemark = async () => {
   )
 }
 
+const submittingRepair = ref(false)
+const handleRepairFulfillment = async (row) => {
+  currentOrder.value = row
+  await runOrderMutation(
+    submittingRepair,
+    () => repairOrderFulfillment(row.id),
+    '履约链修复成功',
+    async () => {
+      if (detailVisible.value && currentOrder.value) {
+        await handleDetail(currentOrder.value)
+      }
+    }
+  )
+}
+
 // ===== 强制操作 =====
 const forceVisible = ref(false)
 const forceType = ref('') // 'complete' | 'cancel'
@@ -1030,6 +1240,7 @@ const submitForce = async () => {
 const handleDropdown = (cmd, row) => {
   if (cmd === 'amount') handleAmount(row)
   else if (cmd === 'remark') handleRemarkItem(row)
+  else if (cmd === 'repair_fulfillment') handleRepairFulfillment(row)
   else if (cmd === 'force_complete') handleForce(row, 'complete')
   else if (cmd === 'force_cancel') handleForce(row, 'cancel')
 }
@@ -1042,7 +1253,7 @@ const getStatusType = (s) => (
     ? 'warning'
     : s === 'pending_group'
       ? 'warning'
-      : ['paid', 'agent_confirmed', 'shipping_requested', 'shipped'].includes(s)
+      : ['paid', 'pickup_pending', 'agent_confirmed', 'shipping_requested', 'shipped'].includes(s)
         ? 'primary'
         : ['completed'].includes(s)
           ? 'success'
@@ -1053,6 +1264,7 @@ const getStatusText = (s) => ({
   pending_payment: '待付款',
   pending_group: '待成团',
   paid: '待发货',
+  pickup_pending: '待核销',
   agent_confirmed: '代理已确认',
   shipping_requested: '代理申请发货',
   shipped: '已发货',
@@ -1069,6 +1281,9 @@ onMounted(() => {
     searchForm.status_group = String(q.status_group)
     searchForm.status = ''
   }
+  if (q.search_field) searchForm.search_field = String(q.search_field)
+  if (q.search_value) searchForm.search_value = String(q.search_value)
+  if (q.product_name) searchForm.product_name = String(q.product_name)
   fetchMiniProgramConfig()
   refreshOrders()
 })
@@ -1132,6 +1347,18 @@ onMounted(() => {
   color: #606266;
   white-space: pre-wrap;
   word-break: break-word;
+}
+.buyer-remark-block--legacy {
+  background: #f4f4f5;
+  color: #909399;
+}
+.detail-inline-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.logistics-drawer {
+  padding: 0 4px;
 }
 .detail-member-row { display: flex; gap: 12px; align-items: flex-start; }
 .detail-member-desc { flex: 1; min-width: 0; }

@@ -22,30 +22,46 @@ module.exports = {
         this.applyTabBarConfig(brandConfig.tab_bar || {});
     },
 
-    fetchMiniProgramConfig() {
+    fetchMiniProgramConfig(options = {}) {
+        const { forceRefresh = false } = options;
         const cacheKey = 'mini_program_config_cache';
         const cacheTtl = 15 * 60 * 1000;
         const now = Date.now();
 
         // 先读本地缓存
-        try {
-            const cached = wx.getStorageSync(cacheKey);
-            if (cached && cached.expireAt > now && cached.config) {
-                this.applyMiniProgramConfig(cached.config);
-            }
-        } catch (_) {}
+        if (!forceRefresh) {
+            try {
+                const cached = wx.getStorageSync(cacheKey);
+                if (cached && cached.expireAt > now && cached.config) {
+                    this.applyMiniProgramConfig(cached.config);
+                }
+            } catch (_) {}
+        }
+
+        if (this.globalData.miniProgramConfigPromise) {
+            return this.globalData.miniProgramConfigPromise;
+        }
 
         // ★ 改为调用云函数
-        callFn('config', { action: 'miniProgramConfig' }, { showError: false })
+        const promise = callFn('config', { action: 'miniProgramConfig' }, { showError: false })
             .then(res => {
                 if (res && res.code === 0 && res.data) {
                     this.applyMiniProgramConfig(res.data);
-                    wx.setStorageSync(cacheKey, { config: res.data, expireAt: now + cacheTtl });
+                    wx.setStorageSync(cacheKey, { config: res.data, expireAt: Date.now() + cacheTtl });
+                    return res.data;
                 }
+                return this.globalData.miniProgramConfig;
             })
             .catch(err => {
                 console.warn('[MiniProgramConfig] 云函数拉取失败，使用本地默认配置', err);
+                return this.globalData.miniProgramConfig;
+            })
+            .finally(() => {
+                this.globalData.miniProgramConfigPromise = null;
             });
+
+        this.globalData.miniProgramConfigPromise = promise;
+        return promise;
     },
 
     applyTabBarConfig(tabBarConfig = {}) {

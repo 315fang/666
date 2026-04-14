@@ -1,7 +1,8 @@
 function formatLogItem(page, item) {
-    const changeType = item.change_type || '';
-    const isOut = ['deduct', 'manual_deduct', 'n_allocate_out', 'adjust'].includes(changeType);
-    const isIn = ['recharge', 'manual_recharge', 'refund', 'n_allocate_in'].includes(changeType);
+    const changeType = item.change_type || item.type || '';
+    const amountVal = parseFloat(item.amount) || 0;
+    const isOut = ['deduct', 'manual_deduct', 'n_allocate_out', 'adjust', 'refund_reopen_reversal', 'order_ship', 'spend'].includes(changeType) || amountVal < 0;
+    const isIn = ['recharge', 'manual_recharge', 'refund', 'n_allocate_in', 'commission_transfer', 'wx_recharge'].includes(changeType) || amountVal > 0;
     const isPending = changeType === 'recharge_pending';
 
     let statusText = '';
@@ -27,9 +28,10 @@ function formatLogItem(page, item) {
     }
     const dateKey = timeRaw.slice(0, 10);
 
-    const amountVal = parseFloat(item.amount) || 0;
-    const balanceBefore = parseFloat(item.balance_before) || 0;
-    const balanceAfter = parseFloat(item.balance_after) || 0;
+    const hasBalanceBefore = item.balance_before !== undefined && item.balance_before !== null && item.balance_before !== '';
+    const hasBalanceAfter = item.balance_after !== undefined && item.balance_after !== null && item.balance_after !== '';
+    const balanceBefore = hasBalanceBefore ? parseFloat(item.balance_before) || 0 : null;
+    const balanceAfter = hasBalanceAfter ? parseFloat(item.balance_after) || 0 : null;
 
     return {
         ...item,
@@ -37,11 +39,12 @@ function formatLogItem(page, item) {
         amountSign: isOut ? '-' : '+',
         isOut: !!isOut,
         isIn: !!isIn,
-        amount: amountVal.toFixed(2),
+        amount: Math.abs(amountVal).toFixed(2),
         timeText,
         dateKey,
-        balanceBefore: balanceBefore.toFixed(2),
-        balanceAfter: balanceAfter.toFixed(2),
+        balanceBefore: balanceBefore != null ? balanceBefore.toFixed(2) : '',
+        balanceAfter: balanceAfter != null ? balanceAfter.toFixed(2) : '',
+        hasBalanceSnapshot: balanceAfter != null,
         remark: item.remark || '',
         refIdDisplay,
         statusText,
@@ -95,6 +98,7 @@ function getChangeLabel(type) {
         recharge_pending: '充值处理中',
         deduct: '发货扣款',
         refund: '退款返还',
+        refund_reopen_reversal: '退款回退冲正',
         adjust: '人工调整',
         manual_recharge: '手动充值',
         manual_deduct: '手动扣减',

@@ -26,7 +26,11 @@
 
       <!-- 列表内容 -->
       <el-table :data="tableData" v-loading="loading">
-        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column label="ID" width="90">
+          <template #default="{ row }">
+            <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+          </template>
+        </el-table-column>
         <el-table-column prop="name" label="活动名称" min-width="150" />
         <el-table-column label="关联商品" min-width="180">
           <template #default="{ row }">
@@ -128,6 +132,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import { getGroupBuys, createGroupBuy, updateGroupBuy, deleteGroupBuy, getProducts } from '@/api'
 import { usePagination } from '@/composables/usePagination'
 

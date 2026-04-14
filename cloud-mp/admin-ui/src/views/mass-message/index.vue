@@ -22,7 +22,11 @@
 
       <!-- 表格 -->
       <el-table :data="tableData" v-loading="loading" stripe>
-        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column label="ID" width="90">
+          <template #default="{ row }">
+            <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+          </template>
+        </el-table-column>
         <el-table-column prop="title" label="标题" min-width="200" />
         <el-table-column label="目标用户" width="130">
           <template #default="{ row }">
@@ -160,6 +164,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import { getMassMessages, previewMassMessage, createMassMessage, sendMassMessage, deleteMassMessage } from '@/api'
 import { formatDate } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'

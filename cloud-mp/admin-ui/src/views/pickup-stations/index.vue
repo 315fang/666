@@ -33,7 +33,11 @@
       </el-form>
 
       <el-table :data="list" v-loading="loading" stripe>
-        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column label="ID" width="90">
+          <template #default="{ row }">
+            <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+          </template>
+        </el-table-column>
         <el-table-column prop="name" label="门店名称" min-width="140" />
         <el-table-column label="地区" min-width="160">
           <template #default="{ row }">
@@ -177,7 +181,11 @@
       </div>
 
       <el-table :data="staffState.list" v-loading="staffState.loading" stripe>
-        <el-table-column prop="id" label="ID" width="72" />
+        <el-table-column label="ID" width="90">
+          <template #default="{ row }">
+            <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+          </template>
+        </el-table-column>
         <el-table-column label="成员" min-width="180">
           <template #default="{ row }">
             <div>{{ displayUserName(row.user, `用户${row.user_id}`) }}</div>
@@ -217,9 +225,34 @@
 
     <el-dialog v-model="staffFormVisible" :title="staffForm.id ? '编辑门店成员' : '添加门店成员'" width="520px" destroy-on-close>
       <el-form :model="staffForm" label-width="100px">
-        <el-form-item label="用户ID" required>
-          <el-input-number v-model="staffForm.user_id" :min="1" :step="1" style="width:220px" :disabled="!!staffForm.id" />
-          <div class="form-tip">当前先按用户ID添加成员，适合运营后台快速配置。</div>
+        <el-form-item label="搜索成员" required>
+          <el-select
+            v-model="staffForm.user_id"
+            filterable
+            remote
+            reserve-keyword
+            clearable
+            placeholder="输入昵称 / 用户ID / 邀请码搜索"
+            :remote-method="searchStationMembers"
+            :loading="staffUserSearching"
+            :disabled="!!staffForm.id"
+            style="width:100%"
+          >
+            <el-option
+              v-for="option in staffUserOptions"
+              :key="option.id"
+              :label="formatStationUserOption(option)"
+              :value="option.id"
+            />
+          </el-select>
+          <div class="form-tip">支持按昵称、用户ID、邀请码/会员码搜索，选中后自动写入成员ID。</div>
+        </el-form-item>
+        <el-form-item label="成员信息" v-if="selectedStaffUser">
+          <div class="staff-user-preview">
+            <div>{{ displayUserName(selectedStaffUser, `用户${selectedStaffUser.id}`) }}</div>
+            <div class="sub">ID: {{ selectedStaffUser.id }} / 邀请码: {{ selectedStaffUser.invite_code || selectedStaffUser.member_no || '—' }}</div>
+            <div class="sub" v-if="selectedStaffUser.phone">手机号: {{ selectedStaffUser.phone }}</div>
+          </div>
         </el-form-item>
         <el-form-item label="门店角色">
           <el-radio-group v-model="staffForm.role">
@@ -246,6 +279,7 @@
 <script setup>
 import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import {
   getPickupStations,
   getPickupStationById,
@@ -253,7 +287,8 @@ import {
   updatePickupStation,
   getPickupStationStaff,
   addPickupStationStaff,
-  removePickupStationStaff
+  removePickupStationStaff,
+  searchUsersLite
 } from '@/api'
 import { usePagination } from '@/composables/usePagination'
 import MapPickerDialog from '@/components/MapPickerDialog.vue'
@@ -284,6 +319,8 @@ const mapPickerVisible = ref(false)
 const staffDialogVisible = ref(false)
 const staffFormVisible = ref(false)
 const staffSaving = ref(false)
+const staffUserSearching = ref(false)
+const staffUserOptions = ref([])
 
 const staffState = reactive({
   stationId: null,
@@ -296,13 +333,45 @@ const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fa
 
 const defaultStaffForm = () => ({
   id: null,
-  user_id: null,
+  user_id: '',
   role: 'staff',
   can_verify: 1,
   remark: ''
 })
 
+function normalizeStaffLookupValue(value) {
+  if (value == null) return ''
+  const text = String(value).trim()
+  if (!text) return ''
+  return /^-?\d+$/.test(text) ? Number(text) : text
+}
+
+function buildStaffUserOption(user = {}) {
+  return {
+    ...user,
+    id: user.id || user._id || user.openid || user.user_id || '',
+    _legacy_id: user._legacy_id ?? user.user_id ?? null
+  }
+}
+
+function resolveStaffUserIdentity(user) {
+  if (!user) return normalizeStaffLookupValue(staffForm.user_id)
+  const preferred = user._legacy_id ?? user.user_id ?? user.id ?? user._id ?? user.openid ?? staffForm.user_id
+  return normalizeStaffLookupValue(preferred)
+}
+
 const staffForm = reactive(defaultStaffForm())
+const selectedStaffUser = computed(() => {
+  const current = String(staffForm.user_id ?? '')
+  if (!current) return null
+  const matchesCurrent = (user = {}) => [user.id, user._id, user._legacy_id, user.user_id, user.openid]
+    .filter((value) => value !== null && value !== undefined && value !== '')
+    .some((value) => String(value) === current)
+
+  return staffUserOptions.value.find(matchesCurrent)
+    || staffState.list.find((item) => String(item.user_id ?? item.openid ?? '') === current)?.user
+    || null
+})
 
 const mapPickerSeed = computed(() => ({
   province: form.province,
@@ -447,14 +516,41 @@ async function openStaffDialog(row) {
 
 function openStaffForm(row) {
   Object.assign(staffForm, defaultStaffForm())
+  staffUserOptions.value = []
   if (row) {
     staffForm.id = row.id
-    staffForm.user_id = Number(row.user_id)
+    staffForm.user_id = row.user_id != null ? String(row.user_id) : ''
     staffForm.role = row.role || 'staff'
     staffForm.can_verify = Number(row.can_verify) === 1 ? 1 : 0
     staffForm.remark = row.remark || ''
+    if (row.user) {
+      staffUserOptions.value = [buildStaffUserOption({ ...row.user, user_id: row.user_id, openid: row.openid || row.user.openid || '' })]
+    }
   }
   staffFormVisible.value = true
+}
+
+function formatStationUserOption(user) {
+  const displayId = user._legacy_id || user.user_id || user.id
+  const nickname = displayUserName(user, `用户${displayId}`)
+  const inviteCode = user.invite_code || user.member_no || '无邀请码'
+  const openidHint = user.openid ? ` / OPENID:${String(user.openid).slice(0, 8)}...` : ''
+  return `${nickname} / ID:${displayId}${openidHint} / 邀请码:${inviteCode}`
+}
+
+async function searchStationMembers(keyword) {
+  const q = String(keyword || '').trim()
+  if (!q) {
+    staffUserOptions.value = []
+    return
+  }
+  staffUserSearching.value = true
+  try {
+    const res = await searchUsersLite({ keyword: q, limit: 20 })
+    staffUserOptions.value = (res?.list || []).map((item) => buildStaffUserOption(item))
+  } finally {
+    staffUserSearching.value = false
+  }
 }
 
 async function loadStaffList(stationId = staffState.stationId) {
@@ -475,14 +571,17 @@ async function loadStaffList(stationId = staffState.stationId) {
 
 async function submitStaff() {
   if (!staffState.stationId) return
-  if (!Number.isFinite(Number(staffForm.user_id)) || Number(staffForm.user_id) <= 0) {
+  const selectedUser = selectedStaffUser.value
+  const resolvedUserId = resolveStaffUserIdentity(selectedUser)
+  if (resolvedUserId === '' || resolvedUserId === null || resolvedUserId === undefined) {
     ElMessage.warning('请填写有效的用户ID')
     return
   }
   staffSaving.value = true
   try {
     await addPickupStationStaff(staffState.stationId, {
-      user_id: Number(staffForm.user_id),
+      user_id: resolvedUserId,
+      openid: selectedUser?.openid || null,
       role: staffForm.role,
       can_verify: Number(staffForm.can_verify) === 1 ? 1 : 0,
       remark: staffForm.remark?.trim() || null
@@ -592,5 +691,12 @@ fetchList()
   font-size: 12px;
   color: #909399;
   line-height: 1.5;
+}
+.staff-user-preview {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
 }
 </style>

@@ -5,8 +5,10 @@
       <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
     </view>
     <text class="nav-title">{{pageTitle}}</text>
-    <view class="refresh-btn" bindtap="onRefresh" wx:if="{{!manualMode}}">刷新</view>
-    <view class="refresh-btn refresh-btn-placeholder" wx:else>手工发货</view>
+    <view class="nav-actions">
+      <view class="refresh-btn" bindtap="onRefresh" wx:if="{{!manualMode}}">刷新</view>
+      <view class="refresh-btn refresh-btn-placeholder" wx:else>手工发货</view>
+    </view>
   </view>
 
   <!-- 加载中 -->
@@ -30,9 +32,12 @@
         <image class="status-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
       </view>
       <view class="status-info">
-        <text class="status-text">{{info.status_text}}</text>
-        <text class="tracking-no">运单：{{info.tracking_no}}</text>
-        <text class="company">承运：{{info.company}}</text>
+        <text class="status-text">{{info.status_text || '物流信息更新中'}}</text>
+        <view class="tracking-row">
+          <text class="tracking-no">运单：{{info.tracking_no || '待补充'}}</text>
+          <view class="copy-btn" wx:if="{{info.tracking_no}}" bindtap="onCopyTrackingNo">复制</view>
+        </view>
+        <text class="company">承运：{{info.company || '待补充'}}</text>
       </view>
       <view class="cache-badge" wx:if="{{info.fromCache}}">缓存</view>
     </view>
@@ -63,7 +68,7 @@
     </view>
 
     <!-- 查询时间 -->
-    <view class="query-time">
+    <view class="query-time" wx:if="{{info.query_time}}">
       <text>查询时间：{{info.query_time}}</text>
     </view>
   </view>

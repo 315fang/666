@@ -71,7 +71,7 @@ function normalizeCard(item = {}, idx = 0) {
         title: item.title || '',
         subtitle: item.subtitle || item.subTitle || '',
         tag: item.tag || '',
-        image: item.image || item.file_id || item.image_url || item.cover_image || '',
+        image: item.file_id || item.image || item.image_url || item.cover_image || '',
         gradient: item.gradient || 'linear-gradient(135deg,#3D2F22,#5A4535)',
         link_type: item.link_type || 'none',
         link_value: item.link_value || '',
@@ -201,6 +201,14 @@ Page({
         if (tabBar && typeof tabBar.refresh === 'function') {
             tabBar.refresh();
         }
+        if (this._activityReloading) return;
+        this._activityReloading = true;
+        Promise.resolve()
+            .then(() => this.loadConfig())
+            .then(() => this.loadActivityPreviews())
+            .finally(() => {
+                this._activityReloading = false;
+            });
     },
 
     onUnload() {

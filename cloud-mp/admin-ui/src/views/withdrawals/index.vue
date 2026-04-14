@@ -8,7 +8,7 @@
       <!-- 搜索栏 -->
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="用户搜索">
-          <el-input v-model="searchForm.keyword" placeholder="昵称/手机号" clearable style="width: 180px" @keyup.enter="handleSearch" />
+          <el-input v-model="searchForm.keyword" placeholder="昵称/手机号/会员码/提现账号" clearable style="width: 220px" @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="全部状态" clearable style="width: 130px">
@@ -26,7 +26,11 @@
 
       <!-- 表格 -->
       <el-table :data="tableData" v-loading="loading">
-        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column label="ID" width="90">
+          <template #default="{ row }">
+            <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+          </template>
+        </el-table-column>
         <el-table-column label="用户" width="150">
           <template #default="{ row }">{{ displayUserName(row.user, row.user_id) }}</template>
         </el-table-column>
@@ -124,6 +128,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getWithdrawals, approveWithdrawal, rejectWithdrawal, completeWithdrawal } from '@/api'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import { formatDateTime } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
 import { getUserNickname } from '@/utils/userDisplay'
@@ -150,6 +155,20 @@ const rejectForm = reactive({
 })
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 
+const patchWithdrawalRow = (id, patch) => {
+  const applyPatch = (row) => ({ ...row, ...patch })
+  const matchId = (row) => row.id === id || row._id === id
+  tableData.value = tableData.value
+    .map((row) => (matchId(row) ? applyPatch(row) : row))
+    .filter((row) => {
+      if (!searchForm.status) return true
+      return row.status === searchForm.status
+    })
+  if (currentRow.value && matchId(currentRow.value)) {
+    currentRow.value = applyPatch(currentRow.value)
+  }
+}
+
 const fetchWithdrawals = async () => {
   loading.value = true
   try {
@@ -174,12 +193,17 @@ const refreshWithdrawals = () => fetchWithdrawals()
 const runWithdrawalMutation = async (task, successMessage, onSuccess) => {
   submitting.value = true
   try {
-    await task()
-    ElMessage.success(successMessage)
+    const result = await task()
+    if (result && (result.id || result._id)) {
+      patchWithdrawalRow(result.id || result._id, result)
+    }
+    const finalMessage = typeof successMessage === 'function' ? successMessage(result) : successMessage
+    ElMessage.success(finalMessage)
     await onSuccess?.()
+    await new Promise(resolve => setTimeout(resolve, 300))
     await refreshWithdrawals()
   } catch (error) {
-    ElMessage.error('操作失败')
+    ElMessage.error(error?.message || '操作失败')
     console.error('提现操作失败:', error)
   } finally {
     submitting.value = false
@@ -214,9 +238,10 @@ const handleApprove = async (row) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    await approveWithdrawal(row.id)
-    ElMessage.success('审核通过，请尽快完成打款')
-    refreshWithdrawals()
+    await runWithdrawalMutation(
+      () => approveWithdrawal(row.id),
+      '审核通过，请尽快完成打款'
+    )
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('操作失败')
@@ -261,9 +286,10 @@ const handleComplete = async (row) => {
         }
       }
     )
-    await completeWithdrawal(row.id, { remark: value })
-    ElMessage.success('打款请求已执行')
-    refreshWithdrawals()
+    await runWithdrawalMutation(
+      () => completeWithdrawal(row.id, { remark: value }),
+      '打款请求已执行'
+    )
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('操作失败')

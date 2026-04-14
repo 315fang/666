@@ -25,7 +25,7 @@ const DEFAULT_MINI_PROGRAM_CONFIG = {
         }
     },
     feature_flags: {
-        show_station_entry: false,
+        show_station_entry: true,
         show_pickup_entry: false,
         enable_logistics_entry: true,
         enable_lottery_entry: false
@@ -102,10 +102,20 @@ function pickString(value, fallback = '') {
     return text || fallback;
 }
 
+function pickAssetRef(source = {}) {
+    return pickString(source.file_id || source.image_url || source.image || source.url || source.cover_image || source.coverImage);
+}
+
 function normalizeTabBarConfig(tabBar = {}) {
-    const merged = mergeDeep(DEFAULT_MINI_PROGRAM_CONFIG.brand_config.tab_bar, tabBar);
-    if (!Array.isArray(merged.items) || merged.items.length < 4) {
+    const rawMerged = mergeDeep(DEFAULT_MINI_PROGRAM_CONFIG.brand_config.tab_bar, isPlainObject(tabBar) ? tabBar : {});
+    const merged = isPlainObject(rawMerged)
+        ? rawMerged
+        : clone(DEFAULT_MINI_PROGRAM_CONFIG.brand_config.tab_bar);
+    const rawItems = Array.isArray(merged.items) ? merged.items.filter((item) => item && typeof item === 'object') : [];
+    if (rawItems.length < 4) {
         merged.items = clone(DEFAULT_MINI_PROGRAM_CONFIG.brand_config.tab_bar.items);
+    } else {
+        merged.items = rawItems;
     }
     merged.items = merged.items.slice(0, 4).map((item, index) => ({
         index,
@@ -119,7 +129,13 @@ function normalizeTabBarConfig(tabBar = {}) {
 
 function normalizeMiniProgramConfig(rawConfig = {}) {
     const merged = mergeDeep(clone(DEFAULT_MINI_PROGRAM_CONFIG), rawConfig || {});
-    merged.brand_config.tab_bar = normalizeTabBarConfig(merged.brand_config.tab_bar || {});
+    merged.brand_config = isPlainObject(merged.brand_config)
+        ? merged.brand_config
+        : clone(DEFAULT_MINI_PROGRAM_CONFIG.brand_config);
+    merged.brand_config.tab_bar = normalizeTabBarConfig(merged.brand_config.tab_bar);
+    merged.logistics_config = isPlainObject(merged.logistics_config)
+        ? merged.logistics_config
+        : clone(DEFAULT_MINI_PROGRAM_CONFIG.logistics_config);
     if (!Array.isArray(merged.logistics_config.shipping_company_options)) {
         merged.logistics_config.shipping_company_options = clone(DEFAULT_MINI_PROGRAM_CONFIG.logistics_config.shipping_company_options);
     }
@@ -128,6 +144,12 @@ function normalizeMiniProgramConfig(rawConfig = {}) {
             .map((item) => pickString(item))
             .filter(Boolean)
     )];
+    merged.product_detail_pledges = isPlainObject(merged.product_detail_pledges)
+        ? merged.product_detail_pledges
+        : clone(DEFAULT_MINI_PROGRAM_CONFIG.product_detail_pledges);
+    if (!isPlainObject(merged.product_detail_pledges.items)) {
+        merged.product_detail_pledges.items = clone(DEFAULT_MINI_PROGRAM_CONFIG.product_detail_pledges.items);
+    }
     if (!isPlainObject(merged.feature_toggles)) merged.feature_toggles = {};
     return merged;
 }
@@ -137,7 +159,7 @@ function normalizePopupAdConfig(config = {}) {
         enabled: !!config.enabled,
         title: pickString(config.title),
         file_id: pickString(config.file_id),
-        image_url: pickString(config.image_url || config.url || config.file_id),
+        image_url: pickAssetRef(config),
         link_type: pickString(config.link_type, 'none'),
         link_value: pickString(config.link_value),
         button_text: pickString(config.button_text),

@@ -73,6 +73,10 @@ function normalizeMyGroupItem(item = {}) {
     const currentMembers = paymentStatus === 'unpaid'
         ? 0
         : Math.max(1, rawCurrentMembers);
+    const rawStatus = groupOrder.status || '';
+    const derivedStatus = ((rawStatus === 'open' || rawStatus === 'pending' || !rawStatus) && minMembers > 0 && currentMembers >= minMembers)
+        ? 'success'
+        : rawStatus;
 
     return {
         ...item,
@@ -81,6 +85,7 @@ function normalizeMyGroupItem(item = {}) {
         _memberText: `${currentMembers}/${minMembers}人`,
         groupOrder: {
             ...groupOrder,
+            status: derivedStatus,
             current_members: currentMembers,
             min_members: minMembers
         }
@@ -168,13 +173,31 @@ Page({
         wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
     },
 
-    onViewGroup(e) {
+    async ensureGroupNoForItem(orderId) {
+        if (!orderId) return '';
+        try {
+            const res = await post(`/orders/${encodeURIComponent(orderId)}/retry-group-join`);
+            return res && res.data && res.data.group_no ? res.data.group_no : '';
+        } catch (_) {
+            return '';
+        }
+    },
+
+    async onViewGroup(e) {
         const groupNo = e.currentTarget.dataset.no;
-        if (!groupNo) {
-            wx.showToast({ title: '支付成功后可在订单中查看拼团进度', icon: 'none' });
+        const orderId = e.currentTarget.dataset.orderId;
+        const paymentStatus = e.currentTarget.dataset.paymentStatus;
+        let targetGroupNo = groupNo;
+        if (!targetGroupNo && paymentStatus === 'paid') {
+            wx.showLoading({ title: '正在同步拼团...' });
+            targetGroupNo = await this.ensureGroupNoForItem(orderId);
+            wx.hideLoading();
+        }
+        if (!targetGroupNo) {
+            wx.showToast({ title: paymentStatus === 'paid' ? '拼团进度生成中，请稍后重试' : '支付成功后可在订单中查看拼团进度', icon: 'none' });
             return;
         }
-        wx.navigateTo({ url: `/pages/group/detail?group_no=${groupNo}` });
+        wx.navigateTo({ url: `/pages/group/detail?group_no=${targetGroupNo}` });
     },
 
     onGoMyGroups() {
@@ -204,13 +227,21 @@ Page({
         this.setData({ activities });
     },
 
-    onShare(e) {
+    async onShare(e) {
         const groupNo = e.currentTarget.dataset.no;
-        if (!groupNo) {
-            wx.showToast({ title: '支付成功后再分享拼团', icon: 'none' });
+        const orderId = e.currentTarget.dataset.orderId;
+        const paymentStatus = e.currentTarget.dataset.paymentStatus;
+        let targetGroupNo = groupNo;
+        if (!targetGroupNo && paymentStatus === 'paid') {
+            wx.showLoading({ title: '正在同步拼团...' });
+            targetGroupNo = await this.ensureGroupNoForItem(orderId);
+            wx.hideLoading();
+        }
+        if (!targetGroupNo) {
+            wx.showToast({ title: paymentStatus === 'paid' ? '拼团进度生成中，请稍后再试分享' : '支付成功后再分享拼团', icon: 'none' });
             return;
         }
-        wx.navigateTo({ url: `/pages/group/detail?group_no=${groupNo}&share=1` });
+        wx.navigateTo({ url: `/pages/group/detail?group_no=${targetGroupNo}&share=1` });
     },
 
     onGoPayOrder(e) {

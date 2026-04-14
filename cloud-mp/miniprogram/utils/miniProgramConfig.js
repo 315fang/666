@@ -2,9 +2,11 @@ const DEFAULT_CONFIG = {
   brand_config: {
     brand_name: '问兰',
     share_title: '问兰 · 品牌甄选',
+    share_poster_file_id: '',
     share_poster_url: '',
+    share_poster_cover_file_id: '',
     share_poster_cover_url: '',
-    share_poster_intro: '合作共赢 共迎美好',
+    share_poster_intro: '专注于大学生（产教融合）实战落地',
     share_poster_code_prefix: '邀请码：',
     share_poster_qr_hint: '长按识别小程序码',
     customer_service_wechat: 'wl_service',
@@ -29,8 +31,8 @@ const DEFAULT_CONFIG = {
     }
   },
   feature_flags: {
-    show_station_entry: false,
-    show_pickup_entry: false,
+    show_station_entry: true,
+    show_pickup_entry: true,
     show_agent_service_entry: false,
     enable_logistics_entry: true,
     enable_lottery_entry: false

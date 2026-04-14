@@ -478,11 +478,56 @@ const handleAction = {
 
     // ===== 限量抢购 =====
     'limitedSpotDetail': asyncHandler(async (params) => {
-        const res = await db.collection('configs')
-            .where({ config_group: 'limited-spot' })
-            .limit(1)
-            .get().catch(() => ({ data: [] }));
-        return success(res.data && res.data[0] ? (res.data[0].config_value || res.data[0].value) : {});
+        const cardId = String(params.card_id || params.id || '').trim();
+        if (!cardId) throw badRequest('缺少 card_id 参数');
+
+        const configValue = await getAppConfigValue('activity_links_config', null);
+        const normalizedLinks = (configValue && typeof configValue === 'object')
+            ? configValue
+            : {};
+        const limitedCards = Array.isArray(normalizedLinks.limited) ? normalizedLinks.limited : [];
+        const card = limitedCards.find((item) => String(item.id || '') === cardId) || null;
+
+        if (!card) {
+            return success({ card: null, products: [] });
+        }
+
+        const spotProducts = Array.isArray(card.spot_products) ? card.spot_products : [];
+        const productMap = await loadProductsByActivityIds(spotProducts.map((item) => item.product_id));
+
+        const products = spotProducts.map((offer, index) => {
+            const product = productSummary(productMap[String(offer.product_id)] || null);
+            const remaining = Math.max(0, Number(offer.stock_limit || 0) - Number(offer.sold_count || 0));
+            return {
+                offer_id: offer.id || offer.offer_id || `${cardId}-${index}`,
+                product_id: offer.product_id || '',
+                sku_id: offer.sku_id || '',
+                enable_points: offer.enable_points !== false,
+                enable_money: offer.enable_money !== false,
+                points_price: Number(offer.points_price || 0),
+                money_price: Number(offer.money_price || 0),
+                stock_limit: Number(offer.stock_limit || 0),
+                sold_count: Number(offer.sold_count || 0),
+                remaining,
+                product: product || {
+                    id: offer.product_id || '',
+                    name: '商品',
+                    image: '',
+                    images: []
+                }
+            };
+        });
+
+        return success({
+            card: {
+                id: card.id || cardId,
+                title: card.title || '',
+                subtitle: card.subtitle || card.subTitle || '',
+                image: card.file_id || card.image || card.image_url || card.cover_image || '',
+                end_time: card.end_time || null
+            },
+            products
+        });
     }),
 
     // ===== 品牌动态 =====

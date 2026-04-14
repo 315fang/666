@@ -3,7 +3,7 @@ const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
 const { toNumber, getAllRecords } = require('./shared/utils');
-const { normalizeCouponRecord } = require('./user-coupons');
+const { normalizeCouponRecord, reconcileLotteryCoupons } = require('./user-coupons');
 
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
@@ -29,12 +29,28 @@ async function getUserCouponIds(openid) {
         .get()
         .catch(() => ({ data: [] }));
     const user = userRes.data && userRes.data[0] ? userRes.data[0] : null;
-    const values = [openid];
+    const values = [];
     if (user) {
         if (hasValue(user.id)) values.push(user.id, String(user.id));
         if (hasValue(user._id)) values.push(user._id);
+        if (hasValue(user._legacy_id)) values.push(user._legacy_id, String(user._legacy_id));
     }
-    return uniqueValues(values);
+    const userIds = uniqueValues(values);
+    return userIds.length > 0 ? userIds : uniqueValues([openid]);
+}
+
+async function queryUserCouponsByUserIds(userIds = []) {
+    if (!Array.isArray(userIds) || userIds.length === 0) return [];
+    const tasks = userIds.map(async (userId) => {
+        const res = await db.collection('user_coupons')
+            .where({ user_id: userId })
+            .orderBy('expire_at', 'asc')
+            .limit(50)
+            .get()
+            .catch(() => ({ data: [] }));
+        return res.data || [];
+    });
+    return (await Promise.all(tasks)).flat();
 }
 
 function normalizeScopeIds(value) {
@@ -181,6 +197,36 @@ function getCommissionLogStatusText(status) {
         rejected: '已驳回'
     };
     return map[status] || String(status || '');
+}
+
+function getOrderSourceText(order = {}) {
+    const firstItem = Array.isArray(order.items) ? (order.items[0] || {}) : {};
+    const orderType = String(order.type || order.order_type || firstItem.activity_type || '').trim().toLowerCase();
+    if (orderType === 'group' || order.group_no || firstItem.group_no || order.group_activity_id || firstItem.group_activity_id) {
+        return '拼团订单';
+    }
+    if (orderType === 'slash' || order.slash_no || firstItem.slash_no) {
+        return '砍价订单';
+    }
+    if (String(order.delivery_type || '').trim() === 'pickup') {
+        return '到店自提订单';
+    }
+    return '小程序商城订单';
+}
+
+function getCommissionSourceText(item = {}, order = null) {
+    const type = String(item.type || '').trim().toLowerCase();
+    const sourceMap = {
+        direct: '来自直推下级订单',
+        indirect: '来自团队下级订单',
+        same_level: '来自平级奖励结算',
+        pickup_subsidy: '来自自提核销补贴',
+        agent_assist: '来自代理协助奖励',
+        agent_fulfillment: '来自代理发货利润',
+        stock_diff: '来自级差利润',
+        self: '来自自购返利'
+    };
+    return sourceMap[type] || (order ? `来自${getOrderSourceText(order)}` : '来自佣金结算');
 }
 
 function getAgentWalletBalance(user = {}) {
@@ -350,11 +396,14 @@ async function walletCommissions(openid, params = {}) {
         try {
             const userRes = await db.collection('users')
                 .where({ openid: _.in(fromOpenids) })
-                .field({ openid: true, nickName: true, nickname: true, phone: true, invite_code: true })
+                .field({ openid: true, nickName: true, nickname: true, phone: true, invite_code: true, member_no: true })
                 .limit(fromOpenids.length)
                 .get();
             (userRes.data || []).forEach(u => {
-                fromUserMap[u.openid] = u.nickName || u.nickname || u.phone || '下级用户';
+                fromUserMap[u.openid] = {
+                    nick: u.nickName || u.nickname || u.phone || '下级用户',
+                    member_no: u.member_no || u.invite_code || ''
+                };
             });
         } catch (_) {}
     }
@@ -366,15 +415,16 @@ async function walletCommissions(openid, params = {}) {
         try {
             const orderRes = await db.collection('orders')
                 .where({ order_no: _.in(orderNos) })
-                .field({ order_no: true, items: true, total_amount: true, pay_amount: true })
+                .field({ order_no: true, items: true, total_amount: true, pay_amount: true, delivery_type: true, type: true, order_type: true, group_no: true, group_activity_id: true, slash_no: true })
                 .limit(orderNos.length)
                 .get();
             (orderRes.data || []).forEach(o => {
                 orderMap[o.order_no] = {
                     order_no: o.order_no,
                     // 取第一个商品名作摘要
-                    product_summary: (o.items && o.items[0]) ? (o.items[0].name || '') : '',
-                    pay_amount: o.pay_amount || o.total_amount || 0
+                    product_summary: (o.items && o.items[0]) ? (o.items[0].name || o.items[0].snapshot_name || '') : '',
+                    pay_amount: o.pay_amount || o.total_amount || 0,
+                    source_text: getOrderSourceText(o)
                 };
             });
         } catch (_) {}
@@ -383,7 +433,7 @@ async function walletCommissions(openid, params = {}) {
     // ── 组合输出
     const enriched = list.map(item => {
         const typeKey = String(item.type || '').toLowerCase();
-        const fromNick = item.from_openid ? (fromUserMap[item.from_openid] || null) : null;
+        const fromUser = item.from_openid ? (fromUserMap[item.from_openid] || null) : null;
         const order = item.order_no ? (orderMap[item.order_no] || null) : null;
         return {
             ...item,
@@ -391,8 +441,11 @@ async function walletCommissions(openid, params = {}) {
             type: typeKey,
             type_text: getCommissionLogTypeText(item.type),
             status_text: getCommissionLogStatusText(item.status),
-            from_user_nick: fromNick,
+            from_user_nick: fromUser ? fromUser.nick : null,
+            from_user_member_no: fromUser ? fromUser.member_no : '',
+            source_text: getCommissionSourceText(item, order),
             order_no_display: item.order_no || item.order_id || null,
+            order_source_text: order ? order.source_text : '',
             product_summary: order ? order.product_summary : null,
             order_pay_amount: order ? order.pay_amount : null
         };
@@ -559,10 +612,11 @@ async function availableCoupons(openid, params = {}) {
     const minPurchase = toNumber(params.min_purchase != null ? params.min_purchase : params.amount, 0);
     const userIds = await getUserCouponIds(openid);
     const scopeContext = await buildCouponScopeContext(params);
+    await reconcileLotteryCoupons(openid).catch(() => 0);
 
     const [openidRes, userIdRes] = await Promise.all([
         db.collection('user_coupons').where({ openid }).orderBy('expire_at', 'asc').limit(50).get().catch(() => ({ data: [] })),
-        db.collection('user_coupons').where({ user_id: _.in(userIds) }).orderBy('expire_at', 'asc').limit(50).get().catch(() => ({ data: [] }))
+        Promise.resolve({ data: await queryUserCouponsByUserIds(userIds) })
     ]);
 
     const map = {};

@@ -1,24 +1,21 @@
 import request from '@/utils/request'
 
 export const getGroupBuys = (params) => request({ url: '/group-buys', method: 'get', params })
-export const getGroupBuyById = (id) => request({ url: `/group-buys/${id}`, method: 'get' })
 export const createGroupBuy = (data) => request({ url: '/group-buys', method: 'post', data })
 export const updateGroupBuy = (id, data) => request({ url: `/group-buys/${id}`, method: 'put', data })
 export const deleteGroupBuy = (id) => request({ url: `/group-buys/${id}`, method: 'delete' })
 
 export const getCoupons = (params) => request({ url: '/coupons', method: 'get', params })
-export const getCouponById = (id) => request({ url: `/coupons/${id}`, method: 'get' })
 export const createCoupon = (data) => request({ url: '/coupons', method: 'post', data })
 export const updateCoupon = (id, data) => request({ url: `/coupons/${id}`, method: 'put', data })
 export const deleteCoupon = (id) => request({ url: `/coupons/${id}`, method: 'delete' })
 export const issueCoupon = (id, data) => request({ url: `/coupons/${id}/issue`, method: 'post', data })
 export const previewCouponIssue = (id, data) => request({ url: `/coupons/${id}/issue`, method: 'post', params: { dry_run: true }, data })
-export const getCouponWxacode = (id, env = 'trial') => request({ url: `/coupons/${id}/wxacode`, method: 'get', params: { env } })
+export const getCouponWxacode = (id, env = 'release') => request({ url: `/coupons/${id}/wxacode`, method: 'get', params: { env } })
 export const getCouponAutoRules = () => request({ url: '/coupon-auto-rules', method: 'get' })
 export const saveCouponAutoRules = (data) => request({ url: '/coupon-auto-rules', method: 'put', data })
 
 export const getSlashActivities = (params) => request({ url: '/slash-activities', method: 'get', params })
-export const getSlashActivityById = (id) => request({ url: `/slash-activities/${id}`, method: 'get' })
 export const createSlashActivity = (data) => request({ url: '/slash-activities', method: 'post', data })
 export const updateSlashActivity = (id, data) => request({ url: `/slash-activities/${id}`, method: 'put', data })
 export const deleteSlashActivity = (id) => request({ url: `/slash-activities/${id}`, method: 'delete' })

@@ -44,12 +44,18 @@ async function queryActiveProducts() {
 }
 
 async function getProductById(id) {
-    const num = toNumber(id, NaN);
-    const [legacy, doc] = await Promise.all([
-        Number.isFinite(num) ? db.collection('products').where({ id: num }).limit(1).get() : Promise.resolve({ data: [] }),
-        db.collection('products').doc(String(id)).get().catch(() => ({ data: null }))
+    const raw = String(id || '').trim();
+    if (!raw) return null;
+    const num = toNumber(raw, NaN);
+    const [legacy, legacyString, legacyId, doc] = await Promise.all([
+        Number.isFinite(num) ? db.collection('products').where({ id: num }).limit(1).get().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+        db.collection('products').where({ id: raw }).limit(1).get().catch(() => ({ data: [] })),
+        Number.isFinite(num)
+            ? db.collection('products').where({ _legacy_id: _.in([num, raw]) }).limit(1).get().catch(() => ({ data: [] }))
+            : db.collection('products').where({ _legacy_id: raw }).limit(1).get().catch(() => ({ data: [] })),
+        db.collection('products').doc(raw).get().catch(() => ({ data: null }))
     ]);
-    return legacy.data[0] || doc.data || null;
+    return legacy.data[0] || legacyString.data[0] || legacyId.data[0] || doc.data || null;
 }
 
 function hasValue(value) {

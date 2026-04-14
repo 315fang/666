@@ -27,7 +27,11 @@
 
       <!-- 表格 -->
       <el-table :data="tableData" v-loading="loading" stripe>
-        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column label="ID" width="90">
+          <template #default="{ row }">
+            <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+          </template>
+        </el-table-column>
         <el-table-column label="经销商信息" min-width="180">
           <template #default="{ row }">
             <div class="dealer-info">
@@ -161,6 +165,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import { getDealers, approveDealer, rejectDealer, updateDealerLevel, updateDealerProfile } from '@/api'
 import { formatDate } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'

@@ -21,6 +21,10 @@ function getRequestDebugUrl(config = {}) {
   return `${baseURL}${url}`
 }
 
+function shouldSkipErrorMessage(config = {}) {
+  return !!config.skipErrorMessage
+}
+
 function getCloudBaseHostedAdminApiBaseURL() {
   if (typeof window === 'undefined') return ''
 
@@ -40,6 +44,16 @@ const resolvedAdminApiBaseURL =
   import.meta.env.VITE_ADMIN_API_BASE_URL ||
   cloudBaseHostedAdminApiBaseURL ||
   '/admin/api'
+
+if (
+  typeof window !== 'undefined' &&
+  !isLocalRuntime() &&
+  resolvedAdminApiBaseURL === '/admin/api'
+) {
+  console.warn(
+    '[admin-api] using relative baseURL "/admin/api". If the current origin does not proxy admin-api, set VITE_ADMIN_API_BASE_URL explicitly.'
+  )
+}
 
 const request = axios.create({
   baseURL: resolvedAdminApiBaseURL,
@@ -81,15 +95,21 @@ request.interceptors.response.use(
       }
       return data
     } else {
-      ElMessage.error(message || '请求失败')
-      return Promise.reject(new Error(message || '请求失败'))
+      if (!shouldSkipErrorMessage(response.config)) {
+        ElMessage.error(message || '请求失败')
+      }
+      const requestError = new Error(message || '请求失败')
+      requestError.response = response
+      return Promise.reject(requestError)
     }
   },
   async error => {
+    const skipErrorMessage = shouldSkipErrorMessage(error.config || {})
     if (error.response) {
       const { status, data } = error.response
       const reqUrl = error.config?.url || ''
       const isLoginRequest = isLoginRequestUrl(reqUrl)
+      const suppressNotFound = !!error.config?.suppressNotFound
 
       // 本地直接打开 dist 或使用无代理静态服务时，请求会落到错误服务并返回 404。
       // 登录接口在真实后端存在，此处仅对登录请求做一次本地直连回退。
@@ -115,10 +135,10 @@ request.interceptors.response.use(
         case 401:
           // 登录接口的 401 多为账号/密码错误，不应提示“登录已过期”
           if (isLoginRequest) {
-            ElMessage.error(data?.message || '用户名或密码错误')
+            if (!skipErrorMessage) ElMessage.error(data?.message || '用户名或密码错误')
             break
           }
-          ElMessage.error(data?.message || '登录已过期，请重新登录')
+          if (!skipErrorMessage) ElMessage.error(data?.message || '登录已过期，请重新登录')
           try {
             const { useUserStore } = await import('@/store/user')
             useUserStore().clearSession()
@@ -131,11 +151,13 @@ request.interceptors.response.use(
           }
           break
         case 403:
-          ElMessage.error('没有权限访问')
+          if (!skipErrorMessage) ElMessage.error('没有权限访问')
           break
         case 404:
           if (isLoginRequest) {
-            ElMessage.error(`登录接口不存在：${getRequestDebugUrl(error.config)}。请确认当前页面由后端服务托管，或将 VITE_ADMIN_API_BASE_URL 指向正确后端。`)
+            if (!skipErrorMessage) {
+              ElMessage.error(`登录接口不存在：${getRequestDebugUrl(error.config)}。请确认当前页面由后端服务托管，或将 VITE_ADMIN_API_BASE_URL 指向正确后端。`)
+            }
             console.error('[admin-api] login endpoint 404', {
               requestUrl: getRequestDebugUrl(error.config),
               fallbackTarget: localDirectAdminApiBaseURL,
@@ -143,20 +165,34 @@ request.interceptors.response.use(
             })
             break
           }
-          ElMessage.error('请求的资源不存在')
+          if (suppressNotFound) {
+            break
+          }
+          if (!skipErrorMessage) ElMessage.error(data?.message || '请求的资源不存在')
+          console.error('[admin-api] 404 response', {
+            requestUrl: getRequestDebugUrl(error.config),
+            responseData: data
+          })
+          break
+        case 413:
+          if (!skipErrorMessage) ElMessage.error(data?.message || '上传入口拒绝请求，请检查生产域名/API 路由配置')
+          console.error('[admin-api] 413 response', {
+            requestUrl: getRequestDebugUrl(error.config),
+            responseData: data
+          })
           break
         case 500:
-          ElMessage.error(data?.message || '服务器错误')
+          if (!skipErrorMessage) ElMessage.error(data?.message || '服务器错误')
           break
         default:
-          ElMessage.error(data?.message || '请求失败')
+          if (!skipErrorMessage) ElMessage.error(data?.message || '请求失败')
       }
     } else if (error.message.includes('timeout')) {
-      ElMessage.error('请求超时，请稍后重试')
+      if (!skipErrorMessage) ElMessage.error('请求超时，请稍后重试')
     } else if (error.message.includes('Network Error')) {
-      ElMessage.error('网络错误，请检查网络连接')
+      if (!skipErrorMessage) ElMessage.error('网络错误，请检查网络连接')
     } else {
-      ElMessage.error(error.message || '未知错误')
+      if (!skipErrorMessage) ElMessage.error(error.message || '未知错误')
     }
     
     return Promise.reject(error)

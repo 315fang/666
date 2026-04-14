@@ -2,6 +2,7 @@ const { get } = require('../../utils/request');
 const { requireLogin } = require('../../utils/auth');
 const { SharePosterCore } = require('./utils/sharePosterCore');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
+const { getTempUrls } = require('../../utils/cloud');
 const app = getApp();
 
 function resolveBrandConfig() {
@@ -19,8 +20,7 @@ Page({
         navBarHeight: 44,
         memberCode: '',
         posterGenerating: false,
-        posterImagePath: '',
-        isStaticPoster: false
+        posterImagePath: ''
     },
 
     onLoad() {
@@ -33,6 +33,44 @@ Page({
     onShow() {
         if (!requireLogin()) return;
         this.loadMemberCode();
+    },
+
+    async refreshBrandConfig() {
+        if (typeof app.fetchMiniProgramConfig === 'function') {
+            try {
+                await app.fetchMiniProgramConfig({ forceRefresh: true });
+            } catch (_) {
+                // 忽略配置刷新失败，继续使用本地已加载配置
+            }
+        }
+        return resolveBrandConfig();
+    },
+
+    async resolvePosterAsset(source) {
+        const raw = String(source || '').trim();
+        if (!raw) return '';
+        if (/^cloud:\/\//i.test(raw)) {
+            try {
+                return await getTempUrls(raw);
+            } catch (_) {
+                return raw;
+            }
+        }
+        return raw;
+    },
+
+    async buildPosterBrandConfig() {
+        const bc = await this.refreshBrandConfig();
+        const coverSource = bc.share_poster_cover_file_id
+            || bc.share_poster_cover_url
+            || bc.share_poster_file_id
+            || bc.share_poster_url
+            || '';
+        const resolvedCover = await this.resolvePosterAsset(coverSource);
+        return {
+            ...bc,
+            share_poster_cover_url: resolvedCover
+        };
     },
 
     async loadMemberCode() {
@@ -91,23 +129,14 @@ Page({
     },
 
     async loadPoster() {
-        const bc = resolveBrandConfig();
-        const coverUrl = bc.share_poster_cover_url || '';
-        const staticUrl = bc.share_poster_url || '';
-        const useLegacyStaticPoster = !!(staticUrl && !coverUrl);
-        if (useLegacyStaticPoster) {
-            this.setData({ posterImagePath: staticUrl, isStaticPoster: true, posterGenerating: false });
-        } else {
-            this.setData({ isStaticPoster: false });
-            await this.generatePoster();
-        }
+        await this.generatePoster();
     },
 
     async generatePoster() {
         if (this.data.posterGenerating) return;
         this.setData({ posterGenerating: true, posterImagePath: '' });
         try {
-            const bc = resolveBrandConfig();
+            const bc = await this.buildPosterBrandConfig();
             const brandName = resolveBrandName();
             const userInfo = app.globalData.userInfo || {};
             const inviteCode = this.data.memberCode || userInfo.invite_code || '';
@@ -132,10 +161,6 @@ Page({
     },
 
     onRegeneratePoster() {
-        if (this.data.isStaticPoster) {
-            wx.showToast({ title: '当前为整张静态海报，请在后台修改', icon: 'none', duration: 2500 });
-            return;
-        }
         this.generatePoster();
     },
 

@@ -3,6 +3,7 @@ const ORDER_STATUS_TEXT = {
     pending_payment: '待付款',
     pending_group: '待成团',
     paid: '待发货',
+    pickup_pending: '待核销',
     agent_confirmed: '代理已确认',
     shipping_requested: '发货申请中',
     shipped: '待收货',

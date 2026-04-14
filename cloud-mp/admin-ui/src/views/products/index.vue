@@ -443,7 +443,11 @@
         <el-button type="primary" size="small" :icon="Plus" @click="openCategoryForm()">新增分类</el-button>
       </div>
       <el-table :data="categories" border size="small" max-height="320">
-        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column label="ID" width="90">
+          <template #default="{ row }">
+            <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+          </template>
+        </el-table-column>
         <el-table-column prop="name" label="分类名称" min-width="180" />
         <el-table-column prop="sort_order" label="排序" width="80" />
         <el-table-column label="操作" width="160" fixed="right">
@@ -477,6 +481,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { useRoute } from 'vue-router'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import { getProducts, createProduct, updateProduct, updateProductStatus, getCategories, deleteProduct, createCategory, updateCategory, deleteCategory } from '@/api'
 import { usePagination } from '@/composables/usePagination'
 import MediaPicker from '@/components/MediaPicker.vue'

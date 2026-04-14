@@ -249,6 +249,48 @@ Page({
         return showStationDetail(this, st);
     },
 
+    onOpenStationLocation() {
+        const station = this.data.selectedStation;
+        if (!station) return;
+        const latitude = Number(station.latitude);
+        const longitude = Number(station.longitude);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+            wx.showToast({ title: '该门店暂无地图坐标', icon: 'none' });
+            return;
+        }
+        wx.openLocation({
+            latitude,
+            longitude,
+            name: station.name || '服务站点',
+            address: station.fullAddress || station.address || '',
+            scale: DETAIL_SCALE
+        });
+    },
+
+    onCopyStationAddress() {
+        const station = this.data.selectedStation;
+        if (!station) return;
+        const text = station.fullAddress || station.address || '';
+        if (!text) {
+            wx.showToast({ title: '暂无门店地址', icon: 'none' });
+            return;
+        }
+        wx.setClipboardData({
+            data: text,
+            success: () => wx.showToast({ title: '地址已复制', icon: 'success' })
+        });
+    },
+
+    onCallStation() {
+        const station = this.data.selectedStation;
+        const phone = String(station?.contact_phone || '').trim();
+        if (!phone) {
+            wx.showToast({ title: '门店暂未配置电话', icon: 'none' });
+            return;
+        }
+        wx.makePhoneCall({ phoneNumber: phone });
+    },
+
     onCloseDetail() {
         this.setData({ selectedStation: null, selectedId: null });
     }

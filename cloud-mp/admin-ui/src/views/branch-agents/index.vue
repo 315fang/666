@@ -64,7 +64,11 @@
             </div>
           </template>
           <el-table :data="stations" v-loading="loadingStations" stripe>
-            <el-table-column prop="id" label="ID" width="70" />
+            <el-table-column label="ID" width="90">
+              <template #default="{ row }">
+                <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+              </template>
+            </el-table-column>
             <el-table-column prop="name" label="点位名称" min-width="160" />
             <el-table-column label="代理类型" width="110">
               <template #default="{ row }">
@@ -102,7 +106,11 @@
         <el-card>
           <template #header><span>分支代理申请</span></template>
           <el-table :data="claims" v-loading="loadingClaims" stripe>
-            <el-table-column prop="id" label="ID" width="70" />
+            <el-table-column label="ID" width="90">
+              <template #default="{ row }">
+                <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+              </template>
+            </el-table-column>
             <el-table-column label="申请人" width="160">
               <template #default="{ row }">
                 {{ displayUserName(row.applicant, row.applicant_id) }} (Lv{{ row.applicant?.role_level ?? '-' }})
@@ -194,6 +202,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import {
   getBranchAgentPolicy, updateBranchAgentPolicy,
   getBranchAgentStations, createBranchAgentStation, updateBranchAgentStation,

@@ -5,6 +5,45 @@ const { buildGrowthProgress, loadTierConfig } = require('./shared/growth');
 const { toNumber } = require('./shared/utils');
 const { buildCanonicalUser } = require('./user-contract');
 
+function pickString(value, fallback = '') {
+    if (value === null || value === undefined) return fallback;
+    const text = String(value).trim();
+    return text || fallback;
+}
+
+function buildProfileUpdateData(data = {}) {
+    const {
+        nickname,
+        nick_name: nickNameSnake,
+        nickName,
+        avatar,
+        avatar_url: avatarSnake,
+        avatarUrl,
+        ...rest
+    } = data || {};
+
+    const nextNickname = pickString(nickname || nickNameSnake || nickName);
+    const nextAvatar = pickString(avatar || avatarSnake || avatarUrl);
+    const updateData = {
+        ...rest,
+        updated_at: db.serverDate()
+    };
+
+    if (nextNickname) {
+        updateData.nickname = nextNickname;
+        updateData.nick_name = nextNickname;
+        updateData.nickName = nextNickname;
+    }
+
+    if (nextAvatar) {
+        updateData.avatar = nextAvatar;
+        updateData.avatar_url = nextAvatar;
+        updateData.avatarUrl = nextAvatar;
+    }
+
+    return updateData;
+}
+
 /**
  * 获取用户信息
  */
@@ -17,10 +56,7 @@ async function getProfile(openid) {
  * 更新用户信息
  */
 async function updateProfile(openid, data) {
-    const updateData = {
-        updated_at: db.serverDate(),
-        ...data
-    };
+    const updateData = buildProfileUpdateData(data);
     await db.collection('users').where({ openid }).update({ data: updateData });
     return getProfile(openid);
 }
@@ -45,6 +81,7 @@ function formatUser(user) {
 }
 
 module.exports = {
+    buildProfileUpdateData,
     getProfile,
     updateProfile,
     formatUser

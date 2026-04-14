@@ -27,7 +27,11 @@
             </div>
           </template>
           <el-table :data="leaders" v-loading="leaderLoading" border>
-            <el-table-column prop="id" label="ID" width="70" />
+            <el-table-column label="ID" width="90">
+              <template #default="{ row }">
+                <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+              </template>
+            </el-table-column>
             <el-table-column label="用户" min-width="160">
               <template #default="{ row }">
                 <div class="user-cell">
@@ -89,7 +93,11 @@
             </div>
           </template>
           <el-table :data="members" v-loading="memberLoading" border>
-            <el-table-column prop="id" label="ID" width="70" />
+            <el-table-column label="ID" width="90">
+              <template #default="{ row }">
+                <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+              </template>
+            </el-table-column>
             <el-table-column label="用户" min-width="160">
               <template #default="{ row }">
                 <div class="user-cell">
@@ -141,7 +149,11 @@
             </div>
           </template>
           <el-table :data="upgrades" v-loading="upgradeLoading" border>
-            <el-table-column prop="id" label="申请ID" width="80" />
+            <el-table-column label="申请ID" width="100">
+              <template #default="{ row }">
+                <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+              </template>
+            </el-table-column>
             <el-table-column label="申请人" min-width="140">
               <template #default="{ row }">
                 {{ displayUserName(row.user) }}
@@ -203,7 +215,11 @@
     <!-- 查看大N名下小n弹窗 -->
     <el-dialog v-model="memberDialogVisible" :title="`${displayUserName(selectedLeader, '-') } 的小n团队`" width="720px">
       <el-table :data="dialogMembers" border>
-        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column label="ID" width="90">
+          <template #default="{ row }">
+            <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+          </template>
+        </el-table-column>
         <el-table-column label="用户" min-width="160">
           <template #default="{ row }">
             <div class="user-cell">
@@ -227,6 +243,7 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import { getNSystemLeaders, getNSystemMembers, getNSystemLeaderMembers, getUpgradeApplications, reviewUpgradeApplication } from '@/api'
 import dayjs from 'dayjs'
 import { getUserAvatar, getUserNickname } from '@/utils/userDisplay'

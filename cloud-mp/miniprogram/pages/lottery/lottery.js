@@ -100,6 +100,14 @@ Page({
         this.loadData();
     },
 
+    onShow() {
+        if (this._lotteryReloading) return;
+        this._lotteryReloading = true;
+        this.loadData().finally(() => {
+            this._lotteryReloading = false;
+        });
+    },
+
     onUnload() {
         this.clearAnimationTimers();
     },

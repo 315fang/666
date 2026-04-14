@@ -12,7 +12,7 @@ async function loadConfig(page, helpers) {
 
     try {
         const pageRes = await cachedGet(get, '/page-content', { page_key: 'activity' }, {
-            cacheTTL: 10 * 60 * 1000,
+            useCache: false,
             showError: false,
             maxRetries: 0,
             timeout: 6000
@@ -43,7 +43,7 @@ async function loadConfig(page, helpers) {
         }
 
         const linksRes = await cachedGet(get, '/activity/links', {}, {
-            cacheTTL: 10 * 60 * 1000,
+            useCache: false,
             showError: false,
             maxRetries: 0,
             timeout: 6000
@@ -92,7 +92,7 @@ async function loadFromFestivalConfig(page, helpers) {
     } = helpers;
 
     const res = await cachedGet(get, '/activity/festival-config', {}, {
-        cacheTTL: 30 * 60 * 1000
+        useCache: false
     });
     const cfg = res.data || {};
     const wallpaperClass = page._resolveWallpaperClass(cfg.global_wallpaper);

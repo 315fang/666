@@ -57,4 +57,9 @@
   <view class="state-loading" wx:if="{{loading}}">
     <text>加载中…</text>
   </view>
+
+  <view class="empty-state" wx:if="{{!loading && !card}}">
+    <text class="empty-state-title">当前活动暂不可用</text>
+    <text class="empty-state-desc">请检查活动卡片配置或稍后再试</text>
+  </view>
 </view>

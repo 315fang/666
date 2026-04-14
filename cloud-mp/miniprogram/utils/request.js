@@ -27,8 +27,6 @@ const ROUTE_TABLE = {
     // ── 用户 ──────────────────────────────────
     'GET /user/profile':                    { fn: 'user',         action: 'getProfile' },
     'PUT /user/profile':                    { fn: 'user',         action: 'updateProfile' },
-    'GET /user/info':                       { fn: 'user',         action: 'getProfile' },
-    'PUT /user/info':                       { fn: 'user',         action: 'updateProfile' },
     'GET /user/stats':                      { fn: 'user',         action: 'getStats' },
     'GET /user/favorites':                  { fn: 'user',         action: 'getFavorites' },
     'GET /user/favorites/status':           { fn: 'user',         action: 'favoriteStatus' },
@@ -43,7 +41,6 @@ const ROUTE_TABLE = {
     'GET /products':                        { fn: 'products',     action: 'list' },
     'GET /products/:id':                    { fn: 'products',     action: 'detail',             idKey: 'product_id' },
     'GET /categories':                      { fn: 'products',     action: 'categories' },
-    'GET /search':                          { fn: 'products',     action: 'search' },
     'GET /products/search':                 { fn: 'products',     action: 'search' },
 
     // ── 购物车 ────────────────────────────────
@@ -68,7 +65,6 @@ const ROUTE_TABLE = {
     'GET /refunds/:id':                     { fn: 'order',        action: 'refundDetail',       idKey: 'refund_id' },
 
     // ── 支付 ──────────────────────────────────
-    'POST /orders/:id/pay':                 { fn: 'payment',      action: 'prepay',             idKey: 'order_id' },
     'POST /orders/:id/prepay':              { fn: 'payment',      action: 'prepay',             idKey: 'order_id' },
     'GET /orders/:id/pay-status':           { fn: 'payment',      action: 'queryStatus',        idKey: 'order_id' },
     'POST /orders/:id/sync-wechat-pay':     { fn: 'payment',      action: 'syncWechatPay',      idKey: 'order_id' },
@@ -80,11 +76,9 @@ const ROUTE_TABLE = {
     'POST /addresses':                      { fn: 'user',         action: 'addAddress' },
     'PUT /addresses/:id':                   { fn: 'user',         action: 'updateAddress',      idKey: 'address_id' },
     'DELETE /addresses/:id':                { fn: 'user',         action: 'deleteAddress',      idKey: 'address_id' },
-    'PUT /addresses/:id/default':           { fn: 'user',         action: 'setDefaultAddress',  idKey: 'address_id' },
 
     // ── 分销 ──────────────────────────────────
     'GET /distribution/overview':           { fn: 'distribution', action: 'center' },
-    'GET /distribution/center':             { fn: 'distribution', action: 'center' },
     'GET /distribution/fund-pool':         { fn: 'distribution', action: 'myFundPoolSummary' },
     'GET /distribution/team':               { fn: 'distribution', action: 'team' },
     'GET /distribution/team/:id':           { fn: 'distribution', action: 'teamDetail',         idKey: 'member_id' },
@@ -93,21 +87,16 @@ const ROUTE_TABLE = {
     'GET /distribution/stats':              { fn: 'distribution', action: 'stats' },
     'GET /distribution/wxacode-invite':     { fn: 'distribution', action: 'wxacodeInvite' },
     'GET /stats/distribution':              { fn: 'distribution', action: 'center' },
-    'GET /agent':                           { fn: 'distribution', action: 'center' },
     'GET /agent/workbench':                 { fn: 'distribution', action: 'agentWorkbench' },
     'GET /agent/orders':                    { fn: 'distribution', action: 'agentOrders' },
     'GET /commissions':                     { fn: 'distribution', action: 'commLogs' },
 
     // ── 钱包/积分 ──────────────────────────────
-    'GET /wallet':                          { fn: 'distribution', action: 'center' },
     'POST /wallet/withdraw':                { fn: 'distribution', action: 'withdraw' },
     'GET /wallet/withdrawals':              { fn: 'distribution', action: 'withdrawList' },
-    'GET /points':                          { fn: 'user',         action: 'getStats' },
-    'GET /points/summary':                  { fn: 'user',         action: 'getStats' },
 
     // ── 优惠券 ────────────────────────────────
     'GET /coupons/mine':                    { fn: 'user',         action: 'listCoupons' },
-    'GET /coupons':                         { fn: 'user',         action: 'listCoupons' },
 
     // ── 配置 ──────────────────────────────────
     'GET /configs':                          { fn: 'config',       action: 'getSystemConfig' },
@@ -192,8 +181,6 @@ const ROUTE_TABLE = {
 
     // ── 问卷 ────────────────────────────────────
     'GET /questionnaire/active':            { fn: 'config',       action: 'questionnaireActive' },
-    'GET /questionnaire/share-eligibility': { fn: 'user',         action: 'shareEligibility' },
-    'POST /questionnaire/submit':           { fn: 'user',         action: 'submitQuestionnaire' },
 
     // ── 规则 ────────────────────────────────────
     'GET /rules':                           { fn: 'config',       action: 'rules' },

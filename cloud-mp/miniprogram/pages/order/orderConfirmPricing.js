@@ -21,7 +21,7 @@ function getPointDeductionRule() {
     );
     return {
         yuanPerPoint: Number.isFinite(yuanPerPoint) && yuanPerPoint > 0 ? yuanPerPoint : 0.1,
-        maxRatio: Number.isFinite(maxRatio) && maxRatio > 0 ? Math.min(1, maxRatio) : 0.7
+        maxRatio: Number.isFinite(maxRatio) && maxRatio > 0 ? Math.max(0.7, Math.min(1, maxRatio)) : 0.7
     };
 }
 

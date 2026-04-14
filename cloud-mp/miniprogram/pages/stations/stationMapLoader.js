@@ -1,6 +1,54 @@
 const { get } = require('../../utils/request');
 const { ensureUserLocationPermission, getCurrentLocation } = require('./utils/location');
 const SINGLE_STATION_SCALE = 14;
+const WEEK_DAY_LABELS = {
+    1: '周一',
+    2: '周二',
+    3: '周三',
+    4: '周四',
+    5: '周五',
+    6: '周六',
+    0: '周日',
+    7: '周日'
+};
+
+function compactText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeBusinessDays(value) {
+    if (!Array.isArray(value)) return [];
+    return value
+        .map((item) => {
+            if (typeof item === 'number' || /^\d+$/.test(String(item || ''))) {
+                return WEEK_DAY_LABELS[Number(item)] || '';
+            }
+            return compactText(item);
+        })
+        .filter(Boolean);
+}
+
+function normalizeStationDisplay(row = {}) {
+    const fullAddress = compactText([
+        row.province,
+        row.city,
+        row.district,
+        row.address
+    ].filter(Boolean).join(' '));
+    const businessDays = normalizeBusinessDays(row.business_days);
+    const businessHoursText = row.business_time_start && row.business_time_end
+        ? `${row.business_time_start} - ${row.business_time_end}`
+        : '';
+    return {
+        ...row,
+        fullAddress,
+        introText: compactText(row.intro || row.description || row.desc || ''),
+        logoUrl: compactText(row.logo_url || row.image_url || row.cover_image || ''),
+        businessDaysText: businessDays.join(' / '),
+        businessHoursText,
+        pickupEnabled: Number(row.is_pickup_point ?? row.pickup_enabled ?? 1) === 1
+    };
+}
 
 async function loadStations(page, helpers) {
     const {
@@ -15,7 +63,7 @@ async function loadStations(page, helpers) {
     try {
         const res = await get('/stations', { status: 'active' }, { showError: true });
         const payload = res.data || {};
-        const list = payload.list || [];
+        const list = (payload.list || []).map(normalizeStationDisplay);
         const { stationMarkers, points } = buildStationMarkersFromList(list);
 
         let userLa = null;

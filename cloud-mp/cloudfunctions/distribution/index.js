@@ -55,6 +55,94 @@ function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
 }
 
+function goodsFundIdentityCandidates(user = {}, openid = '') {
+    const values = [openid, user.id, user._id, user._legacy_id].filter(hasValue);
+    return uniqueValues(values);
+}
+
+function goodsFundLogTypeText(type = '') {
+    return String(type || '').trim().toLowerCase();
+}
+
+function isGoodsFundInflow(type = '', amount = 0) {
+    const normalized = goodsFundLogTypeText(type);
+    if (['recharge', 'manual_recharge', 'refund', 'commission_transfer', 'n_allocate_in', 'wx_recharge'].includes(normalized)) {
+        return true;
+    }
+    if (['spend', 'deduct', 'manual_deduct', 'order_ship', 'n_allocate_out', 'adjust', 'refund_reopen_reversal'].includes(normalized)) {
+        return false;
+    }
+    return amount > 0;
+}
+
+async function summarizeGoodsFundLogs(openid) {
+    const rows = await getAllRecords(db, 'goods_fund_logs', { openid }).catch(() => []);
+    const summary = {
+        total_recharge: 0,
+        total_deduct: 0,
+        frozen_balance: 0
+    };
+
+    rows.forEach((row) => {
+        const amount = roundMoney(Math.abs(toNumber(row.amount, 0)));
+        if (amount <= 0) return;
+        if (isGoodsFundInflow(row.type, toNumber(row.amount, 0))) {
+            summary.total_recharge += amount;
+            return;
+        }
+        summary.total_deduct += amount;
+    });
+
+    return {
+        total_recharge: roundMoney(summary.total_recharge),
+        total_deduct: roundMoney(summary.total_deduct),
+        frozen_balance: roundMoney(summary.frozen_balance)
+    };
+}
+
+async function getWalletAccount(user = {}, openid = '') {
+    const ids = goodsFundIdentityCandidates(user, openid);
+    for (const id of ids) {
+        const res = await db.collection('wallet_accounts')
+            .where({ user_id: id })
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+        if (res.data && res.data[0]) return res.data[0];
+    }
+    return null;
+}
+
+async function listUnifiedGoodsFundLogs(user = {}, openid = '') {
+    const ids = goodsFundIdentityCandidates(user, openid);
+    const [legacyLogs, cloudLogs] = await Promise.all([
+        Promise.all(ids.map((id) => db.collection('wallet_logs').where({ user_id: id }).limit(200).get().catch(() => ({ data: [] })))),
+        db.collection('goods_fund_logs').where({ openid }).limit(200).get().catch(() => ({ data: [] }))
+    ]);
+
+    const map = {};
+    legacyLogs.flatMap((result) => result.data || []).forEach((row) => {
+        map[`wallet_logs:${row._id || row.id || `${row.user_id}:${row.ref_id || ''}:${row.created_at || ''}`}`] = {
+            ...row,
+            type: row.change_type || row.type || '',
+            source_collection: 'wallet_logs'
+        };
+    });
+    (cloudLogs.data || []).forEach((row) => {
+        map[`goods_fund_logs:${row._id || `${row.openid}:${row.order_id || ''}:${row.created_at || ''}`}`] = {
+            ...row,
+            type: row.type || row.change_type || '',
+            source_collection: 'goods_fund_logs'
+        };
+    });
+
+    return Object.values(map).sort((left, right) => {
+        const leftTime = new Date(left.created_at || 0).getTime();
+        const rightTime = new Date(right.created_at || 0).getTime();
+        return rightTime - leftTime;
+    });
+}
+
 async function appendWalletLog(entry) {
     return db.collection('wallet_logs').add({
         data: {
@@ -681,22 +769,27 @@ const handleAction = {
         return success({ list: res.data || [] });
     }),
 
-    'agentRestock': asyncHandler(async (openid, params) => {
-        // 代理补货（简单记录）
-        return success({ success: true, message: '补货申请已提交' });
-    }),
-
     'agentWallet': asyncHandler(async (openid) => {
         const userRes = await db.collection('users').where({ openid }).limit(1).get();
         if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
-        const user = await resolveCommissionWalletState(userRes.data[0]);
+        const [user, goodsFundSummary, walletAccount] = await Promise.all([
+            resolveCommissionWalletState(userRes.data[0]),
+            summarizeGoodsFundLogs(openid),
+            getWalletAccount(userRes.data[0], openid)
+        ]);
         const roleLevel = toNumber(user.role_level, 0);
+        const goodsFundBalance = walletAccount
+            ? roundMoney(toNumber(walletAccount.balance, 0))
+            : resolveGoodsFundBalance(user);
         return success({
             role_level: roleLevel,
             role_name: resolveRoleName(user),
-            balance: resolveGoodsFundBalance(user),
-            goods_fund_balance: resolveGoodsFundBalance(user),
-            agent_wallet_balance: resolveGoodsFundBalance(user),
+            balance: goodsFundBalance,
+            goods_fund_balance: goodsFundBalance,
+            agent_wallet_balance: goodsFundBalance,
+            frozen_balance: walletAccount ? roundMoney(toNumber(walletAccount.frozen_balance, 0)) : goodsFundSummary.frozen_balance,
+            total_recharge: walletAccount ? roundMoney(toNumber(walletAccount.total_recharge, 0)) : goodsFundSummary.total_recharge,
+            total_deduct: walletAccount ? roundMoney(toNumber(walletAccount.total_deduct, 0)) : goodsFundSummary.total_deduct,
             commission_balance: resolveCommissionBalance(user),
             total_earned: toNumber(user.total_earned, 0),
             total_withdrawn: toNumber(user.total_withdrawn, 0),
@@ -853,14 +946,20 @@ const handleAction = {
     }),
 
     'agentWalletLogs': asyncHandler(async (openid, params) => {
-        // 货款流水统一存储在 goods_fund_logs（扣款写入时即用此集合）
-        let query = db.collection('goods_fund_logs').where({ openid });
-        // 支持按类型筛选：spend（扣款）/ refund（退款）/ recharge（充值）
-        if (params && params.type && params.type !== 'all') {
-            query = query.where({ type: params.type });
+        const userRes = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
+        const user = userRes.data && userRes.data[0] ? userRes.data[0] : {};
+        let list = await listUnifiedGoodsFundLogs(user, openid);
+
+        const filter = String((params && (params.filter || params.type)) || 'all').trim().toLowerCase();
+        if (filter === 'in') {
+            list = list.filter((item) => isGoodsFundInflow(item.type, toNumber(item.amount, 0)));
+        } else if (filter === 'out') {
+            list = list.filter((item) => !isGoodsFundInflow(item.type, toNumber(item.amount, 0)));
+        } else if (filter && filter !== 'all') {
+            list = list.filter((item) => goodsFundLogTypeText(item.type) === filter);
         }
-        const res = await query.orderBy('created_at', 'desc').limit(50).get().catch(() => ({ data: [] }));
-        return success({ list: res.data || [] });
+
+        return success({ list: list.slice(0, 50) });
     }),
 
     'agentWalletRechargeConfig': asyncHandler(async (openid) => {

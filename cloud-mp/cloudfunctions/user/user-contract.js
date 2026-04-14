@@ -34,7 +34,7 @@ function resolveRoleName(user = {}) {
 }
 
 function resolveNickname(user = {}) {
-    return pickString(user.nickName || user.nickname || user.nick_name || user.name || '微信用户');
+    return pickString(user.nickname || user.nick_name || user.nickName || user.name || '微信用户');
 }
 
 function resolveAvatar(user = {}) {

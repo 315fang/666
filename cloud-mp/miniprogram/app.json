@@ -10,19 +10,14 @@
         "pages/cart/cart",
         "pages/user/user",
         "pages/user/edit-profile",
-        "pages/user/footprints",
-        "pages/user/favorites",
         "pages/user/favorites-footprints",
         "pages/user/notifications",
         "pages/user/preferences",
         "pages/user/portal-password",
         "pages/user/customer-service",
-        "pages/user/growth-privileges",
         "pages/user/membership-center",
-        "pages/user/member-levels",
         "pages/user/ticket-list",
         "pages/product/detail",
-        "pages/product/reviews",
         "pages/search/search",
         "pages/privacy/privacy"
     ],
@@ -184,6 +179,11 @@
         "navigationBarTitleText": "臻选",
         "navigationBarTextStyle": "white",
         "backgroundColor": "#F4F8FA"
+    },
+    "permission": {
+        "scope.userLocation": {
+            "desc": "用于按当前位置推荐附近门店，并支持地图选点查找最近服务站点"
+        }
     },
     "style": "v2",
     "sitemapLocation": "sitemap.json",

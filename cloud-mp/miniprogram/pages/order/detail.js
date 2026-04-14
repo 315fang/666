@@ -41,6 +41,7 @@ Page({
             pending_payment: '待付款',
             pending_group: '待成团',
             paid: '待发货',
+            pickup_pending: '待核销',
             agent_confirmed: '代理已确认',
             shipping_requested: '发货申请中',
             shipped: '待收货',
@@ -54,6 +55,7 @@ Page({
             pending_payment: '请尽快完成支付',
             pending_group: '已支付成功，等待其他团员加入后成团',
             paid: '已支付成功，等待商家发货',
+            pickup_pending: '订单已支付，等待到指定门店核销提货',
             agent_confirmed: '代理已确认，正在准备发货',
             shipping_requested: '发货申请已提交，等待仓库处理',
             shipped: '商品已发出，请注意查收快递',
@@ -145,6 +147,7 @@ Page({
             pending_payment: '订单已创建，请尽快完成支付。',
             pending_group: '已支付成功，等待其他成员加入成团。',
             paid: '订单已支付成功，正在等待发货。',
+            pickup_pending: '订单已支付，请前往指定门店完成核销提货。',
             agent_confirmed: '团队已确认订单，正在准备发货。',
             shipping_requested: '发货申请已提交，请耐心等待。',
             shipped: logisticsConfig.shipping_mode === 'manual'

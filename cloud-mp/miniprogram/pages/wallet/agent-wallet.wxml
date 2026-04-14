@@ -126,7 +126,7 @@
               </view>
               <view class="log-amount-wrap">
                 <text class="log-amount {{log.isOut ? 'amount-out' : 'amount-in'}}">{{log.amountSign}}¥{{log.amount}}</text>
-                <view class="log-balance-row">
+                <view class="log-balance-row" wx:if="{{log.hasBalanceSnapshot}}">
                   <text class="log-balance-detail">余额 {{log.balanceAfter}}</text>
                 </view>
               </view>

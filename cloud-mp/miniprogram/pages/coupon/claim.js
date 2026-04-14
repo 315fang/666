@@ -38,6 +38,10 @@ Page({
 
     onLoad(options) {
         console.log('[coupon-claim] onLoad options:', JSON.stringify(options));
+        wx.showShareMenu({
+            withShareTicket: true,
+            menus: ['shareAppMessage']
+        });
         const rawScene = options.scene ? decodeURIComponent(options.scene) : '';
         const parsed = parseScene(rawScene);
         const couponId = String(options.id || parsed.id || parsed.cid || options.coupon_id || '');

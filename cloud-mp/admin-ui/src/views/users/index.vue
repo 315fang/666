@@ -136,6 +136,7 @@ import { Refresh, ArrowDown } from '@element-plus/icons-vue'
 import UserBalanceAdjustDialog from './components/UserBalanceAdjustDialog.vue'
 import {
   getUsers,
+  searchUsersLite,
   getUserById,
   getUserTeam,
   getUserTeamSummary,
@@ -175,8 +176,10 @@ const { pagination, resetPage, applyResponse } = usePagination()
  *  role_level  - 用户角色等级（0普通 1会员 2团长 3代理 4合伙人 5区域代理）
  *  status      - 账号状态（active/disabled）
  *  team_leader_id - 按所属负责人 ID 筛选，远程搜索后选择
+ *  lookup      - 精确匹配任意用户标识（跨页跳转专用，不暴露在表单里）
  */
 const searchForm = reactive({ keyword: String(route.query.keyword || ''), member_no: '', role_level: '', status: '', team_leader_id: '' })
+const routeLookup = ref(String(route.query.lookup || ''))
 const leaderOptions = ref([])
 const leaderSearchLoading = ref(false)
 const teamSummaryVisible = ref(false)
@@ -217,6 +220,7 @@ const fetchUsers = async () => {
       team_leader_id: searchForm.team_leader_id !== '' && searchForm.team_leader_id != null
         ? searchForm.team_leader_id
         : undefined,
+      lookup: routeLookup.value || undefined,
       page: pagination.page,
       limit: pagination.limit
     }
@@ -250,30 +254,39 @@ const runUserMutation = async (task, successMessage, onSuccess) => {
   }
 }
 
-const handleSearch = () => { resetPage(); refreshUsers() }
+const handleSearch = () => {
+  routeLookup.value = ''
+  resetPage()
+  refreshUsers()
+}
 const handleReset = () => {
+  routeLookup.value = ''
   Object.assign(searchForm, { keyword: '', member_no: '', role_level: '', status: '', team_leader_id: '' })
   leaderOptions.value = []
   handleSearch()
 }
 
 let leaderSearchTimer = null
+let leaderSearchSeq = 0
 const remoteSearchLeaders = (query) => {
   if (leaderSearchTimer) clearTimeout(leaderSearchTimer)
   const q = String(query || '').trim()
   if (!q) {
+    leaderSearchSeq += 1
     leaderOptions.value = []
     return
   }
   leaderSearchTimer = setTimeout(async () => {
+    const seq = ++leaderSearchSeq
     leaderSearchLoading.value = true
     try {
-      const res = await getUsers({ keyword: q, limit: 20, page: 1 })
+      const res = await searchUsersLite({ keyword: q, limit: 20 })
+      if (seq !== leaderSearchSeq) return
       leaderOptions.value = res?.list || []
     } catch {
-      leaderOptions.value = []
+      if (seq === leaderSearchSeq) leaderOptions.value = []
     } finally {
-      leaderSearchLoading.value = false
+      if (seq === leaderSearchSeq) leaderSearchLoading.value = false
     }
   }, 300)
 }
@@ -580,24 +593,28 @@ const parentForm = reactive({ new_parent_id: '', reason: '' })
 const parentSearchLoading = ref(false)
 const parentSearchOptions = ref([])
 let parentSearchTimer = null
+let parentSearchSeq = 0
 
 const remoteSearchParent = (query) => {
   if (parentSearchTimer) clearTimeout(parentSearchTimer)
   const q = String(query || '').trim()
   if (!q) {
+    parentSearchSeq += 1
     parentSearchOptions.value = []
     return
   }
   parentSearchTimer = setTimeout(async () => {
+    const seq = ++parentSearchSeq
     parentSearchLoading.value = true
     try {
-      const res = await getUsers({ keyword: q, limit: 20, page: 1 })
+      const res = await searchUsersLite({ keyword: q, limit: 20 })
       // 排除当前正在编辑的用户本人（不能设置自己为上级）
+      if (seq !== parentSearchSeq) return
       parentSearchOptions.value = (res?.list || []).filter(u => !currentUser.value || String(u.id) !== String(currentUser.value.id))
     } catch {
-      parentSearchOptions.value = []
+      if (seq === parentSearchSeq) parentSearchOptions.value = []
     } finally {
-      parentSearchLoading.value = false
+      if (seq === parentSearchSeq) parentSearchLoading.value = false
     }
   }, 300)
 }
@@ -662,6 +679,19 @@ const purchaseLevelText = (code) => {
 onMounted(async () => {
   await Promise.all([refreshUsers(), fetchPurchaseLevels()])
 })
+
+watch(
+  () => [route.query.keyword, route.query.lookup],
+  ([nextKeyword, nextLookup]) => {
+    const keyword = String(nextKeyword || '')
+    const lookup = String(nextLookup || '')
+    if (keyword === searchForm.keyword && lookup === routeLookup.value) return
+    searchForm.keyword = keyword
+    routeLookup.value = lookup
+    resetPage()
+    refreshUsers()
+  }
+)
 </script>
 
 <style scoped>

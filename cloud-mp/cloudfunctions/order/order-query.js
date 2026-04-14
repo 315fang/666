@@ -105,6 +105,21 @@ function buildSkuSpecValue(sku = {}) {
     return '';
 }
 
+function getUserRoleLevel(user = {}) {
+    return toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+}
+
+function buildUserRelationSummary(user = {}) {
+    if (!user || typeof user !== 'object') return null;
+    return {
+        id: user._id || user.id || '',
+        openid: user.openid || '',
+        nickname: user.nickName || user.nickname || '',
+        avatar: user.avatarUrl || user.avatar || '',
+        role_level: getUserRoleLevel(user)
+    };
+}
+
 function parseLogisticsFromRemark(remark) {
     if (!hasValue(remark)) return { company: '', trackingNo: '' };
     const text = String(remark);
@@ -289,14 +304,17 @@ async function findCollectionDocByAnyId(collectionName, rawId, cache) {
 
 async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCancelMinutes = 30) {
     const item = firstOrderItem(order);
-    const [productDoc, skuDoc, buyerDoc, commissionDoc, pickupStation] = await Promise.all([
+    const [productDoc, skuDoc, buyerDoc, commissionDoc, pickupStation, directReferrerDoc, indirectReferrerDoc, nearestAgentDoc, fulfillmentPartnerDoc] = await Promise.all([
         findCollectionDocByAnyId('products', order.product_id || item.product_id, cache),
         findCollectionDocByAnyId('skus', item.sku_id || order.sku_id, cache),
         findUserByAnyId(order.openid, cache),
         findCommissionByOrder(order, cache),
-        findCollectionDocByAnyId('stations', order.pickup_station_id, cache)
+        findCollectionDocByAnyId('stations', order.pickup_station_id, cache),
+        findUserByAnyId(order.direct_referrer_openid || order.referrer_openid || '', cache),
+        findUserByAnyId(order.indirect_referrer_openid || '', cache),
+        findUserByAnyId(order.nearest_agent_openid || '', cache),
+        findUserByAnyId(order.fulfillment_partner_openid || order.nearest_agent_openid || '', cache)
     ]);
-    const distributorDoc = buyerDoc && buyerDoc.referrer_openid ? await findUserByAnyId(buyerDoc.referrer_openid, cache) : null;
 
     const quantity = toNumber(order.quantity || order.qty || item.qty || item.quantity, 1);
     const rawStatus = order.status || '';
@@ -421,13 +439,13 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
             completedAt ? { time: completedAt, desc: '已签收', status: 'completed' } : null,
             cancelledAt ? { time: cancelledAt, desc: '订单已取消', status: 'cancelled' } : null
         ].filter(Boolean);
-    const normalizedDistributor = distributorDoc ? {
-        id: distributorDoc._id || distributorDoc.id || '',
-        openid: distributorDoc.openid || '',
-        nick_name: distributorDoc.nickName || distributorDoc.nickname || '',
-        nickname: distributorDoc.nickName || distributorDoc.nickname || '',
-        avatar: distributorDoc.avatarUrl || '',
-        role_level: toNumber(distributorDoc.role_level || distributorDoc.distributor_level, 0)
+    const normalizedDistributor = directReferrerDoc ? {
+        id: directReferrerDoc._id || directReferrerDoc.id || '',
+        openid: directReferrerDoc.openid || '',
+        nick_name: directReferrerDoc.nickName || directReferrerDoc.nickname || '',
+        nickname: directReferrerDoc.nickName || directReferrerDoc.nickname || '',
+        avatar: directReferrerDoc.avatarUrl || '',
+        role_level: getUserRoleLevel(directReferrerDoc)
     } : null;
     const normalizedBuyer = buyerDoc ? {
         id: buyerDoc._id || buyerDoc.id || '',
@@ -439,13 +457,15 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         role_level: toNumber(buyerDoc.role_level || buyerDoc.distributor_level, 0),
         member_no: buyerDoc.member_no || buyerDoc.my_invite_code || buyerDoc.invite_code || ''
     } : null;
-    const normalizedAgent = normalizedDistributor ? {
-        id: normalizedDistributor.id,
-        openid: normalizedDistributor.openid,
-        nickname: normalizedDistributor.nickname,
-        avatar: normalizedDistributor.avatar,
-        role_level: normalizedDistributor.role_level
+    const normalizedAgent = fulfillmentPartnerDoc ? {
+        id: fulfillmentPartnerDoc._id || fulfillmentPartnerDoc.id || '',
+        openid: fulfillmentPartnerDoc.openid || '',
+        nickname: fulfillmentPartnerDoc.nickName || fulfillmentPartnerDoc.nickname || '',
+        avatar: fulfillmentPartnerDoc.avatarUrl || fulfillmentPartnerDoc.avatar || '',
+        role_level: getUserRoleLevel(fulfillmentPartnerDoc)
     } : null;
+    const normalizedIndirectReferrer = buildUserRelationSummary(indirectReferrerDoc);
+    const normalizedNearestAgent = buildUserRelationSummary(nearestAgentDoc);
     const mergedProduct = {
         ...orderProduct,
         id: firstFilled(orderProduct.id, orderProduct._id, productId),
@@ -483,8 +503,23 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         commission_settled: order.commission_settled === true || (commissionDoc && commissionDoc.status === 'settled'),
         estimated_delivery: estimatedDelivery || null,
         shipping_traces: shippingTraces,
+        direct_referrer_id: order.direct_referrer_id || normalizedDistributor?.id || '',
+        direct_referrer_openid: order.direct_referrer_openid || normalizedDistributor?.openid || '',
+        direct_referrer_role_level: toNumber(order.direct_referrer_role_level, normalizedDistributor?.role_level || 0),
+        indirect_referrer_id: order.indirect_referrer_id || normalizedIndirectReferrer?.id || '',
+        indirect_referrer_openid: order.indirect_referrer_openid || normalizedIndirectReferrer?.openid || '',
+        indirect_referrer_role_level: toNumber(order.indirect_referrer_role_level, normalizedIndirectReferrer?.role_level || 0),
+        nearest_agent_id: order.nearest_agent_id || normalizedNearestAgent?.id || '',
+        nearest_agent_openid: order.nearest_agent_openid || normalizedNearestAgent?.openid || '',
+        nearest_agent_role_level: toNumber(order.nearest_agent_role_level, normalizedNearestAgent?.role_level || 0),
+        fulfillment_partner_id: order.fulfillment_partner_id || normalizedAgent?.id || '',
+        fulfillment_partner_openid: order.fulfillment_partner_openid || normalizedAgent?.openid || '',
+        fulfillment_partner_role_level: toNumber(order.fulfillment_partner_role_level, normalizedAgent?.role_level || 0),
         buyer: normalizedBuyer,
         distributor: normalizedDistributor,
+        direct_referrer: normalizedDistributor,
+        indirect_referrer: normalizedIndirectReferrer,
+        nearest_agent: normalizedNearestAgent,
         agent: normalizedAgent,
         agent_info: normalizedAgent,
         product_id: productId,
@@ -493,6 +528,8 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         tracking_no: trackingNo,
         logistics_company: logisticsCompany,
         shipping_company: firstFilled(order.shipping_company, logisticsCompany),
+        locked_agent_cost: toNumber(order.locked_agent_cost_total ?? order.locked_agent_cost, 0),
+        middle_commission_total: toNumber(order.middle_commission_total, 0),
         product: mergedProduct,
         payment_method: paymentMethod,
         payment_method_text: getPaymentMethodText(paymentMethod),

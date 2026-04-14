@@ -182,7 +182,10 @@ const miniProgramForm = reactive({
   brand_config: {
     brand_name: '问兰',
     share_title: '问兰 · 品牌甄选',
+    share_poster_file_id: '',
     share_poster_url: '',
+    share_poster_cover_file_id: '',
+    share_poster_cover_url: '',
     customer_service_wechat: 'wl_service',
     customer_service_hours: '9:00-21:00',
     nav_brand_title: '问兰镜像',
@@ -193,7 +196,7 @@ const miniProgramForm = reactive({
     tab_bar: JSON.parse(JSON.stringify(DEFAULT_TAB_BAR))
   },
   feature_flags: {
-    show_station_entry: false,
+    show_station_entry: true,
     show_pickup_entry: false,
     enable_logistics_entry: true,
     enable_lottery_entry: true
@@ -413,6 +416,12 @@ const fetchMiniProgramConfig = async () => {
     const data = await getMiniProgramConfig()
     if (!data) return
     Object.assign(miniProgramForm.brand_config, data.brand_config || {})
+    if (!miniProgramForm.brand_config.share_poster_cover_url && miniProgramForm.brand_config.share_poster_url) {
+      miniProgramForm.brand_config.share_poster_cover_url = miniProgramForm.brand_config.share_poster_url
+    }
+    if (!miniProgramForm.brand_config.share_poster_cover_file_id && miniProgramForm.brand_config.share_poster_file_id) {
+      miniProgramForm.brand_config.share_poster_cover_file_id = miniProgramForm.brand_config.share_poster_file_id
+    }
     ensureBrandTabBarShape(miniProgramForm.brand_config)
     Object.assign(miniProgramForm.feature_flags, data.feature_flags || {})
     Object.assign(miniProgramForm.activity_page_config, data.activity_page_config || {})

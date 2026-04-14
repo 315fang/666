@@ -1,4 +1,6 @@
 {
+  "navigationBarBackgroundColor": "#FFFFFF",
+  "navigationStyle": "custom",
   "navigationBarTitleText": "拼团详情",
   "usingComponents": {}
 }

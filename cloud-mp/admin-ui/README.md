@@ -96,26 +96,28 @@ admin-ui/
 1. 运行 `npm run build` 构建生产版本
 2. 构建产物在 `dist/` 目录
 3. 将 `dist/` 上传到 CloudBase 静态托管的 `/admin/`
-4. 确保 `/admin/api` 指向已部署的 `admin-api`
+4. 显式设置 `VITE_ADMIN_API_BASE_URL=https://jxalk.wenlan.store/admin/api`
+5. 确保 `jxalk.wenlan.store` 已配置 `/admin/api/* -> admin-api` 且开启路径透传
+6. 确保 `jxalk.wenlan.store` 已配置 `/admin/* -> 管理后台静态托管`
 
 ### CloudBase 静态托管
 
-如果管理后台部署在 `*.tcloudbaseapp.com` 静态站，而管理 API 部署在 CloudBase 函数网关：
+生产环境不再使用默认 `*.service.tcloudbase.com` 作为后台 API 正式入口。默认 CloudBase 域名仅用于调试或临时验证。
 
-1. 构建前优先显式设置 `VITE_ADMIN_API_BASE_URL=https://<envId>.service.tcloudbase.com/admin/api`
-2. 如果未设置该变量，前端会在 `*.tcloudbaseapp.com` 下自动推导 `https://<envId>.service.tcloudbase.com/admin/api`
-3. 自定义域名场景无法自动推导，仍应显式设置 `VITE_ADMIN_API_BASE_URL`
+1. 生产构建前显式设置 `VITE_ADMIN_API_BASE_URL=https://jxalk.wenlan.store/admin/api`
+2. 自定义域名需同时配置 `/admin/api/* -> admin-api` 与 `/admin/* -> 静态托管`
+3. 若临时回退到 `*.tcloudbaseapp.com` 或 `*.service.tcloudbase.com` 做调试，请不要将其视为正式上传入口
 
 当前正式入口约定：
 
-- 管理后台正式访问地址：`https://cloud1-9gywyqe49638e46f-1419893803.tcloudbaseapp.com/admin/`
-- 管理后台正式 API 入口：`https://cloud1-9gywyqe49638e46f.service.tcloudbase.com/admin/api`
+- 管理后台正式访问地址：`https://jxalk.wenlan.store/admin/`
+- 管理后台正式 API 入口：`https://jxalk.wenlan.store/admin/api`
 - 管理后台正式 API 仍由 `admin-api` 云函数网关承接
 - `cloudrun-admin-service` 当前保留为后续演进线；本轮以 `cloud-mp/cloudfunctions/admin-api` 为主入口
 
 ## API 接口
 
-所有 API 请求默认使用 `/admin/api`。当页面运行在 `*.tcloudbaseapp.com` 时，会优先改用对应环境的 `https://<envId>.service.tcloudbase.com/admin/api`。主要接口包括：
+所有 API 请求默认使用 `/admin/api`。生产环境应显式配置 `VITE_ADMIN_API_BASE_URL=https://jxalk.wenlan.store/admin/api`。主要接口包括：
 
 - `POST /login` - 管理员登录
 - `GET /stats` - 获取统计数据
@@ -148,7 +150,7 @@ admin-ui/
 A: 检查 JWT token 是否过期，或者后端 JWT_SECRET 配置是否正确
 
 **Q: 图片上传失败？**  
-A: 检查后端上传接口是否正常，以及文件大小是否超过限制
+A: 优先检查 `jxalk.wenlan.store` 的 `/admin/api/*` 路由是否正确指向 `admin-api`，以及生产构建是否显式写入 `VITE_ADMIN_API_BASE_URL=https://jxalk.wenlan.store/admin/api`
 
 **Q: 开发环境 API 请求失败？**  
 A: 确保后端服务已启动在 `http://localhost:3000`

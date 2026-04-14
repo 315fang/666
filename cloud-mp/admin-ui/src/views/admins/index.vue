@@ -21,7 +21,11 @@
           </template>
 
           <el-table :data="adminList" v-loading="loading" stripe>
-            <el-table-column prop="id" label="ID" width="64" />
+            <el-table-column label="ID" width="90">
+              <template #default="{ row }">
+                <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+              </template>
+            </el-table-column>
             <el-table-column label="账号信息" min-width="180">
               <template #default="{ row }">
                 <div class="admin-cell">
@@ -213,6 +217,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, CircleCheck, Remove } from '@element-plus/icons-vue'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import { getAdmins, createAdmin, updateAdmin, resetAdminPassword, deleteAdmin as deleteAdminApi } from '@/api'
 import { formatDateShort as fmtDate, formatClientIp } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
@@ -246,11 +251,19 @@ const menuGroupsBase = computed(() => buildMenuPermissionGroups())
 
 /** 非超管编辑时不展示 super_admin 权限项（避免误授） */
 const permissionGroups = computed(() => {
-  if (userStore.isSuperAdmin) return menuGroupsBase.value
-  return menuGroupsBase.value
+  const groups = Array.isArray(menuGroupsBase.value)
+    ? menuGroupsBase.value
+        .filter((group) => group && typeof group === 'object')
+        .map((group) => ({
+          ...group,
+          items: Array.isArray(group.items) ? group.items : []
+        }))
+    : []
+  if (userStore.isSuperAdmin) return groups
+  return groups
     .map((g) => ({
       ...g,
-      items: g.items.filter((i) => i.key !== 'super_admin')
+      items: g.items.filter((i) => i?.key !== 'super_admin')
     }))
     .filter((g) => g.items.length > 0)
 })
@@ -262,7 +275,7 @@ const currentAdminId = computed(() => userStore.userInfo?.id ?? '')
 const isSuperAdmin = computed(() => userStore.isSuperAdmin)
 const editableRoleOptions = computed(() => ROLES.filter((role) => isSuperAdmin.value || role.value !== 'super_admin'))
 const assignablePermissionSet = computed(() => new Set(
-  permissionGroups.value.flatMap((group) => group.items.map((item) => item.key))
+  permissionGroups.value.flatMap((group) => (Array.isArray(group.items) ? group.items : []).map((item) => item.key))
 ))
 const canEditAdminRow = (row) => isSuperAdmin.value || String(row?.id ?? '') === String(currentAdminId.value)
 

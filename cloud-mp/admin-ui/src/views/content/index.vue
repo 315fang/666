@@ -63,7 +63,11 @@
           />
 
           <el-table :data="banners" v-loading="bannerLoading" stripe>
-            <el-table-column prop="id" label="ID" width="60" />
+            <el-table-column label="ID" width="90">
+              <template #default="{ row }">
+                <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+              </template>
+            </el-table-column>
             <el-table-column label="图片" width="130">
               <template #default="{ row }">
                 <el-image
@@ -126,7 +130,11 @@
           </template>
 
           <el-table :data="contents" v-loading="contentLoading" stripe>
-            <el-table-column prop="id" label="ID" width="70" />
+            <el-table-column label="ID" width="90">
+              <template #default="{ row }">
+                <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+              </template>
+            </el-table-column>
             <el-table-column prop="title" label="标题" min-width="200" />
             <el-table-column prop="type" label="类型" width="100">
               <template #default="{ row }">
@@ -260,6 +268,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import ContentBlockEditor from '@/components/ContentBlockEditor.vue'
 import { getBanners, createBanner, updateBanner, deleteBanner, uploadFile, getProducts, deleteContent, getContents, createContent, updateContent } from '@/api'
 import { formatDate } from '@/utils/format'

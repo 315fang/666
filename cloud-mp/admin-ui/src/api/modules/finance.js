@@ -40,13 +40,6 @@ export const getRefunds = (params) => {
   })
 }
 
-export const getRefundById = (id) => {
-  return request({
-    url: `/refunds/${id}`,
-    method: 'get'
-  })
-}
-
 export const approveRefund = (id, data) => {
   return request({
     url: `/refunds/${id}/approve`,

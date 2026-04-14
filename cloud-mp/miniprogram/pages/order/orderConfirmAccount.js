@@ -7,6 +7,9 @@ async function loadPointBalance(page) {
             // 后端 pointsAccount 返回 points / growth_value，无 balance_points 字段
             const balance = res.data.points ?? res.data.growth_value ?? res.data.balance_points ?? 0;
             page.setData({ pointBalance: Number(balance) || 0 });
+            if (typeof page._recalcFinal === 'function') {
+                page._recalcFinal();
+            }
         }
     } catch (_e) {
         // 静默

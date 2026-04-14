@@ -8,6 +8,32 @@ export const getUsers = (params) => {
   })
 }
 
+export const searchUsersLite = (params) => {
+  const normalizedParams = {
+    ...params,
+    limit: params?.limit || 20
+  }
+
+  return request({
+    url: '/users/search',
+    method: 'get',
+    params: normalizedParams,
+    suppressNotFound: true
+  }).catch(async (error) => {
+    if (error?.response?.status !== 404) throw error
+
+    const legacy = await getUsers({
+      ...normalizedParams,
+      page: 1
+    })
+
+    return {
+      list: legacy?.list || [],
+      total: legacy?.total ?? legacy?.pagination?.total ?? (legacy?.list || []).length
+    }
+  })
+}
+
 export const getUserById = (id) => {
   return request({
     url: `/users/${id}`,
@@ -35,14 +61,6 @@ export const getUserTeamSummary = (id, params) => {
 export const updateUserRole = (id, data) => {
   return request({
     url: `/users/${id}/role`,
-    method: 'put',
-    data
-  })
-}
-
-export const adjustUserBalance = (id, data) => {
-  return request({
-    url: `/users/${id}/balance`,
     method: 'put',
     data
   })

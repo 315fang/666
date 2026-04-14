@@ -1,9 +1,13 @@
 'use strict';
+const crypto = require('crypto');
+const QRCode = require('qrcode');
 const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
 const { toNumber } = require('./shared/utils');
 const orderCreate = require('./order-create');
+
+const PICKUP_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
@@ -59,7 +63,11 @@ async function ensurePickupSubsidyCommission(order, verifierOpenid) {
     if (!order?.pickup_station_id) return null;
     const [policyRow, station] = await Promise.all([
         getConfigByKey('branch-agent-policy'),
-        findOneByAnyId('branch_agent_stations', order.pickup_station_id)
+        (async () => {
+            const branchStation = await findOneByAnyId('branch_agent_stations', order.pickup_station_id);
+            if (branchStation) return branchStation;
+            return findOneByAnyId('stations', order.pickup_station_id);
+        })()
     ]);
     const policy = {
         enabled: false,
@@ -137,6 +145,165 @@ async function findOneByAnyId(collectionName, rawId) {
     return res.data && res.data[0] ? res.data[0] : null;
 }
 
+async function getUserByOpenid(openid) {
+    if (!hasValue(openid)) return null;
+    const res = await db.collection('users')
+        .where({ openid })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return res.data && res.data[0] ? res.data[0] : null;
+}
+
+function buildUserIdCandidates(user = {}) {
+    return [user.id, user._legacy_id, user._id]
+        .filter((id) => id !== null && id !== undefined && id !== '')
+        .map((id) => String(id));
+}
+
+function normalizePickupCode(rawCode) {
+    return String(rawCode || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function isValidPickupCode(rawCode) {
+    return /^[A-Z0-9]{16}$/.test(normalizePickupCode(rawCode));
+}
+
+function generatePickupCode() {
+    let code = '';
+    while (code.length < 16) {
+        const bytes = crypto.randomBytes(16);
+        for (const byte of bytes) {
+            code += PICKUP_CODE_CHARS[byte % PICKUP_CODE_CHARS.length];
+            if (code.length === 16) break;
+        }
+    }
+    return code;
+}
+
+function getPickupQrToken(order = {}) {
+    return String(order.pickup_qr_token || order.qr_token || order.pickup_qr_code || '').trim();
+}
+
+function generatePickupQrToken(orderId, pickupCode) {
+    return crypto
+        .createHash('sha256')
+        .update(`${String(orderId || '')}:${pickupCode}:${process.env.JWT_SECRET || 'pickup_salt'}`)
+        .digest('hex');
+}
+
+async function ensurePickupCredentials(order) {
+    if (!order || order.delivery_type !== 'pickup') return order;
+
+    const normalizedCode = normalizePickupCode(order.pickup_code);
+    const currentQrToken = getPickupQrToken(order);
+    const canRefresh = order.status === 'paid' || order.status === 'pickup_pending';
+    const shouldRefresh = canRefresh && (!isValidPickupCode(normalizedCode) || !currentQrToken);
+
+    if (!shouldRefresh) {
+        if (normalizedCode && normalizedCode !== order.pickup_code) {
+            order.pickup_code = normalizedCode;
+        }
+        if (currentQrToken && !order.pickup_qr_token) {
+            order.pickup_qr_token = currentQrToken;
+        }
+        return order;
+    }
+
+    const pickupCode = isValidPickupCode(normalizedCode) ? normalizedCode : generatePickupCode();
+    const pickupQrToken = currentQrToken || generatePickupQrToken(order._id || order.id || order.order_no, pickupCode);
+    const patch = {
+        pickup_code: pickupCode,
+        pickup_qr_token: pickupQrToken,
+        status: 'pickup_pending',
+        updated_at: db.serverDate(),
+    };
+
+    if (order._id) {
+        await db.collection('orders').doc(order._id).update({ data: patch }).catch(() => null);
+    }
+
+    Object.assign(order, patch);
+    return order;
+}
+
+function buildPickupStationSummary(stationInfo) {
+    if (!stationInfo) return null;
+    return {
+        _id: stationInfo._id,
+        id: stationInfo.id || stationInfo._legacy_id || stationInfo._id,
+        name: stationInfo.name || '',
+        province: stationInfo.province || '',
+        city: stationInfo.city || '',
+        district: stationInfo.district || '',
+        address: stationInfo.address || '',
+        phone: stationInfo.phone || stationInfo.contact_phone || '',
+        contact_phone: stationInfo.contact_phone || stationInfo.phone || '',
+        pickup_contact: stationInfo.pickup_contact || stationInfo.contact_name || '',
+        business_hours: stationInfo.business_hours || '',
+        business_time_start: stationInfo.business_time_start || '',
+        business_time_end: stationInfo.business_time_end || ''
+    };
+}
+
+async function buildPickupQrDataUrl(qrToken) {
+    const normalizedToken = String(qrToken || '').trim();
+    if (!normalizedToken) return '';
+    try {
+        return await QRCode.toDataURL(normalizedToken, {
+            width: 240,
+            margin: 2,
+            errorCorrectionLevel: 'M'
+        });
+    } catch (_) {
+        return '';
+    }
+}
+
+async function getVerifierStationScope(openid) {
+    const user = await getUserByOpenid(openid);
+    const userIds = buildUserIdCandidates(user);
+    const rows = await db.collection('station_staff')
+        .where({ status: 'active', can_verify: 1 })
+        .limit(500)
+        .get()
+        .catch(() => ({ data: [] }));
+    const scopedRows = (rows.data || []).filter((row) => {
+        if (String(row.openid || '') === String(openid)) return true;
+        return userIds.includes(String(row.user_id || ''));
+    });
+    const stationIds = [...new Set(scopedRows.map((row) => String(row.station_id || '')).filter(Boolean))];
+    return { user, userIds, stationIds };
+}
+
+async function requireVerifierStation(openid, rawStationId) {
+    const stationId = hasValue(rawStationId) ? String(rawStationId) : '';
+    const scope = await getVerifierStationScope(openid);
+    if (!scope.stationIds.length) {
+        throw new Error('当前账号没有自提核销权限');
+    }
+    const targetStationId = stationId || (scope.stationIds.length === 1 ? scope.stationIds[0] : '');
+    if (!targetStationId) {
+        throw new Error('请选择当前核销门店');
+    }
+    if (!scope.stationIds.includes(String(targetStationId))) {
+        throw new Error('当前账号不属于该自提门店，无法查看或核销');
+    }
+    const station = await findOneByAnyId('stations', targetStationId);
+    if (!station) {
+        throw new Error('自提门店不存在');
+    }
+    return {
+        stationId: String(targetStationId),
+        station,
+        scope
+    };
+}
+
+async function findCouponTemplateByAnyId(rawId) {
+    return findOneByAnyId('coupons', rawId);
+}
+
 function isActivityOpen(activity) {
     return activity && (
         activity.status === true
@@ -164,10 +331,66 @@ async function loadProductSummary(productId) {
     return productSummary(product);
 }
 
-function groupStatusForClient(status) {
-    if (status === 'pending') return 'open';
-    if (status === 'completed') return 'success';
-    return status || 'failed';
+function groupStatusForClient(status, options = {}) {
+    const normalized = String(status || '').trim().toLowerCase();
+    const memberCount = Math.max(0, toNumber(options.memberCount, 0));
+    const minMembers = Math.max(0, toNumber(options.minMembers, 0));
+
+    if (normalized === 'completed' || normalized === 'success') return 'success';
+    if (normalized === 'cancelled') return 'cancelled';
+    if (normalized === 'failed' || normalized === 'fail' || normalized === 'expired') return 'fail';
+    if (minMembers > 0 && memberCount >= minMembers) return 'success';
+    if (normalized === 'pending' || normalized === 'open' || !normalized) return 'open';
+    return normalized;
+}
+
+function buildGroupMemberFromOrder(order = {}) {
+    if (!order || !order.openid) return null;
+    return {
+        openid: order.openid,
+        order_id: order._id || '',
+        order_no: order.order_no || '',
+        joined_at: order.group_joined_at || order.paid_at || order.created_at || null,
+        paid_at: order.paid_at || order.pay_time || order.created_at || null
+    };
+}
+
+function mergeGroupMembersWithOrders(group = {}, orders = []) {
+    const paidLikeStatuses = new Set(['pending_group', 'paid', 'pickup_pending', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed']);
+    const merged = {};
+    const seedMembers = Array.isArray(group.members) ? group.members : [];
+    seedMembers.forEach((member) => {
+        if (!member || !member.openid) return;
+        merged[`openid:${member.openid}`] = member;
+        if (member.order_id) merged[`order:${member.order_id}`] = member;
+    });
+    orders
+        .filter((order) => paidLikeStatuses.has(order.status))
+        .forEach((order) => {
+            const member = buildGroupMemberFromOrder(order);
+            if (!member) return;
+            const key = member.order_id ? `order:${member.order_id}` : `openid:${member.openid}`;
+            if (!merged[key]) merged[key] = member;
+            if (!merged[`openid:${member.openid}`]) merged[`openid:${member.openid}`] = member;
+        });
+    return Object.values(merged).filter((member, index, list) => {
+        return list.findIndex((item) => item.order_id === member.order_id || item.openid === member.openid) === index;
+    });
+}
+
+function groupStatusForFallbackOrder(order = {}) {
+    if (order.status === 'pending_group') return 'open';
+    if (['paid', 'pickup_pending', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'].includes(order.status)) return 'success';
+    if (['cancelled', 'refunding', 'refunded'].includes(order.status)) return 'fail';
+    return 'open';
+}
+
+function lotteryCouponTemplateId(prize = {}) {
+    const candidates = [prize.coupon_id, prize.prize_value, prize.value];
+    for (const candidate of candidates) {
+        if (hasValue(candidate)) return candidate;
+    }
+    return null;
 }
 
 // ==================== 拼团 ====================
@@ -264,26 +487,17 @@ async function myGroups(openid, params = {}) {
         return 1;
     }
 
-    const myOrderByGroupNo = {};
-    const myOrderByActivityId = {};
-
-    myOrders.forEach((order) => {
-        if (!order) return;
-        const pri = orderPriority(order);
-        if (order.group_no) {
-            const existing = myOrderByGroupNo[order.group_no];
-            if (!existing || pri < orderPriority(existing)) {
-                myOrderByGroupNo[order.group_no] = order;
-            }
-        }
-        const aid = order.group_activity_id || order.legacy_group_activity_id;
-        if (aid) {
-            const existing = myOrderByActivityId[aid];
-            if (!existing || pri < orderPriority(existing)) {
-                myOrderByActivityId[aid] = order;
-            }
-        }
-    });
+    function pickBestOrder(orders = []) {
+        return (orders || []).reduce((best, cur) => {
+            if (!cur) return best;
+            if (!best) return cur;
+            const priorityDiff = orderPriority(cur) - orderPriority(best);
+            if (priorityDiff !== 0) return priorityDiff < 0 ? cur : best;
+            const timeDiff = new Date(cur.created_at || 0).getTime() - new Date(best.created_at || 0).getTime();
+            if (timeDiff !== 0) return timeDiff > 0 ? cur : best;
+            return cur;
+        }, null);
+    }
 
     const allActivityIds = new Set();
     groups.forEach(g => { if (g.activity_id) allActivityIds.add(g.activity_id); });
@@ -299,16 +513,73 @@ async function myGroups(openid, params = {}) {
         activityMap[aid] = { activity, product };
     }));
 
+    const relatedOrderPool = [];
+    const seenRelatedOrderIds = new Set();
+    function collectRelatedOrders(rows = []) {
+        rows.forEach((order) => {
+            if (!order || !order._id || seenRelatedOrderIds.has(order._id)) return;
+            seenRelatedOrderIds.add(order._id);
+            relatedOrderPool.push(order);
+        });
+    }
+
+    collectRelatedOrders(myOrders);
+
+    const relatedGroupNos = [...joinedGroupNos].filter(Boolean);
+    const relatedActivityIds = [];
+    groups.forEach((group) => {
+        if (group.activity_id) relatedActivityIds.push(group.activity_id);
+        if (group.legacy_activity_id) relatedActivityIds.push(group.legacy_activity_id);
+    });
+
+    const relatedOrderQueries = [];
+    if (relatedGroupNos.length > 0) {
+        relatedOrderQueries.push(
+            db.collection('orders')
+                .where({ group_no: _.in(relatedGroupNos) })
+                .limit(100)
+                .get()
+                .catch(() => ({ data: [] }))
+        );
+    }
+    const uniqueRelatedActivityIds = [...new Set(relatedActivityIds)].filter(Boolean);
+    if (uniqueRelatedActivityIds.length > 0) {
+        relatedOrderQueries.push(
+            db.collection('orders')
+                .where(_.or([
+                    { group_activity_id: _.in(uniqueRelatedActivityIds) },
+                    { legacy_group_activity_id: _.in(uniqueRelatedActivityIds) }
+                ]))
+                .limit(100)
+                .get()
+                .catch(() => ({ data: [] }))
+        );
+    }
+
+    const relatedOrderResults = await Promise.all(relatedOrderQueries);
+    relatedOrderResults.forEach((res) => collectRelatedOrders(res.data || []));
+
+    function getRelatedOrdersForGroup(group = {}) {
+        const groupActivityIds = new Set([group.activity_id, group.legacy_activity_id].filter(Boolean));
+        return relatedOrderPool.filter((order) => {
+            const aid = order.group_activity_id || order.legacy_group_activity_id;
+            if (group.group_no && order.group_no) {
+                return order.group_no === group.group_no;
+            }
+            return !order.group_no && aid && groupActivityIds.has(aid);
+        });
+    }
+
     const paidItems = groups.map(g => {
         const related = activityMap[g.activity_id] || {};
-        const memberCount = (g.members || []).length;
-        const candidates = [
-            myOrderByGroupNo[g.group_no],
-            myOrderByActivityId[g.activity_id],
-            myOrderByActivityId[g.legacy_activity_id]
-        ].filter(Boolean);
-        const myOrder = candidates.length === 0 ? null
-            : candidates.reduce((best, cur) => orderPriority(cur) < orderPriority(best) ? cur : best);
+        const minMembers = g.group_size || related.activity?.min_members || related.activity?.group_size || 2;
+        const relatedOrders = getRelatedOrdersForGroup(g);
+        const myOrder = pickBestOrder(
+            relatedOrders.filter((order) => order.openid === openid)
+        );
+        const mergedMembers = mergeGroupMembersWithOrders(g, relatedOrders);
+        const memberCount = mergedMembers.length;
+        const clientStatus = groupStatusForClient(g.status, { memberCount, minMembers });
         const myPaymentStatus = myOrder
             ? (myOrder.status === 'pending_payment' ? 'unpaid'
                 : (CANCELLED_STATUSES.has(myOrder.status) ? 'cancelled' : 'paid'))
@@ -329,9 +600,9 @@ async function myGroups(openid, params = {}) {
             my_order_status: myOrder?.status || '',
             groupOrder: {
                 group_no: g.group_no,
-                status: groupStatusForClient(g.status),
+                status: clientStatus,
                 current_members: memberCount,
-                min_members: g.group_size || related.activity?.min_members || related.activity?.group_size || 2,
+                min_members: minMembers,
                 product: related.product
             },
             created_at: g.created_at,
@@ -373,7 +644,45 @@ async function myGroups(openid, params = {}) {
             };
         });
 
-    const combined = [...unpaidItems, ...paidItems]
+    const coveredOrderIds = new Set([...paidItems, ...unpaidItems].map((item) => String(item.order_id || '')).filter(Boolean));
+    const paidFallbackItems = await Promise.all(
+        myOrders
+            .filter((order) => PAID_STATUSES.has(order.status) && !coveredOrderIds.has(String(order._id || '')))
+            .map(async (order) => {
+                const aid = order.group_activity_id || order.legacy_group_activity_id;
+                const related = activityMap[aid] || {};
+                const firstItem = Array.isArray(order.items) ? (order.items[0] || {}) : {};
+                const product = related.product || productSummary(order.product || {}) || await loadProductSummary(order.product_id || firstItem.product_id || '');
+                return {
+                    _id: order._id,
+                    id: order._id,
+                    group_no: order.group_no || '',
+                    activity_id: aid || '',
+                    order_id: order._id,
+                    order_no: order.order_no,
+                    status: order.status,
+                    member_count: 1,
+                    group_size: related.activity?.group_size || related.activity?.min_members || 2,
+                    is_leader: !order.group_no || !related.activity,
+                    payment_status: 'paid',
+                    pay_amount: order.pay_amount || order.total_amount || 0,
+                    my_order_status: order.status || '',
+                    groupOrder: {
+                        group_no: order.group_no || '',
+                        status: groupStatusForFallbackOrder(order),
+                        current_members: 1,
+                        min_members: related.activity?.min_members || related.activity?.group_size || 2,
+                        product
+                    },
+                    _memberCurrent: 1,
+                    _memberMin: related.activity?.min_members || related.activity?.group_size || 2,
+                    _memberText: `1/${related.activity?.min_members || related.activity?.group_size || 2}人`,
+                    created_at: order.created_at
+                };
+            })
+    );
+
+    const combined = [...unpaidItems, ...paidItems, ...paidFallbackItems]
         .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
     const total = combined.length;
     const start = (page - 1) * pageSize;
@@ -441,9 +750,6 @@ async function groupOrderDetail(openid, params) {
             product = await loadProductSummary(activityInfo.product_id);
         }
     }
-    const members = group.members || [];
-    const memberCount = members.length;
-
     const expireHours = toNumber(activityInfo?.expire_hours, 24);
     let expire_at = null;
     let remain_seconds = null;
@@ -456,7 +762,9 @@ async function groupOrderDetail(openid, params) {
     }
 
     // 批量拉取成员用户信息（昵称、头像）
-    const memberOpenids = members.map(m => m.openid).filter(Boolean);
+    const mergedMembers = mergeGroupMembersWithOrders(group, ordersRes.data || []);
+    const memberCount = mergedMembers.length;
+    const memberOpenids = mergedMembers.map(m => m.openid).filter(Boolean);
     let memberUserMap = {};
     if (memberOpenids.length > 0) {
         const usersRes = await db.collection('users')
@@ -489,31 +797,45 @@ async function groupOrderDetail(openid, params) {
         .filter((o) => o.openid === openid)
         .sort((a, b) => detailOrderPriority(a) - detailOrderPriority(b)
             || new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-    const myOrder = myOrders[0] || null;
+    const exactMyOrders = myOrders.filter((order) => groupNo && order.group_no === groupNo);
+    const fallbackMyOrders = exactMyOrders.length
+        ? exactMyOrders
+        : myOrders.filter((order) => {
+            const aid = order.group_activity_id || order.legacy_group_activity_id;
+            return !order.group_no && aid && [group.activity_id, group.legacy_activity_id].filter(Boolean).includes(aid);
+        });
+    const myOrder = (exactMyOrders.length ? exactMyOrders : (fallbackMyOrders.length ? fallbackMyOrders : myOrders))[0] || null;
+    const isMember = mergedMembers.some((m) => m.openid === openid);
+    const minMembers = group.group_size || activityInfo?.min_members || activityInfo?.group_size || 2;
+    const clientStatus = groupStatusForClient(group.status, { memberCount, minMembers });
     const myPaymentStatus = myOrder
         ? (myOrder.status === 'pending_payment'
             ? 'unpaid'
             : (paidLikeStatuses.has(myOrder.status) ? 'paid' : (cancelledStatuses.has(myOrder.status) ? 'cancelled' : 'unknown')))
-        : (members.some((m) => m.openid === openid) ? 'paid' : 'unknown');
+        : (isMember ? 'paid' : 'unknown');
 
     return {
         _id: group._id,
         activity_id: group.activity_id || '',
         group_no: group.group_no,
-        status: groupStatusForClient(group.status),
+        status: clientStatus,
         raw_status: group.status,
         member_count: memberCount,
         current_members: memberCount,
-        min_members: group.group_size || activityInfo?.min_members || activityInfo?.group_size || 2,
+        min_members: minMembers,
         group_size: group.group_size,
         is_leader: group.leader_openid === openid,
-        is_member: members.some(m => m.openid === openid),
+        is_member: isMember,
         my_payment_status: myPaymentStatus,
         my_order_id: myOrder?._id || '',
         my_order_no: myOrder?.order_no || '',
+        my_order_status: myOrder?.status || '',
+        my_tracking_no: myOrder?.tracking_no || '',
+        my_delivery_type: myOrder?.delivery_type || '',
+        my_logistics_company: myOrder?.logistics_company || myOrder?.shipping_company || '',
         expire_at,
         remain_seconds,
-        members: members.map(m => ({
+        members: mergedMembers.map(m => ({
             openid: m.openid,
             joined_at: m.joined_at,
             is_leader: m.openid === group.leader_openid,
@@ -953,14 +1275,30 @@ async function lotteryDraw(openid, params) {
         }
     } else if (selectedPrize.type === 'coupon') {
         // 发放优惠券
-        if (selectedPrize.coupon_id) {
+        const couponTemplateId = lotteryCouponTemplateId(selectedPrize);
+        if (couponTemplateId) {
+            const [couponTemplate, userRes] = await Promise.all([
+                findCouponTemplateByAnyId(couponTemplateId),
+                db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }))
+            ]);
+            const user = userRes.data && userRes.data[0] ? userRes.data[0] : null;
+            const validDays = Math.max(1, toNumber(couponTemplate?.valid_days, 30));
             await db.collection('user_coupons').add({
                 data: {
                     openid,
-                    coupon_id: selectedPrize.coupon_id,
+                    user_id: user && (user.id || user._id || user._legacy_id) ? (user.id || user._id || user._legacy_id) : openid,
+                    coupon_id: couponTemplate && couponTemplate.id != null ? couponTemplate.id : (couponTemplate?._id || couponTemplateId),
+                    coupon_name: couponTemplate?.name || selectedPrize.name || '优惠券',
+                    coupon_type: couponTemplate?.type === 'percent' ? 'percent' : (couponTemplate?.type || couponTemplate?.coupon_type || 'fixed'),
+                    coupon_value: toNumber(couponTemplate?.value != null ? couponTemplate.value : couponTemplate?.coupon_value, 0),
+                    min_purchase: toNumber(couponTemplate?.min_purchase, 0),
+                    scope: couponTemplate?.scope || 'all',
+                    scope_ids: Array.isArray(couponTemplate?.scope_ids) ? couponTemplate.scope_ids : [],
                     status: 'unused',
                     source: 'lottery',
+                    source_prize_id: selectedPrize._id || selectedPrize.id || '',
                     created_at: db.serverDate(),
+                    expire_at: db.serverDate({ offset: validDays * 24 * 60 * 60 * 1000 })
                 },
             });
         }
@@ -993,7 +1331,7 @@ async function lotteryDraw(openid, params) {
  * 待核销订单列表（门店管理员查看）
  */
 async function pickupPendingOrders(openid, params = {}) {
-    const stationId = params.station_id || params.pickup_station_id;
+    const { stationId, station } = await requireVerifierStation(openid, params.station_id || params.pickup_station_id);
     const page = toNumber(params.page, 1);
     const pageSize = toNumber(params.pageSize || params.size, 20);
 
@@ -1002,9 +1340,7 @@ async function pickupPendingOrders(openid, params = {}) {
         status: _.in(['paid', 'pickup_pending']),
     });
 
-    if (stationId) {
-        query = query.where({ pickup_station_id: stationId });
-    }
+    query = query.where({ pickup_station_id: stationId });
 
     const [res, totalRes] = await Promise.all([
         query.orderBy('paid_at', 'desc')
@@ -1014,21 +1350,32 @@ async function pickupPendingOrders(openid, params = {}) {
         query.count().catch(() => ({ total: 0 })),
     ]);
 
+    const normalizedOrders = await Promise.all((res.data || []).map((order) => ensurePickupCredentials(order)));
+
     return {
-        list: (res.data || []).map(o => ({
+        list: normalizedOrders.map(o => ({
             _id: o._id,
+            id: o._id,
             order_no: o.order_no,
             openid: o.openid,
             items: o.items || [],
             pay_amount: o.pay_amount,
             pickup_station_id: o.pickup_station_id,
-            pickup_code: o.pickup_code || '',
+            pickup_code: normalizePickupCode(o.pickup_code),
+            pickup_qr_token: getPickupQrToken(o),
             status: o.status,
             paid_at: o.paid_at,
+            picked_up_at: o.picked_up_at || null,
         })),
         total: totalRes.total || 0,
         page,
         pageSize,
+        station: station ? {
+            id: station.id || station._legacy_id || station._id,
+            name: station.name || '',
+            address: station.address || '',
+            phone: station.contact_phone || station.phone || ''
+        } : null
     };
 }
 
@@ -1049,26 +1396,17 @@ async function pickupMyOrder(openid, params) {
         throw new Error('该订单不是自提订单');
     }
 
-    // 如果订单已支付但没有核销码，生成一个
-    if ((order.status === 'paid' || order.status === 'pickup_pending') && !order.pickup_code) {
-        const pickupCode = String(Math.floor(100000 + Math.random() * 900000));
-        await db.collection('orders').doc(orderId).update({
-            data: {
-                pickup_code: pickupCode,
-                status: 'pickup_pending',
-                updated_at: db.serverDate(),
-            },
-        });
-        order.pickup_code = pickupCode;
-        order.status = 'pickup_pending';
-    }
+    await ensurePickupCredentials(order);
 
     // 查自提站信息
     let stationInfo = null;
     if (order.pickup_station_id) {
-        const stationRes = await db.collection('stations').doc(order.pickup_station_id).get().catch(() => ({ data: null }));
-        stationInfo = stationRes.data || null;
+        stationInfo = await findOneByAnyId('stations', order.pickup_station_id);
     }
+
+    const pickupStation = buildPickupStationSummary(stationInfo);
+    const pickupQrToken = getPickupQrToken(order);
+    const pickupQrDataUrl = order.verified_at ? '' : await buildPickupQrDataUrl(pickupQrToken);
 
     return {
         _id: order._id,
@@ -1076,53 +1414,43 @@ async function pickupMyOrder(openid, params) {
         status: order.status,
         items: order.items || [],
         pay_amount: order.pay_amount,
-        pickup_code: order.pickup_code || '',
-        pickup_qr_code: order.pickup_qr_code || '',
-        station: stationInfo ? {
-            _id: stationInfo._id,
-            name: stationInfo.name || '',
-            address: stationInfo.address || '',
-            phone: stationInfo.phone || '',
-            business_hours: stationInfo.business_hours || '',
-        } : null,
+        pickup_code: normalizePickupCode(order.pickup_code),
+        pickup_qr_token: pickupQrToken,
+        qr_token: pickupQrToken,
+        pickup_qr_code: pickupQrToken,
+        pickup_qr_data_url: pickupQrDataUrl,
+        pickupStation,
+        pickup_station: pickupStation,
+        station: pickupStation,
         paid_at: order.paid_at,
         picked_up_at: order.picked_up_at || null,
+        verified_at: order.verified_at || order.pickup_verified_at || order.picked_up_at || null,
     };
 }
 
-/**
- * 核销码验证（门店管理员用）
- */
-async function pickupVerifyCode(openid, params) {
-    const code = params.pickup_code || params.code;
-    if (!code) throw new Error('缺少核销码');
-
-    // 1. 查找对应订单
-    const orderRes = await db.collection('orders')
-        .where({ pickup_code: code, delivery_type: 'pickup' })
-        .limit(1).get().catch(() => ({ data: [] }));
-
-    if (!orderRes.data || orderRes.data.length === 0) {
+async function finalizePickupVerification(order, openid, stationId) {
+    if (!order) {
         throw new Error('核销码无效');
     }
 
-    const order = orderRes.data[0];
+    if (String(order.pickup_station_id || '') !== String(stationId)) {
+        throw new Error('当前订单不属于你所在门店');
+    }
 
     if (order.status !== 'paid' && order.status !== 'pickup_pending') {
         throw new Error(`订单状态不允许核销: ${order.status}`);
     }
 
-    // 2. 核销
     await db.collection('orders').doc(order._id).update({
         data: {
             status: 'completed',
             picked_up_at: db.serverDate(),
             pickup_verified_by: openid,
+            pickup_verified_station_id: stationId,
             updated_at: db.serverDate(),
         },
     });
 
-    // 3. 自提核销后进入售后冻结期，保持和普通确认收货一致
     await db.collection('commissions')
         .where({ order_id: order._id, status: _.in(['pending', 'pending_approval']) })
         .update({
@@ -1146,23 +1474,72 @@ async function pickupVerifyCode(openid, params) {
 }
 
 /**
+ * 核销码验证（门店管理员用）
+ */
+async function pickupVerifyCode(openid, params) {
+    const code = normalizePickupCode(params.pickup_code || params.code);
+    if (!code) throw new Error('缺少核销码');
+    const { stationId } = await requireVerifierStation(openid, params.station_id || params.pickup_station_id);
+
+    // 1. 查找对应订单
+    const orderRes = await db.collection('orders')
+        .where({ pickup_code: code, delivery_type: 'pickup' })
+        .limit(1).get().catch(() => ({ data: [] }));
+
+    if (!orderRes.data || orderRes.data.length === 0) {
+        throw new Error('核销码无效');
+    }
+
+    return finalizePickupVerification(orderRes.data[0], openid, stationId);
+}
+
+/**
  * 二维码核销（门店管理员用）
  */
 async function pickupVerifyQr(openid, params) {
-    // 二维码内容和核销码逻辑一样，只是参数来源不同
-    const qrData = params.qr_data || params.qr_code || params.pickup_code;
+    const { stationId } = await requireVerifierStation(openid, params.station_id || params.pickup_station_id);
+    const rawQr = String(params.qr_token || params.pickup_qr_token || params.qr_data || params.qr_code || params.pickup_code || '').trim();
+    if (!rawQr) throw new Error('缺少二维码数据');
+
+    let qrToken = rawQr;
+    let pickupCode = '';
+    try {
+        const parsed = JSON.parse(rawQr);
+        qrToken = String(parsed.pickup_qr_token || parsed.qr_token || parsed.token || rawQr).trim();
+        pickupCode = normalizePickupCode(parsed.pickup_code || parsed.code || '');
+    } catch (_) {
+        qrToken = rawQr;
+    }
+
+    if (qrToken) {
+        const orderRes = await db.collection('orders')
+            .where({ pickup_qr_token: qrToken, delivery_type: 'pickup' })
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+
+        if (orderRes.data && orderRes.data[0]) {
+            return finalizePickupVerification(orderRes.data[0], openid, stationId);
+        }
+    }
+
+    if (pickupCode) {
+        return pickupVerifyCode(openid, { pickup_code: pickupCode, station_id: stationId });
+    }
+
+    const qrData = rawQr;
     if (!qrData) throw new Error('缺少二维码数据');
 
     // 尝试从二维码数据中提取核销码
     let code = qrData;
     try {
         const parsed = JSON.parse(qrData);
-        code = parsed.pickup_code || parsed.code || qrData;
+        code = parsed.pickup_code || parsed.code || parsed.pickup_qr_token || parsed.qr_token || qrData;
     } catch (_) {
         // 非JSON格式，直接使用
     }
 
-    return pickupVerifyCode(openid, { pickup_code: code });
+    return pickupVerifyCode(openid, { pickup_code: code, station_id: stationId });
 }
 
 module.exports = {

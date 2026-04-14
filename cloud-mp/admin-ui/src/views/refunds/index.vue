@@ -5,10 +5,18 @@
         售后管理
       </template>
 
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px;"
+        title="当前仅支持整单退款。退款金额必须等于订单实付金额，否则不得执行退款。"
+      />
+
       <!-- 搜索栏 -->
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="用户搜索">
-          <el-input v-model="searchForm.keyword" placeholder="昵称/订单号" clearable style="width: 180px" @keyup.enter="handleSearch" />
+          <el-input v-model="searchForm.keyword" placeholder="昵称/手机号/会员码/订单号" clearable style="width: 220px" @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="全部状态" clearable style="width: 130px">
@@ -27,7 +35,11 @@
 
       <!-- 表格 -->
       <el-table :data="tableData" v-loading="loading">
-        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column label="ID" width="90">
+          <template #default="{ row }">
+            <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+          </template>
+        </el-table-column>
         <el-table-column label="订单号" width="180" class-name="hide-mobile">
           <template #default="{ row }">{{ row.order?.order_no || '-' }}</template>
         </el-table-column>
@@ -46,7 +58,13 @@
           </template>
         </el-table-column>
         <el-table-column label="退款金额" width="110">
-          <template #default="{ row }">¥{{ row.display_amount }}</template>
+          <template #default="{ row }">
+            <div>¥{{ row.display_amount }}</div>
+            <div v-if="orderPayAmount(row) > 0" class="text-gray" style="font-size:12px;margin-top:4px;">
+              实付 ¥{{ orderPayAmount(row).toFixed(2) }}
+            </div>
+            <el-tag v-if="!isFullRefund(row)" type="danger" size="small" style="margin-top:6px;">非整单</el-tag>
+          </template>
         </el-table-column>
         <el-table-column label="支付 / 退款去向" width="180" class-name="hide-mobile">
           <template #default="{ row }">
@@ -124,6 +142,7 @@
         </el-descriptions-item>
         <el-descriptions-item label="退款去向">{{ currentRow.display_refund_target_text }}</el-descriptions-item>
         <el-descriptions-item label="退款金额">¥{{ currentRow.display_amount }}</el-descriptions-item>
+        <el-descriptions-item label="订单实付" v-if="orderPayAmount(currentRow) > 0">¥{{ orderPayAmount(currentRow).toFixed(2) }}</el-descriptions-item>
         <el-descriptions-item label="退款原因">{{ currentRow.reason || '-' }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="getStatusType(currentRow.status)">{{ currentRow.display_status_text }}</el-tag>
@@ -148,6 +167,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getRefunds, approveRefund, rejectRefund, completeRefund } from '@/api'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import { formatDateTime } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
 import { getUserNickname } from '@/utils/userDisplay'
@@ -161,7 +181,7 @@ const currentRow = ref(null)
 
 /**
  * 售后搜索字段说明：
- *  keyword - 后端模糊匹配买家昵称或订单号（不支持手机号/会员码）
+ *  keyword - 后端模糊匹配买家昵称 / 手机号 / 会员码 / 订单号 / 退款单 ID / 商品名
  *  status  - 售后单状态精确筛选（pending/approved/processing/rejected/completed）
  */
 const searchForm = reactive({
@@ -178,6 +198,14 @@ const rejectForm = reactive({
   reason: ''
 })
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
+const orderPayAmount = (row = {}) => Number.parseFloat(row.order?.pay_amount || 0)
+const refundAmountNumber = (row = {}) => Number.parseFloat(row.amount || 0)
+const isFullRefund = (row = {}) => {
+  const refundAmount = refundAmountNumber(row)
+  const payAmount = orderPayAmount(row)
+  if (!(refundAmount > 0) || !(payAmount > 0)) return false
+  return Math.abs(refundAmount - payAmount) < 0.005
+}
 const normalizeRefundDisplay = (row = {}) => {
   const paymentMethodCode = resolvePaymentMethod(row)
   return {
@@ -348,9 +376,13 @@ const handleRejectSubmit = async () => {
 }
 
 const handleComplete = async (row) => {
+  if (!isFullRefund(row)) {
+    ElMessage.error(`当前仅支持整单退款。退款金额 ¥${refundAmountNumber(row).toFixed(2)}，订单实付 ¥${orderPayAmount(row).toFixed(2)}。`)
+    return
+  }
   try {
     await ElMessageBox.confirm(
-      `该操作将立即对用户「${displayUserName(row.user, row.user_id)}」发起退款，金额 ¥${row.display_amount || Number.parseFloat(row.amount || 0).toFixed(2)}。\n支付方式：${row.display_payment_method_text || refundPaymentMethodText(row)}\n退款去向：${row.display_refund_target_text || refundTargetText(row)}\n请确认当前售后单已审核无误。`,
+      `该操作将立即对用户「${displayUserName(row.user, row.user_id)}」发起整单退款，金额 ¥${row.display_amount || Number.parseFloat(row.amount || 0).toFixed(2)}。\n订单实付：¥${orderPayAmount(row).toFixed(2)}\n支付方式：${row.display_payment_method_text || refundPaymentMethodText(row)}\n退款去向：${row.display_refund_target_text || refundTargetText(row)}\n请确认当前售后单已审核无误。`,
       '确认发起退款',
       {
         confirmButtonText: '立即退款',

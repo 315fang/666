@@ -19,15 +19,13 @@
     <view class="my-status-banner my-status-{{detail.my_payment_status}}" wx:if="{{detail.my_payment_status}}">
       <view class="my-status-left">
         <text class="my-status-role">{{detail.is_leader ? '我发起的团' : '我参与的团'}}</text>
-        <text class="my-status-text" wx:if="{{detail.my_payment_status === 'paid'}}">已支付 · 等待成团</text>
-        <text class="my-status-text" wx:elif="{{detail.my_payment_status === 'unpaid'}}">未支付 · 支付后自动加入</text>
-        <text class="my-status-text" wx:elif="{{detail.my_payment_status === 'cancelled'}}">原订单已取消 · 当前团状态独立继续</text>
-        <text class="my-status-text" wx:else>已加入拼团</text>
+        <text class="my-status-text">{{detail._myStatusText}}</text>
       </view>
       <view class="my-status-right">
         <view class="my-status-btn" wx:if="{{detail.my_payment_status === 'unpaid'}}" bindtap="onGoPayMyOrder">去支付</view>
         <view class="my-status-btn my-status-btn-secondary" wx:elif="{{detail.my_payment_status === 'cancelled' && detail.status === 'open'}}" bindtap="onJoin">重新参团</view>
-        <view class="my-status-order-link" wx:elif="{{detail.my_order_no}}" bindtap="onGoMyOrder">查看订单</view>
+        <view class="my-status-order-link" wx:elif="{{detail._canViewLogistics}}" bindtap="onGoMyLogistics">查看物流</view>
+        <view class="my-status-order-link" wx:elif="{{detail._canViewOrder}}" bindtap="onGoMyOrder">查看订单</view>
       </view>
     </view>
 
@@ -190,10 +188,26 @@
         </view>
       </view>
     </block>
-    <view class="btn-disabled success-done" wx:if="{{detail.status === 'success'}}">
-      <text>拼团成功 已自动下单</text>
+    <block wx:elif="{{detail.status === 'success' && detail._canViewLogistics}}">
+      <view class="btn-join-wrap full-width">
+        <view class="btn-join" bindtap="onGoMyLogistics">
+          <text class="btn-line1">查看物流</text>
+          <text class="btn-line2">{{detail._successActionSubText}}</text>
+        </view>
+      </view>
+    </block>
+    <block wx:elif="{{detail.status === 'success' && detail._canViewOrder}}">
+      <view class="btn-join-wrap full-width">
+        <view class="btn-join" bindtap="onGoMyOrder">
+          <text class="btn-line1">查看订单</text>
+          <text class="btn-line2">{{detail._successActionSubText}}</text>
+        </view>
+      </view>
+    </block>
+    <view class="btn-disabled success-done" wx:elif="{{detail.status === 'success'}}">
+      <text>拼团成功，订单同步中</text>
     </view>
-    <view class="btn-disabled" wx:if="{{detail.status === 'fail' || detail.status === 'cancelled'}}">
+    <view class="btn-disabled" wx:elif="{{detail.status === 'fail' || detail.status === 'cancelled'}}">
       <text>拼团已结束</text>
     </view>
   </view>

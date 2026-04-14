@@ -317,7 +317,7 @@
           <div style="margin-top:8px; font-size:12px; color:#909399">长按或右键图片可保存</div>
         </div>
         <div v-else style="height:100px; line-height:100px; color:#909399; font-size:13px">
-          小程序码生成失败（开发环境不支持）
+          小程序码暂不可用，可复制下方路径分享
         </div>
         <!-- 小程序路径 -->
         <div style="display:flex; align-items:center; gap:8px; margin:12px 0; background:#f5f7fa; border-radius:6px; padding:8px 12px;">
@@ -369,7 +369,7 @@ import {
   getProductById,
   getCouponWxacode
 } from '@/api'
-import { getUsers } from '@/api/modules/users'
+import { searchUsersLite } from '@/api/modules/users'
 import { usePagination } from '@/composables/usePagination'
 import UserConfirmDialog from '@/components/UserConfirmDialog.vue'
 
@@ -622,6 +622,26 @@ const shareLoading = ref(false)
 const shareWxacodeBase64 = ref('')
 const shareMpPath = ref('')
 const wxacodeImgRef = ref(null)
+const COUPON_WXACODE_ENVS = ['release', 'trial', 'develop']
+
+async function loadCouponWxacode(rowId) {
+  const attempts = []
+
+  for (const env of COUPON_WXACODE_ENVS) {
+    try {
+      const res = await getCouponWxacode(rowId, env)
+      attempts.push({ env, error: res?.error || '', ok: !!res?.wxacode_base64 })
+      if (res?.mp_path) shareMpPath.value = res.mp_path
+      if (res?.wxacode_base64) {
+        return { ...res, env, attempts }
+      }
+    } catch (error) {
+      attempts.push({ env, error: error?.message || 'request_failed', ok: false })
+    }
+  }
+
+  return { wxacode_base64: '', attempts }
+}
 
 const handleShare = async (row) => {
   shareTarget.value = row
@@ -630,9 +650,15 @@ const handleShare = async (row) => {
   shareVisible.value = true
   shareLoading.value = true
   try {
-    const res = await getCouponWxacode(row.id)
+    const res = await loadCouponWxacode(row.id)
     shareWxacodeBase64.value = res?.wxacode_base64 || ''
-    if (res?.mp_path) shareMpPath.value = res.mp_path
+    if (!shareWxacodeBase64.value) {
+      const hints = (res?.attempts || [])
+        .filter((item) => item.error)
+        .map((item) => `${item.env}: ${item.error}`)
+        .join('；')
+      ElMessage.warning(hints ? `小程序码生成失败，已回退为路径分享（${hints}）` : '小程序码生成失败，可手动复制路径分享')
+    }
   } catch (e) {
     ElMessage.warning('小程序码生成失败，可手动复制路径分享')
   } finally {
@@ -659,12 +685,19 @@ const currentCoupon = ref(null)
 const userSearchLoading = ref(false)
 const userSearchOptions = ref([])
 const issueForm = reactive({ mode: 'search', userIdsText: '', roleLevels: [], selectedUsers: [] })
+let userSearchSeq = 0
 
 const searchUsers = async (query) => {
-  if (!query) return
+  if (!query) {
+    userSearchSeq += 1
+    userSearchOptions.value = []
+    return
+  }
+  const seq = ++userSearchSeq
   userSearchLoading.value = true
   try {
-    const res = await getUsers({ keyword: query, limit: 20, page: 1 })
+    const res = await searchUsersLite({ keyword: query, limit: 20 })
+    if (seq !== userSearchSeq) return
     userSearchOptions.value = (res?.list || []).map(u => ({
       id: u.id || u._id,
       nickname: u.nickname || u.nickName || u.name || '未知',
@@ -672,9 +705,9 @@ const searchUsers = async (query) => {
       member_no: u.member_no || ''
     }))
   } catch {
-    userSearchOptions.value = []
+    if (seq === userSearchSeq) userSearchOptions.value = []
   } finally {
-    userSearchLoading.value = false
+    if (seq === userSearchSeq) userSearchLoading.value = false
   }
 }
 

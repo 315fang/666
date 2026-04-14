@@ -51,12 +51,6 @@ const routes = [
         meta: { title: '订单管理', icon: 'ShoppingCart', group: '订单与资金', order: 1, permission: 'orders' }
       },
       {
-        path: 'logistics',
-        name: 'Logistics',
-        component: () => import('@/views/logistics/index.vue'),
-        meta: { title: '物流查询', icon: 'Van', group: '订单与资金', order: 2, nav: false, permission: 'logistics' }
-      },
-      {
         path: 'pickup-stations',
         name: 'PickupStations',
         component: () => import('@/views/pickup-stations/index.vue'),
@@ -131,12 +125,6 @@ const routes = [
         meta: { title: '轮播与图文', icon: 'Picture', group: '内容与设计', order: 1, permission: 'content' }
       },
       {
-        path: 'featured-board',
-        name: 'FeaturedBoard',
-        component: () => import('@/views/featured-board/index.vue'),
-        meta: { title: '商品推荐榜', icon: 'Goods', group: '内容与设计', order: 1, permission: 'content' }
-      },
-      {
         path: 'home-sections',
         name: 'HomeSections',
         component: () => import('@/views/home-sections/index.vue'),
@@ -159,12 +147,6 @@ const routes = [
         name: 'MassMessage',
         component: () => import('@/views/mass-message/index.vue'),
         meta: { title: '群发消息', icon: 'Message', group: '内容与设计', order: 4, permission: 'notification' }
-      },
-      {
-        path: 'splash',
-        name: 'Splash',
-        component: () => import('@/views/splash/index.vue'),
-        meta: { title: '开屏动画', icon: 'Sunrise', group: '内容与设计', order: 5, permission: 'content' }
       },
       // ===== 会员体系 =====
       {
@@ -197,12 +179,6 @@ const routes = [
         name: 'Logs',
         component: () => import('@/views/logs/index.vue'),
         meta: { title: '操作日志', icon: 'List', group: '平台与运维', order: 3, permission: 'logs' }
-      },
-      {
-        path: 'system-config',
-        name: 'SystemConfig',
-        component: () => import('@/views/system-config/index.vue'),
-        meta: { title: '系统配置', icon: 'SetUp', group: '平台与运维', order: 4, permission: 'settings_manage' }
       },
     ]
   },

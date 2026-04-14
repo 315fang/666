@@ -400,7 +400,7 @@ const formatAmountYuan = (value) => {
 
 const getStatusText = (status) => {
   const map = {
-    pending: '待支付', paid: '待发货', agent_confirmed: '待确认',
+    pending: '待支付', paid: '待发货', pickup_pending: '待核销', agent_confirmed: '待确认',
     shipping_requested: '发货中', shipped: '已发货',
     completed: '已完成', cancelled: '已取消'
   }

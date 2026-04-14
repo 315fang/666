@@ -10,7 +10,11 @@
     </template>
 
     <el-table :data="items" v-loading="loading" stripe>
-      <el-table-column prop="id" label="ID" width="60" />
+      <el-table-column label="ID" width="90">
+        <template #default="{ row }">
+          <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+        </template>
+      </el-table-column>
       <el-table-column label="商品" min-width="180">
         <template #default="{ row }">
           <div v-if="row.product" style="display:flex;align-items:center;gap:8px;">
@@ -66,6 +70,7 @@
 
 <script setup>
 import { Plus } from '@element-plus/icons-vue'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 
 defineProps({
   items: { type: Array, default: () => [] },

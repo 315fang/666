@@ -25,7 +25,7 @@ const DEFAULT_MINI_PROGRAM_CONFIG = {
         }
     },
     feature_flags: {
-        show_station_entry: false,
+        show_station_entry: true,
         show_pickup_entry: false,
         enable_logistics_entry: true,
         enable_lottery_entry: false
@@ -102,6 +102,10 @@ function pickString(value, fallback = '') {
     return text || fallback;
 }
 
+function pickAssetRef(source = {}) {
+    return pickString(source.file_id || source.image_url || source.image || source.url || source.cover_image || source.coverImage);
+}
+
 function toBoolean(value) {
     if (value === true || value === 1 || value === '1') return true;
     const normalized = pickString(value).toLowerCase();
@@ -164,7 +168,7 @@ function normalizeBannerList(list = []) {
         title: pickString(item.title),
         subtitle: pickString(item.subtitle),
         file_id: pickString(item.file_id),
-        image_url: pickString(item.image_url || item.image || item.url || item.file_id),
+        image_url: pickAssetRef(item),
         link_type: pickString(item.link_type, 'none'),
         link_value: pickString(item.link_value),
         position: pickString(item.position, 'home'),
@@ -178,7 +182,7 @@ function normalizePopupAdConfig(config = {}) {
         enabled: toBoolean(config.enabled),
         title: pickString(config.title),
         file_id: pickString(config.file_id),
-        image_url: pickString(config.image_url || config.url || config.file_id),
+        image_url: pickAssetRef(config),
         link_type: pickString(config.link_type, 'none'),
         link_value: pickString(config.link_value),
         button_text: pickString(config.button_text),
@@ -191,7 +195,7 @@ function normalizeSplashConfig(config = {}) {
         enabled: toBoolean(config.enabled ?? config.is_active ?? false),
         title: pickString(config.title),
         file_id: pickString(config.file_id),
-        image_url: pickString(config.image_url || config.url || config.file_id),
+        image_url: pickAssetRef(config),
         link_type: pickString(config.link_type, 'none'),
         link_value: pickString(config.link_value)
     };

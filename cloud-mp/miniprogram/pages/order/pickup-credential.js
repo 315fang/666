@@ -8,8 +8,8 @@ function normalizePickupInfo(info) {
         ...info,
         verified_at: verifiedAt,
         pickup_verified_at: verifiedAt,
-        pickup_qr_token: info.pickup_qr_token || info.qr_token || '',
-        pickupStation: info.pickupStation || info.pickup_station || null
+        pickup_qr_token: info.pickup_qr_token || info.qr_token || info.pickup_qr_code || '',
+        pickupStation: info.pickupStation || info.pickup_station || info.station || null
     };
 }
 

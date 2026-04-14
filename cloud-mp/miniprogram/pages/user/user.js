@@ -112,8 +112,8 @@ Page({
         notificationsCount: 0,
         pageLayout: null,
         featureFlags: {
-            show_station_entry: false,
-            show_pickup_entry: false,
+            show_station_entry: true,
+            show_pickup_entry: true,
             show_agent_service_entry: false,
             enable_lottery_entry: false
         },
@@ -288,12 +288,12 @@ Page({
         const userInfo = this.data.userInfo || {};
         const memberCode = String(userInfo.invite_code || '').trim();
         if (!memberCode) {
-            wx.showToast({ title: '暂无会员码', icon: 'none' });
+            wx.showToast({ title: '暂无邀请码', icon: 'none' });
             return;
         }
         wx.setClipboardData({
             data: memberCode,
-            success: () => wx.showToast({ title: 'UID已复制', icon: 'success' })
+            success: () => wx.showToast({ title: '邀请码已复制', icon: 'success' })
         });
     },
 

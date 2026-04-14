@@ -13,11 +13,11 @@
       <el-input v-model="miniProgramForm.brand_config.share_title" />
     </el-form-item>
 
-    <!-- 好友邀请海报静态图（invite-poster） -->
-    <el-form-item label="好友邀请海报图">
+    <!-- 好友邀请海报顶部主视觉图（invite-poster） -->
+    <el-form-item label="邀请海报顶部图">
       <div class="poster-upload-wrap">
-        <div class="poster-preview" v-if="miniProgramForm.brand_config.share_poster_url">
-          <img :src="miniProgramForm.brand_config.share_poster_url" class="poster-thumb" alt="海报预览" />
+        <div class="poster-preview" v-if="miniProgramForm.brand_config.share_poster_cover_url || miniProgramForm.brand_config.share_poster_url">
+          <img :src="miniProgramForm.brand_config.share_poster_cover_url || miniProgramForm.brand_config.share_poster_url" class="poster-thumb" alt="海报预览" />
           <div class="poster-actions">
             <el-button size="small" type="danger" plain @click="clearPoster" :disabled="posterUploading">移除</el-button>
           </div>
@@ -36,7 +36,7 @@
             <span class="poster-upload-sub">建议 600×960px，JPG/PNG，≤2MB</span>
           </div>
         </el-upload>
-        <div class="poster-upload-tip" v-if="miniProgramForm.brand_config.share_poster_url">
+        <div class="poster-upload-tip" v-if="miniProgramForm.brand_config.share_poster_cover_url || miniProgramForm.brand_config.share_poster_url">
           <el-button size="small" plain @click="triggerReplace" :disabled="posterUploading">
             <el-icon><RefreshRight /></el-icon> 替换图片
           </el-button>
@@ -50,7 +50,7 @@
           />
         </div>
         <div class="field-hint" style="margin-top:8px;">
-          上传后小程序「好友邀请」海报页将优先显示此图，可直接发送给好友或保存到相册。留空则自动用 Canvas 动态生成。
+          上传后小程序「好友邀请」海报页会用这张图替换顶部主视觉区域，下面的邀请码、头像和二维码仍保持动态生成。留空则使用默认主视觉。
         </div>
       </div>
     </el-form-item>
@@ -349,10 +349,12 @@ async function handlePosterUpload({ file }) {
   posterUploading.value = true
   try {
     const res = await uploadFile(file, { params: { folder: 'share_poster', skip_library: 1 } })
+    const fileId = res?.data?.file_id || res?.file_id || ''
     const url = res?.data?.url || res?.url || ''
-    if (!url) throw new Error('上传返回 URL 为空')
-    props.miniProgramForm.brand_config.share_poster_url = url
-    ElMessage.success('海报图上传成功')
+    if (!url && !fileId) throw new Error('上传返回图片地址为空')
+    props.miniProgramForm.brand_config.share_poster_cover_file_id = fileId
+    props.miniProgramForm.brand_config.share_poster_cover_url = url
+    ElMessage.success('顶部主视觉上传成功')
   } catch (e) {
     ElMessage.error('上传失败：' + (e?.message || '请重试'))
   } finally {
@@ -361,7 +363,8 @@ async function handlePosterUpload({ file }) {
 }
 
 function clearPoster() {
-  props.miniProgramForm.brand_config.share_poster_url = ''
+  props.miniProgramForm.brand_config.share_poster_cover_file_id = ''
+  props.miniProgramForm.brand_config.share_poster_cover_url = ''
 }
 
 function triggerReplace() {

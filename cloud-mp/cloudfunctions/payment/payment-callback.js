@@ -329,6 +329,94 @@ function getCallbackPaidFen(transaction = {}) {
     return NaN;
 }
 
+async function getWalletAccountByOpenid(openid) {
+    const userRes = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
+    const user = userRes.data && userRes.data[0] ? userRes.data[0] : null;
+    if (!user) return { user: null, account: null };
+    const candidates = [user.id, user._id, user._legacy_id].filter((value) => value !== null && value !== undefined && value !== '');
+    for (const candidate of candidates) {
+        const accountRes = await db.collection('wallet_accounts')
+            .where({ user_id: candidate })
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+        if (accountRes.data && accountRes.data[0]) {
+            return { user, account: accountRes.data[0] };
+        }
+    }
+    return { user, account: null };
+}
+
+function getUserGoodsFundBalance(user = {}) {
+    return toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0);
+}
+
+function sanitizeWalletAccountDocId(value) {
+    return String(value).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+async function ensureWalletAccountForUser(user, seedBalance) {
+    if (!user) return null;
+    const candidates = [user.id, user._id, user._legacy_id].filter((value) => value !== null && value !== undefined && value !== '');
+    if (!candidates.length) return null;
+    const userId = candidates[0];
+    const docId = `wallet-${sanitizeWalletAccountDocId(userId)}`;
+    const balance = Math.max(0, Math.round(toNumber(seedBalance, 0) * 100) / 100);
+    const now = db.serverDate();
+    await db.collection('wallet_accounts').doc(docId).set({
+        data: {
+            user_id: userId,
+            openid: user.openid || '',
+            balance,
+            account_type: 'goods_fund',
+            status: 'active',
+            created_at: now,
+            updated_at: now
+        }
+    });
+    return {
+        _id: docId,
+        id: docId,
+        user_id: userId,
+        openid: user.openid || '',
+        balance
+    };
+}
+
+async function increaseGoodsFundLedger(openid, amount, refId, remark, refType = 'wx_recharge') {
+    const { user, account: existingAccount } = await getWalletAccountByOpenid(openid);
+    if (!user) throw new Error('货款账本同步失败：用户不存在');
+    const account = existingAccount || await ensureWalletAccountForUser(user, getUserGoodsFundBalance(user) - amount);
+    if (!account) throw new Error('货款账本同步失败：无法创建钱包账户');
+    const before = toNumber(account.balance, 0);
+    const after = before + amount;
+
+    await db.collection('wallet_accounts').doc(String(account._id)).update({
+        data: {
+            balance: _.inc(amount),
+            updated_at: db.serverDate()
+        }
+    });
+
+    await db.collection('wallet_logs').add({
+        data: {
+            user_id: user.id || user._legacy_id || user._id || '',
+            account_id: account.id || account._id || '',
+            change_type: 'recharge',
+            amount,
+            balance_before: before,
+            balance_after: after,
+            ref_type: refType,
+            ref_id: refId,
+            remark,
+            created_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    });
+
+    return true;
+}
+
 function getOrderPayFen(order = {}) {
     return amountFen(resolveOrderPayAmount(order, 0));
 }
@@ -377,6 +465,27 @@ function getUserReferrer(user = {}) {
         || '';
 }
 
+function getUserRoleLevel(user = {}) {
+    return toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+}
+
+function normalizeAgentRoleLevel(roleLevel) {
+    const normalized = toNumber(roleLevel, 0);
+    if (normalized >= 5) return 5;
+    if (normalized === 4) return 4;
+    if (normalized === 3) return 3;
+    return 0;
+}
+
+function resolveSupplyPriceByRole(product = {}, sku = {}, roleLevel = 0) {
+    const normalizedRole = normalizeAgentRoleLevel(roleLevel);
+    if (!normalizedRole) return null;
+    const fieldName = `supply_price_b${normalizedRole === 5 ? 3 : normalizedRole}`;
+    const explicit = sku?.[fieldName] ?? product?.[fieldName];
+    const amount = toNumber(explicit, NaN);
+    return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
 function resolveProductPrice(product = {}) {
     const legacyPrice = firstNumber([product.retail_price, product.price]);
     if (legacyPrice !== null) return legacyPrice;
@@ -390,9 +499,11 @@ function resolveSkuPrice(sku = {}) {
 }
 
 function resolveUnitCost(product = {}, sku = {}, item = {}, order = {}) {
+    const fulfillmentRole = normalizeAgentRoleLevel(order.fulfillment_partner_role_level || order.nearest_agent_role_level);
     const explicit = firstNumber([
         item.locked_agent_cost,
-        order.locked_agent_cost,
+        item.locked_agent_unit_cost,
+        resolveSupplyPriceByRole(product, sku, fulfillmentRole),
         sku.cost_price,
         product.cost_price,
         sku.price_agent,
@@ -692,8 +803,10 @@ async function ensureCommissionsCreated(orderId, order) {
         return { created: 0 };
     }
 
-    const parent = await findUserByAny(getUserReferrer(buyer));
-    const grandparent = parent ? await findUserByAny(getUserReferrer(parent)) : null;
+    const parent = await findUserByAny(order.direct_referrer_openid || getUserReferrer(buyer));
+    const grandparent = await findUserByAny(order.indirect_referrer_openid || (parent ? getUserReferrer(parent) : ''));
+    const fulfillmentPartner = await findUserByAny(order.fulfillment_partner_openid || order.nearest_agent_openid || order.agent_info?.openid || '');
+    const fulfillmentPartnerOpenid = fulfillmentPartner?.openid || order.fulfillment_partner_openid || '';
     const beneficiaries = [
         { level: 1, type: 'direct', user: parent },
         { level: 2, type: 'indirect', user: grandparent }
@@ -733,9 +846,6 @@ async function ensureCommissionsCreated(orderId, order) {
         const sku = item.sku_id ? await getDocByIdOrLegacy('skus', item.sku_id) || {} : {};
         const rawBase = roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
         const allocatedBase = itemBaseTotal > 0 ? roundMoney(commissionBase * rawBase / itemBaseTotal) : rawBase;
-        const cost = roundMoney(resolveUnitCost(product, sku, item, order) * qty);
-        let remainingProfit = Math.max(0, roundMoney(allocatedBase - cost));
-
         if (useMatrix) {
             // 级差矩阵制：parent 拿 matrix[parentRole][buyerRole]%，grandparent 拿级差
             // 即便父级被跳过（因为 openid == buyer 等），也要用父级应得比例计算级差
@@ -747,23 +857,22 @@ async function ensureCommissionsCreated(orderId, order) {
             const parentMatrixRate = parentBeneficiary ? matrixRate(commissionMatrix, parentRole, buyerRole) : 0;
 
             for (const beneficiary of beneficiaries) {
-                if (remainingProfit <= 0) break;
                 const bRole = toNumber(beneficiary.user.role_level ?? beneficiary.user.distributor_level ?? beneficiary.user.level, 0);
 
                 const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
                 let amount;
                 if (configured > 0) {
-                    amount = Math.min(remainingProfit, configured);
+                    amount = Math.min(allocatedBase, configured);
                 } else {
                     const myRate = matrixRate(commissionMatrix, bRole, buyerRole);
                     const effectiveRate = beneficiary.level === 1
                         ? myRate
                         : Math.max(0, myRate - parentMatrixRate);
                     amount = roundMoney(allocatedBase * effectiveRate);
-                    amount = Math.min(remainingProfit, amount);
                 }
 
                 if (amount <= 0) continue;
+                if (fulfillmentPartnerOpenid && beneficiary.user.openid === fulfillmentPartnerOpenid) continue;
                 const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
                 totals.set(key, {
                     openid: beneficiary.user.openid,
@@ -772,16 +881,17 @@ async function ensureCommissionsCreated(orderId, order) {
                     level: beneficiary.level,
                     type: beneficiary.type
                 });
-                remainingProfit = roundMoney(remainingProfit - amount);
             }
         } else {
             // 兼容旧模式
             for (const beneficiary of beneficiaries) {
-                if (remainingProfit <= 0) break;
                 const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
                 const roleBased = roleBasedCommission(beneficiary.user, beneficiary.level, allocatedBase, commissionConfig);
-                const amount = Math.min(remainingProfit, configured > 0 ? configured : roleBased);
+                const amount = configured > 0
+                    ? Math.min(allocatedBase, configured)
+                    : roleBased;
                 if (amount <= 0) continue;
+                if (fulfillmentPartnerOpenid && beneficiary.user.openid === fulfillmentPartnerOpenid) continue;
                 const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
                 totals.set(key, {
                     openid: beneficiary.user.openid,
@@ -790,7 +900,6 @@ async function ensureCommissionsCreated(orderId, order) {
                     level: beneficiary.level,
                     type: beneficiary.type
                 });
-                remainingProfit = roundMoney(remainingProfit - amount);
             }
         }
     }
@@ -896,25 +1005,11 @@ async function ensurePaidGroupJoined(orderId, order) {
     let groupNo = order.group_no || '';
     let groupOrder = await findGroupOrder(groupNo);
 
-    // 若 group_no 查不到团但有 activity_id，尝试通过 activity_id 找到 open/pending 状态的团
-    if (!groupOrder && !groupNo) {
-        const actId = order.group_activity_id || order.legacy_group_activity_id || '';
-        if (actId) {
-            const fallbackRes = await db.collection('group_orders')
-                .where({ activity_id: actId, status: db.command.in(['pending', 'open']) })
-                .orderBy('created_at', 'desc')
-                .limit(1)
-                .get().catch(() => ({ data: [] }));
-            if (fallbackRes.data && fallbackRes.data[0]) {
-                groupOrder = fallbackRes.data[0];
-                groupNo = groupOrder.group_no;
-                console.log('[GroupJoin] 通过 activity_id 找到已有团:', groupNo);
-            }
-        }
-    }
-
     if (groupOrder && !['pending', 'open'].includes(groupOrder.status)) {
         throw new Error('拼团已结束');
+    }
+    if (!groupOrder && groupNo) {
+        throw new Error('拼团不存在或已结束');
     }
 
     const member = {
@@ -964,6 +1059,7 @@ async function ensurePaidGroupJoined(orderId, order) {
 
     const members = Array.isArray(groupOrder.members) ? groupOrder.members : [];
     const exists = members.some((item) => item.openid === order.openid || item.order_id === orderId);
+    const nextMembers = exists ? members : [...members, member];
     if (!exists) {
         if (members.length >= groupSize) throw new Error('该团已满员');
         await db.collection('group_orders').doc(groupOrder._id).update({
@@ -974,16 +1070,19 @@ async function ensurePaidGroupJoined(orderId, order) {
         });
     }
 
-    const memberCount = exists ? members.length : members.length + 1;
+    const memberCount = nextMembers.length;
     const completed = memberCount >= groupSize;
+    await writeGroupNoToOrder(groupOrder.group_no);
     if (completed && groupOrder.status !== 'completed') {
         await db.collection('group_orders').doc(groupOrder._id).update({
             data: { status: 'completed', completed_at: db.serverDate(), updated_at: db.serverDate() },
         });
-        await promoteGroupOrdersToPaid(groupOrder);
+        await promoteGroupOrdersToPaid({
+            ...groupOrder,
+            status: 'completed',
+            members: nextMembers
+        });
     }
-
-    await writeGroupNoToOrder(groupOrder.group_no);
     return { joined: !exists, group_no: groupOrder.group_no, member_count: memberCount, completed };
 }
 
@@ -1417,6 +1516,7 @@ async function handleRechargeCallback(outTradeNo, transaction) {
         }).catch((err) => {
             console.error('[RechargeCallback] 到账失败:', err.message);
         });
+    await increaseGoodsFundLedger(openid, amount, outTradeNo, '货款余额充值', 'wx_recharge').catch(() => false);
 
     // 写流水日志
     await db.collection('goods_fund_logs').add({

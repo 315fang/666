@@ -31,6 +31,7 @@ App({
         homePageData: null,
         homeDataPromise: null,
         miniProgramConfig: cloneDefaults(),
+        miniProgramConfigPromise: null,
         brandName: '问兰',
         shareTitle: '问兰 · 品牌甄选',
         customerServiceWechat: 'wl_service',

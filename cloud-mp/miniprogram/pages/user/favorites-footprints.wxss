@@ -1,5 +1,3 @@
-@import "./footprints.wxss";
-
 .page-combo {
   min-height: 100vh;
   background: #fafaf9;
@@ -51,4 +49,91 @@
 
 .panel .head-row {
   flex-shrink: 0;
+}
+
+.head-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 20rpx 24rpx 12rpx;
+}
+
+.clear-all {
+  font-size: 24rpx;
+  color: #b45309;
+  padding: 8rpx 0;
+}
+
+.empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 40rpx;
+}
+
+.empty-text {
+  font-size: 26rpx;
+  color: #a8a29e;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 24rpx;
+  margin-bottom: 16rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10rpx 26rpx rgba(28, 25, 23, 0.05);
+}
+
+.thumb {
+  width: 132rpx;
+  height: 132rpx;
+  border-radius: 20rpx;
+  flex-shrink: 0;
+  background: #f5f5f4;
+}
+
+.row-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.row-title {
+  font-size: 28rpx;
+  line-height: 1.45;
+  color: #1c1917;
+  font-weight: 600;
+}
+
+.row-meta {
+  font-size: 26rpx;
+  color: #b45309;
+  font-weight: 700;
+}
+
+.row-time {
+  font-size: 22rpx;
+  color: #78716c;
+}
+
+.row-del {
+  width: 68rpx;
+  height: 68rpx;
+  border-radius: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #fef2f2;
+}
+
+.del-icon {
+  width: 32rpx;
+  height: 32rpx;
 }

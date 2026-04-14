@@ -84,3 +84,26 @@
 
 .safe-bottom { height: calc(24rpx + env(safe-area-inset-bottom)); }
 .state-loading { padding: 120rpx; text-align: center; color: #a8a29e; }
+
+.empty-state {
+  flex: 1;
+  padding: 140rpx 48rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.empty-state-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #44403c;
+}
+
+.empty-state-desc {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #a8a29e;
+}

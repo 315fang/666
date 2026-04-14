@@ -17,22 +17,22 @@
           <div class="kpi-value">¥{{ fmt(data.gmv) }}</div>
           <div class="kpi-sub">近30天 ¥{{ fmt(data.gmv_30d) }}</div>
         </div>
-        <div class="kpi-card green">
+        <div class="kpi-card green kpi-card--clickable" @click="goCommissions()">
           <div class="kpi-label">佣金总额</div>
           <div class="kpi-value">¥{{ fmt(data.commissions?.total) }}</div>
           <div class="kpi-sub">已结算 ¥{{ fmt(data.commissions?.settled) }}</div>
         </div>
-        <div class="kpi-card orange">
+        <div class="kpi-card orange kpi-card--clickable" @click="goCommissions({ status: 'pending_approval' })">
           <div class="kpi-label">冻结中佣金</div>
           <div class="kpi-value">¥{{ fmt(data.commissions?.frozen) }}</div>
           <div class="kpi-sub">待审批 ¥{{ fmt(data.commissions?.pending_approval) }}</div>
         </div>
-        <div class="kpi-card red">
+        <div class="kpi-card red kpi-card--clickable" @click="goWithdrawals({ status: 'pending' })">
           <div class="kpi-label">待提现金额</div>
           <div class="kpi-value">¥{{ fmt(data.withdrawals?.pending_amount) }}</div>
           <div class="kpi-sub">{{ data.withdrawals?.pending_count ?? 0 }} 笔待处理</div>
         </div>
-        <div class="kpi-card purple">
+        <div class="kpi-card purple kpi-card--clickable" @click="goWithdrawals({ status: 'completed' })">
           <div class="kpi-label">平台手续费收入</div>
           <div class="kpi-value">¥{{ fmt(data.withdrawals?.total_fee) }}</div>
           <div class="kpi-sub">已完成提现 ¥{{ fmt(data.withdrawals?.completed_amount) }}</div>
@@ -66,7 +66,7 @@
               <div class="card-header">
                 <el-icon><Wallet /></el-icon>
                 <span>佣金状态分布</span>
-                <el-button text type="primary" size="small" @click="$router.push('/commissions')">查看明细</el-button>
+                <el-button text type="primary" size="small" @click="goCommissions()">查看明细</el-button>
               </div>
             </template>
             <el-table :data="commissionRows" size="small" stripe>
@@ -96,7 +96,7 @@
               <div class="card-header">
                 <el-icon><CreditCard /></el-icon>
                 <span>提现概览</span>
-                <el-button text type="primary" size="small" @click="$router.push('/withdrawals')">查看明细</el-button>
+                <el-button text type="primary" size="small" @click="goWithdrawals({ status: 'pending' })">查看明细</el-button>
               </div>
             </template>
             <el-descriptions :column="2" border size="small">
@@ -150,11 +150,11 @@
             <template #default="{ row }">
               <el-button
                 text type="primary" size="small"
-                @click="$router.push(`/users?keyword=${row.member_no || row.user_id}`)"
+                @click="goUserManage(row)"
               >
                 {{ row.nickname || '未知用户' }}
               </el-button>
-              <el-tag v-if="row.member_no" size="small" type="info" style="margin-left:4px">{{ row.member_no }}</el-tag>
+              <el-tag v-if="row.invite_code || row.member_no" size="small" type="info" style="margin-left:4px">{{ row.invite_code || row.member_no }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="等级" width="90">
@@ -285,10 +285,10 @@
           <el-table-column label="代理" min-width="150">
             <template #default="{ row }">
               <el-button text type="primary" size="small"
-                @click="$router.push(`/users?keyword=${row.member_no || row.user_id}`)">
+                @click="goUserManage(row)">
                 {{ row.nickname || row.openid || '-' }}
               </el-button>
-              <el-tag v-if="row.member_no" size="small" type="info" style="margin-left:4px">{{ row.member_no }}</el-tag>
+              <el-tag v-if="row.invite_code || row.member_no" size="small" type="info" style="margin-left:4px">{{ row.invite_code || row.member_no }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="等级" width="90">
@@ -336,10 +336,10 @@
               <el-table-column label="合伙人" min-width="130">
                 <template #default="{ row }">
                   <el-button text type="primary" size="small"
-                    @click="$router.push(`/users?keyword=${row.member_no || row.user_id}`)">
+                    @click="goUserManage(row)">
                     {{ row.nickname || '-' }}
                   </el-button>
-                  <el-tag v-if="row.member_no" size="small" type="info" style="margin-left:2px">{{ row.member_no }}</el-tag>
+                  <el-tag v-if="row.invite_code || row.member_no" size="small" type="info" style="margin-left:2px">{{ row.invite_code || row.member_no }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column label="团队人数" width="80" align="center" prop="team_size" />
@@ -377,10 +377,10 @@
               <el-table-column label="代理商" min-width="120">
                 <template #default="{ row }">
                   <el-button text type="primary" size="small"
-                    @click="$router.push(`/users?keyword=${row.member_no || row.user_id}`)">
+                    @click="goUserManage(row)">
                     {{ row.nickname || '-' }}
                   </el-button>
-                  <el-tag v-if="row.member_no" size="small" type="info" style="margin-left:2px">{{ row.member_no }}</el-tag>
+                  <el-tag v-if="row.invite_code || row.member_no" size="small" type="info" style="margin-left:2px">{{ row.invite_code || row.member_no }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column label="个人销售" min-width="110" align="right">
@@ -432,13 +432,16 @@
 import { ref, computed, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Money, Wallet, CreditCard, Coin, TrendCharts, Refresh, Trophy, DataAnalysis, User } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
 import { getFinanceOverview, getAgentPerformance, getPoolContributions, settleAgentDebt } from '@/api'
 import { formatDate } from '@/utils/format'
 import { useUserStore } from '@/store/user'
+import { buildUserManagementQuery } from '@/utils/userRouting'
 
 const loading = ref(false)
 const data = ref({})
 const userStore = useUserStore()
+const router = useRouter()
 const canManageStrategicFunds = computed(() => userStore.hasPermission('user_balance_adjust'))
 
 const debtDialogVisible = ref(false)
@@ -519,6 +522,23 @@ const openDebtDialog = (row) => {
   debtForm.source = 'goods_fund'
   debtForm.reason = ''
   debtDialogVisible.value = true
+}
+
+const goUserManage = (row) => {
+  const query = buildUserManagementQuery(row, row?.nickname || row?.openid || '', [row?.user_id])
+  if (Object.keys(query).length === 0) {
+    ElMessage.warning('无用户信息可跳转')
+    return
+  }
+  router.push({ name: 'Users', query })
+}
+
+const goCommissions = (query = {}) => {
+  router.push({ name: 'Commissions', query })
+}
+
+const goWithdrawals = (query = {}) => {
+  router.push({ name: 'Withdrawals', query })
 }
 
 const handleDebtSubmit = async () => {
@@ -646,6 +666,7 @@ onMounted(fetchAll)
   flex-direction: column;
   gap: 6px;
 }
+.kpi-card--clickable { cursor: pointer; }
 .kpi-card.blue    { background: linear-gradient(135deg, #409eff, #1d7ee6); }
 .kpi-card.green   { background: linear-gradient(135deg, #67c23a, #3f9e1e); }
 .kpi-card.orange  { background: linear-gradient(135deg, #e6a23c, #c07918); }

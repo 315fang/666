@@ -14,31 +14,12 @@
         <image class="hero-badge-icon" src="/assets/icons/tag.svg" mode="aspectFit"></image>
         <text class="hero-badge-text">全员可参与</text>
       </view>
-      <view class="hero-badge hero-badge--soft">
-        <image class="hero-badge-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
-        <text class="hero-badge-text">{{activities.length || 0}} 个活动</text>
-      </view>
     </view>
 
     <view class="hero-card">
       <view class="hero-copy">
         <text class="hero-title">发起砍价，好友一起帮你省</text>
         <text class="hero-subtitle">发起后分享给好友帮砍，每次都会压低当前价格；随时回到“我的砍价”查看进度和最终成交价。</text>
-      </view>
-
-      <view class="hero-stats">
-        <view class="stat-card">
-          <text class="stat-label">专区活动</text>
-          <text class="stat-value">{{activities.length || 0}}</text>
-        </view>
-        <view class="stat-card">
-          <text class="stat-label">我的砍价</text>
-          <text class="stat-value">{{myRecords.length || 0}}</text>
-        </view>
-        <view class="stat-card stat-card--member">
-          <text class="stat-label">参与方式</text>
-          <text class="stat-value stat-value--small">分享助力</text>
-        </view>
       </view>
 
       <view class="hero-actions">

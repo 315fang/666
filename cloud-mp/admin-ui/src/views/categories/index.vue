@@ -9,7 +9,11 @@
       </template>
 
       <el-table :data="categories" v-loading="loading" border>
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column label="ID" width="90">
+          <template #default="{ row }">
+            <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
+          </template>
+        </el-table-column>
         <el-table-column prop="name" label="分类名称" min-width="220" />
         <el-table-column prop="sort_order" label="排序" width="100" />
         <el-table-column label="状态" width="120">
@@ -55,6 +59,7 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import CompactIdCell from '@/components/CompactIdCell.vue'
 import { getCategories, createCategory, updateCategory, deleteCategory } from '@/api'
 
 const loading = ref(false)

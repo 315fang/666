@@ -24,6 +24,43 @@ function plainSummary(html, maxLen = 96) {
     return t.length > maxLen ? `${t.slice(0, maxLen)}…` : t;
 }
 
+function buildDetailUiState(detail = {}) {
+    const orderStatus = detail.my_order_status || '';
+    const orderId = detail.my_order_id || detail.my_order_no || '';
+    const deliveryType = detail.my_delivery_type || '';
+    const trackingNo = detail.my_tracking_no || '';
+    const canViewOrder = Boolean(orderId);
+    const canViewLogistics = canViewOrder
+        && deliveryType !== 'pickup'
+        && Boolean(trackingNo)
+        && ['shipped', 'completed'].includes(orderStatus);
+
+    let myStatusText = '已加入拼团';
+    if (detail.my_payment_status === 'paid') {
+        if (detail.status === 'success') {
+            myStatusText = canViewLogistics ? '已成团 · 可查看物流' : '已成团 · 可查看订单';
+        } else {
+            myStatusText = '已支付 · 等待成团';
+        }
+    } else if (detail.my_payment_status === 'unpaid') {
+        myStatusText = '未支付 · 支付后自动加入';
+    } else if (detail.my_payment_status === 'cancelled') {
+        myStatusText = detail.status === 'open'
+            ? '原订单已取消 · 当前团状态独立继续'
+            : '原订单已取消 · 本团已结束';
+    }
+
+    return {
+        _canViewOrder: canViewOrder,
+        _canViewLogistics: canViewLogistics,
+        _myStatusText: myStatusText,
+        _successActionText: canViewLogistics ? '查看物流' : '查看订单',
+        _successActionSubText: canViewLogistics
+            ? '订单已发货，查看当前配送进度'
+            : '拼团成功，订单已进入后续履约流程'
+    };
+}
+
 Page({
     data: {
         statusBarHeight: 20,
@@ -75,6 +112,9 @@ Page({
                 // 成员进度
                 const cur = d.current_members || 0;
                 const min = d.min_members || 2;
+                if ((d.status === 'open' || d.status === 'pending') && min > 0 && cur >= min) {
+                    d.status = 'success';
+                }
                 d._progressPct = Math.min(100, Math.round(cur / min * 100));
                 d._needMore = Math.max(0, min - cur);
                 const act = d.activity || {};
@@ -119,6 +159,7 @@ Page({
                         is_me: m.openid === myOpenid
                     }));
                 }
+                Object.assign(d, buildDetailUiState(d));
                 this.setData({ detail: d, loading: false });
             } else {
                 wx.showToast({ title: res.message || '加载失败', icon: 'none' });
@@ -180,6 +221,16 @@ Page({
         if (orderId) {
             wx.navigateTo({ url: `/pages/order/detail?id=${orderId}` });
         }
+    },
+
+    onGoMyLogistics() {
+        const d = this.data.detail;
+        const orderId = d && (d.my_order_id || d.my_order_no);
+        if (orderId && d.my_tracking_no && d.my_delivery_type !== 'pickup') {
+            wx.navigateTo({ url: `/pages/logistics/tracking?order_id=${orderId}` });
+            return;
+        }
+        this.onGoMyOrder();
     },
 
     onGoPayMyOrder() {

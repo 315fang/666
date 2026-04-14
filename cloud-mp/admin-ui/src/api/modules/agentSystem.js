@@ -22,7 +22,6 @@ export const updateRechargeConfig = (data) => request({ url: '/agent-system/rech
 export const getDividendPreview = (params) => request({ url: '/agent-system/dividend/preview', method: 'get', params })
 export const executeDividend = (data) => request({ url: '/agent-system/dividend/execute', method: 'post', data })
 
-export const getExitApplications = (params) => request({ url: '/agent-system/exit-applications', method: 'get', params })
 export const createExitApplication = (userId, data) => request({ url: `/agent-system/exit-applications/${userId}`, method: 'post', data })
 export const reviewExitApplication = (id, data) => request({ url: `/agent-system/exit-applications/${id}/review`, method: 'put', data })
 

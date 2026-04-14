@@ -1,9 +1,10 @@
 /** pages/logistics/tracking.wxss **/
 .container { min-height: 100vh; background: #F7F8FA; }
-.nav-bar { display: flex; align-items: center; justify-content: space-between; padding: 12rpx 24rpx; background: #FFFFFF; border-bottom: 1rpx solid #F0F0F0; }
-.nav-back { width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; }
+.nav-bar { display: flex; align-items: center; padding: 12rpx 24rpx; background: #FFFFFF; border-bottom: 1rpx solid #F0F0F0; }
+.nav-back { width: 220rpx; height: 56rpx; display: flex; align-items: center; justify-content: flex-start; flex-shrink: 0; }
 .nav-icon { width: 32rpx; height: 32rpx; }
-.nav-title { font-size: 32rpx; font-weight: 700; color: #1A1A1A; }
+.nav-title { flex: 1; text-align: center; font-size: 32rpx; font-weight: 700; color: #1A1A1A; }
+.nav-actions { width: 220rpx; min-width: 220rpx; height: 56rpx; display: flex; align-items: center; justify-content: flex-end; padding-right: 12rpx; box-sizing: border-box; flex-shrink: 0; }
 .refresh-btn { font-size: 26rpx; color: #6366F1; font-weight: 600; cursor: pointer; }
 .refresh-btn-placeholder { color: #94A3B8; }
 
@@ -20,7 +21,7 @@
 .retry-btn { background: rgba(99,102,241,0.1); color: #6366F1; font-size: 26rpx; font-weight: 700; padding: 16rpx 40rpx; border-radius: 50rpx; cursor: pointer; }
 
 /* Status header */
-.status-header { display: flex; align-items: center; gap: 16rpx; padding: 28rpx 24rpx; margin: 16rpx 24rpx; border-radius: 20rpx; position: relative; }
+.status-header { display: flex; align-items: center; gap: 16rpx; padding: 28rpx 24rpx; margin: 16rpx 24rpx; border-radius: 20rpx; position: relative; background: linear-gradient(135deg, #6B7280, #4B5563); }
 .status-header.in_transit { background: linear-gradient(135deg, #6366F1, #8B5CF6); }
 .status-header.delivered { background: linear-gradient(135deg, #10B981, #059669); }
 .status-header.dispatching { background: linear-gradient(135deg, #3B82F6, #1D4ED8); }
@@ -34,7 +35,10 @@
 .status-icon { width: 40rpx; height: 40rpx; filter: invert(1); }
 .status-info { flex: 1; }
 .status-text { display: block; font-size: 30rpx; font-weight: 800; color: #FFFFFF; }
+.tracking-row { display: flex; align-items: center; gap: 12rpx; margin-top: 4rpx; }
 .tracking-no, .company { display: block; font-size: 20rpx; color: rgba(255,255,255,0.8); margin-top: 4rpx; }
+.tracking-row .tracking-no { margin-top: 0; }
+.copy-btn { min-width: 64rpx; height: 36rpx; padding: 0 14rpx; border-radius: 999rpx; border: 1rpx solid rgba(255,255,255,0.32); background: rgba(255,255,255,0.16); color: #FFFFFF; font-size: 20rpx; line-height: 36rpx; text-align: center; box-sizing: border-box; }
 .cache-badge { font-size: 16rpx; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.15); padding: 4rpx 10rpx; border-radius: 20rpx; }
 
 /* Order bar */
@@ -58,5 +62,5 @@
 .empty-trace { text-align: center; padding: 40rpx; font-size: 24rpx; color: #AAA; }
 
 /* Query time */
-.query-time { text-align: center; padding: 20rpx; font-size: 20rpx; color: #CCC; display: flex; align-items: center; justify-content: center; gap: 10rpx; }
+.query-time { text-align: center; padding: 20rpx; font-size: 20rpx; color: #94A3B8; display: flex; align-items: center; justify-content: center; gap: 10rpx; }
 .mock-badge { background: rgba(245, 158, 11, 0.1); color: #D97706; font-size: 18rpx; padding: 4rpx 10rpx; border-radius: 20rpx; }

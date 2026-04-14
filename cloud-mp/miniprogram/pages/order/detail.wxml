@@ -228,11 +228,11 @@
     </view>
     <view class="info-row">
       <text class="info-label">发货方式</text>
-      <text class="info-value">{{order.fulfillment_type === 'Agent' || order.fulfillment_type === 'Agent_Pending' ? '团队代理发货' : '平台直发'}}</text>
+      <text class="info-value">{{order.fulfillment_type === 'Agent' || order.fulfillment_type === 'Agent_Pending' || order.fulfillment_type === 'agent' || order.fulfillment_type === 'agent_pending' ? '团队代理发货' : '平台直发'}}</text>
     </view>
-    <view class="info-row" wx:if="{{order.remark}}">
+    <view class="info-row" wx:if="{{order.memo}}">
       <text class="info-label">备注</text>
-      <text class="info-value">{{order.remark}}</text>
+      <text class="info-value">{{order.memo}}</text>
     </view>
   </view>
 

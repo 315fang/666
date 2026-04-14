@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
+const Busboy = require('busboy');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -263,6 +264,8 @@ function inferRefundResumeOrderStatus(order) {
     return 'pending_payment';
 }
 
+const ORDER_SHIPPABLE_STATUSES = new Set(['paid', 'agent_confirmed', 'shipping_requested']);
+
 function normalizeAdminPermissionKey(permission) {
     const normalized = pickString(permission).trim();
     return ({
@@ -332,6 +335,24 @@ function toNumber(value, fallback = 0) {
 
 function roundMoney(v) {
     return Math.round((Number(v) || 0) * 100) / 100;
+}
+
+function sanitizeWalletAccountDocId(value) {
+    return String(value).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function getWalletAccountUserIds(user = {}) {
+    return [...new Set([user.id, user._id, user._legacy_id].filter((value) => value !== null && value !== undefined && value !== ''))];
+}
+
+function buildWalletAccountDocId(user = {}) {
+    const primary = getWalletAccountUserIds(user)[0] || pickString(user.openid).trim();
+    return primary ? `wallet-${sanitizeWalletAccountDocId(primary)}` : '';
+}
+
+function findWalletAccountByUser(walletAccounts = [], user = {}) {
+    const targets = new Set(getWalletAccountUserIds(user).map((value) => String(value)));
+    return walletAccounts.find((account) => targets.has(String(account.user_id))) || null;
 }
 
 function toArray(value) {
@@ -550,6 +571,10 @@ function isCloudFileId(value) {
     return /^cloud:\/\//i.test(String(value || ''));
 }
 
+function pickAssetRef(source = {}) {
+    return pickString(source.file_id || source.image_url || source.url || source.image || source.cover_image || source.coverImage).trim();
+}
+
 function getManagedCloud() {
     if (cachedManagedCloud !== undefined) return cachedManagedCloud;
     try {
@@ -605,7 +630,7 @@ async function batchResolveCloudUrls(urls) {
 
 async function normalizeBannerRecordAsync(banner) {
     const fileId = banner.file_id || '';
-    const imageUrl = await resolveAssetValue(banner.image_url || banner.url || banner.image || banner.cover_image || fileId);
+    const imageUrl = await resolveAssetValue(pickAssetRef(banner) || fileId);
     const isActive = toBoolean(banner.status ?? banner.is_active ?? 1) ? 1 : 0;
     return {
         ...banner,
@@ -624,7 +649,7 @@ async function normalizeBannerRecordAsync(banner) {
 
 async function normalizePopupAdConfigAsync(config) {
     const fileId = config.file_id || '';
-    const imageUrl = await resolveAssetValue(config.image_url || config.url || fileId);
+    const imageUrl = await resolveAssetValue(pickAssetRef(config) || fileId);
     return {
         enabled: toBoolean(config.enabled),
         title: pickString(config.title),
@@ -964,7 +989,7 @@ function productWithRelations(product, categories, skus, reviews) {
 
 function normalizeBannerRecord(banner) {
     const fileId = banner.file_id || '';
-    const imageUrl = assetUrl(banner.image_url || banner.url || banner.image || banner.cover_image || fileId);
+    const imageUrl = assetUrl(pickAssetRef(banner) || fileId);
     const isActive = toBoolean(banner.status ?? banner.is_active ?? 1) ? 1 : 0;
     return {
         ...banner,
@@ -983,7 +1008,7 @@ function normalizeBannerRecord(banner) {
 
 function normalizePopupAdConfig(config) {
     const fileId = config.file_id || '';
-    const imageUrl = assetUrl(config.image_url || config.url || fileId);
+    const imageUrl = assetUrl(pickAssetRef(config) || fileId);
     return {
         enabled: toBoolean(config.enabled),
         title: pickString(config.title),
@@ -1000,11 +1025,15 @@ function getMiniProgramDefault() {
 }
 
 function getMiniProgramConfigSnapshot() {
+    const configRows = getCollection('configs');
     const appConfigs = getCollection('app_configs');
+    const fromConfigs = configRows.find((item) => item.config_key === 'mini_program_config' || item.key === 'mini_program_config');
     const fromConfigRow = appConfigs.find((item) => item.config_key === 'mini_program_config');
-    const fallback = fromConfigRow && typeof fromConfigRow.config_value === 'object'
-        ? fromConfigRow.config_value
-        : getMiniProgramDefault();
+    const fallback = fromConfigs && typeof (fromConfigs.config_value ?? fromConfigs.value) === 'object'
+        ? (fromConfigs.config_value ?? fromConfigs.value)
+        : (fromConfigRow && typeof fromConfigRow.config_value === 'object'
+            ? fromConfigRow.config_value
+            : getMiniProgramDefault());
     return configContract.normalizeMiniProgramConfig(getSingleton('mini-program-config', fallback));
 }
 
@@ -1045,15 +1074,22 @@ function normalizeOrderStatusGroup(status) {
 }
 
 function buildOrderRecord(order, users, products, commissions) {
-    const orderId = Number(order.id || order._legacy_id || order._id || 0);
+    const orderLookupId = primaryId(order) || order.order_no || '';
     const buyer = findUserByAnyId(users, order.openid)
         || findUserByAnyId(users, order.buyer_id)
         || findUserByAnyId(users, order.user_id)
         || null;
+    const directReferrer = findUserByAnyId(users, order.direct_referrer_openid || getUserParentRef(buyer));
+    const indirectReferrer = findUserByAnyId(users, order.indirect_referrer_openid || getUserParentRef(directReferrer));
+    const nearestAgent = findUserByAnyId(users, order.nearest_agent_openid || order.fulfillment_partner_openid);
+    const fulfillmentPartner = findUserByAnyId(users, order.fulfillment_partner_openid || order.nearest_agent_openid);
+    const pickupVerifier = findUserByAnyId(users, order.pickup_verified_by);
     const orderItems = toArray(order.items);
     const primaryItem = orderItems[0] || null;
     const product = findByLookup(products, order.product_id ?? primaryItem?.product_id) || null;
-    const orderCommissions = commissions.filter((item) => Number(item.order_id) === orderId);
+    const orderCommissions = commissions.filter((item) =>
+        rowMatchesLookup(item, orderLookupId, [item.order_id, item.order_no, order.order_no])
+    );
     const normalizedItems = (orderItems.length ? orderItems : [{
         product_id: order.product_id,
         qty: order.qty ?? order.quantity ?? 1,
@@ -1094,9 +1130,13 @@ function buildOrderRecord(order, users, products, commissions) {
         phone: pickString(buyer.phone),
         member_no: pickString(buyer.member_no || buyer.my_invite_code || buyer.invite_code),
         invite_code: pickString(buyer.my_invite_code || buyer.invite_code || buyer.member_no),
-        role_level: toNumber(buyer.role_level ?? buyer.distributor_level, 0),
+        role_level: getUserRoleLevel(buyer),
         parent_id: getUserParentRef(buyer)
     } : null;
+    const normalizedDirectReferrer = buildUserRelationSummary(directReferrer);
+    const normalizedIndirectReferrer = buildUserRelationSummary(indirectReferrer);
+    const normalizedNearestAgent = buildUserRelationSummary(nearestAgent);
+    const normalizedFulfillmentPartner = buildUserRelationSummary(fulfillmentPartner);
     const normalizedProduct = {
         ...(product || {}),
         id: product ? primaryId(product) : (primaryItem?.product_id || order.product_id || ''),
@@ -1105,7 +1145,8 @@ function buildOrderRecord(order, users, products, commissions) {
     };
     return {
         ...order,
-        id: orderId || order.id || order._legacy_id || order._id,
+        id: orderLookupId,
+        display_id: buildDisplayId(order, orderLookupId),
         openid: pickString(order.openid),
         status_group: orderContract.normalizeOrderStatusGroup(order.status),
         status_text: orderContract.getOrderStatusText(order.status),
@@ -1128,6 +1169,35 @@ function buildOrderRecord(order, users, products, commissions) {
         address: parseAddressSnapshot(order.address_snapshot),
         address_snapshot: parseAddressSnapshot(order.address_snapshot),
         pickup_station: order.pickupStation || order.pickup_station || null,
+        direct_referrer_id: order.direct_referrer_id || normalizedDirectReferrer?.id || '',
+        direct_referrer_openid: order.direct_referrer_openid || normalizedDirectReferrer?.openid || '',
+        direct_referrer_role_level: toNumber(order.direct_referrer_role_level, normalizedDirectReferrer?.role_level || 0),
+        indirect_referrer_id: order.indirect_referrer_id || normalizedIndirectReferrer?.id || '',
+        indirect_referrer_openid: order.indirect_referrer_openid || normalizedIndirectReferrer?.openid || '',
+        indirect_referrer_role_level: toNumber(order.indirect_referrer_role_level, normalizedIndirectReferrer?.role_level || 0),
+        nearest_agent_id: order.nearest_agent_id || normalizedNearestAgent?.id || '',
+        nearest_agent_openid: order.nearest_agent_openid || normalizedNearestAgent?.openid || '',
+        nearest_agent_role_level: toNumber(order.nearest_agent_role_level, normalizedNearestAgent?.role_level || 0),
+        fulfillment_partner_id: order.fulfillment_partner_id || normalizedFulfillmentPartner?.id || '',
+        fulfillment_partner_openid: order.fulfillment_partner_openid || normalizedFulfillmentPartner?.openid || '',
+        fulfillment_partner_role_level: toNumber(order.fulfillment_partner_role_level, normalizedFulfillmentPartner?.role_level || 0),
+        direct_referrer: normalizedDirectReferrer,
+        indirect_referrer: normalizedIndirectReferrer,
+        nearest_agent: normalizedNearestAgent,
+        distributor: normalizedDirectReferrer,
+        agent: normalizedFulfillmentPartner,
+        agent_info: normalizedFulfillmentPartner,
+        agent_id: order.agent_id || order.nearest_agent_id || normalizedNearestAgent?.id || '',
+        pickup_verified_by: pickString(order.pickup_verified_by),
+        pickup_verified_station_id: pickString(order.pickup_verified_station_id),
+        pickup_verified_user: buildUserRelationSummary(pickupVerifier),
+        locked_agent_cost: toNumber(order.locked_agent_cost_total ?? order.locked_agent_cost, 0),
+        middle_commission_total: toNumber(
+            order.middle_commission_total,
+            orderCommissions
+                .filter((item) => pickString(item.type).toLowerCase() === 'agent_fulfillment')
+                .reduce((sum, item) => sum + toNumber(item.amount, 0), 0)
+        ),
         commissions: orderCommissions
     };
 }
@@ -1138,6 +1208,18 @@ function patchOrder(id, patcher) {
 
 function primaryId(row) {
     return row?.id ?? row?._legacy_id ?? row?._id ?? null;
+}
+
+function buildDisplayId(row, fallback = '') {
+    const legacyId = row?._legacy_id;
+    if (legacyId !== null && legacyId !== undefined && legacyId !== '') return String(legacyId);
+
+    const rawId = row?.id;
+    if (rawId !== null && rawId !== undefined && rawId !== '' && /^\d+$/.test(String(rawId))) {
+        return String(rawId);
+    }
+
+    return pickString(row?._id || rawId || fallback);
 }
 
 function valueTokens(value) {
@@ -1297,13 +1379,127 @@ function getUserParentRef(user) {
         ?? null;
 }
 
+function getUserRoleLevel(user = {}) {
+    return toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+}
+
+function normalizeAgentRoleLevel(roleLevel) {
+    const normalized = toNumber(roleLevel, 0);
+    if (normalized >= 5) return 5;
+    if (normalized === 4) return 4;
+    if (normalized === 3) return 3;
+    return 0;
+}
+
+function resolveSupplyPriceByRole(product = {}, roleLevel = 0) {
+    const normalizedRole = normalizeAgentRoleLevel(roleLevel);
+    if (!normalizedRole) return null;
+    const fieldName = `supply_price_b${normalizedRole === 5 ? 3 : normalizedRole}`;
+    const amount = toNumber(product?.[fieldName], NaN);
+    return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function buildUserRelationSummary(user = {}) {
+    if (!user || typeof user !== 'object') return null;
+    return {
+        id: primaryId(user) || '',
+        openid: pickString(user.openid),
+        nickname: getUserNickname(user),
+        avatar: getUserAvatar(user),
+        role_level: getUserRoleLevel(user)
+    };
+}
+
 function getUserStatus(user) {
     if (user?.status == null || user?.status === '') return 1;
     return toBoolean(user.status) ? 1 : 0;
 }
 
+function buildUserLookupExtras(user = {}) {
+    return [
+        user?._legacy_id,
+        user?.openid,
+        user?.phone,
+        user?.member_no,
+        user?.my_invite_code,
+        user?.invite_code
+    ];
+}
+
 function findUserByAnyId(users, value) {
-    return findByLookup(users, value, (user) => [user?.openid, user?.phone, user?.member_no, user?.my_invite_code]);
+    return findByLookup(users, value, (user) => buildUserLookupExtras(user));
+}
+
+function normalizeUserSearchValue(value) {
+    return pickString(value).trim().toLowerCase();
+}
+
+function buildUserKeywordSearchText(user = {}) {
+    return [
+        getUserNickname(user),
+        user?.phone,
+        user?.openid,
+        user?.member_no,
+        user?.my_invite_code,
+        user?.invite_code,
+        primaryId(user),
+        user?._legacy_id
+    ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function userMatchesKeyword(user, keyword) {
+    const normalizedKeyword = normalizeUserSearchValue(keyword);
+    if (!normalizedKeyword) return true;
+    return buildUserKeywordSearchText(user).includes(normalizedKeyword);
+}
+
+function userMatchesLookup(user, lookup) {
+    if (lookup == null || lookup === '') return true;
+    return rowMatchesLookup(user, lookup, buildUserLookupExtras(user));
+}
+
+function userMatchesMemberNo(user, memberNo) {
+    const normalizedMemberNo = normalizeUserSearchValue(memberNo);
+    if (!normalizedMemberNo) return true;
+    const tokens = [
+        user?.member_no,
+        user?.my_invite_code,
+        user?.invite_code
+    ].flatMap((value) => valueTokens(value).map((token) => String(token).toLowerCase()));
+    return tokens.includes(normalizedMemberNo);
+}
+
+function normalizeUserStatusFilter(value) {
+    const normalized = normalizeUserSearchValue(value);
+    if (!normalized) return null;
+    if (['1', 'true', 'active', 'enabled', 'normal'].includes(normalized)) return 1;
+    if (['0', 'false', 'disabled', 'inactive', 'blocked', 'banned'].includes(normalized)) return 0;
+    const numeric = Number(normalized);
+    return Number.isFinite(numeric) ? numeric : null;
+}
+
+function getUserSearchScore(user, keyword) {
+    const normalizedKeyword = normalizeUserSearchValue(keyword);
+    if (!normalizedKeyword) return Number.POSITIVE_INFINITY;
+
+    const exactTokens = rowLookupTokens(user, buildUserLookupExtras(user)).map((token) => String(token).toLowerCase());
+    if (exactTokens.includes(normalizedKeyword)) return 0;
+
+    const memberNoTokens = [
+        user?.member_no,
+        user?.my_invite_code,
+        user?.invite_code
+    ].flatMap((value) => valueTokens(value).map((token) => String(token).toLowerCase()));
+    if (memberNoTokens.some((token) => token.startsWith(normalizedKeyword))) return 1;
+
+    const phoneTokens = valueTokens(user?.phone).map((token) => String(token).toLowerCase());
+    if (phoneTokens.some((token) => token.startsWith(normalizedKeyword))) return 1;
+
+    const nickname = getUserNickname(user).trim().toLowerCase();
+    if (nickname === normalizedKeyword) return 2;
+    if (nickname.startsWith(normalizedKeyword)) return 3;
+
+    return buildUserKeywordSearchText(user).includes(normalizedKeyword) ? 4 : Number.POSITIVE_INFINITY;
 }
 
 function orderBelongsToUser(order, user) {
@@ -1378,7 +1574,7 @@ function buildUserGraph(users) {
     };
 
     users.forEach((user) => {
-        rowLookupTokens(user, [user?.openid, user?.phone, user?.member_no, user?.my_invite_code]).forEach((token) => registerToken(token, user));
+        rowLookupTokens(user, buildUserLookupExtras(user)).forEach((token) => registerToken(token, user));
         registerToken(primaryId(user), user);
         registerToken(user?._legacy_id, user);
         registerToken(user?._id, user);
@@ -1393,7 +1589,8 @@ function buildUserGraph(users) {
             openid: value,
             phone: value,
             member_no: value,
-            my_invite_code: value
+            my_invite_code: value,
+            invite_code: value
         };
         for (const token of rowLookupTokens(probe, [value])) {
             const hit = tokenToUser.get(token);
@@ -1509,6 +1706,25 @@ function buildUserListRecord(user, context) {
             teamCount: refereeCount,
             totalCommission: 0
         }
+    };
+}
+
+function buildUserSearchRecord(user) {
+    const canonical = userContract.buildCanonicalUser(user);
+    return {
+        id: canonical.id,
+        _id: canonical._id,
+        _legacy_id: user?._legacy_id ?? null,
+        nickname: canonical.nickname,
+        avatar_url: canonical.avatar_url,
+        phone: canonical.phone,
+        member_no: canonical.member_no,
+        invite_code: canonical.invite_code,
+        openid: canonical.openid,
+        role_level: canonical.role_level,
+        role_name: canonical.role_name,
+        status: getUserStatus(user),
+        status_text: canonical.status_text
     };
 }
 
@@ -2017,6 +2233,7 @@ function buildWithdrawalRecord(withdrawal, users) {
     return {
         ...withdrawal,
         id: primaryId(withdrawal),
+        display_id: buildDisplayId(withdrawal),
         amount,
         fee,
         actual_amount: toNumber(withdrawal.actual_amount, amount - fee),
@@ -2064,6 +2281,7 @@ function buildRefundRecord(refund, users, orders, products, skus) {
     return {
         ...refund,
         id: primaryId(refund),
+        display_id: buildDisplayId(refund),
         order_id: pickString(primaryId(order) || refund.order_id || refund.order_no),
         openid: pickString(refund.openid || order?.openid || ''),
         amount: toNumber(refund.amount, 0),
@@ -2085,6 +2303,7 @@ function buildRefundRecord(refund, users, orders, products, skus) {
             product: firstItem?.product || null,
             payment_method: paymentMethod,
             payment_method_text: orderContract.getPaymentMethodText(paymentMethod),
+            pay_amount: toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0),
             points_used: toNumber(order.points_used, 0),
             coupon_discount: toNumber(order.coupon_discount, 0)
         } : {
@@ -2101,23 +2320,104 @@ function buildRefundRecord(refund, users, orders, products, skus) {
     };
 }
 
+function buildOrderSourceText(order = {}) {
+    const sourceOrder = order && typeof order === 'object' ? order : {};
+    const firstItem = toArray(sourceOrder.items)[0] || {};
+    const orderType = pickString(sourceOrder.type || sourceOrder.order_type || firstItem.activity_type).toLowerCase();
+    if (orderType === 'group' || sourceOrder.group_no || firstItem.group_no || sourceOrder.group_activity_id || firstItem.group_activity_id) {
+        return '拼团订单';
+    }
+    if (orderType === 'slash' || sourceOrder.slash_no || firstItem.slash_no) {
+        return '砍价订单';
+    }
+    if (pickString(sourceOrder.delivery_type) === 'pickup') {
+        return '到店自提订单';
+    }
+    return '小程序商城订单';
+}
+
+function buildOrderProductSummary(order = {}) {
+    const sourceOrder = order && typeof order === 'object' ? order : {};
+    const firstItem = toArray(sourceOrder.items)[0] || {};
+    return pickString(
+        firstItem.snapshot_name
+        || firstItem.name
+        || sourceOrder.product?.name
+        || sourceOrder.product_name
+        || ''
+    );
+}
+
+function getCommissionTypeLabel(type) {
+    const normalized = pickString(type || 'other').toLowerCase();
+    const labelMap = {
+        direct: '直推佣金',
+        indirect: '团队佣金',
+        team: '团队佣金',
+        same_level: '平级奖励',
+        peer: '平级奖励',
+        pickup_subsidy: '自提补贴',
+        agent_assist: '动销奖励',
+        assist: '动销奖励',
+        agent_fulfillment: '发货利润',
+        region_agent: '区域代理奖',
+        year_end_dividend: '年终分红',
+        stock_diff: '级差利润',
+        gap: '级差收益',
+        self: '自购返利',
+        admin_deduct: '系统扣除',
+        admin_credit: '系统补发',
+        admin_adjustment: '系统调整'
+    };
+    return labelMap[normalized] || normalized || '其他';
+}
+
+function buildCommissionSourceText(commission = {}, order = {}) {
+    const type = pickString(commission.type).toLowerCase();
+    const sourceMap = {
+        direct: '来自直推下级订单',
+        indirect: '来自团队下级订单',
+        same_level: '来自平级奖励结算',
+        pickup_subsidy: '来自自提核销补贴',
+        agent_assist: '来自代理协助奖励',
+        agent_fulfillment: '来自代理发货利润',
+        region_agent: '来自区域代理收益',
+        year_end_dividend: '来自年终分红',
+        stock_diff: '来自级差利润',
+        gap: '来自级差收益',
+        self: '来自自购返利'
+    };
+    return sourceMap[type] || `来自${buildOrderSourceText(order)}`;
+}
+
 function buildCommissionRecord(commission, users, orders) {
     const order = findByLookup(orders, commission.order_id || commission.order_no, (row) => [row.order_no]);
     const user = findUserByAnyId(users, commission.openid || commission.user_id || commission.receiver_openid || commission.beneficiary_openid || order?.openid || order?.buyer_id);
+    const fromUser = findUserByAnyId(users, commission.from_openid || commission.source_openid || order?.openid || order?.buyer_id);
     return {
         ...commission,
         id: primaryId(commission),
+        display_id: buildDisplayId(commission),
         amount: toNumber(commission.amount, 0),
         level: toNumber(commission.level || commission.commission_level, 1),
         status: pickString(commission.status || 'unknown'),
+        type_text: getCommissionTypeLabel(commission.type),
         user_id: primaryId(user) || commission.user_id || commission.openid || null,
         user: buildUserTiny(user),
+        from_user: buildUserTiny(fromUser),
+        source_text: buildCommissionSourceText(commission, order),
+        order_source_text: buildOrderSourceText(order),
         order: order ? {
             id: primaryId(order),
-            order_no: pickString(order.order_no)
+            order_no: pickString(order.order_no),
+            source_text: buildOrderSourceText(order),
+            product_summary: buildOrderProductSummary(order),
+            delivery_type: pickString(order.delivery_type)
         } : {
             id: commission.order_id || null,
-            order_no: pickString(commission.order_no)
+            order_no: pickString(commission.order_no),
+            source_text: '-',
+            product_summary: ''
         }
     };
 }
@@ -2284,6 +2584,194 @@ function createCommissionEntry(payload = {}) {
     return row;
 }
 
+function collectReferralChain(users, buyer, maxDepth = 8) {
+    const chain = [];
+    const seen = new Set();
+    let currentRef = getUserParentRef(buyer);
+    while (currentRef && chain.length < maxDepth) {
+        const nextUser = findUserByAnyId(users, currentRef);
+        if (!nextUser) break;
+        const key = String(primaryId(nextUser) || nextUser.openid || '');
+        if (!key || seen.has(key)) break;
+        seen.add(key);
+        chain.push(nextUser);
+        currentRef = getUserParentRef(nextUser);
+    }
+    return chain;
+}
+
+function buildOrderItemsForResolution(order = {}) {
+    const items = toArray(order.items);
+    if (items.length) return items;
+    return [{
+        product_id: order.product_id,
+        qty: order.qty ?? order.quantity ?? 1,
+        quantity: order.qty ?? order.quantity ?? 1,
+        item_amount: toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0)
+    }];
+}
+
+function resolveLockedAgentUnitCostForOrderItem(orderItem = {}, product = {}, roleLevel = 0) {
+    const explicit = toNumber(orderItem.locked_agent_cost, NaN);
+    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+    return resolveSupplyPriceByRole(product, roleLevel);
+}
+
+function buildOrderFulfillmentResolution(order = {}, users = [], products = []) {
+    const buyer = findUserByAnyId(users, order.openid) || findUserByAnyId(users, order.buyer_id) || findUserByAnyId(users, order.user_id) || null;
+    const referralChain = buyer ? collectReferralChain(users, buyer) : [];
+    const directReferrer = referralChain[0] || null;
+    const indirectReferrer = referralChain[1] || null;
+    const nearestAgent = (pickString(order.delivery_type || 'express') === 'express')
+        ? (referralChain.find((user) => getUserRoleLevel(user) >= 3) || null)
+        : null;
+    const nearestAgentRoleLevel = nearestAgent ? normalizeAgentRoleLevel(getUserRoleLevel(nearestAgent)) : 0;
+    const items = buildOrderItemsForResolution(order);
+    const canCandidateFulfill = !!nearestAgent && nearestAgentRoleLevel > 0;
+    let canAgentFulfill = canCandidateFulfill;
+    let lockedAgentCostTotal = 0;
+    const normalizedItems = items.map((item) => {
+        const qty = Math.max(1, toNumber(item.qty ?? item.quantity, 1));
+        const product = findByLookup(products, item.product_id) || null;
+        const lockedAgentCost = canCandidateFulfill ? resolveLockedAgentUnitCostForOrderItem(item, product || {}, nearestAgentRoleLevel) : null;
+        if (canAgentFulfill && !(Number.isFinite(lockedAgentCost) && lockedAgentCost > 0)) {
+            canAgentFulfill = false;
+        }
+        return {
+            ...item,
+            qty,
+            quantity: qty,
+            locked_agent_cost: Number.isFinite(lockedAgentCost) && lockedAgentCost > 0 ? roundMoney(lockedAgentCost) : null,
+            locked_agent_cost_total: Number.isFinite(lockedAgentCost) && lockedAgentCost > 0 ? roundMoney(lockedAgentCost * qty) : null
+        };
+    });
+    const finalizedItems = normalizedItems.map((item) => {
+        if (!canAgentFulfill) {
+            return {
+                ...item,
+                locked_agent_cost: null,
+                locked_agent_cost_total: null
+            };
+        }
+        lockedAgentCostTotal += toNumber(item.locked_agent_cost_total, 0);
+        return item;
+    });
+    return {
+        buyer,
+        directReferrer,
+        indirectReferrer,
+        nearestAgent,
+        fulfillmentPartner: canAgentFulfill ? nearestAgent : null,
+        fulfillmentType: canAgentFulfill ? 'agent' : 'platform',
+        lockedAgentCostTotal: canAgentFulfill ? roundMoney(lockedAgentCostTotal) : 0,
+        items: finalizedItems
+    };
+}
+
+function removeConflictingReferralCommissions(order = {}, claimant = null) {
+    if (!claimant?.openid) return 0;
+    const users = getCollection('users');
+    const rows = getCollection('commissions');
+    let changed = 0;
+    const nextRows = rows.map((row) => {
+        if (!rowMatchesLookup(row, order._id || order.id || order.order_no, [row.order_id, row.order_no])) return row;
+        if (!rowMatchesLookup(row, claimant.openid, [row.openid, row.user_id])) return row;
+        if (!['direct', 'indirect'].includes(pickString(row.type).toLowerCase())) return row;
+        const result = cancelCommissionRow(row, users, '履约利润优先，推荐佣金归零');
+        if (result.changed) changed += 1;
+        return result.row;
+    });
+    if (changed) {
+        saveCollection('users', users);
+        saveCollection('commissions', nextRows);
+    }
+    return changed;
+}
+
+function ensureAgentFulfillmentCommissionForOrder(order) {
+    const fulfillmentType = pickString(order?.fulfillment_type).trim().toLowerCase();
+    if (fulfillmentType !== 'agent') return null;
+    const claimantRef = order?.fulfillment_partner_openid || order?.nearest_agent_openid || order?.agent_info?.openid || order?.agent?.openid || null;
+    if (!claimantRef) return null;
+    const users = getCollection('users');
+    const claimant = findUserByAnyId(users, claimantRef);
+    if (!claimant?.openid) return null;
+    const rows = getCollection('commissions');
+    const existing = rows.find((row) =>
+        rowMatchesLookup(row, order._id || order.id || order.order_no, [row.order_id, row.order_no])
+        && pickString(row.type).toLowerCase() === 'agent_fulfillment'
+        && rowMatchesLookup(row, claimant.openid, [row.openid, row.user_id])
+    );
+    if (existing) return existing;
+    const payAmount = roundMoney(toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0));
+    const lockedAgentCost = roundMoney(toNumber(order.locked_agent_cost_total ?? order.locked_agent_cost, 0));
+    const amount = roundMoney(payAmount - lockedAgentCost);
+    if (amount <= 0) return null;
+    removeConflictingReferralCommissions(order, claimant);
+    return createCommissionEntry({
+        openid: claimant.openid,
+        user_id: primaryId(claimant) || claimant.openid,
+        from_openid: order.openid || order.buyer_id || '',
+        order_id: order._id || order.id || null,
+        order_no: pickString(order.order_no),
+        amount,
+        level: getUserRoleLevel(claimant),
+        type: 'agent_fulfillment',
+        locked_agent_cost: lockedAgentCost,
+        pay_amount: payAmount,
+        description: `代理发货利润：实付 ${payAmount} - 锁定成本 ${lockedAgentCost}`
+    });
+}
+
+function repairOrderFulfillmentChain(orderId) {
+    const orders = getCollection('orders');
+    const products = getCollection('products');
+    const users = getCollection('users');
+    const commissions = getCollection('commissions');
+    const current = findByLookup(orders, orderId, (row) => [row.order_no]);
+    if (!current) return { ok: false, message: '订单不存在' };
+    const status = pickString(current.status).toLowerCase();
+    if (['shipped', 'completed', 'refunding', 'refunded', 'cancelled'].includes(status)) {
+        return { ok: false, message: `当前状态不允许修复履约链：${current.status || '-'}` };
+    }
+    const hasSettledCommission = commissions.some((row) =>
+        rowMatchesLookup(row, primaryId(current) || current.order_no, [row.order_id, row.order_no])
+        && ['settled', 'completed'].includes(pickString(row.status).toLowerCase())
+    );
+    if (hasSettledCommission) {
+        return { ok: false, message: '订单已发生佣金结算，不允许自动修复履约链' };
+    }
+    const resolution = buildOrderFulfillmentResolution(current, users, products);
+    const patched = patchOrder(orderId, (row) => ({
+        ...row,
+        items: resolution.items,
+        direct_referrer_id: resolution.directReferrer ? primaryId(resolution.directReferrer) : '',
+        direct_referrer_openid: pickString(resolution.directReferrer?.openid),
+        direct_referrer_role_level: resolution.directReferrer ? getUserRoleLevel(resolution.directReferrer) : 0,
+        indirect_referrer_id: resolution.indirectReferrer ? primaryId(resolution.indirectReferrer) : '',
+        indirect_referrer_openid: pickString(resolution.indirectReferrer?.openid),
+        indirect_referrer_role_level: resolution.indirectReferrer ? getUserRoleLevel(resolution.indirectReferrer) : 0,
+        nearest_agent_id: resolution.nearestAgent ? primaryId(resolution.nearestAgent) : '',
+        nearest_agent_openid: pickString(resolution.nearestAgent?.openid),
+        nearest_agent_role_level: resolution.nearestAgent ? normalizeAgentRoleLevel(getUserRoleLevel(resolution.nearestAgent)) : 0,
+        fulfillment_partner_id: resolution.fulfillmentPartner ? primaryId(resolution.fulfillmentPartner) : '',
+        fulfillment_partner_openid: pickString(resolution.fulfillmentPartner?.openid),
+        fulfillment_partner_role_level: resolution.fulfillmentPartner ? getUserRoleLevel(resolution.fulfillmentPartner) : 0,
+        distributor: buildUserRelationSummary(resolution.directReferrer),
+        agent: buildUserRelationSummary(resolution.fulfillmentPartner),
+        agent_info: buildUserRelationSummary(resolution.fulfillmentPartner),
+        fulfillment_type: resolution.fulfillmentType,
+        locked_agent_cost: resolution.fulfillmentType === 'agent' ? resolution.lockedAgentCostTotal : null,
+        locked_agent_cost_total: resolution.fulfillmentType === 'agent' ? resolution.lockedAgentCostTotal : null,
+        middle_commission_total: resolution.fulfillmentType === 'agent' ? roundMoney(toNumber(row.middle_commission_total, 0)) : 0,
+        referrer_openid: pickString(resolution.directReferrer?.openid),
+        updated_at: nowIso()
+    }));
+    return patched
+        ? { ok: true, order: patched }
+        : { ok: false, message: '订单修复失败' };
+}
+
 function resolveUserReferrer(user = {}) {
     return user.referrer_openid
         || user.parent_openid
@@ -2322,7 +2810,7 @@ function ensureAgentAssistCommissionForOrder(order) {
     if (!assistConfig || assistConfig.enabled === false) return null;
 
     const users = getCollection('users');
-    const childRef = order?.agent?.openid || order?.distributor?.openid || order?.agent_info?.openid || order?.referrer_openid || null;
+    const childRef = order?.fulfillment_partner_openid || order?.agent_info?.openid || order?.agent?.openid || order?.nearest_agent_openid || null;
     const childUser = childRef ? findUserByAnyId(users, childRef) : null;
     if (!childUser) return null;
     const parentUser = findAssistParentUser(childUser, users);
@@ -2672,8 +3160,85 @@ app.use((req, _res, next) => {
 app.use('/uploads', express.static(uploadsRoot));
 
 const upload = multer({ dest: uploadsRoot });
+function getRequestContentType(req) {
+    const headers = req && req.headers && typeof req.headers === 'object' ? req.headers : {};
+    const eventHeaders = req && req.event && req.event.headers && typeof req.event.headers === 'object' ? req.event.headers : {};
+    return String(
+        headers['content-type']
+        || headers['Content-Type']
+        || eventHeaders['content-type']
+        || eventHeaders['Content-Type']
+        || ''
+    ).trim();
+}
+function parseEventMultipartSingle(req) {
+    return new Promise((resolve, reject) => {
+        const contentType = getRequestContentType(req);
+        if (!/^multipart\/form-data/i.test(contentType)) {
+            resolve(false);
+            return;
+        }
+        const rawBody = req.event && Object.prototype.hasOwnProperty.call(req.event, 'body')
+            ? req.event.body
+            : '';
+        if (rawBody == null || rawBody === '') {
+            resolve(false);
+            return;
+        }
+        let buffer = null;
+        try {
+            buffer = Buffer.isBuffer(rawBody)
+                ? rawBody
+                : req.event?.isBase64Encoded
+                    ? Buffer.from(String(rawBody), 'base64')
+                    : Buffer.from(String(rawBody), 'binary');
+        } catch (error) {
+            reject(error);
+            return;
+        }
+        const fields = {};
+        let uploadedFile = null;
+        const busboy = Busboy({ headers: { 'content-type': contentType } });
+        busboy.on('field', (fieldname, value) => {
+            fields[fieldname] = value;
+        });
+        busboy.on('file', (fieldname, file, info) => {
+            const chunks = [];
+            const originalname = info?.filename || `upload_${Date.now()}.bin`;
+            const mimetype = info?.mimeType || 'application/octet-stream';
+            file.on('data', (chunk) => {
+                chunks.push(chunk);
+            });
+            file.on('end', () => {
+                const fileBuffer = Buffer.concat(chunks);
+                uploadedFile = {
+                    fieldname,
+                    originalname,
+                    mimetype,
+                    size: fileBuffer.length,
+                    buffer: fileBuffer
+                };
+            });
+        });
+        busboy.on('finish', () => {
+            req.body = fields;
+            if (uploadedFile) {
+                req.file = uploadedFile;
+            }
+            resolve(Boolean(uploadedFile));
+        });
+        busboy.on('error', reject);
+        busboy.end(buffer);
+    });
+}
 const uploadSingle = (req, res, next) => {
     if (req.event) {
+        const contentType = getRequestContentType(req);
+        if (/^multipart\/form-data/i.test(contentType)) {
+            return parseEventMultipartSingle(req)
+                .then(() => next())
+                .catch(next);
+        }
         return next();
     }
     return upload.single('file')(req, res, next);
@@ -2911,6 +3476,7 @@ app.delete('/admin/api/products/:id', auth, requirePermission('products'), async
 registerMarketingRoutes(app, {
     auth,
     requirePermission,
+    ensureFreshCollections,
     getCollection,
     saveCollection,
     nextId,
@@ -3326,6 +3892,13 @@ app.post('/admin/api/upload', auth, requirePermission('materials'), uploadSingle
     const bodyName = pickString(uploadBody.name || uploadBody.file_name || uploadBody.filename);
     const bodyMimeType = pickString(uploadBody.mime_type, 'application/octet-stream');
     const bodyContent = pickString(uploadBody.content_base64);
+    console.info('[admin-api] upload request reached', {
+        via_event: Boolean(req.event),
+        has_multipart_file: Boolean(req.file),
+        has_body_content: Boolean(bodyContent),
+        content_base64_length: bodyContent ? bodyContent.length : 0,
+        event_body_length: req.event && typeof req.event.body === 'string' ? req.event.body.length : 0
+    });
     let uploadFile = req.file || null;
     if (!uploadFile && bodyContent) {
         let buffer = null;
@@ -3790,27 +4363,24 @@ app.get('/admin/api/users', auth, requirePermission('users'), (req, res) => {
     const context = buildUserListContext(users, orders);
     let rows = sortByUpdatedDesc(users).map((item) => buildUserListRecord(item, context));
 
+    const lookup = pickString(req.query.lookup).trim();
     const keyword = pickString(req.query.keyword).trim().toLowerCase();
     const memberNo = pickString(req.query.member_no).trim().toLowerCase();
     const roleLevel = pickString(req.query.role_level).trim();
-    const status = pickString(req.query.status).trim();
+    const status = normalizeUserStatusFilter(req.query.status);
     const leaderId = pickString(req.query.team_leader_id).trim();
 
+    if (lookup) {
+        rows = rows.filter((item) => userMatchesLookup(item, lookup));
+    }
     if (keyword) {
-        rows = rows.filter((item) => [
-            item.nickname,
-            item.phone,
-            item.openid,
-            item.member_no,
-            item.invite_code,
-            item.id
-        ].filter(Boolean).join(' ').toLowerCase().includes(keyword));
+        rows = rows.filter((item) => userMatchesKeyword(item, keyword));
     }
     if (memberNo) {
-        rows = rows.filter((item) => [item.member_no, item.invite_code].filter(Boolean).join(' ').toLowerCase().includes(memberNo));
+        rows = rows.filter((item) => userMatchesMemberNo(item, memberNo));
     }
     if (roleLevel !== '') rows = rows.filter((item) => Number(item.role_level) === Number(roleLevel));
-    if (status !== '') rows = rows.filter((item) => Number(item.status) === Number(status));
+    if (status !== null) rows = rows.filter((item) => Number(item.status) === Number(status));
     if (leaderId) {
         const leader = context.graph.resolveUser(leaderId);
         const descendants = leader ? context.graph.getDescendants(leader) : [];
@@ -3819,6 +4389,25 @@ app.get('/admin/api/users', auth, requirePermission('users'), (req, res) => {
     }
 
     ok(res, paginate(rows, req));
+});
+
+app.get('/admin/api/users/search', auth, requirePermission('users'), (req, res) => {
+    const keyword = pickString(req.query.keyword).trim();
+    const limit = Math.max(1, Math.min(50, toNumber(req.query.limit, 20)));
+
+    if (!keyword) {
+        return ok(res, { list: [], total: 0 });
+    }
+
+    const matches = sortByUpdatedDesc(getCollection('users'))
+        .map((user) => ({ user, score: getUserSearchScore(user, keyword) }))
+        .filter((item) => Number.isFinite(item.score))
+        .sort((a, b) => a.score - b.score);
+
+    ok(res, {
+        list: matches.slice(0, limit).map(({ user }) => buildUserSearchRecord(user)),
+        total: matches.length
+    });
 });
 
 app.get('/admin/api/users/:id', auth, requirePermission('users'), (req, res) => {
@@ -3878,73 +4467,6 @@ app.put('/admin/api/users/:id/role', auth, requirePermission('user_role_manage')
     }
     createAuditLog(req.admin, 'user.role.update', 'users', { user_id: primaryId(updated), role_level: roleLevel });
     ok(res, updated);
-});
-
-app.put('/admin/api/users/:id/balance', auth, requirePermission('user_balance_adjust'), async (req, res) => {
-    const amount = toNumber(req.body?.amount, NaN);
-    if (!Number.isFinite(amount) || amount < 0) return fail(res, '请输入有效金额');
-    const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '调整原因');
-    if (!reasonCheck.ok) return fail(res, reasonCheck.message);
-    const type = pickString(req.body?.type, 'add');
-    const user = findUserByAnyId(getCollection('users'), req.params.id);
-    if (!user) return fail(res, '用户不存在', 404);
-    const userDocId = pickString(user._id || user.id);
-    const userOpenid = pickString(user.openid);
-    if (!userOpenid) return fail(res, '用户缺少 openid，不能调整余额', 400);
-    const current = toNumber(user.commission_balance ?? user.balance, 0);
-    if (type === 'subtract' && amount > current) {
-        return fail(res, `账户余额不足，当前余额 ${roundMoney(current)}，不能扣减 ${roundMoney(amount)}`, 400);
-    }
-    const delta = type === 'subtract' ? -amount : amount;
-    const nextBalance = roundMoney(current + delta);
-    const patch = {
-        balance: nextBalance,
-        commission_balance: nextBalance,
-        updated_at: nowIso()
-    };
-    if (dataStore._internals?.db) {
-        if (!userDocId) return fail(res, '用户文档不存在，无法更新余额', 500);
-        const writeOk = await directPatchDocument('users', userDocId, patch);
-        if (!writeOk) return fail(res, '余额更新失败，请稍后重试', 500);
-    } else {
-        const updated = patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...patch }));
-        if (!updated) return fail(res, '用户不存在', 404);
-    }
-    try {
-        await appendWalletLogEntry({
-            openid: userOpenid,
-            type: 'admin_adjustment',
-            amount: delta,
-            balance_before: current,
-            balance_after: nextBalance,
-            ref_type: 'admin_manual_balance',
-            ref_id: primaryId(user),
-            description: `管理员${type === 'subtract' ? '扣减' : '增加'}余额 ${roundMoney(amount)} 元`,
-            remark: reasonCheck.reason,
-            operator_id: req.admin?.id || '',
-            operator_name: req.admin?.username || '管理员'
-        });
-    } catch (error) {
-        const rollbackPatch = {
-            balance: current,
-            commission_balance: current,
-            updated_at: nowIso()
-        };
-        if (dataStore._internals?.db && userDocId) {
-            await directPatchDocument('users', userDocId, rollbackPatch);
-        } else {
-            patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...rollbackPatch }));
-        }
-        return fail(res, `余额流水写入失败：${error.message || '未知错误'}`, 500);
-    }
-    const updatedUser = { ...user, ...patch };
-    createAuditLog(req.admin, 'user.balance.adjust', 'users', {
-        user_id: primaryId(updatedUser),
-        type,
-        amount,
-        reason: reasonCheck.reason
-    });
-    ok(res, updatedUser);
 });
 
 // ── 货款余额手动调整 ──
@@ -4794,7 +5316,11 @@ app.get('/admin/api/withdrawals', auth, requirePermission('withdrawals'), (req, 
     if (keyword) {
         rows = rows.filter((item) => [
             item.user?.nickname,
+            item.user?.phone,
+            item.user?.member_no,
+            item.user?.invite_code,
             item.user_id,
+            item.id,
             item.withdraw_account?.name,
             item.withdraw_account?.account,
             item.withdraw_account?.account_no
@@ -4935,6 +5461,9 @@ app.get('/admin/api/refunds', auth, requirePermission('refunds'), async (req, re
         rows = rows.filter((item) => [
             item.order?.order_no,
             item.user?.nickname,
+            item.user?.phone,
+            item.user?.member_no,
+            item.user_id,
             item.order_item?.product?.name,
             item.reason,
             item.id
@@ -5029,7 +5558,7 @@ app.put('/admin/api/refunds/:id/reject', auth, requirePermission('refunds'), asy
 });
 
 app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), async (req, res) => {
-    await ensureFreshCollections(['refunds', 'orders', 'users']);
+    await ensureFreshCollections(['refunds', 'orders', 'users', 'wallet_accounts']);
     const refunds = getCollection('refunds');
     const refund = findByLookup(refunds, req.params.id);
     if (!refund) return fail(res, '退款记录不存在', 404);
@@ -5052,6 +5581,9 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
     const totalAmount = toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0);
     if (refundAmount <= 0 || totalAmount <= 0) return fail(res, '退款金额不合法', 400);
     if (refundAmount > totalAmount) return fail(res, `退款金额(${refundAmount})不能超过订单金额(${totalAmount})`, 400);
+    if (roundMoney(refundAmount) !== roundMoney(totalAmount)) {
+        return fail(res, `当前仅支持整单退款，退款金额必须等于订单实付金额（${roundMoney(totalAmount)}）`, 400);
+    }
 
     // 先持久化 processing 状态，防止并发重复提交
     const processingData = {
@@ -5081,6 +5613,11 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
             // 货款支付订单：退回 agent_wallet_balance（内部余额），不发起微信退款
             const buyerOpenid = pickString(order.openid || order.buyer_id || refund.openid || refund.user_id);
             if (!buyerOpenid) throw new Error('货款退款：找不到买家 openid');
+            const buyerUser = findUserByAnyId(users, buyerOpenid);
+            if (!buyerUser) throw new Error('货款退款：找不到买家用户记录');
+            const previousGoodsFund = roundMoney(toNumber(buyerUser.agent_wallet_balance != null ? buyerUser.agent_wallet_balance : buyerUser.wallet_balance, 0));
+            const nextGoodsFund = roundMoney(previousGoodsFund + refundAmount);
+            const walletAccountUserIds = getWalletAccountUserIds(buyerUser);
 
             const db = dataStore._internals && dataStore._internals.db;
             if (db) {
@@ -5091,14 +5628,72 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
                         updated_at: new Date().toISOString()
                     }
                 });
+                let walletAccount = null;
+                for (const candidate of walletAccountUserIds) {
+                    const accountRes = await db.collection('wallet_accounts')
+                        .where({ user_id: candidate })
+                        .limit(1)
+                        .get()
+                        .catch(() => ({ data: [] }));
+                    if (accountRes.data && accountRes.data[0]) {
+                        walletAccount = accountRes.data[0];
+                        break;
+                    }
+                }
+                const accountId = walletAccount?._id || walletAccount?.id || buildWalletAccountDocId(buyerUser);
+                if (!accountId) throw new Error('货款退款：无法确定钱包账户标识');
+                if (walletAccount) {
+                    await db.collection('wallet_accounts').doc(String(accountId)).update({
+                        data: {
+                            balance: nextGoodsFund,
+                            updated_at: new Date().toISOString()
+                        }
+                    });
+                } else {
+                    await db.collection('wallet_accounts').doc(String(accountId)).set({
+                        data: {
+                            user_id: walletAccountUserIds[0],
+                            openid: buyerOpenid,
+                            balance: nextGoodsFund,
+                            account_type: 'goods_fund',
+                            status: 'active',
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        }
+                    });
+                }
                 rollbackInternalFunds = async () => {
                     await db.collection('users').where({ openid: buyerOpenid }).update({
                         data: {
-                            agent_wallet_balance: _.inc(-refundAmount),
+                            agent_wallet_balance: previousGoodsFund,
+                            updated_at: new Date().toISOString()
+                        }
+                    }).catch(() => {});
+                    await db.collection('wallet_accounts').doc(String(accountId)).set({
+                        data: {
+                            user_id: walletAccountUserIds[0],
+                            openid: buyerOpenid,
+                            balance: previousGoodsFund,
+                            account_type: 'goods_fund',
+                            status: 'active',
+                            created_at: pickString(walletAccount?.created_at || new Date().toISOString()),
                             updated_at: new Date().toISOString()
                         }
                     }).catch(() => {});
                 };
+                await appendWalletLogEntry({
+                    openid: buyerOpenid,
+                    user_id: walletAccountUserIds[0],
+                    account_id: String(accountId),
+                    change_type: 'refund',
+                    amount: refundAmount,
+                    balance_before: previousGoodsFund,
+                    balance_after: nextGoodsFund,
+                    ref_type: 'order_refund',
+                    ref_id: pickString(refund._id || refund.id),
+                    remark: `订单退款 ${pickString(order.order_no)}`,
+                    created_at: new Date().toISOString()
+                });
                 // 写货款流水日志
                 await appendGoodsFundLogEntry({
                     openid: buyerOpenid,
@@ -5115,21 +5710,74 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
                 if (userIdx !== -1) {
                     users[userIdx] = {
                         ...users[userIdx],
-                        agent_wallet_balance: toNumber(users[userIdx].agent_wallet_balance, 0) + refundAmount,
+                        agent_wallet_balance: nextGoodsFund,
                         updated_at: nowIso()
                     };
                     saveCollection('users', users);
+                    const walletAccounts = getCollection('wallet_accounts');
+                    const existingWalletAccount = findWalletAccountByUser(walletAccounts, buyerUser);
+                    const accountId = primaryId(existingWalletAccount) || buildWalletAccountDocId(buyerUser);
+                    const nextWalletAccount = existingWalletAccount
+                        ? {
+                            ...existingWalletAccount,
+                            balance: nextGoodsFund,
+                            updated_at: nowIso()
+                        }
+                        : {
+                            _id: accountId,
+                            id: accountId,
+                            user_id: walletAccountUserIds[0],
+                            openid: buyerOpenid,
+                            balance: nextGoodsFund,
+                            account_type: 'goods_fund',
+                            status: 'active',
+                            created_at: nowIso(),
+                            updated_at: nowIso()
+                        };
+                    if (existingWalletAccount) {
+                        const walletIndex = walletAccounts.findIndex((item) => primaryId(item) === primaryId(existingWalletAccount));
+                        if (walletIndex !== -1) walletAccounts[walletIndex] = nextWalletAccount;
+                    } else {
+                        walletAccounts.push(nextWalletAccount);
+                    }
+                    saveCollection('wallet_accounts', walletAccounts);
                     rollbackInternalFunds = async () => {
                         const rollbackIdx = users.findIndex((u) => u.openid === buyerOpenid);
                         if (rollbackIdx !== -1) {
                             users[rollbackIdx] = {
                                 ...users[rollbackIdx],
-                                agent_wallet_balance: roundMoney(toNumber(users[rollbackIdx].agent_wallet_balance, 0) - refundAmount),
+                                agent_wallet_balance: previousGoodsFund,
                                 updated_at: nowIso()
                             };
                             saveCollection('users', users);
                         }
+                        const rollbackWalletAccounts = getCollection('wallet_accounts');
+                        const rollbackAccount = findWalletAccountByUser(rollbackWalletAccounts, buyerUser);
+                        if (rollbackAccount) {
+                            const rollbackWalletIndex = rollbackWalletAccounts.findIndex((item) => primaryId(item) === primaryId(rollbackAccount));
+                            if (rollbackWalletIndex !== -1) {
+                                rollbackWalletAccounts[rollbackWalletIndex] = {
+                                    ...rollbackWalletAccounts[rollbackWalletIndex],
+                                    balance: previousGoodsFund,
+                                    updated_at: nowIso()
+                                };
+                                saveCollection('wallet_accounts', rollbackWalletAccounts);
+                            }
+                        }
                     };
+                    await appendWalletLogEntry({
+                        openid: buyerOpenid,
+                        user_id: walletAccountUserIds[0],
+                        account_id: String(accountId),
+                        change_type: 'refund',
+                        amount: refundAmount,
+                        balance_before: previousGoodsFund,
+                        balance_after: nextGoodsFund,
+                        ref_type: 'order_refund',
+                        ref_id: pickString(refund._id || refund.id),
+                        remark: `订单退款 ${pickString(order.order_no)}`,
+                        created_at: nowIso()
+                    });
                 }
             }
 
@@ -5436,8 +6084,24 @@ app.get('/admin/api/commissions', auth, requirePermission('commissions'), async 
     const orders = getCollection('orders');
     let rows = sortByUpdatedDesc(getCollection('commissions')).map((item) => buildCommissionRecord(item, users, orders));
     const status = pickString(req.query.status).trim();
+    const type = pickString(req.query.type).trim().toLowerCase();
+    const keyword = pickString(req.query.keyword).trim().toLowerCase();
     const userId = pickString(req.query.user_id).trim();
     if (status) rows = rows.filter((item) => item.status === status);
+    if (type) rows = rows.filter((item) => pickString(item.type).trim().toLowerCase() === type);
+    if (keyword) {
+        rows = rows.filter((item) => [
+            item.user?.nickname,
+            item.user?.invite_code,
+            item.user?.member_no,
+            item.from_user?.nickname,
+            item.from_user?.invite_code,
+            item.from_user?.member_no,
+            item.order?.order_no,
+            item.order?.product_summary,
+            item.id
+        ].filter(Boolean).join(' ').toLowerCase().includes(keyword));
+    }
     if (userId) rows = rows.filter((item) => rowMatchesLookup(item.user || item, userId, [item.user_id]));
     const pageResult = paginate(rows, req);
     ok(res, { ...pageResult, stats: commissionStats(rows) });
@@ -5597,8 +6261,23 @@ app.get('/admin/api/orders/:id', auth, requirePermission('orders'), async (req, 
     ok(res, buildOrderRecord(order, users, products, commissions));
 });
 
-app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), (req, res) => {
+app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), async (req, res) => {
+    await ensureFreshCollections(['orders', 'users', 'products', 'commissions']);
+    const current = findByLookup(getCollection('orders'), req.params.id, (item) => [item.order_no]);
+    if (!current) return fail(res, '订单不存在', 404);
+    if (!ORDER_SHIPPABLE_STATUSES.has(String(current.status || ''))) {
+        return fail(res, `当前订单状态不允许发货：${current.status || '-'}`, 400);
+    }
     const fulfillmentType = pickString(req.body?.fulfillment_type || req.body?.type, '').toLowerCase();
+    if (fulfillmentType === 'agent') {
+        const lockedAgentCost = toNumber(current.locked_agent_cost_total ?? current.locked_agent_cost, 0);
+        if (!pickString(current.fulfillment_partner_openid || current.nearest_agent_openid)) {
+            return fail(res, '当前订单未锁定可履约代理，不能切换为代理发货', 400);
+        }
+        if (lockedAgentCost <= 0) {
+            return fail(res, '当前订单缺少锁定代理成本，不能切换为代理发货', 400);
+        }
+    }
     const updated = patchOrder(req.params.id, (row) => ({
         ...row,
         logistics_company: req.body?.logistics_company || row.logistics_company || '',
@@ -5609,23 +6288,25 @@ app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), (req, r
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '订单不存在', 404);
+    const fulfillmentCommission = ensureAgentFulfillmentCommissionForOrder(updated);
     ensureAgentAssistCommissionForOrder(updated);
     ensureBranchAgentCommissionForOrder(updated, { preferPickup: false });
+    if (fulfillmentCommission) {
+        const commissionAmount = roundMoney(toNumber(fulfillmentCommission.amount, 0));
+        const patched = patchOrder(req.params.id, (row) => ({
+            ...row,
+            middle_commission_total: commissionAmount,
+            updated_at: nowIso()
+        }));
+        if (patched) {
+            updated.middle_commission_total = commissionAmount;
+        }
+    }
     ok(res, updated);
 });
 
-app.put('/admin/api/orders/:id/shipping-info', auth, requirePermission('orders'), (req, res) => {
-    const updated = patchOrder(req.params.id, (row) => ({
-        ...row,
-        logistics_company: req.body?.logistics_company || row.logistics_company || '',
-        tracking_no: req.body?.tracking_no || row.tracking_no || '',
-        updated_at: nowIso()
-    }));
-    if (!updated) return fail(res, '订单不存在', 404);
-    ok(res, updated);
-});
-
-app.put('/admin/api/orders/:id/amount', auth, requirePermission('order_amount_adjust'), (req, res) => {
+app.put('/admin/api/orders/:id/amount', auth, requirePermission('order_amount_adjust'), async (req, res) => {
+    await ensureFreshCollections(['orders']);
     const payAmount = toNumber(req.body?.pay_amount ?? req.body?.actual_price, NaN);
     if (!Number.isFinite(payAmount)) return fail(res, '请输入有效的订单金额');
     const updated = patchOrder(req.params.id, (row) => ({
@@ -5638,53 +6319,68 @@ app.put('/admin/api/orders/:id/amount', auth, requirePermission('order_amount_ad
     ok(res, updated);
 });
 
-app.put('/admin/api/orders/:id/remark', auth, requirePermission('orders'), (req, res) => {
-    const updated = patchOrder(req.params.id, (row) => ({ ...row, remark: pickString(req.body?.remark), updated_at: nowIso() }));
+app.put('/admin/api/orders/:id/remark', auth, requirePermission('orders'), async (req, res) => {
+    await ensureFreshCollections(['orders']);
+    const nextRemark = pickString(req.body?.remark);
+    const updated = patchOrder(req.params.id, (row) => ({
+        ...row,
+        admin_remark: [pickString(row.admin_remark), nextRemark].filter(Boolean).join('\n'),
+        updated_at: nowIso()
+    }));
     if (!updated) return fail(res, '订单不存在', 404);
     ok(res, updated);
 });
 
-app.put('/admin/api/orders/:id/force-complete', auth, requirePermission('order_force_complete'), (req, res) => {
+app.put('/admin/api/orders/:id/repair-fulfillment', auth, requirePermission('orders'), async (req, res) => {
+    await ensureFreshCollections(['orders', 'users', 'products', 'commissions']);
+    const result = repairOrderFulfillmentChain(req.params.id);
+    if (!result.ok) return fail(res, result.message, 400);
+    if (result.order?.fulfillment_partner_openid) {
+        const users = getCollection('users');
+        const claimant = findUserByAnyId(users, result.order.fulfillment_partner_openid);
+        removeConflictingReferralCommissions(result.order, claimant);
+    }
+    const docId = String(result.order?._id || result.order?.id || req.params.id);
+    await directPatchDocument('orders', docId, result.order).catch(() => {});
+    await ensureFreshCollections(['orders', 'users', 'products', 'commissions']);
+    const users = getCollection('users');
+    const products = getCollection('products');
+    const commissions = getCollection('commissions');
+    const refreshed = findByLookup(getCollection('orders'), req.params.id, (row) => [row.order_no]);
+    if (!refreshed) return fail(res, '订单不存在', 404);
+    ok(res, buildOrderRecord(refreshed, users, products, commissions));
+});
+
+app.put('/admin/api/orders/:id/force-complete', auth, requirePermission('order_force_complete'), async (req, res) => {
+    await ensureFreshCollections(['orders']);
+    const reason = pickString(req.body?.reason);
     const updated = patchOrder(req.params.id, (row) => ({
         ...row,
         status: 'completed',
         completed_at: nowIso(),
-        remark: [row.remark, req.body?.reason].filter(Boolean).join(' | '),
+        admin_remark: [pickString(row.admin_remark), reason].filter(Boolean).join('\n'),
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '订单不存在', 404);
     ok(res, updated);
 });
 
-app.put('/admin/api/orders/:id/force-cancel', auth, requirePermission('order_force_cancel'), (req, res) => {
+app.put('/admin/api/orders/:id/force-cancel', auth, requirePermission('order_force_cancel'), async (req, res) => {
+    await ensureFreshCollections(['orders']);
+    const reason = pickString(req.body?.reason);
     const updated = patchOrder(req.params.id, (row) => ({
         ...row,
         status: 'cancelled',
-        remark: [row.remark, req.body?.reason].filter(Boolean).join(' | '),
+        admin_remark: [pickString(row.admin_remark), reason].filter(Boolean).join('\n'),
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '订单不存在', 404);
     ok(res, updated);
 });
 
-app.post('/admin/api/orders/batch-ship', auth, requirePermission('orders'), (req, res) => {
-    const ids = toArray(req.body?.order_ids || req.body?.ids).map((item) => Number(item));
-    const rows = getCollection('orders').map((row) => ids.includes(Number(row.id))
-        ? {
-            ...row,
-            status: 'shipped',
-            logistics_company: req.body?.logistics_company || row.logistics_company || '',
-            tracking_no: req.body?.tracking_no || row.tracking_no || '',
-            shipped_at: nowIso(),
-            updated_at: nowIso()
-        }
-        : row);
-    saveCollection('orders', rows);
-    ok(res, { success: true, count: ids.length });
-});
-
-app.get('/admin/api/logistics/order/:id', auth, requirePermission('orders'), (req, res) => {
-    const order = getCollection('orders').find((item) => Number(item.id) === Number(req.params.id));
+app.get('/admin/api/logistics/order/:id', auth, requirePermission('orders'), async (req, res) => {
+    await ensureFreshCollections(['orders']);
+    const order = findByLookup(getCollection('orders'), req.params.id, (item) => [item.order_no]);
     if (!order) return fail(res, '订单不存在', 404);
     ok(res, {
         order_id: order.id,
@@ -5753,7 +6449,8 @@ app.get('/admin/api/finance/overview', auth, requirePermission('statistics'), (r
         .map((u) => ({
             user_id: u.id || u._legacy_id || u._id,
             nickname: pickString(u.nickname || u.nickName || u.name || ''),
-            member_no: pickString(u.member_no || ''),
+            invite_code: pickString(u.my_invite_code || u.invite_code || u.member_no || ''),
+            member_no: pickString(u.my_invite_code || u.invite_code || u.member_no || ''),
             role_level: toNumber(u.role_level ?? u.distributor_level, 0),
             debt_amount: toNumber(u.debt_amount, 0),
             debt_reason: pickString(u.debt_reason || '')
@@ -5829,7 +6526,9 @@ app.get('/admin/api/finance/agent-performance', auth, requirePermission('statist
 
     // 从订单提取 agent openid（多字段兼容）
     function getOrderAgentOpenid(order) {
-        return order?.agent_info?.openid
+        return order?.fulfillment_partner_openid
+            || order?.nearest_agent_openid
+            || order?.agent_info?.openid
             || order?.agent?.openid
             || order?.distributor?.openid
             || order?.referrer_openid
@@ -5864,7 +6563,8 @@ app.get('/admin/api/finance/agent-performance', auth, requirePermission('statist
                 openid: item.openid,
                 user_id: u.id || u._legacy_id || u._id || item.openid,
                 nickname: pickString(u.nickname || u.nickName || u.name || item.openid),
-                member_no: pickString(u.member_no || ''),
+                invite_code: pickString(u.my_invite_code || u.invite_code || u.member_no || ''),
+                member_no: pickString(u.my_invite_code || u.invite_code || u.member_no || ''),
                 role_level: toNumber(u.role_level ?? u.distributor_level, 0),
                 order_count: item.order_count,
                 gmv: Number(item.gmv.toFixed(2))
@@ -5925,7 +6625,8 @@ app.get('/admin/api/finance/pool-contributions', auth, requirePermission('statis
             user_id: u.id || u._legacy_id || u._id,
             openid: u.openid,
             nickname: pickString(u.nickname || u.nickName || u.name || ''),
-            member_no: pickString(u.member_no || ''),
+            invite_code: pickString(u.my_invite_code || u.invite_code || u.member_no || ''),
+            member_no: pickString(u.my_invite_code || u.invite_code || u.member_no || ''),
             role_level: toNumber(u.role_level ?? u.distributor_level, 0),
             personal_sales: Number(personalSales.toFixed(2)),
             team_size: descendants.length + 1,
@@ -5946,7 +6647,8 @@ app.get('/admin/api/finance/pool-contributions', auth, requirePermission('statis
                 user_id: u.id || u._legacy_id || u._id,
                 openid: u.openid,
                 nickname: pickString(u.nickname || u.nickName || u.name || ''),
-                member_no: pickString(u.member_no || ''),
+                invite_code: pickString(u.my_invite_code || u.invite_code || u.member_no || ''),
+                member_no: pickString(u.my_invite_code || u.invite_code || u.member_no || ''),
                 personal_sales: Number(personalSales.toFixed(2)),
                 settled_commission: Number(totalCommission.toFixed(2))
             };
@@ -5982,114 +6684,6 @@ app.get('/admin/api/statistics/overview', auth, requirePermission('statistics'),
         pending_refund: getCollection('refunds').filter((item) => item.status === 'pending').length,
         low_stock_count: products.filter((item) => toNumber(item.stock, 0) <= 10).length
     });
-});
-
-app.get('/admin/api/dashboard/notifications', auth, (req, res) => {
-    ok(res, {
-        list: [
-            { id: 1, level: 'warning', title: '待发货订单', count: getCollection('orders').filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_ship').length },
-            { id: 2, level: 'info', title: '低库存商品', count: getCollection('products').filter((item) => toNumber(item.stock, 0) <= 10).length }
-        ]
-    });
-});
-
-app.get('/admin/api/statistics/sales-trend', auth, requirePermission('statistics'), (req, res) => {
-    const days = toNumber(req.query.days, 30);
-    const orders = getCollection('orders');
-    const paidStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
-    const result = [];
-    for (let i = days - 1; i >= 0; i--) {
-        const d = getDateKey(Date.now() - i * 86400000, '');
-        const dayOrders = orders.filter((o) => getDateKey(o.created_at, '') === d);
-        result.push({
-            date: d,
-            order_count: dayOrders.length,
-            sales: dayOrders
-                .filter((o) => paidStatuses.includes(o.status))
-                .reduce((s, o) => s + toNumber(o.pay_amount ?? o.total_amount ?? o.actual_price, 0), 0)
-        });
-    }
-    ok(res, { list: result });
-});
-
-app.get('/admin/api/statistics/user-trend', auth, requirePermission('statistics'), (req, res) => {
-    const days = toNumber(req.query.days, 30);
-    const users = getCollection('users');
-    const result = [];
-    for (let i = days - 1; i >= 0; i--) {
-        const d = getDateKey(Date.now() - i * 86400000, '');
-        result.push({
-            date: d,
-            new_users: users.filter((u) => getDateKey(u.created_at, '') === d).length
-        });
-    }
-    ok(res, { list: result });
-});
-
-app.get('/admin/api/statistics/agent-ranking', auth, requirePermission('statistics'), (req, res) => {
-    const users = getCollection('users');
-    const commissions = getCollection('commissions');
-    const limit = toNumber(req.query.limit, 10);
-    const agentMap = {};
-    commissions
-        .filter((c) => ['settled', 'completed', 'approved'].includes(String(c.status || '')))
-        .forEach((c) => {
-            const uid = String(c.user_id || c.openid || '');
-            if (!uid) return;
-            agentMap[uid] = (agentMap[uid] || 0) + toNumber(c.amount, 0);
-        });
-    const list = Object.entries(agentMap)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, limit)
-        .map(([uid, total]) => {
-            const u = users.find((x) => String(x.id || x._id) === uid || x.openid === uid) || {};
-            return {
-                user_id: uid,
-                nickname: pickString(u.nickname || u.nickName || u.name || uid),
-                role_level: toNumber(u.role_level ?? u.distributor_level, 0),
-                total_commission: total
-            };
-        });
-    ok(res, { list });
-});
-
-app.get('/admin/api/statistics/distribution-report', auth, requirePermission('statistics'), (req, res) => {
-    const commissions = getCollection('commissions');
-    const TYPE_LABEL = {
-        direct: '直推佣金', indirect: '团队佣金', team: '团队佣金',
-        same_level: '平级奖励', peer: '平级奖励',
-        pickup_subsidy: '自提补贴', agent_assist: '动销奖励', assist: '动销奖励',
-        year_end_dividend: '年终分红',
-        admin_deduct: '系统扣除', admin_credit: '系统补发', admin_adjustment: '系统调整',
-        region_agent: '区域代理奖', agent_fulfillment: '发货利润'
-    };
-    const byType = {};
-    commissions.forEach((c) => {
-        const t = pickString(c.type || 'other');
-        if (!byType[t]) byType[t] = { type: t, label: TYPE_LABEL[t] || t, count: 0, total: 0, settled: 0 };
-        byType[t].count += 1;
-        byType[t].total += toNumber(c.amount, 0);
-        if (['settled', 'completed', 'approved'].includes(String(c.status || ''))) {
-            byType[t].settled += toNumber(c.amount, 0);
-        }
-    });
-    ok(res, { list: Object.values(byType) });
-});
-
-app.get('/admin/api/statistics/product-ranking', auth, requirePermission('statistics'), (req, res) => {
-    const rows = sortByUpdatedDesc(getCollection('products'))
-        .sort((a, b) => toNumber(b.heat_score, 0) - toNumber(a.heat_score, 0))
-        .slice(0, toNumber(req.query.limit, 10))
-        .map((item) => ({ ...item, images: toArray(item.images).map(assetUrl) }));
-    ok(res, { list: rows });
-});
-
-app.get('/admin/api/statistics/low-stock', auth, requirePermission('statistics'), (req, res) => {
-    const threshold = toNumber(req.query.threshold, 10);
-    const rows = sortByUpdatedDesc(getCollection('products'))
-        .filter((item) => toNumber(item.stock, 0) <= threshold)
-        .map((item) => ({ ...item, images: toArray(item.images).map(assetUrl) }));
-    ok(res, { list: rows });
 });
 
 app.get('/admin/api/operations/dashboard', auth, async (req, res) => {
@@ -6209,6 +6803,12 @@ app.get('/admin/api/mini-program-config', auth, (req, res) => ok(res, getMiniPro
 app.put('/admin/api/mini-program-config', auth, requirePermission('settings_manage'), (req, res) => {
     const nextConfig = configContract.normalizeMiniProgramConfig({ ...getMiniProgramConfigSnapshot(), ...toObject(req.body, {}) });
     saveSingleton('mini-program-config', nextConfig);
+    upsertConfigRow('mini_program_config', nextConfig, {
+        category: 'MINIPROGRAM',
+        group: 'MINIPROGRAM',
+        description: '小程序运行时配置',
+        is_public: true
+    });
     ok(res, nextConfig);
 });
 
@@ -6242,6 +6842,7 @@ function upsertConfigRow(key, value, options = {}) {
         config_group: options.group || rows[index]?.config_group || options.category || 'MEMBER',
         description: options.description || rows[index]?.description || key,
         is_public: options.is_public != null ? options.is_public : (rows[index]?.is_public ?? false),
+        active: true,
         status: true,
         updated_at: nowIso()
     };
@@ -6388,18 +6989,6 @@ app.put('/admin/api/popup-ad-config', auth, requirePermission('content'), async 
     saveSingleton('popup-ad-config', nextConfig);
     ok(res, nextConfig);
 });
-
-app.get('/admin/api/system-configs', auth, (req, res) => ok(res, { list: [] }));
-app.post('/admin/api/system-configs/batch', auth, (req, res) => ok(res, { success: true, items: req.body?.items || [] }));
-app.post('/admin/api/system-configs/refresh-cache', auth, (req, res) => ok(res, { success: true, refreshed_at: nowIso() }));
-app.get('/admin/api/system-configs/:configKey/history', auth, (req, res) => ok(res, { list: [] }));
-app.post('/admin/api/system-configs/:configKey/rollback', auth, (req, res) => ok(res, { success: true, config_key: req.params.configKey }));
-
-app.get('/admin/api/db-indexes/tables', auth, (req, res) => ok(res, { list: [] }));
-app.get('/admin/api/db-indexes/:tableName', auth, (req, res) => ok(res, { list: [] }));
-app.get('/admin/api/db-indexes/:tableName/columns', auth, (req, res) => ok(res, { list: [] }));
-app.post('/admin/api/db-indexes', auth, (req, res) => ok(res, { success: true }));
-app.delete('/admin/api/db-indexes/:tableName/:indexName', auth, (req, res) => ok(res, { success: true }));
 
 // Storage migration: move legacy local /uploads and remote COS/http materials to CloudBase storage
 app.get('/admin/api/storage/migrate/preview', auth, requirePermission('materials'), async (req, res) => {
