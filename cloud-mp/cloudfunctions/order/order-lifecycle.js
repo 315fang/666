@@ -4,7 +4,12 @@ const db = cloud.database();
 const _ = db.command;
 const { getOrderByIdOrNo, listRefunds, getRefundDetail } = require('./order-query');
 const { restoreUsedCoupon } = require('./order-coupon');
-const { normalizePaymentMethodCode, getRefundTargetText } = require('./order-contract');
+const {
+    getRefundTargetText,
+    resolveOrderPayAmount,
+    resolveOrderPaymentMethod,
+    resolveRefundChannel
+} = require('./order-contract');
 
 function toNumber(value, fallback = 0) {
     if (value === null || value === undefined || value === '') return fallback;
@@ -84,6 +89,66 @@ async function restoreFrozenCommissions(orderId) {
                 status: 'pending',
                 frozen_at: _.remove(),
                 refund_deadline: _.remove(),
+                updated_at: db.serverDate()
+            }
+        })
+        .catch(() => {});
+}
+
+function deriveRefundRevertStatus(order = {}) {
+    return order.prev_status
+        || (order.confirmed_at || order.auto_confirmed_at ? 'completed'
+            : (order.shipped_at ? 'shipped'
+                : (order.paid_at ? 'paid' : 'pending_payment')));
+}
+
+function buildBuyerRefundReversal(order = {}) {
+    const pointsUsed = toNumber(order.points_used, 0);
+    const pointsEarned = toNumber(order.points_earned, 0);
+    const orderPayAmount = resolveOrderPayAmount(order, 0);
+    const growthEarned = Math.floor(orderPayAmount);
+    const pointsDelta = pointsUsed - pointsEarned;
+    const growthDelta = pointsUsed - growthEarned;
+    const userReversal = { updated_at: db.serverDate(), order_count: _.inc(-1) };
+    if (pointsDelta !== 0) userReversal.points = _.inc(pointsDelta);
+    if (growthDelta !== 0) userReversal.growth_value = _.inc(growthDelta);
+    if (orderPayAmount > 0) userReversal.total_spent = _.inc(-orderPayAmount);
+    return userReversal;
+}
+
+async function reverseBuyerRefundAssets(openid, order = {}) {
+    await db.collection('users').where({ openid }).update({
+        data: buildBuyerRefundReversal(order)
+    }).catch(() => {});
+}
+
+async function markRefundOrderStep(orderId, field) {
+    if (!orderId || !field) return;
+    await db.collection('orders').doc(String(orderId)).update({
+        data: { [field]: db.serverDate(), updated_at: db.serverDate() }
+    }).catch(() => {});
+}
+
+async function reverseBuyerRefundAssetsWithMarker(openid, orderId, order = {}, markerField = 'refund_buyer_assets_reversed_at') {
+    if (order[markerField]) return;
+    await reverseBuyerRefundAssets(openid, order);
+    await markRefundOrderStep(orderId, markerField);
+}
+
+async function restoreCouponForRefund(orderId, order = {}, markerField = 'refund_coupon_restored_at') {
+    if (order[markerField]) return;
+    await restoreUsedCoupon(order).catch(() => {});
+    await markRefundOrderStep(orderId, markerField);
+}
+
+async function cancelRefundRelatedCommissions(orderId, reason) {
+    await db.collection('commissions')
+        .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval']) })
+        .update({
+            data: {
+                status: 'cancelled',
+                cancel_reason: reason,
+                cancelled_at: db.serverDate(),
                 updated_at: db.serverDate()
             }
         })
@@ -276,11 +341,19 @@ async function applyRefund(openid, params) {
     }
 
     const refundNo = 'REF' + Date.now() + Math.floor(Math.random() * 1000);
-    const refundAmount = toNumber(params.amount ?? params.refund_amount, toNumber(order.pay_amount || order.total_amount, 0));
+    const maxRefundAmount = resolveOrderPayAmount(order, 0);
+    const refundAmount = toNumber(params.amount ?? params.refund_amount, maxRefundAmount);
     const type = params.type || 'refund_only';
     const refundQuantity = type === 'return_refund' ? Math.max(1, toNumber(params.refund_quantity, 1)) : 0;
-    const paymentMethod = normalizePaymentMethodCode(order.payment_method || order.pay_channel || order.pay_type || order.payment_channel || '');
-    const refundChannel = paymentMethod === 'goods_fund' ? 'goods_fund' : (paymentMethod === 'wallet' ? 'wallet' : 'wechat');
+    const paymentMethod = resolveOrderPaymentMethod(order);
+    const refundChannel = resolveRefundChannel(paymentMethod);
+
+    if (refundAmount <= 0) {
+        throw new Error('退款金额必须大于 0');
+    }
+    if (maxRefundAmount > 0 && refundAmount > maxRefundAmount) {
+        throw new Error(`退款金额不能超过实付金额: ${maxRefundAmount}`);
+    }
 
     const result = await db.collection('refunds').add({
         data: {
@@ -321,8 +394,17 @@ async function applyRefund(openid, params) {
     }
 
     // 货款支付订单：自动退款（不需要后台审批，直接退回余额）
-    const payMethod = (order.payment_method || order.pay_channel || '').toLowerCase();
-    if (payMethod === 'goods_fund') {
+    if (paymentMethod === 'goods_fund') {
+        await db.collection('refunds').doc(result._id).update({
+            data: {
+                status: 'processing',
+                payment_method: paymentMethod,
+                refund_channel: refundChannel,
+                refund_target_text: getRefundTargetText(paymentMethod),
+                processing_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        }).catch(() => {});
         try {
             await db.collection('users').where({ openid }).update({
                 data: { agent_wallet_balance: _.inc(refundAmount), updated_at: db.serverDate() }
@@ -336,61 +418,37 @@ async function applyRefund(openid, params) {
             }).catch(() => {});
 
             // 退还奖励积分、成长值、消费统计
-            const pointsUsed = toNumber(order.points_used, 0);
-            const pointsEarned = toNumber(order.points_earned, 0);
-            const orderPayAmt = toNumber(order.pay_amount || order.actual_price || order.total_amount, 0);
-            const growthEarned = Math.floor(orderPayAmt);
-            const pointsDelta = pointsUsed - pointsEarned;
-            const growthDelta = pointsUsed - growthEarned;
-            const userReversal = { updated_at: db.serverDate() };
-            if (pointsDelta !== 0) userReversal.points = _.inc(pointsDelta);
-            if (growthDelta !== 0) userReversal.growth_value = _.inc(growthDelta);
-            if (orderPayAmt > 0) userReversal.total_spent = _.inc(-orderPayAmt);
-            userReversal.order_count = _.inc(-1);
-            await db.collection('users').where({ openid }).update({ data: userReversal }).catch(() => {});
+            await reverseBuyerRefundAssetsWithMarker(openid, canonicalOrderId, order);
 
             // 退优惠券
-            if (order.user_coupon_id) {
-                await db.collection('user_coupons').doc(String(order.user_coupon_id))
-                    .update({ data: { status: 'unused', updated_at: db.serverDate() } }).catch(() => {});
-            }
+            await restoreCouponForRefund(canonicalOrderId, order);
 
             // 取消佣金
-            await db.collection('commissions')
-                .where({ order_id: canonicalOrderId, status: _.in(['pending', 'frozen', 'pending_approval']) })
-                .update({ data: { status: 'cancelled', cancel_reason: '货款退款', cancelled_at: db.serverDate() } }).catch(() => {});
+            await cancelRefundRelatedCommissions(canonicalOrderId, '货款退款');
 
             // 恢复库存（含 SKU）
-            if (order.stock_deducted_at && Array.isArray(order.items)) {
-                for (const item of order.items) {
-                    const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
-                    if (item.product_id) {
-                        await db.collection('products').doc(String(item.product_id)).update({
-                            data: { stock: _.inc(qty), updated_at: db.serverDate() }
-                        }).catch(() => {});
-                    }
-                    if (item.sku_id) {
-                        await db.collection('skus').doc(String(item.sku_id)).update({
-                            data: { stock: _.inc(qty), updated_at: db.serverDate() }
-                        }).catch(() => {});
-                    }
-                }
-            }
+            await restoreOrderStock(canonicalOrderId, order, 'refund_stock_restored_at').catch(() => {});
 
             // 更新退款和订单为已完成
             await db.collection('refunds').doc(result._id).update({
                 data: { status: 'completed', completed_at: db.serverDate(), updated_at: db.serverDate() }
             });
             await db.collection('orders').doc(canonicalOrderId).update({
-                data: { status: 'refunded', refunded_at: db.serverDate(), updated_at: db.serverDate() }
+                data: { status: 'refunded', refunded_at: db.serverDate(), prev_status: _.remove(), updated_at: db.serverDate() }
             });
 
             return { success: true, id: result._id, refund_id: result._id, refund_no: refundNo, auto_refunded: true };
         } catch (autoRefundErr) {
             console.error('[OrderLifecycle] 货款自动退款失败，转人工处理:', autoRefundErr.message);
-            // 将退款标记为待人工处理，保持订单为 refunding 状态
+            // 保持 processing/refunding，让后续重试或人工补偿能感知到部分执行状态
             await db.collection('refunds').doc(result._id).update({
-                data: { status: 'pending', auto_refund_error: autoRefundErr.message, updated_at: db.serverDate() }
+                data: {
+                    status: 'processing',
+                    auto_refund_error: autoRefundErr.message,
+                    auto_refund_partial: true,
+                    auto_refund_failed_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                }
             }).catch(() => {});
             return { success: true, id: result._id, refund_id: result._id, refund_no: refundNo, auto_refund_failed: true, error: autoRefundErr.message };
         }
@@ -432,9 +490,9 @@ async function cancelRefund(openid, refundId) {
 
     // 取消退款时，解冻佣金（恢复为 pending 状态）
     try {
-        const orderId = refundRes.data.order_id;
-        if (orderId) {
-        await restoreFrozenCommissions(orderId);
+        const order = await getOrderByIdOrNo(openid, refundRes.data.order_id || refundRes.data.order_no);
+        if (order && order._id) {
+            await restoreFrozenCommissions(order._id);
         }
     } catch (unfreezeErr) {
         console.error('[OrderLifecycle] 佣金解冻失败:', unfreezeErr.message);
@@ -442,22 +500,25 @@ async function cancelRefund(openid, refundId) {
 
     // 恢复订单状态
     const orderId = refundRes.data.order_id;
-    if (orderId) {
-        const orderRes = await db.collection('orders').doc(orderId).get().catch(() => ({ data: null }));
-        if (orderRes.data && orderRes.data.status === 'refunding') {
+    if (orderId || refundRes.data.order_no) {
+        const order = await getOrderByIdOrNo(openid, orderId || refundRes.data.order_no);
+        if (order && order._id && order.status === 'refunding') {
+            const orderTokens = [order._id, order.id, order.order_no]
+                .filter((value) => value !== undefined && value !== null && value !== '');
             // 检查是否还有其他待处理退款
             const otherRefunds = await db.collection('refunds')
-                .where({ order_id: orderId, status: _.in(['pending', 'processing']) })
+                .where(_.and([
+                    _.or([
+                        { order_id: _.in(orderTokens) },
+                        { order_no: _.in(orderTokens) }
+                    ]),
+                    { status: _.in(['pending', 'processing']) }
+                ]))
                 .limit(1).get().catch(() => ({ data: [] }));
             if (!otherRefunds.data || otherRefunds.data.length === 0) {
                 // 恢复为退款前的状态：优先使用 prev_status 字段，否则按实际字段推断
-                // 顺序：completed > shipped > paid > pending_payment
-                const order = orderRes.data;
-                const prevStatus = order.prev_status
-                    || (order.confirmed_at || order.auto_confirmed_at ? 'completed'
-                        : (order.shipped_at ? 'shipped'
-                            : (order.paid_at ? 'paid' : 'pending_payment')));
-                await db.collection('orders').doc(orderId).update({
+                const prevStatus = deriveRefundRevertStatus(order);
+                await db.collection('orders').doc(order._id).update({
                     data: { status: prevStatus, prev_status: _.remove(), updated_at: db.serverDate() },
                 });
             }

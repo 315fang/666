@@ -2,8 +2,9 @@
 <view class="container">
   <!-- 收货人 -->
   <view class="form-group">
-    <text class="form-label">收货人</text>
+    <text class="form-label">收货人<text class="required-mark">*</text></text>
     <input class="form-input" placeholder="请输入收货人姓名" value="{{form.receiver_name}}" bindinput="onInputName" maxlength="20" />
+    <text class="field-hint">收货人姓名必填，缺失会影响发货</text>
   </view>
 
   <!-- 手机号 -->

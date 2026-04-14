@@ -139,7 +139,7 @@ Page({
     showOrderBubble(order) {
         if (!order) return;
         const logisticsConfig = getConfigSection('logistics_config');
-        const canonicalDesc = order.status_desc || (this.data.activeRefund && this.data.activeRefund.status_desc) || '';
+        const canonicalDesc = order.display_status_desc || order.status_desc || (this.data.activeRefund && (this.data.activeRefund.display_status_desc || this.data.activeRefund.status_desc)) || '';
         const statusMap = {
             pending: '订单已创建，请尽快完成支付。',
             pending_payment: '订单已创建，请尽快完成支付。',

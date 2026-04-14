@@ -54,7 +54,7 @@
       <!-- 订单头部 -->
       <view class="order-header">
         <text class="order-no">{{item.order_no}}</text>
-        <text class="order-status {{item.displayStatus || item.status}} {{item.hasActiveRefund ? 'refunding' : ''}}">{{item.statusText}}</text>
+        <text class="order-status {{item.displayStatus || item.status}} {{item.hasActiveRefund ? 'refunding' : ''}}">{{item.display_status_text}}</text>
       </view>
       <!-- 待付款倒计时 -->
       <view class="order-countdown" wx:if="{{(item.status === 'pending' || item.status === 'pending_payment') && item.countdownText}}">
@@ -78,7 +78,7 @@
             <text class="product-name">{{item.product.name || '商品名称'}}</text>
             <text class="product-spec" wx:if="{{item.sku && item.sku.spec_value}}">{{item.sku.spec_value}}</text>
             <view class="product-price-qty">
-              <text class="product-price">¥{{item.price || item.total_amount}}</text>
+              <text class="product-price">¥{{item.display_price || item.display_total_amount}}</text>
               <text class="product-qty">x{{item.quantity}}</text>
             </view>
           </view>
@@ -89,9 +89,9 @@
       <view class="order-footer">
         <view class="order-total">
           <text class="total-label">共{{item.quantity}}件 实付:</text>
-          <text class="total-amount">¥{{item.pay_amount || item.total_amount}}</text>
-          <text class="pay-method-tag pay-method-wallet" wx:if="{{item.payment_method === 'goods_fund'}}">{{item.payment_method_text || '货款'}}</text>
-          <text class="pay-method-tag pay-method-wechat" wx:elif="{{item.status !== 'pending' && item.status !== 'cancelled' && item.pay_amount > 0}}">{{item.payment_method_text || '微信支付'}}</text>
+          <text class="total-amount">¥{{item.display_pay_amount}}</text>
+          <text class="pay-method-tag pay-method-wallet" wx:if="{{item.payment_method === 'goods_fund'}}">{{item.display_payment_method_text}}</text>
+          <text class="pay-method-tag pay-method-wechat" wx:elif="{{item.status !== 'pending' && item.status !== 'cancelled' && item.pay_amount > 0}}">{{item.display_payment_method_text}}</text>
           <text class="fulfillment-tag" wx:if="{{item.fulfillment_type === 'Agent'}}">团队发货</text>
         </view>
         <view class="order-actions">

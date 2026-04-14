@@ -6,6 +6,11 @@ const _ = db.command;
 const { toNumber } = require('./shared/utils');
 const { jsapiOrder, buildMiniPayParams, loadPrivateKey } = require('./wechat-pay-v3');
 const { processPaidOrder } = require('./payment-callback');
+const {
+    buildPaymentWritePatch,
+    resolveOrderPayAmount,
+    resolvePostPayStatus
+} = require('./shared/order-payment');
 
 /**
  * 货款余额支付（内部扣减，不走微信支付）
@@ -34,15 +39,14 @@ async function payByWalletBalance(openid, orderId, order, payAmount) {
         };
     }
     try {
+        const postPayStatus = resolvePostPayStatus(order);
         // 订单标为已付款
         await db.collection('orders').doc(orderId).update({
-            data: {
-                status: 'paid',
-                payment_method: 'goods_fund',
-                pay_channel: 'goods_fund',
+            data: buildPaymentWritePatch('goods_fund', payAmount, {
+                status: postPayStatus,
                 paid_at: db.serverDate(),
                 updated_at: db.serverDate()
-            }
+            })
         });
 
         // 写货款流水
@@ -69,19 +73,23 @@ async function payByWalletBalance(openid, orderId, order, payAmount) {
             })
             .catch(() => {});
         await db.collection('orders').doc(orderId).update({
-            data: {
+            data: buildPaymentWritePatch('', payAmount, {
                 status: 'pending_payment',
-                payment_method: '',
-                pay_channel: '',
                 paid_at: null,
                 updated_at: db.serverDate()
-            }
+            })
         }).catch(() => {});
         throw new Error(`货款支付流水或订单状态写入失败：${err.message}`);
     }
 
     // 触发订单后续处理（佣金计算、积分等）
-    await processPaidOrder(orderId, { ...order, status: 'paid', payment_method: 'goods_fund', paid_at: new Date() })
+    await processPaidOrder(orderId, {
+        ...order,
+        status: resolvePostPayStatus(order),
+        payment_method: 'goods_fund',
+        pay_amount: payAmount,
+        paid_at: new Date()
+    })
         .catch((err) => console.error('[prepay] processPaidOrder 货款支付后处理失败:', err.message));
 
     return {
@@ -121,33 +129,40 @@ async function preparePay(openid, params) {
     }
 
     // 4. 计算支付金额（元→分）
-    const payAmount = toNumber(order.pay_amount || order.total_amount, 0);
+    const payAmount = resolveOrderPayAmount(order, 0);
     const amountInFen = Math.round(payAmount * 100);
 
     // 4a. 货款余额支付分支（代理商专属）
     if (params.use_wallet_balance) {
         if (payAmount <= 0) {
+            const postPayStatus = resolvePostPayStatus(order);
             // 零元订单直接完成
             await db.collection('orders').doc(orderId).update({
-                data: { status: 'paid', paid_at: db.serverDate(), pay_channel: 'free', updated_at: db.serverDate() }
+                data: buildPaymentWritePatch('', 0, {
+                    status: postPayStatus,
+                    pay_channel: 'free',
+                    paid_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                })
             });
-            await processPaidOrder(orderId, { ...order, status: 'paid', paid_at: new Date() });
+            await processPaidOrder(orderId, { ...order, status: postPayStatus, pay_amount: 0, paid_at: new Date() });
             return { paid_by_free: true, paid_by_wallet: false, order_id: orderId };
         }
         return await payByWalletBalance(openid, orderId, order, payAmount);
     }
 
     if (amountInFen <= 0) {
+        const postPayStatus = resolvePostPayStatus(order);
         await db.collection('orders').doc(orderId).update({
-            data: {
-                status: 'paid',
+            data: buildPaymentWritePatch('', 0, {
+                status: postPayStatus,
                 paid_at: db.serverDate(),
                 pay_time: db.serverDate(),
                 pay_channel: 'free',
                 updated_at: db.serverDate(),
-            },
+            }),
         });
-        await processPaidOrder(orderId, { ...order, status: 'paid', paid_at: new Date() });
+        await processPaidOrder(orderId, { ...order, status: postPayStatus, pay_amount: 0, paid_at: new Date() });
         return {
             order_id: orderId,
             order_no: order.order_no,

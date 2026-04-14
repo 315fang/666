@@ -163,13 +163,13 @@
         </el-table-column>
         <el-table-column label="实付 / 状态" width="180">
           <template #default="{ row }">
-            <div class="text-price">¥{{ money(row.actual_price) }}</div>
+            <div class="text-price">¥{{ row.display_pay_amount }}</div>
             <div style="margin-top:6px">
-              <el-tag :type="getStatusType(row.status)" size="small">{{ orderStatusText(row) }}</el-tag>
+              <el-tag :type="getStatusType(row.status)" size="small">{{ row.display_status_text }}</el-tag>
             </div>
             <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;">
-              <el-tag :type="paymentMethodTagType(detailPaymentMethod(row))" effect="plain" size="small">
-                {{ orderPaymentMethodText(row) }}
+              <el-tag :type="paymentMethodTagType(row.display_payment_method_code || detailPaymentMethod(row))" effect="plain" size="small">
+                {{ row.display_payment_method_text }}
               </el-tag>
               <el-tag
                 v-if="['refunding', 'refunded'].includes(row.status)"
@@ -177,7 +177,7 @@
                 effect="plain"
                 size="small"
               >
-                {{ orderRefundTargetText(row) }}
+                {{ row.display_refund_target_text }}
               </el-tag>
             </div>
             <div class="text-secondary hide-mobile" style="margin-top:4px;font-size:12px">{{ fulfillmentText(row) }}</div>
@@ -191,7 +191,7 @@
               <el-button text size="small">更多<el-icon><ArrowDown /></el-icon></el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item v-if="canAdjustOrderAmount" command="amount" :disabled="row.status !== 'pending'">改价</el-dropdown-item>
+                  <el-dropdown-item v-if="canAdjustOrderAmount" command="amount" :disabled="!['pending', 'pending_payment'].includes(row.status)">改价</el-dropdown-item>
                   <el-dropdown-item command="remark">备注</el-dropdown-item>
                   <el-dropdown-item v-if="canForceCompleteOrder && row.status === 'shipped'" command="force_complete" class="warning-text">强制完成</el-dropdown-item>
                   <el-dropdown-item v-if="canForceCancelOrder" command="force_cancel" :disabled="['completed', 'cancelled', 'refunded'].includes(row.status)" class="danger-text">强制取消</el-dropdown-item>
@@ -229,18 +229,18 @@
         <el-descriptions :column="2" border size="small" style="margin-bottom:20px">
           <el-descriptions-item label="订单号" :span="2">{{ detailData.order_no }}</el-descriptions-item>
           <el-descriptions-item label="订单状态">
-            <el-tag :type="getStatusType(detailData.status)">{{ orderStatusText(detailData) }}</el-tag>
+            <el-tag :type="getStatusType(detailData.status)">{{ detailData.display_status_text }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="履约方式">{{ fulfillmentText(detailData) }}</el-descriptions-item>
           <el-descriptions-item label="支付方式">
-            <el-tag :type="paymentMethodTagType(detailPaymentMethod(detailData))" size="small">
-              {{ orderPaymentMethodText(detailData) }}
+            <el-tag :type="paymentMethodTagType(detailData.display_payment_method_code || detailPaymentMethod(detailData))" size="small">
+              {{ detailData.display_payment_method_text }}
             </el-tag>
             <span class="text-secondary" style="margin-left:8px">
-              原值：{{ detailData.payment_method || detailData.pay_channel || detailData.pay_type || detailData.payment_channel || '-' }}
+              字段值：{{ detailData.payment_method || '-' }}
             </span>
           </el-descriptions-item>
-          <el-descriptions-item label="退款去向">{{ orderRefundTargetText(detailData) }}</el-descriptions-item>
+          <el-descriptions-item label="退款去向">{{ detailData.display_refund_target_text }}</el-descriptions-item>
           <el-descriptions-item label="配送方式">{{ deliveryTypeText(detailData.delivery_type) }}</el-descriptions-item>
           <el-descriptions-item label="下单时间">{{ fmtDateTime(detailData.created_at) }}</el-descriptions-item>
           <el-descriptions-item label="支付时间">{{ fmtDateTime(detailData.paid_at) }}</el-descriptions-item>
@@ -303,10 +303,10 @@
               <div class="amount-row"><span>运费金额</span><span>¥{{ money(detailData.shipping_fee) }}</span></div>
               <div class="amount-row danger"><span>优惠金额</span><span>-¥{{ money(detailData.coupon_discount) }}</span></div>
               <div class="amount-row danger"><span>积分抵扣</span><span>-¥{{ money(detailData.points_discount) }}</span></div>
-              <div class="amount-row total"><span>应付金额</span><span class="text-price">¥{{ money(detailData.actual_price) }}</span></div>
+              <div class="amount-row total"><span>应付金额</span><span class="text-price">¥{{ detailData.display_pay_amount }}</span></div>
               <div class="amount-row">
                 <span>支付方式</span>
-                <span>{{ orderPaymentMethodText(detailData) }}</span>
+                <span>{{ detailData.display_payment_method_text }}</span>
               </div>
             </div>
           </el-col>
@@ -420,10 +420,10 @@
     <el-dialog v-model="amountVisible" title="修改订单金额" width="400px">
       <el-form :model="amountForm" label-width="90px">
         <el-form-item label="当前金额">
-          <span style="color:#f56c6c; font-weight:bold; font-size:16px">¥{{ money(currentOrder?.actual_price) }}</span>
+          <span style="color:#f56c6c; font-weight:bold; font-size:16px">¥{{ money(currentOrder?.pay_amount) }}</span>
         </el-form-item>
         <el-form-item label="新金额">
-          <el-input-number v-model="amountForm.actual_price" :min="0" :precision="2" style="width:100%" />
+          <el-input-number v-model="amountForm.pay_amount" :min="0" :precision="2" style="width:100%" />
         </el-form-item>
         <el-form-item label="调整原因">
           <el-input v-model="amountForm.reason" placeholder="如：客服协商改价" />
@@ -623,7 +623,7 @@ const fetchOrders = async () => {
   loading.value = true
   try {
     const res = await getOrders(buildListQueryParams(false))
-    tableData.value = res?.list || []
+    tableData.value = (res?.list || []).map(normalizeOrderDisplay)
     applyResponse(res)
     const pShip = res?.pendingShip ?? res?.pending_ship ?? res?.summary?.pending_ship
     if (pShip != null) summaryPendingShip.value = pShip
@@ -765,14 +765,19 @@ const normalizeAmount = (value) => {
   return Math.round((n + Number.EPSILON) * 100) / 100
 }
 const fmtDateTime = (value) => value ? formatDateTime(value) : '-'
+const normalizeOrderDisplay = (row = {}) => {
+  const paymentMethodCode = detailPaymentMethod(row)
+  return {
+    ...row,
+    display_pay_amount: money(row.pay_amount),
+    display_status_text: row.status_text || getStatusText(row.status),
+    display_payment_method_code: paymentMethodCode,
+    display_payment_method_text: row.payment_method_text || paymentMethodText(paymentMethodCode),
+    display_refund_target_text: row.refund_target_text || refundDestinationText(paymentMethodCode)
+  }
+}
 const detailPaymentMethod = (row = {}) => {
-  const raw = String(
-    row.payment_method
-    || row.pay_channel
-    || row.pay_type
-    || row.payment_channel
-    || ''
-  ).trim().toLowerCase()
+  const raw = String(row.payment_method || '').trim().toLowerCase()
   if (['wechat', 'wx', 'jsapi', 'miniapp', 'wechatpay', 'weixin'].includes(raw)) return 'wechat'
   if (['goods_fund'].includes(raw)) return 'goods_fund'
   if (['wallet', 'balance', 'credit', 'debt'].includes(raw)) return 'wallet'
@@ -904,7 +909,7 @@ const detailLineItems = computed(() => {
 const handleDetail = async (row) => {
   try {
     const res = await getOrderDetail(row.id)
-    detailData.value = res?.data || res
+    detailData.value = normalizeOrderDisplay(res?.data || res)
     if (detailData.value?.address_snapshot && !detailData.value.address) {
       detailData.value.address = detailData.value.address_snapshot
     }
@@ -964,11 +969,11 @@ const submitShip = async () => {
 
 // ===== 改价 =====
 const amountVisible = ref(false)
-const amountForm = reactive({ actual_price: 0, reason: '' })
+const amountForm = reactive({ pay_amount: 0, reason: '' })
 
 const handleAmount = (row) => {
   currentOrder.value = row
-  amountForm.actual_price = moneyNumber(row.actual_price)
+  amountForm.pay_amount = moneyNumber(row.pay_amount)
   amountForm.reason = ''
   amountVisible.value = true
 }
@@ -976,7 +981,7 @@ const submitAmount = async () => {
   if (!amountForm.reason.trim()) return ElMessage.warning('请填写调整原因')
   await runOrderMutation(
     submittingAmount,
-    () => adjustOrderAmount(currentOrder.value.id, { actual_price: normalizeAmount(amountForm.actual_price), reason: amountForm.reason }),
+    () => adjustOrderAmount(currentOrder.value.id, { pay_amount: normalizeAmount(amountForm.pay_amount), reason: amountForm.reason }),
     '金额修改成功',
     () => { amountVisible.value = false }
   )

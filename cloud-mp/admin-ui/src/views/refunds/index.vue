@@ -46,22 +46,22 @@
           </template>
         </el-table-column>
         <el-table-column label="退款金额" width="110">
-          <template #default="{ row }">¥{{ parseFloat(row.amount || 0).toFixed(2) }}</template>
+          <template #default="{ row }">¥{{ row.display_amount }}</template>
         </el-table-column>
         <el-table-column label="支付 / 退款去向" width="180" class-name="hide-mobile">
           <template #default="{ row }">
             <div style="display:flex; flex-direction:column; gap:6px;">
-              <el-tag :type="paymentMethodTagType(resolvePaymentMethod(row))" effect="plain" size="small">
-                {{ refundPaymentMethodText(row) }}
+              <el-tag :type="paymentMethodTagType(row.display_payment_method_code || resolvePaymentMethod(row))" effect="plain" size="small">
+                {{ row.display_payment_method_text }}
               </el-tag>
-              <span class="text-gray">{{ refundTargetText(row) }}</span>
+              <span class="text-gray">{{ row.display_refund_target_text }}</span>
             </div>
           </template>
         </el-table-column>
         <el-table-column prop="reason" label="退款原因" width="150" show-overflow-tooltip class-name="hide-mobile" />
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">{{ refundStatusText(row) }}</el-tag>
+            <el-tag :type="getStatusType(row.status)">{{ row.display_status_text }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="申请时间" width="170" class-name="hide-mobile">
@@ -118,15 +118,15 @@
           </span>
         </el-descriptions-item>
         <el-descriptions-item label="支付方式">
-          <el-tag :type="paymentMethodTagType(resolvePaymentMethod(currentRow))" effect="plain" size="small">
-            {{ refundPaymentMethodText(currentRow) }}
+          <el-tag :type="paymentMethodTagType(currentRow.display_payment_method_code || resolvePaymentMethod(currentRow))" effect="plain" size="small">
+            {{ currentRow.display_payment_method_text }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="退款去向">{{ refundTargetText(currentRow) }}</el-descriptions-item>
-        <el-descriptions-item label="退款金额">¥{{ parseFloat(currentRow.amount || 0).toFixed(2) }}</el-descriptions-item>
+        <el-descriptions-item label="退款去向">{{ currentRow.display_refund_target_text }}</el-descriptions-item>
+        <el-descriptions-item label="退款金额">¥{{ currentRow.display_amount }}</el-descriptions-item>
         <el-descriptions-item label="退款原因">{{ currentRow.reason || '-' }}</el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-tag :type="getStatusType(currentRow.status)">{{ refundStatusText(currentRow) }}</el-tag>
+          <el-tag :type="getStatusType(currentRow.status)">{{ currentRow.display_status_text }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="申请时间">{{ formatDateTime(currentRow.created_at) }}</el-descriptions-item>
         <el-descriptions-item label="处理时间" v-if="getProcessedTime(currentRow)">
@@ -178,6 +178,21 @@ const rejectForm = reactive({
   reason: ''
 })
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
+const normalizeRefundDisplay = (row = {}) => {
+  const paymentMethodCode = resolvePaymentMethod(row)
+  return {
+    ...row,
+    display_amount: Number.parseFloat(row.amount || 0).toFixed(2),
+    display_payment_method_code: paymentMethodCode,
+    display_payment_method_text: row.payment_method_text || paymentMethodText(paymentMethodCode),
+    display_refund_target_text: row.refund_target_text || ({
+      wechat: '原路退回微信支付',
+      goods_fund: '退回货款余额',
+      wallet: '退回账户余额'
+    }[paymentMethodCode] || '-'),
+    display_status_text: row.status_text || getStatusText(row.status)
+  }
+}
 const resolvePaymentMethod = (row = {}) => {
   const raw = String(
     row.payment_method
@@ -219,7 +234,7 @@ const fetchRefunds = async () => {
       limit: pagination.limit
     }
     const data = await getRefunds(params)
-    tableData.value = data?.list || data?.data?.list || []
+    tableData.value = (data?.list || data?.data?.list || []).map(normalizeRefundDisplay)
     applyResponse(data)
   } catch (error) {
     ElMessage.error('获取售后列表失败')
@@ -232,7 +247,7 @@ const fetchRefunds = async () => {
 const refreshRefunds = () => fetchRefunds()
 
 const patchRefundRow = (id, patch) => {
-  const applyPatch = (row) => ({ ...row, ...patch })
+  const applyPatch = (row) => normalizeRefundDisplay({ ...row, ...patch })
   // 用 _id 或 id 都能匹配，兼容不同格式
   const matchId = (row) => row.id === id || row._id === id
   tableData.value = tableData.value
@@ -286,7 +301,7 @@ const handleReset = () => {
 }
 
 const handleDetail = (row) => {
-  currentRow.value = row
+  currentRow.value = normalizeRefundDisplay(row)
   detailDialogVisible.value = true
 }
 
@@ -335,7 +350,7 @@ const handleRejectSubmit = async () => {
 const handleComplete = async (row) => {
   try {
     await ElMessageBox.confirm(
-      `该操作将立即对用户「${displayUserName(row.user, row.user_id)}」发起退款，金额 ¥${parseFloat(row.amount || 0).toFixed(2)}。\n支付方式：${refundPaymentMethodText(row)}\n退款去向：${refundTargetText(row)}\n请确认当前售后单已审核无误。`,
+      `该操作将立即对用户「${displayUserName(row.user, row.user_id)}」发起退款，金额 ¥${row.display_amount || Number.parseFloat(row.amount || 0).toFixed(2)}。\n支付方式：${row.display_payment_method_text || refundPaymentMethodText(row)}\n退款去向：${row.display_refund_target_text || refundTargetText(row)}\n请确认当前售后单已审核无误。`,
       '确认发起退款',
       {
         confirmButtonText: '立即退款',

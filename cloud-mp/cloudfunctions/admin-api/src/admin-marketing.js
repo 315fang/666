@@ -21,6 +21,7 @@ function registerMarketingRoutes(app, deps) {
         assetUrl,
         createAuditLog,
         directPatchDocument,
+        appendWalletLogEntry,
         requireManualAdjustmentReason,
         ok,
         fail
@@ -1220,7 +1221,7 @@ function registerMarketingRoutes(app, deps) {
         ok(res, { pool_amount: amount, eligible_count: list.length, list });
     });
 
-    app.post('/admin/api/agent-system/dividend/execute', auth, requirePermission('settings_manage'), (req, res) => {
+    app.post('/admin/api/agent-system/dividend/execute', auth, requirePermission('settings_manage'), async (req, res) => {
         const executions = getCollection('dividend_executions');
         const users = getCollection('users');
         const commissions = getCollection('commissions');
@@ -1238,19 +1239,19 @@ function registerMarketingRoutes(app, deps) {
         };
         const previewRows = rules.enabled ? buildDividendPreviewRows(users, rules, amount) : [];
         let totalDistributed = 0;
-        previewRows.forEach((item) => {
+        for (const item of previewRows) {
             const userIndex = users.findIndex((row) => rowMatchesLookup(row, item.userId, [row.openid, row.member_no]));
-            if (userIndex === -1) return;
+            if (userIndex === -1) continue;
             const exists = commissions.find((row) =>
                 pickString(row.type).toLowerCase() === 'year_end_dividend'
                 && row.dividend_year === year
                 && rowMatchesLookup(row, item.userId, [row.openid, row.user_id])
                 && pickString(row.dividend_award_key) === pickString(item.awardKey)
             );
-            if (exists) return;
+            if (exists) continue;
 
             const amountValue = Math.max(0, toNumber(item.dividendAmount, 0));
-            if (amountValue <= 0) return;
+            if (amountValue <= 0) continue;
             totalDistributed += amountValue;
             users[userIndex] = {
                 ...users[userIndex],
@@ -1277,9 +1278,7 @@ function registerMarketingRoutes(app, deps) {
                 description: `${year} 年终分红 · ${item.awardLabel}`
             });
             // 记录钱包流水
-            const walletLogs = getCollection('wallet_logs');
-            walletLogs.push({
-                id: nextId(walletLogs),
+            appendWalletLogEntry({
                 openid: users[userIndex].openid,
                 type: 'year_end_dividend',
                 amount: amountValue,
@@ -1287,8 +1286,7 @@ function registerMarketingRoutes(app, deps) {
                 remark: reasonCheck.reason,
                 created_at: nowIso()
             });
-            saveCollection('wallet_logs', walletLogs);
-        });
+        }
         saveCollection('users', users);
         saveCollection('commissions', commissions);
         const row = {
@@ -1329,19 +1327,19 @@ function registerMarketingRoutes(app, deps) {
         ok(res, buildExitApplicationResponse(row, users, commissions));
     });
 
-    app.put('/admin/api/agent-system/exit-applications/:id/review', auth, requirePermission('users'), (req, res) => {
+    app.put('/admin/api/agent-system/exit-applications/:id/review', auth, requirePermission('users'), async (req, res) => {
         const rows = getCollection('agent_exit_applications');
         const index = rows.findIndex((row) => rowMatchesLookup(row, req.params.id));
         if (index === -1) return fail(res, '退出申请不存在', 404);
         const users = getCollection('users');
         const commissions = getCollection('commissions');
-        const walletLogs = getCollection('wallet_logs');
         const status = req.body?.status || req.body?.result || 'approved';
         const reasonCheck = requireManualAdjustmentReason(req.body?.remark, status === 'approved' ? '审批备注' : '拒绝原因');
         if (!reasonCheck.ok) return fail(res, reasonCheck.message);
         rows[index] = { ...rows[index], status, review_remark: reasonCheck.reason, reviewed_at: nowIso(), updated_at: nowIso() };
         let settlement = null;
         if (status === 'approved' && !rows[index].settled_at) {
+            const walletLogs = getCollection('wallet_logs');
             settlement = applyExitSettlement(rows[index], { users, commissions, walletLogs });
             rows[index] = { ...rows[index], ...settlement, settled_at: nowIso() };
             saveCollection('users', users);

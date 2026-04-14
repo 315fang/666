@@ -1,8 +1,8 @@
 // pages/order/list.js
 const { get, post } = require('../../utils/request');
-const { ORDER_STATUS, ORDER_STATUS_TEXT } = require('../../config/constants');
 const { parseImages } = require('../../utils/dataFormatter');
 const { ErrorHandler } = require('../../utils/errorHandler');
+const { normalizeOrderConsumer, normalizeRefundConsumer, getRefundStatusText } = require('./orderConsumerFields');
 
 function buildOrderActivityInfo(order = {}) {
     const firstItem = Array.isArray(order.items) ? (order.items[0] || {}) : {};
@@ -136,12 +136,15 @@ Page({
             });
 
             // 处理每个订单
-            newOrders = newOrders.map(order => {
+            newOrders = newOrders.map((rawOrder) => {
+                const order = normalizeOrderConsumer(rawOrder);
                 if (order.product && order.product.images) {
                     order.product.images = parseImages(order.product.images);
                 }
-                const quantity = Number(order.quantity || 1);
-                order.price = order.price || order.unit_price || Number(((parseFloat(order.actual_price || order.total_amount || 0)) / Math.max(quantity, 1)).toFixed(2));
+                const quantity = Number(order.quantity || order.qty || 1);
+                const unitPriceBase = order.total_amount != null ? order.total_amount : order.pay_amount;
+                order.price = order.price || order.unit_price || Number((parseFloat(unitPriceBase || 0) / Math.max(quantity, 1)).toFixed(2));
+                order.display_price = Number.isFinite(Number(order.price)) ? Number(order.price).toFixed(2) : order.display_total_amount;
 
                 // ★ 待付款倒计时文字
                 if (order.status === 'pending' || order.status === 'pending_payment') {
@@ -151,15 +154,17 @@ Page({
                 // ★ 检查该订单是否有活跃退款
                 const activeRefund = refundMap[order.id];
                 if (activeRefund) {
+                    const normalizedRefund = normalizeRefundConsumer(activeRefund);
                     order.hasActiveRefund = true;
-                    order.refundId = activeRefund.id;
-                    order.refundStatus = activeRefund.status;
-                    // 覆盖状态文本为退款状态
-                    order.statusText = activeRefund.status_text || '退款中';
+                    order.refundId = normalizedRefund.id;
+                    order.refundStatus = normalizedRefund.status;
+                    order.activeRefund = normalizedRefund;
+                    order.display_status_text = normalizedRefund.display_status_text || '退款中';
+                    order.display_status_desc = normalizedRefund.display_status_desc || order.display_status_desc;
+                    order.display_refund_target_text = normalizedRefund.display_refund_target_text || order.display_refund_target_text;
                     order.displayStatus = 'refunding';
                 } else {
                     order.hasActiveRefund = false;
-                    order.statusText = order.status_text || ORDER_STATUS_TEXT[order.status] || '未知状态';
                     order.displayStatus = order.status;
                 }
                 order.activityInfo = buildOrderActivityInfo(order);
@@ -184,7 +189,8 @@ Page({
             const refundList = res.data?.list || [];
 
             // 将退款记录转换为类订单结构（便于复用同一个模板）
-            const newOrders = refundList.map(refund => {
+            const newOrders = refundList.map((rawRefund) => {
+                const refund = normalizeRefundConsumer(rawRefund);
                 const order = refund.order || {};
                 if (order.product) {
                     order.product.images = parseImages(order.product.images); // ★ 统一使用 dataFormatter.parseImages
@@ -196,12 +202,14 @@ Page({
                     hasActiveRefund: ['pending', 'approved', 'processing'].includes(refund.status),
                     refundId: refund.id,
                     refundStatus: refund.status,
-                    statusText: refund.status_text || this._getRefundStatusText(refund.status),
+                    activeRefund: refund,
+                    display_status_text: refund.display_status_text,
+                    display_status_desc: refund.display_status_desc,
                     displayStatus: 'refund_' + refund.status,
                     refundType: refund.type,
                     refundAmount: refund.amount,
-                    refundTargetText: refund.refund_target_text || '',
-                    paymentMethodText: refund.payment_method_text || ''
+                    display_refund_target_text: refund.display_refund_target_text,
+                    display_payment_method_text: refund.display_payment_method_text
                 };
                 item.activityInfo = buildOrderActivityInfo(item);
                 return item;
@@ -277,15 +285,7 @@ Page({
     },
 
     _getRefundStatusText(status) {
-        const map = {
-            pending: '退款审核中',
-            approved: '退款已通过',
-            processing: '退款处理中',
-            completed: '退款完成',
-            rejected: '退款被拒绝',
-            cancelled: '退款已取消'
-        };
-        return map[status] || '退款中';
+        return getRefundStatusText(status) || '退款中';
     },
 
     // Tab切换

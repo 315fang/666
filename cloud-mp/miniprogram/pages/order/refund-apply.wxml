@@ -24,7 +24,7 @@
       <image class="product-img" src="{{order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{order.product && order.product.images && order.product.images.length > 0}}"></image>
       <view class="product-info">
         <text class="product-name">{{order.product.name || '商品'}}</text>
-        <text class="product-price">订单合计 ¥{{order.pay_amount || order.actual_price || order.total_amount}} / 共 {{order.quantity}} 件</text>
+        <text class="product-price">订单合计 ¥{{order.display_pay_amount}} / 共 {{order.quantity}} 件</text>
       </view>
     </view>
   </view>
@@ -48,7 +48,7 @@
   <view class="amount-row">
     <text class="amount-symbol">¥</text>
     <input class="amount-input" type="digit" value="{{amount}}" bindinput="onAmountInput" placeholder="请输入退款金额" />
-    <text class="amount-max">最多 ¥{{order.pay_amount || order.actual_price || order.total_amount || '0.00'}}</text>
+    <text class="amount-max">最多 ¥{{order.display_pay_amount || '0.00'}}</text>
   </view>
 
   <!-- 退货数量（仅退货退款显示） -->

@@ -1,5 +1,6 @@
 // pages/order/refund-list.js - 退货/退款列表
 const { get, post, put } = require('../../utils/request');
+const { normalizeRefundConsumer } = require('./orderConsumerFields');
 
 Page({
     data: {
@@ -37,14 +38,12 @@ Page({
             const res = await get('/refunds', { page, limit });
 
             if (res.code === 0 && res.data) {
-                const list = (res.data.list || []).map(item => {
+                const list = (res.data.list || []).map(rawItem => {
+                    const item = normalizeRefundConsumer(rawItem);
                     // 处理商品图片
                     if (item.order && item.order.product && typeof item.order.product.images === 'string') {
                         try { item.order.product.images = JSON.parse(item.order.product.images); } catch(e) { item.order.product.images = []; }
                     }
-                    item.statusText = item.status_text || this.data.statusText[item.status] || item.status;
-                    item.paymentMethodText = item.payment_method_text || '';
-                    item.refundTargetText = item.refund_target_text || '';
                     return item;
                 });
 

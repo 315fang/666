@@ -21,6 +21,11 @@ function uniqueValues(values) {
     return list;
 }
 
+function couponExpireOffsetMs(validDays) {
+    const days = Math.max(1, Math.floor(toNumber(validDays, 30)));
+    return days * 24 * 60 * 60 * 1000;
+}
+
 function toCouponIdCandidates(couponId) {
     const raw = String(couponId || '').trim();
     if (!raw) return [];
@@ -314,7 +319,8 @@ async function claimWelcomeCoupons(openid) {
                     scope_ids: Array.isArray(tpl.scope_ids) ? tpl.scope_ids : [],
                     status: 'unused',
                     created_at: db.serverDate(),
-                    expire_at: db.serverDate({ offset: validDays * 24 * 60 * 60 })
+                    // CloudBase serverDate offset 使用毫秒，这里必须按“天 -> 毫秒”换算。
+                    expire_at: db.serverDate({ offset: couponExpireOffsetMs(validDays) })
                 }
             });
             claimedCount += 1;

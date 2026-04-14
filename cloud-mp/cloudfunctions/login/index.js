@@ -38,15 +38,88 @@ function createInviteCode() {
     return code;
 }
 
+function couponExpireOffsetMs(validDays) {
+    const days = Math.max(1, Math.floor(toNumber(validDays, 30)));
+    return days * 24 * 60 * 60 * 1000;
+}
+
+function hasValue(value) {
+    return value !== null && value !== undefined && value !== '';
+}
+
+function uniqueValues(values = []) {
+    const seen = {};
+    const result = [];
+    values.forEach((value) => {
+        if (!hasValue(value)) return;
+        const key = String(value);
+        if (seen[key]) return;
+        seen[key] = true;
+        result.push(value);
+    });
+    return result;
+}
+
+async function getWelcomeCouponTemplates() {
+    const tplRes = await db.collection('coupons').where({
+        name: db.RegExp({ regexp: '注册|见面礼|开运|新人', options: 'i' })
+    }).get();
+
+    return (tplRes.data || []).filter((tpl) => tpl.type !== undefined && tpl.is_active !== false);
+}
+
+function buildWelcomeCouponIdCandidates(templates = []) {
+    const values = [];
+    templates.forEach((tpl) => {
+        if (!tpl) return;
+        if (hasValue(tpl.id)) {
+            values.push(tpl.id, String(tpl.id));
+        }
+        if (hasValue(tpl._id)) values.push(tpl._id);
+    });
+    return uniqueValues(values);
+}
+
+function buildUserIdCandidates(openid, user = {}) {
+    const values = [openid];
+    if (hasValue(user.id)) values.push(user.id, String(user.id));
+    if (hasValue(user._id)) values.push(user._id);
+    return uniqueValues(values);
+}
+
+async function hasAnyWelcomeCouponRecord(openid, user = {}) {
+    const templates = await getWelcomeCouponTemplates();
+    const couponIds = buildWelcomeCouponIdCandidates(templates);
+    if (!couponIds.length) return false;
+
+    const userIds = buildUserIdCandidates(openid, user);
+    const queries = [
+        db.collection('user_coupons')
+            .where({ openid, coupon_id: _.in(couponIds) })
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }))
+    ];
+
+    if (userIds.length) {
+        queries.push(
+            db.collection('user_coupons')
+                .where({ user_id: _.in(userIds), coupon_id: _.in(couponIds) })
+                .limit(1)
+                .get()
+                .catch(() => ({ data: [] }))
+        );
+    }
+
+    const results = await Promise.all(queries);
+    return results.some((result) => Array.isArray(result.data) && result.data.length > 0);
+}
+
 // 自动为用户发放新人注册优惠券（幂等）
 async function ensureWelcomeCoupons(openid, userId) {
     try {
         // 查找所有注册/见面礼/开运/新人券模板
-        const tplRes = await db.collection('coupons').where({
-            name: db.RegExp({ regexp: '注册|见面礼|开运|新人', options: 'i' })
-        }).get();
-
-        const templates = tplRes.data.filter((t) => t.type !== undefined && t.is_active !== false);
+        const templates = await getWelcomeCouponTemplates();
         if (!templates.length) return 0;
 
         let claimedCount = 0;
@@ -79,7 +152,8 @@ async function ensureWelcomeCoupons(openid, userId) {
                     scope_ids: Array.isArray(tpl.scope_ids) ? tpl.scope_ids : [],
                     status: 'unused',
                     created_at: db.serverDate(),
-                    expire_at: db.serverDate({ offset: validDays * 24 * 60 * 60 })
+                    // CloudBase serverDate offset 使用毫秒，这里必须按“天 -> 毫秒”换算。
+                    expire_at: db.serverDate({ offset: couponExpireOffsetMs(validDays) })
                 }
             });
             claimedCount += 1;
@@ -165,7 +239,15 @@ exports.main = cloudFunctionWrapper(async (event) => {
         const rawUser = userRes.data[0];
 
         // 自动发放新人优惠券（幂等：未发放过才发）
-        if (!rawUser.register_coupons_issued) {
+        let hasWelcomeCouponRecord = false;
+        if (rawUser.register_coupons_issued) {
+            hasWelcomeCouponRecord = await hasAnyWelcomeCouponRecord(openid, rawUser);
+        }
+
+        if (!rawUser.register_coupons_issued || !hasWelcomeCouponRecord) {
+            if (rawUser.register_coupons_issued && !hasWelcomeCouponRecord) {
+                console.warn('[Login] register_coupons_issued=true 但缺少券记录，尝试补发新人券:', openid);
+            }
             await ensureWelcomeCoupons(openid, rawUser._id);
             // 重新读取以获取更新后的 register_coupons_issued
             userRes = await db.collection('users').where({ openid }).limit(1).get();

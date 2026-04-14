@@ -77,16 +77,16 @@ Page({
         try {
             const res = await get(`/addresses/${id}`);
             const addr = res.data || res;
-            if (addr && addr.id) {
+            if (addr && (addr.id || addr._id)) {
                 this.setData({
                     form: {
-                        receiver_name: addr.receiver_name || '',
-                        phone: addr.phone || '',
+                        receiver_name: addr.receiver_name || addr.recipient || addr.name || '',
+                        phone: addr.phone || addr.contact_phone || '',
                         province: addr.province || '',
                         city: addr.city || '',
                         district: addr.district || '',
-                        detail: addr.detail || '',
-                        is_default: !!addr.is_default
+                        detail: addr.detail || addr.detail_address || '',
+                        is_default: addr.is_default === true || addr.is_default === 1 || addr.is_default === '1'
                     },
                     region: [addr.province, addr.city, addr.district].filter(Boolean),
                     regionText: [addr.province, addr.city, addr.district].filter(Boolean).join(' ')
@@ -284,4 +284,3 @@ Page({
         }
     }
 });
-

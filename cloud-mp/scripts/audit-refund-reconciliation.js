@@ -104,9 +104,11 @@ function primaryId(row) {
 function buildOrderLookup(orders) {
     const lookup = new Map();
     orders.forEach((order) => {
-        const id = primaryId(order);
         const orderNo = pickString(order && order.order_no);
-        if (id != null) lookup.set(String(id), order);
+        [order && order._id, order && order.id, order && order._legacy_id, primaryId(order)]
+            .map((value) => pickString(value))
+            .filter(Boolean)
+            .forEach((key) => lookup.set(key, order));
         if (orderNo) lookup.set(orderNo, order);
     });
     return lookup;
@@ -497,6 +499,10 @@ async function main() {
     items.forEach((item) => {
         summaryActions[item.action] = (summaryActions[item.action] || 0) + 1;
     });
+    const summarySeverities = {};
+    items.forEach((item) => {
+        summarySeverities[item.severity || 'unknown'] = (summarySeverities[item.severity || 'unknown'] || 0) + 1;
+    });
 
     const report = {
         generated_at: new Date().toISOString(),
@@ -520,7 +526,9 @@ async function main() {
             wechat_refunds: items.filter((item) => item.payment_method === 'wechat').length,
             internal_refunds: items.filter((item) => item.payment_method !== 'wechat').length,
             actionable_refunds: items.filter((item) => item.action !== 'noop').length,
-            actions: summaryActions
+            unknown_channel_refunds: items.filter((item) => item.payment_method === 'unknown').length,
+            actions: summaryActions,
+            severities: summarySeverities
         },
         items
     };

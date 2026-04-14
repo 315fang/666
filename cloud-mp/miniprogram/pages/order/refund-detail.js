@@ -1,5 +1,6 @@
 // pages/order/refund-detail.js - 退款详情
 const { get, put } = require('../../utils/request');
+const { normalizeRefundConsumer } = require('./orderConsumerFields');
 
 Page({
     data: {
@@ -46,14 +47,10 @@ Page({
         try {
             const res = await get(`/refunds/${id}`);
             if (res.code === 0 && res.data) {
-                const refund = res.data;
+                const refund = normalizeRefundConsumer(res.data);
                 if (refund.order && refund.order.product && typeof refund.order.product.images === 'string') {
                     try { refund.order.product.images = JSON.parse(refund.order.product.images); } catch(e) { refund.order.product.images = []; }
                 }
-                refund.statusText = refund.status_text || this.data.statusText[refund.status] || refund.status;
-                refund.paymentMethodText = refund.payment_method_text || '';
-                refund.refundTargetText = refund.refund_target_text || '';
-                refund.processedAt = refund.processing_at || refund.processed_at || '';
                 this.setData({
                     refund,
                     loading: false,
@@ -101,10 +98,12 @@ Page({
                 return_tracking_no: trackingNo,
                 return_company: company || undefined
             });
-            const updatedRefund = {
+            const updatedRefund = normalizeRefundConsumer({
                 ...refund,
-                ...(res.data || res)
-            };
+                ...(res.data || res),
+                return_tracking_no: trackingNo,
+                return_company: company
+            });
             this.setData({
                 refund: updatedRefund,
                 'returnShippingForm.return_tracking_no': trackingNo,

@@ -1,76 +1,96 @@
 {
-  "generatedAt": "2026-04-13T14:28:11.321Z",
+  "generatedAt": "2026-04-14T02:11:43.711Z",
   "baseUrl": "https://cloud1-9gywyqe49638e46f.service.tcloudbase.com/admin/api",
-  "ok": true,
+  "ok": false,
   "results": [
     {
       "name": "products",
-      "ok": true,
-      "status": 200,
-      "count": 12,
-      "issues": []
+      "ok": false,
+      "status": 401,
+      "count": 0,
+      "issues": [
+        "HTTP 401 / code 401"
+      ]
     },
     {
       "name": "orders",
-      "ok": true,
-      "status": 200,
-      "count": 20,
-      "issues": []
+      "ok": false,
+      "status": 401,
+      "count": 0,
+      "issues": [
+        "HTTP 401 / code 401"
+      ]
     },
     {
       "name": "users",
-      "ok": true,
-      "status": 200,
-      "count": 20,
-      "issues": []
+      "ok": false,
+      "status": 401,
+      "count": 0,
+      "issues": [
+        "HTTP 401 / code 401"
+      ]
     },
     {
       "name": "refunds",
-      "ok": true,
-      "status": 200,
-      "count": 20,
-      "issues": []
+      "ok": false,
+      "status": 401,
+      "count": 0,
+      "issues": [
+        "HTTP 401 / code 401"
+      ]
     },
     {
       "name": "withdrawals",
-      "ok": true,
-      "status": 200,
-      "count": 5,
-      "issues": []
+      "ok": false,
+      "status": 401,
+      "count": 0,
+      "issues": [
+        "HTTP 401 / code 401"
+      ]
     },
     {
       "name": "commissions",
-      "ok": true,
-      "status": 200,
-      "count": 3,
-      "issues": []
+      "ok": false,
+      "status": 401,
+      "count": 0,
+      "issues": [
+        "HTTP 401 / code 401"
+      ]
     },
     {
       "name": "group-buys",
-      "ok": true,
-      "status": 200,
-      "count": 2,
-      "issues": []
+      "ok": false,
+      "status": 401,
+      "count": 0,
+      "issues": [
+        "HTTP 401 / code 401"
+      ]
     },
     {
       "name": "lottery-prizes",
-      "ok": true,
-      "status": 200,
-      "count": 13,
-      "issues": []
+      "ok": false,
+      "status": 401,
+      "count": 0,
+      "issues": [
+        "HTTP 401 / code 401"
+      ]
     },
     {
       "name": "pickup-stations",
-      "ok": true,
-      "status": 200,
-      "count": 3,
-      "issues": []
+      "ok": false,
+      "status": 401,
+      "count": 0,
+      "issues": [
+        "HTTP 401 / code 401"
+      ]
     },
     {
       "name": "activity-links",
-      "ok": true,
-      "status": 200,
-      "issues": []
+      "ok": false,
+      "status": 401,
+      "issues": [
+        "HTTP 401 / code 401"
+      ]
     }
   ]
 }

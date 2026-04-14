@@ -38,7 +38,9 @@ async function getUserCouponIds(openid) {
 }
 
 function normalizeScopeIds(value) {
-    if (Array.isArray(value)) return uniqueValues(value);
+    if (Array.isArray(value)) {
+        return uniqueValues(value.map((item) => String(item).trim()).filter(Boolean));
+    }
     if (!hasValue(value)) return [];
     if (typeof value === 'string') {
         const trimmed = value.trim();
@@ -46,25 +48,59 @@ function normalizeScopeIds(value) {
         if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
             try {
                 const parsed = JSON.parse(trimmed);
-                if (Array.isArray(parsed)) return uniqueValues(parsed);
+                if (Array.isArray(parsed)) {
+                    return uniqueValues(parsed.map((item) => String(item).trim()).filter(Boolean));
+                }
             } catch (_) {}
         }
         return uniqueValues(trimmed.split(',').map((item) => item.trim()));
     }
-    return uniqueValues([value]);
+    return uniqueValues([String(value).trim()].filter(Boolean));
 }
 
-function couponMatchesScope(coupon = {}, params = {}) {
+async function expandProductScopeIds(productIds = []) {
+    const aliases = new Set(normalizeScopeIds(productIds));
+    const rawIds = Array.from(aliases);
+    if (rawIds.length === 0) return [];
+
+    await Promise.all(rawIds.map(async (rawId) => {
+        const numericId = Number(rawId);
+        const [byDoc, byLegacy] = await Promise.all([
+            db.collection('products').doc(rawId).get().catch(() => ({ data: null })),
+            Number.isFinite(numericId)
+                ? db.collection('products').where({ id: numericId }).limit(1).get().catch(() => ({ data: [] }))
+                : Promise.resolve({ data: [] })
+        ]);
+        const product = byDoc.data || (byLegacy.data && byLegacy.data[0]) || null;
+        if (!product) return;
+
+        [product._id, product.id]
+            .filter(hasValue)
+            .forEach((value) => aliases.add(String(value)));
+    }));
+
+    return Array.from(aliases);
+}
+
+async function buildCouponScopeContext(params = {}) {
+    return {
+        // 兼容购物袋链路传商品文档 _id，而券模板里存的是旧数字 id。
+        productIds: await expandProductScopeIds(params.product_ids),
+        categoryIds: normalizeScopeIds(params.category_ids)
+    };
+}
+
+function couponMatchesScope(coupon = {}, scopeContext = {}) {
     const scope = String(coupon.scope || 'all').toLowerCase();
     const scopeIds = normalizeScopeIds(coupon.scope_ids);
+    const productIds = normalizeScopeIds(scopeContext.productIds);
+    const categoryIds = normalizeScopeIds(scopeContext.categoryIds);
     if (!scope || scope === 'all' || scopeIds.length === 0) return true;
     if (scope === 'product') {
-        const productIds = normalizeScopeIds(params.product_ids);
-        return productIds.length === 0 || productIds.some((id) => scopeIds.includes(String(id)));
+        return productIds.length === 0 || productIds.some((id) => scopeIds.includes(id));
     }
     if (scope === 'category') {
-        const categoryIds = normalizeScopeIds(params.category_ids);
-        return categoryIds.length === 0 || categoryIds.some((id) => scopeIds.includes(String(id)));
+        return categoryIds.length === 0 || categoryIds.some((id) => scopeIds.includes(id));
     }
     return true;
 }
@@ -522,6 +558,7 @@ async function pointsLogs(openid, params = {}) {
 async function availableCoupons(openid, params = {}) {
     const minPurchase = toNumber(params.min_purchase != null ? params.min_purchase : params.amount, 0);
     const userIds = await getUserCouponIds(openid);
+    const scopeContext = await buildCouponScopeContext(params);
 
     const [openidRes, userIdRes] = await Promise.all([
         db.collection('user_coupons').where({ openid }).orderBy('expire_at', 'asc').limit(50).get().catch(() => ({ data: [] })),
@@ -538,7 +575,7 @@ async function availableCoupons(openid, params = {}) {
     if (minPurchase > 0) {
         coupons = coupons.filter(c => toNumber(c.min_purchase, 0) <= minPurchase);
     }
-    coupons = coupons.filter((coupon) => couponMatchesScope(coupon, params));
+    coupons = coupons.filter((coupon) => couponMatchesScope(coupon, scopeContext));
 
     return coupons.sort((a, b) => {
         const ta = a.expire_at ? new Date(a.expire_at).getTime() : 0;

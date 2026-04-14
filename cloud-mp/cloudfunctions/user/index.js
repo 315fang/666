@@ -336,6 +336,68 @@ const asyncHandler = (handler) => async (...args) => {
     }
 };
 
+function pickAddressText(value) {
+    if (value === undefined || value === null) return '';
+    return String(value).trim();
+}
+
+function resolveAddressReceiverName(source = {}) {
+    return pickAddressText(
+        source.receiver_name
+        || source.recipient
+        || source.contact_name
+        || source.name
+    );
+}
+
+function resolveAddressPhone(source = {}) {
+    return pickAddressText(source.phone || source.contact_phone);
+}
+
+function resolveAddressDetail(source = {}) {
+    return pickAddressText(source.detail || source.detail_address || source.address);
+}
+
+function normalizeAddressRecord(address = {}) {
+    const receiverName = resolveAddressReceiverName(address);
+    const phone = resolveAddressPhone(address);
+    const detail = resolveAddressDetail(address);
+    const isDefault = address.is_default === true || address.is_default === 1 || address.is_default === '1';
+
+    return {
+        ...address,
+        id: address.id || address._id || address.address_id || '',
+        receiver_name: receiverName,
+        recipient: receiverName,
+        name: pickAddressText(address.name) || receiverName,
+        phone,
+        contact_phone: pickAddressText(address.contact_phone) || phone,
+        province: pickAddressText(address.province),
+        city: pickAddressText(address.city),
+        district: pickAddressText(address.district),
+        detail,
+        detail_address: pickAddressText(address.detail_address) || detail,
+        is_default: isDefault
+    };
+}
+
+function buildAddressWriteData(params = {}) {
+    const receiverName = resolveAddressReceiverName(params);
+    const detail = resolveAddressDetail(params);
+
+    return {
+        receiver_name: receiverName,
+        recipient: receiverName,
+        phone: resolveAddressPhone(params),
+        province: pickAddressText(params.province),
+        city: pickAddressText(params.city),
+        district: pickAddressText(params.district),
+        detail,
+        detail_address: detail,
+        is_default: params.is_default === true || params.is_default === 1 || params.is_default === '1'
+    };
+}
+
 // 主处理函数
 const handleAction = {
     // ===== 个人资料 =====
@@ -421,7 +483,7 @@ const handleAction = {
     // ===== 地址 =====
     'listAddresses': asyncHandler(async (openid) => {
         const addresses = await userAddresses.listAddresses(openid);
-        return success({ list: addresses });
+        return success({ list: addresses.map(normalizeAddressRecord) });
     }),
 
     'getAddressDetail': asyncHandler(async (openid, params) => {
@@ -430,33 +492,32 @@ const handleAction = {
         const addresses = await userAddresses.listAddresses(openid);
         const addr = addresses.find(a => a._id === id);
         if (!addr) throw notFound('地址不存在');
-        return success(addr);
+        return success(normalizeAddressRecord(addr));
     }),
 
     'addAddress': asyncHandler(async (openid, params) => {
-        const { province, city, detail } = params;
-        if (!province || !city || !detail) {
+        const addressData = buildAddressWriteData(params);
+        if (!addressData.receiver_name) {
+            throw badRequest('请填写收货人姓名');
+        }
+        if (!addressData.province || !addressData.city || !addressData.detail) {
             throw badRequest('缺少必要地址信息');
         }
-        const address = await userAddresses.addAddress(openid, {
-            province, city, district: params.district, detail,
-            recipient: params.recipient, phone: params.phone,
-            is_default: params.is_default || false,
-        });
+        const address = await userAddresses.addAddress(openid, addressData);
         return success({ id: address._id });
     }),
 
     'updateAddress': asyncHandler(async (openid, params) => {
         const id = params.address_id || params.id;
         if (!id) throw badRequest('缺少地址 ID');
-        await userAddresses.updateAddress(id, {
-            province: params.province,
-            city: params.city,
-            district: params.district,
-            detail: params.detail,
-            recipient: params.recipient,
-            phone: params.phone
-        });
+        const addressData = buildAddressWriteData(params);
+        if (!addressData.receiver_name) {
+            throw badRequest('请填写收货人姓名');
+        }
+        if (!addressData.province || !addressData.city || !addressData.detail) {
+            throw badRequest('缺少必要地址信息');
+        }
+        await userAddresses.updateAddress(id, addressData);
         return success(null);
     }),
 

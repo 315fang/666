@@ -1,11 +1,7 @@
 const { get, post } = require('../../utils/request');
 const { parseImages } = require('../../utils/dataFormatter');
 const { logisticsCompanyLabel } = require('./utils/logisticsCompany');
-
-function toMoney(value) {
-    const num = Number(value);
-    return Number.isFinite(num) ? num.toFixed(2) : '0.00';
-}
+const { normalizeOrderConsumer, normalizeRefundConsumer, toMoney } = require('./orderConsumerFields');
 
 function buildOrderActivityInfo(order = {}) {
     const firstItem = Array.isArray(order.items) ? (order.items[0] || {}) : {};
@@ -69,7 +65,8 @@ async function loadOrder(page, idOrNo) {
     try {
         const pathKey = encodeURIComponent(String(idOrNo));
         const orderRes = await get(`/orders/${pathKey}`);
-        const order = orderRes.data;
+        const rawOrder = orderRes.data;
+        const order = normalizeOrderConsumer(rawOrder);
 
         const refundsRes = await get('/refunds', { page: 1, limit: 100, order_id: order.id }).catch(() => ({
             data: { list: [] }
@@ -84,7 +81,7 @@ async function loadOrder(page, idOrNo) {
             const originalAmount = Number(order.original_amount != null ? order.original_amount : order.total_amount);
             const couponDiscount = Number(order.coupon_discount || 0);
             const pointsDiscount = Number(order.points_discount || 0);
-            const payAmount = Number(order.pay_amount != null ? order.pay_amount : (order.actual_price != null ? order.actual_price : order.total_amount));
+            const payAmount = Number(order.pay_amount != null ? order.pay_amount : order.total_amount);
             order.display_original_amount = toMoney(originalAmount);
             order.display_coupon_discount = toMoney(couponDiscount);
             order.display_points_discount = toMoney(pointsDiscount);
@@ -93,7 +90,7 @@ async function loadOrder(page, idOrNo) {
             order.activityInfo = buildOrderActivityInfo(order);
         }
 
-        const allRefunds = refundsRes.data && refundsRes.data.list || [];
+        const allRefunds = ((refundsRes.data && refundsRes.data.list) || []).map(normalizeRefundConsumer);
         const activeRefund = allRefunds.find(
             (refund) => String(refund.order_id) === String(order.id) && ['pending', 'approved', 'processing'].includes(refund.status)
         );

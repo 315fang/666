@@ -21,6 +21,18 @@
   display: block;
 }
 
+.required-mark {
+  color: #DC2626;
+  margin-left: 6rpx;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #64748B;
+}
+
 .form-input {
   font-size: 28rpx;
   color: #0F172A;

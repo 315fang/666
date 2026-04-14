@@ -193,6 +193,52 @@ function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
 }
 
+function normalizeScopeIds(value) {
+    if (Array.isArray(value)) {
+        return Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean)));
+    }
+    if (!hasValue(value)) return [];
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return [];
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) {
+                    return Array.from(new Set(parsed.map((item) => String(item).trim()).filter(Boolean)));
+                }
+            } catch (_) {}
+        }
+        return Array.from(new Set(trimmed.split(',').map((item) => item.trim()).filter(Boolean)));
+    }
+    return [String(value).trim()].filter(Boolean);
+}
+
+function couponMatchesOrderItems(coupon = {}, items = []) {
+    const scope = String(coupon.scope || 'all').toLowerCase();
+    const scopeIds = normalizeScopeIds(coupon.scope_ids);
+    if (!scope || scope === 'all' || scopeIds.length === 0) return true;
+
+    const productIds = Array.from(new Set(
+        items.flatMap((item) => [item.product_id, item.product_legacy_id])
+            .filter(hasValue)
+            .map((value) => String(value))
+    ));
+    const categoryIds = Array.from(new Set(
+        items.map((item) => item.category_id)
+            .filter(hasValue)
+            .map((value) => String(value))
+    ));
+
+    if (scope === 'product') {
+        return productIds.some((id) => scopeIds.includes(id));
+    }
+    if (scope === 'category') {
+        return categoryIds.some((id) => scopeIds.includes(id));
+    }
+    return true;
+}
+
 function centsToYuan(value, fallback = 0) {
     if (!hasValue(value)) return fallback;
     const num = toNumber(value, NaN);
@@ -239,15 +285,32 @@ function normalizeSpecValue(rawSpec) {
     return rawSpec ? String(rawSpec) : '';
 }
 
+function resolveAddressReceiverName(addressInfo = {}) {
+    return addressInfo.receiver_name || addressInfo.recipient || addressInfo.contact_name || addressInfo.name || '';
+}
+
+function resolveAddressPhone(addressInfo = {}) {
+    return addressInfo.phone || addressInfo.contact_phone || '';
+}
+
+function resolveAddressDetail(addressInfo = {}) {
+    return addressInfo.detail || addressInfo.detail_address || addressInfo.address || '';
+}
+
 function buildAddressSnapshot(addressInfo) {
     if (!addressInfo || typeof addressInfo !== 'object') return null;
+    const receiverName = resolveAddressReceiverName(addressInfo);
+    const phone = resolveAddressPhone(addressInfo);
+    const detail = resolveAddressDetail(addressInfo);
     return {
-        receiver_name: addressInfo.receiver_name || addressInfo.name || '',
-        phone: addressInfo.phone || '',
+        receiver_name: receiverName,
+        name: receiverName,
+        phone,
         province: addressInfo.province || '',
         city: addressInfo.city || '',
         district: addressInfo.district || '',
-        detail: addressInfo.detail || addressInfo.address || ''
+        detail,
+        detail_address: detail
     };
 }
 
@@ -435,6 +498,8 @@ async function createOrder(openid, orderData) {
 
         orderItems.push({
             product_id: productId,
+            product_legacy_id: product.id != null ? String(product.id) : '',
+            category_id: product.category_id != null ? String(product.category_id) : '',
             sku_id: item.sku_id || '',
             name: productName,
             snapshot_name: productName,
@@ -475,6 +540,7 @@ async function createOrder(openid, orderData) {
             if (uc) {
                 if (uc.openid && uc.openid !== openid) throw new Error('优惠券不属于当前用户');
                 if (uc.status !== 'unused') throw new Error('优惠券不可用');
+                if (!couponMatchesOrderItems(uc, orderItems)) throw new Error('优惠券不适用于当前商品');
                 // 门槛用折扣前原价校验，与前端展示的商品标价一致
                 if (toNumber(uc.min_purchase, 0) > originalTotalAmount) throw new Error('订单金额未达到优惠券门槛');
                 if (uc.coupon_type === 'percent') {
@@ -558,6 +624,15 @@ async function createOrder(openid, orderData) {
         }
     }
 
+    if ((delivery_type || 'express') === 'express') {
+        if (!addressInfo) {
+            throw new Error('收货地址不存在或不可用');
+        }
+        if (!resolveAddressReceiverName(addressInfo).trim()) {
+            throw new Error('收货地址缺少收货人姓名，请重新填写后再下单');
+        }
+    }
+
     // 6. 生成订单号
     const orderNo = 'ORD' + Date.now() + Math.floor(Math.random() * 1000);
     const totalQuantity = orderItems.reduce((sum, item) => sum + Math.max(1, toNumber(item.qty || item.quantity, 1)), 0);
@@ -591,6 +666,8 @@ async function createOrder(openid, orderData) {
         buyer_role_level: buyerRoleLevel,
         pay_amount: payAmount,
         actual_price: payAmount,
+        payment_method: '',
+        pay_channel: '',
         address_id: address_id || '',
         address: addressSnapshot,
         address_snapshot: addressSnapshot,

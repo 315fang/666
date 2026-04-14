@@ -176,7 +176,7 @@
           <el-descriptions-item label="快递公司">{{ currentOrder.logistics_company || '-' }}</el-descriptions-item>
           <el-descriptions-item label="运单号">{{ currentOrder.tracking_no }}</el-descriptions-item>
           <el-descriptions-item label="收件人">
-            {{ currentOrder.address?.name }} · {{ currentOrder.address?.phone }}
+            {{ currentOrder.address?.receiver_name || currentOrder.address?.name || displayUserName(currentOrder.buyer) }} · {{ currentOrder.address?.phone }}
           </el-descriptions-item>
           <el-descriptions-item label="收货地址">
             {{ currentOrder.address?.province }}{{ currentOrder.address?.city }}{{ currentOrder.address?.district }}{{ currentOrder.address?.detail }}

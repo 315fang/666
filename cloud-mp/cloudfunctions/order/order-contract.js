@@ -80,6 +80,15 @@ function pickString(value, fallback = '') {
     return text || fallback;
 }
 
+function firstFiniteNumber(values, fallback = 0) {
+    for (const value of values) {
+        if (value === null || value === undefined || value === '') continue;
+        const num = Number(value);
+        if (Number.isFinite(num)) return num;
+    }
+    return fallback;
+}
+
 function normalizePaymentMethodCode(rawValue) {
     const raw = pickString(rawValue).toLowerCase();
     if (!raw) return '';
@@ -124,6 +133,36 @@ function getPaymentMethodText(method) {
     return PAYMENT_METHOD_TEXT_MAP[normalized] || normalized || '-';
 }
 
+function resolveOrderPaymentMethod(order = {}) {
+    return normalizePaymentMethodCode(
+        order.payment_method || order.pay_channel || order.pay_type || order.payment_channel || ''
+    );
+}
+
+function resolveOrderPayAmount(order = {}, fallback = 0) {
+    return firstFiniteNumber([order.pay_amount, order.actual_price, order.total_amount], fallback);
+}
+
+function resolveOrderTotalAmount(order = {}, fallback = 0) {
+    return firstFiniteNumber([order.total_amount, order.pay_amount, order.actual_price], fallback);
+}
+
+function resolveRefundAmount(refund = {}, fallback = 0) {
+    return firstFiniteNumber([refund.amount, refund.refund_amount], fallback);
+}
+
+function resolveRefundChannel(paymentMethod, explicitChannel = '') {
+    const explicit = pickString(explicitChannel);
+    if (explicit) {
+        const normalizedExplicit = normalizePaymentMethodCode(explicit);
+        return normalizedExplicit || explicit;
+    }
+    const normalized = normalizePaymentMethodCode(paymentMethod);
+    if (normalized === 'goods_fund') return 'goods_fund';
+    if (normalized === 'wallet') return 'wallet';
+    return 'wechat';
+}
+
 function getRefundTargetText(paymentMethod, explicitTarget = '') {
     const explicit = pickString(explicitTarget);
     if (explicit) return explicit;
@@ -140,5 +179,10 @@ module.exports = {
     getRefundStatusText,
     getRefundStatusDesc,
     getPaymentMethodText,
-    getRefundTargetText
+    getRefundTargetText,
+    resolveOrderPaymentMethod,
+    resolveOrderPayAmount,
+    resolveOrderTotalAmount,
+    resolveRefundAmount,
+    resolveRefundChannel
 };

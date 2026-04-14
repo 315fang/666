@@ -1,5 +1,6 @@
 // pages/order/refund-apply.js - 申请退货/退款
 const { get, post } = require('../../utils/request');
+const { normalizeOrderConsumer } = require('./orderConsumerFields');
 
 Page({
     data: {
@@ -38,9 +39,10 @@ Page({
             if (order && order.product && typeof order.product.images === 'string') {
                 try { order.product.images = JSON.parse(order.product.images); } catch (e) { order.product.images = []; }
             }
-            const refundableAmount = order.pay_amount || order.actual_price || order.total_amount;
+            const normalizedOrder = normalizeOrderConsumer(order);
+            const refundableAmount = normalizedOrder.display_pay_amount;
             this.setData({
-                order,
+                order: normalizedOrder,
                 amount: refundableAmount
             });
         } catch (err) {
@@ -110,7 +112,7 @@ Page({
             return;
         }
 
-        const maxRefundAmount = parseFloat(this.data.order.pay_amount || this.data.order.actual_price || this.data.order.total_amount);
+        const maxRefundAmount = parseFloat(this.data.order.pay_amount || 0);
         if (refundAmount > maxRefundAmount) {
             wx.showToast({ title: '退款金额不能超过订单金额', icon: 'none' });
             return;
@@ -130,8 +132,7 @@ Page({
                 type,
                 reason,
                 description,
-                amount: refundAmount,
-                refund_amount: refundAmount
+                amount: refundAmount
             };
             // 退货退款传退货数量，仅退款不传（后端默认0）
             if (type === 'return_refund') {

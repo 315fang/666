@@ -4,7 +4,6 @@ const db = cloud.database();
 const _ = db.command;
 const { getAllRecords } = require('./shared/utils');
 const {
-    normalizePaymentMethodCode,
     normalizeOrderStatusGroup,
     normalizeOrderStatusForClient,
     getOrderStatusText,
@@ -12,7 +11,12 @@ const {
     getRefundStatusText,
     getRefundStatusDesc,
     getPaymentMethodText,
-    getRefundTargetText
+    getRefundTargetText,
+    resolveOrderPaymentMethod,
+    resolveOrderPayAmount,
+    resolveOrderTotalAmount,
+    resolveRefundAmount,
+    resolveRefundChannel
 } = require('./order-contract');
 
 function toNumber(value, fallback = 0) {
@@ -300,12 +304,12 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
     const statusGroup = normalizeOrderStatusGroup(rawStatus);
     const statusText = getOrderStatusText(rawStatus);
     const statusDesc = getOrderStatusDesc(rawStatus);
-    const paymentMethod = normalizePaymentMethodCode(order.payment_method || order.pay_channel || order.pay_type || order.payment_channel || '');
+    const paymentMethod = resolveOrderPaymentMethod(order);
     const unitPrice = item.price != null
         ? item.price
         : (item.unit_price != null ? item.unit_price : (order.price || order.unit_price || order.total_amount || order.pay_amount));
-    const totalAmount = order.total_amount != null ? order.total_amount : (order.pay_amount || order.actual_price || 0);
-    const payAmount = order.pay_amount != null ? order.pay_amount : totalAmount;
+    const totalAmount = resolveOrderTotalAmount(order, 0);
+    const payAmount = resolveOrderPayAmount(order, totalAmount);
     const productImages = normalizeImages(firstFilled(order.product?.images, productDoc?.images, productDoc?.image, productDoc?.cover));
     const image = firstFilled(
         item.image,
@@ -496,7 +500,7 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         price: displayAmount(unitPrice),
         total_amount: displayAmount(totalAmount),
         pay_amount: displayAmount(payAmount),
-        actual_price: displayAmount(order.actual_price != null ? order.actual_price : payAmount)
+        actual_price: displayAmount(payAmount)
     };
 }
 
@@ -550,15 +554,12 @@ async function formatRefundForClient(refund = {}, cache = new Map(), defaultAuto
     const formattedOrder = canonicalOrder
         ? await formatOrderForClient(canonicalOrder, cache, defaultAutoCancelMinutes)
         : null;
-    const paymentMethod = normalizePaymentMethodCode(
-        refund.payment_method
-        || formattedOrder?.payment_method
-        || canonicalOrder?.payment_method
-        || canonicalOrder?.pay_channel
-        || canonicalOrder?.pay_type
-        || canonicalOrder?.payment_channel
-        || ''
-    );
+    const paymentMethod = resolveOrderPaymentMethod({
+        payment_method: refund.payment_method || formattedOrder?.payment_method || canonicalOrder?.payment_method || '',
+        pay_channel: refund.pay_channel || formattedOrder?.pay_channel || canonicalOrder?.pay_channel || '',
+        pay_type: refund.pay_type || canonicalOrder?.pay_type || '',
+        payment_channel: refund.payment_channel || canonicalOrder?.payment_channel || ''
+    });
     const status = refund.status || 'pending';
     return {
         ...refund,
@@ -566,13 +567,13 @@ async function formatRefundForClient(refund = {}, cache = new Map(), defaultAuto
         order_id: formattedOrder?.id || refund.order_id || '',
         order_no: formattedOrder?.order_no || refund.order_no || '',
         openid: refund.openid || formattedOrder?.openid || '',
-        amount: displayAmount(refund.amount),
+        amount: displayAmount(resolveRefundAmount(refund, 0)),
         status,
         status_text: getRefundStatusText(status),
         status_desc: getRefundStatusDesc(status),
         payment_method: paymentMethod,
         payment_method_text: getPaymentMethodText(paymentMethod),
-        refund_channel: refund.refund_channel || paymentMethod || '',
+        refund_channel: resolveRefundChannel(paymentMethod, refund.refund_channel || ''),
         refund_target_text: getRefundTargetText(paymentMethod, refund.refund_target_text || refund.refund_target || refund.refund_to),
         created_at: toIsoString(refund.created_at) || refund.created_at || null,
         processing_at: toIsoString(refund.processing_at) || refund.processing_at || null,

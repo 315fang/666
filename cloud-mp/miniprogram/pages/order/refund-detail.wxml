@@ -7,27 +7,22 @@
     <image class="status-icon-img" wx:if="{{refund.status === 'rejected'}}" src="/assets/icons/x.svg" mode="aspectFit"/>
     <image class="status-icon-img" wx:if="{{refund.status === 'completed'}}" src="/assets/icons/check.svg" mode="aspectFit"/>
     <image class="status-icon-img" wx:if="{{refund.status === 'cancelled'}}" src="/assets/icons/minus.svg" mode="aspectFit"/>
-    <text class="status-text">{{refund.statusText}}</text>
-    <text class="status-desc" wx:if="{{refund.status === 'rejected' && refund.reject_reason}}">
-      拒绝原因: {{refund.reject_reason}}
-    </text>
-    <text class="status-desc" wx:if="{{refund.status === 'approved' && refund.type === 'return_refund'}}">
-      请尽快寄回商品并填写物流单号
-    </text>
+    <text class="status-text">{{refund.display_status_text || refund.status}}</text>
+    <text class="status-desc" wx:if="{{refund.display_status_desc}}">{{refund.display_status_desc}}</text>
   </view>
 
   <!-- 退款金额 -->
   <view class="amount-card">
     <text class="amount-label">退款金额</text>
-    <text class="amount-value">¥{{refund.amount}}</text>
+    <text class="amount-value">¥{{refund.display_amount}}</text>
   </view>
 
   <!-- 退回明细 -->
-  <view class="card refund-restore-card" wx:if="{{refund.order && (refund.order.points_used > 0 || refund.order.coupon_discount > 0 || refund.order.payment_method === 'goods_fund' || refund.order.pay_channel === 'goods_fund')}}">
+  <view class="card refund-restore-card" wx:if="{{refund.order && (refund.order.points_used > 0 || refund.order.coupon_discount > 0 || refund.order.payment_method === 'goods_fund' || refund.payment_method === 'goods_fund')}}">
     <view class="card-title">退回明细</view>
-    <view class="info-row" wx:if="{{refund.refundTargetText}}">
+    <view class="info-row" wx:if="{{refund.display_refund_target_text}}">
       <text class="info-label">退回方式</text>
-      <text class="info-value restore-tag">{{refund.refundTargetText}}</text>
+      <text class="info-value restore-tag">{{refund.display_refund_target_text}}</text>
     </view>
     <view class="info-row" wx:if="{{refund.order.points_used > 0}}">
       <text class="info-label">退回积分</text>
@@ -35,7 +30,7 @@
     </view>
     <view class="info-row" wx:if="{{refund.order.coupon_discount > 0}}">
       <text class="info-label">退回优惠券</text>
-      <text class="info-value restore-coupon">优惠券已退回（¥{{refund.order.coupon_discount}}）</text>
+      <text class="info-value restore-coupon">优惠券已退回（¥{{refund.order.display_coupon_discount}}）</text>
     </view>
   </view>
 
@@ -71,7 +66,7 @@
       <image class="product-img" src="{{refund.order.product && refund.order.product.images && refund.order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{refund.order.product && refund.order.product.images && refund.order.product.images.length > 0}}"></image>
       <view class="product-info">
         <text class="product-name">{{refund.order.product.name}}</text>
-        <text class="product-price">订单金额: ¥{{refund.order.total_amount}}</text>
+        <text class="product-price">订单金额: ¥{{refund.order.display_total_amount}}</text>
       </view>
     </view>
   </view>
@@ -87,13 +82,13 @@
       <text class="info-label">退款类型</text>
       <text class="info-value">{{typeText[refund.type]}}</text>
     </view>
-    <view class="info-row" wx:if="{{refund.paymentMethodText}}">
+    <view class="info-row" wx:if="{{refund.display_payment_method_text}}">
       <text class="info-label">支付方式</text>
-      <text class="info-value">{{refund.paymentMethodText}}</text>
+      <text class="info-value">{{refund.display_payment_method_text}}</text>
     </view>
-    <view class="info-row" wx:if="{{refund.refundTargetText}}">
+    <view class="info-row" wx:if="{{refund.display_refund_target_text}}">
       <text class="info-label">退款去向</text>
-      <text class="info-value">{{refund.refundTargetText}}</text>
+      <text class="info-value">{{refund.display_refund_target_text}}</text>
     </view>
     <view class="info-row">
       <text class="info-label">退款原因</text>
@@ -105,11 +100,11 @@
     </view>
     <view class="info-row">
       <text class="info-label">申请时间</text>
-      <text class="info-value">{{refund.createdAt || refund.created_at}}</text>
+      <text class="info-value">{{refund.display_created_at || refund.created_at}}</text>
     </view>
-    <view class="info-row" wx:if="{{refund.processedAt}}">
+    <view class="info-row" wx:if="{{refund.display_processed_at}}">
       <text class="info-label">处理时间</text>
-      <text class="info-value">{{refund.processedAt}}</text>
+      <text class="info-value">{{refund.display_processed_at}}</text>
     </view>
     <view class="info-row" wx:if="{{refund.completed_at}}">
       <text class="info-label">完成时间</text>

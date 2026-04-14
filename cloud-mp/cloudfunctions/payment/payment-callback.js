@@ -4,6 +4,15 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const { verifySignature, decryptResource, loadPublicKey } = require('./wechat-pay-v3');
+const {
+    buildPaymentWritePatch,
+    getRefundTargetText,
+    normalizePaymentMethodCode,
+    resolveOrderPayAmount,
+    resolveOrderPaymentMethod,
+    resolveRefundChannel,
+    resolvePostPayStatus
+} = require('./shared/order-payment');
 
 const DEFAULT_ROLE_NAMES = {
     0: 'VIP会员',
@@ -321,11 +330,15 @@ function getCallbackPaidFen(transaction = {}) {
 }
 
 function getOrderPayFen(order = {}) {
-    return amountFen(order.pay_amount ?? order.actual_price ?? order.total_amount);
+    return amountFen(resolveOrderPayAmount(order, 0));
 }
 
 function getOrderTotalAmount(order = {}) {
-    return roundMoney(order.pay_amount ?? order.actual_price ?? order.total_amount);
+    return resolveOrderPayAmount(order, 0);
+}
+
+function buildPaidOrderPatch(paymentMethod, payAmount, extra = {}) {
+    return buildPaymentWritePatch(paymentMethod, payAmount, extra);
 }
 
 async function getDocByIdOrLegacy(collectionName, id) {
@@ -1143,36 +1156,211 @@ async function processPaidOrder(orderId, order) {
 /**
  * 退还已使用的优惠券（退款时调用）
  */
-async function restoreCoupon(order) {
+async function restoreCoupon(orderId, order) {
     if (!order || !order.openid) return false;
+    if (order.refund_coupon_restored_at) return true;
 
+    let restored = false;
     if (order.user_coupon_id) {
-        const restored = await db.collection('user_coupons')
+        restored = await db.collection('user_coupons')
             .doc(String(order.user_coupon_id))
             .update({ data: { status: 'unused', used_at: db.command.remove() } })
             .then(() => true)
             .catch(() => false);
-        if (restored) return true;
     }
 
-    if (!order.coupon_id) return false;
+    if (!restored && !order.coupon_id) {
+        if (orderId) {
+            await db.collection('orders').doc(String(orderId)).update({
+                data: { refund_coupon_restored_at: db.serverDate(), updated_at: db.serverDate() }
+            }).catch(() => {});
+        }
+        return true;
+    }
 
-    const couponIdStr = String(order.coupon_id);
-    const couponIdNum = Number(order.coupon_id);
-    const candidates = Number.isFinite(couponIdNum)
-        ? [couponIdStr, couponIdNum]
-        : [couponIdStr];
+    if (!restored) {
+        const couponIdStr = String(order.coupon_id);
+        const couponIdNum = Number(order.coupon_id);
+        const candidates = Number.isFinite(couponIdNum)
+            ? [couponIdStr, couponIdNum]
+            : [couponIdStr];
 
-    const results = await Promise.all(
-        candidates.map((cid) =>
-            db.collection('user_coupons')
-                .where({ openid: order.openid, coupon_id: cid, status: 'used' })
-                .update({ data: { status: 'unused', used_at: db.command.remove() } })
-                .then((r) => r && r.stats && r.stats.updated > 0)
-                .catch(() => false)
-        )
+        const results = await Promise.all(
+            candidates.map((cid) =>
+                db.collection('user_coupons')
+                    .where({ openid: order.openid, coupon_id: cid, status: 'used' })
+                    .update({ data: { status: 'unused', used_at: db.command.remove() } })
+                    .then((r) => r && r.stats && r.stats.updated > 0)
+                    .catch(() => false)
+            )
+        );
+        restored = results.some(Boolean);
+    }
+
+    if (orderId) {
+        await db.collection('orders').doc(String(orderId)).update({
+            data: { refund_coupon_restored_at: db.serverDate(), updated_at: db.serverDate() }
+        }).catch(() => {});
+    }
+    return restored;
+}
+
+function deriveRefundRevertStatus(order = {}) {
+    return order.prev_status
+        || (order.confirmed_at || order.auto_confirmed_at ? 'completed'
+            : (order.shipped_at ? 'shipped'
+                : (order.paid_at ? 'paid' : 'pending_payment')));
+}
+
+async function findOrderForRefund(refund = {}) {
+    if (hasValue(refund.order_id)) {
+        const byId = await getDocByIdOrLegacy('orders', refund.order_id);
+        if (byId && byId._id) return byId;
+    }
+    if (hasValue(refund.order_no)) {
+        const byOrderNo = await db.collection('orders')
+            .where({ order_no: String(refund.order_no) })
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+        if (byOrderNo.data && byOrderNo.data[0]) return byOrderNo.data[0];
+    }
+    return null;
+}
+
+function buildRefundRuntime(refund = {}, order = null) {
+    const paymentMethod = normalizePaymentMethodCode(
+        refund.payment_method
+        || resolveOrderPaymentMethod(order || {})
+        || refund.refund_channel
+        || ''
     );
-    return results.some(Boolean);
+    return {
+        amount: firstNumber([refund.amount, refund.refund_amount, getOrderTotalAmount(order || {})], 0),
+        paymentMethod,
+        refundChannel: resolveRefundChannel(paymentMethod, refund.refund_channel || ''),
+        refundTargetText: getRefundTargetText(paymentMethod, refund.refund_target_text || refund.refund_target || refund.refund_to)
+    };
+}
+
+async function cancelPendingCommissionsForRefund(orderId, reason) {
+    await db.collection('commissions')
+        .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval', 'approved']) })
+        .update({
+            data: {
+                status: 'cancelled',
+                cancel_reason: reason,
+                cancelled_reason: reason,
+                updated_at: db.serverDate()
+            }
+        })
+        .catch(() => {});
+}
+
+async function clawBackSettledCommissions(orderId) {
+    const settledRes = await db.collection('commissions')
+        .where({ order_id: orderId, status: 'settled' })
+        .get()
+        .catch(() => ({ data: [] }));
+    for (const comm of (settledRes.data || [])) {
+        const commAmount = toNumber(comm.amount, 0);
+        if (commAmount <= 0 || comm.clawed_back_at) continue;
+        await db.collection('users').where({ openid: comm.openid }).update({
+            data: {
+                commission_balance: _.inc(-commAmount),
+                balance: _.inc(-commAmount),
+                updated_at: db.serverDate()
+            }
+        }).catch((err) => {
+            console.error('[RefundCallback] 追回已结算佣金余额失败:', err.message);
+        });
+        await db.collection('commissions').doc(String(comm._id)).update({
+            data: {
+                status: 'cancelled',
+                cancel_reason: '退款追回已结算佣金',
+                cancelled_reason: '退款追回已结算佣金',
+                clawed_back_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        }).catch(() => {});
+    }
+}
+
+async function restoreRefundOrderInventory(orderId, order = {}) {
+    if (!order || !Array.isArray(order.items)) return;
+    if (order.refund_stock_restored_at) return;
+    for (const item of order.items) {
+        const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+        if (item.product_id) {
+            await db.collection('products').doc(String(item.product_id)).update({
+                data: { stock: _.inc(qty), sales_count: _.inc(-qty), updated_at: db.serverDate() }
+            }).catch(() => {});
+        }
+        if (item.sku_id) {
+            await db.collection('skus').doc(String(item.sku_id)).update({
+                data: { stock: _.inc(qty), updated_at: db.serverDate() }
+            }).catch(() => {});
+        }
+    }
+    if (orderId) {
+        await db.collection('orders').doc(String(orderId)).update({
+            data: { refund_stock_restored_at: db.serverDate(), updated_at: db.serverDate() }
+        }).catch(() => {});
+    }
+}
+
+async function reverseBuyerAssetsForRefund(orderId, order = {}) {
+    if (!order || !order.openid) return;
+    if (order.refund_buyer_assets_reversed_at) return;
+    const pointsUsed = toNumber(order.points_used, 0);
+    const pointsEarned = toNumber(order.points_earned, 0);
+    const orderPayAmount = getOrderTotalAmount(order);
+    const growthEarned = Math.floor(orderPayAmount);
+    const pointsDelta = pointsUsed - pointsEarned;
+    const growthDelta = pointsUsed - growthEarned;
+
+    const userUpdates = { updated_at: db.serverDate(), order_count: _.inc(-1) };
+    if (pointsDelta !== 0) userUpdates.points = _.inc(pointsDelta);
+    if (growthDelta !== 0) userUpdates.growth_value = _.inc(growthDelta);
+    if (orderPayAmount > 0) userUpdates.total_spent = _.inc(-orderPayAmount);
+
+    await db.collection('users')
+        .where({ openid: order.openid })
+        .update({ data: userUpdates })
+        .catch((err) => { console.error('[RefundCallback] 用户数据回退失败:', err.message); });
+
+    if (orderId) {
+        await db.collection('orders').doc(String(orderId)).update({
+            data: { refund_buyer_assets_reversed_at: db.serverDate(), updated_at: db.serverDate() }
+        }).catch(() => {});
+    }
+
+    if (pointsUsed > 0) {
+        await db.collection('point_logs').add({
+            data: {
+                openid: order.openid,
+                type: 'refund',
+                amount: pointsUsed,
+                source: 'order_refund',
+                order_id: orderId,
+                description: `退款退还 ${pointsUsed} 消费积分`,
+                created_at: db.serverDate()
+            }
+        }).catch(() => {});
+    }
+    if (pointsEarned > 0) {
+        await db.collection('point_logs').add({
+            data: {
+                openid: order.openid,
+                type: 'deduct',
+                amount: -pointsEarned,
+                source: 'order_refund_revoke',
+                order_id: orderId,
+                description: `退款扣回 ${pointsEarned} 奖励积分`,
+                created_at: db.serverDate()
+            }
+        }).catch(() => {});
+    }
 }
 
 /**
@@ -1254,7 +1442,6 @@ async function handleRechargeCallback(outTradeNo, transaction) {
  */
 async function handleRefundCallback(refundData, eventType) {
     const outRefundNo = refundData.out_refund_no;
-    const outTradeNo = refundData.out_trade_no;
     const refundStatus = (refundData.refund_status || '').toUpperCase();
     const wxRefundId = refundData.refund_id || '';
 
@@ -1283,14 +1470,20 @@ async function handleRefundCallback(refundData, eventType) {
         return { code: 'SUCCESS', message: 'Already in terminal state' };
     }
 
-    const orderId = refund.order_id;
+    const order = await findOrderForRefund(refund);
+    const canonicalOrderId = order && order._id ? String(order._id) : (hasValue(refund.order_id) ? String(refund.order_id) : '');
+    const refundRuntime = buildRefundRuntime(refund, order);
 
     if (refundStatus === 'SUCCESS') {
-        // 退款成功：更新退款记录和订单状态
+        // 先写入规范字段，待下游回滚完成后再标记 completed，避免过早进入终态。
         await db.collection('refunds').doc(refund._id).update({
             data: {
-                status: 'completed',
-                completed_at: db.serverDate(),
+                status: 'processing',
+                processing_at: refund.processing_at || db.serverDate(),
+                amount: refundRuntime.amount,
+                payment_method: refundRuntime.paymentMethod,
+                refund_channel: refundRuntime.refundChannel,
+                refund_target_text: refundRuntime.refundTargetText,
                 wx_refund_id: wxRefundId || refund.wx_refund_id || '',
                 wx_refund_status: refundStatus,
                 wx_success_time: refundData.success_time || '',
@@ -1298,108 +1491,52 @@ async function handleRefundCallback(refundData, eventType) {
             }
         });
 
-        if (orderId) {
-            // 取消未结算佣金
-            await db.collection('commissions')
-                .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval', 'approved']) })
-                .update({ data: { status: 'cancelled', cancel_reason: '退款完成，佣金作废', cancelled_reason: '退款完成，佣金作废', updated_at: db.serverDate() } })
-                .catch(() => {});
+        try {
+            if (canonicalOrderId) {
+                if (!order?.refund_commissions_resolved_at) {
+                    await cancelPendingCommissionsForRefund(canonicalOrderId, '退款完成，佣金作废');
+                    await clawBackSettledCommissions(canonicalOrderId);
+                    await db.collection('orders').doc(canonicalOrderId).update({
+                        data: { refund_commissions_resolved_at: db.serverDate(), updated_at: db.serverDate() }
+                    }).catch(() => {});
+                }
 
-            // 追回已结算佣金（settled 状态已入账到用户余额，需原子扣回）
-            const settledRes = await db.collection('commissions')
-                .where({ order_id: orderId, status: 'settled' })
-                .get()
-                .catch(() => ({ data: [] }));
-            for (const comm of (settledRes.data || [])) {
-                const commAmount = toNumber(comm.amount, 0);
-                if (commAmount <= 0 || comm.clawed_back_at) continue;
-                // 原子扣回佣金余额（余额不足则允许出现负值/欠款）
-                await db.collection('users').where({ openid: comm.openid }).update({
-                    data: {
-                        commission_balance: _.inc(-commAmount),
-                        balance: _.inc(-commAmount),
-                        updated_at: db.serverDate()
+                if (order) {
+                    await restoreRefundOrderInventory(canonicalOrderId, order);
+                    await reverseBuyerAssetsForRefund(canonicalOrderId, order);
+
+                    if (order.user_coupon_id || order.coupon_id) {
+                        const couponRestored = await restoreCoupon(canonicalOrderId, order).catch(() => false);
+                        if (!couponRestored) {
+                            throw new Error(`优惠券退还失败, order_id: ${canonicalOrderId}`);
+                        }
                     }
-                }).catch((err) => {
-                    console.error('[RefundCallback] 追回已结算佣金余额失败:', err.message);
+                }
+
+                await db.collection('orders').doc(canonicalOrderId).update({
+                    data: { status: 'refunded', refunded_at: db.serverDate(), prev_status: _.remove(), updated_at: db.serverDate() }
                 });
-                // 标记已追回
-                await db.collection('commissions').doc(String(comm._id)).update({
-                    data: {
-                        status: 'cancelled',
-                        cancel_reason: '退款追回已结算佣金',
-                        cancelled_reason: '退款追回已结算佣金',
-                        clawed_back_at: db.serverDate(),
-                        updated_at: db.serverDate()
-                    }
-                }).catch(() => {});
             }
 
-            // 回滚库存 + 退积分 + 退优惠券
-            const orderRes = await db.collection('orders').doc(String(orderId)).get().catch(() => ({ data: null }));
-            const order = orderRes.data;
-            if (order && Array.isArray(order.items)) {
-                for (const item of order.items) {
-                    const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
-                    if (item.product_id) {
-                        await db.collection('products').doc(String(item.product_id)).update({
-                            data: { stock: _.inc(qty), sales_count: _.inc(-qty), updated_at: db.serverDate() }
-                        }).catch(() => {});
-                    }
-                    if (item.sku_id) {
-                        await db.collection('skus').doc(String(item.sku_id)).update({
-                            data: { stock: _.inc(qty), updated_at: db.serverDate() }
-                        }).catch(() => {});
-                    }
+            await db.collection('refunds').doc(refund._id).update({
+                data: {
+                    status: 'completed',
+                    completed_at: db.serverDate(),
+                    callback_error: _.remove(),
+                    callback_retry_needed_at: _.remove(),
+                    updated_at: db.serverDate()
                 }
-            }
-
-            if (order) {
-                const pointsUsed = toNumber(order.points_used, 0);
-                const pointsEarned = toNumber(order.points_earned, 0);
-                const orderPayAmount = toNumber(order.pay_amount || order.actual_price || order.total_amount, 0);
-                const growthEarned = Math.floor(orderPayAmount);
-
-                // 净变化：退还消费积分 - 扣回奖励积分
-                const pointsDelta = pointsUsed - pointsEarned;
-                const growthDelta = pointsUsed - growthEarned;
-
-                const userUpdates = { updated_at: db.serverDate() };
-                if (pointsDelta !== 0) userUpdates.points = _.inc(pointsDelta);
-                if (growthDelta !== 0) userUpdates.growth_value = _.inc(growthDelta);
-                if (orderPayAmount > 0) userUpdates.total_spent = _.inc(-orderPayAmount);
-                userUpdates.order_count = _.inc(-1);
-
-                if (Object.keys(userUpdates).length > 1) {
-                    await db.collection('users')
-                        .where({ openid: order.openid })
-                        .update({ data: userUpdates })
-                        .catch((err) => { console.error('[RefundCallback] 用户数据回退失败:', err.message); });
+            });
+        } catch (settleErr) {
+            await db.collection('refunds').doc(refund._id).update({
+                data: {
+                    status: 'processing',
+                    callback_error: settleErr.message,
+                    callback_retry_needed_at: db.serverDate(),
+                    updated_at: db.serverDate()
                 }
-
-                if (pointsUsed > 0) {
-                    await db.collection('point_logs').add({
-                        data: { openid: order.openid, type: 'refund', amount: pointsUsed, source: 'order_refund', order_id: orderId, description: `退款退还 ${pointsUsed} 消费积分`, created_at: db.serverDate() }
-                    }).catch(() => {});
-                }
-                if (pointsEarned > 0) {
-                    await db.collection('point_logs').add({
-                        data: { openid: order.openid, type: 'deduct', amount: -pointsEarned, source: 'order_refund_revoke', order_id: orderId, description: `退款扣回 ${pointsEarned} 奖励积分`, created_at: db.serverDate() }
-                    }).catch(() => {});
-                }
-
-                // 退优惠券
-                if (order.user_coupon_id || order.coupon_id) {
-                    const couponRestored = await restoreCoupon(order).catch(() => false);
-                    if (!couponRestored) {
-                        console.warn('[RefundCallback] 优惠券退还失败或无需退还, order_id:', orderId);
-                    }
-                }
-            }
-
-            await db.collection('orders').doc(String(orderId)).update({
-                data: { status: 'refunded', refunded_at: db.serverDate(), updated_at: db.serverDate() }
             }).catch(() => {});
+            throw settleErr;
         }
 
         console.log(`[RefundCallback] 退款成功处理完毕: ${outRefundNo}`);
@@ -1408,21 +1545,21 @@ async function handleRefundCallback(refundData, eventType) {
         await db.collection('refunds').doc(refund._id).update({
             data: {
                 status: 'failed',
+                amount: refundRuntime.amount,
+                payment_method: refundRuntime.paymentMethod,
+                refund_channel: refundRuntime.refundChannel,
+                refund_target_text: refundRuntime.refundTargetText,
                 wx_refund_id: wxRefundId || refund.wx_refund_id || '',
                 wx_refund_status: refundStatus,
                 updated_at: db.serverDate()
             }
         });
 
-        if (orderId) {
-            const orderRes = await db.collection('orders').doc(String(orderId)).get().catch(() => ({ data: null }));
-            const order = orderRes.data;
-            if (order && order.status === 'refunding') {
-                const revertStatus = order.prev_status || (order.confirmed_at || order.auto_confirmed_at ? 'completed' : (order.shipped_at ? 'shipped' : (order.paid_at ? 'paid' : 'pending_payment')));
-                await db.collection('orders').doc(String(orderId)).update({
-                    data: { status: revertStatus, updated_at: db.serverDate() }
+        if (canonicalOrderId && order && order.status === 'refunding') {
+            const revertStatus = deriveRefundRevertStatus(order);
+            await db.collection('orders').doc(canonicalOrderId).update({
+                data: { status: revertStatus, prev_status: _.remove(), updated_at: db.serverDate() }
                 }).catch(() => {});
-            }
         }
 
         console.warn(`[RefundCallback] 退款异常/关闭: ${outRefundNo}, status=${refundStatus}`);
@@ -1551,20 +1688,18 @@ async function handleCallback(event) {
                 }
 
                 // 拼团订单支付后进入 pending_group（待成团），普通订单直接 paid
-                const isGroup = order.type === 'group' || hasValue(order.group_activity_id) || hasValue(order.group_no);
-                const postPayStatus = isGroup ? 'pending_group' : 'paid';
+                const postPayStatus = resolvePostPayStatus(order);
+                const canonicalPayAmount = getOrderTotalAmount(order);
                 const updateRes = await db.collection('orders')
                     .where({ _id: order._id, status: 'pending_payment' })
                     .update({
-                    data: {
+                    data: buildPaidOrderPatch('wechat', canonicalPayAmount, {
                         status: postPayStatus,
-                        payment_method: 'wechat',
-                        pay_channel: 'wxpay',
                         paid_at: db.serverDate(),
                         trade_id: transaction.transaction_id || '',
                         pay_time: transaction.success_time ? new Date(transaction.success_time) : db.serverDate(),
                         updated_at: db.serverDate(),
-                    },
+                    }),
                 });
                 if (updateRes.stats && updateRes.stats.updated === 0) {
                     return { code: 'SUCCESS', message: 'Already processed' };
