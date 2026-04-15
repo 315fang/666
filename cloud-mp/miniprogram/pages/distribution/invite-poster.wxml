@@ -27,9 +27,9 @@
             data-variant="{{item.value}}"
             bindtap="onPosterVariantChange"
           >
-            <text class="poster-variant-chip-text {{posterVariant === item.value ? 'poster-variant-chip-text--active' : ''}}">
+            <view class="poster-variant-chip-text {{posterVariant === item.value ? 'poster-variant-chip-text--active' : ''}}">
               {{item.label}}
-            </text>
+            </view>
           </view>
         </view>
       </view>

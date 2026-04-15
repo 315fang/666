@@ -17,20 +17,16 @@
     <text class="amount-value">¥{{refund.display_amount}}</text>
   </view>
 
-  <!-- 退回明细 -->
-  <view class="card refund-restore-card" wx:if="{{refund.order && (refund.order.points_used > 0 || refund.order.coupon_discount > 0 || refund.order.payment_method === 'goods_fund' || refund.payment_method === 'goods_fund')}}">
-    <view class="card-title">退回明细</view>
+  <!-- 退款规则 -->
+  <view class="card refund-restore-card" wx:if="{{refund.order}}">
+    <view class="card-title">退款规则</view>
     <view class="info-row" wx:if="{{refund.display_refund_target_text}}">
       <text class="info-label">退回方式</text>
       <text class="info-value restore-tag">{{refund.display_refund_target_text}}</text>
     </view>
-    <view class="info-row" wx:if="{{refund.order.points_used > 0}}">
-      <text class="info-label">退回积分</text>
-      <text class="info-value restore-points">+{{refund.order.points_used}} 积分</text>
-    </view>
-    <view class="info-row" wx:if="{{refund.order.coupon_discount > 0}}">
-      <text class="info-label">退回优惠券</text>
-      <text class="info-value restore-coupon">优惠券已退回（¥{{refund.order.display_coupon_discount}}）</text>
+    <view class="info-row">
+      <text class="info-label">规则说明</text>
+      <text class="info-value">仅退现金，优惠券和积分不返还</text>
     </view>
   </view>
 

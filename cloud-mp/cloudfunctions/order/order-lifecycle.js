@@ -23,6 +23,241 @@ function toArray(value) {
     return [value];
 }
 
+function pickString(value, fallback = '') {
+    if (value === null || value === undefined) return fallback;
+    const text = String(value).trim();
+    return text || fallback;
+}
+
+function roundMoney(value) {
+    return Math.round(toNumber(value, 0) * 100) / 100;
+}
+
+function getOrderTotalQuantity(order = {}) {
+    const explicit = Math.max(0, toNumber(order.quantity, 0));
+    if (explicit > 0) return explicit;
+    return toArray(order.items).reduce((sum, item) => {
+        return sum + Math.max(1, toNumber(item.qty || item.quantity, 1));
+    }, 0);
+}
+
+function getOrderRefundProgress(order = {}) {
+    const totalQuantity = getOrderTotalQuantity(order);
+    const payAmount = roundMoney(resolveOrderPayAmount(order, 0));
+    const refundedQuantity = Math.max(0, toNumber(order.refunded_quantity_total, 0));
+    const refundedCash = roundMoney(Math.max(0, toNumber(order.refunded_cash_total, 0)));
+    const remainingQuantity = Math.max(0, totalQuantity - refundedQuantity);
+    const remainingCash = roundMoney(Math.max(0, payAmount - refundedCash));
+    return {
+        totalQuantity,
+        payAmount,
+        refundedQuantity,
+        refundedCash,
+        remainingQuantity,
+        remainingCash
+    };
+}
+
+function allocateProportionalAmounts(items = [], totalAmount = 0, field = 'item_amount') {
+    const total = roundMoney(totalAmount);
+    if (total <= 0 || !Array.isArray(items) || items.length === 0) return items.map(() => 0);
+    const baseValues = items.map((item) => Math.max(0, roundMoney(item && item[field])));
+    const baseTotal = roundMoney(baseValues.reduce((sum, value) => sum + value, 0));
+    if (baseTotal <= 0) return items.map((_, index) => index === items.length - 1 ? total : 0);
+
+    let allocatedSum = 0;
+    return items.map((item, index) => {
+        if (index === items.length - 1) return roundMoney(total - allocatedSum);
+        const allocated = roundMoney(total * (baseValues[index] / baseTotal));
+        allocatedSum = roundMoney(allocatedSum + allocated);
+        return allocated;
+    });
+}
+
+function buildOrderSettlementItems(order = {}) {
+    const rawItems = toArray(order.items);
+    const hasSnapshot = rawItems.some((item) => item && item.refund_basis_version === 'snapshot_v1');
+    const couponAllocations = hasSnapshot
+        ? rawItems.map((item) => roundMoney(item.coupon_allocated_amount))
+        : allocateProportionalAmounts(rawItems, toNumber(order.coupon_discount, 0), 'item_amount');
+    const pointsAllocations = hasSnapshot
+        ? rawItems.map((item) => roundMoney(item.points_allocated_amount))
+        : allocateProportionalAmounts(rawItems, toNumber(order.points_discount, 0), 'item_amount');
+
+    return rawItems.map((item, index) => {
+        const quantity = Math.max(1, toNumber(item.qty || item.quantity, 1));
+        const itemAmount = roundMoney(item.item_amount != null ? item.item_amount : item.subtotal);
+        const couponAllocatedAmount = roundMoney(couponAllocations[index]);
+        const pointsAllocatedAmount = roundMoney(pointsAllocations[index]);
+        const cashPaidAllocatedAmount = roundMoney(
+            item.cash_paid_allocated_amount != null
+                ? item.cash_paid_allocated_amount
+                : (itemAmount - couponAllocatedAmount - pointsAllocatedAmount)
+        );
+        const refundedQuantity = Math.max(0, Math.min(quantity, toNumber(item.refunded_quantity, 0)));
+        const refundedCashAmount = roundMoney(Math.max(0, Math.min(cashPaidAllocatedAmount, toNumber(item.refunded_cash_amount, 0))));
+        return {
+            ...item,
+            refund_item_key: item.refund_item_key || `${item.product_id || 'product'}::${item.sku_id || 'nosku'}::${index}`,
+            quantity,
+            qty: quantity,
+            item_amount: itemAmount,
+            cash_paid_allocated_amount: cashPaidAllocatedAmount,
+            refunded_quantity: refundedQuantity,
+            refunded_cash_amount: refundedCashAmount,
+            refundable_quantity: Math.max(0, quantity - refundedQuantity),
+            refundable_cash_amount: roundMoney(Math.max(0, cashPaidAllocatedAmount - refundedCashAmount)),
+            refund_basis_version: item.refund_basis_version || (hasSnapshot ? 'snapshot_v1' : 'legacy_estimated')
+        };
+    });
+}
+
+function normalizeRequestedRefundItems(rawItems = []) {
+    return toArray(rawItems)
+        .map((item) => ({
+            refund_item_key: pickString(item.refund_item_key),
+            product_id: pickString(item.product_id),
+            sku_id: pickString(item.sku_id),
+            quantity: Math.max(0, toNumber(item.quantity ?? item.qty, 0))
+        }))
+        .filter((item) => item.quantity > 0);
+}
+
+function computeRefundSnapshot(order = {}, params = {}) {
+    const progress = getOrderRefundProgress(order);
+    if (progress.remainingQuantity <= 0 || progress.remainingCash <= 0) {
+        throw new Error('订单已无可退现金');
+    }
+
+    const settlementItems = buildOrderSettlementItems(order);
+    const requestedItems = normalizeRequestedRefundItems(params.refund_items);
+    let quotedItems = [];
+
+    if (requestedItems.length > 0) {
+        requestedItems.forEach((selection) => {
+            const target = settlementItems.find((item) => {
+                if (selection.refund_item_key && item.refund_item_key === selection.refund_item_key) return true;
+                return item.product_id === selection.product_id && String(item.sku_id || '') === String(selection.sku_id || '');
+            });
+            if (!target) {
+                throw new Error('退款商品不存在或无法匹配');
+            }
+            if (selection.quantity > target.refundable_quantity) {
+                throw new Error(`退款数量不能超过可退数量：${target.snapshot_name || target.name || '商品'}`);
+            }
+            const refundCashAmount = selection.quantity >= target.refundable_quantity
+                ? roundMoney(target.refundable_cash_amount)
+                : roundMoney(target.cash_paid_allocated_amount * (selection.quantity / target.quantity));
+            quotedItems.push({
+                refund_item_key: target.refund_item_key,
+                product_id: target.product_id,
+                sku_id: target.sku_id || '',
+                name: target.snapshot_name || target.name || '',
+                spec: target.snapshot_spec || target.spec || '',
+                image: target.snapshot_image || target.image || '',
+                quantity: selection.quantity,
+                original_quantity: target.quantity,
+                refundable_quantity_before: target.refundable_quantity,
+                refundable_cash_before: roundMoney(target.refundable_cash_amount),
+                cash_refund_amount: Math.min(roundMoney(target.refundable_cash_amount), refundCashAmount),
+                coupon_refund_amount: 0,
+                points_refund_amount: 0,
+                settlement_basis_version: target.refund_basis_version
+            });
+        });
+    } else {
+        const fallbackTarget = settlementItems[0];
+        if (!fallbackTarget) throw new Error('订单缺少可退款商品');
+        let requestedQuantity = Math.max(1, toNumber(params.refund_quantity, fallbackTarget.refundable_quantity || progress.remainingQuantity));
+        requestedQuantity = Math.min(requestedQuantity, fallbackTarget.refundable_quantity || progress.remainingQuantity);
+        quotedItems = [{
+            refund_item_key: fallbackTarget.refund_item_key,
+            product_id: fallbackTarget.product_id,
+            sku_id: fallbackTarget.sku_id || '',
+            name: fallbackTarget.snapshot_name || fallbackTarget.name || '',
+            spec: fallbackTarget.snapshot_spec || fallbackTarget.spec || '',
+            image: fallbackTarget.snapshot_image || fallbackTarget.image || '',
+            quantity: requestedQuantity,
+            original_quantity: fallbackTarget.quantity,
+            refundable_quantity_before: fallbackTarget.refundable_quantity,
+            refundable_cash_before: roundMoney(fallbackTarget.refundable_cash_amount),
+            cash_refund_amount: requestedQuantity >= fallbackTarget.refundable_quantity
+                ? roundMoney(fallbackTarget.refundable_cash_amount)
+                : roundMoney(fallbackTarget.cash_paid_allocated_amount * (requestedQuantity / fallbackTarget.quantity)),
+            coupon_refund_amount: 0,
+            points_refund_amount: 0,
+            settlement_basis_version: fallbackTarget.refund_basis_version
+        }];
+    }
+
+    const requestedQuantity = quotedItems.reduce((sum, item) => sum + item.quantity, 0);
+    const refundAmount = roundMoney(quotedItems.reduce((sum, item) => sum + item.cash_refund_amount, 0));
+
+    if (refundAmount <= 0) {
+        throw new Error('当前退款对应的现金金额为 0，无法继续退款');
+    }
+
+    return {
+        ...progress,
+        quotedItems,
+        requestedQuantity,
+        refundAmount
+    };
+}
+
+function isFullRefundAfterSettlement(progress = {}, refundQuantity = 0, refundAmount = 0) {
+    const nextQuantity = Math.max(0, toNumber(progress.refundedQuantity, 0) + Math.max(0, toNumber(refundQuantity, 0)));
+    const nextCash = roundMoney(toNumber(progress.refundedCash, 0) + roundMoney(refundAmount));
+    return nextQuantity >= Math.max(1, toNumber(progress.totalQuantity, 0))
+        || nextCash >= roundMoney(Math.max(0, toNumber(progress.payAmount, 0)));
+}
+
+function resolveRefundQuantityFromRecord(order = {}, refund = {}) {
+    const refundItems = normalizeRequestedRefundItems(refund.refund_items);
+    if (refundItems.length > 0) {
+        return refundItems.reduce((sum, item) => sum + Math.max(0, toNumber(item.quantity, 0)), 0);
+    }
+    const progress = getOrderRefundProgress(order);
+    const explicit = Math.max(
+        0,
+        toNumber(
+            refund.refund_quantity_effective != null ? refund.refund_quantity_effective : refund.refund_quantity,
+            0
+        )
+    );
+    if (explicit > 0) return explicit;
+    return Math.max(1, progress.remainingQuantity || progress.totalQuantity || 1);
+}
+
+function buildRefundItemAllocations(order = {}, refundQuantity = 0, refund = {}) {
+    const refundItems = normalizeRequestedRefundItems(refund.refund_items);
+    if (refundItems.length > 0) {
+        const settlementItems = buildOrderSettlementItems(order);
+        return refundItems.map((selection) => {
+            const target = settlementItems.find((item) => {
+                if (selection.refund_item_key && item.refund_item_key === selection.refund_item_key) return true;
+                return item.product_id === selection.product_id && String(item.sku_id || '') === String(selection.sku_id || '');
+            });
+            return target ? { item: target, qty: selection.quantity } : null;
+        }).filter(Boolean);
+    }
+
+    let remaining = Math.max(0, toNumber(refundQuantity, 0));
+    const allocations = [];
+
+    for (const item of buildOrderSettlementItems(order)) {
+        if (remaining <= 0) break;
+        const itemQty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+        const restoredQty = Math.min(itemQty, remaining);
+        if (restoredQty > 0) {
+            allocations.push({ item, qty: restoredQty });
+            remaining -= restoredQty;
+        }
+    }
+
+    return allocations;
+}
+
 function refundDeadlineDate() {
     const days = Math.max(0, toNumber(process.env.REFUND_MAX_DAYS || process.env.COMMISSION_FREEZE_DAYS, 7));
     return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
@@ -156,6 +391,41 @@ async function restoreOrderStock(orderId, order, markerField = 'stock_restored_a
     return { restored: true };
 }
 
+async function restoreRefundOrderStock(orderId, order = {}, refund = {}) {
+    if (pickString(refund.type) !== 'return_refund') return { skipped: true, reason: 'not_return_refund' };
+    if (refund.stock_restored_at) return { skipped: true, reason: 'already_restored' };
+    if (!order.stock_deducted_at) return { skipped: true, reason: 'stock_not_deducted' };
+
+    const refundQuantity = resolveRefundQuantityFromRecord(order, refund);
+    const allocations = buildRefundItemAllocations(order, refundQuantity, refund);
+    if (!allocations.length) return { skipped: true, reason: 'no_allocations' };
+
+    for (const { item, qty } of allocations) {
+        if (item.product_id) {
+            const product = await getDocByIdOrLegacy('products', item.product_id);
+            if (product && product._id) {
+                await db.collection('products').doc(String(product._id)).update({
+                    data: { stock: _.inc(qty), sales_count: _.inc(-qty), updated_at: db.serverDate() },
+                }).catch(() => {});
+            }
+        }
+        if (item.sku_id) {
+            const sku = await getDocByIdOrLegacy('skus', item.sku_id);
+            if (sku && sku._id) {
+                await db.collection('skus').doc(String(sku._id)).update({
+                    data: { stock: _.inc(qty), updated_at: db.serverDate() },
+                }).catch(() => {});
+            }
+        }
+    }
+
+    await db.collection('refunds').doc(String(refund._id)).update({
+        data: { stock_restored_at: db.serverDate(), updated_at: db.serverDate() }
+    }).catch(() => {});
+
+    return { restored: true, quantity: refundQuantity };
+}
+
 async function freezeCommissionsForOrder(orderId, extraData = {}) {
     await db.collection('commissions')
         .where({ order_id: orderId, status: _.in(['pending', 'pending_approval']) })
@@ -191,43 +461,100 @@ function deriveRefundRevertStatus(order = {}) {
                 : (order.paid_at ? 'paid' : 'pending_payment')));
 }
 
-function buildBuyerRefundReversal(order = {}) {
-    const pointsUsed = toNumber(order.points_used, 0);
-    const pointsEarned = toNumber(order.points_earned, 0);
-    const orderPayAmount = resolveOrderPayAmount(order, 0);
-    const growthEarned = Math.floor(orderPayAmount);
-    const pointsDelta = pointsUsed - pointsEarned;
-    const growthDelta = pointsUsed - growthEarned;
-    const userReversal = { updated_at: db.serverDate(), order_count: _.inc(-1) };
-    if (pointsDelta !== 0) userReversal.points = _.inc(pointsDelta);
-    if (growthDelta !== 0) userReversal.growth_value = _.inc(growthDelta);
-    if (orderPayAmount > 0) userReversal.total_spent = _.inc(-orderPayAmount);
+function buildBuyerRefundReversal(order = {}, refund = {}, isFullRefund = false) {
+    const refundAmount = roundMoney(toNumber(refund.amount ?? refund.refund_amount, 0));
+    const userReversal = { updated_at: db.serverDate() };
+    if (refundAmount > 0) userReversal.total_spent = _.inc(-refundAmount);
+    const rewardPointsClawback = Math.max(0, toNumber(refund.reward_points_clawback_amount, 0));
+    const growthClawback = Math.max(0, toNumber(refund.growth_clawback_amount, 0));
+    if (isFullRefund) {
+        userReversal.order_count = _.inc(-1);
+    }
+    if (rewardPointsClawback > 0) userReversal.points = _.inc(-rewardPointsClawback);
+    if (growthClawback > 0) userReversal.growth_value = _.inc(-growthClawback);
     return userReversal;
 }
 
-async function reverseBuyerRefundAssets(openid, order = {}) {
+async function reverseBuyerRefundAssets(openid, order = {}, refund = {}, isFullRefund = false) {
     await db.collection('users').where({ openid }).update({
-        data: buildBuyerRefundReversal(order)
+        data: buildBuyerRefundReversal(order, refund, isFullRefund)
     }).catch(() => {});
 }
 
-async function markRefundOrderStep(orderId, field) {
-    if (!orderId || !field) return;
+async function reverseBuyerRefundAssetsWithMarker(openid, orderId, order = {}, refund = {}, isFullRefund = false) {
+    if (refund.buyer_assets_reversed_at) return;
+    await reverseBuyerRefundAssets(openid, order, refund, isFullRefund);
+    await db.collection('refunds').doc(String(refund._id)).update({
+        data: { buyer_assets_reversed_at: db.serverDate(), updated_at: db.serverDate() }
+    }).catch(() => {});
+}
+
+async function applyRefundProgress(orderId, order = {}, refund = {}) {
+    if (refund.order_progress_applied_at) {
+        return {
+            isFullRefund: pickString(order.status) === 'refunded',
+            refundQuantity: resolveRefundQuantityFromRecord(order, refund),
+            refundAmount: roundMoney(toNumber(refund.amount ?? refund.refund_amount, 0)),
+            rewardPointsClawback: Math.max(0, toNumber(refund.reward_points_clawback_amount, 0)),
+            growthClawback: Math.max(0, toNumber(refund.growth_clawback_amount, 0))
+        };
+    }
+
+    const progress = getOrderRefundProgress(order);
+    const refundQuantity = resolveRefundQuantityFromRecord(order, refund);
+    const refundAmount = roundMoney(toNumber(refund.amount ?? refund.refund_amount, 0));
+    const nextRefundedQuantity = Math.min(progress.totalQuantity, progress.refundedQuantity + refundQuantity);
+    const nextRefundedCash = Math.min(progress.payAmount, roundMoney(progress.refundedCash + refundAmount));
+    const isFullRefund = isFullRefundAfterSettlement(progress, refundQuantity, refundAmount);
+    const refundItems = toArray(refund.refund_items);
+    const keyedRefundItems = new Map(refundItems.map((item) => [pickString(item.refund_item_key), item]));
+    const nextOrderItems = buildOrderSettlementItems(order).map((item) => {
+        const matched = keyedRefundItems.get(pickString(item.refund_item_key));
+        if (!matched) return item;
+        return {
+            ...item,
+            refunded_quantity: Math.min(item.quantity, item.refunded_quantity + Math.max(0, toNumber(matched.quantity, 0))),
+            refunded_cash_amount: Math.min(item.cash_paid_allocated_amount, roundMoney(item.refunded_cash_amount + toNumber(matched.cash_refund_amount, 0)))
+        };
+    });
+    const totalPointsEarned = Math.max(0, toNumber(order.points_earned, 0));
+    const totalGrowthEarned = Math.max(0, Math.floor(resolveOrderPayAmount(order, 0)));
+    const rewardPointsClawedBefore = Math.max(0, toNumber(order.reward_points_clawback_total, 0));
+    const growthClawedBefore = Math.max(0, toNumber(order.growth_clawback_total, 0));
+    const rewardPointsClawback = isFullRefund
+        ? Math.max(0, totalPointsEarned - rewardPointsClawedBefore)
+        : Math.max(0, Math.min(totalPointsEarned - rewardPointsClawedBefore, Math.round(totalPointsEarned * (refundAmount / Math.max(progress.payAmount, 0.01)))));
+    const growthClawback = isFullRefund
+        ? Math.max(0, totalGrowthEarned - growthClawedBefore)
+        : Math.max(0, Math.min(totalGrowthEarned - growthClawedBefore, Math.round(totalGrowthEarned * (refundAmount / Math.max(progress.payAmount, 0.01)))));
+
     await db.collection('orders').doc(String(orderId)).update({
-        data: { [field]: db.serverDate(), updated_at: db.serverDate() }
+        data: {
+            items: nextOrderItems,
+            refunded_quantity_total: nextRefundedQuantity,
+            refunded_cash_total: nextRefundedCash,
+            reward_points_clawback_total: rewardPointsClawedBefore + rewardPointsClawback,
+            growth_clawback_total: growthClawedBefore + growthClawback,
+            has_partial_refund: !isFullRefund && nextRefundedCash > 0,
+            last_refunded_at: db.serverDate(),
+            partially_refunded_at: isFullRefund ? _.remove() : db.serverDate(),
+            status: isFullRefund ? 'refunded' : deriveRefundRevertStatus(order),
+            refunded_at: isFullRefund ? db.serverDate() : _.remove(),
+            prev_status: _.remove(),
+            updated_at: db.serverDate()
+        }
     }).catch(() => {});
-}
 
-async function reverseBuyerRefundAssetsWithMarker(openid, orderId, order = {}, markerField = 'refund_buyer_assets_reversed_at') {
-    if (order[markerField]) return;
-    await reverseBuyerRefundAssets(openid, order);
-    await markRefundOrderStep(orderId, markerField);
-}
+    await db.collection('refunds').doc(String(refund._id)).update({
+        data: {
+            reward_points_clawback_amount: rewardPointsClawback,
+            growth_clawback_amount: growthClawback,
+            order_progress_applied_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    }).catch(() => {});
 
-async function restoreCouponForRefund(orderId, order = {}, markerField = 'refund_coupon_restored_at') {
-    if (order[markerField]) return;
-    await restoreUsedCoupon(order).catch(() => {});
-    await markRefundOrderStep(orderId, markerField);
+    return { isFullRefund, refundQuantity, refundAmount, rewardPointsClawback, growthClawback };
 }
 
 async function cancelRefundRelatedCommissions(orderId, reason) {
@@ -429,19 +756,16 @@ async function applyRefund(openid, params) {
         throw new Error('该订单已有待处理的退款申请');
     }
 
-    const refundNo = 'REF' + Date.now() + Math.floor(Math.random() * 1000);
-    const maxRefundAmount = resolveOrderPayAmount(order, 0);
-    const refundAmount = toNumber(params.amount ?? params.refund_amount, maxRefundAmount);
     const type = params.type || 'refund_only';
-    const refundQuantity = type === 'return_refund' ? Math.max(1, toNumber(params.refund_quantity, 1)) : 0;
+    const refundSnapshot = computeRefundSnapshot(order, params);
+    const refundNo = 'REF' + Date.now() + Math.floor(Math.random() * 1000);
+    const refundAmount = refundSnapshot.refundAmount;
+    const refundQuantity = refundSnapshot.requestedQuantity;
     const paymentMethod = resolveOrderPaymentMethod(order);
     const refundChannel = resolveRefundChannel(paymentMethod);
 
     if (refundAmount <= 0) {
         throw new Error('退款金额必须大于 0');
-    }
-    if (maxRefundAmount > 0 && refundAmount > maxRefundAmount) {
-        throw new Error(`退款金额不能超过实付金额: ${maxRefundAmount}`);
     }
 
     const result = await db.collection('refunds').add({
@@ -454,7 +778,22 @@ async function applyRefund(openid, params) {
             type,
             reason: params.reason || '用户申请退款',
             description: params.description || '',
-            refund_quantity: refundQuantity,
+            refund_quantity: type === 'return_refund' ? refundQuantity : 0,
+            refund_quantity_effective: refundQuantity,
+            refund_items: refundSnapshot.quotedItems,
+            order_total_quantity_snapshot: refundSnapshot.totalQuantity,
+            order_pay_amount_snapshot: refundSnapshot.payAmount,
+            order_refunded_quantity_before: refundSnapshot.refundedQuantity,
+            order_refunded_cash_before: refundSnapshot.refundedCash,
+            cash_refund_amount: refundAmount,
+            coupon_refund_amount: 0,
+            points_refund_amount: 0,
+            reward_points_clawback_amount: 0,
+            growth_clawback_amount: 0,
+            refund_amount_kind: 'cash_only',
+            settlement_basis_version: refundSnapshot.quotedItems.every((item) => item.settlement_basis_version === 'snapshot_v1')
+                ? 'snapshot_v1'
+                : 'legacy_estimated',
             payment_method: paymentMethod,
             refund_channel: refundChannel,
             refund_target_text: getRefundTargetText(paymentMethod),
@@ -507,24 +846,24 @@ async function applyRefund(openid, params) {
                 }
             }).catch(() => {});
 
-            // 退还奖励积分、成长值、消费统计
-            await reverseBuyerRefundAssetsWithMarker(openid, canonicalOrderId, order);
-
-            // 退优惠券
-            await restoreCouponForRefund(canonicalOrderId, order);
+            const refundRecord = {
+                _id: result._id,
+                amount: refundAmount,
+                type,
+                refund_quantity_effective: refundQuantity
+            };
+            const { isFullRefund } = await applyRefundProgress(canonicalOrderId, order, refundRecord);
+            await reverseBuyerRefundAssetsWithMarker(openid, canonicalOrderId, order, refundRecord, isFullRefund);
 
             // 取消佣金
             await cancelRefundRelatedCommissions(canonicalOrderId, '货款退款');
 
-            // 恢复库存（含 SKU）
-            await restoreOrderStock(canonicalOrderId, order, 'refund_stock_restored_at').catch(() => {});
+            // 恢复库存（仅退货退款，按本次退款数量恢复）
+            await restoreRefundOrderStock(canonicalOrderId, order, refundRecord).catch(() => {});
 
-            // 更新退款和订单为已完成
+            // 更新退款为已完成，订单状态由退款进度辅助函数负责
             await db.collection('refunds').doc(result._id).update({
                 data: { status: 'completed', completed_at: db.serverDate(), updated_at: db.serverDate() }
-            });
-            await db.collection('orders').doc(canonicalOrderId).update({
-                data: { status: 'refunded', refunded_at: db.serverDate(), prev_status: _.remove(), updated_at: db.serverDate() }
             });
 
             return { success: true, id: result._id, refund_id: result._id, refund_no: refundNo, auto_refunded: true };

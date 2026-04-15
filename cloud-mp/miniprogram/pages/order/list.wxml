@@ -94,6 +94,10 @@
           <text class="pay-method-tag pay-method-wechat" wx:elif="{{item.status !== 'pending' && item.status !== 'cancelled' && item.pay_amount > 0}}">{{item.display_payment_method_text}}</text>
           <text class="fulfillment-tag" wx:if="{{item.fulfillment_type === 'Agent' || item.fulfillment_type === 'agent'}}">团队发货</text>
         </view>
+        <view class="order-total" wx:if="{{item.refunded_cash_total > 0}}">
+          <text class="total-label">已退 ¥{{item.display_refunded_cash_total}}</text>
+          <text class="total-label">剩余可退 ¥{{item.display_remaining_refundable_cash}}</text>
+        </view>
         <view class="order-actions">
           <!-- ★ 有活跃退款时：只显示"查看退款" -->
           <block wx:if="{{item.hasActiveRefund}}">

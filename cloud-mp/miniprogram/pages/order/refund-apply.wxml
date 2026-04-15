@@ -20,11 +20,29 @@
 
   <!-- 订单信息 -->
   <view class="order-card" wx:if="{{order}}">
-    <view class="order-product">
-      <image class="product-img" src="{{order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{order.product && order.product.images && order.product.images.length > 0}}"></image>
-      <view class="product-info">
-        <text class="product-name">{{order.product.name || '商品'}}</text>
-        <text class="product-price">订单合计 ¥{{order.display_pay_amount}} / 共 {{order.quantity}} 件</text>
+    <view class="order-summary">
+      <text class="product-price">订单合计 ¥{{order.display_pay_amount}} / 共 {{order.quantity}} 件</text>
+      <text class="product-price">已退 ¥{{order.display_refunded_cash_total || '0.00'}} / 剩余可退 ¥{{order.display_remaining_refundable_cash || order.display_pay_amount}}</text>
+    </view>
+    <view class="refund-item-list">
+      <view class="refund-item-card" wx:for="{{refundItems}}" wx:key="refund_item_key">
+        <view class="refund-item-head">
+          <image class="product-img" src="{{item.product && item.product.images && item.product.images[0] || item.product && item.product.image || ''}}" mode="aspectFill" wx:if="{{item.product && ((item.product.images && item.product.images.length > 0) || item.product.image)}}"></image>
+          <view class="product-info">
+            <text class="product-name">{{item.product && item.product.name || item.name || '商品'}}</text>
+            <text class="product-spec" wx:if="{{item.sku && item.sku.spec_value}}">{{item.sku.spec_value}}</text>
+            <text class="product-price">商品实付 ¥{{item.display_cash_paid_allocated_amount}} / 已退 ¥{{item.display_refunded_cash_amount}}</text>
+            <text class="product-price">本次最多可退 ¥{{item.display_refundable_cash_amount}} / 剩余 {{item.refundable_quantity}} 件</text>
+          </view>
+        </view>
+        <view class="qty-row refund-item-qty">
+          <view class="qty-control">
+            <view class="qty-btn {{item.selectedQuantity <= 0 ? 'qty-btn-disabled' : ''}}" bindtap="onRefundQtyMinus" data-index="{{index}}">−</view>
+            <input class="qty-input" type="number" value="{{item.selectedQuantity}}" bindinput="onRefundQtyInput" data-index="{{index}}" />
+            <view class="qty-btn {{item.selectedQuantity >= item.refundable_quantity ? 'qty-btn-disabled' : ''}}" bindtap="onRefundQtyPlus" data-index="{{index}}">+</view>
+          </view>
+          <text class="qty-hint">本次退款 ¥{{item.refundAmount || '0.00'}}</text>
+        </view>
       </view>
     </view>
   </view>
@@ -44,25 +62,16 @@
   <textarea class="desc-input" placeholder="请描述您遇到的问题" bindinput="onDescInput" value="{{description}}" maxlength="200"></textarea>
 
   <!-- 退款金额 -->
-  <view class="section-title">退款金额</view>
+  <view class="section-title">退款金额（系统计算）</view>
   <view class="amount-row">
     <text class="amount-symbol">¥</text>
-    <input class="amount-input" type="digit" value="{{amount}}" bindinput="onAmountInput" placeholder="请输入退款金额" />
-    <text class="amount-max">最多 ¥{{order.display_pay_amount || '0.00'}}</text>
+    <text class="amount-value">{{amount || '0.00'}}</text>
+    <text class="amount-max">仅退现金，优惠券和积分不返还</text>
   </view>
 
-  <!-- 退货数量（仅退货退款显示） -->
+  <!-- 退货数量提示（仅退货退款显示） -->
   <view wx:if="{{type === 'return_refund'}}">
-    <view class="section-title">退货数量</view>
-    <view class="qty-row">
-      <view class="qty-control">
-        <view class="qty-btn" bindtap="onRefundQtyMinus">−</view>
-        <input class="qty-input" type="number" value="{{refundQuantity}}" bindinput="onRefundQtyInput" />
-        <view class="qty-btn" bindtap="onRefundQtyPlus">+</view>
-      </view>
-      <text class="qty-hint">订单共 {{order.quantity || 0}} 件</text>
-    </view>
-    <view class="refund-qty-tip">退货数量对应实际退回的商品件数，库存将按此数量恢复</view>
+    <view class="refund-qty-tip">退货退款会按你选择的商品件数恢复库存；仅退款不会恢复库存。</view>
   </view>
   <view class="refund-only-tip" wx:if="{{type === 'refund_only'}}">
     <image class="tip-icon-img" src="/assets/icons/info.svg" mode="aspectFit"/>

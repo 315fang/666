@@ -72,6 +72,14 @@
       <text class="info-label">退款金额</text>
       <text class="info-value info-value-danger">¥{{activeRefund.display_amount}}</text>
     </view>
+    <view class="info-row" wx:if="{{order.display_refunded_cash_total}}">
+      <text class="info-label">累计已退</text>
+      <text class="info-value">¥{{order.display_refunded_cash_total}}</text>
+    </view>
+    <view class="info-row" wx:if="{{order.display_remaining_refundable_cash}}">
+      <text class="info-label">剩余可退</text>
+      <text class="info-value">¥{{order.display_remaining_refundable_cash}}</text>
+    </view>
     <view class="info-row" wx:if="{{activeRefund.display_refund_target_text}}">
       <text class="info-label">退款去向</text>
       <text class="info-value">{{activeRefund.display_refund_target_text}}</text>
@@ -80,13 +88,9 @@
       <text class="info-label">退款类型</text>
       <text class="info-value">{{activeRefund.type === 'return_refund' ? '退货退款' : '仅退款'}}</text>
     </view>
-    <view class="info-row" wx:if="{{order.points_used > 0}}">
-      <text class="info-label">退回积分</text>
-      <text class="info-value" style="color:#10b981">+{{order.points_used}} 积分</text>
-    </view>
-    <view class="info-row" wx:if="{{order.coupon_discount > 0}}">
-      <text class="info-label">退回优惠券</text>
-      <text class="info-value" style="color:#8b5cf6">已退回（¥{{order.coupon_discount}}）</text>
+    <view class="info-row">
+      <text class="info-label">退款规则</text>
+      <text class="info-value">仅退现金，优惠券和积分不返还</text>
     </view>
     <view class="refund-action" bindtap="onViewRefund">
       <text class="refund-link">查看退款详情 ›</text>
@@ -194,6 +198,14 @@
     <view class="info-row" wx:if="{{order.has_discount_breakdown}}">
       <text class="info-label">实付金额</text>
       <text class="info-value price-value-strong">¥{{order.display_pay_amount}}</text>
+    </view>
+    <view class="info-row" wx:if="{{order.refunded_cash_total > 0}}">
+      <text class="info-label">累计已退</text>
+      <text class="info-value">¥{{order.display_refunded_cash_total}}</text>
+    </view>
+    <view class="info-row" wx:if="{{order.remaining_refundable_cash >= 0}}">
+      <text class="info-label">剩余可退</text>
+      <text class="info-value">¥{{order.display_remaining_refundable_cash}}</text>
     </view>
     <!-- 支付方式说明 -->
     <view class="info-row" wx:if="{{order.status !== 'pending' && order.status !== 'cancelled'}}">

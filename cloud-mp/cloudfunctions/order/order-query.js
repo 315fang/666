@@ -36,6 +36,78 @@ function displayAmount(value) {
     return normalized.toFixed(2);
 }
 
+function roundMoney(value) {
+    return Math.round(toNumber(value, 0) * 100) / 100;
+}
+
+function getOrderTotalQuantity(order = {}) {
+    const explicit = Math.max(0, toNumber(order.quantity, 0));
+    if (explicit > 0) return explicit;
+    return (Array.isArray(order.items) ? order.items : []).reduce((sum, item) => {
+        return sum + Math.max(1, toNumber(item.qty || item.quantity, 1));
+    }, 0);
+}
+
+function allocateProportionalAmounts(items = [], totalAmount = 0, field = 'item_amount') {
+    const total = roundMoney(totalAmount);
+    if (total <= 0 || !Array.isArray(items) || items.length === 0) return items.map(() => 0);
+    const baseValues = items.map((item) => Math.max(0, roundMoney(item && item[field])));
+    const baseTotal = roundMoney(baseValues.reduce((sum, value) => sum + value, 0));
+    if (baseTotal <= 0) return items.map((_, index) => index === items.length - 1 ? total : 0);
+
+    let allocatedSum = 0;
+    return items.map((item, index) => {
+        if (index === items.length - 1) return roundMoney(total - allocatedSum);
+        const allocated = roundMoney(total * (baseValues[index] / baseTotal));
+        allocatedSum = roundMoney(allocatedSum + allocated);
+        return allocated;
+    });
+}
+
+function buildOrderSettlementItems(order = {}) {
+    const rawItems = Array.isArray(order.items) ? order.items : [];
+    const hasSnapshot = rawItems.some((item) => item && item.refund_basis_version === 'snapshot_v1');
+    const couponAllocations = hasSnapshot
+        ? rawItems.map((item) => roundMoney(item.coupon_allocated_amount))
+        : allocateProportionalAmounts(rawItems, toNumber(order.coupon_discount, 0), 'item_amount');
+    const pointsAllocations = hasSnapshot
+        ? rawItems.map((item) => roundMoney(item.points_allocated_amount))
+        : allocateProportionalAmounts(rawItems, toNumber(order.points_discount, 0), 'item_amount');
+
+    return rawItems.map((item, index) => {
+        const quantity = Math.max(1, toNumber(item.qty || item.quantity, 1));
+        const itemAmount = roundMoney(item.item_amount != null ? item.item_amount : item.subtotal);
+        const originalLineAmount = roundMoney(item.original_line_amount != null ? item.original_line_amount : itemAmount);
+        const couponAllocatedAmount = roundMoney(couponAllocations[index]);
+        const pointsAllocatedAmount = roundMoney(pointsAllocations[index]);
+        const cashPaidAllocatedAmount = roundMoney(
+            item.cash_paid_allocated_amount != null
+                ? item.cash_paid_allocated_amount
+                : (itemAmount - couponAllocatedAmount - pointsAllocatedAmount)
+        );
+        const refundedQuantity = Math.max(0, Math.min(quantity, toNumber(item.refunded_quantity, 0)));
+        const refundedCashAmount = roundMoney(Math.max(0, Math.min(cashPaidAllocatedAmount, toNumber(item.refunded_cash_amount, 0))));
+        const refundableQuantity = Math.max(0, quantity - refundedQuantity);
+        const refundableCashAmount = roundMoney(Math.max(0, cashPaidAllocatedAmount - refundedCashAmount));
+        return {
+            ...item,
+            refund_item_key: item.refund_item_key || `${item.product_id || 'product'}::${item.sku_id || 'nosku'}::${index}`,
+            quantity,
+            qty: quantity,
+            item_amount: itemAmount,
+            original_line_amount: originalLineAmount,
+            coupon_allocated_amount: couponAllocatedAmount,
+            points_allocated_amount: pointsAllocatedAmount,
+            cash_paid_allocated_amount: cashPaidAllocatedAmount,
+            refunded_quantity: refundedQuantity,
+            refunded_cash_amount: refundedCashAmount,
+            refundable_quantity: refundableQuantity,
+            refundable_cash_amount: refundableCashAmount,
+            refund_basis_version: item.refund_basis_version || (hasSnapshot ? 'snapshot_v1' : 'legacy_estimated')
+        };
+    });
+}
+
 async function getOrderByIdOrNo(openid, orderId) {
     if (orderId === null || orderId === undefined || orderId === '') return null;
     const id = String(orderId);
@@ -466,6 +538,25 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
     } : null;
     const normalizedIndirectReferrer = buildUserRelationSummary(indirectReferrerDoc);
     const normalizedNearestAgent = buildUserRelationSummary(nearestAgentDoc);
+    const settlementItems = buildOrderSettlementItems(order).map((line) => {
+        const lineImages = normalizeImages(firstFilled(line.snapshot_image, line.image));
+        return {
+            ...line,
+            product: {
+                id: firstFilled(line.product_id),
+                name: firstFilled(line.snapshot_name, line.name, '商品'),
+                images: lineImages.length > 0 ? lineImages : (line.snapshot_image ? [line.snapshot_image] : []),
+                image: firstFilled(line.snapshot_image, line.image)
+            },
+            sku: line.snapshot_spec || line.spec ? { spec_value: firstFilled(line.snapshot_spec, line.spec) } : null,
+            display_original_line_amount: displayAmount(line.original_line_amount),
+            display_coupon_allocated_amount: displayAmount(line.coupon_allocated_amount),
+            display_points_allocated_amount: displayAmount(line.points_allocated_amount),
+            display_cash_paid_allocated_amount: displayAmount(line.cash_paid_allocated_amount),
+            display_refunded_cash_amount: displayAmount(line.refunded_cash_amount),
+            display_refundable_cash_amount: displayAmount(line.refundable_cash_amount)
+        };
+    });
     const mergedProduct = {
         ...orderProduct,
         id: firstFilled(orderProduct.id, orderProduct._id, productId),
@@ -475,6 +566,10 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         image: firstFilled(orderProduct.image, orderProduct.cover, image)
     };
     const orderSku = order.sku && typeof order.sku === 'object' ? order.sku : null;
+    const refundedCashTotal = roundMoney(toNumber(order.refunded_cash_total, 0));
+    const refundedQuantityTotal = Math.max(0, toNumber(order.refunded_quantity_total, 0));
+    const remainingRefundableCash = roundMoney(Math.max(0, payAmount - refundedCashTotal));
+    const hasPartialRefund = refundedCashTotal > 0 && remainingRefundableCash > 0;
 
     return {
         ...order,
@@ -534,6 +629,13 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         payment_method: paymentMethod,
         payment_method_text: getPaymentMethodText(paymentMethod),
         refund_target_text: getRefundTargetText(paymentMethod),
+        items: settlementItems,
+        refunded_cash_total: refundedCashTotal,
+        refunded_quantity_total: refundedQuantityTotal,
+        remaining_refundable_cash: remainingRefundableCash,
+        has_partial_refund: hasPartialRefund,
+        display_refunded_cash_total: displayAmount(refundedCashTotal),
+        display_remaining_refundable_cash: displayAmount(remainingRefundableCash),
         price: displayAmount(unitPrice),
         total_amount: displayAmount(totalAmount),
         pay_amount: displayAmount(payAmount),

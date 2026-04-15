@@ -6,11 +6,11 @@
       </template>
 
       <el-alert
-        type="warning"
+        type="info"
         :closable="false"
         show-icon
         style="margin-bottom: 16px;"
-        title="当前仅支持整单退款。退款金额必须等于订单实付金额，否则不得执行退款。"
+        title="退款金额由系统按商品实付自动计算；仅退现金，优惠券和积分不返还。"
       />
 
       <!-- 搜索栏 -->
@@ -63,7 +63,14 @@
             <div v-if="orderPayAmount(row) > 0" class="text-gray" style="font-size:12px;margin-top:4px;">
               实付 ¥{{ orderPayAmount(row).toFixed(2) }}
             </div>
-            <el-tag v-if="!isFullRefund(row)" type="danger" size="small" style="margin-top:6px;">非整单</el-tag>
+            <div class="text-gray" style="font-size:12px;margin-top:4px;" v-if="row.order?.remaining_refundable_cash >= 0">
+              剩余可退 ¥{{ Number.parseFloat(row.order?.remaining_refundable_cash || 0).toFixed(2) }}
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="计算来源" width="110" class-name="hide-mobile">
+          <template #default="{ row }">
+            <el-tag size="small" effect="plain">{{ row.settlement_basis_version === 'snapshot_v1' ? 'snapshot' : 'legacy_estimated' }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="支付 / 退款去向" width="180" class-name="hide-mobile">
@@ -143,7 +150,11 @@
         <el-descriptions-item label="退款去向">{{ currentRow.display_refund_target_text }}</el-descriptions-item>
         <el-descriptions-item label="退款金额">¥{{ currentRow.display_amount }}</el-descriptions-item>
         <el-descriptions-item label="订单实付" v-if="orderPayAmount(currentRow) > 0">¥{{ orderPayAmount(currentRow).toFixed(2) }}</el-descriptions-item>
+        <el-descriptions-item label="累计已退" v-if="currentRow.order?.refunded_cash_total != null">¥{{ Number.parseFloat(currentRow.order?.refunded_cash_total || 0).toFixed(2) }}</el-descriptions-item>
+        <el-descriptions-item label="剩余可退" v-if="currentRow.order?.remaining_refundable_cash != null">¥{{ Number.parseFloat(currentRow.order?.remaining_refundable_cash || 0).toFixed(2) }}</el-descriptions-item>
+        <el-descriptions-item label="计算来源">{{ currentRow.settlement_basis_version === 'snapshot_v1' ? 'snapshot' : 'legacy_estimated' }}</el-descriptions-item>
         <el-descriptions-item label="退款原因">{{ currentRow.reason || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="退款规则">仅退现金，优惠券和积分不返还</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="getStatusType(currentRow.status)">{{ currentRow.display_status_text }}</el-tag>
         </el-descriptions-item>
@@ -158,6 +169,54 @@
         <el-descriptions-item label="退货快递公司" v-if="currentRow.return_company">{{ currentRow.return_company }}</el-descriptions-item>
         <el-descriptions-item label="退货物流单号" v-if="currentRow.return_tracking_no">{{ currentRow.return_tracking_no }}</el-descriptions-item>
       </el-descriptions>
+      <div v-if="currentRow?.refund_items?.length" style="margin-top:16px;">
+        <div style="font-weight:600;margin-bottom:8px;">退款计算明细</div>
+        <el-table :data="currentRow.refund_items" size="small" border>
+          <el-table-column prop="product.name" label="商品" min-width="180">
+            <template #default="{ row }">
+              <span>{{ row.product?.name || '-' }}</span>
+              <span v-if="row.sku?.spec_value" class="text-gray" style="font-size:12px;margin-left:4px;">{{ row.sku.spec_value }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="quantity" label="退款数量" width="90" />
+          <el-table-column prop="cash_refund_amount" label="现金退款" width="100">
+            <template #default="{ row }">¥{{ Number.parseFloat(row.cash_refund_amount || 0).toFixed(2) }}</template>
+          </el-table-column>
+          <el-table-column prop="settlement_basis_version" label="来源" width="130">
+            <template #default="{ row }">{{ row.settlement_basis_version === 'snapshot_v1' ? 'snapshot' : 'legacy_estimated' }}</template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <div v-if="currentRow?.items?.length" style="margin-top:16px;">
+        <div style="font-weight:600;margin-bottom:8px;">订单商品结算快照</div>
+        <el-table :data="currentRow.items" size="small" border>
+          <el-table-column label="商品" min-width="180">
+            <template #default="{ row }">
+              <span>{{ row.product?.name || '-' }}</span>
+              <span v-if="row.sku?.spec_value" class="text-gray" style="font-size:12px;margin-left:4px;">{{ row.sku.spec_value }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="quantity" label="总件数" width="80" />
+          <el-table-column label="原价" width="90">
+            <template #default="{ row }">¥{{ Number.parseFloat(row.display_original_line_amount || 0).toFixed(2) }}</template>
+          </el-table-column>
+          <el-table-column label="分摊优惠券" width="100">
+            <template #default="{ row }">¥{{ Number.parseFloat(row.display_coupon_allocated_amount || 0).toFixed(2) }}</template>
+          </el-table-column>
+          <el-table-column label="分摊积分" width="100">
+            <template #default="{ row }">¥{{ Number.parseFloat(row.display_points_allocated_amount || 0).toFixed(2) }}</template>
+          </el-table-column>
+          <el-table-column label="商品实付" width="100">
+            <template #default="{ row }">¥{{ Number.parseFloat(row.display_cash_paid_allocated_amount || 0).toFixed(2) }}</template>
+          </el-table-column>
+          <el-table-column label="已退现金" width="100">
+            <template #default="{ row }">¥{{ Number.parseFloat(row.display_refunded_cash_amount || 0).toFixed(2) }}</template>
+          </el-table-column>
+          <el-table-column label="本次最多可退" width="110">
+            <template #default="{ row }">¥{{ Number.parseFloat(row.display_refundable_cash_amount || 0).toFixed(2) }}</template>
+          </el-table-column>
+        </el-table>
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -200,12 +259,6 @@ const rejectForm = reactive({
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 const orderPayAmount = (row = {}) => Number.parseFloat(row.order?.pay_amount || 0)
 const refundAmountNumber = (row = {}) => Number.parseFloat(row.amount || 0)
-const isFullRefund = (row = {}) => {
-  const refundAmount = refundAmountNumber(row)
-  const payAmount = orderPayAmount(row)
-  if (!(refundAmount > 0) || !(payAmount > 0)) return false
-  return Math.abs(refundAmount - payAmount) < 0.005
-}
 const normalizeRefundDisplay = (row = {}) => {
   const paymentMethodCode = resolvePaymentMethod(row)
   return {
@@ -376,13 +429,9 @@ const handleRejectSubmit = async () => {
 }
 
 const handleComplete = async (row) => {
-  if (!isFullRefund(row)) {
-    ElMessage.error(`当前仅支持整单退款。退款金额 ¥${refundAmountNumber(row).toFixed(2)}，订单实付 ¥${orderPayAmount(row).toFixed(2)}。`)
-    return
-  }
   try {
     await ElMessageBox.confirm(
-      `该操作将立即对用户「${displayUserName(row.user, row.user_id)}」发起整单退款，金额 ¥${row.display_amount || Number.parseFloat(row.amount || 0).toFixed(2)}。\n订单实付：¥${orderPayAmount(row).toFixed(2)}\n支付方式：${row.display_payment_method_text || refundPaymentMethodText(row)}\n退款去向：${row.display_refund_target_text || refundTargetText(row)}\n请确认当前售后单已审核无误。`,
+      `该操作将立即对用户「${displayUserName(row.user, row.user_id)}」发起退款，金额 ¥${row.display_amount || Number.parseFloat(row.amount || 0).toFixed(2)}。\n订单实付：¥${orderPayAmount(row).toFixed(2)}\n剩余可退：¥${Number.parseFloat(row.order?.remaining_refundable_cash || 0).toFixed(2)}\n支付方式：${row.display_payment_method_text || refundPaymentMethodText(row)}\n退款去向：${row.display_refund_target_text || refundTargetText(row)}\n退款规则：仅退现金，优惠券和积分不返还。`,
       '确认发起退款',
       {
         confirmButtonText: '立即退款',

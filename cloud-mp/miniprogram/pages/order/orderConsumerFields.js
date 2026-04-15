@@ -100,19 +100,36 @@ function normalizeOrderConsumer(order = {}) {
     );
     const couponDiscount = toNumber(order.coupon_discount);
     const pointsDiscount = toNumber(order.points_discount);
+    const refundedCashTotal = toNumber(order.refunded_cash_total);
+    const remainingRefundableCash = toNumber(order.remaining_refundable_cash);
     const statusText = order.status_text || getOrderStatusText(order.status);
     const statusDesc = order.status_desc || '';
     const paymentMethodText = order.payment_method_text || getPaymentMethodText(paymentMethod);
     const refundTargetText = getRefundTargetText(paymentMethod, order.refund_target_text || '');
+    const normalizedItems = Array.isArray(order.items)
+        ? order.items.map((item) => ({
+            ...item,
+            display_original_line_amount: toMoney(item.original_line_amount),
+            display_coupon_allocated_amount: toMoney(item.coupon_allocated_amount),
+            display_points_allocated_amount: toMoney(item.points_allocated_amount),
+            display_cash_paid_allocated_amount: toMoney(item.cash_paid_allocated_amount),
+            display_refunded_cash_amount: toMoney(item.refunded_cash_amount),
+            display_refundable_cash_amount: toMoney(item.refundable_cash_amount)
+        }))
+        : [];
 
     return {
         ...order,
+        items: normalizedItems,
         payment_method: paymentMethod || order.payment_method || '',
         total_amount: totalAmount,
         original_amount: originalAmount,
         pay_amount: payAmount,
         coupon_discount: couponDiscount,
         points_discount: pointsDiscount,
+        refunded_cash_total: refundedCashTotal,
+        remaining_refundable_cash: remainingRefundableCash,
+        has_partial_refund: !!order.has_partial_refund,
         status_text: statusText,
         status_desc: statusDesc,
         payment_method_text: paymentMethodText,
@@ -125,7 +142,9 @@ function normalizeOrderConsumer(order = {}) {
         display_original_amount: toMoney(originalAmount),
         display_pay_amount: toMoney(payAmount),
         display_coupon_discount: toMoney(couponDiscount),
-        display_points_discount: toMoney(pointsDiscount)
+        display_points_discount: toMoney(pointsDiscount),
+        display_refunded_cash_total: toMoney(refundedCashTotal),
+        display_remaining_refundable_cash: toMoney(remainingRefundableCash)
     };
 }
 

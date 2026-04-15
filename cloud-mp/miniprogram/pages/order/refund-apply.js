@@ -2,15 +2,61 @@
 const { get, post } = require('../../utils/request');
 const { normalizeOrderConsumer } = require('./orderConsumerFields');
 
+function roundMoney(value) {
+    const num = Number(value || 0);
+    return Number.isFinite(num) ? Math.round(num * 100) / 100 : 0;
+}
+
+function calculateRefundAmountByItem(item, selectedQuantity) {
+    const quantity = Math.max(1, Number(item.quantity || item.qty || 1));
+    const refundableQuantity = Math.max(0, Number(item.refundable_quantity || 0));
+    const refundableCashAmount = roundMoney(item.refundable_cash_amount || 0);
+    if (selectedQuantity <= 0 || refundableQuantity <= 0 || refundableCashAmount <= 0) return 0;
+    if (selectedQuantity >= refundableQuantity) return refundableCashAmount;
+    return roundMoney(Number(item.cash_paid_allocated_amount || 0) * (selectedQuantity / quantity));
+}
+
+function buildRefundSelections(order, type) {
+    const items = Array.isArray(order && order.items) ? order.items : [];
+    const singleLine = items.length === 1 ? items[0] : null;
+    return items.map((item) => {
+        const refundableQuantity = Math.max(0, Number(item.refundable_quantity || 0));
+        const defaultQuantity = singleLine ? refundableQuantity : 0;
+        return {
+            ...item,
+            selectedQuantity: defaultQuantity,
+            refundAmount: calculateRefundAmountByItem(item, defaultQuantity),
+            disabled: refundableQuantity <= 0
+        };
+    });
+}
+
+function calculateRefundAmount(order, refundItems = []) {
+    if (!order) return '0.00';
+    const total = refundItems.reduce((sum, item) => sum + calculateRefundAmountByItem(item, item.selectedQuantity), 0);
+    return roundMoney(total).toFixed(2);
+}
+
+function buildRefundItemsPayload(refundItems = []) {
+    return refundItems
+        .filter((item) => Number(item.selectedQuantity || 0) > 0)
+        .map((item) => ({
+            refund_item_key: item.refund_item_key,
+            product_id: item.product_id,
+            sku_id: item.sku_id || '',
+            quantity: Number(item.selectedQuantity || 0)
+        }));
+}
+
 Page({
     data: {
         orderId: null,
         order: null,
+        refundItems: [],
         type: 'refund_only', // refund_only / return_refund
         reason: '',
         description: '',
         amount: '',
-        refundQuantity: 0, // 退货数量，仅 return_refund 时有值
         reasons: [
             { value: 'quality', label: '商品质量问题' },
             { value: 'wrong_item', label: '商品与描述不符' },
@@ -40,22 +86,34 @@ Page({
                 try { order.product.images = JSON.parse(order.product.images); } catch (e) { order.product.images = []; }
             }
             const normalizedOrder = normalizeOrderConsumer(order);
-            const refundableAmount = normalizedOrder.display_pay_amount;
+            const refundItems = buildRefundSelections(normalizedOrder, this.data.type);
             this.setData({
                 order: normalizedOrder,
-                amount: refundableAmount
+                refundItems,
+                amount: calculateRefundAmount(normalizedOrder, refundItems)
             });
         } catch (err) {
             wx.showToast({ title: '加载订单失败', icon: 'none' });
         }
     },
 
+    syncRefundAmount(nextState = {}) {
+        const order = nextState.order || this.data.order;
+        const refundItems = nextState.refundItems || this.data.refundItems;
+        return {
+            amount: calculateRefundAmount(order, refundItems)
+        };
+    },
+
     onTypeChange(e) {
         const type = e.detail.value;
-        this.setData({
+        const nextState = {
             type,
-            // 切换到退货退款时，默认退货数量 = 订单数量
-            refundQuantity: type === 'return_refund' ? (this.data.order ? this.data.order.quantity : 0) : 0
+            refundItems: buildRefundSelections(this.data.order, type)
+        };
+        this.setData({
+            ...nextState,
+            ...this.syncRefundAmount(nextState)
         });
     },
 
@@ -71,33 +129,46 @@ Page({
         this.setData({ description: e.detail.value });
     },
 
-    onAmountInput(e) {
-        this.setData({ amount: e.detail.value });
+    updateRefundItemQuantity(index, nextQuantity) {
+        const refundItems = (this.data.refundItems || []).slice();
+        const current = refundItems[index];
+        if (!current) return;
+        const maxQty = Math.max(0, Number(current.refundable_quantity || 0));
+        let qty = Number(nextQuantity || 0);
+        if (qty < 0) qty = 0;
+        if (qty > maxQty) qty = maxQty;
+        refundItems[index] = {
+            ...current,
+            selectedQuantity: qty,
+            refundAmount: calculateRefundAmountByItem(current, qty)
+        };
+        this.setData({
+            refundItems,
+            ...this.syncRefundAmount({ refundItems })
+        });
     },
 
     onRefundQtyInput(e) {
-        let qty = parseInt(e.detail.value) || 0;
-        const maxQty = this.data.order ? this.data.order.quantity : 0;
-        if (qty < 0) qty = 0;
-        if (qty > maxQty) qty = maxQty;
-        this.setData({ refundQuantity: qty });
+        const index = Number(e.currentTarget.dataset.index);
+        this.updateRefundItemQuantity(index, parseInt(e.detail.value) || 0);
     },
 
-    onRefundQtyMinus() {
-        if (this.data.refundQuantity > 1) {
-            this.setData({ refundQuantity: this.data.refundQuantity - 1 });
-        }
+    onRefundQtyMinus(e) {
+        const index = Number(e.currentTarget.dataset.index);
+        const current = this.data.refundItems[index];
+        if (!current) return;
+        this.updateRefundItemQuantity(index, Number(current.selectedQuantity || 0) - 1);
     },
 
-    onRefundQtyPlus() {
-        const maxQty = this.data.order ? this.data.order.quantity : 0;
-        if (this.data.refundQuantity < maxQty) {
-            this.setData({ refundQuantity: this.data.refundQuantity + 1 });
-        }
+    onRefundQtyPlus(e) {
+        const index = Number(e.currentTarget.dataset.index);
+        const current = this.data.refundItems[index];
+        if (!current) return;
+        this.updateRefundItemQuantity(index, Number(current.selectedQuantity || 0) + 1);
     },
 
     async onSubmit() {
-        const { orderId, type, reason, description, amount, refundQuantity, submitting } = this.data;
+        const { orderId, type, reason, description, amount, refundItems, submitting } = this.data;
 
         if (submitting) return;
 
@@ -108,19 +179,14 @@ Page({
 
         const refundAmount = parseFloat(amount);
         if (!refundAmount || refundAmount <= 0) {
-            wx.showToast({ title: '请输入有效退款金额', icon: 'none' });
+            wx.showToast({ title: '请选择要退款的商品', icon: 'none' });
             return;
         }
 
-        const maxRefundAmount = parseFloat(this.data.order.pay_amount || 0);
-        if (refundAmount > maxRefundAmount) {
-            wx.showToast({ title: '退款金额不能超过订单金额', icon: 'none' });
-            return;
-        }
+        const refundItemsPayload = buildRefundItemsPayload(refundItems);
 
-        // ★ 退货退款必须填退货数量
-        if (type === 'return_refund' && (!refundQuantity || refundQuantity <= 0)) {
-            wx.showToast({ title: '请填写退货数量', icon: 'none' });
+        if (!refundItemsPayload.length) {
+            wx.showToast({ title: '请选择要退款的商品', icon: 'none' });
             return;
         }
 
@@ -132,12 +198,9 @@ Page({
                 type,
                 reason,
                 description,
-                amount: refundAmount
+                refund_items: refundItemsPayload
             };
-            // 退货退款传退货数量，仅退款不传（后端默认0）
-            if (type === 'return_refund') {
-                params.refund_quantity = refundQuantity;
-            }
+            params.refund_quantity = refundItemsPayload.reduce((sum, item) => sum + item.quantity, 0);
 
             const res = await post('/refunds', params);
 

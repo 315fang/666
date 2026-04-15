@@ -316,12 +316,13 @@ class SharePosterCore {
         this.fillRoundRect(ctx, cardX, cardY, cardW, cardH, CARD_RADIUS, '#FFFFFF');
         this.strokeRoundRect(ctx, cardX, cardY, cardW, cardH, CARD_RADIUS, 'rgba(43,33,24,0.06)', 1);
 
+        const isBrandVariant = posterVariant === 'brand';
         const avatarSize = 66;
         const avatarX = cardX + 28;
         const avatarY = cardY + 44;
-        const nameX = avatarX + avatarSize + 18;
+        const textStartX = cardX + 28;
+        const nameX = isBrandVariant ? textStartX : (avatarX + avatarSize + 18);
         const nameY = avatarY + 28;
-        const isBrandVariant = posterVariant === 'brand';
         const memberCode = inviteCode || userInfo?.member_no || userInfo?.my_invite_code || '';
         const name = isBrandVariant
             ? ellipsis(brandConfig.poster_brand_display_name || brandName || '品牌官方', 9)
@@ -330,30 +331,40 @@ class SharePosterCore {
         const codePrefix = brandConfig.share_poster_code_prefix || '邀请码：';
         const qrHint = brandConfig.share_poster_qr_hint || '长按识别小程序码';
 
-        await this.drawIdentityAvatar(ctx, canvas, {
-            x: avatarX,
-            y: avatarY,
-            size: avatarSize,
-            avatarSource: isBrandVariant
-                ? (brandConfig.brand_logo_url || brandConfig.brand_logo || '')
-                : (userInfo.avatar || userInfo.avatar_url || userInfo.avatarUrl || ''),
-            fallbackLabel: isBrandVariant ? String(brandName || '品牌').slice(0, 2) : '',
-            fallbackBg: isBrandVariant ? '#E5D5BB' : '#E9E1D6',
-            fallbackColor: isBrandVariant ? '#70542E' : '#6D5A45'
-        });
+        if (!isBrandVariant) {
+            await this.drawIdentityAvatar(ctx, canvas, {
+                x: avatarX,
+                y: avatarY,
+                size: avatarSize,
+                avatarSource: userInfo.avatar || userInfo.avatar_url || userInfo.avatarUrl || '',
+                fallbackLabel: '',
+                fallbackBg: '#E9E1D6',
+                fallbackColor: '#6D5A45'
+            });
+        } else {
+            this.fillRoundRect(ctx, textStartX, cardY + 36, 112, 36, 18, '#F1E3CA');
+            ctx.save();
+            ctx.fillStyle = '#8E6A34';
+            ctx.font = '600 18px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('品牌海报', textStartX + 56, cardY + 54);
+            ctx.restore();
+        }
 
         ctx.fillStyle = '#2B2118';
-        ctx.font = '700 28px sans-serif';
+        ctx.font = isBrandVariant ? '700 32px sans-serif' : '700 28px sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText(name, nameX, nameY);
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(name, nameX, isBrandVariant ? (cardY + 108) : nameY);
 
         ctx.fillStyle = '#3F3328';
         ctx.font = '600 17px sans-serif';
-        ctx.fillText(introText, avatarX, cardY + 132);
+        ctx.fillText(introText, textStartX, isBrandVariant ? (cardY + 150) : (cardY + 132));
 
         ctx.fillStyle = '#B74848';
         ctx.font = '600 17px sans-serif';
-        ctx.fillText(`${codePrefix}${memberCode || '未配置'}`, avatarX, cardY + 182);
+        ctx.fillText(`${codePrefix}${memberCode || '未配置'}`, textStartX, isBrandVariant ? (cardY + 194) : (cardY + 182));
 
         const qrBoxSize = 170;
         const qrBoxX = cardX + cardW - qrBoxSize - 22;

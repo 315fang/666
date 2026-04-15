@@ -377,6 +377,29 @@ function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
 }
 
+function allocateProportionalAmounts(items = [], totalAmount = 0, field = 'item_amount') {
+    const total = roundMoney(totalAmount);
+    if (total <= 0 || !Array.isArray(items) || items.length === 0) {
+        return items.map(() => 0);
+    }
+
+    const baseValues = items.map((item) => Math.max(0, roundMoney(item && item[field])));
+    const baseTotal = roundMoney(baseValues.reduce((sum, value) => sum + value, 0));
+    if (baseTotal <= 0) {
+        return items.map((_, index) => index === items.length - 1 ? total : 0);
+    }
+
+    let allocatedSum = 0;
+    return items.map((item, index) => {
+        if (index === items.length - 1) {
+            return roundMoney(total - allocatedSum);
+        }
+        const allocated = roundMoney(total * (baseValues[index] / baseTotal));
+        allocatedSum = roundMoney(allocatedSum + allocated);
+        return allocated;
+    });
+}
+
 function resolveProductUnitPrice(product = {}) {
     if (hasValue(product.retail_price)) return toNumber(product.retail_price, 0);
     if (hasValue(product.price)) return toNumber(product.price, 0);
@@ -775,10 +798,12 @@ async function createOrder(openid, orderData) {
             snapshot_image: image,
             price: unitPrice,
             unit_price: unitPrice,
+            original_unit_price: roundMoney(originalUnitPrice),
             qty,
             quantity: qty,
             subtotal: lineTotal,
             item_amount: lineTotal,
+            original_line_amount: roundMoney(originalUnitPrice * qty),
             locked_agent_cost_candidate: lockedAgentUnitCost,
             locked_agent_cost: null,
             locked_agent_cost_total: null,
@@ -870,6 +895,20 @@ async function createOrder(openid, orderData) {
     // 4. 计算最终支付金额
     let payAmount = totalAmount - couponDiscount - pointsDiscount;
     payAmount = Math.max(0, Math.round(payAmount * 100) / 100);
+
+    const couponAllocations = allocateProportionalAmounts(orderItems, couponDiscount, 'item_amount');
+    const pointsAllocations = allocateProportionalAmounts(orderItems, pointsDiscount, 'item_amount');
+    orderItems.forEach((item, index) => {
+        const couponAllocatedAmount = roundMoney(couponAllocations[index]);
+        const pointsAllocatedAmount = roundMoney(pointsAllocations[index]);
+        item.coupon_allocated_amount = couponAllocatedAmount;
+        item.points_allocated_amount = pointsAllocatedAmount;
+        item.cash_paid_allocated_amount = roundMoney(item.item_amount - couponAllocatedAmount - pointsAllocatedAmount);
+        item.refunded_cash_amount = 0;
+        item.refunded_quantity = 0;
+        item.refund_basis_version = 'snapshot_v1';
+        item.refund_item_key = `${item.product_id || 'product'}::${item.sku_id || 'nosku'}::${index}`;
+    });
 
     // 5. 查收货地址
     let addressInfo = null;
@@ -975,6 +1014,11 @@ async function createOrder(openid, orderData) {
         buyer_role_level: buyerRoleLevel,
         pay_amount: payAmount,
         actual_price: payAmount,
+        refunded_cash_total: 0,
+        refunded_quantity_total: 0,
+        reward_points_clawback_total: 0,
+        growth_clawback_total: 0,
+        has_partial_refund: false,
         payment_method: '',
         pay_channel: '',
         address_id: address_id || '',
