@@ -1,410 +1,380 @@
-# 管理后台功能说明
+# 管理后台使用说明书
 
-更新日期：2026-04-14  
-适用范围：`admin-ui/` 当前实际保留页面  
-目标读者：运营、客服、财务、仓储、管理员、后续后台维护人员
+更新日期：2026-04-15  
+适用范围：`cloud-mp/admin-ui` 当前实际保留页面  
+适用对象：运营、客服、财务、仓储、管理员、后续后台维护人员
 
-## 1. 文档目的
+## 1. 文档定位
 
-这份文档只讲当前管理后台的真实页面与真实入口，不讲已经下线或已经合并掉的历史页面。
+这份文档是当前小程序管理后台的正式使用说明书。
 
-用途有两个：
+它解决两个问题：
 
-1. 给后台使用人员明确“某个功能现在去哪里找”。
-2. 给后续维护人员明确“某个页面现在实际负责什么，不要再重复造入口”。
+1. 后台使用人员要知道“现在某件事该去哪个页面做”。
+2. 后台维护人员要知道“菜单、权限、页面职责现在到底是什么”。
 
-说明：
+本文件只描述当前真实保留页面，不沿用历史阶段下线入口、旧配置页和旧命名。
 
-- 运行行为以当前代码为准。
-- 菜单、分组、权限以 [admin-ui/src/router/index.js](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/router/index.js:1) 为准。
-- 默认角色预设以 [admin-ui/src/config/adminRolePresets.js](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/config/adminRolePresets.js:1) 为准。
+当前真相来源：
 
-## 2. 后台当前导航结构
+- 管理后台路由：[admin-ui/src/router/index.js](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/router/index.js:1)
+- 默认角色权限预设：[admin-ui/src/config/adminRolePresets.js](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/config/adminRolePresets.js:1)
+- 工程总入口说明：[README.md](/C:/Users/21963/WeChatProjects/zz/cloud-mp/README.md)
 
-### 2.1 登录后主导航分组
+## 2. 后台概览
 
-后台当前分为 6 个主要业务组：
+### 2.1 后台当前包含哪些业务组
 
-| 分组 | 页面 |
+当前后台按菜单分为 7 个组：
+
+| 分组 | 主要页面 |
 | --- | --- |
-| `经营概览` | 经营看板、财务看板、运营参数 |
-| `订单与资金` | 订单管理、自提门店、提现审核、售后退款、佣金结算 |
-| `商品与营销` | 商品管理、商品分类、拼团活动、营销资源、优惠券管理 |
-| `用户与渠道` | 用户管理、经销商管理、分支代理、N路径代理 |
-| `内容与设计` | 轮播与图文、首页内容位、素材管理、评论管理、群发消息 |
-| `业务策略` | 会员与成长值、代理体系 |
-| `平台与运维` | 管理员与权限、运维监控、操作日志 |
+| 经营概览 | 经营看板、财务看板、运营参数 |
+| 订单与资金 | 订单管理、自提门店、售后退款、提现审核、佣金结算 |
+| 商品与营销 | 商品管理、商品分类、拼团活动、营销资源、优惠券管理 |
+| 用户与渠道 | 用户管理、经销商管理、分支代理、N路径代理 |
+| 内容与设计 | 轮播与图文、首页内容位、素材管理、评论管理、群发消息 |
+| 业务策略 | 会员与成长值 |
+| 平台与运维 | 管理员与权限、运维监控、操作日志 |
 
-### 2.2 顶部快捷入口
+### 2.2 后台当前实际页面数量
 
-顶部快捷按钮当前固定为：
+当前后台实际保留：
+
+- 1 个登录页
+- 27 个业务页
+- 合计 28 个页面入口
+
+### 2.3 先记住的三条使用原则
+
+1. 看板页主要用来“看”，业务处理页主要用来“改”。
+2. 订单、退款、提现、佣金、用户余额都属于高风险动作，操作前必须二次核对。
+3. 找不到入口时，不要凭旧文档猜，先按本文件的菜单索引查。
+
+## 3. 登录、权限与导航
+
+### 3.1 如何登录
+
+入口：
+
+- 路由：`/login`
+- 页面文件：[admin-ui/src/views/login/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/login/index.vue:1)
+
+当前后台通过账号密码登录。登录后右上角头像菜单可执行：
+
+- 修改密码
+- 退出登录
+
+### 3.2 菜单为什么有人看得到、有人看不到
+
+后台是否显示某个页面，取决于页面绑定的 `permission`。
+
+典型示例：
+
+- `orders`：订单管理
+- `refunds`：售后退款
+- `withdrawals`：提现审核
+- `commissions`：佣金结算
+- `content`：轮播与图文、首页内容位
+- `settings_manage`：运营参数
+- `admins`：管理员与权限
+- `super_admin`：运维监控
+
+如果某个同事登录后看不到页面，优先检查：
+
+1. 管理员账号是否已登录成功。
+2. 当前账号的权限是否包含目标页面对应的 `permission`。
+3. 是否被分配成了过窄的默认角色。
+
+### 3.3 默认角色大致能做什么
+
+当前默认角色预设如下：
+
+| 角色 | 典型定位 | 典型权限范围 |
+| --- | --- | --- |
+| `admin` | 全局管理员 | 看板、商品、订单、用户、内容、经销商、佣金、设置、日志、部分高风险能力 |
+| `operator` | 运营 | 看板、商品、订单、内容、素材、通知、统计 |
+| `finance` | 财务 | 看板、订单、提现、佣金、统计 |
+| `customer_service` | 客服 | 看板、订单、退款、用户、通知 |
+| `warehouse` | 仓储 | 订单、自提门店 |
+| `designer` | 设计/内容 | 内容、素材 |
+
+注意：
+
+- 默认角色只是预设，不等于最终授权结果。
+- 某些高风险能力不是角色默认就开，例如订单改价、强制取消、余额调整等。
+
+### 3.4 顶部快捷入口
+
+当前顶部快捷按钮固定为：
 
 - `订单待处理`
 - `首页内容位`
 - `营销资源`
 
-代码位置：
-[admin-ui/src/layout/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/layout/index.vue:89)
+这三个入口适合做日常高频跳转，但不替代完整菜单。
 
-### 2.3 当前已经并页或下线的旧页面
-
-为了避免管理成员继续找旧入口，以下功能已经收口：
-
-| 历史页面 | 当前去哪里找 |
-| --- | --- |
-| `物流查询` | 已并入 `订单管理` |
-| `商品推荐榜` | 已并入 `首页内容位 > 精选商品榜` |
-| `开屏动画` | 已并入 `首页内容位 > 开屏动画` |
-| `系统配置` | 已下线，不再作为后台日常功能入口 |
-
-## 3. 使用前说明
-
-### 3.1 登录与账户
-
-入口：
-
-- 菜单：`/login`
-- 页面文件：[admin-ui/src/views/login/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/login/index.vue:1)
-
-当前后台默认通过账号密码登录。登录后右上角头像下拉可以：
-
-- 修改密码
-- 退出登录
-
-代码位置：
-[admin-ui/src/layout/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/layout/index.vue:95)
-
-### 3.2 权限理解
-
-后台页面是否可见，取决于页面的 `permission` 键。
-
-典型示例：
-
-- `orders` 才能看订单管理
-- `refunds` 才能处理售后退款
-- `statistics` 才能看财务看板与会员页
-- `settings_manage` 才能改运营参数与代理体系
-- `content` 才能管首页内容位与轮播图文
-
-如果某成员登录后看不到页面，优先检查：
-
-1. 该管理员账号的权限组是否包含对应 `permission`
-2. 是否被分配了过窄的默认角色
-
-## 4. 功能总索引
+## 4. 按角色找入口
 
 ### 4.1 运营同事常用入口
 
 | 你要做什么 | 去哪里 |
 | --- | --- |
-| 看今日经营数据 | `经营概览 > 经营看板` |
-| 看资金、佣金、提现风险 | `经营概览 > 财务看板` |
+| 看今日订单、销售、低库存 | `经营概览 > 经营看板` |
+| 看 GMV、基金池、代理贡献 | `经营概览 > 财务看板` |
 | 改首页弹窗、品牌、精选榜、开屏 | `内容与设计 > 首页内容位` |
-| 改轮播图和图文内容 | `内容与设计 > 轮播与图文` |
-| 配活动资源、砍价、抽奖、节日配置 | `商品与营销 > 营销资源` |
-| 发优惠券、看优惠券规则 | `商品与营销 > 优惠券管理` |
+| 改 Banner、图文、文章、公告 | `内容与设计 > 轮播与图文` |
+| 配活动资源、抽奖、链接、节日配置 | `商品与营销 > 营销资源` |
+| 发优惠券、配自动发券 | `商品与营销 > 优惠券管理` |
 
 ### 4.2 客服同事常用入口
 
 | 你要做什么 | 去哪里 |
 | --- | --- |
-| 查订单、看备注、看物流、发货 | `订单与资金 > 订单管理` |
-| 审核退款 | `订单与资金 > 售后退款` |
-| 查看用户资料、等级、团队、状态 | `用户与渠道 > 用户管理` |
-| 查操作记录 | `平台与运维 > 操作日志` |
+| 查订单、看状态、看备注、看物流 | `订单与资金 > 订单管理` |
+| 审核退款、查看退款去向 | `订单与资金 > 售后退款` |
+| 查用户资料、团队、等级、状态 | `用户与渠道 > 用户管理` |
+| 发通知或群发消息 | `内容与设计 > 群发消息` |
 
 ### 4.3 财务同事常用入口
 
 | 你要做什么 | 去哪里 |
 | --- | --- |
-| 看整体财务看板 | `经营概览 > 财务看板` |
+| 看整体财务盘面 | `经营概览 > 财务看板` |
 | 审核提现 | `订单与资金 > 提现审核` |
-| 审核佣金 | `订单与资金 > 佣金结算` |
-| 审核退款结果 | `订单与资金 > 售后退款` |
+| 查看并审批佣金流水 | `订单与资金 > 佣金结算` |
+| 检查退款执行结果 | `订单与资金 > 售后退款` |
 
-### 4.4 管理员常用入口
+### 4.4 仓储或履约同事常用入口
 
 | 你要做什么 | 去哪里 |
 | --- | --- |
-| 配运营参数、小程序配置、告警 | `经营概览 > 运营参数` |
-| 配会员等级和成长值 | `业务策略 > 会员与成长值` |
-| 配代理升级、佣金矩阵、基金池 | `业务策略 > 代理体系` |
-| 管理后台账号与权限 | `平台与运维 > 管理员与权限` |
-| 看运维状态 | `平台与运维 > 运维监控` |
+| 搜索待发货订单 | `订单与资金 > 订单管理` |
+| 执行发货、补录物流单号 | `订单与资金 > 订单管理` |
+| 管理自提门店和核销成员 | `订单与资金 > 自提门店` |
 
-## 5. 页面逐项说明
+### 4.5 管理员常用入口
+
+| 你要做什么 | 去哪里 |
+| --- | --- |
+| 改运营参数和小程序配置 | `经营概览 > 运营参数` |
+| 管理后台账号和权限 | `平台与运维 > 管理员与权限` |
+| 查日志和排查异常 | `平台与运维 > 操作日志` |
+| 看运行状态和任务摘要 | `平台与运维 > 运维监控` |
+
+## 5. 菜单与页面说明
 
 ### 5.1 经营概览
 
 #### 5.1.1 经营看板
 
-入口：
-
-- 菜单位置：`经营概览 > 经营看板`
 - 路由：`/dashboard`
 - 权限：`dashboard`
-- 页面文件：[dashboard](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/dashboard/index.vue:1)
+- 页面文件：[admin-ui/src/views/dashboard/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/dashboard/index.vue:1)
 
 主要用途：
 
-- 查看今日订单、今日销售额、累计用户、待发货
-- 查看近期成交订单
-- 查看低库存商品
-- 查看商品热度榜
-- 查看待处理事项
-- 查看会员成长门槛快照
-- 查看系统状态摘要
+- 看今日订单、今日销售额、累计用户、待发货数
+- 看近期订单
+- 看低库存商品
+- 看系统状态摘要
 
-适用角色：
+使用建议：
 
-- 店长 / 运营负责人 / 管理员
-
-常见问题：
-
-- 如果你只是要具体处理订单，不要停留在这里，应点击跳到 `订单管理`
-- 这里是“看板页”，不是“编辑页”
+- 它是“总览页”，不是业务处理页。
+- 看到异常后，应跳到对应业务页继续处理。
 
 #### 5.1.2 财务看板
 
-入口：
-
-- 菜单位置：`经营概览 > 财务看板`
 - 路由：`/finance`
 - 权限：`statistics`
-- 页面文件：[finance](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/finance/index.vue:1)
+- 页面文件：[admin-ui/src/views/finance/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/finance/index.vue:1)
 
 主要用途：
 
-- 看平台 GMV、佣金、提现、基金池、分红
-- 看代理商货款欠款
-- 看代理业绩贡献榜
-- 看团队贡献与分红资格池
-- 对代理欠款做处理
+- 看 GMV、佣金、提现、基金池、分红
+- 看代理贡献、团队贡献、欠款信息
+- 处理代理欠款相关操作
 
-适用角色：
+风险提示：
 
-- 财务 / 高级运营 / 管理员
-
-注意事项：
-
-- 这里是财务视图，不负责商品、页面内容编辑
-- 欠款处理属于高风险动作，必须确认理由再操作
+- 欠款处理会影响资金口径，必须填写明确理由。
 
 #### 5.1.3 运营参数
 
-入口：
-
-- 菜单位置：`经营概览 > 运营参数`
 - 路由：`/settings`
 - 权限：`settings_manage`
-- 页面文件：[settings](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/settings/index.vue:1)
+- 页面文件：[admin-ui/src/views/settings/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/settings/index.vue:1)
 
 主要用途：
 
-- 修改后台基础设置
-- 修改小程序配置
-- 修改告警配置
-- 查看系统状态快照
+- 维护后台基础配置
+- 维护小程序配置
+- 维护运营参数与告警参数
 
-适用角色：
+风险提示：
 
-- 超级管理员 / 运营管理员
-
-注意事项：
-
-- 这是“全局设置页”，改动会影响多个前台页面
-- 对小程序配置不了解时，不要随意改物流、展示、开关项
+- 这里的配置会影响多个页面和云端行为。
+- 不清楚字段含义时，不要直接改动支付、物流、代理、展示开关。
 
 ### 5.2 订单与资金
 
 #### 5.2.1 订单管理
 
-入口：
-
-- 菜单位置：`订单与资金 > 订单管理`
 - 路由：`/orders`
 - 权限：`orders`
-- 页面文件：[orders](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/orders/index.vue:1)
+- 页面文件：[admin-ui/src/views/orders/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/orders/index.vue:1)
 
 主要用途：
 
-- 按订单号、会员、收货人、商品等维度搜索订单
-- 按状态筛选订单
-- 查看订单详情
+- 按订单号、用户、商品、状态检索订单
+- 查看订单详情、支付方式、收货信息、物流信息
 - 发货
 - 查询物流轨迹
-- 修改订单金额
-- 添加内部备注
+- 改价
+- 写备注
 - 修复履约链
-- 强制完成 / 强制取消
-- 导出订单
-
-当前已并入的能力：
-
-- 原 `物流查询` 页面已经并到本页
-- 现在订单列表和订单详情都可以查看物流轨迹
+- 强制完成
+- 强制取消
 
 适用角色：
 
-- 客服 / 仓储 / 财务 / 管理员
+- 客服
+- 仓储
+- 财务
+- 管理员
 
 注意事项：
 
-- 本页是订单主工作台，处理订单优先来这里
-- `发货` 只对待发货订单开放
-- `物流轨迹` 只有填写了物流单号的订单才可查询
-- 手工发货模式下，不会返回第三方轨迹，只显示发货记录
+- 订单页是订单主工作台，发货、履约、物流、强制操作都优先在这里做。
+- 改价、强制取消、强制完成都属于高风险能力，不应交给普通岗位账号。
 
 #### 5.2.2 自提门店
 
-入口：
-
-- 菜单位置：`订单与资金 > 自提门店`
 - 路由：`/pickup-stations`
 - 权限：`pickup_stations`
-- 页面文件：[pickup-stations](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/pickup-stations/index.vue:1)
+- 页面文件：[admin-ui/src/views/pickup-stations/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/pickup-stations/index.vue:1)
 
 主要用途：
 
-- 新增 / 编辑自提门店
-- 配置门店地址、状态
-- 配置门店核销成员
-- 搜索员工并绑定到门店
+- 新增、编辑、禁用自提门店
+- 绑定门店成员
+- 管理自提核销相关基础信息
 
-适用角色：
+#### 5.2.3 售后退款
 
-- 仓储 / 门店运营 / 管理员
+- 路由：`/refunds`
+- 权限：`refunds`
+- 页面文件：[admin-ui/src/views/refunds/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/refunds/index.vue:1)
 
-注意事项：
+主要用途：
 
-- 如果自提订单无法核销，优先检查门店成员配置
-- 门店地址应尽量保持完整，避免前台地图定位异常
+- 查看退款申请
+- 审核通过
+- 审核拒绝
+- 执行退款
+- 查看支付方式、退款去向、退款明细
 
-#### 5.2.3 提现审核
+当前页面状态含义：
 
-入口：
+| 状态 | 含义 |
+| --- | --- |
+| `pending` | 待审核 |
+| `approved` | 已审核通过，待执行退款 |
+| `processing` | 已提交退款，等待微信或内部补偿链收口 |
+| `completed` | 退款已完成 |
+| `failed` | 退款失败，可重试 |
+| `rejected` | 审核已拒绝 |
 
-- 菜单位置：`订单与资金 > 提现审核`
+重要说明：
+
+1. “退款中”不一定代表钱没退，只代表系统还没收口到终态。
+2. 当前代码已支持在 `processing` 状态下手动执行“同步状态”。
+3. 如果线上环境暂时还看不到“同步状态”按钮，说明后台还没部署到当前版本。
+
+#### 5.2.4 提现审核
+
 - 路由：`/withdrawals`
 - 权限：`withdrawals`
-- 页面文件：[withdrawals](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/withdrawals/index.vue:1)
+- 页面文件：[admin-ui/src/views/withdrawals/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/withdrawals/index.vue:1)
 
 主要用途：
 
 - 查看提现申请
-- 审核通过 / 拒绝
-- 标记提现完成
-- 查看提现详情
+- 审核通过
+- 审核拒绝
+- 标记打款完成
 
-适用角色：
+风险提示：
 
-- 财务
-
-注意事项：
-
-- 拒绝提现前必须确认拒绝原因
-- 完成提现前应确认线下或支付实际已完成
-
-#### 5.2.4 售后退款
-
-入口：
-
-- 菜单位置：`订单与资金 > 售后退款`
-- 路由：`/refunds`
-- 权限：`refunds`
-- 页面文件：[refunds](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/refunds/index.vue:1)
-
-主要用途：
-
-- 查看售后单
-- 审核通过 / 拒绝
-- 执行退款完成
-- 查看售后详情
-
-注意事项：
-
-- 当前按整单退款思路处理
-- 审核前必须确认订单实付金额和退款去向
+- 拒绝提现会回退余额，必须确认理由。
+- 标记完成前要确认真实打款已经完成。
 
 #### 5.2.5 佣金结算
 
-入口：
-
-- 菜单位置：`订单与资金 > 佣金结算`
 - 路由：`/commissions`
 - 权限：`commissions`
-- 页面文件：[commissions](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/commissions/index.vue:1)
+- 页面文件：[admin-ui/src/views/commissions/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/commissions/index.vue:1)
 
 主要用途：
 
 - 查看佣金流水
-- 审核通过 / 驳回
-- 批量审批 / 批量驳回
+- 查看来源订单、来源用户、佣金层级
+- 审批
+- 驳回
+- 批量审批
+- 批量驳回
 
-注意事项：
+说明：
 
-- 这里处理的是系统佣金流水，不是提现
-- 批量操作不可撤销，必须先筛选清楚
+- 这里处理的是佣金流水，不是提现申请。
+- 退款完成后，相关未结佣金应转为 `cancelled`。
 
 ### 5.3 商品与营销
 
 #### 5.3.1 商品管理
 
-入口：
-
-- 菜单位置：`商品与营销 > 商品管理`
 - 路由：`/products`
 - 权限：`products`
-- 页面文件：[products](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/products/index.vue:1)
+- 页面文件：[admin-ui/src/views/products/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/products/index.vue:1)
 
 主要用途：
 
-- 新增 / 编辑商品
-- 修改价格、库存、上下架状态
-- 配置分销价格与发货成本价
-- 管理商品类目
+- 新增、编辑商品
+- 调整价格、库存、上下架
+- 配商品图、规格和佣金参数
+- 配代理成本价与分销相关字段
 
-注意事项：
+风险提示：
 
-- 这里的发货成本价会影响代理履约利润与货款口径
-- 不了解成本字段含义时，不要直接改 B1/B2/B3 成本价
+- 成本价、佣金价、角色价会影响履约利润和分销口径，不能随意改。
 
 #### 5.3.2 商品分类
 
-入口：
-
-- 菜单位置：`商品与营销 > 商品分类`
 - 路由：`/categories`
 - 权限：`products`
-- 页面文件：[categories](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/categories/index.vue:1)
+- 页面文件：[admin-ui/src/views/categories/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/categories/index.vue:1)
 
 主要用途：
 
-- 新增 / 编辑 / 删除分类
-- 管理分类名称、排序等
+- 新增、编辑、排序、删除分类
 
 #### 5.3.3 拼团活动
 
-入口：
-
-- 菜单位置：`商品与营销 > 拼团活动`
 - 路由：`/group-buys`
 - 权限：`products`
-- 页面文件：[group-buy](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/group-buy/index.vue:1)
+- 页面文件：[admin-ui/src/views/group-buy/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/group-buy/index.vue:1)
 
 主要用途：
 
-- 创建 / 编辑 / 删除拼团活动
-- 绑定活动商品
+- 新增、编辑拼团活动
+- 绑定拼团商品和活动规则
 
 #### 5.3.4 营销资源
 
-入口：
-
-- 菜单位置：`商品与营销 > 营销资源`
 - 路由：`/activities`
 - 权限：`products`
-- 页面文件：[activities](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/activities/index.vue:1)
+- 页面文件：[admin-ui/src/views/activities/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/activities/index.vue:1)
 
 主要用途：
 
@@ -415,409 +385,392 @@
 
 注意事项：
 
-- 这是活动资源页，不是首页装修页
-- 真正首页展示逻辑不要在这里找，要去 `首页内容位`
+- 它是“活动资源工作台”，不是首页装修页。
+- 首页弹窗、品牌、精选榜、开屏统一去 `首页内容位`。
 
 #### 5.3.5 优惠券管理
 
-入口：
-
-- 菜单位置：`商品与营销 > 优惠券管理`
 - 路由：`/coupons`
 - 权限：`products`
-- 页面文件：[coupons](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/coupons/index.vue:1)
+- 页面文件：[admin-ui/src/views/coupons/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/coupons/index.vue:1)
 
 主要用途：
 
-- 新建 / 编辑 / 删除优惠券
+- 新建、编辑、删除优惠券
 - 发券
-- 预览发券结果
-- 管理自动发券规则
-- 查看优惠券小程序码
-
-注意事项：
-
-- 自动发券会直接影响用户权益
-- 发券前应先确认目标用户范围和重复发放规则
+- 配自动发券规则
+- 查看发券预览和相关码图
 
 ### 5.4 用户与渠道
 
 #### 5.4.1 用户管理
 
-入口：
-
-- 菜单位置：`用户与渠道 > 用户管理`
 - 路由：`/users`
 - 权限：`users`
-- 页面文件：[users](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/users/index.vue:1)
+- 页面文件：[admin-ui/src/views/users/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/users/index.vue:1)
 
 主要用途：
 
-- 查询用户
-- 查看用户详情
-- 查看团队关系
-- 修改角色、状态、邀请码、备注、上级关系、等级
-- 调整货款、积分、成长值、佣金
+- 搜索用户
+- 查看用户详情和团队关系
+- 改角色、状态、上级关系、备注
+- 调整货款、佣金、积分、成长值
 
-注意事项：
+风险提示：
 
-- 用户页是后台最敏感的“改人”页面之一
-- 修改上级关系、角色、余额前必须确认业务影响
+- 这是后台最敏感的页面之一。
+- 用户角色、上级关系、余额类调整都必须有明确业务理由。
 
 #### 5.4.2 经销商管理
 
-入口：
-
-- 菜单位置：`用户与渠道 > 经销商管理`
 - 路由：`/dealers`
 - 权限：`dealers`
-- 页面文件：[dealers](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/dealers/index.vue:1)
+- 页面文件：[admin-ui/src/views/dealers/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/dealers/index.vue:1)
 
 主要用途：
 
-- 查看经销商资料
+- 看经销商资料
 - 审核经销商
 - 调整经销商等级
-- 修改经销商企业资料
 
 #### 5.4.3 分支代理
 
-入口：
-
-- 菜单位置：`用户与渠道 > 分支代理`
 - 路由：`/branch-agents`
 - 权限：`dealers`
-- 页面文件：[branch-agents](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/branch-agents/index.vue:1)
+- 页面文件：[admin-ui/src/views/branch-agents/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/branch-agents/index.vue:1)
 
 主要用途：
 
-- 查看和配置分支代理策略
-- 管理代理点位
-- 审核分支代理申请
+- 管理分支代理策略
+- 审核分支代理相关数据
 
 #### 5.4.4 N路径代理
 
-入口：
-
-- 菜单位置：`用户与渠道 > N路径代理`
 - 路由：`/n-system`
 - 权限：`dealers`
-- 页面文件：[n-system](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/n-system/index.vue:1)
+- 页面文件：[admin-ui/src/views/n-system/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/n-system/index.vue:1)
 
 主要用途：
 
-- 管理大 N / 小 n 体系
-- 查看 N 路径成员
-- 审核升级申请
-
-注意事项：
-
-- N 路径是独立体系，不要和普通 C/B 路径混淆
+- 查看和维护 N 路径体系
+- 管理升级申请和成员关系
 
 ### 5.5 内容与设计
 
 #### 5.5.1 轮播与图文
 
-入口：
-
-- 菜单位置：`内容与设计 > 轮播与图文`
 - 路由：`/content`
 - 权限：`content`
-- 页面文件：[content](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/content/index.vue:1)
+- 页面文件：[admin-ui/src/views/content/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/content/index.vue:1)
 
 主要用途：
 
-- Banner 管理
-- 图文内容管理
-- 查看图片规范
-
-适用场景：
-
-- 改首页 / 分类页 / 活动页 Banner
-- 改图文文章、公告、帮助内容
+- 管理 Banner
+- 管理图文内容
+- 管理部分首页或分类页展示素材
 
 #### 5.5.2 首页内容位
 
-入口：
-
-- 菜单位置：`内容与设计 > 首页内容位`
 - 路由：`/home-sections`
 - 权限：`content`
-- 页面文件：[home-sections](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/home-sections/index.vue:1)
+- 页面文件：[admin-ui/src/views/home-sections/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/home-sections/index.vue:1)
 
-这是当前首页体验总入口，负责：
+这是首页体验总入口，负责：
 
 - 首页弹窗广告
-- 品牌配置
+- 品牌展示
 - 精选商品榜
 - 开屏动画
 
-这也是最容易找错功能的页面，必须记住：
-
-- 想改首页弹窗，在这里
-- 想改首页品牌 logo / 气泡文案，在这里
-- 想改首页精选商品榜，在这里
-- 想改开屏动画，在这里
+如果你要改的是首页视觉层，优先先到这里，不要去营销资源里找。
 
 #### 5.5.3 素材管理
 
-入口：
-
-- 菜单位置：`内容与设计 > 素材管理`
 - 路由：`/materials`
 - 权限：`materials`
-- 页面文件：[materials](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/materials/index.vue:1)
+- 页面文件：[admin-ui/src/views/materials/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/materials/index.vue:1)
 
 主要用途：
 
 - 上传素材
-- 管理素材分组
-- 移动素材
+- 分组管理素材
+- 移动、整理素材
 
 #### 5.5.4 评论管理
 
-入口：
-
-- 菜单位置：`内容与设计 > 评论管理`
 - 路由：`/reviews`
 - 权限：`content`
-- 页面文件：[reviews](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/reviews/index.vue:1)
+- 页面文件：[admin-ui/src/views/reviews/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/reviews/index.vue:1)
 
 主要用途：
 
-- 查看评论列表
-- 编辑评论内容
+- 查看评论
+- 编辑评论
 
 #### 5.5.5 群发消息
 
-入口：
-
-- 菜单位置：`内容与设计 > 群发消息`
 - 路由：`/mass-message`
 - 权限：`notification`
-- 页面文件：[mass-message](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/mass-message/index.vue:1)
+- 页面文件：[admin-ui/src/views/mass-message/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/mass-message/index.vue:1)
 
 主要用途：
 
-- 创建群发消息
-- 预览群发内容
-- 发送群发
-- 删除群发记录
+- 创建群发
+- 预览群发
+- 发送消息
 
-注意事项：
+风险提示：
 
-- 群发前必须确认目标范围
-- 该功能属于高风险通知功能，不能随意试发
+- 群发属于高风险通知操作，不能拿生产用户做测试。
 
 ### 5.6 业务策略
 
 #### 5.6.1 会员与成长值
 
-入口：
-
-- 菜单位置：`业务策略 > 会员与成长值`
 - 路由：`/membership`
 - 权限：`statistics`
-- 页面文件：[membership](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/membership/index.vue:1)
+- 页面文件：[admin-ui/src/views/membership/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/membership/index.vue:1)
 
 主要用途：
 
 - 配会员等级
 - 配成长值规则
-- 配成长档位和折扣
-- 配积分等级和积分规则
-
-#### 5.6.2 代理体系
-
-入口：
-
-- 菜单位置：`业务策略 > 代理体系`
-- 路由：`/agent-system`
-- 权限：`settings_manage`
-- 页面文件：[agent-system](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/agent-system/index.vue:1)
-
-主要用途：
-
-- 配升级规则
-- 配佣金规则 / 佣金矩阵
-- 配平级奖 / 协助奖 / 基金池 / 分红规则
-- 配退出规则 / 充值规则
-
-注意事项：
-
-- 这里属于策略配置核心页
-- 修改后会影响佣金、分红、代理升级，不要在不了解规则时随意调整
+- 配积分等级
+- 配折扣相关规则
 
 ### 5.7 平台与运维
 
 #### 5.7.1 管理员与权限
 
-入口：
-
-- 菜单位置：`平台与运维 > 管理员与权限`
 - 路由：`/admins`
 - 权限：`admins`
-- 页面文件：[admins](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/admins/index.vue:1)
+- 页面文件：[admin-ui/src/views/admins/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/admins/index.vue:1)
 
 主要用途：
 
-- 新增 / 编辑管理员
-- 重置管理员密码
-- 删除管理员
+- 新增、编辑管理员
 - 分配权限
+- 重置密码
+- 删除账号
 
-注意事项：
+风险提示：
 
-- 超级管理员权限不要轻易改动
-- 给新成员授权时应尽量从最小权限开始
+- 超级管理员权限不要随意调整。
+- 新成员应从最小权限开始授权。
 
 #### 5.7.2 运维监控
 
-入口：
-
-- 菜单位置：`平台与运维 > 运维监控`
 - 路由：`/ops-monitor`
 - 权限：`super_admin`
-- 页面文件：[ops-monitor](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/ops-monitor/index.vue:1)
+- 页面文件：[admin-ui/src/views/ops-monitor/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/ops-monitor/index.vue:1)
 
 主要用途：
 
-- 查看数据库状态
-- 查看堆内存、运行时长、实例内存
-- 查看定时任务状态
-- 查看业务异常速览
-- 查看日志摘要
-- 检查对象存储连通
-
-适用角色：
-
-- 超级管理员 / 运维人员
+- 看数据库与实例状态
+- 看定时任务状态
+- 看内存、运行时长、异常摘要
 
 #### 5.7.3 操作日志
 
-入口：
-
-- 菜单位置：`平台与运维 > 操作日志`
 - 路由：`/logs`
 - 权限：`logs`
-- 页面文件：[logs](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/logs/index.vue:1)
+- 页面文件：[admin-ui/src/views/logs/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/logs/index.vue:1)
 
 主要用途：
 
 - 查询后台操作日志
 - 导出日志
-- 查看变更详情
+- 查看变更细节
 
-## 6. 常见流程
+## 6. 标准操作流程
 
-### 6.1 订单发货
+### 6.1 商品上新
 
-标准路径：
+1. 进入 `商品与营销 > 商品管理`。
+2. 新建商品并填写基础信息、价格、库存、规格、主图。
+3. 如果商品参与分销或代理履约，确认佣金和成本字段。
+4. 保存后检查是否需要补分类。
+5. 若首页需要展示，再去 `首页内容位` 或 `轮播与图文` 配置曝光位。
 
-1. 进入 `订单与资金 > 订单管理`
-2. 搜索订单
-3. 打开订单详情核对
-4. 点击 `发货`
-5. 填写承运方和单号
-6. 发货成功后，如需查轨迹，点击 `物流轨迹`
-
-### 6.2 审核退款
-
-标准路径：
-
-1. 进入 `订单与资金 > 售后退款`
-2. 筛选待审核退款单
-3. 查看详情
-4. 通过或拒绝
-5. 对可执行退款单进行完成退款
-
-### 6.3 调整首页展示
+### 6.2 调整首页内容
 
 如果你要改的是：
 
-- Banner -> 去 `轮播与图文`
-- 首页弹窗 -> 去 `首页内容位 > 弹窗广告`
-- 品牌 logo / 气泡 -> 去 `首页内容位 > 品牌配置`
-- 精选商品榜 -> 去 `首页内容位 > 精选商品榜`
-- 开屏动画 -> 去 `首页内容位 > 开屏动画`
+- Banner：去 `轮播与图文`
+- 首页弹窗：去 `首页内容位`
+- 品牌展示：去 `首页内容位`
+- 精选商品榜：去 `首页内容位`
+- 开屏动画：去 `首页内容位`
 
-### 6.4 修改会员与代理策略
+操作建议：
 
-如果你要改的是：
+1. 先准备素材。
+2. 再进对应页面改配置。
+3. 修改后到小程序端做一次实际查看。
 
-- 会员等级 / 成长值 / 积分等级 -> 去 `会员与成长值`
-- 升级规则 / 佣金规则 / 分红 / 基金池 -> 去 `代理体系`
+### 6.3 订单发货
 
-## 7. 使用注意事项
+1. 进入 `订单与资金 > 订单管理`。
+2. 搜索订单。
+3. 核对收货信息、商品、付款状态。
+4. 点击发货。
+5. 填写物流公司和物流单号。
+6. 发货后如需确认轨迹，回到订单详情查看物流。
 
-### 7.1 不要再找旧入口
+### 6.4 退款审核与执行
 
-以下旧入口已经不存在：
+1. 进入 `订单与资金 > 售后退款`。
+2. 先看订单号、用户、退款金额、退款去向。
+3. 确认符合规则后执行“通过”或“拒绝”。
+4. 对已通过记录，执行“确认退款”。
+5. 如果状态进入 `processing`，说明退款链还未完全收口。
+6. 若用户确认钱已到账但后台仍是 `processing`，优先尝试“同步状态”。
+7. 同步后仍不正常，再交由管理员排查回调链。
 
-- `物流查询`
-- `商品推荐榜`
-- `开屏动画`
-- `系统配置`
+### 6.5 提现审核
 
-### 7.2 遇到找不到功能时先按这条规则判断
+1. 进入 `订单与资金 > 提现审核`。
+2. 先核对用户、金额、账户信息。
+3. 确认通过则审核通过。
+4. 实际打款后再标记完成。
+5. 若拒绝，必须填清晰原因。
 
-1. 商品资源、Banner、文章类 -> `轮播与图文`
-2. 首页弹窗、品牌、精选榜、开屏 -> `首页内容位`
-3. 订单、发货、物流、履约 -> `订单管理`
-4. 提现、退款、佣金 -> `订单与资金`
-5. 策略规则 -> `会员与成长值` 或 `代理体系`
+### 6.6 佣金审批
 
-### 7.3 高风险操作页
+1. 进入 `订单与资金 > 佣金结算`。
+2. 查看收益人、来源订单、佣金额、层级。
+3. 仅对符合规则记录执行审批。
+4. 批量审批前先用筛选条件缩小范围。
 
-以下页面操作前应二次确认：
+### 6.7 用户调整
 
-- `订单管理`
-- `售后退款`
-- `提现审核`
-- `佣金结算`
-- `用户管理`
-- `代理体系`
-- `管理员与权限`
-- `群发消息`
+1. 进入 `用户与渠道 > 用户管理`。
+2. 搜索目标用户。
+3. 打开详情或操作面板。
+4. 先确认调整类型是角色、状态、上级，还是货款、佣金、积分、成长值。
+5. 填写明确原因再执行。
 
-## 8. 维护说明
+## 7. 高风险操作清单
 
-如果后续还要继续瘦身，请遵守以下规则：
+以下页面和操作必须由有经验的人员执行：
 
-1. 不再新增“首页相关独立小页”，首页体验统一收口到 `首页内容位`
-2. 不再新增“物流相关独立页”，物流统一收口到 `订单管理`
-3. 不再新增“系统配置假页”，没有真实后端能力的页面不要上菜单
-4. 菜单、页面说明、权限说明必须同步更新本文件
+- `订单管理`：改价、强制取消、强制完成、履约修复
+- `售后退款`：确认退款、重试退款、状态同步
+- `提现审核`：拒绝、完成打款
+- `佣金结算`：批量审批、批量驳回
+- `用户管理`：余额调整、角色调整、上级关系调整
+- `管理员与权限`：权限配置、重置密码、删除管理员
+- `群发消息`：正式发送
+- `运营参数`：支付、物流、代理、展示类全局参数调整
 
-## 9. 当前后台页面清单
+执行原则：
 
-当前实际保留页面共 28 个：
+1. 先核对对象。
+2. 先确认影响范围。
+3. 先写清原因。
+4. 再执行不可逆动作。
 
-- 登录
-- 经营看板
-- 财务看板
-- 运营参数
-- 商品管理
-- 商品分类
-- 订单管理
-- 自提门店
-- 拼团活动
-- 营销资源
-- 用户管理
-- 优惠券管理
-- 提现审核
-- 售后退款
-- 佣金结算
-- 经销商管理
-- 分支代理
-- N路径代理
-- 轮播与图文
-- 首页内容位
-- 素材管理
-- 评论管理
-- 群发消息
-- 会员与成长值
-- 代理体系
-- 管理员与权限
-- 运维监控
-- 操作日志
+## 8. 常见问题
+
+### 8.1 为什么我登录后看不到某个菜单
+
+常见原因：
+
+- 权限不够
+- 角色预设过窄
+- 当前页面要求更高权限，例如 `super_admin`
+
+排查顺序：
+
+1. 先确认账号是否登录正常。
+2. 再确认页面对应的 `permission`。
+3. 再去 `管理员与权限` 检查授权。
+
+### 8.2 为什么退款已经到了，后台还是退款中
+
+这通常不是页面缓存，而是退款成功后的状态回写没有收口。
+
+先做：
+
+1. 到 `售后退款` 查看该单的微信退款状态。
+2. 若页面有“同步状态”按钮，点击同步。
+3. 若没有该按钮，说明当前环境还没部署到支持状态同步的版本。
+
+### 8.3 为什么订单不能发货
+
+常见原因：
+
+- 订单状态不允许发货
+- 订单还没付款
+- 当前账号没有订单操作权限
+
+### 8.4 为什么物流查不到
+
+常见原因：
+
+- 还没录入物流单号
+- 物流公司错误
+- 第三方轨迹暂时未返回
+
+### 8.5 为什么看板有数据但我不能操作
+
+看板页和处理页权限可能不同。
+
+例如：
+
+- 能看财务看板，不代表能做提现审核
+- 能看订单列表，不代表能强制取消订单
+
+## 9. 已收口或不要再找的旧入口
+
+以下旧入口不要再继续作为当前后台依据：
+
+- 独立 `物流查询` 页
+- 独立 `商品推荐榜` 页
+- 独立 `开屏动画` 页
+- 模糊的旧 `系统配置` 页
+
+这些能力要么已经并入真实页面，要么已经下线，不应继续写进培训材料。
+
+## 10. 维护要求
+
+后续如果新增、下线、并页、改权限，必须同时更新本文件。
+
+更新时遵守：
+
+1. 菜单、路由、权限，以 `admin-ui/src/router/index.js` 为准。
+2. 默认角色说明，以 `admin-ui/src/config/adminRolePresets.js` 为准。
+3. 不根据历史阶段文档补充“想当然”的功能。
+4. 页面没有真实能力，就不要写进说明书。
+
+## 11. 当前页面索引总表
+
+| 分组 | 页面 | 路由 | 权限 |
+| --- | --- | --- | --- |
+| 登录 | 登录 | `/login` | - |
+| 经营概览 | 经营看板 | `/dashboard` | `dashboard` |
+| 经营概览 | 财务看板 | `/finance` | `statistics` |
+| 经营概览 | 运营参数 | `/settings` | `settings_manage` |
+| 订单与资金 | 订单管理 | `/orders` | `orders` |
+| 订单与资金 | 自提门店 | `/pickup-stations` | `pickup_stations` |
+| 订单与资金 | 售后退款 | `/refunds` | `refunds` |
+| 订单与资金 | 提现审核 | `/withdrawals` | `withdrawals` |
+| 订单与资金 | 佣金结算 | `/commissions` | `commissions` |
+| 商品与营销 | 商品管理 | `/products` | `products` |
+| 商品与营销 | 商品分类 | `/categories` | `products` |
+| 商品与营销 | 拼团活动 | `/group-buys` | `products` |
+| 商品与营销 | 营销资源 | `/activities` | `products` |
+| 商品与营销 | 优惠券管理 | `/coupons` | `products` |
+| 用户与渠道 | 用户管理 | `/users` | `users` |
+| 用户与渠道 | 经销商管理 | `/dealers` | `dealers` |
+| 用户与渠道 | 分支代理 | `/branch-agents` | `dealers` |
+| 用户与渠道 | N路径代理 | `/n-system` | `dealers` |
+| 内容与设计 | 轮播与图文 | `/content` | `content` |
+| 内容与设计 | 首页内容位 | `/home-sections` | `content` |
+| 内容与设计 | 素材管理 | `/materials` | `materials` |
+| 内容与设计 | 评论管理 | `/reviews` | `content` |
+| 内容与设计 | 群发消息 | `/mass-message` | `notification` |
+| 业务策略 | 会员与成长值 | `/membership` | `statistics` |
+| 平台与运维 | 管理员与权限 | `/admins` | `admins` |
+| 平台与运维 | 运维监控 | `/ops-monitor` | `super_admin` |
+| 平台与运维 | 操作日志 | `/logs` | `logs` |

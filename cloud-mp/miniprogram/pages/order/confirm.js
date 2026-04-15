@@ -49,6 +49,7 @@ Page({
         selectedCoupon: null,
         showCouponPicker: false,
         couponDiscount: '0.00',
+        allowCoupon: true,
         finalAmount: '0.00',
         shippingFee: 0,
         // 积分抵扣
@@ -64,6 +65,9 @@ Page({
         groupNo: null,
         groupActivityId: null,
         orderType: '',
+        exchangeMode: false,
+        exchangeCouponId: '',
+        exchangeCouponTitle: '',
         // B端货款余额支付
         walletBalance: 0,
         useWallet: false,
@@ -107,12 +111,21 @@ Page({
                     groupNo: directBuy.group_no || null,
                     groupActivityId: directBuy.group_activity_id || null,
                     orderType: directBuy.type || '',
+                    exchangeMode: !!directBuy.exchange_mode,
+                    exchangeCouponId: directBuy.exchange_coupon_id || '',
+                    exchangeCouponTitle: directBuy.exchange_title || '',
+                    allowCoupon: directBuy.exchange_mode ? false : true,
+                    allowPoints: directBuy.exchange_mode ? false : true,
+                    usePoints: false,
+                    useWallet: false,
                     loading: false
                 });
                 this._updatePointsConfig([directBuy]);
                 this._refreshPickupAllowed();
                 await this._refreshMiniProgramConfigAndPricing([directBuy]);
-                this.loadAvailableCoupons();
+                if (!directBuy.exchange_mode) {
+                    this.loadAvailableCoupons();
+                }
             } else {
                 wx.showToast({ title: '商品信息丢失', icon: 'none' });
                 this.setData({ loading: false });
@@ -127,10 +140,12 @@ Page({
 
         // 加载默认地址
         this.loadDefaultAddress();
-        // 加载积分余额
-        this.loadPointBalance();
-        // 加载B端货款余额
-        this.loadWalletBalance();
+        if (!this.data.exchangeMode) {
+            // 加载积分余额
+            this.loadPointBalance();
+            // 加载B端货款余额
+            this.loadWalletBalance();
+        }
     },
 
     async onShow() {
@@ -153,11 +168,13 @@ Page({
             this.loadDefaultAddress();
         }
         if ((this.data.orderItems || []).length > 0) {
-            this.loadPointBalance();
-            this.loadWalletBalance();
+            if (!this.data.exchangeMode) {
+                this.loadPointBalance();
+                this.loadWalletBalance();
+            }
             await this._refreshMiniProgramConfigAndPricing(this.data.orderItems || []);
         }
-        if ((this.data.orderItems || []).length > 0 && ((app.globalData.isLoggedIn && (this.data.availableCoupons || []).length === 0) || (this.data.availableCoupons || []).length === 0)) {
+        if (!this.data.exchangeMode && (this.data.orderItems || []).length > 0 && ((app.globalData.isLoggedIn && (this.data.availableCoupons || []).length === 0) || (this.data.availableCoupons || []).length === 0)) {
             this.loadAvailableCoupons();
         }
         this._tryAutoCouponUsagePrompt();
@@ -196,6 +213,17 @@ Page({
 
     /** 根据商品属性更新积分抵扣权限和规则提示文案 */
     _updatePointsConfig(items) {
+        if (this.data.exchangeMode) {
+            this.setData({
+                allowPoints: false,
+                allowCoupon: false,
+                pointsRuleHint: '兑换订单不支持积分抵扣',
+                usePoints: false,
+                pointsToUse: 0,
+                pointsDeduction: '0.00'
+            });
+            return;
+        }
         // 只要有任一商品关闭了积分抵扣（allow_points === 0），整单禁用积分
         const allowPoints = (items || []).every(item => item.allow_points !== 0);
         const { yuanPerPoint, maxRatio } = getPointDeductionRule();
@@ -303,6 +331,10 @@ Page({
 
     // 点击优惠券行，打开选择器
     async onCouponTap() {
+        if (this.data.exchangeMode) {
+            wx.showToast({ title: '兑换订单不支持普通优惠券', icon: 'none' });
+            return;
+        }
         const ready = await this._ensureCouponReady(true);
         if (!ready) {
             wx.showToast({ title: '登录后可使用优惠券', icon: 'none' });

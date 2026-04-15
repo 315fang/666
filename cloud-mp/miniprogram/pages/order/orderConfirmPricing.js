@@ -76,6 +76,11 @@ function recalcFinal(page) {
 
 async function loadAvailableCoupons(page) {
     try {
+        if (page.data.exchangeMode) {
+            page.setData({ availableCoupons: [], unusedCouponCount: 0, selectedCoupon: null, couponDiscount: '0.00', allowCoupon: false })
+            recalcFinal(page)
+            return
+        }
         const hasExplosive = (page.data.orderItems || []).some(item => item.is_explosive === 1 || item.is_explosive === true);
         if (hasExplosive) {
             page.setData({ availableCoupons: [], unusedCouponCount: 0, selectedCoupon: null, couponDiscount: '0.00', allowCoupon: false });

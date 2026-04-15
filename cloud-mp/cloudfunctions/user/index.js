@@ -25,7 +25,10 @@ const DEFAULT_AGENT_UPGRADE_RULES = {
     b1_recharge: 3000,
     b2_referee_count: 10,
     b2_recharge: 30000,
-    b3_recharge: 198000
+    b3_referee_b1_count: 30,
+    b3_referee_b2_count: 3,
+    b3_recharge: 198000,
+    effective_order_days: 7
 };
 
 const {
@@ -58,6 +61,10 @@ function parseConfigValue(row, fallback) {
         }
     }
     return value;
+}
+
+function roundMoney(value) {
+    return Math.round(toNum(value, 0) * 100) / 100;
 }
 
 function parseTimestamp(value) {
@@ -137,14 +144,15 @@ async function getConfigByKeys(keys = []) {
 }
 
 async function loadMembershipConfig() {
-    const [memberLevelRow, growthTierRow, growthRuleRow, commercePolicyRow, purchaseLevelRow, pointLevelRow, pointRuleRow] = await Promise.all([
+    const [memberLevelRow, growthTierRow, growthRuleRow, commercePolicyRow, purchaseLevelRow, pointLevelRow, pointRuleRow, upgradeRuleRow] = await Promise.all([
         getConfigByKey('member_level_config'),
         getConfigByKey('growth_tier_config'),
         getConfigByKey('growth_rule_config'),
         getConfigByKey('commerce_policy_config'),
         getConfigByKey('purchase_level_config'),
         getConfigByKey('point_level_config'),
-        getConfigByKey('point_rule_config')
+        getConfigByKey('point_rule_config'),
+        getConfigByKey('member_upgrade_rule_config')
     ]);
 
     const growthTiers = parseConfigValue(growthTierRow, []);
@@ -156,12 +164,17 @@ async function loadMembershipConfig() {
         commerce_policy: parseConfigValue(commercePolicyRow, {}),
         purchase_levels: parseConfigValue(purchaseLevelRow, []),
         point_levels: parseConfigValue(pointLevelRow, []),
-        point_rules: parseConfigValue(pointRuleRow, {})
+        point_rules: parseConfigValue(pointRuleRow, {}),
+        upgrade_rules: {
+            ...DEFAULT_AGENT_UPGRADE_RULES,
+            ...parseConfigValue(upgradeRuleRow, {})
+        }
     };
 }
 
 async function loadAgentUpgradeRules() {
     const row = await getConfigByKeys([
+        'member_upgrade_rule_config',
         'agent_system_upgrade-rules',
         'agent_system_upgrade_rules'
     ]);
@@ -246,10 +259,32 @@ async function getRechargeTotal(openid) {
         .reduce((sum, row) => sum + toNum(row.amount, 0), 0);
 }
 
-function deriveEligibleRoleLevel(user = {}, directMembers = [], rechargeTotal = 0, upgradeRules = DEFAULT_AGENT_UPGRADE_RULES) {
-    const currentRoleLevel = toNum(user.role_level ?? user.distributor_level ?? user.level, 0);
-    let nextRoleLevel = currentRoleLevel;
-    const totalSpent = toNum(user.total_spent != null ? user.total_spent : user.growth_value, 0);
+function isEffectiveUpgradeOrder(order = {}, effectiveDays = DEFAULT_AGENT_UPGRADE_RULES.effective_order_days) {
+    const status = String(order.status || '').toLowerCase();
+    if (['cancelled', 'canceled', 'refunded', 'pending', 'pending_payment', 'after_sale', 'refunding'].includes(status)) {
+        return false;
+    }
+    if (toNum(order.refunded_cash_total, 0) > 0 || order.has_partial_refund === true) {
+        return false;
+    }
+    const confirmedAt = parseTimestamp(order.confirmed_at || order.completed_at || order.auto_confirmed_at);
+    if (!confirmedAt) return false;
+    const cutoff = Date.now() - Math.max(0, effectiveDays) * 24 * 60 * 60 * 1000;
+    return confirmedAt <= cutoff;
+}
+
+async function getEffectiveOrderSales(openid, effectiveDays = DEFAULT_AGENT_UPGRADE_RULES.effective_order_days) {
+    if (!openid) return 0;
+    const rows = await getAllRecords(db, 'orders', { openid }).catch(() => []);
+    return roundMoney(rows.reduce((sum, row) => {
+        if (!isEffectiveUpgradeOrder(row, effectiveDays)) return sum;
+        return sum + toNum(row.pay_amount ?? row.actual_price ?? row.total_amount, 0);
+    }, 0));
+}
+
+function deriveEligibleRoleLevel(currentRoleLevel = 0, effectiveSales = 0, directMembers = [], rechargeTotal = 0, upgradeRules = DEFAULT_AGENT_UPGRADE_RULES) {
+    const totalSpent = toNum(effectiveSales, 0);
+    let nextRoleLevel = toNum(currentRoleLevel, 0);
 
     if (totalSpent >= toNum(upgradeRules.c1_min_purchase, DEFAULT_AGENT_UPGRADE_RULES.c1_min_purchase)) {
         nextRoleLevel = Math.max(nextRoleLevel, 1);
@@ -263,9 +298,8 @@ function deriveEligibleRoleLevel(user = {}, directMembers = [], rechargeTotal = 
         nextRoleLevel = Math.max(nextRoleLevel, 2);
     }
 
-    const c2OrAboveCount = directMembers.filter((member) => toNum(member.role_level ?? member.distributor_level, 0) >= 2).length;
     if (
-        c2OrAboveCount >= toNum(upgradeRules.b1_referee_count, DEFAULT_AGENT_UPGRADE_RULES.b1_referee_count)
+        c1OrAboveCount >= toNum(upgradeRules.b1_referee_count, DEFAULT_AGENT_UPGRADE_RULES.b1_referee_count)
         || rechargeTotal >= toNum(upgradeRules.b1_recharge, DEFAULT_AGENT_UPGRADE_RULES.b1_recharge)
     ) {
         nextRoleLevel = Math.max(nextRoleLevel, 3);
@@ -279,7 +313,12 @@ function deriveEligibleRoleLevel(user = {}, directMembers = [], rechargeTotal = 
         nextRoleLevel = Math.max(nextRoleLevel, 4);
     }
 
-    if (rechargeTotal >= toNum(upgradeRules.b3_recharge, DEFAULT_AGENT_UPGRADE_RULES.b3_recharge)) {
+    const b2OrAboveCount = directMembers.filter((member) => toNum(member.role_level ?? member.distributor_level, 0) >= 4).length;
+    if (
+        rechargeTotal >= toNum(upgradeRules.b3_recharge, DEFAULT_AGENT_UPGRADE_RULES.b3_recharge)
+        || b1OrAboveCount >= toNum(upgradeRules.b3_referee_b1_count, DEFAULT_AGENT_UPGRADE_RULES.b3_referee_b1_count)
+        || b2OrAboveCount >= toNum(upgradeRules.b3_referee_b2_count, DEFAULT_AGENT_UPGRADE_RULES.b3_referee_b2_count)
+    ) {
         nextRoleLevel = Math.max(nextRoleLevel, 5);
     }
 
@@ -289,15 +328,18 @@ function deriveEligibleRoleLevel(user = {}, directMembers = [], rechargeTotal = 
 async function evaluateAgentUpgrade(openid) {
     const user = await userGrowth.getUser(openid);
     if (!user) throw notFound('用户不存在');
-    const [upgradeRules, membershipConfig, directMembers, rechargeTotal] = await Promise.all([
+    const [upgradeRules, membershipConfig] = await Promise.all([
         loadAgentUpgradeRules(),
-        loadMembershipConfig(),
+        loadMembershipConfig()
+    ]);
+    const [directMembers, rechargeTotal, effectiveSales] = await Promise.all([
         getDirectMembers(user),
-        getRechargeTotal(openid)
+        getRechargeTotal(openid),
+        getEffectiveOrderSales(openid, toNum(upgradeRules.effective_order_days, DEFAULT_AGENT_UPGRADE_RULES.effective_order_days))
     ]);
     const memberLevels = normalizeMemberLevels(membershipConfig.member_levels);
     const currentRoleLevel = toNum(user.role_level, 0);
-    const nextRoleLevel = deriveEligibleRoleLevel(user, directMembers, rechargeTotal, upgradeRules);
+    const nextRoleLevel = deriveEligibleRoleLevel(currentRoleLevel, effectiveSales, directMembers, rechargeTotal, upgradeRules);
     const roleMeta = memberLevels.find((item) => Number(item.level) === nextRoleLevel);
     return {
         user,
@@ -306,9 +348,47 @@ async function evaluateAgentUpgrade(openid) {
         currentRoleLevel,
         nextRoleLevel,
         rechargeTotal,
+        effectiveSales,
         directMembers,
         roleName: roleMeta?.name || DEFAULT_ROLE_NAMES[nextRoleLevel] || '普通用户',
         discountRate: roleMeta?.discount_rate != null ? toNum(roleMeta.discount_rate, 1) : null
+    };
+}
+
+async function syncEligibleRoleLevelIfNeeded(openid) {
+    const evaluation = await evaluateAgentUpgrade(openid);
+    if (evaluation.nextRoleLevel <= evaluation.currentRoleLevel) {
+        return { ...evaluation, synced: false };
+    }
+    const nextDistributorLevel = Math.max(
+        toNum(evaluation.user.distributor_level != null ? evaluation.user.distributor_level : evaluation.user.agent_level, 0),
+        evaluation.nextRoleLevel
+    );
+    await db.collection('users').where({ openid }).update({
+        data: {
+            role_level: evaluation.nextRoleLevel,
+            role_name: evaluation.roleName,
+            distributor_level: nextDistributorLevel,
+            agent_level: nextDistributorLevel,
+            participate_distribution: 1,
+            discount_rate: evaluation.discountRate != null ? evaluation.discountRate : evaluation.user.discount_rate,
+            role_upgraded_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    });
+    const refreshedUser = await userGrowth.getUser(openid);
+    return {
+        ...evaluation,
+        synced: true,
+        currentRoleLevel: evaluation.nextRoleLevel,
+        user: refreshedUser || {
+            ...evaluation.user,
+            role_level: evaluation.nextRoleLevel,
+            role_name: evaluation.roleName,
+            distributor_level: nextDistributorLevel,
+            agent_level: nextDistributorLevel,
+            discount_rate: evaluation.discountRate != null ? evaluation.discountRate : evaluation.user.discount_rate
+        }
     };
 }
 
@@ -501,12 +581,14 @@ function buildAddressWriteData(params = {}) {
 const handleAction = {
     // ===== 个人资料 =====
     'profile': asyncHandler(async (openid, params) => {
+        await syncEligibleRoleLevelIfNeeded(openid);
         const user = await userProfile.getProfile(openid);
         if (!user) throw notFound('用户不存在');
         return success(userProfile.formatUser(user));
     }),
 
     'getProfile': asyncHandler(async (openid, params) => {
+        await syncEligibleRoleLevelIfNeeded(openid);
         const user = await userProfile.getProfile(openid);
         if (!user) throw notFound('用户不存在');
         return success(userProfile.formatUser(user));
@@ -521,19 +603,22 @@ const handleAction = {
     }),
 
     'getStats': asyncHandler(async (openid) => {
+        await syncEligibleRoleLevelIfNeeded(openid);
         const user = await userGrowth.getUser(openid);
         if (!user) throw notFound('用户不存在');
         return success(userGrowth.buildUserStats(user));
     }),
 
     'balance': asyncHandler(async (openid) => {
+        await syncEligibleRoleLevelIfNeeded(openid);
         const user = await userGrowth.getUser(openid);
         if (!user) throw notFound('用户不存在');
         return success(userGrowth.buildUserStats(user));
     }),
 
     'growth': asyncHandler(async (openid) => {
-        const user = await userGrowth.getUser(openid);
+        const syncResult = await syncEligibleRoleLevelIfNeeded(openid);
+        const user = syncResult.user || await userGrowth.getUser(openid);
         if (!user) throw notFound('用户不存在');
         const config = await loadMembershipConfig();
         const growthTiers = normalizeGrowthTiers(config.growth_tiers);
@@ -548,7 +633,8 @@ const handleAction = {
     }),
 
     'memberTierMeta': asyncHandler(async (openid) => {
-        const user = await userGrowth.getUser(openid);
+        const syncResult = await syncEligibleRoleLevelIfNeeded(openid);
+        const user = syncResult.user || await userGrowth.getUser(openid);
         if (!user) throw notFound('用户不存在');
         const config = await loadMembershipConfig();
         const growthTiers = normalizeGrowthTiers(config.growth_tiers);
@@ -572,8 +658,7 @@ const handleAction = {
             growth_tiers: growthTiers,
             member_levels: memberLevels,
             growth_rules: config.growth_rules || {},
-            commerce_policy: config.commerce_policy || {},
-            purchase_levels: Array.isArray(config.purchase_levels) ? config.purchase_levels : [],
+            upgrade_rules: config.upgrade_rules || DEFAULT_AGENT_UPGRADE_RULES,
             point_levels: Array.isArray(config.point_levels) ? config.point_levels : [],
             point_rules: config.point_rules || {}
         });

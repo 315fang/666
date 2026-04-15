@@ -16,38 +16,35 @@
             <el-form-item label="申请最低等级（role_level）">
               <el-input-number v-model="policy.min_apply_role_level" :min="0" :max="10" />
             </el-form-item>
-            <el-form-item label="学校代理佣金比例">
-              <el-input-number v-model="policy.type_commission_rate.school" :min="0" :max="1" :step="0.001" :precision="3" />
-            </el-form-item>
-            <el-form-item label="区域代理佣金比例">
-              <el-input-number v-model="policy.type_commission_rate.area" :min="0" :max="1" :step="0.001" :precision="3" />
-            </el-form-item>
-            <el-form-item label="市代理佣金比例">
-              <el-input-number v-model="policy.type_commission_rate.city" :min="0" :max="1" :step="0.001" :precision="3" />
-            </el-form-item>
-            <el-form-item label="省代理佣金比例">
-              <el-input-number v-model="policy.type_commission_rate.province" :min="0" :max="1" :step="0.001" :precision="3" />
-            </el-form-item>
-            <el-divider content-position="left">自提门店补贴金（与运费无关）</el-divider>
+            <el-divider content-position="left">自提点奖励</el-divider>
             <el-form-item label="核销后补贴开关">
               <el-switch v-model="policy.pickup_station_subsidy_enabled" active-text="启用" inactive-text="关闭" />
             </el-form-item>
-            <el-form-item label="兼容固定额（元）">
-              <el-input-number v-model="policy.pickup_station_subsidy_amount" :min="0" :max="99999" :precision="2" :step="0.5" />
-              <div class="form-tip">当某档位「比例+固定」合计为 0 时，仍可用此处金额作为单笔补贴（旧数据兼容）。</div>
+            <el-form-item label="自提点奖励比例">
+              <el-input-number v-model="policy.pickup_station_reward_rate" :min="0" :max="1" :step="0.001" :precision="3" />
+              <div class="form-tip">按订单实付金额计算，PDF 默认值为 2.5%。</div>
             </el-form-item>
-            <el-divider content-position="left">自提核销分佣档位（每站点可选 A~D）</el-divider>
-            <div class="form-tip" style="margin-bottom:12px">核销入账 = 订单实付 × 比例 + 固定金额（元）；比例填写 0~1（如 0.01 表示 1%）。</div>
-            <el-table :data="pickupTierTableRows" border size="small" style="max-width:720px">
-              <el-table-column prop="key" label="档位" width="72" />
-              <el-table-column label="比例（0~1）" min-width="200">
+            <el-form-item label="备用固定额（元）">
+              <el-input-number v-model="policy.pickup_station_subsidy_amount" :min="0" :max="99999" :precision="2" :step="0.5" />
+              <div class="form-tip">当比例为 0 时，可用此处金额作为单笔兜底补贴。</div>
+            </el-form-item>
+            <el-divider content-position="left">区域奖励阶梯</el-divider>
+            <div class="form-tip" style="margin-bottom:12px">按收货地匹配区域后，以累计订单实付金额套用区间比例。默认规则：10万=1%，30万=2%，100万=3%。</div>
+            <el-table :data="regionRewardTierTableRows" border size="small" style="max-width:720px">
+              <el-table-column prop="index" label="档位" width="72" />
+              <el-table-column label="累计金额门槛（元）" min-width="220">
                 <template #default="{ row }">
-                  <el-input-number v-model="policy.pickup_tiers[row.key].rate" :min="0" :max="1" :step="0.0005" :precision="4" style="width:160px" />
+                  <el-input-number v-model="policy.region_reward_tiers[row.index].threshold" :min="0" :max="999999999" :step="1000" style="width:180px" />
                 </template>
               </el-table-column>
-              <el-table-column label="固定金额（元）" min-width="200">
+              <el-table-column label="奖励比例（0~1）" min-width="220">
                 <template #default="{ row }">
-                  <el-input-number v-model="policy.pickup_tiers[row.key].fixed_yuan" :min="0" :max="99999" :precision="2" :step="0.5" style="width:160px" />
+                  <el-input-number v-model="policy.region_reward_tiers[row.index].rate" :min="0" :max="1" :step="0.001" :precision="3" style="width:180px" />
+                </template>
+              </el-table-column>
+              <el-table-column label="说明" min-width="160">
+                <template #default="{ row }">
+                  <el-input v-model="policy.region_reward_tiers[row.index].label" placeholder="如：10万" />
                 </template>
               </el-table-column>
             </el-table>
@@ -55,12 +52,12 @@
         </el-card>
       </el-tab-pane>
 
-      <el-tab-pane label="分支代理地图点" name="stations">
+      <el-tab-pane label="区域归属" name="stations">
         <el-card>
           <template #header>
             <div class="header-row">
-              <span>网点/点位管理</span>
-              <el-button type="primary" @click="openStationDialog()">新增点位</el-button>
+              <span>区域归属管理</span>
+              <el-button type="primary" @click="openStationDialog()">新增区域</el-button>
             </div>
           </template>
           <el-table :data="stations" v-loading="loadingStations" stripe>
@@ -69,24 +66,22 @@
                 <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
               </template>
             </el-table-column>
-            <el-table-column prop="name" label="点位名称" min-width="160" />
-            <el-table-column label="代理类型" width="110">
+            <el-table-column prop="name" label="区域名称" min-width="160" />
+            <el-table-column label="归属层级" width="110">
               <template #default="{ row }">
                 <el-tag>{{ branchTypeText(row.branch_type) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="区域" min-width="180">
+            <el-table-column label="结算范围" min-width="220">
               <template #default="{ row }">
-                {{ row.province }} / {{ row.city }} / {{ row.district || '-' }}
+                {{ row.scope_label || [row.province, row.city, row.district].filter(Boolean).join(' / ') || '-' }}
               </template>
             </el-table-column>
-            <el-table-column prop="region_name" label="匹配关键区域" width="140" />
-            <el-table-column label="自提档" width="76">
-              <template #default="{ row }">{{ row.pickup_commission_tier || 'A' }}</template>
-            </el-table-column>
-            <el-table-column prop="commission_rate" label="佣金比例" width="110" />
             <el-table-column label="认领人" width="130">
-              <template #default="{ row }">{{ displayUserName(row.claimant) }}</template>
+              <template #default="{ row }">
+                <span>{{ displayUserName(row.claimant) }}</span>
+                <el-tag v-if="row.claimant?.is_virtual_settlement" size="small" type="warning" style="margin-left:6px">虚拟结算</el-tag>
+              </template>
             </el-table-column>
             <el-table-column label="状态" width="100">
               <template #default="{ row }">
@@ -120,7 +115,7 @@
               <template #default="{ row }">{{ branchTypeText(row.branch_type) }}</template>
             </el-table-column>
             <el-table-column label="目标区域" min-width="170">
-              <template #default="{ row }">{{ row.region_name || row.station?.city || '-' }}</template>
+              <template #default="{ row }">{{ row.station?.scope_label || [row.station?.province, row.station?.city, row.station?.district].filter(Boolean).join(' / ') || row.region_name || '-' }}</template>
             </el-table-column>
             <el-table-column prop="real_name" label="姓名" width="110" />
             <el-table-column prop="phone" label="电话" width="130" />
@@ -144,43 +139,25 @@
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="stationDialogVisible" :title="stationForm.id ? '编辑点位' : '新增点位'" width="680px">
+    <el-dialog v-model="stationDialogVisible" :title="stationForm.id ? '编辑区域' : '新增区域'" width="680px">
       <el-form :model="stationForm" label-width="110px">
-        <el-form-item label="点位名称"><el-input v-model="stationForm.name" /></el-form-item>
-        <el-form-item label="代理类型">
+        <el-form-item label="区域名称"><el-input v-model="stationForm.name" placeholder="如：浦东新区区域代理" /></el-form-item>
+        <el-form-item label="归属层级">
           <el-select v-model="stationForm.branch_type" style="width: 220px">
-            <el-option label="学校代理" value="school" />
-            <el-option label="区域代理" value="area" />
+            <el-option label="区代理" value="district" />
             <el-option label="市代理" value="city" />
             <el-option label="省代理" value="province" />
           </el-select>
         </el-form-item>
-        <el-form-item label="省市区">
+        <el-form-item label="省 / 市 / 区">
           <el-row :gutter="8" style="width:100%">
             <el-col :span="8"><el-input v-model="stationForm.province" placeholder="省" /></el-col>
             <el-col :span="8"><el-input v-model="stationForm.city" placeholder="市" /></el-col>
-            <el-col :span="8"><el-input v-model="stationForm.district" placeholder="区/县/学校" /></el-col>
+            <el-col :span="8"><el-input v-model="stationForm.district" placeholder="区/县" /></el-col>
           </el-row>
         </el-form-item>
-        <el-form-item label="匹配关键区域"><el-input v-model="stationForm.region_name" placeholder="如：浦东新区 / 某某大学" /></el-form-item>
-        <el-form-item label="详细地址"><el-input v-model="stationForm.address" placeholder="可选，用于地图自动解析坐标" /></el-form-item>
-        <el-form-item label="经纬度">
-          <el-row :gutter="8" style="width:100%">
-            <el-col :span="12"><el-input v-model="stationForm.longitude" placeholder="longitude" /></el-col>
-            <el-col :span="12"><el-input v-model="stationForm.latitude" placeholder="latitude" /></el-col>
-          </el-row>
-          <div style="margin-top:8px">
-            <el-button type="primary" plain @click="mapPickerVisible = true">地图选点</el-button>
-          </div>
-          <div class="form-tip">地图搜索/点击标点，或可留空由保存时服务端解析。</div>
-        </el-form-item>
-        <el-form-item label="佣金比例">
-          <el-input-number v-model="stationForm.commission_rate" :min="0" :max="1" :step="0.001" :precision="3" />
-        </el-form-item>
-        <el-form-item label="自提核销档位">
-          <el-select v-model="stationForm.pickup_commission_tier" style="width: 220px">
-            <el-option v-for="t in ['A','B','C','D']" :key="t" :label="`${t} 档（策略里配置比例+固定）`" :value="t" />
-          </el-select>
+        <el-form-item label="认领人ID">
+          <el-input v-model="stationForm.claimant_id" placeholder="填写用户ID / 文档ID / OPENID；可绑定虚拟结算用户" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="stationForm.status" style="width: 220px">
@@ -195,12 +172,11 @@
         <el-button type="primary" :loading="savingStation" @click="saveStation">保存</el-button>
       </template>
     </el-dialog>
-    <MapPickerDialog v-model="mapPickerVisible" :seed="branchMapPickerSeed" @confirm="onBranchMapPickerConfirm" />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CompactIdCell from '@/components/CompactIdCell.vue'
 import {
@@ -208,16 +184,14 @@ import {
   getBranchAgentStations, createBranchAgentStation, updateBranchAgentStation,
   getBranchAgentClaims, reviewBranchAgentClaim
 } from '@/api'
-import MapPickerDialog from '@/components/MapPickerDialog.vue'
 import { getUserNickname } from '@/utils/userDisplay'
 
-function defaultPickupTiers() {
-  return {
-    A: { rate: 0, fixed_yuan: 2 },
-    B: { rate: 0.005, fixed_yuan: 1 },
-    C: { rate: 0.01, fixed_yuan: 0 },
-    D: { rate: 0.015, fixed_yuan: 1 }
-  }
+function defaultRegionRewardTiers() {
+  return [
+    { threshold: 100000, rate: 0.01, label: '10万' },
+    { threshold: 300000, rate: 0.02, label: '30万' },
+    { threshold: 1000000, rate: 0.03, label: '100万' }
+  ]
 }
 
 function toSafeNumber(value, fallback) {
@@ -225,20 +199,17 @@ function toSafeNumber(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
-function mergePolicyPickupTiers(raw) {
-  const d = defaultPickupTiers()
-  const src = raw && typeof raw === 'object' ? raw : {}
-  for (const k of ['A', 'B', 'C', 'D']) {
-    const r = src[k]
-    d[k] = {
-      rate: Math.min(1, Math.max(0, toSafeNumber(r?.rate, d[k].rate))),
-      fixed_yuan: Math.max(0, toSafeNumber(r?.fixed_yuan, d[k].fixed_yuan))
-    }
-  }
-  return d
+function mergeRegionRewardTiers(raw) {
+  const defaults = defaultRegionRewardTiers()
+  const source = Array.isArray(raw) ? raw : []
+  return defaults.map((row, index) => ({
+    threshold: Math.max(0, toSafeNumber(source[index]?.threshold, row.threshold)),
+    rate: Math.min(1, Math.max(0, toSafeNumber(source[index]?.rate, row.rate))),
+    label: String(source[index]?.label || row.label)
+  }))
 }
 
-const pickupTierTableRows = [{ key: 'A' }, { key: 'B' }, { key: 'C' }, { key: 'D' }]
+const regionRewardTierTableRows = [{ index: 0 }, { index: 1 }, { index: 2 }]
 
 const activeTab = ref('policy')
 const savingPolicy = ref(false)
@@ -246,45 +217,24 @@ const loadingStations = ref(false)
 const loadingClaims = ref(false)
 const savingStation = ref(false)
 const stationDialogVisible = ref(false)
-const mapPickerVisible = ref(false)
-
-const branchMapPickerSeed = computed(() => ({
-  province: stationForm.province,
-  city: stationForm.city,
-  district: stationForm.district,
-  address: stationForm.address,
-  longitude: stationForm.longitude,
-  latitude: stationForm.latitude
-}))
-
-function onBranchMapPickerConfirm(p) {
-  stationForm.longitude = String(p.longitude)
-  stationForm.latitude = String(p.latitude)
-  if (p.province != null && p.province !== '') stationForm.province = String(p.province)
-  if (p.city != null && p.city !== '') stationForm.city = String(p.city)
-  if (p.district != null && p.district !== '') stationForm.district = String(p.district)
-  if (p.address != null && p.address !== '') stationForm.address = String(p.address)
-  ElMessage.success('已写入坐标' + (p.city ? '与地址' : ''))
-}
 
 const policy = reactive({
   enabled: false,
   min_apply_role_level: 3,
-  type_commission_rate: { school: 0.01, area: 0.015, city: 0.02, province: 0.03 },
-  pickup_station_subsidy_enabled: false,
+  pickup_station_subsidy_enabled: true,
+  pickup_station_reward_rate: 0.025,
   pickup_station_subsidy_amount: 0,
-  pickup_tiers: defaultPickupTiers()
+  region_reward_tiers: defaultRegionRewardTiers()
 })
 const stations = ref([])
 const claims = ref([])
 const stationForm = reactive({
-  id: null, name: '', branch_type: 'city',
-  province: '', city: '', district: '', region_name: '', address: '',
-  longitude: '', latitude: '', commission_rate: 0.02, status: 'active',
-  pickup_commission_tier: 'A'
+  id: null, name: '', branch_type: 'district',
+  province: '', city: '', district: '',
+  claimant_id: '', status: 'active'
 })
 
-const branchTypeText = (v) => ({ school: '学校代理', area: '区域代理', city: '市代理', province: '省代理' }[v] || v)
+const branchTypeText = (v) => ({ district: '区代理', area: '区代理', city: '市代理', province: '省代理', school: '学校代理（停用）' }[v] || v)
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 
 const loadPolicy = async () => {
@@ -294,16 +244,11 @@ const loadPolicy = async () => {
     Object.assign(policy, {
       enabled: d.enabled === true,
       min_apply_role_level: toSafeNumber(d.min_apply_role_level, 3),
-      pickup_station_subsidy_enabled: d.pickup_station_subsidy_enabled === true,
-      pickup_station_subsidy_amount: toSafeNumber(d.pickup_station_subsidy_amount, 0),
-      type_commission_rate: {
-        school: toSafeNumber(d.type_commission_rate?.school, 0.01),
-        area: toSafeNumber(d.type_commission_rate?.area, 0.015),
-        city: toSafeNumber(d.type_commission_rate?.city, 0.02),
-        province: toSafeNumber(d.type_commission_rate?.province, 0.03)
-      }
+      pickup_station_subsidy_enabled: d.pickup_station_subsidy_enabled !== false,
+      pickup_station_reward_rate: toSafeNumber(d.pickup_station_reward_rate, 0.025),
+      pickup_station_subsidy_amount: toSafeNumber(d.pickup_station_subsidy_amount, 0)
     })
-    policy.pickup_tiers = mergePolicyPickupTiers(d.pickup_tiers)
+    policy.region_reward_tiers = mergeRegionRewardTiers(d.region_reward_tiers)
   } catch (e) { console.error(e) }
 }
 
@@ -332,24 +277,18 @@ const openStationDialog = (row = null) => {
     Object.assign(stationForm, {
       id: row.id,
       name: row.name || '',
-      branch_type: row.branch_type || 'city',
+      branch_type: row.branch_type || 'district',
       province: row.province || '',
       city: row.city || '',
       district: row.district || '',
-      region_name: row.region_name || '',
-      address: row.address || '',
-      longitude: row.longitude ?? '',
-      latitude: row.latitude ?? '',
-      commission_rate: toSafeNumber(row.commission_rate, 0.02),
-      status: row.status || 'active',
-      pickup_commission_tier: row.pickup_commission_tier || 'A'
+      claimant_id: row.claimant_id || '',
+      status: row.status || 'active'
     })
   } else {
     Object.assign(stationForm, {
-      id: null, name: '', branch_type: 'city',
-      province: '', city: '', district: '', region_name: '', address: '',
-      longitude: '', latitude: '', commission_rate: 0.02, status: 'active',
-      pickup_commission_tier: 'A'
+      id: null, name: '', branch_type: 'district',
+      province: '', city: '', district: '',
+      claimant_id: '', status: 'active'
     })
   }
   stationDialogVisible.value = true
@@ -364,13 +303,8 @@ const saveStation = async () => {
       province: stationForm.province,
       city: stationForm.city,
       district: stationForm.district,
-      region_name: stationForm.region_name,
-      address: stationForm.address?.trim() || null,
-      longitude: stationForm.longitude === '' ? null : stationForm.longitude,
-      latitude: stationForm.latitude === '' ? null : stationForm.latitude,
-      commission_rate: stationForm.commission_rate,
-      status: stationForm.status,
-      pickup_commission_tier: stationForm.pickup_commission_tier || 'A'
+      claimant_id: stationForm.claimant_id?.trim() || null,
+      status: stationForm.status
     }
     let resData
     if (stationForm.id) {

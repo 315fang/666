@@ -106,19 +106,23 @@ function onBuyNow(page, resolvePayableUnitPrice) {
     }
     page._buyingNow = true;
     const { product, selectedSku, quantity } = page.data;
+    const isExchangeMode = !!page.data.exchangeMode;
 
     const buyInfo = {
         product_id: normalizeProductId(product.id),
         category_id: product.category_id || null,
         sku_id: selectedSku && selectedSku.id || null,
-        quantity,
-        price: resolvePayableUnitPrice(product, selectedSku, page.data.roleLevel),
+        quantity: isExchangeMode ? 1 : quantity,
+        price: isExchangeMode ? 0 : resolvePayableUnitPrice(product, selectedSku, page.data.roleLevel),
         name: product.name,
         image: product.images && product.images[0] || '',
         spec: selectedSku ? buildSkuText(selectedSku) : '',
         supports_pickup: product.supports_pickup ? 1 : 0,
-        allow_points: product.is_explosive ? 0 : (product.allow_points == null ? 1 : (product.allow_points ? 1 : 0)),
-        is_explosive: product.is_explosive ? 1 : 0
+        allow_points: isExchangeMode ? 0 : (product.is_explosive ? 0 : (product.allow_points == null ? 1 : (product.allow_points ? 1 : 0))),
+        is_explosive: product.is_explosive ? 1 : 0,
+        exchange_coupon_id: isExchangeMode ? page.data.exchangeCouponId : '',
+        exchange_mode: isExchangeMode ? 1 : 0,
+        exchange_title: isExchangeMode ? (page.data.exchangeTitle || '') : ''
     };
     wx.setStorageSync('directBuyInfo', buyInfo);
 

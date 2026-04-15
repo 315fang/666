@@ -110,12 +110,11 @@ Page({
             if (res.code === 0 && res.data) {
                 const d = res.data;
                 // 成员进度
-                const cur = d.current_members || 0;
-                const min = d.min_members || 2;
-                if ((d.status === 'open' || d.status === 'pending') && min > 0 && cur >= min) {
-                    d.status = 'success';
-                }
-                d._progressPct = Math.min(100, Math.round(cur / min * 100));
+                const cur = Number(d.current_members || 0) || 0;
+                const min = Number(d.min_members || 2) || 2;
+                d._progressPct = min > 0
+                    ? Math.min(100, Math.round(cur / min * 100))
+                    : 0;
                 d._needMore = Math.max(0, min - cur);
                 const act = d.activity || {};
                 const stockLimit = Number(act.stock_limit) || 0;

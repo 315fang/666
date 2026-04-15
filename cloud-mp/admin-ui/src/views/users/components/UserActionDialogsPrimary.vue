@@ -34,14 +34,6 @@
             <el-option label="区域代理" :value="5" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="roleForm.role_level === 3" label="代理级别">
-          <el-radio-group v-model="roleForm.agent_level">
-            <el-radio-button :value="3">三级代理（最低）</el-radio-button>
-            <el-radio-button :value="2">二级代理</el-radio-button>
-            <el-radio-button :value="1">一级代理（最高）</el-radio-button>
-          </el-radio-group>
-          <div class="text-secondary agent-level-hint">级别越高，从下级提取的层间佣金越多</div>
-        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="onRoleVisibilityChange(false)">取消</el-button>

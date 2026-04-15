@@ -121,7 +121,7 @@ After deployment:
 3. Create an order with cart items and coupon/points disabled.
 4. Trigger payment prepay and simulate or complete payment callback.
 5. Confirm repeated callback does not duplicate stock deduction, points, or commissions.
-6. Admin UI opens products, orders, refunds, commissions, coupons, group-buys, activities, featured-board, pickup-stations, and agent-system pages without 404.
+6. Admin UI opens products, orders, refunds, commissions, coupons, group-buys, activities, featured-board, pickup-stations, and membership pages without 404.
 7. Reject a refund and verify commissions return from `frozen` to `pending`.
 8. Complete a refund and verify commissions become `cancelled`.
 9. Run `commission-deadline-process` manually once and verify due `frozen` commissions become `pending_approval`.

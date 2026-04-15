@@ -97,7 +97,7 @@
             <el-button v-if="row.status === 'pending'" text type="success" size="small" @click="handleApprove(row)">通过</el-button>
             <el-button v-if="row.status === 'pending'" text type="danger" size="small" @click="handleReject(row)">拒绝</el-button>
             <el-button v-if="row.status === 'approved'" text type="primary" size="small" @click="handleComplete(row)">确认退款</el-button>
-            <el-button v-if="row.status === 'processing'" text type="warning" size="small" disabled>退款中...</el-button>
+            <el-button v-if="row.status === 'processing'" text type="primary" size="small" @click="handleSyncStatus(row)">同步状态</el-button>
             <el-button v-if="row.status === 'failed'" text type="danger" size="small" @click="handleComplete(row)">重试退款</el-button>
             <el-button text size="small" @click="handleDetail(row)">详情</el-button>
           </template>
@@ -225,7 +225,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getRefunds, approveRefund, rejectRefund, completeRefund } from '@/api'
+import { getRefunds, approveRefund, rejectRefund, completeRefund, syncRefundStatus } from '@/api'
 import CompactIdCell from '@/components/CompactIdCell.vue'
 import { formatDateTime } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
@@ -459,6 +459,18 @@ const handleComplete = async (row) => {
       console.error('执行退款失败:', error)
     }
   }
+}
+
+const handleSyncStatus = async (row) => {
+  await runRefundMutation(
+    () => syncRefundStatus(row.id),
+    (result) => {
+      const syncedWechatStatus = result?.sync_result?.wechat_status || result?.wx_refund_status || result?.wx_status || ''
+      if (result?.status === 'completed') return '已同步为退款完成'
+      if (syncedWechatStatus === 'PROCESSING') return '微信侧仍在处理中'
+      return '已同步微信退款状态'
+    }
+  )
 }
 
 const getProcessedTime = (row) => row?.completed_at || row?.processed_at || row?.updated_at || ''

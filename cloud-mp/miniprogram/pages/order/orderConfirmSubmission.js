@@ -20,7 +20,9 @@ async function submitOrder(page, app, brandAnimation) {
         submitting,
         selectedCoupon,
         deliveryType,
-        pickupStation
+        pickupStation,
+        exchangeMode,
+        exchangeCouponId
     } = page.data;
 
     if (submitting) return;
@@ -74,15 +76,15 @@ async function submitOrder(page, app, brandAnimation) {
         if (page.data.groupNo) orderData.group_no = page.data.groupNo;
         if (page.data.groupActivityId) orderData.group_activity_id = page.data.groupActivityId;
         if (page.data.orderType) orderData.type = page.data.orderType;
-        if (selectedCoupon) {
+        if (!exchangeMode && selectedCoupon) {
             orderData.user_coupon_id = selectedCoupon._id != null ? selectedCoupon._id : selectedCoupon.id;
         }
-        if (page.data.usePoints && page.data.pointsToUse > 0) {
+        if (!exchangeMode && page.data.usePoints && page.data.pointsToUse > 0) {
             orderData.points_to_use = page.data.pointsToUse;
         }
 
         // 代理商选择货款支付：直接在创单时扣款，无需跳支付页
-        const useGoodsFund = !!(page.data.useWallet && page.data.isAgent);
+        const useGoodsFund = !!(!exchangeMode && page.data.useWallet && page.data.isAgent);
         if (useGoodsFund) {
             orderData.use_goods_fund = true;
         }
@@ -90,7 +92,10 @@ async function submitOrder(page, app, brandAnimation) {
         wx.removeStorageSync('useWalletPay');
         wx.removeStorageSync('walletPayOrderIds');
 
-        const res = await post('/orders', orderData, { showError: false });
+        if (exchangeMode) {
+            orderData.exchange_coupon_id = exchangeCouponId;
+        }
+        const res = await post(exchangeMode ? '/orders/exchange' : '/orders', orderData, { showError: false });
 
         if (page.data.from === 'direct') {
             wx.removeStorageSync('directBuyInfo');
@@ -98,6 +103,10 @@ async function submitOrder(page, app, brandAnimation) {
 
         const createdOrders = Array.isArray(res.data) ? res.data : (res.data ? [res.data] : []);
         const orderId = createdOrders[0] && (createdOrders[0].id || createdOrders[0].order_id);
+        if (exchangeMode && orderId) {
+            await post(`/orders/${orderId}/prepay`, {}, { showError: false });
+            wx.removeStorageSync('activeExchangeCoupon');
+        }
         const goodsFundPaid = !!(createdOrders[0] && createdOrders[0].goods_fund_paid);
         const isSplitOrders = createdOrders.length > 1;
 

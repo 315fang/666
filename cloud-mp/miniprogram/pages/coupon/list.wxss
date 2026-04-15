@@ -46,6 +46,7 @@
 /* Left: value */
 .coupon-left { padding: 30rpx 10rpx 30rpx 20rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 180rpx; box-sizing: border-box; }
 .coupon-value-wrap { display: flex; align-items: baseline; justify-content: center; color: #E53935; gap: 4rpx; }
+.coupon-exchange-badge { font-size: 26rpx; font-weight: 700; color: #E53935; }
 .coupon-currency { font-size: 28rpx; font-weight: bold; }
 .coupon-value { font-size: 60rpx; font-weight: 800; line-height: 1; }
 .coupon-min { font-size: 22rpx; color: #A45A5A; margin-top: 12rpx; text-align: center; }

@@ -1,0 +1,31 @@
+<view class="container">
+  <view class="nav-bar">
+    <view class="nav-back" bindtap="onBack">‹</view>
+    <text class="nav-title">兑换专区</text>
+    <view class="nav-placeholder"></view>
+  </view>
+
+  <view class="hero-card" wx:if="{{coupon}}">
+    <text class="hero-title">{{coupon.exchange_meta.title || coupon.coupon_name}}</text>
+    <text class="hero-sub">请选择要兑换的商品，提交后将生成 0 元兑换订单。</text>
+  </view>
+
+  <view class="empty-wrap" wx:if="{{loading}}">
+    <text class="empty-text">加载中...</text>
+  </view>
+
+  <view class="empty-wrap" wx:elif="{{!products.length}}">
+    <text class="empty-text">{{emptyText || '暂无可兑换商品'}}</text>
+  </view>
+
+  <view class="product-list" wx:else>
+    <view class="product-card" wx:for="{{products}}" wx:key="id" bindtap="onPickProduct" data-id="{{item.id}}">
+      <image class="product-image" src="{{item.image}}" mode="aspectFill"></image>
+      <view class="product-copy">
+        <text class="product-name">{{item.name}}</text>
+        <text class="product-desc">{{item.description}}</text>
+        <text class="product-action">去兑换 ›</text>
+      </view>
+    </view>
+  </view>
+</view>

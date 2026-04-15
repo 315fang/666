@@ -35,6 +35,7 @@ export const getMiniProgramConfig = () => request({ url: '/mini-program-config',
 export const updateMiniProgramConfig = (data) => request({ url: '/mini-program-config', method: 'put', data })
 export const getMemberTierConfig = () => request({ url: '/member-tier-config', method: 'get' })
 export const updateMemberTierConfig = (data) => request({ url: '/member-tier-config', method: 'put', data })
+export const backfillExchangeCoupons = () => request({ url: '/member-tier-config/exchange-coupons/backfill', method: 'post' })
 
 export const getOperationsDashboard = () => request({ url: '/operations/dashboard', method: 'get' })
 

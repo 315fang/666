@@ -34,7 +34,7 @@ function resolveRoleName(user = {}) {
 }
 
 function resolveNickname(user = {}) {
-    return pickString(user.nickName || user.nickname || user.nick_name || user.name || '微信用户');
+    return pickString(user.virtual_display_name || user.nickName || user.nickname || user.nick_name || user.name || '微信用户');
 }
 
 function resolveAvatar(user = {}) {
@@ -79,6 +79,9 @@ function buildCanonicalUser(user = {}, extra = {}) {
         phone: pickString(user.phone),
         role_level: roleLevel,
         role_name: resolveRoleName(user),
+        is_virtual_settlement: user.is_virtual_settlement === true || user.is_virtual_settlement === 1 || user.is_virtual_settlement === '1',
+        virtual_settlement_type: pickString(user.virtual_settlement_type),
+        virtual_display_name: pickString(user.virtual_display_name),
         member_no: resolveMemberNo(user),
         invite_code: resolveInviteCode(user),
         my_invite_code: pickString(user.my_invite_code || resolveInviteCode(user)),

@@ -74,9 +74,7 @@ function normalizeMyGroupItem(item = {}) {
         ? 0
         : Math.max(1, rawCurrentMembers);
     const rawStatus = groupOrder.status || '';
-    const derivedStatus = ((rawStatus === 'open' || rawStatus === 'pending' || !rawStatus) && minMembers > 0 && currentMembers >= minMembers)
-        ? 'success'
-        : rawStatus;
+    const normalizedStatus = rawStatus || (paymentStatus === 'unpaid' ? 'unpaid' : 'open');
 
     return {
         ...item,
@@ -85,7 +83,7 @@ function normalizeMyGroupItem(item = {}) {
         _memberText: `${currentMembers}/${minMembers}人`,
         groupOrder: {
             ...groupOrder,
-            status: derivedStatus,
+            status: normalizedStatus,
             current_members: currentMembers,
             min_members: minMembers
         }
@@ -100,9 +98,7 @@ Page({
         tab: 'activities',
         activities: [],
         myGroups: [],
-        loading: true,
-        isMember: false,
-        showMemberTip: false
+        loading: true
     },
 
     onLoad(options = {}) {
@@ -113,17 +109,9 @@ Page({
             navBarHeight: app.globalData.navBarHeight || 44,
             tab: initialTab
         });
-        this.checkMemberStatus();
         this.loadData(initialTab);
     },
     onShow() { this.loadData(); },
-
-    checkMemberStatus() {
-        const user = app.globalData.userInfo;
-        const isMember = user && user.role_level >= 1;
-        const showMemberTip = app.globalData.isLoggedIn && !isMember;
-        this.setData({ isMember, showMemberTip });
-    },
 
     switchTab(e) {
         const tab = e.currentTarget.dataset.tab;
@@ -156,17 +144,6 @@ Page({
         const activity = e.currentTarget.dataset.activity;
         if (!app.globalData.isLoggedIn) {
             wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        if (!this.data.isMember) {
-            wx.showModal({
-                title: '需要会员身份',
-                content: '发起拼团需要会员身份，完成首单消费即可升级。',
-                confirmText: '去购物',
-                success: (res) => {
-                    if (res.confirm) wx.switchTab({ url: '/pages/category/category' });
-                }
-            });
             return;
         }
         wx.setStorageSync('directBuyInfo', buildGroupBuyInfo(activity));

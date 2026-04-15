@@ -107,6 +107,33 @@ const handleAction = {
         });
     }),
 
+    'createExchangeOrder': asyncHandler(async (openid, params) => {
+        const { items, address_id, memo, remark, delivery_type, pickup_station_id, exchange_coupon_id } = params;
+        if (!exchange_coupon_id) throw badRequest('缺少兑换券');
+        if (!items || !Array.isArray(items) || items.length !== 1) {
+            throw badRequest('兑换券订单仅支持单个商品');
+        }
+        const actualDeliveryType = delivery_type === 'pickup' ? 'pickup' : 'express';
+        if (actualDeliveryType === 'express' && !address_id) throw badRequest('缺少收货地址');
+        if (actualDeliveryType === 'pickup' && !pickup_station_id) throw badRequest('缺少自提门店');
+        const order = await orderCreate.createExchangeOrder(openid, {
+            items,
+            address_id,
+            memo: memo != null ? memo : remark,
+            delivery_type: actualDeliveryType,
+            pickup_station_id,
+            exchange_coupon_id
+        });
+        return success({
+            id: order._id,
+            order_id: order._id,
+            order_no: order.order_no,
+            total_amount: order.total_amount,
+            pay_amount: order.pay_amount,
+            exchange_coupon_id
+        });
+    }),
+
     'status': asyncHandler(async (openid, params) => {
         const id = params.order_id || params.id;
         if (!id) throw badRequest('缺少订单 ID');

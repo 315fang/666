@@ -147,12 +147,22 @@
     </view>
   </view>
 
+  <view class="section coupon-section" wx:if="{{exchangeMode}}">
+    <view class="coupon-top">
+      <text class="coupon-label">兑换券订单</text>
+      <view class="coupon-right">
+        <text class="coupon-selected">0 元兑换</text>
+      </view>
+    </view>
+    <text class="coupon-tip coupon-tip-active">{{exchangeCouponTitle || '该订单将核销一张兑换券，不参与普通优惠券、积分或货款支付。'}}</text>
+  </view>
+
   <view class="section remark-section">
     <text class="remark-label">订单备注</text>
     <input class="remark-input" placeholder="选填，可留言给卖家" value="{{remark}}" bindinput="onRemarkInput" maxlength="100" />
   </view>
 
-  <view class="section coupon-section" wx:if="{{allowCoupon !== false}}">
+  <view class="section coupon-section" wx:if="{{!exchangeMode && allowCoupon !== false}}">
     <view class="coupon-top" bindtap="onCouponTap">
       <view class="coupon-label-row">
         <text class="coupon-label">礼遇与优惠</text>
@@ -168,30 +178,30 @@
     <text class="coupon-tip coupon-tip-active" wx:if="{{!selectedCoupon && availableCoupons.length > 0}}">您有{{availableCoupons.length}}张优惠券可用，点击立即选择</text>
     <text class="coupon-tip" wx:elif="{{!selectedCoupon && unusedCouponCount > 0}}">您有{{unusedCouponCount}}张优惠券不适用于本单（金额/范围不符）</text>
   </view>
-  <view class="section coupon-section coupon-disabled" wx:if="{{allowCoupon === false}}">
+  <view class="section coupon-section coupon-disabled" wx:if="{{!exchangeMode && allowCoupon === false}}">
     <text class="coupon-label">礼遇与优惠</text>
     <text class="coupon-none">爆单品不参与优惠券活动</text>
   </view>
 
   <!-- 积分抵扣 -->
-  <view class="section points-section" wx:if="{{pointBalance > 0 && allowPoints}}">
+  <view class="section points-section" wx:if="{{!exchangeMode && pointBalance > 0 && allowPoints}}">
     <text class="points-label">积分抵扣</text>
     <view class="points-right">
       <text class="points-balance">{{pointBalance}}积分可用</text>
       <switch checked="{{usePoints}}" bindchange="onTogglePoints" color="#B98B58" style="transform:scale(0.8)" />
     </view>
   </view>
-  <view class="section points-detail" wx:if="{{usePoints && pointBalance > 0 && allowPoints}}">
+  <view class="section points-detail" wx:if="{{!exchangeMode && usePoints && pointBalance > 0 && allowPoints}}">
     <text class="points-deduct-text">使用 {{pointsToUse}} 积分抵扣 ¥{{pointsDeduction}}</text>
     <text class="points-deduct-tip">（{{pointsRuleHint}}）</text>
   </view>
-  <view class="section points-section points-disabled" wx:if="{{pointBalance > 0 && !allowPoints}}">
+  <view class="section points-section points-disabled" wx:if="{{!exchangeMode && pointBalance > 0 && !allowPoints}}">
     <text class="points-label">积分抵扣</text>
     <text class="points-balance-disabled">当前商品不支持积分抵扣</text>
   </view>
 
   <!-- 货款余额支付 -->
-  <view class="section points-section wallet-section" wx:if="{{isAgent}}">
+  <view class="section points-section wallet-section" wx:if="{{!exchangeMode && isAgent}}">
     <view class="wallet-label-col">
       <text class="points-label">货款余额支付</text>
       <text class="wallet-balance-sub" wx:if="{{walletBalance > 0}}">可用余额 ¥{{walletBalance}}</text>
@@ -207,7 +217,7 @@
       />
     </view>
   </view>
-  <view class="section points-detail" wx:if="{{isAgent && useWallet && walletBalance > 0}}">
+  <view class="section points-detail" wx:if="{{!exchangeMode && isAgent && useWallet && walletBalance > 0}}">
     <text class="points-deduct-text">从货款余额扣款，无需微信支付</text>
   </view>
 

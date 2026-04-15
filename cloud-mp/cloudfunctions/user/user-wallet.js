@@ -5,6 +5,38 @@ const _ = db.command;
 const { toNumber, getAllRecords } = require('./shared/utils');
 const { normalizeCouponRecord, reconcileLotteryCoupons } = require('./user-coupons');
 
+const DEFAULT_POINT_RULES = {
+    deduction: {
+        yuan_per_point: 0.1,
+        max_order_ratio: 0.7
+    },
+    purchase_multiplier_by_role: {
+        0: 50,
+        1: 100,
+        2: 150,
+        3: 300,
+        4: 400,
+        5: 500
+    },
+    checkin: {
+        points: 5,
+        remark: '每日签到'
+    },
+    checkin_streak: {
+        points: 50,
+        streak_days: 7,
+        remark: '连续签到奖励'
+    },
+    review: {
+        points: 10,
+        remark: '评价订单奖励'
+    },
+    invite_success: {
+        points: 50,
+        remark: '成功邀请新用户加入团队'
+    }
+};
+
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
 }
@@ -20,6 +52,94 @@ function uniqueValues(values) {
         list.push(value);
     });
     return list;
+}
+
+function parseConfigValue(row, fallback) {
+    if (!row) return fallback;
+    const value = row.config_value !== undefined ? row.config_value : row.value;
+    if (value === undefined || value === null || value === '') return fallback;
+    if (typeof value === 'string') {
+        try {
+            return JSON.parse(value);
+        } catch (_) {
+            return fallback;
+        }
+    }
+    return value;
+}
+
+async function getConfigByKey(key) {
+    const res = await db.collection('configs')
+        .where(_.or([{ config_key: key }, { key }]))
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    if (res.data && res.data[0]) return res.data[0];
+    const legacyRes = await db.collection('app_configs')
+        .where({ config_key: key, status: _.in([true, 1, '1']) })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return legacyRes.data && legacyRes.data[0] ? legacyRes.data[0] : null;
+}
+
+function normalizePointRuleConfig(raw = {}) {
+    const rule = raw && typeof raw === 'object' ? raw : {};
+    const deduction = rule.deduction && typeof rule.deduction === 'object' ? rule.deduction : {};
+    const purchaseMultiplierRaw = rule.purchase_multiplier_by_role && typeof rule.purchase_multiplier_by_role === 'object'
+        ? rule.purchase_multiplier_by_role
+        : {};
+    const checkin = rule.checkin && typeof rule.checkin === 'object' ? rule.checkin : {};
+    const checkinStreak = rule.checkin_streak && typeof rule.checkin_streak === 'object' ? rule.checkin_streak : {};
+    const review = rule.review && typeof rule.review === 'object' ? rule.review : {};
+    const inviteSuccess = rule.invite_success && typeof rule.invite_success === 'object' ? rule.invite_success : {};
+
+    const purchaseMultiplierByRole = {};
+    Object.keys(DEFAULT_POINT_RULES.purchase_multiplier_by_role).forEach((role) => {
+        purchaseMultiplierByRole[role] = Math.max(
+            0,
+            toNumber(
+                purchaseMultiplierRaw[role],
+                DEFAULT_POINT_RULES.purchase_multiplier_by_role[role]
+            )
+        );
+    });
+
+    return {
+        deduction: {
+            yuan_per_point: Math.max(
+                0.01,
+                toNumber(deduction.yuan_per_point, DEFAULT_POINT_RULES.deduction.yuan_per_point)
+            ),
+            max_order_ratio: Math.max(
+                0.01,
+                Math.min(1, toNumber(deduction.max_order_ratio, DEFAULT_POINT_RULES.deduction.max_order_ratio))
+            )
+        },
+        purchase_multiplier_by_role: purchaseMultiplierByRole,
+        checkin: {
+            points: Math.max(0, toNumber(checkin.points, DEFAULT_POINT_RULES.checkin.points)),
+            remark: String(checkin.remark || DEFAULT_POINT_RULES.checkin.remark)
+        },
+        checkin_streak: {
+            points: Math.max(0, toNumber(checkinStreak.points, DEFAULT_POINT_RULES.checkin_streak.points)),
+            streak_days: Math.max(1, Math.floor(toNumber(checkinStreak.streak_days, DEFAULT_POINT_RULES.checkin_streak.streak_days))),
+            remark: String(checkinStreak.remark || DEFAULT_POINT_RULES.checkin_streak.remark)
+        },
+        review: {
+            points: Math.max(0, toNumber(review.points, DEFAULT_POINT_RULES.review.points)),
+            remark: String(review.remark || DEFAULT_POINT_RULES.review.remark)
+        },
+        invite_success: {
+            points: Math.max(0, toNumber(inviteSuccess.points, DEFAULT_POINT_RULES.invite_success.points)),
+            remark: String(inviteSuccess.remark || DEFAULT_POINT_RULES.invite_success.remark)
+        }
+    };
+}
+
+async function loadPointRules() {
+    const row = await getConfigByKey('point_rule_config');
+    return normalizePointRuleConfig(parseConfigValue(row, {}));
 }
 
 async function getUserCouponIds(openid) {
@@ -480,6 +600,7 @@ async function pointsSignInStatus(openid) {
     if (!user.data || user.data.length === 0) throw new Error('用户不存在');
 
     const userData = user.data[0];
+    const pointRules = await loadPointRules();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -500,7 +621,7 @@ async function pointsSignInStatus(openid) {
         signed_today: !!signedToday,
         consecutive_days: consecutiveDays,
         last_sign_in_at: userData.last_sign_in_at || null,
-        today_points: getSignInReward(consecutiveDays + 1),
+        today_points: getSignInReward(consecutiveDays + 1, pointRules),
     };
 }
 
@@ -512,6 +633,7 @@ async function pointsSignIn(openid) {
     if (!user.data || user.data.length === 0) throw new Error('用户不存在');
 
     const userData = user.data[0];
+    const pointRules = await loadPointRules();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -530,13 +652,12 @@ async function pointsSignIn(openid) {
         consecutiveDays = 1;
     }
 
-    const rewardPoints = getSignInReward(consecutiveDays);
+    const rewardPoints = getSignInReward(consecutiveDays, pointRules);
 
     // 发放积分
     await db.collection('users').where({ openid }).update({
         data: {
             points: _.inc(rewardPoints),
-            growth_value: _.inc(rewardPoints),
             consecutive_sign_days: consecutiveDays,
             last_sign_in_at: db.serverDate(),
             updated_at: db.serverDate(),
@@ -565,9 +686,12 @@ async function pointsSignIn(openid) {
 /**
  * 获取签到奖励积分（连续签到递增）
  */
-function getSignInReward(day) {
-    const rewards = [5, 10, 15, 20, 30, 40, 50]; // 1-7天
-    return rewards[Math.min(day - 1, 6)] || 50;
+function getSignInReward(day, pointRules = DEFAULT_POINT_RULES) {
+    const safeDay = Math.max(1, Math.floor(toNumber(day, 1)));
+    const basePoints = Math.max(0, toNumber(pointRules?.checkin?.points, DEFAULT_POINT_RULES.checkin.points));
+    const streakDays = Math.max(1, Math.floor(toNumber(pointRules?.checkin_streak?.streak_days, DEFAULT_POINT_RULES.checkin_streak.streak_days)));
+    const streakBonus = Math.max(0, toNumber(pointRules?.checkin_streak?.points, DEFAULT_POINT_RULES.checkin_streak.points));
+    return basePoints + (safeDay % streakDays === 0 ? streakBonus : 0);
 }
 
 /**
@@ -578,17 +702,57 @@ async function pointsTasks(openid) {
     if (!user.data || user.data.length === 0) throw new Error('用户不存在');
 
     const userData = user.data[0];
+    const pointRules = await loadPointRules();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const lastSignIn = userData.last_sign_in_at ? new Date(userData.last_sign_in_at) : null;
     const signedToday = lastSignIn && lastSignIn >= today;
+    const roleLevel = toNumber(userData.role_level ?? userData.distributor_level ?? userData.level, 0);
+    const orderPayPoints = Math.max(
+        0,
+        toNumber(pointRules.purchase_multiplier_by_role?.[roleLevel], DEFAULT_POINT_RULES.purchase_multiplier_by_role[String(roleLevel)] || 0)
+    );
+    const reviewPoints = Math.max(0, toNumber(pointRules.review.points, DEFAULT_POINT_RULES.review.points));
+    const invitePoints = Math.max(0, toNumber(pointRules.invite_success.points, DEFAULT_POINT_RULES.invite_success.points));
 
-    return [
-        { id: 'sign_in', name: '每日签到', points: getSignInReward(toNumber(userData.consecutive_sign_days, 0) + 1), completed: !!signedToday, daily: true },
-        { id: 'order_pay', name: '下单支付', points: 10, completed: false, daily: false, description: '每消费1元得1积分' },
-        { id: 'review', name: '评价订单', points: 10, completed: false, daily: false, description: '评价一次得10积分' },
-        { id: 'share', name: '分享商品', points: 5, completed: false, daily: true },
+    const tasks = [
+        {
+            id: 'sign_in',
+            name: '每日签到',
+            points: getSignInReward(toNumber(userData.consecutive_sign_days, 0) + 1, pointRules),
+            completed: !!signedToday,
+            daily: true
+        },
+        {
+            id: 'order_pay',
+            name: '下单支付',
+            points: orderPayPoints,
+            completed: false,
+            daily: false,
+            description: `每消费100元得${orderPayPoints}积分`
+        },
+        {
+            id: 'review',
+            name: '评价订单',
+            points: reviewPoints,
+            completed: false,
+            daily: false,
+            description: `评价一次得${reviewPoints}积分`
+        }
     ];
+
+    if (invitePoints > 0) {
+        tasks.push({
+            id: 'invite_success',
+            name: '邀请新用户',
+            points: invitePoints,
+            completed: false,
+            daily: false,
+            description: `成功邀请新用户得${invitePoints}积分`
+        });
+    }
+
+    return tasks;
 }
 
 /**

@@ -148,8 +148,9 @@ page { padding-bottom: 180rpx; }
 
 /* 成员"我"标记 */
 .member-avatar--me {
-  border-color: #245f93;
+  border-color: #c6a16e;
   border-width: 4rpx;
+  box-shadow: 0 8rpx 18rpx rgba(198, 161, 110, 0.18);
 }
 
 .me-tag {
@@ -159,7 +160,7 @@ page { padding-bottom: 180rpx; }
   font-size: 18rpx;
   font-weight: 700;
   color: #fff;
-  background: #e67e22;
+  background: #c6a16e;
   padding: 2rpx 8rpx;
   border-radius: 8rpx;
   line-height: 1.4;
@@ -172,8 +173,8 @@ page { padding-bottom: 180rpx; }
 .hero-card {
   padding: 26rpx;
   border-radius: 28rpx;
-  background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.06));
-  border: 1rpx solid rgba(255,255,255,0.12);
+  background: linear-gradient(160deg, rgba(250, 253, 255, 0.98), rgba(232, 241, 248, 0.94));
+  border: 1rpx solid rgba(36, 95, 147, 0.12);
   display: flex;
   gap: 20rpx;
   box-shadow: 0 20rpx 44rpx rgba(9, 31, 50, 0.16);
@@ -184,6 +185,8 @@ page { padding-bottom: 180rpx; }
   height: 184rpx;
   border-radius: 22rpx;
   flex-shrink: 0;
+  border: 1rpx solid rgba(36, 95, 147, 0.08);
+  box-shadow: 0 10rpx 20rpx rgba(30, 74, 109, 0.08);
 }
 
 .hero-copy {
@@ -212,33 +215,39 @@ page { padding-bottom: 180rpx; }
   font-weight: 700;
 }
 
+.status-badge {
+  background: rgba(36, 95, 147, 0.08);
+  border: 1rpx solid rgba(36, 95, 147, 0.12);
+  color: #245f93;
+}
+
 .hero-badge {
-  background: rgba(255,255,255,0.14);
-  border: 1rpx solid rgba(255,255,255,0.16);
-  color: #f8fbff;
+  background: rgba(36, 95, 147, 0.1);
+  border: 1rpx solid rgba(36, 95, 147, 0.14);
+  color: #245f93;
 }
 
 .status-badge.status-open {
-  background: rgba(214, 230, 245, 0.2);
-  color: #f8fbff;
+  background: rgba(36, 95, 147, 0.1);
+  color: #245f93;
 }
 
 .status-badge.status-success {
-  background: rgba(15, 118, 110, 0.2);
-  color: #e9fffb;
+  background: rgba(15, 118, 110, 0.12);
+  color: #0f766e;
 }
 
 .status-badge.status-fail,
 .status-badge.status-cancelled {
-  background: rgba(107, 130, 151, 0.22);
-  color: #edf5fb;
+  background: rgba(107, 130, 151, 0.12);
+  color: #5f7690;
 }
 
 .hero-title {
   font-size: 32rpx;
   font-weight: 700;
   line-height: 1.45;
-  color: #f8fafc;
+  color: #16324d;
 }
 
 .detail-tags {
@@ -249,22 +258,27 @@ page { padding-bottom: 180rpx; }
 
 .d-tag {
   font-size: 18rpx;
-  color: rgba(248, 251, 255, 0.88);
-  background: rgba(255,255,255,0.08);
+  color: #245f93;
+  background: rgba(36, 95, 147, 0.08);
   padding: 4rpx 12rpx;
   border-radius: 8rpx;
   font-weight: 600;
 }
 
 .d-tag-hot {
-  color: #ffe1bb;
-  background: rgba(197, 139, 71, 0.16);
+  color: #b77923;
+  background: rgba(198, 161, 110, 0.16);
 }
 
 .price-row {
   display: flex;
-  align-items: flex-end;
-  gap: 28rpx;
+  align-items: stretch;
+  gap: 24rpx;
+  margin-top: 4rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1rpx solid rgba(36, 95, 147, 0.08);
 }
 
 .price-main,
@@ -272,22 +286,35 @@ page { padding-bottom: 180rpx; }
   display: flex;
   flex-direction: column;
   gap: 4rpx;
+  justify-content: center;
+}
+
+.price-main {
+  flex: 1;
+}
+
+.price-side {
+  min-width: 144rpx;
+  padding-left: 22rpx;
+  border-left: 1rpx solid rgba(36, 95, 147, 0.12);
+  flex-shrink: 0;
 }
 
 .price-label {
   font-size: 20rpx;
-  color: rgba(234, 243, 251, 0.7);
+  color: #6f8399;
 }
 
 .group-price {
-  font-size: 42rpx;
+  font-size: 46rpx;
   font-weight: 800;
-  color: #f8fafc;
+  color: #b77923;
+  line-height: 1.1;
 }
 
 .original-price {
-  font-size: 24rpx;
-  color: rgba(234, 243, 251, 0.74);
+  font-size: 26rpx;
+  color: #8fa1b2;
   text-decoration: line-through;
 }
 
@@ -354,6 +381,12 @@ page { padding-bottom: 180rpx; }
   font-weight: 700;
 }
 
+.progress-card .section-side {
+  padding: 8rpx 16rpx;
+  border-radius: 999rpx;
+  background: rgba(36, 95, 147, 0.08);
+}
+
 .progress-bar {
   width: 100%;
   height: 12rpx;
@@ -364,7 +397,7 @@ page { padding-bottom: 180rpx; }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #245f93, #7fa7c8);
+  background: linear-gradient(90deg, #245f93 0%, #5b8fb8 78%, #c6a16e 100%);
   border-radius: 999rpx;
 }
 
@@ -380,7 +413,14 @@ page { padding-bottom: 180rpx; }
   flex-direction: column;
   align-items: center;
   gap: 8rpx;
-  width: 80rpx;
+  width: 96rpx;
+}
+
+.member-item--me {
+  padding: 10rpx 8rpx 12rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(180deg, rgba(36, 95, 147, 0.08), rgba(36, 95, 147, 0.02));
+  border: 1rpx solid rgba(36, 95, 147, 0.08);
 }
 
 .avatar-wrap {
@@ -400,6 +440,7 @@ page { padding-bottom: 180rpx; }
 }
 
 .avatar-empty {
+  background: rgba(36, 95, 147, 0.04);
   border: 3rpx dashed rgba(36, 95, 147, 0.2);
 }
 
@@ -420,7 +461,7 @@ page { padding-bottom: 180rpx; }
   font-size: 22rpx;
   color: #6f8399;
   text-align: center;
-  width: 80rpx;
+  width: 96rpx;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -435,12 +476,15 @@ page { padding-bottom: 180rpx; }
   display: flex;
   align-items: center;
   gap: 8rpx;
+  padding: 12rpx 14rpx;
+  border-radius: 16rpx;
+  background: rgba(36, 95, 147, 0.06);
 }
 
 .icon-xs {
   width: 28rpx;
   height: 28rpx;
-  opacity: 0.65;
+  opacity: 0.82;
 }
 
 .notice-text,

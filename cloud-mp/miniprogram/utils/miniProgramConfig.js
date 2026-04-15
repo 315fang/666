@@ -49,7 +49,7 @@ const DEFAULT_CONFIG = {
     pending_toast: '活动筹备中'
   },
   membership_config: {
-    group_buy_start_requirement_text: '发起拼团需要会员身份，请先完成首单成为会员',
+    group_buy_start_requirement_text: '登录后即可发起拼团，支付成功后可在订单或“我的拼团”继续查看进度',
     slash_start_requirement_text: '发起砍价需满足当前活动规则',
     login_agreement_hint: '登录后查看订单、积分、佣金等信息',
     business_center_min_role_level: 1,

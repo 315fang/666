@@ -60,6 +60,79 @@ function uniqueValues(values = []) {
     return result;
 }
 
+function parseConfigValue(row, fallback) {
+    if (!row) return fallback;
+    const value = row.config_value !== undefined ? row.config_value : row.value;
+    if (value === undefined || value === null || value === '') return fallback;
+    if (typeof value === 'string') {
+        try {
+            return JSON.parse(value);
+        } catch (_) {
+            return fallback;
+        }
+    }
+    return value;
+}
+
+async function getConfigByKey(key) {
+    const res = await db.collection('configs')
+        .where(_.or([{ config_key: key }, { key }]))
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    if (res.data && res.data[0]) return res.data[0];
+    const legacyRes = await db.collection('app_configs')
+        .where(_.or([{ config_key: key }, { key }]))
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return legacyRes.data && legacyRes.data[0] ? legacyRes.data[0] : null;
+}
+
+async function loadInvitePointRule() {
+    const row = await getConfigByKey('point_rule_config');
+    const raw = parseConfigValue(row, {}) || {};
+    const invite = raw.invite_success && typeof raw.invite_success === 'object' ? raw.invite_success : {};
+    return {
+        points: Math.max(0, toNumber(invite.points, 50)),
+        remark: String(invite.remark || '成功邀请新用户加入团队')
+    };
+}
+
+async function awardInviteSuccessPoints(referrerOpenid, inviteeOpenid) {
+    if (!referrerOpenid || !inviteeOpenid || referrerOpenid === inviteeOpenid) return 0;
+    const rule = await loadInvitePointRule();
+    if (rule.points <= 0) return 0;
+
+    const existing = await db.collection('point_logs')
+        .where({ openid: referrerOpenid, source: 'invite_success', invitee_openid: inviteeOpenid })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    if (existing.data && existing.data[0]) return 0;
+
+    await db.collection('users').where({ openid: referrerOpenid }).update({
+        data: {
+            points: _.inc(rule.points),
+            updated_at: db.serverDate()
+        }
+    }).catch(() => null);
+
+    await db.collection('point_logs').add({
+        data: {
+            openid: referrerOpenid,
+            type: 'earn',
+            amount: rule.points,
+            source: 'invite_success',
+            invitee_openid: inviteeOpenid,
+            description: rule.remark,
+            created_at: db.serverDate()
+        }
+    }).catch(() => null);
+
+    return rule.points;
+}
+
 async function getWelcomeCouponTemplates() {
     const tplRes = await db.collection('coupons').where({
         name: db.RegExp({ regexp: '注册|见面礼|开运|新人', options: 'i' })
@@ -233,6 +306,9 @@ exports.main = cloudFunctionWrapper(async (event) => {
             };
 
             await db.collection('users').add({ data: newUser });
+            if (referrerOpenid) {
+                await awardInviteSuccessPoints(referrerOpenid, openid);
+            }
             userRes = await db.collection('users').where({ openid }).limit(1).get();
         }
 

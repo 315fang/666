@@ -1,5 +1,5 @@
 export function getUserNickname(user = {}, fallback = '-') {
-  const nickname = user?.nickName || user?.nickname || ''
+  const nickname = user?.virtual_display_name || user?.nickName || user?.nickname || ''
   return nickname || fallback
 }
 

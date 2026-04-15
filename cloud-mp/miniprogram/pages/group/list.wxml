@@ -12,14 +12,14 @@
     <view class="hero-badge-row">
       <view class="hero-badge">
         <image class="hero-badge-icon" src="/assets/icons/users.svg" mode="aspectFit"></image>
-        <text class="hero-badge-text">会员可发起</text>
+        <text class="hero-badge-text">登录后可发起</text>
       </view>
     </view>
 
     <view class="hero-card">
       <view class="hero-copy">
         <text class="hero-title">组团下单，价格更直接</text>
-        <text class="hero-subtitle">会员开团，好友参团，人数凑齐后立即按拼团价成交；发起后可在“我的拼团”持续查看进度。</text>
+        <text class="hero-subtitle">登录后即可开团，好友参团，人数凑齐后立即按拼团价成交；发起后可在“我的拼团”持续查看进度。</text>
       </view>
 
       <view class="hero-actions">
@@ -27,11 +27,6 @@
         <view class="hero-btn" bindtap="onGoActivities">去发起</view>
       </view>
     </view>
-  </view>
-
-  <view class="member-tip" wx:if="{{showMemberTip}}">
-    <image class="tip-icon" src="/assets/icons/star.svg" mode="aspectFit"/>
-    <text class="tip-text">完成首单消费即可升级为会员，解锁发起拼团权限。</text>
   </view>
 
   <view class="tab-row">
@@ -100,7 +95,7 @@
               <text class="meta-dot">·</text>
               <text class="meta-item">开团后{{item.expire_hours}}h有效</text>
             </view>
-            <view class="start-btn">{{isMember ? '发起拼团' : '需要会员'}}</view>
+            <view class="start-btn">发起拼团</view>
           </view>
         </view>
       </view>

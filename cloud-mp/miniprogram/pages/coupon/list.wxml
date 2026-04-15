@@ -57,12 +57,14 @@
         <!-- 左侧：面值 -->
         <view class="coupon-left">
           <view class="coupon-value-wrap">
-            <text class="coupon-currency" wx:if="{{item.coupon_type === 'fixed' || item.coupon_type === 'no_threshold'}}">¥</text>
+            <text class="coupon-exchange-badge" wx:if="{{item.is_exchange}}">兑</text>
+            <text class="coupon-currency" wx:if="{{!item.is_exchange && (item.coupon_type === 'fixed' || item.coupon_type === 'no_threshold')}}">¥</text>
             <text class="coupon-value">
-              {{item.coupon_type === 'percent' ? item.discount_text : item.coupon_value}}
+              {{item.is_exchange ? item.exchange_value_text : (item.coupon_type === 'percent' ? item.discount_text : item.coupon_value)}}
             </text>
           </view>
-          <text class="coupon-min" wx:if="{{item.min_purchase > 0}}">满{{item.min_purchase}}元可用</text>
+          <text class="coupon-min" wx:if="{{item.is_exchange}}">{{item.exchange_scope_text}}</text>
+          <text class="coupon-min" wx:elif="{{item.min_purchase > 0}}">满{{item.min_purchase}}元可用</text>
           <text class="coupon-min" wx:else>无门槛</text>
         </view>
         <!-- 锯齿分割线 -->
@@ -76,11 +78,12 @@
           <text class="coupon-name">{{item.coupon_name}}</text>
           <!-- 使用 JS 格式化后的字段，不使用管道过滤器 -->
           <text class="coupon-expire">{{item.expire_at_formatted}} 到期</text>
-          <text class="coupon-scope scope-limit" wx:if="{{item.scope !== 'all'}}">限该店铺内指定商品使用</text>
+          <text class="coupon-scope scope-limit" wx:if="{{item.is_exchange}}">{{item.exchange_desc}}</text>
+          <text class="coupon-scope scope-limit" wx:elif="{{item.scope !== 'all'}}">限该店铺内指定商品使用</text>
           <text class="coupon-scope scope-all" wx:else>全场通用</text>
           <!-- 操作 -->
           <view class="coupon-action" wx:if="{{activeTab === 'unused'}}" bindtap="onUse" data-coupon="{{item}}">
-            使用
+            {{item.action_text || '使用'}}
           </view>
           <view class="coupon-used-tag" wx:elif="{{activeTab === 'used'}}">已使用</view>
           <view class="coupon-expire-tag" wx:else>已过期</view>

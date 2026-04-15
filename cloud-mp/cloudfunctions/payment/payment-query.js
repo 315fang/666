@@ -4,6 +4,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const { queryOrderByOutTradeNo, loadPrivateKey } = require('./wechat-pay-v3');
 const { processPaidOrder } = require('./payment-callback');
+const { resolvePostPayStatus } = require('./shared/order-payment');
 
 /**
  * 查询支付状态（优先查微信侧，回退查本地）
@@ -35,23 +36,24 @@ async function queryPaymentStatus(orderId, callerOpenid) {
             const wxResult = await queryOrderByOutTradeNo(order.order_no, privateKey);
 
             if (wxResult.trade_state === 'SUCCESS' && order.status !== 'paid') {
+                const postPayStatus = resolvePostPayStatus(order);
                 // 微信已支付但本地未更新，补偿更新
                 await db.collection('orders').doc(orderId).update({
                     data: {
-                        status: 'paid',
+                        status: postPayStatus,
                         paid_at: db.serverDate(),
                         trade_id: wxResult.transaction_id || '',
                         pay_time: wxResult.success_time ? new Date(wxResult.success_time) : db.serverDate(),
                         updated_at: db.serverDate(),
                     },
                 });
-                await processPaidOrder(orderId, { ...order, status: 'paid', paid_at: new Date() }).catch((postErr) => {
+                await processPaidOrder(orderId, { ...order, status: postPayStatus, paid_at: new Date() }).catch((postErr) => {
                     console.error('[PaymentQuery] 支付后补偿处理失败:', postErr.message);
                 });
                 return {
                     orderId: order._id,
                     order_no: order.order_no,
-                    status: 'paid',
+                    status: postPayStatus,
                     amount: order.pay_amount,
                     trade_state: wxResult.trade_state,
                     paidAt: new Date().toISOString(),

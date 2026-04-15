@@ -30,14 +30,17 @@ const DEFAULT_AGENT_UPGRADE_RULES = {
     // C2 晋升：直推 2 名 C1 + 销售额超580（文档要求需有"实物产品消耗"）
     c2_referee_count: 2,
     c2_min_sales: 580,
-    // B1 晋升：推荐10名C1及以上 或 充值3000（代理加盟费）
+    // B1 晋升：推荐10名C1 或 充值3000（代理加盟费）
     b1_referee_count: 10,
     b1_recharge: 3000,
     // B2 晋升：推荐10名B1 或 充值30000
     b2_referee_count: 10,
     b2_recharge: 30000,
-    // B3 晋升：充值198000（19.8万）
-    b3_recharge: 198000
+    // B3 晋升：推荐3名B2 或 30名B1，或充值198000（19.8万）
+    b3_referee_b2_count: 3,
+    b3_referee_b1_count: 30,
+    b3_recharge: 198000,
+    effective_order_days: 7
 };
 
 // 级差矩阵制：MATRIX[上级等级][买家等级] = 佣金百分比（整数，如 20 表示 20%）
@@ -68,14 +71,46 @@ const DEFAULT_PEER_BONUS_CONFIG = {
         level_5: { pct: 20 },
     },
     team: {
-        level_3: { cash: 100, exchange_coupons: 2, coupon_product_value: 399, unlock_reward: 160 },
-        level_4: { cash: 2400, exchange_coupons: 15, coupon_product_value: 399, unlock_reward: 160 },
-        level_5: { cash: 0, exchange_coupons: 0, coupon_product_value: 0, unlock_reward: 0 },
+        level_3: { cash: 100, exchange_coupons: 2, coupon_product_value: 399, unlock_reward: 160, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' },
+        level_4: { cash: 2400, exchange_coupons: 15, coupon_product_value: 399, unlock_reward: 160, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' },
+        level_5: { cash: 0, exchange_coupons: 0, coupon_product_value: 0, unlock_reward: 0, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' },
     },
     refund_dev_fee_pct: 1.5,
     // 兼容旧格式
     level_1: 0, level_2: 0, level_3: 100, level_4: 2000, level_5: 0,
     product_sets_3: 2, product_sets_4: 15, product_sets_5: 0
+};
+
+const DEFAULT_POINT_RULES = {
+    deduction: {
+        yuan_per_point: 0.1,
+        max_order_ratio: 0.7
+    },
+    purchase_multiplier_by_role: {
+        0: 50,
+        1: 100,
+        2: 150,
+        3: 300,
+        4: 400,
+        5: 500
+    },
+    group_start: {
+        points: 0,
+        remark: '发起拼团'
+    },
+    group_success: {
+        points: 0,
+        remark: '拼团成功奖励'
+    }
+};
+
+const DEFAULT_GROWTH_RULES = {
+    purchase: {
+        enabled: true,
+        multiplier: 1,
+        fixed: 0,
+        use_original_amount: false
+    }
 };
 
 function toNumber(value, fallback = 0) {
@@ -92,6 +127,26 @@ function toArray(value) {
 
 function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
+}
+
+function parseTimestamp(value) {
+    if (!value) return 0;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+        const ts = new Date(value).getTime();
+        return Number.isFinite(ts) ? ts : 0;
+    }
+    if (typeof value === 'object') {
+        if (typeof value._seconds === 'number') return value._seconds * 1000;
+        if (typeof value.seconds === 'number') return value.seconds * 1000;
+        if (value.$date !== undefined) return parseTimestamp(value.$date);
+        if (typeof value.toDate === 'function') {
+            const date = value.toDate();
+            return date instanceof Date ? date.getTime() : 0;
+        }
+    }
+    return 0;
 }
 
 function parseConfigValue(row, fallback) {
@@ -167,19 +222,71 @@ function matrixRate(matrix, parentRole, buyerRole) {
     return 0;
 }
 
+function normalizeIdList(values) {
+    return toArray(values).map((value) => String(value || '').trim()).filter(Boolean);
+}
+
+function buildExchangeMeta(teamConfig = {}, bonusLevel = 0) {
+    const allowedProductIds = normalizeIdList(teamConfig.allowed_product_ids);
+    const allowedSkuIds = normalizeIdList(teamConfig.allowed_sku_ids);
+    const couponProductValue = Math.max(0, toNumber(teamConfig.coupon_product_value, 0));
+    const title = String(teamConfig.exchange_title || `平级奖兑换券（${couponProductValue}元产品）`).trim();
+    return {
+        bonus_level: Math.max(0, toNumber(bonusLevel, 0)),
+        allowed_product_ids: allowedProductIds,
+        allowed_sku_ids: allowedSkuIds,
+        coupon_product_value: couponProductValue,
+        unlock_reward: Math.max(0, toNumber(teamConfig.unlock_reward, 0)),
+        title,
+        bind_status: allowedProductIds.length || allowedSkuIds.length ? 'ready' : 'pending_bind'
+    };
+}
+
 async function loadAgentRuntimeConfig() {
-    const [upgradeRow, commissionRow, matrixRow, memberLevelRow, peerBonusRow] = await Promise.all([
-        getConfigByKeys(['agent_system_upgrade-rules', 'agent_system_upgrade_rules']),
+    const [upgradeRow, commissionRow, matrixRow, memberLevelRow, peerBonusRow, pointRuleRow, growthRuleRow] = await Promise.all([
+        getConfigByKeys(['member_upgrade_rule_config', 'agent_system_upgrade-rules', 'agent_system_upgrade_rules']),
         getConfigByKeys(['agent_system_commission-config', 'agent_system_commission_config']),
         getConfigByKeys(['agent_system_commission-matrix', 'agent_system_commission_matrix']),
         getConfigByKeys(['member_level_config']),
-        getConfigByKeys(['agent_system_peer-bonus', 'agent_system_peer_bonus'])
+        getConfigByKeys(['agent_system_peer-bonus', 'agent_system_peer_bonus']),
+        getConfigByKeys(['point_rule_config']),
+        getConfigByKeys(['growth_rule_config'])
     ]);
     const upgradeRules = { ...DEFAULT_AGENT_UPGRADE_RULES, ...parseConfigValue(upgradeRow, {}) };
     const commission = parseConfigValue(commissionRow, {});
     const dbMatrix = parseConfigValue(matrixRow, null);
     const memberLevels = Array.isArray(parseConfigValue(memberLevelRow, [])) ? parseConfigValue(memberLevelRow, []) : [];
     const peerBonus = { ...DEFAULT_PEER_BONUS_CONFIG, ...parseConfigValue(peerBonusRow, {}) };
+    const pointRuleRaw = parseConfigValue(pointRuleRow, {}) || {};
+    const pointRules = {
+        ...DEFAULT_POINT_RULES,
+        ...pointRuleRaw,
+        deduction: {
+            ...DEFAULT_POINT_RULES.deduction,
+            ...(pointRuleRaw.deduction || {})
+        },
+        purchase_multiplier_by_role: {
+            ...DEFAULT_POINT_RULES.purchase_multiplier_by_role,
+            ...(pointRuleRaw.purchase_multiplier_by_role || {})
+        },
+        group_start: {
+            ...DEFAULT_POINT_RULES.group_start,
+            ...(pointRuleRaw.group_start || {})
+        },
+        group_success: {
+            ...DEFAULT_POINT_RULES.group_success,
+            ...(pointRuleRaw.group_success || {})
+        }
+    };
+    const growthRuleRaw = parseConfigValue(growthRuleRow, {}) || {};
+    const growthRules = {
+        ...DEFAULT_GROWTH_RULES,
+        ...growthRuleRaw,
+        purchase: {
+            ...DEFAULT_GROWTH_RULES.purchase,
+            ...(growthRuleRaw.purchase || {})
+        }
+    };
     const commissionMatrix = normalizeCommissionMatrix(
         dbMatrix || commission?.commission_matrix,
         DEFAULT_COMMISSION_MATRIX
@@ -193,7 +300,9 @@ async function loadAgentRuntimeConfig() {
         },
         commissionMatrix,
         memberLevels,
-        peerBonus
+        peerBonus,
+        pointRules,
+        growthRules
     };
 }
 
@@ -251,10 +360,52 @@ async function getRechargeTotal(openid) {
     return roundMoney(rows.reduce((sum, row) => sum + toNumber(row.amount, 0), 0));
 }
 
-function deriveEligibleRoleLevel(user = {}, directMembers = [], rechargeTotal = 0, upgradeRules = DEFAULT_AGENT_UPGRADE_RULES) {
-    const currentRoleLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
-    let nextRoleLevel = currentRoleLevel;
-    const totalSpent = roundMoney(user.total_spent != null ? user.total_spent : user.growth_value);
+async function getAllOrdersByOpenid(openid) {
+    if (!openid) return [];
+    const rows = [];
+    const limit = 100;
+    let skip = 0;
+    while (true) {
+        const res = await db.collection('orders')
+            .where({ openid })
+            .skip(skip)
+            .limit(limit)
+            .get()
+            .catch(() => ({ data: [] }));
+        const batch = res.data || [];
+        rows.push(...batch);
+        if (batch.length < limit) break;
+        skip += limit;
+    }
+    return rows;
+}
+
+function isEffectiveUpgradeOrder(order = {}, effectiveDays = DEFAULT_AGENT_UPGRADE_RULES.effective_order_days) {
+    const status = String(order.status || '').toLowerCase();
+    if (['cancelled', 'canceled', 'refunded', 'pending', 'pending_payment', 'after_sale', 'refunding'].includes(status)) {
+        return false;
+    }
+    if (toNumber(order.refunded_cash_total, 0) > 0 || order.has_partial_refund === true) {
+        return false;
+    }
+    const confirmedAt = parseTimestamp(order.confirmed_at || order.completed_at || order.auto_confirmed_at);
+    if (!confirmedAt) return false;
+    const cutoff = Date.now() - Math.max(0, effectiveDays) * 24 * 60 * 60 * 1000;
+    return confirmedAt <= cutoff;
+}
+
+async function getEffectiveOrderSales(openid, effectiveDays = DEFAULT_AGENT_UPGRADE_RULES.effective_order_days) {
+    const rows = await getAllOrdersByOpenid(openid);
+    return roundMoney(rows.reduce((sum, row) => {
+        if (!isEffectiveUpgradeOrder(row, effectiveDays)) return sum;
+        return sum + toNumber(row.pay_amount ?? row.actual_price ?? row.total_amount, 0);
+    }, 0));
+}
+
+function deriveEligibleRoleLevel(currentRoleLevel = 0, effectiveSales = 0, directMembers = [], rechargeTotal = 0, upgradeRules = DEFAULT_AGENT_UPGRADE_RULES) {
+    const resolvedCurrentRoleLevel = toNumber(currentRoleLevel, 0);
+    let nextRoleLevel = resolvedCurrentRoleLevel;
+    const totalSpent = roundMoney(effectiveSales);
 
     if (totalSpent >= toNumber(upgradeRules.c1_min_purchase, DEFAULT_AGENT_UPGRADE_RULES.c1_min_purchase)) {
         nextRoleLevel = Math.max(nextRoleLevel, 1);
@@ -296,6 +447,10 @@ function deriveEligibleRoleLevel(user = {}, directMembers = [], rechargeTotal = 
     }
 
     return nextRoleLevel;
+}
+
+function isExchangeOrder(order = {}) {
+    return String(order.type || order.order_type || '').trim().toLowerCase() === 'exchange';
 }
 
 function amountFen(value) {
@@ -544,6 +699,9 @@ function roleBasedCommission(user = {}, level, baseAmount, commissionConfig = DE
 }
 
 async function ensureAgentRoleSynced(orderId, order) {
+    if (isExchangeOrder(order)) {
+        return { skipped: true, reason: 'exchange_order' };
+    }
     if (!order.openid) return { skipped: true };
     const user = await findUserByAny(order.openid);
     if (!user) return { skipped: true };
@@ -551,13 +709,14 @@ async function ensureAgentRoleSynced(orderId, order) {
     const { upgradeRules, memberLevels } = await loadAgentRuntimeConfig();
     if (upgradeRules.enabled === false) return { skipped: true };
 
-    const [directMembers, rechargeTotal] = await Promise.all([
+    const [directMembers, rechargeTotal, effectiveSales] = await Promise.all([
         getDirectMembers(user),
-        getRechargeTotal(order.openid)
+        getRechargeTotal(order.openid),
+        getEffectiveOrderSales(order.openid, toNumber(upgradeRules.effective_order_days, DEFAULT_AGENT_UPGRADE_RULES.effective_order_days))
     ]);
 
     const currentRoleLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
-    const nextRoleLevel = deriveEligibleRoleLevel(user, directMembers, rechargeTotal, upgradeRules);
+    const nextRoleLevel = deriveEligibleRoleLevel(currentRoleLevel, effectiveSales, directMembers, rechargeTotal, upgradeRules);
     if (nextRoleLevel <= currentRoleLevel) {
         return { skipped: true, currentRoleLevel, nextRoleLevel };
     }
@@ -591,7 +750,7 @@ async function ensureAgentRoleSynced(orderId, order) {
             to_name: roleMeta.roleName,
             trigger_type: rechargeTotal >= toNumber(upgradeRules.b1_recharge, 3000) ? 'recharge' : 'referral',
             trigger_order_id: orderId,
-            total_spent: roundMoney(user.total_spent || 0),
+            total_spent: effectiveSales,
             recharge_total: rechargeTotal,
             direct_member_count: directMembers.length,
             promoted_at: db.serverDate(),
@@ -603,6 +762,7 @@ async function ensureAgentRoleSynced(orderId, order) {
 }
 
 async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
+    if (isExchangeOrder(order)) return { skipped: true, reason: 'exchange_order' };
     if (!roleSyncResult?.upgraded) return { skipped: true };
     const buyer = await findUserByAny(order.openid || order.buyer_id || order.user_id);
     if (!buyer) return { skipped: true };
@@ -661,8 +821,9 @@ async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
                         source_order_id: orderId,
                         bonus_role_level: bonusLevel,
                         unlock_reward: toNumber(teamConfig.unlock_reward, 160),
-                        title: `平级奖兑换券（${couponValue}元产品）`,
+                        title: pickString(teamConfig.exchange_title || `平级奖兑换券（${couponValue}元产品）`),
                         description: `升级奖励兑换券，可兑换${couponValue}元指定产品`,
+                        exchange_meta: buildExchangeMeta(teamConfig, bonusLevel),
                         created_at: db.serverDate(),
                         expires_at: null,
                     },
@@ -697,16 +858,13 @@ async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
     return { created: true, amount, bonusLevel, version, exchangeCoupons };
 }
 
-const POINTS_MULTIPLIER_BY_ROLE = {
-    0: 0.5,   // VIP: 每100元返50积分
-    1: 1.0,   // C1: 每100元返100积分
-    2: 1.5,   // C2: 每100元返150积分
-    3: 3.0,   // B1: 每100元返300积分
-    4: 4.0,   // B2: 每100元返400积分
-    5: 5.0    // B3: 每100元返500积分
-};
-
 async function ensurePointsAwarded(orderId, order) {
+    if (isExchangeOrder(order)) {
+        await db.collection('orders').doc(orderId).update({
+            data: { points_awarded_at: db.serverDate(), points_earned: 0, updated_at: db.serverDate() },
+        });
+        return { skipped: true, reason: 'exchange_order', awarded: 0, growth: 0, multiplier: 0, buyerRole: 0 };
+    }
     if (order.points_awarded_at) return { skipped: true };
     const payAmount = getOrderTotalAmount(order);
     if (payAmount <= 0 || !order.openid) {
@@ -721,11 +879,20 @@ async function ensurePointsAwarded(orderId, order) {
     const buyerRole = buyerRes.data && buyerRes.data[0]
         ? toNumber(buyerRes.data[0].role_level ?? buyerRes.data[0].distributor_level ?? buyerRes.data[0].level, 0)
         : 0;
-    const multiplier = POINTS_MULTIPLIER_BY_ROLE[buyerRole] ?? POINTS_MULTIPLIER_BY_ROLE[0];
-    const pointsEarned = Math.floor(payAmount * multiplier);
+    const { pointRules, growthRules } = await loadAgentRuntimeConfig();
+    const purchasePointsPerHundred = Math.max(
+        0,
+        toNumber(pointRules.purchase_multiplier_by_role?.[buyerRole], pointRules.purchase_multiplier_by_role?.[0] || DEFAULT_POINT_RULES.purchase_multiplier_by_role[0])
+    );
+    const pointsEarned = Math.floor((payAmount * purchasePointsPerHundred) / 100);
 
-    // 成长值始终 1:1（实际消费金额产生成长值）
-    const growthEarned = Math.floor(payAmount);
+    const purchaseGrowthRule = growthRules.purchase || DEFAULT_GROWTH_RULES.purchase;
+    const growthBaseAmount = purchaseGrowthRule.use_original_amount
+        ? toNumber(order.original_amount ?? order.total_amount ?? payAmount, payAmount)
+        : payAmount;
+    const growthEarned = purchaseGrowthRule.enabled === false
+        ? 0
+        : Math.max(0, Math.floor(growthBaseAmount * toNumber(purchaseGrowthRule.multiplier, 1) + toNumber(purchaseGrowthRule.fixed, 0)));
 
     if (pointsEarned <= 0 && growthEarned <= 0) {
         await db.collection('orders').doc(orderId).update({
@@ -752,8 +919,8 @@ async function ensurePointsAwarded(orderId, order) {
                 source: 'order_pay',
                 order_id: orderId,
                 buyer_role: buyerRole,
-                multiplier,
-                description: `订单支付获得${pointsEarned}积分（${buyerRole >= 3 ? 'B' : 'C'}级${multiplier}倍率）`,
+                multiplier: purchasePointsPerHundred,
+                description: `订单支付获得${pointsEarned}积分（每100元赠送${purchasePointsPerHundred}积分）`,
                 created_at: db.serverDate(),
             },
         });
@@ -762,7 +929,7 @@ async function ensurePointsAwarded(orderId, order) {
     await db.collection('orders').doc(orderId).update({
         data: { points_awarded_at: db.serverDate(), points_earned: pointsEarned, updated_at: db.serverDate() },
     });
-    return { awarded: pointsEarned, growth: growthEarned, multiplier, buyerRole };
+    return { awarded: pointsEarned, growth: growthEarned, multiplier: purchasePointsPerHundred, buyerRole };
 }
 
 async function ensureStockDeducted(orderId, order) {
@@ -794,6 +961,12 @@ async function ensureStockDeducted(orderId, order) {
 }
 
 async function ensureCommissionsCreated(orderId, order) {
+    if (isExchangeOrder(order)) {
+        await db.collection('orders').doc(orderId).update({
+            data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
+        });
+        return { skipped: true, reason: 'exchange_order', created: 0 };
+    }
     if (order.commissions_created_at) return { skipped: true };
     const buyer = await findUserByAny(order.openid || order.buyer_id || order.user_id);
     if (!buyer) {
@@ -2029,5 +2202,6 @@ async function handleCallback(event) {
 
 module.exports = {
     handleCallback,
+    handleRefundCallback,
     processPaidOrder,
 };

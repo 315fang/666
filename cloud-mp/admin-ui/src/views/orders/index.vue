@@ -192,7 +192,7 @@
           <template #default="{ row }">
             <el-button text type="primary" size="small" @click="handleDetail(row)">订单详情</el-button>
             <el-button text type="primary" size="small" v-if="canViewLogistics(row)" @click="openLogisticsDrawer(row)">物流轨迹</el-button>
-            <el-button text type="success" size="small" v-if="['paid', 'agent_confirmed', 'shipping_requested'].includes(row.status) && row.delivery_type !== 'pickup'" @click="handleShip(row)">发货</el-button>
+            <el-button text type="success" size="small" v-if="canShipRow(row)" @click="handleShip(row)">发货</el-button>
             <el-dropdown size="small" @command="(cmd) => handleDropdown(cmd, row)">
               <el-button text size="small">更多<el-icon><ArrowDown /></el-icon></el-button>
               <template #dropdown>
@@ -268,7 +268,6 @@
                     <el-tag size="small" :type="roleTagType(detailData.buyer?.role_level)">{{ roleText(detailData.buyer?.role_level) }}</el-tag>
                   </el-descriptions-item>
                   <el-descriptions-item label="邀请码">{{ detailData.buyer?.invite_code || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="上级ID">{{ detailData.buyer?.parent_id || '-' }}</el-descriptions-item>
                 </el-descriptions>
               </div>
             </div>
@@ -327,12 +326,9 @@
         </div>
 
         <template v-if="detailData.remark?.trim()">
-          <div class="detail-section-bar" style="margin-top:20px">历史备注（旧字段）</div>
+          <div class="detail-section-bar" style="margin-top:20px">历史备注</div>
           <div class="buyer-remark-block buyer-remark-block--legacy">
             {{ detailData.remark }}
-          </div>
-          <div class="text-secondary" style="margin-top:8px;font-size:12px">
-            该字段来自旧数据，可能混有历史物流、系统自动处理和旧版后台备注，仅用于追溯。
           </div>
         </template>
 
@@ -355,8 +351,6 @@
           <el-descriptions-item label="物流单号">{{ detailData.tracking_no || '-' }}</el-descriptions-item>
           <el-descriptions-item label="自提门店" v-if="detailData.delivery_type === 'pickup'">{{ detailData.pickup_station?.name || '-' }}</el-descriptions-item>
           <el-descriptions-item label="核销人ID" v-if="detailData.delivery_type === 'pickup'">{{ detailData.pickup_verified_by || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="直属推荐人ID">{{ detailData.direct_referrer_id || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="间推上级ID">{{ detailData.indirect_referrer_id || '-' }}</el-descriptions-item>
           <el-descriptions-item label="最近代理商ID">{{ detailData.nearest_agent_id || '-' }}</el-descriptions-item>
           <el-descriptions-item label="实际履约人ID">{{ detailData.fulfillment_partner_id || '-' }}</el-descriptions-item>
           <el-descriptions-item label="锁定进货价">¥{{ money(detailData.locked_agent_cost) }}</el-descriptions-item>
@@ -892,6 +886,15 @@ const normalizeOrderDisplay = (row = {}) => {
     display_payment_method_text: row.payment_method_text || paymentMethodText(paymentMethodCode),
     display_refund_target_text: row.refund_target_text || refundDestinationText(paymentMethodCode)
   }
+}
+const canShipRow = (row = {}) => {
+  const status = String(row?.status || '').trim()
+  const deliveryType = String(row?.delivery_type || '').trim().toLowerCase()
+  if (deliveryType === 'pickup') return false
+  if (!['paid', 'agent_confirmed', 'shipping_requested'].includes(status)) return false
+  const type = String(row?.type || row?.order_type || '').trim().toLowerCase()
+  if ((type === 'group' || row?.group_no || row?.group_activity_id) && !row?.group_completed_at) return false
+  return true
 }
 const detailPaymentMethod = (row = {}) => {
   const raw = String(row.payment_method || '').trim().toLowerCase()

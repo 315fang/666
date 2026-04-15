@@ -18,9 +18,18 @@ export const getPickupStations = (params) => request({ url: '/pickup-stations', 
 export const getPickupStationById = (id) => request({ url: `/pickup-stations/${id}`, method: 'get' })
 export const createPickupStation = (data) => request({ url: '/pickup-stations', method: 'post', data })
 export const updatePickupStation = (id, data) => request({ url: `/pickup-stations/${id}`, method: 'put', data })
+export const getPickupStationStaff = (id) => request({ url: `/pickup-stations/${id}/staff`, method: 'get' })
+export const addPickupStationStaff = (id, data) => request({ url: `/pickup-stations/${id}/staff`, method: 'post', data })
+export const removePickupStationStaff = (stationId, staffId) => request({ url: `/pickup-stations/${stationId}/staff/${staffId}`, method: 'delete' })
 
 export const getBranchAgentStations = (params) => request({ url: '/branch-agents/stations', method: 'get', params })
 export const createBranchAgentStation = (data) => request({ url: '/branch-agents/stations', method: 'post', data })
 export const updateBranchAgentStation = (id, data) => request({ url: `/branch-agents/stations/${id}`, method: 'put', data })
 export const getBranchAgentClaims = (params) => request({ url: '/branch-agents/claims', method: 'get', params })
 export const reviewBranchAgentClaim = (id, data) => request({ url: `/branch-agents/claims/${id}/review`, method: 'put', data })
+
+export const getNSystemLeaders = (params) => request({ url: '/n-system/leaders', method: 'get', params })
+export const getNSystemMembers = (params) => request({ url: '/n-system/members', method: 'get', params })
+export const getNSystemLeaderMembers = (id) => request({ url: `/n-system/leaders/${id}/members`, method: 'get' })
+export const getUpgradeApplications = (params) => request({ url: '/upgrade-applications', method: 'get', params })
+export const reviewUpgradeApplication = (id, data) => request({ url: `/upgrade-applications/${id}/review`, method: 'put', data })

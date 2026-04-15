@@ -9,7 +9,9 @@
       <el-button :loading="loading" @click="fetchAll" :icon="Refresh" size="small">刷新</el-button>
     </div>
 
-    <div v-loading="loading">
+    <el-tabs v-model="activeTopTab">
+      <el-tab-pane label="总览" name="overview">
+        <div v-loading="loading">
       <!-- ===== 区域 1：KPI 卡片 ===== -->
       <div class="kpi-grid">
         <div class="kpi-card blue">
@@ -190,7 +192,6 @@
               <div class="card-header">
                 <el-icon><Coin /></el-icon>
                 <span>基金池配置</span>
-                <el-button text type="primary" size="small" @click="$router.push('/agent-system')">管理配置</el-button>
               </div>
             </template>
             <el-empty v-if="!data.fund_pool" description="暂无基金池配置" :image-size="50" />
@@ -224,7 +225,6 @@
               <div class="card-header">
                 <el-icon><TrendCharts /></el-icon>
                 <span>年终分红执行记录</span>
-                <el-button text type="primary" size="small" @click="$router.push('/agent-system')">执行分红</el-button>
               </div>
             </template>
             <el-empty
@@ -397,7 +397,26 @@
           </el-card>
         </el-col>
       </el-row>
-    </div>
+        </div>
+      </el-tab-pane>
+
+      <el-tab-pane v-if="canManageFinanceRules" label="财务规则" name="rules">
+        <el-card class="section-card" style="margin-bottom:16px">
+          <template #header>
+            <div class="card-header">
+              <span>入口导航</span>
+              <el-button type="primary" plain size="small" @click="goMembershipConfig">去会员与成长值配置</el-button>
+            </div>
+          </template>
+          <el-alert
+            type="info"
+            :closable="false"
+            title="财务相关规则统一在此维护；成长值与会员特权仍在“会员与成长值”页面维护。"
+          />
+        </el-card>
+        <FinanceRulesPanel />
+      </el-tab-pane>
+    </el-tabs>
 
     <el-dialog v-model="debtDialogVisible" title="处理代理商欠款" width="min(520px, 94vw)">
       <el-form label-width="110px" v-if="debtTarget">
@@ -437,12 +456,15 @@ import { getFinanceOverview, getAgentPerformance, getPoolContributions, settleAg
 import { formatDate } from '@/utils/format'
 import { useUserStore } from '@/store/user'
 import { buildUserManagementQuery } from '@/utils/userRouting'
+import FinanceRulesPanel from './components/FinanceRulesPanel.vue'
 
 const loading = ref(false)
 const data = ref({})
 const userStore = useUserStore()
 const router = useRouter()
+const activeTopTab = ref('overview')
 const canManageStrategicFunds = computed(() => userStore.hasPermission('user_balance_adjust'))
+const canManageFinanceRules = computed(() => userStore.hasPermission('settings_manage'))
 
 const debtDialogVisible = ref(false)
 const debtSubmitting = ref(false)
@@ -539,6 +561,10 @@ const goCommissions = (query = {}) => {
 
 const goWithdrawals = (query = {}) => {
   router.push({ name: 'Withdrawals', query })
+}
+
+const goMembershipConfig = () => {
+  router.push({ name: 'Membership' })
 }
 
 const handleDebtSubmit = async () => {

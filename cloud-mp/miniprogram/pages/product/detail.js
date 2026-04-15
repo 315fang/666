@@ -128,7 +128,10 @@ Page({
         purchaseMode: 'normal',
         purchaseModeHint: '加入购物袋后可与其他商品一起结算',
         actionLeftLabel: '加入购物袋',
-        actionRightLabel: '立即购买'
+        actionRightLabel: '立即购买',
+        exchangeMode: false,
+        exchangeCouponId: '',
+        exchangeTitle: ''
     },
 
     onLoad(options) {
@@ -179,7 +182,15 @@ Page({
             app.globalData.productDetailNfRelaunchKey = '';
         }
 
-        this.setData({ id: normalizedId });
+        const exchangeCouponId = options.exchange_coupon_id ? String(options.exchange_coupon_id) : '';
+        let exchangeTitle = '';
+        if (exchangeCouponId) {
+            const activeExchangeCoupon = wx.getStorageSync('activeExchangeCoupon');
+            if (activeExchangeCoupon && String(activeExchangeCoupon._id || activeExchangeCoupon.id || activeExchangeCoupon.coupon_id || '') === exchangeCouponId) {
+                exchangeTitle = activeExchangeCoupon.exchange_meta?.title || activeExchangeCoupon.coupon_name || '';
+            }
+        }
+        this.setData({ id: normalizedId, exchangeMode: !!exchangeCouponId, exchangeCouponId, exchangeTitle });
         this.loadProduct(normalizedId);
     },
 
@@ -204,6 +215,17 @@ Page({
     async loadActivityState(productId) {
         const normalizedId = normalizeProductId(productId || this.data.id);
         if (normalizedId === null || normalizedId === undefined || normalizedId === '') return;
+        if (this.data.exchangeMode) {
+            this.setData({
+                groupActivity: null,
+                slashActivity: null,
+                currentGroupRecord: null,
+                currentSlashRecord: null,
+                availablePurchaseModes: [{ key: 'normal', label: '兑换商品', hint: '使用兑换券提交 0 元订单' }],
+                purchaseMode: 'normal'
+            }, () => this.syncPurchaseActionState());
+            return;
+        }
 
         try {
             const [groupRes, slashRes] = await Promise.all([
@@ -314,6 +336,20 @@ Page({
     },
 
     syncPurchaseActionState() {
+        if (this.data.exchangeMode) {
+            this.setData({
+                purchaseModeHint: '使用兑换券提交 0 元订单，不参与积分、普通优惠券和分销佣金',
+                actionLeftLabel: '不可加购',
+                actionRightLabel: '立即兑换',
+                activityStatusCard: {
+                    badge: '兑换券',
+                    title: this.data.exchangeTitle || '当前商品支持兑换券兑换',
+                    desc: '提交后将创建一笔 0 元兑换订单，仍可正常发货、收货和售后。'
+                },
+                activityQuickLinks: []
+            });
+            return;
+        }
         const mode = this.data.purchaseMode || 'normal';
         const groupRecord = this.data.currentGroupRecord;
         const slashRecord = this.data.currentSlashRecord;
@@ -563,21 +599,31 @@ Page({
 
     // 数量减少 (Renamed to match WXML: onMinus)
     onMinus() {
+        if (this.data.exchangeMode) return;
         return onMinus(this);
     },
 
     // 数量增加 (Renamed to match WXML: onPlus)
     onPlus() {
+        if (this.data.exchangeMode) return;
         return onPlus(this);
     },
 
     // Quantity Input (Added)
     onQtyInput(e) {
+        if (this.data.exchangeMode) {
+            this.setData({ quantity: 1 })
+            return
+        }
         return onQtyInput(this, e);
     },
 
     // 加入购物袋入口（防重复点击）
     onAddToCart() {
+        if (this.data.exchangeMode) {
+            wx.showToast({ title: '兑换商品不能加入购物袋', icon: 'none' });
+            return;
+        }
         if (this._addingToCart) return;
         if (this.data.isOutOfStock) {
             wx.showToast({ title: '该商品暂时缺货', icon: 'none' });
@@ -639,6 +685,10 @@ Page({
     },
 
     onLeftActionTap() {
+        if (this.data.exchangeMode) {
+            wx.showToast({ title: '兑换商品请直接点击立即兑换', icon: 'none' });
+            return;
+        }
         if (this.data.purchaseMode === 'normal') {
             return this.onAddToCart();
         }
@@ -662,19 +712,6 @@ Page({
             return;
         }
         if (!requireLogin()) return;
-
-        const roleLevel = app.globalData.userInfo && app.globalData.userInfo.role_level || 0;
-        if (roleLevel < 1) {
-            wx.showModal({
-                title: '需要会员身份',
-                content: '发起拼团需要会员身份，完成首单消费即可升级。',
-                confirmText: '去购物',
-                success: (res) => {
-                    if (res.confirm) wx.switchTab({ url: '/pages/category/category' });
-                }
-            });
-            return;
-        }
 
         try {
             const hasSkuOptions = Array.isArray(this.data.skus) && this.data.skus.length > 0;

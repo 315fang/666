@@ -201,7 +201,7 @@
     <el-form-item label="登录提示文案">
       <el-input v-model="miniProgramForm.membership_config.login_agreement_hint" />
     </el-form-item>
-    <el-form-item label="拼团发起提示">
+    <el-form-item label="拼团引导提示">
       <el-input v-model="miniProgramForm.membership_config.group_buy_start_requirement_text" />
     </el-form-item>
     <el-form-item label="砍价发起提示">

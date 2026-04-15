@@ -60,20 +60,17 @@ async function getConfigByKey(key) {
 }
 
 async function ensurePickupSubsidyCommission(order, verifierOpenid) {
+    if (String(order?.type || '').trim().toLowerCase() === 'exchange') return null;
     if (!order?.pickup_station_id) return null;
     const [policyRow, station] = await Promise.all([
         getConfigByKey('branch-agent-policy'),
-        (async () => {
-            const branchStation = await findOneByAnyId('branch_agent_stations', order.pickup_station_id);
-            if (branchStation) return branchStation;
-            return findOneByAnyId('stations', order.pickup_station_id);
-        })()
+        findOneByAnyId('stations', order.pickup_station_id)
     ]);
     const policy = {
         enabled: false,
-        pickup_station_subsidy_enabled: false,
+        pickup_station_subsidy_enabled: true,
+        pickup_station_reward_rate: 0.025,
         pickup_station_subsidy_amount: 0,
-        pickup_tiers: {},
         ...parseConfigValue(policyRow, {})
     };
     if (!policy.enabled || !policy.pickup_station_subsidy_enabled || !station) return null;
@@ -93,10 +90,8 @@ async function ensurePickupSubsidyCommission(order, verifierOpenid) {
         .catch(() => ({ data: [] }));
     if (existing.data && existing.data[0]) return existing.data[0];
 
-    const tierKey = String(station.pickup_commission_tier || 'A').trim() || 'A';
-    const tier = policy.pickup_tiers?.[tierKey] || {};
     const payAmount = toNumber(order.actual_price ?? order.pay_amount ?? order.total_amount, 0);
-    let amount = payAmount * toNumber(tier.rate, 0) + toNumber(tier.fixed_yuan, 0);
+    let amount = payAmount * toNumber(policy.pickup_station_reward_rate, 0);
     if (amount <= 0) amount = toNumber(policy.pickup_station_subsidy_amount, 0);
     amount = Number(amount.toFixed(2));
     if (amount <= 0) return null;
@@ -116,7 +111,7 @@ async function ensurePickupSubsidyCommission(order, verifierOpenid) {
             pickup_verified_by: verifierOpenid || '',
             created_at: db.serverDate(),
             updated_at: db.serverDate(),
-            description: `自提核销补贴：${station.name || station.region_name || '站点'}`
+            description: `自提点奖励：${station.name || station.region_name || '站点'}`
         }
     });
     return { _id: result._id, amount };
@@ -331,6 +326,30 @@ async function loadProductSummary(productId) {
     return productSummary(product);
 }
 
+function chunkArray(list = [], size = 50) {
+    const chunkSize = Math.max(1, toNumber(size, 50));
+    const chunks = [];
+    for (let index = 0; index < list.length; index += chunkSize) {
+        chunks.push(list.slice(index, index + chunkSize));
+    }
+    return chunks;
+}
+
+async function queryOrdersByIds(orderIds = []) {
+    const ids = [...new Set((orderIds || []).filter(hasValue).map((value) => String(value)))];
+    if (!ids.length) return [];
+
+    const results = await Promise.all(
+        chunkArray(ids, 50).map((chunk) => db.collection('orders')
+            .where({ _id: _.in(chunk) })
+            .limit(chunk.length)
+            .get()
+            .catch(() => ({ data: [] })))
+    );
+
+    return results.flatMap((res) => res.data || []);
+}
+
 function groupStatusForClient(status, options = {}) {
     const normalized = String(status || '').trim().toLowerCase();
     const memberCount = Math.max(0, toNumber(options.memberCount, 0));
@@ -355,27 +374,117 @@ function buildGroupMemberFromOrder(order = {}) {
     };
 }
 
+function buildGroupOrderRefs(group = {}) {
+    const refs = {
+        groupNo: hasValue(group.group_no) ? String(group.group_no) : '',
+        orderIds: new Set(),
+        orderNos: new Set()
+    };
+
+    const seedMembers = Array.isArray(group.members) ? group.members : [];
+    seedMembers.forEach((member) => {
+        if (hasValue(member?.order_id)) refs.orderIds.add(String(member.order_id));
+        if (hasValue(member?.order_no)) refs.orderNos.add(String(member.order_no));
+    });
+
+    return refs;
+}
+
+function orderBelongsToGroup(order = {}, refs = {}) {
+    if (!order) return false;
+
+    const orderGroupNo = hasValue(order.group_no) ? String(order.group_no) : '';
+    if (refs.groupNo && orderGroupNo && refs.groupNo === orderGroupNo) {
+        return true;
+    }
+
+    const orderId = hasValue(order._id || order.id) ? String(order._id || order.id) : '';
+    if (orderId && refs.orderIds && refs.orderIds.has(orderId)) {
+        return true;
+    }
+
+    const orderNo = hasValue(order.order_no) ? String(order.order_no) : '';
+    if (orderNo && refs.orderNos && refs.orderNos.has(orderNo)) {
+        return true;
+    }
+
+    return false;
+}
+
 function mergeGroupMembersWithOrders(group = {}, orders = []) {
     const paidLikeStatuses = new Set(['pending_group', 'paid', 'pickup_pending', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed']);
-    const merged = {};
+    const byOpenid = new Map();
+    const byOrderId = new Map();
+    const byOrderNo = new Map();
+    const orderById = new Map();
+    const orderByNo = new Map();
+
+    orders.forEach((order) => {
+        if (!order) return;
+        const orderId = hasValue(order._id || order.id) ? String(order._id || order.id) : '';
+        const orderNo = hasValue(order.order_no) ? String(order.order_no) : '';
+        if (orderId) orderById.set(orderId, order);
+        if (orderNo) orderByNo.set(orderNo, order);
+    });
+
+    function upsertMember(member) {
+        if (!member || !member.openid) return;
+
+        const openid = String(member.openid);
+        const orderId = hasValue(member.order_id) ? String(member.order_id) : '';
+        const orderNo = hasValue(member.order_no) ? String(member.order_no) : '';
+        const existing = byOpenid.get(openid)
+            || (orderId ? byOrderId.get(orderId) : null)
+            || (orderNo ? byOrderNo.get(orderNo) : null)
+            || null;
+
+        const mergedMember = existing ? {
+            ...member,
+            ...existing,
+            openid,
+            order_id: existing.order_id || orderId,
+            order_no: existing.order_no || orderNo,
+            joined_at: existing.joined_at || member.joined_at || member.paid_at || null,
+            paid_at: existing.paid_at || member.paid_at || member.joined_at || null
+        } : {
+            ...member,
+            openid,
+            order_id: orderId,
+            order_no: orderNo,
+            joined_at: member.joined_at || member.paid_at || null,
+            paid_at: member.paid_at || member.joined_at || null
+        };
+
+        byOpenid.set(openid, mergedMember);
+        if (mergedMember.order_id) byOrderId.set(mergedMember.order_id, mergedMember);
+        if (mergedMember.order_no) byOrderNo.set(mergedMember.order_no, mergedMember);
+    }
+
     const seedMembers = Array.isArray(group.members) ? group.members : [];
     seedMembers.forEach((member) => {
         if (!member || !member.openid) return;
-        merged[`openid:${member.openid}`] = member;
-        if (member.order_id) merged[`order:${member.order_id}`] = member;
+        const memberOrderId = hasValue(member.order_id) ? String(member.order_id) : '';
+        const memberOrderNo = hasValue(member.order_no) ? String(member.order_no) : '';
+        const linkedOrder = (memberOrderId && orderById.get(memberOrderId))
+            || (memberOrderNo && orderByNo.get(memberOrderNo))
+            || null;
+
+        if (linkedOrder && !paidLikeStatuses.has(linkedOrder.status)) {
+            return;
+        }
+
+        upsertMember(member);
     });
+
     orders
         .filter((order) => paidLikeStatuses.has(order.status))
         .forEach((order) => {
             const member = buildGroupMemberFromOrder(order);
             if (!member) return;
-            const key = member.order_id ? `order:${member.order_id}` : `openid:${member.openid}`;
-            if (!merged[key]) merged[key] = member;
-            if (!merged[`openid:${member.openid}`]) merged[`openid:${member.openid}`] = member;
+            upsertMember(member);
         });
-    return Object.values(merged).filter((member, index, list) => {
-        return list.findIndex((item) => item.order_id === member.order_id || item.openid === member.openid) === index;
-    });
+
+    return Array.from(byOpenid.values());
 }
 
 function groupStatusForFallbackOrder(order = {}) {
@@ -526,48 +635,27 @@ async function myGroups(openid, params = {}) {
     collectRelatedOrders(myOrders);
 
     const relatedGroupNos = [...joinedGroupNos].filter(Boolean);
-    const relatedActivityIds = [];
-    groups.forEach((group) => {
-        if (group.activity_id) relatedActivityIds.push(group.activity_id);
-        if (group.legacy_activity_id) relatedActivityIds.push(group.legacy_activity_id);
-    });
-
-    const relatedOrderQueries = [];
     if (relatedGroupNos.length > 0) {
-        relatedOrderQueries.push(
-            db.collection('orders')
-                .where({ group_no: _.in(relatedGroupNos) })
-                .limit(100)
-                .get()
-                .catch(() => ({ data: [] }))
-        );
-    }
-    const uniqueRelatedActivityIds = [...new Set(relatedActivityIds)].filter(Boolean);
-    if (uniqueRelatedActivityIds.length > 0) {
-        relatedOrderQueries.push(
-            db.collection('orders')
-                .where(_.or([
-                    { group_activity_id: _.in(uniqueRelatedActivityIds) },
-                    { legacy_group_activity_id: _.in(uniqueRelatedActivityIds) }
-                ]))
-                .limit(100)
-                .get()
-                .catch(() => ({ data: [] }))
-        );
+        const relatedGroupOrders = await db.collection('orders')
+            .where({ group_no: _.in(relatedGroupNos) })
+            .limit(100)
+            .get()
+            .catch(() => ({ data: [] }));
+        collectRelatedOrders(relatedGroupOrders.data || []);
     }
 
-    const relatedOrderResults = await Promise.all(relatedOrderQueries);
-    relatedOrderResults.forEach((res) => collectRelatedOrders(res.data || []));
+    const relatedMemberOrderIds = groups.flatMap((group) => {
+        const members = Array.isArray(group.members) ? group.members : [];
+        return members
+            .map((member) => member && member.order_id)
+            .filter(hasValue)
+            .map((value) => String(value));
+    });
+    collectRelatedOrders(await queryOrdersByIds(relatedMemberOrderIds));
 
     function getRelatedOrdersForGroup(group = {}) {
-        const groupActivityIds = new Set([group.activity_id, group.legacy_activity_id].filter(Boolean));
-        return relatedOrderPool.filter((order) => {
-            const aid = order.group_activity_id || order.legacy_group_activity_id;
-            if (group.group_no && order.group_no) {
-                return order.group_no === group.group_no;
-            }
-            return !order.group_no && aid && groupActivityIds.has(aid);
-        });
+        const refs = buildGroupOrderRefs(group);
+        return relatedOrderPool.filter((order) => orderBelongsToGroup(order, refs));
     }
 
     const paidItems = groups.map(g => {
@@ -712,6 +800,7 @@ async function groupOrderDetail(openid, params) {
 
     const group = groupRes.data[0];
 
+    const groupRefs = buildGroupOrderRefs(group);
     const activityId = group.activity_id || group.legacy_activity_id || '';
     let allOrders = [];
     const seenOrderIds = new Set();
@@ -726,26 +815,20 @@ async function groupOrderDetail(openid, params) {
             }
         });
     } catch (e) { console.warn('[groupOrderDetail] query by group_no failed:', e.message); }
-    if (activityId) {
-        try {
-            const res2 = await db.collection('orders')
-                .where({ group_activity_id: activityId })
-                .get().catch(() => ({ data: [] }));
-            (res2.data || []).forEach(o => {
-                if (o && o._id && !seenOrderIds.has(o._id)) {
-                    seenOrderIds.add(o._id);
-                    allOrders.push(o);
-                }
-            });
-        } catch (e) { console.warn('[groupOrderDetail] query by activity_id failed:', e.message); }
-    }
+    const linkedOrders = await queryOrdersByIds([...groupRefs.orderIds].filter((orderId) => !seenOrderIds.has(orderId)));
+    linkedOrders.forEach((order) => {
+        if (order && order._id && !seenOrderIds.has(order._id)) {
+            seenOrderIds.add(order._id);
+            allOrders.push(order);
+        }
+    });
     const ordersRes = { data: allOrders };
 
     // 查活动信息
     let activityInfo = null;
     let product = null;
-    if (group.activity_id) {
-        activityInfo = await findOneByAnyId('group_activities', group.activity_id || group.legacy_activity_id);
+    if (activityId) {
+        activityInfo = await findOneByAnyId('group_activities', activityId);
         if (activityInfo) {
             product = await loadProductSummary(activityInfo.product_id);
         }
@@ -797,14 +880,8 @@ async function groupOrderDetail(openid, params) {
         .filter((o) => o.openid === openid)
         .sort((a, b) => detailOrderPriority(a) - detailOrderPriority(b)
             || new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-    const exactMyOrders = myOrders.filter((order) => groupNo && order.group_no === groupNo);
-    const fallbackMyOrders = exactMyOrders.length
-        ? exactMyOrders
-        : myOrders.filter((order) => {
-            const aid = order.group_activity_id || order.legacy_group_activity_id;
-            return !order.group_no && aid && [group.activity_id, group.legacy_activity_id].filter(Boolean).includes(aid);
-        });
-    const myOrder = (exactMyOrders.length ? exactMyOrders : (fallbackMyOrders.length ? fallbackMyOrders : myOrders))[0] || null;
+    const exactMyOrders = myOrders.filter((order) => orderBelongsToGroup(order, groupRefs));
+    const myOrder = exactMyOrders[0] || null;
     const isMember = mergedMembers.some((m) => m.openid === openid);
     const minMembers = group.group_size || activityInfo?.min_members || activityInfo?.group_size || 2;
     const clientStatus = groupStatusForClient(group.status, { memberCount, minMembers });

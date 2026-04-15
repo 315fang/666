@@ -11,6 +11,13 @@ const {
     resolveRefundChannel
 } = require('./order-contract');
 
+const DEFAULT_POINT_RULES = {
+    review: {
+        points: 10,
+        remark: '评价订单奖励'
+    }
+};
+
 function toNumber(value, fallback = 0) {
     if (value === null || value === undefined || value === '') return fallback;
     const num = Number(value);
@@ -31,6 +38,52 @@ function pickString(value, fallback = '') {
 
 function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
+}
+
+function parseConfigValue(row, fallback) {
+    if (!row) return fallback;
+    const value = row.config_value !== undefined ? row.config_value : row.value;
+    if (value === undefined || value === null || value === '') return fallback;
+    if (typeof value === 'string') {
+        try {
+            return JSON.parse(value);
+        } catch (_) {
+            return fallback;
+        }
+    }
+    return value;
+}
+
+async function getConfigByKey(key) {
+    const res = await db.collection('configs')
+        .where(_.or([{ config_key: key }, { key }]))
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    if (res.data && res.data[0]) return res.data[0];
+    const legacyRes = await db.collection('app_configs')
+        .where({ config_key: key, status: _.in([true, 1, '1']) })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return legacyRes.data && legacyRes.data[0] ? legacyRes.data[0] : null;
+}
+
+async function loadPointRules() {
+    const row = await getConfigByKey('point_rule_config');
+    const raw = parseConfigValue(row, {}) || {};
+    const review = raw.review && typeof raw.review === 'object' ? raw.review : {};
+    const reviewImage = raw.review_image && typeof raw.review_image === 'object' ? raw.review_image : {};
+    return {
+        review: {
+            points: Math.max(0, toNumber(review.points, DEFAULT_POINT_RULES.review.points)),
+            remark: pickString(review.remark, DEFAULT_POINT_RULES.review.remark)
+        },
+        review_image: {
+            points: Math.max(0, toNumber(reviewImage.points, Math.max(0, toNumber(review.points, DEFAULT_POINT_RULES.review.points)))),
+            remark: pickString(reviewImage.remark, pickString(review.remark, DEFAULT_POINT_RULES.review.remark))
+        }
+    };
 }
 
 function getOrderTotalQuantity(order = {}) {
@@ -711,16 +764,26 @@ async function reviewOrder(openid, orderId, reviewData) {
         },
     });
 
+    if (String(orderRes.data.type || '').trim().toLowerCase() === 'exchange') {
+        return { success: true, order_id: orderId, review_ids: reviewResults, bonus_points: 0 };
+    }
+
     // 评价奖励积分
-    const bonusPoints = 10;
+    const pointRules = await loadPointRules();
+    const hasImages = Array.isArray(images) && images.length > 0;
+    const bonusPoints = hasImages
+        ? Math.max(0, toNumber(pointRules.review_image.points, pointRules.review.points))
+        : Math.max(0, toNumber(pointRules.review.points, DEFAULT_POINT_RULES.review.points));
     await db.collection('users').where({ openid }).update({
-        data: { points: _.inc(bonusPoints), growth_value: _.inc(bonusPoints), updated_at: db.serverDate() },
+        data: { points: _.inc(bonusPoints), updated_at: db.serverDate() },
     });
     await db.collection('point_logs').add({
         data: {
             openid, type: 'earn', amount: bonusPoints,
-            source: 'review', order_id: orderId,
-            description: '评价订单奖励10积分',
+            source: hasImages ? 'review_image' : 'review', order_id: orderId,
+            description: hasImages
+                ? pickString(pointRules.review_image.remark, '图文评价奖励')
+                : pickString(pointRules.review.remark, DEFAULT_POINT_RULES.review.remark),
             created_at: db.serverDate(),
         },
     });

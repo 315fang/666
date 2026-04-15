@@ -1,36 +1,27 @@
 import request from '@/utils/request'
 
-export const getUpgradeRules = () => request({ url: '/agent-system/upgrade-rules', method: 'get' })
-export const updateUpgradeRules = (data) => request({ url: '/agent-system/upgrade-rules', method: 'put', data })
 export const getCommissionConfig = () => request({ url: '/agent-system/commission-config', method: 'get' })
 export const updateCommissionConfig = (data) => request({ url: '/agent-system/commission-config', method: 'put', data })
-export const getCommissionMatrixConfig = () => request({ url: '/agent-system/commission-matrix', method: 'get' })
-export const updateCommissionMatrixConfig = (data) => request({ url: '/agent-system/commission-matrix', method: 'put', data })
+export const getCommissionMatrix = () => request({ url: '/agent-system/commission-matrix', method: 'get' })
+export const updateCommissionMatrix = (data) => request({ url: '/agent-system/commission-matrix', method: 'put', data })
+
 export const getPeerBonusConfig = () => request({ url: '/agent-system/peer-bonus', method: 'get' })
 export const updatePeerBonusConfig = (data) => request({ url: '/agent-system/peer-bonus', method: 'put', data })
+
 export const getAssistBonusConfig = () => request({ url: '/agent-system/assist-bonus', method: 'get' })
 export const updateAssistBonusConfig = (data) => request({ url: '/agent-system/assist-bonus', method: 'put', data })
+
 export const getFundPoolConfig = () => request({ url: '/agent-system/fund-pool', method: 'get' })
 export const updateFundPoolConfig = (data) => request({ url: '/agent-system/fund-pool', method: 'put', data })
+
 export const getDividendRulesConfig = () => request({ url: '/agent-system/dividend-rules', method: 'get' })
 export const updateDividendRulesConfig = (data) => request({ url: '/agent-system/dividend-rules', method: 'put', data })
-export const getExitRulesConfig = () => request({ url: '/agent-system/exit-rules', method: 'get' })
-export const updateExitRulesConfig = (data) => request({ url: '/agent-system/exit-rules', method: 'put', data })
-export const getRechargeConfig = () => request({ url: '/agent-system/recharge-config', method: 'get' })
-export const updateRechargeConfig = (data) => request({ url: '/agent-system/recharge-config', method: 'put', data })
-
 export const getDividendPreview = (params) => request({ url: '/agent-system/dividend/preview', method: 'get', params })
 export const executeDividend = (data) => request({ url: '/agent-system/dividend/execute', method: 'post', data })
 
+export const getExitRulesConfig = () => request({ url: '/agent-system/exit-rules', method: 'get' })
+export const updateExitRulesConfig = (data) => request({ url: '/agent-system/exit-rules', method: 'put', data })
 export const createExitApplication = (userId, data) => request({ url: `/agent-system/exit-applications/${userId}`, method: 'post', data })
-export const reviewExitApplication = (id, data) => request({ url: `/agent-system/exit-applications/${id}/review`, method: 'put', data })
 
-export const getUpgradeApplications = (params) => request({ url: '/upgrade-applications', method: 'get', params })
-export const reviewUpgradeApplication = (id, data) => request({ url: `/upgrade-applications/${id}/review`, method: 'put', data })
-export const getNSystemLeaders = (params) => request({ url: '/n-system/leaders', method: 'get', params })
-export const getNSystemMembers = (params) => request({ url: '/n-system/members', method: 'get', params })
-export const getNSystemLeaderMembers = (leaderId) => request({ url: `/n-system/leaders/${leaderId}/members`, method: 'get' })
-
-export const getPickupStationStaff = (id) => request({ url: `/pickup-stations/${id}/staff`, method: 'get' })
-export const addPickupStationStaff = (id, data) => request({ url: `/pickup-stations/${id}/staff`, method: 'post', data })
-export const removePickupStationStaff = (id, staffId) => request({ url: `/pickup-stations/${id}/staff/${staffId}`, method: 'delete' })
+export const getRechargeConfig = () => request({ url: '/agent-system/recharge-config', method: 'get' })
+export const updateRechargeConfig = (data) => request({ url: '/agent-system/recharge-config', method: 'put', data })

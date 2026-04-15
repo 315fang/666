@@ -367,6 +367,24 @@ function couponMatchesOrderItems(coupon = {}, items = []) {
     return true;
 }
 
+function normalizeIdList(values) {
+    if (!Array.isArray(values)) return [];
+    return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
+}
+
+function parseExchangeMeta(rawMeta = {}) {
+    const meta = rawMeta && typeof rawMeta === 'object' ? rawMeta : {};
+    return {
+        bonus_level: Math.max(0, toNumber(meta.bonus_level, 0)),
+        allowed_product_ids: normalizeIdList(meta.allowed_product_ids),
+        allowed_sku_ids: normalizeIdList(meta.allowed_sku_ids),
+        coupon_product_value: Math.max(0, toNumber(meta.coupon_product_value, 0)),
+        unlock_reward: Math.max(0, toNumber(meta.unlock_reward, 0)),
+        title: String(meta.title || '').trim(),
+        bind_status: String(meta.bind_status || '').trim().toLowerCase()
+    };
+}
+
 function centsToYuan(value, fallback = 0) {
     if (!hasValue(value)) return fallback;
     const num = toNumber(value, NaN);
@@ -627,6 +645,7 @@ async function createOrder(openid, orderData) {
         address_id,
         coupon_id,
         user_coupon_id,
+        exchange_coupon_id,
         memo,
         delivery_type,
         pickup_station_id,
@@ -640,6 +659,10 @@ async function createOrder(openid, orderData) {
 
     if (!items || !Array.isArray(items) || items.length === 0) {
         throw new Error('缺少商品信息');
+    }
+    const isExchangeOrder = !!exchange_coupon_id;
+    if (isExchangeOrder && items.length !== 1) {
+        throw new Error('兑换券订单仅支持单个商品');
     }
 
     const groupActivity = group_activity_id ? await findGroupActivity(group_activity_id) : null;
@@ -658,6 +681,25 @@ async function createOrder(openid, orderData) {
     }
     if (groupActivity && slashRecord) {
         throw new Error('活动订单类型冲突');
+    }
+    let exchangeCouponDoc = null;
+    let exchangeMeta = null;
+    if (isExchangeOrder) {
+        if (groupActivity || slashRecord) throw new Error('兑换券订单不能参与活动价');
+        if (coupon_id || user_coupon_id) throw new Error('兑换券订单不能叠加普通优惠券');
+        if (toNumber(points_to_use, 0) > 0) throw new Error('兑换券订单不能使用积分抵扣');
+        exchangeCouponDoc = await findUserCouponDoc(openid, exchange_coupon_id);
+        if (!exchangeCouponDoc) throw new Error('兑换券不存在或不可用');
+        if (String(exchangeCouponDoc.coupon_type || '').toLowerCase() !== 'exchange') {
+            throw new Error('当前优惠券不是兑换券');
+        }
+        if (String(exchangeCouponDoc.status || '').toLowerCase() !== 'unused') {
+            throw new Error('兑换券已使用或不可用');
+        }
+        exchangeMeta = parseExchangeMeta(exchangeCouponDoc.exchange_meta);
+        if (!exchangeMeta.allowed_product_ids.length) {
+            throw new Error('兑换券尚未绑定商品，请联系管理员');
+        }
     }
 
     // 0. 提前获取买家信息（折扣率计算需要）和订单超时配置
@@ -709,6 +751,9 @@ async function createOrder(openid, orderData) {
         }
 
         const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+        if (isExchangeOrder && qty !== 1) {
+            throw new Error('兑换券订单每次只能兑换 1 件商品');
+        }
 
         // 库存校验（乐观锁：条件扣减，防超卖）
         // 对于 SKU 优先校验 SKU 库存，否则校验商品库存
@@ -740,7 +785,27 @@ async function createOrder(openid, orderData) {
 
         let unitPrice;
         let originalUnitPrice; // 折扣前原价，用于优惠券门槛校验
-        if (groupActivity) {
+        if (isExchangeOrder) {
+            const productIdCandidates = [
+                product._id,
+                product.id,
+                item.product_id
+            ].filter((value) => value !== null && value !== undefined && value !== '').map((value) => String(value));
+            const skuIdCandidates = [
+                sku && sku._id,
+                sku && sku.id,
+                item.sku_id
+            ].filter((value) => value !== null && value !== undefined && value !== '').map((value) => String(value));
+            if (!productIdCandidates.some((candidate) => exchangeMeta.allowed_product_ids.includes(candidate))) {
+                throw new Error('该商品不在兑换券可兑换范围内');
+            }
+            if (exchangeMeta.allowed_sku_ids.length > 0 && !skuIdCandidates.some((candidate) => exchangeMeta.allowed_sku_ids.includes(candidate))) {
+                throw new Error('该规格不在兑换券可兑换范围内');
+            }
+            const basePrice = resolveSkuUnitPrice(sku, product);
+            unitPrice = 0;
+            originalUnitPrice = basePrice;
+        } else if (groupActivity) {
             unitPrice = activityPrice;
             originalUnitPrice = activityPrice;
         } else if (slashRecord) {
@@ -808,8 +873,9 @@ async function createOrder(openid, orderData) {
             locked_agent_cost: null,
             locked_agent_cost_total: null,
             is_explosive: (product.is_explosive === true || product.is_explosive === 1) ? 1 : 0,
-            allow_points: (product.is_explosive === true || product.is_explosive === 1) ? 0
-                : (product.allow_points == null ? 1 : (product.allow_points ? 1 : 0)),
+            allow_points: isExchangeOrder ? 0 : ((product.is_explosive === true || product.is_explosive === 1) ? 0
+                : (product.allow_points == null ? 1 : (product.allow_points ? 1 : 0))),
+            exchange_coupon_id: isExchangeOrder ? String(exchange_coupon_id) : '',
             activity_type: groupActivity ? 'group' : (slashRecord ? 'slash' : ''),
             group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : '',
             slash_no: slashRecord ? (slashRecord.slash_no || slash_no) : ''
@@ -825,7 +891,7 @@ async function createOrder(openid, orderData) {
 
     // 2. 优惠券抵扣（先计算折扣金额，暂不核销；核销放在订单创建成功之后，防止无回滚丢券）
     let couponDiscount = 0;
-    const selectedCouponId = hasExplosiveItem ? '' : (user_coupon_id || coupon_id);
+    const selectedCouponId = (hasExplosiveItem || isExchangeOrder) ? '' : (user_coupon_id || coupon_id);
     let usedCouponDocId = '';
     let usedCouponTemplateId = '';
     let pendingCouponDoc = null;  // 延迟核销的优惠券文档
@@ -860,7 +926,7 @@ async function createOrder(openid, orderData) {
     let actualPoints = 0;
     const usePoints = toNumber(points_to_use, 0);
     const pointsAllowedByProducts = orderItems.every(it => it.allow_points !== 0);
-    if (usePoints > 0 && pointsAllowedByProducts) {
+    if (!isExchangeOrder && usePoints > 0 && pointsAllowedByProducts) {
         try {
             const userRes = await db.collection('users').where({ openid }).limit(1).get();
             if (userRes.data && userRes.data.length > 0) {
@@ -963,7 +1029,8 @@ async function createOrder(openid, orderData) {
     const distributorSummary = buildUserSummary(directReferrer || distributorInfo);
     const indirectReferrerSummary = buildRelationSummary(indirectReferrer);
     const nearestAgentSummary = buildRelationSummary(nearestAgentCandidate);
-    const canAgentFulfill = !!nearestAgentCandidate
+    const canAgentFulfill = !isExchangeOrder
+        && !!nearestAgentCandidate
         && nearestAgentRoleLevel > 0
         && lockedAgentCostCandidates.length > 0
         && lockedAgentCostCandidates.every((value) => Number.isFinite(value) && value > 0);
@@ -1051,11 +1118,13 @@ async function createOrder(openid, orderData) {
         locked_agent_cost: canAgentFulfill ? lockedAgentCostTotal : null,
         locked_agent_cost_total: canAgentFulfill ? lockedAgentCostTotal : null,
         middle_commission_total: 0,
-        coupon_id: usedCouponTemplateId || coupon_id || '',
-        user_coupon_id: usedCouponDocId || user_coupon_id || '',
+        coupon_id: isExchangeOrder ? (exchangeCouponDoc?.coupon_id || '') : (usedCouponTemplateId || coupon_id || ''),
+        user_coupon_id: isExchangeOrder ? (exchangeCouponDoc?._id || '') : (usedCouponDocId || user_coupon_id || ''),
+        exchange_coupon_id: isExchangeOrder ? String(exchange_coupon_id) : '',
+        exchange_meta: isExchangeOrder ? exchangeMeta : null,
         memo: memo || '',
         referrer_openid: directReferrer?.openid || '',
-        type: groupActivity ? 'group' : (slashRecord ? 'slash' : (type || 'normal')),
+        type: isExchangeOrder ? 'exchange' : (groupActivity ? 'group' : (slashRecord ? 'slash' : (type || 'normal'))),
         group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : '',
         legacy_group_activity_id: groupActivity ? (groupActivity.id || groupActivity._legacy_id || group_activity_id) : '',
         group_no: group_no || '',
@@ -1106,7 +1175,13 @@ async function createOrder(openid, orderData) {
     }
 
     // 7.5 订单创建成功后，执行优惠券核销（先创单后核销，失败不影响订单，但不应再用此券）
-    if (pendingCouponDoc) {
+    if (isExchangeOrder && exchangeCouponDoc?._id) {
+        await db.collection('user_coupons').doc(String(exchangeCouponDoc._id)).update({
+            data: { status: 'used', used_at: db.serverDate(), order_id: result._id, used_order_id: result._id, updated_at: db.serverDate() }
+        }).catch((err) => {
+            console.error('[OrderCreate] 兑换券核销失败:', err.message, '订单已创建:', result._id);
+        });
+    } else if (pendingCouponDoc) {
         await db.collection('user_coupons').doc(pendingCouponDoc._id).update({
             data: { status: 'used', used_at: db.serverDate(), order_id: result._id }
         }).catch((err) => {
@@ -1257,6 +1332,29 @@ async function createOrder(openid, orderData) {
     };
 }
 
+async function createExchangeOrder(openid, orderData = {}) {
+    const items = Array.isArray(orderData.items) ? orderData.items : [];
+    if (items.length !== 1) {
+        throw new Error('兑换券订单仅支持单个商品');
+    }
+    const normalizedItems = items.map((item) => ({
+        product_id: item.product_id,
+        sku_id: item.sku_id || null,
+        quantity: 1
+    }));
+    return createOrder(openid, {
+        ...orderData,
+        items: normalizedItems,
+        coupon_id: '',
+        user_coupon_id: '',
+        points_to_use: 0,
+        exchange_coupon_id: orderData.exchange_coupon_id,
+        type: 'exchange',
+        use_goods_fund: false
+    });
+}
+
 module.exports = {
-    createOrder
+    createOrder,
+    createExchangeOrder
 };

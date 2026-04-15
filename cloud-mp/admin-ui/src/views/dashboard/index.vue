@@ -390,13 +390,17 @@ const getProductImage = (p) => {
   }
 }
 
-const formatAmountYuan = (value) => {
-  if (value === null || value === undefined || value === '') return '0.00'
-  const raw = String(value).trim()
-  const amount = Number(raw)
-  if (!Number.isFinite(amount)) return '0.00'
-  return amount.toFixed(2)
+const normalizeDashboardAmount = (value) => {
+  if (value === null || value === undefined || value === '') return 0
+  const amount = Number(String(value).trim())
+  if (!Number.isFinite(amount)) return 0
+  if (Number.isInteger(amount) && Math.abs(amount) >= 1000) {
+    return amount / 100
+  }
+  return amount
 }
+
+const formatAmountYuan = (value) => normalizeDashboardAmount(value).toFixed(2)
 
 const getStatusText = (status) => {
   const map = {

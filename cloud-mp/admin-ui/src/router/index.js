@@ -155,12 +155,6 @@ const routes = [
         component: () => import('@/views/membership/index.vue'),
         meta: { title: '会员与成长值', icon: 'UserFilled', group: '业务策略', order: 1, permission: 'statistics' }
       },
-      {
-        path: 'agent-system',
-        name: 'AgentSystem',
-        component: () => import('@/views/agent-system/index.vue'),
-        meta: { title: '代理体系', icon: 'Trophy', group: '业务策略', order: 1.5, permission: 'settings_manage' }
-      },
       // ===== 系统管理 =====
       {
         path: 'admins',

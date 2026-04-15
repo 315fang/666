@@ -63,6 +63,13 @@ export const completeRefund = (id) => {
   })
 }
 
+export const syncRefundStatus = (id) => {
+  return request({
+    url: `/refunds/${id}/sync`,
+    method: 'put'
+  })
+}
+
 export const getCommissions = (params) => request({ url: '/commissions', method: 'get', params })
 export const approveCommissionItem = (id) => request({ url: `/commissions/${id}/approve`, method: 'put' })
 export const rejectCommissionItem = (id, data) => request({ url: `/commissions/${id}/reject`, method: 'put', data })

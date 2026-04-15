@@ -266,6 +266,30 @@ function inferRefundResumeOrderStatus(order) {
 
 const ORDER_SHIPPABLE_STATUSES = new Set(['paid', 'agent_confirmed', 'shipping_requested']);
 
+function isGroupOrderLike(order = {}) {
+    const sourceOrder = order && typeof order === 'object' ? order : {};
+    const firstItem = toArray(sourceOrder.items)[0] || {};
+    const orderType = pickString(sourceOrder.type || sourceOrder.order_type || firstItem.activity_type).toLowerCase();
+    return orderType === 'group'
+        || !!pickString(sourceOrder.group_no)
+        || !!pickString(firstItem.group_no)
+        || !!pickString(sourceOrder.group_activity_id)
+        || !!pickString(firstItem.group_activity_id)
+        || !!pickString(sourceOrder.legacy_group_activity_id)
+        || !!pickString(firstItem.legacy_group_activity_id);
+}
+
+function getEffectiveOrderStatus(orderOrStatus) {
+    if (!orderOrStatus || typeof orderOrStatus !== 'object') {
+        return pickString(orderOrStatus);
+    }
+    const rawStatus = pickString(orderOrStatus.status);
+    if (rawStatus === 'paid' && isGroupOrderLike(orderOrStatus) && !orderOrStatus.group_completed_at) {
+        return 'pending_group';
+    }
+    return rawStatus;
+}
+
 function normalizeAdminPermissionKey(permission) {
     const normalized = pickString(permission).trim();
     return ({
@@ -585,6 +609,26 @@ function getManagedCloud() {
         cachedManagedCloud = null;
     }
     return cachedManagedCloud;
+}
+
+async function syncRefundStatusViaPayment(refund = {}) {
+    const cloud = getManagedCloud();
+    if (!cloud?.callFunction) {
+        throw new Error('当前运行环境不支持调用支付云函数');
+    }
+    const result = await cloud.callFunction({
+        name: 'payment',
+        data: {
+            action: 'syncRefundStatus',
+            refund_id: pickString(refund._id || refund.id),
+            refund_no: pickString(refund.refund_no)
+        }
+    });
+    const payload = result?.result;
+    if (payload?.code && payload.code !== 0) {
+        throw new Error(payload.message || '支付云函数同步失败');
+    }
+    return payload?.data || payload || {};
 }
 
 async function resolveManagedFileUrl(fileId) {
@@ -1063,13 +1107,14 @@ function getSettingsSnapshot() {
 }
 
 function normalizeOrderStatusGroup(status) {
-    if (status === 'pending' || status === 'pending_payment') return 'pending_pay';
-    if (status === 'pending_group') return 'pending_group';
-    if (status === 'pending_ship') return 'pending_ship';
-    if (['paid', 'agent_confirmed', 'shipping_requested'].includes(status)) return 'pending_ship';
-    if (status === 'shipped') return 'pending_receive';
-    if (status === 'completed') return 'completed';
-    if (['cancelled', 'refunded'].includes(status)) return 'closed';
+    const effectiveStatus = getEffectiveOrderStatus(status);
+    if (effectiveStatus === 'pending' || effectiveStatus === 'pending_payment') return 'pending_pay';
+    if (effectiveStatus === 'pending_group') return 'pending_group';
+    if (effectiveStatus === 'pending_ship') return 'pending_ship';
+    if (['paid', 'agent_confirmed', 'shipping_requested'].includes(effectiveStatus)) return 'pending_ship';
+    if (effectiveStatus === 'shipped') return 'pending_receive';
+    if (effectiveStatus === 'completed') return 'completed';
+    if (['cancelled', 'refunded'].includes(effectiveStatus)) return 'closed';
     return 'all';
 }
 
@@ -1148,9 +1193,11 @@ function buildOrderRecord(order, users, products, commissions) {
         id: orderLookupId,
         display_id: buildDisplayId(order, orderLookupId),
         openid: pickString(order.openid),
-        status_group: orderContract.normalizeOrderStatusGroup(order.status),
-        status_text: orderContract.getOrderStatusText(order.status),
-        status_desc: orderContract.getOrderStatusDesc(order.status),
+        raw_status: pickString(order.status),
+        status: getEffectiveOrderStatus(order),
+        status_group: orderContract.normalizeOrderStatusGroup(getEffectiveOrderStatus(order)),
+        status_text: orderContract.getOrderStatusText(getEffectiveOrderStatus(order)),
+        status_desc: orderContract.getOrderStatusDesc(getEffectiveOrderStatus(order)),
         buyer: normalizedBuyer,
         product: normalizedProduct,
         items: normalizedItems,
@@ -1273,7 +1320,7 @@ function patchCollectionRow(name, id, patcher) {
 }
 
 function getUserNickname(user) {
-    return pickString(user?.nickname || user?.nickName || user?.name || '微信用户');
+    return pickString(user?.virtual_display_name || user?.nickname || user?.nickName || user?.name || '微信用户');
 }
 
 function getUserAvatar(user) {
@@ -1558,8 +1605,18 @@ function buildUserTiny(user) {
         avatar_url: canonical.avatar_url,
         openid: canonical.openid,
         role_level: canonical.role_level,
-        role_name: canonical.role_name
+        role_name: canonical.role_name,
+        is_virtual_settlement: canonical.is_virtual_settlement === true,
+        virtual_settlement_type: canonical.virtual_settlement_type,
+        virtual_display_name: canonical.virtual_display_name
     };
+}
+
+function isVirtualB3SettlementUser(user = {}) {
+    if (!user || typeof user !== 'object') return false;
+    const settlementType = pickString(user.virtual_settlement_type).trim().toLowerCase();
+    return (user.is_virtual_settlement === true || user.is_virtual_settlement === 1 || user.is_virtual_settlement === '1')
+        && settlementType === 'b3_region';
 }
 
 function buildUserGraph(users) {
@@ -1887,46 +1944,39 @@ function createDefaultBranchAgentPolicy() {
     return {
         enabled: false,
         min_apply_role_level: 3,
-        type_commission_rate: { school: 0.01, area: 0.015, city: 0.02, province: 0.03 },
-        pickup_station_subsidy_enabled: false,
+        pickup_station_subsidy_enabled: true,
+        pickup_station_reward_rate: 0.025,
         pickup_station_subsidy_amount: 0,
-        pickup_tiers: {
-            A: { rate: 0, fixed_yuan: 2 },
-            B: { rate: 0.005, fixed_yuan: 1 },
-            C: { rate: 0.01, fixed_yuan: 0 },
-            D: { rate: 0.015, fixed_yuan: 1 }
-        }
+        region_reward_tiers: [
+            { threshold: 100000, rate: 0.01, label: '10万' },
+            { threshold: 300000, rate: 0.02, label: '30万' },
+            { threshold: 1000000, rate: 0.03, label: '100万' }
+        ]
     };
 }
 
 function normalizeBranchAgentPolicySnapshot(rawPolicy) {
     const defaults = createDefaultBranchAgentPolicy();
     const policy = toObject(rawPolicy, {});
-    const typeCommissionRate = toObject(policy.type_commission_rate, {});
-    const pickupTiers = toObject(policy.pickup_tiers, {});
     const normalizeRate = (value, fallback) => Math.min(1, Math.max(0, toNumber(value, fallback)));
     const normalizeMoney = (value, fallback) => Math.max(0, toNumber(value, fallback));
-    const normalizedPickupTiers = {};
-    for (const tierKey of Object.keys(defaults.pickup_tiers)) {
-        const tierDefaults = defaults.pickup_tiers[tierKey];
-        const tierPayload = toObject(pickupTiers[tierKey], {});
-        normalizedPickupTiers[tierKey] = {
-            rate: normalizeRate(tierPayload.rate, tierDefaults.rate),
-            fixed_yuan: normalizeMoney(tierPayload.fixed_yuan, tierDefaults.fixed_yuan)
-        };
-    }
+    const normalizedRegionRewardTiers = toArray(policy.region_reward_tiers)
+        .map((tier, index) => ({
+            threshold: Math.max(0, normalizeMoney(tier?.threshold, defaults.region_reward_tiers[index]?.threshold || 0)),
+            rate: normalizeRate(tier?.rate, defaults.region_reward_tiers[index]?.rate || 0),
+            label: pickString(tier?.label || defaults.region_reward_tiers[index]?.label || '')
+        }))
+        .filter((tier) => tier.threshold > 0 && tier.rate > 0)
+        .sort((a, b) => a.threshold - b.threshold);
     return {
         enabled: toBoolean(policy.enabled),
         min_apply_role_level: Math.max(0, Math.floor(toNumber(policy.min_apply_role_level, defaults.min_apply_role_level))),
-        type_commission_rate: {
-            school: normalizeRate(typeCommissionRate.school, defaults.type_commission_rate.school),
-            area: normalizeRate(typeCommissionRate.area, defaults.type_commission_rate.area),
-            city: normalizeRate(typeCommissionRate.city, defaults.type_commission_rate.city),
-            province: normalizeRate(typeCommissionRate.province, defaults.type_commission_rate.province)
-        },
-        pickup_station_subsidy_enabled: toBoolean(policy.pickup_station_subsidy_enabled),
+        pickup_station_subsidy_enabled: policy.pickup_station_subsidy_enabled === undefined
+            ? defaults.pickup_station_subsidy_enabled
+            : toBoolean(policy.pickup_station_subsidy_enabled),
+        pickup_station_reward_rate: normalizeRate(policy.pickup_station_reward_rate, defaults.pickup_station_reward_rate),
         pickup_station_subsidy_amount: normalizeMoney(policy.pickup_station_subsidy_amount, defaults.pickup_station_subsidy_amount),
-        pickup_tiers: normalizedPickupTiers
+        region_reward_tiers: normalizedRegionRewardTiers.length ? normalizedRegionRewardTiers : defaults.region_reward_tiers
     };
 }
 
@@ -1936,11 +1986,59 @@ function getBranchAgentPolicySnapshot() {
 
 function getBranchAgentStationsSnapshot() {
     const rows = getCollection('branch_agent_stations');
-    if (rows.length) return rows;
-    return sortByUpdatedDesc(getCollection('pickup_stations')).map((row) => ({
+    if (rows.length) return rows.map((row) => ({
+        ...row,
+        branch_type: normalizeBranchScopeLevel(row.branch_type || row.type || 'district')
+    }));
+    return [];
+}
+
+function normalizeScopeText(value) {
+    return pickString(value).replace(/\s+/g, '').trim().toLowerCase();
+}
+
+function normalizeBranchScopeLevel(value) {
+    const raw = pickString(value).trim().toLowerCase();
+    if (raw === 'area') return 'district';
+    if (['province', 'city', 'district', 'school'].includes(raw)) return raw;
+    return 'district';
+}
+
+function getBranchScopePriority(scopeLevel) {
+    return ({
+        district: 3,
+        city: 2,
+        province: 1
+    }[normalizeBranchScopeLevel(scopeLevel)] || 0);
+}
+
+function buildBranchScopeLabel(station = {}) {
+    const scopeLevel = normalizeBranchScopeLevel(station.branch_type);
+    if (scopeLevel === 'district') {
+        return [pickString(station.province), pickString(station.city), pickString(station.district)].filter(Boolean).join(' / ');
+    }
+    if (scopeLevel === 'city') {
+        return [pickString(station.province), pickString(station.city)].filter(Boolean).join(' / ');
+    }
+    if (scopeLevel === 'province') {
+        return pickString(station.province);
+    }
+    return [pickString(station.province), pickString(station.city), pickString(station.district)].filter(Boolean).join(' / ');
+}
+
+function sortBranchAssignments(rows = []) {
+    return [...rows].sort((left, right) => {
+        const scopeDiff = getBranchScopePriority(right.branch_type) - getBranchScopePriority(left.branch_type);
+        if (scopeDiff !== 0) return scopeDiff;
+        return parseTimestamp(right.updated_at || right.created_at) - parseTimestamp(left.updated_at || left.created_at);
+    });
+}
+
+function buildBranchAssignmentRecord(row) {
+    return {
         id: primaryId(row),
         name: pickString(row.name || row.station_name || row.title),
-        branch_type: pickString(row.branch_type || row.type || 'city'),
+        branch_type: normalizeBranchScopeLevel(row.branch_type || row.type || 'district'),
         province: pickString(row.province),
         city: pickString(row.city),
         district: pickString(row.district),
@@ -1953,8 +2051,9 @@ function getBranchAgentStationsSnapshot() {
         pickup_commission_tier: pickString(row.pickup_commission_tier || 'A'),
         claimant_id: row.claimant_id || row.user_id || null,
         created_at: pickString(row.created_at),
-        updated_at: pickString(row.updated_at || row.created_at)
-    }));
+        updated_at: pickString(row.updated_at || row.created_at),
+        scope_label: buildBranchScopeLabel(row)
+    };
 }
 
 function buildBranchAgentStationRecord(station, users) {
@@ -1962,6 +2061,8 @@ function buildBranchAgentStationRecord(station, users) {
     return {
         ...station,
         id: primaryId(station),
+        branch_type: normalizeBranchScopeLevel(station.branch_type),
+        scope_label: buildBranchScopeLabel(station),
         claimant_id: primaryId(claimant) || station.claimant_id || null,
         claimant: buildUserTiny(claimant)
     };
@@ -1997,10 +2098,8 @@ function syncBranchStationToPickupStation(station) {
     pickupRows[index] = {
         ...pickupRows[index],
         claimant_id: station.claimant_id || pickupRows[index].claimant_id || null,
-        branch_type: pickString(station.branch_type || pickupRows[index].branch_type || 'area'),
+        branch_type: normalizeBranchScopeLevel(station.branch_type || pickupRows[index].branch_type || 'district'),
         region_name: pickString(station.region_name || pickupRows[index].region_name),
-        commission_rate: toNumber(station.commission_rate, pickupRows[index].commission_rate || 0),
-        pickup_commission_tier: pickString(station.pickup_commission_tier || pickupRows[index].pickup_commission_tier || 'A'),
         status: pickString(station.status || pickupRows[index].status || 'active'),
         updated_at: nowIso()
     };
@@ -2023,10 +2122,45 @@ function getOrderAddressText(order = {}) {
     ].filter(Boolean).join(' ');
 }
 
+function getOrderRegionParts(order = {}) {
+    const addr = order.address_snapshot || order.address || {};
+    return {
+        province: normalizeScopeText(addr.province),
+        city: normalizeScopeText(addr.city),
+        district: normalizeScopeText(addr.district)
+    };
+}
+
+function branchAssignmentMatchesOrder(station = {}, order = {}) {
+    const scopeLevel = normalizeBranchScopeLevel(station.branch_type);
+    if (!['province', 'city', 'district'].includes(scopeLevel)) return false;
+    const orderRegion = getOrderRegionParts(order);
+    if (!orderRegion.province) return false;
+    const stationProvince = normalizeScopeText(station.province);
+    const stationCity = normalizeScopeText(station.city);
+    const stationDistrict = normalizeScopeText(station.district);
+    if (scopeLevel === 'province') {
+        return !!stationProvince && stationProvince === orderRegion.province;
+    }
+    if (scopeLevel === 'city') {
+        return !!stationProvince && !!stationCity
+            && stationProvince === orderRegion.province
+            && stationCity === orderRegion.city;
+    }
+    return !!stationProvince && !!stationCity && !!stationDistrict
+        && stationProvince === orderRegion.province
+        && stationCity === orderRegion.city
+        && stationDistrict === orderRegion.district;
+}
+
 function matchBranchAgentStationForOrder(order, options = {}) {
     const policy = getBranchAgentPolicySnapshot();
     if (!policy.enabled) return null;
-    const stations = getBranchAgentStationsSnapshot().filter((item) => pickString(item.status || 'active') === 'active');
+    const stations = sortBranchAssignments(
+        getBranchAgentStationsSnapshot()
+            .map((row) => buildBranchAssignmentRecord(row))
+            .filter((item) => pickString(item.status || 'active') === 'active')
+    );
     if (!stations.length) return null;
 
     if (options.preferPickup && order.pickup_station_id) {
@@ -2034,12 +2168,7 @@ function matchBranchAgentStationForOrder(order, options = {}) {
         if (exact) return exact;
     }
 
-    const addressText = getOrderAddressText(order).toLowerCase();
-    if (!addressText) return null;
-    return stations.find((station) => {
-        const keyword = pickString(station.region_name || station.district || station.city || station.province).toLowerCase();
-        return keyword && addressText.includes(keyword);
-    }) || null;
+    return stations.find((station) => branchAssignmentMatchesOrder(station, order)) || null;
 }
 
 function createBranchAgentCommission(order, station, users, options = {}) {
@@ -2058,6 +2187,7 @@ function createBranchAgentCommission(order, station, users, options = {}) {
 
     const amount = Math.max(0, toNumber(options.amount, 0));
     if (amount <= 0) return null;
+    const isVirtualB3 = isVirtualB3SettlementUser(claimant);
 
     const row = {
         id: nextId(rows),
@@ -2067,11 +2197,13 @@ function createBranchAgentCommission(order, station, users, options = {}) {
         order_id: order._id || order.id || null,
         order_no: pickString(order.order_no),
         amount: Number(amount.toFixed(2)),
-        level: toNumber(claimant.role_level ?? claimant.distributor_level, 0),
+        level: isVirtualB3 ? 5 : toNumber(claimant.role_level ?? claimant.distributor_level, 0),
         status: 'pending_approval',
         type,
         branch_station_id: primaryId(station),
         branch_type: pickString(station.branch_type),
+        claimant_virtual_settlement: isVirtualB3,
+        claimant_virtual_settlement_type: pickString(claimant.virtual_settlement_type),
         description: pickString(options.description),
         created_at: nowIso(),
         updated_at: nowIso()
@@ -2082,6 +2214,7 @@ function createBranchAgentCommission(order, station, users, options = {}) {
 }
 
 function ensureBranchAgentCommissionForOrder(order, options = {}) {
+    if (pickString(order?.type).trim().toLowerCase() === 'exchange') return null;
     const policy = getBranchAgentPolicySnapshot();
     if (!policy.enabled) return null;
     const users = getCollection('users');
@@ -2089,24 +2222,33 @@ function ensureBranchAgentCommissionForOrder(order, options = {}) {
     if (!station) return null;
 
     if (options.preferPickup) {
-        const tierKey = pickString(station.pickup_commission_tier || 'A');
-        const tier = policy.pickup_tiers?.[tierKey] || { rate: 0, fixed_yuan: 0 };
-    const amount = toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0) * toNumber(tier.rate, 0)
-            + toNumber(tier.fixed_yuan, 0);
+        const orderAmount = toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0);
+        let amount = orderAmount * toNumber(policy.pickup_station_reward_rate, 0);
+        if (amount <= 0) amount = toNumber(policy.pickup_station_subsidy_amount, 0);
         return createBranchAgentCommission(order, station, users, {
             amount,
             type: 'pickup_subsidy',
-            description: `自提核销补贴：${pickString(station.name || station.region_name)}`
+            description: `自提点奖励：${pickString(station.name || station.region_name)}`
         });
     }
 
-    const fallbackRate = policy.type_commission_rate?.[pickString(station.branch_type || 'area')] ?? 0;
-    const rate = toNumber(station.commission_rate, fallbackRate || 0);
+    const stationId = primaryId(station);
+    const cumulativeAmount = roundMoney(getCollection('orders').reduce((sum, row) => {
+        const status = getEffectiveOrderStatus(row);
+        if (!['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'].includes(status)) return sum;
+        const matchedStation = matchBranchAgentStationForOrder(row, { preferPickup: false });
+        if (!matchedStation || !rowMatchesLookup(matchedStation, stationId, [stationId])) return sum;
+        return sum + toNumber(row.pay_amount ?? row.actual_price ?? row.total_amount, 0);
+    }, 0));
+    const rate = (policy.region_reward_tiers || []).reduce((current, tier) => {
+        return cumulativeAmount >= toNumber(tier.threshold, 0) ? toNumber(tier.rate, current) : current;
+    }, 0);
     const amount = toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0) * rate;
+    const isVirtualB3 = isVirtualB3SettlementUser(getBranchAgentTargetUser(station, users));
     return createBranchAgentCommission(order, station, users, {
         amount,
-        type: 'region_agent',
-        description: `区域代理收益：${pickString(station.name || station.region_name)}`
+        type: isVirtualB3 ? 'region_b3_virtual' : 'region_agent',
+        description: `${isVirtualB3 ? '虚拟B3区域佣金' : '区域奖励'}：${pickString(station.name || station.region_name)}（累计${cumulativeAmount.toFixed(2)}元）`
     });
 }
 
@@ -2392,6 +2534,7 @@ function getCommissionTypeLabel(type) {
         assist: '动销奖励',
         agent_fulfillment: '发货利润',
         region_agent: '区域代理奖',
+        region_b3_virtual: '虚拟B3区域佣金',
         year_end_dividend: '年终分红',
         stock_diff: '级差利润',
         gap: '级差收益',
@@ -2413,6 +2556,7 @@ function buildCommissionSourceText(commission = {}, order = {}) {
         agent_assist: '来自代理协助奖励',
         agent_fulfillment: '来自代理发货利润',
         region_agent: '来自区域代理收益',
+        region_b3_virtual: '来自虚拟B3区域佣金',
         year_end_dividend: '来自年终分红',
         stock_diff: '来自级差利润',
         gap: '来自级差收益',
@@ -2720,6 +2864,7 @@ function removeConflictingReferralCommissions(order = {}, claimant = null) {
 }
 
 function ensureAgentFulfillmentCommissionForOrder(order) {
+    if (pickString(order?.type).trim().toLowerCase() === 'exchange') return null;
     const fulfillmentType = pickString(order?.fulfillment_type).trim().toLowerCase();
     if (fulfillmentType !== 'agent') return null;
     const claimantRef = order?.fulfillment_partner_openid || order?.nearest_agent_openid || order?.agent_info?.openid || order?.agent?.openid || null;
@@ -2834,6 +2979,7 @@ function resolveAssistBonusAmount(config = {}, countBefore = 0) {
 }
 
 function ensureAgentAssistCommissionForOrder(order) {
+    if (pickString(order?.type).trim().toLowerCase() === 'exchange') return null;
     const fulfillmentType = pickString(order?.fulfillment_type || order?.type).trim().toLowerCase();
     if (fulfillmentType !== 'agent') return null;
 
@@ -5369,14 +5515,7 @@ app.put('/admin/api/branch-agent-policy', auth, requirePermission('dealers'), (r
     const nextPolicy = normalizeBranchAgentPolicySnapshot({
         ...current,
         ...payload,
-        type_commission_rate: {
-            ...current.type_commission_rate,
-            ...toObject(payload.type_commission_rate, {})
-        },
-        pickup_tiers: {
-            ...current.pickup_tiers,
-            ...toObject(payload.pickup_tiers, {})
-        }
+        region_reward_tiers: Array.isArray(payload.region_reward_tiers) ? payload.region_reward_tiers : current.region_reward_tiers
     });
     saveSingleton('branch-agent-policy', nextPolicy);
     upsertConfigRow('branch-agent-policy', nextPolicy, {
@@ -5398,11 +5537,13 @@ app.post('/admin/api/branch-agents/stations', auth, requirePermission('dealers')
     const rows = getCollection('branch_agent_stations');
     const row = {
         id: nextId(rows),
-        ...toObject(req.body, {}),
+        name: pickString(req.body?.name),
         status: pickString(req.body?.status || 'active'),
-        branch_type: pickString(req.body?.branch_type || 'city'),
-        pickup_commission_tier: pickString(req.body?.pickup_commission_tier || 'A'),
-        commission_rate: toNumber(req.body?.commission_rate, 0.02),
+        branch_type: normalizeBranchScopeLevel(req.body?.branch_type || 'district'),
+        province: pickString(req.body?.province),
+        city: pickString(req.body?.city),
+        district: pickString(req.body?.district),
+        claimant_id: req.body?.claimant_id || null,
         created_at: nowIso(),
         updated_at: nowIso()
     };
@@ -5416,8 +5557,13 @@ app.post('/admin/api/branch-agents/stations', auth, requirePermission('dealers')
 app.put('/admin/api/branch-agents/stations/:id', auth, requirePermission('dealers'), (req, res) => {
     const updated = patchCollectionRow('branch_agent_stations', req.params.id, (row) => ({
         ...row,
-        ...toObject(req.body, {}),
-        commission_rate: req.body?.commission_rate != null ? toNumber(req.body.commission_rate, 0.02) : row.commission_rate,
+        name: req.body?.name != null ? pickString(req.body.name) : row.name,
+        branch_type: req.body?.branch_type != null ? normalizeBranchScopeLevel(req.body.branch_type) : normalizeBranchScopeLevel(row.branch_type),
+        province: req.body?.province != null ? pickString(req.body.province) : row.province,
+        city: req.body?.city != null ? pickString(req.body.city) : row.city,
+        district: req.body?.district != null ? pickString(req.body.district) : row.district,
+        claimant_id: req.body?.claimant_id !== undefined ? (req.body.claimant_id || null) : row.claimant_id,
+        status: req.body?.status != null ? pickString(req.body.status) : row.status,
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '点位不存在', 404);
@@ -6130,10 +6276,11 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
             await directPatchDocument('refunds', String(refund._id), { refund_no: refundNo });
             patchCollectionRow('refunds', req.params.id, (row) => ({ ...row, refund_no: refundNo }));
 
+            const totalFee = Math.round(getOrderAmount(order) * 100);
             const wxResult = await createWechatRefund({
                 orderNo: pickString(order.order_no),
                 refundNo,
-                totalFee: Math.round(totalAmount * 100),
+                totalFee,
                 refundFee: Math.round(refundAmount * 100),
                 reason: pickString(refund.reason, '管理员退款')
             });
@@ -6188,6 +6335,38 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
         patchCollectionRow('orders', orderId, (row) => ({ ...row, status: prevOrderStatus, updated_at: nowIso() }));
 
         return fail(res, `退款失败：${error.message || '未知错误'}`, 500);
+    }
+});
+
+app.put('/admin/api/refunds/:id/sync', auth, requirePermission('refunds'), async (req, res) => {
+    await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+    const refund = findByLookup(getCollection('refunds'), req.params.id);
+    if (!refund) return fail(res, '退款记录不存在', 404);
+
+    const order = findByLookup(getCollection('orders'), refund.order_id || refund.order_no, (row) => [row.order_no]);
+    const paymentMethod = normalizePaymentMethodCode(refund.payment_method || order?.payment_method || order?.pay_type || order?.pay_channel || order?.payment_channel || '');
+    if (paymentMethod !== 'wechat') {
+        return fail(res, '当前退款不是微信退款，无需同步状态', 400);
+    }
+    if (!pickString(refund.refund_no)) {
+        return fail(res, '退款单缺少 refund_no，无法同步微信状态', 400);
+    }
+
+    try {
+        const syncResult = await syncRefundStatusViaPayment(refund);
+        await Promise.resolve(dataStore.flush?.());
+        await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+        const freshRefund = findByLookup(getCollection('refunds'), req.params.id);
+        const users = getCollection('users');
+        const orders = getCollection('orders');
+        const products = getCollection('products');
+        const skus = getCollection('skus');
+        ok(res, {
+            ...buildRefundRecord(freshRefund || refund, users, orders, products, skus),
+            sync_result: syncResult
+        });
+    } catch (error) {
+        return fail(res, error.message || '同步微信退款状态失败', 500);
     }
 });
 
@@ -6427,8 +6606,8 @@ app.get('/admin/api/orders', auth, requirePermission('orders'), async (req, res)
     const includeSuborders = toBoolean(req.query.include_suborders);
 
     if (!includeSuborders) rows = rows.filter((item) => !item.parent_order_id);
-    if (status) rows = rows.filter((item) => item.status === status);
-    else if (statusGroup && statusGroup !== 'all') rows = rows.filter((item) => normalizeOrderStatusGroup(item.status) === statusGroup);
+    if (status) rows = rows.filter((item) => getEffectiveOrderStatus(item) === status);
+    else if (statusGroup && statusGroup !== 'all') rows = rows.filter((item) => normalizeOrderStatusGroup(item) === statusGroup);
     if (paymentMethod) {
         rows = rows.filter((item) => normalizePaymentMethodCode(
             item.payment_method || item.pay_channel || item.pay_type || item.payment_channel || ''
@@ -6458,12 +6637,12 @@ app.get('/admin/api/orders', auth, requirePermission('orders'), async (req, res)
     ok(res, {
         ...paginate(rows, req),
         summary: {
-            pending_pay: rows.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_pay').length,
-            pending_group: rows.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_group').length,
-            pending_ship: rows.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_ship').length,
-            pending_receive: rows.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_receive').length,
-            completed: rows.filter((item) => normalizeOrderStatusGroup(item.status) === 'completed').length,
-            closed: rows.filter((item) => normalizeOrderStatusGroup(item.status) === 'closed').length
+            pending_pay: rows.filter((item) => normalizeOrderStatusGroup(item) === 'pending_pay').length,
+            pending_group: rows.filter((item) => normalizeOrderStatusGroup(item) === 'pending_group').length,
+            pending_ship: rows.filter((item) => normalizeOrderStatusGroup(item) === 'pending_ship').length,
+            pending_receive: rows.filter((item) => normalizeOrderStatusGroup(item) === 'pending_receive').length,
+            completed: rows.filter((item) => normalizeOrderStatusGroup(item) === 'completed').length,
+            closed: rows.filter((item) => normalizeOrderStatusGroup(item) === 'closed').length
         }
     });
 });
@@ -6488,6 +6667,9 @@ app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), async (
     await ensureFreshCollections(['orders', 'users', 'products', 'commissions']);
     const current = findByLookup(getCollection('orders'), req.params.id, (item) => [item.order_no]);
     if (!current) return fail(res, '订单不存在', 404);
+    if (getEffectiveOrderStatus(current) === 'pending_group') {
+        return fail(res, '当前拼团订单尚未成团，不允许发货', 400);
+    }
     if (!ORDER_SHIPPABLE_STATUSES.has(String(current.status || ''))) {
         return fail(res, `当前订单状态不允许发货：${current.status || '-'}`, 400);
     }
@@ -6903,7 +7085,7 @@ app.get('/admin/api/statistics/overview', auth, requirePermission('statistics'),
         total_products: products.length,
         today_orders: todayOrders.length,
         today_sales: todayPaidOrders.reduce((sum, item) => sum + toNumber(item.pay_amount ?? item.actual_price ?? item.total_amount, 0), 0),
-        pending_ship: orders.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_ship').length,
+        pending_ship: orders.filter((item) => normalizeOrderStatusGroup(item) === 'pending_ship').length,
         pending_refund: getCollection('refunds').filter((item) => item.status === 'pending').length,
         low_stock_count: products.filter((item) => toNumber(item.stock, 0) <= 10).length
     });
@@ -6924,8 +7106,8 @@ app.get('/admin/api/operations/dashboard', auth, async (req, res) => {
         return paidStatuses.includes(String(item.status || ''))
             && getDateKey(item.paid_at || item.pay_time || item.created_at, '') === today;
     });
-    const pendingShipCount = orders.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_ship').length;
-    const pendingReceiveCount = orders.filter((item) => normalizeOrderStatusGroup(item.status) === 'pending_receive').length;
+    const pendingShipCount = orders.filter((item) => normalizeOrderStatusGroup(item) === 'pending_ship').length;
+    const pendingReceiveCount = orders.filter((item) => normalizeOrderStatusGroup(item) === 'pending_receive').length;
     const pendingRefundCount = refunds.filter((item) => pickString(item.status) === 'pending').length;
     const pendingWithdrawalCount = withdrawals.filter((item) => pickString(item.status) === 'pending').length;
     const pendingCommissionCount = commissions.filter((item) => pickString(item.status) === 'pending_approval').length;
@@ -7075,15 +7257,106 @@ function upsertConfigRow(key, value, options = {}) {
     return row;
 }
 
+function createDefaultPeerBonusConfig() {
+    return {
+        enabled: true,
+        default_version: 'team',
+        cooldown_days: 90,
+        social: {
+            level_3: { pct: 10 },
+            level_4: { pct: 20 },
+            level_5: { pct: 20 }
+        },
+        team: {
+            level_3: { cash: 100, exchange_coupons: 2, coupon_product_value: 399, unlock_reward: 160, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' },
+            level_4: { cash: 2400, exchange_coupons: 15, coupon_product_value: 399, unlock_reward: 160, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' },
+            level_5: { cash: 0, exchange_coupons: 0, coupon_product_value: 0, unlock_reward: 0, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' }
+        },
+        refund_dev_fee_pct: 1.5,
+        level_1: 0,
+        level_2: 0,
+        level_3: 100,
+        level_4: 2000,
+        level_5: 0,
+        product_sets_3: 2,
+        product_sets_4: 15,
+        product_sets_5: 0
+    };
+}
+
+function normalizePeerBonusLevelConfig(raw = {}, fallback = {}) {
+    return {
+        cash: Math.max(0, toNumber(raw.cash, fallback.cash || 0)),
+        exchange_coupons: Math.max(0, Math.floor(toNumber(raw.exchange_coupons, fallback.exchange_coupons || 0))),
+        coupon_product_value: Math.max(0, toNumber(raw.coupon_product_value, fallback.coupon_product_value || 0)),
+        unlock_reward: Math.max(0, toNumber(raw.unlock_reward, fallback.unlock_reward || 0)),
+        allowed_product_ids: toArray(raw.allowed_product_ids).map((value) => pickString(value)).filter(Boolean),
+        allowed_sku_ids: toArray(raw.allowed_sku_ids).map((value) => pickString(value)).filter(Boolean),
+        exchange_title: pickString(raw.exchange_title || fallback.exchange_title)
+    };
+}
+
+function normalizePeerBonusConfig(raw = {}) {
+    const defaults = createDefaultPeerBonusConfig();
+    const source = toObject(raw, {});
+    return {
+        ...defaults,
+        ...source,
+        enabled: source.enabled === undefined ? defaults.enabled : toBoolean(source.enabled),
+        default_version: ['team', 'social'].includes(pickString(source.default_version).toLowerCase()) ? pickString(source.default_version).toLowerCase() : defaults.default_version,
+        cooldown_days: Math.max(0, Math.floor(toNumber(source.cooldown_days, defaults.cooldown_days))),
+        refund_dev_fee_pct: Math.max(0, toNumber(source.refund_dev_fee_pct, defaults.refund_dev_fee_pct)),
+        social: {
+            level_3: { pct: Math.max(0, toNumber(source.social?.level_3?.pct, defaults.social.level_3.pct)) },
+            level_4: { pct: Math.max(0, toNumber(source.social?.level_4?.pct, defaults.social.level_4.pct)) },
+            level_5: { pct: Math.max(0, toNumber(source.social?.level_5?.pct, defaults.social.level_5.pct)) }
+        },
+        team: {
+            level_3: normalizePeerBonusLevelConfig(source.team?.level_3, defaults.team.level_3),
+            level_4: normalizePeerBonusLevelConfig(source.team?.level_4, defaults.team.level_4),
+            level_5: normalizePeerBonusLevelConfig(source.team?.level_5, defaults.team.level_5)
+        }
+    };
+}
+
+function buildExchangeMetaFromPeerBonus(peerBonus, bonusLevel) {
+    const config = normalizePeerBonusConfig(peerBonus);
+    const teamConfig = toObject(config.team?.[`level_${bonusLevel}`], {});
+    const allowedProductIds = toArray(teamConfig.allowed_product_ids).map((value) => pickString(value)).filter(Boolean);
+    const allowedSkuIds = toArray(teamConfig.allowed_sku_ids).map((value) => pickString(value)).filter(Boolean);
+    const title = pickString(teamConfig.exchange_title || `平级奖兑换券（${toNumber(teamConfig.coupon_product_value, 0)}元产品）`);
+    return {
+        bonus_level: Math.max(0, toNumber(bonusLevel, 0)),
+        allowed_product_ids: allowedProductIds,
+        allowed_sku_ids: allowedSkuIds,
+        coupon_product_value: Math.max(0, toNumber(teamConfig.coupon_product_value, 0)),
+        unlock_reward: Math.max(0, toNumber(teamConfig.unlock_reward, 0)),
+        title,
+        bind_status: allowedProductIds.length || allowedSkuIds.length ? 'ready' : 'pending_bind'
+    };
+}
+
 function getMemberTierConfigSnapshot() {
     const fallback = getSingleton('member-tier-config', {});
     return {
-        ...fallback,
         member_levels: getConfigRowValue('member_level_config', fallback.member_levels || []),
         growth_rules: getConfigRowValue('growth_rule_config', fallback.growth_rules || {}),
         growth_tiers: getConfigRowValue('growth_tier_config', fallback.growth_tiers || []),
-        commerce_policy: getConfigRowValue('commerce_policy_config', fallback.commerce_policy || {}),
-        purchase_levels: getConfigRowValue('purchase_level_config', fallback.purchase_levels || []),
+        upgrade_rules: getConfigRowValue('member_upgrade_rule_config', getConfigRowValue('agent_system_upgrade_rules', fallback.upgrade_rules || {
+            enabled: true,
+            c1_min_purchase: 299,
+            c2_referee_count: 2,
+            c2_min_sales: 580,
+            b1_referee_count: 10,
+            b1_recharge: 3000,
+            b2_referee_count: 10,
+            b2_recharge: 30000,
+            b3_referee_b2_count: 3,
+            b3_referee_b1_count: 30,
+            b3_recharge: 198000,
+            effective_order_days: 7
+        })),
+        peer_bonus: normalizePeerBonusConfig(getConfigRowValue('agent_system_peer_bonus', getConfigRowValue('agent_system_peer-bonus', fallback.peer_bonus || {}))),
         point_levels: getConfigRowValue('point_level_config', fallback.point_levels || []),
         point_rules: getConfigRowValue('point_rule_config', fallback.point_rules || {})
     };
@@ -7093,7 +7366,15 @@ app.get('/admin/api/member-tier-config', auth, requirePermission('settings_manag
 
 app.put('/admin/api/member-tier-config', auth, requirePermission('settings_manage'), (req, res) => {
     const nextConfig = toObject(req.body, {});
-    saveSingleton('member-tier-config', nextConfig);
+    saveSingleton('member-tier-config', {
+        member_levels: toArray(nextConfig.member_levels),
+        growth_rules: toObject(nextConfig.growth_rules, {}),
+        growth_tiers: toArray(nextConfig.growth_tiers),
+        upgrade_rules: toObject(nextConfig.upgrade_rules, {}),
+        peer_bonus: normalizePeerBonusConfig(nextConfig.peer_bonus),
+        point_levels: toArray(nextConfig.point_levels),
+        point_rules: toObject(nextConfig.point_rules, {})
+    });
     upsertConfigRow('member_level_config', toArray(nextConfig.member_levels), {
         description: '会员/代理等级配置',
         is_public: true
@@ -7105,11 +7386,13 @@ app.put('/admin/api/member-tier-config', auth, requirePermission('settings_manag
         description: '成长值折扣阶梯配置',
         is_public: true
     });
-    upsertConfigRow('commerce_policy_config', toObject(nextConfig.commerce_policy, {}), {
-        description: '全场折扣与会员权益策略配置'
+    upsertConfigRow('member_upgrade_rule_config', toObject(nextConfig.upgrade_rules, {}), {
+        description: '会员升级门槛配置',
+        is_public: true
     });
-    upsertConfigRow('purchase_level_config', toArray(nextConfig.purchase_levels), {
-        description: '拿货等级配置'
+    upsertConfigRow('agent_system_peer_bonus', normalizePeerBonusConfig(nextConfig.peer_bonus), {
+        description: '平级奖励与兑换券配置',
+        is_public: true
     });
     upsertConfigRow('point_level_config', toArray(nextConfig.point_levels), {
         category: 'POINTS',
@@ -7127,6 +7410,35 @@ app.put('/admin/api/member-tier-config', auth, requirePermission('settings_manag
         growth_tiers: toArray(nextConfig.growth_tiers).length
     });
     ok(res, getMemberTierConfigSnapshot());
+});
+
+app.post('/admin/api/member-tier-config/exchange-coupons/backfill', auth, requirePermission('settings_manage'), async (req, res) => {
+    await ensureFreshCollections(['user_coupons']);
+    const peerBonus = normalizePeerBonusConfig(getConfigRowValue('agent_system_peer_bonus', getConfigRowValue('agent_system_peer-bonus', {})));
+    const rows = getCollection('user_coupons');
+    let updated = 0;
+    let pendingBind = 0;
+    const nextRows = rows.map((row) => {
+        if (pickString(row.coupon_type).toLowerCase() !== 'exchange') return row;
+        if (pickString(row.source).toLowerCase() !== 'peer_bonus') return row;
+        if (row.exchange_meta && typeof row.exchange_meta === 'object' && Object.keys(row.exchange_meta).length > 0) return row;
+        const bonusLevel = Math.max(0, toNumber(row.bonus_role_level, 0));
+        if (!bonusLevel) return row;
+        const exchangeMeta = buildExchangeMetaFromPeerBonus(peerBonus, bonusLevel);
+        if (exchangeMeta.bind_status !== 'ready') pendingBind += 1;
+        updated += 1;
+        return {
+            ...row,
+            exchange_meta: exchangeMeta,
+            updated_at: nowIso()
+        };
+    });
+    if (updated > 0) {
+        saveCollection('user_coupons', nextRows);
+        await Promise.resolve(dataStore.flush?.());
+    }
+    createAuditLog(req.admin, 'member-tier-config.exchange-coupons.backfill', 'user_coupons', { updated, pending_bind: pendingBind });
+    ok(res, { updated, pending_bind: pendingBind });
 });
 
 app.get('/admin/api/alert-config', auth, (req, res) => ok(res, getSingleton('alert-config', {

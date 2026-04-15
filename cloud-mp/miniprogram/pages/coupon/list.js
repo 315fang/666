@@ -34,6 +34,10 @@ function buildCouponView(c = {}) {
         discount_text = (raw % 1 === 0 ? raw.toFixed(0) : raw.toFixed(1)) + '折';
     }
 
+    const exchangeMeta = c.exchange_meta && typeof c.exchange_meta === 'object' ? c.exchange_meta : {};
+    const allowedProductIds = Array.isArray(exchangeMeta.allowed_product_ids) ? exchangeMeta.allowed_product_ids : [];
+    const isExchange = String(c.coupon_type || c.type || '').toLowerCase() === 'exchange';
+
     return {
         ...c,
         id: c.id || c._id || c.coupon_id,
@@ -43,7 +47,14 @@ function buildCouponView(c = {}) {
         min_purchase: c.min_purchase != null ? c.min_purchase : 0,
         scope: c.scope || 'all',
         expire_at_formatted: formatExpire(c.expire_at || c.expires_at || c.end_at || c.valid_until),
-        discount_text
+        discount_text,
+        is_exchange: isExchange,
+        exchange_meta: exchangeMeta,
+        exchange_ready: isExchange && exchangeMeta.bind_status !== 'pending_bind' && allowedProductIds.length > 0,
+        exchange_value_text: isExchange ? String(exchangeMeta.coupon_product_value || c.coupon_value || '资格') : '',
+        exchange_scope_text: isExchange ? (allowedProductIds.length > 0 ? `可兑换 ${allowedProductIds.length} 个指定商品` : '待绑定兑换商品') : '',
+        exchange_desc: isExchange ? (exchangeMeta.title || c.coupon_name || '兑换券') : '',
+        action_text: isExchange ? '去兑换' : '使用'
     };
 }
 
@@ -104,7 +115,23 @@ Page({
     },
 
     onUse(e) {
-        wx.showToast({ title: '下单时可在结算页直接选择优惠券', icon: 'none', duration: 2500 });
+        const coupon = e.currentTarget.dataset.coupon || {};
+        if (!coupon.is_exchange) {
+            wx.showToast({ title: '下单时可在结算页直接选择优惠券', icon: 'none', duration: 2500 });
+            return;
+        }
+        if (!coupon.exchange_ready) {
+            wx.showToast({ title: '该兑换券尚未绑定商品，请联系管理员', icon: 'none', duration: 2500 });
+            return;
+        }
+        const couponId = coupon._id || coupon.id || coupon.coupon_id;
+        const productIds = Array.isArray(coupon.exchange_meta?.allowed_product_ids) ? coupon.exchange_meta.allowed_product_ids : [];
+        wx.setStorageSync('activeExchangeCoupon', coupon);
+        if (productIds.length === 1) {
+            wx.navigateTo({ url: `/pages/product/detail?id=${encodeURIComponent(productIds[0])}&exchange_coupon_id=${encodeURIComponent(couponId)}` });
+            return;
+        }
+        wx.navigateTo({ url: `/pages/coupon/exchange?coupon_id=${encodeURIComponent(couponId)}` });
     },
 
     onGoLogin() {

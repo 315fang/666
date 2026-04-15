@@ -89,6 +89,9 @@
       <view class="explosive-notice" wx:if="{{product.is_explosive}}">
         <text class="explosive-notice-text">此商品不参与会员折扣、优惠券及积分抵扣</text>
       </view>
+      <view class="explosive-notice" wx:if="{{exchangeMode}}">
+        <text class="explosive-notice-text">{{exchangeTitle || '当前商品支持兑换券兑换，下单金额为 0 元。'}}</text>
+      </view>
       <view class="product-title">{{product.name}}</view>
       <view class="product-spec-summary" wx:if="{{product.specSummary}}">
         <text class="spec-summary-label">规格</text>
