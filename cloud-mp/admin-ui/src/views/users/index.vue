@@ -28,6 +28,7 @@
       :on-batch-role-change="handleBatchRoleChange"
       :on-batch-role="handleBatchRole"
       :on-refresh="fetchUsers"
+      :last-synced-at="lastSyncedText"
       :on-open-detail="openDetail"
       :on-open-role-edit="openRoleEdit"
       :on-open-purchase-level="openPurchaseLevel"
@@ -162,12 +163,14 @@ import { formatDateShort as formatDate } from '@/utils/format'
 import { getUserNickname, normalizeUserDisplay } from '@/utils/userDisplay'
 import { useUserStore } from '@/store/user'
 import { useRoute } from 'vue-router'
+import { extractReadAt, mergeStrongSuccessMessage } from '@/api/consistency'
 
 // ===== 列表 =====
 const route = useRoute()
 const loading = ref(false)
 const userStore = useUserStore()
 const tableData = ref([])
+const lastSyncedAt = ref('')
 const { pagination, resetPage, applyResponse } = usePagination()
 /**
  * 搜索字段说明：
@@ -197,6 +200,7 @@ const canManageUserRole = computed(() => userStore.hasPermission('user_role_mana
 const canManageUserParent = computed(() => userStore.hasPermission('user_parent_manage'))
 const canManageUserStatus = computed(() => userStore.hasPermission('user_status_manage'))
 const purchaseLevelOptions = ref([])
+const lastSyncedText = computed(() => lastSyncedAt.value ? formatDate(lastSyncedAt.value) : '')
 
 const fetchPurchaseLevels = async () => {
   try {
@@ -227,6 +231,8 @@ const fetchUsers = async () => {
     const res = await getUsers(params)
     tableData.value = res?.list || []
     applyResponse(res)
+    const readAt = extractReadAt(res)
+    if (readAt) lastSyncedAt.value = readAt
   } catch (e) {
     ElMessage.error(e?.message || '加载用户列表失败')
   } finally {
@@ -239,10 +245,10 @@ const refreshUsers = () => fetchUsers()
 const runUserMutation = async (task, successMessage, onSuccess) => {
   submitting.value = true
   try {
-    await task()
-    if (successMessage) {
-      ElMessage.success(successMessage)
-    }
+    const result = await task()
+    const readAt = extractReadAt(result)
+    if (readAt) lastSyncedAt.value = readAt
+    ElMessage.success(mergeStrongSuccessMessage(result, successMessage))
     if (typeof onSuccess === 'function') {
       await onSuccess()
     }
@@ -359,10 +365,13 @@ const handleBatchRole = async () => {
   if (batchRole.value === null) return
   try {
     await ElMessageBox.confirm(`将 ${selectedIds.value.length} 个用户角色设为「${roleText(batchRole.value)}」？`, '批量操作', { type: 'warning' })
-    await updateUsersBatchRole({ user_ids: selectedIds.value, role_level: batchRole.value })
-    ElMessage.success('批量更新成功')
+    const result = await updateUsersBatchRole({ user_ids: selectedIds.value, role_level: batchRole.value })
+    const readAt = extractReadAt(result)
+    if (readAt) lastSyncedAt.value = readAt
+    ElMessage.success(mergeStrongSuccessMessage(result, `批量更新成功（${selectedIds.value.length} 人）`))
     batchRole.value = null
-    refreshUsers()
+    selectedIds.value = []
+    await refreshUsers()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e?.message || '批量更新失败')
   }
@@ -468,10 +477,12 @@ const onCommerceToggle = async (enabled) => {
   if (!detailUser.value?.id) return
   commerceSaving.value = true
   try {
-    await updateUserCommerce(detailUser.value.id, { participate_distribution: enabled ? 1 : 0 })
+    const result = await updateUserCommerce(detailUser.value.id, { participate_distribution: enabled ? 1 : 0 })
     detailUser.value = { ...detailUser.value, participate_distribution: enabled ? 1 : 0 }
-    ElMessage.success('已更新')
-    refreshUsers()
+    const readAt = extractReadAt(result)
+    if (readAt) lastSyncedAt.value = readAt
+    ElMessage.success(mergeStrongSuccessMessage(result, '分销参与状态已更新'))
+    await refreshUsers()
   } catch (e) {
     ElMessage.error(e?.message || '更新失败')
   } finally {
@@ -496,10 +507,10 @@ const openRoleEdit = (row) => {
 }
 
 const submitRole = async () => {
-  await runUserMutation(async () => {
+  await runUserMutation(() => {
     const payload = { role_level: roleForm.role_level }
     if (roleForm.role_level === 3) payload.agent_level = roleForm.agent_level
-    await updateUserRole(currentUser.value.id, payload)
+    return updateUserRole(currentUser.value.id, payload)
   }, '角色更新成功', () => { roleVisible.value = false })
 }
 
@@ -638,9 +649,10 @@ const submitParent = async () => {
 const handleBan = async (row, ban) => {
   try {
     await ElMessageBox.confirm(`确认${ban ? '封禁' : '解封'}用户「${displayUserName(row)}」？`, '操作确认', { type: 'warning' })
-    await updateUserStatus(row.id, { status: ban ? 0 : 1, reason: ban ? '管理员封禁' : '管理员解封' })
-    ElMessage.success(ban ? '已封禁' : '已解封')
-    refreshUsers()
+    await runUserMutation(
+      () => updateUserStatus(row.id, { status: ban ? 0 : 1, reason: ban ? '管理员封禁' : '管理员解封' }),
+      ban ? '已封禁' : '已解封'
+    )
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e?.message || '操作失败')
   }

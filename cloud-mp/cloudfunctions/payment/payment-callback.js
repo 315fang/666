@@ -5,6 +5,7 @@ const db = cloud.database();
 const _ = db.command;
 const { verifySignature, decryptResource, loadPublicKey } = require('./wechat-pay-v3');
 const {
+    pickString,
     buildPaymentWritePatch,
     getRefundTargetText,
     normalizePaymentMethodCode,
@@ -59,6 +60,14 @@ const DEFAULT_AGENT_COMMISSION_CONFIG = {
     direct_pct_by_role: { 1: 20, 2: 30, 3: 40, 4: 40, 5: 40 },
     indirect_pct_by_role: { 2: 0, 3: 0, 4: 10, 5: 10 },
     commission_matrix: DEFAULT_COMMISSION_MATRIX
+};
+
+const DEFAULT_COST_SPLIT = {
+    enabled: true,
+    direct_sales_pct: 40,
+    operations_pct: 25,
+    mirror_operations_pct: 5,
+    profit_pct: 30
 };
 
 const DEFAULT_PEER_BONUS_CONFIG = {
@@ -297,6 +306,10 @@ async function loadAgentRuntimeConfig() {
             direct_pct_by_role: normalizePctMap(commission?.direct_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.direct_pct_by_role),
             indirect_pct_by_role: normalizePctMap(commission?.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role),
             commission_matrix: commissionMatrix
+        },
+        costSplit: {
+            ...DEFAULT_COST_SPLIT,
+            ...(commission?.cost_split && typeof commission.cost_split === 'object' ? commission.cost_split : {})
         },
         commissionMatrix,
         memberLevels,
@@ -698,6 +711,12 @@ function roleBasedCommission(user = {}, level, baseAmount, commissionConfig = DE
     return roundMoney(baseAmount * (rates[role] || 0));
 }
 
+function resolveSelfCommissionRate(costSplit = {}) {
+    const directSalesPct = toNumber(costSplit?.direct_sales_pct, DEFAULT_COST_SPLIT.direct_sales_pct);
+    const normalized = directSalesPct > 1 ? directSalesPct / 100 : directSalesPct;
+    return Math.max(0, normalized);
+}
+
 async function ensureAgentRoleSynced(orderId, order) {
     if (isExchangeOrder(order)) {
         return { skipped: true, reason: 'exchange_order' };
@@ -985,16 +1004,10 @@ async function ensureCommissionsCreated(orderId, order) {
         { level: 2, type: 'indirect', user: grandparent }
     ].filter((b) => b.user && b.user.openid && b.user.openid !== order.openid);
 
-    if (!beneficiaries.length) {
-        await db.collection('orders').doc(orderId).update({
-            data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
-        });
-        return { created: 0 };
-    }
-
-    const { commissionConfig, commissionMatrix } = await loadAgentRuntimeConfig();
+    const { commissionConfig, commissionMatrix, costSplit } = await loadAgentRuntimeConfig();
     const useMatrix = commissionMatrix && Object.keys(commissionMatrix).length > 0;
     const buyerRole = toNumber(buyer.role_level ?? buyer.distributor_level ?? buyer.level, 0);
+    const isAgentSelfPurchase = buyerRole >= 3;
     const totals = new Map();
     const items = toArray(order.items);
 
@@ -1006,6 +1019,54 @@ async function ensureCommissionsCreated(orderId, order) {
             data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
         });
         return { created: 0, reason: 'all_points_payment' };
+    }
+
+    if (isAgentSelfPurchase) {
+        const existingSelfRes = await db.collection('commissions')
+            .where({ order_id: orderId, openid: buyer.openid, type: 'self' })
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+        const selfCommissionRate = resolveSelfCommissionRate(costSplit);
+        const selfCommissionAmount = roundMoney(orderPayAmount * selfCommissionRate);
+
+        if ((!existingSelfRes.data || existingSelfRes.data.length === 0) && selfCommissionAmount > 0) {
+            await db.collection('commissions').add({
+                data: {
+                    openid: buyer.openid,
+                    user_id: buyer.id || buyer._legacy_id || buyer._id || buyer.openid,
+                    from_openid: order.openid,
+                    buyer_role: buyerRole,
+                    order_id: orderId,
+                    order_no: order.order_no,
+                    amount: selfCommissionAmount,
+                    level: buyerRole,
+                    type: 'self',
+                    self_sale_rate: selfCommissionRate,
+                    self_sale_profit_amount: selfCommissionAmount,
+                    self_sale_goods_value_amount: roundMoney(orderPayAmount - selfCommissionAmount),
+                    status: 'pending',
+                    created_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                }
+            });
+        }
+
+        await db.collection('orders').doc(orderId).update({
+            data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
+        });
+        return {
+            created: selfCommissionAmount > 0 ? 1 : 0,
+            commission_base: orderPayAmount,
+            mode: 'self_purchase'
+        };
+    }
+
+    if (!beneficiaries.length) {
+        await db.collection('orders').doc(orderId).update({
+            data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
+        });
+        return { created: 0 };
     }
 
     const itemBaseTotal = items.reduce((sum, item) => {

@@ -8,7 +8,7 @@ Page({
         balance: '0.00',
         // 佣金概览
         commissionTotal: '0.00',
-        // 预计收益（团队订单已下单待支付，支付成功后才会生成真实佣金）
+        // 预计收益（订单已支付并生成佣金记录，但尚未进入冻结/审核阶段）
         commissionEstimated: '0.00',
         // 收益阶段合计（预计收益 + 冻结中 + 审核中 + 待打款）
         commissionFlowTotal: '0.00',
@@ -128,7 +128,7 @@ Page({
 
     _statusText(status) {
         const map = {
-            'frozen': '冻结中', 'pending': '冻结中',
+            'frozen': '冻结中', 'pending': '预计入账',
             'pending_approval': '审核中',
             'approved': '待打款',
             'settled': '已到账', 'completed': '已到账',
@@ -139,7 +139,7 @@ Page({
 
     _statusClass(status) {
         const map = {
-            'frozen': 'log-status-frozen', 'pending': 'log-status-frozen',
+            'frozen': 'log-status-frozen', 'pending': 'log-status-pending_approval',
             'pending_approval': 'log-status-pending_approval',
             'approved': 'log-status-approved',
             'settled': 'log-status-settled', 'completed': 'log-status-settled',

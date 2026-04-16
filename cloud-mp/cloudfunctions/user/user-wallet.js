@@ -308,7 +308,7 @@ function getCommissionLogTypeText(type) {
 function getCommissionLogStatusText(status) {
     const map = {
         frozen: '冻结中',
-        pending: '冻结中',
+        pending: '预计入账',
         pending_approval: '审核中',
         approved: '待打款',
         settled: '已到账',
@@ -440,8 +440,6 @@ async function getWalletInfo(openid) {
         else if (s === 'pending_approval') stats.pendingApproval += amt;
         else if (s === 'approved')    stats.approved += amt;
         else if (s === 'settled' || s === 'completed') stats.settled += amt;
-        // pending 状态：佣金刚生成尚未冻结，归入冻结前暂存，也计入累计
-        else if (s === 'pending')     stats.frozen += amt;
 
         if (s !== 'cancelled') stats.total += amt;
     });

@@ -20,6 +20,8 @@
         <div class="card-header">
           <span>佣金管理</span>
           <div class="header-actions">
+            <span class="sync-text">最后同步：{{ lastSyncedAt ? formatDate(lastSyncedAt) : '—' }}</span>
+            <el-button size="small" @click="fetchData" :loading="loading">刷新</el-button>
             <el-button
               type="success"
               :disabled="selectedIds.length === 0"
@@ -201,6 +203,7 @@ import { COMMISSION_TYPE_OPTIONS, getCommissionTypeLabel } from '@/utils/commiss
 import { usePagination } from '@/composables/usePagination'
 import { getUserNickname } from '@/utils/userDisplay'
 import { buildUserManagementQuery } from '@/utils/userRouting'
+import { extractReadAt, mergeStrongSuccessMessage } from '@/api/consistency'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -211,6 +214,7 @@ const rejectReason = ref('')
 const selectedIds = ref([])
 const currentRejectId = ref(null)
 const isBatchReject = ref(false)
+const lastSyncedAt = ref('')
 
 const statsCards = ref([
   { label: '总佣金金额', value: '0.00', icon: 'Money', color: '#409eff' },
@@ -237,7 +241,9 @@ const runCommissionMutation = async (task, successMessage) => {
     if (result && (result.id || result._id)) {
       patchCommissionRow(result.id || result._id, result)
     }
-    ElMessage.success(successMessage)
+    const readAt = extractReadAt(result)
+    if (readAt) lastSyncedAt.value = readAt
+    ElMessage.success(mergeStrongSuccessMessage(result, successMessage))
     await fetchData()
   } catch (e) {
     ElMessage.error(e?.message || '操作失败')
@@ -269,6 +275,8 @@ const fetchData = async () => {
     const res = await getCommissions({ ...searchForm, page: pagination.page, limit: pagination.limit })
     tableData.value = res?.list || []
     applyResponse(res)
+    const readAt = extractReadAt(res)
+    if (readAt) lastSyncedAt.value = readAt
 
     // 更新统计卡片
     const stats = res?.stats || res?.data?.stats
@@ -316,9 +324,11 @@ const handleBatchApprove = async () => {
       cancelButtonText: '取消',
       type: 'success'
     })
-      await batchApproveCommissions({ ids: selectedIds.value })
-      ElMessage.success('批量审批成功')
-      fetchData()
+    await runCommissionMutation(
+      () => batchApproveCommissions({ ids: selectedIds.value }),
+      `批量审批成功（${selectedIds.value.length} 条）`
+    )
+    selectedIds.value = []
   } catch (e) {
     if (e !== 'cancel') console.error('批量审批失败:', e)
   }
@@ -337,17 +347,27 @@ const submitReject = async () => {
   }
   submitting.value = true
   try {
+    const result = isBatchReject.value
+      ? await batchRejectCommissions({ ids: selectedIds.value, reason: rejectReason.value })
+      : await rejectCommissionItem(currentRejectId.value, { reason: rejectReason.value })
+    const readAt = extractReadAt(result)
+    if (readAt) lastSyncedAt.value = readAt
+    ElMessage.success(
+      mergeStrongSuccessMessage(
+        result,
+        isBatchReject.value ? `批量驳回成功（${selectedIds.value.length} 条）` : '驳回成功'
+      )
+    )
     if (isBatchReject.value) {
-      await batchRejectCommissions({ ids: selectedIds.value, reason: rejectReason.value })
-      ElMessage.success('批量驳回成功')
-    } else {
-      await rejectCommissionItem(currentRejectId.value, { reason: rejectReason.value })
-      ElMessage.success('驳回成功')
+      selectedIds.value = []
     }
     rejectDialogVisible.value = false
-    fetchData()
+    await fetchData()
   } catch (e) {
-    console.error('驳回失败:', e)
+    if (e !== 'cancel') {
+      ElMessage.error(e?.message || '驳回失败')
+      console.error('驳回失败:', e)
+    }
   } finally {
     submitting.value = false
   }
@@ -381,7 +401,8 @@ watch(
 <style scoped>
 .commissions-page { padding: 0; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
-.header-actions { display: flex; gap: 8px; }
+.header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sync-text { font-size: 12px; color: #909399; }
 .search-form { margin-bottom: 20px; }
 .amount { font-weight: 600; color: #f56c6c; }
 .order-no { font-size: 12px; color: #909399; font-family: monospace; }

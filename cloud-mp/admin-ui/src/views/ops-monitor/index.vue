@@ -114,6 +114,41 @@
           </div>
         </div>
       </el-col>
+      <el-col :xs="24" :sm="12" :md="8">
+        <div class="stat-card" :class="cacheCardClass" style="height:auto;min-height:90px">
+          <div class="stat-icon">
+            <el-icon size="24"><Refresh /></el-icon>
+          </div>
+          <div class="stat-body">
+            <div class="stat-label">缓存健康</div>
+            <div class="stat-value" style="font-size:16px">
+              <el-tag
+                :type="cacheDirtyCount > 0 || cachePendingFlushCount > 0 ? 'warning' : 'success'"
+                size="small"
+                effect="dark"
+                style="margin-right:6px"
+              >
+                {{ cacheDirtyCount > 0 || cachePendingFlushCount > 0 ? '有待同步' : '缓存稳定' }}
+              </el-tag>
+              <span style="font-size:13px;color:#606266">
+                {{ cacheHealth.mode || '--' }}
+              </span>
+            </div>
+            <div class="stat-sub">
+              已缓存 {{ cacheHealth.cached_collections ?? 0 }} 集合
+              <span style="margin-left:8px">脏集合 {{ cacheDirtyCount }}</span>
+              <span style="margin-left:8px">待 flush {{ cachePendingFlushCount }}</span>
+              <el-button
+                text
+                size="small"
+                style="margin-left:8px;padding:0"
+                :loading="cacheRefreshing"
+                @click="refreshCacheStatus"
+              >刷新缓存状态</el-button>
+            </div>
+          </div>
+        </div>
+      </el-col>
     </el-row>
 
     <!-- ═══ 第二行：左：定时任务 / 右：业务异常速览 ═══ -->
@@ -225,6 +260,12 @@
             <el-descriptions-item label="系统负载 (1/5/15m)">
               {{ sysStatus.os?.load_avg?.join(' / ') }}
             </el-descriptions-item>
+            <el-descriptions-item label="缓存最近加载">{{ cacheHealth.loaded_at ? fmtTime(cacheHealth.loaded_at) : '—' }}</el-descriptions-item>
+            <el-descriptions-item label="缓存最近刷新">{{ cacheHealth.last_reload_at ? fmtTime(cacheHealth.last_reload_at) : '—' }}</el-descriptions-item>
+            <el-descriptions-item label="缓存最近错误">
+              <span v-if="cacheHealth.last_error" style="color:#f56c6c">{{ cacheHealth.last_error }}</span>
+              <span v-else>—</span>
+            </el-descriptions-item>
           </el-descriptions>
         </el-card>
       </el-col>
@@ -246,6 +287,64 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <!-- ═══ 第四行：审查与排障工作台 ═══ -->
+    <el-row :gutter="16" style="margin-top:16px">
+      <el-col :xs="24" :md="8">
+        <el-card shadow="never">
+          <template #header>
+            <div class="card-hd">
+              <el-icon><Document /></el-icon>
+              <span>订单链路审查</span>
+            </div>
+          </template>
+          <el-input v-model="orderAuditLookup" placeholder="输入订单ID或订单号" clearable @keyup.enter="loadOrderAudit" />
+          <div style="margin-top:10px">
+            <el-button size="small" type="primary" :loading="orderAuditLoading" @click="loadOrderAudit">查询订单链路</el-button>
+          </div>
+          <div class="audit-box" v-loading="orderAuditLoading">
+            <pre v-if="orderAuditData">{{ formatJson(orderAuditData) }}</pre>
+            <div v-else class="audit-empty">输入订单号后可查看订单 / 退款 / 佣金 / 钱包流水 / 审计日志链路。</div>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :md="8">
+        <el-card shadow="never">
+          <template #header>
+            <div class="card-hd">
+              <el-icon><Cpu /></el-icon>
+              <span>用户资金链路</span>
+            </div>
+          </template>
+          <el-input v-model="userAuditLookup" placeholder="输入用户ID / OPENID / 会员码" clearable @keyup.enter="loadUserAudit" />
+          <div style="margin-top:10px">
+            <el-button size="small" type="primary" :loading="userAuditLoading" @click="loadUserAudit">查询用户链路</el-button>
+          </div>
+          <div class="audit-box" v-loading="userAuditLoading">
+            <pre v-if="userAuditData">{{ formatJson(userAuditData) }}</pre>
+            <div v-else class="audit-empty">输入用户标识后可查看用户、订单、佣金、提现、货款和余额流水链路。</div>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :md="8">
+        <el-card shadow="never">
+          <template #header>
+            <div class="card-hd">
+              <el-icon><Warning /></el-icon>
+              <span>配置来源审查</span>
+            </div>
+          </template>
+          <el-input v-model="configAuditKey" placeholder="输入配置key，如 mini_program_config" clearable @keyup.enter="loadConfigAudit" />
+          <div style="margin-top:10px">
+            <el-button size="small" type="primary" :loading="configAuditLoading" @click="loadConfigAudit">查询配置来源</el-button>
+          </div>
+          <div class="audit-box" v-loading="configAuditLoading">
+            <pre v-if="configAuditData">{{ formatJson(configAuditData) }}</pre>
+            <div v-else class="audit-empty">输入配置key后可查看 singleton / configs / app_configs 的来源与当前生效值。</div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -260,6 +359,9 @@ import {
   getDebugAnomalies,
   getCronStatus,
   getDebugLogs,
+  getDebugOrderChain,
+  getDebugUserChain,
+  getDebugConfigSource,
   getStorageConfig,
   testStorageConfig
 } from '@/api'
@@ -278,17 +380,34 @@ const anomalyIssues = ref([])
 const anomalyStats  = ref({})
 const logLines    = ref([])
 const logNote     = ref('')
+const orderAuditLookup = ref('')
+const orderAuditLoading = ref(false)
+const orderAuditData = ref(null)
+const userAuditLookup = ref('')
+const userAuditLoading = ref(false)
+const userAuditData = ref(null)
+const configAuditKey = ref('')
+const configAuditLoading = ref(false)
+const configAuditData = ref(null)
 
 // ── 存储健康 ──────────────────────────────────────────
 const storageStatus   = ref('checking')   // 'checking' | 'ok' | 'error'
 const storageLatency  = ref(null)
 const storageProvider = ref('')
 const storageChecking = ref(false)
+const cacheRefreshing = ref(false)
 
 const storageCardClass = computed(() => {
   if (storageStatus.value === 'ok')       return 'ok'
   if (storageStatus.value === 'checking') return 'ok'
   return 'err'
+})
+const cacheHealth = computed(() => sysStatus.value.cache_health || {})
+const cacheDirtyCount = computed(() => (cacheHealth.value.dirty_collections || []).length)
+const cachePendingFlushCount = computed(() => (cacheHealth.value.pending_flush_collections || []).length)
+const cacheCardClass = computed(() => {
+  if (cacheDirtyCount.value > 0 || cachePendingFlushCount.value > 0) return 'warn'
+  return 'ok'
 })
 
 const checkStorage = async () => {
@@ -342,6 +461,16 @@ const fetchStatus = async () => {
   } catch { sysStatus.value = {} }
 }
 
+const refreshCacheStatus = async () => {
+  cacheRefreshing.value = true
+  try {
+    await fetchStatus()
+    lastUpdateTime.value = dayjs().format('HH:mm:ss')
+  } finally {
+    cacheRefreshing.value = false
+  }
+}
+
 const fetchCron = async () => {
   loadingCron.value = true
   try {
@@ -374,6 +503,42 @@ const fetchLogs = async () => {
   }
 }
 
+const loadOrderAudit = async () => {
+  if (!orderAuditLookup.value.trim()) return
+  orderAuditLoading.value = true
+  try {
+    orderAuditData.value = await getDebugOrderChain({ id: orderAuditLookup.value.trim(), order_no: orderAuditLookup.value.trim() })
+  } catch (e) {
+    orderAuditData.value = { error: e?.message || '查询失败' }
+  } finally {
+    orderAuditLoading.value = false
+  }
+}
+
+const loadUserAudit = async () => {
+  if (!userAuditLookup.value.trim()) return
+  userAuditLoading.value = true
+  try {
+    userAuditData.value = await getDebugUserChain({ id: userAuditLookup.value.trim(), member_no: userAuditLookup.value.trim(), openid: userAuditLookup.value.trim() })
+  } catch (e) {
+    userAuditData.value = { error: e?.message || '查询失败' }
+  } finally {
+    userAuditLoading.value = false
+  }
+}
+
+const loadConfigAudit = async () => {
+  if (!configAuditKey.value.trim()) return
+  configAuditLoading.value = true
+  try {
+    configAuditData.value = await getDebugConfigSource({ key: configAuditKey.value.trim() })
+  } catch (e) {
+    configAuditData.value = { error: e?.message || '查询失败' }
+  } finally {
+    configAuditLoading.value = false
+  }
+}
+
 const refreshAll = async () => {
   refreshing.value = true
   await Promise.all([fetchStatus(), fetchCron(), fetchAnomalies(), fetchLogs(), checkStorage()])
@@ -386,6 +551,7 @@ const fmtTime = (iso) => {
   if (!iso) return '—'
   return dayjs(iso).format('MM-DD HH:mm:ss')
 }
+const formatJson = (value) => JSON.stringify(value, null, 2)
 
 // ── 生命周期：首次加载 + 30s 自动刷新 ────────────────
 let timer = null
@@ -533,5 +699,28 @@ onUnmounted(() => clearInterval(timer))
 .time-text {
   font-size: 12px;
   color: #606266;
+}
+
+.audit-box {
+  margin-top: 12px;
+  min-height: 220px;
+  max-height: 360px;
+  overflow: auto;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #cbd5e1;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.audit-box pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.audit-empty {
+  color: #94a3b8;
 }
 </style>

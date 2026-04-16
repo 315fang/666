@@ -4,6 +4,7 @@
       <div class="card-header">
         <span>用户列表</span>
         <div class="header-actions">
+          <span style="font-size:12px;color:#909399">最后同步：{{ lastSyncedAt || '—' }}</span>
           <template v-if="selectedIds.length > 0">
             <template v-if="canManageUserRole">
               <el-select v-model="batchRoleModel" placeholder="批量设置角色" size="small" style="width:130px">
@@ -210,6 +211,10 @@ const props = defineProps({
   onRefresh: {
     type: Function,
     required: true
+  },
+  lastSyncedAt: {
+    type: String,
+    default: ''
   },
   onOpenDetail: {
     type: Function,

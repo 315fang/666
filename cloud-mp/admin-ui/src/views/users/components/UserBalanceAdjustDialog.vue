@@ -103,6 +103,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { mergeStrongSuccessMessage } from '@/api/consistency'
 import { getUserNickname } from '@/utils/userDisplay'
 import {
   adjustUserGoodsFund,
@@ -223,15 +224,15 @@ const handleSubmit = async () => {
   submitting.value = true
   try {
     const fn = API_MAP[form.value.account]
-    await fn(props.user.id, {
+    const result = await fn(props.user.id, {
       type:   form.value.type,
       amount: form.value.amount,
       reason: form.value.reason.trim()
     })
     const labelMap = { goods_fund: '货款余额', commission: '佣金', points: '积分', growth: '成长值' }
-    ElMessage.success(`${labelMap[form.value.account]}调整成功`)
+    ElMessage.success(mergeStrongSuccessMessage(result, `${labelMap[form.value.account]}调整成功`))
     emit('update:visible', false)
-    emit('success')
+    emit('success', result)
   } catch (e) {
     ElMessage.error(e?.message || '操作失败，请重试')
   } finally {

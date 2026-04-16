@@ -1,18 +1,18 @@
 # Admin API Smoke
 
-生成时间：2026-04-14T04:40:02.556Z
+生成时间：2026-04-16T06:29:33.570Z
 入口：https://cloud1-9gywyqe49638e46f.service.tcloudbase.com/admin/api
 
 | 接口 | 结果 | 数量 | 问题 |
 | --- | --- | --- | --- |
-| products | 失败 | 0 | HTTP 401 / code 401 |
-| orders | 失败 | 0 | HTTP 401 / code 401 |
-| users | 失败 | 0 | HTTP 401 / code 401 |
-| refunds | 失败 | 0 | HTTP 401 / code 401 |
-| withdrawals | 失败 | 0 | HTTP 401 / code 401 |
-| commissions | 失败 | 0 | HTTP 401 / code 401 |
-| group-buys | 失败 | 0 | HTTP 401 / code 401 |
-| lottery-prizes | 失败 | 0 | HTTP 401 / code 401 |
-| pickup-stations | 失败 | 0 | HTTP 401 / code 401 |
-| activity-links | 失败 | - | HTTP 401 / code 401 |
+| products | 通过 | 11 | - |
+| orders | 通过 | 20 | - |
+| users | 通过 | 20 | - |
+| refunds | 通过 | 20 | - |
+| withdrawals | 通过 | 5 | - |
+| commissions | 通过 | 5 | - |
+| group-buys | 通过 | 2 | - |
+| lottery-prizes | 通过 | 13 | - |
+| pickup-stations | 通过 | 3 | - |
+| activity-links | 通过 | - | - |
 

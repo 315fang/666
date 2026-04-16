@@ -453,6 +453,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Money, Wallet, CreditCard, Coin, TrendCharts, Refresh, Trophy, DataAnalysis, User } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { getFinanceOverview, getAgentPerformance, getPoolContributions, settleAgentDebt } from '@/api'
+import { mergeStrongSuccessMessage } from '@/api/consistency'
 import { formatDate } from '@/utils/format'
 import { useUserStore } from '@/store/user'
 import { buildUserManagementQuery } from '@/utils/userRouting'
@@ -588,12 +589,12 @@ const handleDebtSubmit = async () => {
       }
     )
     debtSubmitting.value = true
-    await settleAgentDebt(debtTarget.value.user_id, {
+    const result = await settleAgentDebt(debtTarget.value.user_id, {
       amount: Number(debtForm.amount),
       source: debtForm.source,
       reason: debtForm.reason
     })
-    ElMessage.success('欠款处理成功')
+    ElMessage.success(mergeStrongSuccessMessage(result, '欠款处理成功'))
     debtDialogVisible.value = false
     await fetchOverview()
   } catch (error) {

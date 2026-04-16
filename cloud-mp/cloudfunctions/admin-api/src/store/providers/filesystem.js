@@ -46,6 +46,7 @@ function createFilesystemStore(options) {
         singletonRoot = runtimeRoot
     } = options;
     const overridesRoot = path.join(runtimeRoot, 'overrides');
+    let lastReloadAt = null;
 
     function getCollection(name) {
         const overridePath = path.join(overridesRoot, `${name}.json`);
@@ -87,7 +88,14 @@ function createFilesystemStore(options) {
                 data_root: dataRoot,
                 normalized_data_root: normalizedDataRoot,
                 runtime_root: runtimeRoot,
-                singleton_root: singletonRoot
+                singleton_root: singletonRoot,
+                cached_collections: 0,
+                dirty_collections: [],
+                pending_flush_collections: [],
+                loaded_at: null,
+                last_reload_at: lastReloadAt,
+                last_error: null,
+                warnings: []
             };
         },
         describe() {
@@ -100,7 +108,12 @@ function createFilesystemStore(options) {
         },
         getCollection,
         async reloadCollection(name) {
+            lastReloadAt = new Date().toISOString();
             return getCollection(name);
+        },
+        async reloadCollections(names = []) {
+            lastReloadAt = new Date().toISOString();
+            return Promise.all((Array.isArray(names) ? names : []).map((name) => getCollection(name)));
         },
         saveCollection,
         getSingleton,

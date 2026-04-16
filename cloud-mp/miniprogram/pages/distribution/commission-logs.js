@@ -1,6 +1,7 @@
 const { get } = require('../../utils/request');
 
 const COMMISSION_STATUS_MAP = {
+    'pending': { text: '预计入账', class: 'status-pending' },
     'frozen': { text: '冻结中', class: 'status-frozen' },
     'pending_approval': { text: '待审核', class: 'status-pending' },
     'available': { text: '可提现', class: 'status-success' },
@@ -19,6 +20,7 @@ const TYPE_MAP = {
     'pickup_subsidy': { name: '自提补贴', icon: '/assets/icons/truck.svg' },
     'agent_assist': { name: '动销奖励', icon: '/assets/icons/bar-chart.svg' },
     'assist': { name: '动销奖励', icon: '/assets/icons/bar-chart.svg' },
+    'self': { name: '自购返利', icon: '/assets/icons/dollar-sign.svg' },
     'year_end_dividend': { name: '年终分红', icon: '/assets/icons/dollar-sign.svg' },
     'Stock_Diff': { name: '级差利润', icon: '/assets/icons/bar-chart.svg' },
     'agent_fulfillment': { name: '发货利润', icon: '/assets/icons/truck.svg' },

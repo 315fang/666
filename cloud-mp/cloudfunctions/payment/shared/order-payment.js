@@ -98,6 +98,7 @@ function resolvePostPayStatus(order = {}) {
 }
 
 module.exports = {
+    pickString,
     normalizePaymentMethodCode,
     resolvePaymentChannelAlias,
     resolveOrderPaymentMethod,

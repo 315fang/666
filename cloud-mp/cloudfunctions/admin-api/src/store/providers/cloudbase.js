@@ -37,6 +37,7 @@ function createCloudBaseStore(options) {
     const state = {
         ready: false,
         loadedAt: null,
+        lastReloadAt: null,
         error: null,
         warnings: []
     };
@@ -339,7 +340,8 @@ function createCloudBaseStore(options) {
                 pending_singleton_flushes: Array.from(pendingSingletonFlush.keys()),
                 last_error: state.error ? state.error.message : null,
                 warnings: state.warnings,
-                loaded_at: state.loadedAt
+                loaded_at: state.loadedAt,
+                last_reload_at: state.lastReloadAt
             };
         },
         describe() {
@@ -367,10 +369,21 @@ function createCloudBaseStore(options) {
             const key = normalizeSourceName(name);
             if (key === 'admin_singletons') {
                 await loadCollection(key);
+                state.lastReloadAt = new Date().toISOString();
                 return singletonCache;
             }
             await loadCollection(key);
+            state.lastReloadAt = new Date().toISOString();
             return cache.get(key) || [];
+        },
+        async reloadCollections(names = []) {
+            const source = Array.isArray(names) ? names : [];
+            const results = [];
+            for (const name of source) {
+                results.push(await this.reloadCollection(name));
+            }
+            state.lastReloadAt = new Date().toISOString();
+            return results;
         },
         saveCollection(name, rows) {
             const key = normalizeSourceName(name);

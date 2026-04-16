@@ -2,7 +2,13 @@
   <div class="withdrawals-page">
     <el-card>
       <template #header>
-        提现审核
+        <div class="card-header">
+          <span>提现审核</span>
+          <div class="header-actions">
+            <span class="sync-text">最后同步：{{ lastSyncedAt ? formatDateTime(lastSyncedAt) : '—' }}</span>
+            <el-button size="small" @click="refreshWithdrawals" :loading="loading">刷新</el-button>
+          </div>
+        </div>
       </template>
 
       <!-- 搜索栏 -->
@@ -128,6 +134,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getWithdrawals, approveWithdrawal, rejectWithdrawal, completeWithdrawal } from '@/api'
+import { extractReadAt, mergeStrongSuccessMessage } from '@/api/consistency'
 import CompactIdCell from '@/components/CompactIdCell.vue'
 import { formatDateTime } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
@@ -139,6 +146,7 @@ const submitting = ref(false)
 const rejectDialogVisible = ref(false)
 const detailDialogVisible = ref(false)
 const currentRow = ref(null)
+const lastSyncedAt = ref('')
 
 const searchForm = reactive({
   status: '',
@@ -180,6 +188,8 @@ const fetchWithdrawals = async () => {
     const data = await getWithdrawals(params)
     tableData.value = data?.list || data?.data?.list || []
     applyResponse(data)
+    const readAt = extractReadAt(data)
+    if (readAt) lastSyncedAt.value = readAt
   } catch (error) {
     ElMessage.error('获取提现列表失败')
     console.error('获取提现列表失败:', error)
@@ -198,9 +208,10 @@ const runWithdrawalMutation = async (task, successMessage, onSuccess) => {
       patchWithdrawalRow(result.id || result._id, result)
     }
     const finalMessage = typeof successMessage === 'function' ? successMessage(result) : successMessage
-    ElMessage.success(finalMessage)
+    ElMessage.success(mergeStrongSuccessMessage(result, finalMessage))
+    const readAt = extractReadAt(result)
+    if (readAt) lastSyncedAt.value = readAt
     await onSuccess?.()
-    await new Promise(resolve => setTimeout(resolve, 300))
     await refreshWithdrawals()
   } catch (error) {
     ElMessage.error(error?.message || '操作失败')
@@ -338,6 +349,25 @@ onMounted(() => {
 <style scoped>
 .withdrawals-page {
   padding: 0;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sync-text {
+  font-size: 12px;
+  color: #909399;
 }
 
 .search-form {

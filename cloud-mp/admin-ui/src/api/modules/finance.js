@@ -1,10 +1,11 @@
 import request from '@/utils/request'
+import { normalizeStrongMutationPayload, withStrongReadParams } from '@/api/consistency'
 
 export const getWithdrawals = (params) => {
   return request({
     url: '/withdrawals',
     method: 'get',
-    params
+    params: withStrongReadParams(params)
   })
 }
 
@@ -13,7 +14,7 @@ export const approveWithdrawal = (id, data) => {
     url: `/withdrawals/${id}/approve`,
     method: 'put',
     data
-  })
+  }).then(normalizeStrongMutationPayload)
 }
 
 export const rejectWithdrawal = (id, data) => {
@@ -21,7 +22,7 @@ export const rejectWithdrawal = (id, data) => {
     url: `/withdrawals/${id}/reject`,
     method: 'put',
     data
-  })
+  }).then(normalizeStrongMutationPayload)
 }
 
 export const completeWithdrawal = (id, data) => {
@@ -29,14 +30,14 @@ export const completeWithdrawal = (id, data) => {
     url: `/withdrawals/${id}/complete`,
     method: 'put',
     data
-  })
+  }).then(normalizeStrongMutationPayload)
 }
 
 export const getRefunds = (params) => {
   return request({
     url: '/refunds',
     method: 'get',
-    params
+    params: withStrongReadParams(params)
   })
 }
 
@@ -45,7 +46,7 @@ export const approveRefund = (id, data) => {
     url: `/refunds/${id}/approve`,
     method: 'put',
     data
-  })
+  }).then(normalizeStrongMutationPayload)
 }
 
 export const rejectRefund = (id, data) => {
@@ -53,30 +54,30 @@ export const rejectRefund = (id, data) => {
     url: `/refunds/${id}/reject`,
     method: 'put',
     data
-  })
+  }).then(normalizeStrongMutationPayload)
 }
 
 export const completeRefund = (id) => {
   return request({
     url: `/refunds/${id}/complete`,
     method: 'put'
-  })
+  }).then(normalizeStrongMutationPayload)
 }
 
 export const syncRefundStatus = (id) => {
   return request({
     url: `/refunds/${id}/sync`,
     method: 'put'
-  })
+  }).then(normalizeStrongMutationPayload)
 }
 
-export const getCommissions = (params) => request({ url: '/commissions', method: 'get', params })
-export const approveCommissionItem = (id) => request({ url: `/commissions/${id}/approve`, method: 'put' })
-export const rejectCommissionItem = (id, data) => request({ url: `/commissions/${id}/reject`, method: 'put', data })
-export const batchApproveCommissions = (data) => request({ url: '/commissions/batch-approve', method: 'post', data })
-export const batchRejectCommissions = (data) => request({ url: '/commissions/batch-reject', method: 'post', data })
+export const getCommissions = (params) => request({ url: '/commissions', method: 'get', params: withStrongReadParams(params) })
+export const approveCommissionItem = (id) => request({ url: `/commissions/${id}/approve`, method: 'put' }).then(normalizeStrongMutationPayload)
+export const rejectCommissionItem = (id, data) => request({ url: `/commissions/${id}/reject`, method: 'put', data }).then(normalizeStrongMutationPayload)
+export const batchApproveCommissions = (data) => request({ url: '/commissions/batch-approve', method: 'post', data }).then(normalizeStrongMutationPayload)
+export const batchRejectCommissions = (data) => request({ url: '/commissions/batch-reject', method: 'post', data }).then(normalizeStrongMutationPayload)
 
 export const getFinanceOverview = () => request({ url: '/finance/overview', method: 'get' })
 export const getAgentPerformance = (params) => request({ url: '/finance/agent-performance', method: 'get', params })
 export const getPoolContributions = () => request({ url: '/finance/pool-contributions', method: 'get' })
-export const settleAgentDebt = (id, data) => request({ url: `/users/${id}/debt-settlement`, method: 'post', data })
+export const settleAgentDebt = (id, data) => request({ url: `/users/${id}/debt-settlement`, method: 'post', data }).then(normalizeStrongMutationPayload)

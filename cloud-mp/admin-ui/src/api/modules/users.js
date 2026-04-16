@@ -1,10 +1,11 @@
 import request from '@/utils/request'
+import { normalizeStrongMutationPayload, withStrongReadParams } from '@/api/consistency'
 
 export const getUsers = (params) => {
   return request({
     url: '/users',
     method: 'get',
-    params
+    params: withStrongReadParams(params)
   })
 }
 
@@ -37,7 +38,8 @@ export const searchUsersLite = (params) => {
 export const getUserById = (id) => {
   return request({
     url: `/users/${id}`,
-    method: 'get'
+    method: 'get',
+    params: withStrongReadParams()
   })
 }
 
@@ -45,7 +47,7 @@ export const getUserTeam = (id, params) => {
   return request({
     url: `/users/${id}/team`,
     method: 'get',
-    params
+    params: withStrongReadParams(params)
   })
 }
 
@@ -54,7 +56,7 @@ export const getUserTeamSummary = (id, params) => {
   return request({
     url: `/users/${id}/team-summary`,
     method: 'get',
-    params
+    params: withStrongReadParams(params)
   })
 }
 
@@ -63,7 +65,7 @@ export const updateUserRole = (id, data) => {
     url: `/users/${id}/role`,
     method: 'put',
     data
-  })
+  }).then(normalizeStrongMutationPayload)
 }
 
 export const updateUserStatus = (id, data) => {
@@ -71,22 +73,22 @@ export const updateUserStatus = (id, data) => {
     url: `/users/${id}/status`,
     method: 'put',
     data
-  })
+  }).then(normalizeStrongMutationPayload)
 }
 
-export const updateUsersBatchRole = (data) => request({ url: '/users/batch-role', method: 'post', data })
-export const updateUserRemark = (id, data) => request({ url: `/users/${id}/remark`, method: 'put', data })
-export const updateUserCommerce = (id, data) => request({ url: `/users/${id}/commerce`, method: 'put', data })
-export const updateUserInviteCode = (id, data) => request({ url: `/users/${id}/invite-code`, method: 'put', data })
-export const updateUserMemberNo = (id, data) => request({ url: `/users/${id}/member-no`, method: 'put', data })
-export const updateUserParent = (id, data) => request({ url: `/users/${id}/parent`, method: 'put', data })
-export const updateUserPurchaseLevel = (id, data) => request({ url: `/users/${id}/purchase-level`, method: 'put', data })
+export const updateUsersBatchRole = (data) => request({ url: '/users/batch-role', method: 'post', data }).then(normalizeStrongMutationPayload)
+export const updateUserRemark = (id, data) => request({ url: `/users/${id}/remark`, method: 'put', data }).then(normalizeStrongMutationPayload)
+export const updateUserCommerce = (id, data) => request({ url: `/users/${id}/commerce`, method: 'put', data }).then(normalizeStrongMutationPayload)
+export const updateUserInviteCode = (id, data) => request({ url: `/users/${id}/invite-code`, method: 'put', data }).then(normalizeStrongMutationPayload)
+export const updateUserMemberNo = (id, data) => request({ url: `/users/${id}/member-no`, method: 'put', data }).then(normalizeStrongMutationPayload)
+export const updateUserParent = (id, data) => request({ url: `/users/${id}/parent`, method: 'put', data }).then(normalizeStrongMutationPayload)
+export const updateUserPurchaseLevel = (id, data) => request({ url: `/users/${id}/purchase-level`, method: 'put', data }).then(normalizeStrongMutationPayload)
 
 /** 调整代理商货款余额（仅代理商有效） */
-export const adjustUserGoodsFund = (id, data) => request({ url: `/users/${id}/goods-fund`, method: 'put', data })
+export const adjustUserGoodsFund = (id, data) => request({ url: `/users/${id}/goods-fund`, method: 'put', data }).then(normalizeStrongMutationPayload)
 /** 调整用户积分（整数） */
-export const adjustUserPoints = (id, data) => request({ url: `/users/${id}/points`, method: 'put', data })
+export const adjustUserPoints = (id, data) => request({ url: `/users/${id}/points`, method: 'put', data }).then(normalizeStrongMutationPayload)
 /** 调整用户成长值（整数） */
-export const adjustUserGrowth = (id, data) => request({ url: `/users/${id}/growth`, method: 'put', data })
+export const adjustUserGrowth = (id, data) => request({ url: `/users/${id}/growth`, method: 'put', data }).then(normalizeStrongMutationPayload)
 /** 手动新增一笔佣金记录 */
-export const adjustUserCommission = (id, data) => request({ url: `/users/${id}/commission`, method: 'post', data })
+export const adjustUserCommission = (id, data) => request({ url: `/users/${id}/commission`, method: 'post', data }).then(normalizeStrongMutationPayload)

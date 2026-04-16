@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { normalizeStrongMutationPayload, withStrongReadParams } from '@/api/consistency'
 
 async function withOrderLookupFallback(executor, primaryId, fallbackId) {
   try {
@@ -19,14 +20,15 @@ export const getOrders = (params) => {
   return request({
     url: '/orders',
     method: 'get',
-    params
+    params: withStrongReadParams(params)
   })
 }
 
 export const getOrderDetail = (id) => {
   return request({
     url: `/orders/${id}`,
-    method: 'get'
+    method: 'get',
+    params: withStrongReadParams()
   })
 }
 
@@ -36,7 +38,7 @@ export const shipOrder = (id, data, fallbackId) =>
       url: `/orders/${targetId}/ship`,
       method: 'put',
       data
-    }),
+    }).then(normalizeStrongMutationPayload),
     id,
     fallbackId
   )
@@ -46,7 +48,7 @@ export const adjustOrderAmount = (id, data) => {
     url: `/orders/${id}/amount`,
     method: 'put',
     data
-  })
+  }).then(normalizeStrongMutationPayload)
 }
 
 export const addOrderRemark = (id, data) => {
@@ -54,14 +56,14 @@ export const addOrderRemark = (id, data) => {
     url: `/orders/${id}/remark`,
     method: 'put',
     data
-  })
+  }).then(normalizeStrongMutationPayload)
 }
 
 export const repairOrderFulfillment = (id) => {
   return request({
     url: `/orders/${id}/repair-fulfillment`,
     method: 'put'
-  })
+  }).then(normalizeStrongMutationPayload)
 }
 
 export const forceCompleteOrder = (id, data) => {
@@ -69,7 +71,7 @@ export const forceCompleteOrder = (id, data) => {
     url: `/orders/${id}/force-complete`,
     method: 'put',
     data
-  })
+  }).then(normalizeStrongMutationPayload)
 }
 
 export const forceCancelOrder = (id, data) => {
@@ -77,7 +79,7 @@ export const forceCancelOrder = (id, data) => {
     url: `/orders/${id}/force-cancel`,
     method: 'put',
     data
-  })
+  }).then(normalizeStrongMutationPayload)
 }
 
 export const exportOrders = (params) => {

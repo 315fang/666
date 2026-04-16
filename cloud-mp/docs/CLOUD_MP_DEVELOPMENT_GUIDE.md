@@ -49,6 +49,42 @@
 
 `admin-ui view -> admin-ui/src/api/* -> /admin/api/* -> admin-api`
 
+### 3.4 管理后台数据一致性
+
+当前后台已按页面一致性分层：
+
+- 强一致页面：
+  - 订单
+  - 退款
+  - 提现
+  - 佣金
+  - 用户余额 / 欠款
+- 弱一致页面：
+  - 素材
+  - Banner
+  - 配置预览
+  - 普通统计看板
+
+当前约定：
+
+1. 强一致读接口默认 `fresh_read=1`，会在读取前 reload 相关集合。
+2. 强一致写接口返回：
+   - `data`
+   - `write_result`
+   - `freshness`
+3. 运维监控页通过 `/admin/api/system/status` 读取 `cache_health`，展示：
+   - `cached_collections`
+   - `dirty_collections`
+   - `pending_flush_collections`
+   - `loaded_at`
+   - `last_reload_at`
+4. 运维监控页当前还接入了三个只读审查接口：
+   - `/admin/api/debug/order-chain`
+   - `/admin/api/debug/user-chain`
+   - `/admin/api/debug/config-source`
+   用于快速排查订单资金链、用户资金链和配置来源问题。
+5. 历史文档提到的 `refresh-cache` 不再作为当前后台正式能力入口，避免继续形成双轨刷新机制。
+
 ### 3.3 数据模型
 
 当前目标模型约束：

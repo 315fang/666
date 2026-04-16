@@ -351,71 +351,34 @@ async function getEstimatedCommissionSummary(openid) {
         indirect_orders: 0
     };
 
-    const userRes = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
-    const currentUser = userRes.data && userRes.data[0];
-    if (!currentUser) return emptySummary;
-
-    const directMembers = await getAllRecords(db, 'users', directRelationWhere(currentUser)).catch(() => []);
-    const indirectMembers = directMembers.length
-        ? await getAllRecords(db, 'users', indirectRelationWhere(directMembers)).catch(() => [])
-        : [];
-    const candidateOpenids = uniqueValues(
-        directMembers.concat(indirectMembers).map((item) => item && item.openid).filter(Boolean)
-    );
-    if (!candidateOpenids.length) return emptySummary;
-
-    const orderGroups = await Promise.all(
-        chunkArray(candidateOpenids, 100).map((batch) => getAllRecords(db, 'orders', {
-            openid: _.in(batch),
-            status: _.in(['pending_payment', 'pending'])
-        }).catch(() => []))
-    );
-    const candidateOrders = orderGroups.flat().filter((order) => order && order._id && order.openid !== openid);
-    if (!candidateOrders.length) return emptySummary;
-
-    const existingCommissionGroups = await Promise.all(
-        chunkArray(uniqueValues(candidateOrders.map((order) => order._id)), 100).map((batch) => getAllRecords(db, 'commissions', {
-            openid,
-            order_id: _.in(batch)
-        }).catch(() => []))
-    );
-    const existingOrderIds = new Set(
-        existingCommissionGroups
-            .flat()
-            .filter((row) => String(row.status || '') !== 'cancelled')
-            .map((row) => String(row.order_id))
-    );
+    const rows = await distributionCommission.getCommissions(openid).catch(() => []);
+    if (!Array.isArray(rows) || rows.length === 0) return emptySummary;
 
     const summary = { ...emptySummary };
-    for (const order of candidateOrders) {
-        if (existingOrderIds.has(String(order._id))) continue;
+    const countedOrderKeys = new Set();
 
-        const calculated = await distributionCommission.calculateOrderCommissions(order);
-        const rows = (calculated.rows || []).filter((row) => row.openid === openid);
-        if (!rows.length) continue;
+    rows.forEach((row) => {
+        if (String(row?.status || '').trim().toLowerCase() !== 'pending') return;
+        const amount = roundMoney(row.amount);
+        if (amount <= 0) return;
 
-        let orderTotal = 0;
-        let directTotal = 0;
-        let indirectTotal = 0;
-        rows.forEach((row) => {
-            const amount = roundMoney(row.amount);
-            orderTotal += amount;
-            if (row.type === 'direct') directTotal += amount;
-            else if (row.type === 'indirect') indirectTotal += amount;
-        });
+        const orderKey = String(row.order_id || row.order_no || row._id || '');
+        const type = String(row.type || '').trim().toLowerCase();
 
-        orderTotal = roundMoney(orderTotal);
-        directTotal = roundMoney(directTotal);
-        indirectTotal = roundMoney(indirectTotal);
-        if (orderTotal <= 0) continue;
+        if (orderKey && !countedOrderKeys.has(orderKey)) {
+            countedOrderKeys.add(orderKey);
+            summary.pending_payment_orders += 1;
+        }
 
-        summary.pending_payment_orders += 1;
-        summary.estimated_commission = roundMoney(summary.estimated_commission + orderTotal);
-        summary.direct_estimated_commission = roundMoney(summary.direct_estimated_commission + directTotal);
-        summary.indirect_estimated_commission = roundMoney(summary.indirect_estimated_commission + indirectTotal);
-        if (directTotal > 0) summary.direct_orders += 1;
-        if (indirectTotal > 0) summary.indirect_orders += 1;
-    }
+        summary.estimated_commission = roundMoney(summary.estimated_commission + amount);
+        if (type === 'direct') {
+            summary.direct_estimated_commission = roundMoney(summary.direct_estimated_commission + amount);
+            summary.direct_orders += 1;
+        } else if (type === 'indirect') {
+            summary.indirect_estimated_commission = roundMoney(summary.indirect_estimated_commission + amount);
+            summary.indirect_orders += 1;
+        }
+    });
 
     return summary;
 }

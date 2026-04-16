@@ -102,6 +102,7 @@ function createMysqlStore(options) {
         ready: false,
         error: null,
         loadedAt: null,
+        lastReloadAt: null,
         warnings: []
     };
 
@@ -251,7 +252,15 @@ function createMysqlStore(options) {
         if (!modelCollections.has(key)) return filesystemStore.getCollection(key);
         const rows = await loadCollection(key);
         cache.set(key, rows);
+        state.lastReloadAt = new Date().toISOString();
         return rows;
+    }
+
+    async function reloadCollections(names = []) {
+        const source = Array.isArray(names) ? names : [];
+        const results = await Promise.all(source.map((name) => reloadCollection(name)));
+        state.lastReloadAt = new Date().toISOString();
+        return results;
     }
 
     function saveCollection(name, rows) {
@@ -303,7 +312,8 @@ function createMysqlStore(options) {
                 pending_flush_collections: Array.from(pendingFlush.keys()),
                 last_error: state.error ? state.error.message : null,
                 warnings: state.warnings,
-                loaded_at: state.loadedAt
+                loaded_at: state.loadedAt,
+                last_reload_at: state.lastReloadAt
             };
         },
         describe() {
@@ -319,6 +329,7 @@ function createMysqlStore(options) {
         },
         getCollection,
         reloadCollection,
+        reloadCollections,
         saveCollection,
         getSingleton,
         saveSingleton,

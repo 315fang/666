@@ -3,8 +3,14 @@
     <el-card>
       <template #header>
         <div class="card-header-row">
-          <span>订单管理</span>
-          <el-tag v-if="summaryPendingShip != null" type="warning" size="small">待发货队列 {{ summaryPendingShip }}</el-tag>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span>订单管理</span>
+            <el-tag v-if="summaryPendingShip != null" type="warning" size="small">待发货队列 {{ summaryPendingShip }}</el-tag>
+          </div>
+          <div class="header-actions">
+            <span class="sync-text">最后同步：{{ lastSyncedAt ? formatDateTime(lastSyncedAt) : '—' }}</span>
+            <el-button size="small" @click="refreshOrders" :loading="loading">刷新</el-button>
+          </div>
         </div>
       </template>
 
@@ -561,6 +567,7 @@ import { buildUserManagementQuery } from '@/utils/userRouting'
 import { getUserAvatar, getUserNickname, normalizeUserDisplay } from '@/utils/userDisplay'
 import { usePagination } from '@/composables/usePagination'
 import { useUserStore } from '@/store/user'
+import { extractReadAt, mergeStrongSuccessMessage } from '@/api/consistency'
 
 const router = useRouter()
 const route = useRoute()
@@ -571,6 +578,7 @@ const exporting = ref(false)
 const summaryPendingShip = ref(null)
 const userStore = useUserStore()
 const tableData = ref([])
+const lastSyncedAt = ref('')
 const { pagination, resetPage, applyResponse } = usePagination()
 const searchForm = reactive({
   status_group: 'all',
@@ -706,6 +714,8 @@ const fetchOrders = async () => {
     const res = await getOrders(buildListQueryParams(false))
     tableData.value = (res?.list || []).map(normalizeOrderDisplay)
     applyResponse(res)
+    const readAt = extractReadAt(res)
+    if (readAt) lastSyncedAt.value = readAt
     const pShip = res?.pendingShip ?? res?.pending_ship ?? res?.summary?.pending_ship
     if (pShip != null) summaryPendingShip.value = pShip
   } catch (error) {
@@ -721,14 +731,16 @@ const refreshOrders = () => fetchOrders()
 const runOrderMutation = async (loadingRef, task, successMessage, onSuccess) => {
   loadingRef.value = true
   try {
-    await task()
-    if (successMessage) {
-      ElMessage.success(successMessage)
-    }
+    const result = await task()
+    const readAt = extractReadAt(result)
+    if (readAt) lastSyncedAt.value = readAt
+    const finalMessage = typeof successMessage === 'function' ? successMessage(result) : successMessage
+    ElMessage.success(mergeStrongSuccessMessage(result, finalMessage))
     if (typeof onSuccess === 'function') {
-      await onSuccess()
+      await onSuccess(result)
     }
     await refreshOrders()
+    return result
   } catch (e) {
     ElMessage.error(e?.message || '操作失败')
   } finally {
@@ -1066,6 +1078,7 @@ const detailTimeline = (order) => {
 }
 const commissionTypeText = (type) => getCommissionTypeLabel(type)
 const commissionStatusText = (status) => ({
+  pending: '预计入账',
   frozen: '冻结中',
   pending_approval: '待审批',
   approved: '已审批',
@@ -1159,7 +1172,15 @@ const submitShip = async () => {
       logistics_company: logisticsCompany,
       type: shipForm.fulfillment_type === 'agent' ? 'Agent' : 'Company',
       fulfillment_type: shipForm.fulfillment_type
-    }, currentOrder.value.order_no), '发货成功', async () => {
+    }, currentOrder.value.order_no), (result) => {
+      if (result?.fulfillment_fallback) {
+        return result.fulfillment_notice || '代理货款不足，已自动改为平台发货'
+      }
+      if (Number(result?.deducted_goods_fund_amount || 0) > 0) {
+        return `发货成功，已扣代理货款 ¥${money(result.deducted_goods_fund_amount)}`
+      }
+      return '发货成功'
+    }, async () => {
       shipDialogVisible.value = false
       await rememberShippingCompanyOption(logisticsCompany)
     })
@@ -1294,6 +1315,8 @@ onMounted(() => {
 
 <style scoped>
 .card-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sync-text { font-size: 12px; color: #909399; }
 .tips-collapse { margin-bottom: 12px; border: none; }
 .tips-collapse :deep(.el-collapse-item__header) { font-size: 13px; color: var(--el-color-info); }
 .status-tabs { margin-bottom: 16px; }

@@ -150,6 +150,10 @@ function saveSingleton(name, value) {
 }
 
 async function ensureFreshCollections(names = []) {
+    if (typeof dataStore.reloadCollections === 'function') {
+        await Promise.resolve(dataStore.reloadCollections(names)).catch(() => null);
+        return;
+    }
     if (typeof dataStore.reloadCollection !== 'function') return;
     await Promise.all(names.map((name) => Promise.resolve(dataStore.reloadCollection(name)).catch(() => null)));
 }
@@ -964,6 +968,101 @@ function ok(res, data) {
 function fail(res, message, status = 400) {
     res.status(status).json({ code: status, message });
 }
+
+function normalizeCollectionNames(names = []) {
+    return [...new Set((Array.isArray(names) ? names : []).map((name) => pickString(name).trim()).filter(Boolean))];
+}
+
+function shouldFreshRead(req, defaultFresh = false) {
+    const raw = pickString(req?.query?.fresh_read).trim().toLowerCase();
+    if (!raw) return defaultFresh;
+    if (['1', 'true', 'yes', 'on', 'fresh'].includes(raw)) return true;
+    if (['0', 'false', 'no', 'off', 'cache'].includes(raw)) return false;
+    return defaultFresh;
+}
+
+async function reloadCollectionsWithMeta(names = []) {
+    const normalized = normalizeCollectionNames(names);
+    if (!normalized.length) {
+        return {
+            reloaded_collections: [],
+            read_at: nowIso()
+        };
+    }
+    await ensureFreshCollections(normalized);
+    return {
+        reloaded_collections: normalized,
+        read_at: nowIso()
+    };
+}
+
+async function freshReadMeta(req, names = [], defaultFresh = false) {
+    const fresh = shouldFreshRead(req, defaultFresh);
+    if (!fresh) {
+        return {
+            reloaded_collections: [],
+            freshness: {
+                read_mode: 'cache',
+                read_at: nowIso()
+            }
+        };
+    }
+    const reloadMeta = await reloadCollectionsWithMeta(names);
+    return {
+        reloaded_collections: reloadMeta.reloaded_collections,
+        freshness: {
+            read_mode: 'fresh',
+            read_at: reloadMeta.read_at
+        }
+    };
+}
+
+function attachFreshness(payload, freshness) {
+    if (!freshness) return payload;
+    if (Array.isArray(payload)) {
+        return {
+            list: payload,
+            freshness
+        };
+    }
+    if (payload && typeof payload === 'object') {
+        return {
+            ...payload,
+            freshness
+        };
+    }
+    return {
+        value: payload,
+        freshness
+    };
+}
+
+function okStrongRead(res, payload, freshness) {
+    return ok(res, attachFreshness(payload, freshness));
+}
+
+function okStrongWrite(res, payload, options = {}) {
+    return ok(res, {
+        data: payload,
+        write_result: {
+            persisted: options.persisted !== false,
+            reloaded_collections: normalizeCollectionNames(options.reloaded_collections),
+            fallbacks_used: Array.isArray(options.fallbacks_used) ? options.fallbacks_used : []
+        },
+        freshness: {
+            read_mode: 'fresh',
+            read_at: options.read_at || nowIso()
+        }
+    });
+}
+
+const STRONG_CONSISTENCY_COLLECTIONS = {
+    orders: ['orders', 'users', 'products', 'commissions', 'refunds'],
+    refunds: ['refunds', 'orders', 'users', 'products', 'skus'],
+    withdrawals: ['withdrawals', 'users'],
+    commissions: ['commissions', 'users', 'orders'],
+    users: ['users', 'orders', 'commissions']
+};
 
 function parseAddressSnapshot(value) {
     if (!value) return null;
@@ -2743,6 +2842,369 @@ function getAgentSystemConfigValue(key, fallback) {
 function normalizePercentToRate(value, fallback = 0) {
     const num = toNumber(value, fallback);
     return num > 1 ? num / 100 : num;
+}
+
+const DEFAULT_REFERRAL_COMMISSION_MATRIX = {
+    1: { 0: 20 },
+    2: { 0: 30, 1: 5 },
+    3: { 1: 20, 2: 10 },
+    4: { 1: 30, 2: 20, 3: 10 },
+    5: { 1: 35, 2: 25, 3: 15, 4: 5 }
+};
+
+function normalizeCommissionMatrixSnapshot(rawMatrix = {}, fallback = DEFAULT_REFERRAL_COMMISSION_MATRIX) {
+    const result = {};
+    const keys = new Set([...Object.keys(fallback || {}), ...Object.keys(rawMatrix || {})]);
+    for (const parentRole of keys) {
+        const base = fallback[parentRole] || {};
+        const override = (rawMatrix || {})[parentRole] || {};
+        const merged = {};
+        for (const buyerRole of new Set([...Object.keys(base), ...Object.keys(override)])) {
+            const value = toNumber(override[buyerRole] ?? base[buyerRole], NaN);
+            if (Number.isFinite(value)) {
+                merged[buyerRole] = value;
+            }
+        }
+        if (Object.keys(merged).length) {
+            result[parentRole] = merged;
+        }
+    }
+    return result;
+}
+
+function matrixRateSnapshot(matrix = {}, parentRole, buyerRole) {
+    const row = matrix[parentRole];
+    if (!row) return 0;
+    const value = toNumber(row[buyerRole], NaN);
+    if (!Number.isFinite(value)) return 0;
+    return value > 1 ? value / 100 : value;
+}
+
+function getReferralCommissionMatrixSnapshot() {
+    const configValue = toObject(
+        getConfigRowValue('agent_system_commission-matrix', getConfigRowValue('agent_system_commission_matrix', {})),
+        {}
+    );
+    return normalizeCommissionMatrixSnapshot(configValue, DEFAULT_REFERRAL_COMMISSION_MATRIX);
+}
+
+function commissionConfigAmountForLevel(product = {}, level, baseAmount = 0) {
+    const fixed = firstNumber([product[`commission_amount_${level}`], product[`commission${level}_amount`]]);
+    if (fixed !== null) return roundMoney(fixed);
+    const rate = firstNumber([product[`commission_rate_${level}`], product[`rate_${level}`]]);
+    if (rate !== null) return roundMoney(baseAmount * rate);
+    return 0;
+}
+
+function resolveSelfSaleRateSnapshot() {
+    const config = toObject(
+        getConfigRowValue('agent_system_commission-config', getConfigRowValue('agent_system_commission_config', {})),
+        {}
+    );
+    const directSalesPct = toNumber(config?.cost_split?.direct_sales_pct, 40);
+    const normalized = directSalesPct > 1 ? directSalesPct / 100 : directSalesPct;
+    return Math.max(0, normalized);
+}
+
+function ensurePlatformSettlementCommissionsForOrder(order = {}) {
+    const rows = getCollection('commissions');
+    const users = getCollection('users');
+    const products = getCollection('products');
+    const buyer = findUserByAnyId(users, order.openid || order.buyer_id || order.user_id);
+    const buyerRole = toNumber(order.buyer_role_level ?? buyer?.role_level ?? buyer?.distributor_level, 0);
+    if (buyerRole >= 3 && buyer?.openid) {
+        const existingSelf = rows.find((row) =>
+            rowMatchesLookup(row, order._id || order.id || order.order_no, [row.order_id, row.order_no])
+            && rowMatchesLookup(row, buyer.openid, [row.openid, row.user_id])
+            && pickString(row.type).toLowerCase() === 'self'
+            && ['pending', 'frozen', 'pending_approval', 'approved', 'settled', 'completed'].includes(pickString(row.status).toLowerCase())
+        );
+        if (existingSelf) return 0;
+
+        const payAmount = roundMoney(toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0));
+        const selfSaleRate = resolveSelfSaleRateSnapshot();
+        const selfAmount = roundMoney(payAmount * selfSaleRate);
+        if (selfAmount <= 0) return 0;
+
+        rows.push({
+            id: nextId(rows),
+            status: 'pending',
+            created_at: nowIso(),
+            updated_at: nowIso(),
+            openid: buyer.openid,
+            user_id: primaryId(buyer) || buyer.openid,
+            from_openid: order.openid || order.buyer_id || '',
+            buyer_role: buyerRole,
+            order_id: order._id || order.id || null,
+            order_no: pickString(order.order_no),
+            amount: selfAmount,
+            level: buyerRole,
+            type: 'self',
+            self_sale_rate: selfSaleRate,
+            self_sale_profit_amount: selfAmount,
+            self_sale_goods_value_amount: roundMoney(payAmount - selfAmount)
+        });
+        saveCollection('commissions', rows);
+        return 1;
+    }
+
+    const directReferrer = findUserByAnyId(users, order.direct_referrer_openid || order.direct_referrer_id || getUserParentRef(buyer || {}));
+    const indirectReferrer = findUserByAnyId(users, order.indirect_referrer_openid || order.indirect_referrer_id || getUserParentRef(directReferrer || {}));
+    const beneficiaries = [
+        { level: 1, type: 'direct', user: directReferrer },
+        { level: 2, type: 'indirect', user: indirectReferrer }
+    ].filter((item) => item.user && item.user.openid && item.user.openid !== order.openid);
+    if (!beneficiaries.length) return 0;
+
+    const orderItems = buildOrderItemsForResolution(order);
+    const payAmount = roundMoney(toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0));
+    if (payAmount <= 0) return 0;
+
+    const matrix = getReferralCommissionMatrixSnapshot();
+    const itemBaseTotal = orderItems.reduce((sum, item) => {
+        const qty = Math.max(1, toNumber(item.qty ?? item.quantity, 1));
+        return sum + roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
+    }, 0) || payAmount;
+
+    const totals = new Map();
+    for (const item of orderItems) {
+        const qty = Math.max(1, toNumber(item.qty ?? item.quantity, 1));
+        const product = findByLookup(products, item.product_id) || {};
+        const rawBase = roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
+        const allocatedBase = itemBaseTotal > 0 ? roundMoney(payAmount * rawBase / itemBaseTotal) : rawBase;
+        const directBeneficiary = beneficiaries.find((entry) => entry.level === 1);
+        const directRole = directBeneficiary
+            ? toNumber(directBeneficiary.user.role_level ?? directBeneficiary.user.distributor_level ?? directBeneficiary.user.level, 0)
+            : 0;
+        const directMatrixRate = directBeneficiary ? matrixRateSnapshot(matrix, directRole, buyerRole) : 0;
+
+        for (const beneficiary of beneficiaries) {
+            const existing = rows.find((row) =>
+                rowMatchesLookup(row, order._id || order.id || order.order_no, [row.order_id, row.order_no])
+                && rowMatchesLookup(row, beneficiary.user.openid, [row.openid, row.user_id])
+                && pickString(row.type).toLowerCase() === beneficiary.type
+                && ['pending', 'frozen', 'pending_approval', 'approved', 'settled', 'completed'].includes(pickString(row.status).toLowerCase())
+            );
+            if (existing) continue;
+
+            const configured = commissionConfigAmountForLevel(product, beneficiary.level, allocatedBase);
+            let amount = 0;
+            if (configured > 0) {
+                amount = Math.min(allocatedBase, configured);
+            } else {
+                const roleLevel = toNumber(beneficiary.user.role_level ?? beneficiary.user.distributor_level ?? beneficiary.user.level, 0);
+                const myRate = matrixRateSnapshot(matrix, roleLevel, buyerRole);
+                const effectiveRate = beneficiary.level === 1 ? myRate : Math.max(0, myRate - directMatrixRate);
+                amount = roundMoney(allocatedBase * effectiveRate);
+            }
+            if (amount <= 0) continue;
+
+            const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
+            totals.set(key, {
+                openid: beneficiary.user.openid,
+                user_id: primaryId(beneficiary.user) || beneficiary.user.openid,
+                from_openid: order.openid || order.buyer_id || '',
+                order_id: order._id || order.id || null,
+                order_no: pickString(order.order_no),
+                amount: roundMoney((totals.get(key)?.amount || 0) + amount),
+                level: beneficiary.level,
+                type: beneficiary.type
+            });
+        }
+    }
+
+    let created = 0;
+    for (const row of totals.values()) {
+        rows.push({
+            id: nextId(rows),
+            status: 'pending',
+            created_at: nowIso(),
+            updated_at: nowIso(),
+            buyer_role: buyerRole,
+            ...row
+        });
+        created += 1;
+    }
+    if (created > 0) {
+        saveCollection('commissions', rows);
+    }
+    return created;
+}
+
+async function deductAgentFulfillmentGoodsFund(order = {}, admin = {}) {
+    const claimantRef = order?.fulfillment_partner_openid || order?.nearest_agent_openid || order?.agent_info?.openid || order?.agent?.openid || null;
+    const users = getCollection('users');
+    const claimant = claimantRef ? findUserByAnyId(users, claimantRef) : null;
+    if (!claimant?.openid) {
+        return { ok: false, reason: '当前订单未锁定履约代理' };
+    }
+
+    const amount = roundMoney(toNumber(order.locked_agent_cost_total ?? order.locked_agent_cost, 0));
+    if (amount <= 0) {
+        return { ok: false, reason: '当前订单缺少锁定代理成本' };
+    }
+
+    const currentGoodsFund = roundMoney(toNumber(claimant.agent_wallet_balance != null ? claimant.agent_wallet_balance : claimant.wallet_balance, 0));
+    if (currentGoodsFund < amount) {
+        return {
+            ok: false,
+            insufficient: true,
+            claimant,
+            amount,
+            balance: currentGoodsFund
+        };
+    }
+
+    const nextGoodsFund = roundMoney(currentGoodsFund - amount);
+    const userDocId = pickString(claimant._id || claimant.id);
+    const walletAccounts = getCollection('wallet_accounts');
+    const existingWalletAccount = findWalletAccountByUser(walletAccounts, claimant);
+    const walletAccountId = primaryId(existingWalletAccount) || buildWalletAccountDocId(claimant);
+    const previousWalletBalance = roundMoney(toNumber(existingWalletAccount?.balance, currentGoodsFund));
+    const db = dataStore._internals?.db;
+
+    const rollback = async () => {
+        if (db) {
+            await db.collection('users').where({ openid: claimant.openid }).update({
+                data: {
+                    agent_wallet_balance: currentGoodsFund,
+                    updated_at: nowIso()
+                }
+            }).catch(() => {});
+            if (walletAccountId) {
+                await db.collection('wallet_accounts').doc(String(walletAccountId)).set({
+                    data: {
+                        ...(existingWalletAccount || {
+                            user_id: getWalletAccountUserIds(claimant)[0],
+                            openid: claimant.openid,
+                            account_type: 'goods_fund',
+                            status: 'active',
+                            created_at: pickString(existingWalletAccount?.created_at || nowIso())
+                        }),
+                        balance: previousWalletBalance,
+                        updated_at: nowIso()
+                    }
+                }).catch(() => {});
+            }
+        } else {
+            patchCollectionRow('users', claimant.openid || primaryId(claimant), (row) => ({
+                ...row,
+                agent_wallet_balance: currentGoodsFund,
+                updated_at: nowIso()
+            }));
+            if (walletAccountId) {
+                const currentWallets = getCollection('wallet_accounts');
+                const index = currentWallets.findIndex((item) => rowMatchesLookup(item, walletAccountId, [item.user_id, item.openid]));
+                const restoredRow = {
+                    ...(existingWalletAccount || {
+                        _id: walletAccountId,
+                        id: walletAccountId,
+                        user_id: getWalletAccountUserIds(claimant)[0],
+                        openid: claimant.openid,
+                        account_type: 'goods_fund',
+                        status: 'active',
+                        created_at: nowIso()
+                    }),
+                    balance: previousWalletBalance,
+                    updated_at: nowIso()
+                };
+                if (index >= 0) currentWallets[index] = restoredRow;
+                else currentWallets.push(restoredRow);
+                saveCollection('wallet_accounts', currentWallets);
+            }
+        }
+    };
+
+    if (db) {
+        const deductRes = await db.collection('users')
+            .where({ openid: claimant.openid, agent_wallet_balance: _.gte(amount) })
+            .update({
+                data: {
+                    agent_wallet_balance: _.inc(-amount),
+                    updated_at: nowIso()
+                }
+            });
+        if (!deductRes.stats || deductRes.stats.updated === 0) {
+            const refreshedUser = await db.collection('users').where({ openid: claimant.openid }).limit(1).get().catch(() => ({ data: [] }));
+            const actualBalance = roundMoney(toNumber(refreshedUser.data?.[0]?.agent_wallet_balance, currentGoodsFund));
+            return {
+                ok: false,
+                insufficient: true,
+                claimant,
+                amount,
+                balance: actualBalance
+            };
+        }
+        if (walletAccountId) {
+            await db.collection('wallet_accounts').doc(String(walletAccountId)).set({
+                data: {
+                    ...(existingWalletAccount || {
+                        user_id: getWalletAccountUserIds(claimant)[0],
+                        openid: claimant.openid,
+                        account_type: 'goods_fund',
+                        status: 'active',
+                        created_at: pickString(existingWalletAccount?.created_at || nowIso())
+                    }),
+                    balance: nextGoodsFund,
+                    updated_at: nowIso()
+                }
+            });
+        }
+    } else {
+        patchCollectionRow('users', claimant.openid || primaryId(claimant), (row) => ({
+            ...row,
+            agent_wallet_balance: nextGoodsFund,
+            updated_at: nowIso()
+        }));
+        if (walletAccountId) {
+            const currentWallets = getCollection('wallet_accounts');
+            const index = currentWallets.findIndex((item) => rowMatchesLookup(item, walletAccountId, [item.user_id, item.openid]));
+            const nextRow = {
+                ...(existingWalletAccount || {
+                    _id: walletAccountId,
+                    id: walletAccountId,
+                    user_id: getWalletAccountUserIds(claimant)[0],
+                    openid: claimant.openid,
+                    account_type: 'goods_fund',
+                    status: 'active',
+                    created_at: nowIso()
+                }),
+                balance: nextGoodsFund,
+                updated_at: nowIso()
+            };
+            if (index >= 0) currentWallets[index] = nextRow;
+            else currentWallets.push(nextRow);
+            saveCollection('wallet_accounts', currentWallets);
+        }
+    }
+
+    try {
+        await appendGoodsFundLogEntry({
+            openid: claimant.openid,
+            type: 'order_ship',
+            amount: -amount,
+            balance_before: currentGoodsFund,
+            balance_after: nextGoodsFund,
+            user_id: primaryId(claimant),
+            order_id: pickString(order._id || order.id),
+            order_no: pickString(order.order_no),
+            remark: `代理发货扣货款 ${pickString(order.order_no)}`,
+            operator_id: admin?.id || '',
+            operator_name: admin?.username || '管理员'
+        });
+    } catch (error) {
+        await rollback();
+        return { ok: false, reason: `代理货款流水写入失败：${error.message || '未知错误'}` };
+    }
+
+    return {
+        ok: true,
+        claimant,
+        amount,
+        balance_before: currentGoodsFund,
+        balance_after: nextGoodsFund,
+        rollback
+    };
 }
 
 function createCommissionEntry(payload = {}) {
@@ -4734,7 +5196,21 @@ app.delete('/admin/api/mass-messages/:id', auth, (req, res) => {
     ok(res, { success: true });
 });
 
+async function buildFreshUserWriteResponse(userId, fallbackData = null) {
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.users);
+    const users = getCollection('users');
+    const orders = getCollection('orders');
+    const commissions = getCollection('commissions');
+    const freshUser = findUserByAnyId(users, userId);
+    return {
+        data: freshUser ? buildUserRecord(freshUser, users, orders, commissions) : fallbackData,
+        reloadMeta
+    };
+}
+
 app.get('/admin/api/users', auth, requirePermission('users'), (req, res) => {
+    return (async () => {
+    const readMeta = await freshReadMeta(req, STRONG_CONSISTENCY_COLLECTIONS.users, true);
     const users = getCollection('users');
     const orders = getCollection('orders');
     const context = buildUserListContext(users, orders);
@@ -4765,7 +5241,8 @@ app.get('/admin/api/users', auth, requirePermission('users'), (req, res) => {
         rows = rows.filter((item) => descendantIds.has(String(item.id)));
     }
 
-    ok(res, paginate(rows, req));
+    okStrongRead(res, paginate(rows, req), readMeta.freshness);
+    })();
 });
 
 app.get('/admin/api/users/search', auth, requirePermission('users'), (req, res) => {
@@ -4788,15 +5265,20 @@ app.get('/admin/api/users/search', auth, requirePermission('users'), (req, res) 
 });
 
 app.get('/admin/api/users/:id', auth, requirePermission('users'), (req, res) => {
+    return (async () => {
+    const readMeta = await freshReadMeta(req, STRONG_CONSISTENCY_COLLECTIONS.users, true);
     const users = getCollection('users');
     const orders = getCollection('orders');
     const commissions = getCollection('commissions');
     const user = findUserByAnyId(users, req.params.id);
     if (!user) return fail(res, '用户不存在', 404);
-    ok(res, buildUserRecord(user, users, orders, commissions));
+    okStrongRead(res, buildUserRecord(user, users, orders, commissions), readMeta.freshness);
+    })();
 });
 
 app.get('/admin/api/users/:id/team', auth, requirePermission('users'), (req, res) => {
+    return (async () => {
+    const readMeta = await freshReadMeta(req, STRONG_CONSISTENCY_COLLECTIONS.users, true);
     const users = getCollection('users');
     const orders = getCollection('orders');
     const commissions = getCollection('commissions');
@@ -4813,15 +5295,19 @@ app.get('/admin/api/users/:id/team', auth, requirePermission('users'), (req, res
         ...buildUserRecord(item, users, orders, commissions),
         joined_team_at: item.joined_team_at || item.bound_parent_at || item.created_at
     }));
-    ok(res, paginate(rows, req));
+    okStrongRead(res, paginate(rows, req), readMeta.freshness);
+    })();
 });
 
 app.get('/admin/api/users/:id/team-summary', auth, requirePermission('users'), (req, res) => {
+    return (async () => {
+    const readMeta = await freshReadMeta(req, STRONG_CONSISTENCY_COLLECTIONS.users, true);
     const users = getCollection('users');
     const orders = getCollection('orders');
     const user = findUserByAnyId(users, req.params.id);
     if (!user) return fail(res, '用户不存在', 404);
-    ok(res, buildUserTeamSummary(user, users, orders, pickString(req.query.range || 'all')));
+    okStrongRead(res, buildUserTeamSummary(user, users, orders, pickString(req.query.range || 'all')), readMeta.freshness);
+    })();
 });
 
 app.put('/admin/api/users/:id/role', auth, requirePermission('user_role_manage'), async (req, res) => {
@@ -4843,7 +5329,12 @@ app.put('/admin/api/users/:id/role', auth, requirePermission('user_role_manage')
         recordAdminFundPoolEntry(openid, roleLevel, oldLevel).catch(() => {});
     }
     createAuditLog(req.admin, 'user.role.update', 'users', { user_id: primaryId(updated), role_level: roleLevel });
-    ok(res, updated);
+    const fresh = await buildFreshUserWriteResponse(req.params.id, updated);
+    okStrongWrite(res, fresh.data, {
+        persisted: true,
+        reloaded_collections: fresh.reloadMeta.reloaded_collections,
+        read_at: fresh.reloadMeta.read_at
+    });
 });
 
 // ── 货款余额手动调整 ──
@@ -4901,7 +5392,12 @@ app.put('/admin/api/users/:id/goods-fund', auth, requirePermission('user_balance
         amount,
         reason: reasonCheck.reason
     });
-    ok(res, updatedUser);
+    const fresh = await buildFreshUserWriteResponse(req.params.id, updatedUser);
+    okStrongWrite(res, fresh.data, {
+        persisted: true,
+        reloaded_collections: fresh.reloadMeta.reloaded_collections,
+        read_at: fresh.reloadMeta.read_at
+    });
 });
 
 // ── 积分手动调整 ──
@@ -4958,7 +5454,12 @@ app.put('/admin/api/users/:id/points', auth, requirePermission('user_balance_adj
         amount,
         reason: reasonCheck.reason
     });
-    ok(res, updatedUser);
+    const fresh = await buildFreshUserWriteResponse(req.params.id, updatedUser);
+    okStrongWrite(res, fresh.data, {
+        persisted: true,
+        reloaded_collections: fresh.reloadMeta.reloaded_collections,
+        read_at: fresh.reloadMeta.read_at
+    });
 });
 
 // ── 成长值手动调整 ──
@@ -5015,7 +5516,12 @@ app.put('/admin/api/users/:id/growth', auth, requirePermission('user_balance_adj
         amount,
         reason: reasonCheck.reason
     });
-    ok(res, updatedUser);
+    const fresh = await buildFreshUserWriteResponse(req.params.id, updatedUser);
+    okStrongWrite(res, fresh.data, {
+        persisted: true,
+        reloaded_collections: fresh.reloadMeta.reloaded_collections,
+        read_at: fresh.reloadMeta.read_at
+    });
 });
 
 // ── 佣金手动调整（直接向 commissions 集合插入一条记录） ──
@@ -5077,7 +5583,16 @@ app.post('/admin/api/users/:id/commission', auth, requirePermission('user_balanc
         amount,
         reason: reasonCheck.reason
     });
-    ok(res, { success: true, record: newRecord });
+    const fresh = await buildFreshUserWriteResponse(req.params.id, null);
+    okStrongWrite(res, {
+        success: true,
+        record: newRecord,
+        fresh_user: fresh.data
+    }, {
+        persisted: true,
+        reloaded_collections: fresh.reloadMeta.reloaded_collections,
+        read_at: fresh.reloadMeta.read_at
+    });
 });
 
 app.post('/admin/api/users/:id/debt-settlement', auth, requirePermission('user_balance_adjust'), async (req, res) => {
@@ -5174,10 +5689,15 @@ app.post('/admin/api/users/:id/debt-settlement', auth, requirePermission('user_b
         goods_fund_after: nextGoodsFund,
         reason: reasonCheck.reason
     });
-    ok(res, updatedUser);
+    const fresh = await buildFreshUserWriteResponse(req.params.id, updatedUser);
+    okStrongWrite(res, fresh.data, {
+        persisted: true,
+        reloaded_collections: fresh.reloadMeta.reloaded_collections,
+        read_at: fresh.reloadMeta.read_at
+    });
 });
 
-app.put('/admin/api/users/:id/status', auth, requirePermission('user_status_manage'), (req, res) => {
+app.put('/admin/api/users/:id/status', auth, requirePermission('user_status_manage'), async (req, res) => {
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         status: toBoolean(req.body?.status) ? 1 : 0,
@@ -5186,10 +5706,15 @@ app.put('/admin/api/users/:id/status', auth, requirePermission('user_status_mana
     }));
     if (!updated) return fail(res, '用户不存在', 404);
     createAuditLog(req.admin, 'user.status.update', 'users', { user_id: primaryId(updated), status: toBoolean(req.body?.status) ? 1 : 0 });
-    ok(res, updated);
+    const fresh = await buildFreshUserWriteResponse(req.params.id, updated);
+    okStrongWrite(res, fresh.data, {
+        persisted: true,
+        reloaded_collections: fresh.reloadMeta.reloaded_collections,
+        read_at: fresh.reloadMeta.read_at
+    });
 });
 
-app.post('/admin/api/users/batch-role', auth, requirePermission('user_role_manage'), (req, res) => {
+app.post('/admin/api/users/batch-role', auth, requirePermission('user_role_manage'), async (req, res) => {
     const ids = toArray(req.body?.user_ids || req.body?.ids);
     const roleLevel = toNumber(req.body?.role_level, NaN);
     if (!ids.length || !Number.isFinite(roleLevel)) return fail(res, '请提供用户列表和角色等级');
@@ -5198,10 +5723,15 @@ app.post('/admin/api/users/batch-role', auth, requirePermission('user_role_manag
         : row);
     saveCollection('users', rows);
     createAuditLog(req.admin, 'user.role.batch-update', 'users', { user_ids: ids, role_level: roleLevel });
-    ok(res, { success: true, affected: ids.length });
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.users);
+    okStrongWrite(res, { success: true, affected: ids.length }, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at
+    });
 });
 
-app.put('/admin/api/users/:id/remark', auth, requirePermission('users'), (req, res) => {
+app.put('/admin/api/users/:id/remark', auth, requirePermission('users'), async (req, res) => {
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         remark: pickString(req.body?.remark),
@@ -5209,40 +5739,60 @@ app.put('/admin/api/users/:id/remark', auth, requirePermission('users'), (req, r
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '用户不存在', 404);
-    ok(res, updated);
+    const fresh = await buildFreshUserWriteResponse(req.params.id, updated);
+    okStrongWrite(res, fresh.data, {
+        persisted: true,
+        reloaded_collections: fresh.reloadMeta.reloaded_collections,
+        read_at: fresh.reloadMeta.read_at
+    });
 });
 
-app.put('/admin/api/users/:id/commerce', auth, requirePermission('users'), (req, res) => {
+app.put('/admin/api/users/:id/commerce', auth, requirePermission('users'), async (req, res) => {
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         participate_distribution: req.body?.participate_distribution == null ? row.participate_distribution : (toBoolean(req.body.participate_distribution) ? 1 : 0),
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '用户不存在', 404);
-    ok(res, updated);
+    const fresh = await buildFreshUserWriteResponse(req.params.id, updated);
+    okStrongWrite(res, fresh.data, {
+        persisted: true,
+        reloaded_collections: fresh.reloadMeta.reloaded_collections,
+        read_at: fresh.reloadMeta.read_at
+    });
 });
 
-app.put('/admin/api/users/:id/invite-code', auth, requirePermission('users'), (req, res) => {
+app.put('/admin/api/users/:id/invite-code', auth, requirePermission('users'), async (req, res) => {
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         invite_code: pickString(req.body?.invite_code),
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '用户不存在', 404);
-    ok(res, updated);
+    const fresh = await buildFreshUserWriteResponse(req.params.id, updated);
+    okStrongWrite(res, fresh.data, {
+        persisted: true,
+        reloaded_collections: fresh.reloadMeta.reloaded_collections,
+        read_at: fresh.reloadMeta.read_at
+    });
 });
 
-app.put('/admin/api/users/:id/member-no', auth, requirePermission('users'), (req, res) => {
+app.put('/admin/api/users/:id/member-no', auth, requirePermission('users'), async (req, res) => {
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         member_no: pickString(req.body?.member_no),
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '用户不存在', 404);
-    ok(res, updated);
+    const fresh = await buildFreshUserWriteResponse(req.params.id, updated);
+    okStrongWrite(res, fresh.data, {
+        persisted: true,
+        reloaded_collections: fresh.reloadMeta.reloaded_collections,
+        read_at: fresh.reloadMeta.read_at
+    });
 });
 
-app.put('/admin/api/users/:id/parent', auth, requirePermission('user_parent_manage'), (req, res) => {
+app.put('/admin/api/users/:id/parent', auth, requirePermission('user_parent_manage'), async (req, res) => {
     const users = getCollection('users');
     const current = findUserByAnyId(users, req.params.id);
     if (!current) return fail(res, '用户不存在', 404);
@@ -5264,17 +5814,27 @@ app.put('/admin/api/users/:id/parent', auth, requirePermission('user_parent_mana
         new_parent_id: nextParent ? primaryId(nextParent) : null,
         reason: pickString(req.body?.reason)
     });
-    ok(res, findUserByAnyId(updatedRows, req.params.id));
+    const fresh = await buildFreshUserWriteResponse(req.params.id, findUserByAnyId(updatedRows, req.params.id));
+    okStrongWrite(res, fresh.data, {
+        persisted: true,
+        reloaded_collections: fresh.reloadMeta.reloaded_collections,
+        read_at: fresh.reloadMeta.read_at
+    });
 });
 
-app.put('/admin/api/users/:id/purchase-level', auth, requirePermission('users'), (req, res) => {
+app.put('/admin/api/users/:id/purchase-level', auth, requirePermission('users'), async (req, res) => {
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         purchase_level_code: req.body?.purchase_level_code == null ? '' : pickString(req.body.purchase_level_code),
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '用户不存在', 404);
-    ok(res, updated);
+    const fresh = await buildFreshUserWriteResponse(req.params.id, updated);
+    okStrongWrite(res, fresh.data, {
+        persisted: true,
+        reloaded_collections: fresh.reloadMeta.reloaded_collections,
+        read_at: fresh.reloadMeta.read_at
+    });
 });
 
 app.get('/admin/api/dealers', auth, requirePermission('dealers'), (req, res) => {
@@ -5686,6 +6246,8 @@ app.put('/admin/api/upgrade-applications/:id/review', auth, requirePermission('d
 });
 
 app.get('/admin/api/withdrawals', auth, requirePermission('withdrawals'), (req, res) => {
+    return (async () => {
+    const readMeta = await freshReadMeta(req, STRONG_CONSISTENCY_COLLECTIONS.withdrawals, true);
     const users = getCollection('users');
     let rows = sortByUpdatedDesc(ensureWithdrawalNumericIds()).map((item) => buildWithdrawalRecord(item, users));
     const keyword = pickString(req.query.keyword).trim().toLowerCase();
@@ -5704,7 +6266,8 @@ app.get('/admin/api/withdrawals', auth, requirePermission('withdrawals'), (req, 
         ].filter(Boolean).join(' ').toLowerCase().includes(keyword));
     }
     if (status) rows = rows.filter((item) => item.status === status);
-    ok(res, paginate(rows, req));
+    okStrongRead(res, paginate(rows, req), readMeta.freshness);
+    })();
 });
 
 app.put('/admin/api/withdrawals/:id/approve', auth, requirePermission('withdrawals'), async (req, res) => {
@@ -5722,7 +6285,13 @@ app.put('/admin/api/withdrawals/:id/approve', auth, requirePermission('withdrawa
     if (!writeOk && dataStore._internals?.db) return fail(res, '提现状态更新失败，请稍后重试', 500);
     const updated = patchCollectionRow('withdrawals', req.params.id, (row) => ({ ...row, ...patch }));
     createAuditLog(req.admin, 'withdrawal.approve', 'withdrawals', { withdrawal_id: primaryId(updated || current), amount: toNumber(current.amount, 0) });
-    ok(res, updated || { ...current, ...patch });
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.withdrawals);
+    const freshCurrent = findByLookup(ensureWithdrawalNumericIds(), req.params.id);
+    okStrongWrite(res, freshCurrent || updated || { ...current, ...patch }, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at
+    });
 });
 
 app.put('/admin/api/withdrawals/:id/reject', auth, requirePermission('withdrawals'), async (req, res) => {
@@ -5798,7 +6367,13 @@ app.put('/admin/api/withdrawals/:id/reject', auth, requirePermission('withdrawal
         amount: refundAmount,
         reason: reasonCheck.reason
     });
-    ok(res, updated);
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.withdrawals);
+    const freshCurrent = findByLookup(ensureWithdrawalNumericIds(), req.params.id);
+    okStrongWrite(res, freshCurrent || updated, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at
+    });
 });
 
 app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdrawals'), async (req, res) => {
@@ -5822,11 +6397,17 @@ app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdraw
         amount: toNumber(current.amount, 0),
         remark: reasonCheck.reason
     });
-    ok(res, updated || { ...current, ...patch });
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.withdrawals);
+    const freshCurrent = findByLookup(ensureWithdrawalNumericIds(), req.params.id);
+    okStrongWrite(res, freshCurrent || updated || { ...current, ...patch }, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at
+    });
 });
 
 app.get('/admin/api/refunds', auth, requirePermission('refunds'), async (req, res) => {
-    await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+    const readMeta = await freshReadMeta(req, STRONG_CONSISTENCY_COLLECTIONS.refunds, true);
     const users = getCollection('users');
     const orders = getCollection('orders');
     const products = getCollection('products');
@@ -5847,18 +6428,18 @@ app.get('/admin/api/refunds', auth, requirePermission('refunds'), async (req, re
         ].filter(Boolean).join(' ').toLowerCase().includes(keyword));
     }
     if (status) rows = rows.filter((item) => item.status === status);
-    ok(res, paginate(rows, req));
+    okStrongRead(res, paginate(rows, req), readMeta.freshness);
 });
 
 app.get('/admin/api/refunds/:id', auth, requirePermission('refunds'), async (req, res) => {
-    await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+    const readMeta = await freshReadMeta(req, STRONG_CONSISTENCY_COLLECTIONS.refunds, true);
     const users = getCollection('users');
     const orders = getCollection('orders');
     const products = getCollection('products');
     const skus = getCollection('skus');
     const row = findByLookup(getCollection('refunds'), req.params.id);
     if (!row) return fail(res, '退款记录不存在', 404);
-    ok(res, buildRefundRecord(row, users, orders, products, skus));
+    okStrongRead(res, buildRefundRecord(row, users, orders, products, skus), readMeta.freshness);
 });
 
 app.put('/admin/api/refunds/:id/approve', auth, requirePermission('refunds'), async (req, res) => {
@@ -5891,14 +6472,18 @@ app.put('/admin/api/refunds/:id/approve', auth, requirePermission('refunds'), as
     }
 
     // 5. 重新加载并返回最新格式化记录
-    await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.refunds);
     const users = getCollection('users');
     const orders = getCollection('orders');
     const products = getCollection('products');
     const skus = getCollection('skus');
     const freshRefund = findByLookup(getCollection('refunds'), req.params.id);
     createAuditLog(req.admin, 'refund.approve', 'refunds', { refund_id: req.params.id });
-    ok(res, buildRefundRecord(freshRefund || { ...refund, ...updateData }, users, orders, products, skus));
+    okStrongWrite(res, buildRefundRecord(freshRefund || { ...refund, ...updateData }, users, orders, products, skus), {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at
+    });
 });
 
 app.put('/admin/api/refunds/:id/reject', auth, requirePermission('refunds'), async (req, res) => {
@@ -5925,13 +6510,17 @@ app.put('/admin/api/refunds/:id/reject', auth, requirePermission('refunds'), asy
     }
     createAuditLog(req.admin, 'refund.reject', 'refunds', { refund_id: req.params.id, order_id: orderId });
     await Promise.resolve(dataStore.flush?.());
-    await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.refunds);
     const freshReject = findByLookup(getCollection('refunds'), req.params.id);
     const rUsers = getCollection('users');
     const rOrders = getCollection('orders');
     const rProducts = getCollection('products');
     const rSkus = getCollection('skus');
-    ok(res, buildRefundRecord(freshReject || { ...rejectedRefund, ...rejectData }, rUsers, rOrders, rProducts, rSkus));
+    okStrongWrite(res, buildRefundRecord(freshReject || { ...rejectedRefund, ...rejectData }, rUsers, rOrders, rProducts, rSkus), {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at
+    });
 });
 
 app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), async (req, res) => {
@@ -6172,11 +6761,15 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
             patchCollectionRow('orders', orderId, (row) => ({ ...row, ...settlement.patch }));
 
             createAuditLog(req.admin, 'refund.complete', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod });
-            await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+            const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.refunds);
             const gfFresh = findByLookup(getCollection('refunds'), req.params.id);
             const gfUsers = getCollection('users');
             const gfOrders = getCollection('orders');
-            ok(res, buildRefundRecord(gfFresh || { ...refund, ...completedData }, gfUsers, gfOrders, getCollection('products'), getCollection('skus')));
+            okStrongWrite(res, buildRefundRecord(gfFresh || { ...refund, ...completedData }, gfUsers, gfOrders, getCollection('products'), getCollection('skus')), {
+                persisted: true,
+                reloaded_collections: reloadMeta.reloaded_collections,
+                read_at: reloadMeta.read_at
+            });
         } else if (['wallet', 'balance', 'credit', 'debt'].includes(paymentMethod)) {
             const walletOwner = findUserByAnyId(users, order.openid || order.buyer_id || refund.openid || refund.user_id);
             const walletOwnerDocId = pickString(walletOwner?._id || walletOwner?.id);
@@ -6260,13 +6853,17 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
             patchCollectionRow('orders', orderId, (row) => ({ ...row, ...settlement.patch }));
 
             createAuditLog(req.admin, 'refund.complete', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod });
-            await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+            const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.refunds);
             const cFresh = findByLookup(getCollection('refunds'), req.params.id);
             const cUsers = getCollection('users');
             const cOrders = getCollection('orders');
             const cProducts = getCollection('products');
             const cSkus = getCollection('skus');
-            ok(res, buildRefundRecord(cFresh || { ...refund, ...completedData }, cUsers, cOrders, cProducts, cSkus));
+            okStrongWrite(res, buildRefundRecord(cFresh || { ...refund, ...completedData }, cUsers, cOrders, cProducts, cSkus), {
+                persisted: true,
+                reloaded_collections: reloadMeta.reloaded_collections,
+                read_at: reloadMeta.read_at
+            });
         } else {
             // 微信支付退款：先锁定 refund_no，再调用微信 API，防止重复提交产生双重退款
             // 如果已有 refund_no（之前调用过），复用；否则生成新的
@@ -6299,9 +6896,13 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
                 await directPatchDocument('orders', String(order._id), settlement.patch);
                 patchCollectionRow('orders', orderId, (row) => ({ ...row, ...settlement.patch }));
                 createAuditLog(req.admin, 'refund.complete', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod, wx_status: wxStatus });
-                await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+                const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.refunds);
                 const freshComplete = findByLookup(getCollection('refunds'), req.params.id);
-                ok(res, buildRefundRecord(freshComplete || { ...refund, ...completedData }, getCollection('users'), getCollection('orders'), getCollection('products'), getCollection('skus')));
+                okStrongWrite(res, buildRefundRecord(freshComplete || { ...refund, ...completedData }, getCollection('users'), getCollection('orders'), getCollection('products'), getCollection('skus')), {
+                    persisted: true,
+                    reloaded_collections: reloadMeta.reloaded_collections,
+                    read_at: reloadMeta.read_at
+                });
             } else {
                 // 正常情况：微信返回 PROCESSING，等待异步回调确认
                 const processingFinal = { status: 'processing', wx_refund_id: wxRefundId, wx_status: wxStatus };
@@ -6309,13 +6910,17 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
                 patchCollectionRow('refunds', req.params.id, (row) => ({ ...row, ...processingFinal }));
 
                 createAuditLog(req.admin, 'refund.processing', 'refunds', { refund_id: req.params.id, order_id: orderId, payment_method: paymentMethod, wx_refund_id: wxRefundId, wx_status: wxStatus });
-                await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+                const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.refunds);
                 const freshProcessing = findByLookup(getCollection('refunds'), req.params.id);
-                ok(res, {
+                okStrongWrite(res, {
                     ...(freshProcessing
                         ? buildRefundRecord(freshProcessing, getCollection('users'), getCollection('orders'), getCollection('products'), getCollection('skus'))
                         : { ...refund, ...processingFinal }),
                     note: '退款申请已提交微信，处理结果将通过回调通知更新'
+                }, {
+                    persisted: true,
+                    reloaded_collections: reloadMeta.reloaded_collections,
+                    read_at: reloadMeta.read_at
                 });
             }
         }
@@ -6355,15 +6960,19 @@ app.put('/admin/api/refunds/:id/sync', auth, requirePermission('refunds'), async
     try {
         const syncResult = await syncRefundStatusViaPayment(refund);
         await Promise.resolve(dataStore.flush?.());
-        await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+        const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.refunds);
         const freshRefund = findByLookup(getCollection('refunds'), req.params.id);
         const users = getCollection('users');
         const orders = getCollection('orders');
         const products = getCollection('products');
         const skus = getCollection('skus');
-        ok(res, {
+        okStrongWrite(res, {
             ...buildRefundRecord(freshRefund || refund, users, orders, products, skus),
             sync_result: syncResult
+        }, {
+            persisted: true,
+            reloaded_collections: reloadMeta.reloaded_collections,
+            read_at: reloadMeta.read_at
         });
     } catch (error) {
         return fail(res, error.message || '同步微信退款状态失败', 500);
@@ -6481,7 +7090,7 @@ app.post('/admin/api/refunds/wechat-notify', async (req, res) => {
 });
 
 app.get('/admin/api/commissions', auth, requirePermission('commissions'), async (req, res) => {
-    await ensureFreshCollections(['commissions', 'users', 'orders']);
+    const readMeta = await freshReadMeta(req, STRONG_CONSISTENCY_COLLECTIONS.commissions, true);
     const users = getCollection('users');
     const orders = getCollection('orders');
     let rows = sortByUpdatedDesc(getCollection('commissions')).map((item) => buildCommissionRecord(item, users, orders));
@@ -6506,7 +7115,7 @@ app.get('/admin/api/commissions', auth, requirePermission('commissions'), async 
     }
     if (userId) rows = rows.filter((item) => rowMatchesLookup(item.user || item, userId, [item.user_id]));
     const pageResult = paginate(rows, req);
-    ok(res, { ...pageResult, stats: commissionStats(rows) });
+    okStrongRead(res, { ...pageResult, stats: commissionStats(rows) }, readMeta.freshness);
 });
 
 app.put('/admin/api/commissions/:id/approve', auth, requirePermission('commissions'), async (req, res) => {
@@ -6523,7 +7132,14 @@ app.put('/admin/api/commissions/:id/approve', auth, requirePermission('commissio
     await Promise.resolve(dataStore.flush?.());
     const updated = rows[index];
     if (!updated) return fail(res, '佣金记录不存在', 404);
-    ok(res, updated);
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.commissions);
+    const freshRows = getCollection('commissions');
+    const freshUpdated = freshRows.find((row) => rowMatchesLookup(row, req.params.id)) || updated;
+    okStrongWrite(res, freshUpdated, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at
+    });
 });
 
 app.put('/admin/api/commissions/:id/reject', auth, requirePermission('commissions'), async (req, res) => {
@@ -6541,7 +7157,14 @@ app.put('/admin/api/commissions/:id/reject', auth, requirePermission('commission
     await Promise.resolve(dataStore.flush?.());
     const updated = rows[index];
     if (!updated) return fail(res, '佣金记录不存在', 404);
-    ok(res, updated);
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.commissions);
+    const freshRows = getCollection('commissions');
+    const freshUpdated = freshRows.find((row) => rowMatchesLookup(row, req.params.id)) || updated;
+    okStrongWrite(res, freshUpdated, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at
+    });
 });
 
 app.post('/admin/api/commissions/batch-approve', auth, requirePermission('commissions'), async (req, res) => {
@@ -6561,7 +7184,13 @@ app.post('/admin/api/commissions/batch-approve', auth, requirePermission('commis
     saveCollection('commissions', rows);
     createAuditLog(req.admin, 'commission.batch_approve_settle', 'commissions', { affected, blocked_ids: blockedIds });
     await Promise.resolve(dataStore.flush?.());
-    ok(res, { success: true, affected, blocked_ids: blockedIds });
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.commissions);
+    okStrongWrite(res, { success: true, affected, blocked_ids: blockedIds }, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at,
+        fallbacks_used: blockedIds.length ? ['blocked_ids'] : []
+    });
 });
 
 app.post('/admin/api/commissions/batch-reject', auth, requirePermission('commissions'), async (req, res) => {
@@ -6584,11 +7213,17 @@ app.post('/admin/api/commissions/batch-reject', auth, requirePermission('commiss
     saveCollection('commissions', rows);
     createAuditLog(req.admin, 'commission.batch_reject_cancel', 'commissions', { affected, blocked_ids: blockedIds });
     await Promise.resolve(dataStore.flush?.());
-    ok(res, { success: true, affected, blocked_ids: blockedIds });
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.commissions);
+    okStrongWrite(res, { success: true, affected, blocked_ids: blockedIds }, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at,
+        fallbacks_used: blockedIds.length ? ['blocked_ids'] : []
+    });
 });
 
 app.get('/admin/api/orders', auth, requirePermission('orders'), async (req, res) => {
-    await ensureFreshCollections(['orders', 'users', 'products', 'commissions', 'refunds']);
+    const readMeta = await freshReadMeta(req, STRONG_CONSISTENCY_COLLECTIONS.orders, true);
     const users = getCollection('users');
     const products = getCollection('products');
     const commissions = getCollection('commissions');
@@ -6634,7 +7269,7 @@ app.get('/admin/api/orders', auth, requirePermission('orders'), async (req, res)
         });
     }
 
-    ok(res, {
+    okStrongRead(res, {
         ...paginate(rows, req),
         summary: {
             pending_pay: rows.filter((item) => normalizeOrderStatusGroup(item) === 'pending_pay').length,
@@ -6644,7 +7279,7 @@ app.get('/admin/api/orders', auth, requirePermission('orders'), async (req, res)
             completed: rows.filter((item) => normalizeOrderStatusGroup(item) === 'completed').length,
             closed: rows.filter((item) => normalizeOrderStatusGroup(item) === 'closed').length
         }
-    });
+    }, readMeta.freshness);
 });
 
 app.get('/admin/api/orders/export', auth, requirePermission('orders'), (req, res) => {
@@ -6654,13 +7289,13 @@ app.get('/admin/api/orders/export', auth, requirePermission('orders'), (req, res
 });
 
 app.get('/admin/api/orders/:id', auth, requirePermission('orders'), async (req, res) => {
-    await ensureFreshCollections(['orders', 'users', 'products', 'commissions']);
+    const readMeta = await freshReadMeta(req, STRONG_CONSISTENCY_COLLECTIONS.orders, true);
     const users = getCollection('users');
     const products = getCollection('products');
     const commissions = getCollection('commissions');
     const order = findByLookup(getCollection('orders'), req.params.id, (item) => [item.order_no]);
     if (!order) return fail(res, '订单不存在', 404);
-    ok(res, buildOrderRecord(order, users, products, commissions));
+    okStrongRead(res, buildOrderRecord(order, users, products, commissions), readMeta.freshness);
 });
 
 app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), async (req, res) => {
@@ -6673,41 +7308,97 @@ app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), async (
     if (!ORDER_SHIPPABLE_STATUSES.has(String(current.status || ''))) {
         return fail(res, `当前订单状态不允许发货：${current.status || '-'}`, 400);
     }
-    const fulfillmentType = pickString(req.body?.fulfillment_type || req.body?.type, '').toLowerCase();
-    if (fulfillmentType === 'agent') {
+    const requestedFulfillmentType = pickString(req.body?.fulfillment_type || req.body?.type, '').toLowerCase();
+    let finalFulfillmentType = requestedFulfillmentType || current.fulfillment_type || 'company';
+    let fallbackNotice = '';
+    let deductionResult = null;
+
+    if (requestedFulfillmentType === 'agent') {
         const lockedAgentCost = toNumber(current.locked_agent_cost_total ?? current.locked_agent_cost, 0);
         if (!pickString(current.fulfillment_partner_openid || current.nearest_agent_openid)) {
-            return fail(res, '当前订单未锁定可履约代理，不能切换为代理发货', 400);
-        }
-        if (lockedAgentCost <= 0) {
-            return fail(res, '当前订单缺少锁定代理成本，不能切换为代理发货', 400);
+            finalFulfillmentType = 'company';
+            fallbackNotice = '当前订单未锁定可履约代理，已自动改为平台发货';
+        } else if (lockedAgentCost <= 0) {
+            finalFulfillmentType = 'company';
+            fallbackNotice = '当前订单缺少锁定代理成本，已自动改为平台发货';
+        } else {
+            deductionResult = await deductAgentFulfillmentGoodsFund(current, req.admin);
+            if (!deductionResult.ok && deductionResult.insufficient) {
+                finalFulfillmentType = 'company';
+                fallbackNotice = `代理货款余额不足（当前 ¥${roundMoney(deductionResult.balance).toFixed(2)}），已自动改为平台发货`;
+                ensurePlatformSettlementCommissionsForOrder(current);
+            } else if (!deductionResult.ok) {
+                return fail(res, deductionResult.reason || '代理货款扣减失败', 500);
+            }
         }
     }
-    const updated = patchOrder(req.params.id, (row) => ({
-        ...row,
-        logistics_company: req.body?.logistics_company || row.logistics_company || '',
-        tracking_no: req.body?.tracking_no || row.tracking_no || '',
-        fulfillment_type: fulfillmentType || row.fulfillment_type || 'company',
-        status: 'shipped',
-        shipped_at: nowIso(),
-        updated_at: nowIso()
-    }));
-    if (!updated) return fail(res, '订单不存在', 404);
-    const fulfillmentCommission = ensureAgentFulfillmentCommissionForOrder(updated);
-    ensureAgentAssistCommissionForOrder(updated);
-    ensureBranchAgentCommissionForOrder(updated, { preferPickup: false });
-    if (fulfillmentCommission) {
-        const commissionAmount = roundMoney(toNumber(fulfillmentCommission.amount, 0));
-        const patched = patchOrder(req.params.id, (row) => ({
+
+    let updated = null;
+    try {
+        updated = patchOrder(req.params.id, (row) => ({
             ...row,
-            middle_commission_total: commissionAmount,
+            logistics_company: req.body?.logistics_company || row.logistics_company || '',
+            tracking_no: req.body?.tracking_no || row.tracking_no || '',
+            fulfillment_type: finalFulfillmentType,
+            fulfillment_partner_id: finalFulfillmentType === 'agent' ? row.fulfillment_partner_id : '',
+            fulfillment_partner_openid: finalFulfillmentType === 'agent' ? row.fulfillment_partner_openid : '',
+            fulfillment_partner_role_level: finalFulfillmentType === 'agent' ? row.fulfillment_partner_role_level : 0,
+            agent: finalFulfillmentType === 'agent' ? row.agent : null,
+            agent_info: finalFulfillmentType === 'agent' ? row.agent_info : null,
+            locked_agent_cost: finalFulfillmentType === 'agent' ? row.locked_agent_cost : null,
+            locked_agent_cost_total: finalFulfillmentType === 'agent' ? row.locked_agent_cost_total : null,
+            middle_commission_total: finalFulfillmentType === 'agent' ? row.middle_commission_total : 0,
+            status: 'shipped',
+            shipped_at: nowIso(),
             updated_at: nowIso()
         }));
-        if (patched) {
-            updated.middle_commission_total = commissionAmount;
+        if (!updated) return fail(res, '订单不存在', 404);
+
+        const fulfillmentCommission = ensureAgentFulfillmentCommissionForOrder(updated);
+        ensureAgentAssistCommissionForOrder(updated);
+        ensureBranchAgentCommissionForOrder(updated, { preferPickup: false });
+        if (fulfillmentCommission) {
+            const commissionAmount = roundMoney(toNumber(fulfillmentCommission.amount, 0));
+            const patched = patchOrder(req.params.id, (row) => ({
+                ...row,
+                middle_commission_total: commissionAmount,
+                updated_at: nowIso()
+            }));
+            if (patched) {
+                updated.middle_commission_total = commissionAmount;
+            }
         }
+    } catch (error) {
+        if (deductionResult?.rollback) {
+            await deductionResult.rollback().catch(() => {});
+        }
+        return fail(res, error.message || '订单发货失败', 500);
     }
-    ok(res, updated);
+
+    createAuditLog(req.admin, 'order.ship', 'orders', {
+        order_id: primaryId(updated) || req.params.id,
+        order_no: pickString(updated.order_no),
+        fulfillment_type: finalFulfillmentType,
+        fallback_notice: fallbackNotice,
+        deducted_goods_fund_amount: roundMoney(deductionResult?.amount || 0)
+    });
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.orders);
+    const users = getCollection('users');
+    const products = getCollection('products');
+    const commissions = getCollection('commissions');
+    const refreshed = findByLookup(getCollection('orders'), req.params.id, (row) => [row.order_no]);
+    const payload = {
+        ...(refreshed ? buildOrderRecord(refreshed, users, products, commissions) : updated),
+        fulfillment_fallback: requestedFulfillmentType === 'agent' && finalFulfillmentType !== 'agent',
+        fulfillment_notice: fallbackNotice,
+        deducted_goods_fund_amount: roundMoney(deductionResult?.amount || 0)
+    };
+    okStrongWrite(res, payload, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at,
+        fallbacks_used: fallbackNotice ? ['platform_fallback'] : []
+    });
 });
 
 app.put('/admin/api/orders/:id/amount', auth, requirePermission('order_amount_adjust'), async (req, res) => {
@@ -6721,7 +7412,13 @@ app.put('/admin/api/orders/:id/amount', auth, requirePermission('order_amount_ad
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '订单不存在', 404);
-    ok(res, updated);
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.orders);
+    const freshUpdated = findByLookup(getCollection('orders'), req.params.id, (row) => [row.order_no]) || updated;
+    okStrongWrite(res, freshUpdated, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at
+    });
 });
 
 app.put('/admin/api/orders/:id/remark', auth, requirePermission('orders'), async (req, res) => {
@@ -6733,7 +7430,13 @@ app.put('/admin/api/orders/:id/remark', auth, requirePermission('orders'), async
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '订单不存在', 404);
-    ok(res, updated);
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.orders);
+    const freshUpdated = findByLookup(getCollection('orders'), req.params.id, (row) => [row.order_no]) || updated;
+    okStrongWrite(res, freshUpdated, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at
+    });
 });
 
 app.put('/admin/api/orders/:id/repair-fulfillment', auth, requirePermission('orders'), async (req, res) => {
@@ -6753,7 +7456,11 @@ app.put('/admin/api/orders/:id/repair-fulfillment', auth, requirePermission('ord
     const commissions = getCollection('commissions');
     const refreshed = findByLookup(getCollection('orders'), req.params.id, (row) => [row.order_no]);
     if (!refreshed) return fail(res, '订单不存在', 404);
-    ok(res, buildOrderRecord(refreshed, users, products, commissions));
+    okStrongWrite(res, buildOrderRecord(refreshed, users, products, commissions), {
+        persisted: true,
+        reloaded_collections: STRONG_CONSISTENCY_COLLECTIONS.orders,
+        read_at: nowIso()
+    });
 });
 
 app.put('/admin/api/orders/:id/force-complete', auth, requirePermission('order_force_complete'), async (req, res) => {
@@ -6767,7 +7474,13 @@ app.put('/admin/api/orders/:id/force-complete', auth, requirePermission('order_f
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '订单不存在', 404);
-    ok(res, updated);
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.orders);
+    const freshUpdated = findByLookup(getCollection('orders'), req.params.id, (row) => [row.order_no]) || updated;
+    okStrongWrite(res, freshUpdated, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at
+    });
 });
 
 app.put('/admin/api/orders/:id/force-cancel', auth, requirePermission('order_force_cancel'), async (req, res) => {
@@ -6780,7 +7493,13 @@ app.put('/admin/api/orders/:id/force-cancel', auth, requirePermission('order_for
         updated_at: nowIso()
     }));
     if (!updated) return fail(res, '订单不存在', 404);
-    ok(res, updated);
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.orders);
+    const freshUpdated = findByLookup(getCollection('orders'), req.params.id, (row) => [row.order_no]) || updated;
+    okStrongWrite(res, freshUpdated, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at
+    });
 });
 
 app.get('/admin/api/logistics/order/:id', auth, requirePermission('orders'), async (req, res) => {
@@ -7149,6 +7868,7 @@ app.get('/admin/api/system/status', auth, (req, res) => {
     const heapPercent = memory.heapTotal > 0 ? Math.round((memory.heapUsed / memory.heapTotal) * 100) : 0;
     const freeMemMb = Math.round(os.freemem() / 1024 / 1024);
     const totalMemMb = Math.round(os.totalmem() / 1024 / 1024);
+    const cacheHealth = typeof dataStore.cacheHealth === 'function' ? dataStore.cacheHealth() : dataStore.health();
     ok(res, {
         status: 'online',
         runtime: 'cloudrun-admin-service',
@@ -7180,6 +7900,7 @@ app.get('/admin/api/system/status', auth, (req, res) => {
         data_root: dataRoot,
         runtime_root: runtimeRoot,
         upload_root: uploadsRoot,
+        cache_health: cacheHealth,
         checked_at: nowIso()
     });
 });
@@ -7231,6 +7952,119 @@ function getConfigRowValue(key, fallback) {
     const row = getCollection('configs').find((item) => item.config_key === key || item.key === key)
         || getCollection('app_configs').find((item) => item.config_key === key || item.key === key);
     return parseConfigRowValue(row, fallback);
+}
+
+function collectWalletLogsForUser(user = {}) {
+    const userIds = [primaryId(user), user?.id, user?._legacy_id, user?._id].filter((value) => value !== null && value !== undefined && value !== '');
+    return sortByUpdatedDesc(getCollection('wallet_logs').filter((row) => {
+        if (user.openid && pickString(row.openid) === pickString(user.openid)) return true;
+        return userIds.some((id) => rowMatchesLookup(row, id, [row.user_id]));
+    }));
+}
+
+function collectGoodsFundLogsForUser(user = {}) {
+    return sortByUpdatedDesc(getCollection('goods_fund_logs').filter((row) => {
+        if (user.openid && pickString(row.openid) === pickString(user.openid)) return true;
+        return rowMatchesLookup(row, primaryId(user), [row.user_id]);
+    }));
+}
+
+function buildOrderAuditSnapshot(order = {}, users = [], products = [], commissions = [], refunds = []) {
+    const orderId = primaryId(order) || order.order_no;
+    const orderNo = pickString(order.order_no);
+    const orderRecord = buildOrderRecord(order, users, products, commissions);
+    const relatedRefunds = refunds
+        .filter((item) => rowMatchesLookup(item, orderId, [item.order_id, item.order_no, orderNo]))
+        .map((item) => buildRefundRecord(item, users, getCollection('orders'), products, getCollection('skus')));
+    const relatedCommissions = commissions
+        .filter((item) => rowMatchesLookup(item, orderId, [item.order_id, item.order_no, orderNo]))
+        .map((item) => buildCommissionRecord(item, users, getCollection('orders')));
+    const buyer = findUserByAnyId(users, order.openid || order.buyer_id || order.user_id);
+    return {
+        order: orderRecord,
+        refunds: relatedRefunds,
+        commissions: relatedCommissions,
+        buyer_wallet_logs: buyer ? collectWalletLogsForUser(buyer).slice(0, 20) : [],
+        buyer_goods_fund_logs: buyer ? collectGoodsFundLogsForUser(buyer).slice(0, 20) : [],
+        audit_logs: sortByUpdatedDesc(getCollection('admin_audit_logs').filter((row) => {
+            return rowMatchesLookup(row, orderId, [row.target_id, row.target, row.order_id, row.order_no, orderNo]);
+        })).slice(0, 20)
+    };
+}
+
+function buildUserAuditSnapshot(user = {}, users = [], orders = [], commissions = []) {
+    const userId = primaryId(user);
+    const canonical = buildUserRecord(user, users, orders, commissions);
+    const recentOrders = sortByUpdatedDesc(orders)
+        .filter((row) => rowMatchesLookup(row, userId, [row.openid, row.user_id, row.buyer_id]))
+        .slice(0, 20)
+        .map((row) => buildOrderRecord(row, users, getCollection('products'), commissions));
+    const recentCommissions = sortByUpdatedDesc(commissions)
+        .filter((row) => rowMatchesLookup(row, userId, [row.user_id, row.openid]))
+        .slice(0, 20)
+        .map((row) => buildCommissionRecord(row, users, orders));
+    const recentWithdrawals = sortByUpdatedDesc(getCollection('withdrawals'))
+        .filter((row) => rowMatchesLookup(row, userId, [row.user_id, row.openid]))
+        .slice(0, 20)
+        .map((row) => buildWithdrawalRecord(row, users));
+    return {
+        user: canonical,
+        parent: buildUserTiny(findUserByAnyId(users, getUserParentRef(user))),
+        direct_children: getDirectChildren(users, user).slice(0, 20).map((row) => buildUserListRecord(row, buildUserListContext(users, orders))),
+        recent_orders: recentOrders,
+        recent_commissions: recentCommissions,
+        recent_withdrawals: recentWithdrawals,
+        wallet_logs: collectWalletLogsForUser(user).slice(0, 20),
+        goods_fund_logs: collectGoodsFundLogsForUser(user).slice(0, 20),
+        audit_logs: sortByUpdatedDesc(getCollection('admin_audit_logs').filter((row) => {
+            return rowMatchesLookup(row, userId, [row.target_id, row.user_id, row.openid]);
+        })).slice(0, 20)
+    };
+}
+
+function buildConfigSourceReport(key) {
+    const normalizedKey = pickString(key).trim();
+    const configRows = getCollection('configs').filter((row) => row.config_key === normalizedKey || row.key === normalizedKey);
+    const appConfigRows = getCollection('app_configs').filter((row) => row.config_key === normalizedKey || row.key === normalizedKey);
+    const singletonValue = getSingleton(normalizedKey, undefined);
+    const singletonExists = singletonValue !== undefined;
+    let effective = null;
+    if (singletonExists) {
+        effective = {
+            source: 'singleton',
+            key: normalizedKey,
+            value: singletonValue
+        };
+    } else if (configRows[0]) {
+        effective = {
+            source: 'configs',
+            key: normalizedKey,
+            value: parseConfigRowValue(configRows[0], null)
+        };
+    } else if (appConfigRows[0]) {
+        effective = {
+            source: 'app_configs',
+            key: normalizedKey,
+            value: parseConfigRowValue(appConfigRows[0], null)
+        };
+    }
+    return {
+        key: normalizedKey,
+        effective,
+        singleton: singletonExists ? singletonValue : null,
+        configs: configRows.map((row) => ({
+            id: primaryId(row),
+            config_key: row.config_key || row.key,
+            updated_at: row.updated_at || row.created_at,
+            value: parseConfigRowValue(row, null)
+        })),
+        app_configs: appConfigRows.map((row) => ({
+            id: primaryId(row),
+            config_key: row.config_key || row.key,
+            updated_at: row.updated_at || row.created_at,
+            value: parseConfigRowValue(row, null)
+        }))
+    };
 }
 
 function upsertConfigRow(key, value, options = {}) {
@@ -7492,6 +8326,35 @@ app.get('/admin/api/debug/anomalies', auth, requirePermission('settings_manage')
 });
 app.get('/admin/api/debug/db-ping', auth, requirePermission('settings_manage'), (req, res) => ok(res, { status: 'ok', mode: dataStore.health().mode, checked_at: nowIso() }));
 app.get('/admin/api/debug/data-source', auth, requirePermission('settings_manage'), (req, res) => ok(res, { descriptor: dataStore.describe(), health: dataStore.health(), checked_at: nowIso() }));
+app.get('/admin/api/debug/order-chain', auth, requirePermission('settings_manage'), async (req, res) => {
+    const lookup = pickString(req.query.order_id || req.query.id || req.query.order_no).trim();
+    if (!lookup) return fail(res, '请提供订单 ID 或订单号');
+    const readMeta = await freshReadMeta(req, STRONG_CONSISTENCY_COLLECTIONS.orders, true);
+    const users = getCollection('users');
+    const products = getCollection('products');
+    const commissions = getCollection('commissions');
+    const refunds = getCollection('refunds');
+    const order = findByLookup(getCollection('orders'), lookup, (row) => [row.order_no]);
+    if (!order) return fail(res, '订单不存在', 404);
+    okStrongRead(res, buildOrderAuditSnapshot(order, users, products, commissions, refunds), readMeta.freshness);
+});
+app.get('/admin/api/debug/user-chain', auth, requirePermission('settings_manage'), async (req, res) => {
+    const lookup = pickString(req.query.user_id || req.query.id || req.query.openid || req.query.member_no).trim();
+    if (!lookup) return fail(res, '请提供用户 ID / OPENID / 会员码');
+    const readMeta = await freshReadMeta(req, STRONG_CONSISTENCY_COLLECTIONS.users, true);
+    const users = getCollection('users');
+    const orders = getCollection('orders');
+    const commissions = getCollection('commissions');
+    const user = findUserByAnyId(users, lookup);
+    if (!user) return fail(res, '用户不存在', 404);
+    okStrongRead(res, buildUserAuditSnapshot(user, users, orders, commissions), readMeta.freshness);
+});
+app.get('/admin/api/debug/config-source', auth, requirePermission('settings_manage'), async (req, res) => {
+    const key = pickString(req.query.key).trim();
+    if (!key) return fail(res, '请提供配置 key');
+    const readMeta = await freshReadMeta(req, ['configs', 'app_configs', 'admin_singletons'], true);
+    okStrongRead(res, buildConfigSourceReport(key), readMeta.freshness);
+});
 app.get('/admin/api/debug/cron-status', auth, requirePermission('settings_manage'), (req, res) => ok(res, {
     tasks: [
         { label: '订单状态补偿', interval: '5m', status: 'ok', run_count: 24, error_count: 0, last_run_at: nowIso(), last_error: '' },

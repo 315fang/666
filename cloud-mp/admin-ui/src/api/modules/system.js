@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { withStrongReadParams } from '@/api/consistency'
 
 export const getSettings = () => {
   return request({
@@ -18,7 +19,8 @@ export const updateSettings = (data) => {
 export const getSystemStatus = () => {
   return request({
     url: '/system/status',
-    method: 'get'
+    method: 'get',
+    params: withStrongReadParams()
   })
 }
 
@@ -26,6 +28,9 @@ export const getDebugAnomalies = () => request({ url: '/debug/anomalies', method
 export const getCronStatus = () => request({ url: '/debug/cron-status', method: 'get' })
 export const getDebugLogs = (lines = 100) =>
   request({ url: `/debug/logs?lines=${lines}`, method: 'get' })
+export const getDebugOrderChain = (params) => request({ url: '/debug/order-chain', method: 'get', params: withStrongReadParams(params) })
+export const getDebugUserChain = (params) => request({ url: '/debug/user-chain', method: 'get', params: withStrongReadParams(params) })
+export const getDebugConfigSource = (params) => request({ url: '/debug/config-source', method: 'get', params: withStrongReadParams(params) })
 
 export const getAlertConfig = () => request({ url: '/alert-config', method: 'get' })
 export const saveAlertConfig = (data) => request({ url: '/alert-config', method: 'put', data })
