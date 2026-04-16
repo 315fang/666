@@ -4,7 +4,7 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const {
-    CloudBaseError, cloudFunctionWrapper
+    CloudBaseError, cloudFunctionWrapper, withTransientDbReadRetry
 } = require('./shared/errors');
 const {
     success, badRequest, serverError
@@ -236,32 +236,129 @@ const handleAction = {
     }),
 
     'getSystemConfig': asyncHandler(async (params) => {
-        const config = await configLoader.loadConfig();
+        const config = await withTransientDbReadRetry(
+            () => configLoader.loadConfig(),
+            { action: 'getSystemConfig' }
+        );
         return success(config);
     }),
 
     'miniProgramConfig': asyncHandler(async (params) => {
-        const config = await configLoader.loadConfig();
+        const config = await withTransientDbReadRetry(
+            () => configLoader.loadConfig(),
+            { action: 'miniProgramConfig' }
+        );
         return success(configContract.normalizeMiniProgramConfig(config.mini_program_config || config));
     }),
 
     // ===== 首页内容 =====
     'homeContent': asyncHandler(async (params) => {
+        const cached = configCache.getCachedConfig('home_content_payload');
+        if (cached && typeof cached === 'object') {
+            return success(cached);
+        }
+
         // 兼容旧数据字段：banners 用 status, products 用 status:true, page_layouts 用 page_key+status
-        const [homeBannerRes, midBannerRes, bottomBannerRes, layoutsRes, productsRes, miniProgramConfig, homepageSettings, popupAd] = await Promise.all([
-            db.collection('banners').where({ status: true, position: 'home' }).orderBy('sort_order', 'asc').limit(10).get().catch(() => ({ data: [] })),
-            db.collection('banners').where({ status: true, position: 'home_mid' }).orderBy('sort_order', 'asc').limit(10).get().catch(() => ({ data: [] })),
-            db.collection('banners').where({ status: true, position: 'home_bottom' }).orderBy('sort_order', 'asc').limit(10).get().catch(() => ({ data: [] })),
-            db.collection('page_layouts').where({ page_key: 'home', status: true }).limit(1).get().catch(() => ({ data: [] })),
-            db.collection('products').where({ status: true }).orderBy('sales_count', 'desc').limit(10).get().catch(() => ({ data: [] })),
+        const [homeBannerRes, midBannerRes, bottomBannerRes, layoutsRes, productsRes, miniProgramRaw, homepageSettings, popupAd] = await Promise.all([
+            db.collection('banners')
+                .where({ status: true, position: 'home' })
+                .orderBy('sort_order', 'asc')
+                .limit(10)
+                .field({
+                    _id: true,
+                    images: true,
+                    id: true,
+                    _legacy_id: true,
+                    name: true,
+                    title: true,
+                    subtitle: true,
+                    link_type: true,
+                    link_value: true,
+                    position: true,
+                    sort_order: true,
+                    file_id: true,
+                    image_url: true,
+                    url: true,
+                })
+                .get().catch(() => ({ data: [] })),
+            db.collection('banners')
+                .where({ status: true, position: 'home_mid' })
+                .orderBy('sort_order', 'asc')
+                .limit(10)
+                .field({
+                    _id: true,
+                    images: true,
+                    id: true,
+                    _legacy_id: true,
+                    name: true,
+                    title: true,
+                    subtitle: true,
+                    link_type: true,
+                    link_value: true,
+                    position: true,
+                    sort_order: true,
+                    file_id: true,
+                    image_url: true,
+                    url: true,
+                })
+                .get().catch(() => ({ data: [] })),
+            db.collection('banners')
+                .where({ status: true, position: 'home_bottom' })
+                .orderBy('sort_order', 'asc')
+                .limit(10)
+                .field({
+                    _id: true,
+                    images: true,
+                    id: true,
+                    _legacy_id: true,
+                    name: true,
+                    title: true,
+                    subtitle: true,
+                    link_type: true,
+                    link_value: true,
+                    position: true,
+                    sort_order: true,
+                    file_id: true,
+                    image_url: true,
+                    url: true,
+                })
+                .get().catch(() => ({ data: [] })),
+            db.collection('page_layouts')
+                .where({ page_key: 'home', status: true })
+                .field({
+                    layout_schema: true,
+                    sections: true
+                })
+                .limit(1)
+                .get().catch(() => ({ data: [] })),
+            db.collection('products')
+                .where({ status: true })
+                .orderBy('sales_count', 'desc')
+                .field({
+                    _id: true,
+                    id: true,
+                    _legacy_id: true,
+                    name: true,
+                    images: true,
+                    min_price: true,
+                    retail_price: true,
+                    market_price: true,
+                    sales_count: true,
+                    purchase_count: true
+                })
+                .limit(10)
+                .get().catch(() => ({ data: [] })),
             (async () => {
-                const allConfig = await configLoader.loadConfig();
-                return configContract.normalizeMiniProgramConfig(allConfig.mini_program_config || allConfig);
+                const cachedMini = await configCache.getConfig('mini_program_config');
+                if (cachedMini !== null) return cachedMini;
+                const cfg = await configLoader.loadConfig();
+                return cfg.mini_program_config || cfg;
             })(),
             getHomepageSettings(),
             getPopupAdConfig()
         ]);
 
+        const miniProgramConfig = configContract.normalizeMiniProgramConfig(miniProgramRaw || {});
         const layout = layoutsRes.data && layoutsRes.data[0] ? layoutsRes.data[0] : null;
         const hotProducts = (productsRes.data || []).map((p) => ({
             _id: p._id,
@@ -273,8 +370,7 @@ const handleAction = {
             original_price: p.original_price || p.market_price,
             sales_count: p.sales_count || p.purchase_count || 0,
         }));
-
-        return success(configContract.normalizeHomeContentPayload({
+        const payload = configContract.normalizeHomeContentPayload({
             miniProgramConfig,
             homepageSettings,
             bannersByPosition: {
@@ -286,7 +382,10 @@ const handleAction = {
             popupAd,
             layout: layout ? layout.layout_schema || layout.sections || layout : null,
             latestActivity: {}
-        }));
+        });
+
+        configCache.setCachedConfig('home_content_payload', payload);
+        return success(payload);
     }),
 
     // ===== Banners =====

@@ -150,18 +150,20 @@ export const uploadFile = async (file, options = {}) => {
   }
 }
 
-export const getStorageConfig = () => {
+export const getStorageConfig = (options = {}) => {
   return request({
     url: '/storage/config',
-    method: 'get'
+    method: 'get',
+    ...options
   })
 }
 
-export const testStorageConfig = (provider) => {
+export const testStorageConfig = (provider, options = {}) => {
   return request({
     url: '/storage/test',
     method: 'post',
-    data: provider ? { provider } : {}
+    data: provider ? { provider } : {},
+    ...options
   })
 }
 

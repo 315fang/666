@@ -73,6 +73,7 @@ const ROUTE_TABLE = {
 
     // ── 地址 ──────────────────────────────────
     'GET /addresses':                       { fn: 'user',         action: 'listAddresses' },
+    'GET /addresses/default':               { fn: 'user',         action: 'getDefaultAddress' },
     'GET /addresses/:id':                   { fn: 'user',         action: 'getAddressDetail',    idKey: 'address_id' },
     'POST /addresses':                      { fn: 'user',         action: 'addAddress' },
     'PUT /addresses/:id':                   { fn: 'user',         action: 'updateAddress',      idKey: 'address_id' },
@@ -163,6 +164,7 @@ const ROUTE_TABLE = {
     'GET /wallet/commissions':              { fn: 'user',         action: 'walletCommissions' },
     'GET /user/member-tier-meta':           { fn: 'user',         action: 'memberTierMeta' },
     'GET /agent/wallet':                    { fn: 'distribution', action: 'agentWallet' },
+    'GET /agent/goods-fund':                { fn: 'distribution', action: 'agentGoodsFund' },
     'GET /agent/wallet/logs':               { fn: 'distribution', action: 'agentWalletLogs' },
     'GET /agent/wallet/recharge-config':    { fn: 'distribution', action: 'agentWalletRechargeConfig' },
     'POST /agent/wallet/prepay':            { fn: 'distribution', action: 'agentWalletPrepay' },
@@ -321,7 +323,18 @@ function request(options = {}) {
     if (route.queryParams) Object.assign(fnData, route.queryParams);
     Object.assign(fnData, data);
 
-    return callFn(route.fn, fnData, { showLoading, showError });
+    const isReadOnly = upperMethod === 'GET';
+    const resolvedMaxRetries = typeof maxRetries === 'number'
+        ? Math.max(0, maxRetries)
+        : (isReadOnly ? config.maxRetries : 0);
+
+    return callFn(route.fn, fnData, {
+        showLoading,
+        showError,
+        maxRetries: resolvedMaxRetries,
+        retryDelay: config.retryDelay,
+        readOnly: isReadOnly
+    });
 }
 
 // 快捷方法（与旧 request.js 完全相同的接口）
@@ -344,6 +357,6 @@ function uploadFile(url, filePath, name = 'file', formData = {}, options = {}) {
 
 function addRequestInterceptor() {}
 function addResponseInterceptor() {}
-const config = { baseUrl: '', timeout: 15000, maxRetries: 1, retryDelay: 1000 };
+const config = { baseUrl: '', timeout: 15000, maxRetries: 1, retryDelay: 300 };
 
 module.exports = { request, get, post, put, del, uploadFile, addRequestInterceptor, addResponseInterceptor, config };

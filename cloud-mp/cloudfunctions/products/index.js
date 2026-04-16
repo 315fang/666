@@ -30,16 +30,65 @@ function isOnSale(status) {
     return status === true || status === 1 || status === '1' || status === 'active' || status === 'on_sale';
 }
 
-async function queryActiveProducts() {
+function resolveActiveProductQuery(categoryId) {
+    const query = db.collection('products').where(_.or([
+        { status: true },
+        { status: 1 },
+        { status: '1' },
+        { status: 'active' },
+        { status: 'on_sale' }
+    ]));
+    if (categoryId) {
+        query.where({ category_id: categoryId });
+    }
+    return query;
+}
+
+async function queryActiveProducts(size = 200) {
+    const { list } = await queryActiveProductsPage({ page: 1, limit: size, sort: 'manual_weight' });
+    return list;
+}
+
+async function queryActiveProductsPage(params = {}) {
+    const pageSize = Math.max(1, toNumber(params.limit || params.size, 20));
+    const page = Math.max(1, toNumber(params.page, 1));
+    const start = (page - 1) * pageSize;
+    const sort = String(params.sort || '').trim().toLowerCase();
+    const sortField = sort === 'hot' || sort === 'sales' ? 'sales_count' : 'manual_weight';
+    const categoryId = params.category_id ? String(params.category_id) : '';
+    const countQuery = resolveActiveProductQuery(categoryId);
+    const listQuery = resolveActiveProductQuery(categoryId);
+
     try {
-        const candidates = [{ status: true }, { status: 1 }, { status: '1' }, { status: 'active' }, { status: 'on_sale' }];
-        const groups = await Promise.all(candidates.map((w) => db.collection('products').where(w).limit(100).get().catch(() => ({ data: [] }))));
-        const map = new Map();
-        groups.forEach((g) => (g.data || []).forEach((item) => map.set(item._id, item)));
-        return Array.from(map.values());
+        const countRes = await countQuery.count().catch(() => ({ total: 0 }));
+        const listRes = await listQuery
+            .orderBy(sortField, 'desc')
+            .skip(start)
+            .limit(pageSize)
+            .get()
+            .catch(() => ({ data: [] }));
+
+        return {
+            list: listRes.data || [],
+            total: toNumber(countRes.total, 0),
+            page,
+            limit: pageSize
+        };
     } catch (err) {
-        console.error('[products] queryActiveProducts 失败:', err.message);
-        return [];
+        console.error('[products] queryActiveProductsPage 失败:', err && err.message ? err.message : err);
+        try {
+            const fallback = await db.collection('products')
+                .where({ status: true })
+                .orderBy(sortField, 'desc')
+                .skip(start)
+                .limit(pageSize)
+                .get()
+                .catch(() => ({ data: [] }));
+            return { list: fallback.data || [], total: 0, page, limit: pageSize };
+        } catch (fallbackErr) {
+            console.error('[products] queryActiveProductsPage 回退失败:', fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr);
+            return { list: [], total: 0, page, limit: pageSize };
+        }
     }
 }
 
@@ -157,17 +206,13 @@ function formatProduct(p) {
 // 主处理函数
 const handleAction = {
     'list': asyncHandler(async (params) => {
-        const pageSize = Math.max(1, toNumber(params.limit || params.size, 20));
-        let list = await queryActiveProducts();
-        if (params.category_id) {
-            list = list.filter((p) => String(p.category_id) === String(params.category_id));
-        }
-        list = list.sort((a, b) => toNumber(b.manual_weight, 0) - toNumber(a.manual_weight, 0)).map(formatProduct);
+        const { list: rawList, total, page, limit } = await queryActiveProductsPage(params);
+        let list = rawList.map(formatProduct);
 
-        // 为列表商品按 product_id 查询 SKU（避免拉全表）
+        // 为列表商品按 product_id 查询 SKU（仅查询当前页的商品，避免拉全表）
         let skuList = [];
         try {
-            const productIds = list.map(p => p._id || p.id).filter(Boolean);
+            const productIds = list.map((p) => p._id || p.id).filter(Boolean);
             const productIdStrs = [...new Set(productIds.map(String))];
             if (productIdStrs.length > 0) {
                 // 微信云开发 _.in() 最多支持 100 个元素
@@ -175,26 +220,44 @@ const handleAction = {
                 for (let i = 0; i < productIdStrs.length; i += 100) {
                     chunks.push(productIdStrs.slice(i, i + 100));
                 }
-                const chunkResults = await Promise.all(chunks.map(ids =>
+                const chunkResults = await Promise.all(chunks.map((ids) =>
                     db.collection('skus').where({ product_id: _.in(ids) }).limit(500).get().catch(() => ({ data: [] }))
                 ));
-                skuList = chunkResults.flatMap(r => r.data || []);
+                skuList = chunkResults.flatMap((r) => r.data || []);
             }
         } catch (e) {
             console.warn('[products/list] 查询 SKU 失败，跳过规格摘要:', e.message);
         }
 
         if (skuList.length > 0) {
+            const skuMap = {};
+            skuList.forEach((sku) => {
+                const pid = String(sku.product_id || '');
+                if (!pid) return;
+                if (!skuMap[pid]) skuMap[pid] = [];
+                skuMap[pid].push(sku);
+            });
+
             list = list.map((product) => {
                 const productIdStr = String(product._id || product.id);
                 const legacyIdStr = product._legacy_id ? String(product._legacy_id) : '';
-                const productSkus = skuList.filter((sku) => {
-                    const pid = String(sku.product_id);
-                    return pid === productIdStr || (legacyIdStr && pid === legacyIdStr) || pid === String(product.id);
+                const productSkus = [
+                    ...(skuMap[productIdStr] || []),
+                    ...(legacyIdStr && skuMap[legacyIdStr] ? skuMap[legacyIdStr] : []),
+                    ...(product.id && skuMap[String(product.id)] ? skuMap[String(product.id)] : [])
+                ];
+                const uniqueSkuMap = {};
+                const uniqueSkus = [];
+                productSkus.forEach((sku) => {
+                    const key = sku._id || sku.id || `${sku.product_id}:${sku.name}:${sku.code || ''}`;
+                    if (uniqueSkuMap[key]) return;
+                    uniqueSkuMap[key] = true;
+                    uniqueSkus.push(normalizeSku(sku));
                 });
-                if (productSkus.length > 0) {
+
+                if (uniqueSkus.length > 0) {
                     const specMap = {};
-                    productSkus.forEach((sku) => {
+                    uniqueSkus.forEach((sku) => {
                         const specs = Array.isArray(sku.specs) && sku.specs.length > 0
                             ? sku.specs
                             : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
@@ -207,15 +270,14 @@ const handleAction = {
                     });
                     const specSummary = Object.keys(specMap).map((name) => Array.from(specMap[name]).join('/')).join(' · ');
                     if (specSummary) product.specSummary = specSummary;
-                    product.skus = productSkus.map(normalizeSku);
+                    product.skus = uniqueSkus;
                 }
                 return product;
             });
         }
 
-        const page = Math.max(1, toNumber(params.page, 1));
-        const start = (page - 1) * pageSize;
-        return success({ list: list.slice(start, start + pageSize), page, size: pageSize, total: list.length });
+        const listTotal = total || list.length;
+        return success({ list, page, size: limit, total: listTotal });
     }),
 
     'detail': asyncHandler(async (params) => {

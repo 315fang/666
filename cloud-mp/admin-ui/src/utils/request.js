@@ -194,7 +194,7 @@ request.interceptors.response.use(
     } else {
       if (!skipErrorMessage) ElMessage.error(error.message || '未知错误')
     }
-    
+    error.__handledByRequest = !skipErrorMessage
     return Promise.reject(error)
   }
 )

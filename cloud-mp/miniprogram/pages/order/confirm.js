@@ -31,6 +31,16 @@ Page({
     data: {
         loading: true,
         submitting: false,
+        cartLoadStatus: 'loading',
+        cartLoadError: '',
+        addressLoadStatus: 'idle',
+        addressLoadError: '',
+        pointsLoadStatus: 'idle',
+        pointsLoadError: '',
+        walletLoadStatus: 'idle',
+        walletLoadError: '',
+        couponLoadStatus: 'idle',
+        couponLoadError: '',
         // 来源：cart（购物袋）或 direct（直接购买）
         from: 'cart',
         // 收货地址
@@ -92,71 +102,45 @@ Page({
     },
 
     async onLoad(options) {
+        const safeOptions = options || {};
+        this._loadOptions = { ...safeOptions };
         const roleLevel = app.globalData.userInfo?.role_level || 0;
-        this.setData({ 
-            from: options.from || 'cart',
-            roleLevel
+        this.setData({
+            from: safeOptions.from || 'cart',
+            roleLevel,
+            isAgent: roleLevel >= 3,
+            cartLoadStatus: 'loading',
+            cartLoadError: ''
         });
 
-        if (options.from === 'direct') {
-            const directBuy = wx.getStorageSync('directBuyInfo');
-            if (directBuy) {
-                const amt = (parseFloat(directBuy.price) * directBuy.quantity).toFixed(2);
-                this.setData({
-                    orderItems: [directBuy],
-                    totalAmount: amt,
-                    finalAmount: amt,
-                    totalCount: directBuy.quantity,
-                    slashNo: directBuy.slash_no || null,
-                    groupNo: directBuy.group_no || null,
-                    groupActivityId: directBuy.group_activity_id || null,
-                    orderType: directBuy.type || '',
-                    exchangeMode: !!directBuy.exchange_mode,
-                    exchangeCouponId: directBuy.exchange_coupon_id || '',
-                    exchangeCouponTitle: directBuy.exchange_title || '',
-                    allowCoupon: directBuy.exchange_mode ? false : true,
-                    allowPoints: directBuy.exchange_mode ? false : true,
-                    usePoints: false,
-                    useWallet: false,
-                    loading: false
-                });
-                this._updatePointsConfig([directBuy]);
-                this._refreshPickupAllowed();
-                await this._refreshMiniProgramConfigAndPricing([directBuy]);
-                if (!directBuy.exchange_mode) {
-                    this.loadAvailableCoupons();
-                }
-            } else {
-                wx.showToast({ title: '商品信息丢失', icon: 'none' });
-                this.setData({ loading: false });
-            }
-        } else if (options.cart_ids) {
-            // 购物袋结算 - 加载选中的购物袋项
-            await this.loadCartItems(options.cart_ids);
-            await this._refreshMiniProgramConfigAndPricing(this.data.orderItems || []);
-        } else {
-            this.setData({ loading: false });
+        const primaryReady = await this._loadPrimaryOrderData(safeOptions);
+        if (primaryReady) {
+            await this._loadSupplementaryData();
         }
-
-        // 加载默认地址
-        this.loadDefaultAddress();
-        if (!this.data.exchangeMode) {
-            // 加载积分余额
-            this.loadPointBalance();
-            // 加载B端货款余额
-            this.loadWalletBalance();
-        }
+        this._hasShownOnce = false;
+        this._tryAutoCouponUsagePrompt();
     },
 
     async onShow() {
         const roleLevel = app.globalData.userInfo?.role_level || 0;
         if (roleLevel !== this.data.roleLevel) {
-            this.setData({ roleLevel });
+            this.setData({
+                roleLevel,
+                isAgent: roleLevel >= 3
+            });
+        }
+        if (!this._hasShownOnce) {
+            this._hasShownOnce = true;
+            return;
         }
         // 从地址选择页返回时刷新地址
         const selectedAddress = wx.getStorageSync('selectedAddress');
         if (selectedAddress) {
-            this.setData({ address: selectedAddress });
+            this.setData({
+                address: selectedAddress,
+                addressLoadStatus: 'success',
+                addressLoadError: ''
+            });
             wx.removeStorageSync('selectedAddress');
             if (this.data.deliveryType === 'pickup') {
                 this.loadPickupStations();
@@ -164,20 +148,128 @@ Page({
             this._tryAutoCouponUsagePrompt();
             return;
         }
-        if (!this.data.address) {
-            this.loadDefaultAddress();
+        if (this.data.cartLoadStatus !== 'success') {
+            return;
         }
         if ((this.data.orderItems || []).length > 0) {
-            if (!this.data.exchangeMode) {
-                this.loadPointBalance();
-                this.loadWalletBalance();
-            }
             await this._refreshMiniProgramConfigAndPricing(this.data.orderItems || []);
         }
-        if (!this.data.exchangeMode && (this.data.orderItems || []).length > 0 && ((app.globalData.isLoggedIn && (this.data.availableCoupons || []).length === 0) || (this.data.availableCoupons || []).length === 0)) {
+        if (!this.data.address && this.data.addressLoadStatus !== 'loading') {
+            this.loadDefaultAddress();
+        }
+        if (!this.data.exchangeMode) {
+            if (this.data.pointsLoadStatus !== 'loading') {
+                this.loadPointBalance();
+            }
+            if (this.data.isAgent && this.data.walletLoadStatus !== 'loading') {
+                this.loadWalletBalance();
+            }
+        }
+        if (!this.data.exchangeMode
+            && this.data.allowCoupon !== false
+            && (this.data.orderItems || []).length > 0
+            && this.data.couponLoadStatus !== 'loading'
+        ) {
             this.loadAvailableCoupons();
         }
         this._tryAutoCouponUsagePrompt();
+    },
+
+    async _loadPrimaryOrderData(options = {}) {
+        if (options.from === 'direct') {
+            const directBuy = wx.getStorageSync('directBuyInfo');
+            if (!directBuy) {
+                this.setData({
+                    loading: false,
+                    cartLoadStatus: 'error',
+                    cartLoadError: '订单信息已失效，请返回重新下单'
+                });
+                return false;
+            }
+            const amt = (parseFloat(directBuy.price) * directBuy.quantity).toFixed(2);
+                this.setData({
+                    orderItems: [directBuy],
+                    totalAmount: amt,
+                    finalAmount: amt,
+                totalCount: directBuy.quantity,
+                slashNo: directBuy.slash_no || null,
+                groupNo: directBuy.group_no || null,
+                groupActivityId: directBuy.group_activity_id || null,
+                orderType: directBuy.type || '',
+                exchangeMode: !!directBuy.exchange_mode,
+                exchangeCouponId: directBuy.exchange_coupon_id || '',
+                exchangeCouponTitle: directBuy.exchange_title || '',
+                    allowCoupon: directBuy.exchange_mode ? false : true,
+                    allowPoints: directBuy.exchange_mode ? false : true,
+                    usePoints: false,
+                    useWallet: false,
+                    cartLoadStatus: 'success',
+                    cartLoadError: ''
+                });
+            this._updatePointsConfig([directBuy]);
+            this._refreshPickupAllowed();
+            await this._refreshMiniProgramConfigAndPricing([directBuy]);
+            return true;
+        }
+
+        if (options.cart_ids) {
+            const result = await this.loadCartItems(options.cart_ids);
+            if (!result || !result.ok) {
+                return false;
+            }
+            await this._refreshMiniProgramConfigAndPricing(this.data.orderItems || []);
+            return true;
+        }
+
+        this.setData({
+            loading: false,
+            cartLoadStatus: 'error',
+            cartLoadError: '订单加载失败，请重试'
+        });
+        return false;
+    },
+
+    async _loadSupplementaryData() {
+        const tasks = [this.loadDefaultAddress()];
+        if (this.data.exchangeMode) {
+            this.setData({
+                pointsLoadStatus: 'success',
+                pointsLoadError: '',
+                walletLoadStatus: this.data.isAgent ? 'success' : 'idle',
+                walletLoadError: '',
+                couponLoadStatus: 'success',
+                couponLoadError: ''
+            });
+            this.setData({ loading: false });
+            return;
+        }
+
+        tasks.push(this.loadPointBalance());
+        if (this.data.isAgent) {
+            tasks.push(this.loadWalletBalance());
+        } else {
+            this.setData({
+                walletLoadStatus: 'idle',
+                walletLoadError: '',
+                walletBalance: 0,
+                useWallet: false
+            });
+        }
+        if (this.data.allowCoupon !== false) {
+            tasks.push(this.loadAvailableCoupons());
+        } else {
+            this.setData({
+                couponLoadStatus: 'success',
+                couponLoadError: '',
+                availableCoupons: [],
+                unusedCouponCount: 0,
+                selectedCoupon: null,
+                couponDiscount: '0.00'
+            });
+        }
+
+        await Promise.allSettled(tasks);
+        this.setData({ loading: false });
     },
 
     _tryAutoCouponUsagePrompt() {
@@ -369,6 +461,51 @@ Page({
         navigateToAddressList();
     },
 
+    async onRetryCartLoad() {
+        this.setData({
+            address: null,
+            orderItems: [],
+            totalAmount: '0.00',
+            totalCount: 0,
+            finalAmount: '0.00',
+            availableCoupons: [],
+            unusedCouponCount: 0,
+            selectedCoupon: null,
+            couponDiscount: '0.00',
+            pointBalance: 0,
+            usePoints: false,
+            pointsToUse: 0,
+            pointsDeduction: '0.00',
+            walletBalance: 0,
+            useWallet: false,
+            pickupStations: [],
+            pickupStation: null,
+            loading: true,
+            cartLoadStatus: 'loading',
+            cartLoadError: ''
+        });
+        const ready = await this._loadPrimaryOrderData(this._loadOptions || {});
+        if (ready) {
+            await this._loadSupplementaryData();
+        }
+    },
+
+    async onRetryAddressLoad() {
+        await this.loadDefaultAddress();
+    },
+
+    async onRetryPointsLoad() {
+        await this.loadPointBalance();
+    },
+
+    async onRetryWalletLoad() {
+        await this.loadWalletBalance();
+    },
+
+    async onRetryCouponLoad() {
+        await this.loadAvailableCoupons();
+    },
+
     // 备注输入
     onRemarkInput(e) {
         this.setData({ remark: e.detail.value });
@@ -376,6 +513,14 @@ Page({
 
     // 提交订单
     async onSubmit() {
+        if (this.data.cartLoadStatus !== 'success') {
+            wx.showToast({ title: this.data.cartLoadError || '订单仍在加载中', icon: 'none' });
+            return;
+        }
+        if (this.data.deliveryType === 'express' && this.data.addressLoadStatus === 'error') {
+            wx.showToast({ title: '地址加载失败，请重试', icon: 'none' });
+            return;
+        }
         return submitOrder(this, app, this.brandAnimation);
     },
 

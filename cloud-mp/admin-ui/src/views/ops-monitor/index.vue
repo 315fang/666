@@ -3,13 +3,15 @@
     <div class="ops-header">
       <h2 class="ops-title">运维监控</h2>
       <div class="ops-actions">
-        <el-tag :type="overallStatus === 'online' ? 'success' : 'danger'" size="large" effect="dark">
-          {{ overallStatus === 'online' ? '系统正常' : '系统异常' }}
+        <el-tag :type="overallTagType" size="large" effect="dark">
+          {{ overallStatusText }}
         </el-tag>
         <el-button :icon="Refresh" @click="refreshAll" :loading="refreshing" size="small">
           刷新
         </el-button>
-        <span class="last-update">上次更新：{{ lastUpdateTime }}</span>
+        <span class="last-update">最近成功：{{ lastSuccessAt ? fmtTime(lastSuccessAt) : '—' }}</span>
+        <span class="last-update">最近探测：{{ lastAttemptAt ? fmtTime(lastAttemptAt) : '—' }}</span>
+        <span v-if="refreshError" class="last-update last-update--warn">{{ refreshError }}</span>
       </div>
     </div>
 
@@ -168,10 +170,10 @@
             <el-table-column label="状态" width="80">
               <template #default="{ row }">
                 <el-tag
-                  :type="row.status === 'ok' ? 'success' : row.status === 'pending' ? 'info' : 'danger'"
+                  :type="cronStatusTagType(row.runtime_status || row.status)"
                   size="small"
                 >
-                  {{ row.status === 'ok' ? '正常' : row.status === 'pending' ? '待触发' : '异常' }}
+                  {{ cronStatusText(row.runtime_status || row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -372,6 +374,10 @@ const refreshing   = ref(false)
 const loadingCron  = ref(false)
 const loadingLog   = ref(false)
 const lastUpdateTime = ref('—')
+const lastSuccessAt = ref('')
+const lastAttemptAt = ref('')
+const refreshState = ref('fresh')
+const refreshError = ref('')
 
 const sysStatus   = ref({})
 const cronTasks   = ref([])
@@ -416,22 +422,25 @@ const checkStorage = async () => {
   storageLatency.value = null
   try {
     // 获取 provider
-    const cfgRes = await getStorageConfig()
+    const cfgRes = await getStorageConfig({ skipErrorMessage: true })
     const cfgData = cfgRes.data || cfgRes
     storageProvider.value = cfgData.provider || cfgData.STORAGE_PROVIDER || '--'
 
     const t0 = Date.now()
-    const testRes = await testStorageConfig()
+    const testRes = await testStorageConfig(undefined, { skipErrorMessage: true })
     const elapsed = Date.now() - t0
     const testData = testRes.data || testRes
     if (testData?.url || testData?.provider || testData?.success || testData?.connected) {
       storageStatus.value  = 'ok'
       storageLatency.value = elapsed
+      return true
     } else {
       storageStatus.value = 'error'
+      return false
     }
   } catch {
     storageStatus.value = 'error'
+    return false
   } finally {
     storageChecking.value = false
   }
@@ -439,8 +448,24 @@ const checkStorage = async () => {
 
 // ── 计算属性 ──────────────────────────────────────────
 const overallStatus = computed(() =>
-  sysStatus.value.status === 'online' ? 'online' : 'degraded'
+  refreshState.value === 'failed'
+    ? 'failed'
+    : (refreshState.value === 'stale'
+      ? 'stale'
+      : (sysStatus.value.status === 'online' ? 'online' : 'degraded'))
 )
+const overallStatusText = computed(() => ({
+  online: '系统正常',
+  degraded: '系统异常',
+  stale: '数据过期',
+  failed: '探测失败'
+}[overallStatus.value] || '系统异常'))
+const overallTagType = computed(() => ({
+  online: 'success',
+  degraded: 'danger',
+  stale: 'warning',
+  failed: 'danger'
+}[overallStatus.value] || 'danger'))
 const dbOk = computed(() =>
   sysStatus.value.services?.database?.status === 'ok'
 )
@@ -456,16 +481,28 @@ const freeMemPct = computed(() => {
 // ── 数据获取 ──────────────────────────────────────────
 const fetchStatus = async () => {
   try {
-    const res = await getSystemStatus()
+    const res = await getSystemStatus({ skipErrorMessage: true })
     sysStatus.value = res.data ?? res
-  } catch { sysStatus.value = {} }
+    return true
+  } catch {
+    return false
+  }
 }
 
 const refreshCacheStatus = async () => {
   cacheRefreshing.value = true
   try {
-    await fetchStatus()
-    lastUpdateTime.value = dayjs().format('HH:mm:ss')
+    const ok = await fetchStatus()
+    if (ok) {
+      const now = new Date().toISOString()
+      lastSuccessAt.value = now
+      lastUpdateTime.value = dayjs(now).format('HH:mm:ss')
+      refreshState.value = 'fresh'
+      refreshError.value = ''
+    } else {
+      refreshState.value = 'stale'
+      refreshError.value = '缓存状态刷新失败，保留上次成功结果'
+    }
   } finally {
     cacheRefreshing.value = false
   }
@@ -474,31 +511,41 @@ const refreshCacheStatus = async () => {
 const fetchCron = async () => {
   loadingCron.value = true
   try {
-    const res = await getCronStatus()
-    cronTasks.value = res?.tasks ?? res?.data?.tasks ?? []
-  } catch { cronTasks.value = [] } finally {
+    const res = await getCronStatus({ skipErrorMessage: true })
+    const payload = res?.data ?? res ?? {}
+    cronTasks.value = payload.tasks ?? payload.jobs ?? payload.data?.tasks ?? payload.data?.jobs ?? cronTasks.value
+    return true
+  } catch {
+    return false
+  } finally {
     loadingCron.value = false
   }
 }
 
 const fetchAnomalies = async () => {
   try {
-    const res = await getDebugAnomalies()
+    const res = await getDebugAnomalies({ skipErrorMessage: true })
     const d = res.data ?? res
     anomalyStatus.value  = d.status   ?? 'normal'
     anomalyIssues.value  = d.issues   ?? []
     anomalyStats.value   = d.stats    ?? {}
-  } catch { anomalyIssues.value = [] }
+    return true
+  } catch {
+    return false
+  }
 }
 
 const fetchLogs = async () => {
   loadingLog.value = true
   try {
-    const res = await getDebugLogs(80)
+    const res = await getDebugLogs(80, { skipErrorMessage: true })
     const d = res.data ?? res
     logLines.value = d.lines ?? []
     logNote.value  = d.note  ?? ''
-  } catch { logLines.value = [] } finally {
+    return true
+  } catch {
+    return false
+  } finally {
     loadingLog.value = false
   }
 }
@@ -541,8 +588,22 @@ const loadConfigAudit = async () => {
 
 const refreshAll = async () => {
   refreshing.value = true
-  await Promise.all([fetchStatus(), fetchCron(), fetchAnomalies(), fetchLogs(), checkStorage()])
-  lastUpdateTime.value = dayjs().format('HH:mm:ss')
+  const attemptAt = new Date().toISOString()
+  lastAttemptAt.value = attemptAt
+  const results = await Promise.all([fetchStatus(), fetchCron(), fetchAnomalies(), fetchLogs(), checkStorage()])
+  const successCount = results.filter(Boolean).length
+  if (successCount === results.length) {
+    refreshState.value = 'fresh'
+    refreshError.value = ''
+    lastSuccessAt.value = attemptAt
+    lastUpdateTime.value = dayjs(attemptAt).format('HH:mm:ss')
+  } else if (successCount > 0) {
+    refreshState.value = 'stale'
+    refreshError.value = '部分探测失败，当前页面保留最近一次成功结果'
+  } else {
+    refreshState.value = 'failed'
+    refreshError.value = '本次探测全部失败，当前页面数据可能已过期'
+  }
   refreshing.value = false
 }
 
@@ -552,6 +613,20 @@ const fmtTime = (iso) => {
   return dayjs(iso).format('MM-DD HH:mm:ss')
 }
 const formatJson = (value) => JSON.stringify(value, null, 2)
+const cronStatusText = (status) => ({
+  ok: '正常',
+  pending: '待触发',
+  unknown: '待确认',
+  stale: '数据过期',
+  error: '异常'
+}[status] || '异常')
+const cronStatusTagType = (status) => ({
+  ok: 'success',
+  pending: 'info',
+  unknown: 'warning',
+  stale: 'warning',
+  error: 'danger'
+}[status] || 'danger')
 
 // ── 生命周期：首次加载 + 30s 自动刷新 ────────────────
 let timer = null
@@ -592,6 +667,10 @@ onUnmounted(() => clearInterval(timer))
 .last-update {
   font-size: 12px;
   color: #909399;
+}
+
+.last-update--warn {
+  color: #d97706;
 }
 
 /* ── 核心指标卡片 ── */

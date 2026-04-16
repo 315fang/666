@@ -130,7 +130,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getWithdrawals, approveWithdrawal, rejectWithdrawal, completeWithdrawal } from '@/api'
@@ -152,6 +152,11 @@ const searchForm = reactive({
   status: '',
   keyword: ''
 })
+
+const applyRouteQueryToFilters = (query = {}) => {
+  searchForm.status = query?.status ? String(query.status) : ''
+  searchForm.keyword = query?.keyword ? String(query.keyword) : ''
+}
 
 const { pagination, resetPage, applyResponse } = usePagination({ defaultLimit: 10 })
 
@@ -191,7 +196,9 @@ const fetchWithdrawals = async () => {
     const readAt = extractReadAt(data)
     if (readAt) lastSyncedAt.value = readAt
   } catch (error) {
-    ElMessage.error('获取提现列表失败')
+    if (!error?.__handledByRequest) {
+      ElMessage.error('获取提现列表失败')
+    }
     console.error('获取提现列表失败:', error)
   } finally {
     loading.value = false
@@ -214,7 +221,9 @@ const runWithdrawalMutation = async (task, successMessage, onSuccess) => {
     await onSuccess?.()
     await refreshWithdrawals()
   } catch (error) {
-    ElMessage.error(error?.message || '操作失败')
+    if (!error?.__handledByRequest) {
+      ElMessage.error(error?.message || '操作失败')
+    }
     console.error('提现操作失败:', error)
   } finally {
     submitting.value = false
@@ -255,7 +264,9 @@ const handleApprove = async (row) => {
     )
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('操作失败')
+      if (!error?.__handledByRequest) {
+        ElMessage.error('操作失败')
+      }
       console.error('审核失败:', error)
     }
   }
@@ -303,7 +314,9 @@ const handleComplete = async (row) => {
     )
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('操作失败')
+      if (!error?.__handledByRequest) {
+        ElMessage.error('操作失败')
+      }
       console.error('执行打款失败:', error)
     }
   }
@@ -339,11 +352,15 @@ const getStatusText = (status) => {
   return map[status] || status
 }
 
-onMounted(() => {
-  const st = route.query?.status
-  if (st) searchForm.status = String(st)
-  refreshWithdrawals()
-})
+watch(
+  () => route.query,
+  (query) => {
+    applyRouteQueryToFilters(query || {})
+    resetPage()
+    refreshWithdrawals()
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>

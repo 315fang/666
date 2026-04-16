@@ -19,6 +19,17 @@
     </view>
   </view>
 
+  <view class="section order-state-section" wx:if="{{cartLoadStatus === 'loading'}}">
+    <text class="order-state-title">订单加载中</text>
+    <text class="order-state-desc">正在获取商品信息与结算数据，请稍候。</text>
+  </view>
+  <view class="section order-state-section" wx:elif="{{cartLoadStatus === 'error'}}">
+    <text class="order-state-title">订单加载失败</text>
+    <text class="order-state-desc">{{cartLoadError || '订单暂时无法加载，请稍后重试。'}}</text>
+    <view class="order-state-btn" bindtap="onRetryCartLoad">重新加载订单</view>
+  </view>
+  <block wx:else>
+
   <!-- 配送方式：始终展示；商品均未开启自提时「到店自提」为禁用态 -->
   <view class="section delivery-section">
     <view class="section-head-row">
@@ -46,7 +57,16 @@
 
   <!-- 快递：必须收货地址 -->
   <block wx:if="{{deliveryType === 'express'}}">
-    <view class="section address-section" bindtap="onSelectAddress" wx:if="{{address}}">
+    <view class="section inline-state-section" wx:if="{{addressLoadStatus === 'loading'}}">
+      <text class="inline-state-title">收货信息加载中</text>
+      <text class="inline-state-desc">正在获取默认收货地址，请稍候。</text>
+    </view>
+    <view class="section inline-state-section" wx:elif="{{addressLoadStatus === 'error'}}">
+      <text class="inline-state-title">收货信息加载失败</text>
+      <text class="inline-state-desc">{{addressLoadError || '地址暂时无法加载，请重试。'}}</text>
+      <view class="inline-state-btn" bindtap="onRetryAddressLoad">重试地址</view>
+    </view>
+    <view class="section address-section" bindtap="onSelectAddress" wx:elif="{{address}}">
       <view class="section-head-row">
         <text class="section-title-text">收货信息</text>
         <view class="section-link-row">
@@ -72,7 +92,16 @@
 
   <!-- 自提：联系地址选填 -->
   <block wx:else>
-    <view class="section address-section" bindtap="onSelectAddress" wx:if="{{address}}">
+    <view class="section inline-state-section" wx:if="{{addressLoadStatus === 'loading'}}">
+      <text class="inline-state-title">联系地址加载中</text>
+      <text class="inline-state-desc">正在获取默认联系地址，请稍候。</text>
+    </view>
+    <view class="section inline-state-section" wx:elif="{{addressLoadStatus === 'error'}}">
+      <text class="inline-state-title">联系地址加载失败</text>
+      <text class="inline-state-desc">{{addressLoadError || '地址暂时无法加载，请重试。'}}</text>
+      <view class="inline-state-btn" bindtap="onRetryAddressLoad">重试地址</view>
+    </view>
+    <view class="section address-section" bindtap="onSelectAddress" wx:elif="{{address}}">
       <view class="section-head-row">
         <text class="section-title-text">联系地址（选填）</text>
         <view class="section-link-row">
@@ -162,7 +191,16 @@
     <input class="remark-input" placeholder="选填，可留言给卖家" value="{{remark}}" bindinput="onRemarkInput" maxlength="100" />
   </view>
 
-  <view class="section coupon-section" wx:if="{{!exchangeMode && allowCoupon !== false}}">
+  <view class="section inline-state-section" wx:if="{{!exchangeMode && allowCoupon !== false && couponLoadStatus === 'loading'}}">
+    <text class="inline-state-title">优惠券加载中</text>
+    <text class="inline-state-desc">正在获取本单可用优惠券，请稍候。</text>
+  </view>
+  <view class="section inline-state-section" wx:elif="{{!exchangeMode && allowCoupon !== false && couponLoadStatus === 'error'}}">
+    <text class="inline-state-title">优惠券暂不可用</text>
+    <text class="inline-state-desc">{{couponLoadError || '优惠券服务暂时不可用，请稍后重试。'}}</text>
+    <view class="inline-state-btn" bindtap="onRetryCouponLoad">重试优惠券</view>
+  </view>
+  <view class="section coupon-section" wx:if="{{!exchangeMode && allowCoupon !== false && couponLoadStatus !== 'loading' && couponLoadStatus !== 'error'}}">
     <view class="coupon-top" bindtap="onCouponTap">
       <view class="coupon-label-row">
         <text class="coupon-label">礼遇与优惠</text>
@@ -183,25 +221,39 @@
     <text class="coupon-none">爆单品不参与优惠券活动</text>
   </view>
 
+  <view class="section inline-state-section" wx:if="{{!exchangeMode && pointsLoadStatus === 'error'}}">
+    <text class="inline-state-title">积分暂不可用</text>
+    <text class="inline-state-desc">{{pointsLoadError || '积分服务暂时不可用，请稍后重试。'}}</text>
+    <view class="inline-state-btn" bindtap="onRetryPointsLoad">重试积分</view>
+  </view>
   <!-- 积分抵扣 -->
-  <view class="section points-section" wx:if="{{!exchangeMode && pointBalance > 0 && allowPoints}}">
+  <view class="section points-section" wx:if="{{!exchangeMode && pointsLoadStatus !== 'error' && pointBalance > 0 && allowPoints}}">
     <text class="points-label">积分抵扣</text>
     <view class="points-right">
       <text class="points-balance">{{pointBalance}}积分可用</text>
       <switch checked="{{usePoints}}" bindchange="onTogglePoints" color="#B98B58" style="transform:scale(0.8)" />
     </view>
   </view>
-  <view class="section points-detail" wx:if="{{!exchangeMode && usePoints && pointBalance > 0 && allowPoints}}">
+  <view class="section points-detail" wx:if="{{!exchangeMode && pointsLoadStatus !== 'error' && usePoints && pointBalance > 0 && allowPoints}}">
     <text class="points-deduct-text">使用 {{pointsToUse}} 积分抵扣 ¥{{pointsDeduction}}</text>
     <text class="points-deduct-tip">（{{pointsRuleHint}}）</text>
   </view>
-  <view class="section points-section points-disabled" wx:if="{{!exchangeMode && pointBalance > 0 && !allowPoints}}">
+  <view class="section points-section points-disabled" wx:if="{{!exchangeMode && pointsLoadStatus !== 'error' && pointBalance > 0 && !allowPoints}}">
     <text class="points-label">积分抵扣</text>
     <text class="points-balance-disabled">当前商品不支持积分抵扣</text>
   </view>
 
+  <view class="section inline-state-section" wx:if="{{!exchangeMode && isAgent && walletLoadStatus === 'loading'}}">
+    <text class="inline-state-title">货款余额加载中</text>
+    <text class="inline-state-desc">正在获取可用货款余额，请稍候。</text>
+  </view>
+  <view class="section inline-state-section" wx:if="{{!exchangeMode && isAgent && walletLoadStatus === 'error'}}">
+    <text class="inline-state-title">货款余额暂不可用</text>
+    <text class="inline-state-desc">{{walletLoadError || '余额服务暂时不可用，请稍后重试。'}}</text>
+    <view class="inline-state-btn" bindtap="onRetryWalletLoad">重试余额</view>
+  </view>
   <!-- 货款余额支付 -->
-  <view class="section points-section wallet-section" wx:if="{{!exchangeMode && isAgent}}">
+  <view class="section points-section wallet-section" wx:if="{{!exchangeMode && isAgent && walletLoadStatus === 'success'}}">
     <view class="wallet-label-col">
       <text class="points-label">货款余额支付</text>
       <text class="wallet-balance-sub" wx:if="{{walletBalance > 0}}">可用余额 ¥{{walletBalance}}</text>
@@ -217,7 +269,7 @@
       />
     </view>
   </view>
-  <view class="section points-detail" wx:if="{{!exchangeMode && isAgent && useWallet && walletBalance > 0}}">
+  <view class="section points-detail" wx:if="{{!exchangeMode && isAgent && walletLoadStatus === 'success' && useWallet && walletBalance > 0}}">
     <text class="points-deduct-text">从货款余额扣款，无需微信支付</text>
   </view>
 
@@ -278,10 +330,11 @@
         </view>
       </view>
     </view>
-    <view class="submit-btn {{submitting ? 'disabled' : ''}}" bindtap="onSubmit">
+    <view class="submit-btn {{submitting || loading ? 'disabled' : ''}}" bindtap="onSubmit">
       <text>{{submitting ? '提交中...' : '提交订单'}}</text>
     </view>
   </view>
+  </block>
 
   <brand-animation id="brandAnimation"></brand-animation>
 

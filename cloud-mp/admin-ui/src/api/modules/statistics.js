@@ -1,8 +1,9 @@
 import request from '@/utils/request'
 
-export const getDashboardOverview = () => {
+export const getDashboardOverview = (options = {}) => {
   return request({
     url: '/statistics/overview',
-    method: 'get'
+    method: 'get',
+    ...options
   })
 }

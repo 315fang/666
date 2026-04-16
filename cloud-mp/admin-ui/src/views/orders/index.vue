@@ -591,6 +591,25 @@ const searchForm = reactive({
   include_suborders: false
 })
 const dateRange = ref([])
+
+function applyRouteQueryToFilters(query = {}) {
+  searchForm.status = query?.status ? String(query.status) : ''
+  searchForm.status_group = searchForm.status
+    ? 'all'
+    : (query?.status_group ? String(query.status_group) : 'all')
+  searchForm.search_field = query?.search_field ? String(query.search_field) : 'auto'
+  searchForm.search_value = query?.search_value ? String(query.search_value) : ''
+  searchForm.product_name = query?.product_name ? String(query.product_name) : ''
+  searchForm.payment_method = query?.payment_method ? String(query.payment_method) : ''
+  searchForm.delivery_type = query?.delivery_type ? String(query.delivery_type) : ''
+  searchForm.include_suborders = ['1', 'true', 'yes'].includes(String(query?.include_suborders || '').toLowerCase())
+  if (query?.start_date && query?.end_date) {
+    dateRange.value = [String(query.start_date), String(query.end_date)]
+  } else {
+    dateRange.value = []
+  }
+}
+
 const submittingShip = ref(false)
 const submittingAmount = ref(false)
 const submittingRemark = ref(false)
@@ -720,7 +739,9 @@ const fetchOrders = async () => {
     if (pShip != null) summaryPendingShip.value = pShip
   } catch (error) {
     console.error(error)
-    ElMessage.error(error?.message || '加载订单列表失败')
+    if (!error?.__handledByRequest) {
+      ElMessage.error(error?.message || '加载订单列表失败')
+    }
   } finally {
     loading.value = false
   }
@@ -742,7 +763,9 @@ const runOrderMutation = async (loadingRef, task, successMessage, onSuccess) => 
     await refreshOrders()
     return result
   } catch (e) {
-    ElMessage.error(e?.message || '操作失败')
+    if (!e?.__handledByRequest) {
+      ElMessage.error(e?.message || '操作失败')
+    }
   } finally {
     loadingRef.value = false
   }
@@ -767,7 +790,9 @@ const handleExport = async () => {
     URL.revokeObjectURL(url)
     ElMessage.success('已导出订单 JSON')
   } catch (e) {
-    ElMessage.error(e?.message || '导出失败')
+    if (!e?.__handledByRequest) {
+      ElMessage.error(e?.message || '导出失败')
+    }
   } finally {
     exporting.value = false
   }
@@ -1041,7 +1066,9 @@ async function loadLogistics(order, forceRefresh = false) {
     syncOrderLogistics(order?.id || order?.order_no, data)
   } catch (error) {
     console.error('加载物流轨迹失败:', error)
-    ElMessage.error(error?.message || '物流查询失败')
+    if (!error?.__handledByRequest) {
+      ElMessage.error(error?.message || '物流查询失败')
+    }
   } finally {
     logisticsLoading.value = false
   }
@@ -1128,7 +1155,9 @@ const handleDetail = async (row) => {
     detailVisible.value = true
   } catch (e) {
     console.error(e)
-    ElMessage.error(e?.message || '加载订单详情失败')
+    if (!e?.__handledByRequest) {
+      ElMessage.error(e?.message || '加载订单详情失败')
+    }
   }
 }
 
@@ -1296,20 +1325,18 @@ const getStatusText = (s) => ({
   cancelled: '已取消',
   refunded: '已退款'
 }[s] || s)
+watch(
+  () => route.query,
+  (query) => {
+    applyRouteQueryToFilters(query || {})
+    resetPage()
+    refreshOrders()
+  },
+  { immediate: true }
+)
+
 onMounted(() => {
-  const q = route.query || {}
-  if (q.status) {
-    searchForm.status = String(q.status)
-    searchForm.status_group = 'all'
-  } else if (q.status_group) {
-    searchForm.status_group = String(q.status_group)
-    searchForm.status = ''
-  }
-  if (q.search_field) searchForm.search_field = String(q.search_field)
-  if (q.search_value) searchForm.search_value = String(q.search_value)
-  if (q.product_name) searchForm.product_name = String(q.product_name)
   fetchMiniProgramConfig()
-  refreshOrders()
 })
 </script>
 

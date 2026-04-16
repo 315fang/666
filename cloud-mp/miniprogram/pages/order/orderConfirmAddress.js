@@ -4,7 +4,7 @@ const { ErrorHandler } = require('../../utils/errorHandler');
 const { ensureUserLocationPermission, getCurrentLocation } = require('./utils/location');
 
 async function loadAddresses() {
-    const res = await get('/addresses');
+    const res = await get('/addresses', {}, { showError: false });
     return res.list || res.data || [];
 }
 
@@ -152,18 +152,51 @@ function chooseRefLocation(page) {
 }
 
 async function loadDefaultAddress(page) {
+    page.setData({
+        addressLoadStatus: 'loading',
+        addressLoadError: ''
+    });
     try {
-        const address = await getDefaultAddress();
-        page.setData({ address });
+        const res = await get('/addresses/default', {}, { showError: false });
+        const address = Object.prototype.hasOwnProperty.call(res || {}, 'data')
+            ? (res.data || null)
+            : (res || null);
+        page.setData({
+            address,
+            addressLoadStatus: 'success',
+            addressLoadError: ''
+        });
+        return {
+            ok: true,
+            status: 'success',
+            data: address,
+            errorType: ''
+        };
     } catch (err) {
-        ErrorHandler.handle(err, { showToast: false });
         console.error('加载默认地址失败:', err);
+        page.setData({
+            address: null,
+            addressLoadStatus: 'error',
+            addressLoadError: '地址加载失败，请重试'
+        });
+        ErrorHandler.handle(err, { showToast: false });
+        return {
+            ok: false,
+            status: 'error',
+            data: null,
+            errorType: err && err.errorType ? err.errorType : 'unknown'
+        };
     }
 }
 
 async function loadCartItems(page, cartIds) {
+    page.setData({
+        loading: true,
+        cartLoadStatus: 'loading',
+        cartLoadError: ''
+    });
     try {
-        const res = await get('/cart');
+        const res = await get('/cart', {}, { showError: false });
         const allItems = res.data?.items || res.data?.list || (Array.isArray(res.data) ? res.data : []) || [];
         const ids = cartIds.split(',').map(Number);
         const { roleLevel } = page.data;
@@ -211,8 +244,7 @@ async function loadCartItems(page, cartIds) {
             invalidSpecItems: selectedItems.filter((item) => item.spec_required_missing),
             totalAmount,
             finalAmount: totalAmount,
-            totalCount,
-            loading: false
+            totalCount
         });
         if (selectedItems.some((item) => item.spec_required_missing)) {
             wx.showToast({ title: '部分商品缺少规格，请返回购物袋重选', icon: 'none' });
@@ -221,12 +253,34 @@ async function loadCartItems(page, cartIds) {
         if (typeof page._updatePointsConfig === 'function') {
             page._updatePointsConfig(selectedItems);
         }
-        if (typeof page.loadAvailableCoupons === 'function') {
-            page.loadAvailableCoupons();
-        }
+        page.setData({
+            cartLoadStatus: 'success',
+            cartLoadError: ''
+        });
+        return {
+            ok: true,
+            status: 'success',
+            data: selectedItems,
+            errorType: ''
+        };
     } catch (err) {
         console.error('加载购物袋失败:', err);
-        page.setData({ loading: false });
+        page.setData({
+            loading: false,
+            orderItems: [],
+            invalidSpecItems: [],
+            totalAmount: '0.00',
+            finalAmount: '0.00',
+            totalCount: 0,
+            cartLoadStatus: 'error',
+            cartLoadError: '订单加载失败，请重试'
+        });
+        return {
+            ok: false,
+            status: 'error',
+            data: null,
+            errorType: err && err.errorType ? err.errorType : 'unknown'
+        };
     }
 }
 

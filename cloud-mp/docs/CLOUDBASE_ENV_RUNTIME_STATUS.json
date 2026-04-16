@@ -1,6 +1,6 @@
 {
   "kind": "runtime_status",
-  "generated_at": "2026-04-10T15:41:46.746Z",
+  "generated_at": "2026-04-16T09:26:38.140Z",
   "ok": true,
   "environment": {
     "env_id": "cloud1-9gywyqe49638e46f",
@@ -12,7 +12,7 @@
       {
         "name": "users",
         "expected": 167,
-        "actual": 168,
+        "actual": 185,
         "status": "count_above_seed"
       },
       {
@@ -30,25 +30,25 @@
       {
         "name": "categories",
         "expected": 9,
-        "actual": 9,
-        "status": "ok"
+        "actual": 10,
+        "status": "count_above_seed"
       },
       {
         "name": "cart_items",
         "expected": 25,
-        "actual": 26,
+        "actual": 50,
         "status": "count_above_seed"
       },
       {
         "name": "orders",
         "expected": 59,
-        "actual": 71,
+        "actual": 166,
         "status": "count_above_seed"
       },
       {
         "name": "refunds",
         "expected": 9,
-        "actual": 11,
+        "actual": 31,
         "status": "count_above_seed"
       },
       {
@@ -60,13 +60,13 @@
       {
         "name": "commissions",
         "expected": 3,
-        "actual": 3,
-        "status": "ok"
+        "actual": 5,
+        "status": "count_above_seed"
       },
       {
         "name": "withdrawals",
         "expected": 3,
-        "actual": 4,
+        "actual": 5,
         "status": "count_above_seed"
       },
       {
@@ -78,8 +78,8 @@
       {
         "name": "materials",
         "expected": 52,
-        "actual": 52,
-        "status": "ok"
+        "actual": 53,
+        "status": "count_above_seed"
       },
       {
         "name": "material_groups",
@@ -103,10 +103,13 @@
     "missing_or_below_required": [],
     "above_seed_required": [
       "users",
+      "categories",
       "cart_items",
       "orders",
       "refunds",
-      "withdrawals"
+      "commissions",
+      "withdrawals",
+      "materials"
     ]
   },
   "functions": {
@@ -136,10 +139,13 @@
       "order-timeout-cancel",
       "payment",
       "products",
+      "shared",
       "user"
     ],
     "missing": [],
-    "extra": []
+    "extra": [
+      "shared"
+    ]
   },
   "admin_chain": {
     "mode": "function_gateway",
@@ -155,12 +161,13 @@
     "matched_required_collection_count": 15,
     "required_collection_baseline_met": true,
     "local_function_count": 12,
-    "deployed_function_count": 12,
-    "functions_match": true,
+    "deployed_function_count": 13,
+    "functions_match": false,
     "admin_chain_ready": true
   },
   "blockers": [],
   "warnings": [
-    "Required collections contain runtime data beyond import baseline: users, cart_items, orders, refunds, withdrawals"
+    "Required collections contain runtime data beyond import baseline: users, categories, cart_items, orders, refunds, commissions, withdrawals, materials",
+    "Extra deployed functions not found in local cloudfunctions/: shared"
   ]
 }

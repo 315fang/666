@@ -7,12 +7,7 @@ const { getAllRecords } = require('./shared/utils');
  * 获取用户地址列表
  */
 async function listAddresses(openid) {
-    try {
-        return await getAllRecords(db, 'addresses', { openid });
-    } catch (err) {
-        console.error('[user-addresses] listAddresses 失败:', err.message);
-        return [];
-    }
+    return getAllRecords(db, 'addresses', { openid });
 }
 
 /**

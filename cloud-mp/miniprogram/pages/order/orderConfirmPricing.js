@@ -77,15 +77,45 @@ function recalcFinal(page) {
 async function loadAvailableCoupons(page) {
     try {
         if (page.data.exchangeMode) {
-            page.setData({ availableCoupons: [], unusedCouponCount: 0, selectedCoupon: null, couponDiscount: '0.00', allowCoupon: false })
-            recalcFinal(page)
-            return
+            page.setData({
+                availableCoupons: [],
+                unusedCouponCount: 0,
+                selectedCoupon: null,
+                couponDiscount: '0.00',
+                allowCoupon: false,
+                couponLoadStatus: 'success',
+                couponLoadError: ''
+            });
+            recalcFinal(page);
+            return {
+                ok: true,
+                status: 'success',
+                data: [],
+                errorType: ''
+            };
         }
+        page.setData({
+            couponLoadStatus: 'loading',
+            couponLoadError: ''
+        });
         const hasExplosive = (page.data.orderItems || []).some(item => item.is_explosive === 1 || item.is_explosive === true);
         if (hasExplosive) {
-            page.setData({ availableCoupons: [], unusedCouponCount: 0, selectedCoupon: null, couponDiscount: '0.00', allowCoupon: false });
+            page.setData({
+                availableCoupons: [],
+                unusedCouponCount: 0,
+                selectedCoupon: null,
+                couponDiscount: '0.00',
+                allowCoupon: false,
+                couponLoadStatus: 'success',
+                couponLoadError: ''
+            });
             recalcFinal(page);
-            return;
+            return {
+                ok: true,
+                status: 'success',
+                data: [],
+                errorType: ''
+            };
         }
         const amount = page.data.totalAmount;
         const productIds = [...new Set((page.data.orderItems || []).map((item) => item.product_id).filter(Boolean))];
@@ -122,16 +152,36 @@ async function loadAvailableCoupons(page) {
             availableCoupons: coupons,
             unusedCouponCount: unusedCoupons.length,
             selectedCoupon: stillAvailable ? selectedCoupon : null,
-            couponDiscount: stillAvailable ? page.data.couponDiscount : '0.00'
+            couponDiscount: stillAvailable ? page.data.couponDiscount : '0.00',
+            allowCoupon: true,
+            couponLoadStatus: 'success',
+            couponLoadError: ''
         });
         if (!stillAvailable) {
             recalcFinal(page);
         }
-    } catch (_err) {
+        return {
+            ok: true,
+            status: 'success',
+            data: coupons,
+            errorType: ''
+        };
+    } catch (error) {
         page.setData({
             availableCoupons: [],
-            unusedCouponCount: 0
+            unusedCouponCount: 0,
+            selectedCoupon: null,
+            couponDiscount: '0.00',
+            couponLoadStatus: 'error',
+            couponLoadError: '优惠券暂不可用'
         });
+        recalcFinal(page);
+        return {
+            ok: false,
+            status: 'error',
+            data: null,
+            errorType: error && error.errorType ? error.errorType : 'unknown'
+        };
     }
 }
 

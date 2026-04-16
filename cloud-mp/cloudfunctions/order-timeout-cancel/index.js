@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
+const { processExpiredGroups } = require('./shared/group-expiry');
 
 function toNumber(value, fallback = 0) {
     const num = Number(value);
@@ -68,6 +69,81 @@ async function restoreUsedCoupon(order) {
     }
 }
 
+async function cancelTimedOutPendingOrders(defaultMinutes, now) {
+    const res = await db.collection('orders')
+        .where({ status: 'pending_payment' })
+        .orderBy('created_at', 'asc')
+        .limit(100)
+        .get();
+
+    if (!res.data || res.data.length === 0) {
+        console.log('[OrderTimeoutCancel] 没有超时待支付订单');
+        return { cancelled: 0, errors: [] };
+    }
+
+    let cancelledCount = 0;
+    const errors = [];
+
+    for (const order of res.data) {
+        try {
+            const expireAt = resolveOrderExpireAt(order, defaultMinutes);
+            if (!expireAt || expireAt.getTime() > now.getTime()) {
+                continue;
+            }
+
+            const updateRes = await db.collection('orders')
+                .where({ _id: order._id, status: 'pending_payment' })
+                .update({
+                    data: {
+                        status: 'cancelled',
+                        cancel_reason: '超时未支付，系统自动取消',
+                        cancelled_at: db.serverDate(),
+                        updated_at: db.serverDate(),
+                    },
+                });
+
+            if (!updateRes.stats || updateRes.stats.updated === 0) {
+                console.log(`[OrderTimeoutCancel] 订单 ${order._id} 状态已变更，跳过取消`);
+                continue;
+            }
+
+            if (toNumber(order.points_used, 0) > 0 && order.openid) {
+                await db.collection('users').where({ openid: order.openid }).update({
+                    data: {
+                        points: _.inc(toNumber(order.points_used, 0)),
+                        growth_value: _.inc(toNumber(order.points_used, 0)),
+                        updated_at: db.serverDate(),
+                    },
+                }).catch((e) => console.error('[OrderTimeoutCancel] 退积分失败:', order._id, e.message));
+            }
+
+            await restoreUsedCoupon(order).catch(() => {});
+
+            if (order.stock_deducted_at && Array.isArray(order.items)) {
+                for (const item of order.items) {
+                    const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+                    if (item.product_id) {
+                        await db.collection('products').doc(String(item.product_id)).update({
+                            data: { stock: _.inc(qty), updated_at: db.serverDate() }
+                        }).catch(() => {});
+                    }
+                    if (item.sku_id) {
+                        await db.collection('skus').doc(String(item.sku_id)).update({
+                            data: { stock: _.inc(qty), updated_at: db.serverDate() }
+                        }).catch(() => {});
+                    }
+                }
+            }
+
+            cancelledCount += 1;
+        } catch (err) {
+            errors.push({ order_id: order._id, error: err.message });
+        }
+    }
+
+    return { cancelled: cancelledCount, errors };
+}
+
 /**
  * 订单超时自动取消定时触发器
  * 每5分钟执行，取消超时未支付的订单
@@ -79,89 +155,23 @@ exports.main = async (event, context) => {
     console.log(`[OrderTimeoutCancel] 开始扫描，默认超时分钟: ${TIMEOUT_MINUTES}`);
 
     try {
-        // 查询待支付订单，具体是否超时由 expire_at / payment_timeout_minutes 判定
-        const res = await db.collection('orders')
-            .where({
-                status: 'pending_payment'
-            })
-            .orderBy('created_at', 'asc')
-            .limit(100)
-            .get();
+        const [pendingResult, groupResult] = await Promise.all([
+            cancelTimedOutPendingOrders(TIMEOUT_MINUTES, now),
+            processExpiredGroups(100)
+        ]);
 
-        if (!res.data || res.data.length === 0) {
-            console.log('[OrderTimeoutCancel] 没有超时订单');
-            return { cancelled: 0 };
-        }
-
-        let cancelledCount = 0;
-        const errors = [];
-
-        for (const order of res.data) {
-            try {
-                const expireAt = resolveOrderExpireAt(order, TIMEOUT_MINUTES);
-                if (!expireAt || expireAt.getTime() > now.getTime()) {
-                    continue;
-                }
-
-                // 先原子更新状态，防止与支付回调竞态
-                const updateRes = await db.collection('orders')
-                    .where({ _id: order._id, status: 'pending_payment' })
-                    .update({
-                        data: {
-                            status: 'cancelled',
-                            cancel_reason: '超时未支付，系统自动取消',
-                            cancelled_at: db.serverDate(),
-                            updated_at: db.serverDate(),
-                        },
-                    });
-
-                if (!updateRes.stats || updateRes.stats.updated === 0) {
-                    console.log(`[OrderTimeoutCancel] 订单 ${order._id} 状态已变更，跳过取消`);
-                    continue;
-                }
-
-                // 状态已锁定为 cancelled，安全地恢复资产
-                if (toNumber(order.points_used, 0) > 0 && order.openid) {
-                    await db.collection('users').where({ openid: order.openid }).update({
-                        data: {
-                            points: _.inc(toNumber(order.points_used, 0)),
-                            growth_value: _.inc(toNumber(order.points_used, 0)),
-                            updated_at: db.serverDate(),
-                        },
-                    }).catch((e) => console.error('[OrderTimeoutCancel] 退积分失败:', order._id, e.message));
-                }
-
-                await restoreUsedCoupon(order).catch(() => {});
-
-                // 恢复库存（创单时已扣 stock）
-                if (order.stock_deducted_at && Array.isArray(order.items)) {
-                    for (const item of order.items) {
-                        const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
-                        if (item.product_id) {
-                            await db.collection('products').doc(String(item.product_id)).update({
-                                data: { stock: _.inc(qty), updated_at: db.serverDate() }
-                            }).catch(() => {});
-                        }
-                        if (item.sku_id) {
-                            await db.collection('skus').doc(String(item.sku_id)).update({
-                                data: { stock: _.inc(qty), updated_at: db.serverDate() }
-                            }).catch(() => {});
-                        }
-                    }
-                }
-
-                cancelledCount += 1;
-            } catch (err) {
-                errors.push({ order_id: order._id, error: err.message });
-            }
-        }
-
-        console.log(`[OrderTimeoutCancel] 完成，取消 ${cancelledCount} 个订单`);
+        const errors = [...pendingResult.errors, ...groupResult.errors];
+        console.log(`[OrderTimeoutCancel] 完成，取消 ${pendingResult.cancelled} 个待支付订单，过期 ${groupResult.expiredGroups} 个拼团，触发 ${groupResult.refundedOrders} 笔自动退款`);
         if (errors.length > 0) {
             console.error('[OrderTimeoutCancel] 部分失败:', JSON.stringify(errors));
         }
 
-        return { cancelled: cancelledCount, errors: errors.length };
+        return {
+            cancelled: pendingResult.cancelled,
+            expired_groups: groupResult.expiredGroups,
+            refunded_orders: groupResult.refundedOrders,
+            errors: errors.length
+        };
     } catch (err) {
         console.error('[OrderTimeoutCancel] 扫描异常:', err);
         return { error: err.message };

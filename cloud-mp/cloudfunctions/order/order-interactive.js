@@ -358,9 +358,37 @@ function groupStatusForClient(status, options = {}) {
     if (normalized === 'completed' || normalized === 'success') return 'success';
     if (normalized === 'cancelled') return 'cancelled';
     if (normalized === 'failed' || normalized === 'fail' || normalized === 'expired') return 'fail';
+    if (options.expiredUnfilled) return 'fail';
     if (minMembers > 0 && memberCount >= minMembers) return 'success';
     if (normalized === 'pending' || normalized === 'open' || !normalized) return 'open';
     return normalized;
+}
+
+function resolveGroupExpiryState(group = {}, activity = null, options = {}) {
+    const minMembers = Math.max(2, toNumber(options.minMembers ?? group.group_size ?? activity?.min_members ?? activity?.group_size, 2));
+    const memberCount = Math.max(0, toNumber(options.memberCount, 0));
+    const expireHours = Math.max(1, toNumber(activity?.expire_hours, 24));
+    const createdDate = parseDate(options.createdAt || group.created_at);
+    if (!createdDate) {
+        return {
+            expireHours,
+            expireAt: null,
+            remainSeconds: null,
+            expiredByTime: false,
+            expiredUnfilled: false
+        };
+    }
+
+    const expireMs = createdDate.getTime() + expireHours * 3600 * 1000;
+    const remainSeconds = Math.max(0, Math.floor((expireMs - Date.now()) / 1000));
+    const expiredByTime = expireMs <= Date.now();
+    return {
+        expireHours,
+        expireAt: new Date(expireMs).toISOString(),
+        remainSeconds,
+        expiredByTime,
+        expiredUnfilled: expiredByTime && memberCount < minMembers
+    };
 }
 
 function buildGroupMemberFromOrder(order = {}) {
@@ -487,7 +515,8 @@ function mergeGroupMembersWithOrders(group = {}, orders = []) {
     return Array.from(byOpenid.values());
 }
 
-function groupStatusForFallbackOrder(order = {}) {
+function groupStatusForFallbackOrder(order = {}, options = {}) {
+    if (options.expiredUnfilled) return 'fail';
     if (order.status === 'pending_group') return 'open';
     if (['paid', 'pickup_pending', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'].includes(order.status)) return 'success';
     if (['cancelled', 'refunding', 'refunded'].includes(order.status)) return 'fail';
@@ -667,7 +696,12 @@ async function myGroups(openid, params = {}) {
         );
         const mergedMembers = mergeGroupMembersWithOrders(g, relatedOrders);
         const memberCount = mergedMembers.length;
-        const clientStatus = groupStatusForClient(g.status, { memberCount, minMembers });
+        const expiryState = resolveGroupExpiryState(g, related.activity || null, { memberCount, minMembers });
+        const clientStatus = groupStatusForClient(g.status, {
+            memberCount,
+            minMembers,
+            expiredUnfilled: expiryState.expiredUnfilled
+        });
         const myPaymentStatus = myOrder
             ? (myOrder.status === 'pending_payment' ? 'unpaid'
                 : (CANCELLED_STATUSES.has(myOrder.status) ? 'cancelled' : 'paid'))
@@ -693,6 +727,7 @@ async function myGroups(openid, params = {}) {
                 min_members: minMembers,
                 product: related.product
             },
+            expire_at: expiryState.expireAt,
             created_at: g.created_at,
         };
     });
@@ -741,6 +776,12 @@ async function myGroups(openid, params = {}) {
                 const related = activityMap[aid] || {};
                 const firstItem = Array.isArray(order.items) ? (order.items[0] || {}) : {};
                 const product = related.product || productSummary(order.product || {}) || await loadProductSummary(order.product_id || firstItem.product_id || '');
+                const minMembers = related.activity?.min_members || related.activity?.group_size || 2;
+                const expiryState = resolveGroupExpiryState({}, related.activity || null, {
+                    createdAt: order.group_joined_at || order.paid_at || order.created_at,
+                    memberCount: 1,
+                    minMembers
+                });
                 return {
                     _id: order._id,
                     id: order._id,
@@ -757,14 +798,15 @@ async function myGroups(openid, params = {}) {
                     my_order_status: order.status || '',
                     groupOrder: {
                         group_no: order.group_no || '',
-                        status: groupStatusForFallbackOrder(order),
+                        status: groupStatusForFallbackOrder(order, { expiredUnfilled: expiryState.expiredUnfilled }),
                         current_members: 1,
-                        min_members: related.activity?.min_members || related.activity?.group_size || 2,
+                        min_members: minMembers,
                         product
                     },
+                    expire_at: expiryState.expireAt,
                     _memberCurrent: 1,
-                    _memberMin: related.activity?.min_members || related.activity?.group_size || 2,
-                    _memberText: `1/${related.activity?.min_members || related.activity?.group_size || 2}人`,
+                    _memberMin: minMembers,
+                    _memberText: `1/${minMembers}人`,
                     created_at: order.created_at
                 };
             })
@@ -833,20 +875,14 @@ async function groupOrderDetail(openid, params) {
             product = await loadProductSummary(activityInfo.product_id);
         }
     }
-    const expireHours = toNumber(activityInfo?.expire_hours, 24);
-    let expire_at = null;
-    let remain_seconds = null;
-    const createdDate = parseDate(group.created_at);
-    if (createdDate) {
-        const createdMs = createdDate.getTime();
-        const expireMs = createdMs + expireHours * 3600 * 1000;
-        expire_at = new Date(expireMs).toISOString();
-        remain_seconds = Math.max(0, Math.floor((expireMs - Date.now()) / 1000));
-    }
-
     // 批量拉取成员用户信息（昵称、头像）
     const mergedMembers = mergeGroupMembersWithOrders(group, ordersRes.data || []);
     const memberCount = mergedMembers.length;
+    const minMembers = group.group_size || activityInfo?.min_members || activityInfo?.group_size || 2;
+    const expiryState = resolveGroupExpiryState(group, activityInfo, { memberCount, minMembers });
+    const expireHours = expiryState.expireHours;
+    const expire_at = expiryState.expireAt;
+    const remain_seconds = expiryState.remainSeconds;
     const memberOpenids = mergedMembers.map(m => m.openid).filter(Boolean);
     let memberUserMap = {};
     if (memberOpenids.length > 0) {
@@ -883,8 +919,11 @@ async function groupOrderDetail(openid, params) {
     const exactMyOrders = myOrders.filter((order) => orderBelongsToGroup(order, groupRefs));
     const myOrder = exactMyOrders[0] || null;
     const isMember = mergedMembers.some((m) => m.openid === openid);
-    const minMembers = group.group_size || activityInfo?.min_members || activityInfo?.group_size || 2;
-    const clientStatus = groupStatusForClient(group.status, { memberCount, minMembers });
+    const clientStatus = groupStatusForClient(group.status, {
+        memberCount,
+        minMembers,
+        expiredUnfilled: expiryState.expiredUnfilled
+    });
     const myPaymentStatus = myOrder
         ? (myOrder.status === 'pending_payment'
             ? 'unpaid'

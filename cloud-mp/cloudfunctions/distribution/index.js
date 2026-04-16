@@ -4,7 +4,7 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const {
-    CloudBaseError, cloudFunctionWrapper
+    CloudBaseError, cloudFunctionWrapper, withTransientDbReadRetry
 } = require('./shared/errors');
 const {
     success, badRequest, unauthorized, forbidden, notFound, serverError
@@ -733,13 +733,42 @@ const handleAction = {
     }),
 
     'agentWallet': asyncHandler(async (openid) => {
-        const userRes = await db.collection('users').where({ openid }).limit(1).get();
+        const userRes = await withTransientDbReadRetry(
+            () => db.collection('users').where({ openid }).limit(1).get(),
+            { action: 'agentWallet', openid }
+        );
         if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
-        const [user, goodsFundSummary, walletAccount] = await Promise.all([
-            resolveCommissionWalletState(userRes.data[0]),
-            summarizeGoodsFundLogs(openid),
-            getWalletAccount(userRes.data[0], openid)
+        const baseUser = userRes.data[0];
+        const userStateResult = resolveCommissionWalletState(baseUser).catch((error) => {
+            console.error('[distribution.agentWallet] resolveCommissionWalletState 失败:', error && error.message ? error.message : error);
+            return null;
+        });
+        const goodsFundSummaryResult = withTransientDbReadRetry(
+            () => summarizeGoodsFundLogs(openid),
+            { action: 'agentWallet.goodsFundSummary', openid }
+        ).catch((error) => {
+            console.error('[distribution.agentWallet] summarizeGoodsFundLogs 失败:', error && error.message ? error.message : error);
+            return null;
+        });
+        const walletAccountResult = withTransientDbReadRetry(
+            () => getWalletAccount(baseUser, openid),
+            { action: 'agentWallet.walletAccount', openid }
+        ).catch((error) => {
+            console.error('[distribution.agentWallet] getWalletAccount 失败:', error && error.message ? error.message : error);
+            return null;
+        });
+
+        const [userState, goodsFundSummary, walletAccount] = await Promise.all([
+            userStateResult,
+            goodsFundSummaryResult,
+            walletAccountResult
         ]);
+        const user = userState || baseUser;
+        const summary = goodsFundSummary || {
+            total_recharge: 0,
+            total_deduct: 0,
+            frozen_balance: 0
+        };
         const roleLevel = toNumber(user.role_level, 0);
         const goodsFundBalance = walletAccount
             ? roundMoney(toNumber(walletAccount.balance, 0))
@@ -750,9 +779,9 @@ const handleAction = {
             balance: goodsFundBalance,
             goods_fund_balance: goodsFundBalance,
             agent_wallet_balance: goodsFundBalance,
-            frozen_balance: walletAccount ? roundMoney(toNumber(walletAccount.frozen_balance, 0)) : goodsFundSummary.frozen_balance,
-            total_recharge: walletAccount ? roundMoney(toNumber(walletAccount.total_recharge, 0)) : goodsFundSummary.total_recharge,
-            total_deduct: walletAccount ? roundMoney(toNumber(walletAccount.total_deduct, 0)) : goodsFundSummary.total_deduct,
+            frozen_balance: walletAccount ? roundMoney(toNumber(walletAccount.frozen_balance, 0)) : summary.frozen_balance,
+            total_recharge: walletAccount ? roundMoney(toNumber(walletAccount.total_recharge, 0)) : summary.total_recharge,
+            total_deduct: walletAccount ? roundMoney(toNumber(walletAccount.total_deduct, 0)) : summary.total_deduct,
             commission_balance: resolveCommissionBalance(user),
             total_earned: toNumber(user.total_earned, 0),
             total_withdrawn: toNumber(user.total_withdrawn, 0),
@@ -761,7 +790,10 @@ const handleAction = {
 
     // 货款余额查询（用于订单确认页展示是否可以使用货款支付）
     'agentGoodsFund': asyncHandler(async (openid) => {
-        const userRes = await db.collection('users').where({ openid }).limit(1).get();
+        const userRes = await withTransientDbReadRetry(
+            () => db.collection('users').where({ openid }).limit(1).get(),
+            { action: 'agentGoodsFund', openid }
+        );
         if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
         const u = userRes.data[0];
         const balance = resolveGoodsFundBalance(u);

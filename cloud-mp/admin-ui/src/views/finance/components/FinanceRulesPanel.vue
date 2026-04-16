@@ -84,37 +84,32 @@
         <el-card>
           <template #header>
             <div class="card-header">
-              <span>平级奖与兑换券绑定</span>
-              <div class="header-actions">
-                <el-button type="warning" plain :loading="backfillingExchangeCoupons" @click="onBackfillExchangeCoupons">补绑历史兑换券</el-button>
-                <el-button type="primary" :loading="saving" @click="save('peer')">保存</el-button>
-              </div>
+              <span>平级奖摘要</span>
+              <el-button type="primary" @click="goMembershipPeerBonus">去会员配置页修改</el-button>
             </div>
           </template>
-          <el-form label-width="200px" style="max-width:820px">
-            <el-form-item label="平级奖总开关"><el-switch v-model="peerBonus.enabled" /></el-form-item>
-            <el-form-item label="默认发放版本">
-              <el-radio-group v-model="peerBonus.default_version">
-                <el-radio-button label="team">团队版</el-radio-button>
-                <el-radio-button label="social">社会版</el-radio-button>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item label="犹豫期（天）"><el-input-number v-model="peerBonus.cooldown_days" :min="0" :step="1" /></el-form-item>
-            <el-form-item label="退款开发费比例（%）"><el-input-number v-model="peerBonus.refund_dev_fee_pct" :min="0" :step="0.1" :precision="1" /></el-form-item>
-          </el-form>
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            title="财务页不再直接修改平级奖配置；唯一可写真相源已收口到「会员与成长值」页面。"
+          />
+          <el-descriptions :column="2" border style="margin-top:16px">
+            <el-descriptions-item label="总开关">{{ peerBonus.enabled ? '启用' : '关闭' }}</el-descriptions-item>
+            <el-descriptions-item label="默认版本">{{ peerBonus.default_version === 'social' ? '社会版' : '团队版' }}</el-descriptions-item>
+            <el-descriptions-item label="犹豫期">{{ peerBonus.cooldown_days }} 天</el-descriptions-item>
+            <el-descriptions-item label="退款开发费比例">{{ peerBonus.refund_dev_fee_pct }}%</el-descriptions-item>
+          </el-descriptions>
           <div class="level-grid">
             <el-card v-for="level in peerBonusLevels" :key="level" class="level-card">
               <template #header><span>Lv.{{ level }} 平级奖</span></template>
-              <el-form label-position="top">
-                <el-form-item label="社会版现金比例（%）"><el-input-number v-model="peerBonus.social['level_' + level].pct" :min="0" :step="1" style="width:100%" /></el-form-item>
-                <el-form-item label="团队版现金（元）"><el-input-number v-model="peerBonus.team['level_' + level].cash" :min="0" :step="1" style="width:100%" /></el-form-item>
-                <el-form-item label="兑换券张数"><el-input-number v-model="peerBonus.team['level_' + level].exchange_coupons" :min="0" :step="1" style="width:100%" /></el-form-item>
-                <el-form-item label="券面货值（元）"><el-input-number v-model="peerBonus.team['level_' + level].coupon_product_value" :min="0" :step="1" style="width:100%" /></el-form-item>
-                <el-form-item label="解锁收益（元）"><el-input-number v-model="peerBonus.team['level_' + level].unlock_reward" :min="0" :step="1" style="width:100%" /></el-form-item>
-                <el-form-item label="兑换券标题"><el-input v-model="peerBonus.team['level_' + level].exchange_title" /></el-form-item>
-                <el-form-item label="允许兑换商品ID（逗号分隔）"><el-input v-model="peerBonus.team['level_' + level].allowed_product_ids_text" type="textarea" :rows="2" /></el-form-item>
-                <el-form-item label="允许兑换SKU ID（逗号分隔）"><el-input v-model="peerBonus.team['level_' + level].allowed_sku_ids_text" type="textarea" :rows="2" /></el-form-item>
-              </el-form>
+              <el-descriptions :column="1" size="small" border>
+                <el-descriptions-item label="社会版现金比例">{{ Number(peerBonus.social['level_' + level].pct || 0) }}%</el-descriptions-item>
+                <el-descriptions-item label="团队版现金">¥{{ Number(peerBonus.team['level_' + level].cash || 0) }}</el-descriptions-item>
+                <el-descriptions-item label="兑换券张数">{{ Number(peerBonus.team['level_' + level].exchange_coupons || 0) }}</el-descriptions-item>
+                <el-descriptions-item label="券面货值">¥{{ Number(peerBonus.team['level_' + level].coupon_product_value || 0) }}</el-descriptions-item>
+                <el-descriptions-item label="解锁收益">¥{{ Number(peerBonus.team['level_' + level].unlock_reward || 0) }}</el-descriptions-item>
+              </el-descriptions>
             </el-card>
           </div>
         </el-card>
@@ -273,10 +268,10 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/store/user'
 import {
-  backfillExchangeCoupons,
   createExitApplication,
   executeDividend,
   getAssistBonusConfig,
@@ -286,7 +281,7 @@ import {
   getDividendRulesConfig,
   getExitRulesConfig,
   getFundPoolConfig,
-  getPeerBonusConfig,
+  getMemberTierConfig,
   getRechargeConfig,
   updateAssistBonusConfig,
   updateCommissionConfig,
@@ -294,14 +289,13 @@ import {
   updateDividendRulesConfig,
   updateExitRulesConfig,
   updateFundPoolConfig,
-  updatePeerBonusConfig,
   updateRechargeConfig
 } from '@/api'
 
 const userStore = useUserStore()
+const router = useRouter()
 const activeTab = ref('commission')
 const saving = ref(false)
-const backfillingExchangeCoupons = ref(false)
 const failedConfigKeys = ref([])
 const isSuperAdmin = computed(() => userStore.isSuperAdmin)
 const canManageExit = computed(() => userStore.isSuperAdmin || userStore.hasPermission('users'))
@@ -562,7 +556,10 @@ const configLoaders = {
     deepAssign(commission, configData)
     mergeCommissionMatrixFromApi(matrixData)
   },
-  peer: async () => mergePeerBonusFromApi(await resolveApiData(getPeerBonusConfig)),
+  peer: async () => {
+    const data = await resolveApiData(getMemberTierConfig)
+    mergePeerBonusFromApi(data.peer_bonus || {})
+  },
   assist: async () => deepAssign(assistBonus, await resolveApiData(getAssistBonusConfig)),
   fund: async () => deepAssign(fundPool, await resolveApiData(getFundPoolConfig)),
   dividendRules: async () => deepAssign(dividendRules, await resolveApiData(getDividendRulesConfig)),
@@ -586,7 +583,6 @@ const save = async (key) => {
       await updateCommissionConfig(JSON.parse(JSON.stringify(commission)))
       await updateCommissionMatrix(buildCommissionMatrixPayload())
     }
-    if (key === 'peer') await updatePeerBonusConfig(buildPeerBonusPayload())
     if (key === 'assist') await updateAssistBonusConfig(JSON.parse(JSON.stringify(assistBonus)))
     if (key === 'fund') await updateFundPoolConfig(JSON.parse(JSON.stringify(fundPool)))
     if (key === 'dividendRules') await updateDividendRulesConfig(JSON.parse(JSON.stringify(dividendRules)))
@@ -594,6 +590,10 @@ const save = async (key) => {
     if (key === 'recharge') await updateRechargeConfig(JSON.parse(JSON.stringify(rechargeConfig)))
     ElMessage.success('保存成功')
   }).catch(() => ElMessage.error('保存失败'))
+}
+
+const goMembershipPeerBonus = () => {
+  router.push('/membership')
 }
 
 const previewDividend = async () => {
@@ -625,19 +625,6 @@ const executePartnerExit = async () => {
     exitResult.value = res
     ElMessage.success('退出申请已创建，请在流程中继续审核')
   }).catch((e) => ElMessage.error(e?.message || '执行失败'))
-}
-
-const onBackfillExchangeCoupons = async () => {
-  backfillingExchangeCoupons.value = true
-  try {
-    const res = await backfillExchangeCoupons()
-    const data = res?.data || res || {}
-    ElMessage.success(`已补绑 ${data.updated || 0} 张历史兑换券${data.pending_bind ? `，其中 ${data.pending_bind} 张仍待绑定商品` : ''}`)
-  } catch (e) {
-    ElMessage.error(e?.message || '补绑失败')
-  } finally {
-    backfillingExchangeCoupons.value = false
-  }
 }
 
 onMounted(loadAll)

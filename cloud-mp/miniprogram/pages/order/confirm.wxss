@@ -58,6 +58,40 @@
     box-shadow: 0 8rpx 20rpx rgba(35, 27, 20, 0.04);
 }
 
+.order-state-section,
+.inline-state-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16rpx;
+}
+
+.order-state-title,
+.inline-state-title {
+    font-size: 30rpx;
+    font-weight: 600;
+    color: #1F1915;
+}
+
+.order-state-desc,
+.inline-state-desc {
+    font-size: 24rpx;
+    line-height: 1.7;
+    color: #73675C;
+}
+
+.order-state-btn,
+.inline-state-btn {
+    align-self: flex-start;
+    min-width: 176rpx;
+    padding: 18rpx 28rpx;
+    border-radius: 999rpx;
+    border: 1rpx solid rgba(185, 139, 88, 0.35);
+    color: #8d6a3f;
+    font-size: 24rpx;
+    font-weight: 600;
+    background: rgba(185, 139, 88, 0.08);
+}
+
 .section-head-row {
     display: flex;
     justify-content: space-between;

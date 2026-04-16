@@ -16,6 +16,80 @@
 
 // 防重复调用 Map（key = fnName:action:JSON(data)）
 const pendingCalls = new Map();
+const TRANSIENT_DB_PATTERNS = [
+    'DATABASE_REQUEST_FAILED',
+    'collection.get:fail',
+    'i/o timeout',
+    'handshake failure',
+    'Invoking task timed out after',
+    'database request fail'
+];
+const TRANSIENT_DB_USER_MESSAGE = '服务暂时繁忙，请稍后重试';
+
+function delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getErrorMessage(error) {
+    if (!error) return '';
+    if (typeof error === 'string') return error;
+    if (typeof error.message === 'string' && error.message) return error.message;
+    if (typeof error.errMsg === 'string' && error.errMsg) return error.errMsg;
+    if (typeof error.errorMessage === 'string' && error.errorMessage) return error.errorMessage;
+    return '';
+}
+
+function isTransientDbError(error) {
+    const message = getErrorMessage(error);
+    if (!message) return false;
+    return TRANSIENT_DB_PATTERNS.some((pattern) => message.includes(pattern));
+}
+
+function normalizeBusinessError(result) {
+    const rawMessage = result && typeof result.message === 'string' ? result.message : '操作失败';
+    const transientDb = isTransientDbError(rawMessage)
+        || (result && result.errorType === 'transient_db')
+        || (result && result.data && result.data.errorType === 'transient_db');
+    return {
+        ...result,
+        code: result && result.code !== undefined ? result.code : -1,
+        success: false,
+        errorType: transientDb ? 'transient_db' : (result && result.errorType) || 'business',
+        rawMessage,
+        message: transientDb ? TRANSIENT_DB_USER_MESSAGE : rawMessage
+    };
+}
+
+function normalizeSystemError(error) {
+    const rawMessage = getErrorMessage(error) || '云函数调用失败';
+    const transientDb = isTransientDbError(error) || isTransientDbError(rawMessage);
+    return {
+        code: error && error.code !== undefined ? error.code : -1,
+        success: false,
+        errorType: transientDb ? 'transient_db' : 'system',
+        rawMessage,
+        message: transientDb ? TRANSIENT_DB_USER_MESSAGE : rawMessage,
+        raw: error
+    };
+}
+
+function unwrapSuccessResult(result) {
+    if (result.data !== undefined && result.data !== null) {
+        const data = result.data;
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+            return {
+                code: result.code,
+                success: result.success,
+                message: result.message,
+                timestamp: result.timestamp,
+                data,
+                ...data
+            };
+        }
+        return result;
+    }
+    return result;
+}
 
 /**
  * 调用云函数
@@ -31,7 +105,10 @@ function callFn(name, data = {}, opts = {}) {
     const {
         showLoading = false,
         showError = true,
-        preventDup = false
+        preventDup = false,
+        maxRetries = 0,
+        retryDelay = 300,
+        readOnly = false
     } = opts;
 
     const dupKey = `${name}:${data.action || ''}:${JSON.stringify(data)}`;
@@ -39,56 +116,51 @@ function callFn(name, data = {}, opts = {}) {
         return pendingCalls.get(dupKey);
     }
 
-    if (showLoading) wx.showLoading({ title: '加载中...', mask: true });
-
-    const promise = wx.cloud.callFunction({ name, data })
-        .then(res => {
-            if (showLoading) wx.hideLoading();
-            const result = res.result;
-            if (!result) throw { code: -1, message: '云函数无返回值' };
-
-            // 统一成功判断：{ success: true } 或 { code: 0 }
-            if (result.success === true || result.code === 0) {
-                // ★ 自动解包：后端统一用 success(data) 返回 { code, success, data, message }
-                // 解包后前端可直接用 res.data / res.list 等，无需再 res.data.list
-                // 同时保留 code/message 在顶层，方便前端判断 res.code === 0
-                if (result.data !== undefined && result.data !== null) {
-                    const data = result.data;
-                    if (data && typeof data === 'object' && !Array.isArray(data)) {
-                        return {
-                            code: result.code,
-                            success: result.success,
-                            message: result.message,
-                            timestamp: result.timestamp,
-                            data,
-                            ...data
-                        };
+    const promise = (async () => {
+        if (showLoading) wx.showLoading({ title: '加载中...', mask: true });
+        try {
+            const totalAttempts = Math.max(0, Number(maxRetries) || 0) + 1;
+            for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
+                try {
+                    const res = await wx.cloud.callFunction({ name, data });
+                    const result = res.result;
+                    if (!result) {
+                        throw normalizeSystemError({ message: '云函数无返回值' });
                     }
-                    // data 是原始值（string/number/boolean/数组），保持 data 字段
-                    return result;
+
+                    if (result.success === true || result.code === 0) {
+                        return unwrapSuccessResult(result);
+                    }
+
+                    throw normalizeBusinessError(result);
+                } catch (error) {
+                    const normalized = (error && error.success === false) || (error && error.errorType)
+                        ? error
+                        : normalizeSystemError(error);
+                    const canRetry = readOnly && attempt < totalAttempts && normalized.errorType === 'transient_db';
+                    if (canRetry) {
+                        console.warn(`[Cloud] callFn(${name}) 第 ${attempt} 次失败，准备重试:`, normalized.rawMessage || normalized.message);
+                        await delay(Math.max(0, Number(retryDelay) || 0));
+                        continue;
+                    }
+
+                    console.error(`[Cloud] callFn(${name}) 失败:`, normalized.raw || normalized);
+                    if (showError) {
+                        wx.showToast({
+                            title: normalized.errorType === 'transient_db' ? TRANSIENT_DB_USER_MESSAGE : normalized.message,
+                            icon: 'none',
+                            duration: 2500
+                        });
+                    }
+                    throw normalized;
                 }
-                return result;
             }
 
-            // 业务错误
-            const errMsg = result.message || '操作失败';
-            if (showError) wx.showToast({ title: errMsg, icon: 'none', duration: 2500 });
-            return Promise.reject(result);
-        })
-        .catch(err => {
+            throw normalizeSystemError({ message: '云函数调用失败' });
+        } finally {
             if (showLoading) wx.hideLoading();
-
-            // 已在 .then 里处理过的业务错误直接透传
-            if (err && (err.success === false || err.code !== undefined)) {
-                return Promise.reject(err);
-            }
-
-            // 网络/云函数系统错误
-            const errMsg = (err && err.errMsg) || '云函数调用失败';
-            console.error(`[Cloud] callFn(${name}) 失败:`, err);
-            if (showError) wx.showToast({ title: '网络错误，请稍后重试', icon: 'none', duration: 2500 });
-            return Promise.reject({ code: -1, message: errMsg, raw: err });
-        })
+        }
+    })()
         .finally(() => {
             if (preventDup) pendingCalls.delete(dupKey);
         });
@@ -148,5 +220,7 @@ module.exports = {
     callFn,
     uploadToCloud,
     getTempUrls,
-    deleteCloudFiles
+    deleteCloudFiles,
+    isTransientDbError,
+    TRANSIENT_DB_USER_MESSAGE
 };

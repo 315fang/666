@@ -477,7 +477,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { useRoute } from 'vue-router'
@@ -495,6 +495,22 @@ const categories = ref([])
 const { pagination, resetPage, applyResponse } = usePagination()
 // keyword：按商品名称模糊匹配；支持从订单页跳转时携带 ?keyword=xxx 预填
 const searchForm = reactive({ keyword: String(route.query.keyword || ''), category_id: '', status: '' })
+
+function applyRouteQueryToFilters(query = {}) {
+  searchForm.keyword = query?.keyword ? String(query.keyword) : ''
+  if (query?.category_id === undefined || query?.category_id === null || query?.category_id === '') {
+    searchForm.category_id = ''
+  } else {
+    const nextCategoryId = Number(query.category_id)
+    searchForm.category_id = Number.isFinite(nextCategoryId) ? nextCategoryId : String(query.category_id)
+  }
+  if (query?.status === undefined || query?.status === null || query?.status === '') {
+    searchForm.status = ''
+  } else {
+    const nextStatus = Number(query.status)
+    searchForm.status = Number.isFinite(nextStatus) ? nextStatus : String(query.status)
+  }
+}
 
 const loadCategories = async () => {
   try {
@@ -518,7 +534,9 @@ const fetchProducts = async () => {
     tableData.value = res?.list || []
     applyResponse(res)
   } catch (e) {
-    ElMessage.error(e?.message || '加载商品列表失败')
+    if (!e?.__handledByRequest) {
+      ElMessage.error(e?.message || '加载商品列表失败')
+    }
   } finally {
     loading.value = false
   }
@@ -531,9 +549,12 @@ const handleStatusChange = async (row, val) => {
   try {
     await updateProductStatus(row.id, { status: val })
     ElMessage.success(val === 1 ? '已上架' : '已下架')
+    await fetchProducts()
   } catch (e) {
     row.status = val === 1 ? 0 : 1
-    ElMessage.error(e?.message || '更新上架状态失败')
+    if (!e?.__handledByRequest) {
+      ElMessage.error(e?.message || '更新上架状态失败')
+    }
   }
 }
 
@@ -544,7 +565,7 @@ const handleDelete = async (row) => {
     ElMessage.success('已删除')
     fetchProducts()
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e?.message || '删除商品失败')
+    if (e !== 'cancel' && !e?.__handledByRequest) ElMessage.error(e?.message || '删除商品失败')
   }
 }
 
@@ -704,7 +725,9 @@ const submitForm = async (status) => {
     formVisible.value = false
     fetchProducts()
   } catch (e) {
-    ElMessage.error(e?.message || '保存商品失败，请重试')
+    if (!e?.__handledByRequest) {
+      ElMessage.error(e?.message || '保存商品失败，请重试')
+    }
   } finally {
     submitting.value = false
   }
@@ -814,7 +837,17 @@ const handleDeleteCategory = async (row) => {
   }
 }
 
-onMounted(() => { loadCategories(); fetchProducts() })
+watch(
+  () => route.query,
+  (query) => {
+    applyRouteQueryToFilters(query || {})
+    resetPage()
+    fetchProducts()
+  },
+  { immediate: true }
+)
+
+onMounted(() => { loadCategories() })
 </script>
 
 <style scoped>

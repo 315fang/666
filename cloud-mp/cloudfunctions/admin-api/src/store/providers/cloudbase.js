@@ -6,8 +6,12 @@ function normalizeSourceName(name) {
     return String(name || '').trim();
 }
 
+function nowIso() {
+    return new Date().toISOString();
+}
+
 function isMissingCollectionError(error) {
-    const message = String(error && error.message || '').toLowerCase();
+    const message = String((error && error.message) || '').toLowerCase();
     return message.includes('collection') && (message.includes('not exist') || message.includes('not found') || message.includes('does not exist'));
 }
 
@@ -47,9 +51,11 @@ function createCloudBaseStore(options) {
     const pendingFlush = new Map();
     const dirtySingletons = new Set();
     const pendingSingletonFlush = new Map();
+    const lazyLoadPromises = new Map();
+    const collectionLoadState = new Map();
     const pageSize = 100;
     const singletonCollectionName = `${cloudbase.collectionPrefix || ''}admin_singletons`;
-    const preloadCollections = [
+    const basePreloadCollections = [
         'admin_singletons',
         'admins',
         'admin_roles',
@@ -57,7 +63,7 @@ function createCloudBaseStore(options) {
         'app_configs'
     ];
     const allKnownCollections = new Set([
-        ...preloadCollections,
+        ...basePreloadCollections,
         'admin_audit_logs', 'addresses', 'banners',
         'branch_agent_claims', 'branch_agent_stations', 'cart_items',
         'categories', 'commissions', 'content_boards', 'content_board_products',
@@ -73,7 +79,43 @@ function createCloudBaseStore(options) {
         'user_favorites', 'user_mass_messages', 'users', 'upgrade_applications',
         'wallet_accounts', 'wallet_logs', 'wallet_recharge_orders', 'withdrawals'
     ]);
-    const lazyLoadPromises = new Map();
+    const preloadCollections = Array.from(allKnownCollections);
+
+    function setCollectionState(name, meta = {}) {
+        const key = normalizeSourceName(name);
+        collectionLoadState.set(key, {
+            collection: key,
+            status: meta.status || 'not_loaded',
+            loaded_at: meta.loaded_at || null,
+            last_error: meta.last_error || null,
+            message: meta.message || ''
+        });
+    }
+
+    function getCollectionState(name) {
+        const key = normalizeSourceName(name);
+        return collectionLoadState.get(key) || {
+            collection: key,
+            status: 'not_loaded',
+            loaded_at: null,
+            last_error: null,
+            message: ''
+        };
+    }
+
+    function buildCollectionAccessError(name, meta = {}) {
+        const stateMeta = getCollectionState(name);
+        const status = meta.status || stateMeta.status || 'not_loaded';
+        const error = new Error(
+            status === 'load_failed'
+                ? `CloudBase 集合 ${name} 加载失败：${meta.last_error || stateMeta.last_error || '未知错误'}`
+                : `CloudBase 集合 ${name} 尚未完成加载，当前状态：${status}`
+        );
+        error.code = status === 'load_failed' ? 'LOAD_FAILED' : 'NOT_LOADED';
+        error.collection = normalizeSourceName(name);
+        error.collection_state = status;
+        return error;
+    }
 
     if (!cloudbase.envId) {
         const error = new Error('ADMIN_DATA_SOURCE=cloudbase requires ADMIN_CLOUDBASE_ENV_ID');
@@ -165,11 +207,11 @@ function createCloudBaseStore(options) {
         let offset = 0;
         const rows = [];
         while (true) {
-          const response = await collection.skip(offset).limit(pageSize).get();
-          const batch = Array.isArray(response.data) ? response.data : [];
-          rows.push(...batch);
-          if (batch.length < pageSize) break;
-          offset += batch.length;
+            const response = await collection.skip(offset).limit(pageSize).get();
+            const batch = Array.isArray(response.data) ? response.data : [];
+            rows.push(...batch);
+            if (batch.length < pageSize) break;
+            offset += batch.length;
         }
         return rows;
     }
@@ -200,56 +242,77 @@ function createCloudBaseStore(options) {
     }
 
     async function loadCollection(name) {
-        if (name === 'admin_singletons') {
+        const key = normalizeSourceName(name);
+        setCollectionState(key, { status: 'loading', loaded_at: null, last_error: null });
+        if (key === 'admin_singletons') {
             try {
+                singletonCache.clear();
                 const rows = await fetchSingletonRows();
                 for (const row of rows) {
-                    const key = String(row.key || row.name || row._id || '').trim();
-                    if (!key) continue;
-                    singletonCache.set(key, row.value);
+                    const singletonKey = String(row.key || row.name || row._id || '').trim();
+                    if (!singletonKey) continue;
+                    singletonCache.set(singletonKey, row.value);
                 }
+                setCollectionState(key, { status: 'loaded', loaded_at: nowIso(), last_error: null });
             } catch (error) {
                 if (isMissingCollectionError(error)) {
-                    state.warnings.push({ collection: name, message: error.message });
+                    state.warnings.push({ collection: key, message: error.message });
+                    setCollectionState(key, { status: 'missing', loaded_at: nowIso(), last_error: null, message: error.message });
                     return;
                 }
                 state.error = error;
+                setCollectionState(key, { status: 'load_failed', loaded_at: nowIso(), last_error: error.message });
                 throw error;
             }
             return;
         }
         try {
-            const rows = await fetchCollection(name);
-            cache.set(name, rows);
+            const rows = await fetchCollection(key);
+            cache.set(key, rows);
+            setCollectionState(key, { status: 'loaded', loaded_at: nowIso(), last_error: null });
         } catch (error) {
             if (isMissingCollectionError(error)) {
-                state.warnings.push({ collection: name, message: error.message });
-                cache.set(name, []);
+                state.warnings.push({ collection: key, message: error.message });
+                setCollectionState(key, { status: 'missing', loaded_at: nowIso(), last_error: null, message: error.message });
                 return;
             }
             state.error = error;
+            setCollectionState(key, { status: 'load_failed', loaded_at: nowIso(), last_error: error.message });
             throw error;
         }
     }
 
     function ensureCollectionLoaded(name) {
-        if (cache.has(name)) return Promise.resolve();
-        if (lazyLoadPromises.has(name)) return lazyLoadPromises.get(name);
-        const p = loadCollection(name).then(() => {
-            lazyLoadPromises.delete(name);
-        }).catch(err => {
-            lazyLoadPromises.delete(name);
-            if (!cache.has(name)) cache.set(name, []);
-            console.warn(`[CloudBase] lazy-load ${name} failed:`, err.message);
-        });
-        lazyLoadPromises.set(name, p);
-        return p;
+        const key = normalizeSourceName(name);
+        if (cache.has(key) || getCollectionState(key).status === 'missing') {
+            return Promise.resolve();
+        }
+        if (lazyLoadPromises.has(key)) return lazyLoadPromises.get(key);
+        const loadPromise = loadCollection(key)
+            .finally(() => {
+                lazyLoadPromises.delete(key);
+            });
+        lazyLoadPromises.set(key, loadPromise);
+        return loadPromise;
+    }
+
+    async function waitForCollection(name, timeoutMs = 8000) {
+        const key = normalizeSourceName(name);
+        const loadPromise = ensureCollectionLoaded(key);
+        await Promise.race([
+            loadPromise,
+            new Promise((_, reject) => setTimeout(() => reject(buildCollectionAccessError(key, { status: 'not_loaded' })), timeoutMs))
+        ]);
+        if (cache.has(key)) return cache.get(key);
+        const meta = getCollectionState(key);
+        if (meta.status === 'missing') return [];
+        throw buildCollectionAccessError(key, meta);
     }
 
     async function initialize() {
-        await Promise.all(preloadCollections.map(name => loadCollection(name)));
+        await Promise.all(preloadCollections.map((name) => ensureCollectionLoaded(name)));
         state.ready = true;
-        state.loadedAt = new Date().toISOString();
+        state.loadedAt = nowIso();
         return {
             ready: true,
             loadedAt: state.loadedAt,
@@ -292,7 +355,7 @@ function createCloudBaseStore(options) {
                     data: {
                         key,
                         value: singletonCache.get(key),
-                        updated_at: new Date().toISOString()
+                        updated_at: nowIso()
                     }
                 });
             }
@@ -325,6 +388,15 @@ function createCloudBaseStore(options) {
             return Promise.allSettled(tasks);
         },
         health() {
+            const states = Array.from(collectionLoadState.values()).reduce((acc, item) => {
+                acc[item.collection] = {
+                    status: item.status,
+                    loaded_at: item.loaded_at,
+                    last_error: item.last_error,
+                    message: item.message
+                };
+                return acc;
+            }, {});
             return {
                 status: state.error ? 'error' : (state.warnings.length ? 'degraded' : (state.ready ? 'ok' : 'starting')),
                 mode: 'cloudbase',
@@ -338,6 +410,9 @@ function createCloudBaseStore(options) {
                 dirty_singletons: Array.from(dirtySingletons),
                 pending_flush_collections: Array.from(pendingFlush.keys()),
                 pending_singleton_flushes: Array.from(pendingSingletonFlush.keys()),
+                not_loaded_collections: Array.from(collectionLoadState.values()).filter((item) => item.status === 'not_loaded' || item.status === 'loading').map((item) => item.collection),
+                load_failed_collections: Array.from(collectionLoadState.values()).filter((item) => item.status === 'load_failed').map((item) => item.collection),
+                collection_states: states,
                 last_error: state.error ? state.error.message : null,
                 warnings: state.warnings,
                 loaded_at: state.loadedAt,
@@ -352,29 +427,26 @@ function createCloudBaseStore(options) {
                 env_id: cloudbase.envId || '',
                 region: cloudbase.region || '',
                 collection_prefix: cloudbase.collectionPrefix || '',
+                preload_mode: 'all_known_collections',
                 ready: state.ready
             };
         },
         getCollection(name) {
             const key = normalizeSourceName(name);
-            if (!cache.has(key)) {
-                if (allKnownCollections.has(key)) {
-                    ensureCollectionLoaded(key);
-                }
-                cache.set(key, []);
-            }
-            return cache.get(key);
+            if (cache.has(key)) return cache.get(key);
+            const meta = getCollectionState(key);
+            if (meta.status === 'missing') return [];
+            throw buildCollectionAccessError(key, meta);
         },
         async reloadCollection(name) {
             const key = normalizeSourceName(name);
-            if (key === 'admin_singletons') {
-                await loadCollection(key);
-                state.lastReloadAt = new Date().toISOString();
-                return singletonCache;
-            }
-            await loadCollection(key);
-            state.lastReloadAt = new Date().toISOString();
-            return cache.get(key) || [];
+            await ensureCollectionLoaded(key);
+            state.lastReloadAt = nowIso();
+            if (key === 'admin_singletons') return singletonCache;
+            if (cache.has(key)) return cache.get(key);
+            const meta = getCollectionState(key);
+            if (meta.status === 'missing') return [];
+            throw buildCollectionAccessError(key, meta);
         },
         async reloadCollections(names = []) {
             const source = Array.isArray(names) ? names : [];
@@ -382,17 +454,25 @@ function createCloudBaseStore(options) {
             for (const name of source) {
                 results.push(await this.reloadCollection(name));
             }
-            state.lastReloadAt = new Date().toISOString();
+            state.lastReloadAt = nowIso();
             return results;
         },
         saveCollection(name, rows) {
             const key = normalizeSourceName(name);
             cache.set(key, Array.isArray(rows) ? rows : []);
+            setCollectionState(key, {
+                status: 'loaded',
+                loaded_at: nowIso(),
+                last_error: null
+            });
             dirty.add(key);
             void flushCollection(key).catch((error) => {
                 state.error = error;
+                setCollectionState(key, { status: 'load_failed', loaded_at: nowIso(), last_error: error.message });
             });
         },
+        waitForCollection,
+        getCollectionState,
         getSingleton(name, fallback) {
             const key = normalizeSourceName(name);
             return singletonCache.has(key) ? singletonCache.get(key) : fallback;
@@ -405,7 +485,19 @@ function createCloudBaseStore(options) {
                 state.error = error;
             });
         },
-        _internals: { cache, singletonCache, dirty, dirtySingletons, state, db, app }
+        _internals: {
+            app,
+            db,
+            cache,
+            singletonCache,
+            dirty,
+            dirtySingletons,
+            pendingFlush,
+            pendingSingletonFlush,
+            lazyLoadPromises,
+            collectionLoadState,
+            state
+        }
     };
 }
 

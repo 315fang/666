@@ -10,6 +10,10 @@ const https = require('https');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { createWechatRefund } = require('./payment-refund');
+const {
+    verifySignature: verifyWechatPaySignature,
+    decryptResource: decryptWechatPayResource
+} = require('../../payment/wechat-pay-v3');
 const orderContract = require('./order-contract');
 const userContract = require('./user-contract');
 const { createFinanceFirewall } = require('./finance-firewall');
@@ -566,6 +570,119 @@ function getPaymentHealthSnapshot() {
     };
 }
 
+async function waitForDataStoreReady(timeoutMs = 8000) {
+    if (!dataStore?.readyPromise) return;
+    await Promise.race([
+        Promise.resolve(dataStore.readyPromise),
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`数据源初始化超时（>${timeoutMs}ms）`)), timeoutMs))
+    ]);
+}
+
+function mapProbeStatus(health = {}, probeError = '') {
+    if (probeError) return 'error';
+    if (health.status === 'error') return 'error';
+    if (health.status === 'degraded' || health.status === 'starting') return 'warning';
+    return 'ok';
+}
+
+async function probeDataStore(options = {}) {
+    const startedAt = Date.now();
+    const collectionName = pickString(options.collection, 'admins') || 'admins';
+    let probeError = '';
+    try {
+        await waitForDataStoreReady(toNumber(options.timeout_ms, 8000));
+        if (options.forceReload !== false) {
+            if (typeof dataStore.reloadCollection === 'function') {
+                await Promise.resolve(dataStore.reloadCollection(collectionName));
+            } else if (typeof dataStore.reloadCollections === 'function') {
+                await Promise.resolve(dataStore.reloadCollections([collectionName]));
+            }
+        }
+    } catch (error) {
+        probeError = error?.message || '未知错误';
+    }
+
+    const latencyMs = Date.now() - startedAt;
+    const descriptor = typeof dataStore.describe === 'function' ? dataStore.describe() : {};
+    const health = typeof dataStore.cacheHealth === 'function' ? dataStore.cacheHealth() : (typeof dataStore.health === 'function' ? dataStore.health() : {});
+    const status = mapProbeStatus(health, probeError);
+
+    return {
+        ok: status !== 'error',
+        status,
+        latency_ms: latencyMs,
+        mode: health.mode || descriptor.source || 'unknown',
+        source: descriptor.source || health.mode || 'unknown',
+        descriptor,
+        health,
+        error: probeError,
+        checked_at: nowIso()
+    };
+}
+
+function buildCronStatusSnapshot() {
+    const cronDefs = [
+        { key: 'order-timeout-cancel', label: '超时未支付订单取消', interval: '5m', path: path.resolve(__dirname, '../../order-timeout-cancel/index.js') },
+        { key: 'order-auto-confirm', label: '自动确认收货', interval: '1h', path: path.resolve(__dirname, '../../order-auto-confirm/index.js') },
+        { key: 'commission-deadline-process', label: '佣金到期处理', interval: '1h', path: path.resolve(__dirname, '../../commission-deadline-process/index.js') }
+    ];
+
+    return cronDefs.map((task) => {
+        const configured = fs.existsSync(task.path);
+        return {
+            key: task.key,
+            label: task.label,
+            interval: task.interval,
+            status: configured ? 'unknown' : 'error',
+            configured,
+            run_count: null,
+            error_count: null,
+            last_run_at: '',
+            last_error: configured ? '未接入任务执行遥测，无法确认最近执行结果' : '本地函数入口不存在'
+        };
+    });
+}
+
+function resolveOperationalStatus(probe = {}) {
+    if (probe.status === 'error') return 'unhealthy';
+    if (probe.status === 'warning') return 'degraded';
+    return 'online';
+}
+
+function buildDataSourceRuntimeStatus(probe = {}) {
+    const health = probe.health || {};
+    const descriptor = probe.descriptor || {};
+    return {
+        status: resolveOperationalStatus(probe),
+        mode: probe.mode || health.mode || descriptor.source || 'unknown',
+        source: descriptor.source || health.mode || probe.source || 'unknown',
+        latency_ms: probe.latency_ms ?? null,
+        checked_at: probe.checked_at || nowIso(),
+        ready: health.ready !== false,
+        probe_error: probe.error || '',
+        collection_source: descriptor.collection_source || '',
+        singleton_source: descriptor.singleton_source || '',
+        cache_health: health,
+        descriptor
+    };
+}
+
+function buildCronRuntimeStatus(probe = {}) {
+    const runtimeStatus = resolveOperationalStatus(probe);
+    return {
+        status: runtimeStatus,
+        checked_at: probe.checked_at || nowIso(),
+        probe_error: probe.error || '',
+        data_source_mode: probe.mode || probe.health?.mode || '',
+        jobs: buildCronStatusSnapshot().map((job) => ({
+            ...job,
+            runtime_status: runtimeStatus === 'online' ? job.status : 'stale',
+            probe_checked_at: probe.checked_at || nowIso(),
+            probe_error: probe.error || ''
+        }))
+    };
+}
+
 function assetUrl(value) {
     if (!value) return '';
     if (/^https?:\/\//i.test(value)) return value;
@@ -935,20 +1052,275 @@ function createAuditLog(admin, action, target, detail) {
     saveCollection('admin_audit_logs', rows);
 }
 
+function getRequestId(req) {
+    const headerId = pickString(
+        req?.headers?.['x-request-id']
+        || req?.headers?.['X-Request-Id']
+        || req?.requestId
+    ).trim();
+    return headerId || crypto.randomUUID();
+}
+
+function buildFieldError(field, message, code = 'invalid') {
+    return { field, message, code };
+}
+
+function ok(res, data, options = {}) {
+    res.json({
+        code: 0,
+        success: true,
+        message: options.message || 'ok',
+        data,
+        request_id: res.req?.requestId || '',
+        timestamp: nowIso()
+    });
+}
+
+function fail(res, message, status = 400, options = {}) {
+    const payload = {
+        code: status,
+        success: false,
+        message,
+        request_id: res.req?.requestId || '',
+        timestamp: nowIso()
+    };
+    if (options.data !== undefined) payload.data = options.data;
+    if (options.field_errors?.length) payload.field_errors = options.field_errors;
+    res.status(status).json(payload);
+}
+
+function failField(res, field, message, status = 400, code = 'invalid') {
+    return fail(res, message, status, {
+        field_errors: [buildFieldError(field, message, code)]
+    });
+}
+
+function failWithFieldErrors(res, fieldErrors = [], message = '提交参数不合法', status = 400) {
+    return fail(res, message, status, {
+        field_errors: (Array.isArray(fieldErrors) ? fieldErrors : []).filter(Boolean)
+    });
+}
+
+function toPlainObject(value) {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function rejectUnknownBodyFields(res, body, allowedFields = [], message = '提交参数不合法') {
+    const payload = toPlainObject(body);
+    const allowed = new Set(Array.isArray(allowedFields) ? allowedFields : []);
+    const unknownFields = Object.keys(payload).filter((field) => !allowed.has(field));
+    if (!unknownFields.length) return null;
+    const fieldErrors = unknownFields.map((field) => buildFieldError(field, `字段 ${field} 不允许提交`, 'unexpected'));
+    failWithFieldErrors(res, fieldErrors, message, 400);
+    return fieldErrors;
+}
+
+function requireNumberField(value, field, label, options = {}) {
+    const { min = null, max = null, integer = false, required = true } = options;
+    const raw = value === undefined || value === null || value === '' ? null : Number(value);
+    if (raw === null) {
+        return required
+            ? { ok: false, error: buildFieldError(field, `请填写${label}`, 'required') }
+            : { ok: true, value: null };
+    }
+    if (!Number.isFinite(raw)) {
+        return { ok: false, error: buildFieldError(field, `${label}必须是有效数字`, 'invalid_number') };
+    }
+    if (integer && !Number.isInteger(raw)) {
+        return { ok: false, error: buildFieldError(field, `${label}必须是整数`, 'invalid_integer') };
+    }
+    if (min !== null && raw < min) {
+        return { ok: false, error: buildFieldError(field, `${label}不能小于 ${min}`, 'out_of_range') };
+    }
+    if (max !== null && raw > max) {
+        return { ok: false, error: buildFieldError(field, `${label}不能大于 ${max}`, 'out_of_range') };
+    }
+    return { ok: true, value: raw };
+}
+
+function requireEnumField(value, field, label, candidates = [], options = {}) {
+    const { required = true } = options;
+    const normalized = pickString(value).trim();
+    if (!normalized) {
+        return required
+            ? { ok: false, error: buildFieldError(field, `请填写${label}`, 'required') }
+            : { ok: true, value: '' };
+    }
+    if (!candidates.includes(normalized)) {
+        return { ok: false, error: buildFieldError(field, `${label}仅支持：${candidates.join(' / ')}`, 'invalid_enum') };
+    }
+    return { ok: true, value: normalized };
+}
+
+function requireNonEmptyStringField(value, field, label, options = {}) {
+    const { maxLength = 200, minLength = 1, required = true } = options;
+    const normalized = pickString(value).trim();
+    if (!normalized) {
+        return required
+            ? { ok: false, error: buildFieldError(field, `请填写${label}`, 'required') }
+            : { ok: true, value: '' };
+    }
+    if (normalized.length < minLength) {
+        return { ok: false, error: buildFieldError(field, `${label}长度不能少于 ${minLength} 个字符`, 'too_short') };
+    }
+    if (normalized.length > maxLength) {
+        return { ok: false, error: buildFieldError(field, `${label}长度不能超过 ${maxLength} 个字符`, 'too_long') };
+    }
+    return { ok: true, value: normalized };
+}
+
+function isValidHttpUrl(value) {
+    const raw = pickString(value).trim();
+    if (!raw) return false;
+    try {
+        const url = new URL(raw);
+        return ['http:', 'https:'].includes(url.protocol);
+    } catch (_) {
+        return false;
+    }
+}
+
+function getHeaderValue(headers = {}, name) {
+    if (!headers || typeof headers !== 'object') return '';
+    const target = String(name || '').toLowerCase();
+    const hit = Object.entries(headers).find(([key]) => String(key).toLowerCase() === target);
+    return pickString(hit?.[1]);
+}
+
+function getRawRequestBody(req) {
+    if (typeof req?.rawBody === 'string') return req.rawBody;
+    if (typeof req?.event?.body === 'string') return req.event.body;
+    if (typeof req?.body === 'string') return req.body;
+    if (req?.body && typeof req.body === 'object') {
+        try {
+            return JSON.stringify(req.body);
+        } catch (_) {
+            return '';
+        }
+    }
+    return '';
+}
+
+function readPaymentVerifyKeyInfo() {
+    const runtimeConfig = readPaymentRuntimeConfig();
+    const paymentEnv = { ...runtimeConfig, ...process.env };
+    const baseDir = path.resolve(__dirname, '../../payment');
+    const pickPaymentEnv = (keys, fallback = '') => {
+        for (const key of keys) {
+            const value = pickString(paymentEnv[key]).trim();
+            if (value) return value;
+        }
+        return fallback;
+    };
+    const platformCertPath = pickPaymentEnv(['PAYMENT_WECHAT_PLATFORM_CERT_PATH', 'WECHAT_PAY_PLATFORM_CERT_PATH'], 'certs/wechatpay_platform.pem');
+    const publicKeyPath = pickPaymentEnv(['PAYMENT_WECHAT_PUBLIC_KEY_PATH', 'WECHAT_PAY_PUBLIC_KEY_PATH'], 'certs/wechatpay_pubkey.pem');
+    const resolvedPlatformCertPath = resolvePaymentPath(platformCertPath, baseDir);
+    const resolvedPublicKeyPath = resolvePaymentPath(publicKeyPath, baseDir);
+    const envPlatformCert = pickPaymentEnv(['PAYMENT_WECHAT_PLATFORM_CERT', 'WECHAT_PAY_PLATFORM_CERT']);
+    if (envPlatformCert) {
+        return { key: envPlatformCert, source: 'env:platform_cert', path: '' };
+    }
+    const envPublicKey = pickPaymentEnv(['PAYMENT_WECHAT_PUBLIC_KEY', 'WECHAT_PAY_PUBLIC_KEY']);
+    if (envPublicKey) {
+        return { key: envPublicKey, source: 'env:public_key', path: '' };
+    }
+    const filePlatformCert = readTextFileMaybe(resolvedPlatformCertPath);
+    if (filePlatformCert) {
+        return { key: filePlatformCert, source: 'file:platform_cert', path: resolvedPlatformCertPath };
+    }
+    const filePublicKey = readTextFileMaybe(resolvedPublicKeyPath);
+    if (filePublicKey) {
+        return { key: filePublicKey, source: 'file:public_key', path: resolvedPublicKeyPath };
+    }
+    return { key: '', source: 'missing', path: '' };
+}
+
+function readPaymentVerifyKey() {
+    return readPaymentVerifyKeyInfo().key;
+}
+
+async function verifyRefundNotifyRequest(req) {
+    const headers = req?.headers || req?.event?.headers || {};
+    const rawBody = getRawRequestBody(req);
+    const wxTimestamp = getHeaderValue(headers, 'wechatpay-timestamp');
+    const wxNonce = getHeaderValue(headers, 'wechatpay-nonce');
+    const wxSignature = getHeaderValue(headers, 'wechatpay-signature');
+    const wxSerial = getHeaderValue(headers, 'wechatpay-serial');
+    const requestAgeSeconds = Math.abs(Math.floor(Date.now() / 1000) - Number(wxTimestamp || 0));
+
+    if (!rawBody) {
+        return { ok: false, status: 400, message: '微信退款回调缺少请求体' };
+    }
+    if (!wxTimestamp || !wxNonce || !wxSignature || !wxSerial) {
+        return { ok: false, status: 400, message: '微信退款回调缺少签名头或证书序列号' };
+    }
+    if (!Number.isFinite(Number(wxTimestamp)) || requestAgeSeconds > 300) {
+        return { ok: false, status: 401, message: '微信退款回调时间戳无效或已过期' };
+    }
+
+    let callbackData;
+    try {
+        callbackData = JSON.parse(rawBody);
+    } catch (_) {
+        return { ok: false, status: 400, message: '微信退款回调请求体不是合法 JSON' };
+    }
+
+    const verifyKeyInfo = readPaymentVerifyKeyInfo();
+    const verifyKey = verifyKeyInfo.key;
+    if (!verifyKey) {
+        return { ok: false, status: 503, message: '当前环境缺少微信支付回调验签公钥或平台证书' };
+    }
+
+    try {
+        const isValid = verifyWechatPaySignature(wxTimestamp, wxNonce, rawBody, wxSignature, verifyKey);
+        if (!isValid) {
+            return { ok: false, status: 401, message: '微信退款回调验签失败' };
+        }
+    } catch (error) {
+        return { ok: false, status: 401, message: `微信退款回调验签异常：${error.message || '未知错误'}` };
+    }
+
+    let refundData = callbackData;
+    if (callbackData.resource?.ciphertext) {
+        if (!callbackData.resource.nonce) {
+            return { ok: false, status: 400, message: '微信退款回调密文缺少 nonce' };
+        }
+        try {
+            refundData = decryptWechatPayResource(
+                callbackData.resource.ciphertext,
+                callbackData.resource.nonce,
+                callbackData.resource.associated_data || 'refund'
+            );
+        } catch (error) {
+            return { ok: false, status: 400, message: `微信退款回调解密失败：${error.message || '未知错误'}` };
+        }
+    }
+
+    return {
+        ok: true,
+        callbackData,
+        refundData,
+        eventType: pickString(callbackData.event_type || '').toUpperCase(),
+        serial: wxSerial,
+        verify_key_source: verifyKeyInfo.source,
+        verify_key_path: verifyKeyInfo.path
+    };
+}
+
 function auth(req, res, next) {
     const header = req.headers.authorization || '';
-    if (!header.startsWith('Bearer ')) return res.status(401).json({ code: 401, message: '未提供认证令牌' });
+    if (!header.startsWith('Bearer ')) return fail(res, '未提供认证令牌', 401);
     try {
         const payload = jwt.verify(header.slice(7), jwtSecret);
         const admin = getCollection('admins').find((item) =>
             (Number(item.id || item._legacy_id) === Number(payload.id)) && toBoolean(item.status)
         );
-        if (!admin) return res.status(401).json({ code: 401, message: '管理员不存在或已禁用' });
+        if (!admin) return fail(res, '管理员不存在或已禁用', 401);
         req.admin = admin;
         req.permissions = normalizePermissions(admin);
         next();
     } catch (_) {
-        return res.status(401).json({ code: 401, message: '登录已过期，请重新登录' });
+        return fail(res, '登录已过期，请重新登录', 401);
     }
 }
 
@@ -959,14 +1331,6 @@ function requirePermission(permission) {
         }
         next();
     };
-}
-
-function ok(res, data) {
-    res.json({ code: 0, data });
-}
-
-function fail(res, message, status = 400) {
-    res.status(status).json({ code: status, message });
 }
 
 function normalizeCollectionNames(names = []) {
@@ -3948,6 +4312,12 @@ ensureDir(runtimeRoot);
 ensureDir(uploadsRoot);
 ensureDir(path.join(runtimeRoot, 'overrides'));
 
+app.use((req, res, next) => {
+    req.requestId = getRequestId(req);
+    res.setHeader('X-Request-Id', req.requestId);
+    next();
+});
+
 app.use(cors({
     origin: function (origin, callback) {
         const allowed = [
@@ -3964,7 +4334,14 @@ app.use(cors({
     },
     credentials: true
 }));
-const jsonParser = express.json({ limit: '10mb' });
+const jsonParser = express.json({
+    limit: '10mb',
+    verify: (req, _res, buf) => {
+        if (buf?.length) {
+            req.rawBody = buf.toString('utf8');
+        }
+    }
+});
 const urlencodedParser = express.urlencoded({ extended: true });
 app.use((req, res, next) => {
     if (req.event) {
@@ -3990,6 +4367,7 @@ app.use((req, _res, next) => {
         return next();
     }
     try {
+        req.rawBody = typeof rawBody === 'string' ? rawBody : '';
         req.body = JSON.parse(rawBody);
     } catch (_) {
         req.body = rawBody;
@@ -4798,10 +5176,14 @@ app.get('/admin/api/storage/config', auth, requirePermission('materials'), (req,
 
 app.put('/admin/api/storage/config', auth, requirePermission('materials'), (req, res) => {
     const requestConfig = toObject(req.body, {});
+    const folder = normalizeStorageFolderInput(requestConfig.folder);
+    if (!folder) {
+        return failField(res, 'folder', '存储目录只能包含字母、数字、下划线、中划线和斜杠，且不能为空');
+    }
     const nextConfig = {
         provider: 'cloudbase',
         bucket: '',
-        folder: pickString(requestConfig.folder, 'materials') || 'materials',
+        folder,
         mode: 'managed'
     };
     saveSingleton('storage-config', nextConfig);
@@ -5130,12 +5512,17 @@ app.post('/admin/api/home-sections/sort', auth, requirePermission('content'), (r
     ok(res, { success: true, sort: orders });
 });
 
-app.get('/admin/api/mass-messages', auth, (req, res) => ok(res, paginate(sortByUpdatedDesc(getCollection('mass_messages')), req)));
+app.get('/admin/api/mass-messages', auth, requirePermission('settings_manage'), (req, res) => ok(res, paginate(sortByUpdatedDesc(getCollection('mass_messages')), req)));
 
 // 群发消息：预览目标用户（不实际发送，只返回匹配用户名单）
-app.post('/admin/api/mass-messages/preview', auth, (req, res) => {
+app.post('/admin/api/mass-messages/preview', auth, requirePermission('settings_manage'), (req, res) => {
+    if (rejectUnknownBodyFields(res, req.body, ['targetType', 'targetRoles', 'targetUsers'], '群发预览参数不合法')) return;
+    const targetTypeCheck = requireEnumField(req.body?.targetType, 'targetType', '目标用户类型', ['all', 'role', 'specific', 'distributor', 'active_30d']);
+    if (!targetTypeCheck.ok) return failWithFieldErrors(res, [targetTypeCheck.error], '群发预览参数不合法');
+
     const users = getCollection('users');
-    const { targetType, targetRoles, targetUsers } = req.body || {};
+    const { targetRoles, targetUsers } = req.body || {};
+    const targetType = targetTypeCheck.value;
     const ROLE_LABEL = { 0: '普通用户', 1: '会员', 2: '团长', 3: '代理商', 4: '合伙人' };
     const PREVIEW_LIMIT = 100;
 
@@ -5143,10 +5530,16 @@ app.post('/admin/api/mass-messages/preview', auth, (req, res) => {
     if (targetType === 'all') {
         matched = users;
     } else if (targetType === 'role') {
-        const levels = toArray(targetRoles).map(Number);
+        const levels = toArray(targetRoles).map(Number).filter(Number.isFinite);
+        if (!levels.length) {
+            return failWithFieldErrors(res, [buildFieldError('targetRoles', '按等级群发时必须至少提供一个用户等级', 'required')], '群发预览参数不合法');
+        }
         matched = users.filter((u) => levels.includes(toNumber(u.role_level ?? u.distributor_level ?? u.level, 0)));
     } else if (targetType === 'specific') {
-        const ids = toArray(targetUsers).map(String);
+        const ids = toArray(targetUsers).map(String).filter(Boolean);
+        if (!ids.length) {
+            return failWithFieldErrors(res, [buildFieldError('targetUsers', '指定用户群发时必须提供目标用户列表', 'required')], '群发预览参数不合法');
+        }
         matched = users.filter((u) => ids.some((id) => rowMatchesLookup(u, id, [u.openid, u.member_no])));
     } else if (targetType === 'distributor') {
         matched = users.filter((u) => toNumber(u.role_level ?? u.distributor_level ?? u.level, 0) >= 2);
@@ -5173,15 +5566,51 @@ app.post('/admin/api/mass-messages/preview', auth, (req, res) => {
     });
 });
 
-app.post('/admin/api/mass-messages', auth, (req, res) => {
+app.post('/admin/api/mass-messages', auth, requirePermission('settings_manage'), (req, res) => {
+    if (rejectUnknownBodyFields(res, req.body, ['title', 'content', 'contentType', 'sendType', 'scheduledAt', 'jump_path', 'targetType', 'targetRoles', 'targetUsers', 'channel', 'summary', 'remark'], '群发消息参数不合法')) return;
+    const titleCheck = requireNonEmptyStringField(req.body?.title, 'title', '消息标题', { maxLength: 80 });
+    const contentCheck = requireNonEmptyStringField(req.body?.content, 'content', '消息内容', { maxLength: 2000 });
+    const targetTypeCheck = requireEnumField(req.body?.targetType, 'targetType', '目标用户类型', ['all', 'role', 'specific', 'distributor', 'active_30d']);
+    const sendTypeCheck = requireEnumField(req.body?.sendType || 'draft', 'sendType', '发送方式', ['draft', 'immediate', 'scheduled']);
+    const fieldErrors = [titleCheck, contentCheck, targetTypeCheck, sendTypeCheck]
+        .filter((item) => !item.ok)
+        .map((item) => item.error);
+    if (targetTypeCheck.ok && targetTypeCheck.value === 'role' && !toArray(req.body?.targetRoles).length) {
+        fieldErrors.push(buildFieldError('targetRoles', '按等级群发时必须至少提供一个用户等级', 'required'));
+    }
+    if (targetTypeCheck.ok && targetTypeCheck.value === 'specific' && !toArray(req.body?.targetUsers).length) {
+        fieldErrors.push(buildFieldError('targetUsers', '指定用户群发时必须提供目标用户列表', 'required'));
+    }
+    if (sendTypeCheck.ok && sendTypeCheck.value === 'scheduled' && !pickString(req.body?.scheduledAt).trim()) {
+        fieldErrors.push(buildFieldError('scheduledAt', '定时群发必须提供发送时间', 'required'));
+    }
+    if (fieldErrors.length) return failWithFieldErrors(res, fieldErrors, '群发消息参数不合法');
+
     const rows = getCollection('mass_messages');
-    const row = { id: nextId(rows), ...req.body, status: 'draft', created_at: nowIso(), updated_at: nowIso() };
+    const row = {
+        id: nextId(rows),
+        title: titleCheck.value,
+        content: contentCheck.value,
+        contentType: pickString(req.body?.contentType || 'text') || 'text',
+        sendType: sendTypeCheck.value,
+        scheduledAt: pickString(req.body?.scheduledAt || ''),
+        jump_path: pickString(req.body?.jump_path || ''),
+        targetType: targetTypeCheck.value,
+        targetRoles: toArray(req.body?.targetRoles).map(Number).filter(Number.isFinite),
+        targetUsers: toArray(req.body?.targetUsers).map((item) => String(item)).filter(Boolean),
+        channel: pickString(req.body?.channel || 'miniprogram'),
+        summary: pickString(req.body?.summary || ''),
+        remark: pickString(req.body?.remark || ''),
+        status: sendTypeCheck.value === 'draft' ? 'draft' : 'pending',
+        created_at: nowIso(),
+        updated_at: nowIso()
+    };
     rows.push(row);
     saveCollection('mass_messages', rows);
     ok(res, row);
 });
 
-app.post('/admin/api/mass-messages/:id/send', auth, (req, res) => {
+app.post('/admin/api/mass-messages/:id/send', auth, requirePermission('settings_manage'), (req, res) => {
     const rows = getCollection('mass_messages');
     const index = rows.findIndex((item) => Number(item.id) === Number(req.params.id));
     if (index === -1) return fail(res, '群发任务不存在', 404);
@@ -5190,7 +5619,7 @@ app.post('/admin/api/mass-messages/:id/send', auth, (req, res) => {
     ok(res, rows[index]);
 });
 
-app.delete('/admin/api/mass-messages/:id', auth, (req, res) => {
+app.delete('/admin/api/mass-messages/:id', auth, requirePermission('settings_manage'), (req, res) => {
     const rows = getCollection('mass_messages');
     saveCollection('mass_messages', rows.filter((item) => Number(item.id) !== Number(req.params.id)));
     ok(res, { success: true });
@@ -5311,15 +5740,21 @@ app.get('/admin/api/users/:id/team-summary', auth, requirePermission('users'), (
 });
 
 app.put('/admin/api/users/:id/role', auth, requirePermission('user_role_manage'), async (req, res) => {
-    const roleLevel = toNumber(req.body?.role_level, NaN);
-    if (!Number.isFinite(roleLevel)) return fail(res, '请提供有效的角色等级');
+    if (rejectUnknownBodyFields(res, req.body, ['role_level', 'agent_level'], '用户角色参数不合法')) return;
+    const roleLevelCheck = requireNumberField(req.body?.role_level, 'role_level', '角色等级', { min: 0, max: 5, integer: true });
+    const agentLevelCheck = req.body?.agent_level == null
+        ? { ok: true, value: null }
+        : requireNumberField(req.body?.agent_level, 'agent_level', '代理等级', { min: 0, max: 5, integer: true, required: false });
+    const roleFieldErrors = [roleLevelCheck, agentLevelCheck].filter((item) => !item.ok).map((item) => item.error);
+    if (roleFieldErrors.length) return failWithFieldErrors(res, roleFieldErrors, '用户角色参数不合法');
+    const roleLevel = roleLevelCheck.value;
     const users = getCollection('users');
     const existingUser = findByLookup(users, req.params.id);
     const oldLevel = toNumber(existingUser && (existingUser.role_level ?? existingUser.distributor_level), 0);
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         role_level: roleLevel,
-        distributor_level: req.body?.agent_level != null ? toNumber(req.body.agent_level, roleLevel) : row.distributor_level,
+        distributor_level: agentLevelCheck.value != null ? agentLevelCheck.value : row.distributor_level,
         role_upgraded_at: roleLevel > oldLevel ? nowIso() : (row.role_upgraded_at || nowIso()),
         updated_at: nowIso()
     }));
@@ -5339,11 +5774,16 @@ app.put('/admin/api/users/:id/role', auth, requirePermission('user_role_manage')
 
 // ── 货款余额手动调整 ──
 app.put('/admin/api/users/:id/goods-fund', auth, requirePermission('user_balance_adjust'), async (req, res) => {
-    const amount = toNumber(req.body?.amount, NaN);
-    if (!Number.isFinite(amount) || amount < 0) return fail(res, '请输入有效金额');
-    const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '调整原因');
-    if (!reasonCheck.ok) return fail(res, reasonCheck.message);
-    const type = pickString(req.body?.type, 'add');
+    if (rejectUnknownBodyFields(res, req.body, ['amount', 'type', 'reason'], '货款调整参数不合法')) return;
+    const amountCheck = requireNumberField(req.body?.amount, 'amount', '货款金额', { min: 0 });
+    const typeCheck = requireEnumField(req.body?.type ?? 'add', 'type', '调整类型', ['add', 'subtract']);
+    const reasonFieldCheck = requireNonEmptyStringField(req.body?.reason, 'reason', '调整原因', { maxLength: 200 });
+    const goodsFundFieldErrors = [amountCheck, typeCheck, reasonFieldCheck].filter((item) => !item.ok).map((item) => item.error);
+    if (goodsFundFieldErrors.length) return failWithFieldErrors(res, goodsFundFieldErrors, '货款调整参数不合法');
+    const amount = amountCheck.value;
+    const reasonCheck = requireManualAdjustmentReason(reasonFieldCheck.value, '调整原因');
+    if (!reasonCheck.ok) return failWithFieldErrors(res, [buildFieldError('reason', reasonCheck.message, 'invalid_reason')], '货款调整参数不合法');
+    const type = typeCheck.value;
     const user = findUserByAnyId(getCollection('users'), req.params.id);
     if (!user) return fail(res, '用户不存在', 404);
     const userDocId = pickString(user._id || user.id);
@@ -5402,11 +5842,16 @@ app.put('/admin/api/users/:id/goods-fund', auth, requirePermission('user_balance
 
 // ── 积分手动调整 ──
 app.put('/admin/api/users/:id/points', auth, requirePermission('user_balance_adjust'), async (req, res) => {
-    const amount = toNumber(req.body?.amount, NaN);
-    if (!Number.isFinite(amount) || amount < 0 || !Number.isInteger(amount)) return fail(res, '积分必须为非负整数');
-    const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '调整原因');
-    if (!reasonCheck.ok) return fail(res, reasonCheck.message);
-    const type = pickString(req.body?.type, 'add');
+    if (rejectUnknownBodyFields(res, req.body, ['amount', 'type', 'reason'], '积分调整参数不合法')) return;
+    const amountCheck = requireNumberField(req.body?.amount, 'amount', '积分', { min: 0, integer: true });
+    const typeCheck = requireEnumField(req.body?.type ?? 'add', 'type', '调整类型', ['add', 'subtract']);
+    const reasonFieldCheck = requireNonEmptyStringField(req.body?.reason, 'reason', '调整原因', { maxLength: 200 });
+    const pointFieldErrors = [amountCheck, typeCheck, reasonFieldCheck].filter((item) => !item.ok).map((item) => item.error);
+    if (pointFieldErrors.length) return failWithFieldErrors(res, pointFieldErrors, '积分调整参数不合法');
+    const amount = amountCheck.value;
+    const reasonCheck = requireManualAdjustmentReason(reasonFieldCheck.value, '调整原因');
+    if (!reasonCheck.ok) return failWithFieldErrors(res, [buildFieldError('reason', reasonCheck.message, 'invalid_reason')], '积分调整参数不合法');
+    const type = typeCheck.value;
     const user = findUserByAnyId(getCollection('users'), req.params.id);
     if (!user) return fail(res, '用户不存在', 404);
     const userDocId = pickString(user._id || user.id);
@@ -5464,11 +5909,16 @@ app.put('/admin/api/users/:id/points', auth, requirePermission('user_balance_adj
 
 // ── 成长值手动调整 ──
 app.put('/admin/api/users/:id/growth', auth, requirePermission('user_balance_adjust'), async (req, res) => {
-    const amount = toNumber(req.body?.amount, NaN);
-    if (!Number.isFinite(amount) || amount < 0 || !Number.isInteger(amount)) return fail(res, '成长值必须为非负整数');
-    const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '调整原因');
-    if (!reasonCheck.ok) return fail(res, reasonCheck.message);
-    const type = pickString(req.body?.type, 'add');
+    if (rejectUnknownBodyFields(res, req.body, ['amount', 'type', 'reason'], '成长值调整参数不合法')) return;
+    const amountCheck = requireNumberField(req.body?.amount, 'amount', '成长值', { min: 0, integer: true });
+    const typeCheck = requireEnumField(req.body?.type ?? 'add', 'type', '调整类型', ['add', 'subtract']);
+    const reasonFieldCheck = requireNonEmptyStringField(req.body?.reason, 'reason', '调整原因', { maxLength: 200 });
+    const growthFieldErrors = [amountCheck, typeCheck, reasonFieldCheck].filter((item) => !item.ok).map((item) => item.error);
+    if (growthFieldErrors.length) return failWithFieldErrors(res, growthFieldErrors, '成长值调整参数不合法');
+    const amount = amountCheck.value;
+    const reasonCheck = requireManualAdjustmentReason(reasonFieldCheck.value, '调整原因');
+    if (!reasonCheck.ok) return failWithFieldErrors(res, [buildFieldError('reason', reasonCheck.message, 'invalid_reason')], '成长值调整参数不合法');
+    const type = typeCheck.value;
     const user = findUserByAnyId(getCollection('users'), req.params.id);
     if (!user) return fail(res, '用户不存在', 404);
     const userDocId = pickString(user._id || user.id);
@@ -6443,6 +6893,11 @@ app.get('/admin/api/refunds/:id', auth, requirePermission('refunds'), async (req
 });
 
 app.put('/admin/api/refunds/:id/approve', auth, requirePermission('refunds'), async (req, res) => {
+    if (rejectUnknownBodyFields(res, req.body, ['remark'], '退款审核参数不合法')) return;
+    const remarkCheck = req.body?.remark == null
+        ? { ok: true, value: '' }
+        : requireNonEmptyStringField(req.body?.remark, 'remark', '审核备注', { maxLength: 200, required: false });
+    if (!remarkCheck.ok) return failWithFieldErrors(res, [remarkCheck.error], '退款审核参数不合法');
     // 1. 重新从 CloudBase 加载退款集合，确保缓存里有这条记录
     await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
 
@@ -6456,7 +6911,7 @@ app.put('/admin/api/refunds/:id/approve', auth, requirePermission('refunds'), as
     const updateData = {
         status: 'approved',
         approved_at: nowIso(),
-        remark: pickString(req.body?.remark || refund.remark)
+        remark: remarkCheck.value || pickString(refund.remark)
     };
 
     // 3. 精确直写到 CloudBase（不走全量替换，不会超时）
@@ -6487,13 +6942,16 @@ app.put('/admin/api/refunds/:id/approve', auth, requirePermission('refunds'), as
 });
 
 app.put('/admin/api/refunds/:id/reject', auth, requirePermission('refunds'), async (req, res) => {
+    if (rejectUnknownBodyFields(res, req.body, ['reason'], '退款拒绝参数不合法')) return;
+    const reasonField = requireNonEmptyStringField(req.body?.reason, 'reason', '拒绝原因', { maxLength: 200 });
+    if (!reasonField.ok) return failWithFieldErrors(res, [reasonField.error], '退款拒绝参数不合法');
     await ensureFreshCollections(['refunds', 'orders', 'users']);
     const rejectedRefund = findByLookup(getCollection('refunds'), req.params.id);
     if (!rejectedRefund) return fail(res, '退款记录不存在', 404);
     if (!['pending', 'approved'].includes(pickString(rejectedRefund.status))) {
         return fail(res, `当前状态不允许拒绝: ${rejectedRefund.status}`, 400);
     }
-    const rejectData = { status: 'rejected', reject_reason: pickString(req.body?.reason) };
+    const rejectData = { status: 'rejected', reject_reason: reasonField.value };
     const writeOk = await directPatchDocument('refunds', String(rejectedRefund._id), rejectData);
     if (!writeOk) return fail(res, '状态更新失败，请稍后重试', 500);
     if (!dataStore._internals?.db) {
@@ -6524,6 +6982,15 @@ app.put('/admin/api/refunds/:id/reject', auth, requirePermission('refunds'), asy
 });
 
 app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), async (req, res) => {
+    if (rejectUnknownBodyFields(res, req.body, ['return_company', 'return_tracking_no'], '退款执行参数不合法')) return;
+    const returnCompanyCheck = req.body?.return_company == null
+        ? { ok: true, value: '' }
+        : requireNonEmptyStringField(req.body?.return_company, 'return_company', '退货快递公司', { maxLength: 60, required: false });
+    const returnTrackingCheck = req.body?.return_tracking_no == null
+        ? { ok: true, value: '' }
+        : requireNonEmptyStringField(req.body?.return_tracking_no, 'return_tracking_no', '退货物流单号', { maxLength: 80, required: false });
+    const completeFieldErrors = [returnCompanyCheck, returnTrackingCheck].filter((item) => !item.ok).map((item) => item.error);
+    if (completeFieldErrors.length) return failWithFieldErrors(res, completeFieldErrors, '退款执行参数不合法');
     await ensureFreshCollections(['refunds', 'orders', 'users', 'wallet_accounts']);
     const refunds = getCollection('refunds');
     const refund = findByLookup(refunds, req.params.id);
@@ -6558,8 +7025,8 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
         payment_method: paymentMethod,
         refund_channel: refundRoute.refund_channel,
         refund_target_text: refundRoute.refund_target_text,
-        return_company: pickString(req.body?.return_company || refund.return_company),
-        return_tracking_no: pickString(req.body?.return_tracking_no || refund.return_tracking_no)
+        return_company: returnCompanyCheck.value || pickString(refund.return_company),
+        return_tracking_no: returnTrackingCheck.value || pickString(refund.return_tracking_no)
     };
     await directPatchDocument('refunds', String(refund._id), processingData);
     patchCollectionRow('refunds', req.params.id, (row) => ({ ...row, ...processingData, updated_at: nowIso() }));
@@ -6944,6 +7411,7 @@ app.put('/admin/api/refunds/:id/complete', auth, requirePermission('refunds'), a
 });
 
 app.put('/admin/api/refunds/:id/sync', auth, requirePermission('refunds'), async (req, res) => {
+    if (rejectUnknownBodyFields(res, req.body, [], '退款状态同步参数不合法')) return;
     await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
     const refund = findByLookup(getCollection('refunds'), req.params.id);
     if (!refund) return fail(res, '退款记录不存在', 404);
@@ -6981,40 +7449,34 @@ app.put('/admin/api/refunds/:id/sync', auth, requirePermission('refunds'), async
 
 // 微信退款回调通知处理：当微信完成退款后，将退款记录更新为 completed 或 failed
 app.post('/admin/api/refunds/wechat-notify', async (req, res) => {
+    const verified = await verifyRefundNotifyRequest(req);
+    if (!verified.ok) {
+        return res.status(verified.status || 401).json({
+            code: 'REJECTED',
+            success: false,
+            message: verified.message,
+            request_id: req.requestId || '',
+            timestamp: nowIso()
+        });
+    }
     try {
-        const db = require('wx-server-sdk').database ? require('wx-server-sdk').database() : null;
-        const body = req.body || {};
-        const eventType = pickString(body.event_type || '').toUpperCase();
+        const eventType = verified.eventType;
         if (!eventType.startsWith('REFUND.')) {
-            return res.json({ code: 'SUCCESS', message: 'Not a refund event' });
+            return res.json({ code: 'SUCCESS', message: 'Ignored non-refund event' });
         }
-        const resource = body.resource || {};
-        // 解密（如果是加密格式）
-        let refundData = body;
-        if (resource.ciphertext) {
-            // 直接读 associated_data，应为 'refund'
-            // 注意：此处用的是 payment 云函数的 decryptResource，admin-api 同样需要自行解密
-            // 简化处理：先尝试解析 resource 中的明文
-            try {
-                const crypto = require('crypto');
-                const apiV3Key = process.env.PAYMENT_WECHAT_API_V3_KEY || '';
-                if (apiV3Key && resource.nonce && resource.associated_data) {
-                    const key = Buffer.from(apiV3Key, 'utf8');
-                    const iv = Buffer.from(resource.nonce, 'utf8');
-                    const buf = Buffer.from(resource.ciphertext, 'base64');
-                    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-                    decipher.setAuthTag(buf.slice(buf.length - 16));
-                    decipher.setAAD(Buffer.from(resource.associated_data || 'refund', 'utf8'));
-                    const decrypted = Buffer.concat([decipher.update(buf.slice(0, buf.length - 16)), decipher.final()]);
-                    refundData = JSON.parse(decrypted.toString('utf8'));
-                }
-            } catch (_) { /* 解密失败时使用原始 body */ }
-        }
-        const outRefundNo = pickString(refundData.out_refund_no || body.out_refund_no);
+        const refundData = verified.refundData || {};
+        const outRefundNo = pickString(refundData.out_refund_no || verified.callbackData?.out_refund_no);
         const refundStatus = pickString(refundData.refund_status || '').toUpperCase();
-        if (!outRefundNo) return res.json({ code: 'SUCCESS', message: 'No refund no' });
+        if (!outRefundNo) {
+            return res.status(400).json({
+                code: 'REJECTED',
+                success: false,
+                message: '微信退款回调缺少 out_refund_no',
+                request_id: req.requestId || '',
+                timestamp: nowIso()
+            });
+        }
 
-        // 查找退款记录并更新
         await ensureFreshCollections(['refunds', 'orders']);
         const refunds = getCollection('refunds');
         const refund = refunds.find((row) => pickString(row.refund_no) === outRefundNo);
@@ -7023,15 +7485,12 @@ app.post('/admin/api/refunds/wechat-notify', async (req, res) => {
             return res.json({ code: 'SUCCESS', message: 'Refund not found' });
         }
 
-        // 幂等：终态不重复处理
         if (pickString(refund.status) === 'completed' || pickString(refund.status) === 'failed') {
             return res.json({ code: 'SUCCESS', message: 'Already in terminal state' });
         }
 
         const refundDocId = String(refund._id || primaryId(refund));
         const orderId = refund.order_id || refund.order_no;
-
-        // 找到关联订单（用于获取 _id 做精确更新）
         const orders = getCollection('orders');
         const order = orderId ? findByLookup(orders, orderId) : null;
         const orderDocId = order ? String(order._id) : null;
@@ -7044,7 +7503,6 @@ app.post('/admin/api/refunds/wechat-notify', async (req, res) => {
                 wx_refund_status: refundStatus,
                 wx_success_time: pickString(refundData.success_time || '')
             };
-            // 优先 directPatchDocument 确保 CloudBase 持久化
             await directPatchDocument('refunds', refundDocId, refundCompleteData);
             patchCollectionRow('refunds', primaryId(refund), (row) => ({ ...row, ...refundCompleteData, updated_at: nowIso() }));
 
@@ -7056,7 +7514,7 @@ app.post('/admin/api/refunds/wechat-notify', async (req, res) => {
                 await directPatchDocument('orders', orderDocId, settlement.patch);
             }
             patchCollectionRow('orders', orderId, (row) => ({ ...row, ...settlement.patch }));
-            console.log(`[RefundNotify] 退款成功处理完毕: ${outRefundNo}, order=${orderId}`);
+            console.log(`[RefundNotify] 退款成功处理完毕: ${outRefundNo}, order=${orderId}, serial=${verified.serial}, key_source=${verified.verify_key_source}`);
         } else if (['ABNORMAL', 'CLOSED'].includes(refundStatus)) {
             const refundFailData = {
                 status: 'failed',
@@ -7066,7 +7524,6 @@ app.post('/admin/api/refunds/wechat-notify', async (req, res) => {
             await directPatchDocument('refunds', refundDocId, refundFailData);
             patchCollectionRow('refunds', primaryId(refund), (row) => ({ ...row, ...refundFailData, updated_at: nowIso() }));
 
-            // 恢复订单到退款前状态
             if (orderDocId && order) {
                 const revertStatus = order.status === 'refunding'
                     ? (order.prev_status || (order.confirmed_at || order.auto_confirmed_at ? 'completed' : (order.shipped_at ? 'shipped' : (order.paid_at ? 'paid' : 'pending_payment'))))
@@ -7078,14 +7535,22 @@ app.post('/admin/api/refunds/wechat-notify', async (req, res) => {
                     updated_at: nowIso()
                 }));
             }
-            console.warn(`[RefundNotify] 退款异常/关闭: ${outRefundNo}, status=${refundStatus}`);
+            console.warn(`[RefundNotify] 退款异常/关闭: ${outRefundNo}, status=${refundStatus}, serial=${verified.serial}`);
+        } else {
+            return res.json({ code: 'SUCCESS', message: `Ignored refund status: ${refundStatus || 'UNKNOWN'}` });
         }
 
         await Promise.resolve(dataStore.flush?.());
         res.json({ code: 'SUCCESS', message: 'OK' });
     } catch (err) {
         console.error('[RefundNotify] 处理退款回调失败:', err.message);
-        res.json({ code: 'SUCCESS', message: 'Error handled' });
+        res.status(500).json({
+            code: 'REJECTED',
+            success: false,
+            message: err.message || '退款回调处理失败',
+            request_id: req.requestId || '',
+            timestamp: nowIso()
+        });
     }
 });
 
@@ -7299,6 +7764,23 @@ app.get('/admin/api/orders/:id', auth, requirePermission('orders'), async (req, 
 });
 
 app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), async (req, res) => {
+    if (rejectUnknownBodyFields(res, req.body, ['fulfillment_type', 'type', 'tracking_no', 'logistics_company'], '订单发货参数不合法')) return;
+    const fulfillmentRaw = pickString(req.body?.fulfillment_type || req.body?.type).trim().toLowerCase();
+    const requestedFulfillmentType = fulfillmentRaw === 'agent'
+        ? 'agent'
+        : (['company', 'platform'].includes(fulfillmentRaw) ? 'company' : fulfillmentRaw);
+    const fulfillmentTypeCheck = requireEnumField(requestedFulfillmentType, 'fulfillment_type', '履约方式', ['company', 'agent']);
+    const logisticsConfig = toPlainObject(getMiniProgramConfigSnapshot().logistics_config);
+    const trackingRequired = logisticsConfig.shipping_tracking_no_required !== false;
+    const companyRequired = !!logisticsConfig.shipping_company_name_required;
+    const trackingNo = pickString(req.body?.tracking_no).trim();
+    const logisticsCompany = pickString(req.body?.logistics_company).trim();
+    const fieldErrors = [];
+    if (!fulfillmentTypeCheck.ok) fieldErrors.push(fulfillmentTypeCheck.error);
+    if (trackingRequired && !trackingNo) fieldErrors.push(buildFieldError('tracking_no', '物流单号不能为空', 'required'));
+    if (companyRequired && !logisticsCompany) fieldErrors.push(buildFieldError('logistics_company', '物流公司不能为空', 'required'));
+    if (fieldErrors.length) return failWithFieldErrors(res, fieldErrors, '订单发货参数不合法');
+
     await ensureFreshCollections(['orders', 'users', 'products', 'commissions']);
     const current = findByLookup(getCollection('orders'), req.params.id, (item) => [item.order_no]);
     if (!current) return fail(res, '订单不存在', 404);
@@ -7308,7 +7790,6 @@ app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), async (
     if (!ORDER_SHIPPABLE_STATUSES.has(String(current.status || ''))) {
         return fail(res, `当前订单状态不允许发货：${current.status || '-'}`, 400);
     }
-    const requestedFulfillmentType = pickString(req.body?.fulfillment_type || req.body?.type, '').toLowerCase();
     let finalFulfillmentType = requestedFulfillmentType || current.fulfillment_type || 'company';
     let fallbackNotice = '';
     let deductionResult = null;
@@ -7337,8 +7818,8 @@ app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), async (
     try {
         updated = patchOrder(req.params.id, (row) => ({
             ...row,
-            logistics_company: req.body?.logistics_company || row.logistics_company || '',
-            tracking_no: req.body?.tracking_no || row.tracking_no || '',
+            logistics_company: logisticsCompany || row.logistics_company || '',
+            tracking_no: trackingNo || row.tracking_no || '',
             fulfillment_type: finalFulfillmentType,
             fulfillment_partner_id: finalFulfillmentType === 'agent' ? row.fulfillment_partner_id : '',
             fulfillment_partner_openid: finalFulfillmentType === 'agent' ? row.fulfillment_partner_openid : '',
@@ -7402,9 +7883,11 @@ app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), async (
 });
 
 app.put('/admin/api/orders/:id/amount', auth, requirePermission('order_amount_adjust'), async (req, res) => {
+    if (rejectUnknownBodyFields(res, req.body, ['pay_amount', 'actual_price'], '订单金额调整参数不合法')) return;
+    const amountCheck = requireNumberField(req.body?.pay_amount ?? req.body?.actual_price, 'pay_amount', '订单金额', { min: 0.01 });
+    if (!amountCheck.ok) return failWithFieldErrors(res, [amountCheck.error], '订单金额调整参数不合法');
     await ensureFreshCollections(['orders']);
-    const payAmount = toNumber(req.body?.pay_amount ?? req.body?.actual_price, NaN);
-    if (!Number.isFinite(payAmount)) return fail(res, '请输入有效的订单金额');
+    const payAmount = amountCheck.value;
     const updated = patchOrder(req.params.id, (row) => ({
         ...row,
         pay_amount: payAmount,
@@ -7464,8 +7947,11 @@ app.put('/admin/api/orders/:id/repair-fulfillment', auth, requirePermission('ord
 });
 
 app.put('/admin/api/orders/:id/force-complete', auth, requirePermission('order_force_complete'), async (req, res) => {
+    if (rejectUnknownBodyFields(res, req.body, ['reason'], '强制完成参数不合法')) return;
+    const reasonCheck = requireNonEmptyStringField(req.body?.reason, 'reason', '完成原因', { maxLength: 200 });
+    if (!reasonCheck.ok) return failWithFieldErrors(res, [reasonCheck.error], '强制完成参数不合法');
     await ensureFreshCollections(['orders']);
-    const reason = pickString(req.body?.reason);
+    const reason = reasonCheck.value;
     const updated = patchOrder(req.params.id, (row) => ({
         ...row,
         status: 'completed',
@@ -7484,8 +7970,11 @@ app.put('/admin/api/orders/:id/force-complete', auth, requirePermission('order_f
 });
 
 app.put('/admin/api/orders/:id/force-cancel', auth, requirePermission('order_force_cancel'), async (req, res) => {
+    if (rejectUnknownBodyFields(res, req.body, ['reason'], '强制取消参数不合法')) return;
+    const reasonCheck = requireNonEmptyStringField(req.body?.reason, 'reason', '取消原因', { maxLength: 200 });
+    if (!reasonCheck.ok) return failWithFieldErrors(res, [reasonCheck.error], '强制取消参数不合法');
     await ensureFreshCollections(['orders']);
-    const reason = pickString(req.body?.reason);
+    const reason = reasonCheck.value;
     const updated = patchOrder(req.params.id, (row) => ({
         ...row,
         status: 'cancelled',
@@ -7863,21 +8352,18 @@ app.get('/admin/api/operations/dashboard', auth, async (req, res) => {
     });
 });
 
-app.get('/admin/api/system/status', auth, (req, res) => {
+app.get('/admin/api/system/status', auth, requirePermission('settings_manage'), async (req, res) => {
+    const probe = await probeDataStore({ collection: pickString(req.query.collection, 'admins') || 'admins', forceReload: true });
     const memory = process.memoryUsage();
     const heapPercent = memory.heapTotal > 0 ? Math.round((memory.heapUsed / memory.heapTotal) * 100) : 0;
     const freeMemMb = Math.round(os.freemem() / 1024 / 1024);
     const totalMemMb = Math.round(os.totalmem() / 1024 / 1024);
     const cacheHealth = typeof dataStore.cacheHealth === 'function' ? dataStore.cacheHealth() : dataStore.health();
     ok(res, {
-        status: 'online',
+        status: resolveOperationalStatus(probe),
         runtime: 'cloudrun-admin-service',
         services: {
-            database: {
-                status: 'ok',
-                latency_ms: 8,
-                mode: dataStore.health().mode
-            }
+            database: buildDataSourceRuntimeStatus(probe)
         },
         process: {
             pid: process.pid,
@@ -7897,11 +8383,13 @@ app.get('/admin/api/system/status', auth, (req, res) => {
             total_mem_mb: totalMemMb,
             load_avg: os.loadavg().map((item) => Number(item.toFixed(2)))
         },
+        data_source: buildDataSourceRuntimeStatus(probe),
+        cron: buildCronRuntimeStatus(probe),
         data_root: dataRoot,
         runtime_root: runtimeRoot,
         upload_root: uploadsRoot,
         cache_health: cacheHealth,
-        checked_at: nowIso()
+        checked_at: probe.checked_at || nowIso()
     });
 });
 
@@ -8170,6 +8658,71 @@ function buildExchangeMetaFromPeerBonus(peerBonus, bonusLevel) {
     };
 }
 
+function normalizeAlertConfigPayload(input, current = {}) {
+    const source = toObject(input, {});
+    const next = {
+        dingtalk: {
+            enabled: toBoolean(source.dingtalk?.enabled ?? current.dingtalk?.enabled ?? false),
+            webhook: pickString(source.dingtalk?.webhook ?? current.dingtalk?.webhook),
+            secret: pickString(source.dingtalk?.secret ?? current.dingtalk?.secret)
+        },
+        wecom: {
+            enabled: toBoolean(source.wecom?.enabled ?? current.wecom?.enabled ?? false),
+            webhook: pickString(source.wecom?.webhook ?? current.wecom?.webhook)
+        },
+        email: {
+            enabled: toBoolean(source.email?.enabled ?? current.email?.enabled ?? false),
+            recipients: toArray(source.email?.recipients ?? current.email?.recipients).map((item) => pickString(item).trim()).filter(Boolean)
+        }
+    };
+    const fieldErrors = [];
+
+    if (next.dingtalk.enabled && next.dingtalk.webhook && !isValidHttpUrl(next.dingtalk.webhook)) {
+        fieldErrors.push(buildFieldError('dingtalk.webhook', '钉钉 webhook 必须是有效的 http/https URL'));
+    }
+    if (next.wecom.enabled && next.wecom.webhook && !isValidHttpUrl(next.wecom.webhook)) {
+        fieldErrors.push(buildFieldError('wecom.webhook', '企业微信 webhook 必须是有效的 http/https URL'));
+    }
+    if (next.email.enabled && next.email.recipients.some((item) => !item.includes('@'))) {
+        fieldErrors.push(buildFieldError('email.recipients', '邮件接收人列表必须是有效邮箱地址数组'));
+    }
+
+    return { value: next, fieldErrors };
+}
+
+function normalizeFeatureTogglePayload(input, current = {}) {
+    const source = toObject(input, {});
+    const allowedKeys = Object.keys({
+        ...toObject(getMiniProgramConfigSnapshot().feature_flags, {}),
+        ...toObject(current, {})
+    });
+    const fieldErrors = [];
+    const next = { ...current };
+
+    const unknownKeys = Object.keys(source).filter((key) => !allowedKeys.includes(key));
+    if (unknownKeys.length) {
+        fieldErrors.push(buildFieldError('feature_toggles', `不支持的开关键：${unknownKeys.join(', ')}`, 'unknown_key'));
+    }
+
+    allowedKeys.forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(source, key)) {
+            next[key] = toBoolean(source[key]);
+        }
+    });
+
+    return { value: next, fieldErrors };
+}
+
+function normalizeStorageFolderInput(value) {
+    const folder = pickString(value, 'materials')
+        .trim()
+        .replace(/^\/+/, '')
+        .replace(/\/+$/, '');
+    if (!folder) return '';
+    if (!/^[a-zA-Z0-9/_-]{1,120}$/.test(folder)) return '';
+    return folder;
+}
+
 function getMemberTierConfigSnapshot() {
     const fallback = getSingleton('member-tier-config', {});
     return {
@@ -8275,30 +8828,36 @@ app.post('/admin/api/member-tier-config/exchange-coupons/backfill', auth, requir
     ok(res, { updated, pending_bind: pendingBind });
 });
 
-app.get('/admin/api/alert-config', auth, (req, res) => ok(res, getSingleton('alert-config', {
+app.get('/admin/api/alert-config', auth, requirePermission('settings_manage'), (req, res) => ok(res, getSingleton('alert-config', {
     dingtalk: { enabled: false, webhook: '', secret: '' },
     wecom: { enabled: false, webhook: '' },
     email: { enabled: false, recipients: [] }
 })));
 
-app.put('/admin/api/alert-config', auth, (req, res) => {
-    const nextConfig = { ...getSingleton('alert-config', {}), ...toObject(req.body, {}) };
-    saveSingleton('alert-config', nextConfig);
-    ok(res, nextConfig);
+app.put('/admin/api/alert-config', auth, requirePermission('settings_manage'), (req, res) => {
+    if (rejectUnknownBodyFields(res, req.body, ['dingtalk', 'wecom', 'email'], '告警配置参数不合法')) return;
+    const normalized = normalizeAlertConfigPayload(req.body, getSingleton('alert-config', {}));
+    if (normalized.fieldErrors.length) return failWithFieldErrors(res, normalized.fieldErrors, '告警配置参数不合法');
+    saveSingleton('alert-config', normalized.value);
+    ok(res, normalized.value);
 });
 
-app.post('/admin/api/alert-config/test', auth, (req, res) => ok(res, {
-    success: true,
-    provider: req.body?.provider || 'unknown',
-    tested_at: nowIso()
-}));
+app.post('/admin/api/alert-config/test', auth, requirePermission('settings_manage'), (req, res) => {
+    if (rejectUnknownBodyFields(res, req.body, ['provider'], '告警测试参数不合法')) return;
+    ok(res, {
+        success: true,
+        provider: req.body?.provider || 'unknown',
+        tested_at: nowIso()
+    });
+});
 
-app.get('/admin/api/feature-toggles', auth, (req, res) => ok(res, getSingleton('feature-toggles', getMiniProgramConfigSnapshot().feature_flags || {})));
+app.get('/admin/api/feature-toggles', auth, requirePermission('settings_manage'), (req, res) => ok(res, getSingleton('feature-toggles', getMiniProgramConfigSnapshot().feature_flags || {})));
 
-app.post('/admin/api/feature-toggles', auth, (req, res) => {
-    const nextConfig = { ...getSingleton('feature-toggles', {}), ...toObject(req.body, {}) };
-    saveSingleton('feature-toggles', nextConfig);
-    ok(res, nextConfig);
+app.post('/admin/api/feature-toggles', auth, requirePermission('settings_manage'), (req, res) => {
+    const normalized = normalizeFeatureTogglePayload(req.body, getSingleton('feature-toggles', {}));
+    if (normalized.fieldErrors.length) return failWithFieldErrors(res, normalized.fieldErrors, '功能开关参数不合法');
+    saveSingleton('feature-toggles', normalized.value);
+    ok(res, normalized.value);
 });
 
 app.get('/admin/api/debug/process', auth, requirePermission('settings_manage'), (req, res) => ok(res, {
@@ -8324,8 +8883,20 @@ app.get('/admin/api/debug/anomalies', auth, requirePermission('settings_manage')
         }
     });
 });
-app.get('/admin/api/debug/db-ping', auth, requirePermission('settings_manage'), (req, res) => ok(res, { status: 'ok', mode: dataStore.health().mode, checked_at: nowIso() }));
-app.get('/admin/api/debug/data-source', auth, requirePermission('settings_manage'), (req, res) => ok(res, { descriptor: dataStore.describe(), health: dataStore.health(), checked_at: nowIso() }));
+app.get('/admin/api/debug/db-ping', auth, requirePermission('settings_manage'), async (req, res) => {
+    const probe = await probeDataStore({ collection: pickString(req.query.collection, 'admins') || 'admins', forceReload: true });
+    ok(res, {
+        status: resolveOperationalStatus(probe),
+        mode: probe.mode,
+        latency_ms: probe.latency_ms,
+        probe_error: probe.error || '',
+        checked_at: probe.checked_at
+    });
+});
+app.get('/admin/api/debug/data-source', auth, requirePermission('settings_manage'), async (req, res) => {
+    const probe = await probeDataStore({ collection: pickString(req.query.collection, 'admins') || 'admins', forceReload: false });
+    ok(res, { descriptor: dataStore.describe(), health: dataStore.health(), probe, checked_at: nowIso() });
+});
 app.get('/admin/api/debug/order-chain', auth, requirePermission('settings_manage'), async (req, res) => {
     const lookup = pickString(req.query.order_id || req.query.id || req.query.order_no).trim();
     if (!lookup) return fail(res, '请提供订单 ID 或订单号');
@@ -8355,14 +8926,10 @@ app.get('/admin/api/debug/config-source', auth, requirePermission('settings_mana
     const readMeta = await freshReadMeta(req, ['configs', 'app_configs', 'admin_singletons'], true);
     okStrongRead(res, buildConfigSourceReport(key), readMeta.freshness);
 });
-app.get('/admin/api/debug/cron-status', auth, requirePermission('settings_manage'), (req, res) => ok(res, {
-    tasks: [
-        { label: '订单状态补偿', interval: '5m', status: 'ok', run_count: 24, error_count: 0, last_run_at: nowIso(), last_error: '' },
-        { label: '素材临时链接刷新', interval: '30m', status: 'pending', run_count: 0, error_count: 0, last_run_at: '', last_error: '' },
-        { label: '数据源健康检查', interval: '10m', status: 'ok', run_count: 24, error_count: 0, last_run_at: nowIso(), last_error: '' }
-    ],
-    checked_at: nowIso()
-}));
+app.get('/admin/api/debug/cron-status', auth, requirePermission('settings_manage'), async (req, res) => {
+    const probe = await probeDataStore({ collection: pickString(req.query.collection, 'admins') || 'admins', forceReload: false });
+    ok(res, buildCronRuntimeStatus(probe));
+});
 app.get('/admin/api/debug/logs', auth, requirePermission('settings_manage'), (req, res) => {
     const lines = sortByUpdatedDesc(getCollection('admin_audit_logs'))
         .slice(0, toNumber(req.query.lines, 100))

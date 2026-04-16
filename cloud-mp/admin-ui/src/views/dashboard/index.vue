@@ -1,5 +1,21 @@
 <template>
   <div class="dashboard">
+    <div class="dashboard-toolbar">
+      <div class="dashboard-toolbar__meta">
+        <div class="dashboard-toolbar__title">经营看板</div>
+        <div class="dashboard-toolbar__sub">
+          最近成功刷新：{{ lastSuccessAt ? formatDateTime(lastSuccessAt) : '—' }}
+        </div>
+        <div v-if="dashboardError" class="dashboard-toolbar__sub dashboard-toolbar__sub--warn">
+          {{ dashboardError }}
+        </div>
+      </div>
+      <div class="dashboard-toolbar__actions">
+        <span class="dashboard-toolbar__sub">最近探测：{{ lastAttemptAt ? formatDateTime(lastAttemptAt) : '—' }}</span>
+        <el-tag :type="dashboardStatusTagType" size="small">{{ dashboardStatusText }}</el-tag>
+        <el-button size="small" @click="refreshDashboard" :loading="refreshing">刷新</el-button>
+      </div>
+    </div>
 
     <!-- ===== Row 1: KPI 卡片 ===== -->
     <div class="kpi-grid">
@@ -224,7 +240,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   getDashboardOverview, getSystemStatus,
@@ -234,6 +250,11 @@ import { ElMessage } from 'element-plus'
 import { formatDateShort as formatDate, formatDateTime } from '@/utils/format'
 
 const router = useRouter()
+const refreshing = ref(false)
+const lastAttemptAt = ref('')
+const lastSuccessAt = ref('')
+const dashboardState = ref('fresh')
+const dashboardError = ref('')
 
 // ───────────────── KPI 卡片 ─────────────────
 const statsCards = ref([
@@ -304,7 +325,7 @@ const fetchOperationsDashboard = async () => {
   dashLoading.value = true
   ordersLoading.value = true
   try {
-    const data = await getOperationsDashboard()
+    const data = await getOperationsDashboard({ skipErrorMessage: true })
     const d = data
     const pendingShipCount = Number(d?.kpi?.pendingShip ?? d?.kpi?.paid ?? d?.kpi?.pending_ship ?? 0)
 
@@ -321,11 +342,12 @@ const fetchOperationsDashboard = async () => {
     lowStockList.value = d?.low_stock || []
     hotProducts.value = d?.hot_products || []
     recentOrders.value = d?.recent_orders || []
+    return true
   } catch (e) {
     console.error('运营数据加载失败:', e)
     // fallback：单独获取统计概况
     try {
-      const ov = await getDashboardOverview()
+      const ov = await getDashboardOverview({ skipErrorMessage: true })
       const pendingShipCount = Number(ov?.pending_ship || 0)
 
       statsCards.value[0].value = String(ov?.today_orders || 0)
@@ -335,8 +357,12 @@ const fetchOperationsDashboard = async () => {
 
       todoItems.value[0].count = pendingShipCount
       todoItems.value[2].count = Number(ov?.pending_refund || 0)
+      return true
     } catch (fallbackErr) {
-      ElMessage.error(fallbackErr?.message || '加载仪表盘失败')
+      if (!fallbackErr?.__handledByRequest) {
+        ElMessage.error(fallbackErr?.message || '加载仪表盘失败')
+      }
+      return false
     }
   } finally {
     dashLoading.value = false
@@ -346,12 +372,13 @@ const fetchOperationsDashboard = async () => {
 
 const fetchMemberTierConfig = async () => {
   try {
-    const res = await getMemberTierConfig()
+    const res = await getMemberTierConfig({ skipErrorMessage: true })
     const d = res
     memberTierList.value = Array.isArray(d?.member_levels) ? d.member_levels : []
+    return true
   } catch (e) {
     console.warn('获取会员等级配置失败:', e)
-    memberTierList.value = []
+    return false
   }
 }
 
@@ -365,7 +392,7 @@ const systemStatus = ref([
 
 const fetchSystemStatus = async () => {
   try {
-    const data = await getSystemStatus()
+    const data = await getSystemStatus({ skipErrorMessage: true })
     const d = data
     systemStatus.value = [
       { label: '数据库', type: 'dot', ok: d?.services?.database?.status === 'ok' },
@@ -373,10 +400,47 @@ const fetchSystemStatus = async () => {
       { label: 'API服务', type: 'dot', ok: (d?.status === 'online' || d?.status === 'ok') },
       { label: '运行时长', type: 'dot', ok: true, extra: d?.process?.uptime_human || '' }
     ]
+    return true
   } catch (e) {
     console.warn('获取系统状态失败:', e)
-    systemStatus.value = systemStatus.value.map(s => ({ ...s, ok: false }))
+    return false
   }
+}
+
+const dashboardStatusText = computed(() => ({
+  fresh: '已同步',
+  stale: '部分过期',
+  failed: '探测失败'
+}[dashboardState.value] || '待同步'))
+
+const dashboardStatusTagType = computed(() => ({
+  fresh: 'success',
+  stale: 'warning',
+  failed: 'danger'
+}[dashboardState.value] || 'info'))
+
+const refreshDashboard = async () => {
+  refreshing.value = true
+  const attemptAt = new Date().toISOString()
+  lastAttemptAt.value = attemptAt
+  const results = await Promise.all([
+    fetchOperationsDashboard(),
+    fetchSystemStatus(),
+    fetchMemberTierConfig()
+  ])
+  const successCount = results.filter(Boolean).length
+  if (successCount === results.length) {
+    dashboardState.value = 'fresh'
+    dashboardError.value = ''
+    lastSuccessAt.value = attemptAt
+  } else if (successCount > 0) {
+    dashboardState.value = 'stale'
+    dashboardError.value = '部分数据刷新失败，当前页面保留最近一次成功结果'
+  } else {
+    dashboardState.value = 'failed'
+    dashboardError.value = '本次探测失败，当前页面显示的是旧数据'
+  }
+  refreshing.value = false
 }
 
 // ───────────────── Helpers ─────────────────
@@ -411,10 +475,15 @@ const getStatusText = (status) => {
   return map[status] || status
 }
 
+let refreshTimer = null
 onMounted(() => {
-  fetchOperationsDashboard()
-  fetchSystemStatus()
-  fetchMemberTierConfig()
+  refreshDashboard()
+  refreshTimer = setInterval(() => {
+    refreshDashboard()
+  }, 60 * 1000)
+})
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
 })
 </script>
 
@@ -423,6 +492,42 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.dashboard-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dashboard-toolbar__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dashboard-toolbar__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.dashboard-toolbar__sub {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.dashboard-toolbar__sub--warn {
+  color: #b45309;
+}
+
+.dashboard-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .focus-bar {

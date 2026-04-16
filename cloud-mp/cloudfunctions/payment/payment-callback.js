@@ -1788,7 +1788,8 @@ async function clawBackSettledCommissions(orderId) {
 
 async function restoreRefundOrderInventory(orderId, order = {}, refund = {}) {
     if (!order || !Array.isArray(order.items)) return;
-    if (pickString(refund.type) !== 'return_refund') return;
+    const isGroupExpiredRefund = pickString(refund.system_refund_scene) === 'group_expired';
+    if (pickString(refund.type) !== 'return_refund' && !isGroupExpiredRefund) return;
     if (refund.stock_restored_at) return;
     const allocations = buildRefundItemAllocations(order, inferRefundQuantityEffective(order, refund), refund);
     for (const { item, qty } of allocations) {
@@ -2052,11 +2053,21 @@ async function handleRefundCallback(refundData, eventType) {
             }
         });
 
-        if (canonicalOrderId && order && order.status === 'refunding') {
+        const shouldKeepRefunding = refund.skip_order_revert_on_fail === true
+            || pickString(refund.system_refund_scene) === 'group_expired';
+        if (canonicalOrderId && order && order.status === 'refunding' && !shouldKeepRefunding) {
             const revertStatus = deriveRefundRevertStatus(order);
             await db.collection('orders').doc(canonicalOrderId).update({
                 data: { status: revertStatus, prev_status: _.remove(), updated_at: db.serverDate() }
                 }).catch(() => {});
+        } else if (canonicalOrderId && order && shouldKeepRefunding) {
+            await db.collection('orders').doc(canonicalOrderId).update({
+                data: {
+                    auto_refund_error: `微信退款失败: ${refundStatus}`,
+                    auto_refund_failed_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                }
+            }).catch(() => {});
         }
 
         console.warn(`[RefundCallback] 退款异常/关闭: ${outRefundNo}, status=${refundStatus}`);

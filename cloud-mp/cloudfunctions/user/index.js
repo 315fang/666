@@ -32,7 +32,7 @@ const DEFAULT_AGENT_UPGRADE_RULES = {
 };
 
 const {
-    CloudBaseError, cloudFunctionWrapper
+    CloudBaseError, cloudFunctionWrapper, withTransientDbReadRetry
 } = require('./shared/errors');
 const {
     success, badRequest, unauthorized, notFound, serverError
@@ -560,6 +560,11 @@ function normalizeAddressRecord(address = {}) {
     };
 }
 
+function pickDefaultAddressRecord(addresses = []) {
+    if (!Array.isArray(addresses) || addresses.length === 0) return null;
+    return addresses.find((item) => item && item.is_default) || addresses[0] || null;
+}
+
 function buildAddressWriteData(params = {}) {
     const receiverName = resolveAddressReceiverName(params);
     const detail = resolveAddressDetail(params);
@@ -666,14 +671,29 @@ const handleAction = {
 
     // ===== 地址 =====
     'listAddresses': asyncHandler(async (openid) => {
-        const addresses = await userAddresses.listAddresses(openid);
+        const addresses = await withTransientDbReadRetry(
+            () => userAddresses.listAddresses(openid),
+            { action: 'listAddresses', openid }
+        );
         return success({ list: addresses.map(normalizeAddressRecord) });
+    }),
+
+    'getDefaultAddress': asyncHandler(async (openid) => {
+        const addresses = await withTransientDbReadRetry(
+            () => userAddresses.listAddresses(openid),
+            { action: 'getDefaultAddress', openid }
+        );
+        const address = pickDefaultAddressRecord(addresses);
+        return success(address ? normalizeAddressRecord(address) : null);
     }),
 
     'getAddressDetail': asyncHandler(async (openid, params) => {
         const id = params.address_id || params.id;
         if (!id) throw badRequest('缺少地址 ID');
-        const addresses = await userAddresses.listAddresses(openid);
+        const addresses = await withTransientDbReadRetry(
+            () => userAddresses.listAddresses(openid),
+            { action: 'getAddressDetail', openid }
+        );
         const addr = addresses.find(a => a._id === id);
         if (!addr) throw notFound('地址不存在');
         return success(normalizeAddressRecord(addr));
@@ -721,7 +741,10 @@ const handleAction = {
 
     // ===== 优惠券 =====
     'listCoupons': asyncHandler(async (openid, params) => {
-        const coupons = await userCoupons.listCoupons(openid, params && params.status);
+        const coupons = await withTransientDbReadRetry(
+            () => userCoupons.listCoupons(openid, params && params.status),
+            { action: 'listCoupons', openid }
+        );
         return success({ list: coupons });
     }),
 
@@ -773,7 +796,10 @@ const handleAction = {
     }),
 
     'availableCoupons': asyncHandler(async (openid, params) => {
-        const coupons = await userWallet.availableCoupons(openid, params);
+        const coupons = await withTransientDbReadRetry(
+            () => userWallet.availableCoupons(openid, params),
+            { action: 'availableCoupons', openid }
+        );
         return success({ list: coupons });
     }),
 
@@ -846,7 +872,10 @@ const handleAction = {
     }),
 
     'pointsAccount': asyncHandler(async (openid) => {
-        const result = await userWallet.pointsAccount(openid);
+        const result = await withTransientDbReadRetry(
+            () => userWallet.pointsAccount(openid),
+            { action: 'pointsAccount', openid }
+        );
         return success(result);
     }),
 

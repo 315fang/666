@@ -9,6 +9,11 @@ function normalizeSourceName(name) {
     return String(name || '').trim();
 }
 
+function stripUndefined(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined));
+}
+
 function collectionToModelName(name) {
     const mapping = {
         users: 'User',
@@ -79,11 +84,6 @@ function collectionToModelName(name) {
     return mapping[normalizeSourceName(name)] || null;
 }
 
-function stripUndefined(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-    return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined));
-}
-
 function createMysqlStore(options) {
     const { mysql, dataRoot, normalizedDataRoot, runtimeRoot, preferNormalizedData } = options;
     const models = loadBackendModels();
@@ -98,6 +98,7 @@ function createMysqlStore(options) {
     const cache = new Map();
     const dirty = new Set();
     const pendingFlush = new Map();
+    const destructiveSyncAllowed = process.env.ADMIN_MYSQL_ALLOW_DESTRUCTIVE_SYNC === 'true';
     const state = {
         ready: false,
         error: null,
@@ -106,74 +107,72 @@ function createMysqlStore(options) {
         warnings: []
     };
 
-    const modelCollections = new Set(
-        [
-            'users',
-            'products',
-            'orders',
-            'addresses',
-            'commissions',
-            'categories',
-            'skus',
-            'cart_items',
-            'carts',
-            'user_favorites',
-            'banners',
-            'contents',
-            'materials',
-            'material_groups',
-            'reviews',
-            'withdrawals',
-            'admins',
-            'refunds',
-            'dealers',
-            'notifications',
-            'app_configs',
-            'quick_entries',
-            'home_sections',
-            'themes',
-            'activity_logs',
-            'admin_audit_logs',
-            'system_configs',
-            'system_config_histories',
-            'configs',
-            'mass_messages',
-            'user_mass_messages',
-            'user_tags',
-            'user_tag_relations',
-            'point_accounts',
-            'point_logs',
-            'group_activities',
-            'group_orders',
-            'group_members',
-            'lottery_prizes',
-            'lottery_records',
-            'coupons',
-            'user_coupons',
-            'slash_activities',
-            'slash_records',
-            'slash_helpers',
-            'service_stations',
-            'station_claims',
-            'station_staff',
-            'splash_screens',
-            'portal_accounts',
-            'agent_wallet_accounts',
-            'agent_wallet_logs',
-            'content_boards',
-            'content_board_items',
-            'content_board_products',
-            'page_layouts',
-            'stock_transactions',
-            'stock_reservations',
-            'commission_settlements',
-            'admin_logs',
-            'activity_spot_stocks',
-            'upgrade_applications',
-            'partner_exit_applications',
-            'n_fund_requests'
-        ]
-    );
+    const modelCollections = new Set([
+        'users',
+        'products',
+        'orders',
+        'addresses',
+        'commissions',
+        'categories',
+        'skus',
+        'cart_items',
+        'carts',
+        'user_favorites',
+        'banners',
+        'contents',
+        'materials',
+        'material_groups',
+        'reviews',
+        'withdrawals',
+        'admins',
+        'refunds',
+        'dealers',
+        'notifications',
+        'app_configs',
+        'quick_entries',
+        'home_sections',
+        'themes',
+        'activity_logs',
+        'admin_audit_logs',
+        'system_configs',
+        'system_config_histories',
+        'configs',
+        'mass_messages',
+        'user_mass_messages',
+        'user_tags',
+        'user_tag_relations',
+        'point_accounts',
+        'point_logs',
+        'group_activities',
+        'group_orders',
+        'group_members',
+        'lottery_prizes',
+        'lottery_records',
+        'coupons',
+        'user_coupons',
+        'slash_activities',
+        'slash_records',
+        'slash_helpers',
+        'service_stations',
+        'station_claims',
+        'station_staff',
+        'splash_screens',
+        'portal_accounts',
+        'agent_wallet_accounts',
+        'agent_wallet_logs',
+        'content_boards',
+        'content_board_items',
+        'content_board_products',
+        'page_layouts',
+        'stock_transactions',
+        'stock_reservations',
+        'commission_settlements',
+        'admin_logs',
+        'activity_spot_stocks',
+        'upgrade_applications',
+        'partner_exit_applications',
+        'n_fund_requests'
+    ]);
 
     function getModel(name) {
         const modelName = collectionToModelName(name);
@@ -190,13 +189,8 @@ function createMysqlStore(options) {
     async function initialize() {
         await sequelize.authenticate();
         for (const name of modelCollections) {
-            try {
-                const rows = await loadCollection(name);
-                cache.set(name, rows);
-            } catch (error) {
-                state.warnings.push({ collection: name, message: error.message });
-                cache.set(name, filesystemStore.getCollection(name));
-            }
+            const rows = await loadCollection(name);
+            cache.set(name, rows);
         }
         state.ready = true;
         state.loadedAt = new Date().toISOString();
@@ -209,11 +203,18 @@ function createMysqlStore(options) {
     }
 
     async function flushCollection(name) {
-        const Model = getModel(name);
+        const key = normalizeSourceName(name);
+        const Model = getModel(key);
         if (!Model) return { skipped: true, reason: 'unmapped-collection' };
-        const rows = cache.get(name) || [];
-        const promise = pendingFlush.get(name);
-        if (promise) return promise;
+        if (!destructiveSyncAllowed) {
+            const error = new Error('MySQL 数据源已禁用 destructive full-table sync，请改用精确写入策略或显式开启 ADMIN_MYSQL_ALLOW_DESTRUCTIVE_SYNC=true');
+            error.code = 'MYSQL_DESTRUCTIVE_SYNC_DISABLED';
+            state.error = error;
+            throw error;
+        }
+        const existing = pendingFlush.get(key);
+        if (existing) return existing;
+        const rows = cache.get(key) || [];
         const flushPromise = (async () => {
             await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
             try {
@@ -229,21 +230,26 @@ function createMysqlStore(options) {
             } finally {
                 await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
             }
-            dirty.delete(name);
+            dirty.delete(key);
             return { success: true, rows: rows.length };
         })();
-        pendingFlush.set(name, flushPromise);
+        pendingFlush.set(key, flushPromise);
         try {
             return await flushPromise;
         } finally {
-            pendingFlush.delete(name);
+            pendingFlush.delete(key);
         }
     }
 
     function getCollection(name) {
         const key = normalizeSourceName(name);
         if (!modelCollections.has(key)) return filesystemStore.getCollection(key);
-        if (!cache.has(key)) cache.set(key, []);
+        if (!cache.has(key)) {
+            const error = new Error(`MySQL 集合 ${key} 尚未加载，请等待初始化完成后再读取`);
+            error.code = 'NOT_LOADED';
+            error.collection = key;
+            throw error;
+        }
         return cache.get(key);
     }
 
@@ -268,6 +274,12 @@ function createMysqlStore(options) {
         if (!modelCollections.has(key)) {
             filesystemStore.saveCollection(key, rows);
             return;
+        }
+        if (!destructiveSyncAllowed) {
+            const error = new Error('MySQL 数据源已禁用 destructive full-table sync，请改用精确写入策略或显式开启 ADMIN_MYSQL_ALLOW_DESTRUCTIVE_SYNC=true');
+            error.code = 'MYSQL_DESTRUCTIVE_SYNC_DISABLED';
+            state.error = error;
+            throw error;
         }
         cache.set(key, Array.isArray(rows) ? rows : []);
         dirty.add(key);
@@ -310,6 +322,9 @@ function createMysqlStore(options) {
                 cached_collections: cache.size,
                 dirty_collections: Array.from(dirty),
                 pending_flush_collections: Array.from(pendingFlush.keys()),
+                write_protected: !destructiveSyncAllowed,
+                write_strategy: destructiveSyncAllowed ? 'destructive_full_table_sync' : 'disabled',
+                fail_closed: true,
                 last_error: state.error ? state.error.message : null,
                 warnings: state.warnings,
                 loaded_at: state.loadedAt,
@@ -319,12 +334,15 @@ function createMysqlStore(options) {
         describe() {
             return {
                 source: 'mysql',
-                collection_source: 'hybrid:mysql+filesystem',
+                collection_source: 'mysql',
                 singleton_source: 'filesystem',
                 host: mysql.host,
                 port: mysql.port,
                 database: mysql.database,
-                mapped_collections: modelCollections.size
+                mapped_collections: modelCollections.size,
+                write_protected: !destructiveSyncAllowed,
+                write_strategy: destructiveSyncAllowed ? 'destructive_full_table_sync' : 'disabled',
+                fail_closed: true
             };
         },
         getCollection,
@@ -333,7 +351,7 @@ function createMysqlStore(options) {
         saveCollection,
         getSingleton,
         saveSingleton,
-        _internals: { models, sequelize, cache, dirty, modelCollections, state }
+        _internals: { models, sequelize, cache, dirty, pendingFlush, modelCollections, state }
     };
 }
 
