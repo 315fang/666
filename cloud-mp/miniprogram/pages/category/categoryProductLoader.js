@@ -49,6 +49,24 @@ function buildSpecSummary(item) {
     return Object.keys(specMap).map((name) => Array.from(specMap[name]).join('/')).join(' · ');
 }
 
+function matchesCategoryId(item = {}, categoryId) {
+    const normalizedCategoryId = String(categoryId == null ? '' : categoryId).trim();
+    if (!normalizedCategoryId) return true;
+    const productCategoryId = String(item.category_id ?? item.categoryId ?? '').trim();
+    return productCategoryId === normalizedCategoryId;
+}
+
+function dedupeProductsById(list = []) {
+    const seen = new Set();
+    return (Array.isArray(list) ? list : []).filter((item) => {
+        const id = item && (item.id ?? item._id ?? item._legacy_id);
+        const key = String(id == null ? '' : id).trim();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
 function mapProductsForCategory(page, list) {
     const pointBalance = page.data.userPointBalance || 0;
     const bestCoupon = page.data.userBestCoupon || 0;
@@ -108,9 +126,10 @@ async function fetchCategoryProducts(page, categoryId) {
             timeout: 10000
         });
         const list = res?.data?.list || res?.data || [];
+        const normalizedList = dedupeProductsById(list).filter((item) => matchesCategoryId(item, categoryId));
         return {
             catId: categoryId,
-            products: mapProductsForCategory(page, Array.isArray(list) ? list : [])
+            products: mapProductsForCategory(page, normalizedList)
         };
     } catch (_err) {
         return { catId: categoryId, products: [] };

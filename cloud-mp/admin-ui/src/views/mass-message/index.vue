@@ -93,10 +93,13 @@
         </el-form-item>
         <el-form-item label="用户等级" v-if="form.target_type === 'by_level'">
           <el-checkbox-group v-model="form.target_levels">
-            <el-checkbox :label="0">普通用户(0)</el-checkbox>
-            <el-checkbox :label="1">会员(1)</el-checkbox>
-            <el-checkbox :label="2">团长(2)</el-checkbox>
-            <el-checkbox :label="3">代理(3)</el-checkbox>
+            <el-checkbox :label="0">VIP用户(0)</el-checkbox>
+            <el-checkbox :label="1">初级会员(1)</el-checkbox>
+            <el-checkbox :label="2">高级会员(2)</el-checkbox>
+            <el-checkbox :label="3">推广合伙人(3)</el-checkbox>
+            <el-checkbox :label="4">运营合伙人(4)</el-checkbox>
+            <el-checkbox :label="5">区域合伙人(5)</el-checkbox>
+            <el-checkbox :label="6">线下实体门店(6)</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
         <el-form-item label="指定用户ID" v-if="form.target_type === 'by_ids'">

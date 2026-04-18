@@ -2728,63 +2728,8 @@ function ensureBranchAgentCommissionForOrder(order, options = {}) {
     });
 }
 
-function getNLeaderRef(user) {
-    return user?.n_leader_id ?? user?.leader_id ?? user?.n_leader_openid ?? user?.parent_id ?? user?.parent_openid ?? user?.referrer_openid ?? null;
-}
-
-function buildNSystemLeaderRecord(user, users) {
-    const members = users.filter((item) => {
-        if (toNumber(item.role_level, 0) !== 6) return false;
-        const leader = findUserByAnyId(users, getNLeaderRef(item));
-        return leader && rowMatchesLookup(leader, primaryId(user), [user.openid]);
-    });
-    return {
-        id: primaryId(user),
-        nickname: getUserNickname(user),
-        avatar_url: getUserAvatar(user),
-        phone: pickString(user.phone),
-        wallet_balance: toNumber(user.wallet_balance ?? user.agent_wallet_balance ?? 0, 0),
-        balance: toNumber(user.balance ?? user.commission_balance ?? 0, 0),
-        n_member_count: members.length,
-        createdAt: pickString(user.created_at),
-        updatedAt: pickString(user.updated_at)
-    };
-}
-
-function buildNSystemMemberRecord(user, users) {
-    const leader = findUserByAnyId(users, getNLeaderRef(user));
-    return {
-        id: primaryId(user),
-        nickname: getUserNickname(user),
-        avatar_url: getUserAvatar(user),
-        phone: pickString(user.phone),
-        wallet_balance: toNumber(user.wallet_balance ?? user.agent_wallet_balance ?? 0, 0),
-        joined_team_at: pickString(user.joined_team_at || user.bound_parent_at || user.created_at),
-        nLeader: buildUserTiny(leader),
-        agentWallet: {
-            balance: toNumber(user.wallet_balance ?? user.agent_wallet_balance ?? 0, 0)
-        }
-    };
-}
-
-function getUpgradeApplicationsSnapshot(users) {
-    const rows = getCollection('upgrade_applications');
-    if (rows.length) return rows;
-    return users
-        .filter((user) => [6, 7].includes(toNumber(user.role_level, 0)))
-        .slice(0, 20)
-        .map((user) => ({
-            id: primaryId(user),
-            user_id: primaryId(user),
-            leader_id: primaryId(findUserByAnyId(users, getNLeaderRef(user))) || null,
-            path_type: toNumber(user.role_level, 0) >= 7 ? 'n_upgrade' : 'n_join',
-            amount: toNumber(user.n_path_amount ?? 0, 0),
-            team_upgrade: false,
-            status: 'approved',
-            createdAt: pickString(user.updated_at || user.created_at),
-            updatedAt: pickString(user.updated_at || user.created_at),
-            reviewed_at: pickString(user.updated_at || user.created_at)
-        }));
+function getUpgradeApplicationsSnapshot() {
+    return getCollection('upgrade_applications');
 }
 
 function buildUpgradeApplicationRecord(item, users) {
@@ -2797,7 +2742,7 @@ function buildUpgradeApplicationRecord(item, users) {
         leader_id: item.leader_id || primaryId(findUserByAnyId(users, item.leader_id)),
         amount: toNumber(item.amount, 0),
         status: pickString(item.status || 'pending_review'),
-        path_type: pickString(item.path_type || 'n_join'),
+        path_type: pickString(item.path_type || 'standard'),
         team_upgrade: toBoolean(item.team_upgrade),
         createdAt: pickString(item.createdAt || item.created_at),
         updatedAt: pickString(item.updatedAt || item.updated_at),
@@ -3893,7 +3838,7 @@ function revokeAgentIdentity(user = {}, exitRules = {}) {
     return {
         ...user,
         role_level: 0,
-        role_name: '普通用户',
+        role_name: 'VIP用户',
         distributor_level: 0,
         agent_level: 0,
         participate_distribution: 0,
@@ -5373,7 +5318,15 @@ app.post('/admin/api/storage/test', auth, requirePermission('materials'), async 
 });
 
 app.get('/admin/api/banners', auth, requirePermission('content'), async (req, res) => {
-    let rows = await Promise.all(sortByUpdatedDesc(getCollection('banners')).map((item) => normalizeBannerRecordAsync(item)));
+    const products = getCollection('products');
+    let rows = await Promise.all(sortByUpdatedDesc(getCollection('banners')).map(async (item) => {
+        const normalized = await normalizeBannerRecordAsync(item);
+        const product = item?.product_id != null ? findByLookup(products, item.product_id) : null;
+        return {
+            ...normalized,
+            product: product ? buildProductSummaryRecord(product) : null
+        };
+    }));
     if (req.query.position) rows = rows.filter((item) => item.position === req.query.position);
     ok(res, paginate(rows, req));
 });
@@ -5669,7 +5622,7 @@ app.post('/admin/api/mass-messages/preview', auth, requirePermission('settings_m
     const users = getCollection('users');
     const { targetRoles, targetUsers } = req.body || {};
     const targetType = targetTypeCheck.value;
-    const ROLE_LABEL = { 0: '普通用户', 1: '会员', 2: '团长', 3: '代理商', 4: '合伙人' };
+    const ROLE_LABEL = { 0: 'VIP用户', 1: '初级会员', 2: '高级会员', 3: '推广合伙人', 4: '运营合伙人', 5: '区域合伙人', 6: '线下实体门店' };
     const PREVIEW_LIMIT = 100;
 
     let matched = [];
@@ -5887,10 +5840,10 @@ app.get('/admin/api/users/:id/team-summary', auth, requirePermission('users'), (
 
 app.put('/admin/api/users/:id/role', auth, requirePermission('user_role_manage'), async (req, res) => {
     if (rejectUnknownBodyFields(res, req.body, ['role_level', 'agent_level'], '用户角色参数不合法')) return;
-    const roleLevelCheck = requireNumberField(req.body?.role_level, 'role_level', '角色等级', { min: 0, max: 5, integer: true });
+    const roleLevelCheck = requireNumberField(req.body?.role_level, 'role_level', '角色等级', { min: 0, max: 6, integer: true });
     const agentLevelCheck = req.body?.agent_level == null
         ? { ok: true, value: null }
-        : requireNumberField(req.body?.agent_level, 'agent_level', '代理等级', { min: 0, max: 5, integer: true, required: false });
+        : requireNumberField(req.body?.agent_level, 'agent_level', '代理等级', { min: 0, max: 6, integer: true, required: false });
     const roleFieldErrors = [roleLevelCheck, agentLevelCheck].filter((item) => !item.ok).map((item) => item.error);
     if (roleFieldErrors.length) return failWithFieldErrors(res, roleFieldErrors, '用户角色参数不合法');
     const roleLevel = roleLevelCheck.value;
@@ -6313,7 +6266,7 @@ app.put('/admin/api/users/:id/status', auth, requirePermission('user_status_mana
 app.post('/admin/api/users/batch-role', auth, requirePermission('user_role_manage'), async (req, res) => {
     const ids = toArray(req.body?.user_ids || req.body?.ids);
     const roleLevel = toNumber(req.body?.role_level, NaN);
-    if (!ids.length || !Number.isFinite(roleLevel)) return fail(res, '请提供用户列表和角色等级');
+    if (!ids.length || !Number.isFinite(roleLevel) || roleLevel < 0 || roleLevel > 6) return fail(res, '请提供合法的用户列表和角色等级');
     const rows = getCollection('users').map((row) => ids.some((id) => rowMatchesLookup(row, id))
         ? { ...row, role_level: roleLevel, updated_at: nowIso() }
         : row);
@@ -6759,48 +6712,11 @@ app.put('/admin/api/branch-agents/claims/:id/review', auth, requirePermission('d
     ok(res, updated);
 });
 
-app.get('/admin/api/n-system/leaders', auth, requirePermission('dealers'), (req, res) => {
-    const search = pickString(req.query.search).trim().toLowerCase();
-    let rows = sortByUpdatedDesc(getCollection('users'))
-        .filter((user) => toNumber(user.role_level, 0) === 7)
-        .map((user) => buildNSystemLeaderRecord(user, getCollection('users')));
-    if (search) {
-        rows = rows.filter((item) => [item.nickname, item.phone, item.id].filter(Boolean).join(' ').toLowerCase().includes(search));
-    }
-    ok(res, paginate(rows, req));
-});
-
-app.get('/admin/api/n-system/members', auth, requirePermission('dealers'), (req, res) => {
-    const users = getCollection('users');
-    const search = pickString(req.query.search).trim().toLowerCase();
-    let rows = sortByUpdatedDesc(users)
-        .filter((user) => toNumber(user.role_level, 0) === 6)
-        .map((user) => buildNSystemMemberRecord(user, users));
-    if (search) {
-        rows = rows.filter((item) => [item.nickname, item.phone, item.id, item.nLeader?.nickname].filter(Boolean).join(' ').toLowerCase().includes(search));
-    }
-    ok(res, paginate(rows, req));
-});
-
-app.get('/admin/api/n-system/leaders/:id/members', auth, requirePermission('dealers'), (req, res) => {
-    const users = getCollection('users');
-    const leader = findUserByAnyId(users, req.params.id);
-    if (!leader) return fail(res, '大N不存在', 404);
-    const rows = sortByUpdatedDesc(users)
-        .filter((user) => toNumber(user.role_level, 0) === 6)
-        .filter((user) => {
-            const mappedLeader = findUserByAnyId(users, getNLeaderRef(user));
-            return mappedLeader && rowMatchesLookup(mappedLeader, primaryId(leader), [leader.openid]);
-        })
-        .map((user) => buildNSystemMemberRecord(user, users));
-    ok(res, { list: rows, total: rows.length });
-});
-
 app.get('/admin/api/upgrade-applications', auth, requirePermission('dealers'), (req, res) => {
     const users = getCollection('users');
     const status = pickString(req.query.status).trim();
     const pathTypes = pickString(req.query.path_type).split(',').map((item) => item.trim()).filter(Boolean);
-    let rows = sortByUpdatedDesc(getUpgradeApplicationsSnapshot(users)).map((item) => buildUpgradeApplicationRecord(item, users));
+    let rows = sortByUpdatedDesc(getUpgradeApplicationsSnapshot()).map((item) => buildUpgradeApplicationRecord(item, users));
     if (status) rows = rows.filter((item) => item.status === status);
     if (pathTypes.length) rows = rows.filter((item) => pathTypes.includes(item.path_type));
     ok(res, paginate(rows, req));
@@ -6810,9 +6726,6 @@ app.put('/admin/api/upgrade-applications/:id/review', auth, requirePermission('d
     const action = pickString(req.body?.action).trim();
     if (!['approve', 'reject'].includes(action)) return fail(res, '请提供有效操作');
     const status = action === 'approve' ? 'approved' : 'rejected';
-    const rows = getCollection('upgrade_applications');
-    const ensureSeeded = rows.length ? rows : getUpgradeApplicationsSnapshot(getCollection('users'));
-    if (!rows.length) saveCollection('upgrade_applications', ensureSeeded);
     const updated = patchCollectionRow('upgrade_applications', req.params.id, (row) => ({
         ...row,
         status,
@@ -6825,7 +6738,13 @@ app.put('/admin/api/upgrade-applications/:id/review', auth, requirePermission('d
         const users = getCollection('users');
         const existingUser = findByLookup(users, updated.user_id);
         const oldLevel = toNumber(existingUser && (existingUser.role_level ?? existingUser.distributor_level), 0);
-        const newLevel = updated.path_type === 'n_upgrade' ? 7 : Math.max(6, toNumber(oldLevel, 0));
+        const pathType = pickString(updated.path_type);
+        let newLevel = oldLevel;
+        if (pathType === 'n_upgrade' || pathType === 'n_join') {
+            newLevel = 5;
+        } else {
+            newLevel = Math.min(6, Math.max(oldLevel + 1, 1));
+        }
         patchCollectionRow('users', updated.user_id, (row) => ({
             ...row,
             role_level: newLevel,

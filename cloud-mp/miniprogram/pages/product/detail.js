@@ -6,7 +6,8 @@ const { USER_ROLES } = require('../../config/constants');
 const { safeBack } = require('../../utils/navigator');
 const { requireLogin } = require('../../utils/auth');
 const { resolveSlashResumePayload } = require('../../utils/activityResume');
-const { loadProduct, resolvePayableUnitPrice } = require('./productDetailData');
+const { fetchLimitedSpotContext, normalizeLimitedSpotMode } = require('../../utils/limitedSpot');
+const { loadProduct, resolvePayableUnitPrice, buildSkuText } = require('./productDetailData');
 const { refreshFavoriteState, toggleFavorite } = require('./productDetailFavorite');
 const {
     onSpecSelect,
@@ -30,6 +31,12 @@ function extractResultList(payload) {
     if (Array.isArray(payload && payload.data)) return payload.data;
     if (payload && payload.data && Array.isArray(payload.data.list)) return payload.data.list;
     return [];
+}
+
+function formatLimitedSpotMoney(value) {
+    const amount = Number(value || 0);
+    if (!Number.isFinite(amount) || amount < 0) return '0.00';
+    return amount.toFixed(2);
 }
 
 function isSameProductId(productId, candidate) {
@@ -131,7 +138,15 @@ Page({
         actionRightLabel: '立即购买',
         exchangeMode: false,
         exchangeCouponId: '',
-        exchangeTitle: ''
+        exchangeTitle: '',
+        limitedSpotCardId: '',
+        limitedSpotOfferId: '',
+        limitedSpotMode: '',
+        limitedSpotCard: null,
+        limitedSpotOffer: null,
+        limitedSpotTitle: '',
+        limitedSpotOriginalPrice: '',
+        limitedSpotLockedSkuId: ''
     },
 
     onLoad(options) {
@@ -183,6 +198,8 @@ Page({
         }
 
         const exchangeCouponId = options.exchange_coupon_id ? String(options.exchange_coupon_id) : '';
+        const limitedSpotCardId = options.limited_spot_card_id ? String(options.limited_spot_card_id) : '';
+        const limitedSpotOfferId = options.limited_spot_offer_id ? String(options.limited_spot_offer_id) : '';
         let exchangeTitle = '';
         if (exchangeCouponId) {
             const activeExchangeCoupon = wx.getStorageSync('activeExchangeCoupon');
@@ -190,7 +207,15 @@ Page({
                 exchangeTitle = activeExchangeCoupon.exchange_meta?.title || activeExchangeCoupon.coupon_name || '';
             }
         }
-        this.setData({ id: normalizedId, exchangeMode: !!exchangeCouponId, exchangeCouponId, exchangeTitle });
+        this.setData({
+            id: normalizedId,
+            exchangeMode: !!exchangeCouponId,
+            exchangeCouponId,
+            exchangeTitle,
+            limitedSpotCardId,
+            limitedSpotOfferId,
+            limitedSpotMode: normalizeLimitedSpotMode(options.limited_spot_mode || '', null)
+        });
         this.loadProduct(normalizedId);
     },
 
@@ -212,9 +237,87 @@ Page({
         return loadProduct(this, id);
     },
 
+    applyLimitedSpotSkuLock(offer) {
+        if (!offer || !offer.sku_id) {
+            this.setData({ limitedSpotLockedSkuId: '' });
+            return;
+        }
+        const targetSku = (this.data.skus || []).find((sku) => String(sku.id || sku._id) === String(offer.sku_id));
+        if (!targetSku) {
+            this.setData({ limitedSpotLockedSkuId: String(offer.sku_id) });
+            return;
+        }
+        const selectedSpecs = {};
+        const skuSpecs = Array.isArray(targetSku.specs) && targetSku.specs.length > 0
+            ? targetSku.specs
+            : (targetSku.spec_name && targetSku.spec_value ? [{ name: targetSku.spec_name, value: targetSku.spec_value }] : []);
+        skuSpecs.forEach((spec) => {
+            if (spec && spec.name) selectedSpecs[spec.name] = spec.value;
+        });
+        this.setData({
+            limitedSpotLockedSkuId: String(targetSku.id || targetSku._id || offer.sku_id),
+            selectedSku: targetSku,
+            selectedSpecs,
+            selectedSkuText: buildSkuText(targetSku),
+            quantity: 1
+        });
+    },
+
+    async loadLimitedSpotContext(productId) {
+        if (!(this.data.limitedSpotCardId && this.data.limitedSpotOfferId)) {
+            this.setData({
+                limitedSpotCard: null,
+                limitedSpotOffer: null,
+                limitedSpotTitle: '',
+                limitedSpotOriginalPrice: '',
+                limitedSpotLockedSkuId: ''
+            });
+            return false;
+        }
+        try {
+            const { card, offer } = await fetchLimitedSpotContext(this.data.limitedSpotCardId, this.data.limitedSpotOfferId);
+            const offerProductId = String(offer.product && (offer.product.id || offer.product._id) || offer.product_id || '');
+            if (offerProductId && String(productId) !== offerProductId) {
+                throw new Error('活动商品与详情页不匹配');
+            }
+            const limitedSpotMode = normalizeLimitedSpotMode(this.data.limitedSpotMode, offer);
+            this.setData({
+                limitedSpotCard: card,
+                limitedSpotOffer: offer,
+                limitedSpotMode,
+                limitedSpotTitle: card && card.title ? card.title : '限时专享商品',
+                limitedSpotOriginalPrice: formatLimitedSpotMoney(
+                    (offer.product && (offer.product.market_price || offer.product.retail_price || offer.product.price))
+                    || this.data.product.market_price
+                    || this.data.product.displayPrice
+                )
+            });
+            this.applyLimitedSpotSkuLock(offer);
+            this.syncPurchaseActionState();
+            return true;
+        } catch (err) {
+            console.error('加载限时专享上下文失败:', err);
+            this.setData({
+                limitedSpotCard: null,
+                limitedSpotOffer: null,
+                limitedSpotTitle: '',
+                limitedSpotOriginalPrice: '',
+                limitedSpotLockedSkuId: ''
+            });
+            wx.showToast({ title: err.message || '专享活动暂不可用', icon: 'none' });
+            return false;
+        }
+    },
+
     async loadActivityState(productId) {
         const normalizedId = normalizeProductId(productId || this.data.id);
         if (normalizedId === null || normalizedId === undefined || normalizedId === '') return;
+        if (this.data.limitedSpotCardId && this.data.limitedSpotOfferId) {
+            const loaded = await this.loadLimitedSpotContext(normalizedId);
+            if (loaded) {
+                return;
+            }
+        }
         if (this.data.exchangeMode) {
             this.setData({
                 groupActivity: null,
@@ -336,6 +439,51 @@ Page({
     },
 
     syncPurchaseActionState() {
+        const limitedSpotOffer = this.data.limitedSpotOffer;
+        if (limitedSpotOffer) {
+            const modes = [];
+            if (limitedSpotOffer.enable_money !== false) {
+                modes.push({
+                    key: 'limited_money',
+                    label: '现金秒杀',
+                    hint: `活动价 ¥${formatLimitedSpotMoney(limitedSpotOffer.money_price)}`
+                });
+            }
+            if (limitedSpotOffer.enable_points !== false) {
+                modes.push({
+                    key: 'limited_points',
+                    label: '积分兑换',
+                    hint: `${Number(limitedSpotOffer.points_price || 0)} 积分兑换`
+                });
+            }
+            const rawMode = normalizeLimitedSpotMode(this.data.limitedSpotMode, limitedSpotOffer);
+            const purchaseMode = rawMode === 'points' ? 'limited_points' : 'limited_money';
+            const availableModes = modes.length ? modes : [{
+                key: 'limited_money',
+                label: '限时专享',
+                hint: '当前活动暂不可购买'
+            }];
+            const currentMeta = availableModes.find((item) => item.key === purchaseMode) || availableModes[0];
+            const effectiveMode = currentMeta && currentMeta.key ? currentMeta.key : 'limited_money';
+            const activityDesc = effectiveMode === 'limited_points'
+                ? '本商品按活动积分兑换，不参与普通优惠券、积分抵扣和货款支付。'
+                : '本商品按活动专享价购买，不参与普通优惠券、积分抵扣和货款支付。';
+            this.setData({
+                availablePurchaseModes: availableModes,
+                purchaseMode: effectiveMode,
+                limitedSpotMode: effectiveMode === 'limited_points' ? 'points' : 'money',
+                purchaseModeHint: currentMeta.hint,
+                actionLeftLabel: '不可加购',
+                actionRightLabel: effectiveMode === 'limited_points' ? '立即兑换' : '立即秒杀',
+                activityStatusCard: {
+                    badge: '限时专享',
+                    title: this.data.limitedSpotTitle || '限时专享商品',
+                    desc: activityDesc
+                },
+                activityQuickLinks: []
+            });
+            return;
+        }
         if (this.data.exchangeMode) {
             this.setData({
                 purchaseModeHint: '使用兑换券提交 0 元订单，不参与积分、普通优惠券和分销佣金',
@@ -563,6 +711,10 @@ Page({
 
     // 选择规格
     onSpecSelect(e) {
+        if (this.data.limitedSpotLockedSkuId) {
+            wx.showToast({ title: '当前专享活动已锁定规格', icon: 'none' });
+            return;
+        }
         const result = onSpecSelect(this, e, resolvePayableUnitPrice);
         this.syncPurchaseActionState();
         return result;
@@ -597,18 +749,30 @@ Page({
 
     // 数量减少 (Renamed to match WXML: onMinus)
     onMinus() {
+        if (this.data.limitedSpotOffer) {
+            this.setData({ quantity: 1 });
+            return;
+        }
         if (this.data.exchangeMode) return;
         return onMinus(this);
     },
 
     // 数量增加 (Renamed to match WXML: onPlus)
     onPlus() {
+        if (this.data.limitedSpotOffer) {
+            this.setData({ quantity: 1 });
+            return;
+        }
         if (this.data.exchangeMode) return;
         return onPlus(this);
     },
 
     // Quantity Input (Added)
     onQtyInput(e) {
+        if (this.data.limitedSpotOffer) {
+            this.setData({ quantity: 1 });
+            return;
+        }
         if (this.data.exchangeMode) {
             this.setData({ quantity: 1 })
             return
@@ -637,7 +801,10 @@ Page({
     onPurchaseModeChange(e) {
         const mode = e.currentTarget.dataset.mode || 'normal';
         if (mode === this.data.purchaseMode) return;
-        this.setData({ purchaseMode: mode }, () => this.syncPurchaseActionState());
+        const patch = { purchaseMode: mode };
+        if (mode === 'limited_money') patch.limitedSpotMode = 'money';
+        if (mode === 'limited_points') patch.limitedSpotMode = 'points';
+        this.setData(patch, () => this.syncPurchaseActionState());
     },
 
     onActivityQuickActionTap(e) {
@@ -683,6 +850,10 @@ Page({
     },
 
     onLeftActionTap() {
+        if (this.data.limitedSpotOffer) {
+            wx.showToast({ title: '专享商品不支持加入购物袋', icon: 'none' });
+            return;
+        }
         if (this.data.exchangeMode) {
             wx.showToast({ title: '兑换商品请直接点击立即兑换', icon: 'none' });
             return;
@@ -835,7 +1006,10 @@ Page({
     // 分享商品详情
     onShareAppMessage() {
         const { product } = this.data;
-        const path = `/pages/product/detail?id=${product.id}`;
+        let path = `/pages/product/detail?id=${product.id}`;
+        if (this.data.limitedSpotCardId && this.data.limitedSpotOfferId) {
+            path += `&limited_spot_card_id=${encodeURIComponent(this.data.limitedSpotCardId)}&limited_spot_offer_id=${encodeURIComponent(this.data.limitedSpotOfferId)}&limited_spot_mode=${encodeURIComponent(this.data.limitedSpotMode || 'money')}`;
+        }
         return {
             title: product.name,
             path,

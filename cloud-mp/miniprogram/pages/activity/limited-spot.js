@@ -1,7 +1,10 @@
-// pages/activity/limited-spot.js — 限时活动专享商品（积分 / 现金）
 const app = getApp();
-const { get, post } = require('../../utils/request');
-const { requireLogin } = require('../../utils/auth');
+const { get } = require('../../utils/request');
+const { navigateToLimitedSpotProduct, normalizeLimitedSpotMode } = require('../../utils/limitedSpot');
+
+function preferredMode(offer) {
+    return normalizeLimitedSpotMode('', offer);
+}
 
 Page({
     data: {
@@ -10,10 +13,7 @@ Page({
         cardId: '',
         card: null,
         products: [],
-        loading: true,
-        addressId: null,
-        addressSummary: '',
-        _submitting: false
+        loading: true
     },
 
     onLoad(query) {
@@ -22,25 +22,7 @@ Page({
             navBarHeight: app.globalData.navBarHeight || 44,
             cardId: query.id || query.card_id || ''
         });
-        if (!this.data.cardId) {
-            wx.showToast({ title: '活动参数缺失', icon: 'none' });
-            this.setData({ loading: false });
-            return;
-        }
         this.loadDetail();
-    },
-
-    onShow() {
-        const pick = wx.getStorageSync('limited_spot_pick_address');
-        if (pick && pick.id) {
-            this.setData({
-                addressId: pick.id,
-                addressSummary: pick.summary || ''
-            });
-            wx.removeStorageSync('limited_spot_pick_address');
-        } else if (app.globalData.isLoggedIn) {
-            this.loadDefaultAddress();
-        }
     },
 
     onBack() {
@@ -50,158 +32,73 @@ Page({
     async loadDetail() {
         this.setData({ loading: true });
         try {
-            const res = await get('/activity/limited-spot/detail', { card_id: this.data.cardId });
+            const params = this.data.cardId ? { card_id: this.data.cardId } : {};
+            const res = await get('/activity/limited-spot/detail', params);
             if (res.code !== 0 || !res.data) {
                 throw new Error(res.message || '加载失败');
             }
             this.setData({
-                card: res.data.card,
-                products: res.data.products || [],
+                card: res.data.card || null,
+                cardId: (res.data.card && (res.data.card.id || '')) || this.data.cardId,
+                products: Array.isArray(res.data.products) ? res.data.products : [],
                 loading: false
             });
         } catch (e) {
-            this.setData({ loading: false });
+            this.setData({ loading: false, card: null, products: [] });
             wx.showToast({ title: e.message || '加载失败', icon: 'none' });
         }
     },
 
-    async loadDefaultAddress() {
-        try {
-            const res = await get('/addresses');
-            const list = res.data || res || [];
-            if (!Array.isArray(list) || !list.length) return;
-            const def = list.find((a) => a.is_default) || list[0];
-            if (def) {
-                this.setData({
-                    addressId: def._id || def.id,
-                    addressSummary: `${def.receiver_name} ${def.phone} ${def.province || ''}${def.city || ''}${def.district || ''}${def.detail || ''}`
-                });
-            }
-        } catch (_) { /* ignore */ }
-    },
-
-    onChooseAddress() {
-        if (!requireLogin()) return;
-        wx.navigateTo({
-            url: '/pages/address/list?from=limited_spot&select=true'
-        });
-    },
-
-    _needAddress() {
-        if (this.data.addressId) return true;
-        wx.showToast({ title: '请先选择收货地址', icon: 'none' });
-        return false;
-    },
-
-    async _afterCreateOrder(order) {
-        const prepayRes = await post(`/orders/${order.id}/prepay`, {});
-        if (prepayRes.code !== 0) {
-            throw new Error(prepayRes.message || '预支付失败');
-        }
-        const payParams = prepayRes.data;
-        if (payParams.paid_by_free || payParams.paid_by_wallet) {
-            wx.showToast({ title: payParams.message || '支付完成', icon: 'success' });
-            wx.redirectTo({ url: `/pages/order/detail?id=${order.id}` });
-            return;
-        }
-        await new Promise((resolve, reject) => {
-            wx.requestPayment({
-                timeStamp: payParams.timeStamp,
-                nonceStr: payParams.nonceStr,
-                package: payParams.package,
-                signType: payParams.signType || 'RSA',
-                paySign: payParams.paySign,
-                success: () => {
-                    wx.showToast({ title: '支付成功', icon: 'success' });
-                    resolve();
-                },
-                fail: (err) => {
-                    if (err.errMsg && err.errMsg.includes('cancel')) {
-                        wx.showToast({ title: '已取消支付', icon: 'none' });
-                    } else {
-                        wx.showToast({ title: '支付未完成', icon: 'none' });
-                    }
-                    reject(err);
-                }
-            });
-        });
-        wx.redirectTo({ url: `/pages/order/detail?id=${order.id}` });
-    },
-
     _findOffer(offerId) {
-        return (this.data.products || []).find((p) => String(p.offer_id) === String(offerId));
+        return (this.data.products || []).find((item) => String(item.offer_id) === String(offerId)) || null;
     },
 
-    async onRedeemPoints(e) {
-        const offer = this._findOffer(e.currentTarget.dataset.offerId);
-        if (!offer || offer.remaining < 1 || this.data._submitting) return;
-        if (!requireLogin()) return;
-        if (!this._needAddress()) return;
-        wx.showModal({
-            title: '确认积分兑换',
-            content: `将消耗 ${offer.points_price} 积分兑换「${offer.product.name}」`,
-            success: async (r) => {
-                if (!r.confirm) return;
-                this.setData({ _submitting: true });
-                try {
-                    await app.wxLogin(false);
-                    const orderData = {
-                        address_id: this.data.addressId,
-                        delivery_type: 'express',
-                        limited_spot: {
-                            card_id: this.data.cardId,
-                            offer_id: offer.offer_id,
-                            redeem_points: true
-                        },
-                        items: [{
-                            product_id: offer.product_id,
-                            sku_id: offer.sku_id || null,
-                            quantity: 1
-                        }]
-                    };
-                    const res = await post('/orders', orderData);
-                    if (res.code !== 0) throw new Error(res.message || '下单失败');
-                    const created = Array.isArray(res.data) ? res.data[0] : res.data;
-                    await this._afterCreateOrder(created);
-                } catch (err) {
-                    wx.showToast({ title: err.message || '兑换失败', icon: 'none' });
-                } finally {
-                    this.setData({ _submitting: false });
-                }
-            }
+    openOffer(offer, mode) {
+        if (!offer || !offer.product_id) return;
+        navigateToLimitedSpotProduct({
+            productId: offer.product_id,
+            cardId: this.data.cardId,
+            offerId: offer.offer_id,
+            mode: normalizeLimitedSpotMode(mode, offer)
         });
     },
 
-    async onPayMoney(e) {
+    onOpenDetail(e) {
         const offer = this._findOffer(e.currentTarget.dataset.offerId);
-        if (!offer || offer.remaining < 1 || this.data._submitting) return;
-        if (!requireLogin()) return;
-        if (!this._needAddress()) return;
-        this.setData({ _submitting: true });
-        try {
-            await app.wxLogin(false);
-            const orderData = {
-                address_id: this.data.addressId,
-                delivery_type: 'express',
-                limited_spot: {
-                    card_id: this.data.cardId,
-                    offer_id: offer.offer_id,
-                    redeem_points: false
-                },
-                items: [{
-                    product_id: offer.product_id,
-                    sku_id: offer.sku_id || null,
-                    quantity: 1
-                }]
-            };
-            const res = await post('/orders', orderData);
-            if (res.code !== 0) throw new Error(res.message || '下单失败');
-            const created = Array.isArray(res.data) ? res.data[0] : res.data;
-            await this._afterCreateOrder(created);
-        } catch (err) {
-            wx.showToast({ title: err.message || '下单失败', icon: 'none' });
-        } finally {
-            this.setData({ _submitting: false });
-        }
+        this.openOffer(offer, preferredMode(offer));
+    },
+
+    onOpenMoney(e) {
+        const offer = this._findOffer(e.currentTarget.dataset.offerId);
+        this.openOffer(offer, 'money');
+    },
+
+    onOpenPoints(e) {
+        const offer = this._findOffer(e.currentTarget.dataset.offerId);
+        this.openOffer(offer, 'points');
+    },
+
+    onGoodsImageError(e) {
+        const index = Number(e.currentTarget.dataset.index || 0);
+        const products = Array.isArray(this.data.products) ? this.data.products.slice() : [];
+        if (!products[index]) return;
+        const product = {
+            ...(products[index].product || {}),
+            images: ['/assets/images/placeholder.svg']
+        };
+        products[index] = {
+            ...products[index],
+            product
+        };
+        this.setData({ products });
+    },
+
+    onShareAppMessage() {
+        const card = this.data.card || {};
+        const cardId = this.data.cardId || '';
+        return {
+            title: card.title || '限时专享商品',
+            path: cardId ? `/pages/activity/limited-spot?id=${encodeURIComponent(cardId)}` : '/pages/activity/limited-spot'
+        };
     }
 });

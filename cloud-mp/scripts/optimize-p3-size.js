@@ -52,7 +52,7 @@ const handleAction = {
     'profile': asyncHandler(async (openid, params) => {
         const user = await userProfile.getProfile(openid);
         if (!user) throw notFound('用户不存在');
-        return success(userProfile.formatUser(user));
+        return success(await userProfile.formatUser(user));
     }),
 
     'updateProfile': asyncHandler(async (openid, params) => {
@@ -60,7 +60,7 @@ const handleAction = {
             throw badRequest('缺少更新数据');
         }
         const user = await userProfile.updateProfile(openid, params);
-        return success(userProfile.formatUser(user));
+        return success(await userProfile.formatUser(user));
     }),
 
     'balance': asyncHandler(async (openid) => {

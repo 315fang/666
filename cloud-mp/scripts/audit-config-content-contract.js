@@ -9,7 +9,7 @@ const mdPath = path.join(docsDir, 'CONFIG_CONTENT_CONTRACT_AUDIT.md');
 const configContract = require(path.join(projectRoot, 'cloudfunctions', 'config', 'config-contract.js'));
 const adminConfigContract = require(path.join(projectRoot, 'cloudfunctions', 'admin-api', 'src', 'config-contract.js'));
 
-const contractCases = [
+const configContractCases = [
   {
     name: 'mini program config logistics options',
     fn: 'normalizeMiniProgramConfig',
@@ -24,6 +24,67 @@ const contractCases = [
     expected: 'cloud://img',
     pick: (result) => result.file_id
   },
+  {
+    name: 'home content brand zone defaults',
+    fn: 'flattenHomeConfigs',
+    args: [{}, {}],
+    expected: {
+      enabled: false,
+      title: '品牌专区',
+      welcomeTitle: 'Welcome',
+      cards: 0,
+      certifications: 0
+    },
+    pick: (result) => ({
+      enabled: result.brand_zone_enabled,
+      title: result.brand_zone_title,
+      welcomeTitle: result.brand_zone_welcome_title,
+      cards: Array.isArray(result.brand_endorsements) ? result.brand_endorsements.length : -1,
+      certifications: Array.isArray(result.brand_certifications) ? result.brand_certifications.length : -1
+    })
+  },
+  {
+    name: 'home content brand zone legacy compatibility',
+    fn: 'flattenHomeConfigs',
+    args: [{}, {
+      brand_story_body: '品牌介绍正文',
+      brand_endorsements: [
+        {
+          name: '实验检测',
+          description: '过程可追溯',
+          file_id: 'cloud://brand-card',
+          link_type: 'page',
+          link_value: '/pages/activity/activity'
+        }
+      ],
+      brand_certifications: ['企业认证']
+    }],
+    expected: {
+      enabled: true,
+      card: {
+        title: '实验检测',
+        subtitle: '过程可追溯',
+        image: '',
+        file_id: 'cloud://brand-card',
+        link_type: 'page',
+        link_value: '/pages/activity/activity'
+      },
+      certification: {
+        title: '企业认证',
+        subtitle: '',
+        image: '',
+        file_id: ''
+      }
+    },
+    pick: (result) => ({
+      enabled: result.brand_zone_enabled,
+      card: Array.isArray(result.brand_endorsements) ? result.brand_endorsements[0] : null,
+      certification: Array.isArray(result.brand_certifications) ? result.brand_certifications[0] : null
+    })
+  }
+];
+
+const adminContractCases = [
   {
     name: 'home section canonical field',
     fn: 'normalizeHomeSectionRecord',
@@ -41,6 +102,10 @@ const sourceChecks = [
   {
     file: 'cloudfunctions/admin-api/src/app.js',
     patterns: ['configContract.normalizeMiniProgramConfig', 'configContract.normalizePopupAdConfig', "patchCollectionRow('content_boards'"]
+  },
+  {
+    file: 'cloudfunctions/config/config-contract.js',
+    patterns: ['brand_zone_enabled', 'brand_zone_cover_file_id', 'flattenHomeConfigs']
   }
 ];
 
@@ -49,7 +114,8 @@ function runContractCases(moduleRef, moduleLabel, tests) {
     if (typeof moduleRef[test.fn] !== 'function') {
       return { module: moduleLabel, name: test.name, ok: false, detail: `missing function ${test.fn}` };
     }
-    const actualRaw = moduleRef[test.fn](test.input);
+    const args = Array.isArray(test.args) ? test.args : [test.input];
+    const actualRaw = moduleRef[test.fn](...args);
     const actual = typeof test.pick === 'function' ? test.pick(actualRaw) : actualRaw;
     const ok = JSON.stringify(actual) === JSON.stringify(test.expected);
     return {
@@ -76,8 +142,8 @@ function runSourceChecks() {
 
 function main() {
   const findings = [
-    ...runContractCases(configContract, 'config', contractCases.slice(0, 2)),
-    ...runContractCases(adminConfigContract, 'admin-api', contractCases),
+    ...runContractCases(configContract, 'config', configContractCases),
+    ...runContractCases(adminConfigContract, 'admin-api', adminContractCases),
     ...runSourceChecks()
   ];
   const ok = findings.every((item) => item.ok);

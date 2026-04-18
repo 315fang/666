@@ -28,7 +28,7 @@ const {
 } = require('./userProfileActions');
 const {
     buildSharePayload,
-    goBusinessCenter: navigateBusinessCenter,
+    goTeamCenter: navigateTeamCenter,
     goAllProducts: navigateAllProducts,
     goCart: navigateCart,
     goCustomerService: navigateCustomerService,
@@ -107,7 +107,7 @@ Page({
             goodsFundBalance: '0.00',
             referee_count: 0,
             role_level: 0,
-            role_name: '普通用户'
+            role_name: 'VIP用户'
         },
         notificationsCount: 0,
         pageLayout: null,
@@ -200,7 +200,7 @@ Page({
         wx.navigateTo({ url: '/pages/user/membership-center' });
     },
 
-    /** 商务中心入口：由后台 membership_config.business_center_min_role_level 控制（默认 1 = C1/初级会员） */
+    /** 团队中心入口（原 business-center 页）：由后台 membership_config.business_center_min_role_level 控制（默认 1 = C1/初级会员） */
     _refreshBusinessCenterVisibility() {
         return refreshBusinessCenterVisibility(this);
     },
@@ -297,8 +297,6 @@ Page({
         });
     },
 
-    noop() {},
-
     // ======== 编辑资料：先选「头像 / 昵称」 ========
     onTapEditProfile() {
         if (!requireLogin()) return;
@@ -378,20 +376,16 @@ Page({
         navigateIfLoggedIn('/pages/user/preferences');
     },
 
-    goBusinessCenter() {
-        return navigateBusinessCenter(this);
+    goTeamCenter() {
+        return navigateTeamCenter(this);
     },
 
-    /** @deprecated 请使用 goBusinessCenter */
+    /** @deprecated 请使用 goTeamCenter */
     goCommerceHub() {
-        this.goBusinessCenter();
+        this.goTeamCenter();
     },
 
-    // ======== ★ 团队 ========
-    onTeamTap() {
-        navigateIfLoggedIn('/pages/distribution/team');
-    },
-    goTeam() { this.onTeamTap(); },
+    // ======== ★ 团队（旧 team 页仍可从分销中心等入口进入） ========
 
     // ======== 地址管理 ========
     goAddress() {
@@ -426,7 +420,7 @@ Page({
     // ======== 工作台（已废弃，保留方法避免报错） ========
     goWorkbench() {
         if (!requireLogin()) return;
-        this.goBusinessCenter();
+        this.goTeamCenter();
     },
 
     // ======== 订单入口 ========
@@ -518,14 +512,6 @@ Page({
     // Phase 2: 积分抽奖
     goLottery() {
         return navigateLottery(this);
-    },
-
-    goMyGroups() {
-        navigateIfLoggedIn('/pages/group/list?tab=my');
-    },
-
-    goMySlash() {
-        navigateIfLoggedIn('/pages/slash/list?tab=my');
     },
 
     // ======== 分享入口（跳转团队页邀请海报） ========

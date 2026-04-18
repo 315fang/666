@@ -170,18 +170,51 @@ function collectProductAssetFileIds(product = {}, skus = []) {
     ];
 }
 
-function resolveActiveProductQuery(categoryId) {
-    const query = db.collection('products').where(_.or([
-        { status: true },
-        { status: 1 },
-        { status: '1' },
-        { status: 'active' },
-        { status: 'on_sale' }
-    ]));
-    if (categoryId) {
-        query.where({ category_id: categoryId });
+const ACTIVE_PRODUCT_STATUS_CONDITIONS = [
+    { status: true },
+    { status: 1 },
+    { status: '1' },
+    { status: 'active' },
+    { status: 'on_sale' }
+];
+
+function buildCategoryIdCandidates(categoryId) {
+    const raw = String(categoryId || '').trim();
+    if (!raw) return [];
+
+    const values = [raw];
+    const numeric = toNumber(raw, NaN);
+    if (Number.isFinite(numeric)) {
+        values.push(numeric);
+        values.push(String(numeric));
     }
-    return query;
+    return [...new Set(values)];
+}
+
+function matchesCategoryId(value, candidates = []) {
+    if (!candidates.length) return true;
+    const normalized = String(value == null ? '' : value).trim();
+    return candidates.some((candidate) => normalized === String(candidate).trim());
+}
+
+function sortProductsByField(list = [], sortField = 'manual_weight') {
+    return [...list].sort((a, b) => {
+        const diff = toNumber(b && b[sortField], 0) - toNumber(a && a[sortField], 0);
+        if (diff !== 0) return diff;
+        return toNumber(b && b.sales_count, 0) - toNumber(a && a.sales_count, 0);
+    });
+}
+
+function resolveActiveProductQuery(categoryId) {
+    const activeCondition = _.or(ACTIVE_PRODUCT_STATUS_CONDITIONS);
+    const categoryCandidates = buildCategoryIdCandidates(categoryId);
+    if (!categoryCandidates.length) {
+        return db.collection('products').where(activeCondition);
+    }
+    return db.collection('products').where(_.and([
+        activeCondition,
+        { category_id: _.in(categoryCandidates) }
+    ]));
 }
 
 async function queryActiveProducts(size = 200) {
@@ -196,6 +229,7 @@ async function queryActiveProductsPage(params = {}) {
     const sort = String(params.sort || '').trim().toLowerCase();
     const sortField = sort === 'hot' || sort === 'sales' ? 'sales_count' : 'manual_weight';
     const categoryId = params.category_id ? String(params.category_id) : '';
+    const categoryCandidates = buildCategoryIdCandidates(categoryId);
     const countQuery = resolveActiveProductQuery(categoryId);
     const listQuery = resolveActiveProductQuery(categoryId);
 
@@ -217,14 +251,17 @@ async function queryActiveProductsPage(params = {}) {
     } catch (err) {
         console.error('[products] queryActiveProductsPage 失败:', err && err.message ? err.message : err);
         try {
-            const fallback = await db.collection('products')
-                .where({ status: true })
-                .orderBy(sortField, 'desc')
-                .skip(start)
-                .limit(pageSize)
-                .get()
-                .catch(() => ({ data: [] }));
-            return { list: fallback.data || [], total: 0, page, limit: pageSize };
+            const fallbackRows = await getAllRecords(db, 'products').catch(() => []);
+            const filteredRows = sortProductsByField(
+                (fallbackRows || []).filter((item) => isOnSale(item && item.status) && matchesCategoryId(item && item.category_id, categoryCandidates)),
+                sortField
+            );
+            return {
+                list: filteredRows.slice(start, start + pageSize),
+                total: filteredRows.length,
+                page,
+                limit: pageSize
+            };
         } catch (fallbackErr) {
             console.error('[products] queryActiveProductsPage 回退失败:', fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr);
             return { list: [], total: 0, page, limit: pageSize };
@@ -528,13 +565,29 @@ const handleAction = {
             const users = await db.collection('users').where({ openid: _.in(reviewerIds) }).limit(100).get().catch(() => ({ data: [] }));
             (users.data || []).forEach((u) => { reviewerMap[u.openid] = u; });
         }
+        const reviewAssetMap = await batchResolveCloudAssetUrls([
+            ...reviews.flatMap((item) => collectCloudFileIdsFromValue(item.images)),
+            ...Object.values(reviewerMap).flatMap((user) => collectCloudFileIdsFromValue([
+                user?.avatarUrl,
+                user?.avatar_url,
+                user?.avatar
+            ]))
+        ]);
 
         const list = reviews.map((r) => {
             const u = reviewerMap[r.openid];
+            const avatar = resolveAssetEntry(u?.avatarUrl || u?.avatar_url || '', reviewAssetMap) || '';
             return {
                 ...r, id: r.id || r._id, rating: toNumber(r.rating, 5),
                 reviewer_nickname: u?.nickName || u?.nickname || '用户',
-                reviewer_avatar: u?.avatarUrl || u?.avatar_url || ''
+                reviewer_avatar: avatar,
+                images: resolveAssetList(r.images, reviewAssetMap),
+                user: {
+                    avatar,
+                    avatar_url: avatar,
+                    nick_name: u?.nickName || u?.nickname || '用户',
+                    nickname: u?.nickName || u?.nickname || '用户'
+                }
             };
         });
 

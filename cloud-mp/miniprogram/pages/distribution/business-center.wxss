@@ -313,20 +313,10 @@
   gap: 10rpx;
 }
 
-.quick-card.primary {
-  background: linear-gradient(160deg, #0d68d2 0%, #0a4ea8 100%);
-}
-
 .quick-title {
   font-size: 28rpx;
   font-weight: 700;
   color: #153d77;
-}
-
-.quick-card.primary .quick-title,
-.quick-card.primary .quick-desc,
-.quick-card.primary .quick-meta {
-  color: #ffffff;
 }
 
 .quick-desc,

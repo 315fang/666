@@ -183,6 +183,23 @@ const coverOf = (p) => {
 
 const posLabel = (pos) => ({ home: '首页轮播', home_mid: '首页中部', home_bottom: '首页底部', category: '分类页', activity: '活动页' }[pos] || pos)
 
+const hydratePickedProduct = async (productId) => {
+  if (!productId) {
+    pickedProduct.value = null
+    return
+  }
+  try {
+    const res = await getProductById(productId)
+    const product = res?.data || res
+    if (product && product.id) {
+      pickedProduct.value = product
+      productList.value = [product]
+    }
+  } catch (_) {
+    pickedProduct.value = null
+  }
+}
+
 watch(() => props.modelValue, (v) => {
   // 只在初始化或外部明确变化时同步，避免 emitData → 父组件更新 → watch 触发 → 覆盖刚上传的 URL
   if (!v) return
@@ -197,6 +214,12 @@ watch(() => props.modelValue, (v) => {
   // 根据外部数据推断模式（只在初始加载时）
   if (v.product_id && v.link_type === 'product') source.value = 'product'
   else if (resolveAssetUrl(v)) source.value = 'custom'
+  if (v.product_id && String(v.product_id) !== String(pickedProduct.value?.id || '')) {
+    hydratePickedProduct(v.product_id)
+  }
+  if (!v.product_id && pickedProduct.value) {
+    pickedProduct.value = null
+  }
 }, { immediate: true })
 
 const emitData = () => { emit('update:modelValue', { ...localData }) }
@@ -216,14 +239,19 @@ const searchProducts = async (kw) => {
 }
 
 const onProductPicked = (id) => {
+  const previousName = pickedProduct.value?.name || ''
   const p = productList.value.find(x => x.id === id)
   pickedProduct.value = p || null
   if (p) {
     localData.link_type = 'product'
     localData.link_value = String(p.id)
     localData.product_id = p.id
-    localData.title = localData.title || p.name
-    if (!localData.image_url) localData.image_url = coverOf(p)
+    if (!localData.title || localData.title === previousName) {
+      localData.title = p.name || ''
+    }
+    // 切换关联商品时，默认同步回商品首图；如需自定义覆盖图，可在下方重新选择
+    localData.file_id = ''
+    localData.image_url = coverOf(p) || ''
     emitData()
   }
 }
@@ -276,14 +304,7 @@ const handleMediaConfirm = (persistIds = [], displayUrls = []) => {
 
 onMounted(async () => {
   if (props.modelValue?.product_id) {
-    try {
-      const res = await getProductById(props.modelValue.product_id)
-      const product = res?.data || res
-      if (product && product.id) {
-        productList.value = [product]
-        onProductPicked(product.id)
-      }
-    } catch (_) {}
+    await hydratePickedProduct(props.modelValue.product_id)
   }
 })
 </script>

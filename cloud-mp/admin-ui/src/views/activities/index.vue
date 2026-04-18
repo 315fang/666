@@ -600,8 +600,36 @@ const linksData = reactive({ banners: [], permanent: [], limited: [], brand_news
 const linksMeta = reactive({
   permanent_section_enabled: true,
   activity_sections_order: 'permanent_first',
+  permanent_section_title: '',
+  permanent_section_subtitle: '',
   brand_news_section_title: '品牌动态'
 })
+
+const inferActivityCardStyleKey = (item = {}) => {
+  const linkType = String(item.link_type || item.linkType || '').trim()
+  const linkValue = String(item.link_value || item.linkValue || '').trim()
+  const title = String(item.title || '').trim()
+
+  if (linkType === 'flash_sale') return 'flash_sale'
+  if (linkType === 'coupon_center') return 'coupon_center'
+  if (linkType === 'lottery') return 'lottery'
+  if (linkType === 'group_buy') return 'group'
+  if (linkType === 'slash') return 'slash'
+
+  if (linkValue === '__flash_sale__' || linkValue.includes('/pages/activity/limited-spot')) return 'flash_sale'
+  if (linkValue === '__coupon_center__' || linkValue.includes('/pages/coupon/list')) return 'coupon_center'
+  if (linkValue.includes('/pages/lottery/')) return 'lottery'
+  if (linkValue.includes('/pages/group/')) return 'group'
+  if (linkValue.includes('/pages/slash/')) return 'slash'
+
+  if (title.includes('秒杀') || title.includes('特惠')) return 'flash_sale'
+  if (title.includes('优惠券')) return 'coupon_center'
+  if (title.includes('抽奖')) return 'lottery'
+  if (title.includes('拼团')) return 'group'
+  if (title.includes('砍价')) return 'slash'
+
+  return ''
+}
 
 let _linksKeyCounter = 0
 const mkItem = (overrides = {}) => ({
@@ -611,7 +639,10 @@ const mkItem = (overrides = {}) => ({
   subtitle:   '',
   tag:        '',
   image:      '',
+  icon:       '',
   gradient:   'linear-gradient(135deg, #3D2F22 0%, #5A4535 100%)',
+  pill_text:  '',
+  style_key:  '',
   link_type:  'none',
   link_value: '',
   end_time:   null,
@@ -647,6 +678,7 @@ const fetchLinks = async () => {
       }
       return mkItem({
         ...it,
+        style_key: it.style_key || inferActivityCardStyleKey(it),
         enabled: it.enabled !== false,
         spot_products: Array.isArray(it.spot_products) ? it.spot_products : [],
         direct_product_id: direct_product_id || null
@@ -654,6 +686,8 @@ const fetchLinks = async () => {
     })
     linksMeta.permanent_section_enabled = d.permanent_section_enabled !== false
     linksMeta.activity_sections_order = d.activity_sections_order === 'limited_first' ? 'limited_first' : 'permanent_first'
+    linksMeta.permanent_section_title = (d.permanent_section_title || '').toString().trim()
+    linksMeta.permanent_section_subtitle = (d.permanent_section_subtitle || '').toString().trim()
     linksMeta.brand_news_section_title = (d.brand_news_section_title || '品牌动态').toString().slice(0, 20) || '品牌动态'
     linksData.banners   = hydrate(d.banners)
     linksData.permanent = hydrate(d.permanent)
@@ -683,6 +717,8 @@ const saveActivityLinks = async () => {
     await updateActivityLinks({
       permanent_section_enabled: linksMeta.permanent_section_enabled,
       activity_sections_order: linksMeta.activity_sections_order,
+      permanent_section_title: linksMeta.permanent_section_title || '',
+      permanent_section_subtitle: linksMeta.permanent_section_subtitle || '',
       brand_news_section_title: linksMeta.brand_news_section_title || '品牌动态',
       banners:   strip(linksData.banners),
       permanent: strip(linksData.permanent),
@@ -814,6 +850,7 @@ const applyOptionToItem = (item, key) => {
   if (option) {
     item.link_type  = option.link_type  || 'none'
     item.link_value = option.link_value || ''
+    if (!item.style_key) item.style_key = inferActivityCardStyleKey(option)
     if (!item.title) item.title = option.title || ''
     if (!item.subtitle) item.subtitle = option.subtitle || ''
   }

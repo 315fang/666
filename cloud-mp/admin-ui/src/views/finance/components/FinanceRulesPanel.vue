@@ -300,7 +300,7 @@ const failedConfigKeys = ref([])
 const isSuperAdmin = computed(() => userStore.isSuperAdmin)
 const canManageExit = computed(() => userStore.isSuperAdmin || userStore.hasPermission('users'))
 const peerBonusLevels = [3, 4, 5]
-const ROLE_NAMES = { 0: '普通用户', 1: 'C1初级代理', 2: 'C2高级代理', 3: 'B1推广合伙人', 4: 'B2运营合伙人', 5: 'B3区域合伙人' }
+const ROLE_NAMES = { 0: 'VIP用户', 1: '初级会员', 2: '高级会员', 3: '推广合伙人', 4: '运营合伙人', 5: '区域合伙人', 6: '线下实体门店' }
 
 const commission = reactive({
   enabled: true,
@@ -479,15 +479,17 @@ async function withLoading(flagRef, task) {
 const previewChain = reactive({ buyerRole: 1, parentRole: 1, gpRole: 2 })
 const previewPaid = ref(399)
 const previewParentRoleOptions = [
-  { v: 1, l: 'Lv1 · C1 初级代理' },
-  { v: 2, l: 'Lv2 · C2 高级代理' },
-  { v: 3, l: 'Lv3 · B1 推广合伙人' },
-  { v: 4, l: 'Lv4 · B2 运营合伙人' }
+  { v: 1, l: 'Lv1 · 初级会员' },
+  { v: 2, l: 'Lv2 · 高级会员' },
+  { v: 3, l: 'Lv3 · 推广合伙人' },
+  { v: 4, l: 'Lv4 · 运营合伙人' },
+  { v: 5, l: 'Lv5 · 区域合伙人' },
+  { v: 6, l: 'Lv6 · 线下实体门店' }
 ]
 const previewIndirectRoleOptions = [
   { v: 0, l: '无（不计算）' },
-  { v: 2, l: 'Lv2 · C2' },
-  { v: 3, l: 'Lv3 · B1' }
+  { v: 2, l: 'Lv2 · 高级会员' },
+  { v: 3, l: 'Lv3 · 推广合伙人' }
 ]
 
 function clampPctMap(map, role) {

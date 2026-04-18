@@ -233,6 +233,17 @@
   font-weight: 700;
 }
 
+.price-value-points {
+  color: #A16207;
+}
+
+.price-points-suffix {
+  margin-left: 10rpx;
+  font-size: 28rpx;
+  color: #A16207;
+  font-weight: 600;
+}
+
 .price-origin {
   font-size: 24rpx;
   color: #9D9082;
@@ -685,6 +696,19 @@
   width: 88rpx;
   text-align: center;
   font-size: 28rpx;
+}
+
+.stepper-static {
+  min-width: 152rpx;
+  justify-content: center;
+  height: 64rpx;
+  background: #F8F3ED;
+}
+
+.stepper-static-value {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #6F5A48;
 }
 
 .stock-text {

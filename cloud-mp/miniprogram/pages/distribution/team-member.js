@@ -9,7 +9,7 @@ function formatDate(dateText) {
 function buildDetailItems(member) {
     return [
         { label: '团队层级', value: member.level_label || '未知' },
-        { label: '成员身份', value: member.role_name || '普通用户' },
+        { label: '成员身份', value: member.role_name || 'VIP用户' },
         { label: '邀请码', value: member.invite_code || '暂无' },
         { label: '手机号', value: member.phone || '未绑定' },
         { label: '订单数', value: `${Number(member.order_count || 0)} 单` },

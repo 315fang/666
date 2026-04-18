@@ -61,6 +61,26 @@
 - `latest_activity`
 - `legacy_payload`
 
+`configs` 中当前首页品牌专区的稳定字段至少包含：
+
+- `brand_zone_enabled`
+- `brand_zone_title`
+- `brand_zone_cover`
+- `brand_zone_cover_file_id`
+- `brand_zone_welcome_title`
+- `brand_zone_welcome_subtitle`
+- `brand_story_title`
+- `brand_story_body`
+- `brand_endorsements`
+- `brand_certifications`
+
+其中：
+
+- `brand_endorsements`
+  作为首页底部品牌专区固定 3 个入口卡的数据源，item 结构为 `title/subtitle/image/file_id/link_type/link_value`
+- `brand_certifications`
+  作为品牌专区认证条目的数据源，item 结构为 `title/subtitle/image/file_id`
+
 ### 2.3 popupAd / homeSections
 
 - `popupAd`

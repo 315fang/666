@@ -6,8 +6,8 @@ const { getTempUrls } = require('../../utils/cloud');
 const app = getApp();
 
 const POSTER_VARIANT_OPTIONS = [
-    { value: 'personal', label: '个人头像版' },
-    { value: 'brand', label: '品牌头像版' }
+    { value: 'brand', label: '官方宣传' },
+    { value: 'personal', label: '个人推荐' }
 ];
 
 function resolveBrandConfig() {
@@ -110,7 +110,9 @@ Page({
     async buildPosterBrandConfig() {
         const bc = await this.refreshBrandConfig();
         const homeConfigs = await this.refreshHomeConfigs();
-        const coverSource = bc.share_poster_cover_file_id
+        const coverSource = homeConfigs.official_promo_cover
+            || bc.official_promo_cover
+            || bc.share_poster_cover_file_id
             || bc.share_poster_cover_url
             || bc.share_poster_file_id
             || bc.share_poster_url
@@ -122,7 +124,10 @@ Page({
             ...bc,
             share_poster_cover_url: resolvedCover,
             brand_logo_url: resolvedBrandLogo,
-            poster_brand_display_name: homeConfigs.nav_brand_title || bc.nav_brand_title || bc.brand_name || app.globalData.brandName || '品牌官方'
+            poster_brand_display_name: homeConfigs.nav_brand_title || bc.nav_brand_title || bc.brand_name || app.globalData.brandName || '品牌官方',
+            official_promo_title: homeConfigs.official_promo_title || bc.official_promo_title || homeConfigs.nav_brand_title || bc.nav_brand_title || bc.brand_name || app.globalData.brandName || '品牌官方',
+            official_promo_subtitle: homeConfigs.official_promo_subtitle || bc.official_promo_subtitle || bc.share_poster_intro || '',
+            official_promo_badge: homeConfigs.official_promo_badge || bc.official_promo_badge || '官方宣传'
         };
     },
 

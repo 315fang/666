@@ -9,6 +9,7 @@ const {
 const {
     success, badRequest, serverError
 } = require('./shared/response');
+const { getAllRecords } = require('./shared/utils');
 
 const db = cloud.database();
 const _ = db.command;
@@ -276,6 +277,84 @@ function uniqueValues(values) {
     return list;
 }
 
+function isTruthyActiveFlag(value, fallback = true) {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (value === false || value === 0 || value === '0') return false;
+    const normalized = pickString(value).toLowerCase();
+    if (!normalized) return fallback;
+    if (['false', 'inactive', 'disabled', 'off'].includes(normalized)) return false;
+    if (['true', 'active', 'enabled', 'on', 'show', 'visible'].includes(normalized)) return true;
+    return fallback;
+}
+
+function boardLookupKeys(board) {
+    return uniqueValues([
+        board && board.id,
+        board && board._id,
+        board && board._legacy_id,
+        board && board.board_key,
+        board && board.key
+    ]).map((value) => String(value));
+}
+
+async function loadBoardMapWithProducts() {
+    const boards = await getAllRecords(db, 'content_boards').catch(() => []);
+    const activeBoards = (boards || []).filter((board) => isTruthyActiveFlag(board?.is_visible ?? board?.is_active ?? board?.status, true));
+    if (!activeBoards.length) return {};
+
+    const relationRows = await getAllRecords(db, 'content_board_products').catch(() => []);
+    const relationList = Array.isArray(relationRows) ? relationRows : [];
+    const boardIdToKeys = {};
+    const boardKeyToBoard = {};
+
+    activeBoards.forEach((board) => {
+        const keys = boardLookupKeys(board);
+        const boardId = String(board.id || board._id || board.board_key || board.key || '');
+        boardIdToKeys[boardId] = new Set(keys);
+        const boardKey = board.board_key || board.key || board._id;
+        if (boardKey) boardKeyToBoard[String(boardKey)] = board;
+    });
+
+    const activeRelations = relationList.filter((row) => {
+        if (!isTruthyActiveFlag(row?.is_active, true)) return false;
+        const boardId = String(row?.board_id ?? '');
+        return Object.values(boardIdToKeys).some((keys) => keys.has(boardId));
+    });
+
+    const productMap = await loadProductsByActivityIds(activeRelations.map((row) => row.product_id));
+    const groupedProducts = {};
+
+    activeRelations
+        .slice()
+        .sort((a, b) => Number(b.sort_order || 0) - Number(a.sort_order || 0))
+        .forEach((row) => {
+            const relationBoardId = String(row.board_id ?? '');
+            const matchedBoard = activeBoards.find((board) => boardLookupKeys(board).includes(relationBoardId));
+            if (!matchedBoard) return;
+            const boardKey = String(matchedBoard.board_key || matchedBoard.key || matchedBoard._id || '');
+            if (!boardKey) return;
+            if (!groupedProducts[boardKey]) groupedProducts[boardKey] = [];
+            const product = productMap[String(row.product_id)] || null;
+            if (!product) return;
+            groupedProducts[boardKey].push({
+                ...product,
+                board_relation_id: row.id || row._id,
+                board_sort_order: Number(row.sort_order || 0)
+            });
+        });
+
+    const map = {};
+    Object.keys(boardKeyToBoard).forEach((boardKey) => {
+        const board = boardKeyToBoard[boardKey];
+        map[boardKey] = {
+            ...board,
+            id: board.id || board._id,
+            products: groupedProducts[boardKey] || []
+        };
+    });
+    return map;
+}
+
 async function loadProductsByActivityIds(productIds) {
     const ids = uniqueValues(productIds);
     if (!ids.length) return {};
@@ -333,6 +412,72 @@ async function getAppConfigValue(key, fallback = null) {
         return row.config_value !== undefined ? row.config_value : (row.value !== undefined ? row.value : row);
     }
     return fallback;
+}
+
+async function getConfigValueByKeys(keys = [], fallback = null) {
+    const normalizedKeys = uniqueValues(keys.map((key) => pickString(key)).filter(Boolean));
+    if (!normalizedKeys.length) return fallback;
+
+    const configRes = await db.collection('configs')
+        .where(_.or([
+            { config_key: _.in(normalizedKeys) },
+            { key: _.in(normalizedKeys) }
+        ]))
+        .limit(20)
+        .get()
+        .catch(() => ({ data: [] }));
+    if (configRes.data && configRes.data[0]) {
+        const row = configRes.data.find((item) => normalizedKeys.includes(pickString(item.config_key || item.key || item._id)));
+        if (row) {
+            return row.config_value !== undefined ? row.config_value : (row.value !== undefined ? row.value : fallback);
+        }
+    }
+
+    for (let i = 0; i < normalizedKeys.length; i += 1) {
+        const value = await getAppConfigValue(normalizedKeys[i], null);
+        if (value !== null && value !== undefined) return value;
+    }
+    return fallback;
+}
+
+async function getActivityLinksConfigValue() {
+    const value = await getConfigValueByKeys(['activity_links', 'activity_links_config'], {});
+    return value && typeof value === 'object' ? value : {};
+}
+
+function isExpiredTime(value) {
+    if (!hasValue(value)) return false;
+    const ts = new Date(value).getTime();
+    return Number.isFinite(ts) ? ts <= Date.now() : false;
+}
+
+function isLimitedCardEnabled(card = {}) {
+    return isTruthyActiveFlag(card.enabled ?? card.status ?? card.is_active ?? card.active, true) && !isExpiredTime(card.end_time || card.end_at);
+}
+
+function sortCardsByOrder(cards = []) {
+    return [...(Array.isArray(cards) ? cards : [])].sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
+}
+
+function pickLimitedCard(cards = [], cardId = '') {
+    const sorted = sortCardsByOrder(cards);
+    if (cardId) {
+        return sorted.find((item) => String(item.id || item._id || '') === String(cardId)) || null;
+    }
+    return sorted.find((item) => isLimitedCardEnabled(item) && Array.isArray(item.spot_products) && item.spot_products.length > 0) || null;
+}
+
+async function countLimitedSpotReservedOrders(cardId, offerId) {
+    if (!hasValue(cardId) || !hasValue(offerId)) return 0;
+    const res = await db.collection('orders')
+        .where({
+            limited_spot_card_id: String(cardId),
+            limited_spot_offer_id: String(offerId),
+            status: _.neq('cancelled')
+        })
+        .count()
+        .catch(() => ({ total: 0 }));
+    return Number(res.total || 0);
 }
 
 async function getSingletonValue(key, fallback = null) {
@@ -420,7 +565,7 @@ const handleAction = {
         }
 
         // 兼容旧数据字段：banners 用 status, products 用 status:true, page_layouts 用 page_key+status
-        const [homeBannerRes, midBannerRes, bottomBannerRes, layoutsRes, productsRes, miniProgramRaw, homepageSettings, popupAd] = await Promise.all([
+        const [homeBannerRes, midBannerRes, bottomBannerRes, layoutsRes, productsRes, miniProgramRaw, homepageSettings, popupAd, boards] = await Promise.all([
             db.collection('banners')
                 .where({ status: true, position: 'home' })
                 .orderBy('sort_order', 'asc')
@@ -516,7 +661,8 @@ const handleAction = {
                 return cfg.mini_program_config || cfg;
             })(),
             getHomepageSettings(),
-            getPopupAdConfig()
+            getPopupAdConfig(),
+            loadBoardMapWithProducts()
         ]);
 
         const miniProgramConfig = configContract.normalizeMiniProgramConfig(miniProgramRaw || {});
@@ -542,7 +688,8 @@ const handleAction = {
             hotProducts,
             popupAd,
             layout: layout ? layout.layout_schema || layout.sections || layout : null,
-            latestActivity: {}
+            latestActivity: {},
+            boards
         });
         const resolvedPayload = await resolveHomeContentAssets(payload);
 
@@ -700,11 +847,7 @@ const handleAction = {
 
     // ===== 内容板块 =====
     'boardsMap': asyncHandler(async (params) => {
-        const res = await db.collection('content_boards')
-            .where({ is_active: true })
-            .get().catch(() => ({ data: [] }));
-        const map = {};
-        (res.data || []).forEach(b => { map[b.board_key || b.key || b._id] = b; });
+        const map = await loadBoardMapWithProducts();
         return success(map);
     }),
 
@@ -719,7 +862,7 @@ const handleAction = {
     }),
 
     'activityLinks': asyncHandler(async (params) => {
-        const configValue = await getAppConfigValue('activity_links_config', null);
+        const configValue = await getActivityLinksConfigValue();
         if (configValue && typeof configValue === 'object') {
             return success(configValue);
         }
@@ -743,25 +886,21 @@ const handleAction = {
     // ===== 限量抢购 =====
     'limitedSpotDetail': asyncHandler(async (params) => {
         const cardId = String(params.card_id || params.id || '').trim();
-        if (!cardId) throw badRequest('缺少 card_id 参数');
-
-        const configValue = await getAppConfigValue('activity_links_config', null);
-        const normalizedLinks = (configValue && typeof configValue === 'object')
-            ? configValue
-            : {};
+        const normalizedLinks = await getActivityLinksConfigValue();
         const limitedCards = Array.isArray(normalizedLinks.limited) ? normalizedLinks.limited : [];
-        const card = limitedCards.find((item) => String(item.id || '') === cardId) || null;
+        const card = pickLimitedCard(limitedCards, cardId);
 
-        if (!card) {
+        if (!card || !isLimitedCardEnabled(card)) {
             return success({ card: null, products: [] });
         }
 
         const spotProducts = Array.isArray(card.spot_products) ? card.spot_products : [];
         const productMap = await loadProductsByActivityIds(spotProducts.map((item) => item.product_id));
-
-        const products = spotProducts.map((offer, index) => {
+        const products = await Promise.all(spotProducts.map(async (offer, index) => {
             const product = productSummary(productMap[String(offer.product_id)] || null);
-            const remaining = Math.max(0, Number(offer.stock_limit || 0) - Number(offer.sold_count || 0));
+            const dynamicSoldCount = await countLimitedSpotReservedOrders(card.id || card._id || cardId, offer.id || offer.offer_id || `${cardId}-${index}`);
+            const soldCount = Math.max(Number(offer.sold_count || 0), dynamicSoldCount);
+            const remaining = Math.max(0, Number(offer.stock_limit || 0) - soldCount);
             return {
                 offer_id: offer.id || offer.offer_id || `${cardId}-${index}`,
                 product_id: offer.product_id || '',
@@ -771,7 +910,7 @@ const handleAction = {
                 points_price: Number(offer.points_price || 0),
                 money_price: Number(offer.money_price || 0),
                 stock_limit: Number(offer.stock_limit || 0),
-                sold_count: Number(offer.sold_count || 0),
+                sold_count: soldCount,
                 remaining,
                 product: product || {
                     id: offer.product_id || '',
@@ -780,7 +919,7 @@ const handleAction = {
                     images: []
                 }
             };
-        });
+        }));
 
         return success({
             card: {

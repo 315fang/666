@@ -26,6 +26,13 @@ function extractCouponList(res) {
     return Array.isArray(list) ? list : [];
 }
 
+function couponExpireMs(c = {}) {
+    const raw = c.expire_at || c.expires_at || c.end_at || c.valid_until;
+    if (!raw) return NaN;
+    const t = new Date(raw).getTime();
+    return Number.isFinite(t) ? t : NaN;
+}
+
 function buildCouponView(c = {}) {
     let discount_text = '';
     if (c.coupon_type === 'percent') {
@@ -33,6 +40,9 @@ function buildCouponView(c = {}) {
         const raw = value <= 1 ? value * 10 : value;
         discount_text = (raw % 1 === 0 ? raw.toFixed(0) : raw.toFixed(1)) + '折';
     }
+
+    const expireMs = couponExpireMs(c);
+    const isExpired = Number.isFinite(expireMs) && expireMs <= Date.now();
 
     const exchangeMeta = c.exchange_meta && typeof c.exchange_meta === 'object' ? c.exchange_meta : {};
     const allowedProductIds = Array.isArray(exchangeMeta.allowed_product_ids) ? exchangeMeta.allowed_product_ids : [];
@@ -47,6 +57,7 @@ function buildCouponView(c = {}) {
         min_purchase: c.min_purchase != null ? c.min_purchase : 0,
         scope: c.scope || 'all',
         expire_at_formatted: formatExpire(c.expire_at || c.expires_at || c.end_at || c.valid_until),
+        is_expired: isExpired,
         discount_text,
         is_exchange: isExchange,
         exchange_meta: exchangeMeta,
@@ -101,7 +112,10 @@ Page({
             const res = await get('/coupons/mine', { status: tab });
             if (res.code === 0) {
                 // 在 JS 中格式化日期，WXML 不支持管道过滤器
-                const coupons = extractCouponList(res).map(buildCouponView);
+                let coupons = extractCouponList(res).map(buildCouponView);
+                if (tab === 'unused') {
+                    coupons = coupons.filter((item) => !item.is_expired);
+                }
                 this.setData({ coupons, loading: false });
                 if (tab === 'unused') {
                     this.setData({ unusedCount: coupons.length });

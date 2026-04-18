@@ -28,6 +28,8 @@
           src="{{item.image}}"
           mode="aspectFill"
           lazy-load
+          binderror="onBannerImageError"
+          data-index="{{index}}"
         ></image>
         <view
           wx:else
@@ -73,7 +75,7 @@
           data-id="{{item.id}}"
           hover-class="card-press"
         >
-          <image wx:if="{{item.cover_image}}" class="news-card-cover" src="{{item.cover_image}}" mode="aspectFill" lazy-load />
+          <image wx:if="{{item.cover_image}}" class="news-card-cover" src="{{item.cover_image}}" mode="aspectFill" lazy-load binderror="onBrandNewsImageError" data-index="{{index}}" />
           <view wx:else class="news-card-cover news-card-cover-placeholder"></view>
           <view class="news-card-body">
             <text class="news-card-title">{{item.title}}</text>
@@ -93,18 +95,31 @@
       <!-- 常驻活动：展示多个子卡片 -->
       <view wx:if="{{item.key === 'permanent' && item.subCards}}" class="sub-cards-container">
         <view
-          class="activity-card sub-card"
+          class="activity-card section-main-card activity-sub-card"
           wx:for="{{item.subCards}}"
           wx:for-item="card"
+          wx:for-index="cardIndex"
           wx:key="key"
           bindtap="onSubCardTap"
           data-card="{{card}}"
           hover-class="card-press"
         >
-          <image wx:if="{{card.image}}" class="activity-card-img" src="{{card.image}}" mode="aspectFill" lazy-load />
-          <view wx:else class="activity-card-fallback" style="background: {{card.gradient}};"></view>
-          <view class="activity-card-overlay">
+          <image
+            wx:if="{{card.image}}"
+            class="activity-card-img"
+            src="{{card.image}}"
+            mode="aspectFill"
+            lazy-load
+          ></image>
+          <view wx:else class="activity-card-fallback activity-sub-card-fallback activity-sub-card-fallback--{{card.key}}" style="background: {{card.gradient}};"></view>
+          <view class="activity-card-overlay activity-sub-card-overlay">
             <view class="activity-card-left">
+              <view class="activity-sub-card-head">
+                <view class="quick-entry-icon-wrap">
+                  <image class="quick-entry-icon" src="{{card.icon}}" mode="aspectFit"></image>
+                </view>
+                <text class="activity-sub-card-pill">{{card.pillText || (cardIndex === 0 ? '主推活动' : '常驻入口')}}</text>
+              </view>
               <text class="activity-card-tag" wx:if="{{card.tag}}">{{card.tag}}</text>
               <text class="activity-card-title">{{card.title}}</text>
               <text class="activity-card-sub">{{card.subtitle}}</text>
@@ -122,7 +137,7 @@
         data-section="{{item}}"
         hover-class="card-press"
       >
-        <image wx:if="{{item.image}}" class="activity-card-img" src="{{item.image}}" mode="aspectFill" lazy-load />
+        <image wx:if="{{item.image}}" class="activity-card-img" src="{{item.image}}" mode="aspectFill" lazy-load binderror="onSectionImageError" data-index="{{index}}" />
         <view wx:else class="activity-card-fallback" style="background: {{item.gradient}};"></view>
         <view class="activity-card-overlay">
           <view class="activity-card-left">

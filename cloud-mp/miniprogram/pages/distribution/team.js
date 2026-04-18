@@ -107,6 +107,10 @@ Page({
         wx.navigateTo({ url: '/pages/distribution/invite-poster' });
     },
 
+    goWalletLogs() {
+        wx.navigateTo({ url: '/pages/distribution/commission-logs' });
+    },
+
     applyCurrentTabSummary(tab = this.data.currentTab, teamStatsByTab = this.data.teamStatsByTab) {
         const summary = teamStatsByTab[tab] || teamStatsByTab.all || { count: 0, monthlyNewMembers: 0, totalSales: 0 };
         this.setData({
@@ -185,7 +189,7 @@ Page({
     },
 
     getRoleName(level) {
-        return ROLE_NAMES[level] || '普通用户';
+        return ROLE_NAMES[level] || 'VIP用户';
     },
 
     switchTab(e) {

@@ -25,6 +25,7 @@ const {
     toNumber, toArray, toString, toBoolean, getDeep, setDeep, deepClone, merge, pick, omit, generateId, delay
 } = require('./shared/utils');
 const { buildCanonicalUser } = require('./user-contract');
+const { resolveUserAvatarFields } = require('../shared/asset-url');
 
 // ==================== 云初始化 ====================
 
@@ -244,11 +245,12 @@ async function ensureWelcomeCoupons(openid, userId) {
     }
 }
 
-function formatUser(user, openid, tierConfig) {
+async function formatUser(user, openid, tierConfig) {
     const points = toNumber(user.points != null ? user.points : user.growth_value, 0);
     const roleLevel = toNumber(user.role_level, 0);
     const distLevel = toNumber(user.distributor_level != null ? user.distributor_level : user.agent_level, 0);
-    const canonical = buildCanonicalUser({ ...user, openid }, {
+    const resolvedUser = await resolveUserAvatarFields({ ...user, openid });
+    const canonical = buildCanonicalUser(resolvedUser, {
         register_coupons_issued: !!user.register_coupons_issued,
         growth_value: points,
         growth_progress: buildGrowthProgress(points, tierConfig),
@@ -294,7 +296,7 @@ exports.main = cloudFunctionWrapper(async (event) => {
                 commission_balance: 0,
                 balance: 0,
                 role_level: 0,
-                role_name: '普通用户',
+                role_name: 'VIP用户',
                 distributor_level: 0,
                 agent_level: 0,
                 referrer_openid: referrerOpenid,
@@ -336,7 +338,7 @@ exports.main = cloudFunctionWrapper(async (event) => {
             if (cfgRes.data && cfgRes.data.length > 0 && cfgRes.data[0].value) tierConfig = cfgRes.data[0].value;
         } catch (_) {}
 
-        const userData = formatUser(userRes.data[0], openid, tierConfig);
+        const userData = await formatUser(userRes.data[0], openid, tierConfig);
         return success({
             ...userData,
             is_new_user: isNewUser,

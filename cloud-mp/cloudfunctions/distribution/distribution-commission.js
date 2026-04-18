@@ -6,12 +6,13 @@ const _ = db.command;
 const { toNumber, getAllRecords } = require('./shared/utils');
 
 const DEFAULT_ROLE_NAMES = {
-    0: 'VIP会员',
-    1: '初级会员 C1',
-    2: '高级会员 C2',
-    3: '推广合伙人 B1',
-    4: '运营合伙人 B2',
-    5: '区域合伙人 B3'
+    0: 'VIP用户',
+    1: '初级会员',
+    2: '高级会员',
+    3: '推广合伙人',
+    4: '运营合伙人',
+    5: '区域合伙人',
+    6: '线下实体门店'
 };
 
 const DEFAULT_COMMISSION_MATRIX = {

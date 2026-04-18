@@ -74,11 +74,6 @@
       </view>
 
       <view class="quick-grid">
-        <view class="quick-card primary" bindtap="goTeam" data-tab="direct">
-          <text class="quick-title">我的团队</text>
-          <text class="quick-desc">先看一级团队，再切换查看二级团队</text>
-          <text class="quick-meta">支持点击成员查看详情</text>
-        </view>
         <view class="quick-card" bindtap="goInvitePoster">
           <text class="quick-title">分享海报</text>
           <text class="quick-desc">生成专属邀请海报，直接保存转发</text>

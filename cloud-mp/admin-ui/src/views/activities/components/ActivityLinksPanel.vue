@@ -73,6 +73,12 @@
           <el-switch v-model="props.linksMeta.permanent_section_enabled" active-text="显示" inactive-text="隐藏" />
           <span class="meta-note">关闭后活动页整区隐藏（拼团/砍价/抽奖等入口一并收起）；卡片配置仍保留。</span>
         </el-form-item>
+        <el-form-item label="区块标题" class="meta-form-item">
+          <el-input v-model="props.linksMeta.permanent_section_title" placeholder="如：热门活动" maxlength="20" class="meta-title-input" />
+        </el-form-item>
+        <el-form-item label="区块副标题" class="meta-form-item">
+          <el-input v-model="props.linksMeta.permanent_section_subtitle" placeholder="如：优先展示平台主推入口" maxlength="30" class="meta-title-input" />
+        </el-form-item>
         <el-form-item label="区块顺序" class="meta-form-item">
           <el-radio-group v-model="props.linksMeta.activity_sections_order">
             <el-radio-button value="permanent_first">常驻在上</el-radio-button>
@@ -107,6 +113,21 @@
               <el-col :span="12"><el-form-item label="副标题" label-width="60px"><el-input v-model="item.subtitle" placeholder="一句话说明" /></el-form-item></el-col>
               <el-col :span="12"><el-form-item label="标签" label-width="60px"><el-input v-model="item.tag" placeholder="如：常驻 / 拼团" maxlength="8" /></el-form-item></el-col>
               <el-col :span="12"><el-form-item label="图片URL" label-width="60px"><el-input v-model="item.image" placeholder="留空使用渐变色背景" /></el-form-item></el-col>
+              <el-col :span="12">
+                <el-form-item label="视觉预设" label-width="60px">
+                  <el-select v-model="item.style_key" placeholder="默认按活动类型" clearable>
+                    <el-option v-for="opt in stylePresetOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12"><el-form-item label="胶囊文案" label-width="60px"><el-input v-model="item.pill_text" placeholder="如：主推活动 / 常驻入口" maxlength="10" /></el-form-item></el-col>
+              <el-col :span="24"><el-form-item label="图标路径" label-width="60px"><el-input v-model="item.icon" placeholder="如：/assets/icons/clock.svg；留空按预设或默认图标" /></el-form-item></el-col>
+              <el-col :span="24">
+                <el-form-item label="渐变背景" label-width="60px">
+                  <el-input v-model="item.gradient" placeholder="如：linear-gradient(135deg, #7A1F1F 0%, #F97316 100%)" />
+                  <div class="form-hint-muted">未配图片时生效；留空则按预设或默认活动样式。</div>
+                </el-form-item>
+              </el-col>
               <el-col :span="24">
                 <el-form-item label="跳转目标" label-width="60px">
                   <el-select
@@ -135,10 +156,10 @@
 
     <div class="links-section">
       <div class="links-section-header">
-        <span class="links-section-title">限时活动</span>
+        <span class="links-section-title">限时秒杀</span>
         <el-button size="small" @click="props.addLinksItem('limited')"><el-icon><Plus /></el-icon> 添加卡片</el-button>
       </div>
-      <div v-if="props.linksData.limited.length === 0" class="links-empty">暂无限时活动卡片，过期自动下架</div>
+      <div v-if="props.linksData.limited.length === 0" class="links-empty">暂无限时秒杀卡片，过期自动下架</div>
       <el-card v-for="(item, idx) in props.linksData.limited" :key="item._key" shadow="never" class="links-item-card">
         <div class="links-item-row">
           <div class="links-sort-col">
@@ -153,8 +174,8 @@
           </div>
           <div class="links-item-form">
             <el-row :gutter="12">
-              <el-col :span="12"><el-form-item label="标题" label-width="60px"><el-input v-model="item.title" placeholder="限时活动标题" /></el-form-item></el-col>
-              <el-col :span="12"><el-form-item label="副标题" label-width="60px"><el-input v-model="item.subtitle" placeholder="活动说明" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="标题" label-width="60px"><el-input v-model="item.title" placeholder="限时秒杀标题" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="副标题" label-width="60px"><el-input v-model="item.subtitle" placeholder="秒杀说明" /></el-form-item></el-col>
               <el-col :span="12"><el-form-item label="标签" label-width="60px"><el-input v-model="item.tag" placeholder="如：限时 48h" maxlength="8" /></el-form-item></el-col>
               <el-col :span="12">
                 <el-form-item label="截止时间" label-width="60px">
@@ -307,6 +328,14 @@ const props = defineProps({
   removeNewsItem: { type: Function, required: true },
   moveNewsItem: { type: Function, required: true }
 })
+
+const stylePresetOptions = [
+  { value: 'flash_sale', label: '秒杀红' },
+  { value: 'coupon_center', label: '优惠券蓝' },
+  { value: 'lottery', label: '抽奖绿' },
+  { value: 'group', label: '拼团蓝' },
+  { value: 'slash', label: '砍价橙' }
+]
 
 const clearLinkTarget = (item) => {
   item.link_type = 'none'

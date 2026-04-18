@@ -4,6 +4,7 @@ const db = cloud.database();
 const { buildGrowthProgress, loadTierConfig } = require('./shared/growth');
 const { toNumber } = require('./shared/utils');
 const { buildCanonicalUser } = require('./user-contract');
+const { resolveUserAvatarFields } = require('../shared/asset-url');
 
 function pickString(value, fallback = '') {
     if (value === null || value === undefined) return fallback;
@@ -49,7 +50,8 @@ function buildProfileUpdateData(data = {}) {
  */
 async function getProfile(openid) {
     const res = await db.collection('users').where({ openid }).limit(1).get();
-    return res.data[0] || null;
+    const user = res.data[0] || null;
+    return user ? resolveUserAvatarFields(user) : null;
 }
 
 /**
@@ -64,10 +66,11 @@ async function updateProfile(openid, data) {
 /**
  * 格式化用户信息（供 index.js 调用）
  */
-function formatUser(user) {
+async function formatUser(user) {
     if (!user) return null;
+    const resolvedUser = await resolveUserAvatarFields(user);
     const points = toNumber(user.points != null ? user.points : user.growth_value, 0);
-    const canonical = buildCanonicalUser(user, {
+    const canonical = buildCanonicalUser(resolvedUser, {
         register_coupons_issued: !!user.register_coupons_issued,
         growth_value: points,
         points

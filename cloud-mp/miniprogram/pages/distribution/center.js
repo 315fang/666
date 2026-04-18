@@ -179,7 +179,7 @@ Page({
                 const userInfo = res.data.userInfo || {};
                 const roleLevel = userInfo.role_level ?? userInfo.distributor_level ?? userInfo.role ?? 0;
 
-                const roleName = app.globalData.userInfo?.role_name || userInfo.role_name || ROLE_NAMES[roleLevel] || '普通用户';
+                const roleName = app.globalData.userInfo?.role_name || userInfo.role_name || ROLE_NAMES[roleLevel] || 'VIP用户';
 
                 this.setData({
                     stats: res.data.stats || this.data.stats,

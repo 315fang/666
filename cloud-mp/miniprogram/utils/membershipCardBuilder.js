@@ -49,7 +49,7 @@ function buildConsumeCardSummary({
         growthValue: normalizeNumber(growthValue, 0),
         progressText,
         progressPercent: Math.max(0, Math.min(100, normalizeNumber(barPercent, 0))),
-        benefitText: '成交价按商品标价结算，成长值用于解锁积分权益'
+        benefitText: '成长值用于解锁积分权益与等级；积分按规则抵扣或兑换'
     };
 }
 

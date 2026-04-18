@@ -44,7 +44,6 @@ function normalizeAssetUrl(value) {
   const raw = extractAssetValue(value);
   if (!raw) return '';
   if (/^https?:\/\//i.test(raw)) {
-    if (isExpiredSignedAssetUrl(raw)) return '';
     return raw;
   }
   if (/^cloud:\/\//i.test(raw) || /^wxfile:\/\//i.test(raw) || /^data:/i.test(raw)) {
@@ -60,24 +59,6 @@ function normalizeAssetUrl(value) {
     return apiBase ? `${apiBase}${normalizedPath}` : normalizedPath;
   }
   return raw;
-}
-
-function parseSignedAssetExpireAt(url) {
-  const text = String(url || '').trim();
-  if (!/^https?:\/\//i.test(text)) return 0;
-  const match = text.match(/[?&]t=(\d{10,13})\b/i);
-  if (!match) return 0;
-  const raw = Number(match[1]);
-  if (!Number.isFinite(raw) || raw <= 0) return 0;
-  return raw > 1e12 ? raw : raw * 1000;
-}
-
-function isExpiredSignedAssetUrl(url) {
-  const text = String(url || '').trim();
-  if (!/^https?:\/\//i.test(text)) return false;
-  if (!/[?&]sign=/.test(text)) return false;
-  const expireAt = parseSignedAssetExpireAt(text);
-  return expireAt > 0 && expireAt <= Date.now();
 }
 
 /**

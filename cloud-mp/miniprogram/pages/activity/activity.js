@@ -177,6 +177,8 @@ Page({
         const activityConfig = getActivityPageConfig();
         const initialSlides = getFallbackBannerSlides();
         const initialPermanent = getDefaultPermanentActivities();
+        this._limitedActivities = [];
+        this._activityLinksMeta = {};
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navTopPadding:   app.globalData.navTopPadding   || (app.globalData.statusBarHeight || 20),
@@ -228,6 +230,8 @@ Page({
         const merged = mergeActivityBannerSlides({ banners, limited });
         const slides = merged.length ? merged : getFallbackBannerSlides();
         const permanentActivities = Array.isArray(permanent) ? permanent : [];
+        this._limitedActivities = Array.isArray(limited) ? limited : [];
+        this._activityLinksMeta = linksMeta && typeof linksMeta === 'object' ? linksMeta : {};
         this.setData({
             bannerSlides: slides,
             brandNews: Array.isArray(brandNews) ? brandNews : [],
@@ -268,11 +272,12 @@ Page({
     },
 
     _buildActivitySections(permanentActivities) {
+        const meta = this._activityLinksMeta || {};
         const built = buildActivitySections({
             permanentActivities: Array.isArray(permanentActivities) ? permanentActivities : [],
-            slashActivities: this._slashActivities || [],
-            groupActivities: this._groupActivities || [],
-            lotteryPrizes: this._lotteryPrizes || []
+            limitedActivities: this._limitedActivities || [],
+            permanentSectionTitle: meta.permanent_section_title || '',
+            permanentSectionSubtitle: meta.permanent_section_subtitle || ''
         });
         return (built.sections || []).map((section) => ({
             ...section
@@ -387,6 +392,30 @@ Page({
         } else {
             wx.showToast({ title: this.data.pendingToast || '活动筹备中', icon: 'none' });
         }
+    },
+
+    onBannerImageError(e) {
+        const index = Number(e.currentTarget.dataset.index || 0);
+        const bannerSlides = Array.isArray(this.data.bannerSlides) ? this.data.bannerSlides.slice() : [];
+        if (!bannerSlides[index]) return;
+        bannerSlides[index] = { ...bannerSlides[index], image: '' };
+        this.setData({ bannerSlides });
+    },
+
+    onBrandNewsImageError(e) {
+        const index = Number(e.currentTarget.dataset.index || 0);
+        const brandNews = Array.isArray(this.data.brandNews) ? this.data.brandNews.slice() : [];
+        if (!brandNews[index]) return;
+        brandNews[index] = { ...brandNews[index], cover_image: '' };
+        this.setData({ brandNews });
+    },
+
+    onSectionImageError(e) {
+        const index = Number(e.currentTarget.dataset.index || 0);
+        const activitySections = Array.isArray(this.data.activitySections) ? this.data.activitySections.slice() : [];
+        if (!activitySections[index]) return;
+        activitySections[index] = { ...activitySections[index], image: '' };
+        this.setData({ activitySections });
     },
 
     onBrandNewsTap(e) {

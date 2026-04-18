@@ -372,6 +372,132 @@ function parseExchangeMeta(rawMeta = {}) {
     };
 }
 
+async function findConfigDocByKeys(keys = []) {
+    const normalizedKeys = normalizeIdList(keys);
+    if (!normalizedKeys.length) return null;
+
+    const configRes = await db.collection('configs')
+        .where(_.or([
+            { config_key: _.in(normalizedKeys) },
+            { key: _.in(normalizedKeys) }
+        ]))
+        .limit(20)
+        .get()
+        .catch(() => ({ data: [] }));
+    const configRow = configRes.data && configRes.data.find((item) => normalizedKeys.includes(String(item.config_key || item.key || item._id || '').trim()));
+    if (configRow) {
+        return {
+            collection: 'configs',
+            doc: configRow,
+            value: configRow.config_value !== undefined ? configRow.config_value : configRow.value
+        };
+    }
+
+    const appConfigRes = await db.collection('app_configs')
+        .where({ config_key: _.in(normalizedKeys), status: true })
+        .limit(20)
+        .get()
+        .catch(() => ({ data: [] }));
+    const appConfigRow = appConfigRes.data && appConfigRes.data.find((item) => normalizedKeys.includes(String(item.config_key || item.key || item._id || '').trim()));
+    if (!appConfigRow) return null;
+    return {
+        collection: 'app_configs',
+        doc: appConfigRow,
+        value: appConfigRow.config_value !== undefined ? appConfigRow.config_value : appConfigRow.value
+    };
+}
+
+function normalizeLimitedSpotMode(mode, offer = {}) {
+    const raw = String(mode || '').trim().toLowerCase();
+    if (['points', 'point', 'redeem', 'exchange', 'limited_points'].includes(raw)) {
+        return offer.enable_points === false ? 'money' : 'points';
+    }
+    if (['money', 'cash', 'buy', 'sale', 'limited_money'].includes(raw)) {
+        return offer.enable_money === false ? 'points' : 'money';
+    }
+    if (offer.enable_money !== false) return 'money';
+    if (offer.enable_points !== false) return 'points';
+    return 'money';
+}
+
+function isExpiredTime(value) {
+    if (!hasValue(value)) return false;
+    const ts = new Date(value).getTime();
+    return Number.isFinite(ts) ? ts <= Date.now() : false;
+}
+
+async function countLimitedSpotReservedOrders(cardId, offerId) {
+    if (!hasValue(cardId) || !hasValue(offerId)) return 0;
+    const res = await db.collection('orders')
+        .where({
+            limited_spot_card_id: String(cardId),
+            limited_spot_offer_id: String(offerId),
+            status: _.neq('cancelled')
+        })
+        .count()
+        .catch(() => ({ total: 0 }));
+    return Number(res.total || 0);
+}
+
+async function resolveLimitedSpotContext(rawLimitedSpot = {}) {
+    if (!rawLimitedSpot || typeof rawLimitedSpot !== 'object') return null;
+    const cardId = String(rawLimitedSpot.card_id || rawLimitedSpot.id || '').trim();
+    const offerId = String(rawLimitedSpot.offer_id || '').trim();
+    if (!cardId || !offerId) {
+        throw new Error('限时专享活动参数缺失');
+    }
+
+    const configDoc = await findConfigDocByKeys(['activity_links', 'activity_links_config']);
+    const configValue = configDoc && configDoc.value && typeof configDoc.value === 'object' ? configDoc.value : {};
+    const limitedCards = Array.isArray(configValue.limited) ? configValue.limited : [];
+    const card = limitedCards.find((item) => String(item.id || item._id || '') === cardId) || null;
+    if (!card) {
+        throw new Error('限时专享活动不存在');
+    }
+    if (isExpiredTime(card.end_time || card.end_at)) {
+        throw new Error('限时专享活动已结束');
+    }
+    if (card.enabled === false || card.status === false || card.is_active === false) {
+        throw new Error('限时专享活动未启用');
+    }
+
+    const spotProducts = Array.isArray(card.spot_products) ? card.spot_products : [];
+    const offer = spotProducts.find((item) => String(item.id || item.offer_id || '') === offerId) || null;
+    if (!offer) {
+        throw new Error('专享商品不存在或已下架');
+    }
+
+    const mode = normalizeLimitedSpotMode(rawLimitedSpot.mode || (rawLimitedSpot.redeem_points ? 'points' : ''), offer);
+    if (mode === 'points' && offer.enable_points === false) {
+        throw new Error('当前专享商品不支持积分兑换');
+    }
+    if (mode === 'money' && offer.enable_money === false) {
+        throw new Error('当前专享商品不支持现金购买');
+    }
+
+    const soldCount = Math.max(
+        toNumber(offer.sold_count, 0),
+        await countLimitedSpotReservedOrders(cardId, offerId)
+    );
+    const stockLimit = Math.max(0, toNumber(offer.stock_limit, 0));
+    if (stockLimit > 0 && soldCount >= stockLimit) {
+        throw new Error('当前专享商品已抢完');
+    }
+
+    return {
+        cardId,
+        offerId,
+        cardTitle: String(card.title || '').trim(),
+        mode,
+        productId: String(offer.product_id || '').trim(),
+        skuId: String(offer.sku_id || '').trim(),
+        pointsPrice: Math.max(0, toNumber(offer.points_price, 0)),
+        moneyPrice: Math.max(0, roundMoney(offer.money_price)),
+        stockLimit,
+        soldCount
+    };
+}
+
 function centsToYuan(value, fallback = 0) {
     if (!hasValue(value)) return fallback;
     const num = toNumber(value, NaN);

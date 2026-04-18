@@ -186,6 +186,17 @@
     <text class="coupon-tip coupon-tip-active">{{exchangeCouponTitle || '该订单将核销一张兑换券，不参与普通优惠券、积分或货款支付。'}}</text>
   </view>
 
+  <view class="section coupon-section" wx:if="{{limitedSpotOrder}}">
+    <view class="coupon-top">
+      <text class="coupon-label">限时专享订单</text>
+      <view class="coupon-right">
+        <text class="coupon-selected" wx:if="{{limitedSpotMode === 'points'}}">{{limitedSpotPointsPrice}} 积分兑换</text>
+        <text class="coupon-selected" wx:else>活动价 ¥{{limitedSpotMoneyPrice}}</text>
+      </view>
+    </view>
+    <text class="coupon-tip coupon-tip-active">{{limitedSpotTitle || '该订单按活动专享价购买，不参与普通优惠券、积分抵扣和货款支付。'}}</text>
+  </view>
+
   <view class="section remark-section">
     <text class="remark-label">订单备注</text>
     <input class="remark-input" placeholder="选填，可留言给卖家" value="{{remark}}" bindinput="onRemarkInput" maxlength="100" />
@@ -321,6 +332,10 @@
           <text class="discount-label">积分：</text>
           <text class="discount-amount">-¥{{pointsDeduction}}</text>
         </view>
+        <view class="total-row" wx:if="{{limitedSpotOrder && limitedSpotMode === 'points'}}">
+          <text class="discount-label">专享积分：</text>
+          <text class="discount-amount">{{limitedSpotPointsPrice}} 积分</text>
+        </view>
         <view class="total-row">
           <text class="total-label">合计：</text>
           <text class="total-price">¥{{finalAmount}}</text>
@@ -331,7 +346,7 @@
       </view>
     </view>
     <view class="submit-btn {{submitting || loading ? 'disabled' : ''}}" bindtap="onSubmit">
-      <text>{{submitting ? '提交中...' : '提交订单'}}</text>
+      <text>{{submitting ? '提交中...' : (limitedSpotOrder ? (limitedSpotMode === 'points' ? '提交兑换订单' : '提交秒杀订单') : '提交订单')}}</text>
     </view>
   </view>
   </block>

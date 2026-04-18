@@ -26,12 +26,13 @@
         </el-form-item>
         <el-form-item label="新角色">
           <el-select v-model="roleForm.role_level" style="width:100%">
-            <el-option label="普通用户" :value="0" />
-            <el-option label="会员" :value="1" />
-            <el-option label="团长" :value="2" />
-            <el-option label="代理商" :value="3" />
-            <el-option label="合伙人" :value="4" />
-            <el-option label="区域代理" :value="5" />
+            <el-option label="VIP用户" :value="0" />
+            <el-option label="初级会员" :value="1" />
+            <el-option label="高级会员" :value="2" />
+            <el-option label="推广合伙人" :value="3" />
+            <el-option label="运营合伙人" :value="4" />
+            <el-option label="区域合伙人" :value="5" />
+            <el-option label="线下实体门店" :value="6" />
           </el-select>
         </el-form-item>
       </el-form>

@@ -213,7 +213,7 @@
     <el-form-item label="自提核销提示">
       <el-input v-model="miniProgramForm.membership_config.pickup_code_pending_text" />
     </el-form-item>
-    <el-form-item label="商务中心最低等级(role_level)">
+    <el-form-item label="团队中心最低等级(role_level)">
       <el-input-number
         v-model="miniProgramForm.membership_config.business_center_min_role_level"
         :min="0"
@@ -221,7 +221,7 @@
         controls-position="right"
         style="width:min(200px, 100%);"
       />
-      <div class="field-hint">0游客 1初级代理(C1) 2高级(C2) 3推广合伙人…；低于此等级不显示「商务中心」入口</div>
+      <div class="field-hint">0=VIP用户，1=初级会员，2=高级会员，3=推广合伙人…；低于此等级不显示「团队中心」入口</div>
     </el-form-item>
     <el-form-item label="我的页·权益入口文案">
       <el-input v-model="miniProgramForm.membership_config.growth_privileges_entry_text" placeholder="如：查看权益" style="max-width:360px;" />

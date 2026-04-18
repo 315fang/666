@@ -13,20 +13,22 @@ const API_CONFIG = {
 // ==================== 用户角色 ====================
 const USER_ROLES = {
   GUEST: 0,
-  MEMBER: 1,      // C1 初级会员
-  LEADER: 2,      // C2 高级会员
-  AGENT: 3,       // B1 推广合伙人
-  PARTNER: 4,     // B2 运营合伙人
-  REGIONAL: 5     // B3 区域合伙人
+  MEMBER: 1,      // 初级会员
+  LEADER: 2,      // 高级会员
+  AGENT: 3,       // 推广合伙人
+  PARTNER: 4,     // 运营合伙人
+  REGIONAL: 5,    // 区域合伙人
+  STORE: 6        // 线下实体门店
 };
 
 const ROLE_NAMES = {
-  [USER_ROLES.GUEST]: 'VIP会员',
-  [USER_ROLES.MEMBER]: '初级会员 C1',
-  [USER_ROLES.LEADER]: '高级会员 C2',
-  [USER_ROLES.AGENT]: '推广合伙人 B1',
-  [USER_ROLES.PARTNER]: '运营合伙人 B2',
-  [USER_ROLES.REGIONAL]: '区域合伙人 B3'
+  [USER_ROLES.GUEST]: 'VIP用户',
+  [USER_ROLES.MEMBER]: '初级会员',
+  [USER_ROLES.LEADER]: '高级会员',
+  [USER_ROLES.AGENT]: '推广合伙人',
+  [USER_ROLES.PARTNER]: '运营合伙人',
+  [USER_ROLES.REGIONAL]: '区域合伙人',
+  [USER_ROLES.STORE]: '线下实体门店'
 };
 
 // ==================== 订单状态 ====================

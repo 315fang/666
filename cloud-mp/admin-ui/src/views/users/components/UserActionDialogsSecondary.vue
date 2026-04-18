@@ -120,7 +120,7 @@
 import { computed } from 'vue'
 import { getUserNickname } from '@/utils/userDisplay'
 
-const ROLE_LABELS = { 0: '普通用户', 1: '会员', 2: '团长', 3: '代理商', 4: '合伙人', 5: '区域代理' }
+const ROLE_LABELS = { 0: 'VIP用户', 1: '初级会员', 2: '高级会员', 3: '推广合伙人', 4: '运营合伙人', 5: '区域合伙人', 6: '线下实体门店' }
 
 const props = defineProps({
   currentUser: { type: Object, default: null },

@@ -133,7 +133,11 @@ Page({
 
             if (res.code === 0) {
                 wx.hideLoading();
-                wx.showToast({ title: '评价成功', icon: 'success' });
+                const bonusPoints = Number((res.data && res.data.bonus_points) || 0);
+                wx.showToast({
+                    title: bonusPoints > 0 ? `评价成功 +${bonusPoints}积分` : '评价成功',
+                    icon: 'success'
+                });
                 setTimeout(() => {
                     wx.navigateBack();
                 }, 1500);

@@ -53,7 +53,7 @@
 
     <!-- 真实券列表 -->
     <view class="coupon-list" wx:else>
-      <view class="coupon-card {{activeTab}}" wx:for="{{coupons}}" wx:key="id">
+      <view class="coupon-card {{activeTab}} {{item.is_expired ? 'coupon-expired' : ''}}" wx:for="{{coupons}}" wx:key="id">
         <!-- 左侧：面值 -->
         <view class="coupon-left">
           <view class="coupon-value-wrap">

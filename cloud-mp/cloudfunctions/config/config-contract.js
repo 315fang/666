@@ -113,6 +113,46 @@ function toBoolean(value) {
     return ['true', 'yes', 'y', 'on', 'enabled', 'active', 'show', 'visible', 'display'].includes(normalized);
 }
 
+function hasBrandZoneLegacyContent(homepageSettings = {}) {
+    const endorsements = Array.isArray(homepageSettings.brand_endorsements) ? homepageSettings.brand_endorsements : [];
+    const certifications = Array.isArray(homepageSettings.brand_certifications) ? homepageSettings.brand_certifications : [];
+    return endorsements.length > 0 || certifications.length > 0 || !!pickString(homepageSettings.brand_story_body);
+}
+
+function normalizeBrandConfigList(list = [], options = {}) {
+    const withLink = !!options.withLink;
+    return (Array.isArray(list) ? list : [])
+        .map((item) => {
+            if (typeof item === 'string') {
+                const title = pickString(item);
+                if (!title) return null;
+                return {
+                    title,
+                    subtitle: '',
+                    image: '',
+                    file_id: '',
+                    ...(withLink ? { link_type: 'none', link_value: '' } : {})
+                };
+            }
+            if (!item || typeof item !== 'object') return null;
+            const title = pickString(item.title || item.name || item.label);
+            const subtitle = pickString(item.subtitle || item.desc || item.description);
+            const image = pickString(item.image || item.image_url || item.url);
+            const fileId = pickString(item.file_id);
+            const linkType = withLink ? pickString(item.link_type, 'none') : 'none';
+            const linkValue = withLink ? pickString(item.link_value) : '';
+            if (!(title || subtitle || image || fileId || linkValue)) return null;
+            return {
+                title: title || subtitle || '未命名内容',
+                subtitle,
+                image,
+                file_id: fileId,
+                ...(withLink ? { link_type: linkType, link_value: linkValue } : {})
+            };
+        })
+        .filter(Boolean);
+}
+
 function normalizeTabBarConfig(tabBar = {}) {
     const merged = mergeDeep(DEFAULT_MINI_PROGRAM_CONFIG.brand_config.tab_bar, tabBar);
     if (!Array.isArray(merged.items) || merged.items.length < 4) {
@@ -145,6 +185,9 @@ function normalizeMiniProgramConfig(rawConfig = {}) {
 
 function flattenHomeConfigs(miniProgramConfig = {}, homepageSettings = {}) {
     const brandConfig = miniProgramConfig.brand_config || {};
+    const brandZoneEnabled = homepageSettings.brand_zone_enabled !== undefined
+        ? toBoolean(homepageSettings.brand_zone_enabled)
+        : hasBrandZoneLegacyContent(homepageSettings);
     return {
         brand_name: pickString(brandConfig.brand_name, DEFAULT_MINI_PROGRAM_CONFIG.brand_config.brand_name),
         share_title: pickString(brandConfig.share_title, DEFAULT_MINI_PROGRAM_CONFIG.brand_config.share_title),
@@ -154,11 +197,25 @@ function flattenHomeConfigs(miniProgramConfig = {}, homepageSettings = {}) {
         nav_brand_sub: pickString(homepageSettings.nav_brand_sub || brandConfig.nav_brand_sub, DEFAULT_MINI_PROGRAM_CONFIG.brand_config.nav_brand_sub),
         show_brand_logo: homepageSettings.show_brand_logo !== undefined ? homepageSettings.show_brand_logo : true,
         brand_logo: pickString(homepageSettings.brand_logo),
+        brand_zone_enabled: brandZoneEnabled,
+        brand_zone_title: pickString(homepageSettings.brand_zone_title, '品牌专区'),
+        brand_zone_cover: pickString(homepageSettings.brand_zone_cover),
+        brand_zone_cover_file_id: pickString(homepageSettings.brand_zone_cover_file_id),
+        brand_zone_welcome_title: pickString(homepageSettings.brand_zone_welcome_title, 'Welcome'),
+        brand_zone_welcome_subtitle: pickString(homepageSettings.brand_zone_welcome_subtitle),
         bubble_enabled: homepageSettings.bubble_enabled !== undefined ? homepageSettings.bubble_enabled : true,
         bubble_limit: Number(homepageSettings.bubble_limit || 10),
         bubble_copy_order: pickString(homepageSettings.bubble_copy_order),
         bubble_copy_group_buy: pickString(homepageSettings.bubble_copy_group_buy),
-        bubble_copy_slash: pickString(homepageSettings.bubble_copy_slash)
+        bubble_copy_slash: pickString(homepageSettings.bubble_copy_slash),
+        official_promo_title: pickString(homepageSettings.official_promo_title),
+        official_promo_subtitle: pickString(homepageSettings.official_promo_subtitle),
+        official_promo_badge: pickString(homepageSettings.official_promo_badge, '官方宣传'),
+        official_promo_cover: pickString(homepageSettings.official_promo_cover),
+        brand_story_title: pickString(homepageSettings.brand_story_title, '企业介绍'),
+        brand_story_body: pickString(homepageSettings.brand_story_body),
+        brand_endorsements: normalizeBrandConfigList(homepageSettings.brand_endorsements, { withLink: true }).slice(0, 3),
+        brand_certifications: normalizeBrandConfigList(homepageSettings.brand_certifications)
     };
 }
 
@@ -201,7 +258,7 @@ function normalizeSplashConfig(config = {}) {
     };
 }
 
-function normalizeHomeContentPayload({ miniProgramConfig, homepageSettings, bannersByPosition, hotProducts, popupAd, layout, latestActivity }) {
+function normalizeHomeContentPayload({ miniProgramConfig, homepageSettings, bannersByPosition, hotProducts, popupAd, layout, latestActivity, boards }) {
     const configs = flattenHomeConfigs(miniProgramConfig, homepageSettings);
     const banners = {
         home: normalizeBannerList(bannersByPosition.home || []),
@@ -214,7 +271,8 @@ function normalizeHomeContentPayload({ miniProgramConfig, homepageSettings, bann
         hot_products: Array.isArray(hotProducts) ? hotProducts : [],
         latestActivity: latestActivity || {},
         popupAd: normalizePopupAdConfig(popupAd),
-        layout: layout || null
+        layout: layout || null,
+        boards: boards || {}
     };
     return {
         ...legacyPayload,
@@ -226,6 +284,7 @@ function normalizeHomeContentPayload({ miniProgramConfig, homepageSettings, bann
             popup_ad: normalizePopupAdConfig(popupAd),
             layout: layout || null,
             latest_activity: latestActivity || {},
+            boards: boards || {},
             legacy_payload: legacyPayload
         }
     };

@@ -44,7 +44,6 @@ function normalizeAssetUrl(url = '') {
 const CATEGORY_INITIAL_BATCH_SIZE = 2;
 const CATEGORY_PRICE_PREVIEW_TTL = 60 * 1000;
 const SPECIAL_CATEGORY_ID = '__special__';
-const SPECIAL_CATEGORY_NAME = '拼团砍价';
 const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
 
 Page({
@@ -231,10 +230,7 @@ Page({
     },
 
     _buildSidebarCategories(categories) {
-        return [{
-            id: SPECIAL_CATEGORY_ID,
-            name: SPECIAL_CATEGORY_NAME
-        }].concat(Array.isArray(categories) ? categories : []);
+        return Array.isArray(categories) ? categories : [];
     },
 
     async loadActivityProducts(forceRefresh = false) {
@@ -361,9 +357,7 @@ Page({
             leftToView: 'left-' + categoryId,
             isManualClick: true
         });
-        if (categoryId !== SPECIAL_CATEGORY_ID) {
-            this.ensureCategoryProductsLoaded(categoryId);
-        }
+        this.ensureCategoryProductsLoaded(categoryId);
         setTimeout(() => { this.setData({ isManualClick: false }); }, 800);
     },
 
@@ -413,7 +407,7 @@ Page({
 
     calculateCategoryHeights() {
         const query = wx.createSelectorQuery().in(this);
-        query.selectAll('.cat-section').boundingClientRect();
+        query.selectAll('.cat-section-anchor').boundingClientRect();
         query.select('.right-content').scrollOffset();
         query.exec((res) => {
             if (!res[0] || res[0].length === 0) return;

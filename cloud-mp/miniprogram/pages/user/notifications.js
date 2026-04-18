@@ -14,6 +14,10 @@ Page({
         this.loadNotifications();
     },
 
+    onPrivacyTap() {
+        wx.navigateTo({ url: '/pages/privacy/privacy' });
+    },
+
     async loadNotifications(isLoadMore = false) {
         if (this.data.loading || (!isLoadMore && !this.data.hasMore)) return;
 

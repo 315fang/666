@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-04-14T02:20:40.167Z",
+  "generatedAt": "2026-04-18T06:27:35.328Z",
   "ok": true,
-  "total": 11,
+  "total": 14,
   "failed": 0,
   "findings": [
     {
@@ -17,16 +17,16 @@
       "detail": "normalizePopupAdConfig => \"cloud://img\""
     },
     {
-      "module": "admin-api",
-      "name": "mini program config logistics options",
+      "module": "config",
+      "name": "home content brand zone defaults",
       "ok": true,
-      "detail": "normalizeMiniProgramConfig => [\"顺丰速运\",\"申通快递\"]"
+      "detail": "flattenHomeConfigs => {\"enabled\":false,\"title\":\"品牌专区\",\"welcomeTitle\":\"Welcome\",\"cards\":0,\"certifications\":0}"
     },
     {
-      "module": "admin-api",
-      "name": "popup ad canonical field",
+      "module": "config",
+      "name": "home content brand zone legacy compatibility",
       "ok": true,
-      "detail": "normalizePopupAdConfig => \"cloud://img\""
+      "detail": "flattenHomeConfigs => {\"enabled\":true,\"card\":{\"title\":\"实验检测\",\"subtitle\":\"过程可追溯\",\"image\":\"\",\"file_id\":\"cloud://brand-card\",\"link_type\":\"page\",\"link_value\":\"/pages/activity/activity\"},\"certification\":{\"title\":\"企业认证\",\"subtitle\":\"\",\"image\":\"\",\"file_id\":\"\"}}"
     },
     {
       "module": "admin-api",
@@ -69,6 +69,24 @@
       "name": "cloudfunctions/admin-api/src/app.js contains patchCollectionRow('content_boards'",
       "ok": true,
       "detail": "cloudfunctions/admin-api/src/app.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/config/config-contract.js contains brand_zone_enabled",
+      "ok": true,
+      "detail": "cloudfunctions/config/config-contract.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/config/config-contract.js contains brand_zone_cover_file_id",
+      "ok": true,
+      "detail": "cloudfunctions/config/config-contract.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/config/config-contract.js contains flattenHomeConfigs",
+      "ok": true,
+      "detail": "cloudfunctions/config/config-contract.js"
     }
   ]
 }

@@ -41,7 +41,9 @@
 .coupon-list { padding: 24rpx; display: flex; flex-direction: column; gap: 24rpx; }
 
 .coupon-card { display: flex; background: #FFF4F5; border-radius: 16rpx; overflow: hidden; position: relative; border: 1rpx solid #FCE4E6; }
-.coupon-card.used, .coupon-card.expired { opacity: 0.6; filter: grayscale(1); }
+.coupon-card.used, .coupon-card.expired, .coupon-card.coupon-expired { opacity: 0.6; filter: grayscale(1); }
+
+.coupon-card.unused.coupon-expired { border-color: #E5E7EB; background: #F3F4F6; }
 
 /* Left: value */
 .coupon-left { padding: 30rpx 10rpx 30rpx 20rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 180rpx; box-sizing: border-box; }

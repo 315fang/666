@@ -298,26 +298,19 @@ async function loadAssetRow(page) {
             get('/coupons/mine', { status: 'unused' }).catch(() => ({ code: -1, data: [] })),
             fetchPointSummary().catch(() => ({ account: {} }))
         ]);
-        const coupons = couponResponse.code === 0 ? extractResponseList(couponResponse) : [];
+        let coupons = couponResponse.code === 0 ? extractResponseList(couponResponse) : [];
+        coupons = coupons.filter((c) => {
+            const exp = c && (c.expire_at || c.expires_at || c.end_at || c.valid_until);
+            if (!exp) return true;
+            const t = new Date(exp).getTime();
+            return !Number.isFinite(t) || t > Date.now();
+        });
         const unusedCouponCount = coupons.length;
         const balance = pickPointBalance(pointWrap.account || {});
-        let couponBanner = null;
-        if (unusedCouponCount > 0) {
-            const firstCoupon = coupons[0];
-            const minValue = Number(firstCoupon.min_purchase) > 0 ? `满${firstCoupon.min_purchase}元可用` : '无门槛';
-            couponBanner = {
-                id: firstCoupon.id,
-                value: firstCoupon.coupon_type === 'percent'
-                    ? `${(Number(firstCoupon.coupon_value || 0) * 10).toFixed(0)}折`
-                    : `¥${firstCoupon.coupon_value}`,
-                name: firstCoupon.coupon_name || '优惠券',
-                minPurchase: minValue
-            };
-        }
         page.setData({
             unusedCouponCount,
             pointsBalanceDisplay: balance != null ? String(balance) : '0',
-            couponBanner
+            couponBanner: null
         });
     } catch (_) {
         // ignore
@@ -380,7 +373,7 @@ async function loadOrderCounts(page) {
         const pending = c.pending || c.pending_payment || 0;
         const paid = (c.paid || 0) + (c.pending_group || 0);
         const shipped = c.shipped || 0;
-        const pendingReview = 0;
+        const pendingReview = Number(c.pending_review || 0);
         const refund = c.refund || 0;
 
         const nextStats = {
@@ -511,7 +504,7 @@ async function loadDistributionInfo(page) {
                 goodsFundBalance,
                 referee_count: teamCount,
                 role_level: roleLevel,
-                role_name: dashboardUserInfo.role_name || ROLE_NAMES[roleLevel] || '普通用户'
+                role_name: dashboardUserInfo.role_name || ROLE_NAMES[roleLevel] || 'VIP用户'
             },
             stats: { frozenAmount },
             balance: formatMoneyInt(goodsFundRaw),

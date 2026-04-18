@@ -788,7 +788,7 @@ async function reviewOrder(openid, orderId, reviewData) {
         },
     });
 
-    return { success: true, review_ids: reviewResults };
+    return { success: true, review_ids: reviewResults, bonus_points: bonusPoints };
 }
 
 /**

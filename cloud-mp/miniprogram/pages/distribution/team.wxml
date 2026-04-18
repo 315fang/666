@@ -35,12 +35,12 @@
     </view>
   </view>
 
-  <view class="toolbar-card" bindtap="goInvitePosterPage">
+  <view class="toolbar-card" bindtap="goWalletLogs">
     <view class="toolbar-left">
-      <image class="toolbar-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
+      <image class="toolbar-icon" src="/assets/icons/list.svg" mode="aspectFit"></image>
       <view class="toolbar-copy">
-        <text class="toolbar-title">分享海报</text>
-        <text class="toolbar-sub">快速生成你的专属邀新海报</text>
+        <text class="toolbar-title">钱包明细</text>
+        <text class="toolbar-sub">查看佣金入账与提现记录</text>
       </view>
     </view>
     <text class="toolbar-arrow">›</text>

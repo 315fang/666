@@ -325,11 +325,16 @@ class SharePosterCore {
         const nameY = avatarY + 28;
         const memberCode = inviteCode || userInfo?.member_no || userInfo?.my_invite_code || '';
         const name = isBrandVariant
-            ? ellipsis(brandConfig.poster_brand_display_name || brandName || '品牌官方', 9)
+            ? ellipsis(brandConfig.official_promo_title || brandConfig.poster_brand_display_name || brandName || '品牌官方', 12)
             : ellipsis(userInfo?.nick_name || userInfo?.nickname || userInfo?.nickName || '微信用户', 9);
-        const introText = brandConfig.share_poster_intro || '专注于大学生（产教融合）实战落地';
+        const introText = isBrandVariant
+            ? (brandConfig.official_promo_subtitle || brandConfig.share_poster_intro || '官方宣传语')
+            : (brandConfig.share_poster_intro || '专注于大学生（产教融合）实战落地');
         const codePrefix = brandConfig.share_poster_code_prefix || '邀请码：';
         const qrHint = brandConfig.share_poster_qr_hint || '长按识别小程序码';
+        const highlightLine = isBrandVariant
+            ? (brandConfig.official_promo_footer || '扫码查看官方宣传')
+            : `${codePrefix}${memberCode || '未配置'}`;
 
         if (!isBrandVariant) {
             await this.drawIdentityAvatar(ctx, canvas, {
@@ -348,7 +353,7 @@ class SharePosterCore {
             ctx.font = '600 18px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('品牌海报', textStartX + 56, cardY + 54);
+            ctx.fillText(String(brandConfig.official_promo_badge || '官方宣传').slice(0, 6), textStartX + 56, cardY + 54);
             ctx.restore();
         }
 
@@ -364,7 +369,7 @@ class SharePosterCore {
 
         ctx.fillStyle = '#B74848';
         ctx.font = '600 17px sans-serif';
-        ctx.fillText(`${codePrefix}${memberCode || '未配置'}`, textStartX, isBrandVariant ? (cardY + 194) : (cardY + 182));
+        ctx.fillText(highlightLine, textStartX, isBrandVariant ? (cardY + 194) : (cardY + 182));
 
         const qrBoxSize = 170;
         const qrBoxX = cardX + cardW - qrBoxSize - 22;

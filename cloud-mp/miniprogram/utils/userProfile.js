@@ -38,7 +38,7 @@ function normalizeUserInfo(info = {}) {
         avatarUrl: avatar,
         avatar,
         role_level: roleLevel,
-        role_name: info.role_name || ROLE_NAMES[roleLevel] || ROLE_NAMES[info.role || 0] || '普通用户',
+        role_name: info.role_name || ROLE_NAMES[roleLevel] || ROLE_NAMES[info.role || 0] || 'VIP用户',
         commission_balance: commissionBalance,
         balance: commissionBalance,
         goods_fund_balance: goodsFundBalance,

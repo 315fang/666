@@ -28,8 +28,5 @@ export const updateBranchAgentStation = (id, data) => request({ url: `/branch-ag
 export const getBranchAgentClaims = (params) => request({ url: '/branch-agents/claims', method: 'get', params })
 export const reviewBranchAgentClaim = (id, data) => request({ url: `/branch-agents/claims/${id}/review`, method: 'put', data })
 
-export const getNSystemLeaders = (params) => request({ url: '/n-system/leaders', method: 'get', params })
-export const getNSystemMembers = (params) => request({ url: '/n-system/members', method: 'get', params })
-export const getNSystemLeaderMembers = (id) => request({ url: `/n-system/leaders/${id}/members`, method: 'get' })
 export const getUpgradeApplications = (params) => request({ url: '/upgrade-applications', method: 'get', params })
 export const reviewUpgradeApplication = (id, data) => request({ url: `/upgrade-applications/${id}/review`, method: 'put', data })

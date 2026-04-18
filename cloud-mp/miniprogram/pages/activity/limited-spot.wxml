@@ -10,44 +10,62 @@
 
   <scroll-view scroll-y class="scroll" wx:if="{{!loading && card}}">
     <view class="hero">
-      <text class="hero-title">{{card.title}}</text>
+      <view class="hero-top">
+        <text class="hero-kicker">专享商品</text>
+        <text class="hero-deadline" wx:if="{{card.end_time}}">截止 {{card.end_time}}</text>
+      </view>
+      <text class="hero-title">{{card.title || '限时专享商品'}}</text>
       <text class="hero-sub" wx:if="{{card.subtitle}}">{{card.subtitle}}</text>
+      <text class="hero-tip">进入详情后可查看商品图文、规格与专享购买方式。</text>
     </view>
 
-    <view class="addr-bar" bindtap="onChooseAddress">
-      <text class="addr-label">收货地址</text>
-      <text class="addr-val">{{addressSummary || '请选择地址'}}</text>
-      <text class="addr-arrow">›</text>
-    </view>
-
-    <view class="list-title">活动商品</view>
+    <view class="list-title">当前可选商品</view>
     <view class="empty" wx:if="{{!products.length}}">暂未配置专享商品</view>
 
     <view class="goods-card" wx:for="{{products}}" wx:key="offer_id">
-      <image class="goods-img" src="{{item.product && item.product.images && item.product.images[0] || '/assets/images/placeholder.svg'}}" mode="aspectFill"></image>
+      <image
+        class="goods-img"
+        src="{{item.product && item.product.images && item.product.images[0] || '/assets/images/placeholder.svg'}}"
+        mode="aspectFill"
+        binderror="onGoodsImageError"
+        data-index="{{index}}"
+      ></image>
       <view class="goods-body">
-        <text class="goods-name">{{item.product.name}}</text>
+        <view class="goods-head">
+          <text class="goods-name">{{item.product.name}}</text>
+          <view class="mode-tags">
+            <text class="mode-tag mode-tag-money" wx:if="{{item.enable_money}}">现金秒杀</text>
+            <text class="mode-tag mode-tag-points" wx:if="{{item.enable_points}}">积分兑换</text>
+          </view>
+        </view>
+        <text class="goods-desc" wx:if="{{item.product.description}}">{{item.product.description}}</text>
         <view class="goods-meta">
           <text class="goods-remain">剩余 {{item.remaining}} / {{item.stock_limit}}</text>
         </view>
         <view class="price-row">
-          <text class="p-points" wx:if="{{item.enable_points}}">{{item.points_price}} 积分</text>
-          <text class="p-sep" wx:if="{{item.enable_points && item.enable_money}}">或</text>
           <text class="p-money" wx:if="{{item.enable_money}}">¥{{item.money_price}}</text>
+          <text class="p-sep" wx:if="{{item.enable_points && item.enable_money}}">或</text>
+          <text class="p-points" wx:if="{{item.enable_points}}">{{item.points_price}} 积分</text>
+          <text class="p-origin" wx:if="{{item.product && (item.product.market_price || item.product.displayPrice)}}">原价 ¥{{item.product.market_price || item.product.displayPrice}}</text>
         </view>
         <view class="btn-row">
+          <view
+            class="btn btn-detail"
+            data-offer-id="{{item.offer_id}}"
+            bindtap="onOpenDetail"
+          >查看详情</view>
           <view
             class="btn btn-points {{item.remaining < 1 || !item.enable_points ? 'disabled' : ''}}"
             wx:if="{{item.enable_points}}"
             data-offer-id="{{item.offer_id}}"
-            bindtap="onRedeemPoints"
+            bindtap="onOpenPoints"
           >积分兑换</view>
           <view
             class="btn btn-money {{item.remaining < 1 || !item.enable_money ? 'disabled' : ''}}"
             wx:if="{{item.enable_money}}"
             data-offer-id="{{item.offer_id}}"
-            bindtap="onPayMoney"
-          >现金购买</view>
+            bindtap="onOpenMoney"
+          >立即秒杀</view>
         </view>
       </view>
     </view>
@@ -59,7 +77,7 @@
   </view>
 
   <view class="empty-state" wx:if="{{!loading && !card}}">
-    <text class="empty-state-title">当前活动暂不可用</text>
-    <text class="empty-state-desc">请检查活动卡片配置或稍后再试</text>
+    <text class="empty-state-title">当前专享活动暂不可用</text>
+    <text class="empty-state-desc">请稍后再试，或返回活动页查看其他活动。</text>
   </view>
 </view>

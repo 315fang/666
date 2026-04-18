@@ -6,6 +6,7 @@
 const TEMP_QUERY_KEYS = [
   'expires',
   'signature',
+  'sign',
   'x-amz-algorithm',
   'x-amz-credential',
   'x-amz-date',
@@ -34,6 +35,13 @@ function analyzeAssetUrl(url) {
     for (const [key] of parsed.searchParams.entries()) {
       const normalized = String(key || '').trim().toLowerCase()
       if (TEMP_QUERY_KEYS.includes(normalized)) matchedKeys.push(normalized)
+    }
+    const host = String(parsed.hostname || '').trim().toLowerCase()
+    const hasCloudBaseLegacySign = host.endsWith('tcb.qcloud.la')
+      && parsed.searchParams.has('sign')
+      && parsed.searchParams.has('t')
+    if (hasCloudBaseLegacySign) {
+      matchedKeys.push('sign', 't')
     }
     return {
       isTemporary: matchedKeys.length > 0,

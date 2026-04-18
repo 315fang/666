@@ -5,7 +5,7 @@ Page({
         loading: true,
         progress: null,
         logs: [],
-        roleNames: { 0: 'VIP会员', 1: '初级会员 C1', 2: '高级会员 C2', 3: '推广合伙人 B1', 4: '运营合伙人 B2', 5: '区域合伙人 B3' }
+        roleNames: { 0: 'VIP用户', 1: '初级会员', 2: '高级会员', 3: '推广合伙人', 4: '运营合伙人', 5: '区域合伙人', 6: '线下实体门店' }
     },
 
     onShow() { this._load(); },

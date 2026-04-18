@@ -9,7 +9,7 @@ function navigateIfLoggedIn(url) {
     return true;
 }
 
-function goBusinessCenter() {
+function goTeamCenter() {
     if (!requireLogin()) return;
     wx.navigateTo({ url: '/pages/distribution/business-center' });
 }
@@ -163,7 +163,7 @@ function buildSharePayload(page) {
 
 module.exports = {
     buildSharePayload,
-    goBusinessCenter,
+    goTeamCenter,
     goAllProducts,
     goCart,
     goCustomerService,

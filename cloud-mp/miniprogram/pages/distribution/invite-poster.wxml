@@ -4,7 +4,7 @@
       <view class="nav-back" bindtap="onBack">
         <image class="back-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"></image>
       </view>
-      <text class="nav-title">邀请海报</text>
+      <text class="nav-title">优品推荐海报</text>
     </view>
   </view>
 
@@ -33,6 +33,7 @@
           </view>
         </view>
       </view>
+      <text class="poster-variant-hint">「官方宣传」主文案与封面来自后台首页内容位中的官方宣传语；「个人推荐」为您的专属邀请样式。</text>
 
       <!-- 海报预览：保留 Canvas 作为导出底图，预览图加载成功后覆盖显示 -->
       <view class="poster-preview-wrap">

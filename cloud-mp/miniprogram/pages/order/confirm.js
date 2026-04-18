@@ -78,6 +78,12 @@ Page({
         exchangeMode: false,
         exchangeCouponId: '',
         exchangeCouponTitle: '',
+        limitedSpotOrder: false,
+        limitedSpotMode: '',
+        limitedSpotTitle: '',
+        limitedSpotPointsPrice: 0,
+        limitedSpotMoneyPrice: 0,
+        limitedSpotPayload: null,
         // B端货款余额支付
         walletBalance: 0,
         walletBalanceDisplay: '0.00',
@@ -158,7 +164,7 @@ Page({
         if (!this.data.address && this.data.addressLoadStatus !== 'loading') {
             this.loadDefaultAddress();
         }
-        if (!this.data.exchangeMode) {
+        if (!this.data.exchangeMode && !this.data.limitedSpotOrder) {
             if (this.data.pointsLoadStatus !== 'loading') {
                 this.loadPointBalance();
             }
@@ -167,6 +173,7 @@ Page({
             }
         }
         if (!this.data.exchangeMode
+            && !this.data.limitedSpotOrder
             && this.data.allowCoupon !== false
             && (this.data.orderItems || []).length > 0
             && this.data.couponLoadStatus !== 'loading'
@@ -188,6 +195,8 @@ Page({
                 return false;
             }
             const amt = (parseFloat(directBuy.price) * directBuy.quantity).toFixed(2);
+            const limitedSpotPayload = directBuy.limited_spot || null;
+            const limitedSpotMode = directBuy.limited_spot_mode || '';
                 this.setData({
                     orderItems: [directBuy],
                     totalAmount: amt,
@@ -200,8 +209,14 @@ Page({
                 exchangeMode: !!directBuy.exchange_mode,
                 exchangeCouponId: directBuy.exchange_coupon_id || '',
                 exchangeCouponTitle: directBuy.exchange_title || '',
-                    allowCoupon: directBuy.exchange_mode ? false : true,
-                    allowPoints: directBuy.exchange_mode ? false : true,
+                limitedSpotOrder: !!limitedSpotPayload,
+                limitedSpotMode,
+                limitedSpotTitle: directBuy.limited_spot_title || '',
+                limitedSpotPointsPrice: Number(directBuy.limited_spot_points_price || 0),
+                limitedSpotMoneyPrice: Number(directBuy.limited_spot_money_price || 0),
+                limitedSpotPayload,
+                    allowCoupon: (directBuy.exchange_mode || limitedSpotPayload) ? false : true,
+                    allowPoints: (directBuy.exchange_mode || limitedSpotPayload) ? false : true,
                     usePoints: false,
                     useWallet: false,
                     cartLoadStatus: 'success',
@@ -232,7 +247,7 @@ Page({
 
     async _loadSupplementaryData() {
         const tasks = [this.loadDefaultAddress()];
-        if (this.data.exchangeMode) {
+        if (this.data.exchangeMode || this.data.limitedSpotOrder) {
             this.setData({
                 pointsLoadStatus: 'success',
                 pointsLoadError: '',
@@ -307,6 +322,17 @@ Page({
 
     /** 根据商品属性更新积分抵扣权限和规则提示文案 */
     _updatePointsConfig(items) {
+        if (this.data.limitedSpotOrder) {
+            this.setData({
+                allowPoints: false,
+                allowCoupon: false,
+                pointsRuleHint: this.data.limitedSpotMode === 'points' ? '专享积分兑换订单不参与普通积分抵扣' : '专享秒杀订单不参与普通积分抵扣',
+                usePoints: false,
+                pointsToUse: 0,
+                pointsDeduction: '0.00'
+            });
+            return;
+        }
         if (this.data.exchangeMode) {
             this.setData({
                 allowPoints: false,

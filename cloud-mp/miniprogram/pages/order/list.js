@@ -456,5 +456,13 @@ Page({
         } else {
             wx.switchTab({ url: '/pages/index/index' });
         }
+    },
+
+    onQuickGroupTap() {
+        wx.navigateTo({ url: '/pages/group/list' });
+    },
+
+    onQuickSlashTap() {
+        wx.navigateTo({ url: '/pages/slash/list?tab=my' });
     }
 });

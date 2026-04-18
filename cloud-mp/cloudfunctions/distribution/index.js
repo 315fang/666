@@ -17,6 +17,7 @@ const {
     resolveCommissionBalance,
     resolveGoodsFundBalance
 } = require('./user-contract');
+const { batchResolveCloudFileUrls, isCloudFileId } = require('../shared/asset-url');
 
 const db = cloud.database();
 const _ = db.command;
@@ -277,6 +278,24 @@ function normalizeTeamMember(member = {}, level = 1, extra = {}) {
         order_count: toNumber(member.order_count, 0),
         ...extra
     };
+}
+
+async function batchResolveMemberAvatars(list = []) {
+    const avatarRefs = (Array.isArray(list) ? list : [])
+        .map((member) => member?.avatarUrl || member?.avatar_url || member?.avatar)
+        .filter(isCloudFileId);
+    const resolvedMap = await batchResolveCloudFileUrls(avatarRefs);
+    return (Array.isArray(list) ? list : []).map((member) => {
+        const avatarRef = member?.avatarUrl || member?.avatar_url || member?.avatar;
+        if (!isCloudFileId(avatarRef)) return member;
+        const resolvedAvatar = resolvedMap.get(avatarRef) || avatarRef;
+        return {
+            ...member,
+            avatarUrl: resolvedAvatar,
+            avatar_url: resolvedAvatar,
+            avatar: resolvedAvatar
+        };
+    });
 }
 
 function firstNumber(values) {
@@ -667,8 +686,9 @@ const handleAction = {
             .where(where)
             .count().catch(() => ({ total: 0 }));
 
+        const resolvedTeam = await batchResolveMemberAvatars(teamRes.data || []);
         return success({
-            list: (teamRes.data || []).map((member) => normalizeTeamMember(member, level === 'indirect' ? 2 : 1)),
+            list: resolvedTeam.map((member) => normalizeTeamMember(member, level === 'indirect' ? 2 : 1)),
             total: totalRes.total || 0,
             page,
             pageSize,
@@ -712,7 +732,8 @@ const handleAction = {
         let contributedAmount = 0;
         (commRes || []).forEach(c => { contributedAmount += toNumber(c.amount, 0); });
 
-        return success(normalizeTeamMember(memberData, level, {
+        const [resolvedMember] = await batchResolveMemberAvatars([memberData]);
+        return success(normalizeTeamMember(resolvedMember || memberData, level, {
             contributed_amount: contributedAmount
         }));
     }),
@@ -827,7 +848,7 @@ const handleAction = {
             .limit(200).get().catch(() => ({ data: [] }));
         const rechargeTotal = (rechargeRes.data || []).reduce((s, r) => s + toNumber(r.amount, 0), 0);
 
-        const ROLE_NAMES = { 0: 'VIP会员', 1: '初级会员 C1', 2: '高级会员 C2', 3: '推广合伙人 B1', 4: '运营合伙人 B2', 5: '区域合伙人 B3' };
+        const ROLE_NAMES = { 0: 'VIP用户', 1: '初级会员', 2: '高级会员', 3: '推广合伙人', 4: '运营合伙人', 5: '区域合伙人', 6: '线下实体门店' };
         const nextLevel = Math.min(currentLevel + 1, 5);
         const conditions = [];
         if (nextLevel === 1) {
@@ -849,7 +870,7 @@ const handleAction = {
 
         return success({
             current_level: currentLevel,
-            current_name: ROLE_NAMES[currentLevel] || '普通用户',
+            current_name: ROLE_NAMES[currentLevel] || 'VIP用户',
             next_level: currentLevel >= 5 ? null : nextLevel,
             next_name: currentLevel >= 5 ? null : (ROLE_NAMES[nextLevel] || ''),
             conditions,

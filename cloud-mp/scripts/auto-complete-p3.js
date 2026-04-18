@@ -68,7 +68,7 @@ async function handleUserAction(event, openid) {
             if (!user) {
                 throw notFound('用户不存在');
             }
-            return success(userProfile.formatUser(user));
+            return success(await userProfile.formatUser(user));
         } catch (err) {
             if (err instanceof CloudBaseError) throw err;
             console.error('Get profile error:', err);
@@ -82,7 +82,7 @@ async function handleUserAction(event, openid) {
                 throw badRequest('缺少更新数据');
             }
             const user = await userProfile.updateProfile(openid, params);
-            return success(userProfile.formatUser(user));
+            return success(await userProfile.formatUser(user));
         } catch (err) {
             if (err instanceof CloudBaseError) throw err;
             console.error('Update profile error:', err);

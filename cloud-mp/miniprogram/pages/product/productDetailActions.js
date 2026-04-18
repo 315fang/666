@@ -1,5 +1,6 @@
 const { post } = require('../../utils/request');
 const { normalizeProductId } = require('../../utils/dataFormatter');
+const { normalizeLimitedSpotMode } = require('../../utils/limitedSpot');
 const { buildSkuText } = require('./productDetailData');
 
 function hasSkuOptions(page) {
@@ -107,22 +108,49 @@ function onBuyNow(page, resolvePayableUnitPrice) {
     page._buyingNow = true;
     const { product, selectedSku, quantity } = page.data;
     const isExchangeMode = !!page.data.exchangeMode;
+    const limitedSpotOffer = page.data.limitedSpotOffer || null;
+    const limitedSpotMode = limitedSpotOffer
+        ? normalizeLimitedSpotMode(page.data.limitedSpotMode, limitedSpotOffer)
+        : '';
+    const isLimitedSpotPoints = !!limitedSpotOffer && limitedSpotMode === 'points';
+    const isLimitedSpotMoney = !!limitedSpotOffer && limitedSpotMode === 'money';
+    const lockedSkuId = limitedSpotOffer && limitedSpotOffer.sku_id
+        ? String(limitedSpotOffer.sku_id)
+        : '';
+    const resolvedSkuId = lockedSkuId || (selectedSku && (selectedSku.id || selectedSku._id) ? String(selectedSku.id || selectedSku._id) : null);
+    const resolvedSpecText = lockedSkuId && !selectedSku
+        ? (limitedSpotOffer.product && limitedSpotOffer.product.specSummary) || ''
+        : (selectedSku ? buildSkuText(selectedSku) : '');
 
     const buyInfo = {
         product_id: normalizeProductId(product.id),
         category_id: product.category_id || null,
-        sku_id: selectedSku && selectedSku.id || null,
-        quantity: isExchangeMode ? 1 : quantity,
-        price: isExchangeMode ? 0 : resolvePayableUnitPrice(product, selectedSku, page.data.roleLevel),
+        sku_id: resolvedSkuId || null,
+        quantity: (isExchangeMode || limitedSpotOffer) ? 1 : quantity,
+        price: isExchangeMode
+            ? 0
+            : (isLimitedSpotMoney
+                ? Number(limitedSpotOffer.money_price || 0)
+                : (isLimitedSpotPoints ? 0 : resolvePayableUnitPrice(product, selectedSku, page.data.roleLevel))),
         name: product.name,
         image: product.images && product.images[0] || '',
-        spec: selectedSku ? buildSkuText(selectedSku) : '',
+        spec: resolvedSpecText,
         supports_pickup: product.supports_pickup ? 1 : 0,
-        allow_points: isExchangeMode ? 0 : (product.is_explosive ? 0 : (product.allow_points == null ? 1 : (product.allow_points ? 1 : 0))),
+        allow_points: (isExchangeMode || limitedSpotOffer) ? 0 : (product.is_explosive ? 0 : (product.allow_points == null ? 1 : (product.allow_points ? 1 : 0))),
         is_explosive: product.is_explosive ? 1 : 0,
         exchange_coupon_id: isExchangeMode ? page.data.exchangeCouponId : '',
         exchange_mode: isExchangeMode ? 1 : 0,
-        exchange_title: isExchangeMode ? (page.data.exchangeTitle || '') : ''
+        exchange_title: isExchangeMode ? (page.data.exchangeTitle || '') : '',
+        limited_spot: limitedSpotOffer ? {
+            card_id: page.data.limitedSpotCardId || '',
+            offer_id: page.data.limitedSpotOfferId || '',
+            mode: limitedSpotMode,
+            redeem_points: isLimitedSpotPoints
+        } : null,
+        limited_spot_mode: limitedSpotMode || '',
+        limited_spot_title: limitedSpotOffer ? (page.data.limitedSpotTitle || '') : '',
+        limited_spot_points_price: limitedSpotOffer ? Number(limitedSpotOffer.points_price || 0) : 0,
+        limited_spot_money_price: limitedSpotOffer ? Number(limitedSpotOffer.money_price || 0) : 0
     };
     wx.setStorageSync('directBuyInfo', buyInfo);
 

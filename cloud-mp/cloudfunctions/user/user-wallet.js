@@ -16,7 +16,8 @@ const DEFAULT_POINT_RULES = {
         2: 150,
         3: 300,
         4: 400,
-        5: 500
+        5: 500,
+        6: 500
     },
     checkin: {
         points: 5,
@@ -586,7 +587,7 @@ async function pointsAccount(openid) {
         points,
         growth_value: points,
         level: toNumber(userData.role_level, 0),
-        level_name: userData.role_name || '普通用户',
+        level_name: userData.role_name || 'VIP用户',
     };
 }
 

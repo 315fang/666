@@ -20,12 +20,13 @@ const {
 } = require('./payment-deposit');
 
 const DEFAULT_ROLE_NAMES = {
-    0: 'VIP会员',
-    1: '初级会员 C1',
-    2: '高级会员 C2',
-    3: '推广合伙人 B1',
-    4: '运营合伙人 B2',
-    5: '区域合伙人 B3'
+    0: 'VIP用户',
+    1: '初级会员',
+    2: '高级会员',
+    3: '推广合伙人',
+    4: '运营合伙人',
+    5: '区域合伙人',
+    6: '线下实体门店'
 };
 
 const DEFAULT_AGENT_UPGRADE_RULES = {
@@ -105,7 +106,8 @@ const DEFAULT_POINT_RULES = {
         2: 150,
         3: 300,
         4: 400,
-        5: 500
+        5: 500,
+        6: 500
     },
     group_start: {
         points: 0,
@@ -326,7 +328,7 @@ async function loadAgentRuntimeConfig() {
 function getRoleMeta(roleLevel, memberLevels = []) {
     const current = (memberLevels || []).find((item) => toNumber(item.level, -1) === roleLevel);
     return {
-        roleName: current?.name || DEFAULT_ROLE_NAMES[roleLevel] || '普通用户',
+        roleName: current?.name || DEFAULT_ROLE_NAMES[roleLevel] || 'VIP用户',
         discountRate: current?.discount_rate != null ? toNumber(current.discount_rate, 1) : null
     };
 }
@@ -769,7 +771,7 @@ async function ensureAgentRoleSynced(orderId, order) {
             user_id: user.id || user._legacy_id || user._id || order.openid,
             from_level: currentRoleLevel,
             to_level: nextRoleLevel,
-            from_name: DEFAULT_ROLE_NAMES[currentRoleLevel] || '普通用户',
+            from_name: DEFAULT_ROLE_NAMES[currentRoleLevel] || 'VIP用户',
             to_name: roleMeta.roleName,
             trigger_type: rechargeTotal >= toNumber(upgradeRules.b1_recharge, 3000) ? 'recharge' : 'referral',
             trigger_order_id: orderId,

@@ -117,12 +117,6 @@ const routes = [
         component: () => import('@/views/branch-agents/index.vue'),
         meta: { title: '分支代理', icon: 'Location', group: '用户与渠道', order: 3, permission: 'dealers' }
       },
-      {
-        path: 'n-system',
-        name: 'NSystem',
-        component: () => import('@/views/n-system/index.vue'),
-        meta: { title: 'N路径代理', icon: 'Connection', group: '用户与渠道', order: 4, permission: 'dealers' }
-      },
       // ===== 内容运营 =====
       {
         path: 'content',

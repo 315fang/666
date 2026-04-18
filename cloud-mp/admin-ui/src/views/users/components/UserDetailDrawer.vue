@@ -34,7 +34,7 @@
               <span v-else class="sub-hint">未设置（可在备注里维护 JSON 标签）</span>
             </el-descriptions-item>
             <el-descriptions-item label="会员码">{{ detailUser.member_no || detailUser.invite_code || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="商务中心(C端)">
+            <el-descriptions-item label="团队中心(C端)">
               <el-switch
                 :model-value="Number(detailUser.participate_distribution) === 1"
                 :loading="commerceSaving"

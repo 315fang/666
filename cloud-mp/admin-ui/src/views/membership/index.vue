@@ -29,7 +29,7 @@
               </div>
               <el-form label-position="top" style="margin-top:12px">
                 <el-form-item label="等级名称">
-                  <el-input v-model="lv.name" placeholder="如：普通用户" />
+                  <el-input v-model="lv.name" placeholder="如：VIP用户" />
                 </el-form-item>
                 <el-form-item label="描述">
                   <el-input v-model="lv.description" type="textarea" :rows="2" placeholder="该等级的权益说明" />
@@ -151,23 +151,26 @@
             </el-form-item>
             <el-divider content-position="left">复购积分倍率（按每消费100元）</el-divider>
             <div class="form-tip" style="margin-bottom:12px">影响路径：订单支付回调发分；这里填写的是每消费 100 元赠送的积分数。</div>
-            <el-form-item label="VIP">
+            <el-form-item label="VIP用户">
               <el-input-number v-model="pointRules.purchase_multiplier_by_role[0]" :min="0" :step="1" style="width:140px" />
             </el-form-item>
-            <el-form-item label="C1">
+            <el-form-item label="初级会员">
               <el-input-number v-model="pointRules.purchase_multiplier_by_role[1]" :min="0" :step="1" style="width:140px" />
             </el-form-item>
-            <el-form-item label="C2">
+            <el-form-item label="高级会员">
               <el-input-number v-model="pointRules.purchase_multiplier_by_role[2]" :min="0" :step="1" style="width:140px" />
             </el-form-item>
-            <el-form-item label="B1">
+            <el-form-item label="推广合伙人">
               <el-input-number v-model="pointRules.purchase_multiplier_by_role[3]" :min="0" :step="1" style="width:140px" />
             </el-form-item>
-            <el-form-item label="B2">
+            <el-form-item label="运营合伙人">
               <el-input-number v-model="pointRules.purchase_multiplier_by_role[4]" :min="0" :step="1" style="width:140px" />
             </el-form-item>
-            <el-form-item label="B3">
+            <el-form-item label="区域合伙人">
               <el-input-number v-model="pointRules.purchase_multiplier_by_role[5]" :min="0" :step="1" style="width:140px" />
+            </el-form-item>
+            <el-form-item label="线下实体门店">
+              <el-input-number v-model="pointRules.purchase_multiplier_by_role[6]" :min="0" :step="1" style="width:140px" />
             </el-form-item>
             <el-form-item label="每日签到">
               <el-input-number v-model="pointRules.checkin.points" :min="0" style="width:140px" />
@@ -286,7 +289,7 @@ const pointLevels = ref(defaultPointLevels())
 
 const pointRules = reactive({
   deduction: { yuan_per_point: 0.1, max_order_ratio: 0.7 },
-  purchase_multiplier_by_role: { 0: 50, 1: 100, 2: 150, 3: 300, 4: 400, 5: 500 },
+  purchase_multiplier_by_role: { 0: 50, 1: 100, 2: 150, 3: 300, 4: 400, 5: 500, 6: 500 },
   review: { points: 10, remark: '写评价获得积分' },
   checkin: { points: 5, remark: '每日签到' },
   checkin_streak: { points: 50, streak_days: 7, remark: '连续签到7天奖励' },
@@ -334,9 +337,9 @@ function defaultPeerBonusConfig() {
 const peerBonus = reactive(defaultPeerBonusConfig())
 
 const defaultGrowthTiers = () => [
-  { min: 0, discount: 1, name: '普通用户', desc: '基础积分权益' },
-  { min: 299, discount: 1, name: '初级代理', desc: '成长值提升后解锁更多积分权益' },
-  { min: 580, discount: 1, name: '高级代理', desc: '成长值提升后解锁更多积分权益' },
+  { min: 0, discount: 1, name: 'VIP用户', desc: '基础积分权益' },
+  { min: 299, discount: 1, name: '初级会员', desc: '成长值提升后解锁更多积分权益' },
+  { min: 580, discount: 1, name: '高级会员', desc: '成长值提升后解锁更多积分权益' },
   { min: 3000, discount: 1, name: '推广合伙人', desc: '享受团队与复购积分权益' },
   { min: 30000, discount: 1, name: '运营合伙人', desc: '享受团队与复购积分权益' },
   { min: 198000, discount: 1, name: '区域合伙人', desc: '享受团队与复购积分权益' }
@@ -345,12 +348,13 @@ const defaultGrowthTiers = () => [
 const growthTiers = ref(defaultGrowthTiers())
 
 const memberLevels = ref([
-  { level: 0, name: 'VIP会员', description: '注册后进入基础会员层级，普通品复购每消费 100 元赠送 50 积分。', color: '#909399', price_tier: 'retail', commission_type: 'none', discount_rate: 1 },
-  { level: 1, name: '初级代理', description: 'C1 消费满 299 元升级，直推 20%，普通品复购每消费 100 元赠送 100 积分。', color: '#409EFF', price_tier: 'member', commission_type: 'level1', discount_rate: 1 },
-  { level: 2, name: '高级代理', description: 'C2 直推 2 个 C1 且销售满 580 元升级，直推 30% + 间推 5%。', color: '#67c23a', price_tier: 'leader', commission_type: 'level2', discount_rate: 1 },
-  { level: 3, name: '推广合伙人', description: 'B1 推荐 10 个 C1 或充值 3000 元升级，享团队与复购积分权益。', color: '#E6A23C', price_tier: 'agent', commission_type: 'level2', discount_rate: 1 },
-  { level: 4, name: '运营合伙人', description: 'B2 推荐 10 个 B1 或充值 30000 元升级，享区域运营权益。', color: '#F56C6C', price_tier: 'agent', commission_type: 'level2', discount_rate: 1 },
-  { level: 5, name: '区域合伙人', description: 'B3 推荐 3 个 B2 或 30 个 B1，或充值 198000 元升级。', color: '#9B59B6', price_tier: 'agent', commission_type: 'level2', discount_rate: 1 },
+  { level: 0, name: 'VIP用户', description: '注册后进入基础会员层级，普通品复购每消费 100 元赠送 50 积分。', color: '#909399', price_tier: 'retail', commission_type: 'none', discount_rate: 1 },
+  { level: 1, name: '初级会员', description: '消费满 299 元升级，解锁更高积分权益。', color: '#409EFF', price_tier: 'member', commission_type: 'level1', discount_rate: 1 },
+  { level: 2, name: '高级会员', description: '满足成长与推荐条件后升级，解锁更高积分权益。', color: '#67c23a', price_tier: 'leader', commission_type: 'level2', discount_rate: 1 },
+  { level: 3, name: '推广合伙人', description: '推荐或充值达标后升级，享团队与复购积分权益。', color: '#E6A23C', price_tier: 'agent', commission_type: 'level2', discount_rate: 1 },
+  { level: 4, name: '运营合伙人', description: '推荐或充值达标后升级，享区域运营权益。', color: '#F56C6C', price_tier: 'agent', commission_type: 'level2', discount_rate: 1 },
+  { level: 5, name: '区域合伙人', description: '团队达标后升级，享更高层级团队权益。', color: '#9B59B6', price_tier: 'agent', commission_type: 'level2', discount_rate: 1 },
+  { level: 6, name: '线下实体门店', description: '线下实体门店身份由后台人工认定，不参与自动成长升级。', color: '#0F766E', price_tier: 'agent', commission_type: 'none', discount_rate: 1 },
 ])
 
 const normalizeCommissionType = (value) => {
@@ -425,6 +429,7 @@ const getUpgradeSummary = (level) => {
   if (level === 3) return `推荐 ${upgradeRules.b1_referee_count} 个 C1 或充值 ${upgradeRules.b1_recharge} 元升级。`
   if (level === 4) return `推荐 ${upgradeRules.b2_referee_count} 个 B1 或充值 ${upgradeRules.b2_recharge} 元升级。`
   if (level === 5) return `推荐 ${upgradeRules.b3_referee_b2_count} 个 B2 或 ${upgradeRules.b3_referee_b1_count} 个 B1，或充值 ${upgradeRules.b3_recharge} 元升级。`
+  if (level === 6) return '线下实体门店由后台人工认定，不走自动升级规则。'
   return '按后台真实规则执行。'
 }
 

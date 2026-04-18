@@ -46,7 +46,7 @@ Page({
         memberLevels: [],
         currentGrowthMin: 0,
         currentRoleLevel: 0,
-        currentRoleName: '普通用户',
+        currentRoleName: 'VIP用户',
         activeCard: 'consume',
         cardSwiperCurrent: 0,
         cardReady: false,
@@ -121,7 +121,7 @@ Page({
                 currentMeta.role_name
                 || profileRes.data.role_name
                 || rawMembers.find(m => Number(m.level) === roleLevel)?.name
-                || '普通用户'
+                || 'VIP用户'
             );
 
             const growthTiers = rawTiers.map((t, idx) => ({
@@ -203,7 +203,7 @@ Page({
         });
     },
 
-    goBusinessCenter() {
+    goTeamCenter() {
         wx.navigateTo({ url: '/pages/distribution/business-center' });
     },
 

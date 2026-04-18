@@ -175,7 +175,7 @@ function registerMarketingRoutes(app, deps) {
             commission_balance: 0,
             balance: 0,
             role_level: exitRules.auto_revoke_identity === false ? user.role_level : 0,
-            role_name: exitRules.auto_revoke_identity === false ? user.role_name : '普通用户',
+            role_name: exitRules.auto_revoke_identity === false ? user.role_name : 'VIP用户',
             distributor_level: exitRules.auto_revoke_identity === false ? user.distributor_level : 0,
             agent_level: exitRules.auto_revoke_identity === false ? user.agent_level : 0,
             participate_distribution: exitRules.auto_revoke_identity === false ? user.participate_distribution : 0,
@@ -238,6 +238,8 @@ function registerMarketingRoutes(app, deps) {
         return {
             permanent_section_enabled: value.permanent_section_enabled !== false,
             activity_sections_order: value.activity_sections_order === 'limited_first' ? 'limited_first' : 'permanent_first',
+            permanent_section_title: pickString(value.permanent_section_title || ''),
+            permanent_section_subtitle: pickString(value.permanent_section_subtitle || ''),
             brand_news_section_title: pickString(value.brand_news_section_title || '品牌动态'),
             banners,
             permanent,
@@ -1255,18 +1257,22 @@ function registerMarketingRoutes(app, deps) {
     app.get('/admin/api/activity-options', auth, requirePermission('products'), async (_req, res) => {
         await ensureFreshCollections(['group_activities', 'slash_activities', 'lottery_prizes', 'products']);
         const products = getCollection('products');
+        const staticOptions = [
+            { key: 'flash_sale:default', link_type: 'flash_sale', link_value: '__flash_sale__', title: '限时秒杀入口', badge: '固定入口' },
+            { key: 'coupon_center:default', link_type: 'coupon_center', link_value: '__coupon_center__', title: '优惠券中心入口', badge: '固定入口' }
+        ];
         const groups = getCollection('group_activities')
             .map((item) => normalizeGroup(item, products))
-            .map((item) => ({ key: `group:${item.id || item._id}`, type: 'group', value: item.id || item._id, title: item.name }));
+            .map((item) => ({ key: `group:${item.id || item._id}`, link_type: 'group_buy', link_value: item.id || item._id, title: item.name, badge: '拼团' }));
         const slash = getCollection('slash_activities')
             .map((item) => normalizeMarketingActivity(item, products, {
                 fallbackLabel: '砍价活动',
                 priceKeys: ['floor_price', 'initial_price'],
                 defaultPrice: 0
             }))
-            .map((item) => ({ key: `slash:${item.id || item._id}`, type: 'slash', value: item.id || item._id, title: item.name }));
-        const lottery = getCollection('lottery_prizes').map((item) => ({ key: `lottery:${item.id || item._id}`, type: 'lottery', value: item.id || item._id, title: item.name || '抽奖奖品' }));
-        ok(res, [...groups, ...slash, ...lottery]);
+            .map((item) => ({ key: `slash:${item.id || item._id}`, link_type: 'slash', link_value: item.id || item._id, title: item.name, badge: '砍价' }));
+        const lottery = getCollection('lottery_prizes').map((item) => ({ key: `lottery:${item.id || item._id}`, link_type: 'lottery', link_value: item.id || item._id, title: item.name || '抽奖奖品', badge: '抽奖' }));
+        ok(res, [...staticOptions, ...groups, ...slash, ...lottery]);
     });
 
     app.get('/admin/api/festival-config', auth, requirePermission('products'), async (_req, res) => {

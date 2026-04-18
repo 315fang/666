@@ -13,7 +13,8 @@ const {
     loadBubbles: loadHomeBubbles,
     loadCoupons: loadHomeCoupons,
     applyHomeConfig,
-    normalizeAssetUrl
+    normalizeAssetUrl,
+    createEmptyBrandZone
 } = require('./indexHomeLoader');
 const app = getApp();
 
@@ -47,12 +48,14 @@ function uniqueImageUrls(list = []) {
 function collectFeaturedImageCandidates(product = {}) {
     return uniqueImageUrls([
         ...(Array.isArray(product.image_candidates) ? product.image_candidates : []),
-        resolveProductImage(product, ''),
+        product.image_url,
+        ...parseImages(product.preview_images),
+        ...parseImages(product.previewImages),
         product.firstImage,
+        resolveProductImage(product, ''),
         product.cover_image,
         product.coverImage,
         product.image,
-        product.image_url,
         product.cover,
         product.cover_url,
         product.coverUrl,
@@ -93,6 +96,7 @@ Page({
         currentBubble: '',
         bubbleAnim: {},
         featuredProducts: [],
+        featuredSections: [],
         userInfo: null,
         isLoggedIn: false,
         truncatedName: '',
@@ -108,6 +112,7 @@ Page({
         statusBarHeight: 20,
         navTopPadding: 20,
         navBarHeight: 44,
+        heroViewportHeight: 0,
         loading: true,
         showPopupAd: false,
         popupAd: {},
@@ -115,13 +120,16 @@ Page({
         regLightTipTitle: '',
         regLightTipContent: '',
         homeCoupons: [],
-        unusedCouponCount: 0
+        unusedCouponCount: 0,
+        brandZone: createEmptyBrandZone()
     },
 
     onLoad(options) {
         this._assetRefreshInFlight = false;
         this._assetRefreshAttempted = false;
+        const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
         this.setData({
+            heroViewportHeight: windowInfo.windowHeight || windowInfo.screenHeight || 0,
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
             navBarHeight: app.globalData.navBarHeight || 44
@@ -603,22 +611,62 @@ Page({
 
     onAssetImageError(e) {
         const scene = e?.currentTarget?.dataset?.scene || 'unknown';
-        if (this._assetRefreshInFlight || this._assetRefreshAttempted) {
-            console.warn('[Index] 图片加载失败，已触发过刷新，不重复重试:', scene);
+        console.warn('[Index] 图片加载失败，使用本地降级内容:', scene, e?.detail || {});
+
+        if (scene === 'hero-banner') {
+            const heroBanners = (this.data.heroBanners || []).map((item, index) => (
+                index === Number(e?.currentTarget?.dataset?.index || 0)
+                    ? { ...item, image: '' }
+                    : item
+            ));
+            this.setData({ heroBanners });
             return;
         }
 
-        this._assetRefreshInFlight = true;
-        this._assetRefreshAttempted = true;
-        console.warn('[Index] 图片加载失败，触发一次强制刷新配置:', scene, e?.detail || {});
+        if (scene === 'mid-poster' || scene === 'bottom-poster') {
+            const key = scene === 'mid-poster' ? 'midPosters' : 'bottomPosters';
+            const list = Array.isArray(this.data[key]) ? this.data[key].slice() : [];
+            const index = Number(e?.currentTarget?.dataset?.index || 0);
+            if (list[index]) {
+                list[index] = { ...list[index], image: '' };
+                this.setData({ [key]: list });
+            }
+            return;
+        }
 
-        this.loadData(true)
-            .catch((err) => {
-                console.error('[Index] 资产刷新失败:', err);
-            })
-            .finally(() => {
-                this._assetRefreshInFlight = false;
-            });
+        if (scene === 'popup-ad') {
+            this.setData({ showPopupAd: false });
+        }
+    },
+
+    onBrandZoneImageError(e) {
+        const scene = e?.currentTarget?.dataset?.scene || 'card';
+        const index = Number(e?.currentTarget?.dataset?.index || 0);
+        const brandZone = {
+            ...createEmptyBrandZone(),
+            ...(this.data.brandZone || {})
+        };
+
+        if (scene === 'cover') {
+            brandZone.coverImage = '';
+            this.setData({ brandZone });
+            return;
+        }
+
+        if (scene === 'certification') {
+            const certifications = Array.isArray(brandZone.certifications) ? brandZone.certifications.slice() : [];
+            if (!certifications[index]) return;
+            certifications[index] = { ...certifications[index], image: '' };
+            brandZone.certifications = certifications;
+            this.setData({ brandZone });
+            return;
+        }
+
+        const cards = Array.isArray(brandZone.cards) ? brandZone.cards.slice() : [];
+        if (!cards[index]) return;
+        cards[index] = { ...cards[index], image: '' };
+        brandZone.cards = cards;
+        this.setData({ brandZone });
     },
 
     _syncPopupAdTabBar() {

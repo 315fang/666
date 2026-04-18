@@ -45,10 +45,13 @@ const globalStore = createStore({
     // 角色名称
     roleName: (state) => {
       const roleNames = {
-        [USER_ROLES.GUEST]: '普通用户',
-        [USER_ROLES.MEMBER]: '会员',
-        [USER_ROLES.LEADER]: '团长',
-        [USER_ROLES.AGENT]: '代理商'
+        [USER_ROLES.GUEST]: 'VIP用户',
+        [USER_ROLES.MEMBER]: '初级会员',
+        [USER_ROLES.LEADER]: '高级会员',
+        [USER_ROLES.AGENT]: '推广合伙人',
+        [USER_ROLES.PARTNER]: '运营合伙人',
+        [USER_ROLES.REGIONAL]: '区域合伙人',
+        [USER_ROLES.STORE]: '线下实体门店'
       };
       return roleNames[state.roleLevel] || '未知';
     },

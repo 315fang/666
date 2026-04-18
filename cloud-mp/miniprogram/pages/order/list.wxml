@@ -23,6 +23,17 @@
     </scroll-view>
   </view>
 
+  <view class="order-activity-quick">
+    <view class="order-quick-btn" bindtap="onQuickGroupTap" hover-class="order-quick-btn-hover">
+      <image class="order-quick-icon" src="/assets/icons/users.svg" mode="aspectFit"></image>
+      <text class="order-quick-text">拼团</text>
+    </view>
+    <view class="order-quick-btn" bindtap="onQuickSlashTap" hover-class="order-quick-btn-hover">
+      <image class="order-quick-icon" src="/assets/icons/tag.svg" mode="aspectFit"></image>
+      <text class="order-quick-text">砍价</text>
+    </view>
+  </view>
+
   <!-- 订单列表 -->
   <scroll-view class="order-list" scroll-y bindscrolltolower="onLoadMore">
     <!-- 列表容器 -->

@@ -1,0 +1,523 @@
+{
+  "kind": "cloudbase_all_asset_migration_report",
+  "executed_at": "2026-04-18T05:35:58.363Z",
+  "mode": "apply",
+  "environment": {
+    "env_id": "cloud1-9gywyqe49638e46f",
+    "auth_status": "READY",
+    "env_status": "READY"
+  },
+  "summary": {
+    "scanned_records": 289,
+    "changed_records": 115,
+    "failed_records": 75
+  },
+  "collections": [
+    {
+      "name": "banners",
+      "scanned": 5,
+      "changed": 5,
+      "failed": 0
+    },
+    {
+      "name": "splash_screens",
+      "scanned": 1,
+      "changed": 1,
+      "failed": 0
+    },
+    {
+      "name": "materials",
+      "scanned": 59,
+      "changed": 59,
+      "failed": 0
+    },
+    {
+      "name": "products",
+      "scanned": 11,
+      "changed": 0,
+      "failed": 10
+    },
+    {
+      "name": "skus",
+      "scanned": 11,
+      "changed": 3,
+      "failed": 8
+    },
+    {
+      "name": "users",
+      "scanned": 186,
+      "changed": 47,
+      "failed": 55
+    },
+    {
+      "name": "reviews",
+      "scanned": 3,
+      "changed": 0,
+      "failed": 1
+    },
+    {
+      "name": "brand_news",
+      "scanned": 0,
+      "changed": 0,
+      "failed": 0
+    },
+    {
+      "name": "lottery_prizes",
+      "scanned": 13,
+      "changed": 0,
+      "failed": 1
+    }
+  ],
+  "failures": [
+    {
+      "collection": "products",
+      "id": "1",
+      "title": "镜像案例库奢护/体验理套装+赠瞬间抗皱神器",
+      "error": "\n"
+    },
+    {
+      "collection": "products",
+      "id": "2",
+      "title": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+      "error": "下载失败，状态码 404"
+    },
+    {
+      "collection": "products",
+      "id": "4",
+      "title": "问兰灯塔皮脂膜精华乳",
+      "error": "\n"
+    },
+    {
+      "collection": "products",
+      "id": "5",
+      "title": "玻色因紧致面霜",
+      "error": "\n"
+    },
+    {
+      "collection": "products",
+      "id": "6",
+      "title": "问兰氨基酸洁面慕斯",
+      "error": "\n"
+    },
+    {
+      "collection": "products",
+      "id": "7",
+      "title": "问兰燕窝精萃露",
+      "error": "\n"
+    },
+    {
+      "collection": "products",
+      "id": "8",
+      "title": "绿魔方抗皱焕颜霜/",
+      "error": "\n"
+    },
+    {
+      "collection": "products",
+      "id": "9",
+      "title": "小极光焕彩面霜",
+      "error": "\n"
+    },
+    {
+      "collection": "products",
+      "id": "10",
+      "title": "皮脂膜精华液(次抛装)",
+      "error": "\n"
+    },
+    {
+      "collection": "products",
+      "id": "11",
+      "title": "问兰护肤尊享礼盒",
+      "error": "\n"
+    },
+    {
+      "collection": "skus",
+      "id": "fallback-sku-1",
+      "title": "fallback-sku-1",
+      "error": "\n"
+    },
+    {
+      "collection": "skus",
+      "id": "fallback-sku-2",
+      "title": "fallback-sku-2",
+      "error": "下载失败，状态码 404"
+    },
+    {
+      "collection": "skus",
+      "id": "fallback-sku-4",
+      "title": "fallback-sku-4",
+      "error": "\n"
+    },
+    {
+      "collection": "skus",
+      "id": "fallback-sku-5",
+      "title": "fallback-sku-5",
+      "error": "\n"
+    },
+    {
+      "collection": "skus",
+      "id": "fallback-sku-6",
+      "title": "fallback-sku-6",
+      "error": "\n"
+    },
+    {
+      "collection": "skus",
+      "id": "fallback-sku-7",
+      "title": "fallback-sku-7",
+      "error": "\n"
+    },
+    {
+      "collection": "skus",
+      "id": "fallback-sku-8",
+      "title": "fallback-sku-8",
+      "error": "\n"
+    },
+    {
+      "collection": "skus",
+      "id": "fallback-sku-11",
+      "title": "fallback-sku-11",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834480357a475ee",
+      "title": "小锚点和他的老婆 | 37970789",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448050a68a281",
+      "title": "小锚点！ | 8H8W69RV",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448091912035e",
+      "title": "金水桥 | 16161349",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834480d1515ac7e",
+      "title": "wxid_nrysw4xo5qwo12 | 91943685",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448115fa1b295",
+      "title": "wxid_8khbfdaygdka12 | 25026235",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448124d6d16df",
+      "title": "王志霞 | 12376649",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448135a00a57c",
+      "title": "wxid_p0wm1yv1mt3y12 | 45875499",
+      "error": "socket hang up"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f92108344817589ccb52",
+      "title": "微信用户 | 36298534",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834481a7f2f33c6",
+      "title": "微信用户 | 50728217",
+      "error": "socket hang up"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834481c7ef31d3a",
+      "title": "爱笑的甜甜 | 34700941",
+      "error": "Client network socket disconnected before secure TLS connection was established"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834481d2b60dbb5",
+      "title": "曦曦是大太阳 | 70663814",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834482b5bbb863a",
+      "title": "follower | 18235542",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f92108344830556c8d50",
+      "title": "竹行鹤. | 75332631",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448316e56f4e7",
+      "title": "小星 | 55971482",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448320a96fa12",
+      "title": "Jovial | 55048693",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448335b5f5131",
+      "title": "爱吃月亮的猫 | H89B6JDA",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448351a78284c",
+      "title": "嫦娥和她的老师们【学习版】 | 83313261",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834483602e955b3",
+      "title": "知水 | YZVUCD8M",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834483853b01c59",
+      "title": "羽杰🌟 | 87095879",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448397c683344",
+      "title": "Manxh. | 16138934",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834483b5665df39",
+      "title": "小文 | 25159459",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834483c46be0185",
+      "title": "万千 | 71678529",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448423f520885",
+      "title": "九如 | 75231361",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834484335259085",
+      "title": "司宇 | 74595622",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834484b42471a15",
+      "title": "江橙🍊和他的老师们 | 34584553",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834484d01a1241c",
+      "title": "狐狸 | 33208468",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834484e7df6b4ee",
+      "title": "李玲玲 | WNDN6YB2",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834484f28562596",
+      "title": "晒晒晒太阳 | KQ3YSFAU",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834485025e3d31b",
+      "title": "万木成行 | 70081182",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834485345c3e695",
+      "title": "Go! | 45303179",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448541b9c2488",
+      "title": "何妨 | 34545895",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834485557179bd2",
+      "title": "曦 | 17209413",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448575409a7a9",
+      "title": "wxid_vw5s67h5khhp12 | 66337742",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f92108344858727a1a19",
+      "title": "次旦普尺 | 51497043",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448594ca2763e",
+      "title": "未熵 | 51910694",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834485c7c25d97b",
+      "title": "CiCi | 34475598",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448603d0cdac0",
+      "title": "微信用户 | 19471684",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834486471398552",
+      "title": "刘祐祎（yī） | 29190657",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448652e5647b2",
+      "title": "政权和他的老师们 | 98382507",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834486716ddeaed",
+      "title": "Sein zum Tode | 25439712",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834486b6245f136",
+      "title": "小奥 | 25882188",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834486c165d2a7e",
+      "title": "用户78158611 | 84455469",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834486f0a881d2a",
+      "title": "傲娇大小姐 | 40790768",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448710d1bfc1c",
+      "title": "wxid_ahah4ny72dhv12 | 86244747",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834487211ec6f01",
+      "title": "雪珂 | 42769396",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448736af42876",
+      "title": "He Ts | 12313601",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834487438f9706f",
+      "title": "小米 | 15467822",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448762a06596d",
+      "title": "🌟卿贝贝🌟 | 73961863",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448793cd3a127",
+      "title": "wxid_zhuebh9xv1gc12 | 45666044",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f9210834487a1c103739",
+      "title": "春草 | 69780641",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448824f5171ca",
+      "title": "胡啦 | 44111819",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448880942e3c6",
+      "title": "wxid_k3i5hyz8czt712 | 81205735",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448905d22962d",
+      "title": "小杜 | 99653371",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448927d608828",
+      "title": "小张 | 40799318",
+      "error": "\n"
+    },
+    {
+      "collection": "users",
+      "id": "9eb3651569d4f921083448a7542f8b5d",
+      "title": "wxid_5psgzmjoviih12 | FVWV4J23",
+      "error": "\n"
+    },
+    {
+      "collection": "reviews",
+      "id": "851a630369d5033c08ee9f90188ec35c",
+      "title": "物超所值，超级好用，还会再复购，也会推荐给身边朋友",
+      "error": "\n"
+    },
+    {
+      "collection": "lottery_prizes",
+      "id": "78167c7f69d50412082a729254548bf9",
+      "title": "神秘大奖",
+      "error": "\n"
+    }
+  ]
+}

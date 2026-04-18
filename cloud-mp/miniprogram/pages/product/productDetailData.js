@@ -94,10 +94,10 @@ async function loadProduct(page, id) {
         const product = res.data || {};
 
         product.images = sanitizeImageList(
-            product.images || product.image || resolveProductImage(product, PRODUCT_PLACEHOLDER),
+            product.preview_images || product.previewImages || product.image_url || product.images || product.image || resolveProductImage(product, PRODUCT_PLACEHOLDER),
             PRODUCT_PLACEHOLDER
         );
-        product.detail_images = sanitizeImageList(product.detail_images);
+        product.detail_images = sanitizeImageList(product.preview_detail_images || product.previewDetailImages || product.detail_images);
 
         let specs = [];
         if (product.skus && product.skus.length > 0) {

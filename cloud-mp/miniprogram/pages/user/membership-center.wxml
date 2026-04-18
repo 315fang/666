@@ -42,7 +42,7 @@
               <text class="member-card-badge">积分权益</text>
             </view>
             <text class="member-card-title">{{consumeCardSummary.tierName || currentTierName || '普通会员'}}</text>
-            <text class="member-card-foot">{{consumeCardSummary.benefitText || '成交价按商品标价结算，成长值用于解锁积分权益'}}</text>
+            <text class="member-card-foot">{{consumeCardSummary.benefitText || '成长值用于解锁积分权益；积分按规则使用'}}</text>
           </view>
         </swiper-item>
 
@@ -54,7 +54,7 @@
             </view>
             <text class="member-card-title">{{agentCardSummary.roleName || currentRoleName || '普通用户'}}</text>
             <view class="member-card-agent-meta">
-              <text class="member-card-agent-discount">成交价按商品标价结算</text>
+              <text class="member-card-agent-points">团队与积分权益以团队中心及当前等级规则为准</text>
               <text class="member-card-agent-status">{{agentCardSummary.statusText || '代理等级由后台审核认定'}}</text>
             </view>
           </view>
@@ -137,7 +137,7 @@
       </view>
 
       <view class="agent-entry-wrap" wx:if="{{agentCardSummary.showEntry}}">
-        <view class="agent-entry-btn" bindtap="goBusinessCenter">进入团队中心</view>
+        <view class="agent-entry-btn" bindtap="goTeamCenter">进入团队中心</view>
       </view>
     </view>
 

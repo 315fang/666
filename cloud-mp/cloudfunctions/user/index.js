@@ -8,12 +8,13 @@ const db = cloud.database();
 const _ = db.command;
 
 const DEFAULT_ROLE_NAMES = {
-    0: 'VIP会员',
-    1: '初级会员 C1',
-    2: '高级会员 C2',
-    3: '推广合伙人 B1',
-    4: '运营合伙人 B2',
-    5: '区域合伙人 B3'
+    0: 'VIP用户',
+    1: '初级会员',
+    2: '高级会员',
+    3: '推广合伙人',
+    4: '运营合伙人',
+    5: '区域合伙人',
+    6: '线下实体门店'
 };
 
 const DEFAULT_AGENT_UPGRADE_RULES = {
@@ -349,7 +350,7 @@ async function evaluateAgentUpgrade(openid) {
         rechargeTotal,
         effectiveSales,
         directMembers,
-        roleName: roleMeta?.name || DEFAULT_ROLE_NAMES[nextRoleLevel] || '普通用户',
+        roleName: roleMeta?.name || DEFAULT_ROLE_NAMES[nextRoleLevel] || 'VIP用户',
         discountRate: 1
     };
 }
@@ -588,14 +589,14 @@ const handleAction = {
         await syncEligibleRoleLevelIfNeeded(openid);
         const user = await userProfile.getProfile(openid);
         if (!user) throw notFound('用户不存在');
-        return success(userProfile.formatUser(user));
+        return success(await userProfile.formatUser(user));
     }),
 
     'getProfile': asyncHandler(async (openid, params) => {
         await syncEligibleRoleLevelIfNeeded(openid);
         const user = await userProfile.getProfile(openid);
         if (!user) throw notFound('用户不存在');
-        return success(userProfile.formatUser(user));
+        return success(await userProfile.formatUser(user));
     }),
 
     'updateProfile': asyncHandler(async (openid, params) => {
@@ -603,7 +604,7 @@ const handleAction = {
             throw badRequest('缺少更新数据');
         }
         const user = await userProfile.updateProfile(openid, params);
-        return success(userProfile.formatUser(user));
+        return success(await userProfile.formatUser(user));
     }),
 
     'getStats': asyncHandler(async (openid) => {
@@ -649,14 +650,14 @@ const handleAction = {
         const roleLevelConfig = memberLevels.find((item) => Number(item.level) === roleLevel);
         return success({
             current_level: roleLevel,
-            current_name: user.role_name || roleLevelConfig?.name || '普通用户',
+            current_name: user.role_name || roleLevelConfig?.name || 'VIP用户',
             points,
             next_level: tier.nextLevel,
             next_level_points: tier.nextThreshold,
             progress: tier.pointsNeeded,
             current: {
                 role_level: roleLevel,
-                role_name: user.role_name || roleLevelConfig?.name || '普通用户',
+                role_name: user.role_name || roleLevelConfig?.name || 'VIP用户',
                 current_growth_tier: tier
             },
             growth_tiers: growthTiers,
@@ -924,7 +925,7 @@ const handleAction = {
         const points = toNum(evaluation.user.points || evaluation.user.growth_value, 0);
         return success({
             current_level: evaluation.currentRoleLevel,
-            current_name: evaluation.user.role_name || DEFAULT_ROLE_NAMES[evaluation.currentRoleLevel] || '普通用户',
+            current_name: evaluation.user.role_name || DEFAULT_ROLE_NAMES[evaluation.currentRoleLevel] || 'VIP用户',
             current_points: points,
             can_upgrade: evaluation.nextRoleLevel > evaluation.currentRoleLevel,
             next_level: evaluation.nextRoleLevel,
@@ -978,7 +979,7 @@ const handleAction = {
                 openid,
                 user_id: user._id || user.id || '',
                 role_level: toNum(user.role_level, 0),
-                role_name: user.role_name || DEFAULT_ROLE_NAMES[toNum(user.role_level, 0)] || '普通用户',
+                role_name: user.role_name || DEFAULT_ROLE_NAMES[toNum(user.role_level, 0)] || 'VIP用户',
                 path_type: pathType,
                 leader_id: leaderId,
                 status: 'pending',

@@ -188,7 +188,7 @@
   margin-top: 24rpx;
 }
 
-.member-card-agent-discount {
+.member-card-agent-points {
   display: inline-block;
   font-size: 24rpx;
   padding: 8rpx 18rpx;

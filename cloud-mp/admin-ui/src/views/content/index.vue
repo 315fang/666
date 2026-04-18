@@ -368,7 +368,7 @@ const bannerRules = {
   image_url: [{ required: true, message: '请上传 Banner 图片', trigger: 'change' }]
 }
 
-const resolveAssetUrl = (item = {}) => item.file_id || item.image_url || item.url || ''
+const resolveAssetUrl = (item = {}) => item.image_url || item.url || item.image || item.cover_image || item.file_id || ''
 
 // 商品搜索
 const productSearchLoading = ref(false)
@@ -453,7 +453,7 @@ const handleLinkTypeChange = () => {
 const bannerBlockData = computed({
   get: () => ({
     file_id: bannerForm.file_id,
-    image_url: resolveAssetUrl(bannerForm),
+    image_url: bannerForm.image_url || '',
     title: bannerForm.title,
     subtitle: bannerForm.subtitle,
     link_type: bannerForm.link_type,

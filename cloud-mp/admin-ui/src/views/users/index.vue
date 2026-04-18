@@ -176,7 +176,7 @@ const { pagination, resetPage, applyResponse } = usePagination()
  * 搜索字段说明：
  *  keyword     - 昵称 / 手机号 / 会员码，后端模糊匹配；支持从订单页跳转时携带 ?keyword=xxx 预填
  *  member_no   - 精确匹配 8 位会员码（比 keyword 优先级高，建议已知会员码时使用）
- *  role_level  - 用户角色等级（0普通 1会员 2团长 3代理 4合伙人 5区域代理）
+ *  role_level  - 用户角色等级（0 VIP用户 1 初级会员 … 5 区域合伙人 6 线下实体门店）
  *  status      - 账号状态（active/disabled）
  *  team_leader_id - 按所属负责人 ID 筛选，远程搜索后选择
  *  lookup      - 精确匹配任意用户标识（跨页跳转专用，不暴露在表单里）
@@ -680,7 +680,7 @@ const handleDropdown = (cmd, row) => {
 }
 
 // ===== 工具函数 =====
-const roleText = (r) => (['普通用户', '会员', '团长', '代理商', '合伙人', '区域代理'][r] ?? '-')
+const roleText = (r) => (['VIP用户', '初级会员', '高级会员', '推广合伙人', '运营合伙人', '区域合伙人', '线下实体门店'][r] ?? '-')
 const roleTagType = (r) => (['', 'success', 'warning', 'danger', 'danger', 'danger'][r] ?? '')
 const purchaseLevelText = (code) => {
   if (!code) return '未设置'

@@ -11,6 +11,8 @@
  *   group_buy   → 跳转拼团列表页（可携带 activity_id）
  *   slash       → 跳转砍价列表页（可携带 activity_id）
  *   lottery     → 跳转抽奖页（预留奖池ID）
+ *   flash_sale  → 限时秒杀（limited-spot，link_value 可为活动 id 或 __flash_sale__）
+ *   coupon_center → 优惠券列表 /pages/coupon/list
  *   page        → link_value = 小程序页面路径（自动判断 tabBar / 子页）
  *   url         → link_value = 外部网址，在 webview 中打开
  *   category    → link_value = 分类 ID，打开分类 Tab 并滚动到该分类（switchTab 无 query，用本地存储传递）
@@ -102,6 +104,20 @@ function navigate(linkType, linkValue) {
             wx.navigateTo({
                 url: linkValue ? `/pages/lottery/lottery?pool_id=${linkValue}` : '/pages/lottery/lottery'
             });
+            break;
+
+        case 'flash_sale': {
+            const v = linkValue != null ? String(linkValue).trim() : '';
+            if (!v || v === '__flash_sale__') {
+                wx.navigateTo({ url: '/pages/activity/limited-spot' });
+            } else {
+                wx.navigateTo({ url: `/pages/activity/limited-spot?id=${encodeURIComponent(v)}` });
+            }
+            break;
+        }
+
+        case 'coupon_center':
+            wx.navigateTo({ url: '/pages/coupon/list' });
             break;
 
         case 'page':

@@ -183,6 +183,26 @@ function validateCloudObject(area, name, response, requiredKeys = []) {
   return result;
 }
 
+function validateHomeContent(response) {
+  const result = validateCloudObject('mini', 'config.homeContent', response, ['banners', 'hot_products', 'configs']);
+  if (!result.ok) return result;
+  const configs = response.body?.data?.configs || {};
+  const requiredConfigKeys = [
+    'brand_zone_enabled',
+    'brand_zone_title',
+    'brand_zone_welcome_title',
+    'brand_endorsements',
+    'brand_certifications'
+  ];
+  for (const key of requiredConfigKeys) {
+    if (!(key in configs)) {
+      result.ok = false;
+      result.issues.push(`configs 缺少键 ${key}`);
+    }
+  }
+  return result;
+}
+
 function renderMarkdown(report) {
   const lines = [];
   lines.push('# Business Smoke Audit');
@@ -227,7 +247,7 @@ function main() {
   }
 
   results.push(validateCloudList('mini', 'products.categories', invokeCloud('products', { action: 'categories' })));
-  results.push(validateCloudObject('mini', 'config.homeContent', invokeCloud('config', { action: 'homeContent' }), ['banners', 'hot_products']));
+  results.push(validateHomeContent(invokeCloud('config', { action: 'homeContent' })));
   results.push(validateCloudList('mini', 'config.groups', invokeCloud('config', { action: 'groups' })));
   results.push(validateCloudList('mini', 'config.slashList', invokeCloud('config', { action: 'slashList' })));
   results.push(validateCloudObject('mini', 'config.lottery', invokeCloud('config', { action: 'lottery' })));

@@ -43,8 +43,11 @@
 .search-icon { width: 28rpx; height: 28rpx; opacity: 0.45; }
 .search-placeholder { font-size: 24rpx; color: #94A3B8; }
 
-/* ── Hero 全屏轮播 ── */
-.hero-editorial { position: relative; height: 100vh; min-height: 760rpx; overflow: hidden; }
+/* ── Hero 轮播 ── */
+.hero-editorial {
+  position: relative;
+  overflow: hidden;
+}
 .hero-swiper, .hero-slide { width: 100%; height: 100%; }
 .hero-image, .hero-fallback { width: 100%; height: 100%; }
 
@@ -78,6 +81,8 @@
 
 .poster-card {
   position: relative;
+  width: 100%;
+  height: 1200rpx;
   border-radius: 24rpx;
   overflow: hidden;
   box-shadow: 0 4rpx 20rpx rgba(30, 74, 109, 0.1);
@@ -85,6 +90,7 @@
 
 .poster-image {
   width: 100%;
+  height: 100%;
   display: block;
 }
 
@@ -114,6 +120,8 @@
   display: flex; align-items: center; justify-content: space-between; margin-bottom: 20rpx;
 }
 .section-intro-title { display: block; font-size: 34rpx; color: #201A15; font-weight: 700; }
+.section-copy { display: flex; flex-direction: column; gap: 6rpx; min-width: 0; }
+.section-intro-sub { font-size: 22rpx; color: #64748B; line-height: 1.5; }
 .section-link { font-size: 24rpx; color: #8D755A; padding: 8rpx 0; min-height: 88rpx; display: flex; align-items: center; }
 
 /* ── 商品精选区（全宽大图横幅，对标麦当劳） ── */
@@ -121,6 +129,14 @@
   padding: 0 24rpx 120rpx;
   padding-bottom: calc(120rpx + constant(safe-area-inset-bottom));
   padding-bottom: calc(120rpx + env(safe-area-inset-bottom));
+}
+
+.products-section-grouped {
+  padding-bottom: 48rpx;
+}
+
+.products-section-block {
+  margin-bottom: 32rpx;
 }
 
 .products-grid { display: flex; flex-direction: column; gap: 20rpx; }
@@ -238,6 +254,222 @@
 @keyframes psk-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 .products-empty { text-align: center; padding: 60rpx 0; font-size: 26rpx; color: #B0A396; }
+
+.brand-zone-section {
+  padding: 0 24rpx 96rpx;
+}
+
+.brand-zone-header {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+}
+
+.brand-zone-header-line {
+  flex: 1;
+  height: 2rpx;
+  background: linear-gradient(90deg, rgba(100, 116, 139, 0.05) 0%, rgba(100, 116, 139, 0.32) 100%);
+}
+
+.brand-zone-header-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #2A241F;
+  letter-spacing: 6rpx;
+}
+
+.brand-zone-hero {
+  position: relative;
+  padding-bottom: 86rpx;
+}
+
+.brand-zone-cover {
+  width: 100%;
+  height: 420rpx;
+  display: block;
+  border-radius: 32rpx;
+  background: #E8EEF2;
+}
+
+.brand-zone-cover-fallback {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 44rpx 40rpx;
+  background: linear-gradient(135deg, #EEF3F6 0%, #F6EEDF 52%, #DEE8EE 100%);
+}
+
+.brand-zone-cover-kicker {
+  font-size: 22rpx;
+  color: #64748B;
+  letter-spacing: 4rpx;
+  margin-bottom: 12rpx;
+}
+
+.brand-zone-cover-title {
+  font-size: 46rpx;
+  line-height: 1.18;
+  font-weight: 600;
+  color: #1F2937;
+}
+
+.brand-zone-welcome-card {
+  position: absolute;
+  left: 24rpx;
+  right: 24rpx;
+  bottom: 0;
+  padding: 22rpx 28rpx;
+  border-radius: 22rpx;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12rpx 30rpx rgba(30, 74, 109, 0.12);
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.brand-zone-welcome-title {
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #3A352F;
+  flex-shrink: 0;
+}
+
+.brand-zone-welcome-subtitle {
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #64748B;
+}
+
+.brand-zone-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16rpx;
+}
+
+.brand-zone-card {
+  overflow: hidden;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8rpx 22rpx rgba(30, 74, 109, 0.08);
+  padding-bottom: 18rpx;
+}
+
+.brand-zone-card-media {
+  width: 100%;
+  height: 180rpx;
+  background: #E8EEF2;
+}
+
+.brand-zone-card-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.brand-zone-card-fallback {
+  display: flex;
+  align-items: flex-end;
+  padding: 18rpx;
+  background: linear-gradient(160deg, #EEF4F7 0%, #F7EFE6 100%);
+}
+
+.brand-zone-card-fallback-text {
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #475569;
+}
+
+.brand-zone-card-title {
+  display: block;
+  padding: 16rpx 16rpx 0;
+  font-size: 22rpx;
+  line-height: 1.5;
+  font-weight: 600;
+  color: #334155;
+  min-height: 66rpx;
+}
+
+.brand-zone-card-subtitle {
+  display: block;
+  padding: 6rpx 16rpx 0;
+  font-size: 18rpx;
+  line-height: 1.5;
+  color: #8B7A68;
+}
+
+.brand-zone-cert-list {
+  margin-top: 24rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8rpx 22rpx rgba(30, 74, 109, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.brand-zone-cert-item {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.brand-zone-cert-image {
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 20rpx;
+  background: #E2E8F0;
+  flex-shrink: 0;
+}
+
+.brand-zone-cert-fallback {
+  background: linear-gradient(135deg, #EEF3F6 0%, #F5EFE7 100%);
+}
+
+.brand-zone-cert-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.brand-zone-cert-title {
+  display: block;
+  font-size: 24rpx;
+  line-height: 1.5;
+  font-weight: 600;
+  color: #1F2937;
+}
+
+.brand-zone-cert-subtitle {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  line-height: 1.55;
+  color: #64748B;
+}
+
+.brand-zone-story {
+  margin-top: 24rpx;
+  padding: 28rpx 24rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8rpx 24rpx rgba(30, 74, 109, 0.08);
+}
+
+.brand-zone-story-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #201A15;
+  margin-bottom: 14rpx;
+}
+
+.brand-zone-story-body {
+  display: block;
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: #475569;
+}
 /* 气泡足迹导航栏版：占据原品牌甄选位置 */
 .nav-bubble-bar {
   position: absolute; left: 28rpx; right: 190rpx;

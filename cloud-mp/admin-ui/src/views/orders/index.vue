@@ -1299,7 +1299,7 @@ const handleDropdown = (cmd, row) => {
 }
 
 // ===== 工具 =====
-const roleText = (r) => (['普通用户', '会员', '团长', '代理商', '合伙人', '区域代理'][r] ?? '未知')
+const roleText = (r) => (['VIP用户', '初级会员', '高级会员', '推广合伙人', '运营合伙人', '区域合伙人', '线下实体门店'][r] ?? '未知')
 const roleTagType = (r) => (['', 'success', 'warning', 'danger', 'danger', 'danger'][r] ?? '')
 const getStatusType = (s) => (
   ['pending', 'pending_payment'].includes(s)
