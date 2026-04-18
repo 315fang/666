@@ -1,5 +1,6 @@
 // pages/order/confirm.js - 订单确认页
 const { get } = require('../../utils/request');
+const { resolveCloudImageUrl } = require('./utils/cloudAsset');
 const app = getApp();
 const { getLightPromptModals } = require('../../utils/miniProgramConfig');
 const { shouldShowDaily, markDailyShown } = require('../../utils/lightPrompt');
@@ -194,11 +195,12 @@ Page({
                 });
                 return false;
             }
+            const image = await resolveCloudImageUrl(directBuy.image, '/assets/images/placeholder.svg');
             const amt = (parseFloat(directBuy.price) * directBuy.quantity).toFixed(2);
             const limitedSpotPayload = directBuy.limited_spot || null;
             const limitedSpotMode = directBuy.limited_spot_mode || '';
                 this.setData({
-                    orderItems: [directBuy],
+                    orderItems: [{ ...directBuy, image }],
                     totalAmount: amt,
                     finalAmount: amt,
                 totalCount: directBuy.quantity,

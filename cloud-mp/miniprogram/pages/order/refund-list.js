@@ -1,5 +1,7 @@
 // pages/order/refund-list.js - 退货/退款列表
 const { get, post, put } = require('../../utils/request');
+const { parseImages } = require('../../utils/dataFormatter');
+const { resolveCloudImageList } = require('./utils/cloudAsset');
 const { normalizeRefundConsumer } = require('./orderConsumerFields');
 
 Page({
@@ -38,14 +40,17 @@ Page({
             const res = await get('/refunds', { page, limit });
 
             if (res.code === 0 && res.data) {
-                const list = (res.data.list || []).map(rawItem => {
+                const list = await Promise.all((res.data.list || []).map(async (rawItem) => {
                     const item = normalizeRefundConsumer(rawItem);
                     // 处理商品图片
-                    if (item.order && item.order.product && typeof item.order.product.images === 'string') {
-                        try { item.order.product.images = JSON.parse(item.order.product.images); } catch(e) { item.order.product.images = []; }
+                    if (item.order && item.order.product && item.order.product.images) {
+                        item.order.product.images = await resolveCloudImageList(
+                            item.order.product.images,
+                            parseImages(item.order.product.images)
+                        );
                     }
                     return item;
-                });
+                }));
 
                 this.setData({
                     refunds: isLoadMore ? refunds.concat(list) : list,

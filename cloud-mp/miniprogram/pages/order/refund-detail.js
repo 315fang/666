@@ -1,5 +1,7 @@
 // pages/order/refund-detail.js - 退款详情
 const { get, put } = require('../../utils/request');
+const { parseImages } = require('../../utils/dataFormatter');
+const { resolveCloudImageList } = require('./utils/cloudAsset');
 const { normalizeRefundConsumer } = require('./orderConsumerFields');
 
 Page({
@@ -48,8 +50,11 @@ Page({
             const res = await get(`/refunds/${id}`);
             if (res.code === 0 && res.data) {
                 const refund = normalizeRefundConsumer(res.data);
-                if (refund.order && refund.order.product && typeof refund.order.product.images === 'string') {
-                    try { refund.order.product.images = JSON.parse(refund.order.product.images); } catch(e) { refund.order.product.images = []; }
+                if (refund.order && refund.order.product && refund.order.product.images) {
+                    refund.order.product.images = await resolveCloudImageList(
+                        refund.order.product.images,
+                        parseImages(refund.order.product.images)
+                    );
                 }
                 this.setData({
                     refund,

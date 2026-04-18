@@ -1,5 +1,6 @@
 const { get, post } = require('../../utils/request');
 const { parseImages } = require('../../utils/dataFormatter');
+const { resolveCloudImageList } = require('./utils/cloudAsset');
 const { logisticsCompanyLabel } = require('./utils/logisticsCompany');
 const { normalizeOrderConsumer, normalizeRefundConsumer, toMoney } = require('./orderConsumerFields');
 
@@ -73,7 +74,10 @@ async function loadOrder(page, idOrNo) {
         }));
 
         if (order && order.product) {
-            order.product.images = parseImages(order.product.images);
+            order.product.images = await resolveCloudImageList(
+                order.product.images,
+                parseImages(order.product.images)
+            );
         }
         if (order) {
             order.logistics_company = order.logistics_company || order.shipping_company || '';

@@ -132,21 +132,49 @@ function buildResolvedAssetUrl(record = {}, resolvedMap = new Map()) {
     return isHttpAsset(fallback) ? fallback : '';
 }
 
+async function resolveProductCoverImage(product = {}) {
+    const candidates = [
+        product.cover_image,
+        product.image_url,
+        product.image,
+        ...(Array.isArray(product.images) ? product.images : [])
+    ].filter(Boolean);
+    const resolvedMap = await batchResolveManagedFileUrls(candidates.filter((value) => isCloudFileId(pickString(value))));
+    for (const candidate of candidates) {
+        const imageUrl = buildResolvedAssetUrl({
+            file_id: candidate,
+            image_url: candidate,
+            image: candidate,
+            cover_image: candidate
+        }, resolvedMap);
+        if (imageUrl) return imageUrl;
+    }
+    return '';
+}
+
 async function normalizeBannerRecords(records = []) {
     const list = Array.isArray(records) ? records : [];
     const resolvedMap = await batchResolveManagedFileUrls(list.map((item) => pickFileId(item)));
-    return list.map((item) => {
-        const imageUrl = buildResolvedAssetUrl(item, resolvedMap);
+    const productMap = await loadProductsByActivityIds(list.map((item) => item && item.product_id));
+    return Promise.all(list.map(async (item) => {
+        const fileId = pickFileId(item);
+        let imageUrl = buildResolvedAssetUrl(item, resolvedMap);
+        if (!imageUrl && item?.product_id != null) {
+            const product = productMap[String(item.product_id)] || null;
+            if (product) {
+                imageUrl = await resolveProductCoverImage(product);
+            }
+        }
         return {
             ...item,
-            file_id: pickFileId(item),
+            file_id: fileId,
             image_url: imageUrl,
             image: imageUrl,
             url: imageUrl,
             cover_image: imageUrl,
             coverImage: imageUrl
         };
-    });
+    }));
 }
 
 async function normalizeSingleAssetRecord(record = {}) {

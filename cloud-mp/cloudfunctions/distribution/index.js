@@ -17,7 +17,7 @@ const {
     resolveCommissionBalance,
     resolveGoodsFundBalance
 } = require('./user-contract');
-const { batchResolveCloudFileUrls, isCloudFileId } = require('../shared/asset-url');
+const { batchResolveCloudFileUrls, isCloudFileId } = require('./shared/asset-url');
 
 const db = cloud.database();
 const _ = db.command;

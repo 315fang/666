@@ -249,9 +249,9 @@ const onProductPicked = (id) => {
     if (!localData.title || localData.title === previousName) {
       localData.title = p.name || ''
     }
-    // 切换关联商品时，默认同步回商品首图；如需自定义覆盖图，可在下方重新选择
+    // 切换关联商品时，清空覆盖图，保存时由后端按关联商品首图回退，避免把临时签名 URL 存进 Banner
     localData.file_id = ''
-    localData.image_url = coverOf(p) || ''
+    localData.image_url = ''
     emitData()
   }
 }

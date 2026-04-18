@@ -1,6 +1,7 @@
 // pages/order/list.js
 const { get, post } = require('../../utils/request');
 const { parseImages } = require('../../utils/dataFormatter');
+const { resolveCloudImageList } = require('./utils/cloudAsset');
 const { ErrorHandler } = require('../../utils/errorHandler');
 const { normalizeOrderConsumer, normalizeRefundConsumer, getRefundStatusText } = require('./orderConsumerFields');
 
@@ -136,10 +137,13 @@ Page({
             });
 
             // 处理每个订单
-            newOrders = newOrders.map((rawOrder) => {
+            newOrders = await Promise.all(newOrders.map(async (rawOrder) => {
                 const order = normalizeOrderConsumer(rawOrder);
                 if (order.product && order.product.images) {
-                    order.product.images = parseImages(order.product.images);
+                    order.product.images = await resolveCloudImageList(
+                        order.product.images,
+                        parseImages(order.product.images)
+                    );
                 }
                 const quantity = Number(order.quantity || order.qty || 1);
                 const unitPriceBase = order.total_amount != null ? order.total_amount : order.pay_amount;
@@ -170,7 +174,7 @@ Page({
                 order.activityInfo = buildOrderActivityInfo(order);
 
                 return order;
-            });
+            }));
 
             this._applyAnimAndSet(newOrders, append, newOrders.length >= limit);
         } catch (err) {
@@ -189,11 +193,14 @@ Page({
             const refundList = res.data?.list || [];
 
             // 将退款记录转换为类订单结构（便于复用同一个模板）
-            const newOrders = refundList.map((rawRefund) => {
+            const newOrders = await Promise.all(refundList.map(async (rawRefund) => {
                 const refund = normalizeRefundConsumer(rawRefund);
                 const order = refund.order || {};
                 if (order.product) {
-                    order.product.images = parseImages(order.product.images); // ★ 统一使用 dataFormatter.parseImages
+                    order.product.images = await resolveCloudImageList(
+                        order.product.images,
+                        parseImages(order.product.images)
+                    );
                 }
 
                 const item = {
@@ -213,7 +220,7 @@ Page({
                 };
                 item.activityInfo = buildOrderActivityInfo(item);
                 return item;
-            });
+            }));
 
             this._applyAnimAndSet(newOrders, append, refundList.length >= limit);
         } catch (err) {

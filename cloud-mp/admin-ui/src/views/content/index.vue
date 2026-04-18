@@ -364,8 +364,7 @@ const bannerForm = reactive({
   sort_order: 0, status: 1, start_time: null, end_time: null
 })
 const bannerRules = {
-  title: [{ required: true, message: '请填写 Banner 标题', trigger: 'blur' }],
-  image_url: [{ required: true, message: '请上传 Banner 图片', trigger: 'change' }]
+  title: [{ required: true, message: '请填写 Banner 标题', trigger: 'blur' }]
 }
 
 const resolveAssetUrl = (item = {}) => item.image_url || item.url || item.image || item.cover_image || item.file_id || ''
@@ -557,6 +556,10 @@ const handleEditBanner = (row) => {
 const handleBannerSubmit = async () => {
   const valid = await bannerFormRef.value?.validate().catch(() => false)
   if (!valid) return
+  if (!bannerForm.product_id && !bannerForm.file_id && !bannerForm.image_url) {
+    ElMessage.warning('请关联商品或上传 Banner 图片')
+    return
+  }
   const tempUrlMessage = warnTemporaryAssetUrls(bannerForm.image_url ? [bannerForm.image_url] : [], 'Banner 图片')
   if (tempUrlMessage) {
     ElMessage.warning(tempUrlMessage)

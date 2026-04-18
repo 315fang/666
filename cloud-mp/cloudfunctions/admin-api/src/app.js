@@ -782,6 +782,20 @@ async function resolveAssetValue(value) {
     return assetUrl(value);
 }
 
+async function resolveProductCoverImageAsync(product = {}) {
+    const candidates = [
+        product.cover_image,
+        product.image_url,
+        product.image,
+        ...toArray(product.images)
+    ].filter(Boolean);
+    for (const candidate of candidates) {
+        const resolved = await resolveAssetValue(candidate);
+        if (resolved) return resolved;
+    }
+    return '';
+}
+
 /**
  * 批量解析 URL 数组中的 cloud:// file ID，返回可直接展示的 https URL 数组。
  * 普通 https/本地路径原样处理（走 assetUrl）。
@@ -806,7 +820,14 @@ async function batchResolveCloudUrls(urls) {
 
 async function normalizeBannerRecordAsync(banner) {
     const fileId = banner.file_id || '';
-    const imageUrl = await resolveAssetValue(pickAssetRef(banner) || fileId);
+    let imageUrl = await resolveAssetValue(pickAssetRef(banner) || fileId);
+    let product = null;
+    if (banner?.product_id != null) {
+        product = findByLookup(getCollection('products'), banner.product_id);
+    }
+    if (!imageUrl && product) {
+        imageUrl = await resolveProductCoverImageAsync(product);
+    }
     const isActive = toBoolean(banner.status ?? banner.is_active ?? 1) ? 1 : 0;
     return {
         ...banner,
@@ -816,6 +837,7 @@ async function normalizeBannerRecordAsync(banner) {
         image: imageUrl,
         cover_image: imageUrl,
         url: imageUrl,
+        product: product ? buildProductSummaryRecord(product) : null,
         is_active: isActive,
         status: isActive,
         created_at: normalizeDateValue(banner.created_at),

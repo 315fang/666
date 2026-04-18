@@ -25,7 +25,7 @@ const {
     toNumber, toArray, toString, toBoolean, getDeep, setDeep, deepClone, merge, pick, omit, generateId, delay
 } = require('./shared/utils');
 const { buildCanonicalUser } = require('./user-contract');
-const { resolveUserAvatarFields } = require('../shared/asset-url');
+const { resolveUserAvatarFields } = require('./shared/asset-url');
 
 // ==================== 云初始化 ====================
 

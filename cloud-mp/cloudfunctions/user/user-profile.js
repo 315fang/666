@@ -4,7 +4,7 @@ const db = cloud.database();
 const { buildGrowthProgress, loadTierConfig } = require('./shared/growth');
 const { toNumber } = require('./shared/utils');
 const { buildCanonicalUser } = require('./user-contract');
-const { resolveUserAvatarFields } = require('../shared/asset-url');
+const { resolveUserAvatarFields } = require('./shared/asset-url');
 
 function pickString(value, fallback = '') {
     if (value === null || value === undefined) return fallback;
