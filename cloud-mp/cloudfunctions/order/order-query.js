@@ -653,15 +653,46 @@ async function queryOrders(openid, params = {}) {
         const limit = Math.max(1, Math.min(100, toNumber(params.limit || params.pageSize || params.size, 20)));
         const where = { openid };
         if (status) where.status = status;
+        const offset = (page - 1) * limit;
+        const cache = new Map();
+        const defaultAutoCancelMinutes = await getDefaultOrderAutoCancelMinutes(cache);
+
+        try {
+            const [countRes, pageRes] = await Promise.all([
+                db.collection('orders').where(where).count().catch(() => ({ total: 0 })),
+                db.collection('orders')
+                    .where(where)
+                    .orderBy('created_at', 'desc')
+                    .skip(offset)
+                    .limit(limit)
+                    .get()
+                    .catch((error) => {
+                        throw error;
+                    })
+            ]);
+
+            const rows = Array.isArray(pageRes.data) ? pageRes.data : [];
+            const total = Math.max(0, toNumber(countRes.total, 0));
+            return {
+                list: await Promise.all(rows.map((order) => formatOrderForClient(order, cache, defaultAutoCancelMinutes))),
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    has_more: offset + rows.length < total
+                }
+            };
+        } catch (pageErr) {
+            // Fallback: 兼容未建索引或历史环境差异，保证结果正确性
+            console.warn('[order-query] queryOrders 分页查询失败，回退全量查询:', pageErr.message);
+        }
+
         const allOrders = await getAllRecords(db, 'orders', where);
         const sorted = allOrders.sort((a, b) => {
             const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
             const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
             return tb - ta;
         });
-        const offset = (page - 1) * limit;
-        const cache = new Map();
-        const defaultAutoCancelMinutes = await getDefaultOrderAutoCancelMinutes(cache);
         return {
             list: await Promise.all(sorted.slice(offset, offset + limit).map((order) => formatOrderForClient(order, cache, defaultAutoCancelMinutes))),
             pagination: {

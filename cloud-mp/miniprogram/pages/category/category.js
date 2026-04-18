@@ -45,6 +45,7 @@ const CATEGORY_INITIAL_BATCH_SIZE = 2;
 const CATEGORY_PRICE_PREVIEW_TTL = 60 * 1000;
 const SPECIAL_CATEGORY_ID = '__special__';
 const SPECIAL_CATEGORY_NAME = '拼团砍价';
+const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
 
 Page({
     data: {
@@ -440,6 +441,49 @@ Page({
         }
         wx.navigateTo({
             url: `/pages/product/detail?id=${encodeURIComponent(String(id))}`
+        });
+    },
+
+    onProductImageError(e) {
+        const categoryId = e.currentTarget.dataset.categoryId;
+        const productId = e.currentTarget.dataset.id;
+        const allProducts = { ...(this.data.allProducts || {}) };
+        let changed = false;
+
+        Object.keys(allProducts).forEach((key) => {
+            const list = Array.isArray(allProducts[key]) ? allProducts[key] : [];
+            allProducts[key] = list.map((product) => {
+                if (String(product?.id) !== String(productId)) return product;
+                if (product.image === PRODUCT_PLACEHOLDER) return product;
+                changed = true;
+                return {
+                    ...product,
+                    image: PRODUCT_PLACEHOLDER
+                };
+            });
+        });
+
+        if (!changed) return;
+
+        const visibleProducts = { ...(this.data.visibleProducts || {}) };
+        if (categoryId && Array.isArray(visibleProducts[categoryId])) {
+            visibleProducts[categoryId] = visibleProducts[categoryId].map((product) => (
+                String(product?.id) === String(productId)
+                    ? { ...product, image: PRODUCT_PLACEHOLDER }
+                    : product
+            ));
+        }
+        if (Array.isArray(visibleProducts[SPECIAL_CATEGORY_ID])) {
+            visibleProducts[SPECIAL_CATEGORY_ID] = visibleProducts[SPECIAL_CATEGORY_ID].map((product) => (
+                String(product?.id) === String(productId)
+                    ? { ...product, image: PRODUCT_PLACEHOLDER }
+                    : product
+            ));
+        }
+
+        this.setData({
+            allProducts,
+            visibleProducts
         });
     },
 

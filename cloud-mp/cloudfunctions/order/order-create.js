@@ -6,19 +6,6 @@ const { toNumber, toBoolean } = require('./shared/utils');
 const { findUserCouponDoc } = require('./order-coupon');
 
 /**
- * 各角色等级默认折扣率（可通过 configs.member_level_config 覆盖）
- * C 级别不打折（改为购买后按等级赠送积分），B 级别 6 折拿货价
- */
-const DEFAULT_ROLE_DISCOUNT_RATES = {
-    0: 1.0,
-    1: 1.0,
-    2: 1.0,
-    3: 0.60,
-    4: 0.60,
-    5: 0.60
-};
-
-/**
  * 根据 product_id 查找商品（兼容数字 id 和文档 _id）
  */
 async function findProduct(productId) {
@@ -702,7 +689,7 @@ async function createOrder(openid, orderData) {
         }
     }
 
-    // 0. 提前获取买家信息（折扣率计算需要）和订单超时配置
+    // 0. 提前获取买家信息（关系链/角色信息）和订单超时配置
     const [earlyBuyerInfo, autoCancelMinutes] = await Promise.all([
         findUserByOpenid(openid),
         getOrderAutoCancelMinutes()
@@ -718,14 +705,6 @@ async function createOrder(openid, orderData) {
         earlyBuyerInfo?.role_level ?? earlyBuyerInfo?.distributor_level ?? earlyBuyerInfo?.level,
         0
     );
-    // C级(0/1/2)不打折，仅B级(3+)使用存储的折扣率或默认表
-    const buyerDiscountRate = (() => {
-        if (buyerRoleLevel <= 2) return 1;
-        const stored = toNumber(earlyBuyerInfo?.discount_rate, NaN);
-        if (Number.isFinite(stored) && stored > 0 && stored <= 1) return stored;
-        return DEFAULT_ROLE_DISCOUNT_RATES[buyerRoleLevel] ?? 1;
-    })();
-
     // 1. 查商品和 SKU，计算金额
     let totalAmount = 0;
     let originalTotalAmount = 0; // 折扣前原价合计，用于优惠券门槛校验
@@ -814,26 +793,7 @@ async function createOrder(openid, orderData) {
         } else {
             const basePrice = resolveSkuUnitPrice(sku, product);
             originalUnitPrice = basePrice;
-            const isExplosive = product.is_explosive === true || product.is_explosive === 1;
-            const skipDiscount = isExplosive || product.skip_member_discount === true || product.skip_role_discount === true;
-
-            // 爆单品不参与会员价，直接用零售价
-            const agentLevelPrice = (!isExplosive && buyerRoleLevel >= 3)
-                ? toNumber(sku?.price_agent ?? product?.price_agent ?? sku?.price_leader ?? product?.price_leader, NaN)
-                : NaN;
-            const memberLevelPrice = (!isExplosive && buyerRoleLevel >= 1 && buyerRoleLevel <= 2)
-                ? toNumber(sku?.price_member ?? product?.price_member, NaN)
-                : NaN;
-
-            if (Number.isFinite(agentLevelPrice) && agentLevelPrice > 0) {
-                unitPrice = agentLevelPrice;
-            } else if (Number.isFinite(memberLevelPrice) && memberLevelPrice > 0) {
-                unitPrice = memberLevelPrice;
-            } else if (skipDiscount || buyerDiscountRate >= 1) {
-                unitPrice = basePrice;
-            } else {
-                unitPrice = Math.round(basePrice * buyerDiscountRate * 100) / 100;
-            }
+            unitPrice = basePrice;
         }
 
         const lineTotal = Math.round(unitPrice * qty * 100) / 100;
@@ -1077,7 +1037,7 @@ async function createOrder(openid, orderData) {
         coupon_discount: couponDiscount,
         points_discount: pointsDiscount,
         points_used: actualPoints,
-        role_discount_rate: buyerDiscountRate,
+        role_discount_rate: 1,
         buyer_role_level: buyerRoleLevel,
         pay_amount: payAmount,
         actual_price: payAmount,

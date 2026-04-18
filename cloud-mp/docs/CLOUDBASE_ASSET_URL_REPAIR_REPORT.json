@@ -1,0 +1,19 @@
+{
+  "kind": "cloudbase_asset_url_repair_report",
+  "executed_at": "2026-04-17T14:41:56.882Z",
+  "mode": "dry-run",
+  "source_audit": "docs\\CLOUDBASE_ASSET_URL_AUDIT.json",
+  "environment": {
+    "env_id": "cloud1-9gywyqe49638e46f",
+    "auth_status": "READY",
+    "env_status": "READY"
+  },
+  "summary": {
+    "stale_candidates": 0,
+    "stale_updated": 0,
+    "stale_failed": 0,
+    "manual_migration_required": 0
+  },
+  "updated": [],
+  "manual_migration": []
+}

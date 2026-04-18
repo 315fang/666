@@ -4,6 +4,7 @@
  */
 
 const { USER_ROLES } = require('../config/constants.js');
+const { getApiBaseUrl } = require('../config/env');
 
 function getAssetFromConfig(key, fallback) {
   try {
@@ -12,6 +13,71 @@ function getAssetFromConfig(key, fallback) {
   } catch (_) {
     return fallback;
   }
+}
+
+function extractAssetValue(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'object') {
+    return String(
+      value.url
+      || value.image_url
+      || value.imageUrl
+      || value.temp_url
+      || value.file_id
+      || value.fileId
+      || value.image
+      || value.cover_image
+      || value.coverImage
+      || value.cover
+      || value.cover_url
+      || value.coverUrl
+      || value.thumb
+      || value.thumbnail
+      || ''
+    ).trim();
+  }
+  return '';
+}
+
+function normalizeAssetUrl(value) {
+  const raw = extractAssetValue(value);
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) {
+    if (isExpiredSignedAssetUrl(raw)) return '';
+    return raw;
+  }
+  if (/^cloud:\/\//i.test(raw) || /^wxfile:\/\//i.test(raw) || /^data:/i.test(raw)) {
+    return raw;
+  }
+  if (raw.startsWith('//')) return `https:${raw}`;
+  const apiBase = getApiBaseUrl().replace(/\/api\/?$/, '');
+  if (raw.startsWith('/')) {
+    return apiBase ? `${apiBase}${raw}` : raw;
+  }
+  if (/^(uploads|assets)\//i.test(raw)) {
+    const normalizedPath = `/${raw.replace(/^\/+/, '')}`;
+    return apiBase ? `${apiBase}${normalizedPath}` : normalizedPath;
+  }
+  return raw;
+}
+
+function parseSignedAssetExpireAt(url) {
+  const text = String(url || '').trim();
+  if (!/^https?:\/\//i.test(text)) return 0;
+  const match = text.match(/[?&]t=(\d{10,13})\b/i);
+  if (!match) return 0;
+  const raw = Number(match[1]);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return raw > 1e12 ? raw : raw * 1000;
+}
+
+function isExpiredSignedAssetUrl(url) {
+  const text = String(url || '').trim();
+  if (!/^https?:\/\//i.test(text)) return false;
+  if (!/[?&]sign=/.test(text)) return false;
+  const expireAt = parseSignedAssetExpireAt(text);
+  return expireAt > 0 && expireAt <= Date.now();
 }
 
 /**
@@ -42,16 +108,18 @@ function parseImages(images) {
   if (!images) return [];
 
   if (Array.isArray(images)) {
-    return images;
+    return images.map((item) => normalizeAssetUrl(item)).filter(Boolean);
   }
 
   if (typeof images === 'string') {
     try {
       const parsed = JSON.parse(images);
-      return Array.isArray(parsed) ? parsed : [parsed];
+      const list = Array.isArray(parsed) ? parsed : [parsed];
+      return list.map((item) => normalizeAssetUrl(item)).filter(Boolean);
     } catch (e) {
       // 如果解析失败，当作单个 URL
-      return [images];
+      const single = normalizeAssetUrl(images);
+      return single ? [single] : [];
     }
   }
 
@@ -69,8 +137,122 @@ function getFirstImage(images, defaultImg = getAssetFromConfig('default_product_
   return imageList.length > 0 ? imageList[0] : defaultImg;
 }
 
+function normalizePriceValue(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) return null;
+  return numeric >= 1000 ? numeric / 100 : numeric;
+}
+
+function hasSelectableSkuSpec(sku) {
+  if (!sku || typeof sku !== 'object') return false;
+  if (Array.isArray(sku.specs) && sku.specs.length > 0) {
+    return sku.specs.some((item) => item && item.name && item.value);
+  }
+  return !!(sku.spec_name && sku.spec_value);
+}
+
+function resolveProductImage(product, fallback = getAssetFromConfig('default_product_image', '/assets/images/placeholder.svg')) {
+  if (!product || typeof product !== 'object') return fallback;
+
+  const productCandidates = [
+    getFirstImage(product.images, ''),
+    product.file_id,
+    product.fileId,
+    product.image,
+    product.imageUrl,
+    product.image_url,
+    product.cover_image,
+    product.coverImage,
+    product.cover,
+    product.cover_url,
+    product.coverUrl,
+    product.thumb,
+    product.thumbnail,
+    product.url
+  ];
+
+  const resolvedProductImage = productCandidates
+    .map((item) => normalizeAssetUrl(item))
+    .find(Boolean);
+  if (resolvedProductImage) {
+    return resolvedProductImage;
+  }
+
+  const candidates = [];
+
+  if (Array.isArray(product.skus)) {
+    const skuImage = product.skus.find((sku) => sku && (
+      sku.image
+      || sku.images
+      || sku.file_id
+      || sku.fileId
+      || sku.image_url
+      || sku.cover_image
+    ));
+    if (skuImage) {
+      candidates.push(
+        skuImage.file_id,
+        skuImage.fileId,
+        skuImage.image,
+        skuImage.images,
+        skuImage.image_url,
+        skuImage.cover_image
+      );
+    }
+  }
+
+  const resolved = candidates
+    .map((item) => normalizeAssetUrl(item))
+    .find(Boolean);
+  return resolved || normalizeAssetUrl(fallback) || fallback;
+}
+
+function resolveProductDisplayPrice(product, roleLevel = USER_ROLES.GUEST) {
+  if (!product) return 0;
+
+  const candidates = [
+    product.displayPrice,
+    calculatePrice(product, null, roleLevel),
+    product.retail_price,
+    product.price,
+    product.min_price
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizePriceValue(candidate);
+    if (normalized != null) return normalized;
+  }
+
+  return 0;
+}
+
+function resolveProductCurrentPrice(product, sku = null, roleLevel = USER_ROLES.GUEST) {
+  const productPrice = resolveProductDisplayPrice(product, roleLevel);
+  if (!sku) return productPrice;
+
+  if (hasSelectableSkuSpec(sku)) {
+    const candidates = [
+      calculatePrice(product, sku, roleLevel),
+      sku.displayPrice,
+      sku.retail_price,
+      sku.price
+    ];
+
+    for (const candidate of candidates) {
+      const normalized = normalizePriceValue(candidate);
+      if (normalized != null) return normalized;
+    }
+  }
+
+  if (productPrice > 0) return productPrice;
+
+  const fallbackSkuPrice = normalizePriceValue(sku.displayPrice ?? sku.retail_price ?? sku.price);
+  return fallbackSkuPrice != null ? fallbackSkuPrice : 0;
+}
+
 /**
- * 根据用户角色计算商品价格
+ * 统一计算商品价格（不区分角色）
  * @param {Object} product - 商品对象
  * @param {Object} sku - SKU 对象（可选）
  * @param {number} roleLevel - 用户角色等级
@@ -89,44 +271,28 @@ function calculatePrice(product, sku = null, roleLevel = USER_ROLES.GUEST) {
 }
 
 /**
- * 计算 SKU 价格
+ * 计算 SKU 价格（统一按标价）
  * @param {Object} sku - SKU 对象
  * @param {number} roleLevel - 用户角色等级
  * @returns {number} 价格
  */
 function calculateSkuPrice(sku, roleLevel) {
+  void roleLevel;
   const rawFallbackPrice = sku.retail_price != null && sku.retail_price !== ''
     ? sku.retail_price
     : (sku.price != null && sku.price !== '' ? (Number(sku.price) >= 1000 ? Number(sku.price) / 100 : sku.price) : 0);
-  const priceMap = {
-    [USER_ROLES.GUEST]: sku.retail_price,
-    [USER_ROLES.MEMBER]: sku.member_price || sku.retail_price,
-    [USER_ROLES.LEADER]: sku.wholesale_price || sku.member_price || sku.retail_price,
-    [USER_ROLES.AGENT]: sku.wholesale_price || sku.member_price || sku.retail_price,
-    [USER_ROLES.PARTNER]: sku.wholesale_price || sku.member_price || sku.retail_price,
-    [USER_ROLES.REGIONAL]: sku.wholesale_price || sku.member_price || sku.retail_price
-  };
-
-  return parseFloat(priceMap[roleLevel] || rawFallbackPrice || 0);
+  return parseFloat(rawFallbackPrice || 0);
 }
 
 /**
- * 计算商品价格
+ * 计算商品价格（统一按标价）
  * @param {Object} product - 商品对象
  * @param {number} roleLevel - 用户角色等级
  * @returns {number} 价格
  */
 function calculateProductPrice(product, roleLevel) {
-  const priceMap = {
-    [USER_ROLES.GUEST]: product.retail_price,
-    [USER_ROLES.MEMBER]: product.price_member || product.retail_price,
-    [USER_ROLES.LEADER]: product.price_leader || product.price_member || product.retail_price,
-    [USER_ROLES.AGENT]: product.price_agent || product.price_leader || product.price_member || product.retail_price,
-    [USER_ROLES.PARTNER]: product.price_agent || product.price_leader || product.price_member || product.retail_price,
-    [USER_ROLES.REGIONAL]: product.price_agent || product.price_leader || product.price_member || product.retail_price
-  };
-
-  return parseFloat(priceMap[roleLevel] || product.retail_price || 0);
+  void roleLevel;
+  return parseFloat(product.retail_price || product.price || 0);
 }
 
 /**
@@ -207,7 +373,7 @@ function formatRelativeTime(timestamp) {
 function processProduct(product, roleLevel = USER_ROLES.GUEST) {
   if (!product) return null;
 
-  const rawFirstImage = getFirstImage(product.images || product.image);
+  const rawFirstImage = resolveProductImage(product, '');
 
   // 生成规格摘要（用于商品卡片和列表展示）
   let specSummary = '';
@@ -230,7 +396,7 @@ function processProduct(product, roleLevel = USER_ROLES.GUEST) {
   return {
     ...product,
     images: parseImages(product.images),
-    firstImage: toOssUrl(rawFirstImage, 400), // 列表卡片宽度按 400 处理
+    firstImage: toOssUrl(rawFirstImage || getAssetFromConfig('default_product_image', '/assets/images/placeholder.svg'), 400), // 列表卡片宽度按 400 处理
     displayPrice: formatMoney(calculatePrice(product, null, roleLevel)),
     formattedRetailPrice: formatMoney(product.retail_price || 0),
     specSummary
@@ -291,6 +457,11 @@ module.exports = {
   toOssUrl,
   parseImages,
   getFirstImage,
+  normalizeAssetUrl,
+  normalizePriceValue,
+  resolveProductImage,
+  resolveProductDisplayPrice,
+  resolveProductCurrentPrice,
   calculatePrice,
   formatMoney,
   formatNumber,

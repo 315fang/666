@@ -23,10 +23,17 @@ function formatPrizeValue(prize = {}) {
     return '试试下一次好运';
 }
 
+function resolvePrizeImage(prize = {}) {
+    const raw = String(prize.image_url || prize.url || prize.image || prize.cover_image || '').trim();
+    if (!raw || /^cloud:\/\//i.test(raw)) return '';
+    return raw;
+}
+
 function normalizePrize(prize = {}) {
     const style = getDefaultPrizeStyle(prize.type);
     return {
         ...prize,
+        image_url: resolvePrizeImage(prize),
         display_emoji: prize.display_emoji || style.display_emoji,
         theme_color: prize.theme_color || style.theme_color,
         accent_color: prize.accent_color || style.accent_color,

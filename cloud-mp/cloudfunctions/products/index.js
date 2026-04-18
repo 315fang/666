@@ -30,6 +30,146 @@ function isOnSale(status) {
     return status === true || status === 1 || status === '1' || status === 'active' || status === 'on_sale';
 }
 
+function pickString(value, fallback = '') {
+    if (value == null) return fallback;
+    const text = String(value).trim();
+    return text || fallback;
+}
+
+function isCloudFileId(value) {
+    return /^cloud:\/\//i.test(pickString(value));
+}
+
+function parseAssetArray(value) {
+    if (Array.isArray(value)) return value.filter((item) => item !== null && item !== undefined && item !== '');
+    if (!hasValue(value)) return [];
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return [];
+        if (trimmed[0] === '[') {
+            try {
+                const parsed = JSON.parse(trimmed);
+                return Array.isArray(parsed) ? parsed.filter((item) => item !== null && item !== undefined && item !== '') : [parsed];
+            } catch (_) {
+                return [trimmed];
+            }
+        }
+        return [trimmed];
+    }
+    return [value];
+}
+
+function extractAssetRef(value) {
+    if (!hasValue(value)) return '';
+    if (typeof value === 'string') return value.trim();
+    if (typeof value === 'object') {
+        const fileId = pickString(value.file_id || value.fileId);
+        if (isCloudFileId(fileId)) return fileId;
+        const direct = pickString(
+            value.url
+            || value.image_url
+            || value.imageUrl
+            || value.temp_url
+            || value.image
+            || value.cover_image
+            || value.coverImage
+            || value.cover
+            || value.cover_url
+            || value.coverUrl
+            || value.thumb
+            || value.thumbnail
+        );
+        if (isCloudFileId(direct)) return direct;
+        return direct || fileId;
+    }
+    return pickString(value);
+}
+
+function collectCloudFileIdsFromValue(value) {
+    return parseAssetArray(value)
+        .map((entry) => extractAssetRef(entry))
+        .filter(isCloudFileId);
+}
+
+async function batchResolveCloudAssetUrls(fileIds = []) {
+    const uniqueIds = [...new Set((Array.isArray(fileIds) ? fileIds : []).filter(isCloudFileId))];
+    const resolved = new Map();
+    if (!uniqueIds.length || !cloud?.getTempFileURL) return resolved;
+
+    for (let i = 0; i < uniqueIds.length; i += 50) {
+        const chunk = uniqueIds.slice(i, i + 50);
+        const result = await cloud.getTempFileURL({ fileList: chunk }).catch(() => ({ fileList: [] }));
+        (result.fileList || []).forEach((file) => {
+            if (!file || !file.fileID) return;
+            resolved.set(file.fileID, pickString(file.tempFileURL || file.download_url || file.fileID));
+        });
+    }
+    return resolved;
+}
+
+function resolveAssetEntry(value, resolvedMap = new Map(), options = {}) {
+    const ref = extractAssetRef(value);
+    if (!ref) return '';
+    if (isCloudFileId(ref)) {
+        if (options && options.preferCloudId) {
+            return ref;
+        }
+        return pickString(resolvedMap.get(ref), ref);
+    }
+    return ref;
+}
+
+function resolveAssetList(value, resolvedMap = new Map(), options = {}) {
+    const seen = new Set();
+    return parseAssetArray(value)
+        .map((entry) => resolveAssetEntry(entry, resolvedMap, options))
+        .filter((url) => {
+            if (!url || seen.has(url)) return false;
+            seen.add(url);
+            return true;
+        });
+}
+
+function resolvePrimaryAsset(record = {}, resolvedMap = new Map(), options = {}) {
+    const galleryImages = resolveAssetList(record.images, resolvedMap, options);
+    if (galleryImages.length) return galleryImages[0];
+    return resolveAssetEntry(
+        record.image
+        || record.image_url
+        || record.imageUrl
+        || record.cover_image
+        || record.coverImage
+        || record.cover
+        || record.cover_url
+        || record.coverUrl
+        || record.file_id
+        || record.fileId
+        || record.thumb
+        || record.thumbnail,
+        resolvedMap,
+        options
+    );
+}
+
+function collectProductAssetFileIds(product = {}, skus = []) {
+    return [
+        ...collectCloudFileIdsFromValue(product.images),
+        ...collectCloudFileIdsFromValue(product.detail_images),
+        ...collectCloudFileIdsFromValue(product.image),
+        ...collectCloudFileIdsFromValue(product.image_url),
+        ...collectCloudFileIdsFromValue(product.cover_image),
+        ...collectCloudFileIdsFromValue(product.coverImage),
+        ...collectCloudFileIdsFromValue(product.file_id),
+        ...collectCloudFileIdsFromValue(product.fileId),
+        ...(Array.isArray(skus) ? skus.flatMap((sku) => ([
+            ...collectCloudFileIdsFromValue(sku.image),
+            ...collectCloudFileIdsFromValue(sku.images),
+            ...collectCloudFileIdsFromValue(sku.file_id),
+            ...collectCloudFileIdsFromValue(sku.fileId)
+        ])) : [])
+    ];
+}
+
 function resolveActiveProductQuery(categoryId) {
     const query = db.collection('products').where(_.or([
         { status: true },
@@ -158,7 +298,7 @@ function resolveSkuOriginalPrice(sku, price) {
     return price;
 }
 
-function normalizeSku(sku) {
+function normalizeSku(sku, resolvedMap = new Map()) {
     const price = resolveSkuPrice(sku);
     const originalPrice = resolveSkuOriginalPrice(sku, price);
     const specs = Array.isArray(sku.specs) && sku.specs.length > 0
@@ -166,10 +306,22 @@ function normalizeSku(sku) {
         : (sku.spec_name && sku.spec_value
             ? [{ name: sku.spec_name, value: sku.spec_value }]
             : (sku.spec ? [{ name: '规格', value: sku.spec }] : []));
+    const skuImages = [
+        ...resolveAssetList(sku.images, resolvedMap, { preferCloudId: true }),
+        ...resolveAssetList([sku.image, sku.file_id, sku.fileId, sku.image_url, sku.cover_image], resolvedMap, { preferCloudId: true })
+    ].filter((url, index, list) => !!url && list.indexOf(url) === index);
+    const primaryImage = skuImages[0] || '';
+    const previewImages = [
+        ...resolveAssetList(sku.images, resolvedMap),
+        ...resolveAssetList([sku.image, sku.file_id, sku.fileId, sku.image_url, sku.cover_image], resolvedMap)
+    ].filter((url, index, list) => !!url && list.indexOf(url) === index);
 
     return {
         ...sku,
         id: sku.id || sku._legacy_id || sku._id,
+        image: primaryImage,
+        images: skuImages,
+        preview_images: previewImages,
         price,
         retail_price: price,
         min_price: price,
@@ -183,9 +335,15 @@ function normalizeSku(sku) {
     };
 }
 
-function formatProduct(p) {
+function formatProduct(p, resolvedMap = new Map()) {
     const price = resolveProductPrice(p);
     const originalPrice = resolveProductOriginalPrice(p, price);
+    const images = resolveAssetList(p.images, resolvedMap, { preferCloudId: true });
+    const detailImages = resolveAssetList(p.detail_images, resolvedMap, { preferCloudId: true });
+    const previewImages = resolveAssetList(p.images, resolvedMap);
+    const previewDetailImages = resolveAssetList(p.detail_images, resolvedMap);
+    const primaryImage = images[0] || resolvePrimaryAsset(p, resolvedMap, { preferCloudId: true }) || '';
+    const primaryPreviewImage = previewImages[0] || resolvePrimaryAsset(p, resolvedMap) || '';
     return {
         ...p,
         id: p.id || p._id,
@@ -195,8 +353,13 @@ function formatProduct(p) {
         displayPrice: price.toFixed(2),
         original_price: originalPrice,
         market_price: originalPrice,
-        image: toArray(p.images)[0] || '',
-        images: toArray(p.images),
+        image: primaryImage,
+        image_url: primaryPreviewImage || primaryImage,
+        cover_image: primaryImage,
+        images: images.length ? images : (primaryImage ? [primaryImage] : []),
+        preview_images: previewImages.length ? previewImages : (primaryPreviewImage ? [primaryPreviewImage] : []),
+        detail_images: detailImages,
+        preview_detail_images: previewDetailImages,
         is_on_sale: isOnSale(p.status),
         stock: toNumber(p.stock, 0),
         sales_count: toNumber(p.sales_count || p.purchase_count, 0)
@@ -207,7 +370,7 @@ function formatProduct(p) {
 const handleAction = {
     'list': asyncHandler(async (params) => {
         const { list: rawList, total, page, limit } = await queryActiveProductsPage(params);
-        let list = rawList.map(formatProduct);
+        let list = rawList.slice();
 
         // 为列表商品按 product_id 查询 SKU（仅查询当前页的商品，避免拉全表）
         let skuList = [];
@@ -228,6 +391,9 @@ const handleAction = {
         } catch (e) {
             console.warn('[products/list] 查询 SKU 失败，跳过规格摘要:', e.message);
         }
+
+        const assetUrlMap = await batchResolveCloudAssetUrls(rawList.flatMap((product) => collectProductAssetFileIds(product, skuList)));
+        list = rawList.map((item) => formatProduct(item, assetUrlMap));
 
         if (skuList.length > 0) {
             const skuMap = {};
@@ -252,7 +418,7 @@ const handleAction = {
                     const key = sku._id || sku.id || `${sku.product_id}:${sku.name}:${sku.code || ''}`;
                     if (uniqueSkuMap[key]) return;
                     uniqueSkuMap[key] = true;
-                    uniqueSkus.push(normalizeSku(sku));
+                    uniqueSkus.push(normalizeSku(sku, assetUrlMap));
                 });
 
                 if (uniqueSkus.length > 0) {
@@ -298,7 +464,7 @@ const handleAction = {
             skus = skuList.filter((sku) => {
                 const pid = String(sku.product_id);
                 return queryIds.includes(pid);
-            }).map(normalizeSku);
+            });
 
             // 生成规格摘要
             const specMap = {};
@@ -316,8 +482,10 @@ const handleAction = {
             console.warn('[products/detail] 查询 SKU 失败，跳过规格信息:', e.message);
         }
 
-        const result = formatProduct(product);
-        if (skus.length > 0) result.skus = skus;
+        const assetUrlMap = await batchResolveCloudAssetUrls(collectProductAssetFileIds(product, skus));
+        const normalizedSkus = skus.map((sku) => normalizeSku(sku, assetUrlMap));
+        const result = formatProduct(product, assetUrlMap);
+        if (normalizedSkus.length > 0) result.skus = normalizedSkus;
         if (specSummary) result.specSummary = specSummary;
         return success(result);
     }),
@@ -335,7 +503,9 @@ const handleAction = {
         list = list.filter((p) => {
             const text = `${p.name || ''} ${p.description || ''}`.toLowerCase();
             return text.includes(search);
-        }).map(formatProduct);
+        });
+        const assetUrlMap = await batchResolveCloudAssetUrls(list.flatMap((product) => collectProductAssetFileIds(product)));
+        list = list.map((item) => formatProduct(item, assetUrlMap));
         const page = Math.max(1, toNumber(params.page, 1));
         const start = (page - 1) * pageSize;
         return success({ list: list.slice(start, start + pageSize), page, size: pageSize, total: list.length, keyword: search });

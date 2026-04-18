@@ -1,1 +1,24 @@
-[]
+[
+  {
+    "id": 1,
+    "config_key": "deposit_reward_config",
+    "key": "deposit_reward_config",
+    "config_value": {
+      "coupon_product_value": 100,
+      "title": "押金兑换券",
+      "description": "支付押金后可领取并分享的兑换券",
+      "allowed_product_ids": [],
+      "allowed_sku_ids": []
+    },
+    "value": {
+      "coupon_product_value": 100,
+      "title": "押金兑换券",
+      "description": "支付押金后可领取并分享的兑换券",
+      "allowed_product_ids": [],
+      "allowed_sku_ids": []
+    },
+    "config_group": "marketing",
+    "created_at": "2026-04-17T00:00:00.000Z",
+    "updated_at": "2026-04-17T00:00:00.000Z"
+  }
+]

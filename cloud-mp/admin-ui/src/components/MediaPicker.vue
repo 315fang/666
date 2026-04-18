@@ -209,13 +209,18 @@ const toggleSelect = (item) => {
 const isCloudFileId = (v) => /^cloud:\/\//i.test(String(v || ''))
 
 const confirm = () => {
-  // 优先返回 cloud:// file_id 作为持久化引用（不会过期），同时传递临时显示 url
-  // 第一个参数：持久 ID（cloud:// 或 https://）
-  // 第二个参数：用于立即预览的 https url（始终是可展示的链接）
-  const persistIds = selected.value.map(s =>
-    (s.file_id && isCloudFileId(s.file_id)) ? s.file_id : s.url
-  )
-  const displayUrls = selected.value.map(s => s.url || '')
+  const validSelections = selected.value.filter((s) => isCloudFileId(s.file_id))
+  if (!validSelections.length) {
+    ElMessage.warning('仅支持选择已托管到云开发存储的素材，请重新上传后再选择')
+    return
+  }
+  if (validSelections.length !== selected.value.length) {
+    ElMessage.warning('已自动忽略未托管到云开发存储的历史素材')
+  }
+  // 第一个参数：持久 cloud:// file_id
+  // 第二个参数：用于立即预览的 https url
+  const persistIds = validSelections.map((s) => s.file_id)
+  const displayUrls = validSelections.map((s) => s.url || '')
   emit('confirm', persistIds, displayUrls)
   innerVisible.value = false
   selected.value = []
@@ -239,6 +244,10 @@ const handleUpload = async (e) => {
       const url = res?.url || res?.data?.url
       const fileId = res?.file_id || res?.data?.file_id || ''
       if (!url) continue
+      if (!isCloudFileId(fileId)) {
+        ElMessage.warning('上传成功但未获得 cloud:// file_id，请检查存储配置')
+        continue
+      }
 
       try {
         const mat = await createMaterial({

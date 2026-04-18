@@ -80,6 +80,7 @@ Page({
         exchangeCouponTitle: '',
         // B端货款余额支付
         walletBalance: 0,
+        walletBalanceDisplay: '0.00',
         useWallet: false,
         isAgent: false,
         // 到店自提（需商品 supports_pickup + 后台维护自提门店）
@@ -252,6 +253,7 @@ Page({
                 walletLoadStatus: 'idle',
                 walletLoadError: '',
                 walletBalance: 0,
+                walletBalanceDisplay: '0.00',
                 useWallet: false
             });
         }
@@ -477,6 +479,7 @@ Page({
             pointsToUse: 0,
             pointsDeduction: '0.00',
             walletBalance: 0,
+            walletBalanceDisplay: '0.00',
             useWallet: false,
             pickupStations: [],
             pickupStation: null,

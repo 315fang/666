@@ -13,7 +13,7 @@ const { createWechatRefund } = require('./payment-refund');
 const {
     verifySignature: verifyWechatPaySignature,
     decryptResource: decryptWechatPayResource
-} = require('../../payment/wechat-pay-v3');
+} = require('./wechat-pay-v3');
 const orderContract = require('./order-contract');
 const userContract = require('./user-contract');
 const { createFinanceFirewall } = require('./finance-firewall');
@@ -22,6 +22,7 @@ const configContract = require('./config-contract');
 const { dataRoot, normalizedDataRoot, runtimeRoot, uploadsRoot, jwtSecret, assetBaseUrl, preferNormalizedData } = require('./config');
 const { createDataStore } = require('./store');
 const { registerMarketingRoutes } = require('./admin-marketing');
+const { registerDepositRoutes } = require('./admin-deposits');
 
 // Express 4 async handler patch: auto-catch rejected promises (Express 5 does this natively)
 const Layer = require('express/lib/router/layer');
@@ -458,7 +459,7 @@ function readPaymentRuntimeConfig() {
 function getPaymentConfigSnapshot() {
     const runtimeConfig = readPaymentRuntimeConfig();
     const paymentEnv = { ...runtimeConfig, ...process.env };
-    const baseDir = path.resolve(__dirname, '../../payment');
+    const baseDir = path.resolve(__dirname, '..');
     const pickPaymentEnv = (keys, fallback = '') => {
         for (const key of keys) {
             const value = pickString(paymentEnv[key]).trim();
@@ -714,6 +715,16 @@ function isManagedStorageStrict() {
 
 function isCloudFileId(value) {
     return /^cloud:\/\//i.test(String(value || ''));
+}
+
+function normalizeMaterialType(value, fallback = 'image') {
+    const normalized = pickString(value, fallback).trim().toLowerCase();
+    return normalized || fallback;
+}
+
+function isManagedImageMaterialType(type) {
+    const normalized = normalizeMaterialType(type, 'image');
+    return normalized === 'image' || normalized === 'poster';
 }
 
 function pickAssetRef(source = {}) {
@@ -1204,7 +1215,7 @@ function getRawRequestBody(req) {
 function readPaymentVerifyKeyInfo() {
     const runtimeConfig = readPaymentRuntimeConfig();
     const paymentEnv = { ...runtimeConfig, ...process.env };
-    const baseDir = path.resolve(__dirname, '../../payment');
+    const baseDir = path.resolve(__dirname, '..');
     const pickPaymentEnv = (keys, fallback = '') => {
         for (const key of keys) {
             const value = pickString(paymentEnv[key]).trim();
@@ -1286,10 +1297,12 @@ async function verifyRefundNotifyRequest(req) {
             return { ok: false, status: 400, message: '微信退款回调密文缺少 nonce' };
         }
         try {
+            const paymentConfig = { ...readPaymentRuntimeConfig(), ...process.env };
             refundData = decryptWechatPayResource(
                 callbackData.resource.ciphertext,
                 callbackData.resource.nonce,
-                callbackData.resource.associated_data || 'refund'
+                callbackData.resource.associated_data || 'refund',
+                pickString(paymentConfig.PAYMENT_WECHAT_API_V3_KEY || paymentConfig.WECHAT_PAY_API_V3_KEY).trim()
             );
         } catch (error) {
             return { ok: false, status: 400, message: `微信退款回调解密失败：${error.message || '未知错误'}` };
@@ -4631,6 +4644,7 @@ app.put('/admin/api/products/:id', auth, requirePermission('products'), async (r
     const rows = getCollection('products');
     const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
     if (index === -1) return fail(res, '商品不存在', 404);
+    const previousRow = rows[index];
     rows[index] = {
         ...rows[index],
         ...req.body,
@@ -4644,6 +4658,103 @@ app.put('/admin/api/products/:id', auth, requirePermission('products'), async (r
         detail_images: req.body?.detail_images != null ? toArray(req.body.detail_images) : rows[index].detail_images,
         updated_at: nowIso()
     };
+    const updatedRow = rows[index];
+
+    const normalizeSpecValue = (value) => String(value == null ? '' : value).trim();
+    const isDefaultSpecToken = (value) => {
+        const text = normalizeSpecValue(value).toLowerCase();
+        return text === 'default' || text === 'default_spec' || text === '默认规格' || text === '默认';
+    };
+    const isDefaultLikeSku = (sku) => {
+        if (!sku || typeof sku !== 'object') return false;
+        if (sku._generated === true) return true;
+
+        const specs = Array.isArray(sku.specs) ? sku.specs.filter(Boolean) : [];
+        if (specs.length === 1) {
+            const specName = normalizeSpecValue(specs[0].name);
+            const specValue = normalizeSpecValue(specs[0].value);
+            const nameDefault = !specName || specName === '规格' || specName === '默认规格' || specName.toLowerCase() === 'spec';
+            if (nameDefault && isDefaultSpecToken(specValue)) {
+                return true;
+            }
+        }
+
+        const rawSpecValue = normalizeSpecValue(sku.spec_value || sku.spec);
+        if (isDefaultSpecToken(rawSpecValue)) return true;
+        return false;
+    };
+
+    const shouldSyncDefaultSku = req.body?.retail_price != null || req.body?.market_price != null || req.body?.stock != null;
+    if (shouldSyncDefaultSku) {
+        await ensureFreshCollections(['skus']);
+        const skus = getCollection('skus');
+        const productIdCandidates = new Set(
+            [
+                updatedRow._id,
+                updatedRow.id,
+                updatedRow._legacy_id,
+                previousRow && previousRow._id,
+                previousRow && previousRow.id,
+                previousRow && previousRow._legacy_id,
+                req.params.id
+            ]
+                .filter((value) => value !== null && value !== undefined && value !== '')
+                .map((value) => String(value))
+        );
+
+        const matchedSkuIndexes = [];
+        skus.forEach((sku, skuIndex) => {
+            const skuProductId = sku && sku.product_id;
+            if (skuProductId === null || skuProductId === undefined || skuProductId === '') return;
+            if (productIdCandidates.has(String(skuProductId))) {
+                matchedSkuIndexes.push(skuIndex);
+            }
+        });
+
+        const defaultLikeSkuIndexes = matchedSkuIndexes.filter((skuIndex) => isDefaultLikeSku(skus[skuIndex]));
+        const targetSkuIndexes = defaultLikeSkuIndexes.length > 0
+            ? defaultLikeSkuIndexes
+            : (matchedSkuIndexes.length === 1 ? matchedSkuIndexes : []);
+
+        if (targetSkuIndexes.length > 0) {
+            const skuPatch = {};
+            if (req.body?.retail_price != null) {
+                const nextRetailPrice = toNumber(updatedRow.retail_price, 0);
+                skuPatch.retail_price = nextRetailPrice;
+                skuPatch.price = nextRetailPrice;
+            }
+            if (req.body?.market_price != null) {
+                const nextMarketPrice = toNumber(updatedRow.market_price, 0);
+                skuPatch.market_price = nextMarketPrice;
+                skuPatch.original_price = nextMarketPrice;
+            }
+            if (req.body?.stock != null) {
+                skuPatch.stock = toNumber(updatedRow.stock, 0);
+            }
+
+            if (Object.keys(skuPatch).length > 0) {
+                const patchedSkus = [];
+                targetSkuIndexes.forEach((skuIndex) => {
+                    const targetSku = skus[skuIndex];
+                    const patchedSku = {
+                        ...targetSku,
+                        ...skuPatch,
+                        updated_at: nowIso()
+                    };
+                    skus[skuIndex] = patchedSku;
+                    patchedSkus.push(patchedSku);
+                });
+                saveCollection('skus', skus);
+
+                for (const patchedSku of patchedSkus) {
+                    const skuDocId = patchedSku._id || patchedSku.id || patchedSku._legacy_id;
+                    if (skuDocId === null || skuDocId === undefined || skuDocId === '') continue;
+                    await directPatchDocument('skus', String(skuDocId), patchedSku);
+                }
+            }
+        }
+    }
+
     const docId = String(rows[index]._id || rows[index].id || req.params.id);
     saveCollection('products', rows);
     await directPatchDocument('products', docId, rows[index]);
@@ -4711,8 +4822,29 @@ registerMarketingRoutes(app, {
     directPatchDocument,
     appendWalletLogEntry,
     requireManualAdjustmentReason,
+    flush: async () => Promise.resolve(dataStore.flush?.()),
     ok,
     fail
+});
+
+registerDepositRoutes(app, {
+    auth,
+    requirePermission,
+    ensureFreshCollections,
+    getCollection,
+    saveCollection,
+    nextId,
+    nowIso,
+    toNumber,
+    toArray,
+    pickString,
+    findByLookup,
+    paginate,
+    createAuditLog,
+    ok,
+    fail,
+    flush: async () => Promise.resolve(dataStore.flush?.()),
+    createWechatRefund
 });
 
 // ===== SKU 管理 API（多规格支持）=====
@@ -5051,15 +5183,20 @@ app.get('/admin/api/materials', auth, requirePermission('materials'), async (req
 
 app.post('/admin/api/materials', auth, requirePermission('materials'), (req, res) => {
     const rows = getCollection('materials');
+    const materialType = normalizeMaterialType(req.body?.type, 'image');
+    const materialFileId = pickString(req.body?.file_id).trim();
+    if (isManagedImageMaterialType(materialType) && !isCloudFileId(materialFileId)) {
+        return failField(res, 'file_id', '图片/海报素材必须通过素材库上传并使用 cloud:// file_id');
+    }
     const row = {
         id: nextId(rows),
         title: pickString(req.body?.title).trim(),
-        type: pickString(req.body?.type, 'image'),
+        type: materialType,
         group_id: req.body?.group_id != null && req.body?.group_id !== '' ? Number(req.body.group_id) : null,
         description: pickString(req.body?.description, ''),
         url: req.body?.url || '',
         thumbnail_url: req.body?.thumbnail_url || '',
-        file_id: req.body?.file_id || '',
+        file_id: materialFileId,
         status: req.body?.status != null ? (toBoolean(req.body.status) ? 1 : 0) : 1,
         sort_order: toNumber(req.body?.sort_order, 0),
         created_at: nowIso(),
@@ -5075,9 +5212,18 @@ app.put('/admin/api/materials/:id', auth, requirePermission('materials'), (req, 
     const rows = getCollection('materials');
     const index = rows.findIndex((item) => Number(item.id) === Number(req.params.id));
     if (index === -1) return fail(res, '素材不存在', 404);
+    const nextType = normalizeMaterialType(req.body?.type, rows[index].type || 'image');
+    const nextFileId = req.body?.file_id != null
+        ? pickString(req.body.file_id).trim()
+        : pickString(rows[index].file_id).trim();
+    if (isManagedImageMaterialType(nextType) && !isCloudFileId(nextFileId)) {
+        return failField(res, 'file_id', '图片/海报素材必须通过素材库上传并使用 cloud:// file_id');
+    }
     rows[index] = {
         ...rows[index],
         ...req.body,
+        type: nextType,
+        file_id: nextFileId,
         group_id: req.body?.group_id != null && req.body?.group_id !== '' ? Number(req.body.group_id) : rows[index].group_id,
         updated_at: nowIso()
     };
@@ -8723,10 +8869,17 @@ function normalizeStorageFolderInput(value) {
     return folder;
 }
 
+function normalizeMemberLevels(memberLevels) {
+    return toArray(memberLevels).map((item) => ({
+        ...toObject(item, {}),
+        discount_rate: 1
+    }));
+}
+
 function getMemberTierConfigSnapshot() {
     const fallback = getSingleton('member-tier-config', {});
     return {
-        member_levels: getConfigRowValue('member_level_config', fallback.member_levels || []),
+        member_levels: normalizeMemberLevels(getConfigRowValue('member_level_config', fallback.member_levels || [])),
         growth_rules: getConfigRowValue('growth_rule_config', fallback.growth_rules || {}),
         growth_tiers: getConfigRowValue('growth_tier_config', fallback.growth_tiers || []),
         upgrade_rules: getConfigRowValue('member_upgrade_rule_config', getConfigRowValue('agent_system_upgrade_rules', fallback.upgrade_rules || {
@@ -8753,8 +8906,9 @@ app.get('/admin/api/member-tier-config', auth, requirePermission('settings_manag
 
 app.put('/admin/api/member-tier-config', auth, requirePermission('settings_manage'), (req, res) => {
     const nextConfig = toObject(req.body, {});
+    const normalizedMemberLevels = normalizeMemberLevels(nextConfig.member_levels);
     saveSingleton('member-tier-config', {
-        member_levels: toArray(nextConfig.member_levels),
+        member_levels: normalizedMemberLevels,
         growth_rules: toObject(nextConfig.growth_rules, {}),
         growth_tiers: toArray(nextConfig.growth_tiers),
         upgrade_rules: toObject(nextConfig.upgrade_rules, {}),
@@ -8762,7 +8916,7 @@ app.put('/admin/api/member-tier-config', auth, requirePermission('settings_manag
         point_levels: toArray(nextConfig.point_levels),
         point_rules: toObject(nextConfig.point_rules, {})
     });
-    upsertConfigRow('member_level_config', toArray(nextConfig.member_levels), {
+    upsertConfigRow('member_level_config', normalizedMemberLevels, {
         description: '会员/代理等级配置',
         is_public: true
     });
@@ -8770,7 +8924,7 @@ app.put('/admin/api/member-tier-config', auth, requirePermission('settings_manag
         description: '成长值来源规则配置'
     });
     upsertConfigRow('growth_tier_config', toArray(nextConfig.growth_tiers), {
-        description: '成长值折扣阶梯配置',
+        description: '成长值等级阶梯配置',
         is_public: true
     });
     upsertConfigRow('member_upgrade_rule_config', toObject(nextConfig.upgrade_rules, {}), {
@@ -8793,7 +8947,7 @@ app.put('/admin/api/member-tier-config', auth, requirePermission('settings_manag
         description: '积分行为奖励规则'
     });
     createAuditLog(req.admin, 'member-tier-config.update', 'configs', {
-        member_levels: toArray(nextConfig.member_levels).length,
+        member_levels: normalizedMemberLevels.length,
         growth_tiers: toArray(nextConfig.growth_tiers).length
     });
     ok(res, getMemberTierConfigSnapshot());

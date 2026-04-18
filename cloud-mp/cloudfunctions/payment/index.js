@@ -15,6 +15,7 @@ const {
 // ==================== 子模块导入 ====================
 const paymentPrepay = require('./payment-prepay');
 const paymentCallback = require('./payment-callback');
+const paymentDeposit = require('./payment-deposit');
 const paymentQuery = require('./payment-query');
 const paymentRefund = require('./payment-refund');
 const { loadPaymentConfig } = require('./config');
@@ -32,6 +33,17 @@ async function handlePaymentAction(event, openid) {
             if (err instanceof CloudBaseError) throw err;
             console.error('Prepay error:', err);
             throw serverError('生成支付信息失败: ' + err.message);
+        }
+    }
+
+    if (action === 'depositPrepay') {
+        try {
+            const result = await paymentDeposit.prepareDepositPay(openid, params);
+            return success(result);
+        } catch (err) {
+            if (err instanceof CloudBaseError) throw err;
+            console.error('DepositPrepay error:', err);
+            throw serverError('生成押金支付信息失败: ' + err.message);
         }
     }
 

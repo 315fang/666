@@ -1,23 +1,150 @@
 const app = getApp();
 const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
-const { processProduct, genHeatLabel } = require('../../utils/dataFormatter');
+const {
+    processProduct,
+    genHeatLabel,
+    parseImages,
+    resolveProductImage,
+    resolveProductDisplayPrice,
+    normalizePriceValue
+} = require('../../utils/dataFormatter');
 const { getApiBaseUrl } = require('../../config/env');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
+const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
+const HOME_PAGE_CACHE_KEY = 'home_config_cache_v2';
+const HOME_PAGE_CACHE_VERSION = 'home-product-image-20260418';
+const FEATURED_PRODUCTS_CACHE_REV = 'product-image-20260418';
 
 function normalizeAssetUrl(url = '') {
-    const raw = String(url || '');
+    const raw = extractAssetValue(url);
     if (!raw) return '';
-    if (/^https?:\/\//i.test(raw)) return raw;
+    if (/^cloud:\/\//i.test(raw)) return raw;
+    if (/^wxfile:\/\//i.test(raw) || /^data:/i.test(raw)) return raw;
+    if (/^https?:\/\//i.test(raw)) {
+        if (isExpiredSignedAssetUrl(raw)) return '';
+        return raw;
+    }
+    if (raw.startsWith('//')) return `https:${raw}`;
     if (raw.startsWith('/')) {
         const apiBase = getApiBaseUrl().replace(/\/api\/?$/, '');
         return `${apiBase}${raw}`;
     }
+    if (/^(uploads|assets)\//i.test(raw)) {
+        const apiBase = getApiBaseUrl().replace(/\/api\/?$/, '');
+        return `${apiBase}/${raw.replace(/^\/+/, '')}`;
+    }
     return raw;
 }
 
+function extractAssetValue(value) {
+    if (!value) return '';
+    if (typeof value === 'string') return value.trim();
+    if (typeof value === 'object') {
+        return String(value.url || value.image_url || value.temp_url || value.file_id || value.image || value.cover_image || '').trim();
+    }
+    return '';
+}
+
+function parseSignedAssetExpireAt(url = '') {
+    const text = String(url || '').trim();
+    if (!/^https?:\/\//i.test(text)) return 0;
+    const match = text.match(/[?&]t=(\d{10,13})\b/i);
+    if (!match) return 0;
+    const raw = Number(match[1]);
+    if (!Number.isFinite(raw) || raw <= 0) return 0;
+    return raw > 1e12 ? raw : raw * 1000;
+}
+
+function isExpiredSignedAssetUrl(url = '') {
+    const text = String(url || '').trim();
+    if (!/^https?:\/\//i.test(text)) return false;
+    if (!/[?&]sign=/.test(text)) return false;
+    const expireAt = parseSignedAssetExpireAt(text);
+    return expireAt > 0 && expireAt <= Date.now();
+}
+
 function pickImageSource(record = {}) {
-    return normalizeAssetUrl(record.file_id || record.image_url || record.url || record.image || '');
+    const direct = [record.image_url, record.url, record.image, record.cover_image]
+        .map((item) => normalizeAssetUrl(item))
+        .find(Boolean);
+    if (direct) return direct;
+
+    const fileId = String(record.file_id || '').trim();
+    if (/^cloud:\/\//i.test(fileId)) {
+        return normalizeAssetUrl(fileId);
+    }
+    return normalizeAssetUrl(fileId || '');
+}
+
+function isPlaceholderAsset(url = '') {
+    const text = String(url || '').trim();
+    if (!text) return false;
+    return /(^|\/)assets\/images\/placeholder\.svg(?:$|[?#])/i.test(text)
+        || /\/assets\/images\/placeholder\.svg(?:$|[?#])/i.test(text);
+}
+
+function uniqueAssetUrls(list = [], options = {}) {
+    const includePlaceholder = !!options.includePlaceholder;
+    const seen = new Set();
+    return (Array.isArray(list) ? list : [])
+        .map((item) => normalizeAssetUrl(item))
+        .filter((url) => {
+            if (!includePlaceholder && isPlaceholderAsset(url)) return false;
+            if (!url || seen.has(url)) return false;
+            seen.add(url);
+            return true;
+        });
+}
+
+function collectProductImageCandidates(product = {}, processed = {}) {
+    return uniqueAssetUrls([
+        resolveProductImage(product, ''),
+        processed.firstImage,
+        product.cover_image,
+        product.coverImage,
+        product.image,
+        product.image_url,
+        product.cover,
+        product.cover_url,
+        product.coverUrl,
+        product.url,
+        product.thumb,
+        product.thumbnail,
+        product.product_image,
+        product.productImage,
+        product.product_image_url,
+        product.file_id,
+        product.fileId,
+        ...parseImages(product.images),
+        ...parseImages(product.image),
+        ...parseImages(product.cover_image),
+        ...parseImages(product.image_url),
+        ...parseImages(product.file_id),
+        ...(Array.isArray(processed.images) ? processed.images : [])
+    ]);
+}
+
+function getProductLookupId(product = {}) {
+    return product && (product.id || product._id || product._legacy_id || product.product_id || '');
+}
+
+async function hydrateFeaturedProductSource(product = {}) {
+    const productId = getProductLookupId(product);
+    if (!productId) return product;
+
+    try {
+        const detailRes = await get(`/products/${productId}`, {}, {
+            showError: false,
+            maxRetries: 0
+        });
+        const detail = detailRes && (detailRes.data || detailRes);
+        return detail && typeof detail === 'object'
+            ? { ...detail, id: detail.id || productId }
+            : product;
+    } catch (_) {
+        return product;
+    }
 }
 
 function pickDisplayName(record = {}) {
@@ -25,17 +152,30 @@ function pickDisplayName(record = {}) {
 }
 
 async function loadData(page, forceRefresh = false) {
+    const cacheKey = HOME_PAGE_CACHE_KEY;
+    const cacheTtl = 5 * 60 * 1000;
+    const now = Date.now();
     page.setData({ loading: true });
     try {
         let data = null;
 
         if (!forceRefresh) {
-            data = app.globalData.homePageData;
+            const memoryExpireAt = Number(app.globalData.homePageDataExpireAt || 0);
+            const memoryVersion = String(app.globalData.homePageDataVersion || '');
+            if (app.globalData.homePageData && memoryVersion === HOME_PAGE_CACHE_VERSION && memoryExpireAt > now) {
+                data = app.globalData.homePageData;
+            } else if (app.globalData.homePageData) {
+                app.globalData.homePageData = null;
+                app.globalData.homePageDataExpireAt = 0;
+                app.globalData.homePageDataVersion = '';
+            }
             if (!data) {
-                const cached = wx.getStorageSync('home_config_cache');
-                if (cached && cached.expireAt > Date.now()) {
+                const cached = wx.getStorageSync(cacheKey);
+                if (cached && cached.version === HOME_PAGE_CACHE_VERSION && cached.expireAt > Date.now()) {
                     data = cached.data;
                     app.globalData.homePageData = data;
+                    app.globalData.homePageDataExpireAt = Number(cached.expireAt) || 0;
+                    app.globalData.homePageDataVersion = HOME_PAGE_CACHE_VERSION;
                 }
             }
             if (!data && app.globalData.homeDataPromise) {
@@ -54,11 +194,23 @@ async function loadData(page, forceRefresh = false) {
                 const res = await get('/homepage-config').catch(() => ({ data: {} }));
                 data = res.data || {};
             }
+
+            if (data && Object.keys(data).length) {
+                const expireAt = now + cacheTtl;
+                app.globalData.homePageData = data;
+                app.globalData.homePageDataExpireAt = expireAt;
+                app.globalData.homePageDataVersion = HOME_PAGE_CACHE_VERSION;
+                try {
+                    wx.setStorageSync(cacheKey, { data, expireAt, version: HOME_PAGE_CACHE_VERSION });
+                } catch (_) {
+                    // ignore storage write errors in low-storage scenarios
+                }
+            }
         }
 
         applyHomeConfig(page, data);
-        loadFeaturedProducts(page);
-        loadPosters(page);
+        loadFeaturedProducts(page, { forceRefresh });
+        loadPosters(page, { forceRefresh });
         loadBubbles(page);
         loadCoupons(page);
     } catch (err) {
@@ -67,7 +219,8 @@ async function loadData(page, forceRefresh = false) {
     }
 }
 
-async function loadFeaturedProducts(page) {
+async function loadFeaturedProducts(page, options = {}) {
+    const forceRefresh = !!options.forceRefresh;
     try {
         const layoutBoardProducts = page.homeResources && page.homeResources.boards
             && page.homeResources.boards['home.featuredProducts']
@@ -79,8 +232,10 @@ async function loadFeaturedProducts(page) {
         if (!boardProducts.length) {
             const boardRes = await cachedGet(get, '/boards/map', {
                 scene: 'home',
-                keys: 'home.featuredProducts'
+                keys: 'home.featuredProducts',
+                rev: FEATURED_PRODUCTS_CACHE_REV
             }, {
+                useCache: !forceRefresh,
                 cacheTTL: 2 * 60 * 1000,
                 showError: false,
                 maxRetries: 0,
@@ -93,7 +248,8 @@ async function loadFeaturedProducts(page) {
         list = Array.isArray(boardProducts) ? boardProducts : [];
 
         if (!list.length) {
-            const res = await cachedGet(get, '/products', { page: 1, limit: 6, sort: 'hot' }, {
+            const res = await cachedGet(get, '/products', { page: 1, limit: 6, sort: 'hot', rev: FEATURED_PRODUCTS_CACHE_REV }, {
+                useCache: !forceRefresh,
                 cacheTTL: 2 * 60 * 1000,
                 showError: false,
                 maxRetries: 0,
@@ -104,21 +260,52 @@ async function loadFeaturedProducts(page) {
         }
 
         const roleLevel = app.globalData.userInfo && app.globalData.userInfo.role_level || 0;
-        const products = list.map((product) => {
-            const processed = processProduct(product, roleLevel);
-            const discountLabel = (product.market_price && product.retail_price && parseFloat(product.market_price) > parseFloat(product.retail_price))
-                ? (Math.round(parseFloat(product.retail_price) / parseFloat(product.market_price) * 10)) + '折'
+        const products = await Promise.all(list.map(async (product) => {
+            let source = product;
+            let processed = processProduct(source, roleLevel);
+            let imageCandidates = collectProductImageCandidates(source, processed);
+            if (!imageCandidates.length) {
+                source = await hydrateFeaturedProductSource(product);
+                processed = processProduct(source, roleLevel);
+                imageCandidates = collectProductImageCandidates(source, processed);
+            }
+
+            const displayPrice = Number(resolveProductDisplayPrice(source, roleLevel) || 0);
+            const marketPrice = Number(normalizePriceValue(source.market_price ?? source.original_price) || 0);
+            const galleryImages = uniqueAssetUrls([
+                ...(Array.isArray(processed.images) ? processed.images : []),
+                ...imageCandidates
+            ]);
+            const coverImage = imageCandidates[0] || '';
+            const discountLabel = (marketPrice > displayPrice && displayPrice > 0)
+                ? (Math.round(displayPrice / marketPrice * 10)) + '折'
                 : '';
-            const heatLabel = genHeatLabel(product);
-            return { ...processed, discount_label: discountLabel, heat_label: heatLabel };
-        });
+            const heatLabel = genHeatLabel(source);
+            return {
+                ...source,
+                ...processed,
+                firstImage: coverImage || '',
+                images: galleryImages,
+                display_image: coverImage || '',
+                cover_image: coverImage,
+                image: coverImage,
+                image_candidates: imageCandidates,
+                image_candidate_index: coverImage ? 0 : -1,
+                retail_price: displayPrice,
+                price: displayPrice,
+                market_price: marketPrice > displayPrice ? marketPrice : 0,
+                discount_label: discountLabel,
+                heat_label: heatLabel
+            };
+        }));
         page.setData({ featuredProducts: products });
     } catch (err) {
         console.error('[Index] 加载精选商品失败:', err);
     }
 }
 
-async function loadPosters(page) {
+async function loadPosters(page, options = {}) {
+    const forceRefresh = !!options.forceRefresh;
     const mapBanners = (list) => (list || []).map((banner) => ({
         id: banner.id,
         image: pickImageSource(banner),
@@ -139,12 +326,14 @@ async function loadPosters(page) {
 
         const [midRes, bottomRes] = await Promise.all([
             cachedGet(get, '/banners', { position: 'home_mid' }, {
+                useCache: !forceRefresh,
                 cacheTTL: 5 * 60 * 1000,
                 showError: false,
                 maxRetries: 0,
                 timeout: 10000
             }).catch(() => ({ data: [] })),
             cachedGet(get, '/banners', { position: 'home_bottom' }, {
+                useCache: !forceRefresh,
                 cacheTTL: 5 * 60 * 1000,
                 showError: false,
                 maxRetries: 0,

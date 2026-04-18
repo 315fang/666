@@ -1,0 +1,95 @@
+{
+  "kind": "cloudbase_asset_migration_execution_report",
+  "executed_at": "2026-04-17T14:09:54.825Z",
+  "mode": "apply",
+  "environment": {
+    "env_id": "cloud1-9gywyqe49638e46f",
+    "auth_status": "READY",
+    "env_status": "READY"
+  },
+  "summary": {
+    "input_records": 6,
+    "migrated": 6,
+    "failed": 0
+  },
+  "results": [
+    {
+      "collection": "banners",
+      "id": "b8ca528e69d4f8b907f289cb5a8ace12",
+      "title": "镜像案例库奢护 | home",
+      "ok": true,
+      "source_url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1773442002338_e2c0135b1b16e32e.jpg",
+      "file_id": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/banners/b8ca528e69d4f8b907f289cb5a8ace12-6f913127a7.jpg",
+      "error": "",
+      "cloud_path": "",
+      "bytes": 0,
+      "skipped": true,
+      "substituted": false
+    },
+    {
+      "collection": "banners",
+      "id": "b8ca528e69d4f8b907f289cc61d65d0b",
+      "title": "问兰燕窝邂逅试用礼 | home_mid",
+      "ok": true,
+      "source_url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774074340036_7d9c82195f9c1d1b.jpg",
+      "file_id": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/banners/b8ca528e69d4f8b907f289cc61d65d0b-603be5a931.jpg",
+      "error": "",
+      "cloud_path": "materials/migrated/banners/b8ca528e69d4f8b907f289cc61d65d0b-603be5a931.jpg",
+      "bytes": 121551,
+      "skipped": false,
+      "substituted": false
+    },
+    {
+      "collection": "banners",
+      "id": "b8ca528e69d4f8b907f289cd0675f0fb",
+      "title": "镜像案例库特惠 | home_mid",
+      "ok": true,
+      "source_url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774074009052_d9731bb253058045.jpg",
+      "file_id": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/banners/b8ca528e69d4f8b907f289cd0675f0fb-6f913127a7.jpg",
+      "error": "",
+      "cloud_path": "materials/migrated/banners/b8ca528e69d4f8b907f289cd0675f0fb-6f913127a7.jpg",
+      "bytes": 242400,
+      "skipped": false,
+      "substituted": false
+    },
+    {
+      "collection": "banners",
+      "id": "b8ca528e69d4f8b907f289ce546e781f",
+      "title": "问兰灯塔皮脂膜精华乳 | home",
+      "ok": true,
+      "source_url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1775016272809_79c3d51d689a3b93.png",
+      "file_id": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/banners/b8ca528e69d4f8b907f289ce546e781f-989d45c395.png",
+      "error": "",
+      "cloud_path": "",
+      "bytes": 0,
+      "skipped": true,
+      "substituted": false
+    },
+    {
+      "collection": "banners",
+      "id": "b8ca528e69d4f8b907f289cf56a9fd5f",
+      "title": "问兰玻色因紧致面霜 | category",
+      "ok": true,
+      "source_url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774779111061_71efc96d09c81509.png",
+      "file_id": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/banners/b8ca528e69d4f8b907f289cf56a9fd5f-07606d274c.png",
+      "error": "",
+      "cloud_path": "",
+      "bytes": 0,
+      "skipped": true,
+      "substituted": false
+    },
+    {
+      "collection": "splash_screens",
+      "id": "78167c7f69d4f8d2082a6c9d07fc7a33",
+      "title": "问兰",
+      "ok": true,
+      "source_url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774075734170_06e1b686b485a29a.png",
+      "file_id": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/splash_screens/78167c7f69d4f8d2082a6c9d07fc7a33-aa07316855.png",
+      "error": "",
+      "cloud_path": "",
+      "bytes": 0,
+      "skipped": true,
+      "substituted": false
+    }
+  ]
+}

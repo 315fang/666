@@ -36,6 +36,8 @@ const ROUTE_TABLE = {
     'POST /user/claim-welcome-coupons':     { fn: 'user',         action: 'claimWelcomeCoupons' },
     'POST /coupons/claim':                  { fn: 'user',         action: 'claimCoupon' },
     'GET /coupons/info':                    { fn: 'user',         action: 'getCouponInfo' },
+    'POST /deposit-orders/prepay':          { fn: 'payment',      action: 'depositPrepay' },
+    'GET /deposit-orders/mine':             { fn: 'user',         action: 'listDepositOrders' },
 
     // ── 商品 ──────────────────────────────────
     'GET /products':                        { fn: 'products',     action: 'list' },

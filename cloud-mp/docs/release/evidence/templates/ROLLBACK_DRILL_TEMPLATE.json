@@ -1,0 +1,17 @@
+{
+  "env": "",
+  "executed_at": "",
+  "operator": "",
+  "trigger_scenario": "",
+  "scope": "",
+  "steps": [],
+  "restore_validation": {
+    "backend_login": false,
+    "order_list": false,
+    "refund_flow": false,
+    "config_content_read": false
+  },
+  "status": "PENDING",
+  "issues": [],
+  "follow_up": []
+}

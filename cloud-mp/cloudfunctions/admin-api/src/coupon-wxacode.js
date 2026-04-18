@@ -16,6 +16,21 @@ function normalizeEnvVersion(value) {
     return ALLOWED_ENV_VERSIONS.has(envVersion) ? envVersion : DEFAULT_ENV_VERSION;
 }
 
+function normalizeMiniProgramPage(page = COUPON_CLAIM_PAGE) {
+    const normalized = String(page || COUPON_CLAIM_PAGE).trim().replace(/^\/+/, '');
+    return normalized || COUPON_CLAIM_PAGE;
+}
+
+function normalizeSceneValue(scene = '') {
+    return String(scene || '').trim();
+}
+
+function buildMiniProgramPath(page = COUPON_CLAIM_PAGE, query = '') {
+    const normalizedPage = normalizeMiniProgramPage(page);
+    const normalizedQuery = String(query || '').trim().replace(/^\?+/, '');
+    return normalizedQuery ? `/${normalizedPage}?${normalizedQuery}` : `/${normalizedPage}`;
+}
+
 function buildCouponSharePath(couponId) {
     return `/pages/coupon/claim?id=${encodeURIComponent(String(couponId || '').trim())}`;
 }
@@ -34,15 +49,37 @@ function normalizeWxacodeBase64(buffer) {
     return Buffer.from(buffer).toString('base64');
 }
 
-function buildCouponWxacodeFallback({ couponId, envVersion = DEFAULT_ENV_VERSION, error = null } = {}) {
+function buildWxacodeFallback({
+    page = COUPON_CLAIM_PAGE,
+    scene = '',
+    mpPath = '',
+    envVersion = DEFAULT_ENV_VERSION,
+    error = null,
+    extra = {}
+} = {}) {
     return {
-        coupon_id: String(couponId || '').trim(),
-        page: COUPON_CLAIM_PAGE,
-        scene: buildCouponWxacodeScene(couponId),
+        ...extra,
+        page: normalizeMiniProgramPage(page),
+        scene: normalizeSceneValue(scene),
         env_version: normalizeEnvVersion(envVersion),
-        mp_path: buildCouponSharePath(couponId),
+        mp_path: mpPath || buildMiniProgramPath(page),
         wxacode_base64: null,
         error
+    };
+}
+
+function buildCouponWxacodeFallback({ couponId, envVersion = DEFAULT_ENV_VERSION, error = null } = {}) {
+    return {
+        ...buildWxacodeFallback({
+            page: COUPON_CLAIM_PAGE,
+            scene: buildCouponWxacodeScene(couponId),
+            mpPath: buildCouponSharePath(couponId),
+            envVersion,
+            error,
+            extra: {
+                coupon_id: String(couponId || '').trim()
+            }
+        })
     };
 }
 
@@ -177,15 +214,22 @@ async function getStableAccessToken({ appId, appSecret, forceRefresh = false, re
     return response.json.access_token;
 }
 
-async function fetchCouponWxacodeBuffer({ accessToken, couponId, envVersion = DEFAULT_ENV_VERSION, width = DEFAULT_WIDTH, requestImpl } = {}) {
+async function fetchWxacodeBuffer({
+    accessToken,
+    page = COUPON_CLAIM_PAGE,
+    scene = '',
+    envVersion = DEFAULT_ENV_VERSION,
+    width = DEFAULT_WIDTH,
+    requestImpl
+} = {}) {
     if (!accessToken) throw new Error('wx_access_token_missing');
 
     const response = await requestWechatApi({
         path: `/wxa/getwxacodeunlimit?access_token=${encodeURIComponent(accessToken)}`,
         method: 'POST',
         body: {
-            scene: buildCouponWxacodeScene(couponId),
-            page: COUPON_CLAIM_PAGE,
+            scene: normalizeSceneValue(scene),
+            page: normalizeMiniProgramPage(page),
             env_version: normalizeEnvVersion(envVersion),
             width: Number.isFinite(Number(width)) && Number(width) > 0 ? Number(width) : DEFAULT_WIDTH,
             check_path: false,
@@ -209,8 +253,21 @@ async function fetchCouponWxacodeBuffer({ accessToken, couponId, envVersion = DE
     return response.buffer;
 }
 
-async function generateCouponWxacode({
-    couponId,
+async function fetchCouponWxacodeBuffer({ accessToken, couponId, envVersion = DEFAULT_ENV_VERSION, width = DEFAULT_WIDTH, requestImpl } = {}) {
+    return fetchWxacodeBuffer({
+        accessToken,
+        page: COUPON_CLAIM_PAGE,
+        scene: buildCouponWxacodeScene(couponId),
+        envVersion,
+        width,
+        requestImpl
+    });
+}
+
+async function generateWxacode({
+    page = COUPON_CLAIM_PAGE,
+    scene = '',
+    mpPath = '',
     envVersion = DEFAULT_ENV_VERSION,
     width = DEFAULT_WIDTH,
     appId,
@@ -219,9 +276,15 @@ async function generateCouponWxacode({
     tokenFetcher,
     wxacodeFetcher
 } = {}) {
-    const fallback = buildCouponWxacodeFallback({ couponId, envVersion, error: null });
+    const fallback = buildWxacodeFallback({
+        page,
+        scene,
+        mpPath,
+        envVersion,
+        error: null
+    });
     const resolveToken = tokenFetcher || getStableAccessToken;
-    const fetchCode = wxacodeFetcher || fetchCouponWxacodeBuffer;
+    const fetchCode = wxacodeFetcher || fetchWxacodeBuffer;
 
     try {
         let accessToken = await resolveToken({
@@ -234,7 +297,8 @@ async function generateCouponWxacode({
         try {
             buffer = await fetchCode({
                 accessToken,
-                couponId,
+                page: fallback.page,
+                scene: fallback.scene,
                 envVersion: fallback.env_version,
                 width,
                 requestImpl
@@ -250,7 +314,8 @@ async function generateCouponWxacode({
             });
             buffer = await fetchCode({
                 accessToken,
-                couponId,
+                page: fallback.page,
+                scene: fallback.scene,
                 envVersion: fallback.env_version,
                 width,
                 requestImpl
@@ -274,6 +339,43 @@ async function generateCouponWxacode({
     }
 }
 
+async function generateCouponWxacode({
+    couponId,
+    envVersion = DEFAULT_ENV_VERSION,
+    width = DEFAULT_WIDTH,
+    appId,
+    appSecret,
+    requestImpl,
+    tokenFetcher,
+    wxacodeFetcher
+} = {}) {
+    const result = await generateWxacode({
+        page: COUPON_CLAIM_PAGE,
+        scene: buildCouponWxacodeScene(couponId),
+        mpPath: buildCouponSharePath(couponId),
+        envVersion,
+        width,
+        appId,
+        appSecret,
+        requestImpl,
+        tokenFetcher,
+        wxacodeFetcher: wxacodeFetcher
+            ? async ({ accessToken, envVersion: nextEnvVersion, width: nextWidth, requestImpl: nextRequestImpl }) => wxacodeFetcher({
+                accessToken,
+                couponId,
+                envVersion: nextEnvVersion,
+                width: nextWidth,
+                requestImpl: nextRequestImpl
+            })
+            : undefined
+    });
+
+    return {
+        ...result,
+        coupon_id: String(couponId || '').trim()
+    };
+}
+
 function clearAccessTokenCache() {
     accessTokenCache.clear();
 }
@@ -283,9 +385,13 @@ module.exports = {
     buildCouponSharePath,
     buildCouponWxacodeScene,
     buildCouponWxacodeFallback,
+    buildMiniProgramPath,
+    buildWxacodeFallback,
     clearAccessTokenCache,
     fetchCouponWxacodeBuffer,
+    fetchWxacodeBuffer,
     generateCouponWxacode,
+    generateWxacode,
     getStableAccessToken,
     normalizeEnvVersion
 };

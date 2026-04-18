@@ -1,6 +1,6 @@
 # CloudBase Environment Runtime Status
 
-Generated at: 2026-04-16T09:26:38.140Z
+Generated at: 2026-04-17T12:29:12.081Z
 
 ## Environment
 
@@ -13,15 +13,15 @@ Generated at: 2026-04-16T09:26:38.140Z
 - `users`: expected=167, actual=185, status=count_above_seed
 - `products`: expected=11, actual=11, status=ok
 - `skus`: expected=11, actual=11, status=ok
-- `categories`: expected=9, actual=10, status=count_above_seed
+- `categories`: expected=9, actual=9, status=ok
 - `cart_items`: expected=25, actual=50, status=count_above_seed
-- `orders`: expected=59, actual=166, status=count_above_seed
-- `refunds`: expected=9, actual=31, status=count_above_seed
+- `orders`: expected=59, actual=169, status=count_above_seed
+- `refunds`: expected=9, actual=32, status=count_above_seed
 - `reviews`: expected=3, actual=3, status=ok
-- `commissions`: expected=3, actual=5, status=count_above_seed
+- `commissions`: expected=3, actual=7, status=count_above_seed
 - `withdrawals`: expected=3, actual=5, status=count_above_seed
 - `banners`: expected=5, actual=5, status=ok
-- `materials`: expected=52, actual=53, status=count_above_seed
+- `materials`: expected=52, actual=59, status=count_above_seed
 - `material_groups`: expected=1, actual=1, status=ok
 - `admins`: expected=2, actual=2, status=ok
 - `admin_roles`: expected=2, actual=2, status=ok
@@ -68,5 +68,5 @@ Generated at: 2026-04-16T09:26:38.140Z
 
 ## Warnings
 
-- Required collections contain runtime data beyond import baseline: users, categories, cart_items, orders, refunds, commissions, withdrawals, materials
+- Required collections contain runtime data beyond import baseline: users, cart_items, orders, refunds, commissions, withdrawals, materials
 - Extra deployed functions not found in local cloudfunctions/: shared

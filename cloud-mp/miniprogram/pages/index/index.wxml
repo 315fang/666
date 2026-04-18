@@ -33,7 +33,7 @@
     <swiper class="hero-swiper" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}" interval="5000" duration="600" indicator-color="rgba(255,255,255,0.25)" indicator-active-color="#FFFFFF">
       <swiper-item wx:for="{{heroBanners}}" wx:key="id">
         <view class="hero-slide" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
-          <image class="hero-image" src="{{item.image}}" mode="aspectFill" wx:if="{{item.image}}"></image>
+          <image class="hero-image" src="{{item.image}}" mode="aspectFill" wx:if="{{item.image}}" binderror="onAssetImageError" data-scene="hero-banner"></image>
           <view class="hero-fallback" wx:else>
             <view class="hero-orb orb-a"></view>
             <view class="hero-orb orb-b"></view>
@@ -77,7 +77,7 @@
   <!-- 中部海报区（后端 banners position=home_mid，对标麦吉丽的多海报铺排） -->
   <view class="poster-section" wx:if="{{midPosters.length > 0}}">
     <view class="poster-card" wx:for="{{midPosters}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
-      <image class="poster-image" src="{{item.image}}" mode="widthFix"></image>
+      <image class="poster-image" src="{{item.image}}" mode="widthFix" binderror="onAssetImageError" data-scene="mid-poster"></image>
       <view class="poster-overlay" wx:if="{{item.title}}">
         <text class="poster-title">{{item.title}}</text>
         <text class="poster-sub" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
@@ -105,7 +105,18 @@
     <view class="products-grid" wx:if="{{featuredProducts.length > 0}}">
       <view class="product-card" wx:for="{{featuredProducts}}" wx:key="id" bindtap="onProductTap" data-id="{{item.id}}" hover-class="press">
         <view class="product-card-img-wrap">
-          <image class="product-card-img" src="{{item.cover_image || (item.images && item.images[0]) || '/assets/images/placeholder.svg'}}" mode="aspectFill" lazy-load="{{true}}"></image>
+          <image
+            wx:if="{{item.display_image || item.cover_image || item.image}}"
+            class="product-card-img"
+            src="{{item.display_image || item.cover_image || item.image}}"
+            mode="aspectFill"
+            lazy-load="{{true}}"
+            binderror="onFeaturedImageError"
+            data-index="{{index}}"
+          ></image>
+          <view wx:else class="product-card-img-fallback">
+            <text class="product-card-img-fallback-label">暂无商品图片</text>
+          </view>
           <view class="product-card-badge" wx:if="{{item.market_price && item.market_price > item.retail_price && item.discount_label}}">
             {{item.discount_label}}
           </view>
@@ -124,7 +135,7 @@
           <view class="product-card-price-row">
             <view class="product-card-price">
               <text class="price-sym">¥</text>
-              <text class="price-num">{{item.retail_price || item.price}}</text>
+              <text class="price-num">{{item.displayPrice || item.retail_price || item.price}}</text>
             </view>
           </view>
         </view>
@@ -139,7 +150,7 @@
   <!-- 底部海报区（后端 banners position=home_bottom） -->
   <view class="poster-section" wx:if="{{bottomPosters.length > 0}}">
     <view class="poster-card" wx:for="{{bottomPosters}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
-      <image class="poster-image" src="{{item.image}}" mode="widthFix"></image>
+      <image class="poster-image" src="{{item.image}}" mode="widthFix" binderror="onAssetImageError" data-scene="bottom-poster"></image>
       <view class="poster-overlay" wx:if="{{item.title}}">
         <text class="poster-title">{{item.title}}</text>
         <text class="poster-sub" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
@@ -152,7 +163,7 @@
   <!-- 弹窗广告 -->
   <view class="popup-ad-overlay" wx:if="{{showPopupAd}}" bindtap="onClosePopupAd">
     <view class="popup-ad-card" catchtap="onPopupAdTap">
-      <image class="popup-ad-image" src="{{popupAd.file_id || popupAd.image_url}}" mode="widthFix" wx:if="{{popupAd.file_id || popupAd.image_url}}"/>
+      <image class="popup-ad-image" src="{{popupAd.image_url || popupAd.url}}" mode="widthFix" wx:if="{{popupAd.image_url || popupAd.url}}" binderror="onAssetImageError" data-scene="popup-ad"/>
       <view class="popup-ad-btn" wx:if="{{popupAd.button_text}}">
         {{popupAd.button_text}}
       </view>

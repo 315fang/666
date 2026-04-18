@@ -60,6 +60,7 @@ async function loadWalletBalance(page) {
             walletLoadStatus: 'idle',
             walletLoadError: '',
             walletBalance: 0,
+            walletBalanceDisplay: '0.00',
             useWallet: false
         });
         return {
@@ -76,16 +77,20 @@ async function loadWalletBalance(page) {
     try {
         const res = await get('/agent/goods-fund', {}, { showError: false });
         if (res && res.code === 0 && res.data) {
-            const balance = parseFloat(res.data.balance || 0);
+            const balance = Number(res.data.balance || 0);
+            const normalizedBalance = Number.isFinite(balance)
+                ? Math.round(balance * 100) / 100
+                : 0;
             page.setData({
-                walletBalance: balance,
+                walletBalance: normalizedBalance,
+                walletBalanceDisplay: normalizedBalance.toFixed(2),
                 walletLoadStatus: 'success',
                 walletLoadError: ''
             });
             return {
                 ok: true,
                 status: 'success',
-                data: balance,
+                data: normalizedBalance,
                 errorType: ''
             };
         }
@@ -93,6 +98,7 @@ async function loadWalletBalance(page) {
     } catch (error) {
         page.setData({
             walletBalance: 0,
+            walletBalanceDisplay: '0.00',
             useWallet: false,
             walletLoadStatus: 'error',
             walletLoadError: '余额暂不可用'

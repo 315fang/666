@@ -256,7 +256,7 @@
   <view class="section points-section wallet-section" wx:if="{{!exchangeMode && isAgent && walletLoadStatus === 'success'}}">
     <view class="wallet-label-col">
       <text class="points-label">货款余额支付</text>
-      <text class="wallet-balance-sub" wx:if="{{walletBalance > 0}}">可用余额 ¥{{walletBalance}}</text>
+      <text class="wallet-balance-sub" wx:if="{{walletBalance > 0}}">可用余额 ¥{{walletBalanceDisplay}}</text>
       <text class="wallet-balance-sub wallet-balance-empty" wx:else>余额不足</text>
     </view>
     <view class="points-right">

@@ -6,7 +6,7 @@ const { USER_ROLES } = require('../../config/constants');
 const { safeBack } = require('../../utils/navigator');
 const { requireLogin } = require('../../utils/auth');
 const { resolveSlashResumePayload } = require('../../utils/activityResume');
-const { loadProduct, resolvePayableUnitPrice, PRODUCT_PLACEHOLDER } = require('./productDetailData');
+const { loadProduct, resolvePayableUnitPrice } = require('./productDetailData');
 const { refreshFavoriteState, toggleFavorite } = require('./productDetailFavorite');
 const {
     onSpecSelect,
@@ -101,7 +101,7 @@ Page({
         selectedSpecs: {},
         quantity: 1,
         currentImage: 0,
-        imageCount: 1,
+        imageCount: 0,
         isFavorite: false,
         statusBarHeight: 20,
         navTopPadding: 20,
@@ -530,15 +530,13 @@ Page({
     onGalleryImageError(e) {
         const index = Number(e.currentTarget.dataset.index || 0);
         const product = this.data.product || {};
-        const images = Array.isArray(product.images) ? product.images.slice() : [];
-        if (!images.length) {
-            images.push(PRODUCT_PLACEHOLDER);
-        } else {
-            images[index] = PRODUCT_PLACEHOLDER;
-        }
+        const images = Array.isArray(product.images)
+            ? product.images.filter((_, currentIndex) => currentIndex !== index)
+            : [];
         this.setData({
             'product.images': images,
-            imageCount: images.length || 1
+            imageCount: images.length || 0,
+            currentImage: Math.min(this.data.currentImage || 0, Math.max(images.length - 1, 0))
         });
     },
 

@@ -8,16 +8,25 @@ const jsonPath = path.join(docsDir, 'BUSINESS_SMOKE_AUDIT.json');
 const mdPath = path.join(docsDir, 'BUSINESS_SMOKE_AUDIT.md');
 
 function execCommand(command) {
+  const execute = (cmd) => execSync(cmd, {
+    cwd: cloudRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: true
+  });
+
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return execSync(command, {
-        cwd: cloudRoot,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-        shell: true
-      });
+      return execute(command);
     } catch (error) {
+      const detail = `${error?.stderr?.toString?.() || ''}\n${error?.stdout?.toString?.() || ''}`;
+      const shouldFallback = /ERR_MODULE_NOT_FOUND|Cannot find package 'ora'/i.test(detail)
+        && /npx\s+mcporter\b/i.test(command);
+      if (shouldFallback) {
+        const fallbackCommand = command.replace(/npx\s+mcporter\b/i, 'npx --yes mcporter@latest');
+        return execute(fallbackCommand);
+      }
       lastError = error;
     }
   }
@@ -28,9 +37,30 @@ function loadJwt() {
   return require(path.join(cloudRoot, 'cloudfunctions', 'admin-api', 'node_modules', 'jsonwebtoken'));
 }
 
+function queryFunctionDetail(functionName) {
+  const output = execCommand(
+    `npx mcporter call cloudbase.queryFunctions action=getFunctionDetail functionName=${functionName} --output json`
+  );
+  const payload = JSON.parse(output);
+  return payload?.data?.functionDetail || payload?.data?.raw || {};
+}
+
+function resolveAdminJwtSecret() {
+  if (process.env.ADMIN_JWT_SECRET) return process.env.ADMIN_JWT_SECRET;
+  const detail = queryFunctionDetail('admin-api');
+  const vars = Array.isArray(detail?.Environment?.Variables) ? detail.Environment.Variables : [];
+  const hit = vars.find((item) => item?.Key === 'ADMIN_JWT_SECRET');
+  if (hit?.Value) return hit.Value;
+  return 'admin-api-function-secret';
+}
+
 function createAdminToken() {
   const jwt = loadJwt();
-  return jwt.sign({ id: 1, username: 'admin', role: 'super_admin' }, 'admin-api-function-secret', { expiresIn: '12h' });
+  return jwt.sign(
+    { id: 1, username: 'admin', role: 'super_admin' },
+    resolveAdminJwtSecret(),
+    { expiresIn: '12h' }
+  );
 }
 
 function projectEnvId() {

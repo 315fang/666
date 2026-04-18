@@ -122,7 +122,7 @@
     >
       <view class="prize-item-top">
         <text class="prize-badge">{{item.badge_text}}</text>
-        <image wx:if="{{item.file_id || item.image_url}}" class="prize-img" src="{{item.file_id || item.image_url}}" mode="aspectFit"/>
+        <image wx:if="{{item.image_url}}" class="prize-img" src="{{item.image_url}}" mode="aspectFit"/>
         <view wx:else class="prize-icon-shell" style="background: linear-gradient(135deg, {{item.theme_color}} 0%, {{item.accent_color}} 100%);">
           <text class="prize-emoji">{{item.display_emoji || prizeEmoji[item.type] || '🎁'}}</text>
         </view>

@@ -40,6 +40,39 @@ const asyncHandler = (handler) => async (...args) => {
     }
 };
 
+let isColdStart = true;
+
+function buildTraceId(event) {
+    const candidate = event && (
+        event.trace_id
+        || event.traceId
+        || event.request_id
+        || event.requestId
+        || event.$requestId
+    );
+    if (candidate) return String(candidate);
+    return `order_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function parseErrorCode(error) {
+    if (!error) return 'unknown_error';
+    if (error.code) return String(error.code);
+    if (error.errCode) return String(error.errCode);
+    return 'internal_error';
+}
+
+function logPerf(entry) {
+    const payload = {
+        kind: 'cf_perf',
+        metric_version: 'phase1_v1',
+        ts: new Date().toISOString(),
+        function_name: 'order',
+        db_ms: null,
+        ...entry
+    };
+    console.log(JSON.stringify(payload));
+}
+
 // 主处理函数
 const handleAction = {
     // ===== 基础 CRUD =====
@@ -272,19 +305,46 @@ const handleAction = {
 };
 
 exports.main = cloudFunctionWrapper(async (event) => {
-    const wxContext = cloud.getWXContext();
-    const openid = wxContext.OPENID;
+    const startedAt = Date.now();
+    const coldStart = isColdStart;
+    isColdStart = false;
+    const traceId = buildTraceId(event || {});
+    const action = event && event.action ? event.action : '';
 
-    if (!openid) {
-        throw unauthorized('未登录');
+    try {
+        const wxContext = cloud.getWXContext();
+        const openid = wxContext.OPENID;
+
+        if (!openid) {
+            throw unauthorized('未登录');
+        }
+
+        const { action: currentAction, ...params } = event;
+        const handler = handleAction[currentAction];
+
+        if (!handler) {
+            throw badRequest(`未知 action: ${currentAction}`);
+        }
+
+        const result = await handler(openid, params);
+        logPerf({
+            action: currentAction,
+            trace_id: traceId,
+            cold_start: coldStart,
+            status: 'ok',
+            code: 'ok',
+            total_ms: Date.now() - startedAt
+        });
+        return result;
+    } catch (error) {
+        logPerf({
+            action,
+            trace_id: traceId,
+            cold_start: coldStart,
+            status: 'error',
+            code: parseErrorCode(error),
+            total_ms: Date.now() - startedAt
+        });
+        throw error;
     }
-
-    const { action, ...params } = event;
-    const handler = handleAction[action];
-
-    if (!handler) {
-        throw badRequest(`未知 action: ${action}`);
-    }
-
-    return handler(openid, params);
 });

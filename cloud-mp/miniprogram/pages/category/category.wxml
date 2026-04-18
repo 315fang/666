@@ -77,7 +77,7 @@
             hover-class="press"
           >
             <view class="product-img-wrap">
-              <image class="product-img" src="{{prod.image}}" mode="aspectFill" lazy-load></image>
+              <image class="product-img" src="{{prod.image}}" mode="aspectFill" lazy-load binderror="onProductImageError" data-category-id="__special__" data-id="{{prod.id}}"></image>
             </view>
             <view class="product-info">
               <view class="product-tag-row" wx:if="{{(prod.product_tag && prod.product_tag !== 'normal') || prod.hasGroupActivity || prod.hasSlashActivity}}">
@@ -134,7 +134,7 @@
           >
             <!-- 正方形缩略图 -->
             <view class="product-img-wrap">
-              <image class="product-img" src="{{prod.image}}" mode="aspectFill" lazy-load></image>
+              <image class="product-img" src="{{prod.image}}" mode="aspectFill" lazy-load binderror="onProductImageError" data-category-id="{{item.id}}" data-id="{{prod.id}}"></image>
             </view>
             <!-- 中间信息 -->
             <view class="product-info">

@@ -46,16 +46,25 @@ function getAdminApiBase() {
 }
 
 function execCommand(command) {
+  const execute = (cmd) => require('child_process').execSync(cmd, {
+    cwd: cloudRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: true
+  });
+
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return require('child_process').execSync(command, {
-        cwd: cloudRoot,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-        shell: true
-      });
+      return execute(command);
     } catch (error) {
+      const detail = `${error?.stderr?.toString?.() || ''}\n${error?.stdout?.toString?.() || ''}`;
+      const shouldFallback = /ERR_MODULE_NOT_FOUND|Cannot find package 'ora'/i.test(detail)
+        && /npx\s+mcporter\b/i.test(command);
+      if (shouldFallback) {
+        const fallbackCommand = command.replace(/npx\s+mcporter\b/i, 'npx --yes mcporter@latest');
+        return execute(fallbackCommand);
+      }
       lastError = error;
     }
   }

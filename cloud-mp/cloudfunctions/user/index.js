@@ -45,6 +45,8 @@ const userProfile = require('./user-profile');
 const userGrowth = require('./user-growth');
 const userAddresses = require('./user-addresses');
 const userCoupons = require('./user-coupons');
+const userCouponTickets = require('./user-coupon-tickets');
+const userDepositOrders = require('./user-deposit-orders');
 const userFavorites = require('./user-favorites');
 const userNotifications = require('./user-notifications');
 const userWallet = require('./user-wallet');
@@ -185,11 +187,8 @@ async function loadAgentUpgradeRules() {
 }
 
 function discountText(discount) {
-    if (discount == null) return '原价';
-    const d = Number(discount);
-    if (!Number.isFinite(d) || d >= 1) return '原价';
-    const fold = parseFloat((d * 10).toFixed(2));
-    return `${fold % 1 === 0 ? fold.toFixed(0) : fold.toFixed(1)}折`;
+    void discount;
+    return '积分权益';
 }
 
 function normalizeGrowthTiers(rows = []) {
@@ -198,8 +197,8 @@ function normalizeGrowthTiers(rows = []) {
             level: toNum(row.level != null ? row.level : index + 1, index + 1),
             name: row.name || `成长档位${index + 1}`,
             min: toNum(row.min != null ? row.min : row.growth_threshold, 0),
-            discount: toNum(row.discount != null ? row.discount : row.discount_rate, 1),
-            discountText: discountText(row.discount != null ? row.discount : row.discount_rate),
+            discount: 1,
+            discountText: discountText(1),
             desc: row.desc || row.description || '',
             enabled: row.enabled !== false
         }))
@@ -212,8 +211,8 @@ function normalizeMemberLevels(rows = []) {
             ...row,
             level: toNum(row.level, 0),
             name: row.name || '代理等级',
-            discount_rate: toNum(row.discount_rate != null ? row.discount_rate : row.discount, 1),
-            discountText: discountText(row.discount_rate != null ? row.discount_rate : row.discount),
+            discount_rate: 1,
+            discountText: discountText(1),
             perks: Array.isArray(row.perks)
                 ? row.perks
                 : [row.description || row.desc || row.benefits].filter(Boolean)
@@ -351,7 +350,7 @@ async function evaluateAgentUpgrade(openid) {
         effectiveSales,
         directMembers,
         roleName: roleMeta?.name || DEFAULT_ROLE_NAMES[nextRoleLevel] || '普通用户',
-        discountRate: roleMeta?.discount_rate != null ? toNum(roleMeta.discount_rate, 1) : null
+        discountRate: 1
     };
 }
 
@@ -371,7 +370,7 @@ async function syncEligibleRoleLevelIfNeeded(openid) {
             distributor_level: nextDistributorLevel,
             agent_level: nextDistributorLevel,
             participate_distribution: 1,
-            discount_rate: evaluation.discountRate != null ? evaluation.discountRate : evaluation.user.discount_rate,
+            discount_rate: 1,
             role_upgraded_at: db.serverDate(),
             updated_at: db.serverDate()
         }
@@ -387,7 +386,7 @@ async function syncEligibleRoleLevelIfNeeded(openid) {
             role_name: evaluation.roleName,
             distributor_level: nextDistributorLevel,
             agent_level: nextDistributorLevel,
-            discount_rate: evaluation.discountRate != null ? evaluation.discountRate : evaluation.user.discount_rate
+            discount_rate: 1
         }
     };
 }
@@ -749,6 +748,16 @@ const handleAction = {
     }),
 
     'getCouponInfo': asyncHandler(async (_openid, params) => {
+        const ticketId = String(params.ticket || params.ticket_id || params.t || '').trim();
+        if (ticketId) {
+            const ticketInfo = await userCouponTickets.getClaimTicketInfo(ticketId);
+            return success({
+                found: !!ticketInfo.found,
+                ticket_status: ticketInfo.ticket_status || 'invalid',
+                coupon: ticketInfo.coupon || null
+            });
+        }
+
         const id = String(params.coupon_id || params.id || '');
         if (!id) throw badRequest('缺少优惠券 ID');
         const numId = Number(id);
@@ -784,10 +793,20 @@ const handleAction = {
     }),
 
     'claimCoupon': asyncHandler(async (openid, params) => {
+        const ticketId = params.ticket || params.ticket_id || params.t;
+        if (ticketId) {
+            const claimedByTicket = await userCouponTickets.claimCouponByTicket(openid, ticketId);
+            return success(claimedByTicket);
+        }
         const id = params.coupon_id || params.id;
         if (!id) throw badRequest('缺少优惠券 ID');
         const claimed = await userCoupons.claimCoupon(openid, id);
         return success(claimed);
+    }),
+
+    'listDepositOrders': asyncHandler(async (openid) => {
+        const orders = await userDepositOrders.listDepositOrders(openid);
+        return success({ list: orders });
     }),
 
     'claimWelcomeCoupons': asyncHandler(async (openid) => {
@@ -933,7 +952,7 @@ const handleAction = {
                 distributor_level: nextDistributorLevel,
                 agent_level: nextDistributorLevel,
                 participate_distribution: 1,
-                discount_rate: evaluation.discountRate != null ? evaluation.discountRate : evaluation.user.discount_rate,
+                discount_rate: 1,
                 updated_at: db.serverDate()
             },
         });

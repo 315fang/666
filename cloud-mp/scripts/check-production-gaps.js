@@ -1,9 +1,12 @@
 const fs = require('fs');
 const path = require('path');
 const { loadPaymentConfig } = require('../cloudfunctions/payment/config');
+const { readJson } = require('./release-runtime-kit');
 
 const root = path.resolve(__dirname, '..', '..');
 const projectRoot = root;
+const cloudMpRoot = path.resolve(__dirname, '..');
+const runtimeEvidenceRoot = path.join(projectRoot, 'cloud-mp', 'docs', 'release', 'evidence', 'runtime');
 
 function readText(relativePath) {
   try {
@@ -32,6 +35,65 @@ function hasPattern(relativePath, pattern) {
 
 function formatMissingKeys(list) {
   return Array.isArray(list) && list.length ? list.join(', ') : 'none';
+}
+
+function readRuntimeEvidence(name) {
+  return readJson(path.join(runtimeEvidenceRoot, name), null);
+}
+
+function hoursBetween(iso) {
+  const ts = new Date(iso || '').getTime();
+  if (!Number.isFinite(ts)) return Number.POSITIVE_INFINITY;
+  return Math.abs(Date.now() - ts) / 36e5;
+}
+
+function checkDailyBackupEvidence() {
+  const latest = readRuntimeEvidence('backup-latest.json');
+  const verify = readRuntimeEvidence('backup-verify-latest.json');
+  const result = {
+    hasLatest: !!latest,
+    latestOk: !!latest && latest.status === 'success',
+    latestFresh: !!latest && hoursBetween(latest.generated_at) <= 36,
+    hasVerify: !!verify,
+    verifyOk: !!verify && verify.status === 'success'
+  };
+  if (!result.hasLatest) blockers.push('当日备份证据缺失：docs/release/evidence/runtime/backup-latest.json');
+  else {
+    if (!result.latestOk) blockers.push(`当日备份未成功：${latest.status || 'unknown'}`);
+    if (!result.latestFresh) blockers.push('最新备份超过 36 小时，不能视为日备份有效');
+  }
+  if (!result.hasVerify) blockers.push('备份校验证据缺失：docs/release/evidence/runtime/backup-verify-latest.json');
+  else if (!result.verifyOk) blockers.push(`备份校验未通过：${verify.status || 'unknown'}`);
+  return result;
+}
+
+function checkPreprodEvidence() {
+  const evidence = readRuntimeEvidence('preprod-evidence-latest.json');
+  if (!evidence) {
+    blockers.push('预发证据缺失：docs/release/evidence/runtime/preprod-evidence-latest.json');
+    return null;
+  }
+  const requiredPacks = ['backend_pack', 'miniprogram_pack', 'finance_pack'];
+  const failedPacks = requiredPacks.filter((key) => evidence[key]?.status !== 'passed');
+  if (failedPacks.length) {
+    blockers.push(`预发证据未通过的主链包：${failedPacks.join(', ')}`);
+  }
+  if (evidence.real_device?.status !== 'passed') {
+    blockers.push('真机验证未通过或未记录');
+  }
+  return evidence;
+}
+
+function checkRollbackDrillEvidence() {
+  const drill = readRuntimeEvidence('rollback-drill-latest.json');
+  if (!drill) {
+    blockers.push('回滚演练记录缺失：docs/release/evidence/runtime/rollback-drill-latest.json');
+    return null;
+  }
+  if (drill.status !== 'passed') {
+    blockers.push(`回滚演练未通过：${drill.status || 'unknown'}`);
+  }
+  return drill;
 }
 
 const blockers = [];
@@ -194,6 +256,9 @@ const timerTriggerCheck = checkTimerTriggers();
 const cloudBaseSeedCheck = checkCloudBaseSeed();
 const adminRuntimeCollectionsCheck = checkAdminRuntimeCollections();
 const authCheck = checkAuthConfiguration();
+const dailyBackupCheck = checkDailyBackupEvidence();
+const preprodEvidence = checkPreprodEvidence();
+const rollbackDrill = checkRollbackDrillEvidence();
 
 if (cloudFunctionCheck.count > 0) {
   blockers.push(`缺失云函数：${cloudFunctionCheck.missing.join(', ')}`);
@@ -210,6 +275,14 @@ if (cloudBaseSeedCheck.count < 5) {
 if (!authCheck.hasEnv) {
   blockers.push('CloudBase 环境未配置，检查 project.config.json 的 cloudbaseEnv 字段');
 }
+if (!fs.existsSync(path.join(projectRoot, 'cloud-mp', 'docs', 'production', 'BACKOFFICE_DUTY_RUNBOOK.md'))) {
+  blockers.push('后台值守手册缺失：docs/production/BACKOFFICE_DUTY_RUNBOOK.md');
+}
+if (!fs.existsSync(path.join(projectRoot, 'cloud-mp', 'docs', 'production', 'BACKUP_RESTORE_RUNBOOK.md'))) {
+  blockers.push('备份恢复手册缺失：docs/production/BACKUP_RESTORE_RUNBOOK.md');
+}
+
+warnings.push('MySQL 当前按废弃遗留资产处理，不纳入日常生产运行门禁。');
 
 if (adminRuntimeCollectionsCheck.count > 0) {
   warnings.push(`后台新增运行集合尚未出现在 seed/import 摘要中，云端首次写入可创建，但建议发布前预建：${adminRuntimeCollectionsCheck.missing.join(', ')}`);
@@ -223,6 +296,11 @@ lines.push('');
 lines.push(`Payment mode: ${paymentConfig.mode}`);
 lines.push(`Payment formal configured: ${paymentConfig.formalConfigured ? 'YES' : 'NO'}`);
 lines.push(`Payment missing formal keys: ${formatMissingKeys(paymentConfig.missingFormalKeys)}`);
+lines.push('');
+lines.push(`Daily backup evidence: ${dailyBackupCheck?.hasLatest ? (dailyBackupCheck.latestOk ? 'READY' : 'FAILED') : 'MISSING'}`);
+lines.push(`Backup verify evidence: ${dailyBackupCheck?.hasVerify ? (dailyBackupCheck.verifyOk ? 'READY' : 'FAILED') : 'MISSING'}`);
+lines.push(`Preprod evidence: ${preprodEvidence ? 'FOUND' : 'MISSING'}`);
+lines.push(`Rollback drill evidence: ${rollbackDrill ? 'FOUND' : 'MISSING'}`);
 lines.push('');
 lines.push(`P0 blockers: ${blockers.length}`);
 lines.push(`Warnings: ${warnings.length}`);
@@ -240,7 +318,7 @@ if (warnings.length) {
   lines.push('');
 }
 
-const outputPath = path.join(projectRoot, 'docs', 'release', 'PRODUCTION_CHECK_REPORT.md');
+const outputPath = path.join(cloudMpRoot, 'docs', 'release', 'PRODUCTION_CHECK_REPORT.md');
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 fs.writeFileSync(outputPath, `${lines.join('\n')}\n`, 'utf8');
 

@@ -392,15 +392,25 @@ const dialogVisible = ref(false)
 const isEdit = ref(false)
 const submitting = ref(false)
 const formRef = ref()
-const form = reactive({ id: null, title: '', type: 'image', url: '', description: '', group_id: null })
+const form = reactive({ id: null, title: '', type: 'image', url: '', file_id: '', description: '', group_id: null })
+const isCloudFileId = (value) => /^cloud:\/\//i.test(String(value || ''))
+const requiresManagedFileId = (type) => ['image', 'poster'].includes(String(type || '').toLowerCase())
 const rules = {
   title: [{ required: true, message: '请输入名称', trigger: 'blur' }],
-  type: [{ required: true, message: '请选择类型', trigger: 'change' }]
+  type: [{ required: true, message: '请选择类型', trigger: 'change' }],
+  file_id: [{
+    trigger: 'change',
+    validator: (_rule, value, callback) => {
+      if (!requiresManagedFileId(form.type)) return callback()
+      if (!isCloudFileId(value)) return callback(new Error('图片/海报素材必须通过素材库上传，生成 cloud:// file_id'))
+      callback()
+    }
+  }]
 }
 
 const handleAdd = () => {
   isEdit.value = false
-  Object.assign(form, { id: null, title: '', type: 'image', url: '', description: '', group_id: activeGroupId.value })
+  Object.assign(form, { id: null, title: '', type: 'image', url: '', file_id: '', description: '', group_id: activeGroupId.value })
   dialogVisible.value = true
 }
 
@@ -421,6 +431,10 @@ const handleDelete = async (row) => {
 const handleSubmit = async () => {
   await formRef.value?.validate(async (valid) => {
     if (!valid) return
+    if (requiresManagedFileId(form.type) && !isCloudFileId(form.file_id)) {
+      ElMessage.warning('请先通过上传获得素材 file_id，再保存图片/海报素材')
+      return
+    }
     const tempUrlMessage = warnTemporaryAssetUrls(form.url ? [form.url] : [], '素材地址')
     if (tempUrlMessage) return ElMessage.warning(tempUrlMessage)
     submitting.value = true
@@ -445,6 +459,7 @@ const handleUpload = async ({ file }) => {
   try {
     const data = await uploadFile(file, { params: { skip_library: 1, folder: 'materials' } })
     form.url = data.url
+    form.file_id = data.file_id || ''
     if (!form.title) form.title = file.name.replace(/\.[^.]+$/, '')
     ElMessage.success('文件已上传')
   } catch (e) {

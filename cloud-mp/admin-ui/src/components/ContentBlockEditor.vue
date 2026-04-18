@@ -56,13 +56,12 @@
         <div v-if="resolvedImageUrl" style="margin-bottom:8px;">
           <el-image :src="resolvedImageUrl" fit="contain" style="max-width:300px;max-height:160px;border-radius:8px;border:1px solid #eee;" />
         </div>
-        <el-input v-model="localData.image_url" placeholder="输入图片URL" @input="emitData">
-          <template #append>
-            <el-upload :show-file-list="false" :http-request="handleUpload" :before-upload="beforeUpload" accept="image/*">
-              <el-button>上传</el-button>
-            </el-upload>
-          </template>
-        </el-input>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <el-button type="primary" @click="openMediaPicker('custom')">从素材库选择</el-button>
+          <el-tag v-if="localData.file_id" type="success" effect="plain">已绑定素材</el-tag>
+          <el-button v-if="localData.image_url" text type="danger" @click="clearSelectedImage">清空</el-button>
+        </div>
+        <div style="font-size:12px;color:#909399;margin-top:6px;">请先上传到素材库，再从素材库中选择图片</div>
       </el-form-item>
     </template>
 
@@ -121,16 +120,27 @@
 
     <!-- 商品模式下可覆盖图片 -->
     <el-form-item label="覆盖图片" v-if="source === 'product' && pickedProduct">
-      <el-input v-model="localData.image_url" placeholder="留空使用商品图，填URL覆盖" @input="emitData" />
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <el-button @click="openMediaPicker('cover')">从素材库选择覆盖图</el-button>
+        <el-button v-if="localData.image_url" text type="danger" @click="clearSelectedImage">清空覆盖图</el-button>
+      </div>
       <div style="font-size:12px;color:#909399;margin-top:4px;">不填则自动使用商品首图</div>
     </el-form-item>
+
+    <MediaPicker
+      v-model:visible="mediaPickerVisible"
+      :multiple="false"
+      :max="1"
+      @confirm="handleMediaConfirm"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getProducts, getProductById, getBanners, uploadFile } from '@/api'
+import { getProducts, getProductById, getBanners } from '@/api'
+import MediaPicker from '@/components/MediaPicker.vue'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({}) },
@@ -147,6 +157,7 @@ const pickedProduct = ref(null)
 const reusableBanners = ref([])
 const reuseId = ref(null)
 const reusedBanner = ref(null)
+const mediaPickerVisible = ref(false)
 
 const localData = reactive({
   file_id: '',
@@ -239,35 +250,28 @@ const onReusePicked = (id) => {
   }
 }
 
-const beforeUpload = (file) => {
-  if (file.size > 10 * 1024 * 1024) {
-    ElMessage.warning('图片不能超过10MB')
-    return false
-  }
-  return true
+const openMediaPicker = () => {
+  mediaPickerVisible.value = true
 }
 
-const handleUpload = async ({ file }) => {
-  try {
-    const res = await uploadFile(file)
-    const payload = res?.data || res || {}
-    const url = payload.url || payload.image_url || ''
-    if (!url) {
-      ElMessage.error('上传成功但未返回图片地址，请检查存储配置')
-      return
-    }
-    syncUploadedAsset(payload)
-    ElMessage.success('图片上传成功')
-    // 强制 emit，让父组件同步最新 image_url
-    emitData()
-  } catch (e) {
-    ElMessage.error(e?.message || '图片上传失败')
-  }
+const clearSelectedImage = () => {
+  localData.file_id = ''
+  localData.image_url = ''
+  emitData()
 }
 
-const syncUploadedAsset = (payload = {}) => {
-  localData.file_id = payload.file_id || ''
-  localData.image_url = payload.url || payload.image_url || ''
+const isCloudFileId = (value) => /^cloud:\/\//i.test(String(value || ''))
+
+const handleMediaConfirm = (persistIds = [], displayUrls = []) => {
+  const persist = Array.isArray(persistIds) ? (persistIds[0] || '') : ''
+  const display = Array.isArray(displayUrls) ? (displayUrls[0] || '') : ''
+  if (!isCloudFileId(persist)) {
+    ElMessage.warning('请选择素材库中已托管到云开发的图片')
+    return
+  }
+  localData.file_id = persist
+  localData.image_url = display || persist
+  emitData()
 }
 
 onMounted(async () => {

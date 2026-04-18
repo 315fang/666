@@ -29,8 +29,165 @@ const asyncHandler = (handler) => async (...args) => {
     }
 };
 
+let isColdStart = true;
+
+function buildTraceId(event) {
+    const candidate = event && (
+        event.trace_id
+        || event.traceId
+        || event.request_id
+        || event.requestId
+        || event.$requestId
+    );
+    if (candidate) return String(candidate);
+    return `config_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function parseErrorCode(error) {
+    if (!error) return 'unknown_error';
+    if (error.code) return String(error.code);
+    if (error.errCode) return String(error.errCode);
+    return 'internal_error';
+}
+
+function logPerf(entry) {
+    const payload = {
+        kind: 'cf_perf',
+        metric_version: 'phase1_v1',
+        ts: new Date().toISOString(),
+        function_name: 'config',
+        db_ms: null,
+        ...entry
+    };
+    console.log(JSON.stringify(payload));
+}
+
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
+}
+
+function pickString(value, fallback = '') {
+    if (value == null) return fallback;
+    const text = String(value).trim();
+    return text || fallback;
+}
+
+function isCloudFileId(value) {
+    return /^cloud:\/\//i.test(pickString(value));
+}
+
+function isHttpAsset(value) {
+    return /^https?:\/\//i.test(pickString(value));
+}
+
+function pickAssetRef(source = {}) {
+    if (!source || typeof source !== 'object') return pickString(source);
+    return pickString(source.file_id || source.image_url || source.url || source.image || source.cover_image || source.coverImage);
+}
+
+function pickFileId(source = {}) {
+    if (!source || typeof source !== 'object') return '';
+    const direct = pickString(source.file_id || source.fileId);
+    if (isCloudFileId(direct)) return direct;
+    const fallback = pickAssetRef(source);
+    return isCloudFileId(fallback) ? fallback : '';
+}
+
+async function batchResolveManagedFileUrls(fileIds = []) {
+    const ids = [...new Set((Array.isArray(fileIds) ? fileIds : []).filter(isCloudFileId))];
+    const resolved = new Map();
+    if (!ids.length || !cloud?.getTempFileURL) return resolved;
+
+    for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        const result = await cloud.getTempFileURL({ fileList: chunk }).catch(() => ({ fileList: [] }));
+        (result.fileList || []).forEach((file) => {
+            if (!file || !file.fileID) return;
+            resolved.set(file.fileID, pickString(file.tempFileURL || file.download_url));
+        });
+    }
+    return resolved;
+}
+
+function buildResolvedAssetUrl(record = {}, resolvedMap = new Map()) {
+    const fileId = pickFileId(record);
+    if (fileId) {
+        const resolved = pickString(resolvedMap.get(fileId));
+        if (resolved) return resolved;
+    }
+    const fallback = pickAssetRef(record);
+    return isHttpAsset(fallback) ? fallback : '';
+}
+
+async function normalizeBannerRecords(records = []) {
+    const list = Array.isArray(records) ? records : [];
+    const resolvedMap = await batchResolveManagedFileUrls(list.map((item) => pickFileId(item)));
+    return list.map((item) => {
+        const imageUrl = buildResolvedAssetUrl(item, resolvedMap);
+        return {
+            ...item,
+            file_id: pickFileId(item),
+            image_url: imageUrl,
+            image: imageUrl,
+            url: imageUrl,
+            cover_image: imageUrl,
+            coverImage: imageUrl
+        };
+    });
+}
+
+async function normalizeSingleAssetRecord(record = {}) {
+    const safeRecord = record && typeof record === 'object' ? { ...record } : {};
+    const fileId = pickFileId(safeRecord);
+    const resolvedMap = await batchResolveManagedFileUrls(fileId ? [fileId] : []);
+    const imageUrl = buildResolvedAssetUrl(safeRecord, resolvedMap);
+    return {
+        ...safeRecord,
+        file_id: fileId,
+        image_url: imageUrl,
+        image: imageUrl,
+        url: imageUrl,
+        cover_image: imageUrl,
+        coverImage: imageUrl
+    };
+}
+
+async function resolveHomeContentAssets(payload = {}) {
+    const safePayload = payload && typeof payload === 'object' ? { ...payload } : {};
+    const resources = safePayload.resources && typeof safePayload.resources === 'object'
+        ? { ...safePayload.resources }
+        : {};
+
+    const bannerGroup = resources.banners && typeof resources.banners === 'object'
+        ? { ...resources.banners }
+        : (safePayload.banners && typeof safePayload.banners === 'object' ? { ...safePayload.banners } : {});
+
+    const [homeBanners, midBanners, bottomBanners] = await Promise.all([
+        normalizeBannerRecords(bannerGroup.home || []),
+        normalizeBannerRecords(bannerGroup.home_mid || []),
+        normalizeBannerRecords(bannerGroup.home_bottom || [])
+    ]);
+
+    const normalizedBanners = {
+        home: homeBanners,
+        home_mid: midBanners,
+        home_bottom: bottomBanners
+    };
+
+    const popupSource = resources.popup_ad && typeof resources.popup_ad === 'object'
+        ? resources.popup_ad
+        : (safePayload.popupAd && typeof safePayload.popupAd === 'object' ? safePayload.popupAd : {});
+    const normalizedPopup = await normalizeSingleAssetRecord(popupSource);
+
+    resources.banners = normalizedBanners;
+    resources.popup_ad = normalizedPopup;
+
+    return {
+        ...safePayload,
+        banners: normalizedBanners,
+        popupAd: normalizedPopup,
+        resources
+    };
 }
 
 function toArray(value) {
@@ -194,7 +351,8 @@ async function getHomepageSettings() {
 
 async function getPopupAdConfig() {
     const popup = await getSingletonValue('popup-ad-config', null);
-    return configContract.normalizePopupAdConfig(popup || {});
+    const normalized = configContract.normalizePopupAdConfig(popup || {});
+    return normalizeSingleAssetRecord(normalized);
 }
 
 async function findOneByAnyId(collectionName, rawId) {
@@ -255,7 +413,10 @@ const handleAction = {
     'homeContent': asyncHandler(async (params) => {
         const cached = configCache.getCachedConfig('home_content_payload');
         if (cached && typeof cached === 'object') {
-            return success(cached);
+            // 首页缓存命中时刷新一次临时素材 URL，避免旧签名链接在客户端触发 403。
+            const refreshed = await resolveHomeContentAssets(cached);
+            configCache.setCachedConfig('home_content_payload', refreshed);
+            return success(refreshed);
         }
 
         // 兼容旧数据字段：banners 用 status, products 用 status:true, page_layouts 用 page_key+status
@@ -383,9 +544,10 @@ const handleAction = {
             layout: layout ? layout.layout_schema || layout.sections || layout : null,
             latestActivity: {}
         });
+        const resolvedPayload = await resolveHomeContentAssets(payload);
 
-        configCache.setCachedConfig('home_content_payload', payload);
-        return success(payload);
+        configCache.setCachedConfig('home_content_payload', resolvedPayload);
+        return success(resolvedPayload);
     }),
 
     // ===== Banners =====
@@ -399,21 +561,24 @@ const handleAction = {
             .orderBy('sort_order', 'asc')
             .limit(10)
             .get().catch(() => ({ data: [] }));
-        return success({ list: res.data || [] });
+        const list = await normalizeBannerRecords(res.data || []);
+        return success({ list });
     }),
 
     // ===== 开屏广告 =====
     'splash': asyncHandler(async (params) => {
         const singletonConfig = await getSingletonValue('splash_config', null);
         if (singletonConfig) {
-            return success(configContract.normalizeSplashConfig(singletonConfig));
+            const normalized = configContract.normalizeSplashConfig(singletonConfig);
+            return success(await normalizeSingleAssetRecord(normalized));
         }
         const res = await db.collection('splash_screens')
             .where({ is_active: true })
             .orderBy('created_at', 'desc')
             .limit(1)
             .get().catch(() => ({ data: [] }));
-        return success(configContract.normalizeSplashConfig(res.data && res.data[0] ? res.data[0] : null));
+        const normalized = configContract.normalizeSplashConfig(res.data && res.data[0] ? res.data[0] : null);
+        return success(await normalizeSingleAssetRecord(normalized));
     }),
 
     // ===== 主题 =====
@@ -622,7 +787,7 @@ const handleAction = {
                 id: card.id || cardId,
                 title: card.title || '',
                 subtitle: card.subtitle || card.subTitle || '',
-                image: card.file_id || card.image || card.image_url || card.cover_image || '',
+                image: buildResolvedAssetUrl(card, await batchResolveManagedFileUrls([pickFileId(card)])),
                 end_time: card.end_time || null
             },
             products
@@ -672,25 +837,45 @@ const handleAction = {
 
 // ==================== 云函数导出 ====================
 exports.main = cloudFunctionWrapper(async (event) => {
-    const { action, ...params } = event;
+    const startedAt = Date.now();
+    const coldStart = isColdStart;
+    isColdStart = false;
+    const traceId = buildTraceId(event || {});
+    const action = event && event.action ? event.action : '';
 
-    // config 云函数部分 action 不需要登录（如首页配置）
-    const publicActions = ['init', 'list', 'getSystemConfig', 'miniProgramConfig', 'homeContent',
-        'banners', 'splash', 'activeTheme', 'activities', 'groups', 'groupDetail', 'groupActivities',
-        'slashList', 'slashDetail', 'slashActivities', 'lottery', 'lotteryPrizes', 'boardsMap',
-        'activityBubbles', 'activityLinks', 'festivalConfig', 'limitedSpotDetail', 'brandNews',
-        'nInviteCard', 'questionnaireActive', 'rules', 'get'];
+    try {
+        const { action: currentAction, ...params } = event;
 
-    // lotteryRecords 必须使用当前登录用户的 openid，忽略 params.openid 防止枚举他人记录
-    if (action === 'lotteryRecords') {
-        const wxContext = cloud.getWXContext();
-        params.openid = wxContext.OPENID || '';  // 强制覆盖，不允许查他人
+        // lotteryRecords 必须使用当前登录用户的 openid，忽略 params.openid 防止枚举他人记录
+        if (currentAction === 'lotteryRecords') {
+            const wxContext = cloud.getWXContext();
+            params.openid = wxContext.OPENID || '';  // 强制覆盖，不允许查他人
+        }
+
+        const handler = handleAction[currentAction];
+        if (!handler) {
+            throw badRequest(`未知 action: ${currentAction}`);
+        }
+
+        const result = await handler(params);
+        logPerf({
+            action: currentAction,
+            trace_id: traceId,
+            cold_start: coldStart,
+            status: 'ok',
+            code: 'ok',
+            total_ms: Date.now() - startedAt
+        });
+        return result;
+    } catch (error) {
+        logPerf({
+            action,
+            trace_id: traceId,
+            cold_start: coldStart,
+            status: 'error',
+            code: parseErrorCode(error),
+            total_ms: Date.now() - startedAt
+        });
+        throw error;
     }
-
-    const handler = handleAction[action];
-    if (!handler) {
-        throw badRequest(`未知 action: ${action}`);
-    }
-
-    return handler(params);
 });

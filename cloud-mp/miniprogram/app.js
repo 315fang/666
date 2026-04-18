@@ -29,6 +29,7 @@ App({
         navTopPadding: 20,
         navBarHeight: 44,
         homePageData: null,
+        homePageDataExpireAt: 0,
         homeDataPromise: null,
         miniProgramConfig: cloneDefaults(),
         miniProgramConfigPromise: null,

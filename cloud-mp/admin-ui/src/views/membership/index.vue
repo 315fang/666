@@ -16,7 +16,7 @@
             type="info"
             :closable="false"
             style="margin-bottom:12px"
-            title="这里只维护等级名称、概况说明和折扣表现；价格档位与分销计算不再在这里单独配置。"
+            title="这里只维护等级名称、概况说明与权益描述；成交价统一按商品标价结算，角色差异体现在积分和团队权益。"
           />
 
           <div class="level-grid">
@@ -36,9 +36,6 @@
                 </el-form-item>
                 <el-form-item label="真实规则摘要">
                   <div class="level-rule-summary">{{ getUpgradeSummary(lv.level) }}</div>
-                </el-form-item>
-                <el-form-item label="等级折扣率">
-                  <el-input-number v-model="lv.discount_rate" :min="0.1" :max="1" :step="0.01" :precision="2" style="width:100%" />
                 </el-form-item>
               </el-form>
             </el-card>
@@ -69,12 +66,12 @@
             <el-form-item label="每单额外成长值">
               <el-input-number v-model="growthRules.purchase.fixed" :min="0" :max="999999" style="width:160px" />
             </el-form-item>
-            <el-divider content-position="left">折扣口径说明</el-divider>
+            <el-divider content-position="left">权益口径说明</el-divider>
             <el-alert
               type="warning"
               :closable="false"
               style="margin-bottom:12px"
-              title="成长值不再单独决定复购折扣。真实折扣口径以“会员等级”中的 discount_rate 为准；成长值这里只负责累计规则和特权展示。"
+              title="成长值与角色等级仅影响积分与团队权益，不再影响订单成交价。"
             />
           </el-form>
         </el-card>
@@ -337,23 +334,23 @@ function defaultPeerBonusConfig() {
 const peerBonus = reactive(defaultPeerBonusConfig())
 
 const defaultGrowthTiers = () => [
-  { min: 0, discount: 1, name: '普通用户', desc: '无折扣' },
-  { min: 299, discount: 0.9, name: '初级代理', desc: '9折' },
-  { min: 580, discount: 0.85, name: '高级代理', desc: '8.5折' },
-  { min: 3000, discount: 1, name: '推广合伙人', desc: '原价（赚佣金）' },
-  { min: 30000, discount: 1, name: '运营合伙人', desc: '原价（赚佣金）' },
-  { min: 198000, discount: 1, name: '区域合伙人', desc: '原价（赚佣金）' }
+  { min: 0, discount: 1, name: '普通用户', desc: '基础积分权益' },
+  { min: 299, discount: 1, name: '初级代理', desc: '成长值提升后解锁更多积分权益' },
+  { min: 580, discount: 1, name: '高级代理', desc: '成长值提升后解锁更多积分权益' },
+  { min: 3000, discount: 1, name: '推广合伙人', desc: '享受团队与复购积分权益' },
+  { min: 30000, discount: 1, name: '运营合伙人', desc: '享受团队与复购积分权益' },
+  { min: 198000, discount: 1, name: '区域合伙人', desc: '享受团队与复购积分权益' }
 ]
 
 const growthTiers = ref(defaultGrowthTiers())
 
 const memberLevels = ref([
   { level: 0, name: 'VIP会员', description: '注册后进入基础会员层级，普通品复购每消费 100 元赠送 50 积分。', color: '#909399', price_tier: 'retail', commission_type: 'none', discount_rate: 1 },
-  { level: 1, name: '初级代理', description: 'C1 消费满 299 元升级，直推 20%，普通品复购每消费 100 元赠送 100 积分。', color: '#409EFF', price_tier: 'member', commission_type: 'level1', discount_rate: 0.90 },
-  { level: 2, name: '高级代理', description: 'C2 直推 2 个 C1 且销售满 580 元升级，直推 30% + 间推 5%。', color: '#67c23a', price_tier: 'leader', commission_type: 'level2', discount_rate: 0.85 },
-  { level: 3, name: '推广合伙人', description: 'B1 推荐 10 个 C1 或充值 3000 元升级，享团队与复购积分权益。', color: '#E6A23C', price_tier: 'agent', commission_type: 'level2', discount_rate: 0.60 },
-  { level: 4, name: '运营合伙人', description: 'B2 推荐 10 个 B1 或充值 30000 元升级，享区域运营权益。', color: '#F56C6C', price_tier: 'agent', commission_type: 'level2', discount_rate: 0.60 },
-  { level: 5, name: '区域合伙人', description: 'B3 推荐 3 个 B2 或 30 个 B1，或充值 198000 元升级。', color: '#9B59B6', price_tier: 'agent', commission_type: 'level2', discount_rate: 0.55 },
+  { level: 1, name: '初级代理', description: 'C1 消费满 299 元升级，直推 20%，普通品复购每消费 100 元赠送 100 积分。', color: '#409EFF', price_tier: 'member', commission_type: 'level1', discount_rate: 1 },
+  { level: 2, name: '高级代理', description: 'C2 直推 2 个 C1 且销售满 580 元升级，直推 30% + 间推 5%。', color: '#67c23a', price_tier: 'leader', commission_type: 'level2', discount_rate: 1 },
+  { level: 3, name: '推广合伙人', description: 'B1 推荐 10 个 C1 或充值 3000 元升级，享团队与复购积分权益。', color: '#E6A23C', price_tier: 'agent', commission_type: 'level2', discount_rate: 1 },
+  { level: 4, name: '运营合伙人', description: 'B2 推荐 10 个 B1 或充值 30000 元升级，享区域运营权益。', color: '#F56C6C', price_tier: 'agent', commission_type: 'level2', discount_rate: 1 },
+  { level: 5, name: '区域合伙人', description: 'B3 推荐 3 个 B2 或 30 个 B1，或充值 198000 元升级。', color: '#9B59B6', price_tier: 'agent', commission_type: 'level2', discount_rate: 1 },
 ])
 
 const normalizeCommissionType = (value) => {
@@ -438,7 +435,8 @@ const loadConfig = async () => {
     if (Array.isArray(d.member_levels) && d.member_levels.length) {
       memberLevels.value = d.member_levels.map((item) => ({
         ...item,
-        commission_type: normalizeCommissionType(item.commission_type)
+        commission_type: normalizeCommissionType(item.commission_type),
+        discount_rate: 1
       }))
     }
     if (d.growth_rules) Object.assign(growthRules, d.growth_rules)
@@ -521,10 +519,10 @@ const normalizeGrowthTiersPayload = () => {
     const min = Number(row.min)
     const discount = Number(row.discount)
     if (!Number.isFinite(min) || min < 0) {
-      throw new Error(`成长值折扣阶梯第 ${idx + 1} 行：成长值下限须 ≥0`)
+      throw new Error(`成长值等级阶梯第 ${idx + 1} 行：成长值下限须 ≥0`)
     }
     if (!Number.isFinite(discount) || discount <= 0 || discount > 1) {
-      throw new Error(`成长值折扣阶梯第 ${idx + 1} 行：折扣系数须在 (0,1]`)
+      throw new Error(`成长值等级阶梯第 ${idx + 1} 行：权益系数须在 (0,1]`)
     }
     return {
       min,
@@ -559,7 +557,8 @@ const saveLevels = async () => {
     await updateMemberTierConfig({
       member_levels: memberLevels.value.map((item) => ({
         ...item,
-        commission_type: normalizeCommissionType(item.commission_type)
+        commission_type: normalizeCommissionType(item.commission_type),
+        discount_rate: 1
       })),
       growth_rules: growthRules,
       growth_tiers: normalizedGrowthTiers,

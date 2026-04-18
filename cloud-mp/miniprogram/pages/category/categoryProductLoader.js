@@ -1,6 +1,6 @@
 const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
-const { getFirstImage, genHeatLabel, calculatePrice } = require('../../utils/dataFormatter');
+const { resolveProductImage, resolveProductDisplayPrice, genHeatLabel } = require('../../utils/dataFormatter');
 const { getMiniProgramConfig } = require('../../utils/miniProgramConfig');
 const app = getApp();
 
@@ -59,7 +59,7 @@ function mapProductsForCategory(page, list) {
     const roleLevel = app.globalData.userInfo?.role_level || 0;
 
     return (list || []).map((item) => {
-        const retailPrice = parseFloat(calculatePrice(item, null, roleLevel) || item.retail_price || item.price || 0);
+        const retailPrice = parseFloat(resolveProductDisplayPrice(item, roleLevel) || 0);
         const marketPrice = parseFloat(item.market_price || 0);
         const sales = Number(item.purchase_count || item.sales_count || 0);
         const groupActivity = groupMap[item.id] || null;
@@ -78,7 +78,7 @@ function mapProductsForCategory(page, list) {
 
         return {
             ...item,
-            image: getFirstImage(item.images),
+            image: resolveProductImage(item),
             specSummary: buildSpecSummary(item),
             price: retailPrice,
             market_price: marketPrice > retailPrice ? marketPrice : 0,

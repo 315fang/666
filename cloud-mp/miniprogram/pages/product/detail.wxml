@@ -36,16 +36,19 @@
   <view class="gallery-section">
     <view class="gallery-aspect-wrap">
       <view class="gallery-aspect-inner">
-        <swiper class="gallery-swiper" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}" indicator-color="rgba(250,250,249,0.35)" indicator-active-color="#E2C4A0" bindchange="onImageChange">
+        <swiper wx:if="{{product.images && product.images.length}}" class="gallery-swiper" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}" indicator-color="rgba(250,250,249,0.35)" indicator-active-color="#E2C4A0" bindchange="onImageChange">
           <swiper-item class="gallery-slide" wx:for="{{product.images}}" wx:key="*this">
             <view class="gallery-frame">
               <image src="{{item}}" mode="aspectFill" class="gallery-image" bindtap="onPreviewImage" binderror="onGalleryImageError" data-index="{{index}}"></image>
             </view>
           </swiper-item>
         </swiper>
+        <view wx:else class="gallery-fallback">
+          <text class="gallery-fallback-label">暂无商品图片</text>
+        </view>
       </view>
     </view>
-    <view class="gallery-copy">
+    <view class="gallery-copy" wx:if="{{imageCount > 0}}">
       <text class="gallery-counter">{{currentImage + 1}} / {{imageCount}}</text>
     </view>
   </view>

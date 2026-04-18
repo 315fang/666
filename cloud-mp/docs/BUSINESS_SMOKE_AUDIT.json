@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-13T14:26:58.213Z",
+  "generatedAt": "2026-04-17T15:13:42.616Z",
   "envId": "cloud1-9gywyqe49638e46f",
   "ok": true,
   "results": [
@@ -13,7 +13,7 @@
       "area": "admin",
       "name": "products",
       "ok": true,
-      "count": 12,
+      "count": 11,
       "issues": []
     },
     {
@@ -75,7 +75,7 @@
       "area": "mini",
       "name": "products.list",
       "ok": true,
-      "count": 2,
+      "count": 9,
       "issues": []
     },
     {

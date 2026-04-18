@@ -57,13 +57,26 @@ function uniqueSorted(list) {
 }
 
 function callMcporter(args) {
-    const command = ['npx', 'mcporter', ...args].join(' ');
-    const output = execSync(command, {
-        cwd: projectRoot,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe']
-    });
-    return JSON.parse(output);
+    const execJson = (command) => {
+        const output = execSync(command, {
+            cwd: projectRoot,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe']
+        });
+        return JSON.parse(output);
+    };
+
+    const primaryCommand = ['npx', 'mcporter', ...args].join(' ');
+    try {
+        return execJson(primaryCommand);
+    } catch (error) {
+        const detail = `${error?.stderr?.toString?.() || ''}\n${error?.stdout?.toString?.() || ''}`;
+        const shouldFallback = /ERR_MODULE_NOT_FOUND|Cannot find package 'ora'/i.test(detail);
+        if (!shouldFallback) throw error;
+
+        const fallbackCommand = ['npx', '--yes', 'mcporter@latest', ...args].join(' ');
+        return execJson(fallbackCommand);
+    }
 }
 
 function getLocalFunctionNames() {

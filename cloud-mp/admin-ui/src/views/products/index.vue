@@ -46,8 +46,6 @@
             <div class="price-col">
               <span class="price-main">¥{{ row.retail_price }}</span>
               <span class="price-sub" v-if="row.market_price" style="text-decoration:line-through;color:#999">原¥{{ row.market_price }}</span>
-              <span class="price-sub" v-if="row.price_member">会员 ¥{{ row.price_member }}</span>
-              <span class="price-sub" v-if="row.price_agent">代理 ¥{{ row.price_agent }}</span>
             </div>
           </template>
         </el-table-column>
@@ -180,7 +178,7 @@
           :closable="false"
           show-icon
           class="form-alert"
-          title="零售价、成本价为必填；会员/团长/代理价用于前台展示；B1/B2/B3 发货成本价用于代理履约扣货款和锁定利润口径。"
+          title="零售价、成本价为必填；B1/B2/B3 发货成本价用于代理履约扣货款和锁定利润口径。"
         />
 
         <el-row :gutter="16">
@@ -200,35 +198,6 @@
             </el-form-item>
           </el-col>
         </el-row>
-
-        <!-- 其他价格档：折叠 -->
-        <el-collapse-transition>
-          <div v-show="showMorePrices">
-            <el-row :gutter="16">
-              <el-col :span="8">
-                <el-form-item label="会员价">
-                  <el-input-number v-model="form.price_member" :min="0" :precision="2" style="width:100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="团长价">
-                  <el-input-number v-model="form.price_leader" :min="0" :precision="2" style="width:100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="代理价">
-                  <el-input-number v-model="form.price_agent" :min="0" :precision="2" style="width:100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </div>
-        </el-collapse-transition>
-
-        <div class="toggle-row">
-          <el-button text size="small" @click="showMorePrices = !showMorePrices">
-            {{ showMorePrices ? '▲ 收起多档价格' : '▼ 展开会员/团长/代理价格' }}
-          </el-button>
-        </div>
 
         <div class="form-section-title">代理发货成本价</div>
         <el-alert
@@ -358,13 +327,6 @@
           </div>
           <div class="sw-item">
             <div class="sw-label">
-              <span>免于复购折扣</span>
-              <span class="sw-desc">爆品/折扣商品不叠加会员等级折扣</span>
-            </div>
-            <el-switch v-model="form.discount_exempt" />
-          </div>
-          <div class="sw-item">
-            <div class="sw-label">
               <span>支持到店自提</span>
               <span class="sw-desc">开启后用户可选自提门店下单（需在「自提门店」维护网点）</span>
             </div>
@@ -381,7 +343,7 @@
 
         <el-form-item label="爆单品" style="margin-top:12px">
           <el-switch v-model="form.is_explosive" :active-value="1" :inactive-value="0" />
-          <span style="margin-left:8px;color:#909399;font-size:12px">开启后自动禁用会员价、优惠券、积分抵扣</span>
+          <span style="margin-left:8px;color:#909399;font-size:12px">开启后自动禁用优惠券、积分抵扣</span>
         </el-form-item>
         <el-form-item label="商品标签">
           <el-select v-model="form.product_tag" style="width:180px">
@@ -390,7 +352,7 @@
             <el-option label="折扣品" value="discount" />
             <el-option label="新品" value="new" />
           </el-select>
-          <span style="margin-left:12px;font-size:12px;color:#909399">标记为爆品或折扣品时建议开启"免于复购折扣"，并关闭"允许优惠券"和"允许积分抵扣"</span>
+          <span style="margin-left:12px;font-size:12px;color:#909399">标记为爆品或折扣品时建议关闭"允许优惠券"和"允许积分抵扣"</span>
         </el-form-item>
 
         <!-- 佣金设置（仅开启后展示）-->
@@ -581,7 +543,6 @@ function commissionRateApiToForm(val) {
 const formVisible = ref(false)
 const formRef = ref(null)
 const submitting = ref(false)
-const showMorePrices = ref(false)
 const skuEnabled = ref(false)
 
 const defaultForm = () => ({
@@ -597,9 +558,6 @@ const defaultForm = () => ({
   supply_price_b1: null,
   supply_price_b2: null,
   supply_price_b3: null,
-  price_member: null,
-  price_leader: null,
-  price_agent: null,
   stock: 0,
   manual_weight: 0,
   growth_value_reward: null,
@@ -608,7 +566,6 @@ const defaultForm = () => ({
   enable_coupon: 0,
   enable_group_buy: 0,
   custom_commissions: 0,
-  discount_exempt: false,
   allow_points: 1,
   supports_pickup: 0,
   visible_in_mall: true,
@@ -643,9 +600,6 @@ const openForm = (row) => {
       supply_price_b1: row.supply_price_b1 ?? null,
       supply_price_b2: row.supply_price_b2 ?? null,
       supply_price_b3: row.supply_price_b3 ?? null,
-      price_member: row.price_member || row.member_price || null,
-      price_leader: row.price_leader || null,
-      price_agent: row.price_agent || null,
       stock: row.stock || 0,
       manual_weight: row.manual_weight || 0,
       growth_value_reward: row.growth_value_reward || null,
@@ -653,7 +607,6 @@ const openForm = (row) => {
       enable_coupon: row.enable_coupon || 0,
       enable_group_buy: row.enable_group_buy || 0,
       custom_commissions: row.custom_commissions || 0,
-      discount_exempt: !!row.discount_exempt,
       allow_points: row.allow_points == null ? 1 : (row.allow_points ? 1 : 0),
       supports_pickup: row.supports_pickup ? 1 : 0,
       visible_in_mall: !(row.visible_in_mall === false || row.visible_in_mall === 0),
@@ -665,7 +618,6 @@ const openForm = (row) => {
       commission_amount_2: row.commission_amount_2 || 0
     })
     skuEnabled.value = (row.skus?.length > 0)
-    showMorePrices.value = !!(row.price_member || row.price_leader || row.price_agent)
     // 编辑已有商品时，从后端返回的数据里 images 已经是解析好的 https URL，
     // 直接缓存到 imagePreviewCache，保证 cloud:// ID（若有）能正常预览
     ;[...form.images, ...form.detail_images].forEach(url => {
@@ -677,7 +629,6 @@ const openForm = (row) => {
   } else {
     Object.assign(form, defaultForm())
     skuEnabled.value = false
-    showMorePrices.value = false
   }
   formVisible.value = true
 }

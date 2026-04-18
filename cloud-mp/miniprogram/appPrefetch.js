@@ -8,14 +8,17 @@ const { callFn } = require('./utils/cloud');
 
 module.exports = {
     prefetchHomeData() {
-        const cacheKey = 'home_config_cache';
+        const cacheKey = 'home_config_cache_v2';
+        const cacheVersion = 'home-product-image-20260418';
         const cacheTtl = 5 * 60 * 1000;
         const now = Date.now();
 
         try {
             const stored = wx.getStorageSync(cacheKey);
-            if (stored && stored.expireAt > now) {
+            if (stored && stored.version === cacheVersion && stored.expireAt > now) {
                 this.globalData.homePageData = stored.data;
+                this.globalData.homePageDataExpireAt = Number(stored.expireAt) || 0;
+                this.globalData.homePageDataVersion = cacheVersion;
                 console.log('[Prefetch] 首页配置命中持久化缓存');
                 return Promise.resolve(stored.data);
             }
@@ -80,12 +83,14 @@ module.exports = {
 
     _cacheHomePayload(payload, expireAt, cacheKey) {
         this.globalData.homePageData = payload;
+        this.globalData.homePageDataExpireAt = Number(expireAt) || 0;
+        this.globalData.homePageDataVersion = 'home-product-image-20260418';
         const configs = payload?.configs || payload?.resources?.configs || {};
         if (configs) {
             this.globalData.brandName = configs.brand_name || this.globalData.brandName;
             this.globalData.shareTitle = configs.share_title || this.globalData.shareTitle;
             this.globalData.customerServiceWechat = configs.customer_service_wechat || this.globalData.customerServiceWechat;
         }
-        wx.setStorageSync(cacheKey, { data: payload, expireAt });
+        wx.setStorageSync(cacheKey, { data: payload, expireAt, version: 'home-product-image-20260418' });
     }
 };

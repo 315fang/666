@@ -14,6 +14,10 @@ const {
     resolveRefundChannel,
     resolvePostPayStatus
 } = require('./shared/order-payment');
+const {
+    handleDepositPaidCallback,
+    handleDepositRefundCallback
+} = require('./payment-deposit');
 
 const DEFAULT_ROLE_NAMES = {
     0: 'VIP会员',
@@ -752,7 +756,7 @@ async function ensureAgentRoleSynced(orderId, order) {
             distributor_level: nextDistributorLevel,
             agent_level: nextDistributorLevel,
             participate_distribution: 1,
-            discount_rate: roleMeta.discountRate != null ? roleMeta.discountRate : user.discount_rate,
+            discount_rate: 1,
             role_upgraded_at: db.serverDate(),
             updated_at: db.serverDate()
         }
@@ -1948,6 +1952,14 @@ async function handleRechargeCallback(outTradeNo, transaction) {
  * { out_trade_no, out_refund_no, refund_id, refund_status: 'SUCCESS'|'ABNORMAL'|'CLOSED', success_time, ... }
  */
 async function handleRefundCallback(refundData, eventType) {
+    const depositResult = await handleDepositRefundCallback(refundData, eventType).catch((error) => {
+        console.error('[DepositRefundCallback] 处理失败:', error.message);
+        throw error;
+    });
+    if (depositResult && depositResult.handled) {
+        return { code: depositResult.code, message: depositResult.message };
+    }
+
     const outRefundNo = refundData.out_refund_no;
     const refundStatus = (refundData.refund_status || '').toUpperCase();
     const wxRefundId = refundData.refund_id || '';
@@ -2167,6 +2179,14 @@ async function handleCallback(event) {
 
         // 5. 处理支付成功
         if (tradeState === 'SUCCESS' && outTradeNo) {
+            const depositResult = await handleDepositPaidCallback(transaction).catch((error) => {
+                console.error('[DepositPaymentCallback] 处理失败:', error.message);
+                throw error;
+            });
+            if (depositResult && depositResult.handled) {
+                return { code: depositResult.code, message: depositResult.message };
+            }
+
             const orderRes = await db.collection('orders')
                 .where({ order_no: outTradeNo })
                 .limit(1)

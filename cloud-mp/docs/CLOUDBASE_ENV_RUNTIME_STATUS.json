@@ -1,6 +1,6 @@
 {
   "kind": "runtime_status",
-  "generated_at": "2026-04-16T09:26:38.140Z",
+  "generated_at": "2026-04-17T12:29:12.081Z",
   "ok": true,
   "environment": {
     "env_id": "cloud1-9gywyqe49638e46f",
@@ -30,8 +30,8 @@
       {
         "name": "categories",
         "expected": 9,
-        "actual": 10,
-        "status": "count_above_seed"
+        "actual": 9,
+        "status": "ok"
       },
       {
         "name": "cart_items",
@@ -42,13 +42,13 @@
       {
         "name": "orders",
         "expected": 59,
-        "actual": 166,
+        "actual": 169,
         "status": "count_above_seed"
       },
       {
         "name": "refunds",
         "expected": 9,
-        "actual": 31,
+        "actual": 32,
         "status": "count_above_seed"
       },
       {
@@ -60,7 +60,7 @@
       {
         "name": "commissions",
         "expected": 3,
-        "actual": 5,
+        "actual": 7,
         "status": "count_above_seed"
       },
       {
@@ -78,7 +78,7 @@
       {
         "name": "materials",
         "expected": 52,
-        "actual": 53,
+        "actual": 59,
         "status": "count_above_seed"
       },
       {
@@ -103,7 +103,6 @@
     "missing_or_below_required": [],
     "above_seed_required": [
       "users",
-      "categories",
       "cart_items",
       "orders",
       "refunds",
@@ -167,7 +166,7 @@
   },
   "blockers": [],
   "warnings": [
-    "Required collections contain runtime data beyond import baseline: users, categories, cart_items, orders, refunds, commissions, withdrawals, materials",
+    "Required collections contain runtime data beyond import baseline: users, cart_items, orders, refunds, commissions, withdrawals, materials",
     "Extra deployed functions not found in local cloudfunctions/: shared"
   ]
 }

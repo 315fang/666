@@ -1,11 +1,17 @@
 const { get } = require('../../utils/request');
-const { parseImages, calculatePrice, normalizeProductId } = require('../../utils/dataFormatter');
+const {
+    parseImages,
+    normalizeProductId,
+    resolveProductImage,
+    resolveProductDisplayPrice,
+    resolveProductCurrentPrice
+} = require('../../utils/dataFormatter');
 const { ErrorHandler } = require('../../utils/errorHandler');
 const { USER_ROLES } = require('../../config/constants');
 const LocalUserContent = require('../../utils/localUserContent');
 const app = getApp();
 
-const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
+const PRODUCT_PLACEHOLDER = '';
 const PLEDGE_ICONS = {
     seven_day: '/assets/icons/refresh-cw.svg',
     return_shipping: '/assets/icons/truck.svg',
@@ -44,28 +50,40 @@ function buildSkuText(sku) {
 }
 
 function resolvePayableUnitPrice(product, sku, roleLevel) {
-    const roleBasedPrice = Number(calculatePrice(product, sku, roleLevel));
-    if (Number.isFinite(roleBasedPrice) && roleBasedPrice > 0 && roleLevel > USER_ROLES.GUEST) {
-        return roleBasedPrice;
-    }
-    if (sku) {
-        const skuCentPrice = parseApiCentPrice(sku.price);
-        const skuDisplayPrice = parseApiDisplayPrice(sku.displayPrice);
-        if (skuDisplayPrice != null && (skuDisplayPrice > 0 || skuCentPrice == null)) {
-            return skuDisplayPrice;
-        }
-        const skuRetailPrice = parseApiDisplayPrice(sku.retail_price);
-        if (skuRetailPrice != null && (skuRetailPrice > 0 || skuCentPrice == null)) {
-            return skuRetailPrice;
-        }
-        if (skuCentPrice != null) {
-            return skuCentPrice;
-        }
+    const resolved = resolveProductCurrentPrice(product, sku, roleLevel);
+    if (Number.isFinite(Number(resolved)) && Number(resolved) >= 0) {
+        return Number(resolved);
     }
     if (parseApiDisplayPrice(product.displayPrice) != null) {
         return parseApiDisplayPrice(product.displayPrice);
     }
-    return roleBasedPrice;
+    return 0;
+}
+
+function pickDefaultSku(product, skus, roleLevel) {
+    const list = Array.isArray(skus) ? skus.filter(Boolean) : [];
+    if (!list.length) return null;
+
+    const targetPrice = Number(resolveProductDisplayPrice(product, roleLevel) || 0);
+    return list.slice().sort((a, b) => {
+        const aInStock = Number(a.stock || 0) > 0 ? 1 : 0;
+        const bInStock = Number(b.stock || 0) > 0 ? 1 : 0;
+        if (aInStock !== bInStock) return bInStock - aInStock;
+
+        const aPrice = Number(resolvePayableUnitPrice(product, a, roleLevel) || 0);
+        const bPrice = Number(resolvePayableUnitPrice(product, b, roleLevel) || 0);
+        if (targetPrice > 0) {
+            const aDiff = Math.abs(aPrice - targetPrice);
+            const bDiff = Math.abs(bPrice - targetPrice);
+            if (aDiff !== bDiff) return aDiff - bDiff;
+        }
+
+        const aSort = Number(a.sort_order ?? a.sortOrder ?? Number.MAX_SAFE_INTEGER);
+        const bSort = Number(b.sort_order ?? b.sortOrder ?? Number.MAX_SAFE_INTEGER);
+        if (aSort !== bSort) return aSort - bSort;
+
+        return aPrice - bPrice;
+    })[0];
 }
 
 async function loadProduct(page, id) {
@@ -75,7 +93,10 @@ async function loadProduct(page, id) {
         const res = await get(`/products/${id}`);
         const product = res.data || {};
 
-        product.images = sanitizeImageList(product.images, PRODUCT_PLACEHOLDER);
+        product.images = sanitizeImageList(
+            product.images || product.image || resolveProductImage(product, PRODUCT_PLACEHOLDER),
+            PRODUCT_PLACEHOLDER
+        );
         product.detail_images = sanitizeImageList(product.detail_images);
 
         let specs = [];
@@ -108,14 +129,14 @@ async function loadProduct(page, id) {
         product.specSummary = specSummary;
 
         const roleLevel = app.globalData.userInfo && app.globalData.userInfo.role_level || USER_ROLES.GUEST;
-        const displayPrice = resolvePayableUnitPrice(product, null, roleLevel);
+        const displayPrice = resolveProductDisplayPrice(product, roleLevel);
 
         let discount = 10;
         if (product.market_price && parseFloat(product.market_price) > 0) {
             discount = Math.round((Number(displayPrice) / parseFloat(product.market_price)) * 10);
         }
 
-        const firstSku = product.skus && product.skus.length > 0 ? product.skus[0] : null;
+        const firstSku = pickDefaultSku(product, product.skus, roleLevel);
         const selectedSpecs = {};
         if (firstSku) {
             // 优先使用 specs 数组（多规格），向后兼容 spec_name/spec_value
@@ -133,9 +154,7 @@ async function loadProduct(page, id) {
             }
         }
 
-        const currentPrice = Number(
-            resolvePayableUnitPrice(product, firstSku, roleLevel)
-        ).toFixed(2);
+        const currentPrice = Number(resolvePayableUnitPrice(product, firstSku, roleLevel)).toFixed(2);
         const currentStock = firstSku ? (firstSku.stock || 0) : (product.stock || 0);
         const isOutOfStock = currentStock <= 0;
 
@@ -155,7 +174,7 @@ async function loadProduct(page, id) {
             selectedSku: firstSku,
             selectedSpecs,
             selectedSkuText: firstSku ? buildSkuText(firstSku) : '默认规格',
-            imageCount: product.images.length || 1,
+            imageCount: product.images.length || 0,
             roleLevel,
             isAgent: roleLevel >= USER_ROLES.LEADER,
             discount,

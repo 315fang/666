@@ -16,6 +16,7 @@
 - `ADMIN_JWT_SECRET` 已固定
 - 正式支付证书、V3 Key、商户参数齐全
 - 小程序、后台、云函数使用同一套预发配置
+- 当日备份成功且已完成 backup verify
 
 建议执行：
 
@@ -78,17 +79,19 @@ npm run release:check
 - 失败项
 - 阻断项
 - 回退决定
+- 真机验证结果
 
 记录位置建议：
 
-- 对应 repair 文档补“预发验证”章节
-- 或在 `docs/release/` 新增本次预发记录
+- `docs/release/evidence/runtime/preprod-evidence-latest.json`
+- 或同步生成同名 markdown 说明
 
 ## 6. 通过定义
 
 只有当以下条件同时满足时，预发阻断门槛才算通过：
 
 - 生产检查报告无 blocker
+- 当日备份和 backup verify 通过
 - 后台主链全通
 - 小程序主链全通
 - 真机已验证

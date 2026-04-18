@@ -26,7 +26,8 @@
 2. 回退最近一轮云函数发布
 3. 回退后台前端资源
 4. 恢复最近一版稳定配置
-5. 重新执行关键 smoke
+5. 如需数据恢复，按 [docs/production/BACKUP_RESTORE_RUNBOOK.md](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/production/BACKUP_RESTORE_RUNBOOK.md) 执行抽样恢复验证
+6. 重新执行关键 smoke
 
 ## 4. 回滚后验证
 
@@ -40,7 +41,15 @@
 - 首页内容
 - 钱包
 
-## 5. 记录要求
+## 5. 演练要求
+
+正式发布前必须至少完成一次回滚桌面演练，并生成：
+
+- `docs/release/evidence/runtime/rollback-drill-latest.json`
+
+没有回滚演练记录时，视为发布阻断。
+
+## 6. 记录要求
 
 每次回滚必须记录：
 

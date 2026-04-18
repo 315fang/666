@@ -16,6 +16,7 @@
         "pages/user/portal-password",
         "pages/user/customer-service",
         "pages/user/membership-center",
+        "pages/user/deposit-orders",
         "pages/user/ticket-list",
         "pages/product/detail",
         "pages/search/search",

@@ -1,0 +1,28 @@
+{
+  "env": "",
+  "executed_at": "",
+  "operator": "",
+  "release_scope": "",
+  "backend_pack": {
+    "status": "PENDING",
+    "success_items": [],
+    "failed_items": []
+  },
+  "miniprogram_pack": {
+    "status": "PENDING",
+    "success_items": [],
+    "failed_items": []
+  },
+  "finance_pack": {
+    "status": "PENDING",
+    "success_items": [],
+    "failed_items": []
+  },
+  "real_device": {
+    "status": "PENDING",
+    "device": "",
+    "notes": ""
+  },
+  "blockers": [],
+  "rollback_decision": "NO_ROLLBACK"
+}

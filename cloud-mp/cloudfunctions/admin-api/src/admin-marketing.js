@@ -6,6 +6,11 @@ const {
     generateCouponWxacode: defaultGenerateCouponWxacode,
     normalizeEnvVersion
 } = require('./coupon-wxacode');
+const {
+    buildTemplateCouponClaimTicket,
+    generateClaimTicketWxacode,
+    normalizeClaimTicket
+} = require('./claim-ticket-wxacode');
 
 function registerMarketingRoutes(app, deps) {
     const {
@@ -30,6 +35,8 @@ function registerMarketingRoutes(app, deps) {
         appendWalletLogEntry,
         requireManualAdjustmentReason,
         generateCouponWxacode = defaultGenerateCouponWxacode,
+        generateClaimTicketWxacodeFn = generateClaimTicketWxacode,
+        flush = async () => {},
         ok,
         fail
     } = deps;
@@ -879,6 +886,39 @@ function registerMarketingRoutes(app, deps) {
         }
 
         ok(res, payload);
+    });
+
+    app.post('/admin/api/coupons/:id/claim-tickets', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['coupons', 'coupon_claim_tickets']);
+        const coupon = findByLookup(getCollection('coupons'), req.params.id);
+        if (!coupon) return fail(res, '优惠券不存在', 404);
+        if (toNumber(coupon.is_active, 1) === 0) return fail(res, '此活动已结束', 400);
+
+        const ticketRows = getCollection('coupon_claim_tickets');
+        const ticket = buildTemplateCouponClaimTicket(coupon, {
+            adminId: req.admin?.id || '',
+            nowIso,
+            pickString,
+            toNumber,
+            toArray
+        });
+        ticketRows.push(ticket);
+        saveCollection('coupon_claim_tickets', ticketRows);
+        await flush();
+
+        const envVersion = normalizeEnvVersion(req.query.env || req.query.env_version || req.body?.env || req.body?.env_version);
+        const wxacode = await generateClaimTicketWxacodeFn({
+            ticketId: ticket.ticket_id,
+            envVersion
+        });
+        createAuditLog(req.admin, 'coupon.claim-ticket.create', 'coupon_claim_tickets', {
+            ticket_id: ticket.ticket_id,
+            coupon_id: coupon.id || coupon._id || req.params.id
+        });
+        ok(res, {
+            ticket: normalizeClaimTicket(ticket),
+            ...wxacode
+        });
     });
 
     app.post('/admin/api/coupons', auth, requirePermission('products'), (req, res) => {

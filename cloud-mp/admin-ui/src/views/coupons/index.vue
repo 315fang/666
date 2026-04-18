@@ -303,6 +303,10 @@
         <p style="margin-bottom:12px; color:#606266; font-size:14px">
           券名称：<strong>{{ shareTarget?.name }}</strong>
         </p>
+        <el-radio-group v-model="shareMode" style="margin-bottom: 16px;" @change="onShareModeChange">
+          <el-radio-button label="standard">通用分享码</el-radio-button>
+          <el-radio-button label="one_time">一次性领取码</el-radio-button>
+        </el-radio-group>
         <!-- 小程序码图片 -->
         <div v-if="shareLoading" style="height:200px; display:flex; align-items:center; justify-content:center;">
           <el-icon class="is-loading" style="font-size:36px; color:#409EFF"><Loading /></el-icon>
@@ -316,6 +320,9 @@
           />
           <div style="margin-top:8px; font-size:12px; color:#909399">长按或右键图片可保存</div>
         </div>
+        <div v-if="shareMode === 'one_time' && shareTicketId" style="font-size:12px; color:#909399; margin-top:-8px; margin-bottom:12px;">
+          票据 ID：{{ shareTicketId }}
+        </div>
         <div v-else style="height:100px; line-height:100px; color:#909399; font-size:13px">
           小程序码暂不可用，可复制下方路径分享
         </div>
@@ -325,6 +332,7 @@
           <el-button size="small" type="primary" plain @click="copyMpPath">复制路径</el-button>
         </div>
         <div style="display:flex; gap:8px; justify-content:center; margin-top:8px">
+          <el-button v-if="shareMode === 'one_time'" type="warning" plain @click="reloadOneTimeShare">重新生成</el-button>
           <a
             v-if="shareWxacodeBase64"
             :href="`data:image/png;base64,${shareWxacodeBase64}`"
@@ -367,7 +375,8 @@ import {
   getProducts,
   getCategories,
   getProductById,
-  getCouponWxacode
+  getCouponWxacode,
+  createCouponClaimTicket
 } from '@/api'
 import { searchUsersLite } from '@/api/modules/users'
 import { usePagination } from '@/composables/usePagination'
@@ -621,6 +630,8 @@ const shareTarget = ref(null)
 const shareLoading = ref(false)
 const shareWxacodeBase64 = ref('')
 const shareMpPath = ref('')
+const shareMode = ref('standard')
+const shareTicketId = ref('')
 const wxacodeImgRef = ref(null)
 const COUPON_WXACODE_ENVS = ['release', 'trial', 'develop']
 
@@ -643,14 +654,45 @@ async function loadCouponWxacode(rowId) {
   return { wxacode_base64: '', attempts }
 }
 
+async function loadCouponClaimTicket(rowId) {
+  const attempts = []
+
+  for (const env of COUPON_WXACODE_ENVS) {
+    try {
+      const res = await createCouponClaimTicket(rowId, env)
+      attempts.push({ env, error: res?.error || '', ok: !!res?.wxacode_base64 })
+      if (res?.mp_path) shareMpPath.value = res.mp_path
+      if (res?.ticket?.ticket_id) shareTicketId.value = res.ticket.ticket_id
+      if (res?.wxacode_base64) {
+        return { ...res, env, attempts }
+      }
+      return { ...res, env, attempts }
+    } catch (error) {
+      attempts.push({ env, error: error?.message || 'request_failed', ok: false })
+    }
+  }
+
+  return { wxacode_base64: '', attempts }
+}
+
+async function loadSharePayload(rowId) {
+  if (shareMode.value === 'one_time') {
+    return loadCouponClaimTicket(rowId)
+  }
+  shareTicketId.value = ''
+  return loadCouponWxacode(rowId)
+}
+
 const handleShare = async (row) => {
   shareTarget.value = row
+  shareMode.value = 'standard'
+  shareTicketId.value = ''
   shareWxacodeBase64.value = ''
   shareMpPath.value = `/pages/coupon/claim?id=${row.id}`
   shareVisible.value = true
   shareLoading.value = true
   try {
-    const res = await loadCouponWxacode(row.id)
+    const res = await loadSharePayload(row.id)
     shareWxacodeBase64.value = res?.wxacode_base64 || ''
     if (!shareWxacodeBase64.value) {
       const hints = (res?.attempts || [])
@@ -668,6 +710,8 @@ const handleShare = async (row) => {
 
 const shareDialogClose = () => {
   shareWxacodeBase64.value = ''
+  shareTicketId.value = ''
+  shareMode.value = 'standard'
 }
 
 const copyMpPath = async () => {
@@ -676,6 +720,39 @@ const copyMpPath = async () => {
     ElMessage.success('路径已复制，可在微信中粘贴发送')
   } catch {
     ElMessage.info(`请手动复制：${shareMpPath.value}`)
+  }
+}
+
+const onShareModeChange = async () => {
+  if (!shareTarget.value) return
+  shareLoading.value = true
+  shareWxacodeBase64.value = ''
+  shareTicketId.value = ''
+  shareMpPath.value = shareMode.value === 'one_time'
+    ? ''
+    : `/pages/coupon/claim?id=${shareTarget.value.id}`
+  try {
+    const res = await loadSharePayload(shareTarget.value.id)
+    shareWxacodeBase64.value = res?.wxacode_base64 || ''
+    if (!shareWxacodeBase64.value && !shareMpPath.value) {
+      shareMpPath.value = res?.mp_path || shareMpPath.value
+    }
+  } finally {
+    shareLoading.value = false
+  }
+}
+
+const reloadOneTimeShare = async () => {
+  if (!shareTarget.value || shareMode.value !== 'one_time') return
+  shareLoading.value = true
+  shareWxacodeBase64.value = ''
+  shareTicketId.value = ''
+  try {
+    const res = await loadCouponClaimTicket(shareTarget.value.id)
+    shareWxacodeBase64.value = res?.wxacode_base64 || ''
+    shareMpPath.value = res?.mp_path || ''
+  } finally {
+    shareLoading.value = false
   }
 }
 

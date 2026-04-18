@@ -1,5 +1,5 @@
 const { get, post } = require('../../utils/request');
-const { parseImages } = require('../../utils/dataFormatter');
+const { parseImages, resolveProductImage } = require('../../utils/dataFormatter');
 const { isDevelopment } = require('../../config/env');
 const navigator = require('../../utils/navigator');
 const { syncPageTabBar, restorePageTabBar } = require('../../utils/tabBarHelper');
@@ -30,6 +30,54 @@ function parseScene(scene) {
         result[key] = value;
     });
     return result;
+}
+
+function uniqueImageUrls(list = []) {
+    const seen = new Set();
+    return (Array.isArray(list) ? list : [])
+        .map((item) => normalizeAssetUrl(item))
+        .filter((url) => {
+            if (/\/assets\/images\/placeholder\.svg(?:$|[?#])/i.test(String(url || ''))) return false;
+            if (!url || seen.has(url)) return false;
+            seen.add(url);
+            return true;
+        });
+}
+
+function collectFeaturedImageCandidates(product = {}) {
+    return uniqueImageUrls([
+        ...(Array.isArray(product.image_candidates) ? product.image_candidates : []),
+        resolveProductImage(product, ''),
+        product.firstImage,
+        product.cover_image,
+        product.coverImage,
+        product.image,
+        product.image_url,
+        product.cover,
+        product.cover_url,
+        product.coverUrl,
+        product.url,
+        product.thumb,
+        product.thumbnail,
+        product.product_image,
+        product.productImage,
+        product.product_image_url,
+        product.file_id,
+        product.fileId,
+        ...parseImages(product.images),
+        ...parseImages(product.image),
+        ...parseImages(product.cover_image)
+    ]);
+}
+
+function findNextCandidateIndex(candidates = [], currentImage = '', currentIndex = -1) {
+    const normalizedCurrent = normalizeAssetUrl(currentImage);
+    for (let index = Math.max(0, currentIndex + 1); index < candidates.length; index += 1) {
+        const candidate = candidates[index];
+        if (!candidate) continue;
+        if (!normalizedCurrent || candidate !== normalizedCurrent) return index;
+    }
+    return -1;
 }
 
 Page({
@@ -71,6 +119,8 @@ Page({
     },
 
     onLoad(options) {
+        this._assetRefreshInFlight = false;
+        this._assetRefreshAttempted = false;
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
@@ -421,6 +471,122 @@ Page({
         wx.navigateTo({ url: `/pages/product/detail?id=${id}` });
     },
 
+    async onFeaturedImageError(e) {
+        const index = Number(e.currentTarget.dataset.index || 0);
+        const featuredProducts = Array.isArray(this.data.featuredProducts)
+            ? this.data.featuredProducts.slice()
+            : [];
+        const item = featuredProducts[index];
+        if (!item) return;
+
+        const currentImage = normalizeAssetUrl(item.cover_image || item.image || (Array.isArray(item.images) ? item.images[0] : ''));
+        const candidates = collectFeaturedImageCandidates(item);
+        const currentIndex = Math.max(
+            Number.isFinite(Number(item.image_candidate_index)) ? Number(item.image_candidate_index) : -1,
+            candidates.indexOf(currentImage)
+        );
+        const nextCandidateIndex = findNextCandidateIndex(candidates, currentImage, currentIndex);
+
+        if (nextCandidateIndex !== -1) {
+            const nextImage = candidates[nextCandidateIndex];
+            featuredProducts[index] = {
+                ...item,
+                display_image: nextImage,
+                cover_image: nextImage,
+                image: nextImage,
+                firstImage: nextImage,
+                image_candidates: candidates,
+                image_candidate_index: nextCandidateIndex,
+                image_missing: false
+            };
+            this.setData({ featuredProducts });
+            return;
+        }
+
+        const hydrated = await this._hydrateFeaturedProductImage(index, item, candidates, currentImage);
+        if (hydrated) return;
+
+        featuredProducts[index] = {
+            ...item,
+            display_image: '',
+            cover_image: '',
+            image: '',
+            firstImage: '',
+            image_candidates: candidates,
+            image_candidate_index: candidates.length - 1,
+            image_missing: true,
+            _detailImageHydrated: true
+        };
+        this.setData({ featuredProducts });
+
+        if (currentImage || candidates.length) {
+            this.onAssetImageError({
+                currentTarget: { dataset: { scene: 'featured-product' } },
+                detail: e?.detail || {}
+            });
+        }
+    },
+
+    async _hydrateFeaturedProductImage(index, item, currentCandidates = [], currentImage = '') {
+        const productId = item && (item.id || item._id || item._legacy_id);
+        if (!productId || item._detailImageHydrated) return false;
+
+        try {
+            const detailRes = await get(`/products/${productId}`, {}, {
+                showError: false,
+                maxRetries: 0
+            });
+            const detail = detailRes && (detailRes.data || detailRes);
+            if (!detail || typeof detail !== 'object') return false;
+
+            const mergedCandidates = uniqueImageUrls([
+                ...currentCandidates,
+                ...collectFeaturedImageCandidates(detail)
+            ]);
+            const nextCandidateIndex = findNextCandidateIndex(mergedCandidates, currentImage, -1);
+            const featuredProducts = Array.isArray(this.data.featuredProducts)
+                ? this.data.featuredProducts.slice()
+                : [];
+            const currentItem = featuredProducts[index];
+            if (!currentItem) return false;
+
+            featuredProducts[index] = {
+                ...currentItem,
+                ...detail,
+                images: parseImages(detail.images).length ? parseImages(detail.images) : currentItem.images,
+                image_candidates: mergedCandidates,
+                image_candidate_index: nextCandidateIndex,
+                _detailImageHydrated: true,
+                image_missing: nextCandidateIndex === -1
+            };
+
+            if (nextCandidateIndex !== -1) {
+                const nextImage = mergedCandidates[nextCandidateIndex];
+                featuredProducts[index] = {
+                    ...featuredProducts[index],
+                    display_image: nextImage,
+                    cover_image: nextImage,
+                    image: nextImage,
+                    firstImage: nextImage
+                };
+            } else {
+                featuredProducts[index] = {
+                    ...featuredProducts[index],
+                    display_image: '',
+                    cover_image: '',
+                    image: '',
+                    firstImage: ''
+                };
+            }
+
+            this.setData({ featuredProducts });
+            return nextCandidateIndex !== -1;
+        } catch (err) {
+            console.warn('[Index] 商品详情补图失败:', productId, err && (err.message || err));
+            return false;
+        }
+    },
+
     onGoCategory() {
         wx.switchTab({ url: '/pages/category/category' });
     },
@@ -433,6 +599,26 @@ Page({
         const item = e.currentTarget.dataset.item;
         if (!item) return;
         navigator.navigate(item.link_type, item.link_value);
+    },
+
+    onAssetImageError(e) {
+        const scene = e?.currentTarget?.dataset?.scene || 'unknown';
+        if (this._assetRefreshInFlight || this._assetRefreshAttempted) {
+            console.warn('[Index] 图片加载失败，已触发过刷新，不重复重试:', scene);
+            return;
+        }
+
+        this._assetRefreshInFlight = true;
+        this._assetRefreshAttempted = true;
+        console.warn('[Index] 图片加载失败，触发一次强制刷新配置:', scene, e?.detail || {});
+
+        this.loadData(true)
+            .catch((err) => {
+                console.error('[Index] 资产刷新失败:', err);
+            })
+            .finally(() => {
+                this._assetRefreshInFlight = false;
+            });
     },
 
     _syncPopupAdTabBar() {

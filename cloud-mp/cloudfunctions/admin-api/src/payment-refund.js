@@ -60,7 +60,7 @@ async function loadPrivateKey() {
     if (filePath) {
         const resolved = path.isAbsolute(filePath)
             ? filePath
-            : path.resolve(__dirname, '../../payment', filePath);
+            : path.resolve(__dirname, '..', filePath);
         if (fs.existsSync(resolved)) {
             cachedPrivateKey = fs.readFileSync(resolved, 'utf8');
             return cachedPrivateKey;

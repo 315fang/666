@@ -17,14 +17,20 @@ async function getWalletAccountByOpenid(openid) {
     const user = userRes.data && userRes.data[0] ? userRes.data[0] : null;
     if (!user) return { user: null, account: null };
     const candidates = [user.id, user._id, user._legacy_id].filter((value) => value !== null && value !== undefined && value !== '');
-    for (const candidate of candidates) {
-        const accountRes = await db.collection('wallet_accounts')
+    if (!candidates.length) return { user, account: null };
+
+    const accountResults = await Promise.all(
+        candidates.map((candidate) => db.collection('wallet_accounts')
             .where({ user_id: candidate })
             .limit(1)
             .get()
-            .catch(() => ({ data: [] }));
-        if (accountRes.data && accountRes.data[0]) {
-            return { user, account: accountRes.data[0] };
+            .catch(() => ({ data: [] })))
+    );
+
+    for (let i = 0; i < accountResults.length; i += 1) {
+        const row = accountResults[i];
+        if (row.data && row.data[0]) {
+            return { user, account: row.data[0] };
         }
     }
     return { user, account: null };

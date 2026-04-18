@@ -97,13 +97,20 @@ Page({
             const { get: httpGet } = require('../../utils/request');
             const res = await httpGet('/agent/wallet');
             if (res && res.code === 0 && res.data) {
-                const balance = parseFloat(res.data.goods_fund_balance || res.data.balance || 0);
-                this.setData({ isAgent: balance > 0, walletBalance: balance });
+                const balance = Number(res.data.goods_fund_balance || res.data.balance || 0);
+                const normalizedBalance = Number.isFinite(balance)
+                    ? Math.round(balance * 100) / 100
+                    : 0;
+                this.setData({
+                    isAgent: normalizedBalance > 0,
+                    walletBalance: normalizedBalance,
+                    walletBalanceDisplay: normalizedBalance.toFixed(2)
+                });
             } else {
-                this.setData({ isAgent: false, walletBalance: 0 });
+                this.setData({ isAgent: false, walletBalance: 0, walletBalanceDisplay: '0.00' });
             }
         } catch (_e) {
-            this.setData({ isAgent: false, walletBalance: 0 });
+            this.setData({ isAgent: false, walletBalance: 0, walletBalanceDisplay: '0.00' });
         }
     },
 

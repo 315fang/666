@@ -119,6 +119,93 @@ function normalizeCartRow(row, product, sku) {
     };
 }
 
+function uniqueNonEmpty(values = []) {
+    const seen = {};
+    const list = [];
+    values.forEach((value) => {
+        if (value === null || value === undefined || value === '') return;
+        const key = String(value);
+        if (seen[key]) return;
+        seen[key] = true;
+        list.push(value);
+    });
+    return list;
+}
+
+function chunk(values = [], size = 100) {
+    const result = [];
+    for (let i = 0; i < values.length; i += size) {
+        result.push(values.slice(i, i + size));
+    }
+    return result;
+}
+
+async function preloadProducts(rows = []) {
+    const productIds = uniqueNonEmpty(rows.map((row) => row.product_id));
+    if (!productIds.length) return new Map();
+
+    const docIds = uniqueNonEmpty(productIds.map((value) => String(value)));
+    const numericIds = uniqueNonEmpty(
+        productIds
+            .map((value) => toNumber(value, NaN))
+            .filter((value) => Number.isFinite(value))
+    );
+
+    const tasks = [];
+    chunk(docIds, 100).forEach((ids) => {
+        tasks.push(db.collection('products').where({ _id: _.in(ids) }).get().catch(() => ({ data: [] })));
+    });
+    chunk(numericIds, 100).forEach((ids) => {
+        tasks.push(db.collection('products').where({ id: _.in(ids) }).get().catch(() => ({ data: [] })));
+        tasks.push(db.collection('products').where({ _legacy_id: _.in(ids) }).get().catch(() => ({ data: [] })));
+    });
+
+    const groups = await Promise.all(tasks);
+    const map = new Map();
+    groups.forEach((group) => {
+        (group.data || []).forEach((item) => {
+            [item._id, item.id, item._legacy_id].forEach((key) => {
+                if (key === null || key === undefined || key === '') return;
+                map.set(String(key), item);
+            });
+        });
+    });
+    return map;
+}
+
+async function preloadSkus(rows = []) {
+    const skuIds = uniqueNonEmpty(rows.map((row) => row.sku_id));
+    if (!skuIds.length) return new Map();
+
+    const docIds = uniqueNonEmpty(skuIds.map((value) => String(value)));
+    const numericIds = uniqueNonEmpty(
+        skuIds
+            .map((value) => toNumber(value, NaN))
+            .filter((value) => Number.isFinite(value))
+    );
+
+    const tasks = [];
+    chunk(docIds, 100).forEach((ids) => {
+        tasks.push(db.collection('skus').where({ _id: _.in(ids) }).get().catch(() => ({ data: [] })));
+    });
+    chunk(numericIds, 100).forEach((ids) => {
+        tasks.push(db.collection('skus').where({ id: _.in(ids) }).get().catch(() => ({ data: [] })));
+        tasks.push(db.collection('skus').where({ _legacy_id: _.in(ids) }).get().catch(() => ({ data: [] })));
+    });
+
+    const groups = await Promise.all(tasks);
+    const map = new Map();
+    groups.forEach((group) => {
+        (group.data || []).forEach((item) => {
+            [item._id, item.id, item._legacy_id].forEach((key) => {
+                if (key === null || key === undefined || key === '') return;
+                map.set(String(key), item);
+            });
+        });
+    });
+    return map;
+}
+
 exports.main = cloudFunctionWrapper(async (event) => {
     const wxContext = cloud.getWXContext();
     const openid = wxContext.OPENID;
@@ -132,12 +219,21 @@ exports.main = cloudFunctionWrapper(async (event) => {
     if (action === 'list') {
         try {
             const rows = await queryCartRows(openid);
+            const [productMap, skuMap] = await Promise.all([
+                preloadProducts(rows),
+                preloadSkus(rows)
+            ]);
             const items = await Promise.all(rows.map(async (row) => {
                 try {
-                    const [product, sku] = await Promise.all([
-                        getProductByCandidate(row.product_id),
-                        getSkuByCandidate(row.sku_id)
-                    ]);
+                    let product = productMap.get(String(row.product_id || '')) || null;
+                    let sku = skuMap.get(String(row.sku_id || '')) || null;
+
+                    if (!product) {
+                        product = await getProductByCandidate(row.product_id);
+                    }
+                    if (row.sku_id && !sku) {
+                        sku = await getSkuByCandidate(row.sku_id);
+                    }
                     return normalizeCartRow(row, product, sku);
                 } catch (err) {
                     console.error('Error normalizing cart row:', row._id, err);

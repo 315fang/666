@@ -12,8 +12,13 @@ export const deleteCoupon = (id) => request({ url: `/coupons/${id}`, method: 'de
 export const issueCoupon = (id, data) => request({ url: `/coupons/${id}/issue`, method: 'post', data })
 export const previewCouponIssue = (id, data) => request({ url: `/coupons/${id}/issue`, method: 'post', params: { dry_run: true }, data })
 export const getCouponWxacode = (id, env = 'release') => request({ url: `/coupons/${id}/wxacode`, method: 'get', params: { env } })
+export const createCouponClaimTicket = (id, env = 'release') => request({ url: `/coupons/${id}/claim-tickets`, method: 'post', params: { env } })
 export const getCouponAutoRules = () => request({ url: '/coupon-auto-rules', method: 'get' })
 export const saveCouponAutoRules = (data) => request({ url: '/coupon-auto-rules', method: 'put', data })
+
+export const getDepositOrders = (params) => request({ url: '/deposit-orders', method: 'get', params })
+export const getDepositOrderDetail = (id, params) => request({ url: `/deposit-orders/${id}`, method: 'get', params })
+export const createDepositRefund = (id, data) => request({ url: `/deposit-orders/${id}/refunds`, method: 'post', data })
 
 export const getSlashActivities = (params) => request({ url: '/slash-activities', method: 'get', params })
 export const createSlashActivity = (data) => request({ url: '/slash-activities', method: 'post', data })

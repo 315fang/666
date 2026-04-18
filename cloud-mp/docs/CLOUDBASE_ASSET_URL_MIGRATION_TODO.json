@@ -1,0 +1,10 @@
+{
+  "kind": "cloudbase_asset_migration_todo",
+  "generated_at": "2026-04-17T14:41:56.884Z",
+  "environment": {
+    "env_id": "cloud1-9gywyqe49638e46f",
+    "auth_status": "READY",
+    "env_status": "READY"
+  },
+  "records": []
+}

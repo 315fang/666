@@ -22,11 +22,6 @@ function resolveSwiperIndex(activeCard) {
     return activeCard === 'agent' ? 1 : 0;
 }
 
-function resolveCurrentDiscountText(growthTiers = []) {
-    const activeTier = (growthTiers || []).find((item) => item && item.active);
-    return normalizeText(activeTier && activeTier.discountText, '原价');
-}
-
 function resolveConsumeProgressText(nextTierMin, subLine) {
     const nextMin = Number(nextTierMin);
     if (!Number.isFinite(nextMin) || nextMin <= 0) {
@@ -45,10 +40,8 @@ function buildConsumeCardSummary({
     growthValue,
     nextTierMin,
     subLine,
-    barPercent,
-    growthTiers
+    barPercent
 }) {
-    const discountText = resolveCurrentDiscountText(growthTiers);
     const progressText = resolveConsumeProgressText(nextTierMin, subLine);
     return {
         label: '消费会员',
@@ -56,10 +49,7 @@ function buildConsumeCardSummary({
         growthValue: normalizeNumber(growthValue, 0),
         progressText,
         progressPercent: Math.max(0, Math.min(100, normalizeNumber(barPercent, 0))),
-        discountText,
-        benefitText: discountText === '原价'
-            ? '当前复购价按原价结算'
-            : `当前复购价享 ${discountText}`
+        benefitText: '成交价按商品标价结算，成长值用于解锁积分权益'
     };
 }
 
@@ -74,21 +64,19 @@ function buildAgentCardSummary({
         currentRoleName,
         isAgent ? '代理权益' : '未开通代理权益'
     );
-    const discountText = normalizeText(level && level.discountText, '暂无额外折扣');
     const hasLevels = Array.isArray(memberLevels) && memberLevels.length > 0;
 
     let statusText = '代理等级由后台审核认定';
     if (!hasLevels) {
         statusText = '代理等级信息暂未加载完成，请稍后重试';
     } else if (isAgent) {
-        statusText = '享受额外折扣与团队权益';
+        statusText = '享受团队与积分权益';
     }
 
     return {
         label: '代理权益',
         roleName,
         levelText: isAgent ? `Lv.${currentRoleLevel}` : '未开通',
-        discountText,
         statusText,
         isAgent,
         showEntry: isAgent
@@ -114,13 +102,13 @@ function getMembershipCardMeta({
 
     const consumeDesc = normalizeText(
         consumeCardSummary && consumeCardSummary.progressText,
-        '成长值决定当前折扣与升级路径'
+        '成长值用于积分权益与等级升级'
     );
     return {
         title: '消费会员权益',
         desc: consumeDesc === '已达到最高等级'
-            ? '成长值决定当前折扣与升级路径'
-            : '成长值决定当前折扣与升级路径'
+            ? '成长值用于积分权益与等级升级'
+            : '成长值用于积分权益与等级升级'
     };
 }
 
@@ -133,8 +121,7 @@ function buildMembershipCardViewModel(input = {}) {
         growthValue: input.growthValue,
         nextTierMin: input.nextTierMin,
         subLine: input.subLine,
-        barPercent: input.barPercent,
-        growthTiers: input.growthTiers
+        barPercent: input.barPercent
     });
     const agentCardSummary = buildAgentCardSummary({
         currentRoleName: input.currentRoleName,

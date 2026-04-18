@@ -94,6 +94,12 @@ const routes = [
         meta: { title: '售后退款', icon: 'RefreshLeft', group: '订单与资金', order: 3, permission: 'refunds' }
       },
       {
+        path: 'deposit-orders',
+        name: 'DepositOrders',
+        component: () => import('@/views/deposit-orders/index.vue'),
+        meta: { title: '押金订单', icon: 'Ticket', group: '订单与资金', order: 3.2, permission: 'refunds' }
+      },
+      {
         path: 'commissions',
         name: 'Commissions',
         component: () => import('@/views/commissions/index.vue'),

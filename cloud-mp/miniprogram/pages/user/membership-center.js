@@ -6,15 +6,6 @@ const {
     getMembershipCardMeta
 } = require('../../utils/membershipCardBuilder');
 
-function discountText(discount) {
-    if (discount == null) return '无';
-    const d = Number(discount);
-    if (d >= 1) return '原价';
-    const fold = parseFloat((d * 10).toFixed(2));
-    const clean = fold % 1 === 0 ? fold.toFixed(0) : fold.toFixed(1);
-    return clean + '折';
-}
-
 function resolveCurrentGrowthTierMin(rawTiers, currentTierMeta, growthValue) {
     const currentTierMin = Number(currentTierMeta?.min);
     if (Number.isFinite(currentTierMin)) {
@@ -30,6 +21,15 @@ function resolveCurrentGrowthTierMin(rawTiers, currentTierMeta, growthValue) {
         }
     }
     return activeTierMin;
+}
+
+function sanitizeTierDesc(desc) {
+    const text = String(desc || '').trim();
+    if (!text) return '';
+    if (/折|原价|复购价/.test(text)) {
+        return '成长值提升可解锁更多积分权益';
+    }
+    return text;
 }
 
 Page({
@@ -126,16 +126,13 @@ Page({
 
             const growthTiers = rawTiers.map((t, idx) => ({
                 ...t,
+                desc: sanitizeTierDesc(t.desc),
                 active: Number(t.min || 0) === activeTierMin,
-                discountText: discountText(t.discount),
                 passed: idx < currentIdx,
                 isNext: idx === currentIdx + 1,
                 isLast: idx === rawTiers.length - 1
             }));
-            const memberLevels = rawMembers.map((m) => ({
-                ...m,
-                discountText: discountText(m.discount_rate)
-            }));
+            const memberLevels = rawMembers.map((m) => ({ ...m }));
             const cardViewModel = buildMembershipCardViewModel({
                 growthValue: Math.floor(g),
                 currentTierName: currentTier.name || '普通会员',
@@ -208,6 +205,10 @@ Page({
 
     goBusinessCenter() {
         wx.navigateTo({ url: '/pages/distribution/business-center' });
+    },
+
+    onOpenDepositCenter() {
+        wx.navigateTo({ url: '/pages/user/deposit-orders' });
     },
 
     onRetry() {

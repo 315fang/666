@@ -55,6 +55,7 @@ function createDeps(overrides = {}) {
     const collections = {
         configs: [],
         coupons: [{ id: 6, name: '新人券' }],
+        coupon_claim_tickets: [],
         user_coupons: [],
         users: [],
         admin_audit_logs: []
@@ -102,6 +103,7 @@ function createDeps(overrides = {}) {
         directPatchDocument: async () => {},
         appendWalletLogEntry: () => {},
         requireManualAdjustmentReason: () => {},
+        flush: async () => {},
         ok,
         fail,
         ...overrides
@@ -266,4 +268,32 @@ test('coupon wxacode route returns fallback payload instead of 404 when generati
     assert.equal(response.body.data.env_version, 'release');
     assert.equal(response.body.data.error, 'mock_wxacode_failed');
     assert.equal(response.body.data.wxacode_base64, null);
+});
+
+test('coupon claim-ticket route creates one-time ticket and returns ticket share payload', async () => {
+    const app = express();
+    const deps = createDeps({
+        generateClaimTicketWxacodeFn: async ({ ticketId }) => ({
+            ticket_id: ticketId,
+            mp_path: `/pages/coupon/claim?ticket=${ticketId}`,
+            scene: `t=${ticketId}`,
+            env_version: 'release',
+            wxacode_base64: Buffer.from('one-time-ticket').toString('base64'),
+            error: null
+        })
+    });
+    registerMarketingRoutes(app, deps);
+
+    const response = await invoke(app, {
+        method: 'POST',
+        path: '/admin/api/coupons/6/claim-tickets',
+        query: { env: 'release' }
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.code, 0);
+    assert.equal(response.body.data.ticket.benefit_kind, 'template_coupon');
+    assert.match(response.body.data.ticket.ticket_id, /^[a-f0-9]{20}$/);
+    assert.equal(response.body.data.mp_path, `/pages/coupon/claim?ticket=${response.body.data.ticket.ticket_id}`);
+    assert.equal(deps.getCollection('coupon_claim_tickets').length, 1);
 });

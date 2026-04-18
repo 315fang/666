@@ -1,0 +1,59 @@
+<view class="deposit-page">
+  <view class="state-wrap" wx:if="{{loading}}">
+    <text class="state-text">加载中…</text>
+  </view>
+
+  <view class="state-wrap" wx:elif="{{loadError}}">
+    <text class="state-text">{{loadError}}</text>
+    <view class="retry-btn" bindtap="onRetry">重试</view>
+  </view>
+
+  <block wx:elif="{{orders.length === 0}}">
+    <view class="empty-wrap">
+      <text class="empty-title">暂无押金记录</text>
+      <text class="empty-desc">完成押金支付后，这里会显示兑换码和退款状态。</text>
+    </view>
+  </block>
+
+  <scroll-view wx:else scroll-y class="deposit-scroll">
+    <view class="deposit-list">
+      <view class="deposit-card" wx:for="{{orders}}" wx:key="id">
+        <view class="deposit-head">
+          <text class="deposit-no">{{item.deposit_no}}</text>
+          <text class="deposit-status">{{item.status}}</text>
+        </view>
+        <view class="deposit-meta">
+          <text>已付 ¥{{item.amount_paid}}</text>
+          <text>已退 ¥{{item.refunded_total}}</text>
+          <text>剩余可退 ¥{{item.refundable_balance}}</text>
+        </view>
+        <view class="deposit-meta">
+          <text>兑换码状态：{{item.coupon_claim_state}}</text>
+          <text>退款次数：{{item.refund_count}}</text>
+        </view>
+
+        <view class="deposit-actions">
+          <view
+            wx:if="{{item.can_pay}}"
+            class="deposit-btn deposit-btn-primary"
+            bindtap="onPayTap"
+            data-id="{{item.id}}"
+          >
+            立即支付
+          </view>
+          <view
+            wx:elif="{{item.can_share_ticket && item.active_ticket}}"
+            class="deposit-btn deposit-btn-primary"
+            bindtap="onOpenTicket"
+            data-path="{{item.active_ticket.claim_path}}"
+          >
+            去分享兑换码
+          </view>
+          <view wx:else class="deposit-btn deposit-btn-disabled">
+            当前无可分享兑换码
+          </view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+</view>

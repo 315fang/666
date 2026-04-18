@@ -394,7 +394,9 @@ async function claimCoupon(openid, couponId) {
     if (Number(couponData.is_active) === 0) {
         return { success: false, message: '此活动已结束' };
     }
-    if (couponData.stock != null && couponData.stock !== -1 && Number(couponData.stock) <= 0) {
+    const stock = couponData.stock == null ? -1 : Number(couponData.stock);
+    const issuedCount = Math.max(0, toNumber(couponData.issued_count, 0));
+    if (stock !== -1 && issuedCount >= stock) {
         return { success: false, message: '此券库存不足' };
     }
 
@@ -414,6 +416,14 @@ async function claimCoupon(openid, couponId) {
             expire_at: db.serverDate({ offset: (couponData.valid_days || 30) * 24 * 60 * 60 * 1000 })
         }
     });
+    if (couponData._id) {
+        await db.collection('coupons').doc(String(couponData._id)).update({
+            data: {
+                issued_count: _.inc(1),
+                updated_at: db.serverDate()
+            }
+        }).catch(() => null);
+    }
 
     return { success: true, id: result._id };
 }

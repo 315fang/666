@@ -5,27 +5,33 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 
 let configCache = {};
-let cacheTime = 0;
 const CACHE_DURATION = 5 * 60 * 1000; // 5分钟
 
 /**
  * 从缓存获取配置
  */
 function getCachedConfig(key) {
-    const now = Date.now();
-    if (now - cacheTime > CACHE_DURATION) {
-        configCache = {};
+    const entry = configCache[key];
+    if (!entry) {
         return null;
     }
-    return configCache[key] || null;
+
+    if (Date.now() - Number(entry.updatedAt || 0) > CACHE_DURATION) {
+        delete configCache[key];
+        return null;
+    }
+
+    return entry.value;
 }
 
 /**
  * 设置缓存
  */
 function setCachedConfig(key, value) {
-    configCache[key] = value;
-    cacheTime = Date.now();
+    configCache[key] = {
+        value,
+        updatedAt: Date.now()
+    };
 }
 
 /**
@@ -33,7 +39,6 @@ function setCachedConfig(key, value) {
  */
 function clearConfigCache() {
     configCache = {};
-    cacheTime = 0;
 }
 
 /**

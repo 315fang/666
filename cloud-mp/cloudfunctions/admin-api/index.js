@@ -43,6 +43,40 @@ const { EventEmitter } = require('events');
 const { createRequest, createResponse } = require('node-mocks-http');
 const app = require('./src/app');
 
+let isColdStart = true;
+
+function buildTraceId(event) {
+    const candidate = event && (
+        event.trace_id
+        || event.traceId
+        || event.request_id
+        || event.requestId
+        || event.$requestId
+    );
+    if (candidate) return String(candidate);
+    return `admin_api_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function parseErrorCode(error) {
+    if (!error) return 'unknown_error';
+    if (error.code) return String(error.code);
+    if (error.errCode) return String(error.errCode);
+    return 'internal_error';
+}
+
+function logPerf(entry) {
+    const payload = {
+        kind: 'cf_perf',
+        metric_version: 'phase1_v1',
+        ts: new Date().toISOString(),
+        function_name: 'admin-api',
+        action: 'http_gateway',
+        db_ms: null,
+        ...entry
+    };
+    console.log(JSON.stringify(payload));
+}
+
 function normalizeHeaders(headers) {
     return headers && typeof headers === 'object' ? headers : {};
 }
@@ -86,47 +120,80 @@ function normalizeBody(event) {
 }
 
 exports.main = async (event) => {
-    const ready = app.locals.dataStore?.readyPromise;
-    if (ready) {
-        await Promise.race([
-            Promise.resolve(ready),
-            new Promise(r => setTimeout(r, 8000))
-        ]);
-    }
+    const startedAt = Date.now();
+    const coldStart = isColdStart;
+    isColdStart = false;
+    const traceId = buildTraceId(event || {});
+    const method = (event.httpMethod || 'GET').toUpperCase();
+    const path = normalizePath(event || {});
 
-    const headers = normalizeHeaders(event.headers);
-    const path = normalizePath(event);
-    const query = normalizeQuery(event);
-    const body = normalizeBody(event);
-    const response = createResponse({ eventEmitter: EventEmitter });
-    const request = createRequest({
-        method: event.httpMethod || 'GET',
-        url: path,
-        originalUrl: path,
-        path,
-        headers,
-        query,
-        body
-    });
-    request.event = event;
-
-    await new Promise((resolve, reject) => {
-        response.on('end', resolve);
-        response.on('finish', resolve);
-        response.on('error', reject);
-        try {
-            app.handle(request, response);
-        } catch (error) {
-            reject(error);
+    try {
+        const ready = app.locals.dataStore?.readyPromise;
+        if (ready) {
+            await Promise.race([
+                Promise.resolve(ready),
+                new Promise(r => setTimeout(r, 8000))
+            ]);
         }
-    });
 
-    return {
-        statusCode: response.statusCode || 200,
-        headers: response._getHeaders(),
-        body: response._isJSON()
-            ? JSON.stringify(response._getJSONData())
-            : String(response._getData() || ''),
-        isBase64Encoded: false
-    };
+        const headers = normalizeHeaders(event.headers);
+        const query = normalizeQuery(event);
+        const body = normalizeBody(event);
+        const response = createResponse({ eventEmitter: EventEmitter });
+        const request = createRequest({
+            method,
+            url: path,
+            originalUrl: path,
+            path,
+            headers,
+            query,
+            body
+        });
+        request.event = event;
+
+        await new Promise((resolve, reject) => {
+            response.on('end', resolve);
+            response.on('finish', resolve);
+            response.on('error', reject);
+            try {
+                app.handle(request, response);
+            } catch (error) {
+                reject(error);
+            }
+        });
+
+        const result = {
+            statusCode: response.statusCode || 200,
+            headers: response._getHeaders(),
+            body: response._isJSON()
+                ? JSON.stringify(response._getJSONData())
+                : String(response._getData() || ''),
+            isBase64Encoded: false
+        };
+
+        logPerf({
+            trace_id: traceId,
+            cold_start: coldStart,
+            method,
+            route: path,
+            status: 'ok',
+            code: 'ok',
+            status_code: result.statusCode,
+            total_ms: Date.now() - startedAt
+        });
+
+        return result;
+    } catch (error) {
+        logPerf({
+            trace_id: traceId,
+            cold_start: coldStart,
+            method,
+            route: path,
+            status: 'error',
+            code: parseErrorCode(error),
+            status_code: 500,
+            total_ms: Date.now() - startedAt
+        });
+        throw error;
+    }
 };

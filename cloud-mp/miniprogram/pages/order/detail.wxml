@@ -288,7 +288,7 @@
         <!-- 代理商：货款余额支付 + 微信支付两个选项 -->
         <block wx:if="{{isAgent && walletBalance > 0}}">
           <view class="bar-action-group">
-            <view class="wallet-pay-hint">货款余额 ¥{{walletBalance}} 可用</view>
+            <view class="wallet-pay-hint">货款余额 ¥{{walletBalanceDisplay}} 可用</view>
             <view class="bar-action-row">
               <view class="btn-outline" bindtap="onCancelOrder">取消订单</view>
               <view class="btn-wallet" bindtap="onPayOrderWithWallet">货款余额支付</view>
