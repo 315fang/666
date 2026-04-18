@@ -232,7 +232,7 @@
             remote
             reserve-keyword
             clearable
-            placeholder="输入昵称 / 用户ID / 邀请码搜索"
+            placeholder="输入昵称 / 用户ID / 会员码搜索"
             :remote-method="searchStationMembers"
             :loading="staffUserSearching"
             :disabled="!!staffForm.id"
@@ -245,12 +245,12 @@
               :value="option.id"
             />
           </el-select>
-          <div class="form-tip">支持按昵称、用户ID、邀请码/会员码搜索，选中后自动写入成员ID。</div>
+          <div class="form-tip">支持按昵称、用户ID、会员码搜索，选中后自动写入成员ID。</div>
         </el-form-item>
         <el-form-item label="成员信息" v-if="selectedStaffUser">
           <div class="staff-user-preview">
             <div>{{ displayUserName(selectedStaffUser, `用户${selectedStaffUser.id}`) }}</div>
-            <div class="sub">ID: {{ selectedStaffUser.id }} / 邀请码: {{ selectedStaffUser.invite_code || selectedStaffUser.member_no || '—' }}</div>
+            <div class="sub">ID: {{ selectedStaffUser.id }} / 用户ID: {{ selectedStaffUser.invite_code || selectedStaffUser.member_no || '—' }}</div>
             <div class="sub" v-if="selectedStaffUser.phone">手机号: {{ selectedStaffUser.phone }}</div>
           </div>
         </el-form-item>
@@ -259,6 +259,7 @@
             <el-radio label="manager">店长</el-radio>
             <el-radio label="staff">店员</el-radio>
           </el-radio-group>
+          <div class="form-tip">店长会作为该门店默认核销补贴收款人；同一门店仅保留一位有效店长。</div>
         </el-form-item>
         <el-form-item label="核销权限">
           <el-switch v-model="staffForm.can_verify" :active-value="1" :inactive-value="0" />
@@ -533,9 +534,9 @@ function openStaffForm(row) {
 function formatStationUserOption(user) {
   const displayId = user._legacy_id || user.user_id || user.id
   const nickname = displayUserName(user, `用户${displayId}`)
-  const inviteCode = user.invite_code || user.member_no || '无邀请码'
+  const inviteCode = user.invite_code || user.member_no || '无用户ID'
   const openidHint = user.openid ? ` / OPENID:${String(user.openid).slice(0, 8)}...` : ''
-  return `${nickname} / ID:${displayId}${openidHint} / 邀请码:${inviteCode}`
+  return `${nickname} / ID:${displayId}${openidHint} / 用户ID:${inviteCode}`
 }
 
 async function searchStationMembers(keyword) {

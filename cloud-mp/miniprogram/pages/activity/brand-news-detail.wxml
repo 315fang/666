@@ -12,7 +12,7 @@
         <rich-text nodes="{{article.content_html}}"></rich-text>
       </view>
       <view class="empty-rich" wx:else>
-        <text>暂无正文，请联系管理员在后台补充。</text>
+        <text>暂无内容</text>
       </view>
     </view>
   </scroll-view>

@@ -1,7 +1,7 @@
 // pages/order/review.js - 订单评价页
 const { get, post, uploadFile } = require('../../utils/request');
 const { parseImages } = require('../../utils/dataFormatter');
-const { resolveCloudImageList } = require('./utils/cloudAsset');
+const { resolveCloudImageList, resolveCloudImageUrl } = require('./utils/cloudAsset');
 
 Page({
     data: {
@@ -38,6 +38,10 @@ Page({
                     order.product.images = await resolveCloudImageList(
                         order.product.images,
                         parseImages(order.product.images)
+                    );
+                    order.product.image = await resolveCloudImageUrl(
+                        order.product.image || order.product.image_url || '',
+                        order.product.images
                     );
                 }
                 this.setData({ order, loading: false });

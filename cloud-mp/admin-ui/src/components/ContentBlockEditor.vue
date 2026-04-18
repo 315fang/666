@@ -101,19 +101,63 @@
     <!-- 跳转（自定义模式或复用模式下可手动改） -->
     <template v-if="source !== 'product'">
       <el-form-item label="跳转类型">
-        <el-select v-model="localData.link_type" style="width:200px" @change="emitData">
-          <el-option label="无跳转" value="none" />
-          <el-option label="商品详情" value="product" />
-          <el-option label="活动页面" value="activity" />
-          <el-option label="分类页定位" value="category" />
-          <el-option label="拼团活动" value="group_buy" />
-          <el-option label="砍价活动" value="slash" />
-          <el-option label="抽奖转盘" value="lottery" />
-          <el-option label="小程序页面" value="page" />
-          <el-option label="外部链接" value="url" />
+        <el-select v-model="localData.link_type" style="width:240px" @change="handleLinkTypeChange">
+          <el-option
+            v-for="option in MINI_PROGRAM_LINK_TYPE_OPTIONS"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
         </el-select>
       </el-form-item>
-      <el-form-item label="跳转目标" v-if="localData.link_type !== 'none'">
+      <el-form-item v-if="shouldShowRecommendedTargets" label="推荐目标">
+        <div style="display:flex;flex-direction:column;gap:8px;max-width:420px;">
+          <el-select
+            v-model="selectedTargetKey"
+            clearable
+            filterable
+            placeholder="从目标库选择，不再手填页面路径"
+            @clear="handleTargetSelectClear"
+          >
+            <el-option-group
+              v-for="group in recommendedTargetGroups"
+              :key="group.group"
+              :label="group.group"
+            >
+              <el-option
+                v-for="target in group.items"
+                :key="target.key"
+                :label="target.title"
+                :value="target.key"
+              >
+                <div style="display:flex;justify-content:space-between;gap:12px;">
+                  <span>{{ target.title }}</span>
+                  <span style="font-size:12px;color:#909399;">{{ target.note || target.link_value || '' }}</span>
+                </div>
+              </el-option>
+            </el-option-group>
+          </el-select>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-size:12px;color:#909399;">默认优先使用目标库，减少路径配置错误。</span>
+            <el-button
+              v-if="!shouldShowManualInput"
+              text
+              type="primary"
+              @click="manualTargetMode = true"
+            >
+              改为手动填写
+            </el-button>
+            <el-button
+              v-else-if="recommendedTargets.length"
+              text
+              @click="manualTargetMode = false"
+            >
+              返回目标库
+            </el-button>
+          </div>
+        </div>
+      </el-form-item>
+      <el-form-item label="跳转目标" v-if="shouldShowManualInput">
         <el-input v-model="localData.link_value" placeholder="商品ID / 分类ID / 活动ID / 页面路径 / URL" style="width:340px" @input="emitData" />
       </el-form-item>
     </template>
@@ -141,6 +185,13 @@ import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getProducts, getProductById, getBanners } from '@/api'
 import MediaPicker from '@/components/MediaPicker.vue'
+import { buildPersistentAssetRef } from '@/utils/assetUrlAudit'
+import {
+  MINI_PROGRAM_LINK_TYPE_OPTIONS,
+  findMiniProgramTarget,
+  getRecommendedTargetsByLinkType,
+  groupMiniProgramTargets
+} from '@/config/miniProgramTargets'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({}) },
@@ -158,6 +209,8 @@ const reusableBanners = ref([])
 const reuseId = ref(null)
 const reusedBanner = ref(null)
 const mediaPickerVisible = ref(false)
+const previewImageUrl = ref('')
+const manualTargetMode = ref(false)
 
 const localData = reactive({
   file_id: '',
@@ -169,8 +222,35 @@ const localData = reactive({
   product_id: null
 })
 
-const resolveAssetUrl = (item = {}) => item.file_id || item.image_url || item.url || ''
-const resolvedImageUrl = computed(() => resolveAssetUrl(localData))
+const isCloudFileId = (value) => /^cloud:\/\//i.test(String(value || ''))
+const resolveAssetUrl = (item = {}, fallback = '') => {
+  const candidates = [fallback, item.image_url, item.url, item.image, item.cover_image]
+    .map((value) => String(value || '').trim())
+  return candidates.find((value) => value && !isCloudFileId(value)) || ''
+}
+const resolvedImageUrl = computed(() => resolveAssetUrl(localData, previewImageUrl.value))
+const recommendedTargets = computed(() => getRecommendedTargetsByLinkType(localData.link_type))
+const recommendedTargetGroups = computed(() => groupMiniProgramTargets(recommendedTargets.value))
+const usesUnlistedTarget = computed(() => {
+  if (!recommendedTargets.value.length) return false
+  return !!String(localData.link_value || '').trim() && !findMiniProgramTarget(localData.link_type, localData.link_value)
+})
+const shouldShowRecommendedTargets = computed(() => source.value !== 'product' && recommendedTargets.value.length > 0)
+const shouldShowManualInput = computed(() => {
+  if (source.value === 'product' || localData.link_type === 'none') return false
+  return !recommendedTargets.value.length || manualTargetMode.value || usesUnlistedTarget.value
+})
+const selectedTargetKey = computed({
+  get: () => findMiniProgramTarget(localData.link_type, localData.link_value)?.key || '',
+  set: (key) => {
+    const target = recommendedTargets.value.find((item) => item.key === key)
+    if (!target) return
+    localData.link_type = target.link_type
+    localData.link_value = target.link_value || ''
+    manualTargetMode.value = false
+    emitData()
+  }
+})
 
 const showField = (f) => props.fields.includes(f)
 
@@ -214,18 +294,57 @@ watch(() => props.modelValue, (v) => {
   // 根据外部数据推断模式（只在初始加载时）
   if (v.product_id && v.link_type === 'product') source.value = 'product'
   else if (resolveAssetUrl(v)) source.value = 'custom'
+  manualTargetMode.value = !!(
+    v.link_type
+    && getRecommendedTargetsByLinkType(v.link_type).length
+    && !findMiniProgramTarget(v.link_type, v.link_value)
+    && String(v.link_value || '').trim()
+  )
   if (v.product_id && String(v.product_id) !== String(pickedProduct.value?.id || '')) {
     hydratePickedProduct(v.product_id)
   }
   if (!v.product_id && pickedProduct.value) {
     pickedProduct.value = null
   }
+  const nextPreview = resolveAssetUrl(v)
+  if (nextPreview) previewImageUrl.value = nextPreview
 }, { immediate: true })
 
 const emitData = () => { emit('update:modelValue', { ...localData }) }
 
 const onSourceChange = () => {
   if (source.value === 'reuse') loadReusableBanners()
+}
+
+const handleLinkTypeChange = (linkType) => {
+  if (linkType === 'none') {
+    localData.link_value = ''
+    manualTargetMode.value = false
+    emitData()
+    return
+  }
+  const matchedTarget = findMiniProgramTarget(linkType, localData.link_value)
+  if (matchedTarget) {
+    manualTargetMode.value = false
+    emitData()
+    return
+  }
+  const targets = getRecommendedTargetsByLinkType(linkType)
+  if (targets.length === 1) {
+    localData.link_value = targets[0].link_value || ''
+    manualTargetMode.value = false
+  } else {
+    localData.link_value = ''
+    manualTargetMode.value = !targets.length
+  }
+  emitData()
+}
+
+const handleTargetSelectClear = () => {
+  if (!recommendedTargets.value.length) return
+  localData.link_value = ''
+  manualTargetMode.value = true
+  emitData()
 }
 
 const searchProducts = async (kw) => {
@@ -252,6 +371,7 @@ const onProductPicked = (id) => {
     // 切换关联商品时，清空覆盖图，保存时由后端按关联商品首图回退，避免把临时签名 URL 存进 Banner
     localData.file_id = ''
     localData.image_url = ''
+    previewImageUrl.value = ''
     emitData()
   }
 }
@@ -268,12 +388,20 @@ const onReusePicked = (id) => {
   reusedBanner.value = b || null
   if (b) {
     localData.file_id = b.file_id || ''
-    localData.image_url = resolveAssetUrl(b)
+    const displayUrl = resolveAssetUrl(b)
+    localData.image_url = buildPersistentAssetRef({ url: displayUrl, fileId: b.file_id || '' })
+    previewImageUrl.value = displayUrl
     localData.title = b.title || ''
     localData.subtitle = b.subtitle || ''
     localData.link_type = b.link_type || 'none'
     localData.link_value = b.link_value || ''
     localData.product_id = b.product_id || null
+    manualTargetMode.value = !!(
+      localData.link_type
+      && getRecommendedTargetsByLinkType(localData.link_type).length
+      && !findMiniProgramTarget(localData.link_type, localData.link_value)
+      && String(localData.link_value || '').trim()
+    )
     emitData()
   }
 }
@@ -285,10 +413,9 @@ const openMediaPicker = () => {
 const clearSelectedImage = () => {
   localData.file_id = ''
   localData.image_url = ''
+  previewImageUrl.value = ''
   emitData()
 }
-
-const isCloudFileId = (value) => /^cloud:\/\//i.test(String(value || ''))
 
 const handleMediaConfirm = (persistIds = [], displayUrls = []) => {
   const persist = Array.isArray(persistIds) ? (persistIds[0] || '') : ''
@@ -298,7 +425,8 @@ const handleMediaConfirm = (persistIds = [], displayUrls = []) => {
     return
   }
   localData.file_id = persist
-  localData.image_url = display || persist
+  localData.image_url = buildPersistentAssetRef({ url: display, fileId: persist })
+  previewImageUrl.value = display || ''
   emitData()
 }
 

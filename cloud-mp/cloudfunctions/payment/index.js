@@ -21,6 +21,39 @@ const paymentRefund = require('./payment-refund');
 const { loadPaymentConfig } = require('./config');
 const { queryRefundByOutRefundNo, loadPrivateKey } = require('./wechat-pay-v3');
 
+let isColdStart = true;
+
+function buildTraceId(event) {
+    const candidate = event && (
+        event.trace_id
+        || event.traceId
+        || event.request_id
+        || event.requestId
+        || event.$requestId
+    );
+    if (candidate) return String(candidate);
+    return `payment_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function parseErrorCode(error) {
+    if (!error) return 'unknown_error';
+    if (error.code) return String(error.code);
+    if (error.errCode) return String(error.errCode);
+    return 'internal_error';
+}
+
+function logPerf(entry) {
+    const payload = {
+        kind: 'cf_perf',
+        metric_version: 'phase1_v1',
+        ts: new Date().toISOString(),
+        function_name: 'payment',
+        db_ms: null,
+        ...entry
+    };
+    console.log(JSON.stringify(payload));
+}
+
 // ==================== 主处理函数 ====================
 async function handlePaymentAction(event, openid) {
     const { action, ...params } = event;
@@ -229,37 +262,63 @@ async function handlePaymentAction(event, openid) {
 
 // ==================== 云函数导出 ====================
 exports.main = async (event, context) => {
+    const startedAt = Date.now();
+    const coldStart = isColdStart;
+    isColdStart = false;
+    const traceId = buildTraceId(event || {});
+    const action = event && event.action ? event.action : '';
+
     // 支付回调：微信服务器 HTTP 调用，可能没有 openid
-    if (event.action === 'callback' || event.action === 'syncRefundStatus') {
-        return handlePaymentAction(event, '');
-    }
-
-    // 兼容微信HTTP触发器直接 POST 过来的回调（event.body 为字符串）
-    if (event.httpMethod === 'POST' && event.body) {
-        try {
-            const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
-            if (body && body.resource) {
-                return handlePaymentAction({ action: 'callback', ...body }, '');
+    try {
+        let result;
+        if (event.action === 'callback' || event.action === 'syncRefundStatus') {
+            result = await handlePaymentAction(event, '');
+        } else if (event.httpMethod === 'POST' && event.body) {
+            try {
+                const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+                if (body && body.resource) {
+                    result = await handlePaymentAction({ action: 'callback', ...body }, '');
+                }
+            } catch (e) {
+                console.error('[Payment] HTTP body 解析失败:', e.message);
             }
-        } catch (e) {
-            console.error('[Payment] HTTP body 解析失败:', e.message);
+        } else if (!event.action && event.resource && event.event_type) {
+            result = await handlePaymentAction({ action: 'callback', ...event }, '');
         }
+
+        if (result === undefined) {
+            const wxContext = cloud.getWXContext();
+            const openid = wxContext.OPENID;
+
+            if (!openid) {
+                throw unauthorized('未登录');
+            }
+
+            result = await cloudFunctionWrapper(async () => {
+                return handlePaymentAction(event, openid);
+            })();
+        }
+
+        logPerf({
+            action: action || 'callback',
+            trace_id: traceId,
+            cold_start: coldStart,
+            status: 'ok',
+            code: 'ok',
+            total_ms: Date.now() - startedAt,
+            cache_hit: false
+        });
+        return result;
+    } catch (error) {
+        logPerf({
+            action: action || 'callback',
+            trace_id: traceId,
+            cold_start: coldStart,
+            status: 'error',
+            code: parseErrorCode(error),
+            total_ms: Date.now() - startedAt,
+            cache_hit: false
+        });
+        throw error;
     }
-
-    // 兼容微信回调直接合并到 event 的情况（部分 CloudBase 版本行为）
-    if (!event.action && event.resource && event.event_type) {
-        return handlePaymentAction({ action: 'callback', ...event }, '');
-    }
-
-    // 其他操作：需要用户登录
-    const wxContext = cloud.getWXContext();
-    const openid = wxContext.OPENID;
-
-    if (!openid) {
-        throw unauthorized('未登录');
-    }
-
-    return cloudFunctionWrapper(async () => {
-        return handlePaymentAction(event, openid);
-    })();
 };

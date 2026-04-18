@@ -6,9 +6,9 @@
     <text class="share-desc">{{description}}</text>
   </view>
 
-  <!-- 邀请码（与分享参数 invite 一致） -->
+  <!-- 用户ID（与分享参数 invite 一致） -->
   <view class="invite-code-section">
-    <view class="invite-label">我的邀请码</view>
+    <view class="invite-label">我的ID</view>
     <view class="invite-code-box" bindtap="onCopyMemberCode">
       <text class="invite-code">{{memberCode}}</text>
       <image class="copy-icon-img" src="/assets/icons/clipboard.svg" mode="aspectFit"/>

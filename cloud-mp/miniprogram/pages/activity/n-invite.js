@@ -103,7 +103,7 @@ Page({
             this.setData({ applied: true });
             wx.showModal({
                 title: '申请已提交',
-                content: res?.message || '后台已收到你的 N1 加入申请，请等待审核。',
+                content: res?.message || '你的申请已提交，请等待审核结果。',
                 showCancel: false
             });
         } catch (e) {

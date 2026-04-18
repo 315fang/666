@@ -203,62 +203,16 @@
                 </el-form-item>
               </el-col>
             </el-row>
-            <el-row :gutter="12" class="limited-row">
-              <el-col :span="24">
-                <el-form-item label="主推商品" label-width="60px">
-                  <el-select
-                    v-model="item.direct_product_id"
-                    filterable
-                    remote
-                    clearable
-                    :remote-method="props.searchProducts"
-                    :loading="props.productSearchLoading"
-                    placeholder="不配专享时可选：小程序点击卡片进入该商品详情直购"
-                    class="product-select"
-                  >
-                    <el-option v-for="p in props.productOptions" :key="p.id" :label="p.name" :value="p.id" />
-                  </el-select>
-                  <div class="form-hint-muted">与下方「专享商品」可同时配置；已配置专享时优先进入限时专享页。仅配此项则走普通商品详情（加购/立即买）。</div>
-                </el-form-item>
-              </el-col>
-              <el-col :span="24">
-                <el-divider content-position="left">专享商品（可选）</el-divider>
-                <el-alert type="info" :closable="false" style="margin-bottom: 10px">配置后保存将自动生成跳转至小程序「限时专享」页。支持仅积分、仅现金或两种方式同时开放。</el-alert>
-                <el-button size="small" type="primary" plain @click="props.addSpotProduct(item)">+ 添加专享商品</el-button>
-              </el-col>
-            </el-row>
-            <el-card v-for="(sp, si) in (item.spot_products || [])" :key="sp.id || si" shadow="never" class="spot-product-card">
-              <el-row :gutter="10">
-                <el-col :span="10">
-                  <el-form-item label="商品" label-width="48px">
-                    <el-select
-                      v-model="sp.product_id"
-                      filterable
-                      remote
-                      :remote-method="props.searchProducts"
-                      :loading="props.productSearchLoading"
-                      placeholder="搜索商品"
-                      style="width: 100%"
-                      @change="() => { sp.sku_id = null }"
-                    >
-                      <el-option v-for="p in props.productOptions" :key="p.id" :label="p.name" :value="p.id" />
-                    </el-select>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6"><el-form-item label="SKU" label-width="40px"><el-input v-model.number="sp.sku_id" placeholder="可选规格ID" clearable /></el-form-item></el-col>
-                <el-col :span="8" class="spot-delete-col"><el-button type="danger" text size="small" @click="props.removeSpotProduct(item, si)">删除</el-button></el-col>
-              </el-row>
-              <el-row :gutter="10">
-                <el-col :span="6"><el-switch v-model="sp.enable_points" active-text="积分兑换" /></el-col>
-                <el-col :span="6"><el-input-number v-model="sp.points_price" :min="1" :step="10" :disabled="!sp.enable_points" /><span class="money-note">积分</span></el-col>
-                <el-col :span="6"><el-switch v-model="sp.enable_money" active-text="现金购买" /></el-col>
-                <el-col :span="6"><el-input-number v-model="sp.money_price" :min="0.01" :precision="2" :step="1" :disabled="!sp.enable_money" /><span class="money-note">元</span></el-col>
-              </el-row>
-              <el-row :gutter="10">
-                <el-col :span="8"><el-form-item label="名额" label-width="48px"><el-input-number v-model="sp.stock_limit" :min="1" :max="999999" /></el-form-item></el-col>
-                <el-col :span="12"><span class="id-note">内部ID：{{ sp.id }}</span></el-col>
-              </el-row>
-            </el-card>
+            <el-alert
+              type="info"
+              :closable="false"
+              show-icon
+              style="margin-top: 12px"
+              title="限时秒杀卡现在只负责入口、标题、副标题、封面和倒计时文案。真实售卖商品请到「商品与营销 > 限时商品」独立配置。"
+            />
+            <div v-if="item.spot_products && item.spot_products.length" class="form-hint-muted" style="margin-top: 8px;">
+              当前保留旧专享商品配置 {{ item.spot_products.length }} 项，仅作兼容兜底；后续请迁移到独立限时商品后台。
+            </div>
           </div>
           <el-button type="danger" text class="delete-button-top" @click="props.removeLinksItem('limited', idx)"><el-icon><Delete /></el-icon></el-button>
         </div>
@@ -319,11 +273,11 @@ const props = defineProps({
   removeLinksItem: { type: Function, required: true },
   moveLinksItem: { type: Function, required: true },
   saveActivityLinks: { type: Function, required: true },
-  searchProducts: { type: Function, required: true },
-  productSearchLoading: { type: Boolean, required: true },
-  productOptions: { type: Array, required: true },
-  addSpotProduct: { type: Function, required: true },
-  removeSpotProduct: { type: Function, required: true },
+  searchProducts: { type: Function, required: false, default: () => {} },
+  productSearchLoading: { type: Boolean, required: false, default: false },
+  productOptions: { type: Array, required: false, default: () => [] },
+  addSpotProduct: { type: Function, required: false, default: () => {} },
+  removeSpotProduct: { type: Function, required: false, default: () => {} },
   addNewsItem: { type: Function, required: true },
   removeNewsItem: { type: Function, required: true },
   moveNewsItem: { type: Function, required: true }
@@ -357,7 +311,7 @@ const setManualLinkType = (item) => {
 .links-item-row{display:flex;gap:16px;align-items:flex-start}
 .links-item-row-news{flex-wrap:wrap}
 .links-sort-col{display:flex;flex-direction:column;gap:6px;width:108px;flex-shrink:0}
-.links-sort-label,.meta-note,.form-hint-muted,.money-note,.id-note,.option-badge{font-size:12px;color:#909399}
+.links-sort-label,.meta-note,.form-hint-muted,.option-badge{font-size:12px;color:#909399}
 .sort-input{width:100px}
 .links-item-preview{width:100px;height:70px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#f5f5f5}
 .preview-image,.links-item-gradient{width:100%;height:100%}
@@ -371,11 +325,6 @@ const setManualLinkType = (item) => {
 .meta-title-input{max-width:320px}
 .entry-toggle{margin-top:10px}
 .entry-switch{margin-left:6px}
-.limited-row{margin-top:12px}
-.product-select{width:100%;max-width:420px}
-.spot-product-card{margin-top:10px}
-.spot-delete-col{text-align:right}
-.money-note{margin-left:6px}
 .news-form{min-width:280px}
 @media (max-width:767px){.card-header,.links-section-header{flex-wrap:wrap;gap:8px}.links-item-row{flex-direction:column}.links-item-preview{width:100%;height:120px}}
 </style>

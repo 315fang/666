@@ -82,7 +82,7 @@
           <div class="sub-text">{{ Number(row.growth_value || 0).toFixed(0) }}成长值</div>
         </template>
       </el-table-column>
-      <el-table-column label="邀请码" width="90" class-name="hide-mobile">
+      <el-table-column label="用户ID" width="90" class-name="hide-mobile">
         <template #default="{ row }">
           <el-tag size="small" type="info">{{ row.invite_code || row.member_no || '-' }}</el-tag>
         </template>
@@ -107,7 +107,7 @@
             <el-button text size="small">更多<el-icon><ArrowDown /></el-icon></el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="invite">修改历史邀请码</el-dropdown-item>
+                <el-dropdown-item command="invite">修改用户ID</el-dropdown-item>
                 <el-dropdown-item command="member_no">修改会员码</el-dropdown-item>
                 <el-dropdown-item command="remark">备注/标签</el-dropdown-item>
                 <el-dropdown-item v-if="canManageUserParent" command="parent">修改上级</el-dropdown-item>

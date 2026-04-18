@@ -1,4 +1,5 @@
 const app = getApp();
+const { getTempUrls } = require('../../utils/cloud');
 const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
 const {
@@ -13,8 +14,8 @@ const { getApiBaseUrl } = require('../../config/env');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
 const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
 const HOME_PAGE_CACHE_KEY = 'home_config_cache_v2';
-const HOME_PAGE_CACHE_VERSION = 'home-product-image-20260418';
 const FEATURED_PRODUCTS_CACHE_REV = 'product-image-20260418';
+const tempUrlCache = new Map();
 
 function normalizeAssetUrl(url = '') {
     const raw = extractAssetValue(url);
@@ -56,6 +57,73 @@ function pickImageSource(record = {}) {
         return normalizeAssetUrl(fileId);
     }
     return normalizeAssetUrl(fileId || '');
+}
+
+function isCloudFileId(value) {
+    return /^cloud:\/\//i.test(String(value || '').trim());
+}
+
+async function warmCloudTempUrls(urls = []) {
+    const cloudIds = [...new Set(
+        (Array.isArray(urls) ? urls : [])
+            .map((item) => normalizeAssetUrl(item))
+            .filter((item) => isCloudFileId(item) && !tempUrlCache.has(item))
+    )];
+    if (!cloudIds.length) return;
+
+    try {
+        const tempUrls = await getTempUrls(cloudIds);
+        const list = Array.isArray(tempUrls) ? tempUrls : [tempUrls];
+        cloudIds.forEach((cloudId, index) => {
+            const tempUrl = String(list[index] || '').trim();
+            if (tempUrl) tempUrlCache.set(cloudId, tempUrl);
+        });
+    } catch (err) {
+        console.warn('[Index] getTempUrls failed:', err);
+    }
+}
+
+async function resolveCloudImageUrl(value, fallback = '') {
+    const normalized = normalizeAssetUrl(value);
+    if (!normalized) return fallback;
+    if (!isCloudFileId(normalized)) return normalized;
+
+    if (!tempUrlCache.has(normalized)) {
+        await warmCloudTempUrls([normalized]);
+    }
+
+    return tempUrlCache.get(normalized) || fallback;
+}
+
+async function resolveBannerListImages(list = []) {
+    return Promise.all((Array.isArray(list) ? list : []).map(async (item) => ({
+        ...item,
+        image: await resolveCloudImageUrl(item.image || item.image_url || item.url || item.file_id || '', '')
+    })));
+}
+
+async function resolveBrandZoneAssets(input = {}) {
+    const brandZone = {
+        ...createEmptyBrandZone(),
+        ...(input || {})
+    };
+    const [coverImage, cards, certifications] = await Promise.all([
+        resolveCloudImageUrl(brandZone.coverImage || '', ''),
+        Promise.all((Array.isArray(brandZone.cards) ? brandZone.cards : []).map(async (item) => ({
+            ...item,
+            image: await resolveCloudImageUrl(item.image || item.file_id || '', '')
+        }))),
+        Promise.all((Array.isArray(brandZone.certifications) ? brandZone.certifications : []).map(async (item) => ({
+            ...item,
+            image: await resolveCloudImageUrl(item.image || item.file_id || '', '')
+        })))
+    ]);
+    return {
+        ...brandZone,
+        coverImage,
+        cards,
+        certifications
+    };
 }
 
 function isPlaceholderAsset(url = '') {
@@ -281,35 +349,12 @@ async function buildDisplayProduct(product = {}, roleLevel = 0) {
 }
 
 async function loadData(page, forceRefresh = false) {
-    const cacheKey = HOME_PAGE_CACHE_KEY;
-    const cacheTtl = 5 * 60 * 1000;
-    const now = Date.now();
     page.setData({ loading: true });
     try {
         let data = null;
 
-        if (!forceRefresh) {
-            const memoryExpireAt = Number(app.globalData.homePageDataExpireAt || 0);
-            const memoryVersion = String(app.globalData.homePageDataVersion || '');
-            if (app.globalData.homePageData && memoryVersion === HOME_PAGE_CACHE_VERSION && memoryExpireAt > now) {
-                data = app.globalData.homePageData;
-            } else if (app.globalData.homePageData) {
-                app.globalData.homePageData = null;
-                app.globalData.homePageDataExpireAt = 0;
-                app.globalData.homePageDataVersion = '';
-            }
-            if (!data) {
-                const cached = wx.getStorageSync(cacheKey);
-                if (cached && cached.version === HOME_PAGE_CACHE_VERSION && cached.expireAt > Date.now()) {
-                    data = cached.data;
-                    app.globalData.homePageData = data;
-                    app.globalData.homePageDataExpireAt = Number(cached.expireAt) || 0;
-                    app.globalData.homePageDataVersion = HOME_PAGE_CACHE_VERSION;
-                }
-            }
-            if (!data && app.globalData.homeDataPromise) {
-                data = await app.globalData.homeDataPromise.catch(() => null);
-            }
+        if (!forceRefresh && app.globalData.homeDataPromise) {
+            data = await app.globalData.homeDataPromise.catch(() => null);
         }
 
         if (!data || Object.keys(data).length === 0) {
@@ -323,21 +368,10 @@ async function loadData(page, forceRefresh = false) {
                 const res = await get('/homepage-config').catch(() => ({ data: {} }));
                 data = res.data || {};
             }
-
-            if (data && Object.keys(data).length) {
-                const expireAt = now + cacheTtl;
-                app.globalData.homePageData = data;
-                app.globalData.homePageDataExpireAt = expireAt;
-                app.globalData.homePageDataVersion = HOME_PAGE_CACHE_VERSION;
-                try {
-                    wx.setStorageSync(cacheKey, { data, expireAt, version: HOME_PAGE_CACHE_VERSION });
-                } catch (_) {
-                    // ignore storage write errors in low-storage scenarios
-                }
-            }
         }
+        try { wx.removeStorageSync(HOME_PAGE_CACHE_KEY); } catch (_) {}
 
-        applyHomeConfig(page, data);
+        await applyHomeConfig(page, data);
         loadFeaturedProducts(page, { forceRefresh });
         loadPosters(page, { forceRefresh });
         loadBubbles(page);
@@ -429,6 +463,7 @@ async function loadPosters(page, options = {}) {
     const mapBanners = (list) => (list || []).map((banner) => ({
         id: banner.id,
         image: pickImageSource(banner),
+        file_id: banner.file_id || '',
         title: banner.title || '',
         subtitle: banner.subtitle || '',
         link_type: banner.link_type || 'none',
@@ -439,9 +474,13 @@ async function loadPosters(page, options = {}) {
         const layoutMid = layoutBanners && Array.isArray(layoutBanners.home_mid) ? layoutBanners.home_mid : [];
         const layoutBottom = layoutBanners && Array.isArray(layoutBanners.home_bottom) ? layoutBanners.home_bottom : [];
         if (layoutBanners && (layoutMid.length > 0 || layoutBottom.length > 0)) {
+            const [midPosters, bottomPosters] = await Promise.all([
+                resolveBannerListImages(mapBanners(layoutMid)),
+                resolveBannerListImages(mapBanners(layoutBottom))
+            ]);
             page.setData({
-                midPosters: mapBanners(layoutMid),
-                bottomPosters: mapBanners(layoutBottom)
+                midPosters,
+                bottomPosters
             });
             return;
         }
@@ -464,9 +503,13 @@ async function loadPosters(page, options = {}) {
         ]);
         const midList = midRes?.data?.list ?? midRes?.list ?? midRes?.data ?? [];
         const bottomList = bottomRes?.data?.list ?? bottomRes?.list ?? bottomRes?.data ?? [];
+        const [midPosters, bottomPosters] = await Promise.all([
+            resolveBannerListImages(mapBanners(Array.isArray(midList) ? midList : [])),
+            resolveBannerListImages(mapBanners(Array.isArray(bottomList) ? bottomList : []))
+        ]);
         page.setData({
-            midPosters: mapBanners(Array.isArray(midList) ? midList : []),
-            bottomPosters: mapBanners(Array.isArray(bottomList) ? bottomList : [])
+            midPosters,
+            bottomPosters
         });
     } catch (e) {
         console.log('[Index] 海报加载失败，不影响主页渲染');
@@ -496,7 +539,7 @@ async function loadBubbles(page) {
     } catch (_) { }
 }
 
-function applyHomeConfig(page, data) {
+async function applyHomeConfig(page, data) {
     if (!data) return;
     app.globalData.homePageData = data;
     const brandConfig = getConfigSection('brand_config');
@@ -520,6 +563,7 @@ function applyHomeConfig(page, data) {
         ? bannerList.map((banner) => ({
             id: banner.id,
             image: pickImageSource(banner),
+            file_id: banner.file_id || '',
             title: banner.title || '',
             subtitle: banner.subtitle || '',
             link_type: banner.link_type || 'none',
@@ -543,7 +587,10 @@ function applyHomeConfig(page, data) {
         configs.brand_story_title = localBrand.brand_story_title;
     }
     const showBrandLogo = configs.show_brand_logo !== 'false' && configs.show_brand_logo !== false;
-    const brandZone = normalizeHomeBrandZone(configs);
+    const [resolvedHeroBanners, brandZone] = await Promise.all([
+        resolveBannerListImages(heroBanners),
+        resolveBrandZoneAssets(normalizeHomeBrandZone(configs))
+    ]);
     page.setData({
         homeConfigs: configs,
         showBrandLogo,
@@ -552,17 +599,18 @@ function applyHomeConfig(page, data) {
         navBrandSub: configs.nav_brand_sub || brandConfig.nav_brand_sub || '品牌甄选',
         brandZone,
         latestActivity: page._normalizeLatestActivity(data.latestActivity || data.resources?.latest_activity || {}),
-        heroBanners,
+        heroBanners: resolvedHeroBanners,
         loading: false
     });
 
     const popupAd = data.popupAd || data.resources?.popup_ad || {};
     if (popupAd.enabled && (popupAd.file_id || popupAd.image_url || popupAd.url)) {
+        const popupImage = await resolveCloudImageUrl(pickImageSource(popupAd), '');
         page._checkAndShowPopupAd({
             ...popupAd,
             file_id: popupAd.file_id || '',
-            image_url: pickImageSource(popupAd), // deprecated: use file_id instead
-            url: pickImageSource(popupAd)
+            image_url: popupImage,
+            url: popupImage
         });
     }
 }

@@ -177,6 +177,12 @@ const ACTIVE_PRODUCT_STATUS_CONDITIONS = [
     { status: 'active' },
     { status: 'on_sale' }
 ];
+const VISIBLE_REVIEW_STATUS_CONDITIONS = [
+    { status: true },
+    { status: 1 },
+    { status: '1' },
+    { status: 'visible' }
+];
 
 function buildCategoryIdCandidates(categoryId) {
     const raw = String(categoryId || '').trim();
@@ -551,7 +557,15 @@ const handleAction = {
     'reviews': asyncHandler(async (params) => {
         if (!params.product_id) throw badRequest('缺少商品 ID');
         const pageSize = Math.max(1, toNumber(params.limit || params.size, 10));
-        const rows = await db.collection('reviews').where({ product_id: params.product_id }).orderBy('created_at', 'desc').limit(100).get().catch(() => ({ data: [] }));
+        const rows = await db.collection('reviews')
+            .where(_.and([
+                { product_id: params.product_id },
+                _.or(VISIBLE_REVIEW_STATUS_CONDITIONS)
+            ]))
+            .orderBy('created_at', 'desc')
+            .limit(100)
+            .get()
+            .catch(() => ({ data: [] }));
         
         const reviews = rows.data || [];
         if (reviews.length === 0) {

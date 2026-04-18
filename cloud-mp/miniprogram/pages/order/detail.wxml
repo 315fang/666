@@ -133,7 +133,7 @@
   <view class="card product-card">
     <view class="card-title">商品信息</view>
     <view class="product-row" wx:if="{{order.product}}">
-      <image class="product-img" src="{{order.product.images && order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{order.product.images && order.product.images.length > 0}}"></image>
+      <image class="product-img" src="{{order.product.images && order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{order.product.images && order.product.images.length > 0}}" binderror="onProductImageError"></image>
       <view class="product-img-placeholder" wx:else>
         <image class="placeholder-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
       </view>
@@ -328,9 +328,6 @@
       <!-- 已发货 -->
       <block wx:if="{{order.status === 'shipped'}}">
         <view class="bar-action-group">
-          <view class="bar-action-link-row" wx:if="{{!reviewed}}">
-            <view class="btn-text-link" bindtap="onGoReview">评价</view>
-          </view>
           <view class="bar-action-row single" wx:if="{{canViewLogistics}}">
             <view class="btn-soft" bindtap="onViewLogistics">查看物流</view>
           </view>

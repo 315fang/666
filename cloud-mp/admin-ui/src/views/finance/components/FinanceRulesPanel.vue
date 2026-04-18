@@ -24,7 +24,7 @@
               type="info"
               :closable="false"
               style="margin-bottom:12px"
-              title="矩阵值表示“该上级角色对该买家角色”的总比例。二级上级实际拿级差，即：上上级矩阵值减去直推上级矩阵值。"
+              title="矩阵值表示“该上级角色对该买家角色”的总比例。二级上级实际拿级差，即：上上级矩阵值减去直推上级矩阵值。Lv6 线下实体门店在普通佣金矩阵中按 Lv4 运营合伙人口径计算；同级奖不适用于 Lv6。"
             />
             <el-table :data="matrixParentRoles" border size="small" style="max-width:920px;margin-bottom:16px">
               <el-table-column label="上级角色" width="120">
@@ -92,7 +92,7 @@
             type="info"
             :closable="false"
             show-icon
-            title="财务页不再直接修改平级奖配置；唯一可写真相源已收口到「会员与成长值」页面。"
+            title="财务页不再直接修改平级奖配置；唯一可写真相源已收口到「会员策略」页面。"
           />
           <el-descriptions :column="2" border style="margin-top:16px">
             <el-descriptions-item label="总开关">{{ peerBonus.enabled ? '启用' : '关闭' }}</el-descriptions-item>
@@ -484,7 +484,7 @@ const previewParentRoleOptions = [
   { v: 3, l: 'Lv3 · 推广合伙人' },
   { v: 4, l: 'Lv4 · 运营合伙人' },
   { v: 5, l: 'Lv5 · 区域合伙人' },
-  { v: 6, l: 'Lv6 · 线下实体门店' }
+  { v: 6, l: 'Lv6 · 线下实体门店（按Lv4矩阵）' }
 ]
 const previewIndirectRoleOptions = [
   { v: 0, l: '无（不计算）' },
@@ -498,19 +498,26 @@ function clampPctMap(map, role) {
   return Math.max(0, Math.min(100, n))
 }
 
+function resolvePreviewCommissionRole(role) {
+  const normalized = Number(role || 0)
+  return normalized === 6 ? 4 : normalized
+}
+
 const middlePreview = computed(() => {
   const paid = Math.max(0, Number(previewPaid.value) || 0)
   const rows = []
   let total = 0
   if (paid <= 0) return { rows, totalMiddle: 0, rest: 0 }
-  const buyerRole = Number(previewChain.buyerRole || 0)
-  const directPct = clampPctMap(commissionMatrix[previewChain.parentRole], buyerRole)
+  const buyerRole = resolvePreviewCommissionRole(previewChain.buyerRole)
+  const parentRole = resolvePreviewCommissionRole(previewChain.parentRole)
+  const gpRole = resolvePreviewCommissionRole(previewChain.gpRole)
+  const directPct = clampPctMap(commissionMatrix[parentRole], buyerRole)
   const directAmt = Math.round(paid * directPct) / 100
   if (directAmt > 0) {
     rows.push({ key: 'd', layer: '直推', roleLabel: ROLE_NAMES[previewChain.parentRole], rateLabel: `${directPct}%`, amount: directAmt })
     total += directAmt
   }
-  const gpTotalPct = clampPctMap(commissionMatrix[previewChain.gpRole], buyerRole)
+  const gpTotalPct = clampPctMap(commissionMatrix[gpRole], buyerRole)
   const indirectPct = Math.max(0, gpTotalPct - directPct)
   const indirectAmt = Math.round(paid * indirectPct) / 100
   if (indirectAmt > 0) {

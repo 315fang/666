@@ -1,71 +1,176 @@
 const app = getApp();
 const { get } = require('../../utils/request');
+const { cachedGet } = require('../../utils/requestCache');
 const { navigateToLimitedSpotProduct, normalizeLimitedSpotMode } = require('../../utils/limitedSpot');
+const LIMITED_SALE_OVERVIEW_TTL = 30 * 1000;
 
-function preferredMode(offer) {
-    return normalizeLimitedSpotMode('', offer);
+function formatCountdown(ms = 0) {
+    const safe = Math.max(0, Math.floor(ms / 1000));
+    const hours = Math.floor(safe / 3600);
+    const minutes = Math.floor((safe % 3600) / 60);
+    const seconds = safe % 60;
+    const pad = (num) => String(num).padStart(2, '0');
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+}
+
+function resolveSlotCountdown(slot = {}) {
+    const now = Date.now();
+    const startTs = slot && slot.start_time ? new Date(slot.start_time).getTime() : 0;
+    const endTs = slot && slot.end_time ? new Date(slot.end_time).getTime() : 0;
+    if (slot.runtime_status === 'upcoming' && startTs > now) {
+        return {
+            label: '距开始',
+            text: formatCountdown(startTs - now)
+        };
+    }
+    if (slot.runtime_status === 'running' && endTs > now) {
+        return {
+            label: '距结束',
+            text: formatCountdown(endTs - now)
+        };
+    }
+    return {
+        label: slot.runtime_status === 'ended' ? '已结束' : '进行中',
+        text: '--:--:--'
+    };
 }
 
 Page({
     data: {
         statusBarHeight: 20,
         navBarHeight: 44,
-        cardId: '',
+        slotId: '',
+        slot: null,
         card: null,
+        slots: [],
         products: [],
-        loading: true
+        loading: true,
+        countdownLabel: '距结束',
+        countdownText: '--:--:--'
     },
 
     onLoad(query) {
+        this._countdownTimer = null;
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navBarHeight: app.globalData.navBarHeight || 44,
-            cardId: query.id || query.card_id || ''
+            slotId: query.slot_id || query.id || query.card_id || ''
         });
-        this.loadDetail();
+        this.loadPage();
+    },
+
+    onUnload() {
+        this.clearCountdown();
+    },
+
+    clearCountdown() {
+        if (this._countdownTimer) {
+            clearInterval(this._countdownTimer);
+            this._countdownTimer = null;
+        }
+    },
+
+    startCountdown(slot) {
+        this.clearCountdown();
+        const update = () => {
+            const countdown = resolveSlotCountdown(slot);
+            this.setData({
+                countdownLabel: countdown.label,
+                countdownText: countdown.text
+            });
+        };
+        update();
+        this._countdownTimer = setInterval(update, 1000);
     },
 
     onBack() {
         wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/activity/activity' }) });
     },
 
-    async loadDetail() {
+    async loadPage() {
         this.setData({ loading: true });
         try {
-            const params = this.data.cardId ? { card_id: this.data.cardId } : {};
-            const res = await get('/activity/limited-spot/detail', params);
-            if (res.code !== 0 || !res.data) {
-                throw new Error(res.message || '加载失败');
-            }
-            this.setData({
-                card: res.data.card || null,
-                cardId: (res.data.card && (res.data.card.id || '')) || this.data.cardId,
-                products: Array.isArray(res.data.products) ? res.data.products : [],
-                loading: false
+            const overviewRes = await cachedGet(get, '/limited-sales/overview', {}, {
+                cacheTTL: LIMITED_SALE_OVERVIEW_TTL,
+                showError: false,
+                maxRetries: 0
             });
+            if (overviewRes.code !== 0 || !overviewRes.data) {
+                throw new Error(overviewRes.message || '加载失败');
+            }
+            const overview = overviewRes.data;
+            const slots = Array.isArray(overview.slots) ? overview.slots : [];
+            const targetSlotId = this.data.slotId || overview.recommended_slot_id || overview.current_slot_id || '';
+
+            if (!targetSlotId) {
+                this.setData({
+                    loading: false,
+                    slots,
+                    card: null,
+                    slot: null,
+                    products: []
+                });
+                return;
+            }
+
+            await this.loadDetail(targetSlotId, slots);
         } catch (e) {
-            this.setData({ loading: false, card: null, products: [] });
+            this.setData({ loading: false, slot: null, products: [], slots: [] });
             wx.showToast({ title: e.message || '加载失败', icon: 'none' });
         }
     },
 
-    _findOffer(offerId) {
-        return (this.data.products || []).find((item) => String(item.offer_id) === String(offerId)) || null;
+    async loadDetail(slotId, slotsFromOverview = null) {
+        this.setData({ loading: true });
+        try {
+            const res = await get('/limited-sales/detail', { slot_id: slotId });
+            if (res.code !== 0 || !res.data) {
+                throw new Error(res.message || '加载失败');
+            }
+            const slot = res.data.slot || null;
+            const slots = Array.isArray(res.data.slots) && res.data.slots.length
+                ? res.data.slots
+                : (Array.isArray(slotsFromOverview) ? slotsFromOverview : []);
+            const products = Array.isArray(res.data.items) ? res.data.items : [];
+            this.setData({
+                slotId: slot ? String(slot.id || '') : '',
+                card: slot,
+                slot,
+                slots,
+                products,
+                loading: false
+            });
+            this.startCountdown(slot || {});
+        } catch (e) {
+            this.clearCountdown();
+            this.setData({ loading: false, slot: null, card: null, products: [] });
+            wx.showToast({ title: e.message || '加载失败', icon: 'none' });
+        }
+    },
+
+    onSelectSlot(e) {
+        const slotId = String(e.currentTarget.dataset.slotId || '').trim();
+        if (!slotId || slotId === String(this.data.slotId || '')) return;
+        this.loadDetail(slotId, this.data.slots || []);
+    },
+
+    _findOffer(itemId) {
+        return (this.data.products || []).find((item) => String(item.item_id || item.offer_id) === String(itemId)) || null;
     },
 
     openOffer(offer, mode) {
         if (!offer || !offer.product_id) return;
         navigateToLimitedSpotProduct({
             productId: offer.product_id,
-            cardId: this.data.cardId,
-            offerId: offer.offer_id,
+            cardId: this.data.slotId,
+            offerId: offer.item_id || offer.offer_id,
             mode: normalizeLimitedSpotMode(mode, offer)
         });
     },
 
     onOpenDetail(e) {
         const offer = this._findOffer(e.currentTarget.dataset.offerId);
-        this.openOffer(offer, preferredMode(offer));
+        this.openOffer(offer, normalizeLimitedSpotMode('', offer));
     },
 
     onOpenMoney(e) {
@@ -94,11 +199,11 @@ Page({
     },
 
     onShareAppMessage() {
-        const card = this.data.card || {};
-        const cardId = this.data.cardId || '';
+        const slot = this.data.slot || {};
+        const slotId = this.data.slotId || '';
         return {
-            title: card.title || '限时专享商品',
-            path: cardId ? `/pages/activity/limited-spot?id=${encodeURIComponent(cardId)}` : '/pages/activity/limited-spot'
+            title: slot.title || '限时商品',
+            path: slotId ? `/pages/activity/limited-spot?slot_id=${encodeURIComponent(slotId)}` : '/pages/activity/limited-spot'
         };
     }
 });

@@ -81,7 +81,7 @@
       <!-- 商品信息 -->
       <view class="order-products" bindtap="onOrderTap" data-order="{{item}}">
         <view class="order-product" wx:if="{{item.product}}">
-          <image class="product-image" src="{{item.product.images[0] || ''}}" mode="aspectFill" wx:if="{{item.product.images && item.product.images.length > 0}}"></image>
+          <image class="product-image" src="{{item.product.images[0] || ''}}" mode="aspectFill" wx:if="{{item.product.images && item.product.images.length > 0}}" binderror="onOrderProductImageError" data-index="{{index}}"></image>
           <view class="product-image product-image-placeholder" wx:else>
             <image class="placeholder-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
           </view>
@@ -154,10 +154,6 @@
 
             <!-- 待收货：主次分层 -->
             <block wx:if="{{item.status === 'shipped'}}">
-              <view class="action-link-row" wx:if="{{!item.reviewed}}">
-                <view class="action-link"
-                      catchtap="onGoReview" data-order="{{item}}">评价</view>
-              </view>
               <view class="action-row single" wx:if="{{item.tracking_no}}">
                 <view class="btn btn-sm btn-soft"
                       catchtap="onViewLogistics" data-order="{{item}}">查看物流</view>

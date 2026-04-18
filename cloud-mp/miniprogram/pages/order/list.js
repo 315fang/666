@@ -374,7 +374,7 @@ Page({
         });
     },
 
-    // 去评价（与详情页一致：已发货/已完成均可提交，以服务端校验为准）
+    // 去评价：仅已完成且未评价的订单展示入口，这里只负责跳转
     onGoReview(e) {
         const order = e.currentTarget.dataset.order;
         if (!order?.id) return;
@@ -463,6 +463,23 @@ Page({
         } else {
             wx.switchTab({ url: '/pages/index/index' });
         }
+    },
+
+    onOrderProductImageError(e) {
+        const index = Number(e.currentTarget.dataset.index);
+        if (!Number.isInteger(index)) return;
+        const orders = (this.data.orders || []).slice();
+        const current = orders[index];
+        if (!current || !current.product) return;
+        orders[index] = {
+            ...current,
+            product: {
+                ...current.product,
+                image: '',
+                images: []
+            }
+        };
+        this.setData({ orders });
     },
 
     onQuickGroupTap() {

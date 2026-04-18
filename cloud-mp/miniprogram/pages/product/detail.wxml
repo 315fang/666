@@ -101,7 +101,7 @@
         <text class="tag-new" wx:if="{{product.product_tag === 'new'}}">新品</text>
       </view>
       <view class="explosive-notice" wx:if="{{product.is_explosive}}">
-        <text class="explosive-notice-text">此商品不参与会员折扣、优惠券及积分抵扣</text>
+        <text class="explosive-notice-text">此商品不参与优惠券及积分抵扣</text>
       </view>
       <view class="explosive-notice" wx:if="{{limitedSpotOffer}}">
         <text class="explosive-notice-text">{{limitedSpotMode === 'points' ? ((limitedSpotTitle || '限时专享商品') + '：使用活动积分兑换，不参与普通优惠券、积分抵扣和货款支付') : ((limitedSpotTitle || '限时专享商品') + '：按活动专享价购买，不参与普通优惠券、积分抵扣和货款支付')}}</text>
@@ -193,20 +193,20 @@
     <text class="detail-empty" wx:if="{{!detailImageList.length && !hasRichDetail}}">暂无详情</text>
   </view>
 
-  <view class="section-card reviews-section" wx:if="{{reviews.length > 0}}">
+  <view class="section-card reviews-section" wx:if="{{reviewsLoaded}}">
     <view class="section-title-row compact-row">
       <view class="review-title-wrap">
         <text class="section-title">用户评价</text>
         <text class="review-count">({{reviewTotal}})</text>
       </view>
     </view>
-    <view class="review-tags" wx:if="{{reviewTags.length > 0}}">
+    <view class="review-tags" wx:if="{{!reviewsLoadError && reviewTags.length > 0}}">
       <view class="review-tag" wx:for="{{reviewTags}}" wx:key="*this">{{item}}</view>
     </view>
-    <view class="review-list">
+    <view class="review-list" wx:if="{{!reviewsLoadError && reviews.length > 0}}">
       <view class="review-item" wx:for="{{reviews}}" wx:key="id" wx:if="{{index < 2}}">
         <view class="review-header">
-          <image class="review-avatar" src="{{item.user.avatar || item.user.avatar_url || '/assets/icons/user.svg'}}"></image>
+          <image class="review-avatar" src="{{item.user.avatar || item.user.avatar_url || '/assets/icons/user.svg'}}" binderror="onReviewAvatarError" data-index="{{index}}"></image>
           <view class="review-user-info">
             <text class="review-name">{{item.user.nick_name || item.user.nickname}}</text>
             <view class="review-stars">
@@ -218,6 +218,8 @@
         <text class="review-content">{{item.content}}</text>
       </view>
     </view>
+    <text class="detail-empty" wx:elif="{{reviewsLoadError}}">评价加载失败，请稍后重试</text>
+    <text class="detail-empty" wx:else>暂无评价</text>
   </view>
 
   <view class="section-card" wx:if="{{servicePledges.length > 0}}">

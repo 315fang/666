@@ -197,7 +197,7 @@ Page({
             }
             const image = await resolveCloudImageUrl(directBuy.image, '/assets/images/placeholder.svg');
             const amt = (parseFloat(directBuy.price) * directBuy.quantity).toFixed(2);
-            const limitedSpotPayload = directBuy.limited_spot || null;
+            const limitedSpotPayload = directBuy.limited_sale || directBuy.limited_spot || null;
             const limitedSpotMode = directBuy.limited_spot_mode || '';
                 this.setData({
                     orderItems: [{ ...directBuy, image }],

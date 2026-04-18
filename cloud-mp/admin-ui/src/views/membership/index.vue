@@ -171,6 +171,7 @@
             </el-form-item>
             <el-form-item label="线下实体门店">
               <el-input-number v-model="pointRules.purchase_multiplier_by_role[6]" :min="0" :step="1" style="width:140px" />
+              <span class="form-hint">默认与运营合伙人一致；门店额外收益通过核销补贴单独计算</span>
             </el-form-item>
             <el-form-item label="每日签到">
               <el-input-number v-model="pointRules.checkin.points" :min="0" style="width:140px" />
@@ -289,7 +290,7 @@ const pointLevels = ref(defaultPointLevels())
 
 const pointRules = reactive({
   deduction: { yuan_per_point: 0.1, max_order_ratio: 0.7 },
-  purchase_multiplier_by_role: { 0: 50, 1: 100, 2: 150, 3: 300, 4: 400, 5: 500, 6: 500 },
+  purchase_multiplier_by_role: { 0: 50, 1: 100, 2: 150, 3: 300, 4: 400, 5: 500, 6: 400 },
   review: { points: 10, remark: '写评价获得积分' },
   checkin: { points: 5, remark: '每日签到' },
   checkin_streak: { points: 50, streak_days: 7, remark: '连续签到7天奖励' },
@@ -354,7 +355,7 @@ const memberLevels = ref([
   { level: 3, name: '推广合伙人', description: '推荐或充值达标后升级，享团队与复购积分权益。', color: '#E6A23C', price_tier: 'agent', commission_type: 'level2', discount_rate: 1 },
   { level: 4, name: '运营合伙人', description: '推荐或充值达标后升级，享区域运营权益。', color: '#F56C6C', price_tier: 'agent', commission_type: 'level2', discount_rate: 1 },
   { level: 5, name: '区域合伙人', description: '团队达标后升级，享更高层级团队权益。', color: '#9B59B6', price_tier: 'agent', commission_type: 'level2', discount_rate: 1 },
-  { level: 6, name: '线下实体门店', description: '线下实体门店身份由后台人工认定，不参与自动成长升级。', color: '#0F766E', price_tier: 'agent', commission_type: 'none', discount_rate: 1 },
+  { level: 6, name: '线下实体门店', description: '线下实体门店身份由后台人工认定；普通权益按运营合伙人执行，额外享门店核销补贴。', color: '#0F766E', price_tier: 'agent', commission_type: 'none', discount_rate: 1 },
 ])
 
 const normalizeCommissionType = (value) => {

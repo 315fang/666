@@ -1,6 +1,7 @@
 // pages/user/membership-center.js - 会员权益中心（整合版）
 const { get } = require('../../utils/request');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
+const { applyGrowthTierDisplayNames } = require('../../utils/growthTierDisplay');
 const {
     buildMembershipCardViewModel,
     getMembershipCardMeta
@@ -85,7 +86,9 @@ Page({
             const meta = (metaRes && metaRes.code === 0 && metaRes.data) ? metaRes.data : {};
             const currentMeta = meta.current || {};
 
-            const rawTiers = (meta.growth_tiers || []).slice().sort((a, b) => (a.min || 0) - (b.min || 0));
+            const rawTiers = applyGrowthTierDisplayNames(
+                (meta.growth_tiers || []).slice().sort((a, b) => (a.min || 0) - (b.min || 0))
+            );
             const rawMembers = (meta.member_levels || []).slice().sort((a, b) => (a.level || 0) - (b.level || 0));
 
             // 计算当前所在档位（用于晋升路线）

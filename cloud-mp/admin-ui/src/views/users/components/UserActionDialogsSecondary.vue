@@ -30,11 +30,11 @@
     </template>
   </el-dialog>
 
-  <el-dialog v-model="inviteVisibleProxy" title="修改历史邀请码" width="380px">
+  <el-dialog v-model="inviteVisibleProxy" title="修改用户ID" width="380px">
     <el-form :model="inviteForm" label-width="90px">
-      <el-form-item label="当前历史邀请码">{{ currentUser?.invite_code || '-' }}</el-form-item>
-      <el-form-item label="新历史邀请码">
-        <el-input v-model="inviteForm.code" placeholder="留空则自动生成6位数字码" maxlength="6" />
+      <el-form-item label="当前用户ID">{{ currentUser?.invite_code || '-' }}</el-form-item>
+      <el-form-item label="新用户ID">
+        <el-input v-model="inviteForm.code" placeholder="留空则自动生成6位数字ID" maxlength="6" />
       </el-form-item>
     </el-form>
     <template #footer>

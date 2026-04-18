@@ -50,6 +50,11 @@ function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
 }
 
+function resolveBenefitRoleLevel(roleLevel) {
+    const normalized = toNumber(roleLevel, 0);
+    return normalized === 6 ? 4 : normalized;
+}
+
 async function appendWalletLog(entry) {
     return db.collection('wallet_logs').add({
         data: {
@@ -274,7 +279,7 @@ function configuredCommission(product = {}, level, baseAmount) {
 }
 
 function roleCommission(user = {}, level, baseAmount, commissionConfig = DEFAULT_AGENT_COMMISSION_CONFIG) {
-    const role = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+    const role = resolveBenefitRoleLevel(user.role_level ?? user.distributor_level ?? user.level);
     const directRates = normalizePctMap(commissionConfig.direct_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.direct_pct_by_role);
     const indirectRates = normalizePctMap(commissionConfig.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role);
     const rate = (level === 1 ? directRates : indirectRates)[role] || 0;

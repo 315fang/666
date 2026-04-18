@@ -21,21 +21,17 @@
             <view class="hero-member-badges" catchtap="onMemberLevelTap" wx:if="{{isLoggedIn}}">
               <view class="hero-member-pill hero-member-pill-consume">
                 <image src="/assets/icons/crown.svg" mode="aspectFit" class="member-pill-icon"></image>
-                <text class="member-pill-label">消费</text>
+                <text class="member-pill-label">成长</text>
                 <text class="member-pill-text">{{growthDisplay && growthDisplay.currentTierName ? growthDisplay.currentTierName : '普通会员'}}</text>
               </view>
-              <view class="hero-member-pill hero-member-pill-store" wx:if="{{(distributionInfo.role_level || userInfo.role_level) === 6}}">
-                <text class="member-pill-label">店长</text>
-                <text class="member-pill-text">{{distributionInfo.role_name || userInfo.role_name || '线下实体门店'}}</text>
-              </view>
-              <view class="hero-member-pill hero-member-pill-agent" wx:elif="{{(distributionInfo.role_level || userInfo.role_level) > 0}}">
-                <text class="member-pill-label">身份</text>
-                <text class="member-pill-text">{{distributionInfo.role_name || userInfo.role_name || '代理会员'}}</text>
+              <view class="hero-member-pill {{agentPillSkinClass}}" wx:if="{{displayAgentRoleLevel > 0}}">
+                <text class="member-pill-label">{{agentPillLabelText}}</text>
+                <text class="member-pill-text">{{agentRoleBadgeName}}</text>
               </view>
             </view>
             <view class="hero-meta-row" wx:if="{{isLoggedIn && userInfo.invite_code}}">
               <view class="hero-member-code" catchtap="onCopyMemberCode">
-                <text class="member-code-label">邀请码</text>
+                <text class="member-code-label">我的ID</text>
                 <text class="member-code-value" selectable="true">{{userInfo.invite_code}}</text>
                 <text class="member-code-action">复制</text>
               </view>

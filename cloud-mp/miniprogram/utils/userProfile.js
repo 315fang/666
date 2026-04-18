@@ -4,6 +4,7 @@
 
 const { get } = require('./request');
 const { ROLE_NAMES } = require('../config/constants');
+const { patchGrowthProgressForDisplay } = require('./growthTierDisplay');
 
 function toNumber(value, fallback = 0) {
     const num = Number(value);
@@ -29,6 +30,7 @@ function normalizeUserInfo(info = {}) {
     );
     return {
         ...info,
+        growth_progress: patchGrowthProgressForDisplay(info),
         id: info.id || info._id || '',
         _id: info._id || info.id || '',
         nickname,

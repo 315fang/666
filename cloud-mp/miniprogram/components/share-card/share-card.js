@@ -4,14 +4,14 @@ Component({
     // 标题
     title: {
       type: String,
-      value: '邀请好友一起赚'
+      value: '优品推荐'
     },
     // 描述
     description: {
       type: String,
-      value: '分享给好友，一起享受优惠'
+      value: '分享给好友，查看精选好物'
     },
-    // 邀请码（与 ?invite= 一致）
+    // 用户ID（与 ?invite= 一致）
     memberCode: {
       type: String,
       value: ''
@@ -67,12 +67,12 @@ Component({
 
   methods: {
     /**
-     * 复制邀请码
+     * 复制用户ID
      */
     onCopyMemberCode() {
       const code = this.properties.memberCode;
       if (!code) {
-        wx.showToast({ title: '邀请码为空', icon: 'none' });
+        wx.showToast({ title: '暂无可复制ID', icon: 'none' });
         return;
       }
 

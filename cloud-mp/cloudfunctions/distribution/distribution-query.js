@@ -232,11 +232,8 @@ async function getDashboard(openid) {
         indirectTeamSales: indirectSummary.totalSales
     };
 
-    const canonicalUser = buildCanonicalUser(userData, {
-        role_name: distLevel > 0 ? ['',
-            '普通分销员', '高级分销员', '团队长', '区域代理', '合伙人'
-        ][distLevel] || '分销员' : '非分销员'
-    });
+    // 不覆盖 role_name：由 user-contract.resolveRoleName 按 role_level 0–6 输出与后台一致的代理称号
+    const canonicalUser = buildCanonicalUser(userData);
 
     return {
         level: distLevel,

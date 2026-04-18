@@ -46,7 +46,7 @@ Page({
       this.setData({
         products: list,
         loading: false,
-        emptyText: list.length ? '' : '可兑换商品已下架，请联系管理员'
+        emptyText: list.length ? '' : '可兑换商品暂不可用'
       })
     } catch (err) {
       this.setData({ loading: false, emptyText: '加载可兑换商品失败，请稍后再试' })

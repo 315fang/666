@@ -22,7 +22,7 @@ const DEFAULT_GROWTH_TIERS = [
         name: '银牌会员',
         min: 100,
         discount: 0.95,
-        benefits: '享受95折优惠',
+        benefits: '解锁更多积分权益',
         enabled: true
     },
     {
@@ -30,7 +30,7 @@ const DEFAULT_GROWTH_TIERS = [
         name: '金牌会员',
         min: 500,
         discount: 0.90,
-        benefits: '享受90折优惠',
+        benefits: '解锁进阶积分权益',
         enabled: true
     },
     {
@@ -38,7 +38,7 @@ const DEFAULT_GROWTH_TIERS = [
         name: '铂金会员',
         min: 1000,
         discount: 0.85,
-        benefits: '享受85折优惠',
+        benefits: '享受更高等级积分与团队权益',
         enabled: true
     },
     {
@@ -46,7 +46,7 @@ const DEFAULT_GROWTH_TIERS = [
         name: '钻石会员',
         min: 5000,
         discount: 0.80,
-        benefits: '享受80折优惠',
+        benefits: '享受最高等级积分与团队权益',
         enabled: true
     }
 ];

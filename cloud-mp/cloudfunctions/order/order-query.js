@@ -18,6 +18,11 @@ const {
     resolveRefundAmount,
     resolveRefundChannel
 } = require('./order-contract');
+const {
+    collectReviewLookupTokens,
+    isOrderReviewed,
+    isPendingReviewOrder
+} = require('./order-review-state');
 
 function toNumber(value, fallback = 0) {
     const num = Number(value);
@@ -137,6 +142,26 @@ function firstOrderItem(order = {}) {
 
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
+}
+
+async function loadUserReviewLookup(openid, cache = new Map()) {
+    const cacheKey = `user-review-lookup:${String(openid || '')}`;
+    if (cache && cache.has(cacheKey)) {
+        return cache.get(cacheKey);
+    }
+
+    const loader = (async () => {
+        if (!hasValue(openid)) return new Set();
+        const reviews = await getAllRecords(db, 'reviews', { openid }).catch(() => []);
+        const reviewLookup = new Set();
+        (reviews || []).forEach((review) => {
+            collectReviewLookupTokens(review).forEach((token) => reviewLookup.add(token));
+        });
+        return reviewLookup;
+    })();
+
+    if (cache) cache.set(cacheKey, loader);
+    return loader;
 }
 
 function normalizeImages(images) {
@@ -485,7 +510,8 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         ),
         explicitExpireAt
     );
-    const reviewed = order.reviewed === true || String(order.remark || '').includes('[已评价]');
+    const reviewLookup = await loadUserReviewLookup(order.openid || '', cache);
+    const reviewed = isOrderReviewed(order, reviewLookup);
     const reviewedAt = firstFilled(
         toIsoString(order.reviewed_at),
         reviewed ? firstFilled(completedAt, toIsoString(order.updated_at)) : ''
@@ -651,11 +677,35 @@ async function queryOrders(openid, params = {}) {
         const status = normalizeStatusForQuery(params.status);
         const page = Math.max(1, toNumber(params.page, 1));
         const limit = Math.max(1, Math.min(100, toNumber(params.limit || params.pageSize || params.size, 20)));
-        const where = { openid };
-        if (status) where.status = status;
         const offset = (page - 1) * limit;
         const cache = new Map();
         const defaultAutoCancelMinutes = await getDefaultOrderAutoCancelMinutes(cache);
+        const reviewLookup = await loadUserReviewLookup(openid, cache);
+
+        if (status === 'pending_review') {
+            const completedOrders = await getAllRecords(db, 'orders', { openid, status: 'completed' }).catch(() => []);
+            const filteredOrders = completedOrders
+                .filter((order) => isPendingReviewOrder(order, reviewLookup))
+                .sort((a, b) => {
+                    const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+                    const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+                    return tb - ta;
+                });
+
+            const pagedOrders = filteredOrders.slice(offset, offset + limit);
+            return {
+                list: await Promise.all(pagedOrders.map((order) => formatOrderForClient(order, cache, defaultAutoCancelMinutes))),
+                pagination: {
+                    total: filteredOrders.length,
+                    page,
+                    limit,
+                    has_more: offset + pagedOrders.length < filteredOrders.length
+                }
+            };
+        }
+
+        const where = { openid };
+        if (status) where.status = status;
 
         try {
             const [countRes, pageRes] = await Promise.all([
@@ -706,6 +756,31 @@ async function queryOrders(openid, params = {}) {
         console.error('[order-query] queryOrders 失败:', err.message);
         return { list: [], pagination: { total: 0, page: 1, limit: 20, has_more: false } };
     }
+}
+
+async function getOrderCounts(openid) {
+    const cache = new Map();
+    const statuses = ['pending_payment', 'pending_group', 'paid', 'shipped'];
+    const counts = {};
+
+    await Promise.all(statuses.map(async (status) => {
+        const res = await db.collection('orders').where({ openid, status }).count().catch(() => ({ total: 0 }));
+        counts[status] = res.total || 0;
+    }));
+
+    const [completedOrders, refundRes, reviewLookup] = await Promise.all([
+        getAllRecords(db, 'orders', { openid, status: 'completed' }).catch(() => []),
+        db.collection('refunds')
+            .where({ openid, status: _.in(['pending', 'approved', 'processing']) })
+            .count()
+            .catch(() => ({ total: 0 })),
+        loadUserReviewLookup(openid, cache)
+    ]);
+
+    counts.pending = counts.pending_payment || 0;
+    counts.pending_review = (completedOrders || []).filter((order) => isPendingReviewOrder(order, reviewLookup)).length;
+    counts.refund = refundRes.total || 0;
+    return counts;
 }
 
 /**
@@ -790,6 +865,7 @@ async function getRefundDetail(openid, refundId) {
 
 module.exports = {
     queryOrders,
+    getOrderCounts,
     getOrderDetail,
     getOrderByIdOrNo,
     listRefunds,

@@ -24,7 +24,6 @@
               <el-tag :type="detailUser.status === 0 ? 'danger' : 'success'">{{ detailUser.status === 0 ? '封禁' : '正常' }}</el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="成长值">{{ Number(detailUser.growth_value || 0).toFixed(0) }}</el-descriptions-item>
-            <el-descriptions-item label="折扣比例">{{ ((detailUser.discount_rate || 1) * 10).toFixed(1) }}折</el-descriptions-item>
             <el-descriptions-item label="用户表·订单数">{{ detailUser.order_count || 0 }}</el-descriptions-item>
             <el-descriptions-item label="直推人数">{{ detailUser.referee_count || 0 }}</el-descriptions-item>
             <el-descriptions-item label="标签/分组" :span="2">

@@ -13,8 +13,8 @@
       <el-input v-model="miniProgramForm.brand_config.share_title" />
     </el-form-item>
 
-    <!-- 好友邀请海报顶部主视觉图（invite-poster） -->
-    <el-form-item label="邀请海报顶部图">
+    <!-- 优品推荐海报顶部主视觉图（invite-poster） -->
+    <el-form-item label="优品推荐海报顶部图">
       <div class="poster-upload-wrap">
         <div class="poster-preview" v-if="miniProgramForm.brand_config.share_poster_cover_url || miniProgramForm.brand_config.share_poster_url">
           <img :src="miniProgramForm.brand_config.share_poster_cover_url || miniProgramForm.brand_config.share_poster_url" class="poster-thumb" alt="海报预览" />
@@ -50,7 +50,7 @@
           />
         </div>
         <div class="field-hint" style="margin-top:8px;">
-          上传后小程序「好友邀请」海报页会用这张图替换顶部主视觉区域，下面的邀请码、头像和二维码仍保持动态生成。留空则使用默认主视觉。
+          上传后小程序「优品推荐」海报页会用这张图替换顶部主视觉区域，下面的我的ID、头像和二维码仍保持动态生成。留空则使用默认主视觉。
         </div>
       </div>
     </el-form-item>
@@ -234,7 +234,7 @@
         placeholder="距离「{next}」还需 {need} 成长值"
         style="max-width:560px;"
       />
-      <div class="field-hint">占位符：{next} 下一档名称；{need} 还差成长值（整数）。折扣档、门槛在「会员与成长值→成长规则」中配置。</div>
+      <div class="field-hint">占位符：{next} 下一档名称；{need} 还差成长值（整数）。成长档位和门槛在「会员策略→成长规则」中配置。</div>
     </el-form-item>
     <el-form-item label="我的页·已达最高档提示">
       <el-input

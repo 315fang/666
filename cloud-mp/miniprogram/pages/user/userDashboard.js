@@ -1,6 +1,26 @@
 const app = getApp();
 const { get } = require('../../utils/request');
 const { ROLE_NAMES } = require('../../config/constants');
+
+/** 与后台 DEFAULT_ROLE_NAMES / 分销侧代理等级一致，避免接口里旧文案（如「代理会员」）与等级不符 */
+function resolveAgentRoleBadgeName(roleLevel) {
+    const n = Number(roleLevel);
+    if (!Number.isFinite(n) || n < 0) return ROLE_NAMES[0];
+    const text = ROLE_NAMES[n];
+    return text != null ? text : ROLE_NAMES[0];
+}
+
+/** 避免在 WXML 的 class 里写三元表达式，部分基础库会报 FLOW_INITIAL_CREATION 渲染错误 */
+function agentPillSkinClassForLevel(roleLevel) {
+    const n = Number(roleLevel);
+    return n === 6 ? 'hero-member-pill-store' : 'hero-member-pill-agent';
+}
+
+/** 第 6 级线下门店：小标签用「店长」，与称号「线下实体门店」对应 */
+function agentPillLabelForLevel(roleLevel) {
+    const n = Number(roleLevel);
+    return n === 6 ? '店长' : '身份';
+}
 const { ErrorHandler } = require('../../utils/errorHandler');
 const { fetchUserProfile } = require('../../utils/userProfile');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
@@ -223,7 +243,11 @@ async function loadUserInfo(page, forceRefresh = false) {
             commissionBalance: '0',
             couponBanner: null,
             notificationsCount: 0,
-            orderStats: { pending: 0, paid: 0, shipped: 0, pendingReview: 0, refund: 0 }
+            orderStats: { pending: 0, paid: 0, shipped: 0, pendingReview: 0, refund: 0 },
+            displayAgentRoleLevel: 0,
+            agentRoleBadgeName: resolveAgentRoleBadgeName(0),
+            agentPillSkinClass: 'hero-member-pill-agent',
+            agentPillLabelText: '身份'
         });
         await loadQuadPreviews(page);
         return;
@@ -243,24 +267,32 @@ async function loadUserInfo(page, forceRefresh = false) {
         const result = await fetchUserProfile();
         if (result) {
             const info = result.info;
-            const roleLevel = info.role_level || 0;
+            const roleLevel = Number(info.role_level) || 0;
             const participateDistribution = info.participate_distribution === 1 || info.participate_distribution === true;
             info.participate_distribution = participateDistribution ? 1 : 0;
             page.setData({
                 userInfo: info,
                 displayNickname: buildDisplayNickname(info),
                 hasUserInfo: true,
-                isAgent: roleLevel >= 2
+                isAgent: roleLevel >= 2,
+                displayAgentRoleLevel: roleLevel,
+                agentRoleBadgeName: resolveAgentRoleBadgeName(roleLevel),
+                agentPillSkinClass: agentPillSkinClassForLevel(roleLevel),
+                agentPillLabelText: agentPillLabelForLevel(roleLevel)
             });
             applyGrowthDisplay(page, info);
             refreshBusinessCenterVisibility(page);
         } else {
             const cached = app.globalData.userInfo;
-            const roleLevel = cached?.role_level != null ? cached.role_level : 0;
+            const roleLevel = Number(cached?.role_level) || 0;
             page.setData({
                 userInfo: cached,
                 displayNickname: buildDisplayNickname(cached),
-                hasUserInfo: !!cached
+                hasUserInfo: !!cached,
+                displayAgentRoleLevel: roleLevel,
+                agentRoleBadgeName: resolveAgentRoleBadgeName(roleLevel),
+                agentPillSkinClass: agentPillSkinClassForLevel(roleLevel),
+                agentPillLabelText: agentPillLabelForLevel(roleLevel)
             });
             applyGrowthDisplay(page, cached);
             refreshBusinessCenterVisibility(page);
@@ -272,11 +304,15 @@ async function loadUserInfo(page, forceRefresh = false) {
             showToast: false
         });
         const cached = app.globalData.userInfo;
-        const roleLevel = cached?.role_level != null ? cached.role_level : 0;
+        const roleLevel = Number(cached?.role_level) || 0;
         page.setData({
             userInfo: cached,
             displayNickname: buildDisplayNickname(cached),
-            hasUserInfo: !!cached
+            hasUserInfo: !!cached,
+            displayAgentRoleLevel: roleLevel,
+            agentRoleBadgeName: resolveAgentRoleBadgeName(roleLevel),
+            agentPillSkinClass: agentPillSkinClassForLevel(roleLevel),
+            agentPillLabelText: agentPillLabelForLevel(roleLevel)
         });
         applyGrowthDisplay(page, cached);
         refreshBusinessCenterVisibility(page);
@@ -497,6 +533,7 @@ async function loadDistributionInfo(page) {
         );
         const teamCount = Number(teamInfo.totalCount || 0);
 
+        const badgeName = resolveAgentRoleBadgeName(roleLevel);
         page.setData({
             distributionInfo: {
                 totalEarnings,
@@ -504,13 +541,17 @@ async function loadDistributionInfo(page) {
                 goodsFundBalance,
                 referee_count: teamCount,
                 role_level: roleLevel,
-                role_name: dashboardUserInfo.role_name || ROLE_NAMES[roleLevel] || 'VIP用户'
+                role_name: badgeName
             },
             stats: { frozenAmount },
             balance: formatMoneyInt(goodsFundRaw),
             commissionBalance: formatMoneyInt(commissionRaw),
             teamCount,
-            isAgent: roleLevel >= 2
+            isAgent: roleLevel >= 2,
+            displayAgentRoleLevel: roleLevel,
+            agentRoleBadgeName: badgeName,
+            agentPillSkinClass: agentPillSkinClassForLevel(roleLevel),
+            agentPillLabelText: agentPillLabelForLevel(roleLevel)
         });
     } catch (error) {
         console.error('加载分销信息失败:', error);

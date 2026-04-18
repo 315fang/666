@@ -1,7 +1,7 @@
 // pages/order/refund-apply.js - 申请退货/退款
 const { get, post } = require('../../utils/request');
 const { parseImages } = require('../../utils/dataFormatter');
-const { resolveCloudImageList } = require('./utils/cloudAsset');
+const { resolveCloudImageList, resolveCloudImageUrl } = require('./utils/cloudAsset');
 const { normalizeOrderConsumer } = require('./orderConsumerFields');
 
 function roundMoney(value) {
@@ -84,10 +84,14 @@ Page({
         try {
             const res = await get(`/orders/${id}`);
             const order = res.data;
-            if (order && order.product && order.product.images) {
+            if (order && order.product) {
                 order.product.images = await resolveCloudImageList(
                     order.product.images,
                     parseImages(order.product.images)
+                );
+                order.product.image = await resolveCloudImageUrl(
+                    order.product.image || order.product.image_url || '',
+                    order.product.images
                 );
             }
             const normalizedOrder = normalizeOrderConsumer(order);

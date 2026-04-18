@@ -9,18 +9,36 @@
   </view>
 
   <scroll-view scroll-y class="scroll" wx:if="{{!loading && card}}">
+    <scroll-view scroll-x class="slot-strip" wx:if="{{slots.length > 0}}" show-scrollbar="{{false}}">
+      <view class="slot-strip-inner">
+        <view
+        wx:for="{{slots}}"
+        wx:key="id"
+        class="slot-chip {{item.id == slotId ? 'active' : ''}}"
+        data-slot-id="{{item.id}}"
+        bindtap="onSelectSlot"
+      >
+          <text class="slot-chip-title">{{item.title}}</text>
+          <text class="slot-chip-sub">{{item.runtime_status === 'running' ? '进行中' : (item.runtime_status === 'upcoming' ? '即将开始' : '已结束')}}</text>
+        </view>
+      </view>
+    </scroll-view>
+
     <view class="hero">
       <view class="hero-top">
-        <text class="hero-kicker">专享商品</text>
-        <text class="hero-deadline" wx:if="{{card.end_time}}">截止 {{card.end_time}}</text>
+        <text class="hero-kicker">限时商品</text>
+        <view class="hero-countdown" wx:if="{{countdownText}}">
+          <text class="hero-countdown-label">{{countdownLabel}}</text>
+          <text class="hero-countdown-value">{{countdownText}}</text>
+        </view>
       </view>
-      <text class="hero-title">{{card.title || '限时专享商品'}}</text>
+      <text class="hero-title">{{card.title || '限时商品'}}</text>
       <text class="hero-sub" wx:if="{{card.subtitle}}">{{card.subtitle}}</text>
-      <text class="hero-tip">进入详情后可查看商品图文、规格与专享购买方式。</text>
+      <text class="hero-tip">进入详情后可查看商品图文、规格与限时购买方式。</text>
     </view>
 
-    <view class="list-title">当前可选商品</view>
-    <view class="empty" wx:if="{{!products.length}}">暂未配置专享商品</view>
+    <view class="list-title">当前档期商品</view>
+    <view class="empty" wx:if="{{!products.length}}">当前档期暂未配置商品</view>
 
     <view class="goods-card" wx:for="{{products}}" wx:key="offer_id">
       <image
@@ -77,7 +95,7 @@
   </view>
 
   <view class="empty-state" wx:if="{{!loading && !card}}">
-    <text class="empty-state-title">当前专享活动暂不可用</text>
-    <text class="empty-state-desc">请稍后再试，或返回活动页查看其他活动。</text>
+    <text class="empty-state-title">当前限时商品暂不可用</text>
+    <text class="empty-state-desc">请稍后再试，或返回活动页查看其他入口。</text>
   </view>
 </view>

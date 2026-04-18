@@ -135,7 +135,7 @@ Page({
             return;
         }
         if (!coupon.exchange_ready) {
-            wx.showToast({ title: '该兑换券尚未绑定商品，请联系管理员', icon: 'none', duration: 2500 });
+            wx.showToast({ title: '该兑换券暂不可兑换', icon: 'none', duration: 2500 });
             return;
         }
         const couponId = coupon._id || coupon.id || coupon.coupon_id;

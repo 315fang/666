@@ -31,6 +31,9 @@ function resolveRoleLevel(user = {}) {
 
 function resolveRoleName(user = {}) {
     const roleLevel = resolveRoleLevel(user);
+    if (roleLevel >= 0 && roleLevel <= 6 && DEFAULT_ROLE_NAMES[roleLevel] != null) {
+        return DEFAULT_ROLE_NAMES[roleLevel];
+    }
     return pickString(user.role_name || DEFAULT_ROLE_NAMES[roleLevel] || 'VIP用户');
 }
 

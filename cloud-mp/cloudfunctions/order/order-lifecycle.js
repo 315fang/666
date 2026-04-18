@@ -1125,6 +1125,7 @@ function generateDefaultTraces(order) {
 module.exports = {
     cancelOrder,
     confirmOrder,
+    freezeCommissionsForOrder,
     reviewOrder,
     applyRefund,
     queryRefundList,

@@ -98,6 +98,7 @@ async function submitOrder(page, app, brandAnimation) {
             orderData.exchange_coupon_id = exchangeCouponId;
         }
         if (limitedSpotOrder && limitedSpotPayload) {
+            orderData.limited_sale = limitedSpotPayload;
             orderData.limited_spot = limitedSpotPayload;
         }
         const res = await post(exchangeMode ? '/orders/exchange' : '/orders', orderData, { showError: false });

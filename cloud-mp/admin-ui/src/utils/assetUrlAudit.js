@@ -52,6 +52,23 @@ function analyzeAssetUrl(url) {
   }
 }
 
+function stripTemporaryQueryKeys(url) {
+  const rawUrl = String(url || '').trim()
+  if (!rawUrl) return ''
+
+  try {
+    const parsed = new URL(rawUrl)
+    TEMP_QUERY_KEYS.forEach((key) => parsed.searchParams.delete(key))
+    if (parsed.hostname.endsWith('tcb.qcloud.la')) {
+      parsed.searchParams.delete('sign')
+      parsed.searchParams.delete('t')
+    }
+    return parsed.toString()
+  } catch (_) {
+    return rawUrl
+  }
+}
+
 export function findTemporaryAssetUrls(urls = []) {
   return (Array.isArray(urls) ? urls : [])
     .map((url) => ({ url, ...analyzeAssetUrl(url) }))
@@ -64,4 +81,10 @@ export function warnTemporaryAssetUrls(urls, label = '素材') {
 
   const keys = Array.from(new Set(flagged.flatMap((item) => item.matchedKeys)))
   return `${label}包含临时签名链接，请改用稳定素材地址${keys.length ? `（命中参数: ${keys.join(', ')}）` : ''}`
+}
+
+export function buildPersistentAssetRef({ url = '', fileId = '' } = {}) {
+  const normalizedFileId = String(fileId || '').trim()
+  if (/^cloud:\/\//i.test(normalizedFileId)) return normalizedFileId
+  return stripTemporaryQueryKeys(url)
 }

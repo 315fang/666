@@ -127,6 +127,7 @@ Page({
     onLoad(options) {
         this._assetRefreshInFlight = false;
         this._assetRefreshAttempted = false;
+        this._skipNextHomeRefresh = true;
         const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
         this.setData({
             heroViewportHeight: windowInfo.windowHeight || windowInfo.screenHeight || 0,
@@ -155,6 +156,11 @@ Page({
         wx.showShareMenu({ withShareTicket: true, menus: ['shareAppMessage', 'shareTimeline'] });
         this._syncPopupAdTabBar();
         this._tryPendingRegisterLightTip();
+        if (this._skipNextHomeRefresh) {
+            this._skipNextHomeRefresh = false;
+        } else {
+            this.loadData(true);
+        }
     },
 
     _tryPendingRegisterLightTip() {

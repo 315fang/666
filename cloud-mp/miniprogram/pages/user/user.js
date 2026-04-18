@@ -109,6 +109,11 @@ Page({
             role_level: 0,
             role_name: 'VIP用户'
         },
+        /** 代理/合伙人等级 1–6，与 ROLE_NAMES、后台 DEFAULT_ROLE_NAMES 一致 */
+        displayAgentRoleLevel: 0,
+        agentRoleBadgeName: 'VIP用户',
+        agentPillSkinClass: 'hero-member-pill-agent',
+        agentPillLabelText: '身份',
         notificationsCount: 0,
         pageLayout: null,
         featureFlags: {
@@ -288,12 +293,12 @@ Page({
         const userInfo = this.data.userInfo || {};
         const memberCode = String(userInfo.invite_code || '').trim();
         if (!memberCode) {
-            wx.showToast({ title: '暂无邀请码', icon: 'none' });
+            wx.showToast({ title: '暂无可复制ID', icon: 'none' });
             return;
         }
         wx.setClipboardData({
             data: memberCode,
-            success: () => wx.showToast({ title: '邀请码已复制', icon: 'success' })
+            success: () => wx.showToast({ title: '我的ID已复制', icon: 'success' })
         });
     },
 

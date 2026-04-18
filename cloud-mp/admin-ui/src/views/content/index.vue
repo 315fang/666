@@ -1,7 +1,7 @@
 <template>
   <div class="content-page">
     <el-alert
-      title="内容中心只负责内容资源本身，例如 Banner、图文、素材规范；首页和活动页的最终呈现顺序，请到页面装修或首页内容位里管理。"
+      title="内容中心只负责内容资源本身，例如 Banner、图文、素材规范；首页和活动页的最终呈现顺序，请到页面装修里管理。"
       type="info"
       :closable="false"
       show-icon
@@ -89,7 +89,7 @@
             <el-table-column label="跳转目标" min-width="180" show-overflow-tooltip>
               <template #default="{ row }">
                 <span v-if="row.link_type === 'product' && row.product">{{ row.product.name }}</span>
-                <span v-else-if="row.link_value">{{ row.link_value }}</span>
+                <span v-else-if="displayLinkTarget(row)">{{ displayLinkTarget(row) }}</span>
                 <span v-else style="color:#ccc">-</span>
               </template>
             </el-table-column>
@@ -272,77 +272,17 @@ import CompactIdCell from '@/components/CompactIdCell.vue'
 import ContentBlockEditor from '@/components/ContentBlockEditor.vue'
 import { getBanners, createBanner, updateBanner, deleteBanner, uploadFile, getProducts, deleteContent, getContents, createContent, updateContent } from '@/api'
 import { formatDate } from '@/utils/format'
-import { warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
+import { buildPersistentAssetRef, warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
+import { findMiniProgramTarget } from '@/config/miniProgramTargets'
+import {
+  imageSpecs,
+  bannerPositionSpecMap,
+  bannerLinkTypeMap,
+  bannerPositionMap
+} from './contentPageConfig'
 
 const activeTab = ref('banner')
 const submitting = ref(false)
-
-const imageSpecs = [
-  {
-    key: 'product_detail',
-    name: '商品详情首图 / 分类弹层大图',
-    ratio: '3:4 竖图',
-    minSize: '1200 x 1600',
-    display: '固定竖图容器，前端满铺填充展示',
-    note: '主体居中，四边预留 8% 安全区，避免边角文案被裁'
-  },
-  {
-    key: 'product_thumb',
-    name: '商品卡缩略图 / 订单商品图',
-    ratio: '1:1 正方图',
-    minSize: '800 x 800',
-    display: '固定正方形容器，前端满铺裁切',
-    note: '商品主体尽量铺满，不要在四角放小字'
-  },
-  {
-    key: 'home',
-    name: '首页轮播主视觉（home）',
-    ratio: '9:16 竖图',
-    minSize: '1242 x 2208',
-    display: '全屏主视觉展示，前端会做沉浸式裁切',
-    note: '标题、人物、商品主体放在中间 70% 安全区'
-  },
-  {
-    key: 'poster',
-    name: '首页中部/底部海报（home_mid / home_bottom）',
-    ratio: '3:4 竖图',
-    minSize: '1080 x 1440',
-    display: '按宽度展示，保持统一画报比例',
-    note: '适合单张活动海报、礼盒图、场景图'
-  },
-  {
-    key: 'category',
-    name: '分类页 Banner（category）',
-    ratio: '3:4 竖图',
-    minSize: '1080 x 1440',
-    display: '与商品详情首图统一，前端满铺裁切',
-    note: '主商品和标题尽量居中，避免贴边'
-  },
-  {
-    key: 'activity',
-    name: '活动页图片条（activity）',
-    ratio: '3:2 横图',
-    minSize: '1500 x 1000',
-    display: '固定横图容器，前端满铺裁切',
-    note: '左右会有轻微裁切，主要信息放中间区域'
-  },
-  {
-    key: 'article',
-    name: '图文正文插图 / 商品详情图',
-    ratio: '3:4 竖图或长图',
-    minSize: '宽度 1080 以上',
-    display: '正文内按宽度自适应显示，不强制裁切',
-    note: '建议单张 2MB 内，长图拆段上传，避免首屏过长'
-  }
-]
-
-const bannerPositionSpecMap = {
-  home: imageSpecs.find(item => item.key === 'home'),
-  home_mid: imageSpecs.find(item => item.key === 'poster'),
-  home_bottom: imageSpecs.find(item => item.key === 'poster'),
-  category: imageSpecs.find(item => item.key === 'category'),
-  activity: imageSpecs.find(item => item.key === 'activity')
-}
 
 const currentBannerImageSpec = computed(() => {
   return bannerPositionSpecMap[bannerForm.position] || imageSpecs[0]
@@ -382,46 +322,14 @@ const autoPreviewUrl = computed(() => {
   return null
 })
 
-const LINK_TYPE_MAP = {
-  none: { label: '无跳转', tagType: 'info' },
-  product: { label: '商品详情', tagType: 'primary' },
-  activity: { label: '活动页面', tagType: 'warning' },
-  category: { label: '分类页定位', tagType: 'success' },
-  group_buy: { label: '拼团活动', tagType: 'success' },
-  slash: { label: '砍价活动', tagType: 'danger' },
-  lottery: { label: '抽奖转盘', tagType: '' },
-  page: { label: '小程序页面', tagType: 'info' },
-  url: { label: '外部链接', tagType: 'info' }
+const linkTypeLabel = (t) => bannerLinkTypeMap[t]?.label || t
+const linkTypeTagType = (t) => bannerLinkTypeMap[t]?.tagType || 'info'
+const positionLabel = (p) => bannerPositionMap[p] || p
+const displayLinkTarget = (row = {}) => {
+  const target = findMiniProgramTarget(row.link_type, row.link_value)
+  if (target) return `${target.title}${target.note ? ` · ${target.note}` : ''}`
+  return row.link_value || ''
 }
-const POSITION_MAP = { home: '首页轮播', home_mid: '首页中部', home_bottom: '首页底部', category: '分类页', activity: '活动页' }
-
-const linkTypeLabel = (t) => LINK_TYPE_MAP[t]?.label || t
-const linkTypeTagType = (t) => LINK_TYPE_MAP[t]?.tagType || 'info'
-const positionLabel = (p) => POSITION_MAP[p] || p
-
-const linkValuePlaceholder = computed(() => {
-  const map = {
-    activity: '活动ID，如：1',
-    category: '分类ID（与商品分类接口 id 一致），如：2',
-    group_buy: '拼团活动ID，如：5',
-    slash: '砍价活动ID，如：3',
-    lottery: '留空即可（跳转到抽奖页）',
-    page: '小程序页面路径，如：/pages/about/index',
-    url: '完整URL，如：https://example.com'
-  }
-  return map[bannerForm.link_type] || '请输入跳转值'
-})
-
-const linkValueHint = computed(() => {
-  const map = {
-    group_buy: '前端将跳转到 /pages/group/detail?id=<填入ID>',
-    slash: '前端将跳转到 /pages/slash/detail?id=<填入ID>',
-    activity: '前端将跳转到 /pages/activity/activity',
-    category: '小程序将打开分类 Tab 并定位到该分类',
-    lottery: '前端将跳转到 /pages/lottery/lottery'
-  }
-  return map[bannerForm.link_type] || ''
-})
 
 const searchProducts = async (query) => {
   if (!query) return
@@ -560,20 +468,21 @@ const handleBannerSubmit = async () => {
     ElMessage.warning('请关联商品或上传 Banner 图片')
     return
   }
-  const tempUrlMessage = warnTemporaryAssetUrls(bannerForm.image_url ? [bannerForm.image_url] : [], 'Banner 图片')
-  if (tempUrlMessage) {
-    ElMessage.warning(tempUrlMessage)
-    return
-  }
   submitting.value = true
   try {
     const payload = { ...bannerForm }
+    payload.image_url = buildPersistentAssetRef({ url: payload.image_url, fileId: payload.file_id })
     // product类型时，link_value = product_id
     if (payload.link_type === 'product' && payload.product_id) {
       payload.link_value = String(payload.product_id)
     }
     if (!payload.image_url) {
       payload.image_url = resolveAssetUrl(payload)
+    }
+    const tempUrlMessage = warnTemporaryAssetUrls(payload.image_url ? [payload.image_url] : [], 'Banner 图片')
+    if (tempUrlMessage) {
+      ElMessage.warning(tempUrlMessage)
+      return
     }
     if (bannerIsEdit.value) {
       await updateBanner(bannerForm.id, payload)

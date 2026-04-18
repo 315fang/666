@@ -199,11 +199,11 @@
             </div>
           </div>
           <div class="quick-list">
-            <div class="quick-item" v-for="q in quickActions" :key="q.title" @click="$router.push(q.path)">
+            <div class="quick-item" v-for="q in quickActions" :key="q.key" @click="router.push(q.to)">
               <div class="todo-icon" :style="{ background: q.iconBg }">
                 <el-icon :size="14"><component :is="q.icon" /></el-icon>
               </div>
-              <span class="quick-name">{{ q.title }}</span>
+              <span class="quick-name">{{ q.label }}</span>
               <span class="menu-arrow">></span>
             </div>
           </div>
@@ -242,14 +242,17 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useUserStore } from '@/store/user'
 import {
   getDashboardOverview, getSystemStatus,
   getOperationsDashboard, getMemberTierConfig
 } from '@/api'
 import { ElMessage } from 'element-plus'
 import { formatDateShort as formatDate, formatDateTime } from '@/utils/format'
+import { buildShortcutItems } from '@/config/adminNavigation'
 
 const router = useRouter()
+const userStore = useUserStore()
 const refreshing = ref(false)
 const lastAttemptAt = ref('')
 const lastSuccessAt = ref('')
@@ -277,13 +280,12 @@ const todoItems = ref([
   { title: '待审批佣金', count: 0, path: '/commissions', icon: 'Wallet', iconBg: 'rgba(20,184,166,0.12)' }
 ])
 const memberTierList = ref([])
-const quickActions = ref([
-  { title: '财务看板', path: '/finance', icon: 'Money', iconBg: 'rgba(16,185,129,0.12)' },
-  { title: '会员等级配置', path: '/membership', icon: 'User', iconBg: 'rgba(99,102,241,0.12)' },
-  { title: '优惠券自动化', path: '/coupons', icon: 'Tickets', iconBg: 'rgba(245,158,11,0.12)' },
-  { title: '物流与发货', path: '/orders', icon: 'Van', iconBg: 'rgba(20,184,166,0.12)' },
-  { title: '活动与开关', path: '/activities', icon: 'MagicStick', iconBg: 'rgba(236,72,153,0.12)' }
-])
+const quickActions = computed(() => (
+  buildShortcutItems(
+    (permission) => userStore.hasPermission(permission),
+    { surface: 'dashboard', limit: 5 }
+  )
+))
 
 const focusBarItems = computed(() => [
   {

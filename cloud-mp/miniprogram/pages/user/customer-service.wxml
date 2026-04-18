@@ -39,7 +39,7 @@
       <view class="command-core">
         <view class="command-contact">
           <text class="field-label">{{primaryContactLabel}}</text>
-          <text class="field-value" selectable>{{primaryContactText || '请先在后台配置客服方式'}}</text>
+          <text class="field-value" selectable>{{primaryContactText || '当前暂无可用联系方式'}}</text>
           <text class="command-note">产品咨询、订单跟进、售后处理都可直接从这里发起。</text>
         </view>
 
@@ -61,7 +61,7 @@
 
     <view class="surface-card surface-card--empty" wx:if="{{loaded && !hasAny}}">
       <text class="empty-title">尚未配置客服方式</text>
-      <text class="empty-desc">请在管理后台「系统设置 → 小程序配置 → 客服通道」填写电话、微信号或二维码图片。</text>
+      <text class="empty-desc">当前暂无可用联系方式，请稍后再试。</text>
     </view>
 
     <view class="section-heading section-heading--faq">

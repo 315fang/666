@@ -405,13 +405,13 @@
           <template #header>
             <div class="card-header">
               <span>入口导航</span>
-              <el-button type="primary" plain size="small" @click="goMembershipConfig">去会员与成长值配置</el-button>
+              <el-button type="primary" plain size="small" @click="goMembershipConfig">去会员策略配置</el-button>
             </div>
           </template>
           <el-alert
             type="info"
             :closable="false"
-            title="财务相关规则统一在此维护；成长值与会员特权仍在“会员与成长值”页面维护。"
+            title="财务相关规则统一在此维护；成长值与会员特权仍在“会员策略”页面维护。"
           />
         </el-card>
         <FinanceRulesPanel />

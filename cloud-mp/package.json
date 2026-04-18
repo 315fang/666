@@ -20,8 +20,10 @@
     "audit:response-shape": "node scripts/audit-admin-response-shape.js",
     "audit:user-distribution-contract": "node scripts/audit-user-distribution-contract.js",
     "audit:order-fields": "node scripts/audit-order-fields.js",
+    "check:index-plan": "node scripts/check-cloudbase-index-manifest.js",
     "check:foundation": "node scripts/check-cloudbase-foundation.js",
     "check:order-helpers": "node scripts/check-order-helper-integrity.js",
+    "perf:baseline": "node scripts/generate-cloudbase-perf-baseline.js",
     "seed:ensure-target": "node scripts/ensure-target-collections.js",
     "seed:normalize": "node scripts/normalize-cloudbase-data.js",
     "seed:build-import": "node scripts/build-cloudbase-import-jsonl.js",
@@ -49,7 +51,8 @@
     "repair:cloudbase-openid": "node scripts/repair-cloudbase-openid-fields.js",
     "repair:refund-reopen": "node scripts/repair-internal-refund-reopen.js",
     "release:finance": "node scripts/release-finance-check.js",
-    "release:check": "npm run check:foundation && npm run import:validate && npm run audit:legacy && node scripts/check-production-gaps.js"
+    "release:check": "npm run check:foundation && npm run import:validate && npm run audit:legacy && node scripts/check-production-gaps.js",
+    "verify:v2:local": "node scripts/verify-v2-local-readiness.js"
   },
   "main": "index.js",
   "directories": {

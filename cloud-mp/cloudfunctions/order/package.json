@@ -8,8 +8,8 @@
     "wx-server-sdk": "~2.6.3"
   },
   "cloudfunction-config": {
-    "memorySize": 256,
-    "timeout": 20
+    "memorySize": 1024,
+    "timeout": 60
   },
   "triggers": [
     {

@@ -18,45 +18,12 @@
  *   category    → link_value = 分类 ID，打开分类 Tab 并滚动到该分类（switchTab 无 query，用本地存储传递）
  */
 
-const TAB_PAGES = [
-    '/pages/index/index',
-    '/pages/category/category',
-    '/pages/activity/activity',
-    '/pages/user/user'
-];
-
-// CMS 配置的 page 类型跳转白名单前缀（防止后台被攻击时跳转到危险路径）
-const PAGE_WHITELIST_PREFIXES = [
-    '/pages/product/detail',
-    '/pages/order/',
-    '/pages/address/',
-    '/pages/distribution/',
-    '/pages/wallet/',
-    '/pages/points/',
-    '/pages/lottery/',
-    '/pages/coupon/',
-    '/pages/slash/',
-    '/pages/group/',
-    '/pages/logistics/',
-    '/pages/search/',
-    '/pages/activity/',
-    '/pages/category/',
-    '/pages/user/',
-    '/pages/index/'
-];
-
-/**
- * 校验 page 类型的 linkValue 路径是否在白名单内
- * @param {string} path
- * @returns {boolean}
- */
-function isValidPagePath(path) {
-    if (!path || typeof path !== 'string') return false;
-    // 必须以 /pages/ 开头
-    if (!path.startsWith('/pages/')) return false;
-    // 必须匹配白名单前缀之一
-    return PAGE_WHITELIST_PREFIXES.some(prefix => path.startsWith(prefix));
-}
+const {
+    TAB_PAGES,
+    stripQuery,
+    isValidPagePath,
+    normalizeTargetLinkValue
+} = require('./miniProgramTargets');
 
 /**
  * 执行跳转
@@ -65,11 +32,12 @@ function isValidPagePath(path) {
  */
 function navigate(linkType, linkValue) {
     if (!linkType || linkType === 'none') return;
+    const normalizedValue = normalizeTargetLinkValue(linkType, linkValue);
 
     switch (linkType) {
         case 'product':
-            if (linkValue) {
-                wx.navigateTo({ url: `/pages/product/detail?id=${linkValue}` });
+            if (normalizedValue) {
+                wx.navigateTo({ url: `/pages/product/detail?id=${normalizedValue}` });
             }
             break;
 
@@ -78,9 +46,9 @@ function navigate(linkType, linkValue) {
             break;
 
         case 'category':
-            if (linkValue != null && String(linkValue).trim() !== '') {
+            if (normalizedValue != null && String(normalizedValue).trim() !== '') {
                 try {
-                    wx.setStorageSync('category_focus_id', String(linkValue).trim());
+                    wx.setStorageSync('category_focus_id', String(normalizedValue).trim());
                 } catch (e) {
                     console.warn('[navigator] category_focus_id 写入失败', e);
                 }
@@ -90,28 +58,28 @@ function navigate(linkType, linkValue) {
 
         case 'group_buy':
             wx.navigateTo({
-                url: linkValue ? `/pages/group/list?activity_id=${linkValue}` : '/pages/group/list'
+                url: normalizedValue ? `/pages/group/list?activity_id=${normalizedValue}` : '/pages/group/list'
             });
             break;
 
         case 'slash':
             wx.navigateTo({
-                url: linkValue ? `/pages/slash/list?activity_id=${linkValue}` : '/pages/slash/list'
+                url: normalizedValue ? `/pages/slash/list?activity_id=${normalizedValue}` : '/pages/slash/list'
             });
             break;
 
         case 'lottery':
             wx.navigateTo({
-                url: linkValue ? `/pages/lottery/lottery?pool_id=${linkValue}` : '/pages/lottery/lottery'
+                url: normalizedValue ? `/pages/lottery/lottery?pool_id=${normalizedValue}` : '/pages/lottery/lottery'
             });
             break;
 
         case 'flash_sale': {
-            const v = linkValue != null ? String(linkValue).trim() : '';
-            if (!v || v === '__flash_sale__') {
+            const slotId = String(normalizedValue || '').trim();
+            if (!slotId) {
                 wx.navigateTo({ url: '/pages/activity/limited-spot' });
             } else {
-                wx.navigateTo({ url: `/pages/activity/limited-spot?id=${encodeURIComponent(v)}` });
+                wx.navigateTo({ url: `/pages/activity/limited-spot?slot_id=${encodeURIComponent(slotId)}` });
             }
             break;
         }
@@ -121,23 +89,26 @@ function navigate(linkType, linkValue) {
             break;
 
         case 'page':
-            if (linkValue) {
-                if (!isValidPagePath(String(linkValue))) {
-                    console.warn('[navigator] page 路径不在白名单内，已阻止跳转:', linkValue);
+            if (normalizedValue) {
+                if (!isValidPagePath(String(normalizedValue))) {
+                    console.warn('[navigator] page 路径不在白名单内，已阻止跳转:', normalizedValue);
+                    wx.showToast({ title: '页面未开放跳转', icon: 'none' });
                     break;
                 }
-                if (TAB_PAGES.includes(linkValue)) {
-                    wx.switchTab({ url: linkValue });
+                const targetPath = String(normalizedValue);
+                const tabPath = stripQuery(targetPath);
+                if (TAB_PAGES.includes(tabPath)) {
+                    wx.switchTab({ url: tabPath });
                 } else {
-                    wx.navigateTo({ url: linkValue });
+                    wx.navigateTo({ url: targetPath });
                 }
             }
             break;
 
         case 'url':
-            if (linkValue) {
+            if (normalizedValue) {
                 wx.setClipboardData({
-                    data: String(linkValue),
+                    data: String(normalizedValue),
                     success: () => {
                         wx.showToast({ title: '链接已复制，请在浏览器打开', icon: 'none' });
                     }

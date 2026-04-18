@@ -107,7 +107,7 @@ const DEFAULT_POINT_RULES = {
         3: 300,
         4: 400,
         5: 500,
-        6: 500
+        6: 400
     },
     group_start: {
         points: 0,
@@ -127,6 +127,11 @@ const DEFAULT_GROWTH_RULES = {
         use_original_amount: false
     }
 };
+let agentRuntimeConfigCache = {
+    value: null,
+    updatedAt: 0
+};
+const AGENT_RUNTIME_CONFIG_TTL = 60 * 1000;
 
 function toNumber(value, fallback = 0) {
     if (value === null || value === undefined || value === '') return fallback;
@@ -237,6 +242,11 @@ function matrixRate(matrix, parentRole, buyerRole) {
     return 0;
 }
 
+function resolveBenefitRoleLevel(roleLevel) {
+    const normalized = toNumber(roleLevel, 0);
+    return normalized === 6 ? 4 : normalized;
+}
+
 function normalizeIdList(values) {
     return toArray(values).map((value) => String(value || '').trim()).filter(Boolean);
 }
@@ -258,6 +268,9 @@ function buildExchangeMeta(teamConfig = {}, bonusLevel = 0) {
 }
 
 async function loadAgentRuntimeConfig() {
+    if (agentRuntimeConfigCache.value && Date.now() - Number(agentRuntimeConfigCache.updatedAt || 0) <= AGENT_RUNTIME_CONFIG_TTL) {
+        return agentRuntimeConfigCache.value;
+    }
     const [upgradeRow, commissionRow, matrixRow, memberLevelRow, peerBonusRow, pointRuleRow, growthRuleRow] = await Promise.all([
         getConfigByKeys(['member_upgrade_rule_config', 'agent_system_upgrade-rules', 'agent_system_upgrade_rules']),
         getConfigByKeys(['agent_system_commission-config', 'agent_system_commission_config']),
@@ -306,7 +319,7 @@ async function loadAgentRuntimeConfig() {
         dbMatrix || commission?.commission_matrix,
         DEFAULT_COMMISSION_MATRIX
     );
-    return {
+    const result = {
         upgradeRules,
         commissionConfig: {
             direct_pct_by_role: normalizePctMap(commission?.direct_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.direct_pct_by_role),
@@ -323,6 +336,11 @@ async function loadAgentRuntimeConfig() {
         pointRules,
         growthRules
     };
+    agentRuntimeConfigCache = {
+        value: result,
+        updatedAt: Date.now()
+    };
+    return result;
 }
 
 function getRoleMeta(roleLevel, memberLevels = []) {
@@ -707,7 +725,7 @@ function commissionConfigForLevel(product = {}, level, baseAmount) {
 }
 
 function roleBasedCommission(user = {}, level, baseAmount, commissionConfig = DEFAULT_AGENT_COMMISSION_CONFIG) {
-    const role = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+    const role = resolveBenefitRoleLevel(user.role_level ?? user.distributor_level ?? user.level);
     if (commissionConfig.commission_matrix) {
         return 0;
     }
@@ -798,6 +816,9 @@ async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
     if (peerBonus.enabled === false) return { skipped: true };
 
     const bonusLevel = toNumber(roleSyncResult.nextRoleLevel, 0);
+    if (bonusLevel === 6) {
+        return { skipped: true, reason: 'lv6_no_same_level' };
+    }
     const targetParentRole = toNumber(parent.role_level ?? parent.distributor_level ?? parent.level, 0);
     if (bonusLevel <= 0 || targetParentRole !== bonusLevel) {
         return { skipped: true, reason: 'not_same_level' };
@@ -904,10 +925,11 @@ async function ensurePointsAwarded(orderId, order) {
     const buyerRole = buyerRes.data && buyerRes.data[0]
         ? toNumber(buyerRes.data[0].role_level ?? buyerRes.data[0].distributor_level ?? buyerRes.data[0].level, 0)
         : 0;
+    const benefitBuyerRole = resolveBenefitRoleLevel(buyerRole);
     const { pointRules, growthRules } = await loadAgentRuntimeConfig();
     const purchasePointsPerHundred = Math.max(
         0,
-        toNumber(pointRules.purchase_multiplier_by_role?.[buyerRole], pointRules.purchase_multiplier_by_role?.[0] || DEFAULT_POINT_RULES.purchase_multiplier_by_role[0])
+        toNumber(pointRules.purchase_multiplier_by_role?.[benefitBuyerRole], pointRules.purchase_multiplier_by_role?.[0] || DEFAULT_POINT_RULES.purchase_multiplier_by_role[0])
     );
     const pointsEarned = Math.floor((payAmount * purchasePointsPerHundred) / 100);
 
@@ -1013,6 +1035,7 @@ async function ensureCommissionsCreated(orderId, order) {
     const { commissionConfig, commissionMatrix, costSplit } = await loadAgentRuntimeConfig();
     const useMatrix = commissionMatrix && Object.keys(commissionMatrix).length > 0;
     const buyerRole = toNumber(buyer.role_level ?? buyer.distributor_level ?? buyer.level, 0);
+    const benefitBuyerRole = resolveBenefitRoleLevel(buyerRole);
     const isAgentSelfPurchase = buyerRole >= 3;
     const totals = new Map();
     const items = toArray(order.items);
@@ -1091,20 +1114,20 @@ async function ensureCommissionsCreated(orderId, order) {
             // 即便父级被跳过（因为 openid == buyer 等），也要用父级应得比例计算级差
             const parentBeneficiary = beneficiaries.find(b => b.level === 1);
             const parentRole = parentBeneficiary
-                ? toNumber(parentBeneficiary.user.role_level ?? parentBeneficiary.user.distributor_level ?? parentBeneficiary.user.level, 0)
+                ? resolveBenefitRoleLevel(parentBeneficiary.user.role_level ?? parentBeneficiary.user.distributor_level ?? parentBeneficiary.user.level)
                 : 0;
             // 无论是否使用商品级配置，都应基于矩阵比例计算级差基准
-            const parentMatrixRate = parentBeneficiary ? matrixRate(commissionMatrix, parentRole, buyerRole) : 0;
+            const parentMatrixRate = parentBeneficiary ? matrixRate(commissionMatrix, parentRole, benefitBuyerRole) : 0;
 
             for (const beneficiary of beneficiaries) {
-                const bRole = toNumber(beneficiary.user.role_level ?? beneficiary.user.distributor_level ?? beneficiary.user.level, 0);
+                const bRole = resolveBenefitRoleLevel(beneficiary.user.role_level ?? beneficiary.user.distributor_level ?? beneficiary.user.level);
 
                 const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
                 let amount;
                 if (configured > 0) {
                     amount = Math.min(allocatedBase, configured);
                 } else {
-                    const myRate = matrixRate(commissionMatrix, bRole, buyerRole);
+                    const myRate = matrixRate(commissionMatrix, bRole, benefitBuyerRole);
                     const effectiveRate = beneficiary.level === 1
                         ? myRate
                         : Math.max(0, myRate - parentMatrixRate);

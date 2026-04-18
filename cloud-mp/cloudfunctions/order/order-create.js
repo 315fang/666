@@ -464,6 +464,90 @@ async function countLimitedSpotReservedOrders(cardId, offerId) {
     return Number(res.total || 0);
 }
 
+async function countLimitedSaleReservedOrders(slotId, itemId) {
+    if (!hasValue(slotId) || !hasValue(itemId)) return 0;
+    const res = await db.collection('orders')
+        .where({
+            limited_sale_slot_id: String(slotId),
+            limited_sale_item_id: String(itemId),
+            status: _.neq('cancelled')
+        })
+        .count()
+        .catch(() => ({ total: 0 }));
+    return Number(res.total || 0);
+}
+
+async function resolveLimitedSaleContext(rawLimitedSale = {}) {
+    if (!rawLimitedSale || typeof rawLimitedSale !== 'object') return null;
+    const slotId = String(rawLimitedSale.slot_id || rawLimitedSale.id || '').trim();
+    const itemId = String(rawLimitedSale.item_id || '').trim();
+    if (!slotId || !itemId) {
+        throw new Error('限时商品档期参数缺失');
+    }
+    const slotCandidates = [slotId];
+    const itemCandidates = [itemId];
+    const numericSlotId = Number(slotId);
+    const numericItemId = Number(itemId);
+    if (Number.isFinite(numericSlotId)) slotCandidates.push(numericSlotId);
+    if (Number.isFinite(numericItemId)) itemCandidates.push(numericItemId);
+
+    const [slotRes, itemRes] = await Promise.all([
+        db.collection('limited_sale_slots')
+            .where(_.or([{ _id: _.in(slotCandidates) }, { id: _.in(slotCandidates) }, { _legacy_id: _.in(slotCandidates) }]))
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] })),
+        db.collection('limited_sale_items')
+            .where(_.or([{ _id: _.in(itemCandidates) }, { id: _.in(itemCandidates) }, { _legacy_id: _.in(itemCandidates) }]))
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }))
+    ]);
+
+    const slot = slotRes.data && slotRes.data[0] ? slotRes.data[0] : null;
+    const item = itemRes.data && itemRes.data[0] ? itemRes.data[0] : null;
+    if (!slot) throw new Error('限时商品档期不存在');
+    if (!item || String(item.slot_id || '') !== slotId) throw new Error('限时商品不存在或已下架');
+    if (!isEnabledFlag(slot.status ?? slot.is_active ?? slot.enabled, true)) throw new Error('限时商品档期未启用');
+    if (!isEnabledFlag(item.status ?? item.is_active ?? item.enabled, true)) throw new Error('限时商品未启用');
+    const startTs = parseTimestamp(slot.start_time);
+    const endTs = parseTimestamp(slot.end_time);
+    const nowTs = Date.now();
+    if (!startTs || !endTs || startTs >= endTs) throw new Error('限时商品档期配置异常');
+    if (nowTs < startTs || nowTs >= endTs) throw new Error('当前不在限时商品售卖时间内');
+
+    const mode = normalizeLimitedSpotMode(rawLimitedSale.mode || (rawLimitedSale.redeem_points ? 'points' : ''), item);
+    if (mode === 'points' && !isEnabledFlag(item.enable_points, true)) {
+        throw new Error('当前限时商品不支持积分兑换');
+    }
+    if (mode === 'money' && !isEnabledFlag(item.enable_money, true)) {
+        throw new Error('当前限时商品不支持现金购买');
+    }
+
+    const soldCount = Math.max(
+        toNumber(item.sold_count, 0),
+        await countLimitedSaleReservedOrders(slotId, itemId)
+    );
+    const stockLimit = Math.max(0, toNumber(item.stock_limit, 0));
+    if (stockLimit > 0 && soldCount >= stockLimit) {
+        throw new Error('当前限时商品已抢完');
+    }
+
+    return {
+        source: 'limited_sale',
+        cardId: slotId,
+        offerId: itemId,
+        cardTitle: String(slot.title || '').trim(),
+        mode,
+        productId: String(item.product_id || '').trim(),
+        skuId: String(item.sku_id || '').trim(),
+        pointsPrice: Math.max(0, toNumber(item.points_price, 0)),
+        moneyPrice: Math.max(0, roundMoney(item.money_price)),
+        stockLimit,
+        soldCount
+    };
+}
+
 async function resolveLimitedSpotContext(rawLimitedSpot = {}) {
     if (!rawLimitedSpot || typeof rawLimitedSpot !== 'object') return null;
     const cardId = String(rawLimitedSpot.card_id || rawLimitedSpot.id || '').trim();
@@ -510,6 +594,7 @@ async function resolveLimitedSpotContext(rawLimitedSpot = {}) {
     }
 
     return {
+        source: 'limited_spot',
         cardId,
         offerId,
         cardTitle: String(card.title || '').trim(),
@@ -793,14 +878,15 @@ async function createOrder(openid, orderData) {
         group_no,
         slash_no,
         use_goods_fund,   // 货款支付标志（仅代理商可用）
-        limited_spot
+        limited_spot,
+        limited_sale
     } = orderData;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
         throw new Error('缺少商品信息');
     }
     const isExchangeOrder = !!exchange_coupon_id;
-    const limitedSpotContext = await resolveLimitedSpotContext(limited_spot);
+    const limitedSpotContext = (await resolveLimitedSaleContext(limited_sale)) || (await resolveLimitedSpotContext(limited_spot));
     if (isExchangeOrder && items.length !== 1) {
         throw new Error('兑换券订单仅支持单个商品');
     }
@@ -869,6 +955,24 @@ async function createOrder(openid, orderData) {
         earlyBuyerInfo?.role_level ?? earlyBuyerInfo?.distributor_level ?? earlyBuyerInfo?.level,
         0
     );
+    const productCache = new Map();
+    const skuCache = new Map();
+    const findProductCached = async (productId) => {
+        const key = String(productId || '').trim();
+        if (!key) return null;
+        if (productCache.has(key)) return productCache.get(key);
+        const product = await findProduct(productId);
+        productCache.set(key, product);
+        return product;
+    };
+    const findSkuCached = async (skuId) => {
+        const key = String(skuId || '').trim();
+        if (!key) return null;
+        if (skuCache.has(key)) return skuCache.get(key);
+        const sku = await findSku(skuId);
+        skuCache.set(key, sku);
+        return sku;
+    };
     // 1. 查商品和 SKU，计算金额
     let totalAmount = 0;
     let originalTotalAmount = 0; // 折扣前原价合计，用于优惠券门槛校验
@@ -877,7 +981,7 @@ async function createOrder(openid, orderData) {
     const lockedAgentCostCandidates = [];
 
     for (const item of items) {
-        const product = await findProduct(item.product_id);
+        const product = await findProductCached(item.product_id);
         if (!product) {
             throw new Error(`商品不存在: ${item.product_id}`);
         }
@@ -890,7 +994,7 @@ async function createOrder(openid, orderData) {
 
         let sku = null;
         if (item.sku_id) {
-            sku = await findSku(item.sku_id);
+            sku = await findSkuCached(item.sku_id);
         }
 
         const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
@@ -1024,11 +1128,13 @@ async function createOrder(openid, orderData) {
             is_explosive: (product.is_explosive === true || product.is_explosive === 1) ? 1 : 0,
             allow_points: (isExchangeOrder || limitedSpotContext) ? 0 : ((product.is_explosive === true || product.is_explosive === 1) ? 0
                 : (product.allow_points == null ? 1 : (product.allow_points ? 1 : 0))),
+            limited_sale_slot_id: limitedSpotContext && limitedSpotContext.source === 'limited_sale' ? limitedSpotContext.cardId : '',
+            limited_sale_item_id: limitedSpotContext && limitedSpotContext.source === 'limited_sale' ? limitedSpotContext.offerId : '',
             exchange_coupon_id: isExchangeOrder ? String(exchange_coupon_id) : '',
             limited_spot_card_id: limitedSpotContext ? limitedSpotContext.cardId : '',
             limited_spot_offer_id: limitedSpotContext ? limitedSpotContext.offerId : '',
             limited_spot_mode: limitedSpotContext ? limitedSpotContext.mode : '',
-            activity_type: limitedSpotContext ? 'limited_spot' : (groupActivity ? 'group' : (slashRecord ? 'slash' : '')),
+            activity_type: limitedSpotContext ? (limitedSpotContext.source === 'limited_sale' ? 'limited_sale' : 'limited_spot') : (groupActivity ? 'group' : (slashRecord ? 'slash' : '')),
             group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : '',
             slash_no: slashRecord ? (slashRecord.slash_no || slash_no) : ''
         });
@@ -1289,6 +1395,8 @@ async function createOrder(openid, orderData) {
         user_coupon_id: isExchangeOrder ? (exchangeCouponDoc?._id || '') : (usedCouponDocId || user_coupon_id || ''),
         exchange_coupon_id: isExchangeOrder ? String(exchange_coupon_id) : '',
         exchange_meta: isExchangeOrder ? exchangeMeta : null,
+        limited_sale_slot_id: limitedSpotContext && limitedSpotContext.source === 'limited_sale' ? limitedSpotContext.cardId : '',
+        limited_sale_item_id: limitedSpotContext && limitedSpotContext.source === 'limited_sale' ? limitedSpotContext.offerId : '',
         limited_spot_card_id: limitedSpotContext ? limitedSpotContext.cardId : '',
         limited_spot_offer_id: limitedSpotContext ? limitedSpotContext.offerId : '',
         limited_spot_mode: limitedSpotContext ? limitedSpotContext.mode : '',
@@ -1303,9 +1411,17 @@ async function createOrder(openid, orderData) {
             points_price: limitedSpotContext.pointsPrice,
             money_price: limitedSpotContext.moneyPrice
         } : null,
+        limited_sale: limitedSpotContext && limitedSpotContext.source === 'limited_sale' ? {
+            slot_id: limitedSpotContext.cardId,
+            item_id: limitedSpotContext.offerId,
+            mode: limitedSpotContext.mode,
+            title: limitedSpotContext.cardTitle,
+            points_price: limitedSpotContext.pointsPrice,
+            money_price: limitedSpotContext.moneyPrice
+        } : null,
         memo: memo || '',
         referrer_openid: directReferrer?.openid || '',
-        type: isExchangeOrder ? 'exchange' : (limitedSpotContext ? 'limited_spot' : (groupActivity ? 'group' : (slashRecord ? 'slash' : (type || 'normal')))),
+        type: isExchangeOrder ? 'exchange' : (limitedSpotContext ? (limitedSpotContext.source === 'limited_sale' ? 'limited_sale' : 'limited_spot') : (groupActivity ? 'group' : (slashRecord ? 'slash' : (type || 'normal')))),
         group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : '',
         legacy_group_activity_id: groupActivity ? (groupActivity.id || groupActivity._legacy_id || group_activity_id) : '',
         group_no: group_no || '',

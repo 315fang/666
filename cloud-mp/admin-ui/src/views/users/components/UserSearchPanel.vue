@@ -1,11 +1,11 @@
 <template>
   <el-card class="search-card">
     <el-form :inline="true" :model="searchForm">
-      <el-form-item label="邀请码">
-        <el-input v-model="searchForm.member_no" placeholder="8位邀请码" clearable style="width:160px" />
+      <el-form-item label="用户ID">
+        <el-input v-model="searchForm.member_no" placeholder="8位用户ID" clearable style="width:160px" />
       </el-form-item>
       <el-form-item label="关键词">
-        <el-input v-model="searchForm.keyword" placeholder="昵称 / 手机号 / 邀请码" clearable style="width:200px" />
+        <el-input v-model="searchForm.keyword" placeholder="昵称 / 手机号 / 用户ID" clearable style="width:200px" />
       </el-form-item>
       <el-form-item label="角色">
         <el-select v-model="searchForm.role_level" placeholder="全部" clearable style="width:120px">
@@ -32,7 +32,7 @@
           remote
           clearable
           reserve-keyword
-          placeholder="搜昵称/手机/邀请码"
+          placeholder="搜昵称/手机/用户ID"
           :remote-method="remoteSearchLeaders"
           :loading="leaderSearchLoading"
           style="width:240px"

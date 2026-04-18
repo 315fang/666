@@ -142,8 +142,64 @@ function getCollection(name) {
     return dataStore.getCollection(name);
 }
 
+const runtimeRouteCache = new Map();
+const RUNTIME_CACHE_KEYS_BY_COLLECTION = {
+    group_activities: ['activity-options'],
+    slash_activities: ['activity-options'],
+    lottery_prizes: ['activity-options'],
+    limited_sale_slots: ['activity-options'],
+    limited_sale_items: ['activity-options'],
+    orders: ['operations-dashboard', 'statistics-overview'],
+    products: ['operations-dashboard', 'statistics-overview'],
+    users: ['operations-dashboard', 'statistics-overview'],
+    refunds: ['operations-dashboard', 'statistics-overview'],
+    withdrawals: ['operations-dashboard'],
+    commissions: ['operations-dashboard']
+};
+const CONFIG_CACHE_KEYS_BY_COLLECTION = {
+    banners: ['homeContent'],
+    configs: ['homeContent', 'activityLinks'],
+    app_configs: ['homeContent', 'activityLinks'],
+    activity_links: ['activityLinks'],
+    limited_sale_slots: ['limitedSalesOverview', 'limitedSalesDetail'],
+    limited_sale_items: ['limitedSalesOverview', 'limitedSalesDetail']
+};
+const CONFIG_CACHE_KEYS_BY_SINGLETON = {
+    settings: ['homeContent'],
+    'popup-ad-config': ['homeContent'],
+    'mini-program-config': ['homeContent']
+};
+
+function getRuntimeCache(key) {
+    const cacheKey = String(key || '').trim();
+    const entry = runtimeRouteCache.get(cacheKey);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+        runtimeRouteCache.delete(cacheKey);
+        return null;
+    }
+    return entry.value;
+}
+
+function setRuntimeCache(key, value, ttlMs = 45 * 1000) {
+    const cacheKey = String(key || '').trim();
+    runtimeRouteCache.set(cacheKey, {
+        value,
+        expiresAt: Date.now() + Math.max(1000, Number(ttlMs || 0))
+    });
+    return value;
+}
+
+function invalidateRuntimeCachesForCollection(name) {
+    const keys = RUNTIME_CACHE_KEYS_BY_COLLECTION[String(name || '').trim()] || [];
+    keys.forEach((key) => runtimeRouteCache.delete(key));
+}
+
 function saveCollection(name, rows) {
-    return dataStore.saveCollection(name, rows);
+    const result = dataStore.saveCollection(name, rows);
+    invalidateRuntimeCachesForCollection(name);
+    bumpConfigCacheKeysForCollection(name);
+    return result;
 }
 
 function getSingleton(name, fallback) {
@@ -151,7 +207,30 @@ function getSingleton(name, fallback) {
 }
 
 function saveSingleton(name, value) {
-    return dataStore.saveSingleton(name, value);
+    const result = dataStore.saveSingleton(name, value);
+    const keys = CONFIG_CACHE_KEYS_BY_SINGLETON[String(name || '').trim()] || [];
+    if (keys.length) {
+        const current = getSingleton('config-cache-meta', {});
+        const next = current && typeof current === 'object' ? { ...current } : {};
+        const stamp = nowIso();
+        keys.forEach((key) => {
+            next[key] = stamp;
+        });
+        dataStore.saveSingleton('config-cache-meta', next);
+    }
+    return result;
+}
+
+function bumpConfigCacheKeysForCollection(name) {
+    const keys = CONFIG_CACHE_KEYS_BY_COLLECTION[String(name || '').trim()] || [];
+    if (!keys.length) return;
+    const current = getSingleton('config-cache-meta', {});
+    const next = current && typeof current === 'object' ? { ...current } : {};
+    const stamp = nowIso();
+    keys.forEach((key) => {
+        next[key] = stamp;
+    });
+    saveSingleton('config-cache-meta', next);
 }
 
 async function ensureFreshCollections(names = []) {
@@ -693,6 +772,13 @@ function assetUrl(value) {
     return value;
 }
 
+function isTemporarySignedAssetUrl(value) {
+    const text = pickString(value).toLowerCase();
+    if (!text || !/^https?:\/\//i.test(text)) return false;
+    if (!text.includes('tcb.qcloud.la')) return false;
+    return /[?&]sign=/.test(text) && /[?&]t=/.test(text);
+}
+
 function getStorageConfigSnapshot() {
     return getSingleton('storage-config', {
         provider: 'cloudbase',
@@ -725,6 +811,13 @@ function normalizeMaterialType(value, fallback = 'image') {
 function isManagedImageMaterialType(type) {
     const normalized = normalizeMaterialType(type, 'image');
     return normalized === 'image' || normalized === 'poster';
+}
+
+function normalizeManagedMaterialUrl(url, fileId, type) {
+    if (isManagedImageMaterialType(type) && isCloudFileId(fileId)) {
+        return fileId;
+    }
+    return pickString(url).trim();
 }
 
 function pickAssetRef(source = {}) {
@@ -796,6 +889,14 @@ async function resolveProductCoverImageAsync(product = {}) {
     return '';
 }
 
+function pickBannerProductLookup(banner = {}) {
+    if (banner?.product_id != null && banner.product_id !== '') return banner.product_id;
+    const linkType = pickString(banner?.link_type).toLowerCase();
+    if (linkType !== 'product') return null;
+    const linkValue = pickString(banner?.link_value);
+    return linkValue || null;
+}
+
 /**
  * 批量解析 URL 数组中的 cloud:// file ID，返回可直接展示的 https URL 数组。
  * 普通 https/本地路径原样处理（走 assetUrl）。
@@ -820,10 +921,14 @@ async function batchResolveCloudUrls(urls) {
 
 async function normalizeBannerRecordAsync(banner) {
     const fileId = banner.file_id || '';
-    let imageUrl = await resolveAssetValue(pickAssetRef(banner) || fileId);
+    const assetCandidate = pickAssetRef(banner) || fileId;
+    let imageUrl = isTemporarySignedAssetUrl(assetCandidate)
+        ? ''
+        : await resolveAssetValue(assetCandidate);
     let product = null;
-    if (banner?.product_id != null) {
-        product = findByLookup(getCollection('products'), banner.product_id);
+    const productLookup = pickBannerProductLookup(banner);
+    if (productLookup != null) {
+        product = findByLookup(getCollection('products'), productLookup);
     }
     if (!imageUrl && product) {
         imageUrl = await resolveProductCoverImageAsync(product);
@@ -2440,7 +2545,7 @@ function sanitizeAdminRecord(admin) {
 
 function createDefaultBranchAgentPolicy() {
     return {
-        enabled: false,
+        enabled: true,
         min_apply_role_level: 3,
         pickup_station_subsidy_enabled: true,
         pickup_station_reward_rate: 0.025,
@@ -3188,6 +3293,11 @@ function normalizePercentToRate(value, fallback = 0) {
     return num > 1 ? num / 100 : num;
 }
 
+function resolveBenefitRoleLevelSnapshot(roleLevel) {
+    const normalized = toNumber(roleLevel, 0);
+    return normalized === 6 ? 4 : normalized;
+}
+
 const DEFAULT_REFERRAL_COMMISSION_MATRIX = {
     1: { 0: 20 },
     2: { 0: 30, 1: 5 },
@@ -3256,6 +3366,7 @@ function ensurePlatformSettlementCommissionsForOrder(order = {}) {
     const products = getCollection('products');
     const buyer = findUserByAnyId(users, order.openid || order.buyer_id || order.user_id);
     const buyerRole = toNumber(order.buyer_role_level ?? buyer?.role_level ?? buyer?.distributor_level, 0);
+    const benefitBuyerRole = resolveBenefitRoleLevelSnapshot(buyerRole);
     if (buyerRole >= 3 && buyer?.openid) {
         const existingSelf = rows.find((row) =>
             rowMatchesLookup(row, order._id || order.id || order.order_no, [row.order_id, row.order_no])
@@ -3318,9 +3429,9 @@ function ensurePlatformSettlementCommissionsForOrder(order = {}) {
         const allocatedBase = itemBaseTotal > 0 ? roundMoney(payAmount * rawBase / itemBaseTotal) : rawBase;
         const directBeneficiary = beneficiaries.find((entry) => entry.level === 1);
         const directRole = directBeneficiary
-            ? toNumber(directBeneficiary.user.role_level ?? directBeneficiary.user.distributor_level ?? directBeneficiary.user.level, 0)
+            ? resolveBenefitRoleLevelSnapshot(directBeneficiary.user.role_level ?? directBeneficiary.user.distributor_level ?? directBeneficiary.user.level)
             : 0;
-        const directMatrixRate = directBeneficiary ? matrixRateSnapshot(matrix, directRole, buyerRole) : 0;
+        const directMatrixRate = directBeneficiary ? matrixRateSnapshot(matrix, directRole, benefitBuyerRole) : 0;
 
         for (const beneficiary of beneficiaries) {
             const existing = rows.find((row) =>
@@ -3336,8 +3447,8 @@ function ensurePlatformSettlementCommissionsForOrder(order = {}) {
             if (configured > 0) {
                 amount = Math.min(allocatedBase, configured);
             } else {
-                const roleLevel = toNumber(beneficiary.user.role_level ?? beneficiary.user.distributor_level ?? beneficiary.user.level, 0);
-                const myRate = matrixRateSnapshot(matrix, roleLevel, buyerRole);
+                const roleLevel = resolveBenefitRoleLevelSnapshot(beneficiary.user.role_level ?? beneficiary.user.distributor_level ?? beneficiary.user.level);
+                const myRate = matrixRateSnapshot(matrix, roleLevel, benefitBuyerRole);
                 const effectiveRate = beneficiary.level === 1 ? myRate : Math.max(0, myRate - directMatrixRate);
                 amount = roundMoney(allocatedBase * effectiveRate);
             }
@@ -4785,6 +4896,9 @@ registerMarketingRoutes(app, {
     paginate,
     sortByUpdatedDesc,
     assetUrl,
+    resolveManagedFileUrl,
+    getRuntimeCache,
+    setRuntimeCache,
     createAuditLog,
     directPatchDocument,
     appendWalletLogEntry,
@@ -5161,7 +5275,7 @@ app.post('/admin/api/materials', auth, requirePermission('materials'), (req, res
         type: materialType,
         group_id: req.body?.group_id != null && req.body?.group_id !== '' ? Number(req.body.group_id) : null,
         description: pickString(req.body?.description, ''),
-        url: req.body?.url || '',
+        url: normalizeManagedMaterialUrl(req.body?.url, materialFileId, materialType),
         thumbnail_url: req.body?.thumbnail_url || '',
         file_id: materialFileId,
         status: req.body?.status != null ? (toBoolean(req.body.status) ? 1 : 0) : 1,
@@ -5190,6 +5304,7 @@ app.put('/admin/api/materials/:id', auth, requirePermission('materials'), (req, 
         ...rows[index],
         ...req.body,
         type: nextType,
+        url: normalizeManagedMaterialUrl(req.body?.url != null ? req.body.url : rows[index].url, nextFileId, nextType),
         file_id: nextFileId,
         group_id: req.body?.group_id != null && req.body?.group_id !== '' ? Number(req.body.group_id) : rows[index].group_id,
         updated_at: nowIso()
@@ -5343,7 +5458,8 @@ app.get('/admin/api/banners', auth, requirePermission('content'), async (req, re
     const products = getCollection('products');
     let rows = await Promise.all(sortByUpdatedDesc(getCollection('banners')).map(async (item) => {
         const normalized = await normalizeBannerRecordAsync(item);
-        const product = item?.product_id != null ? findByLookup(products, item.product_id) : null;
+        const productLookup = pickBannerProductLookup(item);
+        const product = productLookup != null ? findByLookup(products, productLookup) : null;
         return {
             ...normalized,
             product: product ? buildProductSummaryRecord(product) : null
@@ -8365,6 +8481,12 @@ app.get('/admin/api/finance/pool-contributions', auth, requirePermission('statis
 });
 
 app.get('/admin/api/statistics/overview', auth, requirePermission('statistics'), (req, res) => {
+    const cached = getRuntimeCache('statistics-overview');
+    if (cached) {
+        res.set('x-runtime-cache-hit', '1');
+        ok(res, cached);
+        return;
+    }
     const orders = getCollection('orders');
     const products = getCollection('products');
     const users = getCollection('users');
@@ -8373,7 +8495,7 @@ app.get('/admin/api/statistics/overview', auth, requirePermission('statistics'),
     const today = getDateKey(Date.now(), nowIso().slice(0, 10));
     const todayOrders = orders.filter((item) => getDateKey(item.created_at, '') === today);
     const todayPaidOrders = paidOrders.filter((item) => getDateKey(item.paid_at || item.pay_time || item.created_at, '') === today);
-    ok(res, {
+    const payload = {
         total_sales: paidOrders.reduce((sum, item) => sum + toNumber(item.pay_amount ?? item.actual_price ?? item.total_amount, 0), 0),
         total_orders: orders.length,
         total_users: users.length,
@@ -8383,10 +8505,19 @@ app.get('/admin/api/statistics/overview', auth, requirePermission('statistics'),
         pending_ship: orders.filter((item) => normalizeOrderStatusGroup(item) === 'pending_ship').length,
         pending_refund: getCollection('refunds').filter((item) => item.status === 'pending').length,
         low_stock_count: products.filter((item) => toNumber(item.stock, 0) <= 10).length
-    });
+    };
+    res.set('x-runtime-cache-hit', '0');
+    setRuntimeCache('statistics-overview', payload, 30 * 1000);
+    ok(res, payload);
 });
 
 app.get('/admin/api/operations/dashboard', auth, async (req, res) => {
+    const cached = getRuntimeCache('operations-dashboard');
+    if (cached) {
+        res.set('x-runtime-cache-hit', '1');
+        ok(res, cached);
+        return;
+    }
     await ensureFreshCollections(['orders', 'products', 'users', 'refunds', 'withdrawals', 'commissions']);
     const orders = getCollection('orders');
     const products = getCollection('products');
@@ -8407,7 +8538,7 @@ app.get('/admin/api/operations/dashboard', auth, async (req, res) => {
     const pendingWithdrawalCount = withdrawals.filter((item) => pickString(item.status) === 'pending').length;
     const pendingCommissionCount = commissions.filter((item) => pickString(item.status) === 'pending_approval').length;
 
-    ok(res, {
+    const payload = {
         kpi: {
             today_orders: todayOrders.length,
             today_sales: todayPaidOrders.reduce((sum, item) => sum + toNumber(item.pay_amount ?? item.actual_price ?? item.total_amount, 0), 0),
@@ -8436,7 +8567,10 @@ app.get('/admin/api/operations/dashboard', auth, async (req, res) => {
             pending_withdrawal: pendingWithdrawalCount,
             pending_commission: pendingCommissionCount
         }
-    });
+    };
+    res.set('x-runtime-cache-hit', '0');
+    setRuntimeCache('operations-dashboard', payload, 45 * 1000);
+    ok(res, payload);
 });
 
 app.get('/admin/api/system/status', auth, requirePermission('settings_manage'), async (req, res) => {

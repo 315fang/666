@@ -10,9 +10,9 @@
 
   <view class="page-body">
     <view class="poster-section">
-      <!-- 与分享链接 ?invite= 一致，为邀请码（非后台「会员码 member_no」） -->
+      <!-- 与分享链接 ?invite= 一致，为用户ID（非后台「会员码 member_no」） -->
       <view class="invite-code-row" wx:if="{{memberCode}}">
-        <text class="invite-code-label">我的邀请码</text>
+        <text class="invite-code-label">我的ID</text>
         <text class="invite-code-value">{{memberCode}}</text>
         <view class="invite-code-copy" bindtap="onCopyCode">复制</view>
       </view>
@@ -33,7 +33,7 @@
           </view>
         </view>
       </view>
-      <text class="poster-variant-hint">「官方宣传」主文案与封面来自后台首页内容位中的官方宣传语；「个人推荐」为您的专属邀请样式。</text>
+      <text class="poster-variant-hint">「官方宣传」主文案默认：专业皮肤修护 始于1974（可在首页品牌区修改）；封面来自官方宣传封面或优品推荐海报顶图。「个人推荐」为专属邀请样式与您的推荐语。</text>
 
       <!-- 海报预览：保留 Canvas 作为导出底图，预览图加载成功后覆盖显示 -->
       <view class="poster-preview-wrap">

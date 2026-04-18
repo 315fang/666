@@ -30,6 +30,23 @@ const asyncHandler = (handler) => async (...args) => {
     }
 };
 
+async function buildCachedPayload(cacheKey, builder) {
+    const version = await configCache.getCacheVersion(cacheKey);
+    const cached = configCache.getCachedModel(cacheKey, version);
+    if (cached !== null) {
+        return {
+            value: cached,
+            cacheHit: true
+        };
+    }
+    const value = await builder();
+    configCache.setCachedModel(cacheKey, value, version);
+    return {
+        value,
+        cacheHit: false
+    };
+}
+
 let isColdStart = true;
 
 function buildTraceId(event) {
@@ -81,6 +98,13 @@ function isHttpAsset(value) {
     return /^https?:\/\//i.test(pickString(value));
 }
 
+function isTemporarySignedAsset(value) {
+    const text = pickString(value).toLowerCase();
+    if (!text || !/^https?:\/\//i.test(text)) return false;
+    if (!text.includes('tcb.qcloud.la')) return false;
+    return /[?&]sign=/.test(text) && /[?&]t=/.test(text);
+}
+
 function pickAssetRef(source = {}) {
     if (!source || typeof source !== 'object') return pickString(source);
     return pickString(source.file_id || source.image_url || source.url || source.image || source.cover_image || source.coverImage);
@@ -129,7 +153,53 @@ function buildResolvedAssetUrl(record = {}, resolvedMap = new Map()) {
         if (resolved) return resolved;
     }
     const fallback = pickAssetRef(record);
-    return isHttpAsset(fallback) ? fallback : '';
+    if (!isHttpAsset(fallback) || isTemporarySignedAsset(fallback)) return '';
+    return fallback;
+}
+
+function pickBannerProductId(item = {}) {
+    if (hasValue(item?.product_id)) return item.product_id;
+    const linkType = pickString(item?.link_type).toLowerCase();
+    if (linkType !== 'product') return null;
+    const linkValue = pickString(item?.link_value);
+    return hasValue(linkValue) ? linkValue : null;
+}
+
+const ACTIVE_BANNER_STATUS_CONDITIONS = [
+    { status: true },
+    { status: 1 },
+    { status: '1' },
+    { status: 'active' },
+    { status: 'enabled' },
+    { is_active: true },
+    { is_active: 1 },
+    { is_active: '1' }
+];
+
+function buildActiveBannerWhere(position = '') {
+    const activeCondition = _.or(ACTIVE_BANNER_STATUS_CONDITIONS);
+    if (!position) return activeCondition;
+    return _.and([activeCondition, { position }]);
+}
+
+function bannerFieldProjection() {
+    return {
+        _id: true,
+        images: true,
+        id: true,
+        _legacy_id: true,
+        name: true,
+        title: true,
+        subtitle: true,
+        link_type: true,
+        link_value: true,
+        position: true,
+        sort_order: true,
+        file_id: true,
+        image_url: true,
+        url: true,
+        product_id: true
+    };
 }
 
 async function resolveProductCoverImage(product = {}) {
@@ -137,7 +207,9 @@ async function resolveProductCoverImage(product = {}) {
         product.cover_image,
         product.image_url,
         product.image,
-        ...(Array.isArray(product.images) ? product.images : [])
+        ...toArray(product.images),
+        ...toArray(product.preview_images),
+        ...toArray(product.previewImages)
     ].filter(Boolean);
     const resolvedMap = await batchResolveManagedFileUrls(candidates.filter((value) => isCloudFileId(pickString(value))));
     for (const candidate of candidates) {
@@ -155,12 +227,13 @@ async function resolveProductCoverImage(product = {}) {
 async function normalizeBannerRecords(records = []) {
     const list = Array.isArray(records) ? records : [];
     const resolvedMap = await batchResolveManagedFileUrls(list.map((item) => pickFileId(item)));
-    const productMap = await loadProductsByActivityIds(list.map((item) => item && item.product_id));
+    const productMap = await loadProductsByActivityIds(list.map((item) => pickBannerProductId(item)));
     return Promise.all(list.map(async (item) => {
         const fileId = pickFileId(item);
         let imageUrl = buildResolvedAssetUrl(item, resolvedMap);
-        if (!imageUrl && item?.product_id != null) {
-            const product = productMap[String(item.product_id)] || null;
+        const bannerProductId = pickBannerProductId(item);
+        if (!imageUrl && bannerProductId != null) {
+            const product = productMap[String(bannerProductId)] || null;
             if (product) {
                 imageUrl = await resolveProductCoverImage(product);
             }
@@ -272,6 +345,15 @@ function firstPrice(values) {
 function productSummary(product) {
     if (!product) return null;
     const images = toArray(product.images);
+    const previewImages = toArray(product.preview_images).concat(toArray(product.previewImages));
+    const coverImage = pickString(
+        product.cover_image
+        || product.image_url
+        || product.image
+        || product.cover
+        || images[0]
+        || previewImages[0]
+    );
     const price = firstPrice([
         toDisplayPrice(product.retail_price, false),
         toDisplayPrice(product.price, false),
@@ -291,8 +373,11 @@ function productSummary(product) {
         _legacy_id: product._legacy_id,
         name: product.name || product.title || '商品',
         description: product.description || product.subtitle || '',
-        image: product.image || product.cover || images[0] || '',
+        image: coverImage,
+        image_url: coverImage,
+        cover_image: coverImage,
         images,
+        preview_images: previewImages,
         price,
         retail_price: price,
         min_price: price,
@@ -467,9 +552,12 @@ async function getConfigValueByKeys(keys = [], fallback = null) {
         .get()
         .catch(() => ({ data: [] }));
     if (configRes.data && configRes.data[0]) {
-        const row = configRes.data.find((item) => normalizedKeys.includes(pickString(item.config_key || item.key || item._id)));
-        if (row) {
-            return parseMaybeJsonValue(row.config_value !== undefined ? row.config_value : (row.value !== undefined ? row.value : fallback));
+        for (let i = 0; i < normalizedKeys.length; i += 1) {
+            const currentKey = normalizedKeys[i];
+            const row = configRes.data.find((item) => pickString(item.config_key || item.key || item._id) === currentKey);
+            if (row) {
+                return parseMaybeJsonValue(row.config_value !== undefined ? row.config_value : (row.value !== undefined ? row.value : fallback));
+            }
         }
     }
 
@@ -493,6 +581,146 @@ function isExpiredTime(value) {
 
 function isLimitedCardEnabled(card = {}) {
     return isTruthyActiveFlag(card.enabled ?? card.status ?? card.is_active ?? card.active, true) && !isExpiredTime(card.end_time || card.end_at);
+}
+
+function sortLimitedSaleSlots(rows = []) {
+    return [...(Array.isArray(rows) ? rows : [])].sort((a, b) => {
+        const sortDiff = Number(a.sort_order || 0) - Number(b.sort_order || 0);
+        if (sortDiff !== 0) return sortDiff;
+        return parseDateTs(a.start_time) - parseDateTs(b.start_time);
+    });
+}
+
+function parseDateTs(value) {
+    if (!value) return 0;
+    const ts = new Date(value).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+}
+
+function isLimitedSaleSlotEnabled(slot = {}) {
+    return isTruthyActiveFlag(slot.status ?? slot.is_active ?? slot.enabled, true);
+}
+
+function resolveLimitedSaleSlotRuntimeStatus(slot = {}, nowTs = Date.now()) {
+    if (!isLimitedSaleSlotEnabled(slot)) return 'disabled';
+    const startTs = parseDateTs(slot.start_time);
+    const endTs = parseDateTs(slot.end_time);
+    if (!startTs || !endTs || startTs >= endTs) return 'invalid';
+    if (endTs <= nowTs) return 'ended';
+    if (startTs > nowTs) return 'upcoming';
+    return 'running';
+}
+
+function pickRecommendedLimitedSaleSlot(slots = []) {
+    const running = slots.filter((slot) => slot.runtime_status === 'running');
+    if (running.length) return running[0];
+    const upcoming = slots.filter((slot) => slot.runtime_status === 'upcoming');
+    if (upcoming.length) return upcoming[0];
+    return null;
+}
+
+async function normalizeLimitedSaleSlots(rawSlots = []) {
+    const list = sortLimitedSaleSlots(rawSlots);
+    const resolvedMap = await batchResolveManagedFileUrls(list.map((item) => pickFileId(item)));
+    return list.map((item) => {
+        const image = buildResolvedAssetUrl({
+            file_id: item.file_id,
+            image_url: item.cover_image || item.image_url || item.image,
+            image: item.cover_image || item.image || item.image_url
+        }, resolvedMap);
+        return {
+            ...item,
+            id: item.id || item._legacy_id || item._id,
+            title: pickString(item.title),
+            subtitle: pickString(item.subtitle),
+            file_id: pickString(item.file_id),
+            cover_image: image,
+            image_url: image,
+            sort_order: Number(item.sort_order || 0),
+            runtime_status: resolveLimitedSaleSlotRuntimeStatus(item),
+            status: isLimitedSaleSlotEnabled(item) ? 1 : 0
+        };
+    });
+}
+
+async function getLimitedSaleSlotsSnapshot() {
+    const rows = await getAllRecords(db, 'limited_sale_slots').catch(() => []);
+    const normalized = await normalizeLimitedSaleSlots(rows || []);
+    return normalized.filter((slot) => slot.runtime_status === 'running' || slot.runtime_status === 'upcoming');
+}
+
+async function countLimitedSaleReservedOrders(slotId, itemId) {
+    if (!hasValue(slotId) || !hasValue(itemId)) return 0;
+    const res = await db.collection('orders')
+        .where({
+            limited_sale_slot_id: String(slotId),
+            limited_sale_item_id: String(itemId),
+            status: _.neq('cancelled')
+        })
+        .count()
+        .catch(() => ({ total: 0 }));
+    return Number(res.total || 0);
+}
+
+async function buildLimitedSaleDetailPayload(slotId = '') {
+    const slots = await getLimitedSaleSlotsSnapshot();
+    if (!slots.length) {
+        return { slot: null, slots: [], items: [], recommended_slot_id: '' };
+    }
+    const activeSlot = slotId
+        ? (slots.find((item) => String(item.id) === String(slotId)) || null)
+        : pickRecommendedLimitedSaleSlot(slots);
+    if (!activeSlot) {
+        return {
+            slot: null,
+            slots,
+            items: [],
+            recommended_slot_id: pickRecommendedLimitedSaleSlot(slots)?.id || ''
+        };
+    }
+
+    const itemRows = await getAllRecords(db, 'limited_sale_items').catch(() => []);
+    const activeItems = (Array.isArray(itemRows) ? itemRows : [])
+        .filter((item) => String(item.slot_id || '') === String(activeSlot.id))
+        .filter((item) => isTruthyActiveFlag(item.status ?? item.is_active ?? item.enabled, true));
+    const productMap = await loadProductsByActivityIds(activeItems.map((item) => item.product_id));
+    const items = await Promise.all(sortCardsByOrder(activeItems).map(async (item) => {
+        const product = productSummary(productMap[String(item.product_id)] || null);
+        const soldCount = await countLimitedSaleReservedOrders(activeSlot.id, item.id || item._id || item.offer_id || '');
+        const stockLimit = Math.max(0, Number(item.stock_limit || 0));
+        const remainingByQuota = stockLimit > 0 ? Math.max(0, stockLimit - soldCount) : 0;
+        const productStock = product && Number.isFinite(Number(product.stock)) ? Number(product.stock) : null;
+        const remaining = productStock != null
+            ? Math.max(0, Math.min(remainingByQuota, productStock))
+            : remainingByQuota;
+        return {
+            item_id: item.id || item._id || item.offer_id || '',
+            offer_id: item.id || item._id || item.offer_id || '',
+            product_id: item.product_id || '',
+            sku_id: item.sku_id || '',
+            enable_points: isTruthyActiveFlag(item.enable_points, true),
+            enable_money: isTruthyActiveFlag(item.enable_money, true),
+            points_price: Number(item.points_price || 0),
+            money_price: Number(item.money_price || 0),
+            stock_limit,
+            sold_count: soldCount,
+            remaining,
+            sort_order: Number(item.sort_order || 0),
+            product: product || {
+                id: item.product_id || '',
+                name: '商品',
+                image: '',
+                images: []
+            }
+        };
+    }));
+
+    return {
+        slot: activeSlot,
+        slots,
+        items,
+        recommended_slot_id: pickRecommendedLimitedSaleSlot(slots)?.id || ''
+    };
 }
 
 function sortCardsByOrder(cards = []) {
@@ -596,153 +824,100 @@ const handleAction = {
 
     // ===== 首页内容 =====
     'homeContent': asyncHandler(async (params) => {
-        const cached = configCache.getCachedConfig('home_content_payload');
-        if (cached && typeof cached === 'object') {
-            // 首页缓存命中时刷新一次临时素材 URL，避免旧签名链接在客户端触发 403。
-            const refreshed = await resolveHomeContentAssets(cached);
-            configCache.setCachedConfig('home_content_payload', refreshed);
-            return success(refreshed);
-        }
+        const cachedPayload = await buildCachedPayload('homeContent', async () => {
+            // 兼容旧数据字段：banners 用 status, products 用 status:true, page_layouts 用 page_key+status
+            const [homeBannerRes, midBannerRes, bottomBannerRes, layoutsRes, productsRes, miniProgramRaw, homepageSettings, popupAd, boards] = await Promise.all([
+                db.collection('banners')
+                    .where(buildActiveBannerWhere('home'))
+                    .orderBy('sort_order', 'asc')
+                    .limit(10)
+                    .field(bannerFieldProjection())
+                    .get().catch(() => ({ data: [] })),
+                db.collection('banners')
+                    .where(buildActiveBannerWhere('home_mid'))
+                    .orderBy('sort_order', 'asc')
+                    .limit(10)
+                    .field(bannerFieldProjection())
+                    .get().catch(() => ({ data: [] })),
+                db.collection('banners')
+                    .where(buildActiveBannerWhere('home_bottom'))
+                    .orderBy('sort_order', 'asc')
+                    .limit(10)
+                    .field(bannerFieldProjection())
+                    .get().catch(() => ({ data: [] })),
+                db.collection('page_layouts')
+                    .where({ page_key: 'home', status: true })
+                    .field({
+                        layout_schema: true,
+                        sections: true
+                    })
+                    .limit(1)
+                    .get().catch(() => ({ data: [] })),
+                db.collection('products')
+                    .where({ status: true })
+                    .orderBy('sales_count', 'desc')
+                    .field({
+                        _id: true,
+                        id: true,
+                        _legacy_id: true,
+                        name: true,
+                        images: true,
+                        min_price: true,
+                        retail_price: true,
+                        market_price: true,
+                        sales_count: true,
+                        purchase_count: true
+                    })
+                    .limit(10)
+                    .get().catch(() => ({ data: [] })),
+                (async () => {
+                    const cachedMini = await configCache.getConfig('mini_program_config');
+                    if (cachedMini !== null) return cachedMini;
+                    const cfg = await configLoader.loadConfig();
+                    return cfg.mini_program_config || cfg;
+                })(),
+                getHomepageSettings(),
+                getPopupAdConfig(),
+                loadBoardMapWithProducts()
+            ]);
 
-        // 兼容旧数据字段：banners 用 status, products 用 status:true, page_layouts 用 page_key+status
-        const [homeBannerRes, midBannerRes, bottomBannerRes, layoutsRes, productsRes, miniProgramRaw, homepageSettings, popupAd, boards] = await Promise.all([
-            db.collection('banners')
-                .where({ status: true, position: 'home' })
-                .orderBy('sort_order', 'asc')
-                .limit(10)
-                .field({
-                    _id: true,
-                    images: true,
-                    id: true,
-                    _legacy_id: true,
-                    name: true,
-                    title: true,
-                    subtitle: true,
-                    link_type: true,
-                    link_value: true,
-                    position: true,
-                    sort_order: true,
-                    file_id: true,
-                    image_url: true,
-                    url: true,
-                })
-                .get().catch(() => ({ data: [] })),
-            db.collection('banners')
-                .where({ status: true, position: 'home_mid' })
-                .orderBy('sort_order', 'asc')
-                .limit(10)
-                .field({
-                    _id: true,
-                    images: true,
-                    id: true,
-                    _legacy_id: true,
-                    name: true,
-                    title: true,
-                    subtitle: true,
-                    link_type: true,
-                    link_value: true,
-                    position: true,
-                    sort_order: true,
-                    file_id: true,
-                    image_url: true,
-                    url: true,
-                })
-                .get().catch(() => ({ data: [] })),
-            db.collection('banners')
-                .where({ status: true, position: 'home_bottom' })
-                .orderBy('sort_order', 'asc')
-                .limit(10)
-                .field({
-                    _id: true,
-                    images: true,
-                    id: true,
-                    _legacy_id: true,
-                    name: true,
-                    title: true,
-                    subtitle: true,
-                    link_type: true,
-                    link_value: true,
-                    position: true,
-                    sort_order: true,
-                    file_id: true,
-                    image_url: true,
-                    url: true,
-                })
-                .get().catch(() => ({ data: [] })),
-            db.collection('page_layouts')
-                .where({ page_key: 'home', status: true })
-                .field({
-                    layout_schema: true,
-                    sections: true
-                })
-                .limit(1)
-                .get().catch(() => ({ data: [] })),
-            db.collection('products')
-                .where({ status: true })
-                .orderBy('sales_count', 'desc')
-                .field({
-                    _id: true,
-                    id: true,
-                    _legacy_id: true,
-                    name: true,
-                    images: true,
-                    min_price: true,
-                    retail_price: true,
-                    market_price: true,
-                    sales_count: true,
-                    purchase_count: true
-                })
-                .limit(10)
-                .get().catch(() => ({ data: [] })),
-            (async () => {
-                const cachedMini = await configCache.getConfig('mini_program_config');
-                if (cachedMini !== null) return cachedMini;
-                const cfg = await configLoader.loadConfig();
-                return cfg.mini_program_config || cfg;
-            })(),
-            getHomepageSettings(),
-            getPopupAdConfig(),
-            loadBoardMapWithProducts()
-        ]);
-
-        const miniProgramConfig = configContract.normalizeMiniProgramConfig(miniProgramRaw || {});
-        const layout = layoutsRes.data && layoutsRes.data[0] ? layoutsRes.data[0] : null;
-        const hotProducts = (productsRes.data || []).map((p) => ({
-            _id: p._id,
-            id: p.id || p._legacy_id || p._id,
-            name: p.name,
-            images: p.images || [],
-            min_price: p.min_price || p.retail_price,
-            retail_price: p.retail_price || p.min_price,
-            original_price: p.original_price || p.market_price,
-            sales_count: p.sales_count || p.purchase_count || 0,
-        }));
-        const payload = configContract.normalizeHomeContentPayload({
-            miniProgramConfig,
-            homepageSettings,
-            bannersByPosition: {
-                home: homeBannerRes.data || [],
-                home_mid: midBannerRes.data || [],
-                home_bottom: bottomBannerRes.data || []
-            },
-            hotProducts,
-            popupAd,
-            layout: layout ? layout.layout_schema || layout.sections || layout : null,
-            latestActivity: {},
-            boards
+            const miniProgramConfig = configContract.normalizeMiniProgramConfig(miniProgramRaw || {});
+            const layout = layoutsRes.data && layoutsRes.data[0] ? layoutsRes.data[0] : null;
+            const hotProducts = (productsRes.data || []).map((p) => ({
+                _id: p._id,
+                id: p.id || p._legacy_id || p._id,
+                name: p.name,
+                images: p.images || [],
+                min_price: p.min_price || p.retail_price,
+                retail_price: p.retail_price || p.min_price,
+                original_price: p.original_price || p.market_price,
+                sales_count: p.sales_count || p.purchase_count || 0,
+            }));
+            const payload = configContract.normalizeHomeContentPayload({
+                miniProgramConfig,
+                homepageSettings,
+                bannersByPosition: {
+                    home: homeBannerRes.data || [],
+                    home_mid: midBannerRes.data || [],
+                    home_bottom: bottomBannerRes.data || []
+                },
+                hotProducts,
+                popupAd,
+                layout: layout ? layout.layout_schema || layout.sections || layout : null,
+                latestActivity: {},
+                boards
+            });
+            return resolveHomeContentAssets(payload);
         });
-        const resolvedPayload = await resolveHomeContentAssets(payload);
-
-        configCache.setCachedConfig('home_content_payload', resolvedPayload);
-        return success(resolvedPayload);
+        const result = success(cachedPayload.value);
+        result.__perf = { cache_hit: cachedPayload.cacheHit };
+        return result;
     }),
 
     // ===== Banners =====
     'banners': asyncHandler(async (params) => {
         const position = params.position || null;
-        const query = position
-            ? { status: true, position }
-            : { status: true };
+        const query = buildActiveBannerWhere(position || '');
         const res = await db.collection('banners')
             .where(query)
             .orderBy('sort_order', 'asc')
@@ -902,36 +1077,85 @@ const handleAction = {
     }),
 
     'activityLinks': asyncHandler(async (params) => {
-        const configValue = await getActivityLinksConfigValue();
-        if (configValue && typeof configValue === 'object' && Object.keys(configValue).length > 0) {
-            return success(configValue);
-        }
-        const res = await db.collection('activity_links')
-            .where({ is_active: true })
-            .orderBy('sort_order', 'asc')
-            .limit(20)
-            .get().catch(() => ({ data: [] }));
-        return success({ list: res.data || [] });
+        const cachedPayload = await buildCachedPayload('activityLinks', async () => {
+            const configValue = await getActivityLinksConfigValue();
+            if (configValue && typeof configValue === 'object' && Object.keys(configValue).length > 0) {
+                return configValue;
+            }
+            const res = await db.collection('activity_links')
+                .where({ is_active: true })
+                .orderBy('sort_order', 'asc')
+                .limit(20)
+                .get().catch(() => ({ data: [] }));
+            return { list: res.data || [] };
+        });
+        const result = success(cachedPayload.value);
+        result.__perf = { cache_hit: cachedPayload.cacheHit };
+        return result;
     }),
 
     'festivalConfig': asyncHandler(async (params) => {
-        const res = await db.collection('configs')
-            .where({ config_group: 'festival' })
-            .limit(1)
-            .get().catch(() => ({ data: [] }));
-        if (res.data && res.data[0]) return success(res.data[0].config_value || res.data[0].value || {});
-        return success(await getAppConfigValue('activity_links_config', {}));
+        return success(await getConfigValueByKeys([
+            'festival_config'
+        ], {
+            active: false,
+            name: '',
+            theme: '',
+            theme_colors: {},
+            tags: [],
+            card_posters: [],
+            global_wallpaper: { enabled: false, preset: 'default' }
+        }));
     }),
 
-    // ===== 限量抢购 =====
+    // ===== 限时商品 =====
+    'limitedSalesOverview': asyncHandler(async () => {
+        const cachedPayload = await buildCachedPayload('limitedSalesOverview', async () => {
+            const slots = await getLimitedSaleSlotsSnapshot();
+            const recommended = pickRecommendedLimitedSaleSlot(slots);
+            return {
+                slots,
+                recommended_slot_id: recommended ? String(recommended.id) : '',
+                current_slot_id: recommended && recommended.runtime_status === 'running' ? String(recommended.id) : ''
+            };
+        });
+        const result = success(cachedPayload.value);
+        result.__perf = { cache_hit: cachedPayload.cacheHit };
+        return result;
+    }),
+
+    'limitedSalesDetail': asyncHandler(async (params) => {
+        const slotId = String(params.slot_id || params.id || '').trim();
+        const payload = await buildLimitedSaleDetailPayload(slotId);
+        return success(payload);
+    }),
+
     'limitedSpotDetail': asyncHandler(async (params) => {
-        const cardId = String(params.card_id || params.id || '').trim();
+        const slotId = String(params.slot_id || params.id || '').trim();
+        const nextPayload = await buildLimitedSaleDetailPayload(slotId);
+        if (nextPayload.slot) {
+            return success({
+                card: {
+                    id: nextPayload.slot.id,
+                    title: nextPayload.slot.title || '',
+                    subtitle: nextPayload.slot.subtitle || '',
+                    image: nextPayload.slot.cover_image || '',
+                    end_time: nextPayload.slot.end_time || null,
+                    runtime_status: nextPayload.slot.runtime_status || ''
+                },
+                slots: nextPayload.slots || [],
+                products: nextPayload.items || [],
+                recommended_slot_id: nextPayload.recommended_slot_id || ''
+            });
+        }
+
+        const cardId = String(params.card_id || params.slot_id || params.id || '').trim();
         const normalizedLinks = await getActivityLinksConfigValue();
         const limitedCards = Array.isArray(normalizedLinks.limited) ? normalizedLinks.limited : [];
         const card = pickLimitedCard(limitedCards, cardId);
 
         if (!card || !isLimitedCardEnabled(card)) {
-            return success({ card: null, products: [] });
+            return success({ card: null, slots: [], products: [], recommended_slot_id: '' });
         }
 
         const spotProducts = Array.isArray(card.spot_products) ? card.spot_products : [];
@@ -947,6 +1171,7 @@ const handleAction = {
                 : remainingByQuota;
             return {
                 offer_id: offer.id || offer.offer_id || `${cardId}-${index}`,
+                item_id: offer.id || offer.offer_id || `${cardId}-${index}`,
                 product_id: offer.product_id || '',
                 sku_id: offer.sku_id || '',
                 enable_points: isTruthyActiveFlag(offer.enable_points, true),
@@ -973,6 +1198,7 @@ const handleAction = {
                 image: buildResolvedAssetUrl(card, await batchResolveManagedFileUrls([pickFileId(card)])),
                 end_time: card.end_time || null
             },
+            slots: [],
             products
         });
     }),
@@ -1041,13 +1267,18 @@ exports.main = cloudFunctionWrapper(async (event) => {
         }
 
         const result = await handler(params);
+        const perfMeta = result && typeof result === 'object' && result.__perf ? result.__perf : {};
+        if (result && typeof result === 'object' && Object.prototype.hasOwnProperty.call(result, '__perf')) {
+            delete result.__perf;
+        }
         logPerf({
             action: currentAction,
             trace_id: traceId,
             cold_start: coldStart,
             status: 'ok',
             code: 'ok',
-            total_ms: Date.now() - startedAt
+            total_ms: Date.now() - startedAt,
+            cache_hit: !!perfMeta.cache_hit
         });
         return result;
     } catch (error) {
@@ -1057,7 +1288,8 @@ exports.main = cloudFunctionWrapper(async (event) => {
             cold_start: coldStart,
             status: 'error',
             code: parseErrorCode(error),
-            total_ms: Date.now() - startedAt
+            total_ms: Date.now() - startedAt,
+            cache_hit: false
         });
         throw error;
     }

@@ -120,7 +120,7 @@ async function loadStations(page, helpers) {
                 mapLng = userLo;
                 scale = 12;
                 includePoints = [{ latitude: userLa, longitude: userLo }];
-                mapUnavailableText = '站点尚未配置经纬度，地图无法显示门店位置；请在后台自提站点中补充坐标。';
+                mapUnavailableText = '当前暂不支持地图查看，可查看下方门店信息。';
             }
             const label =
                 regionObj && (regionObj.city || regionObj.district)
@@ -146,7 +146,7 @@ async function loadStations(page, helpers) {
             mapLng = center.longitude;
             scale = scaleForStationSpread(points, SINGLE_STATION_SCALE);
         } else if (list.length > 0) {
-            mapUnavailableText = '站点未配置地图坐标，地图无法定位；请在后台自提站点中补充经纬度。';
+            mapUnavailableText = '当前暂不支持地图查看，可查看下方门店信息。';
             regionBanner = '当前仅能查看站点地址列表';
         }
 

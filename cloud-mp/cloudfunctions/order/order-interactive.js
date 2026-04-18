@@ -6,6 +6,7 @@ const db = cloud.database();
 const _ = db.command;
 const { toNumber } = require('./shared/utils');
 const orderCreate = require('./order-create');
+const { freezeCommissionsForOrder } = require('./order-lifecycle');
 
 const PICKUP_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -75,7 +76,7 @@ async function ensurePickupSubsidyCommission(order, verifierOpenid) {
     };
     if (!policy.enabled || !policy.pickup_station_subsidy_enabled || !station) return null;
 
-    const claimantId = station.claimant_id || station.user_id || station.openid;
+    const claimantId = station.pickup_claimant_id || station.pickup_claimant_openid || station.claimant_id || station.user_id || station.openid;
     const claimant = claimantId ? await findOneByAnyId('users', claimantId) : null;
     if (!claimant?.openid) return null;
 
@@ -1412,6 +1413,7 @@ async function lotteryDraw(openid, params) {
                     scope_ids: Array.isArray(couponTemplate?.scope_ids) ? couponTemplate.scope_ids : [],
                     status: 'unused',
                     source: 'lottery',
+                    source_lottery_record_id: result._id,
                     source_prize_id: selectedPrize._id || selectedPrize.id || '',
                     created_at: db.serverDate(),
                     expire_at: db.serverDate({ offset: validDays * 24 * 60 * 60 * 1000 })
@@ -1560,6 +1562,7 @@ async function finalizePickupVerification(order, openid, stationId) {
     await db.collection('orders').doc(order._id).update({
         data: {
             status: 'completed',
+            confirmed_at: db.serverDate(),
             picked_up_at: db.serverDate(),
             pickup_verified_by: openid,
             pickup_verified_station_id: stationId,
@@ -1580,6 +1583,7 @@ async function finalizePickupVerification(order, openid, stationId) {
         .catch(() => {});
 
     await ensurePickupSubsidyCommission(order, openid).catch(() => null);
+    await freezeCommissionsForOrder(order._id, { refund_deadline: refundDeadlineDate() }).catch(() => null);
 
     return {
         success: true,

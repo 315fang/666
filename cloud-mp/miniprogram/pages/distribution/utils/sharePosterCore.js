@@ -20,6 +20,17 @@ function ellipsis(text, max = 8) {
     return value.length > max ? `${value.slice(0, max)}...` : value;
 }
 
+/** 官方主标题：优先按空格拆两行，避免与右侧二维码区域重叠 */
+function splitBrandTitleLines(text) {
+    const s = String(text || '').trim();
+    if (!s) return [''];
+    const sp = s.indexOf(' ');
+    if (sp > 0 && sp < s.length - 1) {
+        return [s.slice(0, sp), s.slice(sp + 1).trim()];
+    }
+    return [s];
+}
+
 class SharePosterCore {
     /**
      * @param {WechatMiniprogram.Page.Instance} wxPage
@@ -324,17 +335,24 @@ class SharePosterCore {
         const nameX = isBrandVariant ? textStartX : (avatarX + avatarSize + 18);
         const nameY = avatarY + 28;
         const memberCode = inviteCode || userInfo?.member_no || userInfo?.my_invite_code || '';
-        const name = isBrandVariant
-            ? ellipsis(brandConfig.official_promo_title || brandConfig.poster_brand_display_name || brandName || '品牌官方', 12)
+        const qrBoxSize = 170;
+        const qrBoxX = cardX + cardW - qrBoxSize - 22;
+        const qrBoxY = cardY + 28;
+        /** 文案区右边界（与二维码留白），避免后绘制的码区盖住文字 */
+        const textColumnRight = qrBoxX - 14;
+
+        const displayName = isBrandVariant
+            ? String(brandConfig.official_promo_title || brandConfig.poster_brand_display_name || brandName || '品牌官方').trim()
             : ellipsis(userInfo?.nick_name || userInfo?.nickname || userInfo?.nickName || '微信用户', 9);
         const introText = isBrandVariant
-            ? (brandConfig.official_promo_subtitle || brandConfig.share_poster_intro || '官方宣传语')
+            ? String(brandConfig.official_promo_subtitle || '').trim()
             : (brandConfig.share_poster_intro || '专注于大学生（产教融合）实战落地');
-        const codePrefix = brandConfig.share_poster_code_prefix || '邀请码：';
+        const codePrefix = brandConfig.share_poster_code_prefix || '我的ID：';
         const qrHint = brandConfig.share_poster_qr_hint || '长按识别小程序码';
         const highlightLine = isBrandVariant
             ? (brandConfig.official_promo_footer || '扫码查看官方宣传')
             : `${codePrefix}${memberCode || '未配置'}`;
+        const brandHasIntro = isBrandVariant && !!introText;
 
         if (!isBrandVariant) {
             await this.drawIdentityAvatar(ctx, canvas, {
@@ -357,23 +375,47 @@ class SharePosterCore {
             ctx.restore();
         }
 
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(textStartX, cardY + 20, Math.max(0, textColumnRight - textStartX), cardH - 36);
+        ctx.clip();
+
         ctx.fillStyle = '#2B2118';
         ctx.font = isBrandVariant ? '700 32px sans-serif' : '700 28px sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
-        ctx.fillText(name, nameX, isBrandVariant ? (cardY + 108) : nameY);
+
+        let titleExtraLines = 0;
+        if (isBrandVariant) {
+            const titleLines = splitBrandTitleLines(displayName);
+            const titleLineY = cardY + 108;
+            const titleLineGap = 36;
+            titleLines.forEach((line, idx) => {
+                ctx.fillText(line, nameX, titleLineY + idx * titleLineGap);
+            });
+            titleExtraLines = Math.max(0, titleLines.length - 1);
+        } else {
+            ctx.fillText(displayName, nameX, nameY);
+        }
 
         ctx.fillStyle = '#3F3328';
         ctx.font = '600 17px sans-serif';
-        ctx.fillText(introText, textStartX, isBrandVariant ? (cardY + 150) : (cardY + 132));
+        const introShift = titleExtraLines * 36;
+        if (!isBrandVariant) {
+            ctx.fillText(introText, textStartX, cardY + 132);
+        } else if (brandHasIntro) {
+            ctx.fillText(introText, textStartX, cardY + 150 + introShift);
+        }
 
         ctx.fillStyle = '#B74848';
         ctx.font = '600 17px sans-serif';
-        ctx.fillText(highlightLine, textStartX, isBrandVariant ? (cardY + 194) : (cardY + 182));
+        const highlightY = isBrandVariant
+            ? (brandHasIntro ? cardY + 194 : cardY + 158) + introShift
+            : cardY + 182;
+        ctx.fillText(highlightLine, textStartX, highlightY);
 
-        const qrBoxSize = 170;
-        const qrBoxX = cardX + cardW - qrBoxSize - 22;
-        const qrBoxY = cardY + 28;
+        ctx.restore();
+
         this.fillRoundRect(ctx, qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 18, '#FBFAF7');
 
         try {

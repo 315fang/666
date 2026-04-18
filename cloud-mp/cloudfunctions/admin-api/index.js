@@ -170,6 +170,7 @@ exports.main = async (event) => {
                 : String(response._getData() || ''),
             isBase64Encoded: false
         };
+        const cacheHit = String(result.headers['x-runtime-cache-hit'] || '') === '1';
 
         logPerf({
             trace_id: traceId,
@@ -179,7 +180,8 @@ exports.main = async (event) => {
             status: 'ok',
             code: 'ok',
             status_code: result.statusCode,
-            total_ms: Date.now() - startedAt
+            total_ms: Date.now() - startedAt,
+            cache_hit: cacheHit
         });
 
         return result;
@@ -192,7 +194,8 @@ exports.main = async (event) => {
             status: 'error',
             code: parseErrorCode(error),
             status_code: 500,
-            total_ms: Date.now() - startedAt
+            total_ms: Date.now() - startedAt,
+            cache_hit: false
         });
         throw error;
     }

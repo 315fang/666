@@ -238,7 +238,7 @@ import {
   moveMaterials, uploadFile
 } from '@/api'
 import { usePagination } from '@/composables/usePagination'
-import { warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
+import { buildPersistentAssetRef, warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
 
 const resolveAssetUrl = (url) => {
   if (!url) return ''
@@ -435,20 +435,26 @@ const handleSubmit = async () => {
       ElMessage.warning('请先通过上传获得素材 file_id，再保存图片/海报素材')
       return
     }
-    const tempUrlMessage = warnTemporaryAssetUrls(form.url ? [form.url] : [], '素材地址')
+    const payload = {
+      ...form,
+      url: buildPersistentAssetRef({ url: form.url, fileId: form.file_id })
+    }
+    const tempUrlMessage = warnTemporaryAssetUrls(payload.url ? [payload.url] : [], '素材地址')
     if (tempUrlMessage) return ElMessage.warning(tempUrlMessage)
     submitting.value = true
     try {
       if (isEdit.value) {
-        await updateMaterial(form.id, form)
+        await updateMaterial(form.id, payload)
         ElMessage.success('更新成功')
       } else {
-        await createMaterial(form)
+        await createMaterial(payload)
         ElMessage.success('上传成功')
       }
       dialogVisible.value = false
       await fetchGroups()
       await fetchMaterials()
+    } catch (e) {
+      ElMessage.error(e?.message || '素材入库失败，请重试')
     } finally {
       submitting.value = false
     }
@@ -458,7 +464,7 @@ const handleSubmit = async () => {
 const handleUpload = async ({ file }) => {
   try {
     const data = await uploadFile(file, { params: { skip_library: 1, folder: 'materials' } })
-    form.url = data.url
+    form.url = data.url || data.file_id || ''
     form.file_id = data.file_id || ''
     if (!form.title) form.title = file.name.replace(/\.[^.]+$/, '')
     ElMessage.success('文件已上传')

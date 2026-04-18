@@ -91,8 +91,7 @@
       </view>
       <view class="record-status {{item.status}}">
         <text wx:if="{{item.status === 'pending'}}">待领取</text>
-        <text wx:elif="{{item.status === 'claimed'}}">已发放</text>
-        <text wx:else>已过期</text>
+        <text wx:else>已发放</text>
       </view>
     </view>
     <view

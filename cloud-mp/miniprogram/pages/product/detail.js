@@ -116,6 +116,8 @@ Page({
         reviews: [],
         reviewTotal: 0,
         reviewTags: [],
+        reviewsLoaded: false,
+        reviewsLoadError: false,
         discount: 10,
         currentPrice: '',
         currentStock: 0,
@@ -198,8 +200,12 @@ Page({
         }
 
         const exchangeCouponId = options.exchange_coupon_id ? String(options.exchange_coupon_id) : '';
-        const limitedSpotCardId = options.limited_spot_card_id ? String(options.limited_spot_card_id) : '';
-        const limitedSpotOfferId = options.limited_spot_offer_id ? String(options.limited_spot_offer_id) : '';
+        const limitedSpotCardId = options.limited_sale_slot_id
+            ? String(options.limited_sale_slot_id)
+            : (options.limited_spot_card_id ? String(options.limited_spot_card_id) : '');
+        const limitedSpotOfferId = options.limited_sale_item_id
+            ? String(options.limited_sale_item_id)
+            : (options.limited_spot_offer_id ? String(options.limited_spot_offer_id) : '');
         let exchangeTitle = '';
         if (exchangeCouponId) {
             const activeExchangeCoupon = wx.getStorageSync('activeExchangeCoupon');
@@ -591,6 +597,10 @@ Page({
 
     // 加载评价
     async loadReviews() {
+        this.setData({
+            reviewsLoaded: false,
+            reviewsLoadError: false
+        });
         try {
             const res = await get(`/products/${this.data.id}/reviews`, { limit: 2 }).catch(() => null);
             if (res && res.data) {
@@ -598,10 +608,31 @@ Page({
                 const reviewTotal = res.data.pagination?.total || res.data.total || reviews.length;
                 // 生成评价标签
                 const reviewTags = this.generateReviewTags(reviews);
-                this.setData({ reviews, reviewTotal, reviewTags });
+                this.setData({
+                    reviews,
+                    reviewTotal,
+                    reviewTags,
+                    reviewsLoaded: true,
+                    reviewsLoadError: false
+                });
+                return;
             }
+            this.setData({
+                reviews: [],
+                reviewTotal: 0,
+                reviewTags: [],
+                reviewsLoaded: true,
+                reviewsLoadError: true
+            });
         } catch (err) {
-            console.log('暂无评价数据');
+            console.log('加载评价失败', err);
+            this.setData({
+                reviews: [],
+                reviewTotal: 0,
+                reviewTags: [],
+                reviewsLoaded: true,
+                reviewsLoadError: true
+            });
         }
     },
 
@@ -697,6 +728,24 @@ Page({
             ? this.data.detailImageList.filter((_, i) => i !== index)
             : [];
         this.setData({ detailImageList: images });
+    },
+
+    onReviewAvatarError(e) {
+        const index = Number(e.currentTarget.dataset.index || 0);
+        const reviews = Array.isArray(this.data.reviews) ? this.data.reviews.slice() : [];
+        const current = reviews[index];
+        if (!current) return;
+        reviews[index] = {
+            ...current,
+            user: {
+                ...(current.user || {}),
+                avatar: '/assets/icons/user.svg',
+                avatar_url: '/assets/icons/user.svg',
+                nick_name: (current.user && current.user.nick_name) || '用户',
+                nickname: (current.user && current.user.nickname) || '用户'
+            }
+        };
+        this.setData({ reviews });
     },
 
     // 返回 (Renamed to match WXML: onBackTap)
@@ -1011,7 +1060,7 @@ Page({
         const { product } = this.data;
         let path = `/pages/product/detail?id=${product.id}`;
         if (this.data.limitedSpotCardId && this.data.limitedSpotOfferId) {
-            path += `&limited_spot_card_id=${encodeURIComponent(this.data.limitedSpotCardId)}&limited_spot_offer_id=${encodeURIComponent(this.data.limitedSpotOfferId)}&limited_spot_mode=${encodeURIComponent(this.data.limitedSpotMode || 'money')}`;
+            path += `&limited_sale_slot_id=${encodeURIComponent(this.data.limitedSpotCardId)}&limited_sale_item_id=${encodeURIComponent(this.data.limitedSpotOfferId)}&limited_spot_mode=${encodeURIComponent(this.data.limitedSpotMode || 'money')}`;
         }
         return {
             title: product.name,

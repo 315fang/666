@@ -1077,7 +1077,7 @@ const handleAction = {
         });
     }),
 
-    // ===== 邀请码 =====
+    // ===== 用户ID =====
     'wxacodeInvite': asyncHandler(async (openid, params) => {
         const user = await db.collection('users').where({ openid }).limit(1).get();
         if (!user.data || user.data.length === 0) throw notFound('用户不存在');

@@ -16,8 +16,8 @@ function normalizeLimitedSpotMode(mode, offer = null) {
 function buildLimitedSpotProductUrl({ productId, cardId, offerId, mode }) {
     const params = [
         `id=${encodeURIComponent(productId)}`,
-        `limited_spot_card_id=${encodeURIComponent(cardId)}`,
-        `limited_spot_offer_id=${encodeURIComponent(offerId)}`,
+        `limited_sale_slot_id=${encodeURIComponent(cardId)}`,
+        `limited_sale_item_id=${encodeURIComponent(offerId)}`,
         `limited_spot_mode=${encodeURIComponent(mode)}`
     ];
     return `/pages/product/detail?${params.join('&')}`;
@@ -25,7 +25,7 @@ function buildLimitedSpotProductUrl({ productId, cardId, offerId, mode }) {
 
 function navigateToLimitedSpotProduct({ productId, cardId, offerId, mode }) {
     if (!productId || !cardId || !offerId) {
-        wx.showToast({ title: '活动商品参数缺失', icon: 'none' });
+        wx.showToast({ title: '限时商品参数缺失', icon: 'none' });
         return;
     }
     wx.navigateTo({
@@ -40,15 +40,18 @@ function navigateToLimitedSpotProduct({ productId, cardId, offerId, mode }) {
 
 async function fetchLimitedSpotContext(cardId, offerId) {
     if (!cardId) {
-        throw new Error('活动参数缺失');
+        throw new Error('档期参数缺失');
     }
-    const res = await get('/activity/limited-spot/detail', { card_id: cardId });
+    const res = await get('/activity/limited-spot/detail', { slot_id: cardId });
     if (res.code !== 0 || !res.data) {
-        throw new Error(res.message || '加载活动失败');
+        throw new Error(res.message || '加载限时商品失败');
     }
-    const card = res.data.card || null;
-    const products = Array.isArray(res.data.products) ? res.data.products : [];
-    const offer = products.find((item) => String(item.offer_id) === String(offerId)) || null;
+    const card = res.data.slot || res.data.card || null;
+    const products = Array.isArray(res.data.items) ? res.data.items : (Array.isArray(res.data.products) ? res.data.products : []);
+    const offer = products.find((item) => (
+        String(item.item_id || item.offer_id || '') === String(offerId)
+        || String(item.offer_id || '') === String(offerId)
+    )) || null;
     if (!offer) {
         throw new Error('专享商品不存在或已下架');
     }

@@ -10,7 +10,7 @@
             </div>
           </template>
           <el-form label-width="220px" style="max-width: 860px">
-            <el-form-item label="区域代理分佣总开关">
+            <el-form-item label="门店/区域分佣总开关">
               <el-switch v-model="policy.enabled" active-text="启用" inactive-text="冻结" />
             </el-form-item>
             <el-form-item label="申请最低等级（role_level）">
@@ -219,7 +219,7 @@ const savingStation = ref(false)
 const stationDialogVisible = ref(false)
 
 const policy = reactive({
-  enabled: false,
+  enabled: true,
   min_apply_role_level: 3,
   pickup_station_subsidy_enabled: true,
   pickup_station_reward_rate: 0.025,
@@ -242,7 +242,7 @@ const loadPolicy = async () => {
     const res = await getBranchAgentPolicy()
     const d = res?.data || res || {}
     Object.assign(policy, {
-      enabled: d.enabled === true,
+      enabled: d.enabled !== false,
       min_apply_role_level: toSafeNumber(d.min_apply_role_level, 3),
       pickup_station_subsidy_enabled: d.pickup_station_subsidy_enabled !== false,
       pickup_station_reward_rate: toSafeNumber(d.pickup_station_reward_rate, 0.025),

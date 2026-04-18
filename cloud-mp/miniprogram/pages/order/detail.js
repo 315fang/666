@@ -285,7 +285,7 @@ Page({
         return onViewLogistics(this);
     },
 
-    // 跳转评价页
+    // 跳转评价页（仅已完成订单展示入口）
     onGoReview() {
         return onGoReview(this);
     },
@@ -293,6 +293,15 @@ Page({
     // 复制单号并给出轻反馈
     onCopyTrackingNo() {
         return onCopyTrackingNo(this);
+    },
+
+    onProductImageError() {
+        const order = this.data.order;
+        if (!order || !order.product) return;
+        this.setData({
+            'order.product.image': '',
+            'order.product.images': []
+        });
     },
 
     startPayStatusPolling(orderId) {

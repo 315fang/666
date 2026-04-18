@@ -5,5 +5,5 @@
     ]
   },
   "timeout": 60,
-  "memorySize": 512
+  "memorySize": 1024
 }

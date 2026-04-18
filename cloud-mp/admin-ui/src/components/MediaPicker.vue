@@ -130,6 +130,7 @@ import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Select, Upload } from '@element-plus/icons-vue'
 import { getMaterials, getMaterialGroups, createMaterial, uploadFile } from '@/api'
+import { buildPersistentAssetRef } from '@/utils/assetUrlAudit'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -239,6 +240,7 @@ const handleUpload = async (e) => {
   try {
     // 与素材库页一致：skip_library=1 避免「上传接口已自动入库 + 再 createMaterial」重复两条记录
     const appended = []
+    let failedCount = 0
     for (const file of files) {
       const res = await uploadFile(file, { params: { skip_library: '1', folder: 'materials' } })
       const url = res?.url || res?.data?.url
@@ -253,19 +255,20 @@ const handleUpload = async (e) => {
         const mat = await createMaterial({
           type: 'image',
           title: file.name.replace(/\.[^.]+$/, ''),
-          url,
+          url: buildPersistentAssetRef({ url, fileId }),
           file_id: fileId
         })
         const row = mat && typeof mat === 'object' ? mat : null
         appended.push({
           id: row?.id,
           file_id: row?.file_id || fileId || '',
-          url: row?.url || url,
+          url,
           title: row?.title || file.name.replace(/\.[^.]+$/, ''),
           name: row?.title || file.name.replace(/\.[^.]+$/, '')
         })
       } catch (err) {
         console.warn('素材自动入库失败:', err)
+        failedCount += 1
       }
     }
 
@@ -287,6 +290,9 @@ const handleUpload = async (e) => {
           ? `已上传 ${appended.length} 张，已按上传顺序加入已选`
           : `已上传 1 张`
       )
+    }
+    if (failedCount > 0) {
+      throw new Error(`已有 ${failedCount} 张图片上传到存储，但写入素材库失败`)
     }
 
     page.value = 1

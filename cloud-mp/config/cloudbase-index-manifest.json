@@ -1,0 +1,63 @@
+{
+  "generated_for": "cloud-mp CloudBase 全链路优化 V2",
+  "collections": [
+    {
+      "name": "orders",
+      "indexes": [
+        { "name": "order_no", "fields": [{ "field": "order_no", "order": "asc" }], "purpose": "订单详情与支付回查" },
+        { "name": "openid_created_at", "fields": [{ "field": "_openid", "order": "asc" }, { "field": "created_at", "order": "desc" }], "purpose": "用户订单列表" },
+        { "name": "status_created_at", "fields": [{ "field": "status", "order": "asc" }, { "field": "created_at", "order": "desc" }], "purpose": "后台订单筛选" },
+        { "name": "pay_time_desc", "fields": [{ "field": "paid_at", "order": "desc" }], "purpose": "支付后核对与时间排序" },
+        { "name": "limited_sale_refs", "fields": [{ "field": "limited_sale_slot_id", "order": "asc" }, { "field": "limited_sale_item_id", "order": "asc" }], "purpose": "限时商品订单追踪" }
+      ]
+    },
+    {
+      "name": "refunds",
+      "indexes": [
+        { "name": "refund_no", "fields": [{ "field": "refund_no", "order": "asc" }], "purpose": "退款单定位" },
+        { "name": "status_created_at", "fields": [{ "field": "status", "order": "asc" }, { "field": "created_at", "order": "desc" }], "purpose": "售后列表" },
+        { "name": "order_id", "fields": [{ "field": "order_id", "order": "asc" }], "purpose": "订单售后回查" }
+      ]
+    },
+    {
+      "name": "commissions",
+      "indexes": [
+        { "name": "status_created_at", "fields": [{ "field": "status", "order": "asc" }, { "field": "created_at", "order": "desc" }], "purpose": "佣金后台列表" },
+        { "name": "openid_status", "fields": [{ "field": "_openid", "order": "asc" }, { "field": "status", "order": "asc" }], "purpose": "分销员佣金中心" },
+        { "name": "order_id_status", "fields": [{ "field": "order_id", "order": "asc" }, { "field": "status", "order": "asc" }], "purpose": "订单佣金追踪" }
+      ]
+    },
+    {
+      "name": "products",
+      "indexes": [
+        { "name": "status_sales_count", "fields": [{ "field": "status", "order": "asc" }, { "field": "sales_count", "order": "desc" }], "purpose": "商品列表销量排序" },
+        { "name": "status_heat_score", "fields": [{ "field": "status", "order": "asc" }, { "field": "heat_score", "order": "desc" }], "purpose": "首页热销与推荐" },
+        { "name": "category_status", "fields": [{ "field": "category_id", "order": "asc" }, { "field": "status", "order": "asc" }], "purpose": "分类页商品筛选" }
+      ]
+    },
+    {
+      "name": "banners",
+      "indexes": [
+        { "name": "position_status_sort_order", "fields": [{ "field": "position", "order": "asc" }, { "field": "status", "order": "asc" }, { "field": "sort_order", "order": "asc" }], "purpose": "Banner 位读取" }
+      ]
+    },
+    {
+      "name": "activity_links",
+      "indexes": [
+        { "name": "is_active_sort_order", "fields": [{ "field": "is_active", "order": "asc" }, { "field": "sort_order", "order": "asc" }], "purpose": "活动入口配置读取" }
+      ]
+    },
+    {
+      "name": "limited_sale_slots",
+      "indexes": [
+        { "name": "status_time_window", "fields": [{ "field": "status", "order": "asc" }, { "field": "start_time", "order": "asc" }, { "field": "end_time", "order": "asc" }, { "field": "sort_order", "order": "asc" }], "purpose": "有效档期与即将开始档期查询" }
+      ]
+    },
+    {
+      "name": "limited_sale_items",
+      "indexes": [
+        { "name": "slot_status_sort_order", "fields": [{ "field": "slot_id", "order": "asc" }, { "field": "status", "order": "asc" }, { "field": "sort_order", "order": "asc" }], "purpose": "档期商品列表" }
+      ]
+    }
+  ]
+}

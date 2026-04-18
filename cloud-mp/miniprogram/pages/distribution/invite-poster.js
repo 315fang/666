@@ -125,8 +125,8 @@ Page({
             share_poster_cover_url: resolvedCover,
             brand_logo_url: resolvedBrandLogo,
             poster_brand_display_name: homeConfigs.nav_brand_title || bc.nav_brand_title || bc.brand_name || app.globalData.brandName || '品牌官方',
-            official_promo_title: homeConfigs.official_promo_title || bc.official_promo_title || homeConfigs.nav_brand_title || bc.nav_brand_title || bc.brand_name || app.globalData.brandName || '品牌官方',
-            official_promo_subtitle: homeConfigs.official_promo_subtitle || bc.official_promo_subtitle || bc.share_poster_intro || '',
+            official_promo_title: homeConfigs.official_promo_title || bc.official_promo_title || '专业皮肤修护 始于1974',
+            official_promo_subtitle: homeConfigs.official_promo_subtitle || bc.official_promo_subtitle || '',
             official_promo_badge: homeConfigs.official_promo_badge || bc.official_promo_badge || '官方宣传'
         };
     },
@@ -145,7 +145,7 @@ Page({
             }
             this.setData({ memberCode });
         } catch (err) {
-            console.error('加载邀请码失败:', err);
+            console.error('加载用户ID失败:', err);
         }
         await this.loadPoster();
     },
@@ -157,12 +157,12 @@ Page({
     onCopyCode() {
         const code = this.data.memberCode;
         if (!code) {
-            wx.showToast({ title: '暂无邀请码', icon: 'none' });
+            wx.showToast({ title: '暂无可复制ID', icon: 'none' });
             return;
         }
         wx.setClipboardData({
             data: code,
-            success: () => wx.showToast({ title: '邀请码已复制', icon: 'success' })
+            success: () => wx.showToast({ title: '我的ID已复制', icon: 'success' })
         });
     },
 

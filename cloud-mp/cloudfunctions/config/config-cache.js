@@ -6,6 +6,10 @@ const db = cloud.database();
 
 let configCache = {};
 const CACHE_DURATION = 5 * 60 * 1000; // 5分钟
+let modelCache = {};
+let cacheMeta = { value: {}, updatedAt: 0 };
+const CACHE_META_TTL = 3 * 1000;
+const MODEL_CACHE_DURATION = 60 * 1000;
 
 /**
  * 从缓存获取配置
@@ -39,6 +43,8 @@ function setCachedConfig(key, value) {
  */
 function clearConfigCache() {
     configCache = {};
+    modelCache = {};
+    cacheMeta = { value: {}, updatedAt: 0 };
 }
 
 /**
@@ -83,9 +89,64 @@ async function getConfig(key) {
     return null;
 }
 
+function getCachedModel(key, version = '') {
+    const entry = modelCache[key];
+    if (!entry) {
+        return null;
+    }
+    if (Date.now() - Number(entry.updatedAt || 0) > MODEL_CACHE_DURATION) {
+        delete modelCache[key];
+        return null;
+    }
+    if (String(entry.version || '') !== String(version || '')) {
+        delete modelCache[key];
+        return null;
+    }
+    return entry.value;
+}
+
+function setCachedModel(key, value, version = '') {
+    modelCache[key] = {
+        value,
+        version: String(version || ''),
+        updatedAt: Date.now()
+    };
+}
+
+async function getCacheMeta() {
+    if (Date.now() - Number(cacheMeta.updatedAt || 0) <= CACHE_META_TTL) {
+        return cacheMeta.value || {};
+    }
+    try {
+        const res = await db.collection('admin_singletons')
+            .doc('config-cache-meta')
+            .get()
+            .catch(() => ({ data: null }));
+        cacheMeta = {
+            value: res.data && typeof res.data.value === 'object' ? res.data.value : {},
+            updatedAt: Date.now()
+        };
+    } catch (err) {
+        console.error('[config-cache] getCacheMeta error:', err);
+        cacheMeta = {
+            value: {},
+            updatedAt: Date.now()
+        };
+    }
+    return cacheMeta.value || {};
+}
+
+async function getCacheVersion(key) {
+    const meta = await getCacheMeta();
+    return String((meta && meta[key]) || '');
+}
+
 module.exports = {
     getCachedConfig,
     setCachedConfig,
     clearConfigCache,
-    getConfig
+    getConfig,
+    getCachedModel,
+    setCachedModel,
+    getCacheVersion
 };

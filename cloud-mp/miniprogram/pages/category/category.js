@@ -2,6 +2,7 @@
 // 结构：二级商城（侧边栏分类 → 商品列表）+ 分页加载
 // 联动：当前版本 scroll sync（calculateCategoryHeights + onRightScroll + leftToView）
 // 购物袋：当前版本改进逻辑（items / summary.total_amount + cart_ids 结算）
+const { getTempUrls } = require('../../utils/cloud');
 const { get } = require('../../utils/request');
 const { normalizeActivityList } = require('../../utils/activityList');
 const { cachedGet } = require('../../utils/requestCache');
@@ -41,10 +42,32 @@ function normalizeAssetUrl(url = '') {
     return raw;
 }
 
+function isCloudFileId(value) {
+    return /^cloud:\/\//i.test(String(value || '').trim());
+}
+
+async function resolveCloudImageUrl(value, fallback = '') {
+    const normalized = normalizeAssetUrl(value);
+    if (!normalized) return fallback;
+    if (!isCloudFileId(normalized)) return normalized;
+
+    if (!tempUrlCache.has(normalized)) {
+        try {
+            const tempUrl = await getTempUrls(normalized);
+            if (tempUrl) tempUrlCache.set(normalized, String(tempUrl).trim());
+        } catch (err) {
+            console.warn('[Category] getTempUrls failed:', err);
+        }
+    }
+
+    return tempUrlCache.get(normalized) || fallback;
+}
+
 const CATEGORY_INITIAL_BATCH_SIZE = 2;
 const CATEGORY_PRICE_PREVIEW_TTL = 60 * 1000;
 const SPECIAL_CATEGORY_ID = '__special__';
 const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
+const tempUrlCache = new Map();
 
 Page({
     data: {
@@ -133,14 +156,15 @@ Page({
 
     /** 后台「内容管理 → Banner → 分类页」对应接口 GET /api/banners?position=category */
     async loadCategoryBanners() {
-        const mapBanners = (list) => (list || [])
-            .map((b) => ({
+        const mapBanners = async (list) => {
+            const mapped = await Promise.all((list || []).map(async (b) => ({
                 id: b.id,
-                image: normalizeAssetUrl(b.file_id || b.image_url),
+                image: await resolveCloudImageUrl(b.image_url || b.file_id || '', ''),
                 link_type: b.link_type || 'none',
                 link_value: b.link_value != null ? String(b.link_value) : ''
-            }))
-            .filter((b) => !!b.image);
+            })));
+            return mapped.filter((b) => !!b.image);
+        };
         try {
             const res = await cachedGet(get, '/banners', { position: 'category' }, {
                 cacheTTL: 3 * 60 * 1000,
@@ -150,7 +174,7 @@ Page({
             });
             const raw = res?.data?.list ?? res?.list ?? res?.data ?? [];
             const list = Array.isArray(raw) ? raw : [];
-            this.setData({ categoryBanners: mapBanners(list) });
+            this.setData({ categoryBanners: await mapBanners(list) });
         } catch (e) {
             console.log('[Category] 分类页 Banner 加载失败', e);
             this.setData({ categoryBanners: [] });

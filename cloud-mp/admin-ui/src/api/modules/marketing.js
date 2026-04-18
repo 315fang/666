@@ -5,6 +5,16 @@ export const createGroupBuy = (data) => request({ url: '/group-buys', method: 'p
 export const updateGroupBuy = (id, data) => request({ url: `/group-buys/${id}`, method: 'put', data })
 export const deleteGroupBuy = (id) => request({ url: `/group-buys/${id}`, method: 'delete' })
 
+export const getLimitedSaleSlots = (params) => request({ url: '/limited-sale-slots', method: 'get', params })
+export const getLimitedSaleSlot = (id) => request({ url: `/limited-sale-slots/${id}`, method: 'get' })
+export const createLimitedSaleSlot = (data) => request({ url: '/limited-sale-slots', method: 'post', data })
+export const updateLimitedSaleSlot = (id, data) => request({ url: `/limited-sale-slots/${id}`, method: 'put', data })
+export const deleteLimitedSaleSlot = (id) => request({ url: `/limited-sale-slots/${id}`, method: 'delete' })
+export const getLimitedSaleItems = (slotId) => request({ url: `/limited-sale-slots/${slotId}/items`, method: 'get' })
+export const createLimitedSaleItem = (slotId, data) => request({ url: `/limited-sale-slots/${slotId}/items`, method: 'post', data })
+export const updateLimitedSaleItem = (id, data) => request({ url: `/limited-sale-items/${id}`, method: 'put', data })
+export const deleteLimitedSaleItem = (id) => request({ url: `/limited-sale-items/${id}`, method: 'delete' })
+
 export const getCoupons = (params) => request({ url: '/coupons', method: 'get', params })
 export const createCoupon = (data) => request({ url: '/coupons', method: 'post', data })
 export const updateCoupon = (id, data) => request({ url: `/coupons/${id}`, method: 'put', data })

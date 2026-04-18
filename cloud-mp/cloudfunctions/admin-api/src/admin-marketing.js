@@ -30,6 +30,9 @@ function registerMarketingRoutes(app, deps) {
         paginate,
         sortByUpdatedDesc,
         assetUrl,
+        resolveManagedFileUrl = async (value) => assetUrl(value),
+        getRuntimeCache = () => null,
+        setRuntimeCache = (_key, value) => value,
         createAuditLog,
         directPatchDocument,
         appendWalletLogEntry,
@@ -52,6 +55,19 @@ function registerMarketingRoutes(app, deps) {
             return row.config_value;
         }
         return row.value !== undefined ? row.value : fallback;
+    }
+
+    function getConfigValueByKeys(keys = [], fallback = null) {
+        const configRows = getCollection('configs');
+        const appConfigRows = getCollection('app_configs');
+        const normalizedKeys = toArray(keys).map((key) => pickString(key)).filter(Boolean);
+        for (let i = 0; i < normalizedKeys.length; i += 1) {
+            const key = normalizedKeys[i];
+            const row = configRows.find((item) => item.config_key === key || item.key === key || item._id === key)
+                || appConfigRows.find((item) => item.config_key === key || item.key === key || item._id === key);
+            if (row) return parseConfigRowValue(row, fallback);
+        }
+        return fallback;
     }
 
     function setConfigValue(key, value, group = 'admin') {
@@ -261,6 +277,44 @@ function registerMarketingRoutes(app, deps) {
             pickString(station.district),
             pickString(station.address)
         ].filter(Boolean).join('');
+    }
+
+    function isActiveStationManager(row = {}) {
+        return pickString(row.role || 'staff') === 'manager' && pickString(row.status || 'active') === 'active';
+    }
+
+    function matchesStationStaffUser(row = {}, userId, openid) {
+        if (openid && rowMatchesLookup(row, openid, [row.user_id, row.openid])) return true;
+        if (userId != null && userId !== '' && rowMatchesLookup(row, userId, [row.user_id, row.openid])) return true;
+        return false;
+    }
+
+    function selectPickupClaimantStaff(staffRows = [], stationId, preferredUserId = null, preferredOpenid = '') {
+        const managers = staffRows
+            .filter((row) => rowMatchesLookup(row, stationId, [row.station_id]))
+            .filter(isActiveStationManager);
+        if (!managers.length) return null;
+        return managers.find((row) => matchesStationStaffUser(row, preferredUserId, preferredOpenid)) || managers[0];
+    }
+
+    function syncPickupStationClaimant(stationId, staffRows = getCollection('station_staff'), options = {}) {
+        const stations = getCollection('stations');
+        const index = stations.findIndex((row) => rowMatchesLookup(row, stationId));
+        if (index === -1) return null;
+        const selectedStaff = selectPickupClaimantStaff(
+            staffRows,
+            stationId,
+            options.preferredUserId,
+            pickString(options.preferredOpenid)
+        );
+        stations[index] = {
+            ...stations[index],
+            pickup_claimant_id: selectedStaff ? (selectedStaff.user_id || selectedStaff.openid || null) : null,
+            pickup_claimant_openid: selectedStaff ? pickString(selectedStaff.openid) : null,
+            updated_at: nowIso()
+        };
+        saveCollection('stations', stations);
+        return stations[index];
     }
 
     function getUserReferrer(user = {}) {
@@ -832,6 +886,174 @@ function registerMarketingRoutes(app, deps) {
         return rows[index];
     }
 
+    function parseDateTimestamp(value) {
+        if (!value) return 0;
+        const ts = new Date(value).getTime();
+        return Number.isFinite(ts) ? ts : 0;
+    }
+
+    function sortLimitedSaleSlots(rows = []) {
+        return [...(Array.isArray(rows) ? rows : [])].sort((a, b) => {
+            const sortDiff = toNumber(a.sort_order, 0) - toNumber(b.sort_order, 0);
+            if (sortDiff !== 0) return sortDiff;
+            const startDiff = parseDateTimestamp(a.start_time) - parseDateTimestamp(b.start_time);
+            if (startDiff !== 0) return startDiff;
+            return String(a.id || a._id || '').localeCompare(String(b.id || b._id || ''));
+        });
+    }
+
+    function isLimitedSaleSlotEnabled(row = {}) {
+        return toBoolean(row.status ?? row.is_active ?? row.enabled ?? 1);
+    }
+
+    function resolveLimitedSaleSlotRuntimeStatus(row = {}, nowTs = Date.now()) {
+        if (!isLimitedSaleSlotEnabled(row)) return 'disabled';
+        const startTs = parseDateTimestamp(row.start_time);
+        const endTs = parseDateTimestamp(row.end_time);
+        if (!startTs || !endTs || startTs >= endTs) return 'invalid';
+        if (endTs <= nowTs) return 'ended';
+        if (startTs > nowTs) return 'upcoming';
+        return 'running';
+    }
+
+    function timeRangesOverlap(leftStart, leftEnd, rightStart, rightEnd) {
+        return leftStart < rightEnd && rightStart < leftEnd;
+    }
+
+    function normalizeLimitedSaleSlotPayload(body = {}, existing = {}) {
+        return {
+            ...existing,
+            ...body,
+            title: pickString(body.title ?? existing.title),
+            subtitle: pickString(body.subtitle ?? existing.subtitle),
+            file_id: pickString(body.file_id ?? existing.file_id),
+            cover_image: pickString(body.cover_image ?? body.image ?? body.image_url ?? existing.cover_image ?? existing.image_url),
+            image_url: pickString(body.image_url ?? body.cover_image ?? body.image ?? existing.image_url ?? existing.cover_image),
+            start_time: pickString(body.start_time ?? existing.start_time),
+            end_time: pickString(body.end_time ?? existing.end_time),
+            status: toBoolean(body.status ?? body.is_active ?? existing.status ?? existing.is_active ?? 1) ? 1 : 0,
+            is_active: toBoolean(body.status ?? body.is_active ?? existing.status ?? existing.is_active ?? 1) ? 1 : 0,
+            sort_order: toNumber(body.sort_order ?? existing.sort_order, 0),
+            updated_at: nowIso()
+        };
+    }
+
+    function validateLimitedSaleSlot(row = {}, rows = [], currentId = '') {
+        const title = pickString(row.title).trim();
+        const startTs = parseDateTimestamp(row.start_time);
+        const endTs = parseDateTimestamp(row.end_time);
+        if (!title) return '档期标题不能为空';
+        if (!startTs || !endTs) return '请填写有效的开始和结束时间';
+        if (startTs >= endTs) return '档期开始时间必须早于结束时间';
+        if (isLimitedSaleSlotEnabled(row)) {
+            const overlap = rows.find((item) => {
+                if (currentId && rowMatchesLookup(item, currentId)) return false;
+                if (!isLimitedSaleSlotEnabled(item)) return false;
+                const otherStart = parseDateTimestamp(item.start_time);
+                const otherEnd = parseDateTimestamp(item.end_time);
+                if (!otherStart || !otherEnd || otherStart >= otherEnd) return false;
+                return timeRangesOverlap(startTs, endTs, otherStart, otherEnd);
+            });
+            if (overlap) {
+                return `启用中的档期不能重叠；当前与「${pickString(overlap.title, '未命名档期')}」冲突`;
+            }
+        }
+        return '';
+    }
+
+    async function resolveLimitedSaleSlotImage(row = {}) {
+        const fileId = pickString(row.file_id);
+        const fallback = pickString(row.cover_image || row.image_url || row.image);
+        if (fileId) {
+            try {
+                return await resolveManagedFileUrl(fileId);
+            } catch (_) {
+                return assetUrl(fallback || fileId);
+            }
+        }
+        return assetUrl(fallback);
+    }
+
+    async function normalizeLimitedSaleSlot(row = {}) {
+        const imageUrl = await resolveLimitedSaleSlotImage(row);
+        return {
+            ...row,
+            id: row.id || row._legacy_id || row._id,
+            title: pickString(row.title),
+            subtitle: pickString(row.subtitle),
+            file_id: pickString(row.file_id),
+            cover_image: imageUrl,
+            image_url: imageUrl,
+            status: isLimitedSaleSlotEnabled(row) ? 1 : 0,
+            is_active: isLimitedSaleSlotEnabled(row) ? 1 : 0,
+            sort_order: toNumber(row.sort_order, 0),
+            runtime_status: resolveLimitedSaleSlotRuntimeStatus(row)
+        };
+    }
+
+    function normalizeLimitedSaleItemPayload(body = {}, existing = {}, slotId = '') {
+        const status = toBoolean(body.status ?? body.is_active ?? existing.status ?? existing.is_active ?? 1) ? 1 : 0;
+        return {
+            ...existing,
+            ...body,
+            slot_id: String(slotId || body.slot_id || existing.slot_id || '').trim(),
+            product_id: body.product_id != null ? String(body.product_id).trim() : String(existing.product_id || '').trim(),
+            sku_id: body.sku_id != null && body.sku_id !== '' ? String(body.sku_id).trim() : '',
+            enable_points: toBoolean(body.enable_points ?? existing.enable_points ?? true),
+            enable_money: toBoolean(body.enable_money ?? existing.enable_money ?? true),
+            points_price: Math.max(0, Math.floor(toNumber(body.points_price ?? existing.points_price, 0))),
+            money_price: Math.max(0, toNumber(body.money_price ?? existing.money_price, 0)),
+            stock_limit: Math.max(0, Math.floor(toNumber(body.stock_limit ?? existing.stock_limit, 0))),
+            sort_order: toNumber(body.sort_order ?? existing.sort_order, 0),
+            status,
+            is_active: status,
+            updated_at: nowIso()
+        };
+    }
+
+    function validateLimitedSaleItem(row = {}, { products = [], skus = [] } = {}) {
+        if (!pickString(row.slot_id).trim()) return '缺少档期 ID';
+        if (!pickString(row.product_id).trim()) return '请选择商品';
+        if (!findByLookup(products, row.product_id)) return '关联商品不存在或未同步';
+        if (pickString(row.sku_id).trim() && !findByLookup(skus, row.sku_id)) return '关联 SKU 不存在或未同步';
+        if (!row.enable_points && !row.enable_money) return '积分价 / 现金价至少启用一种';
+        if (row.enable_points && row.points_price < 1) return '积分价需大于等于 1';
+        if (row.enable_money && row.money_price <= 0) return '现金价需大于 0';
+        if (row.stock_limit < 1) return '名额至少为 1';
+        return '';
+    }
+
+    function sortLimitedSaleItems(rows = []) {
+        return [...(Array.isArray(rows) ? rows : [])].sort((a, b) => {
+            const sortDiff = toNumber(a.sort_order, 0) - toNumber(b.sort_order, 0);
+            if (sortDiff !== 0) return sortDiff;
+            return String(a.id || a._id || '').localeCompare(String(b.id || b._id || ''));
+        });
+    }
+
+    async function normalizeLimitedSaleItem(row = {}, products = [], skus = []) {
+        const product = normalizeLinkedProduct(findByLookup(products, row.product_id));
+        const sku = row.sku_id ? findByLookup(skus, row.sku_id) : null;
+        return {
+            ...row,
+            id: row.id || row._legacy_id || row._id,
+            slot_id: pickString(row.slot_id),
+            product_id: pickString(row.product_id),
+            sku_id: pickString(row.sku_id),
+            enable_points: row.enable_points !== false,
+            enable_money: row.enable_money !== false,
+            points_price: Math.max(0, Math.floor(toNumber(row.points_price, 0))),
+            money_price: Math.max(0, toNumber(row.money_price, 0)),
+            stock_limit: Math.max(0, Math.floor(toNumber(row.stock_limit, 0))),
+            sort_order: toNumber(row.sort_order, 0),
+            status: toBoolean(row.status ?? row.is_active ?? 1) ? 1 : 0,
+            is_active: toBoolean(row.status ?? row.is_active ?? 1) ? 1 : 0,
+            product,
+            product_name: pickString(product?.name),
+            sku_name: pickString(sku?.name || sku?.spec_text || sku?.spec || '')
+        };
+    }
+
     app.get('/admin/api/coupons', auth, requirePermission('products'), (req, res) => {
         const rawRows = getCollection('coupons');
         // 自愈：对 CloudBase 直接创建（无数字 id 只有 UUID _id）的优惠券，补写自增数字 id
@@ -1102,6 +1324,175 @@ function registerMarketingRoutes(app, deps) {
         };
     }
 
+    function parseDateTimestamp(value) {
+        if (!value) return 0;
+        const ts = new Date(value).getTime();
+        return Number.isFinite(ts) ? ts : 0;
+    }
+
+    function sortLimitedSaleSlots(rows = []) {
+        return [...(Array.isArray(rows) ? rows : [])].sort((a, b) => {
+            const sortDiff = toNumber(a.sort_order, 0) - toNumber(b.sort_order, 0);
+            if (sortDiff !== 0) return sortDiff;
+            const startDiff = parseDateTimestamp(a.start_time) - parseDateTimestamp(b.start_time);
+            if (startDiff !== 0) return startDiff;
+            return String(a.id || a._id || '').localeCompare(String(b.id || b._id || ''));
+        });
+    }
+
+    function sortLimitedSaleItems(rows = []) {
+        return [...(Array.isArray(rows) ? rows : [])].sort((a, b) => {
+            const sortDiff = toNumber(a.sort_order, 0) - toNumber(b.sort_order, 0);
+            if (sortDiff !== 0) return sortDiff;
+            return String(a.id || a._id || '').localeCompare(String(b.id || b._id || ''));
+        });
+    }
+
+    function isLimitedSaleSlotEnabled(row = {}) {
+        return toBoolean(row.status ?? row.is_active ?? row.enabled ?? 1);
+    }
+
+    function resolveLimitedSaleSlotRuntimeStatus(row = {}, nowTs = Date.now()) {
+        if (!isLimitedSaleSlotEnabled(row)) return 'disabled';
+        const startTs = parseDateTimestamp(row.start_time);
+        const endTs = parseDateTimestamp(row.end_time);
+        if (!startTs || !endTs || startTs >= endTs) return 'invalid';
+        if (endTs <= nowTs) return 'ended';
+        if (startTs > nowTs) return 'upcoming';
+        return 'running';
+    }
+
+    function timeRangesOverlap(leftStart, leftEnd, rightStart, rightEnd) {
+        return leftStart < rightEnd && rightStart < leftEnd;
+    }
+
+    function normalizeLimitedSaleSlotPayload(body = {}, existing = {}) {
+        const active = toBoolean(body.status ?? body.is_active ?? existing.status ?? existing.is_active ?? 1) ? 1 : 0;
+        return {
+            ...existing,
+            ...body,
+            title: pickString(body.title ?? existing.title),
+            subtitle: pickString(body.subtitle ?? existing.subtitle),
+            file_id: pickString(body.file_id ?? existing.file_id),
+            cover_image: pickString(body.cover_image ?? body.image ?? body.image_url ?? existing.cover_image ?? existing.image_url),
+            image_url: pickString(body.image_url ?? body.cover_image ?? body.image ?? existing.image_url ?? existing.cover_image),
+            start_time: pickString(body.start_time ?? existing.start_time),
+            end_time: pickString(body.end_time ?? existing.end_time),
+            status: active,
+            is_active: active,
+            sort_order: toNumber(body.sort_order ?? existing.sort_order, 0),
+            updated_at: nowIso()
+        };
+    }
+
+    function validateLimitedSaleSlot(row = {}, rows = [], currentId = '') {
+        const title = pickString(row.title).trim();
+        const startTs = parseDateTimestamp(row.start_time);
+        const endTs = parseDateTimestamp(row.end_time);
+        if (!title) return '档期标题不能为空';
+        if (!startTs || !endTs) return '请填写有效的开始和结束时间';
+        if (startTs >= endTs) return '档期开始时间必须早于结束时间';
+        if (isLimitedSaleSlotEnabled(row)) {
+            const overlap = rows.find((item) => {
+                if (currentId && rowMatchesLookup(item, currentId)) return false;
+                if (!isLimitedSaleSlotEnabled(item)) return false;
+                const otherStart = parseDateTimestamp(item.start_time);
+                const otherEnd = parseDateTimestamp(item.end_time);
+                if (!otherStart || !otherEnd || otherStart >= otherEnd) return false;
+                return timeRangesOverlap(startTs, endTs, otherStart, otherEnd);
+            });
+            if (overlap) {
+                return `启用中的档期不得重叠；当前与「${pickString(overlap.title, '未命名档期')}」冲突`;
+            }
+        }
+        return '';
+    }
+
+    async function resolveLimitedSaleSlotImage(row = {}) {
+        const fileId = pickString(row.file_id);
+        const fallback = pickString(row.cover_image || row.image_url || row.image);
+        if (fileId) {
+            try {
+                return await resolveManagedFileUrl(fileId);
+            } catch (_) {
+                return assetUrl(fallback || fileId);
+            }
+        }
+        return assetUrl(fallback);
+    }
+
+    async function normalizeLimitedSaleSlot(row = {}) {
+        const imageUrl = await resolveLimitedSaleSlotImage(row);
+        return {
+            ...row,
+            id: row.id || row._legacy_id || row._id,
+            title: pickString(row.title),
+            subtitle: pickString(row.subtitle),
+            file_id: pickString(row.file_id),
+            cover_image: imageUrl,
+            image_url: imageUrl,
+            sort_order: toNumber(row.sort_order, 0),
+            status: isLimitedSaleSlotEnabled(row) ? 1 : 0,
+            is_active: isLimitedSaleSlotEnabled(row) ? 1 : 0,
+            runtime_status: resolveLimitedSaleSlotRuntimeStatus(row)
+        };
+    }
+
+    function normalizeLimitedSaleItemPayload(body = {}, existing = {}, slotId = '') {
+        const active = toBoolean(body.status ?? body.is_active ?? existing.status ?? existing.is_active ?? 1) ? 1 : 0;
+        return {
+            ...existing,
+            ...body,
+            slot_id: String(slotId || body.slot_id || existing.slot_id || '').trim(),
+            product_id: body.product_id != null ? String(body.product_id).trim() : String(existing.product_id || '').trim(),
+            sku_id: body.sku_id != null && body.sku_id !== '' ? String(body.sku_id).trim() : '',
+            enable_points: toBoolean(body.enable_points ?? existing.enable_points ?? true),
+            enable_money: toBoolean(body.enable_money ?? existing.enable_money ?? true),
+            points_price: Math.max(0, Math.floor(toNumber(body.points_price ?? existing.points_price, 0))),
+            money_price: Math.max(0, toNumber(body.money_price ?? existing.money_price, 0)),
+            stock_limit: Math.max(0, Math.floor(toNumber(body.stock_limit ?? existing.stock_limit, 0))),
+            sort_order: toNumber(body.sort_order ?? existing.sort_order, 0),
+            status: active,
+            is_active: active,
+            updated_at: nowIso()
+        };
+    }
+
+    function validateLimitedSaleItem(row = {}, { products = [], skus = [] } = {}) {
+        if (!pickString(row.slot_id).trim()) return '缺少档期 ID';
+        if (!pickString(row.product_id).trim()) return '请选择商品';
+        if (!findByLookup(products, row.product_id)) return '关联商品不存在或未同步';
+        if (pickString(row.sku_id).trim() && !findByLookup(skus, row.sku_id)) return '关联 SKU 不存在或未同步';
+        if (!row.enable_points && !row.enable_money) return '积分价 / 现金价至少启用一种';
+        if (row.enable_points && row.points_price < 1) return '积分价需大于等于 1';
+        if (row.enable_money && row.money_price <= 0) return '现金价需大于 0';
+        if (row.stock_limit < 1) return '名额至少为 1';
+        return '';
+    }
+
+    async function normalizeLimitedSaleItem(row = {}, products = [], skus = []) {
+        const product = normalizeLinkedProduct(findByLookup(products, row.product_id));
+        const sku = row.sku_id ? findByLookup(skus, row.sku_id) : null;
+        return {
+            ...row,
+            id: row.id || row._legacy_id || row._id,
+            slot_id: pickString(row.slot_id),
+            product_id: pickString(row.product_id),
+            sku_id: pickString(row.sku_id),
+            enable_points: row.enable_points !== false,
+            enable_money: row.enable_money !== false,
+            points_price: Math.max(0, Math.floor(toNumber(row.points_price, 0))),
+            money_price: Math.max(0, toNumber(row.money_price, 0)),
+            stock_limit: Math.max(0, Math.floor(toNumber(row.stock_limit, 0))),
+            sort_order: toNumber(row.sort_order, 0),
+            status: toBoolean(row.status ?? row.is_active ?? 1) ? 1 : 0,
+            is_active: toBoolean(row.status ?? row.is_active ?? 1) ? 1 : 0,
+            product,
+            product_name: pickString(product?.name),
+            sku_name: pickString(sku?.name || sku?.spec_text || sku?.spec || '')
+        };
+    }
+
     app.get('/admin/api/group-buys', auth, requirePermission('products'), async (req, res) => {
         await ensureFreshCollections(['group_activities', 'products']);
         const products = getCollection('products');
@@ -1254,13 +1645,158 @@ function registerMarketingRoutes(app, deps) {
     app.put('/admin/api/lottery-prizes/:id/toggle', auth, requirePermission('products'), updateLotteryPrizeStatus);
     app.post('/admin/api/lottery-prizes/:id/toggle', auth, requirePermission('products'), updateLotteryPrizeStatus);
 
+    app.get('/admin/api/limited-sale-slots', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['limited_sale_slots']);
+        let rows = await Promise.all(sortLimitedSaleSlots(getCollection('limited_sale_slots')).map((item) => normalizeLimitedSaleSlot(item)));
+        const keyword = pickString(req.query.keyword).trim().toLowerCase();
+        const status = pickString(req.query.status).trim();
+        if (keyword) {
+            rows = rows.filter((item) => `${item.title} ${item.subtitle || ''}`.toLowerCase().includes(keyword));
+        }
+        if (status !== '') {
+            rows = rows.filter((item) => String(item.status) === status || String(item.runtime_status) === status);
+        }
+        ok(res, paginate(rows, req));
+    });
+
+    app.get('/admin/api/limited-sale-slots/:id', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['limited_sale_slots']);
+        const row = findByLookup(getCollection('limited_sale_slots'), req.params.id);
+        if (!row) return fail(res, '限时档期不存在', 404);
+        ok(res, await normalizeLimitedSaleSlot(row));
+    });
+
+    app.post('/admin/api/limited-sale-slots', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['limited_sale_slots']);
+        const rows = getCollection('limited_sale_slots');
+        const row = normalizeLimitedSaleSlotPayload(req.body || {}, {
+            id: nextId(rows),
+            created_at: nowIso()
+        });
+        const validationMessage = validateLimitedSaleSlot(row, rows);
+        if (validationMessage) return fail(res, validationMessage);
+        rows.push(row);
+        saveCollection('limited_sale_slots', rows);
+        createAuditLog(req.admin, 'limited_sale_slot.create', 'limited_sale_slots', { slot_id: row.id });
+        ok(res, await normalizeLimitedSaleSlot(row));
+    });
+
+    app.put('/admin/api/limited-sale-slots/:id', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['limited_sale_slots']);
+        const rows = getCollection('limited_sale_slots');
+        const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
+        if (index === -1) return fail(res, '限时档期不存在', 404);
+        const nextRow = normalizeLimitedSaleSlotPayload(req.body || {}, rows[index]);
+        const validationMessage = validateLimitedSaleSlot(nextRow, rows, req.params.id);
+        if (validationMessage) return fail(res, validationMessage);
+        rows[index] = nextRow;
+        saveCollection('limited_sale_slots', rows);
+        createAuditLog(req.admin, 'limited_sale_slot.update', 'limited_sale_slots', { slot_id: req.params.id });
+        ok(res, await normalizeLimitedSaleSlot(rows[index]));
+    });
+
+    app.delete('/admin/api/limited-sale-slots/:id', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['limited_sale_slots', 'limited_sale_items']);
+        const slotRows = getCollection('limited_sale_slots');
+        const nextSlotRows = slotRows.filter((item) => !rowMatchesLookup(item, req.params.id));
+        if (slotRows.length === nextSlotRows.length) return fail(res, '限时档期不存在', 404);
+        saveCollection('limited_sale_slots', nextSlotRows);
+        const nextItemRows = getCollection('limited_sale_items').filter((item) => !rowMatchesLookup(item, req.params.id, [item.slot_id]));
+        saveCollection('limited_sale_items', nextItemRows);
+        createAuditLog(req.admin, 'limited_sale_slot.delete', 'limited_sale_slots', { slot_id: req.params.id });
+        ok(res, { success: true });
+    });
+
+    app.get('/admin/api/limited-sale-slots/:id/items', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['limited_sale_slots', 'limited_sale_items', 'products', 'skus']);
+        const slot = findByLookup(getCollection('limited_sale_slots'), req.params.id);
+        if (!slot) return fail(res, '限时档期不存在', 404);
+        const products = getCollection('products');
+        const skus = getCollection('skus');
+        const rows = await Promise.all(
+            sortLimitedSaleItems(getCollection('limited_sale_items').filter((item) => rowMatchesLookup(item, req.params.id, [item.slot_id])))
+                .map((item) => normalizeLimitedSaleItem(item, products, skus))
+        );
+        ok(res, {
+            slot: await normalizeLimitedSaleSlot(slot),
+            list: rows,
+            total: rows.length
+        });
+    });
+
+    app.post('/admin/api/limited-sale-slots/:id/items', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['limited_sale_slots', 'limited_sale_items', 'products', 'skus']);
+        const slot = findByLookup(getCollection('limited_sale_slots'), req.params.id);
+        if (!slot) return fail(res, '限时档期不存在', 404);
+        const rows = getCollection('limited_sale_items');
+        const row = normalizeLimitedSaleItemPayload(req.body || {}, {
+            id: nextId(rows),
+            created_at: nowIso()
+        }, req.params.id);
+        const validationMessage = validateLimitedSaleItem(row, {
+            products: getCollection('products'),
+            skus: getCollection('skus')
+        });
+        if (validationMessage) return fail(res, validationMessage);
+        rows.push(row);
+        saveCollection('limited_sale_items', rows);
+        createAuditLog(req.admin, 'limited_sale_item.create', 'limited_sale_items', { item_id: row.id, slot_id: req.params.id });
+        ok(res, await normalizeLimitedSaleItem(row, getCollection('products'), getCollection('skus')));
+    });
+
+    app.put('/admin/api/limited-sale-items/:id', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['limited_sale_items', 'products', 'skus']);
+        const rows = getCollection('limited_sale_items');
+        const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
+        if (index === -1) return fail(res, '限时商品不存在', 404);
+        const row = normalizeLimitedSaleItemPayload(req.body || {}, rows[index], rows[index].slot_id);
+        const validationMessage = validateLimitedSaleItem(row, {
+            products: getCollection('products'),
+            skus: getCollection('skus')
+        });
+        if (validationMessage) return fail(res, validationMessage);
+        rows[index] = row;
+        saveCollection('limited_sale_items', rows);
+        createAuditLog(req.admin, 'limited_sale_item.update', 'limited_sale_items', { item_id: req.params.id, slot_id: row.slot_id });
+        ok(res, await normalizeLimitedSaleItem(row, getCollection('products'), getCollection('skus')));
+    });
+
+    app.delete('/admin/api/limited-sale-items/:id', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['limited_sale_items']);
+        const rows = getCollection('limited_sale_items');
+        const nextRows = rows.filter((item) => !rowMatchesLookup(item, req.params.id));
+        if (rows.length === nextRows.length) return fail(res, '限时商品不存在', 404);
+        saveCollection('limited_sale_items', nextRows);
+        createAuditLog(req.admin, 'limited_sale_item.delete', 'limited_sale_items', { item_id: req.params.id });
+        ok(res, { success: true });
+    });
+
     app.get('/admin/api/activity-options', auth, requirePermission('products'), async (_req, res) => {
-        await ensureFreshCollections(['group_activities', 'slash_activities', 'lottery_prizes', 'products']);
+        const cached = getRuntimeCache('activity-options');
+        if (cached) {
+            res.set('x-runtime-cache-hit', '1');
+            ok(res, cached);
+            return;
+        }
+        await ensureFreshCollections(['group_activities', 'slash_activities', 'lottery_prizes', 'products', 'limited_sale_slots']);
         const products = getCollection('products');
         const staticOptions = [
-            { key: 'flash_sale:default', link_type: 'flash_sale', link_value: '__flash_sale__', title: '限时秒杀入口', badge: '固定入口' },
+            { key: 'flash_sale:current', link_type: 'flash_sale', link_value: '', title: '当前有效限时商品', badge: '固定入口' },
             { key: 'coupon_center:default', link_type: 'coupon_center', link_value: '__coupon_center__', title: '优惠券中心入口', badge: '固定入口' }
         ];
+        const limitedSaleOptions = (await Promise.all(
+            sortLimitedSaleSlots(getCollection('limited_sale_slots'))
+                .filter((item) => isLimitedSaleSlotEnabled(item))
+                .map((item) => normalizeLimitedSaleSlot(item))
+        ))
+            .filter((item) => item.runtime_status === 'running' || item.runtime_status === 'upcoming')
+            .map((item) => ({
+            key: `flash_sale:${item.id}`,
+            link_type: 'flash_sale',
+            link_value: String(item.id),
+            title: item.title || `档期 ${item.id}`,
+            badge: item.runtime_status === 'running' ? '限时商品·进行中' : '限时商品'
+        }));
         const groups = getCollection('group_activities')
             .map((item) => normalizeGroup(item, products))
             .map((item) => ({ key: `group:${item.id || item._id}`, link_type: 'group_buy', link_value: item.id || item._id, title: item.name, badge: '拼团' }));
@@ -1272,7 +1808,10 @@ function registerMarketingRoutes(app, deps) {
             }))
             .map((item) => ({ key: `slash:${item.id || item._id}`, link_type: 'slash', link_value: item.id || item._id, title: item.name, badge: '砍价' }));
         const lottery = getCollection('lottery_prizes').map((item) => ({ key: `lottery:${item.id || item._id}`, link_type: 'lottery', link_value: item.id || item._id, title: item.name || '抽奖奖品', badge: '抽奖' }));
-        ok(res, [...staticOptions, ...groups, ...slash, ...lottery]);
+        const payload = [...staticOptions, ...limitedSaleOptions, ...groups, ...slash, ...lottery];
+        res.set('x-runtime-cache-hit', '0');
+        setRuntimeCache('activity-options', payload, 45 * 1000);
+        ok(res, payload);
     });
 
     app.get('/admin/api/festival-config', auth, requirePermission('products'), async (_req, res) => {
@@ -1297,12 +1836,15 @@ function registerMarketingRoutes(app, deps) {
 
     app.get('/admin/api/activity-links', auth, requirePermission('products'), async (_req, res) => {
         await ensureFreshCollections(['configs']);
-        ok(res, normalizeActivityLinksConfig(getConfigValue('activity_links', null)));
+        ok(res, normalizeActivityLinksConfig(getConfigValueByKeys(['activity_links', 'activity_links_config'], null)));
     });
 
     app.put('/admin/api/activity-links', auth, requirePermission('products'), async (req, res) => {
         await ensureFreshCollections(['configs']);
-        ok(res, setConfigValue('activity_links', normalizeActivityLinksConfig(req.body || {}), 'marketing'));
+        const normalized = normalizeActivityLinksConfig(req.body || {});
+        setConfigValue('activity_links', normalized, 'marketing');
+        setConfigValue('activity_links_config', normalized, 'marketing');
+        ok(res, normalized);
     });
 
     app.get('/admin/api/splash', auth, requirePermission('content'), (_req, res) => {
@@ -1322,7 +1864,7 @@ function registerMarketingRoutes(app, deps) {
             id: row.id || row._legacy_id || row._id,
             is_pickup_point: toBoolean(row.is_pickup_point ?? row.pickup_enabled ?? 1) ? 1 : 0,
             status: row.status || 'active',
-            claimant: findByLookup(users, row.claimant_id || row.claimant_openid) || null,
+            claimant: findByLookup(users, row.pickup_claimant_id || row.pickup_claimant_openid || row.claimant_id || row.claimant_openid) || null,
             staffMembers: staffRows.filter((staff) => rowMatchesLookup(row, staff.station_id))
         }));
         const keyword = pickString(req.query.keyword).trim().toLowerCase();
@@ -1339,7 +1881,7 @@ function registerMarketingRoutes(app, deps) {
         ok(res, {
             ...row,
             id: row.id || row._legacy_id || row._id,
-            claimant: findByLookup(getCollection('users'), row.claimant_id || row.claimant_openid) || null
+            claimant: findByLookup(getCollection('users'), row.pickup_claimant_id || row.pickup_claimant_openid || row.claimant_id || row.claimant_openid) || null
         });
     });
 
@@ -1411,23 +1953,37 @@ function registerMarketingRoutes(app, deps) {
             user_id: normalizedUserId,
             openid: pickString(normalizedOpenid || (existingIndex === -1 ? '' : rows[existingIndex].openid)),
             role: req.body?.role || 'staff',
-            can_verify: toBoolean(req.body?.can_verify ?? 1) ? 1 : 0,
+            can_verify: pickString(req.body?.role || 'staff') === 'manager' ? 1 : (toBoolean(req.body?.can_verify ?? 1) ? 1 : 0),
             status: req.body?.status || 'active',
             remark: req.body?.remark || '',
             updated_at: nowIso()
         };
+        if (pickString(row.role) === 'manager') {
+            for (let idx = 0; idx < rows.length; idx += 1) {
+                if (idx === existingIndex) continue;
+                if (!rowMatchesLookup(rows[idx], req.params.id, [rows[idx].station_id])) continue;
+                if (pickString(rows[idx].role) !== 'manager') continue;
+                rows[idx] = {
+                    ...rows[idx],
+                    role: 'staff',
+                    updated_at: nowIso()
+                };
+            }
+        }
         if (existingIndex === -1) rows.push(row);
         else rows[existingIndex] = row;
         saveCollection('station_staff', rows);
+        syncPickupStationClaimant(req.params.id, rows, { preferredUserId: row.user_id, preferredOpenid: row.openid });
         ok(res, row);
     });
 
     app.delete('/admin/api/pickup-stations/:id/staff/:staffId', auth, requirePermission('pickup_stations'), async (req, res) => {
-        await ensureFreshCollections(['station_staff']);
+        await ensureFreshCollections(['stations', 'station_staff']);
         const rows = getCollection('station_staff');
         const nextRows = rows.filter((row) => !(String(row.station_id) === String(req.params.id) && rowMatchesLookup(row, req.params.staffId)));
         if (rows.length === nextRows.length) return fail(res, '门店成员不存在', 404);
         saveCollection('station_staff', nextRows);
+        syncPickupStationClaimant(req.params.id, nextRows);
         ok(res, { success: true });
     });
 

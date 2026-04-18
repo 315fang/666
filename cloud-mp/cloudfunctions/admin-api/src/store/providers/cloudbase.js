@@ -73,6 +73,7 @@ function createCloudBaseStore(options) {
         'goods_fund_logs',
         'group_activities', 'group_members', 'group_orders',
         'agent_exit_applications', 'lottery_prizes', 'lottery_records',
+        'limited_sale_slots', 'limited_sale_items',
         'mass_messages', 'material_groups', 'materials', 'notifications',
         'orders', 'page_layouts', 'pickup_stations', 'point_accounts',
         'point_logs', 'portal_accounts', 'products', 'refunds', 'reviews',

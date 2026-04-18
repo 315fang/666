@@ -65,7 +65,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="关键词">
-          <el-input v-model="searchForm.keyword" placeholder="邀请码/昵称/订单号" clearable style="width:180px" />
+          <el-input v-model="searchForm.keyword" placeholder="用户ID/昵称/订单号" clearable style="width:180px" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">搜索</el-button>

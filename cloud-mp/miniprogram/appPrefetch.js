@@ -5,24 +5,19 @@
  * 云开发版改为调用 config 云函数。
  */
 const { callFn } = require('./utils/cloud');
+const { get } = require('./utils/request');
+const { cachedGet } = require('./utils/requestCache');
+const HOME_PAGE_CACHE_KEY = 'home_config_cache_v2';
+const CATEGORY_BOOTSTRAP_TTL = 5 * 60 * 1000;
+const ACTIVITY_BOOTSTRAP_TTL = 60 * 1000;
+const LIMITED_SALE_OVERVIEW_TTL = 30 * 1000;
 
 module.exports = {
     prefetchHomeData() {
-        const cacheKey = 'home_config_cache_v2';
-        const cacheVersion = 'home-product-image-20260418';
-        const cacheTtl = 5 * 60 * 1000;
-        const now = Date.now();
-
-        try {
-            const stored = wx.getStorageSync(cacheKey);
-            if (stored && stored.version === cacheVersion && stored.expireAt > now) {
-                this.globalData.homePageData = stored.data;
-                this.globalData.homePageDataExpireAt = Number(stored.expireAt) || 0;
-                this.globalData.homePageDataVersion = cacheVersion;
-                console.log('[Prefetch] 首页配置命中持久化缓存');
-                return Promise.resolve(stored.data);
-            }
-        } catch (e) {}
+        if (this.globalData.homeDataPromise) {
+            return this.globalData.homeDataPromise;
+        }
+        try { wx.removeStorageSync(HOME_PAGE_CACHE_KEY); } catch (_) {}
 
         // ★ 改为调用云函数
         const promise = callFn('config', { action: 'homeContent' }, { showError: false })
@@ -30,13 +25,16 @@ module.exports = {
                 const pageData = res && (res.data || res);
                 if (!pageData) throw new Error('empty home content');
 
-                this._cacheHomePayload(pageData, now + cacheTtl, cacheKey);
-                console.log('[Prefetch] 首页页面编排预拉取完成并缓存');
+                this._cacheHomePayload(pageData);
+                console.log('[Prefetch] 首页页面编排预拉取完成');
                 return pageData;
             })
             .catch(err => {
                 console.warn('[Prefetch] 首页配置预拉取失败（不影响首页兜底渲染）', err);
                 return null;
+            })
+            .finally(() => {
+                this.globalData.homeDataPromise = null;
             });
 
         this.globalData.homeDataPromise = promise;
@@ -81,16 +79,74 @@ module.exports = {
         return this.globalData.splashConfigPromise;
     },
 
-    _cacheHomePayload(payload, expireAt, cacheKey) {
+    prefetchCategoryBootstrap() {
+        if (this.globalData.categoryBootstrapPromise) {
+            return this.globalData.categoryBootstrapPromise;
+        }
+
+        const promise = Promise.allSettled([
+            cachedGet(get, '/categories', {}, {
+                cacheTTL: CATEGORY_BOOTSTRAP_TTL,
+                showError: false,
+                maxRetries: 0
+            }),
+            cachedGet(get, '/banners', { position: 'category' }, {
+                cacheTTL: CATEGORY_BOOTSTRAP_TTL,
+                showError: false,
+                maxRetries: 0
+            })
+        ])
+            .catch((err) => {
+                console.warn('[Prefetch] 分类页基础数据预拉取失败（不影响分类页兜底加载）', err);
+                return null;
+            })
+            .finally(() => {
+                this.globalData.categoryBootstrapPromise = null;
+            });
+
+        this.globalData.categoryBootstrapPromise = promise;
+        return promise;
+    },
+
+    prefetchActivityBootstrap() {
+        if (this.globalData.activityBootstrapPromise) {
+            return this.globalData.activityBootstrapPromise;
+        }
+
+        const promise = Promise.allSettled([
+            cachedGet(get, '/page-content', { page_key: 'activity' }, {
+                cacheTTL: ACTIVITY_BOOTSTRAP_TTL,
+                showError: false,
+                maxRetries: 0
+            }),
+            cachedGet(get, '/limited-sales/overview', {}, {
+                cacheTTL: LIMITED_SALE_OVERVIEW_TTL,
+                showError: false,
+                maxRetries: 0
+            })
+        ])
+            .catch((err) => {
+                console.warn('[Prefetch] 活动页基础数据预拉取失败（不影响活动页兜底加载）', err);
+                return null;
+            })
+            .finally(() => {
+                this.globalData.activityBootstrapPromise = null;
+            });
+
+        this.globalData.activityBootstrapPromise = promise;
+        return promise;
+    },
+
+    _cacheHomePayload(payload) {
         this.globalData.homePageData = payload;
-        this.globalData.homePageDataExpireAt = Number(expireAt) || 0;
-        this.globalData.homePageDataVersion = 'home-product-image-20260418';
+        this.globalData.homePageDataExpireAt = 0;
+        this.globalData.homePageDataVersion = '';
         const configs = payload?.configs || payload?.resources?.configs || {};
         if (configs) {
             this.globalData.brandName = configs.brand_name || this.globalData.brandName;
             this.globalData.shareTitle = configs.share_title || this.globalData.shareTitle;
             this.globalData.customerServiceWechat = configs.customer_service_wechat || this.globalData.customerServiceWechat;
         }
-        wx.setStorageSync(cacheKey, { data: payload, expireAt, version: 'home-product-image-20260418' });
+        try { wx.removeStorageSync(HOME_PAGE_CACHE_KEY); } catch (_) {}
     }
 };

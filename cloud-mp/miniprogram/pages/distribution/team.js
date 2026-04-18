@@ -168,7 +168,7 @@ Page({
                     detail_items: [
                         { label: '团队层级', value: levelLabel },
                         { label: '成员身份', value: this.getRoleName(item.role_level) },
-                        { label: '邀请码', value: item.invite_code || '暂无' },
+                        { label: '成员ID', value: item.invite_code || '暂无ID' },
                         { label: '手机号', value: item.phone || '未绑定' },
                         { label: '订单数', value: `${Number(item.order_count || 0)} 单` },
                         { label: '累计业绩', value: `¥${formatMoney(item.total_sales)}` },

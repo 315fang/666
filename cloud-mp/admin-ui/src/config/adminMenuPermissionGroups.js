@@ -1,26 +1,15 @@
 /**
- * 管理员权限勾选分组：与 layout 侧栏 group + 菜单项一致（由 router 动态生成）
+ * 管理员权限勾选分组：与当前导航工作区保持一致（由 router meta 动态生成）
  * 额外权限挂在对应业务分组下（无独立侧栏项的会标注说明）
  */
 import router from '@/router'
-
-/** 与 layout/index.vue groupedMenuItems 一致 */
-const GROUP_ORDER = [
-  '经营概览',
-  '订单与资金',
-  '商品与营销',
-  '内容与设计',
-  '用户与渠道',
-  '业务策略',
-  '平台与运维',
-  '其他'
-]
+import { ADMIN_GROUP_ORDER, getAdminRouteEntries } from '@/config/adminNavigation'
 
 /**
  * 侧栏同组内的补充权限（后端 adminPermissionCatalog 中有、但无独立侧栏入口或需单独说明）
  */
 const EXTRA_ITEMS_BY_GROUP = {
-  订单与资金: [
+  交易与履约: [
     { key: 'order_amount_adjust', label: '订单改价' },
     { key: 'order_force_cancel', label: '订单强制取消' },
     { key: 'order_force_complete', label: '订单强制完成' }
@@ -31,29 +20,29 @@ const EXTRA_ITEMS_BY_GROUP = {
     { key: 'user_role_manage', label: '用户角色修改' },
     { key: 'user_parent_manage', label: '用户上级修改' },
     { key: 'user_status_manage', label: '用户封禁 / 解封' }
-  ],
-  内容与设计: [
-    { key: 'notification', label: '群发消息接口（permission: notification）' }
-  ],
-  平台与运维: [{ key: 'commissions', label: '佣金管理（历史 settlements 已收口为 commissions）' }]
+  ]
 }
 
 export function buildMenuPermissionGroups() {
-  const children = router.options.routes.find((r) => r.path === '/')?.children || []
+  const entries = getAdminRouteEntries(router.options.routes, { includeHidden: true })
 
-  /** @type {Record<string, Map<string, { titles: string[], navHidden: boolean, minOrder: number }>>} */
+  /** @type {Record<string, Map<string, { titles: Array<{ title: string, sectionOrder: number, order: number }>, navHidden: boolean, minOrder: number }>>} */
   const byGroup = {}
 
-  for (const item of children) {
-    const m = item.meta
-    if (!m?.permission || !m?.title) continue
-    const g = m.group || '其他'
+  for (const item of entries) {
+    if (!item.permission || !item.title) continue
+    const g = item.group || '其他'
     if (!byGroup[g]) byGroup[g] = new Map()
-    const perm = m.permission
+    const perm = item.permission
     const cur = byGroup[g].get(perm) || { titles: [], navHidden: true, minOrder: 9999 }
-    cur.titles.push(m.title)
-    cur.minOrder = Math.min(cur.minOrder, Number(m.order ?? 9999))
-    if (m.nav !== false) cur.navHidden = false
+    const itemRank = Number(item.sectionOrder ?? 999) * 1000 + Number(item.order ?? 999)
+    cur.titles.push({
+      title: item.title,
+      sectionOrder: Number(item.sectionOrder ?? 999),
+      order: Number(item.order ?? 999)
+    })
+    cur.minOrder = Math.min(cur.minOrder, itemRank)
+    if (!item.navHidden) cur.navHidden = false
     byGroup[g].set(perm, cur)
   }
 
@@ -62,7 +51,11 @@ export function buildMenuPermissionGroups() {
     const items = []
     if (map) {
       for (const [perm, { titles, navHidden, minOrder }] of map.entries()) {
-        const uniq = [...new Set(titles)]
+        const uniq = [...new Map(
+          titles
+            .sort((a, b) => a.sectionOrder - b.sectionOrder || a.order - b.order || a.title.localeCompare(b.title, 'zh-CN'))
+            .map((item) => [item.title, item.title])
+        ).values()]
         let label = uniq.join('、')
         if (navHidden) label += '（侧栏无菜单，仅授权）'
         items.push({ key: perm, label, _order: minOrder })
@@ -81,7 +74,7 @@ export function buildMenuPermissionGroups() {
   const groups = []
   const used = new Set()
 
-  for (const gname of GROUP_ORDER) {
+  for (const gname of ADMIN_GROUP_ORDER) {
     if (!byGroup[gname] && !(EXTRA_ITEMS_BY_GROUP[gname]?.length)) continue
     const items = buildItemsForGroup(gname)
     if (!items.length) continue

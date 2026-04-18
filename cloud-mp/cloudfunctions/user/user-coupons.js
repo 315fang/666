@@ -164,6 +164,26 @@ async function reconcileLotteryCoupons(openid) {
         const sourceRecordId = String(record._id || record.id || '');
         if (sourceRecordId && existingSourceIds.has(sourceRecordId)) continue;
 
+        const recordCreated = parseDate(record.created_at);
+        const fuzzyExisting = existingCoupons.find((c) => {
+            if (String(c.source || '') !== 'lottery') return false;
+            if (String(c.source_lottery_record_id || '') !== '') return false;
+            const cCreated = parseDate(c.created_at);
+            if (!recordCreated || !cCreated) return false;
+            if (String(c.source_prize_id || '') !== String(record.prize_id || '')) return false;
+            return Math.abs(cCreated.getTime() - recordCreated.getTime()) < 3 * 60 * 1000;
+        });
+        if (fuzzyExisting && sourceRecordId) {
+            await db.collection('user_coupons').doc(String(fuzzyExisting._id)).update({
+                data: {
+                    source_lottery_record_id: sourceRecordId,
+                    updated_at: db.serverDate()
+                }
+            }).catch(() => null);
+            existingSourceIds.add(sourceRecordId);
+            continue;
+        }
+
         const prize = await findLotteryPrize(record.prize_id);
         const templateId = resolveLotteryCouponTemplateId(prize || {}, record);
         if (!hasValue(templateId)) continue;
@@ -208,7 +228,9 @@ async function reconcileLotteryCoupons(openid) {
 function expireTime(coupon) {
     const raw = coupon.expire_at || coupon.expires_at || coupon.end_at || coupon.valid_until;
     if (!raw) return 0;
-    const time = new Date(raw).getTime();
+    const d = parseDate(raw);
+    if (!d) return 0;
+    const time = d.getTime();
     return Number.isFinite(time) ? time : 0;
 }
 

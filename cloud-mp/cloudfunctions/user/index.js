@@ -38,7 +38,7 @@ const {
 const {
     success, badRequest, unauthorized, notFound, serverError
 } = require('./shared/response');
-const { calculateTier } = require('./shared/growth');
+const { calculateTier, buildGrowthProgress } = require('./shared/growth');
 const { toNumber: toNum, getAllRecords } = require('./shared/utils');
 
 // 子模块导入
@@ -219,6 +219,38 @@ function normalizeMemberLevels(rows = []) {
                 : [row.description || row.desc || row.benefits].filter(Boolean)
         }))
         .sort((a, b) => a.level - b.level);
+}
+
+/** 与小程序「我的」页 growthDisplay / applyGrowthDisplay 字段对齐 */
+function mapGrowthProgressToFrontend(raw) {
+    if (!raw || !raw.tier) {
+        return {
+            current: { name: '' },
+            next: null,
+            percent: 0,
+            next_threshold: null
+        };
+    }
+    const threshold = raw.nextLevel && raw.nextLevel.threshold != null ? Number(raw.nextLevel.threshold) : null;
+    return {
+        current: { name: raw.tier.name || '' },
+        next: raw.nextLevel ? { name: raw.nextLevel.name || '' } : null,
+        percent: Number.isFinite(raw.progress) ? raw.progress : 0,
+        next_threshold: Number.isFinite(threshold) ? threshold : null
+    };
+}
+
+async function enrichUserWithGrowthProgress(formattedUser) {
+    if (!formattedUser) return formattedUser;
+    const points = toNum(formattedUser.points != null ? formattedUser.points : formattedUser.growth_value, 0);
+    const config = await loadMembershipConfig();
+    const growthTiers = normalizeGrowthTiers(config.growth_tiers);
+    const raw = buildGrowthProgress(points, growthTiers.length ? growthTiers : null);
+    return {
+        ...formattedUser,
+        growth_value: points,
+        growth_progress: mapGrowthProgressToFrontend(raw)
+    };
 }
 
 function userRelationIds(user = {}) {
@@ -589,14 +621,14 @@ const handleAction = {
         await syncEligibleRoleLevelIfNeeded(openid);
         const user = await userProfile.getProfile(openid);
         if (!user) throw notFound('用户不存在');
-        return success(await userProfile.formatUser(user));
+        return success(await enrichUserWithGrowthProgress(await userProfile.formatUser(user)));
     }),
 
     'getProfile': asyncHandler(async (openid, params) => {
         await syncEligibleRoleLevelIfNeeded(openid);
         const user = await userProfile.getProfile(openid);
         if (!user) throw notFound('用户不存在');
-        return success(await userProfile.formatUser(user));
+        return success(await enrichUserWithGrowthProgress(await userProfile.formatUser(user)));
     }),
 
     'updateProfile': asyncHandler(async (openid, params) => {
@@ -604,7 +636,7 @@ const handleAction = {
             throw badRequest('缺少更新数据');
         }
         const user = await userProfile.updateProfile(openid, params);
-        return success(await userProfile.formatUser(user));
+        return success(await enrichUserWithGrowthProgress(await userProfile.formatUser(user)));
     }),
 
     'getStats': asyncHandler(async (openid) => {

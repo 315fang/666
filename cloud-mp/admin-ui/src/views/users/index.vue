@@ -564,7 +564,7 @@ const submitRemark = async () => {
   )
 }
 
-// ===== 历史邀请码修改 =====
+// ===== 用户ID修改 =====
 const inviteVisible = ref(false)
 const inviteForm = reactive({ code: '' })
 
@@ -576,7 +576,7 @@ const openInvite = (row) => {
 const submitInvite = async () => {
   await runUserMutation(
     () => updateUserInviteCode(currentUser.value.id, { invite_code: inviteForm.code || undefined }),
-    '历史邀请码已更新',
+    '用户ID已更新',
     () => { inviteVisible.value = false }
   )
 }

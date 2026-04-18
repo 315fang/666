@@ -72,7 +72,7 @@
           </view>
           <view class="member-tag-row">
             <view class="member-tag">{{item.role_name}}</view>
-            <text class="member-tag-sub">{{item.invite_code || '暂无邀请码'}}</text>
+            <text class="member-tag-sub">{{item.invite_code || '暂无ID'}}</text>
           </view>
           <view class="member-meta-row">
             <text class="member-meta">加入 {{item.joined_at_format}}</text>

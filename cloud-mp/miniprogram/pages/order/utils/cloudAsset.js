@@ -7,6 +7,10 @@ function isCloudFileId(value) {
     return /^cloud:\/\//i.test(String(value || '').trim());
 }
 
+function toRenderableImageList(value) {
+    return parseImages(value).filter((item) => !isCloudFileId(item));
+}
+
 async function warmCloudTempUrls(urls = []) {
     const cloudIds = [...new Set(
         (Array.isArray(urls) ? urls : [])
@@ -31,19 +35,23 @@ async function warmCloudTempUrls(urls = []) {
 
 async function resolveCloudImageUrl(value, fallback = '') {
     const normalized = normalizeAssetUrl(value);
-    if (!normalized) return fallback;
+    const safeFallback = toRenderableImageList(fallback)[0] || '';
+    if (!normalized) return safeFallback;
     if (!isCloudFileId(normalized)) return normalized;
 
     if (!tempUrlCache.has(normalized)) {
         await warmCloudTempUrls([normalized]);
     }
 
-    return tempUrlCache.get(normalized) || fallback;
+    return tempUrlCache.get(normalized) || safeFallback;
 }
 
 async function resolveCloudImageList(value, fallbackList = []) {
     const normalizedList = parseImages(value);
-    if (!normalizedList.length) return fallbackList;
+    const safeFallbackList = toRenderableImageList(
+        Array.isArray(fallbackList) && fallbackList.length ? fallbackList : normalizedList
+    );
+    if (!normalizedList.length) return safeFallbackList;
 
     await warmCloudTempUrls(normalizedList);
 
@@ -54,7 +62,7 @@ async function resolveCloudImageList(value, fallbackList = []) {
         })
         .filter(Boolean);
 
-    return resolved.length ? resolved : fallbackList;
+    return resolved.length ? resolved : safeFallbackList;
 }
 
 module.exports = {

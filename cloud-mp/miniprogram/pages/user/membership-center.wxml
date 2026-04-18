@@ -16,7 +16,7 @@
           data-type="consume"
           bindtap="onCardTabTap"
         >
-          消费会员
+          成长会员
         </view>
         <view
           class="card-switch-tab {{activeCard === 'agent' ? 'card-switch-tab-active' : ''}}"
@@ -38,7 +38,7 @@
         <swiper-item>
           <view class="member-card member-card-consume">
             <view class="member-card-head">
-              <text class="member-card-label">{{consumeCardSummary.label || '消费会员'}}</text>
+              <text class="member-card-label">{{consumeCardSummary.label || '成长会员'}}</text>
               <text class="member-card-badge">积分权益</text>
             </view>
             <text class="member-card-title">{{consumeCardSummary.tierName || currentTierName || '普通会员'}}</text>
@@ -55,7 +55,7 @@
             <text class="member-card-title">{{agentCardSummary.roleName || currentRoleName || '普通用户'}}</text>
             <view class="member-card-agent-meta">
               <text class="member-card-agent-points">团队与积分权益以团队中心及当前等级规则为准</text>
-              <text class="member-card-agent-status">{{agentCardSummary.statusText || '代理等级由后台审核认定'}}</text>
+              <text class="member-card-agent-status">{{agentCardSummary.statusText || '以当前身份为准'}}</text>
             </view>
           </view>
         </swiper-item>
@@ -75,7 +75,7 @@
 
     <view class="benefits-panel" wx:if="{{activeCard === 'consume'}}">
       <view class="benefits-panel-head">
-        <text class="benefits-panel-title">消费会员权益</text>
+        <text class="benefits-panel-title">成长会员权益</text>
         <text class="benefits-panel-desc">消费1元 = 1成长值，成长值决定积分权益与等级升级</text>
       </view>
 
@@ -103,13 +103,13 @@
     <view class="benefits-panel" wx:elif="{{activeCard === 'agent'}}">
       <view class="benefits-panel-head">
         <text class="benefits-panel-title">代理权益说明</text>
-        <text class="benefits-panel-desc">代理等级独立于成长值体系，由后台审核认定</text>
+        <text class="benefits-panel-desc">团队与积分权益以当前身份为准</text>
       </view>
 
       <view class="agent-summary-card">
         <text class="agent-summary-label">当前身份</text>
         <text class="agent-summary-title">{{agentCardSummary.roleName || currentRoleName || '普通用户'}}</text>
-        <text class="agent-summary-desc">{{agentCardSummary.statusText || '代理等级由后台审核认定'}}</text>
+        <text class="agent-summary-desc">{{agentCardSummary.statusText || '以当前身份为准'}}</text>
       </view>
 
       <block wx:if="{{memberLevels.length}}">

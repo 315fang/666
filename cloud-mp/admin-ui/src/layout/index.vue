@@ -23,31 +23,35 @@
 
       <!-- 导航菜单 -->
       <nav class="sidebar-nav">
-        <template v-for="(group, groupName) in groupedMenuItems" :key="groupName">
+        <template v-for="group in navigationTree" :key="group.name">
           <!-- 分组标签 -->
-          <div v-if="!isCollapse" class="nav-group-label">{{ groupName }}</div>
+          <div v-if="!isCollapse" class="nav-group-label">{{ group.name }}</div>
 
-          <!-- 菜单项 -->
-          <router-link
-            v-for="item in group"
-            :key="item.path"
-            :to="item.path"
-            custom
-            v-slot="{ href, navigate, isActive }"
-          >
-            <a
-              :href="href"
-              @click="navigate"
-              :class="['nav-item', { 'is-active': isActive }]"
-              :title="isCollapse ? item.title : ''"
+          <template v-for="section in group.sections" :key="`${group.name}-${section.name}`">
+            <div v-if="!isCollapse" class="nav-section-label">{{ section.name }}</div>
+
+            <!-- 菜单项 -->
+            <router-link
+              v-for="item in section.items"
+              :key="item.path"
+              :to="item.path"
+              custom
+              v-slot="{ href, navigate, isActive }"
             >
-              <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
-              <transition name="nav-label">
-                <span v-if="!isCollapse" class="nav-label">{{ item.title }}</span>
-              </transition>
-              <span v-if="isActive && !isCollapse" class="active-indicator" />
-            </a>
-          </router-link>
+              <a
+                :href="href"
+                @click="navigate"
+                :class="['nav-item', { 'is-active': isActive }]"
+                :title="isCollapse ? item.title : ''"
+              >
+                <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+                <transition name="nav-label">
+                  <span v-if="!isCollapse" class="nav-label">{{ item.title }}</span>
+                </transition>
+                <span v-if="isActive && !isCollapse" class="active-indicator" />
+              </a>
+            </router-link>
+          </template>
         </template>
       </nav>
 
@@ -75,11 +79,21 @@
             <span class="hamburger-bar" />
           </button>
           <el-breadcrumb separator="/">
-            <el-breadcrumb-item :to="{ path: '/' }">经营看板</el-breadcrumb-item>
-            <el-breadcrumb-item v-if="currentTitle">{{ currentTitle }}</el-breadcrumb-item>
+            <el-breadcrumb-item
+              v-for="(crumb, index) in currentBreadcrumbs"
+              :key="`${index}-${crumb}`"
+            >
+              {{ crumb }}
+            </el-breadcrumb-item>
           </el-breadcrumb>
-          <div class="topbar-context" v-if="currentGroup">
-            <span class="context-pill">{{ currentGroup }}</span>
+          <div class="topbar-context" v-if="currentContextPills.length">
+            <span
+              v-for="pill in currentContextPills"
+              :key="pill"
+              class="context-pill"
+            >
+              {{ pill }}
+            </span>
           </div>
         </div>
 
@@ -88,9 +102,9 @@
           <div class="topbar-shortcuts">
             <button
               v-for="action in topbarActions"
-              :key="action.path"
+              :key="action.key"
               class="topbar-shortcut"
-              @click="router.push(action.path)"
+              @click="router.push(action.to)"
             >
               {{ action.label }}
             </button>
@@ -190,6 +204,11 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { changePassword } from '@/api'
+import {
+  buildAdminBreadcrumbs,
+  buildAdminNavigationTree,
+  buildShortcutItems
+} from '@/config/adminNavigation'
 
 const router = useRouter()
 const route = useRoute()
@@ -239,46 +258,20 @@ const passwordRules = {
   ]
 }
 
-const menuItems = computed(() => {
-  const children = router.options.routes.find(r => r.path === '/')?.children || []
-  return children
-    .filter(item => item.meta?.title && item.meta?.nav !== false && userStore.hasPermission(item.meta?.permission))
-    .map(item => ({
-      path: '/' + item.path,
-      title: item.meta.title,
-      icon: item.meta.icon,
-      group: item.meta.group || '其他',
-      order: Number(item.meta.order || 999)
-    }))
-})
+const navigationTree = computed(() => (
+  buildAdminNavigationTree(router.options.routes, (permission) => userStore.hasPermission(permission))
+))
 
-const groupedMenuItems = computed(() => {
-  const groupOrder = ['经营概览', '订单与资金', '商品与营销', '内容与设计', '用户与渠道', '业务策略', '平台与运维', '其他']
-  const groups = {}
-  for (const item of menuItems.value) {
-    if (!groups[item.group]) groups[item.group] = []
-    groups[item.group].push(item)
-  }
-  Object.keys(groups).forEach(groupName => {
-    groups[groupName].sort((a, b) => a.order - b.order || a.title.localeCompare(b.title))
-  })
-  const sorted = {}
-  for (const name of groupOrder) {
-    if (groups[name]) sorted[name] = groups[name]
-  }
-  Object.keys(groups).forEach(name => {
-    if (!sorted[name]) sorted[name] = groups[name]
-  })
-  return sorted
-})
-
-const currentTitle = computed(() => route.meta?.title || '')
-const currentGroup = computed(() => route.meta?.group || '')
-const topbarActions = [
-  { label: '订单待处理', path: '/orders?status_group=pending_ship' },
-  { label: '首页内容位', path: '/home-sections' },
-  { label: '营销资源', path: '/activities' }
-]
+const currentBreadcrumbs = computed(() => buildAdminBreadcrumbs(route))
+const currentContextPills = computed(() => (
+  [route.meta?.group, route.meta?.section].filter((item, index, list) => item && list.indexOf(item) === index)
+))
+const topbarActions = computed(() => (
+  buildShortcutItems(
+    (permission) => userStore.hasPermission(permission),
+    { surface: 'topbar', limit: 3 }
+  )
+))
 
 const toggleCollapse = () => { isCollapse.value = !isCollapse.value }
 
@@ -427,6 +420,15 @@ const handlePasswordSubmit = async () => {
   overflow: hidden;
 }
 
+.nav-section-label {
+  padding: 6px 12px 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #94A3B8;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
 .nav-item {
   display: flex;
   align-items: center;
@@ -549,6 +551,8 @@ const handlePasswordSubmit = async () => {
 .topbar-context {
   display: flex;
   align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .context-pill {

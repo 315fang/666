@@ -120,10 +120,10 @@
             </div>
             <el-divider content-position="left">官方宣传海报</el-divider>
             <el-form-item label="官方宣传标题">
-              <el-input v-model="brandConfig.official_promo_title" placeholder="如：问兰官方宣传语" style="width:320px;" />
+              <el-input v-model="brandConfig.official_promo_title" placeholder="如：专业皮肤修护 始于1974" style="width:420px;" />
             </el-form-item>
             <el-form-item label="官方宣传副标题">
-              <el-input v-model="brandConfig.official_promo_subtitle" placeholder="如：品牌官方推荐语" style="width:420px;" />
+              <el-input v-model="brandConfig.official_promo_subtitle" placeholder="选填；留空则官方宣传版仅显示主标题一行" style="width:420px;" />
             </el-form-item>
             <el-form-item label="官方宣传标签">
               <el-input v-model="brandConfig.official_promo_badge" placeholder="默认：官方宣传" style="width:220px;" />
@@ -610,7 +610,7 @@ const brandConfig = reactive({
   bubble_copy_order: '',
   bubble_copy_group_buy: '',
   bubble_copy_slash: '',
-  official_promo_title: '',
+  official_promo_title: '专业皮肤修护 始于1974',
   official_promo_subtitle: '',
   official_promo_badge: '官方宣传',
   official_promo_cover: '',

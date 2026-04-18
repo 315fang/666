@@ -141,6 +141,12 @@ function onBuyNow(page, resolvePayableUnitPrice) {
         exchange_coupon_id: isExchangeMode ? page.data.exchangeCouponId : '',
         exchange_mode: isExchangeMode ? 1 : 0,
         exchange_title: isExchangeMode ? (page.data.exchangeTitle || '') : '',
+        limited_sale: limitedSpotOffer ? {
+            slot_id: page.data.limitedSpotCardId || '',
+            item_id: page.data.limitedSpotOfferId || '',
+            mode: limitedSpotMode,
+            redeem_points: isLimitedSpotPoints
+        } : null,
         limited_spot: limitedSpotOffer ? {
             card_id: page.data.limitedSpotCardId || '',
             offer_id: page.data.limitedSpotOfferId || '',

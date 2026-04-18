@@ -82,28 +82,7 @@ const handleAction = {
     }),
 
     'counts': asyncHandler(async (openid) => {
-        const db = cloud.database();
-        const statuses = ['pending_payment', 'pending_group', 'paid', 'shipped'];
-        const counts = {};
-        await Promise.all(statuses.map(async (s) => {
-            const res = await db.collection('orders').where({ openid, status: s }).count().catch(() => ({ total: 0 }));
-            counts[s] = res.total || 0;
-        }));
-        const completedOrders = await db.collection('orders')
-            .where({ openid, status: 'completed' })
-            .field({ reviewed: true, remark: true })
-            .limit(200)
-            .get()
-            .catch(() => ({ data: [] }));
-        const refundRes = await db.collection('refunds')
-            .where({ openid, status: db.command.in(['pending', 'approved', 'processing']) })
-            .count().catch(() => ({ total: 0 }));
-        counts.pending = counts.pending_payment;
-        counts.pending_review = (completedOrders.data || []).filter((item) => {
-            if (!item) return false;
-            return !(item.reviewed === true || String(item.remark || '').includes('[已评价]'));
-        }).length;
-        counts.refund = refundRes.total || 0;
+        const counts = await orderQuery.getOrderCounts(openid);
         return success(counts);
     }),
 
@@ -116,7 +95,7 @@ const handleAction = {
     }),
 
     'create': asyncHandler(async (openid, params) => {
-        const { items, address_id, coupon_id, user_coupon_id, memo, remark, delivery_type, pickup_station_id, points_to_use, type, group_activity_id, group_no, slash_no, use_goods_fund, limited_spot } = params;
+        const { items, address_id, coupon_id, user_coupon_id, memo, remark, delivery_type, pickup_station_id, points_to_use, type, group_activity_id, group_no, slash_no, use_goods_fund, limited_spot, limited_sale } = params;
         if (!items || !Array.isArray(items) || items.length === 0) {
             throw badRequest('缺少商品信息');
         }
@@ -137,7 +116,8 @@ const handleAction = {
             group_no,
             slash_no,
             use_goods_fund: !!use_goods_fund,
-            limited_spot
+            limited_spot,
+            limited_sale
         });
         return success({
             id: order._id,
@@ -338,13 +318,18 @@ exports.main = cloudFunctionWrapper(async (event) => {
         }
 
         const result = await handler(openid, params);
+        const perfMeta = result && typeof result === 'object' && result.__perf ? result.__perf : {};
+        if (result && typeof result === 'object' && Object.prototype.hasOwnProperty.call(result, '__perf')) {
+            delete result.__perf;
+        }
         logPerf({
             action: currentAction,
             trace_id: traceId,
             cold_start: coldStart,
             status: 'ok',
             code: 'ok',
-            total_ms: Date.now() - startedAt
+            total_ms: Date.now() - startedAt,
+            cache_hit: !!perfMeta.cache_hit
         });
         return result;
     } catch (error) {
@@ -354,7 +339,8 @@ exports.main = cloudFunctionWrapper(async (event) => {
             cold_start: coldStart,
             status: 'error',
             code: parseErrorCode(error),
-            total_ms: Date.now() - startedAt
+            total_ms: Date.now() - startedAt,
+            cache_hit: false
         });
         throw error;
     }

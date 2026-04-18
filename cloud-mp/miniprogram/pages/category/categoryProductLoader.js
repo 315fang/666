@@ -1,11 +1,14 @@
+const { getTempUrls } = require('../../utils/cloud');
 const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
-const { resolveProductImage, resolveProductDisplayPrice, genHeatLabel } = require('../../utils/dataFormatter');
+const { resolveProductImage, resolveProductDisplayPrice, genHeatLabel, normalizeAssetUrl } = require('../../utils/dataFormatter');
 const { getMiniProgramConfig } = require('../../utils/miniProgramConfig');
 const app = getApp();
 
 const CATEGORY_BACKGROUND_BATCH_SIZE = 2;
 const CATEGORY_PRODUCTS_CACHE_TTL = 2 * 60 * 1000;
+const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
+const tempUrlCache = new Map();
 
 function getPointDeductionRule() {
     const config = getMiniProgramConfig();
@@ -67,6 +70,33 @@ function dedupeProductsById(list = []) {
     });
 }
 
+function isCloudFileId(value) {
+    return /^cloud:\/\//i.test(String(value || '').trim());
+}
+
+async function resolveCloudImageUrl(value, fallback = '') {
+    const normalized = normalizeAssetUrl(value);
+    if (!normalized) return fallback;
+    if (!isCloudFileId(normalized)) return normalized;
+
+    if (!tempUrlCache.has(normalized)) {
+        try {
+            const tempUrl = await getTempUrls(normalized);
+            if (tempUrl) tempUrlCache.set(normalized, String(tempUrl).trim());
+        } catch (err) {
+            console.warn('[CategoryProducts] getTempUrls failed:', err);
+        }
+    }
+
+    return tempUrlCache.get(normalized) || fallback;
+}
+
+function pickMappedProductImage(item) {
+    const current = normalizeAssetUrl(item?.image || '');
+    if (current && !isCloudFileId(current)) return current;
+    return resolveProductImage(item);
+}
+
 function mapProductsForCategory(page, list) {
     const pointBalance = page.data.userPointBalance || 0;
     const bestCoupon = page.data.userBestCoupon || 0;
@@ -96,7 +126,7 @@ function mapProductsForCategory(page, list) {
 
         return {
             ...item,
-            image: resolveProductImage(item),
+            image: pickMappedProductImage(item),
             specSummary: buildSpecSummary(item),
             price: retailPrice,
             market_price: marketPrice > retailPrice ? marketPrice : 0,
@@ -117,6 +147,14 @@ function mapProductsForCategory(page, list) {
     });
 }
 
+async function mapProductsForCategoryAsync(page, list) {
+    const mapped = mapProductsForCategory(page, list);
+    return Promise.all(mapped.map(async (item) => ({
+        ...item,
+        image: await resolveCloudImageUrl(item.image, PRODUCT_PLACEHOLDER)
+    })));
+}
+
 async function fetchCategoryProducts(page, categoryId) {
     try {
         const res = await cachedGet(get, '/products', { category_id: categoryId, page: 1, limit: 50 }, {
@@ -129,9 +167,10 @@ async function fetchCategoryProducts(page, categoryId) {
         const normalizedList = dedupeProductsById(list).filter((item) => matchesCategoryId(item, categoryId));
         return {
             catId: categoryId,
-            products: mapProductsForCategory(page, normalizedList)
+            products: await mapProductsForCategoryAsync(page, normalizedList)
         };
-    } catch (_err) {
+    } catch (err) {
+        console.warn('[CategoryProducts] fetchCategoryProducts failed:', categoryId, err);
         return { catId: categoryId, products: [] };
     }
 }

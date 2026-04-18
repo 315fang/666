@@ -155,10 +155,16 @@ Page({
         try {
             const res = await get('/lottery/records', { page: 1, limit: 10 });
             if (res.code === 0) {
-                const records = (res.data?.list || []).map((item) => ({
-                    ...item,
-                    display_emoji: getDefaultPrizeStyle(item.prize_type).display_emoji
-                }));
+                const records = (res.data?.list || []).map((item) => {
+                    const raw = String(item.status || '').toLowerCase();
+                    // 库内常无 claimed，或误标 expired；券/积分已入账时应对用户展示「已发放」
+                    const uiStatus = raw === 'pending' ? 'pending' : 'claimed';
+                    return {
+                        ...item,
+                        status: uiStatus,
+                        display_emoji: getDefaultPrizeStyle(item.prize_type).display_emoji
+                    };
+                });
                 this.setData({ records });
             }
         } catch (e) {

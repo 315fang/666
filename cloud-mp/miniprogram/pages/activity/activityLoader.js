@@ -1,5 +1,6 @@
 const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
+const ACTIVITY_PAGE_CACHE_TTL = 60 * 1000;
 
 async function loadConfig(page, helpers) {
     const {
@@ -12,7 +13,7 @@ async function loadConfig(page, helpers) {
 
     try {
         const pageRes = await cachedGet(get, '/page-content', { page_key: 'activity' }, {
-            useCache: false,
+            cacheTTL: ACTIVITY_PAGE_CACHE_TTL,
             showError: false,
             maxRetries: 0,
             timeout: 6000
@@ -29,7 +30,7 @@ async function loadConfig(page, helpers) {
                 permanent = [];
             }
             const limited = unifiedLinks.limited || [];
-            page._applyActivityData({
+            await page._applyActivityData({
                 banners: banners.length ? banners : getDefaultBanners(),
                 permanent,
                 limited,
@@ -43,7 +44,7 @@ async function loadConfig(page, helpers) {
         }
 
         const linksRes = await cachedGet(get, '/activity/links', {}, {
-            useCache: false,
+            cacheTTL: ACTIVITY_PAGE_CACHE_TTL,
             showError: false,
             maxRetries: 0,
             timeout: 6000
@@ -58,7 +59,7 @@ async function loadConfig(page, helpers) {
                 permanent = [];
             }
             const limited = links.limited || [];
-            page._applyActivityData({
+            await page._applyActivityData({
                 banners: banners.length ? banners : getDefaultBanners(),
                 permanent,
                 limited,
@@ -92,7 +93,9 @@ async function loadFromFestivalConfig(page, helpers) {
     } = helpers;
 
     const res = await cachedGet(get, '/activity/festival-config', {}, {
-        useCache: false
+        cacheTTL: ACTIVITY_PAGE_CACHE_TTL,
+        showError: false,
+        maxRetries: 0
     });
     const cfg = res.data || {};
     const wallpaperClass = page._resolveWallpaperClass(cfg.global_wallpaper);
@@ -104,7 +107,7 @@ async function loadFromFestivalConfig(page, helpers) {
     const usePerm = permCards.length
         ? permCards
         : sortByOrder(getDefaultPermanentActivities().map((item, idx) => normalizeCard(item, idx)).filter(isRenderableCard));
-    page._applyActivityData({
+    await page._applyActivityData({
         banners: bannerCards.length ? bannerCards : getDefaultBanners(),
         permanent: usePerm,
         limited: limCards,

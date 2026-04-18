@@ -1,12 +1,15 @@
 // pages/activity/activity.js
+const { getTempUrls } = require('../../utils/cloud');
 const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
 const { navigate } = require('../../utils/navigator');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
+const { normalizeAssetUrl } = require('../../utils/dataFormatter');
 const { loadConfig } = require('./activityLoader');
 const { startBannerCountdown, clearBannerTimers } = require('./activityTimers');
 const { buildActivitySections } = require('../../utils/activitySectionBuilder');
 const app = getApp();
+const tempUrlCache = new Map();
 
 function getActivityPageConfig() {
     return getConfigSection('activity_page_config');
@@ -23,6 +26,57 @@ function getDefaultPermanentActivities() {
 function parsePositiveInt(v) {
     const n = parseInt(v, 10);
     return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function isCloudFileId(value) {
+    return /^cloud:\/\//i.test(String(value || '').trim());
+}
+
+async function resolveCloudImageUrl(value, fallback = '') {
+    const normalized = normalizeAssetUrl(value);
+    if (!normalized) return fallback;
+    if (!isCloudFileId(normalized)) return normalized;
+
+    if (!tempUrlCache.has(normalized)) {
+        try {
+            const tempUrl = await getTempUrls(normalized);
+            if (tempUrl) tempUrlCache.set(normalized, String(tempUrl).trim());
+        } catch (err) {
+            console.warn('[Activity] getTempUrls failed:', err);
+        }
+    }
+
+    return tempUrlCache.get(normalized) || fallback;
+}
+
+async function resolveBannerSlideImages(slides = []) {
+    return Promise.all((Array.isArray(slides) ? slides : []).map(async (item) => ({
+        ...item,
+        image: await resolveCloudImageUrl(item.image || item.file_id || '', '')
+    })));
+}
+
+async function resolveSectionImages(sections = []) {
+    return Promise.all((Array.isArray(sections) ? sections : []).map(async (section) => {
+        if (Array.isArray(section.subCards) && section.subCards.length) {
+            const subCards = await Promise.all(section.subCards.map(async (card) => ({
+                ...card,
+                image: await resolveCloudImageUrl(card.image || card.file_id || '', '')
+            })));
+            return { ...section, subCards };
+        }
+        return {
+            ...section,
+            image: await resolveCloudImageUrl(section.image || section.file_id || '', '')
+        };
+    }));
+}
+
+async function resolveBrandNewsImages(list = []) {
+    return Promise.all((Array.isArray(list) ? list : []).map(async (item) => ({
+        ...item,
+        cover_image: await resolveCloudImageUrl(item.cover_image || item.image || item.file_id || '', '')
+    })));
 }
 
 /** 专享列表中第一个有效商品 ID（用于无跳转配置时的兜底） */
@@ -188,7 +242,7 @@ Page({
             brandNews: [],
             brandNewsSectionTitle: '品牌动态',
             permanentActivities: initialPermanent,
-            activitySections: this._buildActivitySections(initialPermanent)
+            activitySections: []
         });
         this._clearBannerTimers();
         initialSlides.forEach((item) => {
@@ -217,7 +271,7 @@ Page({
         this._clearBannerTimers();
     },
 
-    _applyActivityData({
+    async _applyActivityData({
         banners,
         permanent,
         limited,
@@ -232,18 +286,23 @@ Page({
         const permanentActivities = Array.isArray(permanent) ? permanent : [];
         this._limitedActivities = Array.isArray(limited) ? limited : [];
         this._activityLinksMeta = linksMeta && typeof linksMeta === 'object' ? linksMeta : {};
+        const [resolvedSlides, resolvedBrandNews, activitySections] = await Promise.all([
+            resolveBannerSlideImages(slides),
+            resolveBrandNewsImages(brandNews),
+            this._buildActivitySections(permanentActivities)
+        ]);
         this.setData({
-            bannerSlides: slides,
-            brandNews: Array.isArray(brandNews) ? brandNews : [],
+            bannerSlides: resolvedSlides,
+            brandNews: resolvedBrandNews,
             brandNewsSectionTitle: brandNewsSectionTitle || '品牌动态',
             permanentActivities,
-            activitySections: this._buildActivitySections(permanentActivities),
+            activitySections,
             wallpaperClass,
             loadError,
             bannerIndex: 0
         });
         this._clearBannerTimers();
-        slides.forEach((item) => {
+        resolvedSlides.forEach((item) => {
             if (item.end_time) this._startBannerCountdown(item.end_time, item.id);
         });
     },
@@ -271,7 +330,7 @@ Page({
         });
     },
 
-    _buildActivitySections(permanentActivities) {
+    async _buildActivitySections(permanentActivities) {
         const meta = this._activityLinksMeta || {};
         const built = buildActivitySections({
             permanentActivities: Array.isArray(permanentActivities) ? permanentActivities : [],
@@ -279,15 +338,16 @@ Page({
             permanentSectionTitle: meta.permanent_section_title || '',
             permanentSectionSubtitle: meta.permanent_section_subtitle || ''
         });
-        return (built.sections || []).map((section) => ({
+        return resolveSectionImages((built.sections || []).map((section) => ({
             ...section
-        }));
+        })));
     },
 
     async loadActivityPreviews() {
         // 简化：不再需要加载预览数据，直接更新sections
+        const activitySections = await this._buildActivitySections(this.data.permanentActivities || []);
         this.setData({
-            activitySections: this._buildActivitySections(this.data.permanentActivities || [])
+            activitySections
         });
     },
 

@@ -1,7 +1,7 @@
 <template>
   <div class="activities-page">
     <el-alert
-      title="这里用于维护营销资源本身：砍价、抽奖、节日配置；具体页面怎么展示，统一交给活动页与页面装修入口处理。"
+      title="这里用于维护活动资源本身：砍价、抽奖、节日配置；具体页面怎么展示，统一交给活动页与页面装修入口处理。"
       type="info"
       :closable="false"
       show-icon
@@ -429,6 +429,9 @@ const activityOptionsLoading = ref(false)
 const activityOptions = ref([])
 
 const currentActivityOptionKey = (linkType, linkValue) => {
+  if ((linkType || 'none') === 'flash_sale' && ((linkValue || '') === '' || (linkValue || '') === '__flash_sale__')) {
+    return 'flash_sale:current'
+  }
   const matched = activityOptions.value.find(opt => opt.link_type === (linkType || 'none') && (opt.link_value || '') === (linkValue || ''))
   return matched?.key || ''
 }
@@ -691,7 +694,13 @@ const fetchLinks = async () => {
     linksMeta.brand_news_section_title = (d.brand_news_section_title || '品牌动态').toString().slice(0, 20) || '品牌动态'
     linksData.banners   = hydrate(d.banners)
     linksData.permanent = hydrate(d.permanent)
-    linksData.limited   = hydrate(d.limited)
+    linksData.limited   = hydrate(d.limited).map((item) => {
+      if ((!item.link_type || item.link_type === 'none') && Array.isArray(item.spot_products) && item.spot_products.length) {
+        item.link_type = 'flash_sale'
+        item.link_value = ''
+      }
+      return item
+    })
     linksData.brand_news = (d.brand_news || []).map((it) => mkNewsItem({ ...it }))
   } catch (e) {
     ElMessage.error('读取活动链接配置失败')
@@ -703,15 +712,6 @@ const fetchLinks = async () => {
 const saveActivityLinks = async () => {
   linksSaving.value = true
   try {
-    linksData.limited.forEach((item) => {
-      if (item.spot_products && item.spot_products.length) {
-        item.link_type = 'page'
-        item.link_value = `/pages/activity/limited-spot?id=${encodeURIComponent(item.id)}`
-      } else if (item.direct_product_id) {
-        item.link_type = 'product'
-        item.link_value = String(item.direct_product_id)
-      }
-    })
     validateActivityLinks()
     const strip = (arr) => arr.map(({ _key, ...rest }) => rest)
     await updateActivityLinks({
@@ -736,7 +736,8 @@ const saveActivityLinks = async () => {
 const validateActivityLinks = () => {
   const validateItem = (item, idx, section, requireEndTime = false) => {
     if (!item.title?.trim()) throw new Error(`${section} 第 ${idx + 1} 项缺少标题`)
-    if (!item.link_type || item.link_type === 'none' || !item.link_value?.trim()) {
+    const requiresLinkValue = String(item.link_type || 'none') !== 'flash_sale'
+    if (!item.link_type || item.link_type === 'none' || (requiresLinkValue && !item.link_value?.trim())) {
       throw new Error(`${section} 第 ${idx + 1} 项缺少跳转目标`)
     }
     if (!item.image?.trim() && !item.gradient?.trim()) {
@@ -747,38 +748,13 @@ const validateActivityLinks = () => {
     }
   }
 
-  const validateSpot = (sp, li, si) => {
-    if (!sp.product_id) throw new Error(`限时活动第 ${li + 1} 项 · 专享商品第 ${si + 1} 个：请选择商品`)
-    if (!sp.enable_points && !sp.enable_money) {
-      throw new Error(`限时活动第 ${li + 1} 项 · 专享商品第 ${si + 1} 个：请至少开启积分或现金一种方式`)
-    }
-    if (sp.enable_points && (!sp.points_price || sp.points_price < 1)) {
-      throw new Error(`限时活动第 ${li + 1} 项 · 专享商品第 ${si + 1} 个：积分价需 ≥1`)
-    }
-    if (sp.enable_money && (!sp.money_price || sp.money_price <= 0)) {
-      throw new Error(`限时活动第 ${li + 1} 项 · 专享商品第 ${si + 1} 个：现金价需大于 0`)
-    }
-    if (!sp.stock_limit || sp.stock_limit < 1) {
-      throw new Error(`限时活动第 ${li + 1} 项 · 专享商品第 ${si + 1} 个：活动名额至少为 1`)
-    }
-  }
-
   linksData.banners.forEach((item, idx) => validateItem(item, idx, 'Banner'))
   linksData.permanent.forEach((item, idx) => {
     if (item.enabled === false) return
     validateItem(item, idx, '常驻活动')
   })
   linksData.limited.forEach((item, idx) => {
-    if (item.spot_products && item.spot_products.length) {
-      if (!item.title?.trim()) throw new Error(`限时活动第 ${idx + 1} 项缺少标题`)
-      if (!item.image?.trim() && !item.gradient?.trim()) {
-        throw new Error(`限时活动第 ${idx + 1} 项至少填写图片或渐变背景`)
-      }
-      if (!item.end_time) throw new Error(`限时活动第 ${idx + 1} 项必须填写截止时间`)
-      item.spot_products.forEach((sp, si) => validateSpot(sp, idx, si))
-    } else {
-      validateItem(item, idx, '限时活动', true)
-    }
+    validateItem(item, idx, '限时活动', true)
   })
 
   linksData.brand_news.forEach((item, idx) => {
@@ -791,6 +767,14 @@ const validateActivityLinks = () => {
 }
 
 const addLinksItem = (section) => {
+  if (section === 'limited') {
+    linksData[section].push(mkItem({
+      link_type: 'flash_sale',
+      link_value: '',
+      style_key: 'flash_sale'
+    }))
+    return
+  }
   linksData[section].push(mkItem())
 }
 

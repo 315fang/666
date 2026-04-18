@@ -273,7 +273,7 @@
                   <el-descriptions-item label="会员层级">
                     <el-tag size="small" :type="roleTagType(detailData.buyer?.role_level)">{{ roleText(detailData.buyer?.role_level) }}</el-tag>
                   </el-descriptions-item>
-                  <el-descriptions-item label="邀请码">{{ detailData.buyer?.invite_code || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="用户ID">{{ detailData.buyer?.invite_code || '-' }}</el-descriptions-item>
                 </el-descriptions>
               </div>
             </div>
@@ -692,7 +692,7 @@ const shippingCompanyOptions = ref(
  *   phone       - 精确匹配买家手机号
  *   nickname    - 模糊匹配买家昵称
  *   member_no   - 精确匹配会员码（8位大写字母/数字）
- *   invite_code - 精确匹配邀请码（用于追踪推广来源订单）
+ *   invite_code - 精确匹配用户ID（用于追踪推广来源订单）
  *
  * product_name  - 独立字段，按订单中包含的商品名称模糊匹配（与 search_value 互不干扰）
  * status_group  - Tab 级粗筛（all/pending/shipped/completed/cancelled），与精确 status 互斥

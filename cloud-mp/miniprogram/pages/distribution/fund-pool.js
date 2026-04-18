@@ -99,7 +99,7 @@ Page({
     _sourceLabel(s) {
         const map = {
             'upgrade_payment': '升级入池',
-            'admin_upgrade': '后台升级入池',
+            'admin_upgrade': '升级入池',
             'manual': '手动入池',
             'dividend': '分红'
         };
