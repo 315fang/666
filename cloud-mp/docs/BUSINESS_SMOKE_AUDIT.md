@@ -1,6 +1,6 @@
 # Business Smoke Audit
 
-生成时间：2026-04-17T15:13:42.616Z
+生成时间：2026-04-18T06:29:06.732Z
 环境：cloud1-9gywyqe49638e46f
 
 | 范围 | 项目 | 结果 | 数量 | 问题 |
@@ -18,7 +18,7 @@
 | mini | products.list | 通过 | 9 | - |
 | mini | products.detail | 通过 | - | - |
 | mini | products.categories | 通过 | 9 | - |
-| mini | config.homeContent | 通过 | - | - |
+| mini | config.homeContent | 失败 | - | configs 缺少键 brand_zone_enabled；configs 缺少键 brand_zone_title；configs 缺少键 brand_zone_welcome_title；configs 缺少键 brand_endorsements；configs 缺少键 brand_certifications |
 | mini | config.groups | 通过 | 1 | - |
 | mini | config.slashList | 通过 | 1 | - |
 | mini | config.lottery | 通过 | - | - |

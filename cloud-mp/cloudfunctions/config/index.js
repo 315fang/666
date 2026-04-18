@@ -86,6 +86,18 @@ function pickAssetRef(source = {}) {
     return pickString(source.file_id || source.image_url || source.url || source.image || source.cover_image || source.coverImage);
 }
 
+function parseMaybeJsonValue(value) {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    if (!trimmed) return value;
+    if (trimmed[0] !== '{' && trimmed[0] !== '[') return value;
+    try {
+        return JSON.parse(trimmed);
+    } catch (_) {
+        return value;
+    }
+}
+
 function pickFileId(source = {}) {
     if (!source || typeof source !== 'object') return '';
     const direct = pickString(source.file_id || source.fileId);
@@ -429,13 +441,13 @@ async function getConfigValueByKeys(keys = [], fallback = null) {
     if (configRes.data && configRes.data[0]) {
         const row = configRes.data.find((item) => normalizedKeys.includes(pickString(item.config_key || item.key || item._id)));
         if (row) {
-            return row.config_value !== undefined ? row.config_value : (row.value !== undefined ? row.value : fallback);
+            return parseMaybeJsonValue(row.config_value !== undefined ? row.config_value : (row.value !== undefined ? row.value : fallback));
         }
     }
 
     for (let i = 0; i < normalizedKeys.length; i += 1) {
         const value = await getAppConfigValue(normalizedKeys[i], null);
-        if (value !== null && value !== undefined) return value;
+        if (value !== null && value !== undefined) return parseMaybeJsonValue(value);
     }
     return fallback;
 }
@@ -863,7 +875,7 @@ const handleAction = {
 
     'activityLinks': asyncHandler(async (params) => {
         const configValue = await getActivityLinksConfigValue();
-        if (configValue && typeof configValue === 'object') {
+        if (configValue && typeof configValue === 'object' && Object.keys(configValue).length > 0) {
             return success(configValue);
         }
         const res = await db.collection('activity_links')
@@ -900,13 +912,17 @@ const handleAction = {
             const product = productSummary(productMap[String(offer.product_id)] || null);
             const dynamicSoldCount = await countLimitedSpotReservedOrders(card.id || card._id || cardId, offer.id || offer.offer_id || `${cardId}-${index}`);
             const soldCount = Math.max(Number(offer.sold_count || 0), dynamicSoldCount);
-            const remaining = Math.max(0, Number(offer.stock_limit || 0) - soldCount);
+            const remainingByQuota = Math.max(0, Number(offer.stock_limit || 0) - soldCount);
+            const productStock = product && Number.isFinite(Number(product.stock)) ? Number(product.stock) : null;
+            const remaining = productStock != null
+                ? Math.max(0, Math.min(remainingByQuota, productStock))
+                : remainingByQuota;
             return {
                 offer_id: offer.id || offer.offer_id || `${cardId}-${index}`,
                 product_id: offer.product_id || '',
                 sku_id: offer.sku_id || '',
-                enable_points: offer.enable_points !== false,
-                enable_money: offer.enable_money !== false,
+                enable_points: isTruthyActiveFlag(offer.enable_points, true),
+                enable_money: isTruthyActiveFlag(offer.enable_money, true),
                 points_price: Number(offer.points_price || 0),
                 money_price: Number(offer.money_price || 0),
                 stock_limit: Number(offer.stock_limit || 0),

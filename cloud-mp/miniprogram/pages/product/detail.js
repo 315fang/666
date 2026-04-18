@@ -281,6 +281,7 @@ Page({
                 throw new Error('活动商品与详情页不匹配');
             }
             const limitedSpotMode = normalizeLimitedSpotMode(this.data.limitedSpotMode, offer);
+            const activityOutOfStock = Number(offer.remaining || 0) < 1;
             this.setData({
                 limitedSpotCard: card,
                 limitedSpotOffer: offer,
@@ -290,7 +291,9 @@ Page({
                     (offer.product && (offer.product.market_price || offer.product.retail_price || offer.product.price))
                     || this.data.product.market_price
                     || this.data.product.displayPrice
-                )
+                ),
+                currentStock: Math.max(0, Number(offer.remaining || 0)),
+                isOutOfStock: this.data.isOutOfStock || activityOutOfStock
             });
             this.applyLimitedSpotSkuLock(offer);
             this.syncPurchaseActionState();

@@ -202,16 +202,16 @@
     <input class="remark-input" placeholder="选填，可留言给卖家" value="{{remark}}" bindinput="onRemarkInput" maxlength="100" />
   </view>
 
-  <view class="section inline-state-section" wx:if="{{!exchangeMode && allowCoupon !== false && couponLoadStatus === 'loading'}}">
+  <view class="section inline-state-section" wx:if="{{!exchangeMode && !limitedSpotOrder && allowCoupon !== false && couponLoadStatus === 'loading'}}">
     <text class="inline-state-title">优惠券加载中</text>
     <text class="inline-state-desc">正在获取本单可用优惠券，请稍候。</text>
   </view>
-  <view class="section inline-state-section" wx:elif="{{!exchangeMode && allowCoupon !== false && couponLoadStatus === 'error'}}">
+  <view class="section inline-state-section" wx:elif="{{!exchangeMode && !limitedSpotOrder && allowCoupon !== false && couponLoadStatus === 'error'}}">
     <text class="inline-state-title">优惠券暂不可用</text>
     <text class="inline-state-desc">{{couponLoadError || '优惠券服务暂时不可用，请稍后重试。'}}</text>
     <view class="inline-state-btn" bindtap="onRetryCouponLoad">重试优惠券</view>
   </view>
-  <view class="section coupon-section" wx:if="{{!exchangeMode && allowCoupon !== false && couponLoadStatus !== 'loading' && couponLoadStatus !== 'error'}}">
+  <view class="section coupon-section" wx:if="{{!exchangeMode && !limitedSpotOrder && allowCoupon !== false && couponLoadStatus !== 'loading' && couponLoadStatus !== 'error'}}">
     <view class="coupon-top" bindtap="onCouponTap">
       <view class="coupon-label-row">
         <text class="coupon-label">礼遇与优惠</text>
@@ -227,44 +227,44 @@
     <text class="coupon-tip coupon-tip-active" wx:if="{{!selectedCoupon && availableCoupons.length > 0}}">您有{{availableCoupons.length}}张优惠券可用，点击立即选择</text>
     <text class="coupon-tip" wx:elif="{{!selectedCoupon && unusedCouponCount > 0}}">您有{{unusedCouponCount}}张优惠券不适用于本单（金额/范围不符）</text>
   </view>
-  <view class="section coupon-section coupon-disabled" wx:if="{{!exchangeMode && allowCoupon === false}}">
+  <view class="section coupon-section coupon-disabled" wx:if="{{!exchangeMode && !limitedSpotOrder && allowCoupon === false}}">
     <text class="coupon-label">礼遇与优惠</text>
     <text class="coupon-none">爆单品不参与优惠券活动</text>
   </view>
 
-  <view class="section inline-state-section" wx:if="{{!exchangeMode && pointsLoadStatus === 'error'}}">
+  <view class="section inline-state-section" wx:if="{{!exchangeMode && !limitedSpotOrder && pointsLoadStatus === 'error'}}">
     <text class="inline-state-title">积分暂不可用</text>
     <text class="inline-state-desc">{{pointsLoadError || '积分服务暂时不可用，请稍后重试。'}}</text>
     <view class="inline-state-btn" bindtap="onRetryPointsLoad">重试积分</view>
   </view>
   <!-- 积分抵扣 -->
-  <view class="section points-section" wx:if="{{!exchangeMode && pointsLoadStatus !== 'error' && pointBalance > 0 && allowPoints}}">
+  <view class="section points-section" wx:if="{{!exchangeMode && !limitedSpotOrder && pointsLoadStatus !== 'error' && pointBalance > 0 && allowPoints}}">
     <text class="points-label">积分抵扣</text>
     <view class="points-right">
       <text class="points-balance">{{pointBalance}}积分可用</text>
       <switch checked="{{usePoints}}" bindchange="onTogglePoints" color="#B98B58" style="transform:scale(0.8)" />
     </view>
   </view>
-  <view class="section points-detail" wx:if="{{!exchangeMode && pointsLoadStatus !== 'error' && usePoints && pointBalance > 0 && allowPoints}}">
+  <view class="section points-detail" wx:if="{{!exchangeMode && !limitedSpotOrder && pointsLoadStatus !== 'error' && usePoints && pointBalance > 0 && allowPoints}}">
     <text class="points-deduct-text">使用 {{pointsToUse}} 积分抵扣 ¥{{pointsDeduction}}</text>
     <text class="points-deduct-tip">（{{pointsRuleHint}}）</text>
   </view>
-  <view class="section points-section points-disabled" wx:if="{{!exchangeMode && pointsLoadStatus !== 'error' && pointBalance > 0 && !allowPoints}}">
+  <view class="section points-section points-disabled" wx:if="{{!exchangeMode && !limitedSpotOrder && pointsLoadStatus !== 'error' && pointBalance > 0 && !allowPoints}}">
     <text class="points-label">积分抵扣</text>
     <text class="points-balance-disabled">当前商品不支持积分抵扣</text>
   </view>
 
-  <view class="section inline-state-section" wx:if="{{!exchangeMode && isAgent && walletLoadStatus === 'loading'}}">
+  <view class="section inline-state-section" wx:if="{{!exchangeMode && !limitedSpotOrder && isAgent && walletLoadStatus === 'loading'}}">
     <text class="inline-state-title">货款余额加载中</text>
     <text class="inline-state-desc">正在获取可用货款余额，请稍候。</text>
   </view>
-  <view class="section inline-state-section" wx:if="{{!exchangeMode && isAgent && walletLoadStatus === 'error'}}">
+  <view class="section inline-state-section" wx:if="{{!exchangeMode && !limitedSpotOrder && isAgent && walletLoadStatus === 'error'}}">
     <text class="inline-state-title">货款余额暂不可用</text>
     <text class="inline-state-desc">{{walletLoadError || '余额服务暂时不可用，请稍后重试。'}}</text>
     <view class="inline-state-btn" bindtap="onRetryWalletLoad">重试余额</view>
   </view>
   <!-- 货款余额支付 -->
-  <view class="section points-section wallet-section" wx:if="{{!exchangeMode && isAgent && walletLoadStatus === 'success'}}">
+  <view class="section points-section wallet-section" wx:if="{{!exchangeMode && !limitedSpotOrder && isAgent && walletLoadStatus === 'success'}}">
     <view class="wallet-label-col">
       <text class="points-label">货款余额支付</text>
       <text class="wallet-balance-sub" wx:if="{{walletBalance > 0}}">可用余额 ¥{{walletBalanceDisplay}}</text>
@@ -280,7 +280,7 @@
       />
     </view>
   </view>
-  <view class="section points-detail" wx:if="{{!exchangeMode && isAgent && walletLoadStatus === 'success' && useWallet && walletBalance > 0}}">
+  <view class="section points-detail" wx:if="{{!exchangeMode && !limitedSpotOrder && isAgent && walletLoadStatus === 'success' && useWallet && walletBalance > 0}}">
     <text class="points-deduct-text">从货款余额扣款，无需微信支付</text>
   </view>
 

@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-04-17T15:13:42.616Z",
+  "generatedAt": "2026-04-18T06:29:06.732Z",
   "envId": "cloud1-9gywyqe49638e46f",
-  "ok": true,
+  "ok": false,
   "results": [
     {
       "area": "admin",
@@ -94,8 +94,14 @@
     {
       "area": "mini",
       "name": "config.homeContent",
-      "ok": true,
-      "issues": []
+      "ok": false,
+      "issues": [
+        "configs 缺少键 brand_zone_enabled",
+        "configs 缺少键 brand_zone_title",
+        "configs 缺少键 brand_zone_welcome_title",
+        "configs 缺少键 brand_endorsements",
+        "configs 缺少键 brand_certifications"
+      ]
     },
     {
       "area": "mini",

@@ -372,6 +372,18 @@ function parseExchangeMeta(rawMeta = {}) {
     };
 }
 
+function parseMaybeJsonValue(value) {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    if (!trimmed) return value;
+    if (trimmed[0] !== '{' && trimmed[0] !== '[') return value;
+    try {
+        return JSON.parse(trimmed);
+    } catch (_) {
+        return value;
+    }
+}
+
 async function findConfigDocByKeys(keys = []) {
     const normalizedKeys = normalizeIdList(keys);
     if (!normalizedKeys.length) return null;
@@ -389,7 +401,7 @@ async function findConfigDocByKeys(keys = []) {
         return {
             collection: 'configs',
             doc: configRow,
-            value: configRow.config_value !== undefined ? configRow.config_value : configRow.value
+            value: parseMaybeJsonValue(configRow.config_value !== undefined ? configRow.config_value : configRow.value)
         };
     }
 
@@ -403,20 +415,22 @@ async function findConfigDocByKeys(keys = []) {
     return {
         collection: 'app_configs',
         doc: appConfigRow,
-        value: appConfigRow.config_value !== undefined ? appConfigRow.config_value : appConfigRow.value
+        value: parseMaybeJsonValue(appConfigRow.config_value !== undefined ? appConfigRow.config_value : appConfigRow.value)
     };
 }
 
 function normalizeLimitedSpotMode(mode, offer = {}) {
     const raw = String(mode || '').trim().toLowerCase();
+    const enablePoints = isEnabledFlag(offer.enable_points, true);
+    const enableMoney = isEnabledFlag(offer.enable_money, true);
     if (['points', 'point', 'redeem', 'exchange', 'limited_points'].includes(raw)) {
-        return offer.enable_points === false ? 'money' : 'points';
+        return !enablePoints ? 'money' : 'points';
     }
     if (['money', 'cash', 'buy', 'sale', 'limited_money'].includes(raw)) {
-        return offer.enable_money === false ? 'points' : 'money';
+        return !enableMoney ? 'points' : 'money';
     }
-    if (offer.enable_money !== false) return 'money';
-    if (offer.enable_points !== false) return 'points';
+    if (enableMoney) return 'money';
+    if (enablePoints) return 'points';
     return 'money';
 }
 
@@ -424,6 +438,17 @@ function isExpiredTime(value) {
     if (!hasValue(value)) return false;
     const ts = new Date(value).getTime();
     return Number.isFinite(ts) ? ts <= Date.now() : false;
+}
+
+function isEnabledFlag(value, fallback = true) {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (value === true || value === 1 || value === '1') return true;
+    if (value === false || value === 0 || value === '0') return false;
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized) return fallback;
+    if (['false', 'inactive', 'disabled', 'off', 'hidden'].includes(normalized)) return false;
+    if (['true', 'active', 'enabled', 'on', 'show', 'visible'].includes(normalized)) return true;
+    return fallback;
 }
 
 async function countLimitedSpotReservedOrders(cardId, offerId) {
@@ -457,7 +482,7 @@ async function resolveLimitedSpotContext(rawLimitedSpot = {}) {
     if (isExpiredTime(card.end_time || card.end_at)) {
         throw new Error('限时专享活动已结束');
     }
-    if (card.enabled === false || card.status === false || card.is_active === false) {
+    if (!isEnabledFlag(card.enabled ?? card.status ?? card.is_active ?? card.active, true)) {
         throw new Error('限时专享活动未启用');
     }
 
@@ -468,10 +493,10 @@ async function resolveLimitedSpotContext(rawLimitedSpot = {}) {
     }
 
     const mode = normalizeLimitedSpotMode(rawLimitedSpot.mode || (rawLimitedSpot.redeem_points ? 'points' : ''), offer);
-    if (mode === 'points' && offer.enable_points === false) {
+    if (mode === 'points' && !isEnabledFlag(offer.enable_points, true)) {
         throw new Error('当前专享商品不支持积分兑换');
     }
-    if (mode === 'money' && offer.enable_money === false) {
+    if (mode === 'money' && !isEnabledFlag(offer.enable_money, true)) {
         throw new Error('当前专享商品不支持现金购买');
     }
 
@@ -767,15 +792,20 @@ async function createOrder(openid, orderData) {
         group_activity_id,
         group_no,
         slash_no,
-        use_goods_fund   // 货款支付标志（仅代理商可用）
+        use_goods_fund,   // 货款支付标志（仅代理商可用）
+        limited_spot
     } = orderData;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
         throw new Error('缺少商品信息');
     }
     const isExchangeOrder = !!exchange_coupon_id;
+    const limitedSpotContext = await resolveLimitedSpotContext(limited_spot);
     if (isExchangeOrder && items.length !== 1) {
         throw new Error('兑换券订单仅支持单个商品');
+    }
+    if (limitedSpotContext && items.length !== 1) {
+        throw new Error('限时专享订单仅支持单个商品');
     }
 
     const groupActivity = group_activity_id ? await findGroupActivity(group_activity_id) : null;
@@ -795,6 +825,9 @@ async function createOrder(openid, orderData) {
     if (groupActivity && slashRecord) {
         throw new Error('活动订单类型冲突');
     }
+    if (limitedSpotContext && (groupActivity || slashRecord || isExchangeOrder)) {
+        throw new Error('限时专享订单不能与其他活动叠加');
+    }
     let exchangeCouponDoc = null;
     let exchangeMeta = null;
     if (isExchangeOrder) {
@@ -813,6 +846,11 @@ async function createOrder(openid, orderData) {
         if (!exchangeMeta.allowed_product_ids.length) {
             throw new Error('兑换券尚未绑定商品，请联系管理员');
         }
+    }
+    if (limitedSpotContext) {
+        if (coupon_id || user_coupon_id) throw new Error('限时专享订单不能叠加普通优惠券');
+        if (toNumber(points_to_use, 0) > 0) throw new Error('限时专享订单不能再使用普通积分抵扣');
+        if (use_goods_fund) throw new Error('限时专享订单不支持货款余额支付');
     }
 
     // 0. 提前获取买家信息（关系链/角色信息）和订单超时配置
@@ -858,6 +896,25 @@ async function createOrder(openid, orderData) {
         const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
         if (isExchangeOrder && qty !== 1) {
             throw new Error('兑换券订单每次只能兑换 1 件商品');
+        }
+        if (limitedSpotContext && qty !== 1) {
+            throw new Error('限时专享订单每次只能购买 1 件商品');
+        }
+        if (limitedSpotContext) {
+            const productIdCandidates = [product._id, product.id, item.product_id]
+                .filter((value) => value !== null && value !== undefined && value !== '')
+                .map((value) => String(value));
+            if (!productIdCandidates.includes(limitedSpotContext.productId)) {
+                throw new Error('当前商品不在专享活动范围内');
+            }
+            if (limitedSpotContext.skuId) {
+                const skuIdCandidates = [sku && sku._id, sku && sku.id, item.sku_id]
+                    .filter((value) => value !== null && value !== undefined && value !== '')
+                    .map((value) => String(value));
+                if (!skuIdCandidates.includes(limitedSpotContext.skuId)) {
+                    throw new Error('当前规格不在专享活动范围内');
+                }
+            }
         }
 
         // 库存校验（乐观锁：条件扣减，防超卖）
@@ -910,6 +967,12 @@ async function createOrder(openid, orderData) {
             const basePrice = resolveSkuUnitPrice(sku, product);
             unitPrice = 0;
             originalUnitPrice = basePrice;
+        } else if (limitedSpotContext) {
+            const basePrice = resolveSkuUnitPrice(sku, product);
+            originalUnitPrice = basePrice;
+            unitPrice = limitedSpotContext.mode === 'points'
+                ? 0
+                : limitedSpotContext.moneyPrice;
         } else if (groupActivity) {
             unitPrice = activityPrice;
             originalUnitPrice = activityPrice;
@@ -959,10 +1022,13 @@ async function createOrder(openid, orderData) {
             locked_agent_cost: null,
             locked_agent_cost_total: null,
             is_explosive: (product.is_explosive === true || product.is_explosive === 1) ? 1 : 0,
-            allow_points: isExchangeOrder ? 0 : ((product.is_explosive === true || product.is_explosive === 1) ? 0
+            allow_points: (isExchangeOrder || limitedSpotContext) ? 0 : ((product.is_explosive === true || product.is_explosive === 1) ? 0
                 : (product.allow_points == null ? 1 : (product.allow_points ? 1 : 0))),
             exchange_coupon_id: isExchangeOrder ? String(exchange_coupon_id) : '',
-            activity_type: groupActivity ? 'group' : (slashRecord ? 'slash' : ''),
+            limited_spot_card_id: limitedSpotContext ? limitedSpotContext.cardId : '',
+            limited_spot_offer_id: limitedSpotContext ? limitedSpotContext.offerId : '',
+            limited_spot_mode: limitedSpotContext ? limitedSpotContext.mode : '',
+            activity_type: limitedSpotContext ? 'limited_spot' : (groupActivity ? 'group' : (slashRecord ? 'slash' : '')),
             group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : '',
             slash_no: slashRecord ? (slashRecord.slash_no || slash_no) : ''
         });
@@ -977,7 +1043,7 @@ async function createOrder(openid, orderData) {
 
     // 2. 优惠券抵扣（先计算折扣金额，暂不核销；核销放在订单创建成功之后，防止无回滚丢券）
     let couponDiscount = 0;
-    const selectedCouponId = (hasExplosiveItem || isExchangeOrder) ? '' : (user_coupon_id || coupon_id);
+    const selectedCouponId = (hasExplosiveItem || isExchangeOrder || limitedSpotContext) ? '' : (user_coupon_id || coupon_id);
     let usedCouponDocId = '';
     let usedCouponTemplateId = '';
     let pendingCouponDoc = null;  // 延迟核销的优惠券文档
@@ -1012,7 +1078,22 @@ async function createOrder(openid, orderData) {
     let actualPoints = 0;
     const usePoints = toNumber(points_to_use, 0);
     const pointsAllowedByProducts = orderItems.every(it => it.allow_points !== 0);
-    if (!isExchangeOrder && usePoints > 0 && pointsAllowedByProducts) {
+    if (limitedSpotContext && limitedSpotContext.mode === 'points') {
+        actualPoints = Math.max(0, Math.floor(limitedSpotContext.pointsPrice));
+        if (actualPoints < 1) {
+            throw new Error('当前专享商品积分价异常，请稍后再试');
+        }
+        const pointDeductRes = await db.collection('users')
+            .where({ openid, points: _.gte(actualPoints) })
+            .update({
+                data: { points: _.inc(-actualPoints), growth_value: _.inc(-actualPoints), updated_at: db.serverDate() }
+            })
+            .catch(() => ({ stats: { updated: 0 } }));
+        if (!pointDeductRes.stats || pointDeductRes.stats.updated === 0) {
+            throw new Error(`积分不足，当前兑换需要 ${actualPoints} 积分`);
+        }
+        pointsDiscount = 0;
+    } else if (!isExchangeOrder && usePoints > 0 && pointsAllowedByProducts) {
         try {
             const userRes = await db.collection('users').where({ openid }).limit(1).get();
             if (userRes.data && userRes.data.length > 0) {
@@ -1208,9 +1289,23 @@ async function createOrder(openid, orderData) {
         user_coupon_id: isExchangeOrder ? (exchangeCouponDoc?._id || '') : (usedCouponDocId || user_coupon_id || ''),
         exchange_coupon_id: isExchangeOrder ? String(exchange_coupon_id) : '',
         exchange_meta: isExchangeOrder ? exchangeMeta : null,
+        limited_spot_card_id: limitedSpotContext ? limitedSpotContext.cardId : '',
+        limited_spot_offer_id: limitedSpotContext ? limitedSpotContext.offerId : '',
+        limited_spot_mode: limitedSpotContext ? limitedSpotContext.mode : '',
+        limited_spot_title: limitedSpotContext ? limitedSpotContext.cardTitle : '',
+        limited_spot_points_price: limitedSpotContext ? limitedSpotContext.pointsPrice : 0,
+        limited_spot_money_price: limitedSpotContext ? limitedSpotContext.moneyPrice : 0,
+        limited_spot: limitedSpotContext ? {
+            card_id: limitedSpotContext.cardId,
+            offer_id: limitedSpotContext.offerId,
+            mode: limitedSpotContext.mode,
+            title: limitedSpotContext.cardTitle,
+            points_price: limitedSpotContext.pointsPrice,
+            money_price: limitedSpotContext.moneyPrice
+        } : null,
         memo: memo || '',
         referrer_openid: directReferrer?.openid || '',
-        type: isExchangeOrder ? 'exchange' : (groupActivity ? 'group' : (slashRecord ? 'slash' : (type || 'normal'))),
+        type: isExchangeOrder ? 'exchange' : (limitedSpotContext ? 'limited_spot' : (groupActivity ? 'group' : (slashRecord ? 'slash' : (type || 'normal')))),
         group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : '',
         legacy_group_activity_id: groupActivity ? (groupActivity.id || groupActivity._legacy_id || group_activity_id) : '',
         group_no: group_no || '',
