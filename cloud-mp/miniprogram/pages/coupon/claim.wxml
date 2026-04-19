@@ -48,10 +48,20 @@
         <text>此券已被领完</text>
       </view>
 
+      <!-- 今日限额已用完 -->
+      <view class="status-badge out-of-stock" wx:elif="{{claimStatus === 'daily_exhausted'}}">
+        <text>{{ claimMsg || '今日份额已领完' }}</text>
+      </view>
+
+      <!-- 未到领取时段 -->
+      <view class="status-badge inactive" wx:elif="{{claimStatus === 'not_started' || claimStatus === 'time_ended'}}">
+        <text>{{ claimMsg || '当前不在领取时间内' }}</text>
+      </view>
+
       <!-- 领取成功 -->
       <view wx:elif="{{claimStatus === 'success'}}">
         <view class="status-badge success">
-          <text>🎉 领取成功！</text>
+          <text>领取成功</text>
         </view>
         <view class="btn-primary" bindtap="goToCouponList">去我的券包使用</view>
       </view>

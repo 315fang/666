@@ -4,12 +4,12 @@ Component({
     // 标题
     title: {
       type: String,
-      value: '优品推荐'
+      value: '品牌推荐'
     },
     // 描述
     description: {
       type: String,
-      value: '分享给好友，查看精选好物'
+      value: '分享给好友，查看品牌推荐'
     },
     // 用户ID（与 ?invite= 一致）
     memberCode: {

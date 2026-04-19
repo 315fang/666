@@ -1,104 +1,69 @@
 # CloudBase Migration Progress
 
-## 当前阶段判断
+更新日期：2026-04-18
 
-按长期目标计算，当前整体迁移完成度大约在 **65% - 75%**。
+## 当前判断
 
-已经完成的部分主要是：
+`cloud-mp` 的正式运行主线已经切到 CloudBase，但迁移工作并没有“自然结束”，而是进入了收口阶段。
 
-- 小程序已基于 `wx.cloud` 运行
-- 用户侧核心云函数已开始统一到新模型
-- CloudRun 管理服务已成型
-- 标准化 seed 生成链路已建立
-- 后台已能读取标准化 seed
-- 导入包校验脚本已建立
-- 剩余旧字段审计脚本已建立
-- 后台权限中间件已覆盖商品、订单、素材、设置和内容主模块
+更准确的说法是：
 
-尚未完成的部分主要是：
+- 小程序主链路已是 CloudBase
+- 管理后台正式主链路已是 `admin-api + CloudBase`
+- MySQL 仍保留为迁移输入和历史资产
+- 当前剩余工作重点已从“是否迁过去”变成“迁过去之后是否一致、可信、可维护”
 
-- 正式支付接入与回调闭环
-- CloudBase 正式导入与环境落库
-- 后台真实数据源切换
-- 分销/营销等剩余云函数治理
-- 图片 `file_id` 全量替换
+## 已完成
 
-## 已完成事项
+### 运行主线
 
-### 基础架构
+- 小程序通过 `wx.cloud` 与云函数运行
+- 管理后台通过 `/admin/api/*` 访问 `admin-api`
+- 项目根目录 `package.json`、`project.config.json`、CloudBase 相关脚本和集合基线已经形成
 
-- 安装 `cloudbase` skill
-- 小程序确认使用 `wx.cloud.init`
-- 后台新增 CloudRun 管理服务骨架
-- `admin-ui` 已切换到可配置的 CloudRun API 基座
+### 数据资产
 
-### 文档与模型
+- 已建立 `cloudbase-seed/`
+- 已建立 `cloudbase-import/`
+- 已建立目标模型与迁移映射文档
 
-- 新增目标模型文档
-- 新增 MySQL -> CloudBase 映射文档
-- 明确 CloudBase 正式集合清单
+### 工程能力
 
-### 后台管理服务
+- `admin-api` 测试已具备基础可执行性
+- `check:foundation` 可验证基础结构
+- `admin-ui` 可构建
+- 小程序路由审计已回到 `requestRoutes.js` 作为路径真相源
 
-- 登录 / 资料 / 修改密码
-- 商品管理
-- 分类管理
-- 素材库与上传接口
-- Banner / 内容 / 日志
-- 订单管理
-- 统计 / 设置 / 小程序配置 / 告警配置
-- 模块权限闭环（商品、素材、订单、设置、内容）
-- `materials` / `banners` / `popup-ad-config` 已补 `file_id` 兼容输出
+## 未完成但仍关键
 
-### 小程序云函数
+### A. 运行一致性
 
-- `login`
-- `user`
-- `products`
-- `cart`
-- `order`
-- `payment`
-- `config`
+- `directPatchDocument()` 与 `collectionPrefix` 约定还未完全收口
+- `saveCollection()` 仍存在整集合覆盖写风险
+- `admin-api` 冷启动时的数据预热和就绪逻辑还需收紧
 
-以上函数都已经改到“新字段优先，旧字段兼容读取”的阶段。
+### B. 遗留资产处理
 
-### 数据迁移中间层
+- MySQL 运行时兼容路径仍保留在代码中
+- 旧阶段文档仍不少，容易误导协作
+- 部分脚本和报告仍残留旧阶段完成度口径
 
-- 新增 `scripts/normalize-cloudbase-data.js`
-- 生成 `cloudbase-seed`
-- 后台服务支持优先读取 `cloudbase-seed`
-- 新增 `backend/cloudrun-admin-service/scripts/sync-from-cloudbase-seed.js`
-- 新增 `scripts/validate-cloudbase-import.js`
-- 新增 `scripts/audit-legacy-compat.js`
-- 新增环境导入结果模板与兼容审计文档
+### C. 文档收口
 
-## 当前未完成事项
+- 入口文档、开发指南、发布手册已经开始收口
+- 但审计快照、阶段总结、历史交付文件仍需要继续分层管理
 
-### P0
+## 当前阶段目标
 
-- 正式支付下单配置收口
-- 支付回调验签
-- 支付幂等更新订单
-- CloudBase 环境正式导入数据
+本阶段不再把重点放在“再迁一层功能”，而是放在下面几件事：
 
-### P1
+1. 恢复文档可信度
+2. 恢复审计和检查结果可信度
+3. 收紧 CloudBase 数据写路径
+4. 清理仍会误导协作的 MySQL/旧阶段口径
 
-- CloudRun 服务切真实 MySQL / CloudBase
-- 图片素材改成 `file_id` 主引用
-- 订单金额统一到“分”并去掉运行时双单位混用
-- 小程序和后台页面层清理剩余 `image_url` / `avatar_url` / `nickname` 展示兼容
+## 对 MySQL 的当前结论
 
-### P2
-
-- 分销云函数治理
-- 营销活动治理
-- 后台权限细粒度校验
-
-## 下一步推荐顺序
-
-1. 生成可导入 CloudBase 的 JSONL 文件
-2. 在目标环境导入标准化集合
-3. 后台切到标准化数据主读
-4. 接正式支付闭环并补齐支付环境变量
-5. 清理剩余兼容逻辑
-6. 执行 `npm run audit:legacy` 并按审计结果清理页面层旧字段
+- MySQL 仍是仓库中的迁移输入
+- MySQL 不是当前推荐的正式运行模式
+- 任何运行说明若继续把 MySQL 写成当前正式主数据源，都应视为过时文档

@@ -58,7 +58,7 @@
         </view>
         <text class="goods-desc" wx:if="{{item.product.description}}">{{item.product.description}}</text>
         <view class="goods-meta">
-          <text class="goods-remain">剩余 {{item.remaining}} / {{item.stock_limit}}</text>
+          <text class="goods-remain">{{item.stock_label || ('剩余 ' + item.remaining + ' / ' + item.stock_limit)}}</text>
         </view>
         <view class="price-row">
           <text class="p-money" wx:if="{{item.enable_money}}">¥{{item.money_price}}</text>
@@ -73,13 +73,13 @@
             bindtap="onOpenDetail"
           >查看详情</view>
           <view
-            class="btn btn-points {{item.remaining < 1 || !item.enable_points ? 'disabled' : ''}}"
+            class="btn btn-points {{item.sold_out || !item.enable_points ? 'disabled' : ''}}"
             wx:if="{{item.enable_points}}"
             data-offer-id="{{item.offer_id}}"
             bindtap="onOpenPoints"
           >积分兑换</view>
           <view
-            class="btn btn-money {{item.remaining < 1 || !item.enable_money ? 'disabled' : ''}}"
+            class="btn btn-money {{item.sold_out || !item.enable_money ? 'disabled' : ''}}"
             wx:if="{{item.enable_money}}"
             data-offer-id="{{item.offer_id}}"
             bindtap="onOpenMoney"

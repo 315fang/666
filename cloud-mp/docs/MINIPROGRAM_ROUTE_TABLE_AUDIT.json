@@ -1,92 +1,92 @@
 {
-  "generatedAt": "2026-04-18T15:32:13.541Z",
-  "ok": false,
+  "generatedAt": "2026-04-19T03:17:37.138Z",
+  "ok": true,
   "total": 12,
-  "failed": 12,
+  "failed": 0,
   "findings": [
     {
       "route": "POST /orders",
       "action": "create",
-      "route_ok": false,
+      "route_ok": true,
       "action_ok": true,
-      "ok": false
+      "ok": true
     },
     {
       "route": "GET /orders",
       "action": "list",
-      "route_ok": false,
+      "route_ok": true,
       "action_ok": true,
-      "ok": false
+      "ok": true
     },
     {
       "route": "GET /orders/:id",
       "action": "detail",
-      "route_ok": false,
+      "route_ok": true,
       "action_ok": true,
-      "ok": false
+      "ok": true
     },
     {
       "route": "POST /orders/:id/prepay",
       "action": "prepay",
-      "route_ok": false,
+      "route_ok": true,
       "action_ok": true,
-      "ok": false
+      "ok": true
     },
     {
       "route": "GET /orders/:id/pay-status",
       "action": "queryStatus",
-      "route_ok": false,
+      "route_ok": true,
       "action_ok": true,
-      "ok": false
+      "ok": true
     },
     {
       "route": "POST /orders/:id/sync-wechat-pay",
       "action": "syncWechatPay",
-      "route_ok": false,
+      "route_ok": true,
       "action_ok": true,
-      "ok": false
+      "ok": true
     },
     {
       "route": "POST /orders/:id/retry-group-join",
       "action": "retryGroupJoin",
-      "route_ok": false,
+      "route_ok": true,
       "action_ok": true,
-      "ok": false
+      "ok": true
     },
     {
       "route": "GET /refunds",
       "action": "refundList",
-      "route_ok": false,
+      "route_ok": true,
       "action_ok": true,
-      "ok": false
+      "ok": true
     },
     {
       "route": "POST /refunds",
       "action": "applyRefund",
-      "route_ok": false,
+      "route_ok": true,
       "action_ok": true,
-      "ok": false
+      "ok": true
     },
     {
       "route": "GET /refunds/:id",
       "action": "refundDetail",
-      "route_ok": false,
+      "route_ok": true,
       "action_ok": true,
-      "ok": false
+      "ok": true
     },
     {
       "route": "PUT /refunds/:id/cancel",
       "action": "cancelRefund",
-      "route_ok": false,
+      "route_ok": true,
       "action_ok": true,
-      "ok": false
+      "ok": true
     },
     {
       "route": "PUT /refunds/:id/return-shipping",
       "action": "returnShipping",
-      "route_ok": false,
+      "route_ok": true,
       "action_ok": true,
-      "ok": false
+      "ok": true
     }
   ]
 }

@@ -1,0 +1,54 @@
+<view class="page">
+  <view class="state-loading" wx:if="{{loading}}">
+    <text class="state-title">加载中…</text>
+  </view>
+
+  <view class="state-error" wx:elif="{{loadError}}">
+    <text class="state-title">内容加载失败</text>
+    <text class="state-desc">请稍后重试</text>
+    <view class="state-action" bindtap="onRetry">重新加载</view>
+  </view>
+
+  <view class="state-empty" wx:elif="{{articles.length === 0}}">
+    <text class="state-title">{{categoryTitle}}</text>
+    <text class="state-desc">当前分类暂无内容</text>
+  </view>
+
+  <scroll-view wx:else scroll-y class="scroll">
+    <view class="page-head">
+      <text class="page-kicker">新闻中心</text>
+      <text class="page-title">{{categoryTitle}}</text>
+      <text class="page-subtitle">海报图优先展示，点击可查看详情</text>
+    </view>
+
+    <view class="article-list">
+      <view
+        class="article-card"
+        wx:for="{{articles}}"
+        wx:key="id"
+        bindtap="onArticleTap"
+        data-id="{{item.id}}"
+        hover-class="press"
+      >
+        <image
+          wx:if="{{item.cover_image}}"
+          class="article-cover"
+          src="{{item.cover_image}}"
+          mode="aspectFill"
+          binderror="onArticleImageError"
+          data-index="{{index}}"
+        ></image>
+        <view wx:else class="article-cover article-cover-fallback">
+          <text class="article-cover-fallback-text">{{categoryTitle}}</text>
+        </view>
+        <view class="article-copy">
+          <text class="article-title">{{item.title}}</text>
+          <text class="article-summary" wx:if="{{item.summary}}">{{item.summary}}</text>
+          <text class="article-link">查看详情 ›</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="safe-bottom"></view>
+  </scroll-view>
+</view>

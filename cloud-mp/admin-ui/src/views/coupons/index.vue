@@ -94,6 +94,16 @@
               <span v-if="row.stock === -1" style="color:#67c23a">无限</span>
               <span v-else>{{ row.stock }}</span>
             </div>
+            <div>
+              每日领:
+              <span v-if="row.daily_claim_limit === -1" style="color:#67c23a">不限</span>
+              <span v-else>{{ row.claimed_today_count }} / {{ row.daily_claim_limit }}</span>
+            </div>
+            <div>
+              时段:
+              <span v-if="row.claim_time_enabled === 1">{{ row.claim_start_time }} - {{ row.claim_end_time }}</span>
+              <span v-else style="color:#67c23a">全天</span>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="发放情况 (发出/使用)" width="150">
@@ -225,6 +235,30 @@
           </el-col>
         </el-row>
         <div style="height: 15px"></div>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="每日领取上限">
+              <el-input-number v-model="form.daily_claim_limit" :min="-1" :precision="0" style="width:100%" />
+              <div class="form-tip" style="position:absolute; bottom:-25px; left:0; line-height:1">-1 为不限，0 表示当天不可领</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="定时领取">
+              <el-switch v-model="form.claim_time_enabled" :active-value="1" :inactive-value="0" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <div style="height: 15px"></div>
+
+        <el-form-item label="领取时段" v-if="form.claim_time_enabled === 1">
+          <div style="display:flex; align-items:center; gap:12px; width:100%;">
+            <el-input v-model="form.claim_start_time" placeholder="09:00" style="width:140px;" />
+            <span style="color:#909399;">至</span>
+            <el-input v-model="form.claim_end_time" placeholder="23:59" style="width:140px;" />
+          </div>
+          <div class="form-tip">按北京时间每天循环生效，支持填写如 10:00 - 22:30。</div>
+        </el-form-item>
 
         <el-form-item label="使用说明">
           <el-input v-model="form.description" type="textarea" :rows="2" placeholder="填写给用户看的使用说明" />
@@ -530,6 +564,10 @@ const defaultForm = () => ({
   scope_ids: [],
   valid_days: 30,
   stock: -1,
+  daily_claim_limit: -1,
+  claim_time_enabled: 0,
+  claim_start_time: '09:00',
+  claim_end_time: '23:59',
   description: '',
   is_active: 1
 })

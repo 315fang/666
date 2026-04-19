@@ -107,7 +107,11 @@ function isTemporarySignedAsset(value) {
 
 function pickAssetRef(source = {}) {
     if (!source || typeof source !== 'object') return pickString(source);
-    return pickString(source.file_id || source.image_url || source.url || source.image || source.cover_image || source.coverImage);
+    const fileId = pickString(source.file_id || source.fileId);
+    const direct = pickString(source.image_url || source.url || source.image || source.cover_image || source.coverImage);
+    if (fileId) return fileId;
+    if (isTemporarySignedAsset(direct)) return '';
+    return direct;
 }
 
 function parseMaybeJsonValue(value) {
@@ -573,6 +577,46 @@ async function getActivityLinksConfigValue() {
     return value && typeof value === 'object' ? value : {};
 }
 
+function normalizeBrandNewsCategoryKey(value, fallback = 'latest_activity') {
+    const raw = pickString(value).toLowerCase().replace(/[\s-]+/g, '_');
+    if (!raw) return fallback;
+    if (['latest_activity', 'latest', 'activity', 'activities', 'news', 'newest'].includes(raw)) return 'latest_activity';
+    if (['industry_frontier', 'industry', 'frontier', 'trend'].includes(raw)) return 'industry_frontier';
+    if (['mall_notice', 'notice', 'notices', 'announcement', 'announcements'].includes(raw)) return 'mall_notice';
+    return fallback;
+}
+
+function normalizeBrandNewsEntry(item = {}, index = 0) {
+    return {
+        ...item,
+        id: pickString(item.id || item._id || `brand-news-${index}`),
+        title: pickString(item.title),
+        summary: pickString(item.summary),
+        cover_image: pickString(item.cover_image || item.image || item.image_url),
+        cover_file_id: pickString(item.cover_file_id || item.file_id),
+        file_id: pickString(item.file_id || item.cover_file_id),
+        content_html: pickString(item.content_html || item.content || item.body),
+        sort_order: Number(item.sort_order || 0),
+        category_key: normalizeBrandNewsCategoryKey(item.category_key || item.category || item.type),
+        enabled: isTruthyActiveFlag(item.enabled ?? item.is_active ?? item.status, true),
+        created_at: item.created_at || '',
+        updated_at: item.updated_at || ''
+    };
+}
+
+async function getConfiguredBrandNewsEntries() {
+    const configValue = await getActivityLinksConfigValue();
+    const rows = Array.isArray(configValue.brand_news) ? configValue.brand_news : [];
+    return rows
+        .map((item, index) => normalizeBrandNewsEntry(item, index))
+        .filter((item) => item.enabled && item.title)
+        .sort((a, b) => {
+            const sortDiff = Number(a.sort_order || 0) - Number(b.sort_order || 0);
+            if (sortDiff !== 0) return sortDiff;
+            return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+        });
+}
+
 function isExpiredTime(value) {
     if (!hasValue(value)) return false;
     const ts = new Date(value).getTime();
@@ -662,6 +706,31 @@ async function countLimitedSaleReservedOrders(slotId, itemId) {
     return Number(res.total || 0);
 }
 
+function buildLimitedSaleStockState(stockLimit, soldCount, productStockRaw) {
+    const normalizedStockLimit = Math.max(0, Number(stockLimit || 0));
+    const hasQuotaLimit = normalizedStockLimit > 0;
+    const remainingByQuota = hasQuotaLimit ? Math.max(0, normalizedStockLimit - soldCount) : null;
+    const hasFiniteProductStock = Number.isFinite(Number(productStockRaw)) && Number(productStockRaw) >= 0;
+    const normalizedProductStock = hasFiniteProductStock ? Math.max(0, Number(productStockRaw)) : null;
+    const remaining = normalizedProductStock != null
+        ? (hasQuotaLimit ? Math.max(0, Math.min(remainingByQuota, normalizedProductStock)) : normalizedProductStock)
+        : (hasQuotaLimit ? remainingByQuota : 1);
+    const soldOut = normalizedProductStock != null
+        ? (normalizedProductStock < 1 || (hasQuotaLimit && remainingByQuota < 1))
+        : (hasQuotaLimit ? remainingByQuota < 1 : false);
+    const stockLabel = hasQuotaLimit
+        ? `剩余 ${remaining} / ${normalizedStockLimit}`
+        : (normalizedProductStock != null ? `商品库存剩余 ${remaining} 件` : '库存以商品详情为准');
+
+    return {
+        remaining,
+        soldOut,
+        hasQuotaLimit,
+        stockLabel,
+        normalizedStockLimit
+    };
+}
+
 async function buildLimitedSaleDetailPayload(slotId = '') {
     const slots = await getLimitedSaleSlotsSnapshot();
     if (!slots.length) {
@@ -687,12 +756,11 @@ async function buildLimitedSaleDetailPayload(slotId = '') {
     const items = await Promise.all(sortCardsByOrder(activeItems).map(async (item) => {
         const product = productSummary(productMap[String(item.product_id)] || null);
         const soldCount = await countLimitedSaleReservedOrders(activeSlot.id, item.id || item._id || item.offer_id || '');
-        const stockLimit = Math.max(0, Number(item.stock_limit || 0));
-        const remainingByQuota = stockLimit > 0 ? Math.max(0, stockLimit - soldCount) : 0;
-        const productStock = product && Number.isFinite(Number(product.stock)) ? Number(product.stock) : null;
-        const remaining = productStock != null
-            ? Math.max(0, Math.min(remainingByQuota, productStock))
-            : remainingByQuota;
+        const stockState = buildLimitedSaleStockState(
+            item.stock_limit,
+            soldCount,
+            product && Object.prototype.hasOwnProperty.call(product, 'stock') ? product.stock : null
+        );
         return {
             item_id: item.id || item._id || item.offer_id || '',
             offer_id: item.id || item._id || item.offer_id || '',
@@ -702,9 +770,12 @@ async function buildLimitedSaleDetailPayload(slotId = '') {
             enable_money: isTruthyActiveFlag(item.enable_money, true),
             points_price: Number(item.points_price || 0),
             money_price: Number(item.money_price || 0),
-            stock_limit,
+            stock_limit: stockState.normalizedStockLimit,
             sold_count: soldCount,
-            remaining,
+            remaining: stockState.remaining,
+            quota_limited: stockState.hasQuotaLimit,
+            sold_out: stockState.soldOut,
+            stock_label: stockState.stockLabel,
             sort_order: Number(item.sort_order || 0),
             product: product || {
                 id: item.product_id || '',
@@ -1164,11 +1235,11 @@ const handleAction = {
             const product = productSummary(productMap[String(offer.product_id)] || null);
             const dynamicSoldCount = await countLimitedSpotReservedOrders(card.id || card._id || cardId, offer.id || offer.offer_id || `${cardId}-${index}`);
             const soldCount = Math.max(Number(offer.sold_count || 0), dynamicSoldCount);
-            const remainingByQuota = Math.max(0, Number(offer.stock_limit || 0) - soldCount);
-            const productStock = product && Number.isFinite(Number(product.stock)) ? Number(product.stock) : null;
-            const remaining = productStock != null
-                ? Math.max(0, Math.min(remainingByQuota, productStock))
-                : remainingByQuota;
+            const stockState = buildLimitedSaleStockState(
+                offer.stock_limit,
+                soldCount,
+                product && Object.prototype.hasOwnProperty.call(product, 'stock') ? product.stock : null
+            );
             return {
                 offer_id: offer.id || offer.offer_id || `${cardId}-${index}`,
                 item_id: offer.id || offer.offer_id || `${cardId}-${index}`,
@@ -1178,9 +1249,12 @@ const handleAction = {
                 enable_money: isTruthyActiveFlag(offer.enable_money, true),
                 points_price: Number(offer.points_price || 0),
                 money_price: Number(offer.money_price || 0),
-                stock_limit: Number(offer.stock_limit || 0),
+                stock_limit: stockState.normalizedStockLimit,
                 sold_count: soldCount,
-                remaining,
+                remaining: stockState.remaining,
+                quota_limited: stockState.hasQuotaLimit,
+                sold_out: stockState.soldOut,
+                stock_label: stockState.stockLabel,
                 product: product || {
                     id: offer.product_id || '',
                     name: '商品',
@@ -1205,12 +1279,41 @@ const handleAction = {
 
     // ===== 品牌动态 =====
     'brandNews': asyncHandler(async (params) => {
+        const targetId = pickString(params.id || params.news_id);
+        const categoryKey = pickString(params.category_key)
+            ? normalizeBrandNewsCategoryKey(params.category_key)
+            : '';
+        const configuredEntries = await getConfiguredBrandNewsEntries();
+
+        if (configuredEntries.length > 0) {
+            if (targetId) {
+                const article = configuredEntries.find((item) => item.id === targetId);
+                return success(article || null);
+            }
+            const list = categoryKey
+                ? configuredEntries.filter((item) => item.category_key === categoryKey)
+                : configuredEntries;
+            return success({ list });
+        }
+
         const res = await db.collection('brand_news')
             .where({ is_active: true })
             .orderBy('created_at', 'desc')
-            .limit(10)
+            .limit(200)
             .get().catch(() => ({ data: [] }));
-        return success({ list: res.data || [] });
+        const legacyEntries = (res.data || [])
+            .map((item, index) => normalizeBrandNewsEntry(item, index))
+            .filter((item) => item.enabled && item.title);
+
+        if (targetId) {
+            const article = legacyEntries.find((item) => item.id === targetId);
+            return success(article || null);
+        }
+
+        const list = categoryKey
+            ? legacyEntries.filter((item) => item.category_key === categoryKey)
+            : legacyEntries;
+        return success({ list });
     }),
 
     // ===== 邀请卡 =====

@@ -113,7 +113,6 @@ Page({
         displayAgentRoleLevel: 0,
         agentRoleBadgeName: 'VIP用户',
         agentPillSkinClass: 'hero-member-pill-agent',
-        agentPillLabelText: '身份',
         notificationsCount: 0,
         pageLayout: null,
         featureFlags: {

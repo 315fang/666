@@ -1,6 +1,6 @@
 # Admin API Smoke
 
-生成时间：2026-04-17T15:15:03.215Z
+生成时间：2026-04-18T22:36:09.423Z
 入口：https://cloud1-9gywyqe49638e46f.service.tcloudbase.com/admin/api
 
 | 接口 | 结果 | 数量 | 问题 |

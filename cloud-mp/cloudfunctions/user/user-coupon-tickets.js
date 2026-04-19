@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const cloud = require('wx-server-sdk');
+const userCoupons = require('./user-coupons');
 
 const db = cloud.database();
 const _ = db.command;
@@ -75,6 +76,11 @@ function buildTicketCouponInfo(ticket = {}, latestTemplate = null) {
         is_active: pickString(ticket.status) === 'unused' ? 1 : 0,
         scope: pickString(template.scope || snapshot.scope || (type === 'exchange' ? 'exchange' : 'all')),
         scope_ids: toArray(template.scope_ids || snapshot.scope_ids),
+        daily_claim_limit: toNumber(template.daily_claim_limit != null ? template.daily_claim_limit : snapshot.daily_claim_limit, -1),
+        claimed_today_count: toNumber(template.claimed_today_count != null ? template.claimed_today_count : snapshot.claimed_today_count, 0),
+        claim_time_enabled: !!(template.claim_time_enabled != null ? template.claim_time_enabled : snapshot.claim_time_enabled),
+        claim_start_time: pickString(template.claim_start_time || snapshot.claim_start_time),
+        claim_end_time: pickString(template.claim_end_time || snapshot.claim_end_time),
         exchange_meta: exchangeMeta,
         ticket_status: pickString(ticket.status || 'unused')
     };
@@ -152,11 +158,17 @@ async function getClaimTicketInfo(ticketId) {
     const latestTemplate = pickString(ticket.benefit_kind) === 'template_coupon'
         ? await getLatestTemplateCoupon(db, ticket.coupon_template_id || ticket.coupon_snapshot?.id)
         : null;
+    const availability = latestTemplate && pickString(ticket.status || 'unused') === 'unused'
+        ? userCoupons.resolveTemplateClaimAvailability(latestTemplate, { alreadyOwned: false })
+        : null;
 
     return {
         found: true,
         ticket_status: pickString(ticket.status || 'unused'),
         coupon: buildTicketCouponInfo(ticket, latestTemplate),
+        claim_status: availability ? availability.state : '',
+        claim_message: availability ? availability.message : '',
+        can_claim: availability ? availability.canClaim : pickString(ticket.status || 'unused') === 'unused',
         ticket
     };
 }
@@ -242,16 +254,12 @@ async function claimCouponByTicket(openid, ticketId) {
             if (!latestTemplate) {
                 return { success: false, message: '优惠券不存在或已下架' };
             }
-            if (toNumber(latestTemplate.is_active, 1) === 0) {
-                return { success: false, message: '此活动已结束' };
-            }
-            const stock = latestTemplate.stock == null ? -1 : toNumber(latestTemplate.stock, -1);
-            const issuedCount = Math.max(0, toNumber(latestTemplate.issued_count, 0));
-            if (stock !== -1 && issuedCount >= stock) {
-                return { success: false, message: '此券已被领完' };
-            }
             if (await hasOwnedTemplateCoupon(conn, identity, latestTemplate.id != null ? latestTemplate.id : (latestTemplate._id || ticket.coupon_template_id))) {
                 return { success: false, message: '已领取此优惠券' };
+            }
+            const availability = userCoupons.resolveTemplateClaimAvailability(latestTemplate, { alreadyOwned: false });
+            if (!availability.canClaim) {
+                return { success: false, message: availability.message || '当前不可领取' };
             }
             const userCouponDoc = buildTemplateCouponDoc(identity, ticket, latestTemplate);
             await conn.collection('user_coupons').doc(userCouponDoc._id).set({ data: userCouponDoc });
@@ -259,6 +267,8 @@ async function claimCouponByTicket(openid, ticketId) {
                 await conn.collection('coupons').doc(String(latestTemplate._id)).update({
                     data: {
                         issued_count: _.inc(1),
+                        claim_day_key: availability.dayKey,
+                        claimed_today_count: availability.claimedTodayCount + 1,
                         updated_at: new Date().toISOString()
                     }
                 }).catch(() => null);

@@ -1,0 +1,113 @@
+<view class="page">
+  <view class="state-loading" wx:if="{{loading}}">
+    <text class="state-title">加载中…</text>
+  </view>
+
+  <view class="state-error" wx:elif="{{loadError}}">
+    <text class="state-title">品牌内容暂未开放</text>
+    <text class="state-desc">首页品牌专区尚未配置完整，稍后再试。</text>
+    <view class="state-action" bindtap="onRetry">重新加载</view>
+  </view>
+
+  <view wx:else>
+    <view class="hero">
+      <image
+        wx:if="{{heroImage}}"
+        class="hero-image"
+        src="{{heroImage}}"
+        mode="aspectFill"
+        binderror="onCoverImageError"
+      ></image>
+      <view wx:else class="hero-image hero-fallback"></view>
+
+      <view class="hero-overlay">
+        <view class="hero-badge">{{officialPromoBadge}}</view>
+        <text class="hero-kicker">{{navBrandSub || '品牌甄选'}}</text>
+        <text class="hero-title">{{officialPromoTitle || navBrandTitle || brandZone.title || '品牌专区'}}</text>
+        <text class="hero-subtitle" wx:if="{{officialPromoSubtitle || brandZone.welcomeSubtitle}}">
+          {{officialPromoSubtitle || brandZone.welcomeSubtitle}}
+        </text>
+      </view>
+
+      <view class="hero-summary-card">
+        <text class="hero-summary-title">{{brandZone.welcomeTitle || brandZone.title || '品牌专区'}}</text>
+        <text class="hero-summary-text">{{brandZone.welcomeSubtitle || '集中查看品牌介绍、品牌背书与企业认证信息。'}}</text>
+      </view>
+    </view>
+
+    <view class="section section-story" wx:if="{{storyParagraphs.length > 0}}">
+      <view class="section-head">
+        <text class="section-kicker">企业介绍</text>
+        <text class="section-title">{{brandZone.story.title || '品牌故事'}}</text>
+      </view>
+      <text class="story-paragraph" wx:for="{{storyParagraphs}}" wx:key="index">{{item}}</text>
+    </view>
+
+    <view class="section" wx:if="{{brandZone.cards.length > 0}}">
+      <view class="section-head">
+        <text class="section-kicker">新闻中心</text>
+        <text class="section-title">固定内容入口</text>
+      </view>
+      <view class="endorsement-list">
+        <view
+          class="endorsement-card"
+          wx:for="{{brandZone.cards}}"
+          wx:key="id"
+          bindtap="onBrandCardTap"
+          data-item="{{item}}"
+          hover-class="press"
+        >
+          <image
+            wx:if="{{item.image}}"
+            class="endorsement-image"
+            src="{{item.image}}"
+            mode="aspectFill"
+            binderror="onBrandZoneImageError"
+            data-scene="card"
+            data-index="{{index}}"
+          ></image>
+          <view wx:else class="endorsement-image endorsement-fallback">
+            <text class="endorsement-fallback-text">{{item.title}}</text>
+          </view>
+          <view class="endorsement-copy">
+            <text class="endorsement-title">{{item.title}}</text>
+            <text class="endorsement-subtitle" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
+            <text class="endorsement-link">进入板块 ›</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="section" wx:if="{{brandZone.certifications.length > 0}}">
+      <view class="section-head">
+        <text class="section-kicker">企业认证</text>
+        <text class="section-title">可信资质与身份信息</text>
+      </view>
+      <view class="cert-list">
+        <view class="cert-item" wx:for="{{brandZone.certifications}}" wx:key="id">
+          <image
+            wx:if="{{item.image}}"
+            class="cert-image"
+            src="{{item.image}}"
+            mode="aspectFill"
+            binderror="onBrandZoneImageError"
+            data-scene="certification"
+            data-index="{{index}}"
+          ></image>
+          <view wx:else class="cert-image cert-fallback"></view>
+          <view class="cert-copy">
+            <text class="cert-title">{{item.title}}</text>
+            <text class="cert-subtitle" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="footer-actions">
+      <view class="footer-action footer-action-ghost" bindtap="onRetry">刷新内容</view>
+      <view class="footer-action footer-action-primary" bindtap="onOpenActivity">查看最新活动</view>
+    </view>
+
+    <view class="safe-bottom"></view>
+  </view>
+</view>

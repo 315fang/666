@@ -287,7 +287,7 @@ Page({
                 throw new Error('活动商品与详情页不匹配');
             }
             const limitedSpotMode = normalizeLimitedSpotMode(this.data.limitedSpotMode, offer);
-            const activityOutOfStock = Number(offer.remaining || 0) < 1;
+            const activityOutOfStock = !!offer.sold_out;
             this.setData({
                 limitedSpotCard: card,
                 limitedSpotOffer: offer,

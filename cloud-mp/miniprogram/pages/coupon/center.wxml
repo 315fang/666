@@ -1,0 +1,105 @@
+<view class="page">
+  <scroll-view scroll-y class="scroll">
+    <view class="hero">
+      <text class="hero-kicker">TODAY BENEFITS</text>
+      <text class="hero-title">领券中心</text>
+      <text class="hero-subtitle">每日福利按时开放。领取成功后，可在下单结算页直接选择使用。</text>
+
+      <view class="hero-metrics">
+        <view class="metric-card metric-card-main">
+          <text class="metric-value">{{claimableCount}}</text>
+          <text class="metric-label">当前可领</text>
+        </view>
+        <view class="metric-card">
+          <text class="metric-value">{{unusedCount}}</text>
+          <text class="metric-label">我的未用券</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-head">
+        <view class="section-copy">
+          <text class="section-title">今日可领取</text>
+          <text class="section-subtitle">同一张券默认每个账号仅可领取一次，具体以券面说明为准。</text>
+        </view>
+        <view class="section-link" bindtap="onOpenMyCoupons">我的券包 ›</view>
+      </view>
+
+      <view class="coupon-list" wx:if="{{coupons.length > 0}}">
+        <view class="coupon-card {{item.card_muted ? 'coupon-card-muted' : ''}}" wx:for="{{coupons}}" wx:key="id">
+          <view class="coupon-card-rail"></view>
+          <view class="coupon-value-area">
+            <text class="coupon-value">{{item.value_text}}</text>
+            <text class="coupon-threshold">{{item.threshold_text}}</text>
+          </view>
+
+          <view class="coupon-copy-area">
+            <view class="coupon-copy-top">
+              <text class="coupon-name">{{item.coupon_name}}</text>
+              <text class="coupon-window">{{item.claim_window_text}}</text>
+            </view>
+            <text class="coupon-desc" wx:if="{{item.description}}">{{item.description}}</text>
+            <text class="coupon-desc" wx:else>领取后 {{item.valid_days}} 天内有效</text>
+
+            <view class="coupon-meta-row">
+              <text class="coupon-meta">{{item.quota_text}}</text>
+              <text class="coupon-meta">{{item.stock_text}}</text>
+            </view>
+
+            <view class="coupon-bottom-row">
+              <text class="coupon-hint">{{item.claim_hint}}</text>
+              <view
+                class="coupon-action {{item.action_disabled ? 'coupon-action-disabled' : ''}}"
+                bindtap="onClaimCoupon"
+                data-id="{{item.id}}"
+              >
+                {{claimingCouponId == item.id ? '处理中' : item.action_text}}
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="state-card" wx:elif="{{loading}}">
+        <text class="state-title">福利加载中</text>
+        <text class="state-desc">正在准备今天可领取的券面信息。</text>
+      </view>
+
+      <view class="state-card" wx:else>
+        <text class="state-title">当前暂无可领取福利</text>
+        <text class="state-desc">可稍后再来查看，或先进入我的券包查看已领取内容。</text>
+      </view>
+    </view>
+
+    <view class="section my-section">
+      <view class="section-head">
+        <view class="section-copy">
+          <text class="section-title">我的券包快览</text>
+          <text class="section-subtitle">这里只展示未使用券，完整记录可进入券包查看。</text>
+        </view>
+        <view class="section-link" bindtap="onOpenCouponPack">{{mineCoupons.length > 0 ? '查看全部' : (isLoggedIn ? '去领券' : '去登录')}} ›</view>
+      </view>
+
+      <view class="mine-preview-list" wx:if="{{mineCoupons.length > 0}}">
+        <view class="mine-preview-card" wx:for="{{mineCoupons}}" wx:key="id" bindtap="onOpenMyCoupons">
+          <view class="mine-preview-left">
+            <text class="mine-preview-value">{{item.value_text}}</text>
+            <text class="mine-preview-threshold">{{item.threshold_text}}</text>
+          </view>
+          <view class="mine-preview-right">
+            <text class="mine-preview-name">{{item.coupon_name}}</text>
+            <text class="mine-preview-expire">{{item.expire_text}} 到期</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="state-card state-card-light" wx:else>
+        <text class="state-title">{{isLoggedIn ? '还没有已领取的优惠券' : '登录后查看已领取券包'}}</text>
+        <text class="state-desc">{{isLoggedIn ? '先从上方福利列表领取一张，再回到券包使用。' : '登录后即可同步你的券包和可领取状态。'}}</text>
+      </view>
+    </view>
+
+    <view class="safe-bottom"></view>
+  </scroll-view>
+</view>

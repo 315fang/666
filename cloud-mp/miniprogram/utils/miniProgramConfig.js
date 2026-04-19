@@ -13,6 +13,8 @@ const DEFAULT_CONFIG = {
     customer_service_hours: '9:00-21:00',
     nav_brand_title: '问兰镜像',
     nav_brand_sub: '品牌甄选',
+    coupon_zone_title: '惊喜福利',
+    coupon_zone_subtitle: '领取后可在结算页直接选择使用',
     official_promo_title: '专业皮肤修护 始于1974',
     official_promo_subtitle: '',
     about_summary: '品牌甄选，值得信赖。',

@@ -49,15 +49,35 @@
     </swiper>
   </view>
 
-  <!-- 优惠券入口（暂时隐藏） -->
-  <!--
-  <view class="coupon-section" wx:if="{{isLoggedIn && homeCoupons.length > 0}}">
-    <view class="section-head">
-      <text class="section-intro-title">我的优惠券</text>
-      <view class="section-link" bindtap="onCouponTap">全部 {{unusedCouponCount}} 张 ›</view>
+  <!-- 中部海报区（后端 banners position=home_mid，对标麦吉丽的多海报铺排） -->
+  <view class="poster-section" wx:if="{{midPosters.length > 0}}">
+    <view class="poster-card" wx:for="{{midPosters}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
+      <image class="poster-image" src="{{item.image}}" mode="aspectFill" binderror="onAssetImageError" data-scene="mid-poster" data-index="{{index}}"></image>
+      <view class="poster-overlay" wx:if="{{item.title}}">
+        <text class="poster-title">{{item.title}}</text>
+        <text class="poster-sub" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="coupon-section">
+    <view class="section-head coupon-section-head">
+      <view class="section-copy">
+        <text class="section-intro-title">{{homeConfigs.coupon_zone_title || '惊喜福利'}}</text>
+        <text class="section-intro-sub">{{homeConfigs.coupon_zone_subtitle || '领取后可在结算页直接选择使用'}}</text>
+      </view>
+      <view class="section-link" bindtap="onCouponTap">
+        {{homeCoupons.length > 0 ? '去领更多' : '前往领券中心'}} ›
+      </view>
     </view>
 
-    <scroll-view scroll-x class="coupon-scroll-x" enhanced="{{true}}" show-scrollbar="{{false}}">
+    <scroll-view
+      wx:if="{{isLoggedIn && homeCoupons.length > 0}}"
+      scroll-x
+      class="coupon-scroll-x"
+      enhanced="{{true}}"
+      show-scrollbar="{{false}}"
+    >
       <view class="coupon-strip">
         <view class="coupon-mini-card" wx:for="{{homeCoupons}}" wx:key="id" bindtap="onCouponItemTap" data-coupon="{{item}}" hover-class="press">
           <view class="cmc-left">
@@ -71,17 +91,13 @@
         </view>
       </view>
     </scroll-view>
-  </view>
-  -->
 
-  <!-- 中部海报区（后端 banners position=home_mid，对标麦吉丽的多海报铺排） -->
-  <view class="poster-section" wx:if="{{midPosters.length > 0}}">
-    <view class="poster-card" wx:for="{{midPosters}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
-      <image class="poster-image" src="{{item.image}}" mode="aspectFill" binderror="onAssetImageError" data-scene="mid-poster" data-index="{{index}}"></image>
-      <view class="poster-overlay" wx:if="{{item.title}}">
-        <text class="poster-title">{{item.title}}</text>
-        <text class="poster-sub" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
+    <view wx:else class="coupon-empty-tip" bindtap="onCouponTap" hover-class="press">
+      <view class="coupon-empty-copy">
+        <text class="coupon-empty-title">{{isLoggedIn ? '当前账户还没有可用优惠券' : '登录后领取专属福利'}}</text>
+        <text class="coupon-empty-desc">{{isLoggedIn ? '前往领券中心领取今日可用福利券' : '进入领券中心查看今日可领取的优惠券'}}</text>
       </view>
+      <text class="coupon-empty-cta">{{isLoggedIn ? '立即去领' : '查看福利'}} ›</text>
     </view>
   </view>
 
@@ -197,17 +213,6 @@
     </view>
   </view>
 
-  <!-- 底部海报区（后端 banners position=home_bottom） -->
-  <view class="poster-section" wx:if="{{bottomPosters.length > 0}}">
-    <view class="poster-card" wx:for="{{bottomPosters}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
-      <image class="poster-image" src="{{item.image}}" mode="aspectFill" binderror="onAssetImageError" data-scene="bottom-poster" data-index="{{index}}"></image>
-      <view class="poster-overlay" wx:if="{{item.title}}">
-        <text class="poster-title">{{item.title}}</text>
-        <text class="poster-sub" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
-      </view>
-    </view>
-  </view>
-
   <view class="brand-zone-section" wx:if="{{brandZone.enabled}}">
     <view class="brand-zone-header">
       <view class="brand-zone-header-line"></view>
@@ -278,6 +283,25 @@
     <view class="brand-zone-story" wx:if="{{brandZone.story.body}}">
       <text class="brand-zone-story-title">{{brandZone.story.title || '企业介绍'}}</text>
       <text class="brand-zone-story-body">{{brandZone.story.body}}</text>
+    </view>
+
+    <view class="brand-zone-detail-entry" bindtap="onBrandZoneOpen" hover-class="press">
+      <view class="brand-zone-detail-copy">
+        <text class="brand-zone-detail-title">查看品牌详情</text>
+        <text class="brand-zone-detail-subtitle">集中查看品牌介绍、背书入口与企业认证信息</text>
+      </view>
+      <text class="brand-zone-detail-arrow">›</text>
+    </view>
+  </view>
+
+  <!-- 底部海报区（后端 banners position=home_bottom） -->
+  <view class="poster-section" wx:if="{{bottomPosters.length > 0}}">
+    <view class="poster-card" wx:for="{{bottomPosters}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
+      <image class="poster-image" src="{{item.image}}" mode="aspectFill" binderror="onAssetImageError" data-scene="bottom-poster" data-index="{{index}}"></image>
+      <view class="poster-overlay" wx:if="{{item.title}}">
+        <text class="poster-title">{{item.title}}</text>
+        <text class="poster-sub" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
+      </view>
     </view>
   </view>
 

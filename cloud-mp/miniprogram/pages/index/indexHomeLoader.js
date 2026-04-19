@@ -1,5 +1,4 @@
 const app = getApp();
-const { getTempUrls } = require('../../utils/cloud');
 const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
 const {
@@ -8,97 +7,35 @@ const {
     parseImages,
     resolveProductImage,
     resolveProductDisplayPrice,
-    normalizePriceValue
+    normalizePriceValue,
+    normalizeAssetUrl
 } = require('../../utils/dataFormatter');
-const { getApiBaseUrl } = require('../../config/env');
+const { pickDirectAssetUrl, pickPreferredAssetRef, resolveCloudImageUrl } = require('../../utils/cloudAssetRuntime');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
+const {
+    getBrandNewsCategoryDefs,
+    buildBrandNewsListPagePath,
+    normalizeBrandNewsCategoryKey
+} = require('../../utils/brandNewsCenter');
 const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
 const HOME_PAGE_CACHE_KEY = 'home_config_cache_v2';
 const FEATURED_PRODUCTS_CACHE_REV = 'product-image-20260418';
-const tempUrlCache = new Map();
-
-function normalizeAssetUrl(url = '') {
-    const raw = extractAssetValue(url);
-    if (!raw) return '';
-    if (/^cloud:\/\//i.test(raw)) return raw;
-    if (/^wxfile:\/\//i.test(raw) || /^data:/i.test(raw)) return raw;
-    if (/^https?:\/\//i.test(raw)) {
-        return raw;
-    }
-    if (raw.startsWith('//')) return `https:${raw}`;
-    if (raw.startsWith('/')) {
-        const apiBase = getApiBaseUrl().replace(/\/api\/?$/, '');
-        return `${apiBase}${raw}`;
-    }
-    if (/^(uploads|assets)\//i.test(raw)) {
-        const apiBase = getApiBaseUrl().replace(/\/api\/?$/, '');
-        return `${apiBase}/${raw.replace(/^\/+/, '')}`;
-    }
-    return raw;
-}
-
-function extractAssetValue(value) {
-    if (!value) return '';
-    if (typeof value === 'string') return value.trim();
-    if (typeof value === 'object') {
-        return String(value.url || value.image_url || value.temp_url || value.file_id || value.image || value.cover_image || '').trim();
-    }
-    return '';
-}
+const FIXED_BRAND_CARD_PRESETS = getBrandNewsCategoryDefs().map((item, index) => ({
+    slotIndex: index,
+    categoryKey: item.key,
+    title: item.title,
+    link_type: 'page',
+    link_value: buildBrandNewsListPagePath(item.key)
+}));
 
 function pickImageSource(record = {}) {
-    const direct = [record.image_url, record.url, record.image, record.cover_image]
-        .map((item) => normalizeAssetUrl(item))
-        .find(Boolean);
-    if (direct) return direct;
-
-    const fileId = String(record.file_id || '').trim();
-    if (/^cloud:\/\//i.test(fileId)) {
-        return normalizeAssetUrl(fileId);
-    }
-    return normalizeAssetUrl(fileId || '');
-}
-
-function isCloudFileId(value) {
-    return /^cloud:\/\//i.test(String(value || '').trim());
-}
-
-async function warmCloudTempUrls(urls = []) {
-    const cloudIds = [...new Set(
-        (Array.isArray(urls) ? urls : [])
-            .map((item) => normalizeAssetUrl(item))
-            .filter((item) => isCloudFileId(item) && !tempUrlCache.has(item))
-    )];
-    if (!cloudIds.length) return;
-
-    try {
-        const tempUrls = await getTempUrls(cloudIds);
-        const list = Array.isArray(tempUrls) ? tempUrls : [tempUrls];
-        cloudIds.forEach((cloudId, index) => {
-            const tempUrl = String(list[index] || '').trim();
-            if (tempUrl) tempUrlCache.set(cloudId, tempUrl);
-        });
-    } catch (err) {
-        console.warn('[Index] getTempUrls failed:', err);
-    }
-}
-
-async function resolveCloudImageUrl(value, fallback = '') {
-    const normalized = normalizeAssetUrl(value);
-    if (!normalized) return fallback;
-    if (!isCloudFileId(normalized)) return normalized;
-
-    if (!tempUrlCache.has(normalized)) {
-        await warmCloudTempUrls([normalized]);
-    }
-
-    return tempUrlCache.get(normalized) || fallback;
+    return pickDirectAssetUrl(record) || pickPreferredAssetRef(record);
 }
 
 async function resolveBannerListImages(list = []) {
     return Promise.all((Array.isArray(list) ? list : []).map(async (item) => ({
         ...item,
-        image: await resolveCloudImageUrl(item.image || item.image_url || item.url || item.file_id || '', '')
+        image: await resolveCloudImageUrl(item, '')
     })));
 }
 
@@ -108,14 +45,14 @@ async function resolveBrandZoneAssets(input = {}) {
         ...(input || {})
     };
     const [coverImage, cards, certifications] = await Promise.all([
-        resolveCloudImageUrl(brandZone.coverImage || '', ''),
+        resolveCloudImageUrl({ file_id: brandZone.file_id || '', image: brandZone.coverImage || '' }, ''),
         Promise.all((Array.isArray(brandZone.cards) ? brandZone.cards : []).map(async (item) => ({
             ...item,
-            image: await resolveCloudImageUrl(item.image || item.file_id || '', '')
+            image: await resolveCloudImageUrl(item, '')
         }))),
         Promise.all((Array.isArray(brandZone.certifications) ? brandZone.certifications : []).map(async (item) => ({
             ...item,
-            image: await resolveCloudImageUrl(item.image || item.file_id || '', '')
+            image: await resolveCloudImageUrl(item, '')
         })))
     ]);
     return {
@@ -265,6 +202,40 @@ function normalizeBrandList(list = [], prefix = 'brand-item', options = {}) {
         .filter(Boolean);
 }
 
+function pickFixedBrandCardSource(list = [], preset = {}, index = 0) {
+    const rows = Array.isArray(list) ? list : [];
+    return rows.find((item) => {
+        if (!item || typeof item !== 'object') return false;
+        if (Number(item.slot_index) === index) return true;
+        return normalizeBrandNewsCategoryKey(item.category_key, '') === preset.categoryKey;
+    }) || rows[index] || {};
+}
+
+function isRenderableFixedBrandCard(item = {}) {
+    if (!item || typeof item !== 'object') return false;
+    return !!normalizeText(item.subtitle || item.desc || item.description || item.title)
+        || !!pickImageSource(item)
+        || !!normalizeText(item.file_id);
+}
+
+function normalizeFixedBrandCards(list = []) {
+    return FIXED_BRAND_CARD_PRESETS.map((preset, index) => {
+        const source = pickFixedBrandCardSource(list, preset, index);
+        if (!isRenderableFixedBrandCard(source)) return null;
+        return {
+            id: source.id || `brand-zone-card-${preset.categoryKey}`,
+            slot_index: index,
+            category_key: preset.categoryKey,
+            title: preset.title,
+            subtitle: normalizeText(source.subtitle || source.desc || source.description),
+            image: pickImageSource(source),
+            file_id: normalizeText(source.file_id),
+            link_type: preset.link_type,
+            link_value: preset.link_value
+        };
+    }).filter(Boolean);
+}
+
 function createEmptyBrandZone() {
     return {
         enabled: false,
@@ -286,7 +257,7 @@ function normalizeHomeBrandZone(configs = {}) {
         title: normalizeText(configs.brand_story_title, '企业介绍'),
         body: normalizeText(configs.brand_story_body)
     };
-    const cards = normalizeBrandList(configs.brand_endorsements, 'brand-zone-card', { withLink: true }).slice(0, 3);
+    const cards = normalizeFixedBrandCards(configs.brand_endorsements);
     const certifications = normalizeBrandList(configs.brand_certifications, 'brand-zone-certification');
     const enabled = configs.brand_zone_enabled !== undefined
         ? !(configs.brand_zone_enabled === false || configs.brand_zone_enabled === 'false' || configs.brand_zone_enabled === 0 || configs.brand_zone_enabled === '0')
@@ -464,6 +435,8 @@ async function loadPosters(page, options = {}) {
         id: banner.id,
         image: pickImageSource(banner),
         file_id: banner.file_id || '',
+        image_url: banner.image_url || banner.image || banner.url || '',
+        temp_url: banner.temp_url || '',
         title: banner.title || '',
         subtitle: banner.subtitle || '',
         link_type: banner.link_type || 'none',
@@ -564,6 +537,8 @@ async function applyHomeConfig(page, data) {
             id: banner.id,
             image: pickImageSource(banner),
             file_id: banner.file_id || '',
+            image_url: banner.image_url || banner.image || banner.url || '',
+            temp_url: banner.temp_url || '',
             title: banner.title || '',
             subtitle: banner.subtitle || '',
             link_type: banner.link_type || 'none',
@@ -617,7 +592,7 @@ async function applyHomeConfig(page, data) {
 
 async function loadCoupons(page) {
     if (!app.globalData.isLoggedIn) {
-        page.setData({ homeCoupons: [] });
+        page.setData({ homeCoupons: [], unusedCouponCount: 0 });
         return;
     }
     try {

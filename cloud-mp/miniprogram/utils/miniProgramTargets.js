@@ -1,4 +1,4 @@
-const registry = require('./miniProgramTargets.json')
+const registry = require('./miniProgramTargetsData')
 
 const TAB_PAGES = Array.isArray(registry.tabPages) ? registry.tabPages.slice() : []
 const PAGE_WHITELIST_PREFIXES = Array.isArray(registry.pageWhitelistPrefixes)

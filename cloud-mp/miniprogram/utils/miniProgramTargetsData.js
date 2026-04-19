@@ -1,0 +1,170 @@
+module.exports = {
+    tabPages: [
+        '/pages/index/index',
+        '/pages/category/category',
+        '/pages/activity/activity',
+        '/pages/user/user'
+    ],
+    pageWhitelistPrefixes: [
+        '/pages/index/',
+        '/pages/category/',
+        '/pages/activity/',
+        '/pages/user/',
+        '/pages/product/detail',
+        '/pages/order/',
+        '/pages/address/',
+        '/pages/distribution/',
+        '/pages/wallet/',
+        '/pages/points/',
+        '/pages/lottery/',
+        '/pages/coupon/',
+        '/pages/slash/',
+        '/pages/group/',
+        '/pages/logistics/',
+        '/pages/search/',
+        '/pages/stations/',
+        '/pages/pickup/'
+    ],
+    targets: [
+        {
+            key: 'page:index',
+            title: '商城首页',
+            group: '主导航',
+            link_type: 'page',
+            link_value: '/pages/index/index',
+            tab: true,
+            note: '首页 Tab'
+        },
+        {
+            key: 'page:category',
+            title: '全部商品',
+            group: '主导航',
+            link_type: 'page',
+            link_value: '/pages/category/category',
+            tab: true,
+            note: '分类 Tab'
+        },
+        {
+            key: 'page:activity',
+            title: '活动中心',
+            group: '主导航',
+            link_type: 'page',
+            link_value: '/pages/activity/activity',
+            tab: true,
+            note: '活动 Tab'
+        },
+        {
+            key: 'page:user',
+            title: '个人中心',
+            group: '主导航',
+            link_type: 'page',
+            link_value: '/pages/user/user',
+            tab: true,
+            note: '我的 Tab'
+        },
+        {
+            key: 'flash_sale:current',
+            title: '当前有效限时商品',
+            group: '营销入口',
+            link_type: 'flash_sale',
+            link_value: '',
+            note: '进入当前有效档期'
+        },
+        {
+            key: 'coupon:center',
+            title: '领券中心',
+            group: '营销入口',
+            link_type: 'coupon_center',
+            link_value: '__coupon_center__',
+            note: '领券中心页'
+        },
+        {
+            key: 'page:brand-zone',
+            title: '品牌专区详情',
+            group: '品牌内容',
+            link_type: 'page',
+            link_value: '/pages/index/brand-zone-detail',
+            note: '首页品牌专区承接页'
+        },
+        {
+            key: 'page:search',
+            title: '搜索页',
+            group: '商城功能',
+            link_type: 'page',
+            link_value: '/pages/search/search',
+            note: '商品搜索'
+        },
+        {
+            key: 'page:coupon-list',
+            title: '我的优惠券',
+            group: '商城功能',
+            link_type: 'page',
+            link_value: '/pages/coupon/list',
+            note: '优惠券明细'
+        },
+        {
+            key: 'page:points',
+            title: '积分中心',
+            group: '商城功能',
+            link_type: 'page',
+            link_value: '/pages/points/index',
+            note: '积分任务与兑换'
+        },
+        {
+            key: 'page:membership-center',
+            title: '会员中心',
+            group: '会员服务',
+            link_type: 'page',
+            link_value: '/pages/user/membership-center',
+            note: '会员权益中心'
+        },
+        {
+            key: 'page:wallet',
+            title: '我的钱包',
+            group: '会员服务',
+            link_type: 'page',
+            link_value: '/pages/wallet/index',
+            note: '钱包首页'
+        },
+        {
+            key: 'page:orders',
+            title: '我的订单',
+            group: '订单服务',
+            link_type: 'page',
+            link_value: '/pages/order/list',
+            note: '全部订单'
+        },
+        {
+            key: 'page:refunds',
+            title: '售后列表',
+            group: '订单服务',
+            link_type: 'page',
+            link_value: '/pages/order/refund-list',
+            note: '退款/售后列表'
+        },
+        {
+            key: 'page:customer-service',
+            title: '专属客服',
+            group: '会员服务',
+            link_type: 'page',
+            link_value: '/pages/user/customer-service',
+            note: '客服入口'
+        },
+        {
+            key: 'page:favorites',
+            title: '足迹收藏',
+            group: '会员服务',
+            link_type: 'page',
+            link_value: '/pages/user/favorites-footprints',
+            note: '收藏与足迹'
+        },
+        {
+            key: 'page:distribution-center',
+            title: '分销中心',
+            group: '分销服务',
+            link_type: 'page',
+            link_value: '/pages/distribution/center',
+            note: '分销中心首页'
+        }
+    ]
+}

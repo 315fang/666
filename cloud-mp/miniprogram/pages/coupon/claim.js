@@ -67,10 +67,16 @@ Page({
             const found = res && (res.found !== false);
             const coupon = res && res.coupon;
             const ticketStatus = String(res && res.ticket_status || '').trim();
+            const claimStatus = String(res && res.claim_status || '').trim();
+            const claimMessage = String(res && res.claim_message || '').trim();
             if (!found || !coupon) {
                 this.setData({ loading: false, claimStatus: 'error', claimMsg: '优惠券不存在或已下架' });
                 return;
             }
+            const valueText = couponValueText(coupon);
+            const minPurchaseText = coupon.type === 'exchange' || coupon.coupon_type === 'exchange'
+                ? '指定商品兑换'
+                : (Number(coupon.min_purchase) > 0 ? `满 ${coupon.min_purchase} 元可用` : '无门槛');
             if (ticketId) {
                 if (ticketStatus === 'claimed') {
                     this.setData({
@@ -78,10 +84,8 @@ Page({
                         coupon,
                         claimStatus: 'claimed',
                         claimMsg: '该领取码已被使用',
-                        valueText: couponValueText(coupon),
-                        minPurchaseText: coupon.type === 'exchange' || coupon.coupon_type === 'exchange'
-                            ? '指定商品兑换'
-                            : (Number(coupon.min_purchase) > 0 ? `满 ${coupon.min_purchase} 元可用` : '无门槛')
+                        valueText,
+                        minPurchaseText
                     });
                     return;
                 }
@@ -91,30 +95,29 @@ Page({
                         coupon,
                         claimStatus: 'error',
                         claimMsg: '该领取码已失效',
-                        valueText: couponValueText(coupon),
-                        minPurchaseText: coupon.type === 'exchange' || coupon.coupon_type === 'exchange'
-                            ? '指定商品兑换'
-                            : (Number(coupon.min_purchase) > 0 ? `满 ${coupon.min_purchase} 元可用` : '无门槛')
+                        valueText,
+                        minPurchaseText
                     });
                     return;
                 }
             }
-            if (Number(coupon.is_active) === 0) {
-                this.setData({ loading: false, coupon, claimStatus: 'inactive', claimMsg: '此活动已结束' });
-                return;
-            }
-            if ((coupon.type || coupon.coupon_type) !== 'exchange' && coupon.stock !== -1 && Number(coupon.stock) <= 0) {
-                this.setData({ loading: false, coupon, claimStatus: 'out_of_stock', claimMsg: '此券已被领完' });
+            if (claimStatus && claimStatus !== 'claimable') {
+                this.setData({
+                    loading: false,
+                    coupon,
+                    claimStatus,
+                    claimMsg: claimMessage || '当前暂不可领取',
+                    valueText,
+                    minPurchaseText
+                });
                 return;
             }
             this.setData({
                 loading: false,
                 coupon,
                 claimStatus: 'idle',
-                valueText: couponValueText(coupon),
-                minPurchaseText: (coupon.type || coupon.coupon_type) === 'exchange'
-                    ? '指定商品兑换'
-                    : (Number(coupon.min_purchase) > 0 ? `满 ${coupon.min_purchase} 元可用` : '无门槛')
+                valueText,
+                minPurchaseText
             });
         } catch (e) {
             this.setData({ loading: false, claimStatus: 'error', claimMsg: '加载失败，请稍后重试' });

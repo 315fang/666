@@ -2,7 +2,7 @@ const { get } = require('../../utils/request');
 const { requireLogin } = require('../../utils/auth');
 const { SharePosterCore } = require('./utils/sharePosterCore');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
-const { getTempUrls } = require('../../utils/cloud');
+const { resolveCloudImageUrl } = require('../../utils/cloudAssetRuntime');
 const app = getApp();
 
 const POSTER_VARIANT_OPTIONS = [
@@ -95,29 +95,28 @@ Page({
     },
 
     async resolvePosterAsset(source) {
-        const raw = String(source || '').trim();
-        if (!raw) return '';
-        if (/^cloud:\/\//i.test(raw)) {
-            try {
-                return await getTempUrls(raw);
-            } catch (_) {
-                return raw;
-            }
-        }
-        return raw;
+        return resolveCloudImageUrl(source, '');
     },
 
     async buildPosterBrandConfig() {
         const bc = await this.refreshBrandConfig();
         const homeConfigs = await this.refreshHomeConfigs();
-        const coverSource = homeConfigs.official_promo_cover
-            || bc.official_promo_cover
-            || bc.share_poster_cover_file_id
-            || bc.share_poster_cover_url
-            || bc.share_poster_file_id
-            || bc.share_poster_url
-            || '';
-        const brandLogoSource = homeConfigs.brand_logo || bc.brand_logo || '';
+        const coverSource = {
+            file_id: homeConfigs.official_promo_cover_file_id
+                || bc.official_promo_cover_file_id
+                || bc.share_poster_cover_file_id
+                || bc.share_poster_file_id
+                || '',
+            image_url: homeConfigs.official_promo_cover
+                || bc.official_promo_cover
+                || bc.share_poster_cover_url
+                || bc.share_poster_url
+                || ''
+        };
+        const brandLogoSource = {
+            file_id: homeConfigs.brand_logo_file_id || bc.brand_logo_file_id || '',
+            image_url: homeConfigs.brand_logo || bc.brand_logo || ''
+        };
         const resolvedCover = await this.resolvePosterAsset(coverSource);
         const resolvedBrandLogo = await this.resolvePosterAsset(brandLogoSource);
         return {

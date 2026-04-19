@@ -13,6 +13,8 @@ const migrationTodoJsonPath = path.join(docsRoot, 'CLOUDBASE_ASSET_URL_MIGRATION
 const migrationTodoMdPath = path.join(docsRoot, 'CLOUDBASE_ASSET_URL_MIGRATION_TODO.md');
 
 const shouldApply = process.argv.includes('--apply');
+const AUTO_FIX_CATEGORIES = new Set(['stale_url_but_recoverable', 'cloud_asset_without_file_id']);
+const MANUAL_MIGRATION_CATEGORIES = new Set(['http_url_without_file_id', 'signed_url_without_file_id']);
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -80,29 +82,39 @@ function callMcporter(selector, payload) {
 }
 
 function buildCleanupPatch(sample) {
-  const patch = {
-    updated_at: nowIso()
-  };
+  const patch = { updated_at: nowIso() };
+  const clearFields = Array.isArray(sample.clear_fields) ? sample.clear_fields : [];
 
-  // For recoverable records, clear stale URL fields and keep file_id as source of truth.
-  if (sample.collection === 'materials') {
-    patch.url = '';
-    patch.temp_url = '';
-    patch.image_url = '';
-  } else {
-    patch.url = '';
-    patch.image_url = '';
-    patch.temp_url = '';
+  if (sample.category === 'stale_url_but_recoverable') {
+    clearFields.forEach((field) => {
+      patch[field] = '';
+    });
+    return patch;
+  }
+
+  if (sample.category === 'cloud_asset_without_file_id') {
+    if (sample.file_id_path) {
+      patch[sample.file_id_path] = pickString(sample.asset_value);
+    } else {
+      patch.file_id = pickString(sample.asset_value);
+    }
+    clearFields.forEach((field) => {
+      patch[field] = '';
+    });
+    return patch;
   }
 
   return patch;
 }
 
-function applyUpdate(collectionName, docId, patch) {
+function applyUpdate(sample, patch) {
+  const query = sample.source_type === 'singleton'
+    ? { key: sample.singleton_key }
+    : { _id: sample.doc_id || sample.id };
   return callMcporter('cloudbase.writeNoSqlDatabaseContent', {
     action: 'update',
-    collectionName,
-    query: { _id: docId },
+    collectionName: sample.collection,
+    query,
     update: { $set: patch },
     isMulti: false,
     upsert: false
@@ -120,9 +132,9 @@ function renderRepairReportMarkdown(report) {
   lines.push('');
   lines.push('## Summary');
   lines.push('');
-  lines.push(`- stale_url_but_recoverable candidates: ${report.summary.stale_candidates}`);
-  lines.push(`- stale records updated: ${report.summary.stale_updated}`);
-  lines.push(`- stale records failed: ${report.summary.stale_failed}`);
+  lines.push(`- auto-fix candidates: ${report.summary.auto_fix_candidates}`);
+  lines.push(`- records updated: ${report.summary.auto_fix_updated}`);
+  lines.push(`- records failed: ${report.summary.auto_fix_failed}`);
   lines.push(`- manual migration required: ${report.summary.manual_migration_required}`);
   lines.push('');
 
@@ -132,7 +144,10 @@ function renderRepairReportMarkdown(report) {
     lines.push('- none');
   } else {
     report.updated.forEach((item) => {
-      lines.push(`- [${item.collection}] id=${item.id} | ${item.ok ? 'OK' : `FAILED (${item.error || 'unknown'})`}`);
+      const location = item.source_type === 'singleton'
+        ? `${item.collection}.${item.singleton_key || ''}:${item.field_path || ''}`
+        : item.collection;
+      lines.push(`- [${location}] id=${item.id} | ${item.ok ? 'OK' : `FAILED (${item.error || 'unknown'})`}`);
     });
   }
 
@@ -143,7 +158,10 @@ function renderRepairReportMarkdown(report) {
     lines.push('- none');
   } else {
     report.manual_migration.forEach((item) => {
-      lines.push(`- [${item.collection}] id=${item.id} | ${item.title || 'untitled'} | ${item.image_url || item.url || ''}`);
+      const location = item.source_type === 'singleton'
+        ? `${item.collection}.${item.singleton_key || ''}:${item.field_path || ''}`
+        : item.collection;
+      lines.push(`- [${location}] id=${item.id} | ${item.title || 'untitled'} | ${item.image_url || item.url || item.asset_value || ''}`);
     });
   }
 
@@ -162,8 +180,8 @@ function renderMigrationTodoMarkdown(todo) {
   lines.push('## Required Actions');
   lines.push('');
   lines.push('1. Re-upload this asset in the admin material library so a cloud:// file_id is created.');
-  lines.push('2. Backfill file_id for the related banner/splash record and clear legacy image_url/url fields.');
-  lines.push('3. Run npm run audit:asset-urls again and verify http_url_without_file_id is zero.');
+  lines.push('2. Backfill file_id for the related record and clear legacy image_url/url fields.');
+  lines.push('3. Run npm run audit:asset-urls again and verify signed/http temporary risks are zero.');
   lines.push('');
   lines.push('## Records');
   lines.push('');
@@ -171,7 +189,10 @@ function renderMigrationTodoMarkdown(todo) {
     lines.push('- none');
   } else {
     todo.records.forEach((item) => {
-      lines.push(`- [${item.collection}] id=${item.id} | ${item.title || 'untitled'} | ${item.image_url || item.url || ''}`);
+      const location = item.source_type === 'singleton'
+        ? `${item.collection}.${item.singleton_key || ''}:${item.field_path || ''}`
+        : item.collection;
+      lines.push(`- [${location}] id=${item.id} | ${item.title || 'untitled'} | ${item.image_url || item.url || item.asset_value || ''}`);
     });
   }
   lines.push('');
@@ -184,8 +205,18 @@ function main() {
     throw new Error('Missing docs/CLOUDBASE_ASSET_URL_AUDIT.json. Run npm run audit:asset-urls first.');
   }
 
-  const staleCandidates = audit.samples.filter((item) => item.category === 'stale_url_but_recoverable');
-  const manualMigration = audit.samples.filter((item) => item.category === 'http_url_without_file_id' || item.category === 'signed_url_without_file_id');
+  const autoFixCandidates = audit.samples.filter((item) => (
+    AUTO_FIX_CATEGORIES.has(item.category)
+    && (item.category !== 'cloud_asset_without_file_id' || item.source_type !== 'singleton' || item.file_id_path)
+  ));
+  const manualMigration = audit.samples.filter((item) => (
+    MANUAL_MIGRATION_CATEGORIES.has(item.category)
+    || (
+      item.category === 'cloud_asset_without_file_id'
+      && item.source_type === 'singleton'
+      && !item.file_id_path
+    )
+  ));
 
   const report = {
     kind: 'cloudbase_asset_url_repair_report',
@@ -198,9 +229,9 @@ function main() {
       env_status: pickString(audit.environment?.env_status)
     },
     summary: {
-      stale_candidates: staleCandidates.length,
-      stale_updated: 0,
-      stale_failed: 0,
+      auto_fix_candidates: autoFixCandidates.length,
+      auto_fix_updated: 0,
+      auto_fix_failed: 0,
       manual_migration_required: manualMigration.length
     },
     updated: [],
@@ -208,16 +239,19 @@ function main() {
   };
 
   if (shouldApply) {
-    staleCandidates.forEach((item) => {
+    autoFixCandidates.forEach((item) => {
       const record = {
         collection: item.collection,
+        singleton_key: item.singleton_key || '',
+        source_type: item.source_type || 'collection',
+        field_path: item.field_path || '',
         id: item.id,
         ok: false,
         error: ''
       };
       try {
         const patch = buildCleanupPatch(item);
-        const result = applyUpdate(item.collection, item.id, patch);
+        const result = applyUpdate(item, patch);
         record.ok = !!(result && result.success !== false);
         if (!record.ok) {
           record.error = 'writeNoSqlDatabaseContent returned non-success';
@@ -229,8 +263,11 @@ function main() {
       report.updated.push(record);
     });
   } else {
-    report.updated = staleCandidates.map((item) => ({
+    report.updated = autoFixCandidates.map((item) => ({
       collection: item.collection,
+      singleton_key: item.singleton_key || '',
+      source_type: item.source_type || 'collection',
+      field_path: item.field_path || '',
       id: item.id,
       ok: true,
       error: '',
@@ -238,8 +275,8 @@ function main() {
     }));
   }
 
-  report.summary.stale_updated = report.updated.filter((item) => item.ok).length;
-  report.summary.stale_failed = report.updated.filter((item) => !item.ok).length;
+  report.summary.auto_fix_updated = report.updated.filter((item) => item.ok).length;
+  report.summary.auto_fix_failed = report.updated.filter((item) => !item.ok).length;
 
   const migrationTodo = {
     kind: 'cloudbase_asset_migration_todo',
@@ -254,17 +291,17 @@ function main() {
   writeText(migrationTodoMdPath, renderMigrationTodoMarkdown(migrationTodo));
 
   console.log(JSON.stringify({
-    ok: report.summary.stale_failed === 0,
+    ok: report.summary.auto_fix_failed === 0,
     mode: report.mode,
-    stale_candidates: report.summary.stale_candidates,
-    stale_updated: report.summary.stale_updated,
-    stale_failed: report.summary.stale_failed,
+    auto_fix_candidates: report.summary.auto_fix_candidates,
+    auto_fix_updated: report.summary.auto_fix_updated,
+    auto_fix_failed: report.summary.auto_fix_failed,
     manual_migration_required: report.summary.manual_migration_required,
     report_json: path.relative(projectRoot, reportJsonPath),
     migration_todo_json: path.relative(projectRoot, migrationTodoJsonPath)
   }, null, 2));
 
-  if (report.summary.stale_failed > 0) {
+  if (report.summary.auto_fix_failed > 0) {
     process.exitCode = 1;
   }
 }

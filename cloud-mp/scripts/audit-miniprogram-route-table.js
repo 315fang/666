@@ -6,7 +6,7 @@ const docsDir = path.join(projectRoot, 'docs');
 const jsonPath = path.join(docsDir, 'MINIPROGRAM_ROUTE_TABLE_AUDIT.json');
 const mdPath = path.join(docsDir, 'MINIPROGRAM_ROUTE_TABLE_AUDIT.md');
 
-const requestShimPath = path.join(projectRoot, 'miniprogram', 'utils', 'request.js');
+const requestRouteTablePath = path.join(projectRoot, 'miniprogram', 'utils', 'requestRoutes.js');
 const orderIndexPath = path.join(projectRoot, 'cloudfunctions', 'order', 'index.js');
 const paymentIndexPath = path.join(projectRoot, 'cloudfunctions', 'payment', 'index.js');
 
@@ -30,19 +30,21 @@ function actionExists(sourceText, actionName) {
 }
 
 function main() {
-  const requestShim = fs.readFileSync(requestShimPath, 'utf8');
+  delete require.cache[require.resolve(requestRouteTablePath)];
+  const { ROUTE_TABLE } = require(requestRouteTablePath);
   const orderIndex = fs.readFileSync(orderIndexPath, 'utf8');
   const paymentIndex = fs.readFileSync(paymentIndexPath, 'utf8');
 
   const findings = requiredRoutes.map((item) => {
-    const routeSnippet = `${item.route}:`;
-    const routeOk = requestShim.includes(routeSnippet)
-      && requestShim.includes(`fn: ${item.fn}`)
-      && requestShim.includes(`action: ${item.action}`);
+    const routeKey = item.route.replace(/'/g, '');
+    const routeConfig = ROUTE_TABLE[routeKey];
+    const routeOk = !!routeConfig
+      && routeConfig.fn === item.fn.replace(/'/g, '')
+      && routeConfig.action === item.action.replace(/'/g, '');
     const ownerSource = item.owner === 'order' ? orderIndex : paymentIndex;
     const actionOk = actionExists(ownerSource, item.action.replace(/'/g, ''));
     return {
-      route: item.route.replace(/'/g, ''),
+      route: routeKey,
       action: item.action.replace(/'/g, ''),
       route_ok: routeOk,
       action_ok: actionOk,

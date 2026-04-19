@@ -85,7 +85,7 @@ function navigate(linkType, linkValue) {
         }
 
         case 'coupon_center':
-            wx.navigateTo({ url: '/pages/coupon/list' });
+            wx.navigateTo({ url: '/pages/coupon/center' });
             break;
 
         case 'page':

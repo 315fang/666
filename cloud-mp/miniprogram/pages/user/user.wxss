@@ -248,13 +248,6 @@
   flex-shrink: 0;
 }
 
-.member-pill-label {
-  font-size: 15rpx;
-  color: rgba(219, 236, 255, 0.78);
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
 .member-pill-text {
   font-size: 17rpx;
   color: #FFFFFF;
@@ -882,6 +875,16 @@
 /* 小蓝点+数字（新鲜标记，点击即消） */
 .order-tab-dot {
   background: #3b82f6;
+}
+
+.order-tab-alert-dot {
+  width: 18rpx;
+  min-width: 18rpx;
+  height: 18rpx;
+  padding: 0;
+  background: #ef4444;
+  border: 4rpx solid #fff;
+  box-shadow: 0 6rpx 14rpx rgba(239, 68, 68, 0.24);
 }
 
 .order-tab-text {

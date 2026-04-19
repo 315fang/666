@@ -128,14 +128,39 @@ exports.main = async (event) => {
     const path = normalizePath(event || {});
 
     try {
-        const ready = app.locals.dataStore?.readyPromise;
-        if (ready) {
-            await Promise.race([
-                Promise.resolve(ready),
-                new Promise(r => setTimeout(r, 8000))
-            ]);
+        if (typeof app.locals.dataStore?.waitUntilReady === 'function') {
+            await app.locals.dataStore.waitUntilReady(8000);
+        } else {
+            const ready = app.locals.dataStore?.readyPromise;
+            if (ready) await Promise.resolve(ready);
         }
+    } catch (error) {
+        const message = error && error.message ? error.message : '数据源尚未就绪';
+        logPerf({
+            trace_id: traceId,
+            cold_start: coldStart,
+            method,
+            route: path,
+            status: 'error',
+            code: 'data_store_not_ready',
+            status_code: 503,
+            total_ms: Date.now() - startedAt,
+            cache_hit: false
+        });
+        return {
+            statusCode: 503,
+            headers: {
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+                code: 'SERVICE_UNAVAILABLE',
+                message
+            }),
+            isBase64Encoded: false
+        };
+    }
 
+    try {
         const headers = normalizeHeaders(event.headers);
         const query = normalizeQuery(event);
         const body = normalizeBody(event);

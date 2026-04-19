@@ -1,15 +1,13 @@
 // pages/activity/activity.js
-const { getTempUrls } = require('../../utils/cloud');
 const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
 const { navigate } = require('../../utils/navigator');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
-const { normalizeAssetUrl } = require('../../utils/dataFormatter');
+const { pickPreferredAssetRef, resolveCloudImageUrl } = require('../../utils/cloudAssetRuntime');
 const { loadConfig } = require('./activityLoader');
 const { startBannerCountdown, clearBannerTimers } = require('./activityTimers');
 const { buildActivitySections } = require('../../utils/activitySectionBuilder');
 const app = getApp();
-const tempUrlCache = new Map();
 
 function getActivityPageConfig() {
     return getConfigSection('activity_page_config');
@@ -28,31 +26,10 @@ function parsePositiveInt(v) {
     return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-function isCloudFileId(value) {
-    return /^cloud:\/\//i.test(String(value || '').trim());
-}
-
-async function resolveCloudImageUrl(value, fallback = '') {
-    const normalized = normalizeAssetUrl(value);
-    if (!normalized) return fallback;
-    if (!isCloudFileId(normalized)) return normalized;
-
-    if (!tempUrlCache.has(normalized)) {
-        try {
-            const tempUrl = await getTempUrls(normalized);
-            if (tempUrl) tempUrlCache.set(normalized, String(tempUrl).trim());
-        } catch (err) {
-            console.warn('[Activity] getTempUrls failed:', err);
-        }
-    }
-
-    return tempUrlCache.get(normalized) || fallback;
-}
-
 async function resolveBannerSlideImages(slides = []) {
     return Promise.all((Array.isArray(slides) ? slides : []).map(async (item) => ({
         ...item,
-        image: await resolveCloudImageUrl(item.image || item.file_id || '', '')
+        image: await resolveCloudImageUrl(item, '')
     })));
 }
 
@@ -61,13 +38,13 @@ async function resolveSectionImages(sections = []) {
         if (Array.isArray(section.subCards) && section.subCards.length) {
             const subCards = await Promise.all(section.subCards.map(async (card) => ({
                 ...card,
-                image: await resolveCloudImageUrl(card.image || card.file_id || '', '')
+                image: await resolveCloudImageUrl(card, '')
             })));
             return { ...section, subCards };
         }
         return {
             ...section,
-            image: await resolveCloudImageUrl(section.image || section.file_id || '', '')
+            image: await resolveCloudImageUrl(section, '')
         };
     }));
 }
@@ -75,7 +52,7 @@ async function resolveSectionImages(sections = []) {
 async function resolveBrandNewsImages(list = []) {
     return Promise.all((Array.isArray(list) ? list : []).map(async (item) => ({
         ...item,
-        cover_image: await resolveCloudImageUrl(item.cover_image || item.image || item.file_id || '', '')
+        cover_image: await resolveCloudImageUrl(item, '')
     })));
 }
 
@@ -125,7 +102,7 @@ function normalizeCard(item = {}, idx = 0) {
         title: item.title || '',
         subtitle: item.subtitle || item.subTitle || '',
         tag: item.tag || '',
-        image: item.file_id || item.image || item.image_url || item.cover_image || '',
+        image: pickPreferredAssetRef(item),
         gradient: item.gradient || 'linear-gradient(135deg,#3D2F22,#5A4535)',
         link_type: item.link_type || 'none',
         link_value: item.link_value || '',
@@ -416,7 +393,7 @@ Page({
             title:    item.title || '',
             subtitle: item.subtitle || item.subTitle || '',
             tag:      item.tag || '',
-            image:    item.image || '',
+            image:    pickPreferredAssetRef(item),
             gradient: item.gradient || 'linear-gradient(135deg,#3D2F22,#5A4535)',
             link_type:  item.link_type || (item.link ? 'page' : 'none'),
             link_value: item.link_value || item.link || '',

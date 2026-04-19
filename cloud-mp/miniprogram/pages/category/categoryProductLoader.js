@@ -1,14 +1,13 @@
-const { getTempUrls } = require('../../utils/cloud');
 const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
 const { resolveProductImage, resolveProductDisplayPrice, genHeatLabel, normalizeAssetUrl } = require('../../utils/dataFormatter');
+const { isCloudFileId, pickPreferredAssetRef, resolveCloudImageUrl } = require('../../utils/cloudAssetRuntime');
 const { getMiniProgramConfig } = require('../../utils/miniProgramConfig');
 const app = getApp();
 
 const CATEGORY_BACKGROUND_BATCH_SIZE = 2;
 const CATEGORY_PRODUCTS_CACHE_TTL = 2 * 60 * 1000;
 const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
-const tempUrlCache = new Map();
 
 function getPointDeductionRule() {
     const config = getMiniProgramConfig();
@@ -70,31 +69,14 @@ function dedupeProductsById(list = []) {
     });
 }
 
-function isCloudFileId(value) {
-    return /^cloud:\/\//i.test(String(value || '').trim());
-}
-
-async function resolveCloudImageUrl(value, fallback = '') {
-    const normalized = normalizeAssetUrl(value);
-    if (!normalized) return fallback;
-    if (!isCloudFileId(normalized)) return normalized;
-
-    if (!tempUrlCache.has(normalized)) {
-        try {
-            const tempUrl = await getTempUrls(normalized);
-            if (tempUrl) tempUrlCache.set(normalized, String(tempUrl).trim());
-        } catch (err) {
-            console.warn('[CategoryProducts] getTempUrls failed:', err);
-        }
-    }
-
-    return tempUrlCache.get(normalized) || fallback;
-}
-
 function pickMappedProductImage(item) {
-    const current = normalizeAssetUrl(item?.image || '');
-    if (current && !isCloudFileId(current)) return current;
-    return resolveProductImage(item);
+    return pickPreferredAssetRef({
+        file_id: item?.file_id || item?.fileId || '',
+        image: item?.image || '',
+        image_url: item?.image_url || '',
+        cover_image: item?.cover_image || '',
+        url: resolveProductImage(item)
+    }) || normalizeAssetUrl(resolveProductImage(item));
 }
 
 function mapProductsForCategory(page, list) {
@@ -151,7 +133,12 @@ async function mapProductsForCategoryAsync(page, list) {
     const mapped = mapProductsForCategory(page, list);
     return Promise.all(mapped.map(async (item) => ({
         ...item,
-        image: await resolveCloudImageUrl(item.image, PRODUCT_PLACEHOLDER)
+        image: await resolveCloudImageUrl({
+            file_id: item.file_id || item.fileId || '',
+            image: item.image,
+            image_url: item.image_url || '',
+            cover_image: item.cover_image || ''
+        }, PRODUCT_PLACEHOLDER)
     })));
 }
 

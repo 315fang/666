@@ -114,6 +114,46 @@ async function getWalletAccount(user = {}, openid = '') {
     return null;
 }
 
+function walletAccountUserId(user = {}, openid = '') {
+    return goodsFundIdentityCandidates(user, openid).find((value) => value !== openid) || openid;
+}
+
+async function syncWalletAccountBalanceFromUser(user = {}, walletAccount = null, openid = '') {
+    const userBalance = roundMoney(resolveGoodsFundBalance(user));
+    const accountBalance = walletAccount ? roundMoney(toNumber(walletAccount.balance, userBalance)) : null;
+    if (accountBalance != null && Math.abs(accountBalance - userBalance) < 0.0001) {
+        return {
+            balance: userBalance,
+            account: walletAccount
+        };
+    }
+
+    const accountId = String(walletAccount?._id || walletAccount?.id || `wallet-${String(walletAccountUserId(user, openid)).replace(/[^a-zA-Z0-9_-]/g, '_')}`);
+    const nextAccount = {
+        ...(walletAccount || {}),
+        _id: accountId,
+        id: accountId,
+        user_id: walletAccountUserId(user, openid),
+        openid: user.openid || openid || '',
+        account_type: walletAccount?.account_type || 'goods_fund',
+        status: walletAccount?.status || 'active',
+        balance: userBalance,
+        updated_at: new Date().toISOString(),
+        created_at: walletAccount?.created_at || new Date().toISOString()
+    };
+
+    await db.collection('wallet_accounts').doc(accountId).set({
+        data: nextAccount
+    }).catch((error) => {
+        console.error('[distribution.agentWallet] wallet_accounts 对账失败:', error && error.message ? error.message : error);
+    });
+
+    return {
+        balance: userBalance,
+        account: nextAccount
+    };
+}
+
 async function listUnifiedGoodsFundLogs(user = {}, openid = '') {
     const ids = goodsFundIdentityCandidates(user, openid);
     const [legacyLogs, cloudLogs] = await Promise.all([
@@ -785,24 +825,23 @@ const handleAction = {
             walletAccountResult
         ]);
         const user = userState || baseUser;
+        const syncedWallet = await syncWalletAccountBalanceFromUser(user, walletAccount, openid);
         const summary = goodsFundSummary || {
             total_recharge: 0,
             total_deduct: 0,
             frozen_balance: 0
         };
         const roleLevel = toNumber(user.role_level, 0);
-        const goodsFundBalance = walletAccount
-            ? roundMoney(toNumber(walletAccount.balance, 0))
-            : resolveGoodsFundBalance(user);
+        const goodsFundBalance = syncedWallet.balance;
         return success({
             role_level: roleLevel,
             role_name: resolveRoleName(user),
             balance: goodsFundBalance,
             goods_fund_balance: goodsFundBalance,
             agent_wallet_balance: goodsFundBalance,
-            frozen_balance: walletAccount ? roundMoney(toNumber(walletAccount.frozen_balance, 0)) : summary.frozen_balance,
-            total_recharge: walletAccount ? roundMoney(toNumber(walletAccount.total_recharge, 0)) : summary.total_recharge,
-            total_deduct: walletAccount ? roundMoney(toNumber(walletAccount.total_deduct, 0)) : summary.total_deduct,
+            frozen_balance: summary.frozen_balance,
+            total_recharge: summary.total_recharge,
+            total_deduct: summary.total_deduct,
             commission_balance: resolveCommissionBalance(user),
             total_earned: toNumber(user.total_earned, 0),
             total_withdrawn: toNumber(user.total_withdrawn, 0),

@@ -15,12 +15,6 @@ function agentPillSkinClassForLevel(roleLevel) {
     const n = Number(roleLevel);
     return n === 6 ? 'hero-member-pill-store' : 'hero-member-pill-agent';
 }
-
-/** 第 6 级线下门店：小标签用「店长」，与称号「线下实体门店」对应 */
-function agentPillLabelForLevel(roleLevel) {
-    const n = Number(roleLevel);
-    return n === 6 ? '店长' : '身份';
-}
 const { ErrorHandler } = require('../../utils/errorHandler');
 const { fetchUserProfile } = require('../../utils/userProfile');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
@@ -64,6 +58,11 @@ function buildOrderFreshFlags(currentStats = {}, seenSnapshot = {}) {
         pendingReview: Number(currentStats.pendingReview || 0) > Number(seenSnapshot.pendingReview || 0),
         refund: Number(currentStats.refund || 0) > Number(seenSnapshot.refund || 0)
     };
+}
+
+function normalizeOrderBadgeStatus(status) {
+    if (status === 'pending_review') return 'pendingReview';
+    return status;
 }
 
 function extractResponseList(response) {
@@ -246,8 +245,7 @@ async function loadUserInfo(page, forceRefresh = false) {
             orderStats: { pending: 0, paid: 0, shipped: 0, pendingReview: 0, refund: 0 },
             displayAgentRoleLevel: 0,
             agentRoleBadgeName: resolveAgentRoleBadgeName(0),
-            agentPillSkinClass: 'hero-member-pill-agent',
-            agentPillLabelText: '身份'
+            agentPillSkinClass: 'hero-member-pill-agent'
         });
         await loadQuadPreviews(page);
         return;
@@ -277,8 +275,7 @@ async function loadUserInfo(page, forceRefresh = false) {
                 isAgent: roleLevel >= 2,
                 displayAgentRoleLevel: roleLevel,
                 agentRoleBadgeName: resolveAgentRoleBadgeName(roleLevel),
-                agentPillSkinClass: agentPillSkinClassForLevel(roleLevel),
-                agentPillLabelText: agentPillLabelForLevel(roleLevel)
+                agentPillSkinClass: agentPillSkinClassForLevel(roleLevel)
             });
             applyGrowthDisplay(page, info);
             refreshBusinessCenterVisibility(page);
@@ -291,8 +288,7 @@ async function loadUserInfo(page, forceRefresh = false) {
                 hasUserInfo: !!cached,
                 displayAgentRoleLevel: roleLevel,
                 agentRoleBadgeName: resolveAgentRoleBadgeName(roleLevel),
-                agentPillSkinClass: agentPillSkinClassForLevel(roleLevel),
-                agentPillLabelText: agentPillLabelForLevel(roleLevel)
+                agentPillSkinClass: agentPillSkinClassForLevel(roleLevel)
             });
             applyGrowthDisplay(page, cached);
             refreshBusinessCenterVisibility(page);
@@ -311,8 +307,7 @@ async function loadUserInfo(page, forceRefresh = false) {
             hasUserInfo: !!cached,
             displayAgentRoleLevel: roleLevel,
             agentRoleBadgeName: resolveAgentRoleBadgeName(roleLevel),
-            agentPillSkinClass: agentPillSkinClassForLevel(roleLevel),
-            agentPillLabelText: agentPillLabelForLevel(roleLevel)
+            agentPillSkinClass: agentPillSkinClassForLevel(roleLevel)
         });
         applyGrowthDisplay(page, cached);
         refreshBusinessCenterVisibility(page);
@@ -447,7 +442,7 @@ function markOrderBadgesSeen(page, statuses) {
     const currentStats = page.data.orderStats || {};
     const currentFlags = page.data.orderFreshFlags || {};
     const targetStatuses = Array.isArray(statuses) && statuses.length
-        ? statuses
+        ? statuses.map(normalizeOrderBadgeStatus).filter(Boolean)
         : ['pending', 'paid', 'shipped', 'pendingReview', 'refund'];
     const nextSnapshot = {
         ...readOrderBadgeSnapshot(page)
@@ -550,8 +545,7 @@ async function loadDistributionInfo(page) {
             isAgent: roleLevel >= 2,
             displayAgentRoleLevel: roleLevel,
             agentRoleBadgeName: badgeName,
-            agentPillSkinClass: agentPillSkinClassForLevel(roleLevel),
-            agentPillLabelText: agentPillLabelForLevel(roleLevel)
+            agentPillSkinClass: agentPillSkinClassForLevel(roleLevel)
         });
     } catch (error) {
         console.error('加载分销信息失败:', error);

@@ -88,6 +88,10 @@ function buildTemplateCouponSnapshot(coupon = {}, { pickString = (value, fallbac
         description: pickString(coupon.description),
         stock: coupon.stock == null ? -1 : toNumber(coupon.stock, -1),
         is_active: coupon.is_active == null ? 1 : toNumber(coupon.is_active, 1),
+        daily_claim_limit: coupon.daily_claim_limit == null ? -1 : toNumber(coupon.daily_claim_limit, -1),
+        claim_time_enabled: coupon.claim_time_enabled == null ? 0 : toNumber(coupon.claim_time_enabled, 0),
+        claim_start_time: pickString(coupon.claim_start_time || '09:00'),
+        claim_end_time: pickString(coupon.claim_end_time || '23:59'),
         scope: pickString(coupon.scope || 'all'),
         scope_ids: toArray(coupon.scope_ids)
     };

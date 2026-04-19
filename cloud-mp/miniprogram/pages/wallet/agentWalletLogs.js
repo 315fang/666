@@ -100,6 +100,7 @@ function getChangeLabel(type) {
         refund: '退款返还',
         refund_reopen_reversal: '退款回退冲正',
         adjust: '人工调整',
+        admin_adjustment: '管理员调整',
         manual_recharge: '手动充值',
         manual_deduct: '手动扣减',
         order_ship: '订单发货',

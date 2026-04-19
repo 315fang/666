@@ -1,8 +1,16 @@
 const path = require('path');
+const fs = require('fs');
 const { createFilesystemStore } = require('./filesystem');
 
 function loadBackendModels() {
-    return require(path.resolve(__dirname, '../../../../models'));
+    const legacyModelsPath = path.resolve(__dirname, '../../../../models');
+    const legacyModelsJsPath = `${legacyModelsPath}.js`;
+    if (!fs.existsSync(legacyModelsPath) && !fs.existsSync(legacyModelsJsPath)) {
+        const error = new Error(`Legacy MySQL admin store is not available in this workspace. Expected models at ${legacyModelsPath}. Switch ADMIN_DATA_SOURCE to cloudbase.`);
+        error.code = 'MYSQL_MODELS_MISSING';
+        throw error;
+    }
+    return require(legacyModelsPath);
 }
 
 function normalizeSourceName(name) {

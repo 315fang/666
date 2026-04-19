@@ -46,6 +46,7 @@ function createCloudBaseStore(options) {
         warnings: []
     };
     const cache = new Map();
+    const collectionSnapshots = new Map();
     const singletonCache = new Map();
     const dirty = new Set();
     const pendingFlush = new Map();
@@ -191,6 +192,23 @@ function createCloudBaseStore(options) {
         return `${prefix}${normalizeSourceName(name)}`;
     }
 
+    function cloneRows(rows = []) {
+        return (Array.isArray(rows) ? rows : []).map((row) => {
+            if (!row || typeof row !== 'object') return row;
+            return JSON.parse(JSON.stringify(row));
+        });
+    }
+
+    function normalizeComparableRow(row) {
+        if (!row || typeof row !== 'object') return row;
+        const { _id, ...safeRow } = row;
+        return safeRow;
+    }
+
+    function rowsEqual(left, right) {
+        return JSON.stringify(normalizeComparableRow(left)) === JSON.stringify(normalizeComparableRow(right));
+    }
+
     async function fetchCollection(name) {
         const collection = db.collection(getCollectionName(name));
         let offset = 0;
@@ -219,16 +237,16 @@ function createCloudBaseStore(options) {
         return rows;
     }
 
-    async function replaceCollection(name, rows) {
+    async function syncCollectionDiff(name, previousRows, rows) {
         const collection = db.collection(getCollectionName(name));
-        const existingRows = await fetchCollection(name).catch(() => []);
-        const existingIds = new Set(existingRows.map((item) => String(item._id)));
+        const existingRows = Array.isArray(previousRows) ? previousRows : [];
+        const existingMap = new Map(existingRows.map((item) => [toDocumentId(item), item]));
         const nextRows = Array.isArray(rows) ? rows : [];
-        const nextIds = new Set();
+        const nextMap = new Map(nextRows.map((item) => [toDocumentId(item), item]));
 
-        for (const row of nextRows) {
-            const docId = toDocumentId(row);
-            nextIds.add(docId);
+        for (const [docId, row] of nextMap.entries()) {
+            const previous = existingMap.get(docId);
+            if (previous && rowsEqual(previous, row)) continue;
             const { _id, ...safeRow } = row || {};
             await collection.doc(docId).set({
                 data: {
@@ -237,8 +255,8 @@ function createCloudBaseStore(options) {
             });
         }
 
-        for (const docId of existingIds) {
-            if (!nextIds.has(docId)) {
+        for (const docId of existingMap.keys()) {
+            if (!nextMap.has(docId)) {
                 await collection.doc(docId).remove();
             }
         }
@@ -272,10 +290,13 @@ function createCloudBaseStore(options) {
         try {
             const rows = await fetchCollection(key);
             cache.set(key, rows);
+            collectionSnapshots.set(key, cloneRows(rows));
             setCollectionState(key, { status: 'loaded', loaded_at: nowIso(), last_error: null });
         } catch (error) {
             if (isMissingCollectionError(error)) {
                 state.warnings.push({ collection: key, message: error.message });
+                cache.set(key, []);
+                collectionSnapshots.set(key, []);
                 setCollectionState(key, { status: 'missing', loaded_at: nowIso(), last_error: null, message: error.message });
                 return;
             }
@@ -334,7 +355,14 @@ function createCloudBaseStore(options) {
                 dirty.delete(key);
                 const rows = cache.get(key) || [];
                 flushedRows = rows.length;
-                await replaceCollection(key, rows);
+                const snapshot = collectionSnapshots.get(key) || [];
+                try {
+                    await syncCollectionDiff(key, snapshot, rows);
+                    collectionSnapshots.set(key, cloneRows(rows));
+                } catch (error) {
+                    dirty.add(key);
+                    throw error;
+                }
             }
             return { success: true, rows: flushedRows };
         })();
@@ -434,6 +462,7 @@ function createCloudBaseStore(options) {
                 ready: state.ready
             };
         },
+        getCollectionName,
         getCollection(name) {
             const key = normalizeSourceName(name);
             if (cache.has(key)) return cache.get(key);
@@ -474,6 +503,27 @@ function createCloudBaseStore(options) {
                 setCollectionState(key, { status: 'load_failed', loaded_at: nowIso(), last_error: error.message });
             });
         },
+        async patchCollectionDocument(name, docId, updateData) {
+            const key = normalizeSourceName(name);
+            const collection = db.collection(getCollectionName(key));
+            const { _id, ...safeUpdateData } = (updateData && typeof updateData === 'object') ? updateData : {};
+            await collection.doc(String(docId)).update({
+                data: {
+                    ...safeUpdateData,
+                    updated_at: nowIso()
+                }
+            });
+            if (cache.has(key)) {
+                const rows = cache.get(key) || [];
+                const index = rows.findIndex((item) => String(item._id || item.id || item._legacy_id) === String(docId));
+                if (index !== -1) {
+                    rows[index] = { ...rows[index], ...safeUpdateData, updated_at: nowIso() };
+                    cache.set(key, rows);
+                    collectionSnapshots.set(key, cloneRows(rows));
+                }
+            }
+            return true;
+        },
         waitForCollection,
         getCollectionState,
         getSingleton(name, fallback) {
@@ -493,13 +543,15 @@ function createCloudBaseStore(options) {
             db,
             cache,
             singletonCache,
+            collectionSnapshots,
             dirty,
             dirtySingletons,
             pendingFlush,
             pendingSingletonFlush,
             lazyLoadPromises,
             collectionLoadState,
-            state
+            state,
+            getCollectionName
         }
     };
 }

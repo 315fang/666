@@ -72,11 +72,19 @@
     },
     {
       "key": "coupon:center",
-      "title": "优惠券中心",
+      "title": "领券中心",
       "group": "营销入口",
       "link_type": "coupon_center",
       "link_value": "__coupon_center__",
-      "note": "我的优惠券列表"
+      "note": "领券中心页"
+    },
+    {
+      "key": "page:brand-zone",
+      "title": "品牌专区详情",
+      "group": "品牌内容",
+      "link_type": "page",
+      "link_value": "/pages/index/brand-zone-detail",
+      "note": "首页品牌专区承接页"
     },
     {
       "key": "page:search",

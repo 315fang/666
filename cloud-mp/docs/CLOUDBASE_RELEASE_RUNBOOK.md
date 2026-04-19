@@ -1,20 +1,63 @@
 # CloudBase Release Runbook
 
-> Updated: 2026-04-10
+Updated: 2026-04-18
 
-This runbook closes the gap between local P0 readiness and CloudBase console deployment.
+This runbook is the current release and上线检查入口 for `cloud-mp`.
 
-## Current Local Status
+## 1. Scope
 
-- `npm run release:check` passes with `P0 blockers: 0` and `Warnings: 0`.
-- `admin-ui` production build passes.
-- `admin-ui` production API base URL must use `https://jxalk.wenlan.store/admin/api`; do not use `*.service.tcloudbase.com` as the formal upload entry.
-- CloudBase MCP is configured in `config/mcporter.json`, but MCP auth may still report `AUTH_REQUIRED`.
-- CloudBase CLI login is working on this machine and was used for deployment.
+This runbook covers:
 
-## Login And Bind Environment
+- local verification before release
+- CloudBase environment checks
+- admin-ui build and upload prerequisites
+- function deployment sequence
+- known risks that must be reviewed before traffic cutover
 
-Use one of these paths before deployment:
+It does not replace field-truth docs or one-off audit snapshots.
+
+## 2. Current runtime position
+
+- mini program runtime: CloudBase
+- admin runtime: `cloudfunctions/admin-api`
+- formal data source: CloudBase
+- `mysql/` remains a migration and historical asset set, not the formal production runtime source
+
+## 3. Local verification baseline
+
+The following checks were re-verified locally on 2026-04-18:
+
+- `node --test "cloudfunctions/admin-api/test/*.test.js"` passed
+- `npm run check:foundation` passed
+- `cd admin-ui && npm run build` passed
+- `npm run audit:miniprogram-routes` should be run against the repaired route-audit script that now reads `miniprogram/utils/requestRoutes.js`
+
+Recommended command set:
+
+```powershell
+cd C:\Users\21963\WeChatProjects\zz\cloud-mp
+node --test "cloudfunctions/admin-api/test/*.test.js"
+npm run check:foundation
+npm run audit:miniprogram-routes
+
+cd C:\Users\21963\WeChatProjects\zz\cloud-mp\admin-ui
+npm run build
+```
+
+## 4. Release blockers to review manually
+
+Current code review findings mean release reviewers should explicitly check:
+
+1. `admin-api` CloudBase precise writes do not bypass `collectionPrefix`
+2. cold-start readiness does not fail open into half-loaded collections
+3. collection writes do not rely on unsafe full-collection rewrite behavior for hot business collections
+4. runtime does not accidentally enable `ADMIN_DATA_SOURCE=mysql`
+
+These are not documentation-only issues; they affect release safety.
+
+## 5. Login and environment binding
+
+Use one of the following before deployment:
 
 ```bash
 npx mcporter call cloudbase.auth action=start_auth authMode=device --output json
@@ -22,7 +65,7 @@ npx mcporter call cloudbase.auth action=set_env envId=cloud1-9gywyqe49638e46f --
 npx mcporter call cloudbase.auth action=status --output json
 ```
 
-If MCP device login keeps timing out, use CloudBase CLI login:
+If MCP auth is not ready, fall back to CloudBase CLI:
 
 ```bash
 cloudbase login
@@ -34,9 +77,9 @@ Expected environment:
 - Env ID: `cloud1-9gywyqe49638e46f`
 - Region: `ap-shanghai`
 
-## Deploy Cloud Functions
+## 6. Deploy sequence
 
-Deploy or update these functions after login. The latest deployment completed for the changed functions on 2026-04-10:
+Deploy the changed functions after login:
 
 ```bash
 cloudbase functions:deploy login --envId cloud1-9gywyqe49638e46f --force
@@ -53,77 +96,44 @@ cloudbase functions:deploy commission-deadline-process --envId cloud1-9gywyqe496
 cloudbase functions:deploy order-auto-confirm --envId cloud1-9gywyqe49638e46f --force
 ```
 
-The three timer functions must retain package trigger config. Current cloud trigger check:
+## 7. Domain and routing checks
 
-- `order-timeout-cancel`: every 5 minutes, trigger `orderTimeoutCancelTimer`
-- `commission-deadline-process`: every hour at minute 15, trigger `commissionDeadlineProcessTimer`
-- `order-auto-confirm`: every hour at minute 30, trigger `orderAutoConfirmTimer`
+In CloudBase console, verify:
 
-## Manual Console Checks
+- `jxalk.wenlan.store/admin/*` routes to admin static hosting
+- `jxalk.wenlan.store/admin/api/*` routes to `admin-api` with path passthrough
+- `payment` HTTP path is reachable
+- WeChat Pay notify URL points to the formal payment HTTP path
 
-In CloudBase console:
+Do not use `*.service.tcloudbase.com` as the formal admin-ui public entry.
 
-- Confirm custom domain `jxalk.wenlan.store` routes `/admin/api/*` to `admin-api` with path passthrough enabled.
-- Confirm custom domain `jxalk.wenlan.store` routes `/admin/*` to the admin UI static hosting site.
-- Confirm `payment` has HTTP access path `/payment`.
-- Confirm WeChat Pay notify URL points to the payment HTTP access URL.
-- Confirm payment private key/public key/API v3 key are configured through secure env/config, not copied into public code.
-- Confirm `admin-api` runtime env has `ADMIN_DATA_SOURCE=cloudbase` and `ADMIN_CLOUDBASE_ENV_ID=cloud1-9gywyqe49638e46f`.
-- Confirm `admin-api` `/health` eventually reports no CloudBase collection warnings after a cold start. A warm instance may keep startup warning counters until recycled.
-- Confirm the 22 import collections exist or can be imported from `cloudbase-import`.
+## 8. Environment checks
 
-## Required Collections
+For `admin-api`, verify:
 
-Core import validation currently expects these 22 collections:
+- `ADMIN_DATA_SOURCE=cloudbase`
+- `ADMIN_CLOUDBASE_ENV_ID=cloud1-9gywyqe49638e46f`
+- no accidental MySQL fallback is configured as the formal runtime
 
-- `admins`
-- `admin_roles`
-- `banners`
-- `cart_items`
-- `categories`
-- `commissions`
-- `coupon_auto_rules`
-- `content_boards`
-- `content_board_products`
-- `agent_exit_applications`
-- `dividend_executions`
-- `materials`
-- `material_groups`
-- `orders`
-- `products`
-- `refunds`
-- `reviews`
-- `skus`
-- `splash_screens`
-- `station_staff`
-- `users`
-- `withdrawals`
+For payment, verify formal configuration through env or secure cert files rather than repo-tracked secrets.
 
-## Suggested Indexes
+## 9. Collection and import checks
 
-Create these indexes before production traffic. These ordinary indexes have been created via CLI; use the console to verify them:
+Before formal release:
 
-- `users`: `openid`, `my_invite_code`, `referrer_openid`
-- `orders`: `openid`, `order_no`, `status`, `openid + status`
-- `cart_items`: `openid`, `openid + sku_id`
-- `commissions`: `openid`, `order_id`, `status`, `refund_deadline`
-- `refunds`: `openid`, `order_id`, `status`
-- `user_coupons`: `openid`, `coupon_id`, `status`
-- `content_board_products`: `board_id`, `board_id + product_id`
-- `station_staff`: `station_id`, `station_id + user_id`
+- confirm required collections exist in CloudBase
+- confirm import packages in `cloudbase-import/` are the expected baseline
+- confirm `cloudbase-seed/` and `cloudbase-import/` are not mistaken for live runtime state
 
-## Smoke Test
+## 10. Smoke checklist
 
 After deployment:
 
-1. Mini program login returns an `openid`.
-2. Product list and detail load.
-3. Create an order with cart items and coupon/points disabled.
-4. Trigger payment prepay and simulate or complete payment callback.
-5. Confirm repeated callback does not duplicate stock deduction, points, or commissions.
-6. Admin UI opens products, orders, refunds, commissions, coupons, group-buys, activities, featured-board, pickup-stations, and membership pages without 404.
-7. Reject a refund and verify commissions return from `frozen` to `pending`.
-8. Complete a refund and verify commissions become `cancelled`.
-9. Run `commission-deadline-process` manually once and verify due `frozen` commissions become `pending_approval`.
-10. Run `order-auto-confirm` manually once with a test shipped order and verify it becomes `completed`.
-11. Open `https://jxalk.wenlan.store/admin/` and upload an approximately `100KB` JPG/PNG from the materials page; confirm the request hits `admin-api` and returns a valid material URL instead of `413`.
+1. mini program login returns valid identity
+2. product list and detail load
+3. order creation works
+4. prepay and payment callback work without duplicate post-processing
+5. refund review and settlement paths behave correctly
+6. admin pages open without routing or permission regression
+7. materials upload returns a valid storage reference rather than 413 or route failure
+8. route audit and build evidence are attached to the release record if required

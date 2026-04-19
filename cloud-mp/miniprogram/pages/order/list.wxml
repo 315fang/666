@@ -34,6 +34,14 @@
     </view>
   </view>
 
+  <view class="review-reward-banner" wx:if="{{currentStatus === 'pending_review'}}">
+    <view class="review-reward-badge">评价有礼</view>
+    <view class="review-reward-copy">
+      <text class="review-reward-title">五星好评可获得积分奖励</text>
+      <text class="review-reward-sub">完成评价后，实际到账积分以系统发放结果为准</text>
+    </view>
+  </view>
+
   <!-- 订单列表 -->
   <scroll-view class="order-list" scroll-y bindscrolltolower="onLoadMore">
     <!-- 列表容器 -->

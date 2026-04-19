@@ -59,12 +59,26 @@ const ADMIN_DATE_KEY_FORMATTER = new Intl.DateTimeFormat('en-US', {
  * @returns {Promise<boolean>} 是否成功
  */
 async function directPatchDocument(collectionName, docId, updateData) {
+    if (typeof dataStore?.patchCollectionDocument === 'function') {
+        try {
+            return await dataStore.patchCollectionDocument(collectionName, docId, updateData);
+        } catch (err) {
+            console.error(`[directPatchDocument] ${collectionName}/${docId} 写入失败:`, err.message);
+            return false;
+        }
+    }
+
     const db = dataStore._internals?.db;
     if (db) {
         // CloudBase 模式：直接精确更新单条文档
         try {
             const { _id, ...safeUpdateData } = (updateData && typeof updateData === 'object') ? updateData : {};
-            await db.collection(collectionName).doc(String(docId)).update({
+            const namespacedCollectionName = typeof dataStore?.getCollectionName === 'function'
+                ? dataStore.getCollectionName(collectionName)
+                : (typeof dataStore?._internals?.getCollectionName === 'function'
+                    ? dataStore._internals.getCollectionName(collectionName)
+                    : collectionName);
+            await db.collection(namespacedCollectionName).doc(String(docId)).update({
                 data: {
                     ...safeUpdateData,
                     updated_at: new Date().toISOString()
@@ -6033,6 +6047,51 @@ app.put('/admin/api/users/:id/goods-fund', auth, requirePermission('user_balance
     const delta = type === 'subtract' ? -amount : amount;
     const next = roundMoney(current + delta);
     const patch = { agent_wallet_balance: next, updated_at: nowIso() };
+    const walletAccounts = getCollection('wallet_accounts');
+    const existingWalletAccount = findWalletAccountByUser(walletAccounts, user);
+    const walletAccountId = primaryId(existingWalletAccount) || buildWalletAccountDocId(user);
+    const previousWalletBalance = roundMoney(toNumber(existingWalletAccount?.balance, current));
+    const previousTotalRecharge = roundMoney(toNumber(existingWalletAccount?.total_recharge, 0));
+    const previousTotalDeduct = roundMoney(toNumber(existingWalletAccount?.total_deduct, 0));
+    const nextTotalRecharge = type === 'add' ? roundMoney(previousTotalRecharge + amount) : previousTotalRecharge;
+    const nextTotalDeduct = type === 'subtract' ? roundMoney(previousTotalDeduct + amount) : previousTotalDeduct;
+
+    const syncWalletAccount = async (balance, totalRecharge, totalDeduct) => {
+        if (!walletAccountId) return true;
+        const walletPayload = {
+            ...(existingWalletAccount || {
+                _id: walletAccountId,
+                id: walletAccountId,
+                user_id: getWalletAccountUserIds(user)[0],
+                openid: userOpenid,
+                account_type: 'goods_fund',
+                status: 'active',
+                created_at: pickString(existingWalletAccount?.created_at || nowIso())
+            }),
+            balance: roundMoney(balance),
+            total_recharge: roundMoney(totalRecharge),
+            total_deduct: roundMoney(totalDeduct),
+            updated_at: nowIso()
+        };
+        if (dataStore._internals?.db) {
+            const walletCollectionName = typeof dataStore?.getCollectionName === 'function'
+                ? dataStore.getCollectionName('wallet_accounts')
+                : (typeof dataStore?._internals?.getCollectionName === 'function'
+                    ? dataStore._internals.getCollectionName('wallet_accounts')
+                    : 'wallet_accounts');
+            await dataStore._internals.db.collection(walletCollectionName).doc(String(walletAccountId)).set({
+                data: walletPayload
+            });
+            return true;
+        }
+        const currentWallets = getCollection('wallet_accounts');
+        const index = currentWallets.findIndex((item) => rowMatchesLookup(item, walletAccountId, [item.user_id, item.openid]));
+        if (index >= 0) currentWallets[index] = walletPayload;
+        else currentWallets.push(walletPayload);
+        saveCollection('wallet_accounts', currentWallets);
+        return true;
+    };
+
     if (dataStore._internals?.db) {
         if (!userDocId) return fail(res, '用户文档不存在，无法更新货款余额', 500);
         const writeOk = await directPatchDocument('users', userDocId, patch);
@@ -6040,6 +6099,17 @@ app.put('/admin/api/users/:id/goods-fund', auth, requirePermission('user_balance
     } else {
         const updated = patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...patch }));
         if (!updated) return fail(res, '用户不存在', 404);
+    }
+    try {
+        await syncWalletAccount(next, nextTotalRecharge, nextTotalDeduct);
+    } catch (error) {
+        const rollbackPatch = { agent_wallet_balance: current, updated_at: nowIso() };
+        if (dataStore._internals?.db && userDocId) {
+            await directPatchDocument('users', userDocId, rollbackPatch);
+        } else {
+            patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...rollbackPatch }));
+        }
+        return fail(res, `货款账本同步失败：${error.message || '未知错误'}`, 500);
     }
     try {
         await appendGoodsFundLogEntry({
@@ -6060,6 +6130,9 @@ app.put('/admin/api/users/:id/goods-fund', auth, requirePermission('user_balance
         } else {
             patchCollectionRow('users', req.params.id, (row) => ({ ...row, ...rollbackPatch }));
         }
+        try {
+            await syncWalletAccount(previousWalletBalance, previousTotalRecharge, previousTotalDeduct);
+        } catch (_) {}
         return fail(res, `货款流水写入失败：${error.message || '未知错误'}`, 500);
     }
     const updatedUser = { ...user, ...patch };

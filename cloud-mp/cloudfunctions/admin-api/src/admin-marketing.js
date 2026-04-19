@@ -732,8 +732,15 @@ function registerMarketingRoutes(app, deps) {
     }
 
     function normalizeCoupon(row) {
+        const shiftedNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+        const todayKey = `${shiftedNow.getUTCFullYear()}-${String(shiftedNow.getUTCMonth() + 1).padStart(2, '0')}-${String(shiftedNow.getUTCDate()).padStart(2, '0')}`;
         const type = pickString(row.type || row.coupon_type || 'fixed');
         const isActive = row.is_active != null ? row.is_active : row.status;
+        const claimTimeEnabled = toBoolean(row.claim_time_enabled ?? false);
+        const claimStartTime = pickString(row.claim_start_time || '09:00', '09:00');
+        const claimEndTime = pickString(row.claim_end_time || '23:59', '23:59');
+        const claimDayKey = pickString(row.claim_day_key || '');
+        const claimedTodayCount = claimDayKey === todayKey ? toNumber(row.claimed_today_count, 0) : 0;
         return {
             ...row,
             id: row.id || row._legacy_id || row._id,
@@ -747,6 +754,12 @@ function registerMarketingRoutes(app, deps) {
             stock: row.stock == null ? -1 : toNumber(row.stock, -1),
             issued_count: toNumber(row.issued_count, 0),
             used_count: toNumber(row.used_count, 0),
+            daily_claim_limit: row.daily_claim_limit == null ? -1 : Math.max(-1, toNumber(row.daily_claim_limit, -1)),
+            claimed_today_count: claimedTodayCount,
+            claim_day_key: claimDayKey,
+            claim_time_enabled: claimTimeEnabled ? 1 : 0,
+            claim_start_time: claimStartTime,
+            claim_end_time: claimEndTime,
             scope: pickString(row.scope || 'all'),
             scope_ids: toArray(row.scope_ids),
             is_active: toBoolean(isActive == null ? 1 : isActive) ? 1 : 0,
@@ -768,6 +781,12 @@ function registerMarketingRoutes(app, deps) {
             min_purchase: minPurchase,
             valid_days: Math.max(1, toNumber(body.valid_days ?? existing.valid_days, 30)),
             stock: body.stock == null ? (existing.stock == null ? -1 : toNumber(existing.stock, -1)) : toNumber(body.stock, -1),
+            daily_claim_limit: body.daily_claim_limit == null
+                ? (existing.daily_claim_limit == null ? -1 : Math.max(-1, toNumber(existing.daily_claim_limit, -1)))
+                : Math.max(-1, toNumber(body.daily_claim_limit, -1)),
+            claim_time_enabled: toBoolean(body.claim_time_enabled ?? existing.claim_time_enabled ?? false) ? 1 : 0,
+            claim_start_time: pickString(body.claim_start_time ?? existing.claim_start_time ?? '09:00', '09:00'),
+            claim_end_time: pickString(body.claim_end_time ?? existing.claim_end_time ?? '23:59', '23:59'),
             scope: pickString(body.scope ?? existing.scope ?? 'all'),
             scope_ids: toArray(body.scope_ids ?? existing.scope_ids),
             is_active: toBoolean(body.is_active ?? existing.is_active ?? existing.status ?? 1) ? 1 : 0,

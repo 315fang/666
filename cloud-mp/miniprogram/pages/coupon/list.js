@@ -152,6 +152,10 @@ Page({
         wx.switchTab({ url: '/pages/user/user' });
     },
 
+    onOpenCouponCenter() {
+        wx.navigateTo({ url: '/pages/coupon/center' });
+    },
+
     onBack() {
         const { safeBack } = require('../../utils/navigator');
         safeBack('/pages/user/user');

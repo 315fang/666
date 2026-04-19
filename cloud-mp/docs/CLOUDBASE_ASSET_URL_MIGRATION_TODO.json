@@ -1,10 +1,30 @@
 {
   "kind": "cloudbase_asset_migration_todo",
-  "generated_at": "2026-04-17T14:41:56.884Z",
+  "generated_at": "2026-04-19T03:16:42.075Z",
   "environment": {
     "env_id": "cloud1-9gywyqe49638e46f",
     "auth_status": "READY",
     "env_status": "READY"
   },
-  "records": []
+  "records": [
+    {
+      "source_type": "singleton",
+      "collection": "admin_singletons",
+      "singleton_key": "popup-ad-config",
+      "doc_id": "popup-ad-config",
+      "id": "popup-ad-config",
+      "field_path": "value.image_url",
+      "file_id_path": "value.file_id",
+      "asset_value": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1773442002338_e2c0135b1b16e32e.jpg",
+      "clear_fields": [
+        "value.image_url"
+      ],
+      "file_id": "",
+      "image_url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1773442002338_e2c0135b1b16e32e.jpg",
+      "url": "",
+      "temp_url": "",
+      "title": "",
+      "category": "http_url_without_file_id"
+    }
+  ]
 }

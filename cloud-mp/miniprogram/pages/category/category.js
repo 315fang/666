@@ -2,13 +2,12 @@
 // 结构：二级商城（侧边栏分类 → 商品列表）+ 分页加载
 // 联动：当前版本 scroll sync（calculateCategoryHeights + onRightScroll + leftToView）
 // 购物袋：当前版本改进逻辑（items / summary.total_amount + cart_ids 结算）
-const { getTempUrls } = require('../../utils/cloud');
 const { get } = require('../../utils/request');
 const { normalizeActivityList } = require('../../utils/activityList');
 const { cachedGet } = require('../../utils/requestCache');
 const { normalizeProductId } = require('../../utils/dataFormatter');
 const { ErrorHandler } = require('../../utils/errorHandler');
-const { getApiBaseUrl } = require('../../config/env');
+const { resolveCloudImageUrl } = require('../../utils/cloudAssetRuntime');
 const navigator = require('../../utils/navigator');
 const { syncPageTabBar, restorePageTabBar } = require('../../utils/tabBarHelper');
 const {
@@ -31,43 +30,9 @@ const {
     changeCartItemQty
 } = require('./categoryCart');
 
-function normalizeAssetUrl(url = '') {
-    const raw = String(url || '');
-    if (!raw) return '';
-    if (/^https?:\/\//i.test(raw)) return raw;
-    if (raw.startsWith('/')) {
-        const apiBase = getApiBaseUrl().replace(/\/api\/?$/, '');
-        return `${apiBase}${raw}`;
-    }
-    return raw;
-}
-
-function isCloudFileId(value) {
-    return /^cloud:\/\//i.test(String(value || '').trim());
-}
-
-async function resolveCloudImageUrl(value, fallback = '') {
-    const normalized = normalizeAssetUrl(value);
-    if (!normalized) return fallback;
-    if (!isCloudFileId(normalized)) return normalized;
-
-    if (!tempUrlCache.has(normalized)) {
-        try {
-            const tempUrl = await getTempUrls(normalized);
-            if (tempUrl) tempUrlCache.set(normalized, String(tempUrl).trim());
-        } catch (err) {
-            console.warn('[Category] getTempUrls failed:', err);
-        }
-    }
-
-    return tempUrlCache.get(normalized) || fallback;
-}
-
 const CATEGORY_INITIAL_BATCH_SIZE = 2;
 const CATEGORY_PRICE_PREVIEW_TTL = 60 * 1000;
-const SPECIAL_CATEGORY_ID = '__special__';
 const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
-const tempUrlCache = new Map();
 
 Page({
     data: {
@@ -159,7 +124,7 @@ Page({
         const mapBanners = async (list) => {
             const mapped = await Promise.all((list || []).map(async (b) => ({
                 id: b.id,
-                image: await resolveCloudImageUrl(b.image_url || b.file_id || '', ''),
+                image: await resolveCloudImageUrl(b, ''),
                 link_type: b.link_type || 'none',
                 link_value: b.link_value != null ? String(b.link_value) : ''
             })));
@@ -388,22 +353,12 @@ Page({
     _rebuildVisibleProducts() {
         const allProducts = this.data.allProducts || {};
         const nextVisibleProducts = {};
-        const specialProducts = [];
-        const seenProductIds = new Set();
 
         Object.keys(allProducts).forEach((categoryId) => {
             const list = Array.isArray(allProducts[categoryId]) ? allProducts[categoryId] : [];
             nextVisibleProducts[categoryId] = list;
-            list.forEach((product) => {
-                if (!product || seenProductIds.has(product.id)) return;
-                if (product.hasGroupActivity || product.hasSlashActivity) {
-                    seenProductIds.add(product.id);
-                    specialProducts.push(product);
-                }
-            });
         });
 
-        nextVisibleProducts[SPECIAL_CATEGORY_ID] = specialProducts;
         this.setData({ visibleProducts: nextVisibleProducts });
     },
 
@@ -486,13 +441,6 @@ Page({
         const visibleProducts = { ...(this.data.visibleProducts || {}) };
         if (categoryId && Array.isArray(visibleProducts[categoryId])) {
             visibleProducts[categoryId] = visibleProducts[categoryId].map((product) => (
-                String(product?.id) === String(productId)
-                    ? { ...product, image: PRODUCT_PLACEHOLDER }
-                    : product
-            ));
-        }
-        if (Array.isArray(visibleProducts[SPECIAL_CATEGORY_ID])) {
-            visibleProducts[SPECIAL_CATEGORY_ID] = visibleProducts[SPECIAL_CATEGORY_ID].map((product) => (
                 String(product?.id) === String(productId)
                     ? { ...product, image: PRODUCT_PLACEHOLDER }
                     : product

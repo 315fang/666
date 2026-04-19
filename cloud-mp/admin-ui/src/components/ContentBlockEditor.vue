@@ -45,7 +45,7 @@
           <div class="picked-name">{{ pickedProduct.name }}</div>
           <div class="picked-price">¥{{ pickedProduct.retail_price || pickedProduct.price }}</div>
           <div class="picked-meta" v-if="pickedProduct.description">{{ pickedProduct.description.slice(0, 40) }}</div>
-          <div class="picked-hint">已自动填入：图片、标题、跳转链接</div>
+          <div class="picked-hint">{{ hideLinkControls ? '已自动填入图片，可继续调整副文案' : '已自动填入：图片、标题、跳转链接' }}</div>
         </div>
       </div>
     </template>
@@ -99,7 +99,7 @@
     </el-form-item>
 
     <!-- 跳转（自定义模式或复用模式下可手动改） -->
-    <template v-if="source !== 'product'">
+    <template v-if="!hideLinkControls && source !== 'product'">
       <el-form-item label="跳转类型">
         <el-select v-model="localData.link_type" style="width:240px" @change="handleLinkTypeChange">
           <el-option
@@ -196,7 +196,8 @@ import {
 const props = defineProps({
   modelValue: { type: Object, default: () => ({}) },
   fields: { type: Array, default: () => ['title', 'subtitle'] },
-  imageSpec: { type: Object, default: null }
+  imageSpec: { type: Object, default: null },
+  hideLinkControls: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:modelValue'])

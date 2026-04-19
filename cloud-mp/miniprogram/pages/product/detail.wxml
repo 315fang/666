@@ -86,8 +86,8 @@
         <view class="stepper stepper-static" wx:else>
           <text class="stepper-static-value">1 件</text>
         </view>
-        <text class="stock-text stock-out" wx:if="{{limitedSpotOffer && limitedSpotOffer.remaining < 1}}">已抢完</text>
-        <text class="stock-text" wx:elif="{{limitedSpotOffer}}">活动剩余 {{limitedSpotOffer.remaining}} 件</text>
+        <text class="stock-text stock-out" wx:if="{{limitedSpotOffer && limitedSpotOffer.sold_out}}">已抢完</text>
+        <text class="stock-text" wx:elif="{{limitedSpotOffer}}">{{limitedSpotOffer.stock_label || ('活动剩余 ' + limitedSpotOffer.remaining + ' 件')}}</text>
         <text class="stock-text stock-out" wx:elif="{{isOutOfStock}}">已售罄</text>
         <text class="stock-text" wx:else>库存 {{currentStock}} 件</text>
       </view>

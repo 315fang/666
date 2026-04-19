@@ -8,6 +8,8 @@ const DEFAULT_MINI_PROGRAM_CONFIG = {
         customer_service_hours: '9:00-21:00',
         nav_brand_title: '问兰镜像',
         nav_brand_sub: '品牌甄选',
+        coupon_zone_title: '惊喜福利',
+        coupon_zone_subtitle: '领取后可在结算页直接选择使用',
         about_summary: '品牌甄选，值得信赖。',
         activity_share_title: '问兰 · 当季品牌活动进行中',
         logistics_page_title: '物流跟踪',
@@ -103,7 +105,18 @@ function pickString(value, fallback = '') {
 }
 
 function pickAssetRef(source = {}) {
-    return pickString(source.file_id || source.image_url || source.image || source.url || source.cover_image || source.coverImage);
+    const fileId = pickString(source.file_id || source.fileId);
+    const direct = pickString(source.image_url || source.image || source.url || source.cover_image || source.coverImage);
+    if (fileId) return fileId;
+    if (isTemporarySignedAssetUrl(direct)) return '';
+    return direct;
+}
+
+function isTemporarySignedAssetUrl(value = '') {
+    const text = pickString(value).toLowerCase();
+    if (!text || !/^https?:\/\//i.test(text)) return false;
+    if (!text.includes('tcb.qcloud.la')) return false;
+    return /[?&]sign=/.test(text) && /[?&]t=/.test(text);
 }
 
 function toBoolean(value) {
@@ -137,8 +150,8 @@ function normalizeBrandConfigList(list = [], options = {}) {
             if (!item || typeof item !== 'object') return null;
             const title = pickString(item.title || item.name || item.label);
             const subtitle = pickString(item.subtitle || item.desc || item.description);
-            const image = pickString(item.image || item.image_url || item.url);
             const fileId = pickString(item.file_id);
+            const image = fileId || pickString(item.image || item.image_url || item.url);
             const linkType = withLink ? pickString(item.link_type, 'none') : 'none';
             const linkValue = withLink ? pickString(item.link_value) : '';
             if (!(title || subtitle || image || fileId || linkValue)) return null;
@@ -195,6 +208,8 @@ function flattenHomeConfigs(miniProgramConfig = {}, homepageSettings = {}) {
         customer_service_hours: pickString(brandConfig.customer_service_hours, DEFAULT_MINI_PROGRAM_CONFIG.brand_config.customer_service_hours),
         nav_brand_title: pickString(homepageSettings.nav_brand_title || brandConfig.nav_brand_title, DEFAULT_MINI_PROGRAM_CONFIG.brand_config.nav_brand_title),
         nav_brand_sub: pickString(homepageSettings.nav_brand_sub || brandConfig.nav_brand_sub, DEFAULT_MINI_PROGRAM_CONFIG.brand_config.nav_brand_sub),
+        coupon_zone_title: pickString(homepageSettings.coupon_zone_title || brandConfig.coupon_zone_title, DEFAULT_MINI_PROGRAM_CONFIG.brand_config.coupon_zone_title),
+        coupon_zone_subtitle: pickString(homepageSettings.coupon_zone_subtitle || brandConfig.coupon_zone_subtitle, DEFAULT_MINI_PROGRAM_CONFIG.brand_config.coupon_zone_subtitle),
         show_brand_logo: homepageSettings.show_brand_logo !== undefined ? homepageSettings.show_brand_logo : true,
         brand_logo: pickString(homepageSettings.brand_logo),
         brand_zone_enabled: brandZoneEnabled,

@@ -19,13 +19,12 @@ function extractAssetValue(value) {
   if (!value) return '';
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'object') {
-    return String(
+    const fileId = String(value.file_id || value.fileId || '').trim();
+    const direct = String(
       value.url
       || value.image_url
       || value.imageUrl
       || value.temp_url
-      || value.file_id
-      || value.fileId
       || value.image
       || value.cover_image
       || value.coverImage
@@ -36,13 +35,30 @@ function extractAssetValue(value) {
       || value.thumbnail
       || ''
     ).trim();
+    if (isTemporarySignedAssetUrl(direct) && /^cloud:\/\//i.test(fileId)) {
+      return fileId;
+    }
+    return String(
+      direct
+      || fileId
+    ).trim();
   }
   return '';
+}
+
+function isTemporarySignedAssetUrl(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw || !/^https?:\/\//i.test(raw)) return false;
+  if (!raw.includes('tcb.qcloud.la')) return false;
+  return /[?&]sign=/.test(raw) && /[?&]t=/.test(raw);
 }
 
 function normalizeAssetUrl(value) {
   const raw = extractAssetValue(value);
   if (!raw) return '';
+  if (isTemporarySignedAssetUrl(raw)) {
+    return '';
+  }
   if (/^https?:\/\//i.test(raw)) {
     return raw;
   }
@@ -438,6 +454,7 @@ module.exports = {
   toOssUrl,
   parseImages,
   getFirstImage,
+  isTemporarySignedAssetUrl,
   normalizeAssetUrl,
   normalizePriceValue,
   resolveProductImage,

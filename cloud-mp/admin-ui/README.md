@@ -1,160 +1,112 @@
 # 管理后台
 
-基于 Vue 3 + Element Plus + Vite 构建的现代化管理后台系统。
+更新日期：2026-04-18
 
-## 功能特性
+基于 Vue 3 + Vite + Pinia + Element Plus 的 CloudBase 管理后台前端。
 
-- ✅ 管理员登录与权限控制
-- ✅ 数据概览仪表板
-- ✅ 商品管理（增删改查、上下架）
-- ✅ 订单管理（查看、发货）
-- ✅ 用户管理（角色管理）
-- ✅ 提现审核
-- ✅ 售后管理
-- ✅ 系统设置
+## 1. 角色与边界
 
-## 技术栈
+管理后台只负责：
 
-- **框架**: Vue 3 (Composition API)
-- **UI 组件库**: Element Plus
-- **状态管理**: Pinia
-- **路由**: Vue Router 4
-- **构建工具**: Vite 5
-- **HTTP 客户端**: Axios
-- **图表**: ECharts 5
+- 管理页面渲染
+- 管理操作发起
+- 权限驱动的路由与菜单展示
 
-## 开发指南
+管理后台不直接写数据库。所有正式管理写操作都应通过 `/admin/api/*` 进入 `cloudfunctions/admin-api`。
 
-### 1. 安装依赖
+## 2. 当前技术栈
 
-```bash
-cd cloud-mp/admin-ui
+- Vue 3
+- Vue Router 4
+- Pinia
+- Element Plus
+- Axios
+- ECharts
+- Vite 5
+
+## 3. 当前主要页面
+
+路由真相源：`admin-ui/src/router/index.js`
+
+当前主页面包括：
+
+- 经营看板、财务看板、运营参数
+- 商品管理、商品分类、拼团活动、限时商品、活动资源、优惠券
+- 订单管理、自提门店、退款、押金订单、提现、佣金
+- 用户管理、经销商、分支代理
+- 内容资源、页面装修、素材管理、评论管理、群发消息
+- 会员策略
+- 管理员与权限、运维监控、操作日志
+
+## 4. 本地开发
+
+安装依赖：
+
+```powershell
+cd C:\Users\21963\WeChatProjects\zz\cloud-mp\admin-ui
 npm install
 ```
 
-### 2. 启动开发服务器
+启动开发服务器：
 
-```bash
+```powershell
 npm run dev
 ```
 
-开发服务器将在 `http://localhost:5173/admin/` 启动
+默认会启动在 `http://localhost:5173/`，使用 hash 路由后访问后台。
 
-**注意**: 开发环境下，API 请求会通过 Vite proxy 代理到 `VITE_ADMIN_DEV_PROXY_TARGET`，默认值为 `http://127.0.0.1:3001`
+## 5. API 约定
 
-### 3. 构建生产版本
-
-```bash
-npm run build
-```
-
-构建产物将输出到 `dist/` 目录
-
-## 项目结构
-
-```
-admin-ui/
-├── src/
-│   ├── api/              # API 接口封装
-│   ├── assets/           # 静态资源
-│   ├── components/       # 公共组件
-│   ├── layout/           # 布局组件
-│   ├── router/           # 路由配置
-│   ├── store/            # 状态管理
-│   ├── utils/            # 工具函数
-│   ├── views/            # 页面组件
-│   │   ├── dashboard/    # 数据概览
-│   │   ├── login/        # 登录页
-│   │   ├── products/     # 商品管理
-│   │   ├── orders/       # 订单管理
-│   │   ├── users/        # 用户管理
-│   │   ├── withdrawals/  # 提现管理
-│   │   ├── refunds/      # 售后管理
-│   │   └── settings/     # 系统设置
-│   ├── App.vue           # 根组件
-│   ├── main.js           # 入口文件
-│   └── style.css         # 全局样式
-├── index.html            # HTML 模板
-├── vite.config.js        # Vite 配置
-└── package.json          # 项目配置
-```
-
-## 登录凭证
-
-首次使用请确认 `cloud-mp/cloudfunctions/admin-api` 已有管理员数据，或先通过现有导入数据初始化 `admins` / `admin_roles` 集合。
-
-## 部署说明
+统一请求封装：`admin-ui/src/utils/request.js`
 
 ### 开发环境
 
-1. 确保本地管理 API 服务可通过 `VITE_ADMIN_DEV_PROXY_TARGET` 访问
-2. 运行 `npm run dev` 启动开发服务器
-3. 访问 `http://localhost:5173/admin/`
+- 默认代理目标：`http://127.0.0.1:3001`
+- 可通过 `VITE_ADMIN_DEV_PROXY_TARGET` 覆盖
 
 ### 生产环境
 
-1. 运行 `npm run build` 构建生产版本
-2. 构建产物在 `dist/` 目录
-3. 将 `dist/` 上传到 CloudBase 静态托管的 `/admin/`
-4. 显式设置 `VITE_ADMIN_API_BASE_URL=https://jxalk.wenlan.store/admin/api`
-5. 确保 `jxalk.wenlan.store` 已配置 `/admin/api/* -> admin-api` 且开启路径透传
-6. 确保 `jxalk.wenlan.store` 已配置 `/admin/* -> 管理后台静态托管`
+- 正式后台入口：`https://jxalk.wenlan.store/admin/`
+- 正式 API 入口：`https://jxalk.wenlan.store/admin/api`
+- 不应把 `*.service.tcloudbase.com` 当作正式管理后台上传入口
 
-### CloudBase 静态托管
+## 6. 构建
 
-生产环境不再使用默认 `*.service.tcloudbase.com` 作为后台 API 正式入口。默认 CloudBase 域名仅用于调试或临时验证。
+```powershell
+cd C:\Users\21963\WeChatProjects\zz\cloud-mp\admin-ui
+npm run build
+```
 
-1. 生产构建前显式设置 `VITE_ADMIN_API_BASE_URL=https://jxalk.wenlan.store/admin/api`
-2. 自定义域名需同时配置 `/admin/api/* -> admin-api` 与 `/admin/* -> 静态托管`
-3. 若临时回退到 `*.tcloudbaseapp.com` 或 `*.service.tcloudbase.com` 做调试，请不要将其视为正式上传入口
+截至 2026-04-18，本地构建通过。
 
-当前正式入口约定：
+## 7. 登录与权限
 
-- 管理后台正式访问地址：`https://jxalk.wenlan.store/admin/`
-- 管理后台正式 API 入口：`https://jxalk.wenlan.store/admin/api`
-- 管理后台正式 API 仍由 `admin-api` 云函数网关承接
-- `cloudrun-admin-service` 当前保留为后续演进线；本轮以 `cloud-mp/cloudfunctions/admin-api` 为主入口
+- 登录态由 JWT 驱动
+- token 存在 `localStorage`
+- 路由守卫和菜单显示都受权限控制
+- 当前权限判断以前端路由 meta 和后端 `admin-api` 校验共同生效
 
-## API 接口
+## 8. 开发注意事项
 
-所有 API 请求默认使用 `/admin/api`。生产环境应显式配置 `VITE_ADMIN_API_BASE_URL=https://jxalk.wenlan.store/admin/api`。主要接口包括：
+1. 前端不要直接拼数据库结构，优先复用现有 API 模块。
+2. 页面权限名要和后端权限目录保持一致。
+3. 管理端所有正式写操作都走 `admin-api`，不要引入绕行写数据库。
+4. 生产构建要显式确认 `VITE_ADMIN_API_BASE_URL`。
+5. 如果本地静态打开构建产物，登录 404 会尝试一次本地直连回退，但这只用于排障，不是正式部署方式。
 
-- `POST /login` - 管理员登录
-- `GET /stats` - 获取统计数据
-- `GET /products` - 获取商品列表
-- `POST /products` - 创建商品
-- `PUT /products/:id` - 更新商品
-- `DELETE /products/:id` - 删除商品
-- `GET /orders` - 获取订单列表
-- `PUT /orders/:id/ship` - 订单发货
-- `GET /users` - 获取用户列表
-- `PUT /users/:id/role` - 更新用户角色
-- `GET /withdrawals` - 获取提现列表
-- `PUT /withdrawals/:id/approve` - 通过提现
-- `PUT /withdrawals/:id/reject` - 拒绝提现
-- `GET /refunds` - 获取售后列表
-- `PUT /refunds/:id/approve` - 通过售后
-- `PUT /refunds/:id/reject` - 拒绝售后
+## 9. 常见问题
 
-## 开发注意事项
+### 登录后 401
 
-1. **路由配置**: 所有路由都使用 `/admin/` 作为 base path
-2. **权限控制**: 使用 JWT token 进行身份验证，token 存储在 localStorage
-3. **请求拦截**: Axios 拦截器自动添加 Authorization header
-4. **错误处理**: 统一的错误处理和消息提示
-5. **响应格式**: 后端统一返回 `{ code, message, data }` 格式
+- 检查 token 是否过期
+- 检查 `ADMIN_JWT_SECRET` 是否稳定配置
 
-## 常见问题
+### 本地请求失败
 
-**Q: 登录后提示 401 错误？**  
-A: 检查 JWT token 是否过期，或者后端 JWT_SECRET 配置是否正确
+- 检查本地 `admin-api` 是否可从 `VITE_ADMIN_DEV_PROXY_TARGET` 访问
+- 当前默认不是 `http://localhost:3000`，而是 `http://127.0.0.1:3001`
 
-**Q: 图片上传失败？**  
-A: 优先检查 `jxalk.wenlan.store` 的 `/admin/api/*` 路由是否正确指向 `admin-api`，以及生产构建是否显式写入 `VITE_ADMIN_API_BASE_URL=https://jxalk.wenlan.store/admin/api`
+### 图片上传异常或 413
 
-**Q: 开发环境 API 请求失败？**  
-A: 确保后端服务已启动在 `http://localhost:3000`
-
-## License
-
-MIT
+- 优先检查 `/admin/api/* -> admin-api` 的域名路由是否正确
+- 再检查生产环境的 `VITE_ADMIN_API_BASE_URL`

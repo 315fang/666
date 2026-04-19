@@ -780,49 +780,41 @@ const handleAction = {
         return success({ list: coupons });
     }),
 
-    'getCouponInfo': asyncHandler(async (_openid, params) => {
+    'couponCenter': asyncHandler(async (openid) => {
+        const [templates, mine] = await Promise.all([
+            withTransientDbReadRetry(
+                () => userCoupons.listCouponCenter(openid),
+                { action: 'couponCenter', openid }
+            ),
+            withTransientDbReadRetry(
+                () => userCoupons.listCoupons(openid, 'unused'),
+                { action: 'couponCenter.mine', openid }
+            )
+        ]);
+        return success({
+            list: templates,
+            mine: mine.slice(0, 3),
+            unused_count: mine.length
+        });
+    }),
+
+    'getCouponInfo': asyncHandler(async (openid, params) => {
         const ticketId = String(params.ticket || params.ticket_id || params.t || '').trim();
         if (ticketId) {
             const ticketInfo = await userCouponTickets.getClaimTicketInfo(ticketId);
             return success({
                 found: !!ticketInfo.found,
                 ticket_status: ticketInfo.ticket_status || 'invalid',
-                coupon: ticketInfo.coupon || null
+                coupon: ticketInfo.coupon || null,
+                claim_status: ticketInfo.claim_status || '',
+                claim_message: ticketInfo.claim_message || '',
+                can_claim: ticketInfo.can_claim !== false
             });
         }
 
         const id = String(params.coupon_id || params.id || '');
         if (!id) throw badRequest('缺少优惠券 ID');
-        const numId = Number(id);
-        const hasNumeric = Number.isFinite(numId) && !isNaN(numId);
-        let coupon = null;
-        if (hasNumeric) {
-            const r = await db.collection('coupons').where({ id: numId }).limit(1).get().catch(() => ({ data: [] }));
-            coupon = r.data && r.data[0];
-        }
-        if (!coupon) {
-            const r2 = await db.collection('coupons').where({ id: id }).limit(1).get().catch(() => ({ data: [] }));
-            coupon = r2.data && r2.data[0];
-        }
-        if (!coupon) {
-            try { const r3 = await db.collection('coupons').doc(id).get(); coupon = r3.data; } catch (_) {}
-        }
-        if (!coupon) return success({ coupon: null, found: false });
-        const couponId = coupon.id != null ? String(coupon.id) : coupon._id;
-        return success({
-            found: true,
-            coupon: {
-                id: couponId,
-                name: coupon.name,
-                type: coupon.type || coupon.coupon_type || 'fixed',
-                value: coupon.value ?? coupon.coupon_value ?? 0,
-                min_purchase: coupon.min_purchase ?? 0,
-                valid_days: coupon.valid_days ?? 30,
-                description: coupon.description || '',
-                stock: coupon.stock ?? -1,
-                is_active: coupon.is_active ?? 1
-            }
-        });
+        return success(await userCoupons.getCouponClaimInfo(openid, id));
     }),
 
     'claimCoupon': asyncHandler(async (openid, params) => {

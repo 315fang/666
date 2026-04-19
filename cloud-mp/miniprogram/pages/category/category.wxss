@@ -39,10 +39,6 @@
   font-weight: 500;
 }
 
-.activity-tail-section {
-  padding-top: 8rpx;
-}
-
 .cat-empty {
   padding: 40rpx 0;
   text-align: center;

@@ -83,6 +83,7 @@ const ROUTE_TABLE = {
 
     // ── 优惠券 ────────────────────────────────
     'GET /coupons/mine': { fn: 'user', action: 'listCoupons' },
+    'GET /coupons/center': { fn: 'user', action: 'couponCenter' },
 
     // ── 配置 ──────────────────────────────────
     'GET /configs': { fn: 'config', action: 'getSystemConfig' },

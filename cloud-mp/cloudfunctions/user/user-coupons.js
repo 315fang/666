@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
 const { toNumber, getAllRecords } = require('./shared/utils');
+const CHINA_UTC_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
@@ -85,6 +86,220 @@ function addDays(date, days) {
     if (!date) return '';
     const next = new Date(date.getTime() + Math.max(1, days) * 24 * 60 * 60 * 1000);
     return next.toISOString();
+}
+
+function getChinaNowParts(nowTs = Date.now()) {
+    const shifted = new Date(nowTs + CHINA_UTC_OFFSET_MS);
+    const year = shifted.getUTCFullYear();
+    const month = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(shifted.getUTCDate()).padStart(2, '0');
+    const hours = shifted.getUTCHours();
+    const minutes = shifted.getUTCMinutes();
+    return {
+        dayKey: `${year}-${month}-${day}`,
+        minuteOfDay: hours * 60 + minutes
+    };
+}
+
+function normalizeClockText(value, fallback = '') {
+    const raw = String(value == null ? '' : value).trim();
+    if (!raw) return fallback;
+    const match = raw.match(/^(\d{1,2})(?::?(\d{2}))$/);
+    if (!match) return fallback;
+    const hour = Math.max(0, Math.min(23, Number(match[1] || 0)));
+    const minute = Math.max(0, Math.min(59, Number(match[2] || 0)));
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function clockTextToMinutes(value, fallback = 0) {
+    const normalized = normalizeClockText(value);
+    if (!normalized) return fallback;
+    const [hourText, minuteText] = normalized.split(':');
+    return Number(hourText) * 60 + Number(minuteText);
+}
+
+function normalizeDailyClaimLimit(coupon = {}) {
+    if (!hasValue(coupon.daily_claim_limit)) return -1;
+    const limit = Math.floor(toNumber(coupon.daily_claim_limit, -1));
+    return limit < 0 ? -1 : limit;
+}
+
+function isEnabledFlag(value, fallback = false) {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (value === true || value === 1 || value === '1') return true;
+    if (value === false || value === 0 || value === '0') return false;
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized) return fallback;
+    return ['true', 'yes', 'on', 'enabled', 'active'].includes(normalized);
+}
+
+function getClaimedTodayCount(coupon = {}, nowParts = getChinaNowParts()) {
+    return String(coupon.claim_day_key || '') === nowParts.dayKey
+        ? Math.max(0, toNumber(coupon.claimed_today_count, 0))
+        : 0;
+}
+
+function buildClaimWindowLabel(coupon = {}) {
+    if (!isEnabledFlag(coupon.claim_time_enabled, false)) return '全天可领';
+    return `${coupon.claim_start_time} - ${coupon.claim_end_time}`;
+}
+
+function buildTimeWindowState(coupon = {}, nowParts = getChinaNowParts()) {
+    const enabled = isEnabledFlag(coupon.claim_time_enabled, false);
+    if (!enabled) {
+        return {
+            enabled: false,
+            inWindow: true,
+            label: '全天可领',
+            state: 'all_day',
+            message: ''
+        };
+    }
+
+    const startText = normalizeClockText(coupon.claim_start_time, '00:00');
+    const endText = normalizeClockText(coupon.claim_end_time, '23:59');
+    const startMinutes = clockTextToMinutes(startText, 0);
+    const endMinutes = clockTextToMinutes(endText, 23 * 60 + 59);
+    const current = nowParts.minuteOfDay;
+
+    let inWindow = true;
+    let state = 'all_day';
+    let message = '';
+
+    if (startMinutes !== endMinutes) {
+        if (startMinutes < endMinutes) {
+            inWindow = current >= startMinutes && current <= endMinutes;
+            state = current < startMinutes ? 'before_start' : (inWindow ? 'active' : 'after_end');
+        } else {
+            inWindow = current >= startMinutes || current <= endMinutes;
+            state = inWindow ? 'active' : 'before_start';
+        }
+    }
+
+    if (!inWindow) {
+        if (state === 'before_start') {
+            message = `今日 ${startText} 开始领取`;
+        } else {
+            message = `今日领取时间已结束`;
+        }
+    }
+
+    return {
+        enabled: true,
+        inWindow,
+        label: `${startText} - ${endText}`,
+        state,
+        message
+    };
+}
+
+function buildCouponTemplateView(coupon = {}, availability = null) {
+    const templateId = hasValue(coupon.id) ? coupon.id : coupon._id;
+    const type = coupon.type || coupon.coupon_type || 'fixed';
+    const claimTimeEnabled = isEnabledFlag(coupon.claim_time_enabled, false);
+    const isActive = isEnabledFlag(coupon.is_active != null ? coupon.is_active : coupon.status, true);
+    const value = toNumber(coupon.value != null ? coupon.value : coupon.coupon_value, 0);
+    const stock = coupon.stock == null ? -1 : toNumber(coupon.stock, -1);
+    const issuedCount = Math.max(0, toNumber(coupon.issued_count, 0));
+    const stockRemaining = stock === -1 ? -1 : Math.max(0, stock - issuedCount);
+    const dailyClaimLimit = normalizeDailyClaimLimit(coupon);
+    const claimedTodayCount = availability ? availability.claimedTodayCount : getClaimedTodayCount(coupon);
+    const timeWindow = availability ? availability.timeWindow : buildTimeWindowState(coupon);
+
+    return {
+        id: templateId,
+        coupon_id: templateId,
+        name: coupon.name || coupon.title || '优惠券',
+        coupon_name: coupon.name || coupon.title || '优惠券',
+        type,
+        coupon_type: type,
+        value,
+        coupon_value: value,
+        min_purchase: toNumber(coupon.min_purchase, 0),
+        valid_days: Math.max(1, toNumber(coupon.valid_days, 30)),
+        description: coupon.description || '',
+        created_at: coupon.created_at || '',
+        updated_at: coupon.updated_at || '',
+        stock,
+        stock_remaining: stockRemaining,
+        is_active: isActive ? 1 : 0,
+        scope: coupon.scope || 'all',
+        scope_ids: Array.isArray(coupon.scope_ids) ? coupon.scope_ids : [],
+        daily_claim_limit: dailyClaimLimit,
+        claimed_today_count: claimedTodayCount,
+        claim_time_enabled: claimTimeEnabled,
+        claim_start_time: normalizeClockText(coupon.claim_start_time, '00:00'),
+        claim_end_time: normalizeClockText(coupon.claim_end_time, '23:59'),
+        claim_window_text: timeWindow.label,
+        can_claim: availability ? availability.canClaim : false,
+        claim_status: availability ? availability.state : 'unknown',
+        claim_message: availability ? availability.message : ''
+    };
+}
+
+function resolveTemplateClaimAvailability(coupon = {}, options = {}) {
+    const nowParts = options.nowParts || getChinaNowParts();
+    const alreadyOwned = !!options.alreadyOwned;
+    const type = String(coupon.type || coupon.coupon_type || 'fixed').toLowerCase();
+    const stock = coupon.stock == null ? -1 : toNumber(coupon.stock, -1);
+    const issuedCount = Math.max(0, toNumber(coupon.issued_count, 0));
+    const dailyClaimLimit = normalizeDailyClaimLimit(coupon);
+    const claimedTodayCount = getClaimedTodayCount(coupon, nowParts);
+    const timeWindow = buildTimeWindowState(coupon, nowParts);
+
+    const result = {
+        state: 'claimable',
+        message: '',
+        canClaim: true,
+        claimedTodayCount,
+        dailyClaimLimit,
+        dayKey: nowParts.dayKey,
+        timeWindow
+    };
+
+    if (type === 'exchange') {
+        result.state = 'unsupported';
+        result.message = '该券不支持在领券中心领取';
+        result.canClaim = false;
+        return result;
+    }
+
+    if (alreadyOwned) {
+        result.state = 'already_owned';
+        result.message = '你已领取过这张券';
+        result.canClaim = false;
+        return result;
+    }
+
+    if (!isEnabledFlag(coupon.is_active != null ? coupon.is_active : coupon.status, true)) {
+        result.state = 'inactive';
+        result.message = '此活动已结束';
+        result.canClaim = false;
+        return result;
+    }
+
+    if (stock !== -1 && issuedCount >= stock) {
+        result.state = 'out_of_stock';
+        result.message = '此券已被领完';
+        result.canClaim = false;
+        return result;
+    }
+
+    if (dailyClaimLimit !== -1 && claimedTodayCount >= dailyClaimLimit) {
+        result.state = 'daily_exhausted';
+        result.message = '今日份额已领完';
+        result.canClaim = false;
+        return result;
+    }
+
+    if (!timeWindow.inWindow) {
+        result.state = timeWindow.state === 'before_start' ? 'not_started' : 'time_ended';
+        result.message = timeWindow.message || '当前不在领取时间内';
+        result.canClaim = false;
+        return result;
+    }
+
+    return result;
 }
 
 async function queryUserCouponsByUserIds(userIds = [], extraWhere = null, limit = null) {
@@ -278,6 +493,17 @@ async function findCouponTemplate(couponId) {
     return null;
 }
 
+async function getOwnedCouponTemplateIds(identity) {
+    if (!identity || !identity.openids || !identity.openids.length) return new Set();
+    const existingCoupons = await fetchCouponsByIdentity(identity.openids[0]);
+    return new Set(
+        existingCoupons
+            .map((coupon) => coupon.coupon_id)
+            .filter(hasValue)
+            .map((value) => String(value))
+    );
+}
+
 function shouldHydrateFromTemplate(coupon) {
     return !hasValue(coupon.coupon_name)
         || !hasValue(coupon.coupon_type)
@@ -397,29 +623,67 @@ async function listCoupons(openid, status = 'unused') {
     }
 }
 
+async function listCouponCenter(openid) {
+    const identity = await getCouponIdentity(openid);
+    const ownedTemplateIds = await getOwnedCouponTemplateIds(identity);
+    const rows = await getAllRecords(db, 'coupons').catch(() => []);
+    const nowParts = getChinaNowParts();
+
+    const coupons = (Array.isArray(rows) ? rows : [])
+        .filter((coupon) => String(coupon.type || coupon.coupon_type || 'fixed').toLowerCase() !== 'exchange')
+        .map((coupon) => {
+            const couponId = hasValue(coupon.id) ? coupon.id : coupon._id;
+            const alreadyOwned = ownedTemplateIds.has(String(couponId));
+            const availability = resolveTemplateClaimAvailability(coupon, {
+                alreadyOwned,
+                nowParts
+            });
+            return buildCouponTemplateView(coupon, availability);
+        })
+        .sort((a, b) => {
+            const aRank = a.can_claim ? 0 : (a.claim_status === 'already_owned' ? 1 : 2);
+            const bRank = b.can_claim ? 0 : (b.claim_status === 'already_owned' ? 1 : 2);
+            if (aRank !== bRank) return aRank - bRank;
+            return (parseDate(b.updated_at || b.created_at || 0)?.getTime() || 0) - (parseDate(a.updated_at || a.created_at || 0)?.getTime() || 0);
+        });
+
+    return coupons;
+}
+
+async function getCouponClaimInfo(openid, couponId) {
+    const coupon = await findCouponTemplate(couponId);
+    if (!coupon) return { found: false, coupon: null };
+
+    let alreadyOwned = false;
+    if (openid) {
+        const identity = await getCouponIdentity(openid);
+        alreadyOwned = await hasOwnedCoupon(identity, couponId);
+    }
+
+    const availability = resolveTemplateClaimAvailability(coupon, { alreadyOwned });
+    return {
+        found: true,
+        coupon: buildCouponTemplateView(coupon, availability),
+        claim_status: availability.state,
+        claim_message: availability.message,
+        can_claim: availability.canClaim
+    };
+}
+
 /**
  * 领取优惠券
  */
 async function claimCoupon(openid, couponId) {
     const cid = String(couponId);
     const identity = await getCouponIdentity(openid);
-
-    if (await hasOwnedCoupon(identity, cid)) {
-        return { success: false, message: '已领取此优惠券' };
-    }
-
     const couponData = await findCouponTemplate(cid);
     if (!couponData) {
         return { success: false, message: '优惠券不存在' };
     }
-
-    if (Number(couponData.is_active) === 0) {
-        return { success: false, message: '此活动已结束' };
-    }
-    const stock = couponData.stock == null ? -1 : Number(couponData.stock);
-    const issuedCount = Math.max(0, toNumber(couponData.issued_count, 0));
-    if (stock !== -1 && issuedCount >= stock) {
-        return { success: false, message: '此券库存不足' };
+    const alreadyOwned = await hasOwnedCoupon(identity, cid);
+    const availability = resolveTemplateClaimAvailability(couponData, { alreadyOwned });
+    if (!availability.canClaim) {
+        return { success: false, message: availability.message || '当前不可领取' };
     }
 
     const result = await db.collection('user_coupons').add({
@@ -435,6 +699,7 @@ async function claimCoupon(openid, couponId) {
             scope_ids: Array.isArray(couponData.scope_ids) ? couponData.scope_ids : [],
             status: 'unused',
             created_at: db.serverDate(),
+            claim_day_key: availability.dayKey,
             expire_at: db.serverDate({ offset: (couponData.valid_days || 30) * 24 * 60 * 60 * 1000 })
         }
     });
@@ -442,6 +707,8 @@ async function claimCoupon(openid, couponId) {
         await db.collection('coupons').doc(String(couponData._id)).update({
             data: {
                 issued_count: _.inc(1),
+                claim_day_key: availability.dayKey,
+                claimed_today_count: availability.claimedTodayCount + 1,
                 updated_at: db.serverDate()
             }
         }).catch(() => null);
@@ -512,7 +779,12 @@ async function claimWelcomeCoupons(openid) {
 
 module.exports = {
     listCoupons,
+    listCouponCenter,
     claimCoupon,
+    findCouponTemplate,
+    getCouponClaimInfo,
+    resolveTemplateClaimAvailability,
+    buildCouponTemplateView,
     claimWelcomeCoupons,
     normalizeCouponRecord,
     reconcileLotteryCoupons

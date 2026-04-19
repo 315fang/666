@@ -129,8 +129,10 @@ Page({
         this._assetRefreshAttempted = false;
         this._skipNextHomeRefresh = true;
         const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+        const viewportHeight = windowInfo.windowHeight || windowInfo.screenHeight || 0;
+        const heroPeekHeight = Math.max(160, Math.round(viewportHeight * 0.20));
         this.setData({
-            heroViewportHeight: windowInfo.windowHeight || windowInfo.screenHeight || 0,
+            heroViewportHeight: Math.max(480, viewportHeight - heroPeekHeight),
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
             navBarHeight: app.globalData.navBarHeight || 44
@@ -249,11 +251,7 @@ Page({
     },
 
     onCouponTap() {
-        if (!app.globalData.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
-        wx.navigateTo({ url: '/pages/coupon/list' });
+        wx.navigateTo({ url: '/pages/coupon/center' });
     },
 
     onClaimWelcomeCoupons() {
@@ -280,7 +278,11 @@ Page({
     },
 
     onCouponItemTap(e) {
-        wx.showToast({ title: '下单时可在结算页选择优惠券', icon: 'none', duration: 2500 });
+        if (!app.globalData.isLoggedIn) {
+            wx.navigateTo({ url: '/pages/coupon/center' });
+            return;
+        }
+        wx.navigateTo({ url: '/pages/coupon/list' });
     },
 
     _startBubbleRotation() {
@@ -437,6 +439,10 @@ Page({
 
     onActivityTap() {
         wx.switchTab({ url: '/pages/activity/activity' });
+    },
+
+    onBrandZoneOpen() {
+        wx.navigateTo({ url: '/pages/index/brand-zone-detail' });
     },
 
     onLatestActivityTap() {

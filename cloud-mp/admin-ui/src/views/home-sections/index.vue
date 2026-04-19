@@ -69,6 +69,13 @@
             <el-form-item label="品牌副标题">
               <el-input v-model="brandConfig.nav_brand_sub" placeholder="如：品牌甄选" style="width:240px;" />
             </el-form-item>
+            <el-divider content-position="left">首页福利楼层</el-divider>
+            <el-form-item label="楼层标题">
+              <el-input v-model="brandConfig.coupon_zone_title" placeholder="默认：惊喜福利" style="width:240px;" />
+            </el-form-item>
+            <el-form-item label="楼层副标题">
+              <el-input v-model="brandConfig.coupon_zone_subtitle" placeholder="如：登录后领券，下单时可直接使用" />
+            </el-form-item>
             <el-divider content-position="left">底部品牌专区</el-divider>
             <el-form-item label="启用专区">
               <el-switch v-model="brandConfig.brand_zone_enabled" active-text="开启" inactive-text="关闭" />
@@ -495,6 +502,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ContentBlockEditor from '@/components/ContentBlockEditor.vue'
 import MediaPicker from '@/components/MediaPicker.vue'
+import { warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
 import {
   getPopupAdConfig,
   updatePopupAdConfig,
@@ -599,6 +607,8 @@ const brandConfig = reactive({
   brand_logo: '',
   nav_brand_title: '问兰镜像',
   nav_brand_sub: '品牌甄选',
+  coupon_zone_title: '惊喜福利',
+  coupon_zone_subtitle: '领取后可在结算页直接选择使用',
   brand_zone_enabled: false,
   brand_zone_title: '品牌专区',
   brand_zone_cover: '',
@@ -758,6 +768,8 @@ const loadBrandConfig = async () => {
     brandConfig.brand_logo = d.brand_logo || ''
     brandConfig.nav_brand_title = d.nav_brand_title || '问兰镜像'
     brandConfig.nav_brand_sub = d.nav_brand_sub || '品牌甄选'
+    brandConfig.coupon_zone_title = d.coupon_zone_title || '惊喜福利'
+    brandConfig.coupon_zone_subtitle = d.coupon_zone_subtitle || '领取后可在结算页直接选择使用'
     brandConfig.brand_zone_enabled = d.brand_zone_enabled !== undefined
       ? d.brand_zone_enabled !== 'false' && d.brand_zone_enabled !== false
       : hasBrandZoneLegacyContent(d)
@@ -785,6 +797,15 @@ const loadBrandConfig = async () => {
 const saveBrandConfig = async () => {
   brandSaving.value = true
   try {
+    const brandAssetWarning = warnTemporaryAssetUrls([
+      brandConfig.brand_logo,
+      brandConfig.official_promo_cover,
+      brandConfig.brand_zone_cover
+    ], '品牌配置图片')
+    if (brandAssetWarning) {
+      ElMessage.warning(brandAssetWarning)
+      return
+    }
     await updateSettings({
       category: 'homepage',
       settings: {
@@ -792,6 +813,8 @@ const saveBrandConfig = async () => {
         brand_logo: brandConfig.brand_logo,
         nav_brand_title: brandConfig.nav_brand_title,
         nav_brand_sub: brandConfig.nav_brand_sub,
+        coupon_zone_title: brandConfig.coupon_zone_title,
+        coupon_zone_subtitle: brandConfig.coupon_zone_subtitle,
         brand_zone_enabled: String(brandConfig.brand_zone_enabled),
         brand_zone_title: brandConfig.brand_zone_title,
         brand_zone_cover: brandConfig.brand_zone_cover,

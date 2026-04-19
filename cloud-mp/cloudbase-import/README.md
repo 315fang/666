@@ -1,35 +1,34 @@
 # CloudBase Import Package
 
-这个目录存放可导入 CloudBase 控制台的 JSONL 数据包。
+更新日期：2026-04-18
 
-生成顺序：
+本目录存放可导入 CloudBase 的 JSONL 包。
+
+## 生成链路
 
 ```powershell
+cd C:\Users\21963\WeChatProjects\zz\cloud-mp
 node .\scripts\normalize-cloudbase-data.js
 node .\scripts\build-cloudbase-import-jsonl.js
 ```
 
-生成后每个集合会对应一个 `*.jsonl` 文件。
+生成关系：
 
-建议导入顺序：
+`mysql/jsonl -> cloudbase-seed -> cloudbase-import`
 
-1. `users`
-2. `categories`
-3. `products`
-4. `skus`
-5. `banners`
-6. `materials`
-7. `material_groups`
-8. `orders`
-9. `refunds`
-10. `reviews`
-11. `commissions`
-12. `withdrawals`
-13. `admins`
-14. `admin_roles`
+## 角色
 
-注意：
+- 作为 CloudBase 环境初始化导入包
+- 作为导入前验证和导入后核对的静态产物
+- 不是正式运行时数据库
 
-- 当前导入包仍属于迁移期数据包
-- 管理员密码字段仅用于后台兼容，不建议直接作为正式 CloudBase Auth 方案
-- 图片字段目前仍有旧 URL，后续还需要切到 `file_id`
+## 当前注意事项
+
+- 导入包仍属于迁移期资产
+- 图片和素材字段仍可能存在待切换的 `file_id`/旧 URL 兼容问题
+- 管理员密码相关字段只用于历史兼容和导入，不应被当作最终身份体系设计
+
+## 建议
+
+- 导入前先执行 `npm run import:validate`
+- 导入后结合 `docs/CLOUDBASE_RELEASE_RUNBOOK.md` 做环境检查
