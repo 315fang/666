@@ -21,7 +21,7 @@ function getPointDeductionRule() {
     );
     return {
         yuanPerPoint: Number.isFinite(yuanPerPoint) && yuanPerPoint > 0 ? yuanPerPoint : 0.1,
-        maxRatio: Number.isFinite(maxRatio) && maxRatio > 0 ? Math.max(0.7, Math.min(1, maxRatio)) : 0.7
+        maxRatio: Number.isFinite(maxRatio) && maxRatio > 0 ? Math.min(1, maxRatio) : 0.7
     };
 }
 
@@ -50,7 +50,10 @@ function buildCouponQuery(params) {
 }
 
 function recalcFinal(page) {
-    const totalFen = Math.round(parseFloat(page.data.totalAmount) * 100);
+    const bundleBaseAmount = page.data.bundleOrder
+        ? parseFloat(page.data.bundlePrice || page.data.finalAmount || 0)
+        : parseFloat(page.data.totalAmount);
+    const totalFen = Math.round(bundleBaseAmount * 100);
     const shippingFen = Math.round(parseFloat(page.data.shippingFee || 0) * 100);
     const couponFen = Math.round(parseFloat(page.data.couponDiscount) * 100);
     const afterCouponFen = Math.max(0, totalFen + shippingFen - couponFen);
@@ -76,6 +79,23 @@ function recalcFinal(page) {
 
 async function loadAvailableCoupons(page) {
     try {
+        if (page.data.allowCoupon === false) {
+            page.setData({
+                availableCoupons: [],
+                unusedCouponCount: 0,
+                selectedCoupon: null,
+                couponDiscount: '0.00',
+                couponLoadStatus: 'success',
+                couponLoadError: ''
+            });
+            recalcFinal(page);
+            return {
+                ok: true,
+                status: 'success',
+                data: [],
+                errorType: ''
+            };
+        }
         if (page.data.exchangeMode) {
             page.setData({
                 availableCoupons: [],
@@ -153,7 +173,7 @@ async function loadAvailableCoupons(page) {
             unusedCouponCount: unusedCoupons.length,
             selectedCoupon: stillAvailable ? selectedCoupon : null,
             couponDiscount: stillAvailable ? page.data.couponDiscount : '0.00',
-            allowCoupon: true,
+            allowCoupon: page.data.allowCoupon !== false,
             couponLoadStatus: 'success',
             couponLoadError: ''
         });
@@ -173,7 +193,7 @@ async function loadAvailableCoupons(page) {
             selectedCoupon: null,
             couponDiscount: '0.00',
             couponLoadStatus: 'error',
-            couponLoadError: '优惠券暂不可用'
+            couponLoadError: '优惠券服务暂不可用'
         });
         recalcFinal(page);
         return {

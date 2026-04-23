@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-04-19T16:04:35.830Z",
+  "apply": false,
+  "target_count": 1,
+  "targets": [
+    {
+      "docId": "9eb3651569d4f92108344817589ccb52",
+      "user_id": 22,
+      "openid": "oc0ZD3U6ngmfB3MLFTYuRiEaYDh4",
+      "nickname": "微信用户",
+      "current_role_level": 7,
+      "next_role_level": 5,
+      "next_role_name": "区域合伙人"
+    }
+  ]
+}

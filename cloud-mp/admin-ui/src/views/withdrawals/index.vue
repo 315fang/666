@@ -19,9 +19,11 @@
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="全部状态" clearable style="width: 130px">
             <el-option label="待审核" value="pending" />
-            <el-option label="已通过" value="approved" />
+            <el-option label="待打款" value="approved" />
+            <el-option label="打款中" value="processing" />
+            <el-option label="打款失败" value="failed" />
             <el-option label="已拒绝" value="rejected" />
-            <el-option label="已打款" value="completed" />
+            <el-option label="已到账" value="completed" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -73,6 +75,7 @@
             <el-button v-if="row.status === 'pending'" text type="success" size="small" @click="handleApprove(row)">通过</el-button>
             <el-button v-if="row.status === 'pending'" text type="danger" size="small" @click="handleReject(row)">拒绝</el-button>
             <el-button v-if="canAutoCompleteWithdrawal(row)" text type="primary" size="small" @click="handleComplete(row)">确认打款</el-button>
+            <el-button v-if="canSyncWithdrawal(row)" text type="warning" size="small" @click="handleSync(row)">同步状态</el-button>
             <el-button text size="small" @click="handleDetail(row)">详情</el-button>
           </template>
         </el-table-column>
@@ -122,6 +125,16 @@
         <el-descriptions-item label="状态">
           <el-tag :type="getStatusType(currentRow.status)">{{ getStatusText(currentRow.status) }}</el-tag>
         </el-descriptions-item>
+        <el-descriptions-item label="微信批次" v-if="currentRow.wx_transfer?.batch_id || currentRow.wx_transfer?.out_batch_no">
+          {{ currentRow.wx_transfer?.batch_id || '-' }} / {{ currentRow.wx_transfer?.out_batch_no || '-' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="微信明细" v-if="currentRow.wx_transfer?.detail_id || currentRow.wx_transfer?.out_detail_no">
+          {{ currentRow.wx_transfer?.detail_id || '-' }} / {{ currentRow.wx_transfer?.out_detail_no || '-' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="微信状态" v-if="currentRow.wx_transfer?.batch_status || currentRow.wx_transfer?.detail_status">
+          {{ currentRow.wx_transfer?.batch_status || '-' }} / {{ currentRow.wx_transfer?.detail_status || '-' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="失败原因" v-if="currentRow.fail_reason">{{ currentRow.fail_reason }}</el-descriptions-item>
         <el-descriptions-item label="申请时间">{{ formatDateTime(currentRow.created_at) }}</el-descriptions-item>
         <el-descriptions-item label="备注" v-if="currentRow.remark">{{ currentRow.remark }}</el-descriptions-item>
       </el-descriptions>
@@ -133,7 +146,7 @@
 import { ref, reactive, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getWithdrawals, approveWithdrawal, rejectWithdrawal, completeWithdrawal } from '@/api'
+import { getWithdrawals, approveWithdrawal, rejectWithdrawal, completeWithdrawal, syncWithdrawal } from '@/api'
 import { extractReadAt, mergeStrongSuccessMessage } from '@/api/consistency'
 import CompactIdCell from '@/components/CompactIdCell.vue'
 import { formatDateTime } from '@/utils/format'
@@ -310,7 +323,7 @@ const handleComplete = async (row) => {
     )
     await runWithdrawalMutation(
       () => completeWithdrawal(row.id, { remark: value }),
-      '打款请求已执行'
+      (result) => result?.status === 'completed' ? '微信提现已完成' : '微信提现已受理，等待微信处理'
     )
   } catch (error) {
     if (error !== 'cancel') {
@@ -322,7 +335,19 @@ const handleComplete = async (row) => {
   }
 }
 
-const canAutoCompleteWithdrawal = (row) => row?.status === 'approved' && getWithdrawAccountType(row) === 'wechat'
+const canAutoCompleteWithdrawal = (row) => ['approved', 'failed'].includes(row?.status) && getWithdrawAccountType(row) === 'wechat'
+const canSyncWithdrawal = (row) => ['processing', 'approved'].includes(row?.status) && !!row?.wx_transfer?.batch_id
+
+const handleSync = async (row) => {
+  await runWithdrawalMutation(
+    () => syncWithdrawal(row.id),
+    (result) => {
+      if (result?.status === 'completed') return '微信提现已到账'
+      if (result?.status === 'failed') return result?.fail_reason ? `微信提现失败：${result.fail_reason}` : '微信提现失败'
+      return '微信提现状态已同步'
+    }
+  )
+}
 
 const getWithdrawAccountType = (row) => row?.withdraw_account?.type || row?.method || ''
 
@@ -343,12 +368,12 @@ const getWithdrawAccountText = (row) => {
 }
 
 const getStatusType = (status) => {
-  const map = { pending: 'warning', approved: 'info', rejected: 'danger', completed: 'success' }
+  const map = { pending: 'warning', approved: 'info', processing: 'warning', rejected: 'danger', failed: 'danger', completed: 'success' }
   return map[status] || 'info'
 }
 
 const getStatusText = (status) => {
-  const map = { pending: '待审核', approved: '待打款', rejected: '已拒绝', completed: '已打款' }
+  const map = { pending: '待审核', approved: '待打款', processing: '打款中', rejected: '已拒绝', failed: '打款失败', completed: '已到账' }
   return map[status] || status
 }
 

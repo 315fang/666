@@ -4,11 +4,17 @@ const {
     normalizeProductId,
     resolveProductImage,
     resolveProductDisplayPrice,
-    resolveProductCurrentPrice
+    resolveProductCurrentPrice,
+    resolveProductInitialSku,
+    getSkuSpecEntries,
+    buildSkuValueText,
+    buildProductSpecSummary,
+    resolveProductDefaultSpecText
 } = require('../../utils/dataFormatter');
 const { ErrorHandler } = require('../../utils/errorHandler');
 const { USER_ROLES } = require('../../config/constants');
 const LocalUserContent = require('../../utils/localUserContent');
+const { resolveRenderableImageList } = require('../../utils/cloudAssetRuntime');
 const app = getApp();
 
 const PRODUCT_PLACEHOLDER = '';
@@ -39,14 +45,9 @@ function sanitizeImageList(value, fallback) {
     return fallback ? [fallback] : [];
 }
 
-// 构建 SKU 规格文本（多规格用 " / " 连接，单规格用 ": " 连接）
+// 构建 SKU 规格文本（只显示规格值，例如 "120ml" / "120ml / 礼盒"）
 function buildSkuText(sku) {
-    if (!sku) return '默认规格';
-    const specs = Array.isArray(sku.specs) && sku.specs.length > 0
-        ? sku.specs
-        : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
-    if (specs.length === 0) return sku.spec || '默认规格';
-    return specs.map((s) => `${s.name}: ${s.value}`).join(' / ');
+    return buildSkuValueText(sku, '默认规格');
 }
 
 function resolvePayableUnitPrice(product, sku, roleLevel) {
@@ -60,30 +61,24 @@ function resolvePayableUnitPrice(product, sku, roleLevel) {
     return 0;
 }
 
-function pickDefaultSku(product, skus, roleLevel) {
-    const list = Array.isArray(skus) ? skus.filter(Boolean) : [];
-    if (!list.length) return null;
+function resolveInitialSku(product, skus, roleLevel) {
+    return resolveProductInitialSku(product, skus, roleLevel);
+}
 
-    const targetPrice = Number(resolveProductDisplayPrice(product, roleLevel) || 0);
-    return list.slice().sort((a, b) => {
-        const aInStock = Number(a.stock || 0) > 0 ? 1 : 0;
-        const bInStock = Number(b.stock || 0) > 0 ? 1 : 0;
-        if (aInStock !== bInStock) return bInStock - aInStock;
+function hasAvailableSkuStock(sku) {
+    return Number(sku && sku.stock || 0) > 0;
+}
 
-        const aPrice = Number(resolvePayableUnitPrice(product, a, roleLevel) || 0);
-        const bPrice = Number(resolvePayableUnitPrice(product, b, roleLevel) || 0);
-        if (targetPrice > 0) {
-            const aDiff = Math.abs(aPrice - targetPrice);
-            const bDiff = Math.abs(bPrice - targetPrice);
-            if (aDiff !== bDiff) return aDiff - bDiff;
-        }
+function resolveInitialPurchasableSku(product, skus, roleLevel) {
+    const preferredSku = resolveInitialSku(product, skus, roleLevel);
+    if (!preferredSku || hasAvailableSkuStock(preferredSku)) {
+        return preferredSku;
+    }
 
-        const aSort = Number(a.sort_order ?? a.sortOrder ?? Number.MAX_SAFE_INTEGER);
-        const bSort = Number(b.sort_order ?? b.sortOrder ?? Number.MAX_SAFE_INTEGER);
-        if (aSort !== bSort) return aSort - bSort;
-
-        return aPrice - bPrice;
-    })[0];
+    return resolveInitialSku({
+        ...product,
+        default_sku_id: null
+    }, skus, roleLevel) || preferredSku;
 }
 
 async function loadProduct(page, id) {
@@ -93,21 +88,23 @@ async function loadProduct(page, id) {
         const res = await get(`/products/${id}`);
         const product = res.data || {};
 
-        product.images = sanitizeImageList(
+        product.images = await resolveRenderableImageList(
             product.preview_images || product.previewImages || product.image_url || product.images || product.image || resolveProductImage(product, PRODUCT_PLACEHOLDER),
             PRODUCT_PLACEHOLDER
         );
-        product.detail_images = sanitizeImageList(product.preview_detail_images || product.previewDetailImages || product.detail_images);
+        if (!product.images.length) {
+            product.images = sanitizeImageList(resolveProductImage(product, PRODUCT_PLACEHOLDER), PRODUCT_PLACEHOLDER);
+        }
+        product.detail_images = await resolveRenderableImageList(
+            product.preview_detail_images || product.previewDetailImages || product.detail_images,
+            []
+        );
 
         let specs = [];
         if (product.skus && product.skus.length > 0) {
             const specMap = {};
             product.skus.forEach((sku) => {
-                // 优先使用 specs 数组（多规格），向后兼容 spec_name/spec_value
-                const skuSpecs = Array.isArray(sku.specs) && sku.specs.length > 0
-                    ? sku.specs
-                    : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
-                skuSpecs.forEach((s) => {
+                getSkuSpecEntries(sku).forEach((s) => {
                     if (s.name && s.value) {
                         if (!specMap[s.name]) {
                             specMap[s.name] = new Set();
@@ -124,8 +121,8 @@ async function loadProduct(page, id) {
         }
         product.specs = specs;
 
-        // 生成规格摘要文本（如 "120ml / 50ml"），用于商品卡片和详情页显眼展示
-        const specSummary = specs.map((s) => s.values.join('/')).join(' · ');
+        const specSummary = resolveProductDefaultSpecText(product, product.skus || [])
+            || buildProductSpecSummary(product.skus || []);
         product.specSummary = specSummary;
 
         const roleLevel = app.globalData.userInfo && app.globalData.userInfo.role_level || USER_ROLES.GUEST;
@@ -136,14 +133,10 @@ async function loadProduct(page, id) {
             discount = Math.round((Number(displayPrice) / parseFloat(product.market_price)) * 10);
         }
 
-        const firstSku = pickDefaultSku(product, product.skus, roleLevel);
+        const firstSku = resolveInitialPurchasableSku(product, product.skus, roleLevel);
         const selectedSpecs = {};
         if (firstSku) {
-            // 优先使用 specs 数组（多规格），向后兼容 spec_name/spec_value
-            const firstSkuSpecs = Array.isArray(firstSku.specs) && firstSku.specs.length > 0
-                ? firstSku.specs
-                : (firstSku.spec_name && firstSku.spec_value ? [{ name: firstSku.spec_name, value: firstSku.spec_value }] : []);
-            firstSkuSpecs.forEach((s) => {
+            getSkuSpecEntries(firstSku).forEach((s) => {
                 if (s.name && s.value) {
                     selectedSpecs[s.name] = s.value;
                 }
@@ -191,6 +184,7 @@ async function loadProduct(page, id) {
             id: pid,
             name: product.name,
             image: product.images && product.images[0] || '',
+            image_ref: product.cover_image || product.file_id || product.image || product.image_url || '',
             price: Number(displayPrice).toFixed(2)
         });
 

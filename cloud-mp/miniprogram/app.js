@@ -78,8 +78,6 @@ App({
 
         // 并行预拉取首页数据
         this.globalData.homeDataPromise = this.prefetchHomeData();
-        this.prefetchCategoryBootstrap();
-        this.prefetchActivityBootstrap();
 
         // 版本更新检测
         this.checkUpdate();

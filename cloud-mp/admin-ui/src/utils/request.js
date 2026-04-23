@@ -4,6 +4,7 @@ import router from '@/router'
 
 const localAdminProxyTarget = String(import.meta.env.VITE_ADMIN_DEV_PROXY_TARGET || 'http://127.0.0.1:3001').replace(/\/$/, '')
 const localDirectAdminApiBaseURL = `${localAdminProxyTarget}/admin/api`
+const READ_ONLY_ADMIN_ROLES = new Set(['marketing_director'])
 
 function isLocalRuntime() {
   if (typeof window === 'undefined') return false
@@ -13,6 +14,24 @@ function isLocalRuntime() {
 
 function isLoginRequestUrl(url) {
   return typeof url === 'string' && url.includes('/login')
+}
+
+function isLogoutRequestUrl(url) {
+  return typeof url === 'string' && url.includes('/logout')
+}
+
+function getStoredAdminRole() {
+  try {
+    const raw = localStorage.getItem('admin_info') || '{}'
+    const info = JSON.parse(raw)
+    return String(info?.role || '').trim()
+  } catch (_) {
+    return ''
+  }
+}
+
+function isMutatingMethod(method = '') {
+  return !['GET', 'HEAD', 'OPTIONS'].includes(String(method || '').toUpperCase())
 }
 
 function getRequestDebugUrl(config = {}) {
@@ -40,9 +59,11 @@ function getCloudBaseHostedAdminApiBaseURL() {
 }
 
 const cloudBaseHostedAdminApiBaseURL = getCloudBaseHostedAdminApiBaseURL()
+const configuredAdminApiBaseURL = import.meta.env.VITE_ADMIN_API_BASE_URL || ''
 const resolvedAdminApiBaseURL =
-  import.meta.env.VITE_ADMIN_API_BASE_URL ||
+  // 在 CloudBase 原生测试域名下，优先直连官方 service 域名，避免生产自定义域名异常时拖垮测试入口。
   cloudBaseHostedAdminApiBaseURL ||
+  configuredAdminApiBaseURL ||
   '/admin/api'
 
 if (
@@ -69,6 +90,14 @@ request.interceptors.request.use(
     const token = localStorage.getItem('admin_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+    }
+    const role = getStoredAdminRole()
+    if (
+      READ_ONLY_ADMIN_ROLES.has(role) &&
+      isMutatingMethod(config.method) &&
+      !isLogoutRequestUrl(config.url)
+    ) {
+      return Promise.reject(new Error('市场总监账号为只读账号，不能执行修改操作'))
     }
     return config
   },

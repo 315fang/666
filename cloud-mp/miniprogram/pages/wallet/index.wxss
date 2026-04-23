@@ -332,22 +332,37 @@
   font-size: 24rpx;
   color: #9A8D80;
   text-align: center;
-  margin-bottom: 32rpx;
+  margin-bottom: 16rpx;
 }
 
 .popup-balance-num { font-weight: 700; color: #1C1917; }
+
+.popup-rule-tip {
+  margin-bottom: 24rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #8B7355;
+  text-align: center;
+}
 
 .popup-input-wrap {
   display: flex;
   align-items: center;
   border-bottom: 2rpx solid rgba(122, 108, 94, 0.15);
   padding: 16rpx 0 20rpx;
-  margin-bottom: 36rpx;
+  margin-bottom: 20rpx;
 }
 
 .popup-input-symbol { font-size: 40rpx; color: #1C1917; font-weight: 600; margin-right: 10rpx; }
 
 .popup-input { flex: 1; font-size: 48rpx; font-weight: 700; color: #1C1917; height: 72rpx; }
+
+.popup-calc-tip {
+  margin-bottom: 28rpx;
+  font-size: 22rpx;
+  color: #8B7355;
+  text-align: center;
+}
 
 .popup-btn-row { display: flex; gap: 16rpx; }
 

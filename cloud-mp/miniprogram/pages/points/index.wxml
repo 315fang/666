@@ -33,8 +33,8 @@
         <!-- 成长值进度 -->
         <view class="asset-progress-wrap" wx:if="{{account.next_level && (account.growth_needed > 0 || account.next_level_threshold)}}">
           <view class="asset-progress-label">
-            <text class="asset-progress-text">成长值 {{account.growth_value || 0}}</text>
-            <text class="asset-progress-text">距 {{account.next_level_name || '下一等级'}} 还差 {{account.growth_needed || 0}} 成长值</text>
+            <text class="asset-progress-text">当前积分 {{account.growth_value || 0}}</text>
+            <text class="asset-progress-text">距 {{account.next_level_name || '下一等级'}} 还差 {{account.growth_needed || 0}} 积分</text>
           </view>
           <view class="asset-progress-bar">
             <view class="asset-progress-fill" style="width: {{account.growth_progress || 0}}%"></view>

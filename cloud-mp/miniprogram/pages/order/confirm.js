@@ -1,6 +1,7 @@
 // pages/order/confirm.js - 订单确认页
 const { get } = require('../../utils/request');
 const { resolveCloudImageUrl } = require('./utils/cloudAsset');
+const { normalizeOrderItemSpec } = require('./orderSpecText');
 const app = getApp();
 const { getLightPromptModals } = require('../../utils/miniProgramConfig');
 const { shouldShowDaily, markDailyShown } = require('../../utils/lightPrompt');
@@ -21,12 +22,33 @@ const {
     getPointDeductionRule
 } = require('./orderConfirmPricing');
 const { submitOrder } = require('./orderConfirmSubmission');
+const { normalizeLimitedSpotPayload } = require('../../utils/limitedSpot');
 const {
     loadPointBalance,
     togglePoints,
     loadWalletBalance,
     toggleWallet
 } = require('./orderConfirmAccount');
+
+const DISCOUNT_RESTRICTED_ORDER_TYPES = new Set(['group', 'slash', 'limited_sale', 'limited_spot', 'bundle', 'exchange']);
+
+function isDiscountRestrictedOrderType(orderType = '') {
+    return DISCOUNT_RESTRICTED_ORDER_TYPES.has(String(orderType || '').trim().toLowerCase());
+}
+
+function isCouponRestrictedItem(item = {}) {
+    return Number(item.allow_coupon) === 0
+        || Number(item.is_explosive) === 1
+        || String(item.product_tag || '').trim().toLowerCase() === 'hot'
+        || String(item.activity_type || '').trim() !== '';
+}
+
+function isPointsRestrictedItem(item = {}) {
+    return Number(item.allow_points) === 0
+        || Number(item.is_explosive) === 1
+        || String(item.product_tag || '').trim().toLowerCase() === 'hot'
+        || String(item.activity_type || '').trim() !== '';
+}
 
 Page({
     data: {
@@ -53,6 +75,10 @@ Page({
         // 合计
         totalAmount: '0.00',
         totalCount: 0,
+        bundleOrder: false,
+        bundleMeta: null,
+        bundlePrice: '0.00',
+        bundleDiscount: '0.00',
         roleLevel: 0,
         // 优惠券
         availableCoupons: [],
@@ -80,6 +106,7 @@ Page({
         exchangeCouponId: '',
         exchangeCouponTitle: '',
         limitedSpotOrder: false,
+        limitedSpotSource: '',
         limitedSpotMode: '',
         limitedSpotTitle: '',
         limitedSpotPointsPrice: 0,
@@ -195,15 +222,78 @@ Page({
                 });
                 return false;
             }
+            if (directBuy.bundle_mode) {
+                const bundleItems = Array.isArray(directBuy.items) ? directBuy.items : [];
+                const resolvedItems = await Promise.all(bundleItems.map(async (item) => normalizeOrderItemSpec({
+                    ...item,
+                    image: await resolveCloudImageUrl(item.image, '/assets/images/placeholder.svg')
+                })));
+                const originalAmount = Number(directBuy.bundle_original_amount || 0);
+                const bundlePrice = Number(directBuy.bundle_price || 0);
+                const totalCount = resolvedItems.reduce((sum, item) => sum + Number(item.quantity || item.qty || 1), 0);
+                this.setData({
+                    orderItems: resolvedItems,
+                    totalAmount: originalAmount.toFixed(2),
+                    finalAmount: bundlePrice.toFixed(2),
+                    totalCount,
+                    bundleOrder: true,
+                    bundleMeta: {
+                        id: directBuy.bundle_id || '',
+                        title: directBuy.bundle_title || '',
+                        subtitle: directBuy.bundle_subtitle || '',
+                        cover_image: directBuy.bundle_cover_image || '',
+                        bundle_price: bundlePrice,
+                        original_amount: originalAmount
+                    },
+                    bundlePrice: bundlePrice.toFixed(2),
+                    bundleDiscount: Math.max(0, originalAmount - bundlePrice).toFixed(2),
+                    slashNo: null,
+                    groupNo: null,
+                    groupActivityId: null,
+                    orderType: 'bundle',
+                    exchangeMode: false,
+                    exchangeCouponId: '',
+                    exchangeCouponTitle: '',
+                    limitedSpotOrder: false,
+                    limitedSpotSource: '',
+                    limitedSpotMode: '',
+                    limitedSpotTitle: '',
+                    limitedSpotPointsPrice: 0,
+                    limitedSpotMoneyPrice: 0,
+                    limitedSpotPayload: null,
+                    allowCoupon: false,
+                    allowPoints: false,
+                    usePoints: false,
+                    pointsToUse: 0,
+                    pointsDeduction: '0.00',
+                    useWallet: false,
+                    couponDiscount: '0.00',
+                    selectedCoupon: null,
+                    cartLoadStatus: 'success',
+                    cartLoadError: ''
+                });
+                this._updatePointsConfig(resolvedItems);
+                this._refreshPickupAllowed();
+                await this._refreshMiniProgramConfigAndPricing(resolvedItems);
+                return true;
+            }
             const image = await resolveCloudImageUrl(directBuy.image, '/assets/images/placeholder.svg');
             const amt = (parseFloat(directBuy.price) * directBuy.quantity).toFixed(2);
-            const limitedSpotPayload = directBuy.limited_sale || directBuy.limited_spot || null;
-            const limitedSpotMode = directBuy.limited_spot_mode || '';
-                this.setData({
-                    orderItems: [{ ...directBuy, image }],
-                    totalAmount: amt,
-                    finalAmount: amt,
+            const limitedSpotPayload = normalizeLimitedSpotPayload(
+                directBuy.limited_sale || directBuy.limited_spot || null,
+                directBuy.limited_spot_mode || ''
+            );
+            const limitedSpotMode = limitedSpotPayload ? limitedSpotPayload.mode : '';
+            const directBuyItem = normalizeOrderItemSpec({ ...directBuy, image });
+            this.setData({
+                orderItems: [directBuyItem],
+                totalAmount: amt,
+                finalAmount: amt,
                 totalCount: directBuy.quantity,
+                bundleOrder: false,
+                bundleMeta: null,
+                bundlePrice: '0.00',
+                bundleDiscount: '0.00',
                 slashNo: directBuy.slash_no || null,
                 groupNo: directBuy.group_no || null,
                 groupActivityId: directBuy.group_activity_id || null,
@@ -212,21 +302,22 @@ Page({
                 exchangeCouponId: directBuy.exchange_coupon_id || '',
                 exchangeCouponTitle: directBuy.exchange_title || '',
                 limitedSpotOrder: !!limitedSpotPayload,
+                limitedSpotSource: limitedSpotPayload?.source || directBuy.limited_spot_source || '',
                 limitedSpotMode,
-                limitedSpotTitle: directBuy.limited_spot_title || '',
-                limitedSpotPointsPrice: Number(directBuy.limited_spot_points_price || 0),
-                limitedSpotMoneyPrice: Number(directBuy.limited_spot_money_price || 0),
+                limitedSpotTitle: directBuy.limited_spot_title || limitedSpotPayload?.title || '',
+                limitedSpotPointsPrice: Number(directBuy.limited_spot_points_price || limitedSpotPayload?.points_price || 0),
+                limitedSpotMoneyPrice: Number(directBuy.limited_spot_money_price || limitedSpotPayload?.money_price || 0),
                 limitedSpotPayload,
-                    allowCoupon: (directBuy.exchange_mode || limitedSpotPayload) ? false : true,
-                    allowPoints: (directBuy.exchange_mode || limitedSpotPayload) ? false : true,
-                    usePoints: false,
-                    useWallet: false,
-                    cartLoadStatus: 'success',
-                    cartLoadError: ''
-                });
-            this._updatePointsConfig([directBuy]);
+                allowCoupon: (directBuy.exchange_mode || limitedSpotPayload) ? false : true,
+                allowPoints: (directBuy.exchange_mode || limitedSpotPayload) ? false : true,
+                usePoints: false,
+                useWallet: false,
+                cartLoadStatus: 'success',
+                cartLoadError: ''
+            });
+            this._updatePointsConfig([directBuyItem]);
             this._refreshPickupAllowed();
-            await this._refreshMiniProgramConfigAndPricing([directBuy]);
+            await this._refreshMiniProgramConfigAndPricing([directBuyItem]);
             return true;
         }
 
@@ -258,6 +349,23 @@ Page({
                 couponLoadStatus: 'success',
                 couponLoadError: ''
             });
+            this.setData({ loading: false });
+            return;
+        }
+        if (this.data.bundleOrder) {
+            tasks.push(this.loadPointBalance());
+            if (this.data.isAgent) {
+                tasks.push(this.loadWalletBalance());
+            }
+            this.setData({
+                couponLoadStatus: 'success',
+                couponLoadError: '',
+                availableCoupons: [],
+                unusedCouponCount: 0,
+                selectedCoupon: null,
+                couponDiscount: '0.00'
+            });
+            await Promise.allSettled(tasks);
             this.setData({ loading: false });
             return;
         }
@@ -308,7 +416,7 @@ Page({
         if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
         const cu = getLightPromptModals().coupon_usage;
         if (!cu || !cu.enabled) {
-            wx.showToast({ title: '暂无可展示说明', icon: 'none' });
+            wx.showToast({ title: '暂无说明', icon: 'none' });
             return;
         }
         this.setData({
@@ -324,6 +432,10 @@ Page({
 
     /** 根据商品属性更新积分抵扣权限和规则提示文案 */
     _updatePointsConfig(items) {
+        const orderType = String(this.data.orderType || '').trim().toLowerCase();
+        const restrictedOrderType = isDiscountRestrictedOrderType(orderType);
+        const hasCouponRestrictedItem = (items || []).some((item) => isCouponRestrictedItem(item));
+        const hasPointsRestrictedItem = (items || []).some((item) => isPointsRestrictedItem(item));
         if (this.data.limitedSpotOrder) {
             this.setData({
                 allowPoints: false,
@@ -331,7 +443,26 @@ Page({
                 pointsRuleHint: this.data.limitedSpotMode === 'points' ? '专享积分兑换订单不参与普通积分抵扣' : '专享秒杀订单不参与普通积分抵扣',
                 usePoints: false,
                 pointsToUse: 0,
-                pointsDeduction: '0.00'
+                pointsDeduction: '0.00',
+                selectedCoupon: null,
+                couponDiscount: '0.00',
+                availableCoupons: [],
+                unusedCouponCount: 0
+            });
+            return;
+        }
+        if (this.data.bundleOrder) {
+            this.setData({
+                allowPoints: false,
+                allowCoupon: false,
+                pointsRuleHint: '组合订单不支持积分抵扣',
+                usePoints: false,
+                pointsToUse: 0,
+                pointsDeduction: '0.00',
+                selectedCoupon: null,
+                couponDiscount: '0.00',
+                availableCoupons: [],
+                unusedCouponCount: 0
             });
             return;
         }
@@ -342,18 +473,54 @@ Page({
                 pointsRuleHint: '兑换订单不支持积分抵扣',
                 usePoints: false,
                 pointsToUse: 0,
-                pointsDeduction: '0.00'
+                pointsDeduction: '0.00',
+                selectedCoupon: null,
+                couponDiscount: '0.00',
+                availableCoupons: [],
+                unusedCouponCount: 0
+            });
+            return;
+        }
+        if (restrictedOrderType) {
+            this.setData({
+                allowPoints: false,
+                allowCoupon: false,
+                pointsRuleHint: orderType === 'group'
+                    ? '拼团订单不支持积分抵扣'
+                    : (orderType === 'slash' ? '砍价订单不支持积分抵扣' : '活动订单不支持积分抵扣'),
+                usePoints: false,
+                pointsToUse: 0,
+                pointsDeduction: '0.00',
+                selectedCoupon: null,
+                couponDiscount: '0.00',
+                availableCoupons: [],
+                unusedCouponCount: 0
             });
             return;
         }
         // 只要有任一商品关闭了积分抵扣（allow_points === 0），整单禁用积分
         const allowPoints = (items || []).every(item => item.allow_points !== 0);
+        const allowCoupon = !hasCouponRestrictedItem && (items || []).every(item => item.allow_coupon !== 0);
         const { yuanPerPoint, maxRatio } = getPointDeductionRule();
         const pct = Math.round(maxRatio * 100);
         const hint = `1积分抵${yuanPerPoint}元，最多抵扣订单${pct}%`;
-        this.setData({ allowPoints, pointsRuleHint: hint });
-        if (!allowPoints) {
-            this.setData({ usePoints: false });
+        this.setData({
+            allowPoints,
+            allowCoupon,
+            pointsRuleHint: hint,
+            ...(allowCoupon ? {} : {
+                selectedCoupon: null,
+                couponDiscount: '0.00',
+                availableCoupons: [],
+                unusedCouponCount: 0
+            })
+        });
+        if (!allowPoints || hasPointsRestrictedItem) {
+            this.setData({
+                usePoints: false,
+                pointsToUse: 0,
+                pointsDeduction: '0.00'
+            });
         }
     },
 
@@ -376,7 +543,7 @@ Page({
         const v = e.currentTarget.dataset.type;
         if (v !== 'express' && v !== 'pickup') return;
         if (v === 'pickup' && !this.data.pickupAllowed) {
-            wx.showToast({ title: '当前商品不支持到店自提', icon: 'none' });
+            wx.showToast({ title: '该商品不支持到店自提', icon: 'none' });
             return;
         }
         this.setData({ deliveryType: v, pickupStation: v === 'pickup' ? this.data.pickupStation : null });
@@ -454,7 +621,7 @@ Page({
     // 点击优惠券行，打开选择器
     async onCouponTap() {
         if (this.data.exchangeMode) {
-            wx.showToast({ title: '兑换订单不支持普通优惠券', icon: 'none' });
+            wx.showToast({ title: '兑换订单不参与普通优惠券', icon: 'none' });
             return;
         }
         const ready = await this._ensureCouponReady(true);
@@ -498,6 +665,10 @@ Page({
             totalAmount: '0.00',
             totalCount: 0,
             finalAmount: '0.00',
+            bundleOrder: false,
+            bundleMeta: null,
+            bundlePrice: '0.00',
+            bundleDiscount: '0.00',
             availableCoupons: [],
             unusedCouponCount: 0,
             selectedCoupon: null,

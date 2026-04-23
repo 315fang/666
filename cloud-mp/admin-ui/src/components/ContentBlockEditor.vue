@@ -9,9 +9,7 @@
     <!-- 内容来源切换 -->
     <el-form-item label="内容来源">
       <el-radio-group v-model="source" @change="onSourceChange">
-        <el-radio-button value="product">关联商品</el-radio-button>
-        <el-radio-button value="custom">自定义图片</el-radio-button>
-        <el-radio-button value="reuse">复用已有</el-radio-button>
+        <el-radio-button v-for="option in availableSourceOptions" :key="option.value" :value="option.value">{{ option.label }}</el-radio-button>
       </el-radio-group>
     </el-form-item>
 
@@ -57,9 +55,9 @@
           <el-image :src="resolvedImageUrl" fit="contain" style="max-width:300px;max-height:160px;border-radius:8px;border:1px solid #eee;" />
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <el-button type="primary" @click="openMediaPicker('custom')">从素材库选择</el-button>
-          <el-tag v-if="localData.file_id" type="success" effect="plain">已绑定素材</el-tag>
-          <el-button v-if="localData.image_url" text type="danger" @click="clearSelectedImage">清空</el-button>
+          <el-button type="primary" @click="openMediaPicker('custom')">{{ localData.file_id ? '更换素材' : '从素材库选择' }}</el-button>
+          <el-tag v-if="localData.file_id" type="success" effect="plain">当前素材已绑定，可重新选择替换</el-tag>
+          <el-button v-if="localData.file_id || localData.image_url || resolvedImageUrl" text type="danger" @click="clearSelectedImage">清空</el-button>
         </div>
         <div style="font-size:12px;color:#909399;margin-top:6px;">请先上传到素材库，再从素材库中选择图片</div>
       </el-form-item>
@@ -165,8 +163,8 @@
     <!-- 商品模式下可覆盖图片 -->
     <el-form-item label="覆盖图片" v-if="source === 'product' && pickedProduct">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <el-button @click="openMediaPicker('cover')">从素材库选择覆盖图</el-button>
-        <el-button v-if="localData.image_url" text type="danger" @click="clearSelectedImage">清空覆盖图</el-button>
+        <el-button @click="openMediaPicker('cover')">{{ localData.file_id ? '更换覆盖图' : '从素材库选择覆盖图' }}</el-button>
+        <el-button v-if="localData.file_id || localData.image_url || resolvedImageUrl" text type="danger" @click="clearSelectedImage">清空覆盖图</el-button>
       </div>
       <div style="font-size:12px;color:#909399;margin-top:4px;">不填则自动使用商品首图</div>
     </el-form-item>
@@ -197,7 +195,8 @@ const props = defineProps({
   modelValue: { type: Object, default: () => ({}) },
   fields: { type: Array, default: () => ['title', 'subtitle'] },
   imageSpec: { type: Object, default: null },
-  hideLinkControls: { type: Boolean, default: false }
+  hideLinkControls: { type: Boolean, default: false },
+  allowedSources: { type: Array, default: () => ['product', 'custom', 'reuse'] }
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -224,12 +223,23 @@ const localData = reactive({
 })
 
 const isCloudFileId = (value) => /^cloud:\/\//i.test(String(value || ''))
+const SOURCE_OPTIONS = [
+  { value: 'product', label: '关联商品' },
+  { value: 'custom', label: '自定义图片' },
+  { value: 'reuse', label: '复用已有' }
+]
 const resolveAssetUrl = (item = {}, fallback = '') => {
   const candidates = [fallback, item.image_url, item.url, item.image, item.cover_image]
     .map((value) => String(value || '').trim())
   return candidates.find((value) => value && !isCloudFileId(value)) || ''
 }
 const resolvedImageUrl = computed(() => resolveAssetUrl(localData, previewImageUrl.value))
+const availableSourceOptions = computed(() => {
+  const allowed = Array.isArray(props.allowedSources) && props.allowedSources.length
+    ? props.allowedSources
+    : ['product', 'custom', 'reuse']
+  return SOURCE_OPTIONS.filter((item) => allowed.includes(item.value))
+})
 const recommendedTargets = computed(() => getRecommendedTargetsByLinkType(localData.link_type))
 const recommendedTargetGroups = computed(() => groupMiniProgramTargets(recommendedTargets.value))
 const usesUnlistedTarget = computed(() => {
@@ -309,6 +319,14 @@ watch(() => props.modelValue, (v) => {
   }
   const nextPreview = resolveAssetUrl(v)
   if (nextPreview) previewImageUrl.value = nextPreview
+}, { immediate: true })
+
+watch(availableSourceOptions, (options) => {
+  if (!options.length) return
+  const allowedValues = options.map((item) => item.value)
+  if (!allowedValues.includes(source.value)) {
+    source.value = allowedValues[0]
+  }
 }, { immediate: true })
 
 const emitData = () => { emit('update:modelValue', { ...localData }) }

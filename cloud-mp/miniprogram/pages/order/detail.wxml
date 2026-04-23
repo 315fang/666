@@ -132,7 +132,24 @@
   <!-- 商品信息 -->
   <view class="card product-card">
     <view class="card-title">商品信息</view>
-    <view class="product-row" wx:if="{{order.product}}">
+    <view class="bundle-order-head" wx:if="{{order.bundle_meta}}">
+      <text class="bundle-order-title">{{order.bundle_meta.title}}</text>
+      <text class="bundle-order-subtitle" wx:if="{{order.bundle_meta.subtitle}}">{{order.bundle_meta.subtitle}}</text>
+      <text class="bundle-order-price">组合价 ¥{{order.display_pay_amount}}</text>
+    </view>
+    <view class="bundle-order-items" wx:if="{{order.bundle_meta && order.items && order.items.length > 0}}">
+      <view class="bundle-order-item" wx:for="{{order.items}}" wx:key="refund_item_key">
+        <image class="product-img" src="{{item.product && item.product.images && item.product.images[0] || item.product && item.product.image || ''}}" mode="aspectFill" wx:if="{{item.product && ((item.product.images && item.product.images.length > 0) || item.product.image)}}"></image>
+        <view class="product-info">
+          <text class="product-name">{{item.product && item.product.name || item.snapshot_name || item.name || '商品'}}</text>
+          <text class="product-spec" wx:if="{{item.sku && item.sku.spec_value}}">{{item.sku.spec_value}}</text>
+          <text class="product-spec" wx:elif="{{item.snapshot_spec}}">{{item.snapshot_spec}}</text>
+          <text class="product-price">¥{{item.display_cash_paid_allocated_amount || item.item_amount}}</text>
+        </view>
+        <text class="product-qty">×{{item.qty || item.quantity || 1}}</text>
+      </view>
+    </view>
+    <view class="product-row" wx:elif="{{order.product}}">
       <image class="product-img" src="{{order.product.images && order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{order.product.images && order.product.images.length > 0}}" binderror="onProductImageError"></image>
       <view class="product-img-placeholder" wx:else>
         <image class="placeholder-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
@@ -194,6 +211,10 @@
     <view class="info-row" wx:if="{{order.points_discount > 0}}">
       <text class="info-label">积分抵扣</text>
       <text class="info-value">-¥{{order.display_points_discount}}（{{order.points_used}}积分）</text>
+    </view>
+    <view class="info-row" wx:if="{{order.bundle_discount > 0}}">
+      <text class="info-label">组合优惠</text>
+      <text class="info-value">-¥{{order.display_bundle_discount}}</text>
     </view>
     <view class="info-row" wx:if="{{order.has_discount_breakdown}}">
       <text class="info-label">实付金额</text>

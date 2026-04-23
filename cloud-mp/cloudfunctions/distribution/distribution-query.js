@@ -3,7 +3,7 @@ const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
 const { toNumber, getAllRecords } = require('./shared/utils');
-const { buildCanonicalUser, resolveCommissionBalance, resolveGoodsFundBalance } = require('./user-contract');
+const { buildCanonicalUser } = require('./user-contract');
 
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
@@ -75,6 +75,31 @@ function getCommissionWalletBalance(user = {}) {
     return 0;
 }
 
+function hasExplicitCommissionBalance(user = {}) {
+    if (user.commission_balance != null) return true;
+    if (user.balance == null) return false;
+    if (user.wallet_balance == null) return true;
+    return roundMoney(user.balance) !== roundMoney(user.wallet_balance);
+}
+
+function deriveCommissionBalance(user = {}, totals = {}) {
+    const settled = roundMoney(totals.settled);
+    const withdrawn = roundMoney(user.total_withdrawn);
+    const total = roundMoney(totals.total);
+    const earned = roundMoney(user.total_earned);
+    if (total <= 0 && earned > 0) {
+        return Math.max(0, roundMoney(earned - withdrawn));
+    }
+    return Math.max(0, roundMoney(settled - withdrawn));
+}
+
+function resolveCurrentCommissionBalance(user = {}, totals = {}) {
+    const derived = deriveCommissionBalance(user, totals);
+    if (!hasExplicitCommissionBalance(user)) return derived;
+    const stored = getCommissionWalletBalance(user);
+    return stored === 0 && derived > 0 ? derived : stored;
+}
+
 function commissionRecordKey(row = {}) {
     return String(row._id || `${row.openid || ''}:${row.user_id || ''}:${row.order_id || ''}:${row.type || ''}:${row.created_at || ''}`);
 }
@@ -144,7 +169,6 @@ async function getDashboard(openid) {
     const userData = user.data[0];
     const distLevel = toNumber(userData.distributor_level != null ? userData.distributor_level : userData.agent_level, 0);
     const walletBalance = getAgentWalletBalance(userData);
-    const commissionBalance = getCommissionWalletBalance(userData);
 
     // 查佣金统计
     let totalCommission = 0;
@@ -162,6 +186,11 @@ async function getDashboard(openid) {
             }
         });
     } catch (_) { }
+
+    const commissionBalance = resolveCurrentCommissionBalance(userData, {
+        total: totalCommission,
+        settled: settledCommission
+    });
 
     const monthStart = new Date();
     monthStart.setDate(1);
@@ -222,7 +251,8 @@ async function getDashboard(openid) {
     };
     const stats = {
         totalEarnings: roundMoney(totalCommission),
-        availableAmount: roundMoney(settledCommission),
+        // 可提现金额应与佣金钱包余额一致，不能展示历史已结算累计。
+        availableAmount: commissionBalance,
         frozenAmount: roundMoney(pendingCommission),
         totalCommission: roundMoney(totalCommission),
         pendingCommission: roundMoney(pendingCommission),
@@ -244,11 +274,11 @@ async function getDashboard(openid) {
         },
         team,
         stats,
-        wallet_balance: resolveGoodsFundBalance(userData),
-        agent_wallet_balance: resolveGoodsFundBalance(userData),
-        goods_fund_balance: resolveGoodsFundBalance(userData),
-        balance: resolveCommissionBalance(userData),
-        commission_balance: resolveCommissionBalance(userData),
+        wallet_balance: walletBalance,
+        agent_wallet_balance: walletBalance,
+        goods_fund_balance: walletBalance,
+        balance: commissionBalance,
+        commission_balance: commissionBalance,
         total_commission: roundMoney(totalCommission),
         pending_commission: roundMoney(pendingCommission),
         settled_commission: roundMoney(settledCommission),

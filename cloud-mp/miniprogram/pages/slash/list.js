@@ -128,7 +128,7 @@ Page({
                 return;
             }
             if (res.code === 0 || res.code === 1) {
-                wx.showToast({ title: normalizeUserMessage(res.message, '砍价已发起，请到“我的砍价”继续查看'), icon: 'none' });
+                wx.showToast({ title: normalizeUserMessage(res.message, '砍价已发起，可前往“我的砍价”查看'), icon: 'none' });
                 setTimeout(() => this.onGoMySlash(), 500);
                 return;
             }
@@ -136,18 +136,18 @@ Page({
         } catch (e) {
             const message = e && e.message ? String(e.message) : '';
             if (message.includes('已发起过砍价')) {
-                wx.showToast({ title: '你已发起过该商品砍价，正带你继续查看', icon: 'none' });
+                wx.showToast({ title: '该砍价已发起，正在为你打开', icon: 'none' });
                 setTimeout(() => this.onGoMySlash(), 500);
                 return;
             }
-            wx.showToast({ title: normalizeUserMessage(message, '网络错误，请稍后重试'), icon: 'none' });
+            wx.showToast({ title: normalizeUserMessage(message, '网络异常，请稍后重试'), icon: 'none' });
         }
     },
 
     onViewRecord(e) {
         const slashNo = e.currentTarget.dataset.no;
         if (!slashNo) {
-            wx.showToast({ title: '砍价记录缺少详情编号', icon: 'none' });
+            wx.showToast({ title: '缺少砍价编号', icon: 'none' });
             return;
         }
         wx.navigateTo({ url: `/pages/slash/detail?slash_no=${slashNo}` });

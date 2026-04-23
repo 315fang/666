@@ -1,0 +1,614 @@
+{
+  "counts": {
+    "wallet_logs": 37,
+    "commissions": 8,
+    "goods_fund_logs": 26,
+    "users": 187,
+    "configs": 22,
+    "upgrade_applications": 0,
+    "dividend_executions": 0,
+    "fund_pool_logs": 0
+  },
+  "wallet_logs_without_change_type": [
+    {
+      "_id": "3bef321d69db89b003f7c6f306188194",
+      "amount": -1,
+      "created_at": {
+        "$date": 1775995312893
+      },
+      "description": "提现1元",
+      "openid": "oc0ZD3bWzY7Xcyj02iWm4lyKfBCE",
+      "type": "withdraw",
+      "withdraw_id": "1fa8f55169db89b003f96fd2717a18ca"
+    },
+    {
+      "_id": "da3d566169dd0f0d041a44f11121ba70",
+      "amount": -339.15,
+      "created_at": "2026-04-13T15:43:07.174Z",
+      "description": "退款回退冲正 ORD202603301847220003575239",
+      "openid": "oc0ZD3Y5yrF5ezpwwSPUtkJWna1Q",
+      "order_id": "78167c7f69d4f939082a6d336227877b",
+      "order_no": "ORD202603301847220003575239",
+      "refund_id": "4d75389069da0cfc022d16cd4cf6269d",
+      "refund_no": "REF1775897852197731",
+      "type": "refund_reopen_reversal"
+    },
+    {
+      "_id": "2d12bec269dd0f15042bfbef2e871c33",
+      "amount": -299,
+      "created_at": "2026-04-13T15:43:07.174Z",
+      "description": "退款回退冲正 ORD202603301859370001586766",
+      "openid": "oc0ZD3Y5yrF5ezpwwSPUtkJWna1Q",
+      "order_id": "78167c7f69d4f939082a6d3627e43afc",
+      "order_no": "ORD202603301859370001586766",
+      "refund_id": "b8ca528e69d5015207f28db348f415fe",
+      "refund_no": "SYSRF177510363794967505",
+      "type": "refund_reopen_reversal"
+    },
+    {
+      "_id": "b3c6c3d569dd0f1d0424b99949f2a6c6",
+      "amount": -299,
+      "created_at": "2026-04-13T15:43:07.174Z",
+      "description": "退款回退冲正 ORD202604021245010002973888",
+      "openid": "oc0ZD3Y5yrF5ezpwwSPUtkJWna1Q",
+      "order_id": "78167c7f69d4f939082a6d3c02f21b32",
+      "order_no": "ORD202604021245010002973888",
+      "refund_id": "b8ca528e69d5015207f28db714b04613",
+      "refund_no": "SYSRF177512683468041091",
+      "type": "refund_reopen_reversal"
+    },
+    {
+      "_id": "33956e3d69de26ce043e398b420ad317",
+      "amount": 299,
+      "created_at": "2026-04-14T11:36:46.324Z",
+      "description": "订单退款 ORD202603301859370001586766",
+      "openid": "oc0ZD3Y5yrF5ezpwwSPUtkJWna1Q",
+      "order_id": "78167c7f69d4f939082a6d3627e43afc",
+      "order_no": "ORD202603301859370001586766",
+      "refund_id": "b8ca528e69d5015207f28db348f415fe",
+      "refund_no": "SYSRF177510363794967505",
+      "type": "refund"
+    },
+    {
+      "_id": "8d2e20b369de26d1043fb5795dea5b27",
+      "amount": 299,
+      "created_at": "2026-04-14T11:36:49.015Z",
+      "description": "订单退款 ORD202604021245010002973888",
+      "openid": "oc0ZD3Y5yrF5ezpwwSPUtkJWna1Q",
+      "order_id": "78167c7f69d4f939082a6d3c02f21b32",
+      "order_no": "ORD202604021245010002973888",
+      "refund_id": "b8ca528e69d5015207f28db714b04613",
+      "refund_no": "SYSRF177512683468041091",
+      "type": "refund"
+    },
+    {
+      "_id": "69d4baf669de26d6043d190930df6e34",
+      "amount": 339.15,
+      "created_at": "2026-04-14T11:36:54.422Z",
+      "description": "订单退款 ORD202603301847220003575239",
+      "openid": "oc0ZD3Y5yrF5ezpwwSPUtkJWna1Q",
+      "order_id": "78167c7f69d4f939082a6d336227877b",
+      "order_no": "ORD202603301847220003575239",
+      "refund_id": "4d75389069da0cfc022d16cd4cf6269d",
+      "refund_no": "REF1775897852197731",
+      "type": "refund"
+    },
+    {
+      "_id": "f0df711e69df587c0461f5a338293995",
+      "amount": 1,
+      "created_at": "2026-04-15T09:21:00.730Z",
+      "description": "提现驳回退回 1 元",
+      "openid": "oc0ZD3bWzY7Xcyj02iWm4lyKfBCE",
+      "remark": "000",
+      "type": "withdraw_reject_refund",
+      "withdraw_id": 5
+    },
+    {
+      "_id": "f0df711e69df58830461f61277e37ac7",
+      "amount": 10,
+      "created_at": "2026-04-15T09:21:07.778Z",
+      "description": "提现驳回退回 10 元",
+      "openid": "oc0ZD3Y5yrF5ezpwwSPUtkJWna1Q",
+      "remark": "0000",
+      "type": "withdraw_reject_refund",
+      "withdraw_id": 4
+    }
+  ],
+  "config_key_duplicates_after_dash_normalization": [
+    {
+      "normalized": "agent_system_peer_bonus",
+      "keys": [
+        "agent_system_peer_bonus",
+        "agent_system_peer-bonus"
+      ]
+    }
+  ],
+  "key_configs": [
+    {
+      "_id": "13",
+      "config_group": "agent_system",
+      "config_key": "agent_system_fund-pool",
+      "config_value": {
+        "b1": {
+          "mirror_ops_pct": 42,
+          "parent_pct": 11,
+          "personal_pct": 16,
+          "total": 480,
+          "travel_pct": 31
+        },
+        "b2": {
+          "mirror_ops_pct": 42,
+          "parent_pct": 11,
+          "personal_pct": 16,
+          "total": 4600,
+          "travel_pct": 31
+        },
+        "b3": {
+          "mirror_ops_pct": 42,
+          "parent_pct": 11,
+          "personal_pct": 16,
+          "total": 0,
+          "travel_pct": 31
+        },
+        "enabled": true
+      },
+      "created_at": "2026-04-14T06:05:01.405Z",
+      "id": 13,
+      "key": "agent_system_fund-pool",
+      "updated_at": "2026-04-14T06:05:01.405Z",
+      "value": {
+        "b1": {
+          "mirror_ops_pct": 42,
+          "parent_pct": 11,
+          "personal_pct": 16,
+          "total": 480,
+          "travel_pct": 31
+        },
+        "b2": {
+          "mirror_ops_pct": 42,
+          "parent_pct": 11,
+          "personal_pct": 16,
+          "total": 4600,
+          "travel_pct": 31
+        },
+        "b3": {
+          "mirror_ops_pct": 42,
+          "parent_pct": 11,
+          "personal_pct": 16,
+          "total": 0,
+          "travel_pct": 31
+        },
+        "enabled": true
+      }
+    },
+    {
+      "_id": "14",
+      "config_group": "agent_system",
+      "config_key": "agent_system_dividend-rules",
+      "config_value": {
+        "b1_personal_award": {
+          "enabled": true,
+          "pool_pct": 1,
+          "ranks": []
+        },
+        "b_team_award": {
+          "enabled": true,
+          "pool_pct": 1,
+          "ranks": []
+        },
+        "enabled": true,
+        "min_months": 12,
+        "source_pct": 1
+      },
+      "created_at": "2026-04-14T06:05:08.136Z",
+      "id": 14,
+      "key": "agent_system_dividend-rules",
+      "updated_at": "2026-04-19T14:51:29.312Z",
+      "value": {
+        "b1_personal_award": {
+          "enabled": true,
+          "pool_pct": 1,
+          "ranks": []
+        },
+        "b_team_award": {
+          "enabled": true,
+          "pool_pct": 1,
+          "ranks": []
+        },
+        "enabled": true,
+        "min_months": 12,
+        "source_pct": 1
+      }
+    },
+    {
+      "_id": "17",
+      "active": true,
+      "category": "MEMBER",
+      "config_group": "MEMBER",
+      "config_key": "agent_system_peer_bonus",
+      "config_type": "json",
+      "config_value": {
+        "cooldown_days": 90,
+        "default_version": "team",
+        "enabled": true,
+        "level_1": 0,
+        "level_2": 0,
+        "level_3": 100,
+        "level_4": 2000,
+        "level_5": 0,
+        "product_sets_3": 2,
+        "product_sets_4": 15,
+        "product_sets_5": 0,
+        "refund_dev_fee_pct": 1.5,
+        "social": {
+          "level_3": {
+            "pct": 10
+          },
+          "level_4": {
+            "pct": 20
+          },
+          "level_5": {
+            "pct": 20
+          }
+        },
+        "team": {
+          "level_3": {
+            "allowed_product_ids": [],
+            "allowed_sku_ids": [],
+            "cash": 100,
+            "coupon_product_value": 399,
+            "exchange_coupons": 2,
+            "exchange_title": "",
+            "unlock_reward": 160
+          },
+          "level_4": {
+            "allowed_product_ids": [],
+            "allowed_sku_ids": [],
+            "cash": 2400,
+            "coupon_product_value": 399,
+            "exchange_coupons": 15,
+            "exchange_title": "",
+            "unlock_reward": 160
+          },
+          "level_5": {
+            "allowed_product_ids": [],
+            "allowed_sku_ids": [],
+            "cash": 0,
+            "coupon_product_value": 0,
+            "exchange_coupons": 0,
+            "exchange_title": "",
+            "unlock_reward": 0
+          }
+        }
+      },
+      "created_at": "2026-04-15T11:53:41.580Z",
+      "description": "平级奖励与兑换券配置",
+      "id": 17,
+      "is_public": true,
+      "key": "agent_system_peer_bonus",
+      "status": true,
+      "updated_at": "2026-04-18T03:06:14.486Z",
+      "value": {
+        "cooldown_days": 90,
+        "default_version": "team",
+        "enabled": true,
+        "level_1": 0,
+        "level_2": 0,
+        "level_3": 100,
+        "level_4": 2000,
+        "level_5": 0,
+        "product_sets_3": 2,
+        "product_sets_4": 15,
+        "product_sets_5": 0,
+        "refund_dev_fee_pct": 1.5,
+        "social": {
+          "level_3": {
+            "pct": 10
+          },
+          "level_4": {
+            "pct": 20
+          },
+          "level_5": {
+            "pct": 20
+          }
+        },
+        "team": {
+          "level_3": {
+            "allowed_product_ids": [],
+            "allowed_sku_ids": [],
+            "cash": 100,
+            "coupon_product_value": 399,
+            "exchange_coupons": 2,
+            "exchange_title": "",
+            "unlock_reward": 160
+          },
+          "level_4": {
+            "allowed_product_ids": [],
+            "allowed_sku_ids": [],
+            "cash": 2400,
+            "coupon_product_value": 399,
+            "exchange_coupons": 15,
+            "exchange_title": "",
+            "unlock_reward": 160
+          },
+          "level_5": {
+            "allowed_product_ids": [],
+            "allowed_sku_ids": [],
+            "cash": 0,
+            "coupon_product_value": 0,
+            "exchange_coupons": 0,
+            "exchange_title": "",
+            "unlock_reward": 0
+          }
+        }
+      }
+    },
+    {
+      "_id": "19",
+      "config_group": "agent_system",
+      "config_key": "agent_system_peer-bonus",
+      "config_value": {
+        "cooldown_days": 90,
+        "default_version": "team",
+        "enabled": true,
+        "refund_dev_fee_pct": 1.5,
+        "social": {
+          "level_3": {
+            "pct": 10
+          },
+          "level_4": {
+            "pct": 20
+          },
+          "level_5": {
+            "pct": 20
+          }
+        },
+        "team": {
+          "level_3": {
+            "allowed_product_ids": [],
+            "allowed_sku_ids": [],
+            "cash": 100,
+            "coupon_product_value": 399,
+            "exchange_coupons": 2,
+            "exchange_title": "",
+            "unlock_reward": 160
+          },
+          "level_4": {
+            "allowed_product_ids": [],
+            "allowed_sku_ids": [],
+            "cash": 2400,
+            "coupon_product_value": 399,
+            "exchange_coupons": 15,
+            "exchange_title": "",
+            "unlock_reward": 160
+          },
+          "level_5": {
+            "allowed_product_ids": [],
+            "allowed_sku_ids": [],
+            "cash": 0,
+            "coupon_product_value": 0,
+            "exchange_coupons": 0,
+            "exchange_title": "",
+            "unlock_reward": 0
+          }
+        }
+      },
+      "created_at": "2026-04-15T12:31:31.297Z",
+      "id": 19,
+      "key": "agent_system_peer-bonus",
+      "updated_at": "2026-04-15T12:31:31.297Z",
+      "value": {
+        "cooldown_days": 90,
+        "default_version": "team",
+        "enabled": true,
+        "refund_dev_fee_pct": 1.5,
+        "social": {
+          "level_3": {
+            "pct": 10
+          },
+          "level_4": {
+            "pct": 20
+          },
+          "level_5": {
+            "pct": 20
+          }
+        },
+        "team": {
+          "level_3": {
+            "allowed_product_ids": [],
+            "allowed_sku_ids": [],
+            "cash": 100,
+            "coupon_product_value": 399,
+            "exchange_coupons": 2,
+            "exchange_title": "",
+            "unlock_reward": 160
+          },
+          "level_4": {
+            "allowed_product_ids": [],
+            "allowed_sku_ids": [],
+            "cash": 2400,
+            "coupon_product_value": 399,
+            "exchange_coupons": 15,
+            "exchange_title": "",
+            "unlock_reward": 160
+          },
+          "level_5": {
+            "allowed_product_ids": [],
+            "allowed_sku_ids": [],
+            "cash": 0,
+            "coupon_product_value": 0,
+            "exchange_coupons": 0,
+            "exchange_title": "",
+            "unlock_reward": 0
+          }
+        }
+      }
+    },
+    {
+      "_id": "20",
+      "config_group": "agent_system",
+      "config_key": "agent_system_commission-config",
+      "config_value": {
+        "agent_cost_discount_rate": 0.1,
+        "cost_split": {
+          "direct_sales_pct": 40,
+          "enabled": true,
+          "mirror_operations_pct": 5,
+          "operations_pct": 25,
+          "profit_pct": 30
+        },
+        "default_platform_fulfillment": false,
+        "direct_pct_by_role": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0
+        },
+        "enabled": true,
+        "indirect_pct_by_role": {
+          "2": 0,
+          "3": 0
+        },
+        "tertiary_pct_factor": 0
+      },
+      "created_at": "2026-04-15T12:31:43.596Z",
+      "id": 20,
+      "key": "agent_system_commission-config",
+      "updated_at": "2026-04-15T12:31:43.596Z",
+      "value": {
+        "agent_cost_discount_rate": 0.1,
+        "cost_split": {
+          "direct_sales_pct": 40,
+          "enabled": true,
+          "mirror_operations_pct": 5,
+          "operations_pct": 25,
+          "profit_pct": 30
+        },
+        "default_platform_fulfillment": false,
+        "direct_pct_by_role": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0
+        },
+        "enabled": true,
+        "indirect_pct_by_role": {
+          "2": 0,
+          "3": 0
+        },
+        "tertiary_pct_factor": 0
+      }
+    },
+    {
+      "_id": "21",
+      "config_group": "agent_system",
+      "config_key": "agent_system_exit-rules",
+      "config_value": {
+        "auto_revoke_identity": true,
+        "enabled": true,
+        "over_1_year_max_days": 60,
+        "over_1_year_min_days": 45,
+        "refund_scope": "",
+        "under_1_year_max_days": 90,
+        "under_1_year_min_days": 60
+      },
+      "created_at": "2026-04-19T14:51:33.394Z",
+      "id": 21,
+      "key": "agent_system_exit-rules",
+      "updated_at": "2026-04-19T14:51:33.394Z",
+      "value": {
+        "auto_revoke_identity": true,
+        "enabled": true,
+        "over_1_year_max_days": 60,
+        "over_1_year_min_days": 45,
+        "refund_scope": "",
+        "under_1_year_max_days": 90,
+        "under_1_year_min_days": 60
+      }
+    },
+    {
+      "_id": "22",
+      "config_group": "agent_system",
+      "config_key": "agent_system_recharge-config",
+      "config_value": {
+        "bonus_enabled": false,
+        "bonus_tiers": [],
+        "enabled": true,
+        "options": [],
+        "preset_amounts": [
+          1000,
+          3000,
+          5000
+        ]
+      },
+      "created_at": "2026-04-19T14:51:36.309Z",
+      "id": 22,
+      "key": "agent_system_recharge-config",
+      "updated_at": "2026-04-19T14:51:36.309Z",
+      "value": {
+        "bonus_enabled": false,
+        "bonus_tiers": [],
+        "enabled": true,
+        "options": [],
+        "preset_amounts": [
+          1000,
+          3000,
+          5000
+        ]
+      }
+    }
+  ],
+  "role_level_overflow_users": [
+    {
+      "_id": "9eb3651569d4f92108344817589ccb52",
+      "agent_id": null,
+      "agent_level": 1,
+      "agent_wallet_balance": 0,
+      "avatar_url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/users/avatars/1774605158449_e700fd8bb91045c4.jpeg",
+      "balance": 0,
+      "benefit_parent_id": null,
+      "cb_detach_level": null,
+      "cb_detached_at": null,
+      "cb_detached_from_user_id": null,
+      "commission_balance": 0,
+      "consecutive_sign_days": 1,
+      "created_at": "2026-03-25T13:07:32.000Z",
+      "debt_amount": 0,
+      "discount_rate": 1,
+      "growth_value": 0,
+      "id": 22,
+      "invite_code": "36298534",
+      "joined_team_at": null,
+      "last_login": "2026-03-25T13:07:32.000Z",
+      "last_sign_in_at": {
+        "$date": 1776563835027
+      },
+      "member_no": "36298534",
+      "n_leader_id": null,
+      "n_level": 3,
+      "n_parent_id": null,
+      "nickname": "微信用户",
+      "openid": "oc0ZD3U6ngmfB3MLFTYuRiEaYDh4",
+      "order_count": 0,
+      "parent_id": null,
+      "parent_openid": null,
+      "participate_distribution": 0,
+      "phone": null,
+      "points": 1,
+      "preferences": null,
+      "purchase_level_code": null,
+      "referee_count": 0,
+      "remark": null,
+      "role_level": 7,
+      "status": true,
+      "stock_count": 0,
+      "tags": null,
+      "total_sales": 0,
+      "updated_at": {
+        "$date": 1776563835027
+      }
+    }
+  ],
+  "upgrade_related_wallet_logs": [],
+  "year_end_dividend_commissions": []
+}

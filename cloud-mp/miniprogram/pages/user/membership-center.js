@@ -2,6 +2,7 @@
 const { get } = require('../../utils/request');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
 const { applyGrowthTierDisplayNames } = require('../../utils/growthTierDisplay');
+const { ROLE_NAMES } = require('../../config/constants');
 const {
     buildMembershipCardViewModel,
     getMembershipCardMeta
@@ -28,9 +29,12 @@ function sanitizeTierDesc(desc) {
     const text = String(desc || '').trim();
     if (!text) return '';
     if (/折|原价|复购价/.test(text)) {
-        return '成长值提升可解锁更多积分权益';
+        return '成长值提升可解锁更多成长会员权益';
     }
-    return text;
+    return text
+        .replace(/积分会员/g, '成长会员')
+        .replace(/积分权益/g, '成长会员权益')
+        .replace(/积分/g, '成长值');
 }
 
 Page({
@@ -89,7 +93,13 @@ Page({
             const rawTiers = applyGrowthTierDisplayNames(
                 (meta.growth_tiers || []).slice().sort((a, b) => (a.min || 0) - (b.min || 0))
             );
-            const rawMembers = (meta.member_levels || []).slice().sort((a, b) => (a.level || 0) - (b.level || 0));
+            const rawMembers = (meta.member_levels || [])
+                .slice()
+                .map((item) => ({
+                    ...item,
+                    name: ROLE_NAMES[Number(item.level)] || item.name
+                }))
+                .sort((a, b) => (a.level || 0) - (b.level || 0));
 
             // 计算当前所在档位（用于晋升路线）
             let currentIdx = 0;
@@ -121,7 +131,8 @@ Page({
 
             const activeTierMin = resolveCurrentGrowthTierMin(rawTiers, currentMeta.current_growth_tier, g);
             const roleName = String(
-                currentMeta.role_name
+                ROLE_NAMES[roleLevel]
+                || currentMeta.role_name
                 || profileRes.data.role_name
                 || rawMembers.find(m => Number(m.level) === roleLevel)?.name
                 || 'VIP用户'
@@ -208,10 +219,6 @@ Page({
 
     goTeamCenter() {
         wx.navigateTo({ url: '/pages/distribution/business-center' });
-    },
-
-    onOpenDepositCenter() {
-        wx.navigateTo({ url: '/pages/user/deposit-orders' });
     },
 
     onRetry() {

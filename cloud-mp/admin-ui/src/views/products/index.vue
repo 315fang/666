@@ -254,11 +254,16 @@
         </div>
         <el-collapse-transition>
           <div v-show="skuEnabled">
-            <p class="sku-hint">启用后，顾客下单需选择规格；请为每条规格填写名称、规格值与价格/库存。仅单规格商品可不启用。</p>
+            <p class="sku-hint">启用后，顾客下单需选择规格；请为每条规格填写名称、规格值与价格/库存，并指定一个默认 SKU 作为前台展示与预选真相源。</p>
             <div class="sku-toolbar">
               <el-button size="small" type="primary" plain :icon="Plus" @click="addSku">添加规格</el-button>
             </div>
             <el-table :data="form.skus" border size="small" style="width:100%;margin-top:8px">
+              <el-table-column label="默认" width="70" align="center">
+                <template #default="{ $index }">
+                  <el-radio v-model="form.default_sku_index" :label="$index" />
+                </template>
+              </el-table-column>
               <el-table-column label="规格名" width="90">
                 <template #default="{ row }">
                   <el-input v-model="row.spec_name" placeholder="颜色" size="small" />
@@ -447,7 +452,7 @@ import CompactIdCell from '@/components/CompactIdCell.vue'
 import { getProducts, createProduct, updateProduct, updateProductStatus, getCategories, deleteProduct, createCategory, updateCategory, deleteCategory } from '@/api'
 import { usePagination } from '@/composables/usePagination'
 import MediaPicker from '@/components/MediaPicker.vue'
-import { warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
+import { buildPersistentAssetRef, warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
 
 // ===== 列表 =====
 const route = useRoute()
@@ -562,6 +567,7 @@ const defaultForm = () => ({
   manual_weight: 0,
   growth_value_reward: null,
   skus: [],
+  default_sku_index: null,
   // 营销：全部默认关闭（allow_points 默认开，爆款手动关）
   enable_coupon: 0,
   enable_group_buy: 0,
@@ -585,15 +591,32 @@ const rules = {
   cost_price: [{ required: true, type: 'number', message: '请填写成本价', trigger: 'blur' }]
 }
 
+const normalizePersistentAssetList = (urls = []) => (Array.isArray(urls) ? urls : [])
+  .map((url) => buildPersistentAssetRef({ url }))
+  .filter(Boolean)
+
+const seedImagePreviewCache = (persistedUrls = [], previewUrls = []) => {
+  persistedUrls.forEach((persistedUrl, index) => {
+    const previewUrl = String(previewUrls[index] || '').trim()
+    if (persistedUrl && previewUrl && persistedUrl !== previewUrl) {
+      imagePreviewCache[persistedUrl] = previewUrl
+    }
+  })
+}
+
 const openForm = (row) => {
   if (row) {
+    const nextSkus = row.skus ? row.skus.map(s => ({ ...s })) : []
+    const matchedDefaultSkuIndex = nextSkus.findIndex((sku) => Number(sku?.id) === Number(row.default_sku_id))
+    const normalizedImages = normalizePersistentAssetList(row.raw_images?.length ? row.raw_images : row.images)
+    const normalizedDetailImages = normalizePersistentAssetList(row.raw_detail_images?.length ? row.raw_detail_images : row.detail_images)
     Object.assign(form, {
       id: row.id,
       name: row.name || '',
       category_id: row.category_id || null,
       description: row.description || '',
-      images: row.images ? [...row.images] : [],
-      detail_images: row.detail_images ? [...row.detail_images] : [],
+      images: normalizedImages,
+      detail_images: normalizedDetailImages,
       retail_price: row.retail_price,
       market_price: row.market_price || null,
       cost_price: row.cost_price,
@@ -603,7 +626,8 @@ const openForm = (row) => {
       stock: row.stock || 0,
       manual_weight: row.manual_weight || 0,
       growth_value_reward: row.growth_value_reward || null,
-      skus: row.skus ? row.skus.map(s => ({ ...s })) : [],
+      skus: nextSkus,
+      default_sku_index: matchedDefaultSkuIndex >= 0 ? matchedDefaultSkuIndex : null,
       enable_coupon: row.enable_coupon || 0,
       enable_group_buy: row.enable_group_buy || 0,
       custom_commissions: row.custom_commissions || 0,
@@ -618,14 +642,10 @@ const openForm = (row) => {
       commission_amount_2: row.commission_amount_2 || 0
     })
     skuEnabled.value = (row.skus?.length > 0)
-    // 编辑已有商品时，从后端返回的数据里 images 已经是解析好的 https URL，
-    // 直接缓存到 imagePreviewCache，保证 cloud:// ID（若有）能正常预览
-    ;[...form.images, ...form.detail_images].forEach(url => {
-      if (url && !isCloudId(url)) {
-        // 这里 images 是经后端解析过的 https 链接，不需要额外处理
-        // 若日后存的是 cloud://，可在此根据 row._imageUrls 等字段回填缓存
-      }
-    })
+    // 编辑已有商品时，后端可能返回带签名的临时预览 URL；
+    // 表单里改存稳定引用，预览仍沿用当前可显示地址。
+    seedImagePreviewCache(normalizedImages, row.images || [])
+    seedImagePreviewCache(normalizedDetailImages, row.detail_images || [])
   } else {
     Object.assign(form, defaultForm())
     skuEnabled.value = false
@@ -633,8 +653,28 @@ const openForm = (row) => {
   formVisible.value = true
 }
 
-const addSku = () => form.skus.push({ spec_name: '', spec_value: '', sku_code: '', retail_price: form.retail_price || 0, stock: 0 })
-const removeSku = (i) => form.skus.splice(i, 1)
+const addSku = () => {
+  const nextIndex = form.skus.length
+  form.skus.push({ spec_name: '', spec_value: '', sku_code: '', retail_price: form.retail_price || 0, stock: 0 })
+  if (form.default_sku_index == null && nextIndex === 0) {
+    form.default_sku_index = 0
+  }
+}
+
+const removeSku = (i) => {
+  form.skus.splice(i, 1)
+  if (form.skus.length === 0) {
+    form.default_sku_index = null
+    return
+  }
+  if (form.default_sku_index === i) {
+    form.default_sku_index = form.skus.length === 1 ? 0 : null
+    return
+  }
+  if (Number.isInteger(form.default_sku_index) && form.default_sku_index > i) {
+    form.default_sku_index -= 1
+  }
+}
 const removeImg = (key, i) => form[key].splice(i, 1)
 
 const submitForm = async (status) => {
@@ -659,7 +699,14 @@ const submitForm = async (status) => {
   submitting.value = true
   try {
     const data = { ...form, status }
-    if (!skuEnabled.value) data.skus = []
+    if (!skuEnabled.value) {
+      data.skus = []
+      data.default_sku_index = null
+    } else {
+      data.default_sku_index = Number.isInteger(Number(form.default_sku_index))
+        ? Number(form.default_sku_index)
+        : null
+    }
     // 百分比 → 小数（后端存 0~1）
     data.commission_rate_1 = (Number(data.commission_rate_1) || 0) / 100
     data.commission_rate_2 = (Number(data.commission_rate_2) || 0) / 100
@@ -697,8 +744,8 @@ const imagePreviewCache = reactive({})
 
 const isCloudId = (v) => /^cloud:\/\//i.test(String(v || ''))
 
-/** 获取图片的可展示 URL：cloud:// 用缓存，否则直接用原 URL */
-const resolvePreviewUrl = (url) => isCloudId(url) ? (imagePreviewCache[url] || url) : url
+/** 获取图片的可展示 URL：优先走缓存，兼容 cloud:// 和历史临时预览 URL */
+const resolvePreviewUrl = (url) => imagePreviewCache[url] || url
 
 const openPicker = (target) => {
   pickerTarget.value = target

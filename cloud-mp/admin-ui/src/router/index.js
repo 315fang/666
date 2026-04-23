@@ -58,6 +58,24 @@ const routes = [
         meta: { title: '自提门店', icon: 'MapLocation', group: '交易与履约', section: '订单履约', sectionOrder: 1, order: 2, permission: 'pickup_stations' }
       },
       {
+        path: 'pickup-procurements',
+        name: 'PickupProcurements',
+        component: () => import('@/views/pickup-procurements/index.vue'),
+        meta: { title: '门店备货', icon: 'Box', group: '交易与履约', section: '订单履约', sectionOrder: 1, order: 3, permission: 'pickup_stations' }
+      },
+      {
+        path: 'pickup-inventory',
+        name: 'PickupInventory',
+        component: () => import('@/views/pickup-inventory/index.vue'),
+        meta: { title: '门店库存', icon: 'Collection', group: '交易与履约', section: '订单履约', sectionOrder: 1, order: 4, permission: 'pickup_stations' }
+      },
+      {
+        path: 'warehouse-overview',
+        name: 'WarehouseOverview',
+        component: () => import('@/views/warehouse-overview/index.vue'),
+        meta: { title: '仓库总览', icon: 'DataAnalysis', group: '交易与履约', section: '订单履约', sectionOrder: 1, order: 5, permission: 'pickup_stations' }
+      },
+      {
         path: 'group-buys',
         name: 'GroupBuys',
         component: () => import('@/views/group-buy/index.vue'),
@@ -70,10 +88,16 @@ const routes = [
         meta: { title: '限时商品', icon: 'Timer', group: '商品与营销', section: '活动投放', sectionOrder: 2, order: 2, permission: 'products' }
       },
       {
+        path: 'product-bundles',
+        name: 'ProductBundles',
+        component: () => import('@/views/product-bundles/index.vue'),
+        meta: { title: '自由组合', icon: 'Box', group: '商品与营销', section: '活动投放', sectionOrder: 2, order: 3, permission: 'products' }
+      },
+      {
         path: 'activities',
         name: 'Activities',
         component: () => import('@/views/activities/index.vue'),
-        meta: { title: '活动资源', icon: 'Promotion', group: '商品与营销', section: '活动投放', sectionOrder: 2, order: 3, permission: 'products' }
+        meta: { title: '活动资源', icon: 'Promotion', group: '商品与营销', section: '活动投放', sectionOrder: 2, order: 4, permission: 'products' }
       },
       {
         path: 'users',
@@ -85,7 +109,7 @@ const routes = [
         path: 'coupons',
         name: 'Coupons',
         component: () => import('@/views/coupons/index.vue'),
-        meta: { title: '优惠券管理', icon: 'Ticket', group: '商品与营销', section: '活动投放', sectionOrder: 2, order: 4, permission: 'products' }
+        meta: { title: '优惠券管理', icon: 'Ticket', group: '商品与营销', section: '活动投放', sectionOrder: 2, order: 5, permission: 'products' }
       },
       // ===== 审核管理 =====
       {
@@ -113,6 +137,12 @@ const routes = [
         meta: { title: '佣金结算', icon: 'Wallet', group: '交易与履约', section: '结算审核', sectionOrder: 3, order: 2, permission: 'commissions' }
       },
       {
+        path: 'goods-fund-transfers',
+        name: 'GoodsFundTransfers',
+        component: () => import('@/views/goods-fund-transfers/index.vue'),
+        meta: { title: '货款划拨审核', icon: 'Wallet', group: '交易与履约', section: '结算审核', sectionOrder: 3, order: 3, permission: 'commissions' }
+      },
+      {
         path: 'dealers',
         name: 'Dealers',
         component: () => import('@/views/dealers/index.vue'),
@@ -123,6 +153,12 @@ const routes = [
         name: 'BranchAgents',
         component: () => import('@/views/branch-agents/index.vue'),
         meta: { title: '分支代理', icon: 'Location', group: '用户与渠道', section: '渠道管理', sectionOrder: 2, order: 2, permission: 'dealers' }
+      },
+      {
+        path: 'directed-invites',
+        name: 'DirectedInvites',
+        component: () => import('@/views/directed-invites/index.vue'),
+        meta: { title: 'B1定向邀约', icon: 'Share', group: '用户与渠道', section: '渠道管理', sectionOrder: 2, order: 3, permission: 'dealers' }
       },
       // ===== 内容运营 =====
       {
@@ -153,14 +189,14 @@ const routes = [
         path: 'mass-message',
         name: 'MassMessage',
         component: () => import('@/views/mass-message/index.vue'),
-        meta: { title: '群发消息', icon: 'Message', group: '页面与内容', section: '消息触达', sectionOrder: 3, order: 1, permission: 'notification' }
+        meta: { title: '群发消息', icon: 'Message', group: '页面与内容', section: '消息触达', sectionOrder: 3, order: 1, permission: 'settings_manage' }
       },
       // ===== 会员体系 =====
       {
         path: 'membership',
         name: 'Membership',
         component: () => import('@/views/membership/index.vue'),
-        meta: { title: '会员策略', icon: 'UserFilled', group: '经营与策略', section: '策略配置', sectionOrder: 2, order: 2, permission: 'statistics' }
+        meta: { title: '会员策略', icon: 'UserFilled', group: '经营与策略', section: '策略配置', sectionOrder: 2, order: 2, permission: 'settings_manage' }
       },
       // ===== 系统管理 =====
       {

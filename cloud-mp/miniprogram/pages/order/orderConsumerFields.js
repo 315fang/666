@@ -9,15 +9,16 @@ const ORDER_STATUS_TEXT = {
     shipped: '待收货',
     completed: '已完成',
     cancelled: '已取消',
+    refunding: '退款中',
     refunded: '已退款'
 };
 
 const REFUND_STATUS_TEXT = {
     pending: '审核中',
-    approved: '审核通过',
-    processing: '退款处理中',
+    approved: '已通过',
+    processing: '退款中',
     completed: '退款完成',
-    rejected: '申请被拒绝',
+    rejected: '已驳回',
     cancelled: '已取消',
     failed: '退款失败'
 };
@@ -78,15 +79,22 @@ function getRefundTargetText(method, explicitText = '') {
 function buildRefundStatusDesc(refund = {}, statusDesc = '') {
     if (statusDesc) return statusDesc;
     if (refund.status === 'rejected' && refund.reject_reason) {
-        return `拒绝原因: ${refund.reject_reason}`;
+        return `驳回原因：${refund.reject_reason}`;
     }
     if (refund.status === 'approved' && refund.type === 'return_refund') {
-        return '请尽快寄回商品并填写物流单号';
+        return '请寄回商品并填写退货单号';
+    }
+    if (refund.status === 'failed') {
+        return '退款未成功，请联系客服处理';
     }
     return '';
 }
 
 function normalizeOrderConsumer(order = {}) {
+    const refundFailed = order.status === 'refunding' && (
+        order.auto_refund_error
+        || order.auto_refund_failed_at
+    );
     const paymentMethod = normalizePaymentMethodCode(
         order.payment_method || order.pay_channel || order.pay_type || order.payment_channel || ''
     );
@@ -100,10 +108,11 @@ function normalizeOrderConsumer(order = {}) {
     );
     const couponDiscount = toNumber(order.coupon_discount);
     const pointsDiscount = toNumber(order.points_discount);
+    const bundleDiscount = toNumber(order.bundle_discount);
     const refundedCashTotal = toNumber(order.refunded_cash_total);
     const remainingRefundableCash = toNumber(order.remaining_refundable_cash);
-    const statusText = order.status_text || getOrderStatusText(order.status);
-    const statusDesc = order.status_desc || '';
+    const statusText = refundFailed ? '退款失败' : (order.status_text || getOrderStatusText(order.status));
+    const statusDesc = refundFailed ? '退款未成功，请联系客服处理' : (order.status_desc || '');
     const paymentMethodText = order.payment_method_text || getPaymentMethodText(paymentMethod);
     const refundTargetText = getRefundTargetText(paymentMethod, order.refund_target_text || '');
     const normalizedItems = Array.isArray(order.items)
@@ -127,6 +136,7 @@ function normalizeOrderConsumer(order = {}) {
         pay_amount: payAmount,
         coupon_discount: couponDiscount,
         points_discount: pointsDiscount,
+        bundle_discount: bundleDiscount,
         refunded_cash_total: refundedCashTotal,
         remaining_refundable_cash: remainingRefundableCash,
         has_partial_refund: !!order.has_partial_refund,
@@ -143,6 +153,7 @@ function normalizeOrderConsumer(order = {}) {
         display_pay_amount: toMoney(payAmount),
         display_coupon_discount: toMoney(couponDiscount),
         display_points_discount: toMoney(pointsDiscount),
+        display_bundle_discount: toMoney(bundleDiscount),
         display_refunded_cash_total: toMoney(refundedCashTotal),
         display_remaining_refundable_cash: toMoney(remainingRefundableCash)
     };

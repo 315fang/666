@@ -7,7 +7,7 @@ export const MINI_PROGRAM_LINK_TYPE_OPTIONS = [
   { value: 'slash', label: '砍价活动' },
   { value: 'lottery', label: '抽奖转盘' },
   { value: 'flash_sale', label: '限时商品' },
-  { value: 'coupon_center', label: '优惠券中心' },
+  { value: 'coupon_center', label: '惊喜礼遇' },
   { value: 'page', label: '小程序页面' },
   { value: 'url', label: '外部链接' }
 ]
@@ -55,11 +55,11 @@ export const MINI_PROGRAM_TARGETS = [
   },
   {
     key: 'coupon:center',
-    title: '优惠券中心',
+    title: '惊喜礼遇',
     group: '营销入口',
     link_type: 'coupon_center',
     link_value: '__coupon_center__',
-    note: '我的优惠券列表'
+    note: '惊喜礼遇页'
   },
   {
     key: 'page:search',

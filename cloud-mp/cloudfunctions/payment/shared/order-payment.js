@@ -36,6 +36,17 @@ function normalizePaymentMethodCode(rawValue) {
     return raw;
 }
 
+function hasWechatPaymentEvidence(order = {}) {
+    const payPackage = order.pay_params && typeof order.pay_params === 'object'
+        ? pickString(order.pay_params.package)
+        : '';
+    return !!(
+        pickString(order.trade_id || order.transaction_id || order.wx_transaction_id)
+        || pickString(order.prepay_id)
+        || payPackage.startsWith('prepay_id=')
+    );
+}
+
 function resolvePaymentChannelAlias(paymentMethod) {
     const normalized = normalizePaymentMethodCode(paymentMethod);
     if (normalized === 'wechat') return 'wxpay';
@@ -44,9 +55,11 @@ function resolvePaymentChannelAlias(paymentMethod) {
 }
 
 function resolveOrderPaymentMethod(order = {}) {
-    return normalizePaymentMethodCode(
+    const explicit = normalizePaymentMethodCode(
         order.payment_method || order.pay_channel || order.pay_type || order.payment_channel || ''
     );
+    if (explicit) return explicit;
+    return hasWechatPaymentEvidence(order) ? 'wechat' : '';
 }
 
 function resolveOrderPayAmount(order = {}, fallback = 0) {
@@ -94,6 +107,9 @@ function isGroupOrder(order = {}) {
 }
 
 function resolvePostPayStatus(order = {}) {
+    if (pickString(order.delivery_type).toLowerCase() === 'pickup') {
+        return 'pickup_pending';
+    }
     return isGroupOrder(order) ? 'pending_group' : 'paid';
 }
 

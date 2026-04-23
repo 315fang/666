@@ -12,21 +12,25 @@ function pickString(value, fallback = '') {
     return text || fallback;
 }
 
+function normalizeRealName(value) {
+    if (value == null) return '';
+    return String(value).trim().replace(/\s+/g, ' ');
+}
+
 function buildProfileUpdateData(data = {}) {
     const {
         nickname,
         nick_name: nickNameSnake,
         nickName,
+        real_name: realName,
         avatar,
         avatar_url: avatarSnake,
-        avatarUrl,
-        ...rest
+        avatarUrl
     } = data || {};
 
     const nextNickname = pickString(nickname || nickNameSnake || nickName);
     const nextAvatar = pickString(avatar || avatarSnake || avatarUrl);
     const updateData = {
-        ...rest,
         updated_at: db.serverDate()
     };
 
@@ -42,7 +46,19 @@ function buildProfileUpdateData(data = {}) {
         updateData.avatarUrl = nextAvatar;
     }
 
+    if (Object.prototype.hasOwnProperty.call(data || {}, 'real_name')) {
+        updateData.real_name = normalizeRealName(realName);
+    }
+
     return updateData;
+}
+
+function resolveGrowthValue(user = {}) {
+    return toNumber(user.growth_value, 0);
+}
+
+function resolvePointsValue(user = {}) {
+    return toNumber(user.points != null ? user.points : user.growth_value, 0);
 }
 
 /**
@@ -69,10 +85,11 @@ async function updateProfile(openid, data) {
 async function formatUser(user) {
     if (!user) return null;
     const resolvedUser = await resolveUserAvatarFields(user);
-    const points = toNumber(user.points != null ? user.points : user.growth_value, 0);
+    const growthValue = resolveGrowthValue(user);
+    const points = resolvePointsValue(user);
     const canonical = buildCanonicalUser(resolvedUser, {
         register_coupons_issued: !!user.register_coupons_issued,
-        growth_value: points,
+        growth_value: growthValue,
         points
     });
     return {

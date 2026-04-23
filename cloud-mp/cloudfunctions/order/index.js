@@ -16,6 +16,7 @@ const orderQuery = require('./order-query');
 const orderStatus = require('./order-status');
 const orderLifecycle = require('./order-lifecycle');
 const orderInteractive = require('./order-interactive');
+const lottery = require('./lottery');
 
 // 已知的业务验证错误关键词，匹配时返回 400 而非 500，让前端展示具体原因
 const VALIDATION_ERROR_PATTERNS = [
@@ -41,6 +42,7 @@ const asyncHandler = (handler) => async (...args) => {
 };
 
 let isColdStart = true;
+const internalActionToken = String(process.env.ORDER_INTERNAL_TOKEN || '').trim();
 
 function buildTraceId(event) {
     const candidate = event && (
@@ -95,7 +97,7 @@ const handleAction = {
     }),
 
     'create': asyncHandler(async (openid, params) => {
-        const { items, address_id, coupon_id, user_coupon_id, memo, remark, delivery_type, pickup_station_id, points_to_use, type, group_activity_id, group_no, slash_no, use_goods_fund, limited_spot, limited_sale } = params;
+        const { items, address_id, coupon_id, user_coupon_id, memo, remark, delivery_type, pickup_station_id, points_to_use, type, group_activity_id, group_no, slash_no, use_goods_fund, limited_spot, limited_sale, bundle_context, portal_password } = params;
         if (!items || !Array.isArray(items) || items.length === 0) {
             throw badRequest('缺少商品信息');
         }
@@ -117,7 +119,9 @@ const handleAction = {
             slash_no,
             use_goods_fund: !!use_goods_fund,
             limited_spot,
-            limited_sale
+            limited_sale,
+            bundle_context,
+            portal_password
         });
         return success({
             id: order._id,
@@ -224,6 +228,12 @@ const handleAction = {
         return success(result);
     }),
 
+    'recoverGoodsFundRefunds': asyncHandler(async (_openid, params) => {
+        const limit = Math.max(1, Math.min(100, Number(params.limit || 20) || 20));
+        const result = await orderLifecycle.recoverPendingGoodsFundRefunds(limit);
+        return success(result);
+    }),
+
     // ===== 物流 =====
     'trackLogistics': asyncHandler(async (openid, params) => {
         const result = await orderLifecycle.trackLogistics(openid, params);
@@ -269,7 +279,24 @@ const handleAction = {
 
     // ===== 抽奖 =====
     'lotteryDraw': asyncHandler(async (openid, params) => {
-        const result = await orderInteractive.lotteryDraw(openid, params);
+        const result = await lottery.drawLottery(openid, params);
+        return success(result);
+    }),
+
+    'lotteryRecords': asyncHandler(async (openid, params) => {
+        const result = await lottery.listLotteryRecords(openid, params);
+        return success(result);
+    }),
+
+    'lotteryClaimDetail': asyncHandler(async (openid, params) => {
+        const recordId = params.record_id || params.id;
+        if (!recordId) throw badRequest('缺少中奖记录 ID');
+        const result = await lottery.getLotteryClaimDetail(openid, recordId);
+        return success(result);
+    }),
+
+    'submitLotteryClaim': asyncHandler(async (openid, params) => {
+        const result = await lottery.createLotteryClaim(openid, params);
         return success(result);
     }),
 
@@ -305,12 +332,29 @@ exports.main = cloudFunctionWrapper(async (event) => {
     try {
         const wxContext = cloud.getWXContext();
         const openid = wxContext.OPENID;
+        const { action: currentAction, ...params } = event;
+
+        if (currentAction === 'recoverGoodsFundRefunds') {
+            const providedToken = String(params.internal_token || '').trim();
+            if (!internalActionToken || providedToken !== internalActionToken) {
+                throw unauthorized('内部订单接口禁止直接访问');
+            }
+            const result = await handleAction[currentAction]('', params);
+            logPerf({
+                action: currentAction,
+                trace_id: traceId,
+                cold_start: coldStart,
+                status: 'ok',
+                code: 'ok',
+                total_ms: Date.now() - startedAt,
+                cache_hit: false
+            });
+            return result;
+        }
 
         if (!openid) {
             throw unauthorized('未登录');
         }
-
-        const { action: currentAction, ...params } = event;
         const handler = handleAction[currentAction];
 
         if (!handler) {

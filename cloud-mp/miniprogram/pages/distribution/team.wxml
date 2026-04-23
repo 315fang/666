@@ -72,6 +72,8 @@
           </view>
           <view class="member-tag-row">
             <view class="member-tag">{{item.role_name}}</view>
+            <view class="member-tag">{{item.relation_source_text || (item.relation_source === 'directed_b1' ? '定向邀约' : '普通邀请')}}</view>
+            <view class="member-tag" wx:if="{{item.line_locked}}">已锁线路</view>
             <text class="member-tag-sub">{{item.invite_code || '暂无ID'}}</text>
           </view>
           <view class="member-meta-row">
@@ -94,7 +96,7 @@
         <image src="/assets/icons/users.svg" mode="aspectFit" class="empty-icon"></image>
         <text class="empty-title">当前没有成员</text>
         <text class="empty-desc">从邀请海报或分享入口开始积累你的团队</text>
-        <button class="empty-invite-btn" open-type="share">立即邀请</button>
+        <button class="empty-invite-btn" bindtap="goInvitePosterPage">立即邀请</button>
       </view>
     </view>
     <view class="bottom-space"></view>

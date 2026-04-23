@@ -4,13 +4,15 @@ export const ADMIN_ROLE_PRESETS = {
     'dealers', 'commissions', 'statistics', 'logs',
     'settings_manage', 'notification',
     'order_amount_adjust', 'order_force_cancel', 'order_force_complete',
-    'user_balance_adjust', 'user_role_manage', 'user_parent_manage', 'user_status_manage'
+    'user_balance_adjust', 'user_role_manage', 'user_parent_manage', 'user_status_manage', 'user_portal_password_manage'
   ],
   operator: ['dashboard', 'products', 'orders', 'pickup_stations', 'content', 'materials', 'notification', 'statistics'],
   finance: ['dashboard', 'orders', 'pickup_stations', 'withdrawals', 'commissions', 'statistics'],
-  customer_service: ['dashboard', 'orders', 'pickup_stations', 'refunds', 'users', 'notification'],
+  customer_service: ['dashboard', 'orders', 'pickup_stations', 'refunds', 'users', 'notification', 'user_portal_password_manage'],
   warehouse: ['orders', 'pickup_stations'],
-  designer: ['content', 'materials']
+  designer: ['content', 'materials'],
+  channel_manager: ['dashboard', 'users', 'dealers', 'distribution', 'notification', 'statistics', 'logs'],
+  marketing_director: ['dashboard', 'products', 'orders', 'pickup_stations', 'users', 'distribution', 'content', 'materials', 'dealers', 'refunds', 'withdrawals', 'commissions', 'statistics', 'logs']
 }
 
 export function normalizeAdminPermission(perm) {

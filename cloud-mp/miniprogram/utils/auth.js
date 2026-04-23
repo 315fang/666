@@ -1,36 +1,109 @@
 /**
  * utils/auth.js — 云开发版
  *
- * 原版：post('/login', params) → HTTP 请求后端
- * 云开发版：wx.cloud.callFunction({ name: 'login' }) → 由 appAuth.wxLogin() 统一处理
- *
- * 此文件仅保留页面级帮助函数，不再处理 HTTP
+ * 页面侧统一通过 openid + userInfo 判定登录态。
+ * token 仅作历史兼容清理，不再作为任何登录依据。
  */
 
-/**
- * 登录态守卫 — 消除页面中重复的 "if (!isLoggedIn)" 模板代码
- *
- * 用法一：直接调用，未登录时自动 Toast 并返回 false
- *   if (!requireLogin()) return;
- *
- * 用法二：传入回调，仅在已登录时执行
- *   requireLogin(() => { wx.navigateTo({ url: '/pages/xxx' }) });
- *
- * @param {Function} [callback] - 已登录时执行的函数
- * @param {string}   [message]  - 未登录时的 Toast 文案，默认"请先登录"
- * @returns {boolean} 是否已登录
- */
-function hasLoginSession() {
-    const app = getApp();
-    if (app && app.globalData && app.globalData.isLoggedIn) {
-        return true;
+function isPlainObject(value) {
+    return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getAppInstance() {
+    try {
+        return getApp();
+    } catch (_err) {
+        return null;
+    }
+}
+
+function readStorage(key) {
+    try {
+        return wx.getStorageSync(key);
+    } catch (_err) {
+        return '';
+    }
+}
+
+function resolveOpenid() {
+    const candidates = Array.prototype.slice.call(arguments);
+    for (let i = 0; i < candidates.length; i += 1) {
+        const candidate = candidates[i];
+        if (typeof candidate === 'string' && candidate.trim()) {
+            return candidate.trim();
+        }
+        if (isPlainObject(candidate) && typeof candidate.openid === 'string' && candidate.openid.trim()) {
+            return candidate.openid.trim();
+        }
+    }
+    return '';
+}
+
+function normalizeLoginPrompt(input) {
+    if (typeof input === 'string') {
+        return { message: input };
+    }
+
+    if (isPlainObject(input)) {
+        return {
+            ...input,
+            message: input.message || input.content || input.title || '请先登录'
+        };
+    }
+
+    return { message: '请先登录' };
+}
+
+function syncLoginSnapshot(app, snapshot) {
+    const globalData = app && app.globalData;
+    if (globalData) {
+        globalData.userInfo = snapshot.userInfo;
+        globalData.openid = snapshot.openid || null;
+        globalData.isLoggedIn = snapshot.isLoggedIn;
     }
 
     try {
-        return !!wx.getStorageSync('openid');
+        wx.removeStorageSync('token');
+        if (snapshot.isLoggedIn) {
+            wx.setStorageSync('userInfo', snapshot.userInfo);
+            wx.setStorageSync('openid', snapshot.openid);
+        }
     } catch (_err) {
-        return false;
+        // ignore storage sync failures
     }
+}
+
+function getLoginState() {
+    const app = getAppInstance();
+    const globalData = app && app.globalData ? app.globalData : null;
+    const cachedUserInfo = readStorage('userInfo');
+    const cachedOpenid = readStorage('openid');
+    const openid = resolveOpenid(
+        globalData && globalData.openid,
+        globalData && globalData.userInfo,
+        cachedOpenid,
+        cachedUserInfo
+    );
+    const rawUserInfo = isPlainObject(globalData && globalData.userInfo)
+        ? globalData.userInfo
+        : (isPlainObject(cachedUserInfo) ? cachedUserInfo : null);
+    const userInfo = rawUserInfo && openid && rawUserInfo.openid !== openid
+        ? { ...rawUserInfo, openid }
+        : rawUserInfo;
+    const isLoggedIn = !!(openid && userInfo);
+    const snapshot = {
+        app,
+        userInfo: isLoggedIn ? userInfo : null,
+        openid: isLoggedIn ? openid : '',
+        isLoggedIn
+    };
+
+    syncLoginSnapshot(app, snapshot);
+    return snapshot;
+}
+
+function hasLoginSession() {
+    return getLoginState().isLoggedIn;
 }
 
 function requireLogin(callback, message) {
@@ -38,21 +111,57 @@ function requireLogin(callback, message) {
         if (typeof callback === 'function') callback();
         return true;
     }
-    wx.showToast({ title: message || '请先登录', icon: 'none' });
+
+    const prompt = normalizeLoginPrompt(message);
+    wx.showToast({ title: prompt.message, icon: 'none' });
     return false;
 }
 
 /**
  * 触发登录（供页面调用）
- * 等同于 getApp().triggerLogin()
+ * 优先走 app.triggerLogin，让隐私授权与登录流程保持单一入口。
  */
-async function triggerLogin() {
-    const app = getApp();
-    return app ? app.triggerLogin() : { success: false, reason: 'no_app' };
+async function triggerLogin(options) {
+    const app = getAppInstance();
+    if (!app) {
+        return { success: false, reason: 'no_app' };
+    }
+    if (typeof app.triggerLogin === 'function') {
+        return app.triggerLogin(options);
+    }
+    if (typeof app.wxLogin === 'function') {
+        return app.wxLogin(options);
+    }
+    return { success: false, reason: 'no_login_method' };
+}
+
+async function ensureLogin(options) {
+    const snapshot = getLoginState();
+    if (snapshot.isLoggedIn) {
+        return snapshot;
+    }
+
+    const result = await triggerLogin(options);
+    const nextSnapshot = getLoginState();
+    if (nextSnapshot.isLoggedIn) {
+        return nextSnapshot;
+    }
+
+    const prompt = normalizeLoginPrompt(options);
+    const error = new Error(
+        (result && result.message)
+        || prompt.message
+        || '登录失败'
+    );
+    error.reason = (result && result.reason) || 'login_failed';
+    error.result = result;
+    throw error;
 }
 
 module.exports = {
+    getLoginState,
     hasLoginSession,
     requireLogin,
-    triggerLogin
+    triggerLogin,
+    ensureLogin
 };

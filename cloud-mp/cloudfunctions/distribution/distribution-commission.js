@@ -12,7 +12,7 @@ const DEFAULT_ROLE_NAMES = {
     3: '推广合伙人',
     4: '运营合伙人',
     5: '区域合伙人',
-    6: '线下实体门店'
+    6: '店长'
 };
 
 const DEFAULT_COMMISSION_MATRIX = {
@@ -53,6 +53,11 @@ function roundMoney(value) {
 function resolveBenefitRoleLevel(roleLevel) {
     const normalized = toNumber(roleLevel, 0);
     return normalized === 6 ? 4 : normalized;
+}
+
+function isFlexBundleCommissionItem(order = {}, item = {}) {
+    const bundleSceneType = String(item.bundle_scene_type || order.bundle_meta?.scene_type || '').trim();
+    return bundleSceneType === 'flex_bundle';
 }
 
 async function appendWalletLog(entry) {
@@ -310,11 +315,17 @@ async function calculateOrderCommissions(order, explicitReferrerOpenid) {
         const product = await getDocByIdOrLegacy('products', item.product_id) || {};
         const rawBase = roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price || orderAmount, 0) * qty));
         const allocatedBase = itemBaseTotal > 0 ? roundMoney(orderAmount * rawBase / itemBaseTotal) : rawBase;
+        const useFixedBundleCommission = isFlexBundleCommissionItem(order, item);
         for (const beneficiary of beneficiaries) {
-            const configured = configuredCommission(product, beneficiary.level, allocatedBase);
-            const amount = configured > 0
-                ? Math.min(allocatedBase, configured)
-                : roleCommission(beneficiary.user, beneficiary.level, allocatedBase, commissionConfig);
+            let amount;
+            if (useFixedBundleCommission) {
+                amount = roundMoney(beneficiary.level === 1 ? item.direct_commission_fixed_amount : item.indirect_commission_fixed_amount);
+            } else {
+                const configured = configuredCommission(product, beneficiary.level, allocatedBase);
+                amount = configured > 0
+                    ? Math.min(allocatedBase, configured)
+                    : roleCommission(beneficiary.user, beneficiary.level, allocatedBase, commissionConfig);
+            }
             if (amount <= 0) continue;
             const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
             totals.set(key, {

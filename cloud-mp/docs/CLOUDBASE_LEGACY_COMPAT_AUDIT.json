@@ -1,7 +1,7 @@
 {
   "miniprogram": {
     "quantity": {
-      "count": 104,
+      "count": 87,
       "files": [
         {
           "file": "cloud-mp/miniprogram/components/order-card/order-card.wxml",
@@ -10,10 +10,6 @@
         {
           "file": "cloud-mp/miniprogram/components/order-card/order-card.wxss",
           "count": 1
-        },
-        {
-          "file": "cloud-mp/miniprogram/pages/activity/limited-spot.js",
-          "count": 2
         },
         {
           "file": "cloud-mp/miniprogram/pages/cart/cart.js",
@@ -36,22 +32,6 @@
           "count": 7
         },
         {
-          "file": "cloud-mp/miniprogram/pages/distribution/restock.js",
-          "count": 16
-        },
-        {
-          "file": "cloud-mp/miniprogram/pages/distribution/restock.wxml",
-          "count": 9
-        },
-        {
-          "file": "cloud-mp/miniprogram/pages/distribution/restock.wxss",
-          "count": 3
-        },
-        {
-          "file": "cloud-mp/miniprogram/pages/distribution/workbench.wxml",
-          "count": 1
-        },
-        {
           "file": "cloud-mp/miniprogram/pages/group/detail.js",
           "count": 1
         },
@@ -61,7 +41,7 @@
         },
         {
           "file": "cloud-mp/miniprogram/pages/order/confirm.js",
-          "count": 2
+          "count": 3
         },
         {
           "file": "cloud-mp/miniprogram/pages/order/confirm.wxml",
@@ -73,7 +53,7 @@
         },
         {
           "file": "cloud-mp/miniprogram/pages/order/detail.wxml",
-          "count": 1
+          "count": 2
         },
         {
           "file": "cloud-mp/miniprogram/pages/order/list.js",
@@ -85,19 +65,19 @@
         },
         {
           "file": "cloud-mp/miniprogram/pages/order/orderConfirmAddress.js",
-          "count": 4
+          "count": 6
         },
         {
           "file": "cloud-mp/miniprogram/pages/order/orderConfirmSubmission.js",
-          "count": 2
+          "count": 4
         },
         {
           "file": "cloud-mp/miniprogram/pages/order/refund-apply.js",
-          "count": 3
+          "count": 5
         },
         {
           "file": "cloud-mp/miniprogram/pages/order/refund-apply.wxml",
-          "count": 2
+          "count": 1
         },
         {
           "file": "cloud-mp/miniprogram/pages/pickup/orders.wxml",
@@ -105,7 +85,7 @@
         },
         {
           "file": "cloud-mp/miniprogram/pages/product/detail.js",
-          "count": 6
+          "count": 11
         },
         {
           "file": "cloud-mp/miniprogram/pages/product/detail.wxml",
@@ -113,7 +93,11 @@
         },
         {
           "file": "cloud-mp/miniprogram/pages/product/productDetailActions.js",
-          "count": 13
+          "count": 14
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/product-bundle/detail.js",
+          "count": 1
         },
         {
           "file": "cloud-mp/miniprogram/pages/slash/detail.js",
@@ -130,12 +114,8 @@
       "files": []
     },
     "user_id": {
-      "count": 2,
+      "count": 1,
       "files": [
-        {
-          "file": "cloud-mp/miniprogram/pages/group/detail.js",
-          "count": 1
-        },
         {
           "file": "cloud-mp/miniprogram/pages/stations/my-station.wxml",
           "count": 1
@@ -147,19 +127,23 @@
       "files": []
     },
     "image_url": {
-      "count": 13,
+      "count": 32,
       "files": [
         {
-          "file": "cloud-mp/miniprogram/pages/activity/activity.js",
-          "count": 1
+          "file": "cloud-mp/miniprogram/pages/category/categoryProductLoader.js",
+          "count": 4
         },
         {
-          "file": "cloud-mp/miniprogram/pages/category/category.js",
+          "file": "cloud-mp/miniprogram/pages/distribution/invite-poster.js",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/index/brand-news-list.js",
           "count": 1
         },
         {
           "file": "cloud-mp/miniprogram/pages/index/index.js",
-          "count": 1
+          "count": 2
         },
         {
           "file": "cloud-mp/miniprogram/pages/index/index.wxml",
@@ -167,24 +151,60 @@
         },
         {
           "file": "cloud-mp/miniprogram/pages/index/indexHomeLoader.js",
-          "count": 3
+          "count": 4
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/lottery/lottery.js",
+          "count": 2
         },
         {
           "file": "cloud-mp/miniprogram/pages/lottery/lottery.wxml",
           "count": 2
         },
         {
-          "file": "cloud-mp/miniprogram/pages/splash/splash.js",
+          "file": "cloud-mp/miniprogram/pages/order/list.js",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/refund-apply.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/refund-detail.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/refund-list.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/review.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/product/productDetailData.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/stations/stationMapLoader.js",
           "count": 1
         },
         {
           "file": "cloud-mp/miniprogram/utils/activitySectionBuilder.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/utils/cloudAssetRuntime.js",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/utils/dataFormatter.js",
           "count": 2
         }
       ]
     },
     "avatar_url": {
-      "count": 13,
+      "count": 14,
       "files": [
         {
           "file": "cloud-mp/miniprogram/pages/activity/n-invite.wxml",
@@ -207,19 +227,19 @@
           "count": 1
         },
         {
-          "file": "cloud-mp/miniprogram/pages/distribution/utils/invitePosterCore.js",
-          "count": 2
+          "file": "cloud-mp/miniprogram/pages/distribution/utils/sharePosterCore.js",
+          "count": 1
         },
         {
           "file": "cloud-mp/miniprogram/pages/group/detail.wxml",
           "count": 1
         },
         {
-          "file": "cloud-mp/miniprogram/pages/product/detail.wxml",
+          "file": "cloud-mp/miniprogram/pages/product/detail.js",
           "count": 1
         },
         {
-          "file": "cloud-mp/miniprogram/pages/product/reviews.wxml",
+          "file": "cloud-mp/miniprogram/pages/product/detail.wxml",
           "count": 1
         },
         {
@@ -233,11 +253,15 @@
         {
           "file": "cloud-mp/miniprogram/pages/user/user.wxml",
           "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/utils/userProfile.js",
+          "count": 2
         }
       ]
     },
     "nickname": {
-      "count": 54,
+      "count": 64,
       "files": [
         {
           "file": "cloud-mp/miniprogram/pages/activity/n-invite.js",
@@ -260,15 +284,27 @@
           "count": 1
         },
         {
+          "file": "cloud-mp/miniprogram/pages/distribution/directed-invite.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/directed-invite.wxml",
+          "count": 3
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/directed-invites.js",
+          "count": 3
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/directed-invites.wxml",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/distribution/goods-fund-transfer-history.js",
+          "count": 2
+        },
+        {
           "file": "cloud-mp/miniprogram/pages/distribution/invite-poster.js",
-          "count": 1
-        },
-        {
-          "file": "cloud-mp/miniprogram/pages/distribution/invite.js",
-          "count": 1
-        },
-        {
-          "file": "cloud-mp/miniprogram/pages/distribution/invite.wxml",
           "count": 1
         },
         {
@@ -284,16 +320,8 @@
           "count": 1
         },
         {
-          "file": "cloud-mp/miniprogram/pages/distribution/utils/invitePosterCore.js",
-          "count": 3
-        },
-        {
-          "file": "cloud-mp/miniprogram/pages/distribution/workbench.wxml",
+          "file": "cloud-mp/miniprogram/pages/distribution/utils/sharePosterCore.js",
           "count": 1
-        },
-        {
-          "file": "cloud-mp/miniprogram/pages/feed/index.js",
-          "count": 2
         },
         {
           "file": "cloud-mp/miniprogram/pages/group/detail.wxml",
@@ -316,15 +344,11 @@
           "count": 1
         },
         {
+          "file": "cloud-mp/miniprogram/pages/product/detail.js",
+          "count": 2
+        },
+        {
           "file": "cloud-mp/miniprogram/pages/product/detail.wxml",
-          "count": 1
-        },
-        {
-          "file": "cloud-mp/miniprogram/pages/product/reviews.wxml",
-          "count": 1
-        },
-        {
-          "file": "cloud-mp/miniprogram/pages/questionnaire/fill.js",
           "count": 1
         },
         {
@@ -352,12 +376,16 @@
           "count": 2
         },
         {
+          "file": "cloud-mp/miniprogram/pages/user/userDashboard.js",
+          "count": 1
+        },
+        {
           "file": "cloud-mp/miniprogram/pages/user/userProfileActions.js",
           "count": 4
         },
         {
           "file": "cloud-mp/miniprogram/utils/userProfile.js",
-          "count": 3
+          "count": 8
         }
       ]
     },
@@ -366,8 +394,49 @@
       "files": []
     },
     "pending_payment": {
-      "count": 0,
-      "files": []
+      "count": 23,
+      "files": [
+        {
+          "file": "cloud-mp/miniprogram/config/constants.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/logistics/tracking.js",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/detail.js",
+          "count": 4
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/detail.wxml",
+          "count": 4
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/list.js",
+          "count": 5
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/list.wxml",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/orderConsumerFields.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/orderDetailData.js",
+          "count": 2
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/order/orderDetailPayment.js",
+          "count": 1
+        },
+        {
+          "file": "cloud-mp/miniprogram/pages/user/userDashboard.js",
+          "count": 1
+        }
+      ]
     }
   },
   "admin-ui": {
@@ -422,7 +491,7 @@
       "files": []
     },
     "image_url": {
-      "count": 53,
+      "count": 52,
       "files": [
         {
           "file": "admin-ui/src/components/ContentBlockEditor.vue",
@@ -438,11 +507,11 @@
         },
         {
           "file": "admin-ui/src/views/activities/index.vue",
-          "count": 6
+          "count": 5
         },
         {
           "file": "admin-ui/src/views/content/index.vue",
-          "count": 14
+          "count": 13
         },
         {
           "file": "admin-ui/src/views/home-sections/index.vue",
@@ -450,7 +519,7 @@
         },
         {
           "file": "admin-ui/src/views/splash/index.vue",
-          "count": 8
+          "count": 9
         }
       ]
     },
@@ -485,10 +554,14 @@
       ]
     },
     "pending_ship": {
-      "count": 1,
+      "count": 5,
       "files": [
         {
           "file": "admin-ui/src/views/dashboard/index.vue",
+          "count": 4
+        },
+        {
+          "file": "admin-ui/src/views/orders/index.vue",
           "count": 1
         }
       ]

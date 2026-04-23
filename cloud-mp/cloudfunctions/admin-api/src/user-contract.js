@@ -1,5 +1,10 @@
 'use strict';
 
+const {
+    normalizeAccountOrigin,
+    normalizeAccountVisibility
+} = require('./shared/account-visibility');
+
 const DEFAULT_ROLE_NAMES = {
     0: 'VIP用户',
     1: '初级会员',
@@ -21,12 +26,19 @@ function toNumber(value, fallback = 0) {
     return Number.isFinite(num) ? num : fallback;
 }
 
+function normalizeRoleLevelValue(value) {
+    const roleLevel = toNumber(value, 0);
+    if (roleLevel === 7) return 5;
+    if (roleLevel < 0) return 0;
+    return roleLevel > 6 ? 6 : roleLevel;
+}
+
 function primaryId(user = {}) {
     return user._id || user.id || user._legacy_id || '';
 }
 
 function resolveRoleLevel(user = {}) {
-    return toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+    return normalizeRoleLevelValue(user.role_level ?? user.distributor_level ?? user.level);
 }
 
 function resolveRoleName(user = {}) {
@@ -65,6 +77,8 @@ function buildCanonicalUser(user = {}, extra = {}) {
     const roleLevel = resolveRoleLevel(user);
     const commissionBalance = resolveCommissionBalance(user);
     const goodsFundBalance = resolveGoodsFundBalance(user);
+    const accountVisibility = normalizeAccountVisibility(user);
+    const accountOrigin = normalizeAccountOrigin(user);
 
     return {
         ...user,
@@ -94,6 +108,10 @@ function buildCanonicalUser(user = {}, extra = {}) {
         goods_fund_balance: goodsFundBalance,
         agent_wallet_balance: goodsFundBalance,
         wallet_balance: goodsFundBalance,
+        account_visibility: accountVisibility,
+        hidden_reason: pickString(user.hidden_reason),
+        hidden_at: pickString(user.hidden_at),
+        account_origin: accountOrigin,
         is_distributor: roleLevel >= 3 || toNumber(user.distributor_level ?? user.agent_level, 0) > 0,
         status_text: toNumber(user.status, 1) === 0 ? '禁用' : '正常',
         ...extra

@@ -1,5 +1,10 @@
 const { get } = require('../../utils/request');
-const { processProduct } = require('../../utils/dataFormatter');
+const {
+    processProduct,
+    buildSkuValueText,
+    findProductDefaultSku
+} = require('../../utils/dataFormatter');
+const { normalizeSpecDisplayText, normalizeOrderItems } = require('./orderSpecText');
 const { resolveCloudImageUrl } = require('./utils/cloudAsset');
 const { ErrorHandler } = require('../../utils/errorHandler');
 const { ensureUserLocationPermission, getCurrentLocation } = require('./utils/location');
@@ -43,11 +48,20 @@ async function resolveMissingSkuForCartItem(item) {
         const detailRes = await _productCache[pid];
         const product = detailRes && detailRes.data ? detailRes.data : null;
         const skus = product && Array.isArray(product.skus) ? product.skus : [];
+        const defaultSku = product ? findProductDefaultSku(product, skus) : null;
         if (skus.length === 1) {
             const onlySku = skus[0];
             return {
                 skuId: onlySku.id || onlySku._id || null,
                 sku: onlySku,
+                product,
+                requiresSelection: false
+            };
+        }
+        if (defaultSku) {
+            return {
+                skuId: defaultSku.id || defaultSku._id || null,
+                sku: defaultSku,
                 product,
                 requiresSelection: false
             };
@@ -83,12 +97,21 @@ function refreshPickupAllowed(page) {
 async function loadPickupStations(page) {
     try {
         const params = [];
+        const pickupItems = (page.data.orderItems || []).map((item) => ({
+            product_id: item.product_id,
+            sku_id: item.sku_id,
+            quantity: item.quantity || item.qty || 1,
+            name: item.name
+        }));
         if (page.data.refLat != null && page.data.refLng != null) {
             params.push(`lat=${encodeURIComponent(page.data.refLat)}`);
             params.push(`lng=${encodeURIComponent(page.data.refLng)}`);
         }
         if (page.data.address && page.data.address.city) {
             params.push(`sort_city=${encodeURIComponent(page.data.address.city)}`);
+        }
+        if (pickupItems.length) {
+            params.push(`items=${encodeURIComponent(JSON.stringify(pickupItems))}`);
         }
         const qs = params.length ? `?${params.join('&')}` : '';
         const res = await get(`/stations/pickup-options${qs}`, {}, { showError: false });
@@ -211,9 +234,10 @@ async function loadCartItems(page, cartIds) {
                     const sku = resolved.sku || item.sku || null;
                     const processed = processProduct(product, roleLevel);
                     const specText = sku
-                        ? `${sku.spec_name || '规格'}: ${sku.spec_value || sku.spec || sku.specs || ''}`.replace(/: $/, '')
-                        : (item.snapshot_spec || '');
+                        ? buildSkuValueText(sku, '')
+                        : (item.snapshot_spec || product?.default_spec_text || processed.specSummary || '');
                     const isExplosive = !!(product?.is_explosive);
+                    const isHotProduct = String(product?.product_tag || '').trim().toLowerCase() === 'hot';
                     const image = await resolveCloudImageUrl(
                         sku?.image || item.snapshot_image || processed.firstImage,
                         '/assets/images/placeholder.svg'
@@ -225,38 +249,41 @@ async function loadCartItems(page, cartIds) {
                         sku_id: resolved.skuId,
                         quantity: item.quantity,
                         supports_pickup: product?.supports_pickup ? 1 : 0,
-                        allow_points: isExplosive ? 0 : (product?.allow_points == null ? 1 : (product.allow_points ? 1 : 0)),
+                        allow_coupon: (isExplosive || isHotProduct) ? 0 : (product?.enable_coupon == null ? 1 : (product.enable_coupon ? 1 : 0)),
+                        allow_points: (isExplosive || isHotProduct) ? 0 : (product?.allow_points == null ? 1 : (product.allow_points ? 1 : 0)),
                         is_explosive: isExplosive ? 1 : 0,
+                        product_tag: product?.product_tag || 'normal',
                         price: parseFloat(item.effective_price || processed.displayPrice || item.price || 0),
                         name: processed.name || item.snapshot_name || '商品',
                         image,
-                        spec: specText,
+                        spec: normalizeSpecDisplayText(specText),
                         spec_required_missing: !!resolved.requiresSelection
                     };
                 })
         );
+        const normalizedSelectedItems = normalizeOrderItems(selectedItems);
 
         let totalAmountFen = 0;
         let totalCount = 0;
-        selectedItems.forEach((item) => {
+        normalizedSelectedItems.forEach((item) => {
             totalAmountFen += Math.round(item.price * 100) * item.quantity;
             totalCount += item.quantity;
         });
 
         const totalAmount = (totalAmountFen / 100).toFixed(2);
         page.setData({
-            orderItems: selectedItems,
-            invalidSpecItems: selectedItems.filter((item) => item.spec_required_missing),
+            orderItems: normalizedSelectedItems,
+            invalidSpecItems: normalizedSelectedItems.filter((item) => item.spec_required_missing),
             totalAmount,
             finalAmount: totalAmount,
             totalCount
         });
-        if (selectedItems.some((item) => item.spec_required_missing)) {
+        if (normalizedSelectedItems.some((item) => item.spec_required_missing)) {
             wx.showToast({ title: '部分商品缺少规格，请返回购物袋重选', icon: 'none' });
         }
         refreshPickupAllowed(page);
         if (typeof page._updatePointsConfig === 'function') {
-            page._updatePointsConfig(selectedItems);
+            page._updatePointsConfig(normalizedSelectedItems);
         }
         page.setData({
             cartLoadStatus: 'success',
@@ -265,7 +292,7 @@ async function loadCartItems(page, cartIds) {
         return {
             ok: true,
             status: 'success',
-            data: selectedItems,
+            data: normalizedSelectedItems,
             errorType: ''
         };
     } catch (err) {

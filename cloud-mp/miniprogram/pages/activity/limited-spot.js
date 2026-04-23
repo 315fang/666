@@ -54,7 +54,7 @@ Page({
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navBarHeight: app.globalData.navBarHeight || 44,
-            slotId: query.slot_id || query.id || query.card_id || ''
+            slotId: query.slot_id || ''
         });
         this.loadPage();
     },
@@ -100,7 +100,13 @@ Page({
             }
             const overview = overviewRes.data;
             const slots = Array.isArray(overview.slots) ? overview.slots : [];
-            const targetSlotId = this.data.slotId || overview.recommended_slot_id || overview.current_slot_id || '';
+            const requestedSlotId = String(this.data.slotId || '').trim();
+            const hasRequestedSlot = requestedSlotId
+                ? slots.some((item) => String(item.id || '') === requestedSlotId)
+                : false;
+            const targetSlotId = hasRequestedSlot
+                ? requestedSlotId
+                : (overview.current_slot_id || overview.recommended_slot_id || '');
 
             if (!targetSlotId) {
                 this.setData({
@@ -131,6 +137,12 @@ Page({
             const slots = Array.isArray(res.data.slots) && res.data.slots.length
                 ? res.data.slots
                 : (Array.isArray(slotsFromOverview) ? slotsFromOverview : []);
+            if (!slot && slots.length > 0) {
+                const fallbackSlotId = String(res.data.current_slot_id || res.data.recommended_slot_id || slots[0].id || '').trim();
+                if (fallbackSlotId && fallbackSlotId !== String(slotId || '').trim()) {
+                    return this.loadDetail(fallbackSlotId, slots);
+                }
+            }
             const products = Array.isArray(res.data.items) ? res.data.items : [];
             this.setData({
                 slotId: slot ? String(slot.id || '') : '',

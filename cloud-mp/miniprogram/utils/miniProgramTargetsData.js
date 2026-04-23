@@ -71,12 +71,12 @@ module.exports = {
             note: '进入当前有效档期'
         },
         {
-            key: 'coupon:center',
-            title: '领券中心',
+            key: 'category:bundle-zone',
+            title: '组合专区',
             group: '营销入口',
-            link_type: 'coupon_center',
-            link_value: '__coupon_center__',
-            note: '领券中心页'
+            link_type: 'category',
+            link_value: 'bundle-zone',
+            note: '分类页组合专区'
         },
         {
             key: 'page:brand-zone',
@@ -101,6 +101,14 @@ module.exports = {
             link_type: 'page',
             link_value: '/pages/coupon/list',
             note: '优惠券明细'
+        },
+        {
+            key: 'page:flex-bundles',
+            title: '自由组合列表',
+            group: '营销入口',
+            link_type: 'page',
+            link_value: '/pages/activity/flex-bundles',
+            note: '活动页自由组合入口'
         },
         {
             key: 'page:points',

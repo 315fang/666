@@ -1,5 +1,6 @@
 // pages/group/detail.js - 拼团详情
 const { get } = require('../../utils/request');
+const { requireLogin } = require('../../utils/auth');
 const app = getApp();
 
 function resolvePreferredSkuId(detail) {
@@ -10,6 +11,7 @@ function resolvePreferredSkuId(detail) {
     if (activitySkuId != null) return activitySkuId;
     if (detail.sku_id != null && detail.sku_id !== '') return detail.sku_id;
     if (detail.product && detail.product.sku_id != null && detail.product.sku_id !== '') return detail.product.sku_id;
+    if (detail.product && detail.product.default_sku_id != null && detail.product.default_sku_id !== '') return detail.product.default_sku_id;
     const skus = detail.product && Array.isArray(detail.product.skus) ? detail.product.skus : [];
     if (skus.length === 1) {
         return skus[0]._id || skus[0].id || null;
@@ -40,14 +42,14 @@ function buildDetailUiState(detail = {}) {
         if (detail.status === 'success') {
             myStatusText = canViewLogistics ? '已成团 · 可查看物流' : '已成团 · 可查看订单';
         } else {
-            myStatusText = '已支付 · 等待成团';
+            myStatusText = '已支付 · 待成团';
         }
     } else if (detail.my_payment_status === 'unpaid') {
         myStatusText = '未支付 · 支付后自动加入';
     } else if (detail.my_payment_status === 'cancelled') {
         myStatusText = detail.status === 'open'
-            ? '原订单已取消 · 当前团状态独立继续'
-            : '原订单已取消 · 本团已结束';
+            ? '原订单已取消 · 拼团继续'
+            : '原订单已取消 · 拼团已结束';
     }
 
     return {
@@ -56,8 +58,8 @@ function buildDetailUiState(detail = {}) {
         _myStatusText: myStatusText,
         _successActionText: canViewLogistics ? '查看物流' : '查看订单',
         _successActionSubText: canViewLogistics
-            ? '订单已发货，查看当前配送进度'
-            : '拼团成功，订单已进入后续履约流程'
+            ? '订单已发货，可查看物流'
+            : '拼团成功，可查看订单'
     };
 }
 
@@ -93,7 +95,7 @@ Page({
             }
         } else {
             this.setData({ loading: false });
-            wx.showToast({ title: '参数错误', icon: 'error' });
+            wx.showToast({ title: '缺少拼团信息', icon: 'none' });
         }
     },
 
@@ -166,7 +168,7 @@ Page({
             }
         } catch (e) {
             console.error('[group/detail] loadDetail error:', e);
-            wx.showToast({ title: '网络错误', icon: 'none' });
+            wx.showToast({ title: '网络异常，请稍后重试', icon: 'none' });
             this.setData({ loading: false });
         }
     },
@@ -174,10 +176,7 @@ Page({
     onJoin() {
         const { detail } = this.data;
         if (!detail) return;
-        if (!app.globalData.isLoggedIn) {
-            wx.showToast({ title: '请先登录', icon: 'none' });
-            return;
-        }
+        if (!requireLogin()) return;
         if (detail.status === 'fail' || detail.status === 'cancelled') {
             wx.showToast({ title: '拼团已结束', icon: 'none' });
             return;
@@ -197,7 +196,9 @@ Page({
             type: 'group',
             group_no: detail.group_no,
             group_activity_id: detail.activity && (detail.activity._id || detail.activity.id),
-            supports_pickup: detail.product.supports_pickup ? 1 : 0
+            supports_pickup: detail.product.supports_pickup ? 1 : 0,
+            allow_coupon: 0,
+            allow_points: 0
         };
         wx.setStorageSync('directBuyInfo', buyInfo);
         wx.navigateTo({ url: '/pages/order/confirm?from=direct' });

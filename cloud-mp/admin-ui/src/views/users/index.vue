@@ -18,6 +18,7 @@
       :pagination="pagination"
       :can-adjust-user-balance="canAdjustUserBalance"
       :can-manage-user-role="canManageUserRole"
+      :can-manage-purchase-level="canManagePurchaseLevel"
       :can-manage-user-parent="canManageUserParent"
       :can-manage-user-status="canManageUserStatus"
       :role-text="roleText"
@@ -56,6 +57,9 @@
       :detail-avg-order-amount="detailAvgOrderAmount"
       :detail-team-preview="detailTeamPreview"
       :commerce-saving="commerceSaving"
+      :profile-saving="profileSaving"
+      :can-manage-user-portal-password="canManageUserPortalPassword"
+      :portal-password-saving="portalPasswordSaving"
       :team-data="teamData"
       :team-loading="teamLoading"
       :role-text="roleText"
@@ -65,9 +69,12 @@
       :on-visibility-change="handleDetailVisibilityChange"
       :on-tab-change="handleDetailTabChange"
       :on-commerce-toggle="onCommerceToggle"
+      :on-edit-real-name="onEditRealName"
       :on-open-parent-detail="openParentDetail"
       :on-open-team-summary="openTeamSummaryFromDetail"
       :on-go-team-member-list="goTeamMemberListFromDetail"
+      :on-reset-portal-password="onResetPortalPassword"
+      :on-unlock-portal-password="onUnlockPortalPassword"
     />
 
     <UserActionDialogsPrimary
@@ -127,11 +134,30 @@
       @update:tag-input-value="(value) => { tagInputValue = value }"
       @clear-parent-search="() => { parentSearchOptions = []; if (parentSearchTimer) clearTimeout(parentSearchTimer) }"
     />
+
+    <el-dialog v-model="visibilityVisible" :title="visibilityForm.visibility === 'hidden' ? '隐藏账号' : '恢复账号显示'" width="440px">
+      <el-form :model="visibilityForm" label-width="90px">
+        <el-form-item label="清理分类" required>
+          <el-select v-model="visibilityForm.cleanup_category" :disabled="visibilityForm.visibility === 'visible'" style="width:100%">
+            <el-option v-for="item in cleanupCategoryOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="操作原因" required>
+          <el-input v-model="visibilityForm.reason" type="textarea" :rows="3" maxlength="200" show-word-limit />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="visibilityVisible = false">取消</el-button>
+        <el-button :type="visibilityForm.visibility === 'hidden' ? 'warning' : 'primary'" @click="submitUserVisibility" :loading="submitting">
+          {{ visibilityForm.visibility === 'hidden' ? '隐藏账号' : '恢复显示' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, nextTick, onMounted, watch, computed } from 'vue'
+import { ref, reactive, nextTick, onMounted, watch, computed, h } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, ArrowDown } from '@element-plus/icons-vue'
 import UserBalanceAdjustDialog from './components/UserBalanceAdjustDialog.vue'
@@ -148,9 +174,13 @@ import {
   updateUsersBatchRole,
   updateUserMemberNo,
   updateUserRemark,
+  updateUserProfile,
   updateUserCommerce,
+  updateUserVisibility,
   updateUserInviteCode,
-  updateUserParent
+  updateUserParent,
+  resetUserPortalPassword,
+  unlockUserPortalPassword
 } from '@/api'
 import UserSearchPanel from './components/UserSearchPanel.vue'
 import UserListTableCard from './components/UserListTableCard.vue'
@@ -181,7 +211,7 @@ const { pagination, resetPage, applyResponse } = usePagination()
  *  team_leader_id - 按所属负责人 ID 筛选，远程搜索后选择
  *  lookup      - 精确匹配任意用户标识（跨页跳转专用，不暴露在表单里）
  */
-const searchForm = reactive({ keyword: String(route.query.keyword || ''), member_no: '', role_level: '', status: '', team_leader_id: '' })
+const searchForm = reactive({ keyword: String(route.query.keyword || ''), member_no: '', role_level: '', status: '', team_leader_id: '', include_hidden: false })
 const routeLookup = ref(String(route.query.lookup || ''))
 const leaderOptions = ref([])
 const leaderSearchLoading = ref(false)
@@ -197,12 +227,18 @@ const selectedIds = ref([])
 const batchRole = ref(null)
 const canAdjustUserBalance = computed(() => userStore.hasPermission('user_balance_adjust'))
 const canManageUserRole = computed(() => userStore.hasPermission('user_role_manage'))
+const canManagePurchaseLevel = computed(() => canManageUserRole.value && userStore.hasPermission('settings_manage'))
 const canManageUserParent = computed(() => userStore.hasPermission('user_parent_manage'))
 const canManageUserStatus = computed(() => userStore.hasPermission('user_status_manage'))
+const canManageUserPortalPassword = computed(() => userStore.hasPermission('user_portal_password_manage'))
 const purchaseLevelOptions = ref([])
 const lastSyncedText = computed(() => lastSyncedAt.value ? formatDate(lastSyncedAt.value) : '')
 
 const fetchPurchaseLevels = async () => {
+  if (!canManagePurchaseLevel.value) {
+    purchaseLevelOptions.value = []
+    return
+  }
   try {
     const res = await getMemberTierConfig()
     const list = Array.isArray(res?.purchase_levels) ? res.purchase_levels : []
@@ -224,6 +260,7 @@ const fetchUsers = async () => {
       team_leader_id: searchForm.team_leader_id !== '' && searchForm.team_leader_id != null
         ? searchForm.team_leader_id
         : undefined,
+      include_hidden: searchForm.include_hidden ? '1' : undefined,
       lookup: routeLookup.value || undefined,
       page: pagination.page,
       limit: pagination.limit
@@ -250,7 +287,7 @@ const runUserMutation = async (task, successMessage, onSuccess) => {
     if (readAt) lastSyncedAt.value = readAt
     ElMessage.success(mergeStrongSuccessMessage(result, successMessage))
     if (typeof onSuccess === 'function') {
-      await onSuccess()
+      await onSuccess(result)
     }
     await refreshUsers()
   } catch (e) {
@@ -260,6 +297,19 @@ const runUserMutation = async (task, successMessage, onSuccess) => {
   }
 }
 
+const cleanupCategoryOptions = [
+  { label: '游客清理', value: 'visitor_cleanup' },
+  { label: '取消未支付噪音', value: 'cancelled_unpaid_noise' },
+  { label: '无效用户噪音', value: 'invalid_user_noise' },
+  { label: '手动清理', value: 'manual_cleanup' }
+]
+const cleanupCategoryText = (value) => cleanupCategoryOptions.find((item) => item.value === value)?.label || value || '手动清理'
+const inferUserCleanupCategory = (row = {}) => {
+  if (row.account_origin === 'auto_login') return 'visitor_cleanup'
+  if (Number(row.order_count || 0) > 0 && Number(row.total_sales || 0) <= 0) return 'cancelled_unpaid_noise'
+  return 'manual_cleanup'
+}
+
 const handleSearch = () => {
   routeLookup.value = ''
   resetPage()
@@ -267,7 +317,7 @@ const handleSearch = () => {
 }
 const handleReset = () => {
   routeLookup.value = ''
-  Object.assign(searchForm, { keyword: '', member_no: '', role_level: '', status: '', team_leader_id: '' })
+  Object.assign(searchForm, { keyword: '', member_no: '', role_level: '', status: '', team_leader_id: '', include_hidden: false })
   leaderOptions.value = []
   handleSearch()
 }
@@ -405,6 +455,24 @@ const detailAvgOrderAmount = computed(() => {
   return (ts / oc).toFixed(2)
 })
 
+const applyDetailUserRecord = (record) => {
+  if (!record || typeof record !== 'object') return
+  const raw = { ...record }
+  const stats = raw.stats ?? null
+  delete raw.stats
+  detailUser.value = raw
+  detailStats.value = stats
+}
+
+const loadDetailUser = async (userId, { loadTeamSummary: withTeamSummary = true } = {}) => {
+  const [full, teamSum] = await Promise.all([
+    getUserById(userId),
+    withTeamSummary ? getUserTeamSummary(userId, { range: 'all' }).catch(() => null) : Promise.resolve(null)
+  ])
+  applyDetailUserRecord(full && typeof full === 'object' ? full : {})
+  if (withTeamSummary) detailTeamPreview.value = teamSum
+}
+
 const handleDetailVisibilityChange = (value) => {
   detailVisible.value = value
 }
@@ -444,16 +512,7 @@ const openDetail = async (row) => {
   teamData.value = []
   detailVisible.value = true
   try {
-    const [full, teamSum] = await Promise.all([
-      getUserById(row.id),
-      getUserTeamSummary(row.id, { range: 'all' }).catch(() => null)
-    ])
-    const raw = full && typeof full === 'object' ? { ...full } : {}
-    const stats = raw.stats
-    delete raw.stats
-    detailUser.value = raw
-    detailStats.value = stats ?? null
-    detailTeamPreview.value = teamSum
+    await loadDetailUser(row.id)
   } catch (e) {
     ElMessage.error(e?.message || '加载用户详情失败')
   }
@@ -473,6 +532,8 @@ const openParentDetail = async () => {
 }
 
 const commerceSaving = ref(false)
+const profileSaving = ref(false)
+const portalPasswordSaving = ref(false)
 const onCommerceToggle = async (enabled) => {
   if (!detailUser.value?.id) return
   commerceSaving.value = true
@@ -487,6 +548,150 @@ const onCommerceToggle = async (enabled) => {
     ElMessage.error(e?.message || '更新失败')
   } finally {
     commerceSaving.value = false
+  }
+}
+
+const onEditRealName = async () => {
+  if (!detailUser.value?.id) return
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '请输入用户真实姓名。该字段用于大额微信提现实名校验。',
+      '编辑真实姓名',
+      {
+        confirmButtonText: '保存',
+        cancelButtonText: '取消',
+        inputValue: detailUser.value.real_name || '',
+        inputPlaceholder: '2-32 个字符',
+        inputValidator: (input) => {
+          const text = String(input || '').trim()
+          if (!text) return true
+          if (text.length < 2 || text.length > 32) return '真实姓名长度需在 2-32 个字符之间'
+          return true
+        }
+      }
+    )
+    profileSaving.value = true
+    const result = await updateUserProfile(detailUser.value.id, { real_name: String(value || '').trim() })
+    const readAt = extractReadAt(result)
+    if (readAt) lastSyncedAt.value = readAt
+    applyDetailUserRecord(result)
+    ElMessage.success(mergeStrongSuccessMessage(result, '真实姓名已更新'))
+    await refreshUsers()
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error(e?.message || '更新真实姓名失败')
+    }
+  } finally {
+    profileSaving.value = false
+  }
+}
+
+const copyText = async (text) => {
+  const value = String(text || '')
+  if (!value) return false
+  if (navigator?.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value)
+    return true
+  }
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.setAttribute('readonly', 'readonly')
+  textarea.style.position = 'absolute'
+  textarea.style.left = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.select()
+  const copied = document.execCommand('copy')
+  document.body.removeChild(textarea)
+  if (!copied) throw new Error('复制失败')
+  return true
+}
+
+const showPortalPasswordResetResult = async (result) => {
+  const nextPassword = String(result?.initial_password || '').trim()
+  if (!nextPassword) return
+  try {
+    await ElMessageBox.confirm(
+      h('div', { class: 'portal-password-result' }, [
+        h('div', { class: 'portal-password-result__title' }, '新的初始密码'),
+        h('div', { class: 'portal-password-result__password' }, nextPassword),
+        h('div', { class: 'portal-password-result__hint' }, '该密码只在本次重置结果中展示，请立即复制并通知用户尽快在小程序内修改。')
+      ]),
+      '业务密码已重置',
+      {
+        confirmButtonText: '复制密码并关闭',
+        cancelButtonText: '关闭',
+        distinguishCancelAndClose: true,
+        closeOnClickModal: false,
+        closeOnPressEscape: false
+      }
+    )
+    try {
+      await copyText(nextPassword)
+      ElMessage.success('新初始密码已复制')
+    } catch (error) {
+      ElMessage.error(error?.message || '复制初始密码失败')
+    }
+  } catch (action) {
+    if (action !== 'cancel' && action !== 'close') {
+      ElMessage.error(action?.message || '展示重置结果失败')
+    }
+  }
+}
+
+const onResetPortalPassword = async () => {
+  if (!detailUser.value?.id) return
+  try {
+    await ElMessageBox.confirm(
+      `确认将「${displayUserName(detailUser.value)}」的业务密码重置为新的初始密码？重置后用户需要重新在小程序中完成修改。`,
+      '重置业务密码',
+      { type: 'warning', confirmButtonText: '确认重置', cancelButtonText: '取消' }
+    )
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e?.message || '已取消')
+    return
+  }
+
+  portalPasswordSaving.value = true
+  try {
+    const result = await resetUserPortalPassword(detailUser.value.id)
+    const readAt = extractReadAt(result)
+    if (readAt) lastSyncedAt.value = readAt
+    if (result?.user) applyDetailUserRecord(result.user)
+    ElMessage.success(mergeStrongSuccessMessage(result, '业务密码已重置'))
+    await refreshUsers()
+    await showPortalPasswordResetResult(result)
+  } catch (e) {
+    ElMessage.error(e?.message || '重置业务密码失败')
+  } finally {
+    portalPasswordSaving.value = false
+  }
+}
+
+const onUnlockPortalPassword = async () => {
+  if (!detailUser.value?.id) return
+  try {
+    await ElMessageBox.confirm(
+      `确认解除「${displayUserName(detailUser.value)}」当前的业务密码锁定状态？`,
+      '解除业务密码锁定',
+      { type: 'warning', confirmButtonText: '确认解锁', cancelButtonText: '取消' }
+    )
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e?.message || '已取消')
+    return
+  }
+
+  portalPasswordSaving.value = true
+  try {
+    const result = await unlockUserPortalPassword(detailUser.value.id)
+    const readAt = extractReadAt(result)
+    if (readAt) lastSyncedAt.value = readAt
+    if (result?.user) applyDetailUserRecord(result.user)
+    ElMessage.success(mergeStrongSuccessMessage(result, '业务密码锁定已解除'))
+    await refreshUsers()
+  } catch (e) {
+    ElMessage.error(e?.message || '解除业务密码锁定失败')
+  } finally {
+    portalPasswordSaving.value = false
   }
 }
 
@@ -658,6 +863,43 @@ const handleBan = async (row, ban) => {
   }
 }
 
+// ===== 隐藏/恢复 =====
+const visibilityVisible = ref(false)
+const visibilityTarget = ref(null)
+const visibilityForm = reactive({
+  visibility: 'hidden',
+  cleanup_category: 'manual_cleanup',
+  reason: ''
+})
+
+const handleUserVisibility = (row) => {
+  const hidden = row.account_visibility === 'hidden'
+  visibilityTarget.value = row
+  visibilityForm.visibility = hidden ? 'visible' : 'hidden'
+  visibilityForm.cleanup_category = hidden ? (row.cleanup_category || 'manual_cleanup') : inferUserCleanupCategory(row)
+  visibilityForm.reason = hidden ? '管理员恢复显示' : `管理员隐藏账号：${cleanupCategoryText(visibilityForm.cleanup_category)}`
+  visibilityVisible.value = true
+}
+
+const submitUserVisibility = async () => {
+  if (!visibilityTarget.value) return
+  if (!visibilityForm.reason.trim()) return ElMessage.warning('请填写操作原因')
+  await runUserMutation(
+    () => updateUserVisibility(visibilityTarget.value.id, {
+      visibility: visibilityForm.visibility,
+      cleanup_category: visibilityForm.cleanup_category,
+      reason: visibilityForm.reason.trim()
+    }),
+    visibilityForm.visibility === 'hidden' ? '用户已隐藏' : '用户已恢复显示',
+    (result) => {
+      visibilityVisible.value = false
+      if (detailUser.value && String(detailUser.value.id) === String(visibilityTarget.value.id)) {
+        applyDetailUserRecord(result)
+      }
+    }
+  )
+}
+
 // ===== 账户调整（货款/佣金/积分/成长值）=====
 const accountAdjustVisible = ref(false)
 const accountAdjustInitType = ref('goods_fund')
@@ -674,6 +916,7 @@ const handleDropdown = (cmd, row) => {
   else if (cmd === 'member_no') openMemberNo(row)
   else if (cmd === 'remark') openRemark(row)
   else if (cmd === 'parent') openParent(row)
+  else if (cmd === 'visibility') handleUserVisibility(row)
   else if (cmd === 'ban') handleBan(row, true)
   else if (cmd === 'unban') handleBan(row, false)
   else if (cmd === 'account_adjust') openAccountAdjust(row)
@@ -741,4 +984,28 @@ watch(
 .mini-stat-card :deep(.el-card__body) { padding: 12px 14px; }
 .mini-stat-label { font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px; }
 .mini-stat-value { font-size: 15px; font-weight: 600; color: var(--el-text-color-primary); word-break: break-all; }
+
+:deep(.portal-password-result__title) {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 10px;
+}
+
+:deep(.portal-password-result__password) {
+  font-family: ui-monospace, monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--el-fill-color-light);
+  word-break: break-all;
+}
+
+:deep(.portal-password-result__hint) {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+}
 </style>

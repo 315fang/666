@@ -141,6 +141,415 @@ test('PUT /admin/api/users/:id/goods-fund returns field_errors for invalid body'
     assert.ok(response.body.field_errors.some((item) => item.field === 'extra_field'));
 });
 
+test('PUT /admin/api/users/:id/goods-fund updates balance and wallet account on valid request', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const users = app.locals.dataStore.getCollection('users');
+    const walletAccounts = app.locals.dataStore.getCollection('wallet_accounts');
+    const tempUser = {
+        _id: 'test-user-goods-fund-success',
+        id: 999401,
+        openid: 'test-openid-goods-fund-success',
+        nickname: 'goods-fund-user',
+        role_level: 1,
+        agent_wallet_balance: 20,
+        created_at: '2026-04-20T00:00:00.000Z',
+        updated_at: '2026-04-20T00:00:00.000Z'
+    };
+    users.push(tempUser);
+    app.locals.dataStore.saveCollection?.('users', users);
+
+    try {
+        const response = await invoke(`/admin/api/users/${tempUser.id}/goods-fund`, {
+            method: 'PUT',
+            admin,
+            body: {
+                amount: 10,
+                type: 'add',
+                reason: '管理员补贴'
+            }
+        });
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.success, true);
+        assert.equal(response.body.data?.data?.agent_wallet_balance, 30);
+
+        const updatedUser = app.locals.dataStore.getCollection('users').find((row) => String(row.id) === String(tempUser.id));
+        assert.equal(updatedUser.agent_wallet_balance, 30);
+
+        const relatedWalletAccount = app.locals.dataStore.getCollection('wallet_accounts').find((row) => String(row.openid) === tempUser.openid);
+        assert.ok(relatedWalletAccount);
+        assert.equal(Number(relatedWalletAccount.balance), 30);
+    } finally {
+        app.locals.dataStore.saveCollection?.(
+            'users',
+            app.locals.dataStore.getCollection('users').filter((row) => String(row.id) !== String(tempUser.id))
+        );
+        app.locals.dataStore.saveCollection?.(
+            'wallet_accounts',
+            app.locals.dataStore.getCollection('wallet_accounts').filter((row) => String(row.openid) !== tempUser.openid)
+        );
+    }
+});
+
+test('PUT /admin/api/users/:id/points updates points on valid request', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const users = app.locals.dataStore.getCollection('users');
+    const tempUser = {
+        _id: 'test-user-points-success',
+        id: 999402,
+        openid: 'test-openid-points-success',
+        nickname: 'points-user',
+        role_level: 1,
+        points: 12,
+        created_at: '2026-04-20T00:00:00.000Z',
+        updated_at: '2026-04-20T00:00:00.000Z'
+    };
+    users.push(tempUser);
+    app.locals.dataStore.saveCollection?.('users', users);
+
+    try {
+        const response = await invoke(`/admin/api/users/${tempUser.id}/points`, {
+            method: 'PUT',
+            admin,
+            body: {
+                amount: 8,
+                type: 'add',
+                reason: '活动补点'
+            }
+        });
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.success, true);
+        assert.equal(response.body.data?.data?.points, 20);
+
+        const updatedUser = app.locals.dataStore.getCollection('users').find((row) => String(row.id) === String(tempUser.id));
+        assert.equal(updatedUser.points, 20);
+    } finally {
+        app.locals.dataStore.saveCollection?.(
+            'users',
+            app.locals.dataStore.getCollection('users').filter((row) => String(row.id) !== String(tempUser.id))
+        );
+    }
+});
+
+test('PUT /admin/api/orders/:id/amount accepts reason and updates pending order', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const orders = app.locals.dataStore.getCollection('orders');
+    const auditLogs = app.locals.dataStore.getCollection('admin_audit_logs');
+    const tempOrder = {
+        _id: 'test-order-adjust-pending',
+        id: 999101,
+        order_no: 'TEST-ADJUST-PENDING',
+        status: 'pending',
+        total_amount: 100,
+        pay_amount: 100,
+        actual_price: 100,
+        shipping_fee: 0,
+        coupon_discount: 0,
+        points_discount: 0,
+        qty: 1,
+        openid: 'test-openid',
+        created_at: '2026-04-20T00:00:00.000Z',
+        updated_at: '2026-04-20T00:00:00.000Z'
+    };
+    orders.push(tempOrder);
+    app.locals.dataStore.saveCollection?.('orders', orders);
+
+    try {
+        const response = await invoke(`/admin/api/orders/${tempOrder.id}/amount`, {
+            method: 'PUT',
+            admin,
+            body: {
+                pay_amount: 88.5,
+                reason: '客服协商改价'
+            }
+        });
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.success, true);
+        assert.equal(response.body.data?.data?.pay_amount, 88.5);
+        assert.equal(response.body.data?.data?.actual_price, 88.5);
+
+        const updated = app.locals.dataStore.getCollection('orders').find((row) => String(row.id) === String(tempOrder.id));
+        assert.equal(updated.pay_amount, 88.5);
+        assert.equal(updated.actual_price, 88.5);
+        assert.match(String(updated.admin_remark || ''), /客服协商改价/);
+    } finally {
+        const nextOrders = app.locals.dataStore.getCollection('orders').filter((row) => String(row.id) !== String(tempOrder.id));
+        app.locals.dataStore.saveCollection?.('orders', nextOrders);
+        const nextAuditLogs = auditLogs.filter((row) => !(row.action === 'order.amount.adjust' && String(row.detail?.order_no || '') === tempOrder.order_no));
+        app.locals.dataStore.saveCollection?.('admin_audit_logs', nextAuditLogs);
+    }
+});
+
+test('PUT /admin/api/orders/:id/amount rejects orders already in refund chain', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const orders = app.locals.dataStore.getCollection('orders');
+    const refunds = app.locals.dataStore.getCollection('refunds');
+    const tempOrder = {
+        _id: 'test-order-adjust-refund',
+        id: 999102,
+        order_no: 'TEST-ADJUST-REFUND',
+        status: 'pending',
+        total_amount: 120,
+        pay_amount: 120,
+        actual_price: 120,
+        shipping_fee: 0,
+        coupon_discount: 0,
+        points_discount: 0,
+        qty: 1,
+        openid: 'test-openid-2',
+        created_at: '2026-04-20T00:00:00.000Z',
+        updated_at: '2026-04-20T00:00:00.000Z'
+    };
+    const tempRefund = {
+        _id: 'test-refund-adjust-refund',
+        id: 999201,
+        order_id: tempOrder.id,
+        order_no: tempOrder.order_no,
+        status: 'processing',
+        amount: 10
+    };
+    orders.push(tempOrder);
+    refunds.push(tempRefund);
+    app.locals.dataStore.saveCollection?.('orders', orders);
+    app.locals.dataStore.saveCollection?.('refunds', refunds);
+
+    try {
+        const response = await invoke(`/admin/api/orders/${tempOrder.id}/amount`, {
+            method: 'PUT',
+            admin,
+            body: {
+                pay_amount: 100,
+                reason: '尝试改价'
+            }
+        });
+
+        assert.equal(response.statusCode, 400);
+        assert.equal(response.body.success, false);
+        assert.equal(response.body.message, '订单已进入退款链路，不允许改价');
+    } finally {
+        const nextOrders = app.locals.dataStore.getCollection('orders').filter((row) => String(row.id) !== String(tempOrder.id));
+        const nextRefunds = app.locals.dataStore.getCollection('refunds').filter((row) => String(row.id) !== String(tempRefund.id));
+        app.locals.dataStore.saveCollection?.('orders', nextOrders);
+        app.locals.dataStore.saveCollection?.('refunds', nextRefunds);
+    }
+});
+
+test('PUT /admin/api/commissions/:id/approve settles pending commission and updates user balance', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const users = app.locals.dataStore.getCollection('users');
+    const commissions = app.locals.dataStore.getCollection('commissions');
+    const tempUser = {
+        _id: 'test-user-commission-approve',
+        id: 999301,
+        openid: 'test-openid-commission-approve',
+        nickname: 'commission-user',
+        role_level: 1,
+        balance: 0,
+        commission_balance: 0,
+        total_earned: 0,
+        debt_amount: 0,
+        created_at: '2026-04-20T00:00:00.000Z',
+        updated_at: '2026-04-20T00:00:00.000Z'
+    };
+    const tempCommission = {
+        _id: 'test-commission-approve',
+        id: 999302,
+        openid: tempUser.openid,
+        user_id: tempUser.id,
+        order_id: 'ORDER-COMMISSION-APPROVE',
+        order_no: 'ORDER-COMMISSION-APPROVE',
+        amount: 25,
+        status: 'pending_approval',
+        type: 'direct',
+        created_at: '2026-04-20T00:00:00.000Z',
+        updated_at: '2026-04-20T00:00:00.000Z'
+    };
+    users.push(tempUser);
+    commissions.push(tempCommission);
+    app.locals.dataStore.saveCollection?.('users', users);
+    app.locals.dataStore.saveCollection?.('commissions', commissions);
+
+    try {
+        const response = await invoke(`/admin/api/commissions/${tempCommission.id}/approve`, {
+            method: 'PUT',
+            admin
+        });
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.success, true);
+        assert.equal(response.body.data?.data?.status, 'settled');
+
+        const updatedUser = app.locals.dataStore.getCollection('users').find((row) => String(row.id) === String(tempUser.id));
+        const updatedCommission = app.locals.dataStore.getCollection('commissions').find((row) => String(row.id) === String(tempCommission.id));
+        assert.equal(updatedUser.balance, 25);
+        assert.equal(updatedUser.commission_balance, 25);
+        assert.equal(updatedCommission.status, 'settled');
+    } finally {
+        app.locals.dataStore.saveCollection?.(
+            'users',
+            app.locals.dataStore.getCollection('users').filter((row) => String(row.id) !== String(tempUser.id))
+        );
+        app.locals.dataStore.saveCollection?.(
+            'commissions',
+            app.locals.dataStore.getCollection('commissions').filter((row) => String(row.id) !== String(tempCommission.id))
+        );
+    }
+});
+
+test('PUT /admin/api/commissions/:id/reject cancels pending commission', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const commissions = app.locals.dataStore.getCollection('commissions');
+    const tempCommission = {
+        _id: 'test-commission-reject',
+        id: 999303,
+        openid: 'test-openid-commission-reject',
+        user_id: 999304,
+        order_id: 'ORDER-COMMISSION-REJECT',
+        order_no: 'ORDER-COMMISSION-REJECT',
+        amount: 18,
+        status: 'pending_approval',
+        type: 'direct',
+        created_at: '2026-04-20T00:00:00.000Z',
+        updated_at: '2026-04-20T00:00:00.000Z'
+    };
+    commissions.push(tempCommission);
+    app.locals.dataStore.saveCollection?.('commissions', commissions);
+
+    try {
+        const response = await invoke(`/admin/api/commissions/${tempCommission.id}/reject`, {
+            method: 'PUT',
+            admin,
+            body: { reason: '人工驳回' }
+        });
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.success, true);
+        assert.equal(response.body.data?.data?.status, 'cancelled');
+
+        const updatedCommission = app.locals.dataStore.getCollection('commissions').find((row) => String(row.id) === String(tempCommission.id));
+        assert.equal(updatedCommission.status, 'cancelled');
+        assert.equal(updatedCommission.cancel_reason, '人工驳回');
+    } finally {
+        app.locals.dataStore.saveCollection?.(
+            'commissions',
+            app.locals.dataStore.getCollection('commissions').filter((row) => String(row.id) !== String(tempCommission.id))
+        );
+    }
+});
+
+test('POST /admin/api/commissions/batch-approve settles pending commissions', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const users = app.locals.dataStore.getCollection('users');
+    const commissions = app.locals.dataStore.getCollection('commissions');
+    const tempUser = {
+        _id: 'test-user-commission-batch-approve',
+        id: 999305,
+        openid: 'test-openid-commission-batch-approve',
+        nickname: 'commission-batch-user',
+        role_level: 1,
+        balance: 0,
+        commission_balance: 0,
+        total_earned: 0,
+        debt_amount: 0,
+        created_at: '2026-04-20T00:00:00.000Z',
+        updated_at: '2026-04-20T00:00:00.000Z'
+    };
+    const tempCommission = {
+        _id: 'test-commission-batch-approve',
+        id: 999306,
+        openid: tempUser.openid,
+        user_id: tempUser.id,
+        order_id: 'ORDER-COMMISSION-BATCH-APPROVE',
+        order_no: 'ORDER-COMMISSION-BATCH-APPROVE',
+        amount: 15,
+        status: 'pending_approval',
+        type: 'direct',
+        created_at: '2026-04-20T00:00:00.000Z',
+        updated_at: '2026-04-20T00:00:00.000Z'
+    };
+    users.push(tempUser);
+    commissions.push(tempCommission);
+    app.locals.dataStore.saveCollection?.('users', users);
+    app.locals.dataStore.saveCollection?.('commissions', commissions);
+
+    try {
+        const response = await invoke('/admin/api/commissions/batch-approve', {
+            method: 'POST',
+            admin,
+            body: { ids: [tempCommission.id] }
+        });
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.success, true);
+        assert.equal(response.body.data?.data?.affected, 1);
+
+        const updatedUser = app.locals.dataStore.getCollection('users').find((row) => String(row.id) === String(tempUser.id));
+        const updatedCommission = app.locals.dataStore.getCollection('commissions').find((row) => String(row.id) === String(tempCommission.id));
+        assert.equal(updatedUser.balance, 15);
+        assert.equal(updatedCommission.status, 'settled');
+    } finally {
+        app.locals.dataStore.saveCollection?.(
+            'users',
+            app.locals.dataStore.getCollection('users').filter((row) => String(row.id) !== String(tempUser.id))
+        );
+        app.locals.dataStore.saveCollection?.(
+            'commissions',
+            app.locals.dataStore.getCollection('commissions').filter((row) => String(row.id) !== String(tempCommission.id))
+        );
+    }
+});
+
+test('POST /admin/api/commissions/batch-reject cancels pending commissions', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const commissions = app.locals.dataStore.getCollection('commissions');
+    const tempCommission = {
+        _id: 'test-commission-batch-reject',
+        id: 999307,
+        openid: 'test-openid-commission-batch-reject',
+        user_id: 999308,
+        order_id: 'ORDER-COMMISSION-BATCH-REJECT',
+        order_no: 'ORDER-COMMISSION-BATCH-REJECT',
+        amount: 12,
+        status: 'pending_approval',
+        type: 'direct',
+        created_at: '2026-04-20T00:00:00.000Z',
+        updated_at: '2026-04-20T00:00:00.000Z'
+    };
+    commissions.push(tempCommission);
+    app.locals.dataStore.saveCollection?.('commissions', commissions);
+
+    try {
+        const response = await invoke('/admin/api/commissions/batch-reject', {
+            method: 'POST',
+            admin,
+            body: { ids: [tempCommission.id], reason: '批量驳回' }
+        });
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.success, true);
+        assert.equal(response.body.data?.data?.affected, 1);
+
+        const updatedCommission = app.locals.dataStore.getCollection('commissions').find((row) => String(row.id) === String(tempCommission.id));
+        assert.equal(updatedCommission.status, 'cancelled');
+        assert.equal(updatedCommission.cancel_reason, '批量驳回');
+    } finally {
+        app.locals.dataStore.saveCollection?.(
+            'commissions',
+            app.locals.dataStore.getCollection('commissions').filter((row) => String(row.id) !== String(tempCommission.id))
+        );
+    }
+});
+
 test('settings-protected endpoints still reject low-permission admins', async () => {
     await ensureReady();
     const admins = app.locals.dataStore.getCollection('admins');

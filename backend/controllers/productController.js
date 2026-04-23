@@ -5,6 +5,17 @@ const PricingService = require('../services/PricingService');
 const CacheService = require('../services/CacheService');
 const MemberTierService = require('../services/MemberTierService');
 const { MALL_LIST_WHERE } = require('../utils/productMallVisibility');
+const { resolveDefaultSpecText } = require('../utils/productDefaultSku');
+
+function attachDefaultSkuFields(product, skus = []) {
+    const data = {
+        ...product,
+        default_sku_id: product.default_sku_id != null ? Number(product.default_sku_id) : null,
+        skus
+    };
+    data.default_spec_text = resolveDefaultSpecText(data, skus);
+    return data;
+}
 
 /**
  * 获取商品列表
@@ -38,6 +49,25 @@ async function getProducts(req, res, next) {
             limit: parseInt(limit)
         });
 
+        const productIds = rows.map((product) => product.id);
+        const skuRows = productIds.length > 0
+            ? await SKU.findAll({
+                where: {
+                    product_id: { [Op.in]: productIds },
+                    status: 1
+                },
+                attributes: ['id', 'product_id', 'spec_name', 'spec_value', 'retail_price', 'stock', 'image'],
+                order: [['product_id', 'ASC'], ['id', 'ASC']]
+            })
+            : [];
+        const skuMap = new Map();
+        skuRows.forEach((skuRow) => {
+            const plainSku = skuRow.toJSON();
+            const list = skuMap.get(plainSku.product_id) || [];
+            list.push(plainSku);
+            skuMap.set(plainSku.product_id, list);
+        });
+
         // 获取用户角色/拿货等级，计算动态价格
         const roleLevel = req.user ? req.user.role_level : 0;
         const purchaseLevel = req.user
@@ -47,13 +77,27 @@ async function getProducts(req, res, next) {
         // 应付单价（含会员/全场折，与下单一致）
         const productsWithPrice = await Promise.all(
             rows.map(async (product) => {
-                const plainProduct = product.toJSON();
+                const skus = skuMap.get(product.id) || [];
+                const plainProduct = attachDefaultSkuFields(product.toJSON(), skus);
                 plainProduct.displayPrice = await PricingService.calculatePayableUnitPrice(
                     plainProduct,
                     null,
                     roleLevel,
                     purchaseLevel
                 );
+                if (skus.length > 0) {
+                    plainProduct.skus = await Promise.all(
+                        skus.map(async (sku) => ({
+                            ...sku,
+                            displayPrice: await PricingService.calculatePayableUnitPrice(
+                                plainProduct,
+                                sku,
+                                roleLevel,
+                                purchaseLevel
+                            )
+                        }))
+                    );
+                }
                 return plainProduct;
             })
         );
@@ -109,11 +153,12 @@ async function getProductById(req, res, next) {
                     }))
                 );
             }
+            const cachedData = attachDefaultSkuFields(cached, cached.skus || []);
 
             const service_pledges = await loadProductDetailPledgesList(AppConfig);
             return res.json({
                 code: 0,
-                data: { ...cached, service_pledges },
+                data: { ...cachedData, service_pledges },
                 source: 'cache'
             });
         }
@@ -160,9 +205,10 @@ async function getProductById(req, res, next) {
                 }))
             );
         }
+        const responseProduct = attachDefaultSkuFields(plainProduct, plainProduct.skus || []);
 
         // 缓存商品信息（30分钟，不含 service_pledges，承诺文案走运营配置实时读库）
-        await CacheService.cacheProduct(id, plainProduct, CacheService.TTL.LONG);
+        await CacheService.cacheProduct(id, responseProduct, CacheService.TTL.LONG);
 
         // ★ Phase 5：异步增加浏览次数（不阻塞响应）
         setImmediate(() => {
@@ -172,7 +218,7 @@ async function getProductById(req, res, next) {
         const service_pledges = await loadProductDetailPledgesList(AppConfig);
         res.json({
             code: 0,
-            data: { ...plainProduct, service_pledges },
+            data: { ...responseProduct, service_pledges },
             source: 'database'
         });
     } catch (error) {

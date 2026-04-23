@@ -19,47 +19,16 @@ function extractAssetValue(value) {
   if (!value) return '';
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'object') {
-    const fileId = String(value.file_id || value.fileId || '').trim();
-    const direct = String(
-      value.url
-      || value.image_url
-      || value.imageUrl
-      || value.temp_url
-      || value.image
-      || value.cover_image
-      || value.coverImage
-      || value.cover
-      || value.cover_url
-      || value.coverUrl
-      || value.thumb
-      || value.thumbnail
-      || ''
-    ).trim();
-    if (isTemporarySignedAssetUrl(direct) && /^cloud:\/\//i.test(fileId)) {
-      return fileId;
-    }
-    return String(
-      direct
-      || fileId
-    ).trim();
+    return String(value.url || value.image_url || value.temp_url || value.file_id || value.image || '').trim();
   }
   return '';
-}
-
-function isTemporarySignedAssetUrl(value) {
-  const raw = String(value || '').trim().toLowerCase();
-  if (!raw || !/^https?:\/\//i.test(raw)) return false;
-  if (!raw.includes('tcb.qcloud.la')) return false;
-  return /[?&]sign=/.test(raw) && /[?&]t=/.test(raw);
 }
 
 function normalizeAssetUrl(value) {
   const raw = extractAssetValue(value);
   if (!raw) return '';
-  if (isTemporarySignedAssetUrl(raw)) {
-    return '';
-  }
   if (/^https?:\/\//i.test(raw)) {
+    if (isExpiredSignedAssetUrl(raw)) return '';
     return raw;
   }
   if (/^cloud:\/\//i.test(raw) || /^wxfile:\/\//i.test(raw) || /^data:/i.test(raw)) {
@@ -75,6 +44,33 @@ function normalizeAssetUrl(value) {
     return apiBase ? `${apiBase}${normalizedPath}` : normalizedPath;
   }
   return raw;
+}
+
+function parseSignedAssetExpireAt(url) {
+  const text = String(url || '').trim();
+  if (!/^https?:\/\//i.test(text)) return 0;
+  const match = text.match(/[?&]t=(\d{10,13})\b/i);
+  if (!match) return 0;
+  const raw = Number(match[1]);
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return raw > 1e12 ? raw : raw * 1000;
+}
+
+function isExpiredSignedAssetUrl(url) {
+  const text = String(url || '').trim();
+  if (!/^https?:\/\//i.test(text)) return false;
+  if (!/[?&]sign=/.test(text)) return false;
+  const expireAt = parseSignedAssetExpireAt(text);
+  return expireAt > 0 && expireAt <= Date.now();
+}
+
+function isTemporarySignedAssetUrl(url) {
+  const text = String(url || '').trim();
+  if (!/^https?:\/\//i.test(text)) return false;
+  if (/[?&](expires|signature|sign|x-amz-algorithm|x-amz-credential|x-amz-date|x-amz-expires|x-amz-security-token|x-amz-signature|x-oss-signature|x-oss-credential|x-oss-date|x-oss-expires|x-cos-algorithm|x-cos-credential|x-cos-date|x-cos-expires|x-cos-security-token|x-cos-signature)=/i.test(text)) {
+    return true;
+  }
+  return /tcb\.qcloud\.la/i.test(text) && /[?&]sign=/i.test(text) && /[?&]t=/i.test(text);
 }
 
 /**
@@ -149,53 +145,152 @@ function hasSelectableSkuSpec(sku) {
   return !!(sku.spec_name && sku.spec_value);
 }
 
+function pickText(value, fallback = '') {
+  if (value == null) return fallback;
+  const text = String(value).trim();
+  return text || fallback;
+}
+
+function dedupeTextList(list = []) {
+  const seen = new Set();
+  return (Array.isArray(list) ? list : []).filter((item) => {
+    const text = pickText(item);
+    if (!text || seen.has(text)) return false;
+    seen.add(text);
+    return true;
+  });
+}
+
+function getSkuSpecEntries(sku = {}) {
+  if (!sku || typeof sku !== 'object') return [];
+
+  if (Array.isArray(sku.specs) && sku.specs.length > 0) {
+    return sku.specs
+      .map((item) => ({
+        name: pickText(item && (item.name || item.key || item.label)),
+        value: pickText(item && (item.value || item.text || item.label_value))
+      }))
+      .filter((item) => item.name && item.value);
+  }
+
+  if (sku.specs && typeof sku.specs === 'object') {
+    return Object.keys(sku.specs)
+      .map((name) => ({
+        name: pickText(name),
+        value: pickText(sku.specs[name])
+      }))
+      .filter((item) => item.name && item.value);
+  }
+
+  const specName = pickText(sku.spec_name || sku.specName);
+  const specValue = pickText(sku.spec_value || sku.specValue);
+  if (specName && specValue) {
+    return [{ name: specName, value: specValue }];
+  }
+
+  return [];
+}
+
+function buildSkuValueText(sku = {}, fallback = '') {
+  const values = dedupeTextList(getSkuSpecEntries(sku).map((item) => item.value));
+  if (values.length > 0) return values.join(' / ');
+  return pickText(sku.spec_value || sku.specValue || sku.spec || sku.name, fallback);
+}
+
+function buildProductSpecSummary(skus = []) {
+  const specMap = {};
+  (Array.isArray(skus) ? skus : []).forEach((sku) => {
+    getSkuSpecEntries(sku).forEach((entry) => {
+      if (!entry.name || !entry.value) return;
+      if (!specMap[entry.name]) {
+        specMap[entry.name] = new Set();
+      }
+      specMap[entry.name].add(entry.value);
+    });
+  });
+
+  return Object.keys(specMap)
+    .map((name) => Array.from(specMap[name]).join('/'))
+    .join(' · ');
+}
+
+function findProductDefaultSku(product = {}, skus = []) {
+  const safeSkus = Array.isArray(skus) ? skus.filter(Boolean) : [];
+  if (!safeSkus.length) return null;
+
+  const defaultSkuId = pickText(
+    product.default_sku_id
+    || product.defaultSkuId
+    || product.default_sku
+    || product.defaultSku
+  );
+  if (defaultSkuId) {
+    const matched = safeSkus.find((sku) => {
+      const skuId = pickText(sku.id || sku._id || sku.sku_id || sku.skuId);
+      return skuId && skuId === defaultSkuId;
+    });
+    if (matched) return matched;
+  }
+
+  const flagged = safeSkus.find((sku) => (
+    sku.is_default === true
+    || sku.default === true
+    || sku.isDefault === true
+    || sku.is_default === 1
+    || sku.default === 1
+  ));
+  if (flagged) return flagged;
+
+  if (safeSkus.length === 1) return safeSkus[0];
+  return null;
+}
+
+function resolveProductInitialSku(product = {}, skus = [], roleLevel = USER_ROLES.GUEST) {
+  void roleLevel;
+  const safeSkus = Array.isArray(skus) ? skus.filter(Boolean) : [];
+  if (!safeSkus.length) return null;
+
+  const defaultSku = findProductDefaultSku(product, safeSkus);
+  if (defaultSku) return defaultSku;
+
+  const inStockSku = safeSkus.find((sku) => Number(sku.stock || 0) > 0);
+  return inStockSku || safeSkus[0];
+}
+
+function resolveProductDefaultSpecText(product = {}, skus = []) {
+  const explicitText = pickText(product.default_spec_text || product.defaultSpecText || product.spec_text || product.specText);
+  if (explicitText) return explicitText;
+
+  const defaultSku = findProductDefaultSku(product, skus);
+  if (defaultSku) {
+    const defaultSkuText = buildSkuValueText(defaultSku, '');
+    if (defaultSkuText) return defaultSkuText;
+  }
+
+  if (Array.isArray(skus) && skus.length === 1) {
+    return buildSkuValueText(skus[0], '');
+  }
+
+  return '';
+}
+
 function resolveProductImage(product, fallback = getAssetFromConfig('default_product_image', '/assets/images/placeholder.svg')) {
   if (!product || typeof product !== 'object') return fallback;
 
-  const productCandidates = [
-    getFirstImage(product.images, ''),
+  const candidates = [
+    getFirstImage(product.images),
     product.file_id,
     product.fileId,
     product.image,
-    product.imageUrl,
     product.image_url,
     product.cover_image,
-    product.coverImage,
-    product.cover,
-    product.cover_url,
-    product.coverUrl,
-    product.thumb,
-    product.thumbnail,
-    product.url
+    product.coverImage
   ];
 
-  const resolvedProductImage = productCandidates
-    .map((item) => normalizeAssetUrl(item))
-    .find(Boolean);
-  if (resolvedProductImage) {
-    return resolvedProductImage;
-  }
-
-  const candidates = [];
-
   if (Array.isArray(product.skus)) {
-    const skuImage = product.skus.find((sku) => sku && (
-      sku.image
-      || sku.images
-      || sku.file_id
-      || sku.fileId
-      || sku.image_url
-      || sku.cover_image
-    ));
+    const skuImage = product.skus.find((sku) => sku && (sku.image || sku.file_id || sku.fileId));
     if (skuImage) {
-      candidates.push(
-        skuImage.file_id,
-        skuImage.fileId,
-        skuImage.image,
-        skuImage.images,
-        skuImage.image_url,
-        skuImage.cover_image
-      );
+      candidates.push(skuImage.file_id, skuImage.fileId, skuImage.image);
     }
   }
 
@@ -370,7 +465,7 @@ function formatRelativeTime(timestamp) {
 function processProduct(product, roleLevel = USER_ROLES.GUEST) {
   if (!product) return null;
 
-  const rawFirstImage = resolveProductImage(product, '');
+  const rawFirstImage = getFirstImage(product.images || product.image);
 
   // 生成规格摘要（用于商品卡片和列表展示）
   let specSummary = '';
@@ -393,7 +488,7 @@ function processProduct(product, roleLevel = USER_ROLES.GUEST) {
   return {
     ...product,
     images: parseImages(product.images),
-    firstImage: toOssUrl(rawFirstImage || getAssetFromConfig('default_product_image', '/assets/images/placeholder.svg'), 400), // 列表卡片宽度按 400 处理
+    firstImage: toOssUrl(rawFirstImage, 400), // 列表卡片宽度按 400 处理
     displayPrice: formatMoney(calculatePrice(product, null, roleLevel)),
     formattedRetailPrice: formatMoney(product.retail_price || 0),
     specSummary
@@ -454,9 +549,15 @@ module.exports = {
   toOssUrl,
   parseImages,
   getFirstImage,
-  isTemporarySignedAssetUrl,
   normalizeAssetUrl,
+  isTemporarySignedAssetUrl,
   normalizePriceValue,
+  getSkuSpecEntries,
+  buildSkuValueText,
+  buildProductSpecSummary,
+  findProductDefaultSku,
+  resolveProductInitialSku,
+  resolveProductDefaultSpecText,
   resolveProductImage,
   resolveProductDisplayPrice,
   resolveProductCurrentPrice,

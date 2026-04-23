@@ -1,0 +1,485 @@
+[
+  {
+    "name": "activities",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "activity_bubbles",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "activity_links",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "addresses",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 61
+  },
+  {
+    "name": "admin_audit_logs",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 27
+  },
+  {
+    "name": "admin_roles",
+    "local_override_count": 8,
+    "seed_count": 8,
+    "import_count": 8,
+    "live_count": 8
+  },
+  {
+    "name": "admin_singletons",
+    "local_override_count": null,
+    "seed_count": 4,
+    "import_count": 4,
+    "live_count": 8
+  },
+  {
+    "name": "admins",
+    "local_override_count": 8,
+    "seed_count": 8,
+    "import_count": 8,
+    "live_count": 8
+  },
+  {
+    "name": "agent_exit_applications",
+    "local_override_count": 0,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "app_configs",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 50
+  },
+  {
+    "name": "banners",
+    "local_override_count": 5,
+    "seed_count": 5,
+    "import_count": 5,
+    "live_count": 5
+  },
+  {
+    "name": "branch_agent_claims",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "branch_agent_stations",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "brand_news",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "cart_items",
+    "local_override_count": 25,
+    "seed_count": 25,
+    "import_count": 25,
+    "live_count": 51
+  },
+  {
+    "name": "categories",
+    "local_override_count": 9,
+    "seed_count": 9,
+    "import_count": 9,
+    "live_count": 9
+  },
+  {
+    "name": "commissions",
+    "local_override_count": 3,
+    "seed_count": 3,
+    "import_count": 3,
+    "live_count": 8
+  },
+  {
+    "name": "configs",
+    "local_override_count": 1,
+    "seed_count": 1,
+    "import_count": 1,
+    "live_count": 22
+  },
+  {
+    "name": "content_board_products",
+    "local_override_count": 0,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 3
+  },
+  {
+    "name": "content_boards",
+    "local_override_count": 1,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 1
+  },
+  {
+    "name": "contents",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "coupon_auto_rules",
+    "local_override_count": 0,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 1
+  },
+  {
+    "name": "coupon_claim_tickets",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "coupons",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 3
+  },
+  {
+    "name": "deposit_orders",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "deposit_refunds",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "directed_invites",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 2
+  },
+  {
+    "name": "dividend_executions",
+    "local_override_count": 0,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "fund_pool_logs",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "goods_fund_logs",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 26
+  },
+  {
+    "name": "goods_fund_transfer_applications",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "group_activities",
+    "local_override_count": 2,
+    "seed_count": 2,
+    "import_count": 2,
+    "live_count": 2
+  },
+  {
+    "name": "group_members",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 14
+  },
+  {
+    "name": "group_orders",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 22
+  },
+  {
+    "name": "limited_sale_items",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 1
+  },
+  {
+    "name": "limited_sale_slots",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 1
+  },
+  {
+    "name": "lottery_configs",
+    "local_override_count": null,
+    "seed_count": 1,
+    "import_count": 1,
+    "live_count": 1
+  },
+  {
+    "name": "lottery_prizes",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 13
+  },
+  {
+    "name": "lottery_records",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 191
+  },
+  {
+    "name": "mass_messages",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 3
+  },
+  {
+    "name": "material_groups",
+    "local_override_count": 1,
+    "seed_count": 1,
+    "import_count": 1,
+    "live_count": 1
+  },
+  {
+    "name": "materials",
+    "local_override_count": 52,
+    "seed_count": 52,
+    "import_count": 52,
+    "live_count": 62
+  },
+  {
+    "name": "notifications",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 368
+  },
+  {
+    "name": "orders",
+    "local_override_count": 59,
+    "seed_count": 59,
+    "import_count": 59,
+    "live_count": 180
+  },
+  {
+    "name": "page_layouts",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 3
+  },
+  {
+    "name": "point_logs",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 646
+  },
+  {
+    "name": "products",
+    "local_override_count": 11,
+    "seed_count": 11,
+    "import_count": 11,
+    "live_count": 11
+  },
+  {
+    "name": "promotion_logs",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "refunds",
+    "local_override_count": 9,
+    "seed_count": 9,
+    "import_count": 9,
+    "live_count": 32
+  },
+  {
+    "name": "reviews",
+    "local_override_count": 3,
+    "seed_count": 3,
+    "import_count": 3,
+    "live_count": 5
+  },
+  {
+    "name": "skus",
+    "local_override_count": 11,
+    "seed_count": 11,
+    "import_count": 11,
+    "live_count": 11
+  },
+  {
+    "name": "slash_activities",
+    "local_override_count": 1,
+    "seed_count": 1,
+    "import_count": 1,
+    "live_count": 1
+  },
+  {
+    "name": "slash_helpers",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 3
+  },
+  {
+    "name": "slash_records",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 40
+  },
+  {
+    "name": "splash_screens",
+    "local_override_count": 0,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 1
+  },
+  {
+    "name": "station_procurement_orders",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "station_sku_stocks",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "station_staff",
+    "local_override_count": 0,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 3
+  },
+  {
+    "name": "station_stock_logs",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "stations",
+    "local_override_count": 1,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 3
+  },
+  {
+    "name": "upgrade_applications",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 0
+  },
+  {
+    "name": "user_coupons",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 20
+  },
+  {
+    "name": "user_favorites",
+    "local_override_count": null,
+    "seed_count": null,
+    "import_count": 0,
+    "live_count": 36
+  },
+  {
+    "name": "users",
+    "local_override_count": 167,
+    "seed_count": 167,
+    "import_count": 167,
+    "live_count": 187
+  },
+  {
+    "name": "wallet_accounts",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 13
+  },
+  {
+    "name": "wallet_logs",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 37
+  },
+  {
+    "name": "wallet_recharge_configs",
+    "local_override_count": null,
+    "seed_count": 3,
+    "import_count": 3,
+    "live_count": 3
+  },
+  {
+    "name": "wallet_recharge_orders",
+    "local_override_count": null,
+    "seed_count": 0,
+    "import_count": 0,
+    "live_count": 1
+  },
+  {
+    "name": "withdrawals",
+    "local_override_count": 3,
+    "seed_count": 3,
+    "import_count": 3,
+    "live_count": 5
+  }
+]

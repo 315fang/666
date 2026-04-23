@@ -1,6 +1,6 @@
 // pages/coupon/claim.js
 const { get, post } = require('../../utils/request');
-const app = getApp();
+const { hasLoginSession, ensureLogin } = require('../../utils/auth');
 
 function parseScene(scene) {
     const result = {};
@@ -129,9 +129,9 @@ Page({
         if (claiming || claimStatus === 'success' || claimStatus === 'already_owned' || claimStatus === 'claimed') return;
 
         // 检查登录状态
-        if (!app.globalData.isLoggedIn) {
+        if (!hasLoginSession()) {
             try {
-                await app.wxLogin(true);
+                await ensureLogin({ ignorePendingInviteCode: true, message: '请先登录' });
             } catch (_e) {
                 wx.showToast({ title: '请先登录', icon: 'none' });
                 return;

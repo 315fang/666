@@ -74,7 +74,7 @@ export const bannerLinkTypeMap = {
   slash: { label: '砍价活动', tagType: 'danger' },
   lottery: { label: '抽奖转盘', tagType: '' },
   flash_sale: { label: '限时商品', tagType: 'warning' },
-  coupon_center: { label: '优惠券中心', tagType: 'success' },
+  coupon_center: { label: '惊喜礼遇', tagType: 'success' },
   page: { label: '小程序页面', tagType: 'info' },
   url: { label: '外部链接', tagType: 'info' }
 }

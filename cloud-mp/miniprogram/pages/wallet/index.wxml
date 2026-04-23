@@ -178,6 +178,7 @@
       <view class="popup-balance-tip">
         可提现余额：<text class="popup-balance-num">¥{{balance}}</text>
       </view>
+      <view class="popup-rule-tip">{{withdrawRules.ruleText}}</view>
       <view class="popup-input-wrap">
         <text class="popup-input-symbol">¥</text>
         <input
@@ -188,6 +189,9 @@
           bindinput="onWithdrawInput"
           focus="{{showWithdraw}}"
         />
+      </view>
+      <view class="popup-calc-tip" wx:if="{{withdrawAmount}}">
+        手续费约：¥{{withdrawFee}}，实际到账约：¥{{withdrawActual}}
       </view>
       <view class="popup-btn-row">
         <view class="popup-cancel" bindtap="hideWithdraw">

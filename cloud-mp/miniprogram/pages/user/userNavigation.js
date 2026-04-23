@@ -31,11 +31,36 @@ function onOrderTap(page, event) {
     wx.navigateTo({ url });
 }
 
-function onSettingsTap() {
+function onSettingsTap(page) {
+    const itemList = [];
+    const isStoreManager = !!(page && page.data && page.data.isStoreManager);
+    if (isStoreManager) {
+        itemList.push('店长工作台');
+    }
+    itemList.push('密码中心', '隐私协议', '关于', '清除缓存');
     wx.showActionSheet({
-        itemList: ['清除缓存', '意见反馈'],
+        itemList,
         success: (res) => {
-            if (res.tapIndex === 0) {
+            const selected = itemList[res.tapIndex];
+            if (selected === '店长工作台') {
+                if (!requireLogin()) return;
+                wx.navigateTo({ url: '/pages/stations/my-station' });
+                return;
+            }
+            if (selected === '密码中心') {
+                if (!requireLogin()) return;
+                wx.navigateTo({ url: '/pages/user/portal-password' });
+                return;
+            }
+            if (selected === '隐私协议') {
+                goPrivacy();
+                return;
+            }
+            if (selected === '关于') {
+                onAboutTap();
+                return;
+            }
+            if (selected === '清除缓存') {
                 clearUserCache();
                 wx.showToast({ title: '页面缓存已清除', icon: 'success' });
             }

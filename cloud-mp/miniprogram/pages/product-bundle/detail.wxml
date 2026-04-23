@@ -1,0 +1,84 @@
+<view class="page">
+  <view class="loading-wrap" wx:if="{{loading}}">加载自由组合中...</view>
+
+  <view class="error-wrap" wx:elif="{{loadError}}">
+    <text class="error-title">自由组合加载失败</text>
+    <text class="error-desc">请稍后重试或联系管理员检查自由组合配置。</text>
+    <view class="retry-btn" bindtap="onRetry">重新加载</view>
+  </view>
+
+  <block wx:elif="{{bundle}}">
+    <image class="hero-image" src="{{bundle.cover_preview_url || bundle.cover_image}}" mode="aspectFill" wx:if="{{bundle.cover_preview_url || bundle.cover_image}}"></image>
+    <view class="hero-card">
+      <view class="hero-badge-row">
+        <text class="hero-badge">{{bundle.scene_type === 'flex_bundle' ? '自由组合套餐' : '自由搭配爆单品'}}</text>
+        <text class="hero-tag" wx:for="{{bundle.channel_tags}}" wx:key="index">{{item}}</text>
+      </view>
+      <text class="bundle-title">{{bundle.hero_title || bundle.title}}</text>
+      <text class="bundle-subtitle" wx:if="{{bundle.hero_subtitle || bundle.subtitle}}">{{bundle.hero_subtitle || bundle.subtitle}}</text>
+      <view class="price-row">
+        <text class="bundle-price">¥{{bundle.bundle_price}}</text>
+        <text class="bundle-origin" wx:if="{{originalAmount > 0}}">原合计 ¥{{originalAmountText}}</text>
+      </view>
+      <text class="bundle-discount" wx:if="{{bundleDiscount > 0}}">{{bundle.scene_type === 'flex_bundle' ? '套餐优惠' : '组合优惠'}} -¥{{bundleDiscountText}}</text>
+    </view>
+
+    <view class="group-card" wx:for="{{bundle.groups}}" wx:for-item="group" wx:key="group_key">
+      <view class="group-head">
+        <text class="group-title">{{group.group_title}}</text>
+        <text class="group-rule">需选 {{group.min_select}}-{{group.max_select}} 项</text>
+      </view>
+      <view class="option-list">
+        <view
+          class="option-card {{option.selected ? 'option-card-active' : ''}}"
+          wx:for="{{group.options}}"
+          wx:for-item="option"
+          wx:key="option_key"
+          data-group-key="{{group.group_key}}"
+          data-option-key="{{option.option_key}}"
+          bindtap="onToggleOption"
+        >
+          <image class="option-image" src="{{option.product.image}}" mode="aspectFill" wx:if="{{option.product.image}}"></image>
+          <view class="option-info">
+            <text class="option-name">{{option.product.name}}</text>
+            <text class="option-spec" wx:if="{{option.sku && option.sku.spec_value}}">{{option.sku.spec_value}}</text>
+            <view class="option-bottom">
+              <text class="option-price">¥{{option.product.retail_price}}</text>
+              <text class="option-qty">×{{option.default_qty}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="summary-card">
+      <view class="summary-row">
+        <text class="summary-label">已选商品</text>
+        <text class="summary-value">{{selectedCount}} 项 / {{totalQuantity}} 件</text>
+      </view>
+      <view class="summary-row">
+        <text class="summary-label">套餐原价</text>
+        <text class="summary-value">¥{{originalAmountText}}</text>
+      </view>
+      <view class="summary-row" wx:if="{{bundleDiscount > 0}}">
+        <text class="summary-label">套餐优惠</text>
+        <text class="summary-value summary-discount">-¥{{bundleDiscountText}}</text>
+      </view>
+      <view class="summary-row">
+        <text class="summary-label">支付金额</text>
+        <text class="summary-value summary-price">¥{{bundle.bundle_price}}</text>
+      </view>
+      <text class="summary-tip">自由组合订单不叠加优惠券、积分和其他活动，售后仅支持整套退款。</text>
+    </view>
+
+    <view class="bottom-bar">
+      <view class="bottom-left">
+        <text class="bottom-title">{{bundle.hero_title || bundle.title}}</text>
+        <text class="bottom-price">¥{{bundle.bundle_price}}</text>
+      </view>
+      <view class="buy-btn {{selectionValid ? '' : 'buy-btn-disabled'}}" bindtap="onBuyNow">
+        {{selectionValid ? '立即购买' : selectionMessage}}
+      </view>
+    </view>
+  </block>
+</view>

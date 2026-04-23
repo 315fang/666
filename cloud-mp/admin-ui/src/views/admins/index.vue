@@ -242,6 +242,8 @@ const ROLES = [
   { value: 'customer_service', label: '客服',   desc: '订单+售后+用户+群发', tag: 'info' },
   { value: 'warehouse',   label: '库房',        desc: '订单+物流（无看板）', tag: 'info' },
   { value: 'designer',    label: '美工',        desc: '图文+素材', tag: 'success' },
+  { value: 'channel_manager', label: '渠道经理', desc: '用户+经销商+B1邀约+日志', tag: 'warning' },
+  { value: 'marketing_director', label: '市场总监', desc: '全局只读（不可修改）', tag: 'info' },
 ]
 
 const userStore = useUserStore()

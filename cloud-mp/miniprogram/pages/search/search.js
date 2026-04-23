@@ -11,7 +11,7 @@ Page({
         keyword: '',
         products: [],
         history: [],
-        hotKeywords: ['精选好物', '护肤套装', '家居好物', '送礼佳品'],
+        hotKeywords: [],
         loading: false,
         hasSearched: false
     },

@@ -59,6 +59,22 @@ export const addOrderRemark = (id, data) => {
   }).then(normalizeStrongMutationPayload)
 }
 
+export const updateOrderTestFlag = (id, data) => {
+  return request({
+    url: `/orders/${id}/test-flag`,
+    method: 'put',
+    data
+  }).then(normalizeStrongMutationPayload)
+}
+
+export const updateOrderVisibility = (id, data) => {
+  return request({
+    url: `/orders/${id}/visibility`,
+    method: 'put',
+    data
+  }).then(normalizeStrongMutationPayload)
+}
+
 export const repairOrderFulfillment = (id) => {
   return request({
     url: `/orders/${id}/repair-fulfillment`,

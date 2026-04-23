@@ -16,7 +16,7 @@
 
       <view class="growth-mini">
         <view class="growth-line">
-          <text>成长值 {{growthValue || 0}}</text>
+          <text>积分 {{growthValue || 0}}</text>
           <text wx:if="{{growthLoaded && nextGrowthThreshold}}">下一级 {{nextGrowthThreshold}}</text>
           <text wx:elif="{{growthLoaded}}">已达最高等级</text>
         </view>
@@ -63,14 +63,14 @@
   <!-- 3. 邀请好友区域 -->
   <view class="invite-card">
     <view class="invite-header">
-      <text class="invite-title">邀请好友加入团队</text>
-      <text class="invite-subtitle">分享团队邀请，好友通过链接加入团队</text>
+      <text class="invite-title">邀请成员加入团队</text>
+      <text class="invite-subtitle">分享团队邀请，好友可直接加入</text>
     </view>
-    <button class="share-btn-full" open-type="share">
-      <text>分享团队邀请</text>
+    <button class="share-btn-full" bindtap="onInviteTap">
+      <text>分享邀请</text>
     </button>
     <view class="invite-detail-btn" bindtap="onInviteTap">
-      <text>查看邀请详情 ›</text>
+      <text>查看详情 ›</text>
     </view>
   </view>
 
@@ -130,12 +130,21 @@
       </view>
       <view class="menu-arrow">›</view>
     </view>
+    <view class="menu-item" bindtap="onGoodsFundTransferHistoryTap">
+      <view class="menu-left">
+        <view class="menu-icon share">
+          <image class="icon-img" src="/assets/icons/dollar-sign.svg" mode="aspectFit"/>
+        </view>
+        <text class="menu-name">货款划拨记录</text>
+      </view>
+      <view class="menu-arrow">›</view>
+    </view>
     <view class="menu-item" bindtap="onInviteTap">
       <view class="menu-left">
         <view class="menu-icon share">
           <image class="icon-img" src="/assets/icons/share.svg" mode="aspectFit"/>
         </view>
-        <text class="menu-name">推广邀请</text>
+        <text class="menu-name">团队邀请</text>
       </view>
       <view class="menu-arrow">›</view>
     </view>
@@ -207,14 +216,14 @@
     <view class="mask" bindtap="hideShareModal"></view>
     <view class="modal-content">
       <view class="modal-header">
-        <text>分享团队邀请</text>
+        <text>分享邀请</text>
         <view class="close" bindtap="hideShareModal">×</view>
       </view>
       <view class="qr-section">
-        <text class="qr-tip">点击下方按钮，将邀请链接分享给好友</text>
+        <text class="qr-tip">点击下方按钮分享给好友</text>
       </view>
       <view class="share-actions">
-        <button class="action-btn primary" open-type="share">
+        <button class="action-btn primary" bindtap="goInvitePosterPage">
           <image class="btn-icon-img" src="/assets/icons/message.svg" mode="aspectFit"/>
           <text>发给微信好友</text>
         </button>
@@ -227,15 +236,12 @@
     <view class="mask" bindtap="hideWithdraw"></view>
     <view class="popup-content">
       <view class="popup-title">申请提现</view>
-      <view class="popup-balance">当前可提现余额：¥{{balance}}</view>
-      <view class="popup-fee-hint" wx:if="{{userInfo.role < 4}}">
-        <text class="fee-text">提现规则：最低100元起提，手续费3%（封顶100元）</text>
-      </view>
-      <view class="popup-fee-hint" wx:else>
-        <text class="fee-text">提现规则：免手续费</text>
+      <view class="popup-balance">可提现余额：¥{{balance}}</view>
+      <view class="popup-fee-hint">
+        <text class="fee-text">提现规则：{{withdrawRules.ruleText}}</text>
       </view>
       <input class="popup-input" type="digit" placeholder="请输入提现金额" bindinput="onWithdrawInput" value="{{withdrawAmount}}" maxlength="10" />
-      <view class="popup-fee-calc" wx:if="{{withdrawAmount && userInfo.role < 4}}">
+      <view class="popup-fee-calc" wx:if="{{withdrawAmount}}">
         <text class="fee-calc-text">手续费约：¥{{withdrawFee}}，实际到账约：¥{{withdrawActual}}</text>
       </view>
       <button class="popup-btn" bindtap="confirmWithdraw">确认提现</button>

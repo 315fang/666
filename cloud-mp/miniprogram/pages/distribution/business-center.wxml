@@ -15,10 +15,10 @@
           <image class="hero-avatar" src="{{userInfo.avatar || userInfo.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
           <view class="hero-user-meta">
             <text class="hero-name">{{userInfo.nick_name || userInfo.nickname || '微信用户'}}</text>
-            <text class="hero-role">{{userInfo.role_name || '团队成员'}}</text>
+            <text class="hero-role">{{isStoreManager ? '店长' : (userInfo.role_name || '团队成员')}}</text>
           </view>
         </view>
-        <button class="hero-share-btn" open-type="share">立即邀新</button>
+        <button class="hero-share-btn" bindtap="goInvitePosterPage">立即邀新</button>
       </view>
 
       <view class="hero-balance-grid">
@@ -28,9 +28,9 @@
           <text class="balance-sub">代理订货与发货结算资金</text>
         </view>
         <view class="hero-balance-card {{showGoodsWallet ? '' : 'full'}}" bindtap="onPurseWalletTap">
-          <text class="balance-label">钱包余额</text>
+          <text class="balance-label">佣金钱包</text>
           <text class="balance-amount">¥{{purseBalanceDisplay}}</text>
-          <text class="balance-sub">购物抵扣与钱包明细</text>
+          <text class="balance-sub">可提现佣金与佣金明细</text>
         </view>
       </view>
 
@@ -74,9 +74,17 @@
       </view>
 
       <view class="quick-grid">
-        <view class="quick-card" bindtap="goInvitePoster">
-          <text class="quick-title">分享海报</text>
-          <text class="quick-desc">生成专属邀请海报，直接保存转发</text>
+        <view class="quick-card" wx:if="{{showGoodsWallet}}" bindtap="onAgentWalletTap">
+          <text class="quick-title">货款明细</text>
+          <text class="quick-desc">查看余额、流水与货款明细</text>
+        </view>
+        <view class="quick-card" wx:if="{{!showGoodsWallet}}" bindtap="onPurseWalletTap">
+          <text class="quick-title">钱包明细</text>
+          <text class="quick-desc">购物余额、充值和消费记录</text>
+        </view>
+        <view class="quick-card" wx:if="{{canDirectedInvite}}" bindtap="goDirectedInvites">
+          <text class="quick-title">推广合伙人邀约</text>
+          <text class="quick-desc">发起单次邀约，审核通过后为对方激活推广合伙人并划拨货款</text>
         </view>
         <view class="quick-card" bindtap="goCommissionLogs">
           <text class="quick-title">佣金明细</text>
@@ -85,14 +93,6 @@
         <view class="quick-card" bindtap="goFundPool">
           <text class="quick-title">我的基金池</text>
           <text class="quick-desc">查看个人贡献与四个池子当前余额</text>
-        </view>
-        <view class="quick-card" wx:if="{{showGoodsWallet}}" bindtap="onAgentWalletTap">
-          <text class="quick-title">货款账户</text>
-          <text class="quick-desc">查看余额、流水与充值入口</text>
-        </view>
-        <view class="quick-card" wx:if="{{!showGoodsWallet}}" bindtap="onPurseWalletTap">
-          <text class="quick-title">钱包明细</text>
-          <text class="quick-desc">购物余额、充值和消费记录</text>
         </view>
       </view>
     </view>
@@ -120,7 +120,7 @@
       </view>
     </view>
 
-    <view class="section-card" wx:if="{{participateDistribution}}">
+    <view class="section-card" wx:if="{{participateDistribution && !isStoreManager}}">
       <view class="section-head">
         <text class="section-title">推广看板</text>
         <text class="section-sub">进入完整分佣中心查看提现、推广订单与看板</text>
@@ -131,20 +131,6 @@
           <text class="wide-action-desc">佣金、提现、推广订单与分销数据</text>
         </view>
         <text class="wide-action-arrow">›</text>
-      </view>
-    </view>
-
-    <view class="section-card tips-card">
-      <view class="section-head">
-        <text class="section-title">说明</text>
-      </view>
-      <view class="tip-line">
-        <text class="tip-dot"></text>
-        <text class="tip-text">货款余额和钱包余额是两套资金账户，前者用于代理业务，后者用于商城消费。</text>
-      </view>
-      <view class="tip-line">
-        <text class="tip-dot"></text>
-        <text class="tip-text">团队成员页支持一级/二级切换，点击成员卡片后可继续查看该成员的更多信息。</text>
       </view>
     </view>
 

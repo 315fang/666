@@ -45,6 +45,43 @@ function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
 }
 
+function pickString(value, fallback = '') {
+    if (value == null) return fallback;
+    const text = String(value).replace(/\s+/g, ' ').trim();
+    return text || fallback;
+}
+
+function normalizeSpecDisplayText(rawSpec = '') {
+    const text = pickString(rawSpec);
+    if (!text) return '';
+    if (/[·/、,，;；|]/.test(text)) {
+        const seen = new Set();
+        const parts = text
+            .split(/\s*[·/、,，;；|]+\s*/)
+            .map((item) => pickString(item))
+            .filter((item) => {
+                if (!item || seen.has(item)) return false;
+                seen.add(item);
+                return true;
+            });
+        if (parts.length > 0) return parts.join(' / ');
+    }
+    const tokens = text.split(/\s+/).filter(Boolean);
+    for (let size = 1; size <= Math.floor(tokens.length / 2); size += 1) {
+        if (tokens.length % size !== 0) continue;
+        const pattern = tokens.slice(0, size).join(' ');
+        let matched = true;
+        for (let index = size; index < tokens.length; index += size) {
+            if (tokens.slice(index, index + size).join(' ') !== pattern) {
+                matched = false;
+                break;
+            }
+        }
+        if (matched) return pattern;
+    }
+    return text;
+}
+
 function getOrderTotalQuantity(order = {}) {
     const explicit = Math.max(0, toNumber(order.quantity, 0));
     if (explicit > 0) return explicit;
@@ -72,6 +109,9 @@ function allocateProportionalAmounts(items = [], totalAmount = 0, field = 'item_
 function buildOrderSettlementItems(order = {}) {
     const rawItems = Array.isArray(order.items) ? order.items : [];
     const hasSnapshot = rawItems.some((item) => item && item.refund_basis_version === 'snapshot_v1');
+    const bundleAllocations = hasSnapshot
+        ? rawItems.map((item) => roundMoney(item.bundle_discount_allocated_amount))
+        : allocateProportionalAmounts(rawItems, toNumber(order.bundle_discount, 0), 'item_amount');
     const couponAllocations = hasSnapshot
         ? rawItems.map((item) => roundMoney(item.coupon_allocated_amount))
         : allocateProportionalAmounts(rawItems, toNumber(order.coupon_discount, 0), 'item_amount');
@@ -83,12 +123,13 @@ function buildOrderSettlementItems(order = {}) {
         const quantity = Math.max(1, toNumber(item.qty || item.quantity, 1));
         const itemAmount = roundMoney(item.item_amount != null ? item.item_amount : item.subtotal);
         const originalLineAmount = roundMoney(item.original_line_amount != null ? item.original_line_amount : itemAmount);
+        const bundleDiscountAllocatedAmount = roundMoney(bundleAllocations[index]);
         const couponAllocatedAmount = roundMoney(couponAllocations[index]);
         const pointsAllocatedAmount = roundMoney(pointsAllocations[index]);
         const cashPaidAllocatedAmount = roundMoney(
             item.cash_paid_allocated_amount != null
                 ? item.cash_paid_allocated_amount
-                : (itemAmount - couponAllocatedAmount - pointsAllocatedAmount)
+                : (itemAmount - bundleDiscountAllocatedAmount - couponAllocatedAmount - pointsAllocatedAmount)
         );
         const refundedQuantity = Math.max(0, Math.min(quantity, toNumber(item.refunded_quantity, 0)));
         const refundedCashAmount = roundMoney(Math.max(0, Math.min(cashPaidAllocatedAmount, toNumber(item.refunded_cash_amount, 0))));
@@ -101,6 +142,7 @@ function buildOrderSettlementItems(order = {}) {
             qty: quantity,
             item_amount: itemAmount,
             original_line_amount: originalLineAmount,
+            bundle_discount_allocated_amount: bundleDiscountAllocatedAmount,
             coupon_allocated_amount: couponAllocatedAmount,
             points_allocated_amount: pointsAllocatedAmount,
             cash_paid_allocated_amount: cashPaidAllocatedAmount,
@@ -417,8 +459,12 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
     const rawStatus = order.status || '';
     const status = normalizeOrderStatusForClient(rawStatus);
     const statusGroup = normalizeOrderStatusGroup(rawStatus);
-    const statusText = getOrderStatusText(rawStatus);
-    const statusDesc = getOrderStatusDesc(rawStatus);
+    const refundFailed = rawStatus === 'refunding' && (
+        hasValue(order.auto_refund_error)
+        || hasValue(order.auto_refund_failed_at)
+    );
+    const statusText = refundFailed ? '退款失败' : getOrderStatusText(rawStatus);
+    const statusDesc = refundFailed ? '系统退款未成功，请联系客服处理' : getOrderStatusDesc(rawStatus);
     const paymentMethod = resolveOrderPaymentMethod(order);
     const unitPrice = item.price != null
         ? item.price
@@ -443,12 +489,12 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         productDoc?.title,
         '商品'
     );
-    const specValue = firstFilled(
+    const specValue = normalizeSpecDisplayText(firstFilled(
         order.sku?.spec_value,
         item.spec,
         item.snapshot_spec,
         buildSkuSpecValue(skuDoc)
-    );
+    ));
     const productId = firstFilled(
         order.product_id,
         item.product_id,
@@ -576,6 +622,7 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
             },
             sku: line.snapshot_spec || line.spec ? { spec_value: firstFilled(line.snapshot_spec, line.spec) } : null,
             display_original_line_amount: displayAmount(line.original_line_amount),
+            display_bundle_discount_allocated_amount: displayAmount(line.bundle_discount_allocated_amount),
             display_coupon_allocated_amount: displayAmount(line.coupon_allocated_amount),
             display_points_allocated_amount: displayAmount(line.points_allocated_amount),
             display_cash_paid_allocated_amount: displayAmount(line.cash_paid_allocated_amount),
@@ -656,6 +703,7 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         payment_method_text: getPaymentMethodText(paymentMethod),
         refund_target_text: getRefundTargetText(paymentMethod),
         items: settlementItems,
+        bundle_discount: roundMoney(toNumber(order.bundle_discount, 0)),
         refunded_cash_total: refundedCashTotal,
         refunded_quantity_total: refundedQuantityTotal,
         remaining_refundable_cash: remainingRefundableCash,
@@ -800,7 +848,7 @@ async function formatRefundForClient(refund = {}, cache = new Map(), defaultAuto
         ? await formatOrderForClient(canonicalOrder, cache, defaultAutoCancelMinutes)
         : null;
     const paymentMethod = resolveOrderPaymentMethod({
-        payment_method: refund.payment_method || formattedOrder?.payment_method || canonicalOrder?.payment_method || '',
+        payment_method: refund.payment_method || refund.refund_channel || formattedOrder?.payment_method || canonicalOrder?.payment_method || '',
         pay_channel: refund.pay_channel || formattedOrder?.pay_channel || canonicalOrder?.pay_channel || '',
         pay_type: refund.pay_type || canonicalOrder?.pay_type || '',
         payment_channel: refund.payment_channel || canonicalOrder?.payment_channel || ''

@@ -4,195 +4,148 @@ const { cachedGet } = require('../../utils/requestCache');
 const {
     processProduct,
     genHeatLabel,
-    parseImages,
     resolveProductImage,
     resolveProductDisplayPrice,
-    normalizePriceValue,
-    normalizeAssetUrl
+    normalizePriceValue
 } = require('../../utils/dataFormatter');
-const { pickDirectAssetUrl, pickPreferredAssetRef, resolveCloudImageUrl } = require('../../utils/cloudAssetRuntime');
+const { getApiBaseUrl } = require('../../config/env');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
-const {
-    getBrandNewsCategoryDefs,
-    buildBrandNewsListPagePath,
-    normalizeBrandNewsCategoryKey
-} = require('../../utils/brandNewsCenter');
-const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
-const HOME_PAGE_CACHE_KEY = 'home_config_cache_v2';
-const FEATURED_PRODUCTS_CACHE_REV = 'product-image-20260418';
-const FIXED_BRAND_CARD_PRESETS = getBrandNewsCategoryDefs().map((item, index) => ({
-    slotIndex: index,
-    categoryKey: item.key,
-    title: item.title,
-    link_type: 'page',
-    link_value: buildBrandNewsListPagePath(item.key)
-}));
 
-function pickImageSource(record = {}) {
-    return pickDirectAssetUrl(record) || pickPreferredAssetRef(record);
-}
-
-async function resolveBannerListImages(list = []) {
-    return Promise.all((Array.isArray(list) ? list : []).map(async (item) => ({
-        ...item,
-        image: await resolveCloudImageUrl(item, '')
-    })));
-}
-
-async function resolveBrandZoneAssets(input = {}) {
-    const brandZone = {
-        ...createEmptyBrandZone(),
-        ...(input || {})
-    };
-    const [coverImage, cards, certifications] = await Promise.all([
-        resolveCloudImageUrl({ file_id: brandZone.file_id || '', image: brandZone.coverImage || '' }, ''),
-        Promise.all((Array.isArray(brandZone.cards) ? brandZone.cards : []).map(async (item) => ({
-            ...item,
-            image: await resolveCloudImageUrl(item, '')
-        }))),
-        Promise.all((Array.isArray(brandZone.certifications) ? brandZone.certifications : []).map(async (item) => ({
-            ...item,
-            image: await resolveCloudImageUrl(item, '')
-        })))
-    ]);
-    return {
-        ...brandZone,
-        coverImage,
-        cards,
-        certifications
-    };
-}
-
-function isPlaceholderAsset(url = '') {
-    const text = String(url || '').trim();
-    if (!text) return false;
-    return /(^|\/)assets\/images\/placeholder\.svg(?:$|[?#])/i.test(text)
-        || /\/assets\/images\/placeholder\.svg(?:$|[?#])/i.test(text);
-}
-
-function uniqueAssetUrls(list = [], options = {}) {
-    const includePlaceholder = !!options.includePlaceholder;
-    const seen = new Set();
-    return (Array.isArray(list) ? list : [])
-        .map((item) => normalizeAssetUrl(item))
-        .filter((url) => {
-            if (!includePlaceholder && isPlaceholderAsset(url)) return false;
-            if (!url || seen.has(url)) return false;
-            seen.add(url);
-            return true;
-        });
-}
-
-function collectProductImageCandidates(product = {}, processed = {}) {
-    return uniqueAssetUrls([
-        product.image_url,
-        ...parseImages(product.preview_images),
-        ...parseImages(product.previewImages),
-        processed.firstImage,
-        resolveProductImage(product, ''),
-        product.cover_image,
-        product.coverImage,
-        product.image,
-        product.cover,
-        product.cover_url,
-        product.coverUrl,
-        product.url,
-        product.thumb,
-        product.thumbnail,
-        product.product_image,
-        product.productImage,
-        product.product_image_url,
-        product.file_id,
-        product.fileId,
-        ...parseImages(product.images),
-        ...parseImages(product.image),
-        ...parseImages(product.cover_image),
-        ...parseImages(product.file_id),
-        ...(Array.isArray(processed.images) ? processed.images : [])
-    ]);
-}
-
-function getProductLookupId(product = {}) {
-    return product && (product.id || product._id || product._legacy_id || product.product_id || '');
-}
-
-async function hydrateFeaturedProductSource(product = {}) {
-    const productId = getProductLookupId(product);
-    if (!productId) return product;
-
-    try {
-        const detailRes = await get(`/products/${productId}`, {}, {
-            showError: false,
-            maxRetries: 0
-        });
-        const detail = detailRes && (detailRes.data || detailRes);
-        return detail && typeof detail === 'object'
-            ? { ...detail, id: detail.id || productId }
-            : product;
-    } catch (_) {
-        return product;
+const FIXED_BRAND_CARD_PRESETS = [
+    {
+        slot_index: 0,
+        category_key: 'latest_activity',
+        title: '最新活动',
+        link_type: 'page',
+        link_value: '/pages/index/brand-news-list?category_key=latest_activity'
+    },
+    {
+        slot_index: 1,
+        category_key: 'industry_frontier',
+        title: '行业前沿',
+        link_type: 'page',
+        link_value: '/pages/index/brand-news-list?category_key=industry_frontier'
+    },
+    {
+        slot_index: 2,
+        category_key: 'mall_notice',
+        title: '商城公告',
+        link_type: 'page',
+        link_value: '/pages/index/brand-news-list?category_key=mall_notice'
     }
-}
+];
 
-function pickDisplayName(record = {}) {
-    return record.nickName || record.nickname || '';
-}
-
-function normalizeText(value, fallback = '') {
+function pickString(value, fallback = '') {
     if (value == null) return fallback;
     const text = String(value).trim();
     return text || fallback;
 }
 
-function isBoardVisible(board = {}) {
-    return !(
-        board.is_visible === 0
-        || board.is_visible === false
-        || board.is_active === 0
-        || board.is_active === false
-        || board.status === 0
-        || board.status === false
-    );
+function toBoolean(value) {
+    if (value === true || value === 1 || value === '1') return true;
+    const normalized = pickString(value).toLowerCase();
+    if (!normalized) return false;
+    return ['true', 'yes', 'y', 'on', 'enabled', 'active', 'show', 'visible', 'display'].includes(normalized);
 }
 
-function normalizeBoardEntries(boardMap = {}) {
-    return Object.entries(boardMap || {})
-        .map(([key, board]) => ({
-            ...(board || {}),
-            key: String((board && (board.board_key || board.key)) || key || '').trim()
-        }))
-        .filter((board) => board.key && isBoardVisible(board))
-        .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
+function getBrandCardPreset(input, index = 0) {
+    const rawSlotIndex = input && input.slot_index;
+    const slotIndex = rawSlotIndex === '' || rawSlotIndex === null || rawSlotIndex === undefined
+        ? NaN
+        : Number(rawSlotIndex);
+    if (Number.isInteger(slotIndex) && FIXED_BRAND_CARD_PRESETS[slotIndex]) {
+        return FIXED_BRAND_CARD_PRESETS[slotIndex];
+    }
+    const categoryKey = pickString(input && input.category_key);
+    if (categoryKey) {
+        const matched = FIXED_BRAND_CARD_PRESETS.find((item) => item.category_key === categoryKey);
+        if (matched) return matched;
+    }
+    return FIXED_BRAND_CARD_PRESETS[index] || FIXED_BRAND_CARD_PRESETS[0];
 }
 
-function normalizeBrandList(list = [], prefix = 'brand-item', options = {}) {
+function createBrandCard(index = 0) {
+    const preset = getBrandCardPreset(null, index);
+    return {
+        id: `brand-card-${preset.slot_index}-${preset.category_key}`,
+        slot_index: preset.slot_index,
+        category_key: preset.category_key,
+        title: preset.title,
+        subtitle: '',
+        image: '',
+        file_id: '',
+        link_type: preset.link_type,
+        link_value: preset.link_value
+    };
+}
+
+function createBrandCertification(index = 0) {
+    return {
+        id: `brand-cert-${index}`,
+        title: '',
+        subtitle: '',
+        image: '',
+        file_id: ''
+    };
+}
+
+function createEmptyBrandZone() {
+    return {
+        enabled: false,
+        title: '品牌专区',
+        coverImage: '',
+        coverFileId: '',
+        welcomeTitle: 'Welcome',
+        welcomeSubtitle: '',
+        cards: [],
+        certifications: [],
+        story: {
+            title: '企业介绍',
+            body: ''
+        }
+    };
+}
+
+function normalizeBrandConfigList(list = [], options = {}) {
     const withLink = !!options.withLink;
     return (Array.isArray(list) ? list : [])
         .map((item, index) => {
             if (typeof item === 'string') {
-                const title = normalizeText(item);
-                return title
-                    ? {
-                        id: `${prefix}-${index}`,
-                        title,
-                        subtitle: '',
-                        image: '',
-                        file_id: '',
-                        ...(withLink ? { link_type: 'none', link_value: '' } : {})
-                    }
-                    : null;
+                const title = pickString(item);
+                if (!title) return null;
+                const base = withLink ? createBrandCard(index) : createBrandCertification(index);
+                return {
+                    ...base,
+                    title
+                };
             }
+
             if (!item || typeof item !== 'object') return null;
-            const title = normalizeText(item.title || item.name || item.label);
-            const subtitle = normalizeText(item.subtitle || item.desc || item.description);
-            const image = pickImageSource(item);
-            const fileId = normalizeText(item.file_id);
-            const linkType = withLink ? normalizeText(item.link_type, 'none') : 'none';
-            const linkValue = withLink ? normalizeText(item.link_value) : '';
-            if (!title && !subtitle && !image && !fileId && !linkValue) return null;
+
+            const base = withLink ? createBrandCard(index) : createBrandCertification(index);
+            const preset = withLink ? getBrandCardPreset(item, index) : null;
+            const fileId = pickString(item.file_id || item.fileId);
+            const image = normalizeAssetUrl(fileId || item.image || item.image_url || item.url || item.cover_image || item.coverImage);
+            const title = pickString(item.title || item.name || item.label, base.title || '');
+            const subtitle = pickString(item.subtitle || item.desc || item.description);
+            const linkType = withLink ? pickString(item.link_type, preset ? preset.link_type : base.link_type || 'none') : 'none';
+            const linkValue = withLink ? pickString(item.link_value, preset ? preset.link_value : base.link_value || '') : '';
+            const fixedTitle = withLink && preset ? preset.title : (title || base.title || '未命名内容');
+
+            if (!(title || subtitle || image || fileId || linkValue)) return null;
+
             return {
-                id: item.id || `${prefix}-${index}`,
-                title: title || subtitle || '未命名内容',
+                ...base,
+                ...(preset ? {
+                    slot_index: preset.slot_index,
+                    category_key: preset.category_key,
+                    title: preset.title,
+                    link_type: preset.link_type,
+                    link_value: preset.link_value
+                } : {}),
+                ...item,
+                id: pickString(item.id, base.id),
+                title: fixedTitle,
                 subtitle,
                 image,
                 file_id: fileId,
@@ -202,130 +155,110 @@ function normalizeBrandList(list = [], prefix = 'brand-item', options = {}) {
         .filter(Boolean);
 }
 
-function pickFixedBrandCardSource(list = [], preset = {}, index = 0) {
-    const rows = Array.isArray(list) ? list : [];
-    return rows.find((item) => {
-        if (!item || typeof item !== 'object') return false;
-        if (Number(item.slot_index) === index) return true;
-        return normalizeBrandNewsCategoryKey(item.category_key, '') === preset.categoryKey;
-    }) || rows[index] || {};
-}
-
-function isRenderableFixedBrandCard(item = {}) {
-    if (!item || typeof item !== 'object') return false;
-    return !!normalizeText(item.subtitle || item.desc || item.description || item.title)
-        || !!pickImageSource(item)
-        || !!normalizeText(item.file_id);
-}
-
-function normalizeFixedBrandCards(list = []) {
-    return FIXED_BRAND_CARD_PRESETS.map((preset, index) => {
-        const source = pickFixedBrandCardSource(list, preset, index);
-        if (!isRenderableFixedBrandCard(source)) return null;
-        return {
-            id: source.id || `brand-zone-card-${preset.categoryKey}`,
-            slot_index: index,
-            category_key: preset.categoryKey,
-            title: preset.title,
-            subtitle: normalizeText(source.subtitle || source.desc || source.description),
-            image: pickImageSource(source),
-            file_id: normalizeText(source.file_id),
-            link_type: preset.link_type,
-            link_value: preset.link_value
-        };
-    }).filter(Boolean);
-}
-
-function createEmptyBrandZone() {
-    return {
-        enabled: false,
-        title: '品牌专区',
-        coverImage: '',
-        welcomeTitle: 'Welcome',
-        welcomeSubtitle: '',
-        story: {
-            title: '企业介绍',
-            body: ''
-        },
-        cards: [],
-        certifications: []
-    };
-}
-
-function normalizeHomeBrandZone(configs = {}) {
-    const story = {
-        title: normalizeText(configs.brand_story_title, '企业介绍'),
-        body: normalizeText(configs.brand_story_body)
-    };
-    const cards = normalizeFixedBrandCards(configs.brand_endorsements);
-    const certifications = normalizeBrandList(configs.brand_certifications, 'brand-zone-certification');
-    const enabled = configs.brand_zone_enabled !== undefined
-        ? !(configs.brand_zone_enabled === false || configs.brand_zone_enabled === 'false' || configs.brand_zone_enabled === 0 || configs.brand_zone_enabled === '0')
-        : !!(cards.length || certifications.length || story.body);
+function normalizeBrandZone(configs = {}) {
+    const defaults = createEmptyBrandZone();
+    const cards = normalizeBrandConfigList(configs.brand_endorsements, { withLink: true });
+    const certifications = normalizeBrandConfigList(configs.brand_certifications);
+    const coverFileId = pickString(configs.brand_zone_cover_file_id);
+    const coverImage = normalizeAssetUrl(coverFileId || configs.brand_zone_cover || '');
+    const storyBody = pickString(configs.brand_story_body);
 
     return {
-        enabled,
-        title: normalizeText(configs.brand_zone_title, '品牌专区'),
-        coverImage: pickImageSource({
-            file_id: configs.brand_zone_cover_file_id,
-            image: configs.brand_zone_cover,
-            image_url: configs.brand_zone_cover
-        }),
-        welcomeTitle: normalizeText(configs.brand_zone_welcome_title, 'Welcome'),
-        welcomeSubtitle: normalizeText(configs.brand_zone_welcome_subtitle),
-        story,
+        ...defaults,
+        enabled: configs.brand_zone_enabled !== undefined
+            ? toBoolean(configs.brand_zone_enabled)
+            : !!(cards.length || certifications.length || coverImage || storyBody),
+        title: pickString(configs.brand_zone_title, defaults.title),
+        coverImage,
+        coverFileId,
+        welcomeTitle: pickString(configs.brand_zone_welcome_title, defaults.welcomeTitle),
+        welcomeSubtitle: pickString(configs.brand_zone_welcome_subtitle, defaults.welcomeSubtitle),
         cards,
-        certifications
+        certifications,
+        story: {
+            title: pickString(configs.brand_story_title, defaults.story.title),
+            body: storyBody
+        }
     };
 }
 
-async function buildDisplayProduct(product = {}, roleLevel = 0) {
-    let source = product;
-    let processed = processProduct(source, roleLevel);
-    let imageCandidates = collectProductImageCandidates(source, processed);
-    if (!imageCandidates.length) {
-        source = await hydrateFeaturedProductSource(product);
-        processed = processProduct(source, roleLevel);
-        imageCandidates = collectProductImageCandidates(source, processed);
+function normalizeAssetUrl(url = '') {
+    const raw = String(url || '');
+    if (!raw) return '';
+    if (/^cloud:\/\//i.test(raw)) return raw;
+    if (/^https?:\/\//i.test(raw)) {
+        if (isExpiredSignedAssetUrl(raw)) return '';
+        return raw;
     }
+    if (raw.startsWith('/')) {
+        const apiBase = getApiBaseUrl().replace(/\/api\/?$/, '');
+        return `${apiBase}${raw}`;
+    }
+    return raw;
+}
 
-    const displayPrice = Number(resolveProductDisplayPrice(source, roleLevel) || 0);
-    const marketPrice = Number(normalizePriceValue(source.market_price ?? source.original_price) || 0);
-    const galleryImages = uniqueAssetUrls([
-        ...(Array.isArray(processed.images) ? processed.images : []),
-        ...imageCandidates
-    ]);
-    const coverImage = imageCandidates[0] || '';
-    const discountLabel = (marketPrice > displayPrice && displayPrice > 0)
-        ? `${Math.round(displayPrice / marketPrice * 10)}折`
-        : '';
-    const heatLabel = genHeatLabel(source);
+function parseSignedAssetExpireAt(url = '') {
+    const text = String(url || '').trim();
+    if (!/^https?:\/\//i.test(text)) return 0;
+    const match = text.match(/[?&]t=(\d{10,13})\b/i);
+    if (!match) return 0;
+    const raw = Number(match[1]);
+    if (!Number.isFinite(raw) || raw <= 0) return 0;
+    return raw > 1e12 ? raw : raw * 1000;
+}
 
-    return {
-        ...source,
-        ...processed,
-        firstImage: coverImage || '',
-        images: galleryImages,
-        display_image: coverImage || '',
-        cover_image: coverImage,
-        image: coverImage,
-        image_candidates: imageCandidates,
-        image_candidate_index: coverImage ? 0 : -1,
-        retail_price: displayPrice,
-        price: displayPrice,
-        market_price: marketPrice > displayPrice ? marketPrice : 0,
-        discount_label: discountLabel,
-        heat_label: heatLabel
-    };
+function isExpiredSignedAssetUrl(url = '') {
+    const text = String(url || '').trim();
+    if (!/^https?:\/\//i.test(text)) return false;
+    if (!/[?&]sign=/.test(text)) return false;
+    const expireAt = parseSignedAssetExpireAt(text);
+    return expireAt > 0 && expireAt <= Date.now();
+}
+
+function pickImageSource(record = {}) {
+    const direct = [record.image_url, record.url, record.image, record.cover_image]
+        .map((item) => normalizeAssetUrl(item))
+        .find(Boolean);
+    if (direct) return direct;
+
+    const fileId = String(record.file_id || '').trim();
+    if (/^cloud:\/\//i.test(fileId)) {
+        return normalizeAssetUrl(fileId);
+    }
+    return normalizeAssetUrl(fileId || '');
+}
+
+function pickDisplayName(record = {}) {
+    return record.nickName || record.nickname || '';
 }
 
 async function loadData(page, forceRefresh = false) {
+    const cacheKey = 'home_config_cache';
+    const cacheTtl = 5 * 60 * 1000;
+    const now = Date.now();
     page.setData({ loading: true });
     try {
         let data = null;
 
-        if (!forceRefresh && app.globalData.homeDataPromise) {
-            data = await app.globalData.homeDataPromise.catch(() => null);
+        if (!forceRefresh) {
+            const memoryExpireAt = Number(app.globalData.homePageDataExpireAt || 0);
+            if (app.globalData.homePageData && memoryExpireAt > now) {
+                data = app.globalData.homePageData;
+            } else if (app.globalData.homePageData && memoryExpireAt > 0 && memoryExpireAt <= now) {
+                app.globalData.homePageData = null;
+                app.globalData.homePageDataExpireAt = 0;
+            }
+            if (!data) {
+                const cached = wx.getStorageSync(cacheKey);
+                if (cached && cached.expireAt > Date.now()) {
+                    data = cached.data;
+                    app.globalData.homePageData = data;
+                    app.globalData.homePageDataExpireAt = Number(cached.expireAt) || 0;
+                }
+            }
+            if (!data && app.globalData.homeDataPromise) {
+                data = await app.globalData.homeDataPromise.catch(() => null);
+            }
         }
 
         if (!data || Object.keys(data).length === 0) {
@@ -339,10 +272,20 @@ async function loadData(page, forceRefresh = false) {
                 const res = await get('/homepage-config').catch(() => ({ data: {} }));
                 data = res.data || {};
             }
-        }
-        try { wx.removeStorageSync(HOME_PAGE_CACHE_KEY); } catch (_) {}
 
-        await applyHomeConfig(page, data);
+            if (data && Object.keys(data).length) {
+                const expireAt = now + cacheTtl;
+                app.globalData.homePageData = data;
+                app.globalData.homePageDataExpireAt = expireAt;
+                try {
+                    wx.setStorageSync(cacheKey, { data, expireAt });
+                } catch (_) {
+                    // ignore storage write errors in low-storage scenarios
+                }
+            }
+        }
+
+        applyHomeConfig(page, data);
         loadFeaturedProducts(page, { forceRefresh });
         loadPosters(page, { forceRefresh });
         loadBubbles(page);
@@ -356,11 +299,17 @@ async function loadData(page, forceRefresh = false) {
 async function loadFeaturedProducts(page, options = {}) {
     const forceRefresh = !!options.forceRefresh;
     try {
-        let boardEntries = normalizeBoardEntries(page.homeResources && page.homeResources.boards ? page.homeResources.boards : {});
-        if (!boardEntries.length) {
+        const layoutBoardProducts = page.homeResources && page.homeResources.boards
+            && page.homeResources.boards['home.featuredProducts']
+            ? page.homeResources.boards['home.featuredProducts'].products
+            : null;
+        let list = Array.isArray(layoutBoardProducts) ? layoutBoardProducts : [];
+
+        let boardProducts = list;
+        if (!boardProducts.length) {
             const boardRes = await cachedGet(get, '/boards/map', {
                 scene: 'home',
-                rev: FEATURED_PRODUCTS_CACHE_REV
+                keys: 'home.featuredProducts'
             }, {
                 useCache: !forceRefresh,
                 cacheTTL: 2 * 60 * 1000,
@@ -368,47 +317,14 @@ async function loadFeaturedProducts(page, options = {}) {
                 maxRetries: 0,
                 timeout: 10000
             }).catch(() => null);
-            const boardMap = boardRes && boardRes.data ? boardRes.data : {};
-            boardEntries = normalizeBoardEntries(boardMap);
-            if (page.homeResources && boardEntries.length) {
-                page.homeResources.boards = boardMap;
-            }
+            boardProducts = boardRes && boardRes.data && boardRes.data['home.featuredProducts']
+                ? boardRes.data['home.featuredProducts'].products
+                : null;
         }
+        list = Array.isArray(boardProducts) ? boardProducts : [];
 
-        const roleLevel = app.globalData.userInfo && app.globalData.userInfo.role_level || 0;
-        const categoryBoards = boardEntries.filter((board) => {
-            const boardKey = String(board.key || '').trim();
-            const boardType = String(board.section_type || board.board_type || '').trim();
-            return (boardType === 'product_board' || boardKey.startsWith('home.category.') || boardKey === 'home.featuredProducts')
-                && Array.isArray(board.products)
-                && board.products.length > 0;
-        });
-
-        if (categoryBoards.length > 0) {
-            const featuredSections = [];
-            for (const board of categoryBoards) {
-                const rawProducts = Array.isArray(board.products) ? board.products.slice(0, 4) : [];
-                const products = await Promise.all(rawProducts.map((product) => buildDisplayProduct(product, roleLevel)));
-                if (!products.length) continue;
-                featuredSections.push({
-                    id: board.id || board.key,
-                    key: board.key,
-                    title: normalizeText(board.board_name || board.section_name || board.title, '精选好物'),
-                    subtitle: normalizeText(board.subtitle || board.description),
-                    products
-                });
-            }
-            page.setData({
-                featuredSections,
-                featuredProducts: featuredSections[0] ? featuredSections[0].products : []
-            });
-            return;
-        }
-
-        const featuredBoard = boardEntries.find((board) => String(board.key || '').trim() === 'home.featuredProducts');
-        let list = Array.isArray(featuredBoard && featuredBoard.products) ? featuredBoard.products : [];
         if (!list.length) {
-            const res = await cachedGet(get, '/products', { page: 1, limit: 6, sort: 'hot', rev: FEATURED_PRODUCTS_CACHE_REV }, {
+            const res = await cachedGet(get, '/products', { page: 1, limit: 6, sort: 'hot' }, {
                 useCache: !forceRefresh,
                 cacheTTL: 2 * 60 * 1000,
                 showError: false,
@@ -419,11 +335,31 @@ async function loadFeaturedProducts(page, options = {}) {
             list = Array.isArray(listRaw) ? listRaw : [];
         }
 
-        const products = await Promise.all(list.map((product) => buildDisplayProduct(product, roleLevel)));
-        page.setData({
-            featuredProducts: products,
-            featuredSections: []
+        const roleLevel = app.globalData.userInfo && app.globalData.userInfo.role_level || 0;
+        const products = list.map((product) => {
+            const processed = processProduct(product, roleLevel);
+            const displayPrice = Number(resolveProductDisplayPrice(product, roleLevel) || 0);
+            const marketPrice = Number(normalizePriceValue(product.market_price ?? product.original_price) || 0);
+            const coverImage = normalizeAssetUrl(resolveProductImage(product))
+                || normalizeAssetUrl(processed.firstImage)
+                || pickImageSource(product)
+                || '/assets/images/placeholder.svg';
+            const discountLabel = (marketPrice > displayPrice && displayPrice > 0)
+                ? (Math.round(displayPrice / marketPrice * 10)) + '折'
+                : '';
+            const heatLabel = genHeatLabel(product);
+            return {
+                ...processed,
+                cover_image: coverImage,
+                image: coverImage,
+                retail_price: displayPrice,
+                price: displayPrice,
+                market_price: marketPrice > displayPrice ? marketPrice : 0,
+                discount_label: discountLabel,
+                heat_label: heatLabel
+            };
         });
+        page.setData({ featuredProducts: products });
     } catch (err) {
         console.error('[Index] 加载精选商品失败:', err);
     }
@@ -434,9 +370,6 @@ async function loadPosters(page, options = {}) {
     const mapBanners = (list) => (list || []).map((banner) => ({
         id: banner.id,
         image: pickImageSource(banner),
-        file_id: banner.file_id || '',
-        image_url: banner.image_url || banner.image || banner.url || '',
-        temp_url: banner.temp_url || '',
         title: banner.title || '',
         subtitle: banner.subtitle || '',
         link_type: banner.link_type || 'none',
@@ -444,16 +377,10 @@ async function loadPosters(page, options = {}) {
     }));
     try {
         const layoutBanners = page.homeResources ? page.homeResources.banners || null : null;
-        const layoutMid = layoutBanners && Array.isArray(layoutBanners.home_mid) ? layoutBanners.home_mid : [];
-        const layoutBottom = layoutBanners && Array.isArray(layoutBanners.home_bottom) ? layoutBanners.home_bottom : [];
-        if (layoutBanners && (layoutMid.length > 0 || layoutBottom.length > 0)) {
-            const [midPosters, bottomPosters] = await Promise.all([
-                resolveBannerListImages(mapBanners(layoutMid)),
-                resolveBannerListImages(mapBanners(layoutBottom))
-            ]);
+        if (layoutBanners) {
             page.setData({
-                midPosters,
-                bottomPosters
+                midPosters: mapBanners(layoutBanners.home_mid || []),
+                bottomPosters: mapBanners(layoutBanners.home_bottom || [])
             });
             return;
         }
@@ -476,13 +403,9 @@ async function loadPosters(page, options = {}) {
         ]);
         const midList = midRes?.data?.list ?? midRes?.list ?? midRes?.data ?? [];
         const bottomList = bottomRes?.data?.list ?? bottomRes?.list ?? bottomRes?.data ?? [];
-        const [midPosters, bottomPosters] = await Promise.all([
-            resolveBannerListImages(mapBanners(Array.isArray(midList) ? midList : [])),
-            resolveBannerListImages(mapBanners(Array.isArray(bottomList) ? bottomList : []))
-        ]);
         page.setData({
-            midPosters,
-            bottomPosters
+            midPosters: mapBanners(Array.isArray(midList) ? midList : []),
+            bottomPosters: mapBanners(Array.isArray(bottomList) ? bottomList : [])
         });
     } catch (e) {
         console.log('[Index] 海报加载失败，不影响主页渲染');
@@ -512,7 +435,7 @@ async function loadBubbles(page) {
     } catch (_) { }
 }
 
-async function applyHomeConfig(page, data) {
+function applyHomeConfig(page, data) {
     if (!data) return;
     app.globalData.homePageData = data;
     const brandConfig = getConfigSection('brand_config');
@@ -536,9 +459,6 @@ async function applyHomeConfig(page, data) {
         ? bannerList.map((banner) => ({
             id: banner.id,
             image: pickImageSource(banner),
-            file_id: banner.file_id || '',
-            image_url: banner.image_url || banner.image || banner.url || '',
-            temp_url: banner.temp_url || '',
             title: banner.title || '',
             subtitle: banner.subtitle || '',
             link_type: banner.link_type || 'none',
@@ -546,53 +466,35 @@ async function applyHomeConfig(page, data) {
         }))
         : defaultBrandBanners;
 
-    const apiConfigs = data.configs || data.resources?.configs || {};
-    const localBrand = getConfigSection('brand_config') || {};
-    const configs = { ...localBrand, ...apiConfigs };
-    if (!Array.isArray(configs.brand_endorsements) || configs.brand_endorsements.length === 0) {
-        configs.brand_endorsements = localBrand.brand_endorsements;
-    }
-    if (!Array.isArray(configs.brand_certifications) || configs.brand_certifications.length === 0) {
-        configs.brand_certifications = localBrand.brand_certifications;
-    }
-    if (!String(configs.brand_story_body || '').trim() && localBrand.brand_story_body) {
-        configs.brand_story_body = localBrand.brand_story_body;
-    }
-    if (!String(configs.brand_story_title || '').trim() && localBrand.brand_story_title) {
-        configs.brand_story_title = localBrand.brand_story_title;
-    }
+    const configs = data.configs || data.resources?.configs || {};
     const showBrandLogo = configs.show_brand_logo !== 'false' && configs.show_brand_logo !== false;
-    const [resolvedHeroBanners, brandZone] = await Promise.all([
-        resolveBannerListImages(heroBanners),
-        resolveBrandZoneAssets(normalizeHomeBrandZone(configs))
-    ]);
+    const brandZone = normalizeBrandZone(configs);
     page.setData({
         homeConfigs: configs,
         showBrandLogo,
         brandLogo: configs.brand_logo || '',
         navBrandTitle: configs.nav_brand_title || brandConfig.nav_brand_title || '问兰镜像',
         navBrandSub: configs.nav_brand_sub || brandConfig.nav_brand_sub || '品牌甄选',
-        brandZone,
         latestActivity: page._normalizeLatestActivity(data.latestActivity || data.resources?.latest_activity || {}),
-        heroBanners: resolvedHeroBanners,
+        brandZone,
+        heroBanners,
         loading: false
     });
 
     const popupAd = data.popupAd || data.resources?.popup_ad || {};
     if (popupAd.enabled && (popupAd.file_id || popupAd.image_url || popupAd.url)) {
-        const popupImage = await resolveCloudImageUrl(pickImageSource(popupAd), '');
         page._checkAndShowPopupAd({
             ...popupAd,
             file_id: popupAd.file_id || '',
-            image_url: popupImage,
-            url: popupImage
+            image_url: pickImageSource(popupAd), // deprecated: use file_id instead
+            url: pickImageSource(popupAd)
         });
     }
 }
 
 async function loadCoupons(page) {
     if (!app.globalData.isLoggedIn) {
-        page.setData({ homeCoupons: [], unusedCouponCount: 0 });
+        page.setData({ homeCoupons: [] });
         return;
     }
     try {
@@ -601,14 +503,7 @@ async function loadCoupons(page) {
             const source = Array.isArray(res && res.list)
                 ? res.list
                 : (Array.isArray(res && res.data && res.data.list) ? res.data.list : []);
-            const now = Date.now();
-            const usable = source.filter((c) => {
-                const exp = c && (c.expire_at || c.expires_at || c.end_at || c.valid_until);
-                if (!exp) return true;
-                const t = new Date(exp).getTime();
-                return !Number.isFinite(t) || t > now;
-            });
-            const coupons = usable.map((c) => {
+            const coupons = source.map((c) => {
                 let discount_text = '';
                 if (c.coupon_type === 'percent') {
                     const raw = parseFloat((toCouponNumber(c.coupon_value) * 10).toFixed(1));
@@ -623,10 +518,12 @@ async function loadCoupons(page) {
                     discount_text,
                     value_text: valueText,
                     min_label: minLabel,
+                    name: buildHomeCouponName(c),
+                    sub_label: buildHomeCouponSubLabel(c),
                     expire_at_formatted: formatCouponExpire(c.expire_at)
                 };
             });
-            // 只展示前 3 张（已过滤过期）
+            // 只展示前 3 张
             page.setData({ homeCoupons: coupons.slice(0, 3), unusedCouponCount: coupons.length });
         }
     } catch (_) {
@@ -650,6 +547,21 @@ function formatCouponExpire(dateStr) {
     } catch (_) {
         return dateStr;
     }
+}
+
+function buildHomeCouponName(coupon = {}) {
+    return pickString(coupon.coupon_name || coupon.name || coupon.title, '优惠券');
+}
+
+function buildHomeCouponSubLabel(coupon = {}) {
+    const expireText = formatCouponExpire(
+        coupon.expire_at || coupon.expires_at || coupon.end_at || coupon.valid_until
+    );
+    if (expireText) return `${expireText} 到期`;
+
+    const validDays = Math.max(0, Math.floor(toCouponNumber(coupon.valid_days)));
+    if (validDays > 0) return `领取后 ${validDays} 天内有效`;
+    return '长期有效';
 }
 
 module.exports = {

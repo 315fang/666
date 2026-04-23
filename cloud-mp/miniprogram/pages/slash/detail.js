@@ -10,6 +10,7 @@ function resolvePreferredSkuId(detail) {
     if (activitySkuId != null) return activitySkuId;
     if (detail.sku_id != null && detail.sku_id !== '') return detail.sku_id;
     if (detail.product && detail.product.sku_id != null && detail.product.sku_id !== '') return detail.product.sku_id;
+    if (detail.product && detail.product.default_sku_id != null && detail.product.default_sku_id !== '') return detail.product.default_sku_id;
     const skus = detail.product && Array.isArray(detail.product.skus) ? detail.product.skus : [];
     if (skus.length === 1) {
         return skus[0]._id || skus[0].id || null;
@@ -68,7 +69,7 @@ Page({
             this.loadDetail(options.slash_no);
         } else {
             this.setData({ loading: false });
-            wx.showToast({ title: '参数错误', icon: 'error' });
+            wx.showToast({ title: '缺少砍价信息', icon: 'none' });
         }
     },
 
@@ -94,11 +95,6 @@ Page({
                 const sold = Number(act.sold_count) || 0;
                 d._stockRemain = Math.max(0, stockLimit - sold);
                 d._soldPct = stockLimit > 0 ? Math.min(100, Math.round((sold / stockLimit) * 100)) : 0;
-                d._soldCount = sold;
-                d._maxHelpersText = act.max_helpers === -1 ? '不限人数' : `最多${act.max_helpers}人`;
-                const minH = act.min_slash_per_helper != null ? act.min_slash_per_helper : '';
-                const maxH = act.max_slash_per_helper != null ? act.max_slash_per_helper : '';
-                d._slashRangeHint = minH !== '' && maxH !== '' ? `好友每次随机砍 ¥${minH} ~ ¥${maxH}` : '';
                 d._productSummary = plainSummary(d.product?.description, 120);
                 const origN = parseFloat(d.original_price) || 0;
                 const curN = parseFloat(d.current_price) || 0;
@@ -145,7 +141,7 @@ Page({
             }
         } catch (e) {
             console.error('[slash/detail] loadDetail error:', e);
-            wx.showToast({ title: e?.message || '网络错误', icon: 'none' });
+            wx.showToast({ title: e?.message || '网络异常，请稍后重试', icon: 'none' });
             this.setData({ loading: false });
         }
     },
@@ -159,7 +155,7 @@ Page({
             return;
         }
         if (alreadyHelped) {
-            wx.showToast({ title: '您已帮砍过了', icon: 'none' });
+            wx.showToast({ title: '你已帮砍过', icon: 'none' });
             return;
         }
         this.setData({ helping: true });
@@ -173,8 +169,8 @@ Page({
                     ? parseFloat(res.data.cut_amount).toFixed(2)
                     : '0.00';
                 wx.showModal({
-                    title: '帮砍成功！',
-                    content: `您帮 TA 砍了 ¥${cutAmount}，继续邀请好友砍得更多！`,
+                    title: '帮砍成功',
+                    content: `本次帮砍 ¥${cutAmount}，可继续邀请好友。`,
                     showCancel: false,
                     confirmText: '好的'
                 });
@@ -186,7 +182,7 @@ Page({
             }
         } catch (e) {
             wx.hideLoading();
-            wx.showToast({ title: e?.message || '帮砍失败，请重试', icon: 'none' });
+            wx.showToast({ title: e?.message || '帮砍失败，请稍后重试', icon: 'none' });
             this.setData({ helping: false });
         }
     },
@@ -200,15 +196,15 @@ Page({
         }
         // 非发起人不能以砍价价格下单
         if (!isOwner) {
-            wx.showToast({ title: '只有发起人才能以砍价价格购买', icon: 'none' });
+            wx.showToast({ title: '仅发起人可按砍价购买', icon: 'none' });
             return;
         }
         if (detail.status === 'purchased') {
-            wx.showToast({ title: '已购买该商品', icon: 'none' });
+            wx.showToast({ title: '该商品已购买', icon: 'none' });
             return;
         }
         if (detail.status === 'expired' || detail._expired) {
-            wx.showToast({ title: '砍价已过期', icon: 'none' });
+            wx.showToast({ title: '砍价已结束', icon: 'none' });
             return;
         }
         if (!detail.product || !detail.product.id) return;
@@ -225,7 +221,9 @@ Page({
             spec: resolvedSkuId ? '砍价·指定规格' : '砍价特惠',
             type: 'slash',
             slash_no: detail.slash_no,
-            supports_pickup: detail.product.supports_pickup ? 1 : 0
+            supports_pickup: detail.product.supports_pickup ? 1 : 0,
+            allow_coupon: 0,
+            allow_points: 0
         };
         wx.setStorageSync('directBuyInfo', buyInfo);
         wx.navigateTo({ url: '/pages/order/confirm?from=direct' });
@@ -235,7 +233,7 @@ Page({
         const { detail } = this.data;
         if (!detail) return {};
         return {
-            title: `帮我砍一刀！${detail.product?.name || '商品'}只差一点就到底价了`,
+            title: `帮我砍一刀，${detail.product?.name || '商品'}`,
             path: `/pages/slash/detail?slash_no=${detail.slash_no}`,
             imageUrl: detail.product?.images?.[0] || ''
         };

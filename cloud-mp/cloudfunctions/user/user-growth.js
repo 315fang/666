@@ -19,9 +19,9 @@ async function getGrowthProgress(openid) {
     const user = await getUser(openid);
     if (!user) return null;
 
-    const points = user.points || user.growth_value || 0;
+    const growthValue = user.growth_value || 0;
     const tierConfig = await loadTierConfig(db);
-    return buildGrowthProgress(points, tierConfig);
+    return buildGrowthProgress(growthValue, tierConfig);
 }
 
 /**
@@ -48,6 +48,7 @@ async function addPoints(openid, points) {
  */
 function buildUserStats(user) {
     if (!user) return null;
+    const growthValue = toNumber(user.growth_value, 0);
     const points = toNumber(user.points != null ? user.points : user.growth_value, 0);
     const balance = toNumber(user.commission_balance != null ? user.commission_balance : user.balance, 0);
     const goodsFundBalance = toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0);
@@ -62,7 +63,7 @@ function buildUserStats(user) {
         agent_wallet_balance: goodsFundBalance,
         total_spent: totalSpent,
         order_count: orderCount,
-        growth_value: points
+        growth_value: growthValue
     };
 }
 

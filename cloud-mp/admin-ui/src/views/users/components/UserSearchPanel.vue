@@ -24,6 +24,9 @@
           <el-option label="已封禁" :value="0" />
         </el-select>
       </el-form-item>
+      <el-form-item>
+        <el-checkbox v-model="searchForm.include_hidden">含隐藏账号</el-checkbox>
+      </el-form-item>
       <el-form-item label="团队负责人">
         <el-select
           v-model="searchForm.team_leader_id"

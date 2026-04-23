@@ -1,7 +1,9 @@
 'use strict';
 
 const crypto = require('crypto');
+const fs = require('fs');
 const https = require('https');
+const path = require('path');
 
 const CONFIG = {
     mchId: process.env.PAYMENT_WECHAT_MCHID || process.env.WECHAT_MCH_ID || '',
@@ -12,15 +14,28 @@ const CONFIG = {
 
 let privateKeyPem = null;
 
+function readDownloadedFile(result = {}) {
+    if (Buffer.isBuffer(result.fileContent)) return result.fileContent.toString('utf8');
+    if (typeof result.fileContent === 'string' && result.fileContent.includes('PRIVATE KEY')) return result.fileContent;
+    if (result.tempFilePath) return fs.readFileSync(result.tempFilePath, 'utf8');
+    return '';
+}
+
 async function loadPrivateKey(cloud) {
     if (privateKeyPem) return privateKeyPem;
 
+    const inlineKey = String(process.env.PAYMENT_WECHAT_PRIVATE_KEY || process.env.WECHAT_PAY_PRIVATE_KEY || '').trim();
+    if (inlineKey) {
+        privateKeyPem = inlineKey;
+        return privateKeyPem;
+    }
+
     try {
         const result = await cloud.downloadFile({
-            fileID: 'cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/payment-certs/apiclient_key.pem',
+            fileID: process.env.PAYMENT_WECHAT_PRIVATE_KEY_FILE_ID
+                || 'cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/payment-certs/apiclient_key.pem',
         });
-        const fs = require('fs');
-        const content = fs.readFileSync(result.fileContent || result.tempFilePath, 'utf8');
+        const content = readDownloadedFile(result);
         if (content.includes('PRIVATE KEY')) {
             privateKeyPem = content;
             return privateKeyPem;
@@ -30,9 +45,10 @@ async function loadPrivateKey(cloud) {
     }
 
     try {
-        const fs = require('fs');
-        const path = require('path');
-        const keyPath = path.join(__dirname, 'certs', 'apiclient_key.pem');
+        const configuredPath = String(process.env.PAYMENT_WECHAT_PRIVATE_KEY_PATH || process.env.WECHAT_PAY_PRIVATE_KEY_PATH || '').trim();
+        const keyPath = configuredPath
+            ? (path.isAbsolute(configuredPath) ? configuredPath : path.join(__dirname, configuredPath))
+            : path.join(__dirname, 'certs', 'apiclient_key.pem');
         if (fs.existsSync(keyPath)) {
             privateKeyPem = fs.readFileSync(keyPath, 'utf8');
             return privateKeyPem;

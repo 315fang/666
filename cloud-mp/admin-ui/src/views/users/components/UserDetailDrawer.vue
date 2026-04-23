@@ -11,6 +11,11 @@
             </el-descriptions-item>
             <el-descriptions-item label="昵称">{{ displayUserName(detailUser) }}</el-descriptions-item>
             <el-descriptions-item label="手机号">{{ detailUser.phone || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="真实姓名">
+              <span>{{ detailUser.real_name || '-' }}</span>
+              <el-button type="primary" link size="small" style="margin-left:8px" :loading="profileSaving" @click="onEditRealName">编辑</el-button>
+            </el-descriptions-item>
+            <el-descriptions-item label="提现实名来源">{{ detailUser.real_name ? '用户实名资料' : '未填写' }}</el-descriptions-item>
             <el-descriptions-item label="OpenID" :span="2">
               <span class="mono-ellipsis">{{ detailUser.openid || '-' }}</span>
             </el-descriptions-item>
@@ -21,8 +26,11 @@
               <el-tag type="info">{{ purchaseLevelText(detailUser.purchase_level_code) }}</el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="账号状态">
-              <el-tag :type="detailUser.status === 0 ? 'danger' : 'success'">{{ detailUser.status === 0 ? '封禁' : '正常' }}</el-tag>
+              <el-tag :type="detailUser.account_visibility === 'hidden' ? 'info' : (detailUser.status === 0 ? 'danger' : 'success')">
+                {{ detailUser.account_visibility === 'hidden' ? '已隐藏' : (detailUser.status === 0 ? '封禁' : '正常') }}
+              </el-tag>
             </el-descriptions-item>
+            <el-descriptions-item label="账号来源">{{ detailUser.account_origin || 'normal' }}</el-descriptions-item>
             <el-descriptions-item label="成长值">{{ Number(detailUser.growth_value || 0).toFixed(0) }}</el-descriptions-item>
             <el-descriptions-item label="用户表·订单数">{{ detailUser.order_count || 0 }}</el-descriptions-item>
             <el-descriptions-item label="直推人数">{{ detailUser.referee_count || 0 }}</el-descriptions-item>
@@ -54,6 +62,15 @@
             <el-descriptions-item label="内部备注" :span="2">{{ detailUser.remark || '-' }}</el-descriptions-item>
           </el-descriptions>
 
+          <UserPortalPasswordPanel
+            :detail-user="detailUser"
+            :can-manage-user-portal-password="canManageUserPortalPassword"
+            :portal-password-saving="portalPasswordSaving"
+            :format-date="formatDate"
+            :on-reset-portal-password="onResetPortalPassword"
+            :on-unlock-portal-password="onUnlockPortalPassword"
+          />
+
           <div class="detail-section-title" style="margin-top:20px">钱包与消费</div>
           <el-descriptions :column="2" border size="small">
             <el-descriptions-item label="佣金余额">¥{{ Number(detailUser.balance || 0).toFixed(2) }}</el-descriptions-item>
@@ -71,6 +88,33 @@
           <div v-if="detailStats" style="margin-top:12px">
             <el-statistic title="累计佣金收益(佣金流水合计)" :value="Number(detailStats.totalCommission || 0)" prefix="¥" :precision="2" />
           </div>
+
+          <div class="detail-section-title" style="margin-top:20px">最近货款划拨</div>
+          <el-table :data="detailUser.recent_goods_fund_transfers || []" stripe size="small" empty-text="暂无货款划拨记录">
+            <el-table-column label="方向" width="90">
+              <template #default="{ row }">
+                <el-tag size="small" :type="String(row.from_openid || row.from_snapshot?.openid) === String(detailUser.openid) ? 'warning' : 'success'">
+                  {{ String(row.from_openid || row.from_snapshot?.openid) === String(detailUser.openid) ? '转出' : '转入' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="对方" min-width="160">
+              <template #default="{ row }">
+                {{ String(row.from_openid || row.from_snapshot?.openid) === String(detailUser.openid)
+                  ? displayUserName(row.to_snapshot, '-')
+                  : displayUserName(row.from_snapshot, '-') }}
+              </template>
+            </el-table-column>
+            <el-table-column label="金额" width="100">
+              <template #default="{ row }">¥{{ Number(row.amount || 0).toFixed(2) }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="90">
+              <template #default="{ row }">{{ row.status_text || row.status || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="申请时间" width="160">
+              <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+            </el-table-column>
+          </el-table>
 
           <div class="detail-section-title" style="margin-top:20px">团队（以本人为负责人 · 全体后代）</div>
           <p class="sub-hint" style="margin-bottom:10px">不含本人；含多级下级。可打开弹窗看订单维度，或跳到列表逐人查看。</p>
@@ -132,6 +176,7 @@
 
 <script setup>
 import { getUserNickname } from '@/utils/userDisplay'
+import UserPortalPasswordPanel from './UserPortalPasswordPanel.vue'
 
 defineProps({
   visible: {
@@ -163,6 +208,18 @@ defineProps({
     default: null
   },
   commerceSaving: {
+    type: Boolean,
+    default: false
+  },
+  canManageUserPortalPassword: {
+    type: Boolean,
+    default: false
+  },
+  portalPasswordSaving: {
+    type: Boolean,
+    default: false
+  },
+  profileSaving: {
     type: Boolean,
     default: false
   },
@@ -206,11 +263,23 @@ defineProps({
     type: Function,
     required: true
   },
+  onEditRealName: {
+    type: Function,
+    required: true
+  },
   onOpenTeamSummary: {
     type: Function,
     required: true
   },
   onGoTeamMemberList: {
+    type: Function,
+    required: true
+  },
+  onResetPortalPassword: {
+    type: Function,
+    required: true
+  },
+  onUnlockPortalPassword: {
     type: Function,
     required: true
   }

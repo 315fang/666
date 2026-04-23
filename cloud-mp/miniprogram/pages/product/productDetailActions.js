@@ -99,7 +99,7 @@ function onQtyInput(page, event) {
 function onBuyNow(page, resolvePayableUnitPrice) {
     if (page._buyingNow) return;
     if (page.data.isOutOfStock) {
-        wx.showToast({ title: '该商品暂时缺货', icon: 'none' });
+        wx.showToast({ title: '商品暂时缺货', icon: 'none' });
         return;
     }
     if (!ensureSkuSelected(page)) {
@@ -109,6 +109,7 @@ function onBuyNow(page, resolvePayableUnitPrice) {
     const { product, selectedSku, quantity } = page.data;
     const isExchangeMode = !!page.data.exchangeMode;
     const limitedSpotOffer = page.data.limitedSpotOffer || null;
+    const limitedSpotSource = page.data.limitedSpotSource || 'limited_sale';
     const limitedSpotMode = limitedSpotOffer
         ? normalizeLimitedSpotMode(page.data.limitedSpotMode, limitedSpotOffer)
         : '';
@@ -136,23 +137,30 @@ function onBuyNow(page, resolvePayableUnitPrice) {
         image: product.images && product.images[0] || '',
         spec: resolvedSpecText,
         supports_pickup: product.supports_pickup ? 1 : 0,
-        allow_points: (isExchangeMode || limitedSpotOffer) ? 0 : (product.is_explosive ? 0 : (product.allow_points == null ? 1 : (product.allow_points ? 1 : 0))),
+        allow_coupon: (isExchangeMode || limitedSpotOffer || product.is_explosive || String(product.product_tag || '').trim().toLowerCase() === 'hot')
+            ? 0
+            : (product.enable_coupon == null ? 1 : (product.enable_coupon ? 1 : 0)),
+        allow_points: (isExchangeMode || limitedSpotOffer || product.is_explosive || String(product.product_tag || '').trim().toLowerCase() === 'hot')
+            ? 0
+            : (product.allow_points == null ? 1 : (product.allow_points ? 1 : 0)),
         is_explosive: product.is_explosive ? 1 : 0,
+        product_tag: product.product_tag || 'normal',
         exchange_coupon_id: isExchangeMode ? page.data.exchangeCouponId : '',
         exchange_mode: isExchangeMode ? 1 : 0,
         exchange_title: isExchangeMode ? (page.data.exchangeTitle || '') : '',
-        limited_sale: limitedSpotOffer ? {
+        limited_sale: limitedSpotOffer && limitedSpotSource === 'limited_sale' ? {
             slot_id: page.data.limitedSpotCardId || '',
             item_id: page.data.limitedSpotOfferId || '',
             mode: limitedSpotMode,
             redeem_points: isLimitedSpotPoints
         } : null,
-        limited_spot: limitedSpotOffer ? {
+        limited_spot: limitedSpotOffer && limitedSpotSource === 'limited_spot' ? {
             card_id: page.data.limitedSpotCardId || '',
             offer_id: page.data.limitedSpotOfferId || '',
             mode: limitedSpotMode,
             redeem_points: isLimitedSpotPoints
         } : null,
+        limited_spot_source: limitedSpotOffer ? limitedSpotSource : '',
         limited_spot_mode: limitedSpotMode || '',
         limited_spot_title: limitedSpotOffer ? (page.data.limitedSpotTitle || '') : '',
         limited_spot_points_price: limitedSpotOffer ? Number(limitedSpotOffer.points_price || 0) : 0,

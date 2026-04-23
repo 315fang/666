@@ -10,6 +10,11 @@ const {
     resolveOrderPaymentMethod,
     resolveRefundChannel
 } = require('./order-contract');
+const {
+    releasePickupStationInventoryForOrder,
+    restorePickupStationInventoryForRefund,
+    rollbackPickupStationPrincipalForOrder
+} = require('./pickup-station-stock');
 
 const DEFAULT_POINT_RULES = {
     review: {
@@ -130,6 +135,9 @@ function allocateProportionalAmounts(items = [], totalAmount = 0, field = 'item_
 function buildOrderSettlementItems(order = {}) {
     const rawItems = toArray(order.items);
     const hasSnapshot = rawItems.some((item) => item && item.refund_basis_version === 'snapshot_v1');
+    const bundleAllocations = hasSnapshot
+        ? rawItems.map((item) => roundMoney(item.bundle_discount_allocated_amount))
+        : allocateProportionalAmounts(rawItems, toNumber(order.bundle_discount, 0), 'item_amount');
     const couponAllocations = hasSnapshot
         ? rawItems.map((item) => roundMoney(item.coupon_allocated_amount))
         : allocateProportionalAmounts(rawItems, toNumber(order.coupon_discount, 0), 'item_amount');
@@ -140,12 +148,13 @@ function buildOrderSettlementItems(order = {}) {
     return rawItems.map((item, index) => {
         const quantity = Math.max(1, toNumber(item.qty || item.quantity, 1));
         const itemAmount = roundMoney(item.item_amount != null ? item.item_amount : item.subtotal);
+        const bundleDiscountAllocatedAmount = roundMoney(bundleAllocations[index]);
         const couponAllocatedAmount = roundMoney(couponAllocations[index]);
         const pointsAllocatedAmount = roundMoney(pointsAllocations[index]);
         const cashPaidAllocatedAmount = roundMoney(
             item.cash_paid_allocated_amount != null
                 ? item.cash_paid_allocated_amount
-                : (itemAmount - couponAllocatedAmount - pointsAllocatedAmount)
+                : (itemAmount - bundleDiscountAllocatedAmount - couponAllocatedAmount - pointsAllocatedAmount)
         );
         const refundedQuantity = Math.max(0, Math.min(quantity, toNumber(item.refunded_quantity, 0)));
         const refundedCashAmount = roundMoney(Math.max(0, Math.min(cashPaidAllocatedAmount, toNumber(item.refunded_cash_amount, 0))));
@@ -155,6 +164,7 @@ function buildOrderSettlementItems(order = {}) {
             quantity,
             qty: quantity,
             item_amount: itemAmount,
+            bundle_discount_allocated_amount: bundleDiscountAllocatedAmount,
             cash_paid_allocated_amount: cashPaidAllocatedAmount,
             refunded_quantity: refundedQuantity,
             refunded_cash_amount: refundedCashAmount,
@@ -248,6 +258,20 @@ function computeRefundSnapshot(order = {}, params = {}) {
 
     if (refundAmount <= 0) {
         throw new Error('当前退款对应的现金金额为 0，无法继续退款');
+    }
+
+    if (order.bundle_id || order.bundle_meta) {
+        const remainingItems = settlementItems
+            .filter((item) => item.refundable_quantity > 0)
+            .map((item) => `${item.refund_item_key}:${item.refundable_quantity}`);
+        const quotedKeys = quotedItems
+            .map((item) => `${item.refund_item_key}:${item.quantity}`);
+        const fullQuantity = requestedQuantity >= Math.max(1, progress.remainingQuantity);
+        const fullCash = refundAmount >= roundMoney(progress.remainingCash);
+        const sameItems = remainingItems.length === quotedKeys.length && remainingItems.every((key) => quotedKeys.includes(key));
+        if (!(fullQuantity && fullCash && sameItems)) {
+            throw new Error('组合订单仅支持整套退款');
+        }
     }
 
     return {
@@ -405,6 +429,292 @@ async function increaseGoodsFundLedger(openid, amount, refId, remark) {
     return true;
 }
 
+async function getGoodsFundRefundLedgerMarkers(openid, order = {}, refund = {}) {
+    const refundId = pickString(refund._id || refund.id);
+    const refundNo = pickString(refund.refund_no);
+    const orderId = pickString(order._id || order.id || refund.order_id);
+    const orderNo = pickString(order.order_no || refund.order_no);
+
+    const [walletLogsRes, goodsFundLogsRes] = await Promise.all([
+        db.collection('wallet_logs')
+            .where({ openid, change_type: 'refund' })
+            .limit(50)
+            .get()
+            .catch(() => ({ data: [] })),
+        db.collection('goods_fund_logs')
+            .where({ openid, type: 'refund' })
+            .limit(50)
+            .get()
+            .catch(() => ({ data: [] }))
+    ]);
+
+    const walletLog = (walletLogsRes.data || []).find((item) => {
+        const refId = pickString(item.ref_id);
+        return pickString(item.refund_id) === refundId
+            || pickString(item.refund_no) === refundNo
+            || refId === refundId
+            || refId === refundNo
+            || refId === orderNo;
+    }) || null;
+
+    const goodsFundLog = (goodsFundLogsRes.data || []).find((item) => {
+        return pickString(item.refund_id) === refundId
+            || pickString(item.refund_no) === refundNo
+            || (orderId && pickString(item.order_id) === orderId)
+            || (orderNo && pickString(item.order_no) === orderNo);
+    }) || null;
+
+    return {
+        walletLog,
+        goodsFundLog
+    };
+}
+
+async function markGoodsFundRefundCredited(refundId, patch = {}) {
+    await db.collection('refunds').doc(String(refundId)).update({
+        data: {
+            goods_fund_credited_at: db.serverDate(),
+            updated_at: db.serverDate(),
+            ...patch
+        }
+    }).catch(() => {});
+}
+
+async function ensureGoodsFundRefundCredited(openid, order = {}, refund = {}, amount = 0) {
+    const refundId = pickString(refund._id || refund.id);
+    if (!refundId) throw new Error('退款记录缺少 ID，无法处理货款退款');
+    if (pickString(refund.goods_fund_credited_at)) return { credited: true, skipped: true };
+
+    const { walletLog, goodsFundLog } = await getGoodsFundRefundLedgerMarkers(openid, order, refund);
+    if (walletLog && goodsFundLog) {
+        await markGoodsFundRefundCredited(refundId, {
+            goods_fund_wallet_log_id: pickString(walletLog._id || walletLog.id),
+            goods_fund_log_id: pickString(goodsFundLog._id || goodsFundLog.id),
+            goods_fund_credit_amount: roundMoney(amount)
+        });
+        return {
+            credited: true,
+            inferred: true,
+            wallet_log_id: pickString(walletLog._id || walletLog.id),
+            goods_fund_log_id: pickString(goodsFundLog._id || goodsFundLog.id)
+        };
+    }
+
+    const { user, account: existingAccount } = await getWalletAccountByUser(openid);
+    if (!user) throw new Error('货款退款失败：找不到用户');
+
+    const previousGoodsFund = roundMoney(getUserGoodsFundBalance(user));
+    const nextGoodsFund = roundMoney(previousGoodsFund + amount);
+    const account = existingAccount || await ensureWalletAccountForUser(user, previousGoodsFund);
+    if (!account) throw new Error('货款退款失败：无法初始化钱包账户');
+
+    const walletAccountId = pickString(account._id || account.id);
+    if (!walletAccountId) throw new Error('货款退款失败：钱包账户标识缺失');
+
+    let walletLogId = '';
+    let goodsFundLogId = '';
+    try {
+        await db.collection('users').where({ openid }).update({
+            data: {
+                agent_wallet_balance: _.inc(amount),
+                updated_at: db.serverDate()
+            }
+        });
+
+        await db.collection('wallet_accounts').doc(String(walletAccountId)).update({
+            data: {
+                balance: nextGoodsFund,
+                updated_at: db.serverDate()
+            }
+        });
+
+        const walletLogRes = await db.collection('wallet_logs').add({
+            data: {
+                user_id: user.id || user._legacy_id || user._id || '',
+                openid,
+                account_id: walletAccountId,
+                change_type: 'refund',
+                amount,
+                balance_before: previousGoodsFund,
+                balance_after: nextGoodsFund,
+                ref_type: 'order_refund',
+                ref_id: refundId,
+                refund_id: refundId,
+                refund_no: pickString(refund.refund_no),
+                order_id: pickString(order._id || order.id || refund.order_id),
+                order_no: pickString(order.order_no || refund.order_no),
+                remark: `订单退款 ${pickString(order.order_no || refund.order_no)}`,
+                created_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        });
+        walletLogId = pickString(walletLogRes && walletLogRes._id);
+
+        const goodsFundLogRes = await db.collection('goods_fund_logs').add({
+            data: {
+                openid,
+                user_id: user.id || user._legacy_id || user._id || '',
+                type: 'refund',
+                amount,
+                refund_id: refundId,
+                refund_no: pickString(refund.refund_no),
+                order_id: pickString(order._id || order.id || refund.order_id),
+                order_no: pickString(order.order_no || refund.order_no),
+                remark: `订单退款 ${pickString(order.order_no || refund.order_no)}`,
+                created_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        });
+        goodsFundLogId = pickString(goodsFundLogRes && goodsFundLogRes._id);
+
+        await markGoodsFundRefundCredited(refundId, {
+            goods_fund_wallet_log_id: walletLogId,
+            goods_fund_log_id: goodsFundLogId,
+            goods_fund_credit_amount: roundMoney(amount)
+        });
+
+        return {
+            credited: true,
+            wallet_log_id: walletLogId,
+            goods_fund_log_id: goodsFundLogId
+        };
+    } catch (error) {
+        await db.collection('users').where({ openid }).update({
+            data: {
+                agent_wallet_balance: previousGoodsFund,
+                updated_at: db.serverDate()
+            }
+        }).catch(() => {});
+        await db.collection('wallet_accounts').doc(String(walletAccountId)).update({
+            data: {
+                balance: previousGoodsFund,
+                updated_at: db.serverDate()
+            }
+        }).catch(() => {});
+        if (walletLogId) {
+            await db.collection('wallet_logs').doc(String(walletLogId)).remove().catch(() => {});
+        }
+        if (goodsFundLogId) {
+            await db.collection('goods_fund_logs').doc(String(goodsFundLogId)).remove().catch(() => {});
+        }
+        throw error;
+    }
+}
+
+async function completeGoodsFundRefundSettlement(orderId, order = {}, refund = {}) {
+    const canonicalOrderId = orderId || order._id || order.id || refund.order_id;
+    const buyerOpenid = pickString(order.openid || refund.openid);
+    if (!canonicalOrderId) throw new Error('货款退款缺少订单 ID');
+    if (!buyerOpenid) throw new Error('货款退款缺少买家 openid');
+
+    const refundAmount = roundMoney(toNumber(refund.amount ?? refund.refund_amount, 0));
+    const refundQuantity = resolveRefundQuantityFromRecord(order, refund);
+    if (refundAmount <= 0) throw new Error('货款退款金额无效');
+
+    const processingPatch = {
+        status: 'processing',
+        payment_method: 'goods_fund',
+        refund_channel: 'goods_fund',
+        refund_target_text: getRefundTargetText('goods_fund'),
+        processing_at: refund.processing_at || db.serverDate(),
+        updated_at: db.serverDate()
+    };
+    await db.collection('refunds').doc(String(refund._id)).update({ data: processingPatch }).catch(() => {});
+
+    await ensureGoodsFundRefundCredited(buyerOpenid, order, refund, refundAmount);
+
+    const latestRefundRes = await db.collection('refunds').doc(String(refund._id)).get().catch(() => ({ data: refund }));
+    const latestRefund = latestRefundRes.data || refund;
+    const refundRecord = {
+        ...latestRefund,
+        _id: refund._id,
+        amount: refundAmount,
+        refund_amount: refundAmount,
+        type: refund.type,
+        refund_quantity_effective: refundQuantity
+    };
+
+    const { isFullRefund } = await applyRefundProgress(canonicalOrderId, order, refundRecord);
+    refundRecord.order_progress_applied_at = refundRecord.order_progress_applied_at || '1';
+    await reverseBuyerRefundAssetsWithMarker(buyerOpenid, canonicalOrderId, order, refundRecord, isFullRefund);
+    refundRecord.buyer_assets_reversed_at = refundRecord.buyer_assets_reversed_at || '1';
+
+    await cancelRefundRelatedCommissions(canonicalOrderId, '货款退款');
+    await restoreRefundOrderStock(canonicalOrderId, order, refundRecord);
+    refundRecord.stock_restored_at = refundRecord.stock_restored_at || '1';
+    await rollbackPickupStationPrincipalForOrder(db, order, refundRecord, '退款冲回自提门店进货本金');
+    refundRecord.pickup_principal_reversed_at = refundRecord.pickup_principal_reversed_at || '1';
+
+    await db.collection('refunds').doc(String(refund._id)).update({
+        data: {
+            status: 'completed',
+            completed_at: db.serverDate(),
+            auto_refund_error: _.remove(),
+            auto_refund_partial: _.remove(),
+            auto_refund_failed_at: _.remove(),
+            updated_at: db.serverDate()
+        }
+    }).catch(() => {});
+
+    await db.collection('orders').doc(String(canonicalOrderId)).update({
+        data: {
+            auto_refund_error: _.remove(),
+            auto_refund_failed_at: _.remove(),
+            auto_refund_partial: _.remove(),
+            updated_at: db.serverDate()
+        }
+    }).catch(() => {});
+
+    return {
+        completed: true,
+        refund_id: pickString(refund._id),
+        order_id: pickString(canonicalOrderId)
+    };
+}
+
+async function recoverPendingGoodsFundRefunds(limit = 20) {
+    const res = await db.collection('refunds')
+        .where({
+            status: 'processing',
+            payment_method: _.in(['goods_fund', 'wallet', 'goods-fund', 'goodsfund'])
+        })
+        .limit(Math.max(1, Math.min(100, toNumber(limit, 20))))
+        .get()
+        .catch(() => ({ data: [] }));
+
+    const refunds = (res.data || []).filter((item) => resolveRefundChannel(resolveOrderPaymentMethod({ payment_method: item.payment_method })) === 'goods_fund');
+    let completed = 0;
+    const errors = [];
+
+    for (const refund of refunds) {
+        try {
+            const order = await getOrderByIdOrNo(refund.order_id || refund.order_no);
+            if (!order) {
+                errors.push({ refund_id: refund._id, error: '关联订单不存在' });
+                continue;
+            }
+            await completeGoodsFundRefundSettlement(order._id || refund.order_id, order, refund);
+            completed += 1;
+        } catch (error) {
+            await db.collection('refunds').doc(String(refund._id)).update({
+                data: {
+                    auto_refund_error: error.message,
+                    auto_refund_partial: true,
+                    auto_refund_failed_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                }
+            }).catch(() => {});
+            errors.push({ refund_id: refund._id, error: error.message });
+        }
+    }
+
+    return {
+        scanned: refunds.length,
+        completed,
+        errors
+    };
+}
+
 async function getDocByIdOrLegacy(collectionName, id) {
     if (id === null || id === undefined || id === '') return null;
     const num = toNumber(id, NaN);
@@ -418,6 +728,9 @@ async function getDocByIdOrLegacy(collectionName, id) {
 }
 
 async function restoreOrderStock(orderId, order, markerField = 'stock_restored_at') {
+    if (pickString(order.pickup_stock_reservation_mode) === 'station') {
+        return { skipped: true, reason: 'pickup_station_stock' };
+    }
     if (!order.stock_deducted_at || order[markerField]) return { skipped: true };
     for (const item of toArray(order.items)) {
         const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
@@ -445,6 +758,9 @@ async function restoreOrderStock(orderId, order, markerField = 'stock_restored_a
 }
 
 async function restoreRefundOrderStock(orderId, order = {}, refund = {}) {
+    if (pickString(order.pickup_stock_reservation_mode) === 'station') {
+        return restorePickupStationInventoryForRefund(db, order, refund);
+    }
     if (pickString(refund.type) !== 'return_refund') return { skipped: true, reason: 'not_return_refund' };
     if (refund.stock_restored_at) return { skipped: true, reason: 'already_restored' };
     if (!order.stock_deducted_at) return { skipped: true, reason: 'stock_not_deducted' };
@@ -671,6 +987,10 @@ async function cancelOrder(openid, orderId) {
         .update({ data: { status: 'cancelled', cancelled_at: db.serverDate() } })
         .catch(() => {});
 
+    await releasePickupStationInventoryForOrder(db, order, '用户取消订单，释放自提门店预占库存').catch((stockErr) => {
+        console.error('[OrderLifecycle] 取消订单释放门店库存失败:', stockErr.message);
+    });
+
     await restoreOrderStock(orderId, order).catch((stockErr) => {
         console.error('[OrderLifecycle] 取消订单恢复库存失败:', stockErr.message);
     });
@@ -807,6 +1127,13 @@ async function applyRefund(openid, params) {
         throw new Error(`订单状态不允许退款: ${order.status}`);
     }
     const canonicalOrderId = order._id || String(orderId);
+    if (order.bundle_id || order.bundle_meta) {
+        const requestedQuantity = Math.max(0, toNumber(params.refund_quantity, 0));
+        const progress = getOrderRefundProgress(order);
+        if (requestedQuantity > 0 && requestedQuantity < progress.remainingQuantity) {
+            throw new Error('组合订单仅支持整套退款');
+        }
+    }
 
     // 检查是否已有待处理退款
     const existingRefund = await db.collection('refunds')
@@ -897,45 +1224,21 @@ async function applyRefund(openid, params) {
             }
         }).catch(() => {});
         try {
-            await db.collection('users').where({ openid }).update({
-                data: { agent_wallet_balance: _.inc(refundAmount), updated_at: db.serverDate() }
-            });
-            await increaseGoodsFundLedger(openid, refundAmount, order.order_no, `订单退款 ${order.order_no}`);
-            await db.collection('goods_fund_logs').add({
-                data: {
-                    openid, type: 'refund', amount: refundAmount,
-                    order_id: canonicalOrderId, order_no: order.order_no,
-                    remark: `订单退款 ${order.order_no}`, created_at: db.serverDate()
-                }
-            }).catch(() => {});
-
-            const refundRecord = {
+            await completeGoodsFundRefundSettlement(canonicalOrderId, order, {
                 _id: result._id,
+                refund_no: refundNo,
                 amount: refundAmount,
+                refund_amount: refundAmount,
                 type,
-                refund_quantity_effective: refundQuantity
-            };
-            const { isFullRefund } = await applyRefundProgress(canonicalOrderId, order, refundRecord);
-            await reverseBuyerRefundAssetsWithMarker(openid, canonicalOrderId, order, refundRecord, isFullRefund);
-
-            // 取消佣金
-            await cancelRefundRelatedCommissions(canonicalOrderId, '货款退款');
-
-            // 恢复库存（仅退货退款，按本次退款数量恢复）
-            await restoreRefundOrderStock(canonicalOrderId, order, refundRecord).catch(() => {});
-
-            // 更新退款为已完成，订单状态由退款进度辅助函数负责
-            await db.collection('refunds').doc(result._id).update({
-                data: { status: 'completed', completed_at: db.serverDate(), updated_at: db.serverDate() }
+                refund_quantity_effective: refundQuantity,
+                payment_method: paymentMethod,
+                refund_channel: refundChannel,
+                refund_target_text: getRefundTargetText(paymentMethod),
+                processing_at: new Date().toISOString()
             });
-
             return { success: true, id: result._id, refund_id: result._id, refund_no: refundNo, auto_refunded: true };
         } catch (autoRefundErr) {
             console.error('[OrderLifecycle] 货款自动退款失败，转人工处理:', autoRefundErr.message);
-            await db.collection('users').where({ openid }).update({
-                data: { agent_wallet_balance: _.inc(-refundAmount), updated_at: db.serverDate() }
-            }).catch(() => {});
-            // 保持 processing/refunding，让后续重试或人工补偿能感知到部分执行状态
             await db.collection('refunds').doc(result._id).update({
                 data: {
                     status: 'processing',
@@ -1125,11 +1428,13 @@ function generateDefaultTraces(order) {
 module.exports = {
     cancelOrder,
     confirmOrder,
+    completeGoodsFundRefundSettlement,
     freezeCommissionsForOrder,
     reviewOrder,
     applyRefund,
     queryRefundList,
     queryRefundDetail,
+    recoverPendingGoodsFundRefunds,
     cancelRefund,
     returnShipping,
     trackLogistics,

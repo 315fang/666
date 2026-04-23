@@ -78,11 +78,15 @@ export const updateUserStatus = (id, data) => {
 
 export const updateUsersBatchRole = (data) => request({ url: '/users/batch-role', method: 'post', data }).then(normalizeStrongMutationPayload)
 export const updateUserRemark = (id, data) => request({ url: `/users/${id}/remark`, method: 'put', data }).then(normalizeStrongMutationPayload)
+export const updateUserProfile = (id, data) => request({ url: `/users/${id}/profile`, method: 'put', data }).then(normalizeStrongMutationPayload)
 export const updateUserCommerce = (id, data) => request({ url: `/users/${id}/commerce`, method: 'put', data }).then(normalizeStrongMutationPayload)
+export const updateUserVisibility = (id, data) => request({ url: `/users/${id}/visibility`, method: 'put', data }).then(normalizeStrongMutationPayload)
 export const updateUserInviteCode = (id, data) => request({ url: `/users/${id}/invite-code`, method: 'put', data }).then(normalizeStrongMutationPayload)
 export const updateUserMemberNo = (id, data) => request({ url: `/users/${id}/member-no`, method: 'put', data }).then(normalizeStrongMutationPayload)
 export const updateUserParent = (id, data) => request({ url: `/users/${id}/parent`, method: 'put', data }).then(normalizeStrongMutationPayload)
 export const updateUserPurchaseLevel = (id, data) => request({ url: `/users/${id}/purchase-level`, method: 'put', data }).then(normalizeStrongMutationPayload)
+export const resetUserPortalPassword = (id) => request({ url: `/users/${id}/portal-password/reset`, method: 'post' }).then(normalizeStrongMutationPayload)
+export const unlockUserPortalPassword = (id) => request({ url: `/users/${id}/portal-password/unlock`, method: 'post' }).then(normalizeStrongMutationPayload)
 
 /** 调整代理商货款余额（仅代理商有效） */
 export const adjustUserGoodsFund = (id, data) => request({ url: `/users/${id}/goods-fund`, method: 'put', data }).then(normalizeStrongMutationPayload)

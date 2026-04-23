@@ -55,7 +55,10 @@
         <div class="kpi-card pink">
           <div class="kpi-label">上次分红</div>
           <div class="kpi-value">¥{{ fmt(data.dividend?.last_total_distributed) }}</div>
-          <div class="kpi-sub">{{ data.dividend?.last_executed_year ? data.dividend.last_executed_year + ' 年度' : '暂无分红记录' }}</div>
+          <div class="kpi-sub">
+            {{ data.dividend?.last_executed_year ? data.dividend.last_executed_year + ' 年度' : '暂无分红记录' }}
+            · 池余额 ¥{{ fmt(data.dividend?.pool?.balance) }}
+          </div>
         </div>
       </div>
 
@@ -192,6 +195,7 @@
               <div class="card-header">
                 <el-icon><Coin /></el-icon>
                 <span>基金池配置</span>
+                <el-button text type="primary" size="small" @click="openFundPoolLogs">查看流水</el-button>
               </div>
             </template>
             <el-empty v-if="!data.fund_pool" description="暂无基金池配置" :image-size="50" />
@@ -214,6 +218,7 @@
                   <div class="fund-sub-value">¥{{ fmt(sub.amount) }}</div>
                 </div>
               </div>
+              <div class="total-row">流水笔数：<strong>{{ data.fund_pool_sub?.log_count ?? 0 }}</strong></div>
             </template>
           </el-card>
         </el-col>
@@ -225,8 +230,20 @@
               <div class="card-header">
                 <el-icon><TrendCharts /></el-icon>
                 <span>年终分红执行记录</span>
+                <el-button text type="primary" size="small" @click="openDividendExecutions">查看全部</el-button>
               </div>
             </template>
+            <el-descriptions :column="3" border size="small" style="margin-bottom:12px">
+              <el-descriptions-item label="分红池余额">
+                <span class="amount blue">¥{{ fmt(data.dividend?.pool?.balance) }}</span>
+              </el-descriptions-item>
+              <el-descriptions-item label="累计入池">
+                <span class="amount green">¥{{ fmt(data.dividend?.pool?.total_in) }}</span>
+              </el-descriptions-item>
+              <el-descriptions-item label="累计发放">
+                <span class="amount purple">¥{{ fmt(data.dividend?.pool?.total_out) }}</span>
+              </el-descriptions-item>
+            </el-descriptions>
             <el-empty
               v-if="!data.dividend?.executions?.length"
               description="暂无分红执行记录"
@@ -444,6 +461,48 @@
         <el-button type="primary" :loading="debtSubmitting" @click="handleDebtSubmit">确认处理</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="fundPoolLogDialogVisible" title="基金池流水" width="min(960px, 96vw)">
+      <el-table :data="fundPoolLogRows" v-loading="fundPoolLogLoading" size="small" stripe max-height="520">
+        <el-table-column prop="created_at" label="时间" min-width="160">
+          <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+        </el-table-column>
+        <el-table-column prop="nickname" label="用户" min-width="140" />
+        <el-table-column prop="invite_code" label="编号" width="110" />
+        <el-table-column prop="role_label" label="等级" width="120" />
+        <el-table-column prop="source_text" label="来源" width="120" />
+        <el-table-column label="金额" width="120" align="right">
+          <template #default="{ row }"><span class="amount blue">¥{{ fmt(row.amount) }}</span></template>
+        </el-table-column>
+        <el-table-column label="子账户拆分" min-width="220">
+          <template #default="{ row }">
+            镜像 ¥{{ fmt(row.sub_amounts?.mirror_ops) }} / 旅行 ¥{{ fmt(row.sub_amounts?.travel) }} / 父母 ¥{{ fmt(row.sub_amounts?.parent) }} / 个人 ¥{{ fmt(row.sub_amounts?.personal) }}
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <el-dialog v-model="dividendExecDialogVisible" title="分红执行记录" width="min(960px, 96vw)">
+      <el-table :data="dividendExecutionRows" v-loading="dividendExecutionLoading" size="small" stripe max-height="520">
+        <el-table-column prop="year" label="年度" width="90" />
+        <el-table-column label="发放总额" width="120" align="right">
+          <template #default="{ row }"><span class="amount green">¥{{ fmt(row.totalDistributed) }}</span></template>
+        </el-table-column>
+        <el-table-column label="发放人数" width="90" align="center">
+          <template #default="{ row }">{{ row.distributedCount ?? '-' }}</template>
+        </el-table-column>
+        <el-table-column label="执行前池余额" width="130" align="right">
+          <template #default="{ row }">¥{{ fmt(row.pool_balance_before) }}</template>
+        </el-table-column>
+        <el-table-column label="执行后池余额" width="130" align="right">
+          <template #default="{ row }">¥{{ fmt(row.pool_balance_after) }}</template>
+        </el-table-column>
+        <el-table-column prop="remark" label="说明" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="created_at" label="执行时间" min-width="160">
+          <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
@@ -452,7 +511,7 @@ import { ref, computed, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Money, Wallet, CreditCard, Coin, TrendCharts, Refresh, Trophy, DataAnalysis, User } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import { getFinanceOverview, getAgentPerformance, getPoolContributions, settleAgentDebt } from '@/api'
+import { getFinanceOverview, getAgentPerformance, getPoolContributions, getFundPoolLogs, getDividendExecutions, settleAgentDebt } from '@/api'
 import { mergeStrongSuccessMessage } from '@/api/consistency'
 import { formatDate } from '@/utils/format'
 import { useUserStore } from '@/store/user'
@@ -484,6 +543,19 @@ const perfData = ref({ list: [], total_agents: 0, period_start: '', period_end: 
 // 池子贡献
 const poolLoading = ref(false)
 const poolData = ref({ partner_contributions: [], agent_contributions: [], dividend_enabled: false })
+const fundPoolLogDialogVisible = ref(false)
+const fundPoolLogLoading = ref(false)
+const fundPoolLogRows = ref([])
+const dividendExecDialogVisible = ref(false)
+const dividendExecutionLoading = ref(false)
+const dividendExecutionRows = ref([])
+
+const normalizeRoleLevel = (level) => {
+  const n = Number(level ?? 0)
+  if (!Number.isFinite(n)) return 0
+  if (n === 7) return 5
+  return Math.min(6, Math.max(0, n))
+}
 
 const fmt = (val) => {
   const n = Number(val ?? 0)
@@ -492,11 +564,12 @@ const fmt = (val) => {
 
 const roleLevelLabel = (level) => {
   const map = { 0: 'VIP用户', 1: '初级会员', 2: '高级会员', 3: '推广合伙人', 4: '运营合伙人', 5: '区域合伙人', 6: '线下实体门店' }
-  return map[level] ?? `等级${level}`
+  const normalized = normalizeRoleLevel(level)
+  return map[normalized] ?? `等级${normalized}`
 }
 const roleLevelType = (level) => {
   const map = { 0: '', 1: 'success', 2: 'warning', 3: 'danger', 4: 'danger' }
-  return map[level] ?? ''
+  return map[normalizeRoleLevel(level)] ?? ''
 }
 
 const fetchOverview = async () => {
@@ -532,6 +605,32 @@ const fetchPoolContributions = async () => {
     ElMessage.error('加载池子贡献数据失败')
   } finally {
     poolLoading.value = false
+  }
+}
+
+const openFundPoolLogs = async () => {
+  fundPoolLogDialogVisible.value = true
+  fundPoolLogLoading.value = true
+  try {
+    const res = await getFundPoolLogs({ page: 1, limit: 100 })
+    fundPoolLogRows.value = res?.list || res?.data?.list || []
+  } catch (e) {
+    ElMessage.error('加载基金池流水失败')
+  } finally {
+    fundPoolLogLoading.value = false
+  }
+}
+
+const openDividendExecutions = async () => {
+  dividendExecDialogVisible.value = true
+  dividendExecutionLoading.value = true
+  try {
+    const res = await getDividendExecutions({ page: 1, limit: 100 })
+    dividendExecutionRows.value = res?.list || res?.data?.list || []
+  } catch (e) {
+    ElMessage.error('加载分红执行记录失败')
+  } finally {
+    dividendExecutionLoading.value = false
   }
 }
 

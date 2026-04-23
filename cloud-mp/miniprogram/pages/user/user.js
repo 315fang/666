@@ -121,9 +121,13 @@ Page({
             show_agent_service_entry: false,
             enable_lottery_entry: false
         },
+        showPortalPasswordEntry: false,
         loginAgreementHint: '登录后查看订单、积分、佣金等信息',
         showBusinessCenter: false,
         showPickupVerify: false,
+        isStoreManager: false,
+        storeManagerStationName: '',
+        storeManagerStationCount: 0,
         /** 我的页成长值条（真实后端 growth_progress） */
         growthDisplay: null,
         // 昵称修改弹窗
@@ -164,6 +168,7 @@ Page({
             featureFlags,
             loginAgreementHint: membershipConfig.login_agreement_hint || '登录后查看订单、积分、佣金等信息'
         });
+        this._syncPortalPasswordEntryVisibility();
         this.loadPageLayoutConfig();
         this.loadUserInfo();
         this._refreshBusinessCenterVisibility();
@@ -192,7 +197,9 @@ Page({
 
     // 从服务端加载用户最新信息
     async loadUserInfo(forceRefresh = false) {
-        return loadUserInfo(this, forceRefresh);
+        const result = await loadUserInfo(this, forceRefresh);
+        this._syncPortalPasswordEntryVisibility();
+        return result;
     },
 
     _applyGrowthDisplay(info) {
@@ -207,6 +214,23 @@ Page({
     /** 团队中心入口（原 business-center 页）：由后台 membership_config.business_center_min_role_level 控制（默认 1 = C1/初级会员） */
     _refreshBusinessCenterVisibility() {
         return refreshBusinessCenterVisibility(this);
+    },
+
+    _syncPortalPasswordEntryVisibility() {
+        const userInfo = this.data.userInfo || app.globalData.userInfo || {};
+        const roleLevel = Number(userInfo.role_level || this.data.displayAgentRoleLevel || 0);
+        const shouldShow = !!(
+            this.data.isLoggedIn
+            && (
+                this.data.featureFlags.show_agent_service_entry
+                || roleLevel >= 1
+                || userInfo.portal_password_enabled
+                || userInfo.portal_password_change_required
+            )
+        );
+        if (shouldShow !== this.data.showPortalPasswordEntry) {
+            this.setData({ showPortalPasswordEntry: shouldShow });
+        }
     },
 
     _scheduleSecondaryLoads(forceRefresh = false) {
@@ -236,10 +260,6 @@ Page({
 
     onCommissionWalletTap() {
         this.onWalletTap();
-    },
-
-    onDividendRightsTap() {
-        navigateIfLoggedIn('/pages/distribution/fund-pool');
     },
 
     onQuadExpressTap() {
@@ -281,6 +301,28 @@ Page({
     onEditProfile() {
         if (!requireLogin()) return;
         wx.navigateTo({ url: '/pages/user/edit-profile' });
+    },
+
+    promptProfileBootstrapIfNeeded(userInfo = {}, loginResult = {}) {
+        const openid = String(userInfo.openid || app.globalData.openid || '').trim();
+        if (!openid) return;
+        if (this._profileBootstrapPrompting) return;
+        this._profileBootstrapPrompting = true;
+        const title = loginResult?.is_new_user ? '首次登录建议完善资料' : '建议完善默认资料';
+        wx.showModal({
+            title,
+            content: '微信小程序不能静默读取你的真实头像和昵称。现在去完善后，后续将默认显示你的微信头像和昵称。',
+            confirmText: '去完善',
+            cancelText: '稍后',
+            success: (res) => {
+                if (res.confirm) {
+                    wx.navigateTo({ url: '/pages/user/edit-profile?bootstrap=1' });
+                }
+            },
+            complete: () => {
+                this._profileBootstrapPrompting = false;
+            }
+        });
     },
 
     onMemberLevelTap() {
@@ -376,10 +418,6 @@ Page({
     },
     goWallet() { this.onWalletTap(); },
 
-    goGrowthValue() {
-        navigateIfLoggedIn('/pages/user/preferences');
-    },
-
     goTeamCenter() {
         return navigateTeamCenter(this);
     },
@@ -411,10 +449,6 @@ Page({
 
     goStationsMap() {
         wx.navigateTo({ url: '/pages/stations/map' });
-    },
-
-    goMyStation() {
-        navigateIfLoggedIn('/pages/stations/my-station');
     },
 
     goPickupVerify() {
@@ -450,14 +484,9 @@ Page({
         navigateIfLoggedIn('/pages/user/notifications');
     },
 
-    // ======== 偏好设置入口 ========
-    onPreferencesTap() {
-        navigateIfLoggedIn('/pages/user/preferences');
-    },
-
     // ======== 设置 ========
     onSettingsTap() {
-        return handleSettingsTap();
+        return handleSettingsTap(this);
     },
 
     // ======== 隐私协议 ========

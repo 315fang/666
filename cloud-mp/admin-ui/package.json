@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "check": "node ./scripts/check-privileged-config-usage.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"

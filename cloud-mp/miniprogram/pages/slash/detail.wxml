@@ -20,7 +20,7 @@
         <image class="hero-product-img" src="{{detail.product && detail.product.images && detail.product.images[0] || '/assets/icons/package.svg'}}" mode="aspectFill"/>
         <view class="hero-copy">
           <view class="hero-badge-row">
-            <text class="hero-badge">砍价特惠</text>
+            <text class="hero-badge">砍价活动</text>
             <view class="status-badge status-{{detail.status}}">
               <text>{{statusTextMap[detail.status] || detail.status}}</text>
             </view>
@@ -32,7 +32,7 @@
           </view>
           <view class="hero-stats">
             <view class="stat-card">
-              <text class="stat-label">当前价格</text>
+              <text class="stat-label">当前价</text>
               <text class="stat-value">¥{{detail.current_price}}</text>
             </view>
             <view class="stat-card">
@@ -72,7 +72,7 @@
       <view class="notice-row" wx:if="{{detail.status === 'active' && !detail._expired}}">
         <image src="/assets/icons/clock.svg" class="icon-xs" mode="aspectFit"/>
         <text class="notice-text" wx:if="{{detail._remainSecs > 0 || detail._remainHours > 0 || detail._remainMins > 0}}">剩余 {{detail._remainHours}}小时{{detail._remainMins}}分{{detail._remainSecs}}秒</text>
-        <text class="notice-text" wx:else>即将结束，请尽快邀请好友</text>
+        <text class="notice-text" wx:else>即将结束，请尽快分享</text>
       </view>
       <view class="notice-row" wx:if="{{detail.status === 'expired' || detail._expired}}">
         <image src="/assets/icons/info.svg" class="icon-xs" mode="aspectFit"/>
@@ -81,12 +81,9 @@
     </view>
 
     <view class="section-card" wx:if="{{detail.activity}}">
-      <text class="section-title block-title">活动说明</text>
-      <view class="rule-line" wx:if="{{detail.activity.expire_hours}}"><text class="rule-dot"></text><text>发起后 {{detail.activity.expire_hours}} 小时内有效。</text></view>
-      <view class="rule-line" wx:if="{{detail._maxHelpersText}}"><text class="rule-dot"></text><text>帮砍名额：{{detail._maxHelpersText}}</text></view>
-      <view class="rule-line" wx:if="{{detail._slashRangeHint}}"><text class="rule-dot"></text><text>{{detail._slashRangeHint}}</text></view>
-      <view class="rule-line" wx:if="{{detail.activity.stock_limit > 0}}"><text class="rule-dot"></text><text>活动库存有限，已抢 {{detail._soldPct}}%（{{detail._soldCount}}/{{detail.activity.stock_limit}} 件）。</text></view>
-      <view class="rule-line"><text class="rule-dot"></text><text>砍至底价后可按当前价下单，最终价格以结算页为准。</text></view>
+      <text class="section-title block-title">活动规则</text>
+      <view class="rule-line" wx:if="{{detail.activity.expire_hours}}"><text class="rule-dot"></text><text>活动有效期 {{detail.activity.expire_hours}} 小时。</text></view>
+      <view class="rule-line"><text class="rule-dot"></text><text>到底价后可按当前价下单，价格以结算页为准。</text></view>
     </view>
 
     <view class="section-card" wx:if="{{detail.activity && detail.activity.stock_limit > 0}}">
@@ -130,7 +127,7 @@
       <text class="section-title block-title">帮砍好友</text>
       <view class="empty-helpers">
         <image src="/assets/icons/users.svg" class="empty-icon" mode="aspectFit"/>
-        <text class="empty-text">还没有好友帮砍\n快去分享给朋友吧</text>
+        <text class="empty-text">暂无帮砍记录\n去分享给好友吧</text>
       </view>
     </view>
   </block>
@@ -144,14 +141,14 @@
       </button>
       <view class="btn-buy-wrap" wx:if="{{detail.status === 'success' || detail.status === 'active'}}">
         <view class="btn-buy {{detail.status === 'success' ? 'btn-buy-ready' : 'btn-buy-default'}}" bindtap="onBuy">
-          <text class="btn-buy-line1" wx:if="{{detail.status === 'success'}}">已到底价 · 立即抢购</text>
-          <text class="btn-buy-line1" wx:else>¥{{detail.current_price}} 抢先下单</text>
-          <text class="btn-buy-line2" wx:if="{{detail.status === 'active'}}">现价购买 · 不必等砍到底</text>
+          <text class="btn-buy-line1" wx:if="{{detail.status === 'success'}}">已到底价 · 立即下单</text>
+          <text class="btn-buy-line1" wx:else>¥{{detail.current_price}} 立即下单</text>
+          <text class="btn-buy-line2" wx:if="{{detail.status === 'active'}}">现价可直接购买</text>
           <text class="btn-buy-line2" wx:if="{{detail.status === 'success'}}">库存有限以结算为准</text>
         </view>
       </view>
       <view class="btn-disabled" wx:if="{{detail.status === 'expired' || detail.status === 'purchased'}}">
-        <text wx:if="{{detail.status === 'expired'}}">活动已过期</text>
+        <text wx:if="{{detail.status === 'expired'}}">活动已结束</text>
         <text wx:else>已完成购买</text>
       </view>
     </block>
@@ -164,7 +161,7 @@
             <text class="btn-helped-text">已帮砍 ¥{{myHelpAmount}}</text>
           </view>
           <button class="btn-invite-helper share-button-reset" open-type="share">
-            <text>继续邀请好友</text>
+            <text>继续邀请</text>
           </button>
         </view>
 
@@ -175,18 +172,18 @@
         <view class="btn-help-wrap" wx:else>
           <view class="btn-help {{helping ? 'btn-help-loading' : ''}}" bindtap="onHelp">
             <image src="/assets/icons/tag.svg" class="btn-icon" mode="aspectFit" wx:if="{{!helping}}"/>
-            <text class="btn-help-text" wx:if="{{!helping}}">帮 TA 砍一刀</text>
+            <text class="btn-help-text" wx:if="{{!helping}}">帮忙砍一刀</text>
             <text class="btn-help-text" wx:else>帮砍中…</text>
           </view>
         </view>
       </block>
 
       <view class="btn-disabled btn-success-wrap" wx:elif="{{detail.status === 'success'}}">
-        <text>好友已砍到底价</text>
+        <text>已砍到底价</text>
       </view>
 
       <view class="btn-disabled" wx:elif="{{detail.status === 'expired' || detail.status === 'purchased'}}">
-        <text wx:if="{{detail.status === 'expired'}}">活动已过期</text>
+        <text wx:if="{{detail.status === 'expired'}}">活动已结束</text>
         <text wx:else>好友已完成购买</text>
       </view>
     </block>

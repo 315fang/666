@@ -51,18 +51,63 @@
           indicator-active-color="#B98B58"
         >
           <swiper-item wx:for="{{categoryBanners}}" wx:key="id">
-            <image
-              class="category-banner-img"
-              src="{{item.image}}"
-              mode="aspectFill"
+            <view
+              class="category-banner-slide"
               bindtap="onCategoryBannerTap"
               data-item="{{item}}"
-            />
+            >
+              <image
+                wx:if="{{item.image}}"
+                class="category-banner-img"
+                src="{{item.image}}"
+                mode="aspectFill"
+              />
+              <view wx:else class="category-banner-fallback">
+                <view class="category-banner-fallback-orb orb-a"></view>
+                <view class="category-banner-fallback-orb orb-b"></view>
+                <view class="category-banner-fallback-copy">
+                  <text class="category-banner-fallback-title">{{item.title || '分类海报'}}</text>
+                  <text class="category-banner-fallback-subtitle" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
+                </view>
+              </view>
+            </view>
           </swiper-item>
         </swiper>
       </view>
 
-      <view class="cat-section cat-section-anchor" wx:for="{{categories}}" wx:key="id" id="cat-{{item.id}}">
+      <view class="cat-section cat-section-anchor" wx:if="{{productBundles.length > 0}}" id="cat-bundle-zone">
+        <view class="cat-section-header">
+          <text class="cat-section-title">组合专区</text>
+        </view>
+        <view class="bundle-zone-list">
+          <view
+            class="bundle-zone-card"
+            wx:for="{{productBundles}}"
+            wx:key="id"
+            bindtap="onOpenBundleDetail"
+            data-id="{{item.id}}"
+            hover-class="press"
+          >
+            <image class="bundle-zone-image" src="{{item.cover_preview_url || item.cover_image}}" mode="aspectFill" wx:if="{{item.cover_preview_url || item.cover_image}}"></image>
+            <view class="bundle-zone-image bundle-zone-image-placeholder" wx:else>
+              <text class="bundle-zone-image-placeholder-text">组合</text>
+            </view>
+            <view class="bundle-zone-info">
+              <text class="bundle-zone-title">{{item.hero_title || item.title}}</text>
+              <text class="bundle-zone-subtitle" wx:if="{{item.hero_subtitle || item.subtitle}}">{{item.hero_subtitle || item.subtitle}}</text>
+              <view class="bundle-zone-tags" wx:if="{{item.channel_tags && item.channel_tags.length > 0}}">
+                <text class="bundle-zone-tag" wx:for="{{item.channel_tags}}" wx:key="index">{{item}}</text>
+              </view>
+              <view class="bundle-zone-meta">
+                <text class="bundle-zone-price">¥{{item.bundle_price}}</text>
+                <text class="bundle-zone-count">{{item.group_count}} 组 / {{item.option_count}} 选项</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="cat-section cat-section-anchor" wx:for="{{renderedCategories}}" wx:key="id" id="cat-{{item.id}}">
         <view class="cat-section-header">
           <text class="cat-section-title">{{item.name}}</text>
         </view>
@@ -85,9 +130,7 @@
             </view>
             <!-- 中间信息 -->
             <view class="product-info">
-              <view class="product-tag-row" wx:if="{{(prod.product_tag && prod.product_tag !== 'normal') || prod.hasGroupActivity || prod.hasSlashActivity}}">
-                <text class="ptag ptag-group" wx:if="{{prod.hasGroupActivity}}">拼团</text>
-                <text class="ptag ptag-slash" wx:if="{{prod.hasSlashActivity}}">砍价</text>
+              <view class="product-tag-row" wx:if="{{prod.product_tag && prod.product_tag !== 'normal'}}">
                 <text class="ptag ptag-hot" wx:if="{{prod.product_tag === 'hot'}}">爆品</text>
                 <text class="ptag ptag-discount" wx:if="{{prod.product_tag === 'discount'}}">折扣</text>
                 <text class="ptag ptag-new" wx:if="{{prod.product_tag === 'new'}}">新品</text>

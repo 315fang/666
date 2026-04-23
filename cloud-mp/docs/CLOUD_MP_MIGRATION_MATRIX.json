@@ -318,12 +318,6 @@
       "status": "已通"
     },
     {
-      "item": "pages/user/preferences",
-      "legacy": "miniprogram/pages/user/preferences",
-      "target": "cloud-mp/miniprogram/pages/user/preferences",
-      "status": "已通"
-    },
-    {
       "item": "pages/user/ticket-list",
       "legacy": "miniprogram/pages/user/ticket-list",
       "target": "cloud-mp/miniprogram/pages/user/ticket-list",
@@ -908,12 +902,6 @@
       "status": "已通"
     },
     {
-      "item": "user.getPreferences",
-      "legacy": "GET /user/preferences",
-      "target": "cloud-mp/cloudfunctions/user/index.js",
-      "status": "已通"
-    },
-    {
       "item": "user.getProfile",
       "legacy": "GET /user/profile | GET /user/info",
       "target": "cloud-mp/cloudfunctions/user/index.js",
@@ -1030,12 +1018,6 @@
     {
       "item": "user.shareEligibility",
       "legacy": "GET /questionnaire/share-eligibility",
-      "target": "cloud-mp/cloudfunctions/user/index.js",
-      "status": "已通"
-    },
-    {
-      "item": "user.submitPreferences",
-      "legacy": "POST /user/preferences/submit",
       "target": "cloud-mp/cloudfunctions/user/index.js",
       "status": "已通"
     },

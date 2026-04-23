@@ -1,0 +1,20 @@
+{
+  "name": "visitor-account-cleanup",
+  "version": "1.0.0",
+  "description": "定时任务：自动隐藏无业务关系的游客账号",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  },
+  "cloudfunction-config": {
+    "memorySize": 256,
+    "timeout": 30
+  },
+  "triggers": [
+    {
+      "name": "visitorAccountCleanupTimer",
+      "type": "timer",
+      "config": "0 30 3 * * * *"
+    }
+  ]
+}

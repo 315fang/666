@@ -1,7 +1,7 @@
 // pages/order/list.js
 const { get, post } = require('../../utils/request');
 const { parseImages } = require('../../utils/dataFormatter');
-const { resolveCloudImageList } = require('./utils/cloudAsset');
+const { resolveCloudImageList, resolveCloudImageUrl } = require('./utils/cloudAsset');
 const { ErrorHandler } = require('../../utils/errorHandler');
 const { normalizeOrderConsumer, normalizeRefundConsumer, getRefundStatusText } = require('./orderConsumerFields');
 
@@ -15,13 +15,13 @@ function buildOrderActivityInfo(order = {}) {
         const isPaid = order.status && order.status !== 'pending' && order.status !== 'pending_payment' && order.status !== 'cancelled';
         let actionText, disabled;
         if (groupNo && order.status === 'cancelled') {
-            actionText = '查看当前团状态';
+            actionText = '查看拼团';
             disabled = false;
         } else if (groupNo) {
-            actionText = '查看进度';
+            actionText = '查看拼团';
             disabled = false;
         } else if (isPaid) {
-            actionText = '查看拼团';
+            actionText = '刷新查看';
             disabled = false;
         } else {
             actionText = '支付后查看';
@@ -40,7 +40,7 @@ function buildOrderActivityInfo(order = {}) {
         return {
             type: 'slash',
             label: '砍价',
-            actionText: slashNo ? '查看详情' : '去我的砍价',
+            actionText: slashNo ? '查看砍价' : '我的砍价',
             targetNo: slashNo,
             disabled: false
         };
@@ -126,7 +126,7 @@ Page({
                     // 只传 order_ids 过滤（若后端支持），否则限量拉取并在前端过滤
                     const refundsRes = await get('/refunds', { page: 1, limit: 20 }).catch(() => ({ data: { list: [] } }));
                     activeRefunds = (refundsRes.data?.list || [])
-                        .filter(r => ['pending', 'approved', 'processing'].includes(r.status));
+                        .filter(r => ['pending', 'approved', 'processing', 'failed'].includes(r.status));
                 } catch (_) { /* 退款状态查询失败不影响主列表 */ }
             }
 
@@ -139,10 +139,14 @@ Page({
             // 处理每个订单
             newOrders = await Promise.all(newOrders.map(async (rawOrder) => {
                 const order = normalizeOrderConsumer(rawOrder);
-                if (order.product && order.product.images) {
+                if (order.product) {
                     order.product.images = await resolveCloudImageList(
                         order.product.images,
                         parseImages(order.product.images)
+                    );
+                    order.product.image = await resolveCloudImageUrl(
+                        order.product.image || order.product.image_url || '',
+                        order.product.images
                     );
                 }
                 const quantity = Number(order.quantity || order.qty || 1);
@@ -201,12 +205,16 @@ Page({
                         order.product.images,
                         parseImages(order.product.images)
                     );
+                    order.product.image = await resolveCloudImageUrl(
+                        order.product.image || order.product.image_url || '',
+                        order.product.images
+                    );
                 }
 
                 const item = {
                     ...order,
                     id: order.id,
-                    hasActiveRefund: ['pending', 'approved', 'processing'].includes(refund.status),
+                    hasActiveRefund: ['pending', 'approved', 'processing', 'failed'].includes(refund.status),
                     refundId: refund.id,
                     refundStatus: refund.status,
                     activeRefund: refund,
@@ -482,11 +490,4 @@ Page({
         this.setData({ orders });
     },
 
-    onQuickGroupTap() {
-        wx.navigateTo({ url: '/pages/group/list' });
-    },
-
-    onQuickSlashTap() {
-        wx.navigateTo({ url: '/pages/slash/list?tab=my' });
-    }
 });

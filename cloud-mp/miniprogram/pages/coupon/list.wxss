@@ -46,12 +46,12 @@
 .coupon-card.unused.coupon-expired { border-color: #E5E7EB; background: #F3F4F6; }
 
 /* Left: value */
-.coupon-left { padding: 30rpx 10rpx 30rpx 20rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 180rpx; box-sizing: border-box; }
-.coupon-value-wrap { display: flex; align-items: baseline; justify-content: center; color: #E53935; gap: 4rpx; }
+.coupon-left { padding: 28rpx 12rpx 28rpx 20rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 190rpx; min-width: 190rpx; box-sizing: border-box; }
+.coupon-value-wrap { min-height: 74rpx; display: flex; align-items: flex-start; justify-content: center; color: #E53935; gap: 4rpx; width: 100%; }
 .coupon-exchange-badge { font-size: 26rpx; font-weight: 700; color: #E53935; }
-.coupon-currency { font-size: 28rpx; font-weight: bold; }
-.coupon-value { font-size: 60rpx; font-weight: 800; line-height: 1; }
-.coupon-min { font-size: 22rpx; color: #A45A5A; margin-top: 12rpx; text-align: center; }
+.coupon-currency { font-size: 28rpx; font-weight: 700; line-height: 1; padding-top: 8rpx; }
+.coupon-value { font-size: 60rpx; font-weight: 800; line-height: 1; text-align: center; font-variant-numeric: tabular-nums; }
+.coupon-min { font-size: 22rpx; color: #A45A5A; margin-top: 10rpx; text-align: center; line-height: 1.35; }
 
 /* Divider */
 .coupon-divider { display: flex; flex-direction: column; align-items: center; justify-content: space-between; width: 2rpx; position: relative; }

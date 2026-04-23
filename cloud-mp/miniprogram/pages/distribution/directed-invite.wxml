@@ -1,0 +1,44 @@
+<view class="page">
+  <view class="state" wx:if="{{loading}}">
+    <text class="state-title">加载中…</text>
+  </view>
+
+  <view class="state" wx:elif="{{loadError}}">
+    <text class="state-title">邀约不存在或已失效</text>
+    <text class="state-desc">{{loadErrorText}}</text>
+  </view>
+
+  <view wx:else>
+    <view class="hero-card">
+      <text class="hero-kicker">定向邀约</text>
+      <text class="hero-title">推广合伙人邀约</text>
+      <text class="hero-desc">接受后进入审核，通过后生效，并划拨相应货款。</text>
+      <view class="status-pill">{{invite.status_text}}</view>
+    </view>
+
+    <view class="card">
+      <text class="card-title">发起人</text>
+      <text class="card-line">{{invite.inviter.nickname || '团队伙伴'}}</text>
+      <text class="card-sub">{{invite.inviter.role_name || ''}} · {{invite.inviter.invite_code || '暂无ID'}}</text>
+    </view>
+
+    <view class="card">
+      <text class="card-title">邀约信息</text>
+      <text class="card-line">目标身份：推广合伙人</text>
+      <text class="card-line">通过后划拨货款：¥{{invite.transfer_amount}}</text>
+      <text class="card-line" wx:if="{{invite.lock_status_text}}">票据状态：{{invite.lock_status_text}}</text>
+      <text class="card-line">有效期至：{{invite.ticket_expire_at}}</text>
+      <text class="card-sub">{{invite.accept_hint}}</text>
+    </view>
+
+    <view class="card" wx:if="{{invite.accepted_user && invite.accepted_user.nickname}}">
+      <text class="card-title">接受人</text>
+      <text class="card-line">{{invite.accepted_user.nickname}}</text>
+      <text class="card-sub">{{invite.accepted_user.invite_code || '暂无ID'}}</text>
+    </view>
+
+    <button class="action-btn primary" wx:if="{{invite.can_accept}}" bindtap="onAcceptInvite" loading="{{accepting}}">确认接受邀约</button>
+    <button class="action-btn" wx:elif="{{invite.can_share}}" open-type="share">分享邀约</button>
+    <view class="footer-tip" wx:else>该邀约当前无需处理。</view>
+  </view>
+</view>

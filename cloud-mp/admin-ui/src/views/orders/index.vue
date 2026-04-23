@@ -111,6 +111,8 @@
             <el-form-item label=" ">
               <el-space wrap>
                 <el-checkbox v-model="searchForm.include_suborders">含拆分子单</el-checkbox>
+                <el-checkbox v-model="searchForm.include_test">含测试订单</el-checkbox>
+                <el-checkbox v-model="searchForm.include_hidden">含清理箱订单</el-checkbox>
                 <el-button type="primary" @click="handleSearch">查询</el-button>
                 <el-button @click="handleReset">清空条件</el-button>
                 <el-button @click="handleExport" :loading="exporting">导出 JSON</el-button>
@@ -177,6 +179,8 @@
             <div class="text-price">¥{{ row.display_pay_amount }}</div>
             <div style="margin-top:6px">
               <el-tag :type="getStatusType(row.status)" size="small">{{ row.display_status_text }}</el-tag>
+              <el-tag v-if="row.is_test_order" type="warning" effect="plain" size="small" style="margin-left:6px">测试订单</el-tag>
+              <el-tag v-if="row.order_visibility === 'hidden'" type="info" effect="plain" size="small" style="margin-left:6px">已隐藏</el-tag>
             </div>
             <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;">
               <el-tag :type="paymentMethodTagType(row.display_payment_method_code || detailPaymentMethod(row))" effect="plain" size="small">
@@ -203,8 +207,14 @@
               <el-button text size="small">更多<el-icon><ArrowDown /></el-icon></el-button>
               <template #dropdown>
                   <el-dropdown-menu>
-                    <el-dropdown-item v-if="canAdjustOrderAmount" command="amount" :disabled="!['pending', 'pending_payment'].includes(row.status)">改价</el-dropdown-item>
+                    <el-dropdown-item v-if="canAdjustOrderAmount" command="amount" :disabled="!canAdjustAmountRow(row)">改价</el-dropdown-item>
                     <el-dropdown-item command="remark">备注</el-dropdown-item>
+                    <el-dropdown-item v-if="canManageSettings" command="test_flag">
+                      {{ row.is_test_order ? '取消测试订单标记' : '标记为测试订单' }}
+                    </el-dropdown-item>
+                    <el-dropdown-item v-if="canManageSettings" command="visibility" :class="row.order_visibility === 'hidden' ? '' : 'warning-text'">
+                      {{ row.order_visibility === 'hidden' ? '移出清理箱' : '移入清理箱' }}
+                    </el-dropdown-item>
                     <el-dropdown-item command="repair_fulfillment" :disabled="['shipped', 'completed', 'refunding', 'refunded', 'cancelled'].includes(row.status)">修复履约</el-dropdown-item>
                     <el-dropdown-item v-if="canForceCompleteOrder && row.status === 'shipped'" command="force_complete" class="warning-text">强制完成</el-dropdown-item>
                     <el-dropdown-item v-if="canForceCancelOrder" command="force_cancel" :disabled="['completed', 'cancelled', 'refunded'].includes(row.status)" class="danger-text">强制取消</el-dropdown-item>
@@ -241,8 +251,14 @@
 
         <el-descriptions :column="2" border size="small" style="margin-bottom:20px">
           <el-descriptions-item label="订单号" :span="2">{{ detailData.order_no }}</el-descriptions-item>
+          <el-descriptions-item label="订单类型">{{ orderTypeText(detailData) }}</el-descriptions-item>
           <el-descriptions-item label="订单状态">
             <el-tag :type="getStatusType(detailData.status)">{{ detailData.display_status_text }}</el-tag>
+            <el-tag v-if="detailData.is_test_order" type="warning" effect="plain" size="small" style="margin-left:8px">测试订单</el-tag>
+            <el-tag v-if="detailData.order_visibility === 'hidden'" type="info" effect="plain" size="small" style="margin-left:8px">已隐藏</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="清理分类">
+            {{ detailData.order_visibility === 'hidden' ? cleanupCategoryText(detailData.cleanup_category) : '正常显示' }}
           </el-descriptions-item>
           <el-descriptions-item label="履约方式">{{ fulfillmentText(detailData) }}</el-descriptions-item>
           <el-descriptions-item label="支付方式">
@@ -281,6 +297,14 @@
         </el-row>
 
         <div class="detail-section-bar">商品信息</div>
+        <div v-if="detailData.bundle_meta" class="detail-card" style="margin-bottom:16px;">
+          <div class="detail-card-title">组合信息</div>
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item label="组合标题">{{ detailData.bundle_meta.title || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="组合价">¥{{ money(detailData.bundle_meta.bundle_price || detailData.pay_amount) }}</el-descriptions-item>
+            <el-descriptions-item label="组合副标题" :span="2">{{ detailData.bundle_meta.subtitle || '-' }}</el-descriptions-item>
+          </el-descriptions>
+        </div>
         <el-row :gutter="16" class="detail-goods-row">
           <el-col :xs="24" :lg="15">
             <el-table :data="detailLineItems" border size="small" class="goods-lines-table">
@@ -310,6 +334,7 @@
             <div class="amount-summary">
               <div class="amount-row"><span>商品金额</span><span>¥{{ money(detailData.total_amount) }}</span></div>
               <div class="amount-row"><span>运费金额</span><span>¥{{ money(detailData.shipping_fee) }}</span></div>
+              <div class="amount-row danger" v-if="Number(detailData.bundle_discount || 0) > 0"><span>组合优惠</span><span>-¥{{ money(detailData.bundle_discount) }}</span></div>
               <div class="amount-row danger"><span>优惠金额</span><span>-¥{{ money(detailData.coupon_discount) }}</span></div>
               <div class="amount-row danger"><span>积分抵扣</span><span>-¥{{ money(detailData.points_discount) }}</span></div>
               <div class="amount-row total"><span>应付金额</span><span class="text-price">¥{{ detailData.display_pay_amount }}</span></div>
@@ -357,6 +382,11 @@
           <el-descriptions-item label="物流单号">{{ detailData.tracking_no || '-' }}</el-descriptions-item>
           <el-descriptions-item label="自提门店" v-if="detailData.delivery_type === 'pickup'">{{ detailData.pickup_station?.name || '-' }}</el-descriptions-item>
           <el-descriptions-item label="核销人ID" v-if="detailData.delivery_type === 'pickup'">{{ detailData.pickup_verified_by || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="核销人" v-if="detailData.delivery_type === 'pickup'">{{ detailData.pickup_verified_user?.nickname || detailData.pickup_verified_by || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="核销时间" v-if="detailData.delivery_type === 'pickup'">{{ fmtDateTime(detailData.pickup_verified_at) || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="服务费" v-if="detailData.delivery_type === 'pickup'">¥{{ money(detailData.pickup_service_fee_amount) }}</el-descriptions-item>
+          <el-descriptions-item label="进货价补偿" v-if="detailData.delivery_type === 'pickup'">¥{{ money(detailData.pickup_principal_return_amount) }}</el-descriptions-item>
+          <el-descriptions-item label="补偿冲回" v-if="detailData.delivery_type === 'pickup' && Number(detailData.pickup_principal_reversal_amount || 0) > 0">¥{{ money(detailData.pickup_principal_reversal_amount) }}</el-descriptions-item>
           <el-descriptions-item label="最近代理商ID">{{ detailData.nearest_agent_id || '-' }}</el-descriptions-item>
           <el-descriptions-item label="实际履约人ID">{{ detailData.fulfillment_partner_id || '-' }}</el-descriptions-item>
           <el-descriptions-item label="锁定进货价">¥{{ money(detailData.locked_agent_cost) }}</el-descriptions-item>
@@ -524,6 +554,26 @@
       </template>
     </el-dialog>
 
+    <!-- ===== 清理箱弹窗 ===== -->
+    <el-dialog v-model="visibilityVisible" :title="visibilityForm.visibility === 'hidden' ? '移入订单清理箱' : '移出订单清理箱'" width="440px">
+      <el-form :model="visibilityForm" label-width="90px">
+        <el-form-item label="清理分类" required>
+          <el-select v-model="visibilityForm.cleanup_category" :disabled="visibilityForm.visibility === 'visible'" style="width:100%">
+            <el-option v-for="item in cleanupCategoryOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="操作原因" required>
+          <el-input v-model="visibilityForm.reason" type="textarea" :rows="3" maxlength="200" show-word-limit />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="visibilityVisible = false">取消</el-button>
+        <el-button :type="visibilityForm.visibility === 'hidden' ? 'warning' : 'primary'" @click="submitOrderVisibility" :loading="submittingVisibility">
+          {{ visibilityForm.visibility === 'hidden' ? '移入清理箱' : '恢复显示' }}
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- ===== 强制动作弹窗 ===== -->
     <el-dialog v-model="forceVisible" :title="forceType === 'complete' ? '强制完成订单' : '强制取消订单'" width="400px">
       <el-alert v-if="forceType === 'cancel'" title="取消订单将自动发起退款，不可逆操作！" type="error" :closable="false" style="margin-bottom:15px" />
@@ -553,6 +603,8 @@ import {
   refreshAdminLogistics,
   adjustOrderAmount,
   addOrderRemark,
+  updateOrderTestFlag,
+  updateOrderVisibility,
   repairOrderFulfillment,
   getMiniProgramConfig,
   updateMiniProgramConfig,
@@ -588,7 +640,9 @@ const searchForm = reactive({
   product_name: '',
   payment_method: '',
   delivery_type: '',
-  include_suborders: false
+  include_suborders: false,
+  include_test: false,
+  include_hidden: false
 })
 const dateRange = ref([])
 
@@ -603,6 +657,8 @@ function applyRouteQueryToFilters(query = {}) {
   searchForm.payment_method = query?.payment_method ? String(query.payment_method) : ''
   searchForm.delivery_type = query?.delivery_type ? String(query.delivery_type) : ''
   searchForm.include_suborders = ['1', 'true', 'yes'].includes(String(query?.include_suborders || '').toLowerCase())
+  searchForm.include_test = ['1', 'true', 'yes'].includes(String(query?.include_test || '').toLowerCase())
+  searchForm.include_hidden = ['1', 'true', 'yes'].includes(String(query?.include_hidden || '').toLowerCase())
   if (query?.start_date && query?.end_date) {
     dateRange.value = [String(query.start_date), String(query.end_date)]
   } else {
@@ -614,6 +670,8 @@ const submittingShip = ref(false)
 const submittingAmount = ref(false)
 const submittingRemark = ref(false)
 const submittingForce = ref(false)
+const submittingTestFlag = ref(false)
+const submittingVisibility = ref(false)
 const logisticsMode = ref('third_party')
 const logisticsTrackingRequired = ref(true)
 const logisticsCompanyRequired = ref(false)
@@ -724,6 +782,8 @@ const buildListQueryParams = (forExport = false) => {
     params.end_date = dateRange.value[1]
   }
   if (searchForm.include_suborders) params.include_suborders = '1'
+  if (searchForm.include_test) params.include_test = '1'
+  if (searchForm.include_hidden) params.include_hidden = '1'
   return params
 }
 
@@ -771,6 +831,23 @@ const runOrderMutation = async (loadingRef, task, successMessage, onSuccess) => 
   }
 }
 
+const cleanupCategoryOptions = [
+  { label: '取消未支付噪音', value: 'cancelled_unpaid_noise' },
+  { label: '测试订单', value: 'test_order' },
+  { label: '无效用户噪音', value: 'invalid_user_noise' },
+  { label: '财务关联保留', value: 'finance_related_keep' },
+  { label: '手动清理', value: 'manual_cleanup' }
+]
+const cleanupCategoryText = (value) => cleanupCategoryOptions.find((item) => item.value === value)?.label || value || '手动清理'
+const inferOrderCleanupCategory = (row = {}) => {
+  if (row.is_test_order) return 'test_order'
+  if (String(row.status || '').trim().toLowerCase() === 'cancelled') return 'cancelled_unpaid_noise'
+  if (['refunding', 'refunded', 'paid', 'shipped', 'completed'].includes(String(row.status || '').trim().toLowerCase())) {
+    return 'finance_related_keep'
+  }
+  return 'manual_cleanup'
+}
+
 watch(
   () => searchForm.status,
   (v) => {
@@ -799,8 +876,20 @@ const handleExport = async () => {
 }
 
 const fetchMiniProgramConfig = async () => {
+  if (!canManageSettings.value) {
+    miniProgramConfigSnapshot.value = null
+    logisticsMode.value = 'third_party'
+    logisticsTrackingRequired.value = true
+    logisticsCompanyRequired.value = false
+    shippingCompanyOptions.value = mergeShippingCompanyOptions(
+      DEFAULT_SHIPPING_COMPANY_OPTIONS,
+      [],
+      readLocalShippingCompanyOptions()
+    )
+    return
+  }
   try {
-    const data = await getMiniProgramConfig()
+    const data = await getMiniProgramConfig({ skipErrorMessage: true })
     miniProgramConfigSnapshot.value = data || null
     logisticsMode.value = data?.logistics_config?.shipping_mode || 'third_party'
     logisticsTrackingRequired.value = data?.logistics_config?.shipping_tracking_no_required !== false
@@ -868,6 +957,8 @@ const handleReset = () => {
   searchForm.payment_method = ''
   searchForm.delivery_type = ''
   searchForm.include_suborders = false
+  searchForm.include_test = false
+  searchForm.include_hidden = false
   dateRange.value = []
   handleSearch()
 }
@@ -917,6 +1008,8 @@ const normalizeOrderDisplay = (row = {}) => {
   const paymentMethodCode = detailPaymentMethod(row)
   return {
     ...row,
+    order_visibility: row.order_visibility === 'hidden' ? 'hidden' : 'visible',
+    cleanup_category: row.cleanup_category || '',
     display_pay_amount: money(row.pay_amount),
     display_status_text: row.status_text || getStatusText(row.status),
     display_payment_method_code: paymentMethodCode,
@@ -933,11 +1026,19 @@ const canShipRow = (row = {}) => {
   if ((type === 'group' || row?.group_no || row?.group_activity_id) && !row?.group_completed_at) return false
   return true
 }
+const canAdjustAmountRow = (row = {}) => {
+  const status = String(row?.status || '').trim().toLowerCase()
+  if (!['pending', 'pending_payment'].includes(status)) return false
+  const commissions = Array.isArray(row?.commissions) ? row.commissions : []
+  return commissions.length === 0
+}
 const detailPaymentMethod = (row = {}) => {
   const raw = String(row.payment_method || '').trim().toLowerCase()
   if (['wechat', 'wx', 'jsapi', 'miniapp', 'wechatpay', 'weixin'].includes(raw)) return 'wechat'
   if (['goods_fund'].includes(raw)) return 'goods_fund'
   if (['wallet', 'balance', 'credit', 'debt'].includes(raw)) return 'wallet'
+  if (row.goods_fund_paid === true) return 'goods_fund'
+  if (row.paid_at) return 'wechat'
   return raw || ''
 }
 const paymentMethodText = (method) => ({
@@ -965,6 +1066,7 @@ const deliveryTypeText = (type) => ({
 
 const orderTypeText = (row) => {
   const type = String(row?.type || row?.order_type || '').trim().toLowerCase()
+  if (type === 'bundle' || row?.bundle_id || row?.bundle_meta) return '组合订单'
   if (type === 'group' || row?.group_no || row?.group_activity_id) return '拼团订单'
   if (type === 'slash' || row?.slash_no || row?.slash_activity_id) return '砍价订单'
   if (String(row?.delivery_type || '').trim().toLowerCase() === 'pickup') return '自提订单'
@@ -1289,10 +1391,79 @@ const submitForce = async () => {
   await runOrderMutation(submittingForce, action, message, () => { forceVisible.value = false })
 }
 
+const handleTestFlag = async (row) => {
+  const nextFlag = !row.is_test_order
+  try {
+    await ElMessageBox.confirm(
+      nextFlag
+        ? `确认将订单「${row.order_no}」标记为测试订单？标记后将默认从业务统计和常规列表中排除。`
+        : `确认取消订单「${row.order_no}」的测试订单标记？`,
+      nextFlag ? '标记测试订单' : '取消测试订单标记',
+      { type: 'warning' }
+    )
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e?.message || '已取消')
+    return
+  }
+
+  await runOrderMutation(
+    submittingTestFlag,
+    () => updateOrderTestFlag(row.id, {
+      is_test_order: nextFlag,
+      reason: nextFlag ? '管理员标记测试订单' : '管理员取消测试订单标记'
+    }),
+    nextFlag ? '订单已标记为测试订单' : '测试订单标记已取消',
+    (result) => {
+      if (detailVisible.value && currentOrder.value && String(currentOrder.value.id) === String(row.id)) {
+        detailData.value = normalizeOrderDisplay(result?.data || result)
+      }
+    }
+  )
+}
+
+const visibilityVisible = ref(false)
+const visibilityTarget = ref(null)
+const visibilityForm = reactive({
+  visibility: 'hidden',
+  cleanup_category: 'manual_cleanup',
+  reason: ''
+})
+
+const handleOrderVisibility = (row) => {
+  const hidden = row.order_visibility === 'hidden'
+  visibilityTarget.value = row
+  visibilityForm.visibility = hidden ? 'visible' : 'hidden'
+  visibilityForm.cleanup_category = hidden ? (row.cleanup_category || 'manual_cleanup') : inferOrderCleanupCategory(row)
+  visibilityForm.reason = hidden ? '管理员恢复显示' : `管理员移入清理箱：${cleanupCategoryText(visibilityForm.cleanup_category)}`
+  visibilityVisible.value = true
+}
+
+const submitOrderVisibility = async () => {
+  if (!visibilityTarget.value) return
+  if (!visibilityForm.reason.trim()) return ElMessage.warning('请填写操作原因')
+  await runOrderMutation(
+    submittingVisibility,
+    () => updateOrderVisibility(visibilityTarget.value.id, {
+      visibility: visibilityForm.visibility,
+      cleanup_category: visibilityForm.cleanup_category,
+      reason: visibilityForm.reason.trim()
+    }),
+    visibilityForm.visibility === 'hidden' ? '订单已移入清理箱' : '订单已恢复显示',
+    (result) => {
+      visibilityVisible.value = false
+      if (detailVisible.value && visibilityTarget.value && detailData.value && String(detailData.value.id) === String(visibilityTarget.value.id)) {
+        detailData.value = normalizeOrderDisplay(result?.data || result)
+      }
+    }
+  )
+}
+
 // Dropdown dispatch
 const handleDropdown = (cmd, row) => {
   if (cmd === 'amount') handleAmount(row)
   else if (cmd === 'remark') handleRemarkItem(row)
+  else if (cmd === 'test_flag') handleTestFlag(row)
+  else if (cmd === 'visibility') handleOrderVisibility(row)
   else if (cmd === 'repair_fulfillment') handleRepairFulfillment(row)
   else if (cmd === 'force_complete') handleForce(row, 'complete')
   else if (cmd === 'force_cancel') handleForce(row, 'cancel')

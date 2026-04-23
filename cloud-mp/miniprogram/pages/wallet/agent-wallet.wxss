@@ -294,11 +294,16 @@
   display: flex;
   align-items: center;
   gap: 10rpx;
+  min-width: 0;
 }
 .log-type {
   font-size: 28rpx;
   color: #1E1710;
   font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 状态标签 */
@@ -323,12 +328,22 @@
   color: #B5A89A;
 }
 
+.log-detail {
+  font-size: 22rpx;
+  color: #8E8174;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* 单号行 */
 .log-ref-row {
   display: flex;
   align-items: center;
   gap: 4rpx;
   margin-top: 2rpx;
+  min-width: 0;
 }
 .log-ref-label {
   font-size: 20rpx;
@@ -338,6 +353,8 @@
 .log-ref-value {
   font-size: 20rpx;
   color: #A09585;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

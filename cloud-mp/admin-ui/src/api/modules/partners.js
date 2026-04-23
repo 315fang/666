@@ -21,6 +21,12 @@ export const updatePickupStation = (id, data) => request({ url: `/pickup-station
 export const getPickupStationStaff = (id) => request({ url: `/pickup-stations/${id}/staff`, method: 'get' })
 export const addPickupStationStaff = (id, data) => request({ url: `/pickup-stations/${id}/staff`, method: 'post', data })
 export const removePickupStationStaff = (stationId, staffId) => request({ url: `/pickup-stations/${stationId}/staff/${staffId}`, method: 'delete' })
+export const getPickupWarehouseOverview = () => request({ url: '/pickup-stations/warehouse-overview', method: 'get' })
+export const getPickupStationInventory = (params) => request({ url: '/pickup-stations/inventory', method: 'get', params })
+export const adjustPickupStationInventory = (id, data) => request({ url: `/pickup-stations/inventory/${id}/adjust`, method: 'post', data })
+export const getPickupProcurements = (params) => request({ url: '/pickup-stations/procurements', method: 'get', params })
+export const createPickupProcurement = (data) => request({ url: '/pickup-stations/procurements', method: 'post', data })
+export const receivePickupProcurement = (id, data) => request({ url: `/pickup-stations/procurements/${id}/receive`, method: 'post', data })
 
 export const getBranchAgentStations = (params) => request({ url: '/branch-agents/stations', method: 'get', params })
 export const createBranchAgentStation = (data) => request({ url: '/branch-agents/stations', method: 'post', data })
@@ -30,3 +36,7 @@ export const reviewBranchAgentClaim = (id, data) => request({ url: `/branch-agen
 
 export const getUpgradeApplications = (params) => request({ url: '/upgrade-applications', method: 'get', params })
 export const reviewUpgradeApplication = (id, data) => request({ url: `/upgrade-applications/${id}/review`, method: 'put', data })
+
+export const getDirectedInvites = (params) => request({ url: '/directed-invites', method: 'get', params })
+export const approveDirectedInvite = (id, data) => request({ url: `/directed-invites/${id}/approve`, method: 'post', data })
+export const rejectDirectedInvite = (id, data) => request({ url: `/directed-invites/${id}/reject`, method: 'post', data })

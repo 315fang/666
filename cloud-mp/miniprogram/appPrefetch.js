@@ -8,14 +8,24 @@ const { callFn } = require('./utils/cloud');
 const { get } = require('./utils/request');
 const { cachedGet } = require('./utils/requestCache');
 const HOME_PAGE_CACHE_KEY = 'home_config_cache_v2';
+const HOME_PAGE_ASSET_TTL = 4 * 60 * 60 * 1000;
 const CATEGORY_BOOTSTRAP_TTL = 5 * 60 * 1000;
 const ACTIVITY_BOOTSTRAP_TTL = 60 * 1000;
 const LIMITED_SALE_OVERVIEW_TTL = 30 * 1000;
 
 module.exports = {
-    prefetchHomeData() {
-        if (this.globalData.homeDataPromise) {
+    prefetchHomeData(options = {}) {
+        const { forceRefresh = false } = options;
+        const expireAt = Number(this.globalData.homePageDataExpireAt || 0);
+        if (!forceRefresh && this.globalData.homePageData && expireAt > Date.now()) {
+            return Promise.resolve(this.globalData.homePageData);
+        }
+        if (!forceRefresh && this.globalData.homeDataPromise) {
             return this.globalData.homeDataPromise;
+        }
+        if (forceRefresh) {
+            this.globalData.homePageData = null;
+            this.globalData.homePageDataExpireAt = 0;
         }
         try { wx.removeStorageSync(HOME_PAGE_CACHE_KEY); } catch (_) {}
 
@@ -139,7 +149,7 @@ module.exports = {
 
     _cacheHomePayload(payload) {
         this.globalData.homePageData = payload;
-        this.globalData.homePageDataExpireAt = 0;
+        this.globalData.homePageDataExpireAt = Date.now() + HOME_PAGE_ASSET_TTL;
         this.globalData.homePageDataVersion = '';
         const configs = payload?.configs || payload?.resources?.configs || {};
         if (configs) {

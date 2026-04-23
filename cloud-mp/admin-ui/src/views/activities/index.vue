@@ -39,6 +39,22 @@
         />
       </el-tab-pane>
 
+      <el-tab-pane label="抽奖履约" name="lottery_fulfillment">
+        <LotteryFulfillmentPanel
+          :records="lotteryRecords"
+          :records-loading="lotteryRecordsLoading"
+          :claims="lotteryClaims"
+          :claims-loading="lotteryClaimsLoading"
+          :prize-type-label="prizeTypeLabel"
+          @refresh="fetchLotteryFulfillment"
+          @retry="handleRetryLotteryFulfillment"
+          @approve="handleApproveLotteryClaim"
+          @reject="handleRejectLotteryClaim"
+          @ship="handleShipLotteryClaim"
+          @complete="handleCompleteLotteryClaim"
+        />
+      </el-tab-pane>
+
       <!-- ====== 节日活动配置 ====== -->
       <el-tab-pane label="节日活动" name="festival">
         <FestivalConfigPanel
@@ -48,7 +64,7 @@
           :global-ui-loading="globalUiLoading"
           :global-ui-saving="globalUiSaving"
           :activity-options-loading="activityOptionsLoading"
-          :activity-options="activityOptions"
+          :activity-options="mergedActivityOptions"
           :current-activity-option-key="currentActivityOptionKey"
           :find-activity-option="findActivityOption"
           :activity-option-label="activityOptionLabel"
@@ -70,7 +86,7 @@
           :links-data="linksData"
           :links-meta="linksMeta"
           :activity-options-loading="activityOptionsLoading"
-          :activity-options="activityOptions"
+          :activity-options="mergedActivityOptions"
           :current-activity-option-key="currentActivityOptionKey"
           :apply-option-to-item="applyOptionToItem"
           :add-links-item="addLinksItem"
@@ -125,19 +141,27 @@ import SlashActivityDialog from './components/SlashActivityDialog.vue'
 import LotteryPrizeDialog from './components/LotteryPrizeDialog.vue'
 import SlashActivityPanel from './components/SlashActivityPanel.vue'
 import LotteryPrizePanel from './components/LotteryPrizePanel.vue'
+import LotteryFulfillmentPanel from './components/LotteryFulfillmentPanel.vue'
 import FestivalConfigPanel from './components/FestivalConfigPanel.vue'
 import ActivityLinksPanel from './components/ActivityLinksPanel.vue'
 import {
   getSlashActivities, createSlashActivity, updateSlashActivity, deleteSlashActivity,
   getLotteryPrizes, createLotteryPrize, updateLotteryPrize, deleteLotteryPrize,
+  getLotteryRecords, getLotteryClaims, approveLotteryClaim, rejectLotteryClaim, shipLotteryClaim, completeLotteryClaim, retryLotteryFulfillment,
   getActivityOptions, getFestivalConfig, updateFestivalConfig, getGlobalUiConfig, updateGlobalUiConfig,
   getActivityLinks, updateActivityLinks,
   getProducts, uploadFile
 } from '@/api'
+import { MINI_PROGRAM_TARGETS, normalizeTargetLinkValue } from '@/config/miniProgramTargets'
 import { formatDateShort as formatDate } from '@/utils/format'
 
 const activeTab = ref('slash')
 const submitting = ref(false)
+
+const parseTextArray = (value) => String(value || '')
+  .split(/[\n,]/)
+  .map(item => item.trim())
+  .filter(Boolean)
 
 const PRIZE_STYLE_PRESETS = {
   miss: { display_emoji: '🍀', badge_text: '好运签', theme_color: '#6B7280', accent_color: '#D1D5DB' },
@@ -261,6 +285,17 @@ const prizeForm = reactive({
   id: null, name: '', image_url: '', file_id: '', cost_points: 100,
   probability: 10, stock: -1, type: 'miss', prize_value: 0,
   sort_order: 0, is_active: 1,
+  coupon_amount: 0,
+  coupon_min_purchase: 0,
+  coupon_valid_days: 30,
+  coupon_scope: 'all',
+  coupon_scope_ids_text: '',
+  eligible_role_levels: [3, 4, 5, 6],
+  fallback_reward_type: 'points',
+  claim_required: true,
+  claim_instruction: '',
+  claim_deadline_days: 7,
+  shipping_required: true,
   display_emoji: '🍀', badge_text: '好运签',
   theme_color: '#6B7280', accent_color: '#D1D5DB'
 })
@@ -289,6 +324,16 @@ watch(() => prizeForm.type, (type, oldType) => {
   if (!prizeForm.accent_color || prizeForm.accent_color === oldPreset.accent_color) {
     prizeForm.accent_color = preset.accent_color
   }
+  if (type === 'physical') {
+    prizeForm.claim_required = true
+    prizeForm.shipping_required = true
+  } else if (type === 'mystery') {
+    prizeForm.claim_required = true
+    prizeForm.shipping_required = false
+  } else {
+    prizeForm.claim_required = false
+    prizeForm.shipping_required = false
+  }
 })
 
 const fetchPrizes = async () => {
@@ -313,6 +358,17 @@ const openPrizeDialog = (row = null) => {
       cost_points: row.cost_points, probability: parseFloat(row.probability),
       stock: row.stock, type: row.type, prize_value: parseFloat(row.prize_value || 0),
       sort_order: row.sort_order, is_active: row.is_active,
+      coupon_amount: parseFloat(row.coupon_amount || 0),
+      coupon_min_purchase: parseFloat(row.coupon_min_purchase || 0),
+      coupon_valid_days: Number(row.coupon_valid_days || 30),
+      coupon_scope: row.coupon_scope || 'all',
+      coupon_scope_ids_text: Array.isArray(row.coupon_scope_ids) ? row.coupon_scope_ids.join(', ') : '',
+      eligible_role_levels: Array.isArray(row.eligible_role_levels) && row.eligible_role_levels.length ? row.eligible_role_levels : [3, 4, 5, 6],
+      fallback_reward_type: row.fallback_reward_type || 'points',
+      claim_required: row.claim_required !== false,
+      claim_instruction: row.claim_instruction || '',
+      claim_deadline_days: Number(row.claim_deadline_days || 7),
+      shipping_required: row.shipping_required !== false,
       display_emoji: row.display_emoji || getPrizeStylePreset(row.type).display_emoji,
       badge_text: row.badge_text || getPrizeStylePreset(row.type).badge_text,
       theme_color: row.theme_color || getPrizeStylePreset(row.type).theme_color,
@@ -324,6 +380,17 @@ const openPrizeDialog = (row = null) => {
       id: null, name: '', image_url: '', file_id: '', cost_points: 100,
       probability: 0, stock: -1, type: 'miss', prize_value: 0,
       sort_order: 0, is_active: 1,
+      coupon_amount: 0,
+      coupon_min_purchase: 0,
+      coupon_valid_days: 30,
+      coupon_scope: 'all',
+      coupon_scope_ids_text: '',
+      eligible_role_levels: [3, 4, 5, 6],
+      fallback_reward_type: 'points',
+      claim_required: true,
+      claim_instruction: '',
+      claim_deadline_days: 7,
+      shipping_required: true,
       display_emoji: preset.display_emoji,
       badge_text: preset.badge_text,
       theme_color: preset.theme_color,
@@ -338,11 +405,19 @@ const submitPrize = async () => {
     if (!valid) return
     submitting.value = true
     try {
+      const payload = {
+        ...prizeForm,
+        coupon_scope_ids: parseTextArray(prizeForm.coupon_scope_ids_text),
+        eligible_role_levels: Array.isArray(prizeForm.eligible_role_levels) ? prizeForm.eligible_role_levels : [3, 4, 5, 6]
+      }
+      if (payload.type === 'coupon') {
+        payload.prize_value = payload.coupon_amount
+      }
       if (prizeIsEdit.value) {
-        await updateLotteryPrize(prizeForm.id, prizeForm)
+        await updateLotteryPrize(prizeForm.id, payload)
         ElMessage.success('更新成功')
       } else {
-        await createLotteryPrize(prizeForm)
+        await createLotteryPrize(payload)
         ElMessage.success('创建成功')
       }
       prizeDialogVisible.value = false
@@ -378,6 +453,106 @@ const deletePrize = async (row) => {
   }
 }
 
+const lotteryRecordsLoading = ref(false)
+const lotteryClaimsLoading = ref(false)
+const lotteryRecords = ref([])
+const lotteryClaims = ref([])
+
+const fetchLotteryFulfillment = async () => {
+  lotteryRecordsLoading.value = true
+  lotteryClaimsLoading.value = true
+  try {
+    const [recordsRes, claimsRes] = await Promise.all([
+      getLotteryRecords({ limit: 50 }),
+      getLotteryClaims({ limit: 50 })
+    ])
+    const recordsData = recordsRes?.data || recordsRes
+    const claimsData = claimsRes?.data || claimsRes
+    lotteryRecords.value = Array.isArray(recordsData) ? recordsData : (recordsData?.list || [])
+    lotteryClaims.value = Array.isArray(claimsData) ? claimsData : (claimsData?.list || [])
+  } catch (e) {
+    ElMessage.error('加载抽奖履约数据失败')
+  } finally {
+    lotteryRecordsLoading.value = false
+    lotteryClaimsLoading.value = false
+  }
+}
+
+const handleRetryLotteryFulfillment = async (row) => {
+  try {
+    await retryLotteryFulfillment(row.id)
+    ElMessage.success('已重试发奖')
+    fetchLotteryFulfillment()
+  } catch (e) {
+    ElMessage.error(e?.message || '重试发奖失败')
+  }
+}
+
+const handleApproveLotteryClaim = async (row) => {
+  try {
+    const { value } = await ElMessageBox.prompt('可填写审核备注（选填）', '审核通过', {
+      confirmButtonText: '通过',
+      cancelButtonText: '取消',
+      inputPlaceholder: '审核备注'
+    })
+    await approveLotteryClaim(row.id, { review_remark: value || '' })
+    ElMessage.success('已审核通过')
+    fetchLotteryFulfillment()
+  } catch (e) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '审核失败')
+  }
+}
+
+const handleRejectLotteryClaim = async (row) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请填写驳回原因', '驳回领奖', {
+      confirmButtonText: '驳回',
+      cancelButtonText: '取消',
+      inputPlaceholder: '驳回原因'
+    })
+    await rejectLotteryClaim(row.id, { review_remark: value || '' })
+    ElMessage.success('已驳回')
+    fetchLotteryFulfillment()
+  } catch (e) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '驳回失败')
+  }
+}
+
+const handleShipLotteryClaim = async (row) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请填写物流公司和运单号，格式：物流公司,运单号', '实物发货', {
+      confirmButtonText: '发货',
+      cancelButtonText: '取消',
+      inputPlaceholder: '顺丰,SF123456789'
+    })
+    const [shipping_company, tracking_no] = String(value || '').split(',').map(item => item.trim())
+    if (!shipping_company || !tracking_no) {
+      ElMessage.error('请按“物流公司,运单号”格式填写')
+      return
+    }
+    await shipLotteryClaim(row.id, { shipping_company, tracking_no })
+    ElMessage.success('已发货')
+    fetchLotteryFulfillment()
+  } catch (e) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '发货失败')
+  }
+}
+
+const handleCompleteLotteryClaim = async (row) => {
+  try {
+    const { value } = await ElMessageBox.prompt('可填写完成备注（选填）', '标记完成', {
+      confirmButtonText: '完成',
+      cancelButtonText: '取消',
+      inputPlaceholder: '完成备注'
+    })
+    await completeLotteryClaim(row.id, { resolution_note: value || '' })
+    ElMessage.success('已标记完成')
+    fetchLotteryFulfillment()
+  } catch (e) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.message || '操作失败')
+  }
+}
+
 const handlePrizeUpload = async ({ file }) => {
   try {
     const data = await uploadFile(file)
@@ -408,6 +583,7 @@ const festival = reactive({
   banner_title: '',
   banner_subtitle: '',
   banner: '',
+  banner_file_id: '',
   ctaText: '',
   ctaPath: '',
   cta_link_type: 'none',
@@ -427,15 +603,48 @@ const globalUi = reactive({
 })
 const activityOptionsLoading = ref(false)
 const activityOptions = ref([])
+const staticActivityOptions = MINI_PROGRAM_TARGETS.map((target) => ({
+  key: target.key,
+  title: target.title,
+  link_type: target.link_type,
+  link_value: target.link_value || '',
+  badge: target.group || '小程序页面',
+  note: target.note || target.link_value || ''
+}))
+
+const buildActivityOptionSignature = (linkType, linkValue) => {
+  const type = String(linkType || 'none')
+  const value = normalizeTargetLinkValue(type, linkValue)
+  return `${type}::${String(value || '')}`
+}
+
+const mergedActivityOptions = computed(() => {
+  const map = new Map()
+  staticActivityOptions.forEach((option) => {
+    map.set(buildActivityOptionSignature(option.link_type, option.link_value), option)
+  })
+  activityOptions.value.forEach((option) => {
+    map.set(buildActivityOptionSignature(option.link_type, option.link_value), {
+      ...option,
+      note: option.note || option.badge || ''
+    })
+  })
+  return Array.from(map.values())
+})
 
 const currentActivityOptionKey = (linkType, linkValue) => {
-  if ((linkType || 'none') === 'flash_sale' && ((linkValue || '') === '' || (linkValue || '') === '__flash_sale__')) {
-    return 'flash_sale:current'
-  }
-  const matched = activityOptions.value.find(opt => opt.link_type === (linkType || 'none') && (opt.link_value || '') === (linkValue || ''))
+  const signature = buildActivityOptionSignature(linkType, linkValue)
+  const matched = mergedActivityOptions.value.find(
+    opt => buildActivityOptionSignature(opt.link_type, opt.link_value) === signature
+  )
   return matched?.key || ''
 }
-const findActivityOption = (linkType, linkValue) => activityOptions.value.find(opt => opt.link_type === (linkType || 'none') && (opt.link_value || '') === (linkValue || ''))
+const findActivityOption = (linkType, linkValue) => {
+  const signature = buildActivityOptionSignature(linkType, linkValue)
+  return mergedActivityOptions.value.find(
+    opt => buildActivityOptionSignature(opt.link_type, opt.link_value) === signature
+  )
+}
 const activityOptionLabel = (opt) => opt?.badge ? `${opt.title} · ${opt.badge}` : (opt?.title || '未命名入口')
 const activityOptionNote = (opt) => opt?.note || ''
 
@@ -448,7 +657,7 @@ const applyActivityOption = (target, option) => {
 }
 
 const handleCtaOptionChange = (key) => {
-  const option = activityOptions.value.find(opt => opt.key === key)
+  const option = mergedActivityOptions.value.find(opt => opt.key === key)
   if (!option) return
   festival.cta_link_type = option.link_type || 'none'
   festival.cta_link_value = option.link_value || ''
@@ -456,7 +665,7 @@ const handleCtaOptionChange = (key) => {
 }
 
 const handlePosterOptionChange = (poster, key) => {
-  const option = activityOptions.value.find(opt => opt.key === key)
+  const option = mergedActivityOptions.value.find(opt => opt.key === key)
   if (!option) return
   applyActivityOption(poster, option)
 }
@@ -492,6 +701,7 @@ const fetchFestival = async () => {
       banner_title: d.banner_title || '',
       banner_subtitle: d.banner_subtitle || '',
       banner: d.banner || '',
+      banner_file_id: d.banner_file_id || '',
       ctaText: d.ctaText || '',
       ctaPath: d.ctaPath || '',
       cta_link_type: d.cta_link_type || (d.ctaPath ? 'page' : 'none'),
@@ -503,6 +713,7 @@ const fetchFestival = async () => {
         title: item.title || '',
         subTitle: item.subTitle || item.subtitle || '',
         image: item.image || '',
+        file_id: item.file_id || '',
         gradient: item.gradient || 'linear-gradient(135deg, #2C231C 0%, #473326 100%)',
         source_type: item.source_type || '',
         link_type: item.link_type || (item.link ? 'page' : 'none'),
@@ -526,7 +737,7 @@ const saveFestival = async () => {
     await updateFestivalConfig({
       ...festival,
       ctaPath: festival.cta_link_type === 'page' ? festival.cta_link_value : '',
-      card_posters: festival.card_posters.map(item => ({
+      card_posters: festival.card_posters.map(({ _preview_url, ...item }) => ({
         ...item,
         link: item.link_type === 'page' ? item.link_value : ''
       }))
@@ -605,7 +816,7 @@ const linksMeta = reactive({
   activity_sections_order: 'permanent_first',
   permanent_section_title: '',
   permanent_section_subtitle: '',
-  brand_news_section_title: '品牌动态'
+  brand_news_section_title: '新闻中心'
 })
 
 const inferActivityCardStyleKey = (item = {}) => {
@@ -642,6 +853,7 @@ const mkItem = (overrides = {}) => ({
   subtitle:   '',
   tag:        '',
   image:      '',
+  file_id:    '',
   icon:       '',
   gradient:   'linear-gradient(135deg, #3D2F22 0%, #5A4535 100%)',
   pill_text:  '',
@@ -659,9 +871,12 @@ const mkItem = (overrides = {}) => ({
 const mkNewsItem = (overrides = {}) => ({
   _key: ++_linksKeyCounter,
   id: String(Date.now()),
+  category_key: 'latest_activity',
   title: '',
   summary: '',
   cover_image: '',
+  cover_file_id: '',
+  file_id: '',
   content_html: '',
   sort_order: 0,
   enabled: true,
@@ -691,7 +906,7 @@ const fetchLinks = async () => {
     linksMeta.activity_sections_order = d.activity_sections_order === 'limited_first' ? 'limited_first' : 'permanent_first'
     linksMeta.permanent_section_title = (d.permanent_section_title || '').toString().trim()
     linksMeta.permanent_section_subtitle = (d.permanent_section_subtitle || '').toString().trim()
-    linksMeta.brand_news_section_title = (d.brand_news_section_title || '品牌动态').toString().slice(0, 20) || '品牌动态'
+    linksMeta.brand_news_section_title = (d.brand_news_section_title || '新闻中心').toString().slice(0, 20) || '新闻中心'
     linksData.banners   = hydrate(d.banners)
     linksData.permanent = hydrate(d.permanent)
     linksData.limited   = hydrate(d.limited).map((item) => {
@@ -713,13 +928,13 @@ const saveActivityLinks = async () => {
   linksSaving.value = true
   try {
     validateActivityLinks()
-    const strip = (arr) => arr.map(({ _key, ...rest }) => rest)
+    const strip = (arr) => arr.map(({ _key, _preview_url, ...rest }) => rest)
     await updateActivityLinks({
       permanent_section_enabled: linksMeta.permanent_section_enabled,
       activity_sections_order: linksMeta.activity_sections_order,
       permanent_section_title: linksMeta.permanent_section_title || '',
       permanent_section_subtitle: linksMeta.permanent_section_subtitle || '',
-      brand_news_section_title: linksMeta.brand_news_section_title || '品牌动态',
+      brand_news_section_title: linksMeta.brand_news_section_title || '新闻中心',
       banners:   strip(linksData.banners),
       permanent: strip(linksData.permanent),
       limited:   strip(linksData.limited),
@@ -759,9 +974,9 @@ const validateActivityLinks = () => {
 
   linksData.brand_news.forEach((item, idx) => {
     if (item.enabled === false) return
-    if (!item.title?.trim()) throw new Error(`品牌新闻第 ${idx + 1} 条缺少标题`)
+    if (!item.title?.trim()) throw new Error(`新闻中心内容第 ${idx + 1} 条缺少标题`)
     if (!item.summary?.trim() && !item.content_html?.trim()) {
-      throw new Error(`品牌新闻第 ${idx + 1} 条请填写摘要或正文`)
+      throw new Error(`新闻中心内容第 ${idx + 1} 条请填写摘要或正文`)
     }
   })
 }
@@ -830,7 +1045,7 @@ const moveNewsItem = (idx, delta) => {
 
 const applyOptionToItem = (item, key) => {
   if (!key) { item.link_type = 'none'; item.link_value = ''; return }
-  const option = activityOptions.value.find(opt => opt.key === key)
+  const option = mergedActivityOptions.value.find(opt => opt.key === key)
   if (option) {
     item.link_type  = option.link_type  || 'none'
     item.link_value = option.link_value || ''
@@ -840,8 +1055,8 @@ const applyOptionToItem = (item, key) => {
   }
 }
 
-const prizeTypeLabel = (t) => ({ miss: '未中奖', points: '积分', coupon: '优惠券', physical: '实物' }[t] || t)
-const prizeTagType = (t) => ({ miss: 'info', points: 'warning', coupon: 'success', physical: 'primary' }[t] || '')
+const prizeTypeLabel = (t) => ({ miss: '未中奖', points: '积分', coupon: '优惠券', goods_fund: '货款', physical: '实物', mystery: '神秘大奖' }[t] || t)
+const prizeTagType = (t) => ({ miss: 'info', points: 'warning', coupon: 'success', goods_fund: 'success', physical: 'primary', mystery: 'danger' }[t] || '')
 
 watch(activeTab, (tab) => {
   if (tab === 'slash' && slashList.value.length === 0) {
@@ -849,6 +1064,9 @@ watch(activeTab, (tab) => {
   }
   if (tab === 'lottery' && prizes.value.length === 0) {
     fetchPrizes()
+  }
+  if (tab === 'lottery_fulfillment' && lotteryRecords.value.length === 0 && lotteryClaims.value.length === 0) {
+    fetchLotteryFulfillment()
   }
   if (tab === 'festival') {
     fetchActivityOptions()

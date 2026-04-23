@@ -21,7 +21,7 @@
 
   <view class="section order-state-section" wx:if="{{cartLoadStatus === 'loading'}}">
     <text class="order-state-title">订单加载中</text>
-    <text class="order-state-desc">正在获取商品信息与结算数据，请稍候。</text>
+    <text class="order-state-desc">正在获取订单信息，请稍候。</text>
   </view>
   <view class="section order-state-section" wx:elif="{{cartLoadStatus === 'error'}}">
     <text class="order-state-title">订单加载失败</text>
@@ -47,9 +47,9 @@
         bindtap="onDeliveryTypeChange"
       >到店自提</view>
     </view>
-    <text class="delivery-hint" wx:if="{{deliveryType === 'express'}}">{{pickupAllowed ? '商品将邮寄至下方收货地址；需要到店取货可切换为「到店自提」。' : '商品将邮寄至下方收货地址。'}}</text>
-    <text class="delivery-hint delivery-hint-muted" wx:if="{{!pickupAllowed}}">当前订单中的商品不支持到店自提。若需自提，请选购支持到店自提的商品，或咨询客服。</text>
-    <text class="delivery-hint" wx:if="{{pickupAllowed && deliveryType === 'pickup'}}">自提免运费；可选填联系地址便于售后。可用当前位置推荐附近门店，也可用「地图选点」修正。</text>
+    <text class="delivery-hint" wx:if="{{deliveryType === 'express'}}">{{pickupAllowed ? '商品将寄送至下方地址，如需自提可切换到店自提。' : '商品将寄送至下方地址。'}}</text>
+    <text class="delivery-hint delivery-hint-muted" wx:if="{{!pickupAllowed}}">该订单商品不支持到店自提。</text>
+    <text class="delivery-hint" wx:if="{{pickupAllowed && deliveryType === 'pickup'}}">到店自提免运费，可填写联系地址便于售后。</text>
     <view class="pickup-map-link" wx:if="{{pickupAllowed && deliveryType === 'pickup'}}" bindtap="onOpenStationsMap">
       <text class="pickup-map-link-text">查看全部门店地图</text>
     </view>
@@ -134,7 +134,7 @@
       <button class="pickup-loc-btn ghost" size="mini" bindtap="onChooseRefLocation">地图选点</button>
       <button class="pickup-loc-btn ghost" size="mini" wx:if="{{refLocationName}}" bindtap="clearRefLocation">清除参考点</button>
     </view>
-    <text class="pickup-hint-muted" wx:if="{{pickupDistanceHint}}">未显示距离时列表按城市与名称排序；点「定位排序」或「地图选点」后可显示约 xx km 并优先最近门店。</text>
+    <text class="pickup-hint-muted" wx:if="{{pickupDistanceHint}}">未显示距离时按城市与名称排序；定位后优先展示附近门店。</text>
     <text class="ref-loc-name" wx:if="{{refLocationName}}">参考：{{refLocationName}}</text>
     <view
       class="pickup-row {{pickupStation && pickupStation.id === item.id ? 'pickup-row-active' : ''}}"
@@ -148,17 +148,27 @@
         <text class="pickup-dist" wx:if="{{item.distance_km != null}}">约 {{item.distance_km}} km</text>
       </view>
       <text class="pickup-addr">{{item.city}} {{item.district || ''}} {{item.address || ''}}</text>
+      <text class="pickup-rule">库存：{{item.stock_status_text || '库存充足'}}</text>
       <text class="pickup-rule">仅该门店人员可核销本订单</text>
     </view>
-    <text class="pickup-empty" wx:if="{{pickupStations.length === 0}}">暂无可用自提点，请稍后再试或联系客服</text>
+    <text class="pickup-empty" wx:if="{{pickupStations.length === 0}}">暂无可选自提门店，请稍后再试。</text>
     <view class="pickup-notice-card" wx:if="{{pickupStation}}">
       <text class="pickup-notice-title">已选自提门店</text>
       <text class="pickup-notice-name">{{pickupStation.name}}</text>
-      <text class="pickup-notice-desc">提交订单后，仅限该门店工作人员完成核销，请勿前往其他门店自提。</text>
+      <text class="pickup-notice-desc">提交后仅限该门店核销，请勿前往其他门店。</text>
     </view>
   </view>
 
   <view class="section goods-section">
+    <view class="section-head-row" wx:if="{{bundleOrder && bundleMeta}}">
+      <text class="section-title-text">组合信息</text>
+      <text class="section-meta-text">固定组合价 ¥{{bundlePrice}}</text>
+    </view>
+    <view class="bundle-summary-card" wx:if="{{bundleOrder && bundleMeta}}">
+      <text class="bundle-summary-title">{{bundleMeta.title}}</text>
+      <text class="bundle-summary-subtitle" wx:if="{{bundleMeta.subtitle}}">{{bundleMeta.subtitle}}</text>
+      <text class="bundle-summary-discount" wx:if="{{bundleDiscount > 0}}">组合优惠 -¥{{bundleDiscount}}</text>
+    </view>
     <view class="section-head-row">
       <text class="section-title-text">商品摘要</text>
       <text class="section-meta-text">共 {{totalCount}} 件</text>
@@ -183,7 +193,7 @@
         <text class="coupon-selected">0 元兑换</text>
       </view>
     </view>
-    <text class="coupon-tip coupon-tip-active">{{exchangeCouponTitle || '该订单将核销一张兑换券，不参与普通优惠券、积分或货款支付。'}}</text>
+    <text class="coupon-tip coupon-tip-active">{{exchangeCouponTitle || '该订单使用兑换券结算，不参与普通优惠券、积分或货款支付。'}}</text>
   </view>
 
   <view class="section coupon-section" wx:if="{{limitedSpotOrder}}">
@@ -194,7 +204,7 @@
         <text class="coupon-selected" wx:else>活动价 ¥{{limitedSpotMoneyPrice}}</text>
       </view>
     </view>
-    <text class="coupon-tip coupon-tip-active">{{limitedSpotTitle || '该订单按活动专享价购买，不参与普通优惠券、积分抵扣和货款支付。'}}</text>
+    <text class="coupon-tip coupon-tip-active">{{limitedSpotTitle || '该订单按活动价结算，不参与优惠券、积分抵扣和货款支付。'}}</text>
   </view>
 
   <view class="section remark-section">
@@ -204,11 +214,11 @@
 
   <view class="section inline-state-section" wx:if="{{!exchangeMode && !limitedSpotOrder && allowCoupon !== false && couponLoadStatus === 'loading'}}">
     <text class="inline-state-title">优惠券加载中</text>
-    <text class="inline-state-desc">正在获取本单可用优惠券，请稍候。</text>
+    <text class="inline-state-desc">正在获取可用优惠券，请稍候。</text>
   </view>
   <view class="section inline-state-section" wx:elif="{{!exchangeMode && !limitedSpotOrder && allowCoupon !== false && couponLoadStatus === 'error'}}">
     <text class="inline-state-title">优惠券暂不可用</text>
-    <text class="inline-state-desc">{{couponLoadError || '优惠券服务暂时不可用，请稍后重试。'}}</text>
+    <text class="inline-state-desc">{{couponLoadError || '请稍后重试。'}}</text>
     <view class="inline-state-btn" bindtap="onRetryCouponLoad">重试优惠券</view>
   </view>
   <view class="section coupon-section" wx:if="{{!exchangeMode && !limitedSpotOrder && allowCoupon !== false && couponLoadStatus !== 'loading' && couponLoadStatus !== 'error'}}">
@@ -224,49 +234,49 @@
         <text class="arrow" wx:if="{{availableCoupons.length > 0}}">›</text>
       </view>
     </view>
-    <text class="coupon-tip coupon-tip-active" wx:if="{{!selectedCoupon && availableCoupons.length > 0}}">您有{{availableCoupons.length}}张优惠券可用，点击立即选择</text>
-    <text class="coupon-tip" wx:elif="{{!selectedCoupon && unusedCouponCount > 0}}">您有{{unusedCouponCount}}张优惠券不适用于本单（金额/范围不符）</text>
+    <text class="coupon-tip coupon-tip-active" wx:if="{{!selectedCoupon && availableCoupons.length > 0}}">本单可用优惠券 {{availableCoupons.length}} 张，点击选择</text>
+    <text class="coupon-tip" wx:elif="{{!selectedCoupon && unusedCouponCount > 0}}">{{unusedCouponCount}} 张优惠券不适用于本单</text>
   </view>
   <view class="section coupon-section coupon-disabled" wx:if="{{!exchangeMode && !limitedSpotOrder && allowCoupon === false}}">
     <text class="coupon-label">礼遇与优惠</text>
-    <text class="coupon-none">爆单品不参与优惠券活动</text>
+    <text class="coupon-none">{{bundleOrder ? '该订单不参与优惠券' : '该商品不参与优惠券'}}</text>
   </view>
 
   <view class="section inline-state-section" wx:if="{{!exchangeMode && !limitedSpotOrder && pointsLoadStatus === 'error'}}">
     <text class="inline-state-title">积分暂不可用</text>
-    <text class="inline-state-desc">{{pointsLoadError || '积分服务暂时不可用，请稍后重试。'}}</text>
+    <text class="inline-state-desc">{{pointsLoadError || '请稍后重试。'}}</text>
     <view class="inline-state-btn" bindtap="onRetryPointsLoad">重试积分</view>
   </view>
   <!-- 积分抵扣 -->
   <view class="section points-section" wx:if="{{!exchangeMode && !limitedSpotOrder && pointsLoadStatus !== 'error' && pointBalance > 0 && allowPoints}}">
     <text class="points-label">积分抵扣</text>
     <view class="points-right">
-      <text class="points-balance">{{pointBalance}}积分可用</text>
+      <text class="points-balance">可用积分 {{pointBalance}}</text>
       <switch checked="{{usePoints}}" bindchange="onTogglePoints" color="#B98B58" style="transform:scale(0.8)" />
     </view>
   </view>
   <view class="section points-detail" wx:if="{{!exchangeMode && !limitedSpotOrder && pointsLoadStatus !== 'error' && usePoints && pointBalance > 0 && allowPoints}}">
-    <text class="points-deduct-text">使用 {{pointsToUse}} 积分抵扣 ¥{{pointsDeduction}}</text>
+    <text class="points-deduct-text">使用 {{pointsToUse}} 积分，抵扣 ¥{{pointsDeduction}}</text>
     <text class="points-deduct-tip">（{{pointsRuleHint}}）</text>
   </view>
   <view class="section points-section points-disabled" wx:if="{{!exchangeMode && !limitedSpotOrder && pointsLoadStatus !== 'error' && pointBalance > 0 && !allowPoints}}">
     <text class="points-label">积分抵扣</text>
-    <text class="points-balance-disabled">当前商品不支持积分抵扣</text>
+    <text class="points-balance-disabled">{{bundleOrder ? '该订单不支持积分抵扣' : '该商品不支持积分抵扣'}}</text>
   </view>
 
   <view class="section inline-state-section" wx:if="{{!exchangeMode && !limitedSpotOrder && isAgent && walletLoadStatus === 'loading'}}">
     <text class="inline-state-title">货款余额加载中</text>
-    <text class="inline-state-desc">正在获取可用货款余额，请稍候。</text>
+    <text class="inline-state-desc">正在获取货款余额，请稍候。</text>
   </view>
   <view class="section inline-state-section" wx:if="{{!exchangeMode && !limitedSpotOrder && isAgent && walletLoadStatus === 'error'}}">
     <text class="inline-state-title">货款余额暂不可用</text>
-    <text class="inline-state-desc">{{walletLoadError || '余额服务暂时不可用，请稍后重试。'}}</text>
+    <text class="inline-state-desc">{{walletLoadError || '请稍后重试。'}}</text>
     <view class="inline-state-btn" bindtap="onRetryWalletLoad">重试余额</view>
   </view>
   <!-- 货款余额支付 -->
   <view class="section points-section wallet-section" wx:if="{{!exchangeMode && !limitedSpotOrder && isAgent && walletLoadStatus === 'success'}}">
     <view class="wallet-label-col">
-      <text class="points-label">货款余额支付</text>
+      <text class="points-label">货款支付</text>
       <text class="wallet-balance-sub" wx:if="{{walletBalance > 0}}">可用余额 ¥{{walletBalanceDisplay}}</text>
       <text class="wallet-balance-sub wallet-balance-empty" wx:else>余额不足</text>
     </view>
@@ -281,7 +291,7 @@
     </view>
   </view>
   <view class="section points-detail" wx:if="{{!exchangeMode && !limitedSpotOrder && isAgent && walletLoadStatus === 'success' && useWallet && walletBalance > 0}}">
-    <text class="points-deduct-text">从货款余额扣款，无需微信支付</text>
+    <text class="points-deduct-text">本单将从货款余额扣款，无需微信支付</text>
   </view>
 
   <view class="coupon-picker {{showCouponPicker ? 'show' : ''}}" wx:if="{{showCouponPicker}}">
@@ -331,6 +341,10 @@
         <view class="total-row" wx:if="{{usePoints && pointsDeduction > 0}}">
           <text class="discount-label">积分：</text>
           <text class="discount-amount">-¥{{pointsDeduction}}</text>
+        </view>
+        <view class="total-row" wx:if="{{bundleOrder && bundleDiscount > 0}}">
+          <text class="discount-label">组合优惠：</text>
+          <text class="discount-amount">-¥{{bundleDiscount}}</text>
         </view>
         <view class="total-row" wx:if="{{limitedSpotOrder && limitedSpotMode === 'points'}}">
           <text class="discount-label">专享积分：</text>

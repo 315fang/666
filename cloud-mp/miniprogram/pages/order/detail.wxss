@@ -103,6 +103,46 @@
   gap: 20rpx;
 }
 
+.bundle-order-head {
+  padding: 0 0 20rpx;
+  margin-bottom: 20rpx;
+  border-bottom: 1rpx solid rgba(117, 105, 95, 0.08);
+}
+
+.bundle-order-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #241D18;
+}
+
+.bundle-order-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #9A8D80;
+}
+
+.bundle-order-price {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: #B95E46;
+  font-weight: 600;
+}
+
+.bundle-order-items {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.bundle-order-item {
+  display: flex;
+  gap: 20rpx;
+  align-items: center;
+}
+
 .product-img {
   width: 160rpx;
   height: 160rpx;

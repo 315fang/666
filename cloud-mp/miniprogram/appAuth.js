@@ -76,11 +76,27 @@ module.exports = {
                 if (!cachedOpenid) {
                     wx.setStorageSync('openid', openid);
                 }
+                wx.removeStorageSync('token');
                 this.globalData.userInfo = normalizedUser;
                 this.globalData.openid = openid;
                 this.globalData.isLoggedIn = true;
                 wx.setStorageSync('userInfo', normalizedUser);
                 console.log('[Auth] 从缓存恢复登录状态');
+
+                let pendingInviteCode = '';
+                try {
+                    pendingInviteCode = String(wx.getStorageSync('pending_invite_code') || '').trim().toUpperCase();
+                } catch (_) {
+                    pendingInviteCode = '';
+                }
+                if (pendingInviteCode) {
+                    try {
+                        await this.wxLogin();
+                        console.log('[Auth] 检测到待绑定邀请码，已刷新登录并尝试绑定上级');
+                    } catch (refreshErr) {
+                        console.warn('[Auth] 待绑定邀请码刷新登录失败:', refreshErr);
+                    }
+                }
             } else {
                 console.log('[Auth] 无登录缓存，等待用户主动触发登录');
             }
@@ -92,7 +108,7 @@ module.exports = {
     /**
      * 触发登录入口（供页面调用）
      */
-    async triggerLogin() {
+    async triggerLogin(options) {
         const { ensurePrivacyAuthorization } = require('./utils/privacy');
         try {
             await ensurePrivacyAuthorization();
@@ -100,7 +116,7 @@ module.exports = {
             return { success: false, reason: 'privacy_denied' };
         }
         try {
-            return await this.wxLogin();
+            return await this.wxLogin(options);
         } catch (err) {
             return { success: false, reason: 'login_failed', err };
         }
@@ -112,13 +128,16 @@ module.exports = {
      * 原流程：wx.login() → 获取 code → POST /login → 后端换 openid + 写 DB → 返回 JWT
      * 云开发：wx.cloud.callFunction('login') → 云函数中自动有 openid → 写云数据库 → 返回用户信息
      */
-    async wxLogin() {
+    async wxLogin(options = {}) {
         try {
             // 读取待绑定的会员码（如果有）
             let inviteCode = '';
+            const ignorePendingInviteCode = !!(options && options.ignorePendingInviteCode);
             try {
-                const pending = wx.getStorageSync('pending_invite_code');
-                if (pending) inviteCode = String(pending).trim().toUpperCase();
+                if (!ignorePendingInviteCode) {
+                    const pending = wx.getStorageSync('pending_invite_code');
+                    if (pending) inviteCode = String(pending).trim().toUpperCase();
+                }
             } catch (e) { /* ignore */ }
 
             // ★ 调用云函数 login（云函数内部通过 getWXContext() 获取 openid，无需 code）
@@ -135,7 +154,9 @@ module.exports = {
             }
 
             // 清除已消费的会员码
-            try { wx.removeStorageSync('pending_invite_code'); } catch (e) { /* ignore */ }
+            if (!ignorePendingInviteCode) {
+                try { wx.removeStorageSync('pending_invite_code'); } catch (e) { /* ignore */ }
+            }
 
             // 保存登录信息（注意：云开发版无 token）
             // 云函数 login 返回 { success, data: { openid, ... } }，data 即 userInfo
@@ -153,6 +174,7 @@ module.exports = {
 
             wx.setStorageSync('userInfo', normalizedUser);
             wx.setStorageSync('openid', userOpenid);
+            wx.removeStorageSync('token');
 
             // 新用户优惠券提示
             if (result.is_new_user || userData.is_new_user) {
@@ -182,6 +204,7 @@ module.exports = {
         this.globalData.isLoggedIn = false;
         wx.removeStorageSync('userInfo');
         wx.removeStorageSync('openid');
+        wx.removeStorageSync('token');
     },
 
     _applyRegisterCouponPrompt(result) {

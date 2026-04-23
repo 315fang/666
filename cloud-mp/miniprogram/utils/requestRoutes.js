@@ -20,10 +20,13 @@ const ROUTE_TABLE = {
     'GET /coupons/info': { fn: 'user', action: 'getCouponInfo' },
     'POST /deposit-orders/prepay': { fn: 'payment', action: 'depositPrepay' },
     'GET /deposit-orders/mine': { fn: 'user', action: 'listDepositOrders' },
+    'GET /user/dashboard-bootstrap': { fn: 'user', action: 'dashboardBootstrap' },
 
     // ── 商品 ──────────────────────────────────
     'GET /products': { fn: 'products', action: 'list' },
     'GET /products/:id': { fn: 'products', action: 'detail', idKey: 'product_id' },
+    'GET /product-bundles': { fn: 'products', action: 'bundleList' },
+    'GET /product-bundles/:id': { fn: 'products', action: 'bundleDetail', idKey: 'bundle_id' },
     'GET /categories': { fn: 'products', action: 'categories' },
     'GET /products/search': { fn: 'products', action: 'search' },
 
@@ -68,6 +71,13 @@ const ROUTE_TABLE = {
     'GET /distribution/fund-pool': { fn: 'distribution', action: 'myFundPoolSummary' },
     'GET /distribution/team': { fn: 'distribution', action: 'team' },
     'GET /distribution/team/:id': { fn: 'distribution', action: 'teamDetail', idKey: 'member_id' },
+    'POST /distribution/team/:id/goods-fund-transfer-applications': { fn: 'distribution', action: 'createGoodsFundTransferApplication', idKey: 'member_id' },
+    'GET /distribution/goods-fund-transfer-applications': { fn: 'distribution', action: 'goodsFundTransferApplications' },
+    'GET /distribution/directed-invites': { fn: 'distribution', action: 'listDirectedInvites' },
+    'POST /distribution/directed-invites': { fn: 'distribution', action: 'createDirectedInvite' },
+    'GET /distribution/directed-invites/ticket': { fn: 'distribution', action: 'getDirectedInviteTicket' },
+    'POST /distribution/directed-invites/accept': { fn: 'distribution', action: 'acceptDirectedInvite' },
+    'POST /distribution/directed-invites/:id/revoke': { fn: 'distribution', action: 'revokeDirectedInvite', idKey: 'invite_id' },
     'GET /distribution/commission-logs': { fn: 'distribution', action: 'commLogs' },
     'POST /distribution/withdraw': { fn: 'distribution', action: 'withdraw' },
     'GET /distribution/stats': { fn: 'distribution', action: 'stats' },
@@ -79,6 +89,7 @@ const ROUTE_TABLE = {
 
     // ── 钱包/积分 ──────────────────────────────
     'POST /wallet/withdraw': { fn: 'distribution', action: 'withdraw' },
+    'GET /wallet/withdraw-rules': { fn: 'distribution', action: 'withdrawRules' },
     'GET /wallet/withdrawals': { fn: 'distribution', action: 'withdrawList' },
 
     // ── 优惠券 ────────────────────────────────
@@ -89,7 +100,7 @@ const ROUTE_TABLE = {
     'GET /configs': { fn: 'config', action: 'getSystemConfig' },
     'GET /mini-program-config': { fn: 'config', action: 'miniProgramConfig' },
     'GET /page-content/home': { fn: 'config', action: 'homeContent' },
-    'GET /page-content': { fn: 'config', action: 'homeContent' },
+    'GET /page-content': { fn: 'config', action: 'pageContent' },
     'GET /homepage-config': { fn: 'config', action: 'homeContent' },
     'GET /splash/active': { fn: 'config', action: 'splash' },
     'GET /themes/active': { fn: 'config', action: 'activeTheme' },
@@ -100,6 +111,8 @@ const ROUTE_TABLE = {
 
     // ── 自提门店 ──────────────────────────────
     'GET /stations/my-scope': { fn: 'user', action: 'getPickupScope' },
+    'GET /stations/store-manager/workbench': { fn: 'user', action: 'storeManagerWorkbench' },
+    'POST /stations/store-manager/procurements': { fn: 'user', action: 'storeManagerCreateProcurement' },
     'GET /stations/region-from-point': { fn: 'user', action: 'regionFromPoint' },
     'GET /stations': { fn: 'user', action: 'listStations' },
 
@@ -119,7 +132,9 @@ const ROUTE_TABLE = {
     // ── 抽奖 ──────────────────────────────────
     'GET /lottery': { fn: 'config', action: 'lottery' },
     'GET /lottery/prizes': { fn: 'config', action: 'lotteryPrizes' },
-    'GET /lottery/records': { fn: 'config', action: 'lotteryRecords' },
+    'GET /lottery/records': { fn: 'order', action: 'lotteryRecords' },
+    'GET /lottery/claims/:id': { fn: 'order', action: 'lotteryClaimDetail', idKey: 'record_id' },
+    'POST /lottery/claims': { fn: 'order', action: 'submitLotteryClaim' },
     'POST /lottery/draw': { fn: 'order', action: 'lotteryDraw' },
 
     // ── 升级 ──────────────────────────────────
@@ -155,17 +170,12 @@ const ROUTE_TABLE = {
     'POST /agent/wallet/prepay': { fn: 'distribution', action: 'agentWalletPrepay' },
     'GET /agent/wallet/recharge-orders/:id': { fn: 'distribution', action: 'agentWalletRechargeOrderDetail', idKey: 'recharge_order_id' },
 
-    // ── 用户偏好 ────────────────────────────────
-    'GET /user/preferences': { fn: 'user', action: 'getPreferences' },
-    'POST /user/preferences/submit': { fn: 'user', action: 'submitPreferences' },
     'POST /user/favorites/clear-all': { fn: 'user', action: 'clearAllFavorites' },
     'POST /user/portal/apply-initial-password': { fn: 'user', action: 'applyInitialPassword' },
+    'POST /user/portal/change-password': { fn: 'user', action: 'changePortalPassword' },
 
     // ── 升级申请 ────────────────────────────────
     'POST /upgrade/apply': { fn: 'user', action: 'upgradeApply' },
-
-    // ── 工单 / 客服 ─────────────────────────────
-    'GET /customer-service/tickets': { fn: 'user', action: 'listTickets' },
 
     // ── 问卷 ────────────────────────────────────
     'GET /questionnaire/active': { fn: 'config', action: 'questionnaireActive' },
@@ -205,8 +215,8 @@ const ROUTE_TABLE = {
     // ── 拼团订单详情 ────────────────────────────
     'GET /group/orders/:id': { fn: 'order', action: 'groupOrderDetail', idKey: 'group_no' },
 
-    // ── 收藏按ID删除 ────────────────────────────
-    'DELETE /user/favorites/:id': { fn: 'user', action: 'removeFavoriteById', idKey: 'favorite_id' },
+    // ── 收藏按商品ID删除 ────────────────────────
+    'DELETE /user/favorites/:id': { fn: 'user', action: 'removeFavorite', idKey: 'product_id' },
 
     // ── 退款操作补充 ────────────────────────────
     'PUT /refunds/:id/cancel': { fn: 'order', action: 'cancelRefund', idKey: 'refund_id' },

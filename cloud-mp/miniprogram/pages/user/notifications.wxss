@@ -1,33 +1,4 @@
 /* pages/user/notifications.wxss - 暖棕统一版 */
-.notif-shortcut-card { padding: 24rpx 24rpx 0; }
-
-.notif-shortcut-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24rpx;
-  border-radius: 20rpx;
-  background: rgba(255,255,255,0.94);
-  box-shadow: 0 4rpx 16rpx rgba(37, 29, 21, 0.04);
-}
-
-.notif-shortcut-left {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  gap: 18rpx;
-}
-
-.notif-shortcut-copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.notif-shortcut-arrow {
-  font-size: 30rpx;
-  color: #B0A396;
-}
-
 .notif-list { padding: 24rpx; }
 
 .notif-item {

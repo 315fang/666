@@ -2,6 +2,7 @@ const app = getApp();
 const { get } = require('../../utils/request');
 const { requireLogin } = require('../../utils/auth');
 const { fetchUserProfile } = require('../../utils/userProfile');
+const { USER_ROLES } = require('../../config/constants');
 
 function formatMoney(value) {
     const n = Number(value || 0);
@@ -24,7 +25,10 @@ Page({
         monthlyNewMembers: 0,
         totalEarnings: '0.00',
         availableAmount: '0.00',
-        frozenAmount: '0.00'
+        frozenAmount: '0.00',
+        canDirectedInvite: false,
+        isStoreManager: false,
+        storeManagerStationName: ''
     },
 
     onLoad(options) {
@@ -48,11 +52,37 @@ Page({
     async refreshPage() {
         const u = app.globalData.userInfo || {};
         const pd = u.participate_distribution === 1 || u.participate_distribution === true;
+        const roleLevel = Number(u.role_level || 0);
         this.setData({
             userInfo: u,
-            participateDistribution: pd
+            participateDistribution: pd,
+            isStoreManager: roleLevel >= USER_ROLES.STORE,
+            canDirectedInvite: roleLevel >= 4
         });
-        await Promise.all([this.loadBalances(), this.loadOverview()]);
+        await Promise.all([this.loadBalances(), this.loadOverview(), this.loadPickupScope()]);
+    },
+
+    async loadPickupScope() {
+        try {
+            const res = await get('/stations/my-scope', {}, { showError: false });
+            const scope = res?.data || null;
+            const stations = Array.isArray(scope?.stations) ? scope.stations : [];
+            const managerStations = stations.filter((item) => String(item.my_role || '') === 'manager');
+            const userInfo = this.data.userInfo || {};
+            const roleLevel = Number(userInfo.role_level || 0);
+            const isStoreManager = roleLevel >= USER_ROLES.STORE || managerStations.length > 0;
+            this.setData({
+                isStoreManager,
+                storeManagerStationName: managerStations[0]?.name || '',
+                canDirectedInvite: roleLevel >= 4 || managerStations.length > 0
+            });
+        } catch (_) {
+            const roleLevel = Number(this.data.userInfo?.role_level || 0);
+            this.setData({
+                isStoreManager: roleLevel >= USER_ROLES.STORE,
+                storeManagerStationName: ''
+            });
+        }
     },
 
     async loadBalances() {
@@ -131,11 +161,6 @@ Page({
         wx.navigateTo({ url: '/pages/wallet/index' });
     },
 
-    goInvitePoster() {
-        if (!requireLogin()) return;
-        wx.navigateTo({ url: '/pages/distribution/invite-poster' });
-    },
-
     goTeam(e) {
         const tab = e && e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.tab : '';
         const suffix = tab ? `?tab=${tab}` : '';
@@ -152,6 +177,23 @@ Page({
 
     goDistributionCenter() {
         wx.navigateTo({ url: '/pages/distribution/center' });
+    },
+
+    goMyStation() {
+        wx.navigateTo({ url: '/pages/stations/my-station' });
+    },
+
+    goInvitePosterPage() {
+        wx.navigateTo({ url: '/pages/distribution/invite-poster' });
+    },
+
+    goDirectedInvites() {
+        if (!requireLogin()) return;
+        if (!this.data.canDirectedInvite) {
+            wx.showToast({ title: '仅运营合伙人、区域合伙人或店长可发起推广合伙人邀约', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: '/pages/distribution/directed-invites' });
     },
 
     onShareAppMessage() {

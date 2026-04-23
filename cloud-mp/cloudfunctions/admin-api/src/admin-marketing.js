@@ -11,6 +11,7 @@ const {
     generateClaimTicketWxacode,
     normalizeClaimTicket
 } = require('./claim-ticket-wxacode');
+const { createLotteryAdminSupport } = require('./admin-lottery');
 
 function registerMarketingRoutes(app, deps) {
     const {
@@ -43,6 +44,7 @@ function registerMarketingRoutes(app, deps) {
         ok,
         fail
     } = deps;
+    createLotteryAdminSupport({ app, ...deps });
 
     function getConfigValue(key, fallback) {
         const rows = getCollection('configs');
@@ -86,6 +88,87 @@ function registerMarketingRoutes(app, deps) {
         else rows[index] = row;
         saveCollection('configs', rows);
         return value;
+    }
+
+    function roundMoney(value) {
+        return Math.round(toNumber(value, 0) * 100) / 100;
+    }
+
+    function normalizeDividendRanks(ranks = []) {
+        return toArray(ranks)
+            .map((item, index) => ({
+                rank: Math.max(1, Math.floor(toNumber(item?.rank, index + 1))),
+                count: Math.max(1, Math.floor(toNumber(item?.count, 1))),
+                pct: Math.max(0, toNumber(item?.pct, 0)),
+                label: pickString(item?.label || '')
+            }))
+            .filter((item) => item.pct > 0);
+    }
+
+    function normalizeDividendRulesConfig(rawValue = {}) {
+        const value = rawValue && typeof rawValue === 'object' ? rawValue : {};
+        return {
+            enabled: toBoolean(value.enabled),
+            source_pct: Math.max(0, toNumber(value.source_pct, 0)),
+            min_months: Math.max(0, Math.floor(toNumber(value.min_months, 0))),
+            b_team_award: {
+                enabled: toBoolean(value?.b_team_award?.enabled),
+                pool_pct: Math.max(0, toNumber(value?.b_team_award?.pool_pct, 0)),
+                ranks: normalizeDividendRanks(value?.b_team_award?.ranks)
+            },
+            b1_personal_award: {
+                enabled: toBoolean(value?.b1_personal_award?.enabled),
+                pool_pct: Math.max(0, toNumber(value?.b1_personal_award?.pool_pct, 0)),
+                ranks: normalizeDividendRanks(value?.b1_personal_award?.ranks)
+            }
+        };
+    }
+
+    function validateDividendRulesConfig(config = {}) {
+        if (!config.enabled) return { ok: true };
+        const enabledAwards = [
+            { key: 'B团队奖', value: config.b_team_award || {} },
+            { key: 'B1个人奖', value: config.b1_personal_award || {} }
+        ].filter((item) => item.value.enabled);
+        if (!enabledAwards.length) {
+            return { ok: false, message: '分红规则已启用时，至少需要启用一个奖项' };
+        }
+        for (const award of enabledAwards) {
+            if (!Array.isArray(award.value.ranks) || award.value.ranks.length === 0) {
+                return { ok: false, message: `${award.key}已启用，但未配置有效名次档位` };
+            }
+            if (toNumber(award.value.pool_pct, 0) <= 0) {
+                return { ok: false, message: `${award.key}已启用，但分红池比例必须大于 0` };
+            }
+        }
+        return { ok: true };
+    }
+
+    function getDividendRulesSnapshot() {
+        return normalizeDividendRulesConfig(getConfigValue('agent_system_dividend-rules', {}));
+    }
+
+    function getDividendPoolSnapshot() {
+        const value = getConfigValue('agent_system_dividend-pool', {});
+        return {
+            balance: 0,
+            total_in: 0,
+            total_out: 0,
+            last_executed_year: null,
+            last_total_distributed: 0,
+            ...((value && typeof value === 'object') ? value : {})
+        };
+    }
+
+    function setDividendPoolSnapshot(nextValue = {}) {
+        return setConfigValue('agent_system_dividend-pool', {
+            balance: roundMoney(toNumber(nextValue.balance, 0)),
+            total_in: roundMoney(toNumber(nextValue.total_in, 0)),
+            total_out: roundMoney(toNumber(nextValue.total_out, 0)),
+            last_executed_year: nextValue.last_executed_year || null,
+            last_total_distributed: roundMoney(toNumber(nextValue.last_total_distributed, 0)),
+            updated_at: nowIso()
+        }, 'agent_system');
     }
 
     function parseConfigRowValue(row, fallback) {
@@ -256,7 +339,7 @@ function registerMarketingRoutes(app, deps) {
             activity_sections_order: value.activity_sections_order === 'limited_first' ? 'limited_first' : 'permanent_first',
             permanent_section_title: pickString(value.permanent_section_title || ''),
             permanent_section_subtitle: pickString(value.permanent_section_subtitle || ''),
-            brand_news_section_title: pickString(value.brand_news_section_title || '品牌动态'),
+            brand_news_section_title: pickString(value.brand_news_section_title || '新闻中心'),
             banners,
             permanent,
             limited,
@@ -762,6 +845,7 @@ function registerMarketingRoutes(app, deps) {
             claim_end_time: claimEndTime,
             scope: pickString(row.scope || 'all'),
             scope_ids: toArray(row.scope_ids),
+            show_in_coupon_center: toBoolean(row.show_in_coupon_center ?? false) ? 1 : 0,
             is_active: toBoolean(isActive == null ? 1 : isActive) ? 1 : 0,
             status: toBoolean(isActive == null ? 1 : isActive) ? 1 : 0
         };
@@ -789,10 +873,81 @@ function registerMarketingRoutes(app, deps) {
             claim_end_time: pickString(body.claim_end_time ?? existing.claim_end_time ?? '23:59', '23:59'),
             scope: pickString(body.scope ?? existing.scope ?? 'all'),
             scope_ids: toArray(body.scope_ids ?? existing.scope_ids),
+            show_in_coupon_center: toBoolean(body.show_in_coupon_center ?? existing.show_in_coupon_center ?? false) ? 1 : 0,
             is_active: toBoolean(body.is_active ?? existing.is_active ?? existing.status ?? 1) ? 1 : 0,
             status: toBoolean(body.is_active ?? existing.is_active ?? existing.status ?? 1) ? 1 : 0,
             updated_at: nowIso()
         };
+    }
+
+    function hasCouponNumericId(row = {}) {
+        if (row.id == null || row.id === '') return false;
+        const numericId = Number(row.id);
+        return Number.isFinite(numericId) && numericId > 0;
+    }
+
+    function getCouponNumericIdSeed(row = {}) {
+        return [
+            pickString(row._legacy_id),
+            pickString(row._id),
+            pickString(row.created_at),
+            pickString(row.updated_at),
+            pickString(row.name || row.title)
+        ].join('|');
+    }
+
+    function ensureCouponNumericIds(rows = []) {
+        const sourceRows = Array.isArray(rows) ? rows : [];
+        const occupiedIds = new Set(
+            sourceRows
+                .map((item) => Number(item?.id))
+                .filter((value) => Number.isFinite(value) && value > 0)
+        );
+        const missingRows = sourceRows
+            .filter((item) => !hasCouponNumericId(item))
+            .sort((left, right) => getCouponNumericIdSeed(left).localeCompare(getCouponNumericIdSeed(right)));
+
+        let nextGeneratedId = occupiedIds.size ? Math.max(...occupiedIds) : 0;
+        const patchTasks = [];
+
+        for (const row of missingRows) {
+            const legacyId = Number(row?._legacy_id);
+            let assignedId = Number.isFinite(legacyId) && legacyId > 0 && !occupiedIds.has(legacyId)
+                ? legacyId
+                : null;
+
+            if (!assignedId) {
+                do {
+                    nextGeneratedId += 1;
+                } while (occupiedIds.has(nextGeneratedId));
+                assignedId = nextGeneratedId;
+            }
+
+            occupiedIds.add(assignedId);
+            row.id = assignedId;
+
+            if (row._id && typeof directPatchDocument === 'function') {
+                patchTasks.push(
+                    Promise.resolve(
+                        directPatchDocument('coupons', String(row._id), { id: assignedId })
+                    ).catch(() => {})
+                );
+            }
+        }
+
+        if (patchTasks.length > 0) {
+            void Promise.allSettled(patchTasks);
+        }
+
+        return sourceRows;
+    }
+
+    function getCouponRows() {
+        return ensureCouponNumericIds(getCollection('coupons'));
+    }
+
+    function findCouponByLookup(lookup) {
+        return findByLookup(getCouponRows(), lookup);
     }
 
     function normalizeLinkedProduct(product) {
@@ -907,7 +1062,10 @@ function registerMarketingRoutes(app, deps) {
 
     function parseDateTimestamp(value) {
         if (!value) return 0;
-        const ts = new Date(value).getTime();
+        const raw = pickString(value).trim();
+        if (!raw) return 0;
+        const normalized = /(?:z|[+-]\d{2}:\d{2})$/i.test(raw) ? raw : `${raw}+08:00`;
+        const ts = new Date(normalized).getTime();
         return Number.isFinite(ts) ? ts : 0;
     }
 
@@ -1074,25 +1232,7 @@ function registerMarketingRoutes(app, deps) {
     }
 
     app.get('/admin/api/coupons', auth, requirePermission('products'), (req, res) => {
-        const rawRows = getCollection('coupons');
-        // 自愈：对 CloudBase 直接创建（无数字 id 只有 UUID _id）的优惠券，补写自增数字 id
-        const maxNumericId = rawRows.reduce((max, r) => {
-            const n = Number(r.id);
-            return Number.isFinite(n) ? Math.max(max, n) : max;
-        }, 0);
-        let patchCounter = maxNumericId;
-        for (const r of rawRows) {
-            const hasNumericId = Number.isFinite(Number(r.id)) && r.id != null && r.id !== '';
-            if (!hasNumericId) {
-                patchCounter += 1;
-                r.id = patchCounter;
-                // 异步回写到 CloudBase（不阻塞响应）
-                if (r._id) {
-                    directPatchDocument('coupons', String(r._id), { id: patchCounter }).catch(() => {});
-                }
-            }
-        }
-        let rows = sortByUpdatedDesc(rawRows).map(normalizeCoupon);
+        let rows = sortByUpdatedDesc(getCouponRows()).map(normalizeCoupon);
         const keyword = pickString(req.query.keyword).trim().toLowerCase();
         const status = pickString(req.query.status).trim();
         if (keyword) rows = rows.filter((item) => `${item.name} ${item.description || ''}`.toLowerCase().includes(keyword));
@@ -1101,13 +1241,13 @@ function registerMarketingRoutes(app, deps) {
     });
 
     app.get('/admin/api/coupons/:id', auth, requirePermission('products'), (req, res) => {
-        const row = findByLookup(getCollection('coupons'), req.params.id);
+        const row = findCouponByLookup(req.params.id);
         if (!row) return fail(res, '优惠券不存在', 404);
         ok(res, normalizeCoupon(row));
     });
 
     app.get('/admin/api/coupons/:id/wxacode', auth, requirePermission('products'), async (req, res) => {
-        const coupon = findByLookup(getCollection('coupons'), req.params.id);
+        const coupon = findCouponByLookup(req.params.id);
         if (!coupon) return fail(res, '优惠券不存在', 404);
 
         const couponId = coupon.id || coupon._legacy_id || coupon._id || req.params.id;
@@ -1133,7 +1273,7 @@ function registerMarketingRoutes(app, deps) {
 
     app.post('/admin/api/coupons/:id/claim-tickets', auth, requirePermission('products'), async (req, res) => {
         await ensureFreshCollections(['coupons', 'coupon_claim_tickets']);
-        const coupon = findByLookup(getCollection('coupons'), req.params.id);
+        const coupon = findCouponByLookup(req.params.id);
         if (!coupon) return fail(res, '优惠券不存在', 404);
         if (toNumber(coupon.is_active, 1) === 0) return fail(res, '此活动已结束', 400);
 
@@ -1180,7 +1320,7 @@ function registerMarketingRoutes(app, deps) {
     });
 
     app.put('/admin/api/coupons/:id', auth, requirePermission('products'), (req, res) => {
-        const rows = getCollection('coupons');
+        const rows = getCouponRows();
         const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
         if (index === -1) return fail(res, '优惠券不存在', 404);
         rows[index] = normalizeCouponPayload(req.body, rows[index]);
@@ -1190,7 +1330,7 @@ function registerMarketingRoutes(app, deps) {
     });
 
     app.delete('/admin/api/coupons/:id', auth, requirePermission('products'), (req, res) => {
-        const rows = getCollection('coupons');
+        const rows = getCouponRows();
         const nextRows = rows.filter((item) => !rowMatchesLookup(item, req.params.id));
         if (rows.length === nextRows.length) return fail(res, '优惠券不存在', 404);
         saveCollection('coupons', nextRows);
@@ -1199,11 +1339,17 @@ function registerMarketingRoutes(app, deps) {
     });
 
     function updateCouponStatus(req, res) {
-        const row = patchCollectionFlag('coupons', req.params.id, {
+        const rows = getCouponRows();
+        const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
+        if (index === -1) return fail(res, '优惠券不存在', 404);
+        rows[index] = {
+            ...rows[index],
             is_active: toBoolean(req.body?.status ?? req.body?.is_active ?? req.body?.enabled ?? req.body?.value ?? 1) ? 1 : 0,
-            status: toBoolean(req.body?.status ?? req.body?.is_active ?? req.body?.enabled ?? req.body?.value ?? 1) ? 1 : 0
-        });
-        if (!row) return fail(res, '优惠券不存在', 404);
+            status: toBoolean(req.body?.status ?? req.body?.is_active ?? req.body?.enabled ?? req.body?.value ?? 1) ? 1 : 0,
+            updated_at: nowIso()
+        };
+        saveCollection('coupons', rows);
+        const row = rows[index];
         createAuditLog(req.admin, 'coupon.status', 'coupons', { coupon_id: req.params.id, status: row.status });
         ok(res, normalizeCoupon(row));
     }
@@ -1236,7 +1382,7 @@ function registerMarketingRoutes(app, deps) {
     }
 
     app.post('/admin/api/coupons/:id/issue', auth, requirePermission('products'), (req, res) => {
-        const coupons = getCollection('coupons');
+        const coupons = getCouponRows();
         const coupon = findByLookup(coupons, req.params.id);
         if (!coupon) return fail(res, '优惠券不存在', 404);
 
@@ -1599,71 +1745,6 @@ function registerMarketingRoutes(app, deps) {
         })
     });
 
-    crudCollection({
-        basePath: 'lottery-prizes',
-        collection: 'lottery_prizes',
-        permission: 'products',
-        label: '抽奖奖品',
-        refreshCollections: ['lottery_prizes'],
-        normalize: row => {
-            const visual = defaultPrizeVisual(row);
-            const imageUrl = assetUrl(row.file_id || row.image_url || row.image || row.cover_image || '') || buildPrizeImageDataUri(row);
-            const isActive = toBoolean(row.is_active ?? row.status ?? 1) ? 1 : 0;
-            return {
-                ...row,
-                id: row.id || row._legacy_id || row._id,
-                name: pickString(row.name || visual.badge || '未命名奖品'),
-                file_id: pickString(row.file_id),
-                image_url: imageUrl,
-                image: imageUrl,
-                cover_image: imageUrl,
-                prize_value: toNumber(row.prize_value ?? row.value, 0),
-                cost_points: Math.max(0, toNumber(row.cost_points, 1)),
-                probability: toNumber(row.probability, 0),
-                stock: row.stock == null ? -1 : toNumber(row.stock, -1),
-                sort_order: toNumber(row.sort_order, 0),
-                display_emoji: pickString(row.display_emoji || visual.emoji),
-                badge_text: pickString(row.badge_text || visual.badge),
-                theme_color: pickString(row.theme_color || visual.theme),
-                accent_color: pickString(row.accent_color || visual.accent),
-                is_active: isActive,
-                status: isActive
-            };
-        },
-        payload: (body, existing) => ({
-            ...existing,
-            ...body,
-            is_active: toBoolean(body.is_active ?? body.status ?? existing.is_active ?? 1) ? 1 : 0,
-            status: toBoolean(body.is_active ?? body.status ?? existing.status ?? 1) ? 1 : 0,
-            updated_at: nowIso()
-        })
-    });
-
-    function updateLotteryPrizeStatus(req, res) {
-        const row = patchCollectionFlag('lottery_prizes', req.params.id, {
-            is_active: toBoolean(req.body?.status ?? req.body?.is_active ?? req.body?.enabled ?? req.body?.value ?? 1) ? 1 : 0,
-            status: toBoolean(req.body?.status ?? req.body?.is_active ?? req.body?.enabled ?? req.body?.value ?? 1) ? 1 : 0
-        });
-        if (!row) return fail(res, '抽奖奖品不存在', 404);
-        createAuditLog(req.admin, 'lottery_prize.status', 'lottery_prizes', { prize_id: req.params.id, status: row.status });
-        const imageUrl = assetUrl(row.file_id || row.image_url || row.image || row.cover_image || '');
-        ok(res, {
-            ...row,
-            id: row.id || row._legacy_id || row._id,
-            file_id: pickString(row.file_id),
-            image_url: imageUrl,
-            image: imageUrl,
-            cover_image: imageUrl,
-            is_active: toBoolean(row.is_active ?? row.status ?? 1) ? 1 : 0,
-            status: toBoolean(row.is_active ?? row.status ?? 1) ? 1 : 0
-        });
-    }
-
-    app.put('/admin/api/lottery-prizes/:id/status', auth, requirePermission('products'), updateLotteryPrizeStatus);
-    app.post('/admin/api/lottery-prizes/:id/status', auth, requirePermission('products'), updateLotteryPrizeStatus);
-    app.put('/admin/api/lottery-prizes/:id/toggle', auth, requirePermission('products'), updateLotteryPrizeStatus);
-    app.post('/admin/api/lottery-prizes/:id/toggle', auth, requirePermission('products'), updateLotteryPrizeStatus);
-
     app.get('/admin/api/limited-sale-slots', auth, requirePermission('products'), async (req, res) => {
         await ensureFreshCollections(['limited_sale_slots']);
         let rows = await Promise.all(sortLimitedSaleSlots(getCollection('limited_sale_slots')).map((item) => normalizeLimitedSaleSlot(item)));
@@ -1801,7 +1882,7 @@ function registerMarketingRoutes(app, deps) {
         const products = getCollection('products');
         const staticOptions = [
             { key: 'flash_sale:current', link_type: 'flash_sale', link_value: '', title: '当前有效限时商品', badge: '固定入口' },
-            { key: 'coupon_center:default', link_type: 'coupon_center', link_value: '__coupon_center__', title: '优惠券中心入口', badge: '固定入口' }
+            { key: 'coupon_center:default', link_type: 'coupon_center', link_value: '__coupon_center__', title: '惊喜礼遇入口', badge: '固定入口' }
         ];
         const limitedSaleOptions = (await Promise.all(
             sortLimitedSaleSlots(getCollection('limited_sale_slots'))
@@ -1958,6 +2039,12 @@ function registerMarketingRoutes(app, deps) {
         const normalizedUserId = requestUserId != null && requestUserId !== ''
             ? requestUserId
             : (matchedUser?.id || matchedUser?._legacy_id || matchedUser?._id || normalizedOpenid);
+        const requestedRole = pickString(req.body?.role || 'staff');
+        if (requestedRole === 'manager') {
+            if (!matchedUser) return fail(res, '店长用户不存在', 404);
+            const roleLevel = toNumber(matchedUser.role_level ?? matchedUser.distributor_level ?? matchedUser.level, 0);
+            if (roleLevel < 6) return fail(res, '仅线下实体门店等级用户可设为店长', 400);
+        }
         const existingIndex = rows.findIndex((row) => {
             if (!rowMatchesLookup(row, req.params.id, [row.station_id])) return false;
             if (rowMatchesLookup(row, req.body?.id)) return true;
@@ -1971,8 +2058,8 @@ function registerMarketingRoutes(app, deps) {
             station_id: req.params.id,
             user_id: normalizedUserId,
             openid: pickString(normalizedOpenid || (existingIndex === -1 ? '' : rows[existingIndex].openid)),
-            role: req.body?.role || 'staff',
-            can_verify: pickString(req.body?.role || 'staff') === 'manager' ? 1 : (toBoolean(req.body?.can_verify ?? 1) ? 1 : 0),
+            role: requestedRole,
+            can_verify: requestedRole === 'manager' ? 1 : (toBoolean(req.body?.can_verify ?? 1) ? 1 : 0),
             status: req.body?.status || 'active',
             remark: req.body?.remark || '',
             updated_at: nowIso()
@@ -2088,9 +2175,20 @@ function registerMarketingRoutes(app, deps) {
 
     Object.keys(agentConfigDefaults).forEach((key) => {
         app.get(`/admin/api/agent-system/${key}`, auth, requirePermission('settings_manage'), (_req, res) => {
+            if (key === 'dividend-rules') {
+                ok(res, getDividendRulesSnapshot());
+                return;
+            }
             ok(res, getConfigValue(`agent_system_${key}`, agentConfigDefaults[key]));
         });
         app.put(`/admin/api/agent-system/${key}`, auth, requirePermission('settings_manage'), (req, res) => {
+            if (key === 'dividend-rules') {
+                const normalizedRules = normalizeDividendRulesConfig(req.body || {});
+                const validation = validateDividendRulesConfig(normalizedRules);
+                if (!validation.ok) return fail(res, validation.message, 400);
+                ok(res, setConfigValue(`agent_system_${key}`, normalizedRules, 'agent_system'));
+                return;
+            }
             ok(res, setConfigValue(`agent_system_${key}`, req.body || {}, 'agent_system'));
         });
     });
@@ -2098,15 +2196,20 @@ function registerMarketingRoutes(app, deps) {
     app.get('/admin/api/agent-system/dividend/preview', auth, requirePermission('settings_manage'), (req, res) => {
         const users = getCollection('users');
         const amount = toNumber(req.query.amount || req.query.pool_amount || req.query.pool, 0);
-        const rules = {
-            enabled: false,
-            source_pct: 0,
-            b_team_award: { enabled: false, pool_pct: 0, ranks: [] },
-            b1_personal_award: { enabled: false, pool_pct: 0, ranks: [] },
-            ...getConfigValue('agent_system_dividend-rules', {})
-        };
+        const rules = getDividendRulesSnapshot();
+        if (!rules.enabled) return fail(res, '分红规则未启用', 400);
+        const validation = validateDividendRulesConfig(rules);
+        if (!validation.ok) return fail(res, validation.message, 400);
+        const poolState = getDividendPoolSnapshot();
         const list = rules.enabled ? buildDividendPreviewRows(users, rules, amount) : [];
-        ok(res, { pool_amount: amount, eligible_count: list.length, list });
+        ok(res, {
+            pool_amount: amount,
+            eligible_count: list.length,
+            pool_balance: roundMoney(poolState.balance),
+            pool_total_in: roundMoney(poolState.total_in),
+            pool_total_out: roundMoney(poolState.total_out),
+            list
+        });
     });
 
     app.post('/admin/api/agent-system/dividend/execute', auth, requirePermission('settings_manage'), async (req, res) => {
@@ -2118,15 +2221,18 @@ function registerMarketingRoutes(app, deps) {
         if (!reasonCheck.ok) return fail(res, reasonCheck.message);
         if (amount <= 0) return fail(res, '分红金额必须大于 0');
         const year = Math.max(2000, Math.floor(toNumber(req.body?.year, new Date().getFullYear() - 1)));
-        const rules = {
-            enabled: false,
-            source_pct: 0,
-            b_team_award: { enabled: false, pool_pct: 0, ranks: [] },
-            b1_personal_award: { enabled: false, pool_pct: 0, ranks: [] },
-            ...getConfigValue('agent_system_dividend-rules', {})
-        };
+        const rules = getDividendRulesSnapshot();
+        if (!rules.enabled) return fail(res, '分红规则未启用', 400);
+        const validation = validateDividendRulesConfig(rules);
+        if (!validation.ok) return fail(res, validation.message, 400);
+        const poolState = getDividendPoolSnapshot();
+        const availableBalance = roundMoney(poolState.balance);
+        if (availableBalance < amount) {
+            return fail(res, `分红池余额不足，当前可用 ¥${availableBalance.toFixed(2)}，请求发放 ¥${roundMoney(amount).toFixed(2)}`, 400);
+        }
         const previewRows = rules.enabled ? buildDividendPreviewRows(users, rules, amount) : [];
         let totalDistributed = 0;
+        let distributedCount = 0;
         for (const item of previewRows) {
             const userIndex = users.findIndex((row) => rowMatchesLookup(row, item.userId, [row.openid, row.member_no]));
             if (userIndex === -1) continue;
@@ -2141,6 +2247,7 @@ function registerMarketingRoutes(app, deps) {
             const amountValue = Math.max(0, toNumber(item.dividendAmount, 0));
             if (amountValue <= 0) continue;
             totalDistributed += amountValue;
+            distributedCount += 1;
             users[userIndex] = {
                 ...users[userIndex],
                 commission_balance: toNumber(users[userIndex].commission_balance, 0) + amountValue,
@@ -2168,7 +2275,7 @@ function registerMarketingRoutes(app, deps) {
             // 记录钱包流水
             appendWalletLogEntry({
                 openid: users[userIndex].openid,
-                type: 'year_end_dividend',
+                change_type: 'year_end_dividend',
                 amount: amountValue,
                 description: `${year} 年终分红 · ${item.awardLabel} ¥${amountValue}`,
                 remark: reasonCheck.reason,
@@ -2177,13 +2284,23 @@ function registerMarketingRoutes(app, deps) {
         }
         saveCollection('users', users);
         saveCollection('commissions', commissions);
+        const nextPoolState = {
+            ...poolState,
+            balance: roundMoney(toNumber(poolState.balance, 0) - totalDistributed),
+            total_out: roundMoney(toNumber(poolState.total_out, 0) + totalDistributed),
+            last_executed_year: year,
+            last_total_distributed: totalDistributed
+        };
+        setDividendPoolSnapshot(nextPoolState);
         const row = {
             id: nextId(executions),
             ...req.body,
             year,
             remark: reasonCheck.reason,
             totalDistributed: Number(totalDistributed.toFixed(2)),
-            distributedCount: previewRows.length,
+            distributedCount,
+            pool_balance_before: availableBalance,
+            pool_balance_after: nextPoolState.balance,
             status: 'completed',
             created_at: nowIso(),
             updated_at: nowIso()

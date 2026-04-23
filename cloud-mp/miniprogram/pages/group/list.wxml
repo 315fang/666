@@ -12,19 +12,14 @@
     <view class="hero-badge-row">
       <view class="hero-badge">
         <image class="hero-badge-icon" src="/assets/icons/users.svg" mode="aspectFit"></image>
-        <text class="hero-badge-text">登录后可发起</text>
+        <text class="hero-badge-text">登录后可开团</text>
       </view>
     </view>
 
     <view class="hero-card">
       <view class="hero-copy">
-        <text class="hero-title">组团下单，价格更直接</text>
-        <text class="hero-subtitle">登录后即可开团，好友参团，人数凑齐后立即按拼团价成交；发起后可在“我的拼团”持续查看进度。</text>
-      </view>
-
-      <view class="hero-actions">
-        <view class="hero-btn hero-btn-primary" bindtap="onGoMyGroups">我的拼团</view>
-        <view class="hero-btn" bindtap="onGoActivities">去发起</view>
+        <text class="hero-title">拼团下单，享受团购价</text>
+        <text class="hero-subtitle">登录后可发起拼团，好友参团后按拼团价结算。记录可在“我的拼团”查看。</text>
       </view>
     </view>
   </view>
@@ -38,7 +33,7 @@
     <view class="section-head">
       <view>
         <text class="section-title">可发起活动</text>
-        <text class="section-subtitle">先看人数门槛和拼团价，再决定是否开团。</text>
+        <text class="section-subtitle">查看人数要求和拼团价。</text>
       </view>
     </view>
 
@@ -55,7 +50,7 @@
 
     <view class="empty-wrap" wx:if="{{!activities.length && !loading}}">
       <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
-      <text class="empty-text">暂无拼团活动\n活动上线后可从这里发起，已参与记录看“我的拼团”</text>
+      <text class="empty-text">暂无拼团活动</text>
     </view>
 
     <view class="activity-list">
@@ -106,7 +101,7 @@
     <view class="section-head">
       <view>
         <text class="section-title">我的拼团</text>
-        <text class="section-subtitle">查看开团进度、分享状态和成团结果。</text>
+        <text class="section-subtitle">查看参团进度和成团结果。</text>
       </view>
     </view>
 
@@ -123,8 +118,8 @@
 
     <view class="empty-wrap" wx:if="{{!myGroups.length && !loading}}">
       <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
-      <text class="empty-text">还没有参与拼团\n快去发起一个吧</text>
-      <view class="empty-action" bindtap="onGoActivities">去发起拼团</view>
+      <text class="empty-text">暂无拼团记录</text>
+      <view class="empty-action" bindtap="onGoActivities">去拼团</view>
     </view>
 
     <view class="group-list">
@@ -183,11 +178,11 @@
             <view class="record-badge record-badge--role" wx:else>我参与的</view>
           </view>
           <view class="cancelled-hint">
-            <text>你的订单已取消，拼团可能仍在继续</text>
+            <text>订单已取消，拼团记录仍可查看</text>
           </view>
           <view class="record-action-row">
             <view class="record-action record-action--secondary" catchtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}" data-order-id="{{item.order_id}}" data-payment-status="{{item.payment_status}}">
-              <text>查看团状态</text>
+              <text>查看拼团</text>
             </view>
           </view>
         </view>
@@ -226,10 +221,10 @@
           <view class="record-action-row">
             <view class="share-row" wx:if="{{item.groupOrder && item.groupOrder.status === 'open'}}" catchtap="onShare" data-no="{{item.groupOrder.group_no}}" data-order-id="{{item.order_id}}" data-payment-status="{{item.payment_status}}">
               <image class="share-icon" src="/assets/icons/share.svg" mode="aspectFit"/>
-              <text>分享给好友参团</text>
+              <text>邀请好友参团</text>
             </view>
             <view class="record-action" catchtap="onViewGroup" data-no="{{item.groupOrder && item.groupOrder.group_no}}" data-order-id="{{item.order_id}}" data-payment-status="{{item.payment_status}}">
-              <text>查看进度</text>
+              <text>查看详情</text>
             </view>
           </view>
         </view>

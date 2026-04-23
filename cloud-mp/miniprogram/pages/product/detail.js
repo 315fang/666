@@ -56,22 +56,22 @@ function describeGroupRecord(record) {
     const status = record && record.groupOrder && record.groupOrder.status || '';
     if (status === 'open') {
         return {
-            title: '你已参与该商品拼团，可继续查看当前进度',
-            desc: '当前拼团还在进行中，可继续查看还差几人成团，或分享给好友一起参团。',
-            actionText: '继续查看拼团'
+            title: '你已参与该商品拼团',
+            desc: '可查看成团进度，也可继续邀请好友参团。',
+            actionText: '查看拼团'
         };
     }
     if (status === 'success') {
         return {
-            title: '你参与的拼团已成团，可继续查看订单与进度',
-            desc: '该商品已有一笔成团记录，你可以继续查看详情或回到“我的拼团”查看全部记录。',
-            actionText: '查看拼团详情'
+            title: '该商品拼团已成团',
+            desc: '可查看订单和拼团详情。',
+            actionText: '查看详情'
         };
     }
     return {
-        title: '你参与过该商品拼团，可回到我的拼团继续查看',
-        desc: '如果这笔拼团尚未生成详情，也可以先去下单，支付成功后再回到订单或“我的拼团”查看。',
-        actionText: '查看我的拼团'
+        title: '你已参与过该商品拼团',
+        desc: '可前往“我的拼团”查看记录。',
+        actionText: '我的拼团'
     };
 }
 
@@ -79,22 +79,22 @@ function describeSlashRecord(record) {
     const status = record && record.status || '';
     if (status === 'active') {
         return {
-            title: '你已发起该商品砍价，可继续查看当前进度',
-            desc: '继续查看后可确认已经砍到哪里、还差多少到目标价，并继续分享给好友帮砍。',
-            actionText: '继续查看砍价'
+            title: '你已发起该商品砍价',
+            desc: '可查看当前进度，并继续邀请好友帮砍。',
+            actionText: '查看砍价'
         };
     }
     if (status === 'success') {
         return {
-            title: '你这笔砍价已到底价，可继续查看详情或下单',
-            desc: '砍价记录仍可继续查看，确认购买状态时也可以从“我的砍价”回找。',
-            actionText: '查看砍价详情'
+            title: '该商品砍价已到底价',
+            desc: '可查看详情并完成下单。',
+            actionText: '查看详情'
         };
     }
     return {
-        title: '你参与过该商品砍价，可回到我的砍价继续查看',
-        desc: '如果当前记录已结束或已购买，也可以从“我的砍价”回看完整进度。',
-        actionText: '查看我的砍价'
+        title: '你已参与过该商品砍价',
+        desc: '可前往“我的砍价”查看记录。',
+        actionText: '我的砍价'
     };
 }
 
@@ -133,9 +133,9 @@ Page({
         slashActivity: null,
         currentGroupRecord: null,
         currentSlashRecord: null,
-        availablePurchaseModes: [{ key: 'normal', label: '普通购买', hint: '加入购物袋后可与其他商品一起结算' }],
+        availablePurchaseModes: [{ key: 'normal', label: '普通购买', hint: '加入购物袋后可一并结算' }],
         purchaseMode: 'normal',
-        purchaseModeHint: '加入购物袋后可与其他商品一起结算',
+        purchaseModeHint: '加入购物袋后可一并结算',
         actionLeftLabel: '加入购物袋',
         actionRightLabel: '立即购买',
         exchangeMode: false,
@@ -143,6 +143,7 @@ Page({
         exchangeTitle: '',
         limitedSpotCardId: '',
         limitedSpotOfferId: '',
+        limitedSpotSource: '',
         limitedSpotMode: '',
         limitedSpotCard: null,
         limitedSpotOffer: null,
@@ -206,6 +207,9 @@ Page({
         const limitedSpotOfferId = options.limited_sale_item_id
             ? String(options.limited_sale_item_id)
             : (options.limited_spot_offer_id ? String(options.limited_spot_offer_id) : '');
+        const limitedSpotSource = options.limited_sale_slot_id || options.limited_sale_item_id
+            ? 'limited_sale'
+            : ((options.limited_spot_card_id || options.limited_spot_offer_id) ? 'limited_spot' : '');
         let exchangeTitle = '';
         if (exchangeCouponId) {
             const activeExchangeCoupon = wx.getStorageSync('activeExchangeCoupon');
@@ -220,6 +224,7 @@ Page({
             exchangeTitle,
             limitedSpotCardId,
             limitedSpotOfferId,
+            limitedSpotSource,
             limitedSpotMode: normalizeLimitedSpotMode(options.limited_spot_mode || '', null)
         });
         this.loadProduct(normalizedId);
@@ -313,7 +318,7 @@ Page({
                 limitedSpotOriginalPrice: '',
                 limitedSpotLockedSkuId: ''
             });
-            wx.showToast({ title: err.message || '专享活动暂不可用', icon: 'none' });
+            wx.showToast({ title: err.message || '活动暂不可参与', icon: 'none' });
             return false;
         }
     },
@@ -338,39 +343,16 @@ Page({
             }, () => this.syncPurchaseActionState());
             return;
         }
-
-        try {
-            const [groupRes, slashRes] = await Promise.all([
-                get('/group/activities', { product_id: normalizedId }, { showError: false }).catch(() => null),
-                get('/slash/activities', { product_id: normalizedId }, { showError: false }).catch(() => null)
-            ]);
-
-            const groupActivity = this.findProductActivity(normalizeActivityList(groupRes && groupRes.data), normalizedId);
-            const slashActivity = this.findProductActivity(normalizeActivityList(slashRes && slashRes.data), normalizedId);
-            const availablePurchaseModes = this.buildPurchaseModes(groupActivity, slashActivity);
-            const availableKeys = availablePurchaseModes.map((item) => item.key);
-            const preferredMode = groupActivity ? 'group' : slashActivity ? 'slash' : 'normal';
-            const purchaseMode = availableKeys.includes(this.data.purchaseMode) ? this.data.purchaseMode : preferredMode;
-
-            this.setData({
-                groupActivity,
-                slashActivity,
-                availablePurchaseModes,
-                purchaseMode
-            }, () => {
-                this.syncPurchaseActionState();
-                this.loadUserActivitySnapshot(normalizedId);
-            });
-        } catch (err) {
-            this.setData({
-                groupActivity: null,
-                slashActivity: null,
-                currentGroupRecord: null,
-                currentSlashRecord: null,
-                availablePurchaseModes: [{ key: 'normal', label: '普通购买', hint: '加入购物袋后可与其他商品一起结算' }],
-                purchaseMode: 'normal'
-            }, () => this.syncPurchaseActionState());
-        }
+        // 普通商品详情页只保留正常购买。
+        // 拼团、砍价分别从各自活动页 / 详情页发起，不在商品详情页混合展示。
+        this.setData({
+            groupActivity: null,
+            slashActivity: null,
+            currentGroupRecord: null,
+            currentSlashRecord: null,
+            availablePurchaseModes: [{ key: 'normal', label: '普通购买', hint: '加入购物袋后可与其他商品一起结算' }],
+            purchaseMode: 'normal'
+        }, () => this.syncPurchaseActionState());
     },
 
     findProductActivity(list, productId) {
@@ -470,13 +452,13 @@ Page({
             const availableModes = modes.length ? modes : [{
                 key: 'limited_money',
                 label: '限时专享',
-                hint: '当前活动暂不可购买'
+                    hint: '活动暂不可购买'
             }];
             const currentMeta = availableModes.find((item) => item.key === purchaseMode) || availableModes[0];
             const effectiveMode = currentMeta && currentMeta.key ? currentMeta.key : 'limited_money';
             const activityDesc = effectiveMode === 'limited_points'
-                ? '本商品按活动积分兑换，不参与普通优惠券、积分抵扣和货款支付。'
-                : '本商品按活动专享价购买，不参与普通优惠券、积分抵扣和货款支付。';
+                ? '该商品按活动积分兑换，不参与优惠券、积分抵扣和货款支付。'
+                : '该商品按活动价结算，不参与优惠券、积分抵扣和货款支付。';
             this.setData({
                 availablePurchaseModes: availableModes,
                 purchaseMode: effectiveMode,
@@ -495,13 +477,13 @@ Page({
         }
         if (this.data.exchangeMode) {
             this.setData({
-                purchaseModeHint: '使用兑换券提交 0 元订单，不参与积分、普通优惠券和分销佣金',
+                purchaseModeHint: '使用兑换券提交 0 元订单',
                 actionLeftLabel: '不可加购',
                 actionRightLabel: '立即兑换',
                 activityStatusCard: {
                     badge: '兑换券',
-                    title: this.data.exchangeTitle || '当前商品支持兑换券兑换',
-                    desc: '提交后将创建一笔 0 元兑换订单，仍可正常发货、收货和售后。'
+                    title: this.data.exchangeTitle || '支持兑换券兑换',
+                    desc: '提交后生成 0 元订单，可正常发货和售后。'
                 },
                 activityQuickLinks: []
             });
@@ -516,7 +498,7 @@ Page({
         const hasCurrentSlash = !!(slashRecord && slashRecord.slash_no);
         const modeMeta = {
             normal: {
-                purchaseModeHint: '加入购物袋后可与其他商品一起结算',
+                purchaseModeHint: '加入购物袋后可一并结算',
                 actionLeftLabel: '加入购物袋',
                 actionRightLabel: '立即购买',
                 activityStatusCard: null,
@@ -528,23 +510,23 @@ Page({
                 actionRightLabel: hasCurrentGroup ? groupCopy.actionText : '去下单拼团',
                 activityStatusCard: {
                     badge: hasCurrentGroup ? '我的拼团' : '拼团说明',
-                    title: hasCurrentGroup ? groupCopy.title : '支付成功后可在订单或“我的拼团”继续查看进度',
-                    desc: hasCurrentGroup ? groupCopy.desc : '拼团不是发起后立刻成团，支付完成后系统会为你建立或加入对应拼团。'
+                    title: hasCurrentGroup ? groupCopy.title : '支付后可查看拼团进度',
+                    desc: hasCurrentGroup ? groupCopy.desc : '支付完成后，系统会为你建立或加入对应拼团。'
                 },
                 activityQuickLinks: hasCurrentGroup
                     ? [{
                         key: 'current-group',
                         label: groupCopy.actionText,
-                        desc: '继续查看这笔拼团当前是否还差人、是否已成团'
+                        desc: '查看当前拼团进度'
                     }, {
                         key: 'my-group',
-                        label: '查看我的拼团',
-                        desc: '回到我参与的全部拼团记录，继续回找历史活动'
+                        label: '我的拼团',
+                        desc: '查看我参与过的拼团'
                     }]
                     : [{
                         key: 'my-group',
-                        label: '查看我的拼团',
-                        desc: '回到我参与的拼团，继续看是否已成团'
+                        label: '我的拼团',
+                        desc: '查看我参与过的拼团'
                     }]
             },
             slash: {
@@ -554,22 +536,22 @@ Page({
                 activityStatusCard: {
                     badge: hasCurrentSlash ? '我的砍价' : '砍价说明',
                     title: hasCurrentSlash ? slashCopy.title : '发起后会自动进入你的砍价详情',
-                    desc: hasCurrentSlash ? slashCopy.desc : '如果你已经发起过同一商品的砍价，我们会直接带你继续查看上次进度。'
+                    desc: hasCurrentSlash ? slashCopy.desc : '如已发起过同款砍价，将直接带你查看原记录。'
                 },
                 activityQuickLinks: hasCurrentSlash
                     ? [{
                         key: 'current-slash',
                         label: slashCopy.actionText,
-                        desc: '继续查看这笔砍价当前进度，确认是否已到底价'
+                        desc: '查看当前砍价进度'
                     }, {
                         key: 'my-slash',
-                        label: '查看我的砍价',
-                        desc: '回到我发起过的砍价记录，继续回找历史活动'
+                        label: '我的砍价',
+                        desc: '查看我发起过的砍价'
                     }]
                     : [{
                         key: 'my-slash',
-                        label: '查看我的砍价',
-                        desc: '继续看我已经发起的砍价记录与进度'
+                        label: '我的砍价',
+                        desc: '查看我发起过的砍价'
                     }]
             }
         };
@@ -580,19 +562,19 @@ Page({
     getPurchaseHint(mode) {
         if (mode === 'group') {
             if (this.data.currentGroupRecord && this.data.currentGroupRecord.group_no) {
-                return '你已参与过该商品拼团，可继续查看当前进度';
+                return '可查看拼团进度';
             }
             const groupPrice = parseFloat(this.data.groupActivity && this.data.groupActivity.group_price || 0);
-            return groupPrice > 0 ? `当前拼团价 ¥${groupPrice.toFixed(2)}` : '可发起拼团购买';
+            return groupPrice > 0 ? `拼团价 ¥${groupPrice.toFixed(2)}` : '可发起拼团';
         }
         if (mode === 'slash') {
             if (this.data.currentSlashRecord && this.data.currentSlashRecord.slash_no) {
-                return '你已发起过该商品砍价，可继续查看当前进度';
+                return '可查看砍价进度';
             }
             const floorPrice = parseFloat(this.data.slashActivity && this.data.slashActivity.floor_price || 0);
-            return floorPrice > 0 ? `最低可砍至 ¥${floorPrice.toFixed(2)}` : '可发起砍价购买';
+            return floorPrice > 0 ? `最低可砍至 ¥${floorPrice.toFixed(2)}` : '可发起砍价';
         }
-        return '加入购物袋后可与其他商品一起结算';
+        return '加入购物袋后可一并结算';
     },
 
     // 加载评价
@@ -764,7 +746,7 @@ Page({
     // 选择规格
     onSpecSelect(e) {
         if (this.data.limitedSpotLockedSkuId) {
-            wx.showToast({ title: '当前专享活动已锁定规格', icon: 'none' });
+            wx.showToast({ title: '活动商品规格已锁定', icon: 'none' });
             return;
         }
         const result = onSpecSelect(this, e, resolvePayableUnitPrice);
@@ -840,7 +822,7 @@ Page({
         }
         if (this._addingToCart) return;
         if (this.data.isOutOfStock) {
-            wx.showToast({ title: '该商品暂时缺货', icon: 'none' });
+            wx.showToast({ title: '商品暂时缺货', icon: 'none' });
             return;
         }
         this.addToCart();
@@ -903,7 +885,7 @@ Page({
 
     onLeftActionTap() {
         if (this.data.limitedSpotOffer) {
-            wx.showToast({ title: '专享商品不支持加入购物袋', icon: 'none' });
+            wx.showToast({ title: '活动商品不支持加入购物袋', icon: 'none' });
             return;
         }
         if (this.data.exchangeMode) {
@@ -929,7 +911,7 @@ Page({
     async onStartGroup() {
         const activity = this.data.groupActivity;
         if (!activity) {
-            wx.showToast({ title: '当前商品暂无拼团活动', icon: 'none' });
+            wx.showToast({ title: '暂无拼团活动', icon: 'none' });
             return;
         }
         if (!requireLogin()) return;
@@ -968,7 +950,7 @@ Page({
     async onStartSlash() {
         const activity = this.data.slashActivity;
         if (!activity) {
-            wx.showToast({ title: '当前商品暂无砍价活动', icon: 'none' });
+            wx.showToast({ title: '暂无砍价活动', icon: 'none' });
             return;
         }
         if (!requireLogin()) return;
@@ -994,7 +976,7 @@ Page({
                 return;
             }
             if (res.code === 0 || res.code === 1) {
-                wx.showToast({ title: normalizeUserMessage(res.message, '砍价已发起，请到“我的砍价”继续查看'), icon: 'none' });
+                wx.showToast({ title: normalizeUserMessage(res.message, '砍价已发起，可前往“我的砍价”查看'), icon: 'none' });
                 setTimeout(() => this.openMySlashList(), 500);
                 return;
             }
@@ -1002,7 +984,7 @@ Page({
         } catch (err) {
             const message = err && err.message ? String(err.message) : '';
             if (message.includes('已发起过砍价')) {
-                wx.showToast({ title: '你已发起过这笔砍价，正在带你继续查看', icon: 'none' });
+                wx.showToast({ title: '该砍价已发起，正在为你打开', icon: 'none' });
                 this.loadUserActivitySnapshot(this.data.id);
                 setTimeout(() => {
                     if (this.data.currentSlashRecord && this.data.currentSlashRecord.slash_no) {
@@ -1060,7 +1042,11 @@ Page({
         const { product } = this.data;
         let path = `/pages/product/detail?id=${product.id}`;
         if (this.data.limitedSpotCardId && this.data.limitedSpotOfferId) {
-            path += `&limited_sale_slot_id=${encodeURIComponent(this.data.limitedSpotCardId)}&limited_sale_item_id=${encodeURIComponent(this.data.limitedSpotOfferId)}&limited_spot_mode=${encodeURIComponent(this.data.limitedSpotMode || 'money')}`;
+            if (this.data.limitedSpotSource === 'limited_spot') {
+                path += `&limited_spot_card_id=${encodeURIComponent(this.data.limitedSpotCardId)}&limited_spot_offer_id=${encodeURIComponent(this.data.limitedSpotOfferId)}&limited_spot_mode=${encodeURIComponent(this.data.limitedSpotMode || 'money')}`;
+            } else {
+                path += `&limited_sale_slot_id=${encodeURIComponent(this.data.limitedSpotCardId)}&limited_sale_item_id=${encodeURIComponent(this.data.limitedSpotOfferId)}&limited_spot_mode=${encodeURIComponent(this.data.limitedSpotMode || 'money')}`;
+            }
         }
         return {
             title: product.name,

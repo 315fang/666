@@ -27,7 +27,7 @@
 ### 营销入口
 
 - 当前有效限时商品：`flash_sale` -> `''`
-- 优惠券中心：`coupon_center` -> `__coupon_center__`
+- 惊喜礼遇：`coupon_center` -> `__coupon_center__`
 
 ### 商城功能
 

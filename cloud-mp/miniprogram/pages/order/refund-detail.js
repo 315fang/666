@@ -15,9 +15,9 @@ Page({
         },
         statusText: {
             pending: '审核中',
-            approved: '审核通过，等待退款',
-            rejected: '申请被拒绝',
-            processing: '退款处理中',
+            approved: '已通过，等待退款',
+            rejected: '已驳回',
+            processing: '退款中',
             completed: '退款完成',
             cancelled: '已取消'
         },

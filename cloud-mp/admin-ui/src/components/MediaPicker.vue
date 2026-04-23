@@ -163,7 +163,7 @@ const fetchMaterials = async () => {
       keyword: keyword.value || undefined,
       group_id: activeGroup.value || undefined,
       type: 'image',
-      sort: 'created_asc'
+      sort: 'created_desc'
     })
     list.value = res?.list || res?.data?.list || []
     total.value = res?.pagination?.total || res?.total || 0

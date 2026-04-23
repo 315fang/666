@@ -18,6 +18,7 @@ const paymentCallback = require('./payment-callback');
 const paymentDeposit = require('./payment-deposit');
 const paymentQuery = require('./payment-query');
 const paymentRefund = require('./payment-refund');
+const paymentTransfer = require('./payment-transfer');
 const { loadPaymentConfig } = require('./config');
 const { queryRefundByOutRefundNo, loadPrivateKey } = require('./wechat-pay-v3');
 
@@ -57,6 +58,14 @@ function logPerf(entry) {
 // ==================== 主处理函数 ====================
 async function handlePaymentAction(event, openid) {
     const { action, ...params } = event;
+    const internalActions = new Set(['createWithdrawalTransfer', 'syncWithdrawalTransfer']);
+    if (internalActions.has(action)) {
+        const expectedToken = String(process.env.PAYMENT_INTERNAL_TOKEN || '').trim();
+        const providedToken = String(params.internal_token || '').trim();
+        if (!expectedToken || providedToken !== expectedToken) {
+            throw unauthorized('内部支付接口禁止直接访问');
+        }
+    }
 
     if (action === 'prepay') {
         try {
@@ -174,6 +183,28 @@ async function handlePaymentAction(event, openid) {
         }
     }
 
+    if (action === 'createWithdrawalTransfer') {
+        try {
+            const result = await paymentTransfer.createWithdrawalTransfer(params);
+            return success(result);
+        } catch (err) {
+            if (err instanceof CloudBaseError) throw err;
+            console.error('CreateWithdrawalTransfer error:', err);
+            throw serverError('微信提现发起失败: ' + err.message);
+        }
+    }
+
+    if (action === 'syncWithdrawalTransfer') {
+        try {
+            const result = await paymentTransfer.queryWithdrawalTransferStatus(params);
+            return success(result);
+        } catch (err) {
+            if (err instanceof CloudBaseError) throw err;
+            console.error('SyncWithdrawalTransfer error:', err);
+            throw serverError('同步微信提现状态失败: ' + err.message);
+        }
+    }
+
     if (action === 'refund') {
         try {
             const result = await paymentRefund.refundPayment(openid, params);
@@ -271,7 +302,7 @@ exports.main = async (event, context) => {
     // 支付回调：微信服务器 HTTP 调用，可能没有 openid
     try {
         let result;
-        if (event.action === 'callback' || event.action === 'syncRefundStatus') {
+        if (['callback', 'syncRefundStatus', 'createWithdrawalTransfer', 'syncWithdrawalTransfer'].includes(event.action)) {
             result = await handlePaymentAction(event, '');
         } else if (event.httpMethod === 'POST' && event.body) {
             try {

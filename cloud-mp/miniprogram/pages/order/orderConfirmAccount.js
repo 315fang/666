@@ -33,7 +33,7 @@ async function loadPointBalance(page) {
             pointsToUse: 0,
             pointsDeduction: '0.00',
             pointsLoadStatus: 'error',
-            pointsLoadError: '积分暂不可用'
+            pointsLoadError: '积分服务暂不可用'
         });
         if (typeof page._recalcFinal === 'function') {
             page._recalcFinal();
@@ -101,7 +101,7 @@ async function loadWalletBalance(page) {
             walletBalanceDisplay: '0.00',
             useWallet: false,
             walletLoadStatus: 'error',
-            walletLoadError: '余额暂不可用'
+            walletLoadError: '货款余额暂不可用'
         });
         return {
             ok: false,

@@ -1,6 +1,6 @@
 const { get, post } = require('../../utils/request');
 const { parseImages } = require('../../utils/dataFormatter');
-const { resolveCloudImageList } = require('./utils/cloudAsset');
+const { resolveCloudImageList, resolveCloudImageUrl } = require('./utils/cloudAsset');
 const { logisticsCompanyLabel } = require('./utils/logisticsCompany');
 const { normalizeOrderConsumer, normalizeRefundConsumer, toMoney } = require('./orderConsumerFields');
 
@@ -15,22 +15,22 @@ function buildOrderActivityInfo(order = {}) {
         let title, desc, actionText, disabled;
         if (groupNo && order.status === 'cancelled') {
             title = '订单已取消';
-            desc = '该订单已取消，但当前拼团状态可能仍在继续，可进入拼团页查看当前团状态。';
-            actionText = '查看当前团状态';
+            desc = '订单已取消，拼团记录仍可查看。';
+            actionText = '查看拼团';
             disabled = false;
         } else if (groupNo) {
             title = '可查看拼团进度';
-            desc = '支付后已生成拼团进度，可继续邀请或查看成团状态。';
-            actionText = '查看拼团进度';
+            desc = '支付成功，可查看成团进度。';
+            actionText = '查看拼团';
             disabled = false;
         } else if (isPaid) {
-            title = '拼团进度生成中';
-            desc = '支付已完成，拼团进度正在生成，请稍后刷新查看。';
-            actionText = '刷新查看';
+            title = '拼团记录生成中';
+            desc = '支付成功，拼团记录正在生成，请稍后刷新。';
+            actionText = '刷新';
             disabled = false;
         } else {
-            title = '拼团进度待生成';
-            desc = '完成支付后会生成拼团进度，可从订单或我的拼团继续查看。';
+            title = '支付后可查看拼团';
+            desc = '支付成功后会生成拼团记录。';
             actionText = '支付后查看';
             disabled = true;
         }
@@ -47,9 +47,9 @@ function buildOrderActivityInfo(order = {}) {
         return {
             type: 'slash',
             label: '砍价订单',
-            title: slashNo ? '可查看砍价详情' : '去我的砍价继续查看',
-            desc: slashNo ? '该订单已关联你的砍价记录，可返回查看砍价进度和购买状态。' : '订单还没带回砍价编号时，也可以先去“我的砍价”继续查看当前进度。',
-            actionText: slashNo ? '查看砍价详情' : '去我的砍价',
+            title: slashNo ? '可查看砍价详情' : '可前往我的砍价',
+            desc: slashNo ? '该订单已关联砍价记录，可查看进度与下单状态。' : '可前往“我的砍价”查看相关记录。',
+            actionText: slashNo ? '查看砍价' : '我的砍价',
             targetNo: slashNo,
             disabled: false
         };
@@ -79,25 +79,48 @@ async function loadOrder(page, idOrNo) {
                 parseImages(order.product.images)
             );
         }
+        if (order && Array.isArray(order.items) && order.items.length > 0) {
+            order.items = await Promise.all(order.items.map(async (item) => {
+                const product = item.product && typeof item.product === 'object' ? { ...item.product } : null;
+                if (product) {
+                    product.images = await resolveCloudImageList(
+                        product.images,
+                        parseImages(product.images)
+                    );
+                    product.image = await resolveCloudImageUrl(
+                        product.image || '',
+                        product.images
+                    );
+                }
+                return {
+                    ...item,
+                    product
+                };
+            }));
+        }
         if (order) {
             order.logistics_company = order.logistics_company || order.shipping_company || '';
             order.logistics_company_label = logisticsCompanyLabel(order.logistics_company);
             const originalAmount = Number(order.original_amount != null ? order.original_amount : order.total_amount);
             const couponDiscount = Number(order.coupon_discount || 0);
             const pointsDiscount = Number(order.points_discount || 0);
+            const bundleDiscount = Number(order.bundle_discount || 0);
             const payAmount = Number(order.pay_amount != null ? order.pay_amount : order.total_amount);
             order.display_original_amount = toMoney(originalAmount);
             order.display_coupon_discount = toMoney(couponDiscount);
             order.display_points_discount = toMoney(pointsDiscount);
+            order.display_bundle_discount = toMoney(bundleDiscount);
             order.display_pay_amount = toMoney(payAmount);
-            order.has_discount_breakdown = couponDiscount > 0 || pointsDiscount > 0 || Math.abs(originalAmount - payAmount) > 0.0001;
+            order.has_discount_breakdown = bundleDiscount > 0 || couponDiscount > 0 || pointsDiscount > 0 || Math.abs(originalAmount - payAmount) > 0.0001;
             order.activityInfo = buildOrderActivityInfo(order);
         }
 
         const allRefunds = ((refundsRes.data && refundsRes.data.list) || []).map(normalizeRefundConsumer);
-        const activeRefund = allRefunds.find(
-            (refund) => String(refund.order_id) === String(order.id) && ['pending', 'approved', 'processing'].includes(refund.status)
-        );
+        const activeRefund = allRefunds.find((refund) => {
+            if (String(refund.order_id) !== String(order.id)) return false;
+            if (['pending', 'approved', 'processing'].includes(refund.status)) return true;
+            return order.status === 'refunding' && refund.status === 'failed';
+        });
         const latestRefund = allRefunds.find((refund) => String(refund.order_id) === String(order.id));
 
         page.setData({

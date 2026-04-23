@@ -47,7 +47,7 @@
       <image src="/assets/icons/gift.svg" class="empty-icon" mode="aspectFit"/>
       <text class="empty-text" wx:if="{{activeTab === 'unused'}}">暂无可用优惠券</text>
       <text class="empty-sub" wx:if="{{activeTab === 'unused'}}">快去参与活动领券吧</text>
-      <view class="empty-btn" wx:if="{{activeTab === 'unused'}}" bindtap="onOpenCouponCenter">前往领券中心</view>
+      <view class="empty-btn" wx:if="{{activeTab === 'unused'}}" bindtap="onOpenCouponCenter">前往惊喜礼遇</view>
       <text class="empty-text" wx:elif="{{activeTab === 'used'}}">暂无已使用记录</text>
       <text class="empty-text" wx:else>暂无已过期记录</text>
     </view>

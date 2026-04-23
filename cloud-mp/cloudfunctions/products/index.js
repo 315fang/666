@@ -5,6 +5,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const db = cloud.database();
 const _ = db.command;
+const { listActiveBundles, getActiveBundleDetail } = require('./product-bundles');
 
 const {
     CloudBaseError, cloudFunctionWrapper
@@ -154,7 +155,11 @@ function resolvePrimaryAsset(record = {}, resolvedMap = new Map(), options = {})
 function collectProductAssetFileIds(product = {}, skus = []) {
     return [
         ...collectCloudFileIdsFromValue(product.images),
+        ...collectCloudFileIdsFromValue(product.preview_images),
+        ...collectCloudFileIdsFromValue(product.previewImages),
         ...collectCloudFileIdsFromValue(product.detail_images),
+        ...collectCloudFileIdsFromValue(product.preview_detail_images),
+        ...collectCloudFileIdsFromValue(product.previewDetailImages),
         ...collectCloudFileIdsFromValue(product.image),
         ...collectCloudFileIdsFromValue(product.image_url),
         ...collectCloudFileIdsFromValue(product.cover_image),
@@ -383,8 +388,8 @@ function formatProduct(p, resolvedMap = new Map()) {
     const originalPrice = resolveProductOriginalPrice(p, price);
     const images = resolveAssetList(p.images, resolvedMap, { preferCloudId: true });
     const detailImages = resolveAssetList(p.detail_images, resolvedMap, { preferCloudId: true });
-    const previewImages = resolveAssetList(p.images, resolvedMap);
-    const previewDetailImages = resolveAssetList(p.detail_images, resolvedMap);
+    const previewImages = resolveAssetList(p.preview_images || p.previewImages || p.images, resolvedMap);
+    const previewDetailImages = resolveAssetList(p.preview_detail_images || p.previewDetailImages || p.detail_images, resolvedMap);
     const primaryImage = images[0] || resolvePrimaryAsset(p, resolvedMap, { preferCloudId: true }) || '';
     const primaryPreviewImage = previewImages[0] || resolvePrimaryAsset(p, resolvedMap) || '';
     return {
@@ -552,6 +557,18 @@ const handleAction = {
         const page = Math.max(1, toNumber(params.page, 1));
         const start = (page - 1) * pageSize;
         return success({ list: list.slice(start, start + pageSize), page, size: pageSize, total: list.length, keyword: search });
+    }),
+
+    'bundleList': asyncHandler(async (params) => {
+        const result = await listActiveBundles(params);
+        return success(result);
+    }),
+
+    'bundleDetail': asyncHandler(async (params) => {
+        if (!params.bundle_id) throw badRequest('缺少组合 ID');
+        const result = await getActiveBundleDetail(params.bundle_id);
+        if (!result) throw notFound('产品组合不存在');
+        return success(result);
     }),
 
     'reviews': asyncHandler(async (params) => {

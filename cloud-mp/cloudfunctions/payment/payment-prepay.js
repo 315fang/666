@@ -11,6 +11,7 @@ const {
     resolveOrderPayAmount,
     resolvePostPayStatus
 } = require('./shared/order-payment');
+const { assertPortalPassword } = require('./shared/portal-password');
 
 async function getWalletAccountByOpenid(openid) {
     const userRes = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
@@ -267,6 +268,7 @@ async function preparePay(openid, params) {
 
     // 4a. 货款余额支付分支（代理商专属）
     if (params.use_wallet_balance) {
+        await assertPortalPassword(db, openid, params.portal_password || params.password);
         if (payAmount <= 0) {
             const postPayStatus = resolvePostPayStatus(order);
             // 零元订单直接完成

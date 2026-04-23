@@ -13,8 +13,10 @@ const DEFAULT_CONFIG = {
     customer_service_hours: '9:00-21:00',
     nav_brand_title: '问兰镜像',
     nav_brand_sub: '品牌甄选',
-    coupon_zone_title: '惊喜福利',
-    coupon_zone_subtitle: '领取后可在结算页直接选择使用',
+    coupon_zone_title: '惊喜礼遇',
+    coupon_zone_subtitle: '领券后下单可用',
+    police_registration_title: '公安备案',
+    police_registration_number: '苏公网安备32050802012518号',
     official_promo_title: '专业皮肤修护 始于1974',
     official_promo_subtitle: '',
     about_summary: '品牌甄选，值得信赖。',
@@ -59,8 +61,8 @@ const DEFAULT_CONFIG = {
     business_center_min_role_level: 1,
     growth_bar_subtitle_template: '距离「{next}」还需 {need} 成长值',
     growth_bar_max_tier_text: '您已达到当前成长体系最高档位',
-    growth_privileges_entry_text: '查看权益',
-    growth_privileges_page_title: '成长值与权益说明'
+    growth_privileges_entry_text: '查看说明',
+    growth_privileges_page_title: '成长会员与权益说明'
   },
   lottery_config: {
     hero_title: '把积分换成一点仪式感',

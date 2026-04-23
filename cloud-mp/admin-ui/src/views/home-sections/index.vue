@@ -36,7 +36,7 @@
         </el-card>
       </el-tab-pane>
 
-      <el-tab-pane label="品牌背书" name="brand">
+      <el-tab-pane v-if="canManageSettings" label="品牌背书" name="brand">
         <el-card>
           <template #header>
             <div class="card-header">
@@ -71,7 +71,7 @@
             </el-form-item>
             <el-divider content-position="left">首页福利楼层</el-divider>
             <el-form-item label="楼层标题">
-              <el-input v-model="brandConfig.coupon_zone_title" placeholder="默认：惊喜福利" style="width:240px;" />
+              <el-input v-model="brandConfig.coupon_zone_title" placeholder="默认：惊喜礼遇" style="width:240px;" />
             </el-form-item>
             <el-form-item label="楼层副标题">
               <el-input v-model="brandConfig.coupon_zone_subtitle" placeholder="如：登录后领券，下单时可直接使用" />
@@ -92,9 +92,9 @@
                 </div>
                 <div class="brand-zone-cover-actions">
                   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                    <el-button type="primary" @click="openBrandAssetPicker('cover')">从素材库选择</el-button>
-                    <el-tag v-if="brandConfig.brand_zone_cover_file_id" type="success" effect="plain">已绑定素材</el-tag>
-                    <el-button v-if="brandZoneCoverDisplay" text type="danger" @click="clearBrandZoneCover">清空封面</el-button>
+                    <el-button type="primary" @click="openBrandAssetPicker('cover')">{{ brandConfig.brand_zone_cover_file_id ? '更换素材' : '从素材库选择' }}</el-button>
+                    <el-tag v-if="brandConfig.brand_zone_cover_file_id" type="success" effect="plain">当前素材已绑定，可重新选择替换</el-tag>
+                    <el-button v-if="brandZoneCoverDisplay || brandConfig.brand_zone_cover_file_id" text type="danger" @click="clearBrandZoneCover">清空封面</el-button>
                   </div>
                   <div class="field-help">建议使用横图。优先选择云开发素材；未配置时小程序会展示品牌渐变兜底图。</div>
                 </div>
@@ -108,7 +108,7 @@
             </el-form-item>
             <el-divider content-position="left">品牌专区入口卡</el-divider>
             <el-alert
-              title="固定 3 个入口卡槽位。可配置商品、分类、活动、小程序页面或外链跳转；未配置槽位首页会自动隐藏。"
+              title="固定 3 个入口卡槽位：最新活动、行业前沿、商城公告。后台只配置海报和副文案，跳转目标已写死，未配置槽位首页会自动隐藏。"
               type="info"
               :closable="false"
               show-icon
@@ -116,12 +116,17 @@
             />
             <div v-for="(item, index) in brandConfig.brand_endorsements" :key="item.id" class="brand-entry-card">
               <div class="brand-entry-header">
-                <span>入口卡 {{ index + 1 }}</span>
+                <div>
+                  <span>{{ getBrandCardPreset(index).title }}</span>
+                  <div class="brand-entry-tip">{{ getBrandCardPreset(index).note }}</div>
+                </div>
                 <span class="brand-entry-tip">固定槽位，不支持新增或删除</span>
               </div>
               <ContentBlockEditor
                 :model-value="buildBrandCardModel(index)"
-                :fields="['title', 'subtitle']"
+                :fields="['subtitle']"
+                :hide-link-controls="true"
+                :allowed-sources="['custom', 'reuse']"
                 @update:modelValue="updateBrandCard(index, $event)"
               />
             </div>
@@ -152,7 +157,7 @@
                 <span>认证 {{ index + 1 }}</span>
                 <div class="brand-entry-actions">
                   <el-button text type="primary" @click="openBrandAssetPicker('certification', index)">选择图片</el-button>
-                  <el-button v-if="resolveBrandImage(item)" text @click="clearBrandCertificationImage(index)">清空图片</el-button>
+                  <el-button v-if="resolveBrandImage(item) || item.file_id" text @click="clearBrandCertificationImage(index)">清空图片</el-button>
                   <el-button type="danger" text @click="removeBrandCertification(index)">删除</el-button>
                 </div>
               </div>
@@ -499,10 +504,11 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useUserStore } from '@/store/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ContentBlockEditor from '@/components/ContentBlockEditor.vue'
 import MediaPicker from '@/components/MediaPicker.vue'
-import { warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
+import { buildPersistentAssetRef, warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
 import {
   getPopupAdConfig,
   updatePopupAdConfig,
@@ -525,21 +531,61 @@ import {
 } from '@/api/index'
 
 const route = useRoute()
+const userStore = useUserStore()
+const canManageSettings = computed(() => userStore.hasPermission('settings_manage'))
+const availableTabs = computed(() => (
+  canManageSettings.value
+    ? ['popup', 'brand', 'featured', 'splash']
+    : ['popup', 'featured', 'splash']
+))
 const pageTab = ref('popup')
 const submitting = ref(false)
 const FIXED_BRAND_CARD_COUNT = 3
+const FIXED_BRAND_CARD_PRESETS = [
+  {
+    slot_index: 0,
+    category_key: 'latest_activity',
+    title: '最新活动',
+    link_type: 'page',
+    link_value: '/pages/index/brand-news-list?category_key=latest_activity',
+    note: '固定跳转到「最新活动」列表页'
+  },
+  {
+    slot_index: 1,
+    category_key: 'industry_frontier',
+    title: '行业前沿',
+    link_type: 'page',
+    link_value: '/pages/index/brand-news-list?category_key=industry_frontier',
+    note: '固定跳转到「行业前沿」列表页'
+  },
+  {
+    slot_index: 2,
+    category_key: 'mall_notice',
+    title: '商城公告',
+    link_type: 'page',
+    link_value: '/pages/index/brand-news-list?category_key=mall_notice',
+    note: '固定跳转到「商城公告」列表页'
+  }
+]
 
 const createBrandId = (prefix = 'brand') => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
 
-const createBrandEntry = () => ({
-  id: createBrandId('brand-card'),
-  title: '',
-  subtitle: '',
-  image: '',
-  file_id: '',
-  link_type: 'none',
-  link_value: ''
-})
+const getBrandCardPreset = (index = 0) => FIXED_BRAND_CARD_PRESETS[index] || FIXED_BRAND_CARD_PRESETS[0]
+
+const createBrandEntry = (index = 0) => {
+  const preset = getBrandCardPreset(index)
+  return {
+    id: createBrandId('brand-card'),
+    slot_index: preset.slot_index,
+    category_key: preset.category_key,
+    title: preset.title,
+    subtitle: '',
+    image: '',
+    file_id: '',
+    link_type: preset.link_type,
+    link_value: preset.link_value
+  }
+}
 
 const createBrandCertificationEntry = () => ({
   id: createBrandId('brand-cert'),
@@ -607,7 +653,7 @@ const brandConfig = reactive({
   brand_logo: '',
   nav_brand_title: '问兰镜像',
   nav_brand_sub: '品牌甄选',
-  coupon_zone_title: '惊喜福利',
+  coupon_zone_title: '惊喜礼遇',
   coupon_zone_subtitle: '领取后可在结算页直接选择使用',
   brand_zone_enabled: false,
   brand_zone_title: '品牌专区',
@@ -626,7 +672,7 @@ const brandConfig = reactive({
   official_promo_cover: '',
   brand_story_title: '企业介绍',
   brand_story_body: '',
-  brand_endorsements: [],
+  brand_endorsements: Array.from({ length: FIXED_BRAND_CARD_COUNT }, (_, index) => createBrandEntry(index)),
   brand_certifications: []
 })
 
@@ -640,17 +686,23 @@ const brandZoneCoverDisplay = computed(() => brandConfig.brand_zone_cover || '')
 
 const resolveBrandImage = (item = {}) => item.image || item.image_url || ''
 
-const normalizeBrandCard = (item = {}) => ({
-  ...createBrandEntry(),
-  ...item,
-  id: item.id || createBrandId('brand-card'),
-  title: item.title || item.name || item.label || '',
-  subtitle: item.subtitle || item.desc || item.description || '',
-  image: item.image || item.image_url || item.url || '',
-  file_id: item.file_id || '',
-  link_type: item.link_type || 'none',
-  link_value: item.link_value || ''
-})
+const normalizeBrandCard = (item = {}, index = 0) => {
+  const slotIndex = Number.isFinite(Number(item.slot_index)) ? Number(item.slot_index) : index
+  const preset = getBrandCardPreset(slotIndex)
+  return {
+    ...createBrandEntry(slotIndex),
+    ...item,
+    id: item.id || createBrandId('brand-card'),
+    slot_index: preset.slot_index,
+    category_key: preset.category_key,
+    title: preset.title,
+    subtitle: item.subtitle || item.desc || item.description || '',
+    image: item.image || item.image_url || item.url || '',
+    file_id: item.file_id || '',
+    link_type: preset.link_type,
+    link_value: preset.link_value
+  }
+}
 
 const normalizeBrandCertification = (item = {}) => ({
   ...createBrandCertificationEntry(),
@@ -662,10 +714,15 @@ const normalizeBrandCertification = (item = {}) => ({
   file_id: item.file_id || ''
 })
 
-const buildBrandCardSlots = (list = []) => {
-  const slots = Array.from({ length: FIXED_BRAND_CARD_COUNT }, (_, index) => normalizeBrandCard(list[index] || {}))
-  return slots
-}
+const buildBrandCardSlots = (list = []) => Array.from({ length: FIXED_BRAND_CARD_COUNT }, (_, index) => {
+  const preset = getBrandCardPreset(index)
+  const source = (Array.isArray(list) ? list : []).find((item) => {
+    if (!item || typeof item !== 'object') return false
+    if (Number(item.slot_index) === index) return true
+    return String(item.category_key || '').trim() === preset.category_key
+  }) || (Array.isArray(list) ? list[index] : null) || {}
+  return normalizeBrandCard(source, index)
+})
 
 const hasBrandZoneLegacyContent = (settings = {}) => {
   const endorsements = Array.isArray(settings.brand_endorsements) ? settings.brand_endorsements : []
@@ -674,29 +731,32 @@ const hasBrandZoneLegacyContent = (settings = {}) => {
 }
 
 const buildBrandCardModel = (index) => {
-  const item = normalizeBrandCard(brandConfig.brand_endorsements[index] || {})
+  const preset = getBrandCardPreset(index)
+  const item = normalizeBrandCard(brandConfig.brand_endorsements[index] || {}, index)
   return {
-    title: item.title,
+    title: preset.title,
     subtitle: item.subtitle,
     image_url: item.image,
     file_id: item.file_id,
-    link_type: item.link_type || 'none',
-    link_value: item.link_value || '',
-    product_id: item.link_type === 'product' ? item.link_value || null : null
+    link_type: preset.link_type,
+    link_value: preset.link_value,
+    product_id: null
   }
 }
 
 const updateBrandCard = (index, value = {}) => {
-  const current = normalizeBrandCard(brandConfig.brand_endorsements[index] || {})
+  const preset = getBrandCardPreset(index)
+  const current = normalizeBrandCard(brandConfig.brand_endorsements[index] || {}, index)
   brandConfig.brand_endorsements[index] = normalizeBrandCard({
     ...current,
-    title: value.title,
     subtitle: value.subtitle,
     image: value.image_url || '',
     file_id: value.file_id || '',
-    link_type: value.link_type || 'none',
-    link_value: value.link_value || ''
-  })
+    slot_index: preset.slot_index,
+    category_key: preset.category_key,
+    link_type: preset.link_type,
+    link_value: preset.link_value
+  }, index)
 }
 
 const addBrandCertification = () => {
@@ -748,8 +808,8 @@ const handleBrandAssetConfirm = (persistIds = [], displayUrls = []) => {
 }
 
 const isBrandCardConfigured = (item = {}) => {
-  const current = normalizeBrandCard(item)
-  return !!(current.title || current.subtitle || current.image || current.file_id || current.link_value)
+  const current = normalizeBrandCard(item, Number(item.slot_index || 0))
+  return !!(current.subtitle || current.image || current.file_id)
 }
 
 const isBrandCertificationConfigured = (item = {}) => {
@@ -758,6 +818,7 @@ const isBrandCertificationConfigured = (item = {}) => {
 }
 
 const loadBrandConfig = async () => {
+  if (!canManageSettings.value) return
   try {
     const res = await getSettings()
     const root = res?.data || res || {}
@@ -768,7 +829,7 @@ const loadBrandConfig = async () => {
     brandConfig.brand_logo = d.brand_logo || ''
     brandConfig.nav_brand_title = d.nav_brand_title || '问兰镜像'
     brandConfig.nav_brand_sub = d.nav_brand_sub || '品牌甄选'
-    brandConfig.coupon_zone_title = d.coupon_zone_title || '惊喜福利'
+    brandConfig.coupon_zone_title = d.coupon_zone_title || '惊喜礼遇'
     brandConfig.coupon_zone_subtitle = d.coupon_zone_subtitle || '领取后可在结算页直接选择使用'
     brandConfig.brand_zone_enabled = d.brand_zone_enabled !== undefined
       ? d.brand_zone_enabled !== 'false' && d.brand_zone_enabled !== false
@@ -795,12 +856,20 @@ const loadBrandConfig = async () => {
 }
 
 const saveBrandConfig = async () => {
+  if (!canManageSettings.value) {
+    ElMessage.warning('没有权限修改品牌背书配置')
+    return
+  }
   brandSaving.value = true
   try {
+    const normalizedBrandZoneCover = buildPersistentAssetRef({
+      url: brandConfig.brand_zone_cover,
+      fileId: brandConfig.brand_zone_cover_file_id
+    })
     const brandAssetWarning = warnTemporaryAssetUrls([
       brandConfig.brand_logo,
       brandConfig.official_promo_cover,
-      brandConfig.brand_zone_cover
+      normalizedBrandZoneCover
     ], '品牌配置图片')
     if (brandAssetWarning) {
       ElMessage.warning(brandAssetWarning)
@@ -817,7 +886,7 @@ const saveBrandConfig = async () => {
         coupon_zone_subtitle: brandConfig.coupon_zone_subtitle,
         brand_zone_enabled: String(brandConfig.brand_zone_enabled),
         brand_zone_title: brandConfig.brand_zone_title,
-        brand_zone_cover: brandConfig.brand_zone_cover,
+        brand_zone_cover: normalizedBrandZoneCover,
         brand_zone_cover_file_id: brandConfig.brand_zone_cover_file_id,
         brand_zone_welcome_title: brandConfig.brand_zone_welcome_title,
         brand_zone_welcome_subtitle: brandConfig.brand_zone_welcome_subtitle,
@@ -834,14 +903,18 @@ const saveBrandConfig = async () => {
         brand_story_body: brandConfig.brand_story_body,
         brand_endorsements: brandConfig.brand_endorsements
           .slice(0, FIXED_BRAND_CARD_COUNT)
-          .map(({ id, ...rest }) => ({
-            title: rest.title || '',
-            subtitle: rest.subtitle || '',
-            image: rest.image || '',
-            file_id: rest.file_id || '',
-            link_type: rest.link_type || 'none',
-            link_value: rest.link_value || ''
-          }))
+          .map(({ id, ...rest }, index) => {
+            const preset = getBrandCardPreset(index)
+            return {
+              slot_index: preset.slot_index,
+              category_key: preset.category_key,
+              subtitle: rest.subtitle || '',
+              image: rest.image || '',
+              file_id: rest.file_id || '',
+              link_type: preset.link_type,
+              link_value: preset.link_value
+            }
+          })
           .filter(isBrandCardConfigured),
         brand_certifications: brandConfig.brand_certifications
           .map(({ id, ...rest }) => ({
@@ -1292,6 +1365,12 @@ watch(
   { immediate: true }
 )
 
+watch(canManageSettings, (allowed) => {
+  if (!allowed && pageTab.value === 'brand') {
+    pageTab.value = 'popup'
+  }
+})
+
 watch(boardId, async (value, oldValue) => {
   if (!value || value === oldValue) return
   syncBoardDraft()
@@ -1300,11 +1379,11 @@ watch(boardId, async (value, oldValue) => {
 
 onMounted(() => {
   const tab = String(route.query.tab || '')
-  if (['popup', 'brand', 'featured', 'splash'].includes(tab)) {
+  if (availableTabs.value.includes(tab)) {
     pageTab.value = tab
   }
   loadPopupAd()
-  loadBrandConfig()
+  if (canManageSettings.value) loadBrandConfig()
 })
 </script>
 

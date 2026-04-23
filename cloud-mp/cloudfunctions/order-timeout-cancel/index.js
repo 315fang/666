@@ -4,6 +4,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 const { processExpiredGroups } = require('./shared/group-expiry');
+const { recoverGroupExpiredRefunds } = require('./shared/system-refund');
 
 function toNumber(value, fallback = 0) {
     const num = Number(value);
@@ -67,6 +68,45 @@ async function restoreUsedCoupon(order) {
             .update({ data: { status: 'unused', used_at: _.remove() } })
             .catch(() => {});
     }
+}
+
+async function releasePickupStationInventory(order, reason = '超时未支付，释放自提门店预占库存') {
+    if (!order || String(order.pickup_stock_reservation_mode || '') !== 'station') return;
+    if (String(order.pickup_stock_reservation_status || '') === 'released') return;
+    const items = Array.isArray(order.items) ? order.items : [];
+    for (const item of items) {
+        const stockId = String(item && item.pickup_station_stock_id || '').trim();
+        const qty = Math.max(0, Number(item && (item.pickup_stock_reserved_qty ?? item.qty ?? item.quantity) || 0));
+        if (!stockId || qty <= 0) continue;
+        await db.collection('station_sku_stocks').doc(stockId).update({
+            data: {
+                available_qty: _.inc(qty),
+                reserved_qty: _.inc(-qty),
+                updated_at: db.serverDate()
+            }
+        }).catch(() => {});
+        await db.collection('station_stock_logs').add({
+            data: {
+                station_id: order.pickup_station_id || '',
+                stock_id: stockId,
+                product_id: item.product_id || '',
+                sku_id: item.sku_id || '',
+                type: 'release',
+                quantity: qty,
+                order_id: order._id || '',
+                order_no: order.order_no || '',
+                remark: reason,
+                created_at: db.serverDate()
+            }
+        }).catch(() => {});
+    }
+    await db.collection('orders').doc(String(order._id)).update({
+        data: {
+            pickup_stock_reservation_status: 'released',
+            pickup_stock_released_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    }).catch(() => {});
 }
 
 async function cancelTimedOutPendingOrders(defaultMinutes, now) {
@@ -135,6 +175,10 @@ async function cancelTimedOutPendingOrders(defaultMinutes, now) {
                 }
             }
 
+            await releasePickupStationInventory(order).catch((e) => {
+                console.error('[OrderTimeoutCancel] 释放门店预占库存失败:', order._id, e.message);
+            });
+
             cancelledCount += 1;
         } catch (err) {
             errors.push({ order_id: order._id, error: err.message });
@@ -142,6 +186,33 @@ async function cancelTimedOutPendingOrders(defaultMinutes, now) {
     }
 
     return { cancelled: cancelledCount, errors };
+}
+
+async function recoverPendingGoodsFundRefunds(limit = 20) {
+    const internalToken = String(process.env.ORDER_INTERNAL_TOKEN || '').trim();
+    if (!internalToken) {
+        return { scanned: 0, completed: 0, errors: [{ error: 'missing_ORDER_INTERNAL_TOKEN' }] };
+    }
+
+    const result = await cloud.callFunction({
+        name: process.env.ORDER_FUNCTION_NAME || 'order',
+        data: {
+            action: 'recoverGoodsFundRefunds',
+            internal_token: internalToken,
+            limit
+        }
+    }).catch((error) => ({
+        result: {
+            code: 500,
+            message: error.message || 'recover_goods_fund_refunds_failed'
+        }
+    }));
+
+    const payload = result && result.result;
+    if (payload && payload.code && payload.code !== 0) {
+        return { scanned: 0, completed: 0, errors: [{ error: payload.message || 'recover_goods_fund_refunds_failed' }] };
+    }
+    return payload && payload.data ? payload.data : (payload || { scanned: 0, completed: 0, errors: [] });
 }
 
 /**
@@ -155,13 +226,15 @@ exports.main = async (event, context) => {
     console.log(`[OrderTimeoutCancel] 开始扫描，默认超时分钟: ${TIMEOUT_MINUTES}`);
 
     try {
-        const [pendingResult, groupResult] = await Promise.all([
+        const [pendingResult, groupResult, goodsFundRecoveryResult] = await Promise.all([
             cancelTimedOutPendingOrders(TIMEOUT_MINUTES, now),
-            processExpiredGroups(100)
+            processExpiredGroups(100),
+            recoverPendingGoodsFundRefunds(50)
         ]);
+        const refundRecoveryResult = await recoverGroupExpiredRefunds(50);
 
-        const errors = [...pendingResult.errors, ...groupResult.errors];
-        console.log(`[OrderTimeoutCancel] 完成，取消 ${pendingResult.cancelled} 个待支付订单，过期 ${groupResult.expiredGroups} 个拼团，触发 ${groupResult.refundedOrders} 笔自动退款`);
+        const errors = [...pendingResult.errors, ...groupResult.errors, ...refundRecoveryResult.errors, ...(goodsFundRecoveryResult.errors || [])];
+        console.log(`[OrderTimeoutCancel] 完成，取消 ${pendingResult.cancelled} 个待支付订单，过期 ${groupResult.expiredGroups} 个拼团，触发 ${groupResult.refundedOrders} 笔自动退款，拼团退款补偿扫描 ${refundRecoveryResult.scanned} 笔，已同步 ${refundRecoveryResult.synced} 笔，重试 ${refundRecoveryResult.retried} 笔，货款退款补偿完成 ${goodsFundRecoveryResult.completed || 0} 笔`);
         if (errors.length > 0) {
             console.error('[OrderTimeoutCancel] 部分失败:', JSON.stringify(errors));
         }
@@ -170,6 +243,10 @@ exports.main = async (event, context) => {
             cancelled: pendingResult.cancelled,
             expired_groups: groupResult.expiredGroups,
             refunded_orders: groupResult.refundedOrders,
+            recovered_refunds: refundRecoveryResult.completed,
+            synced_refunds: refundRecoveryResult.synced,
+            retried_refunds: refundRecoveryResult.retried,
+            recovered_goods_fund_refunds: goodsFundRecoveryResult.completed || 0,
             errors: errors.length
         };
     } catch (err) {

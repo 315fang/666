@@ -52,13 +52,18 @@ function createMockRequestImpl(handlers = []) {
 }
 
 function createDeps(overrides = {}) {
+    const {
+        initialCollections = {},
+        ...restOverrides
+    } = overrides;
     const collections = {
         configs: [],
         coupons: [{ id: 6, name: '新人券' }],
         coupon_claim_tickets: [],
         user_coupons: [],
         users: [],
-        admin_audit_logs: []
+        admin_audit_logs: [],
+        ...JSON.parse(JSON.stringify(initialCollections))
     };
 
     const ok = (res, data) => res.json({ code: 0, data });
@@ -106,7 +111,7 @@ function createDeps(overrides = {}) {
         flush: async () => {},
         ok,
         fail,
-        ...overrides
+        ...restOverrides
     };
 }
 
@@ -296,4 +301,67 @@ test('coupon claim-ticket route creates one-time ticket and returns ticket share
     assert.match(response.body.data.ticket.ticket_id, /^[a-f0-9]{20}$/);
     assert.equal(response.body.data.mp_path, `/pages/coupon/claim?ticket=${response.body.data.ticket.ticket_id}`);
     assert.equal(deps.getCollection('coupon_claim_tickets').length, 1);
+});
+
+test('coupon issue dry-run accepts synthesized coupon id on a fresh instance', async () => {
+    const seedCollections = {
+        coupons: [
+            {
+                _id: 'coupon-doc-1',
+                name: '跨实例新人券',
+                valid_days: 30,
+                is_active: 1
+            }
+        ],
+        users: [
+            {
+                id: 8,
+                openid: 'openid-user-8',
+                nickname: '小明',
+                role_level: 0
+            }
+        ]
+    };
+
+    const listApp = express();
+    registerMarketingRoutes(listApp, createDeps({
+        initialCollections: seedCollections
+    }));
+
+    const listResponse = await invoke(listApp, {
+        path: '/admin/api/coupons'
+    });
+
+    assert.equal(listResponse.statusCode, 200);
+    const synthesizedCouponId = listResponse.body.data.list[0].id;
+    assert.equal(synthesizedCouponId, 1);
+
+    const patchCalls = [];
+    const issueApp = express();
+    registerMarketingRoutes(issueApp, createDeps({
+        initialCollections: seedCollections,
+        directPatchDocument: async (collection, docId, patch) => {
+            patchCalls.push({ collection, docId, patch });
+            return true;
+        }
+    }));
+
+    const issueResponse = await invoke(issueApp, {
+        method: 'POST',
+        path: `/admin/api/coupons/${synthesizedCouponId}/issue`,
+        query: { dry_run: 'true' },
+        body: { user_ids: [8] }
+    });
+
+    assert.equal(issueResponse.statusCode, 200);
+    assert.equal(issueResponse.body.code, 0);
+    assert.equal(issueResponse.body.data.count, 1);
+    assert.equal(issueResponse.body.data.preview[0].id, 8);
+    assert.deepEqual(patchCalls, [
+        {
+            collection: 'coupons',
+            docId: 'coupon-doc-1',
+            patch: { id: 1 }
+        }
+    ]);
 });

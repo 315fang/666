@@ -48,6 +48,18 @@ function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
 }
 
+function primaryId(user = {}) {
+    return user._id || user.id || user._legacy_id || '';
+}
+
+function hasBoundParent(user = {}) {
+    return !!(
+        toString(user.referrer_openid, '').trim()
+        || toString(user.parent_openid, '').trim()
+        || hasValue(user.parent_id)
+    );
+}
+
 function uniqueValues(values = []) {
     const seen = {};
     const result = [];
@@ -88,6 +100,65 @@ async function getConfigByKey(key) {
         .get()
         .catch(() => ({ data: [] }));
     return legacyRes.data && legacyRes.data[0] ? legacyRes.data[0] : null;
+}
+
+async function findInviterByInviteCode(inviteCode = '') {
+    const normalizedCode = toString(inviteCode, '').trim().toUpperCase();
+    if (!normalizedCode) return null;
+    const res = await db.collection('users')
+        .where(_.or([
+            { my_invite_code: normalizedCode },
+            { invite_code: normalizedCode },
+            { member_no: normalizedCode }
+        ]))
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return res.data && res.data[0] ? res.data[0] : null;
+}
+
+async function bindExistingUserReferrerIfNeeded(openid, user = {}, inviteCode = '') {
+    const normalizedOpenid = toString(openid, '').trim();
+    const normalizedCode = toString(inviteCode, '').trim().toUpperCase();
+    if (!normalizedOpenid || !normalizedCode || !user) {
+        return user;
+    }
+    if (hasBoundParent(user)) {
+        return user;
+    }
+
+    const inviter = await findInviterByInviteCode(normalizedCode);
+    if (!inviter) {
+        return user;
+    }
+    if (toString(inviter.openid, '').trim() === normalizedOpenid) {
+        return user;
+    }
+
+    const parentId = primaryId(inviter) || null;
+    const patch = {
+        referrer_openid: toString(inviter.openid, '').trim(),
+        parent_openid: toString(inviter.openid, '').trim(),
+        parent_id: parentId,
+        joined_team_at: db.serverDate(),
+        bound_parent_at: db.serverDate(),
+        relation_source: 'share_invite',
+        invitation_source: 'share_invite',
+        line_locked: true,
+        updated_at: db.serverDate()
+    };
+
+    const userId = primaryId(user);
+    if (userId) {
+        await db.collection('users').doc(String(userId)).update({ data: patch });
+    } else {
+        await db.collection('users').where({ openid: normalizedOpenid }).update({ data: patch });
+    }
+
+    await awardInviteSuccessPoints(patch.referrer_openid, normalizedOpenid);
+
+    const refreshed = await db.collection('users').where({ openid: normalizedOpenid }).limit(1).get().catch(() => ({ data: [] }));
+    return refreshed.data && refreshed.data[0] ? refreshed.data[0] : { ...user, ...patch };
 }
 
 async function loadInvitePointRule() {
@@ -246,21 +317,26 @@ async function ensureWelcomeCoupons(openid, userId) {
 }
 
 async function formatUser(user, openid, tierConfig) {
+    const growthValue = toNumber(user.growth_value, 0);
     const points = toNumber(user.points != null ? user.points : user.growth_value, 0);
     const roleLevel = toNumber(user.role_level, 0);
     const distLevel = toNumber(user.distributor_level != null ? user.distributor_level : user.agent_level, 0);
     const resolvedUser = await resolveUserAvatarFields({ ...user, openid });
     const canonical = buildCanonicalUser(resolvedUser, {
         register_coupons_issued: !!user.register_coupons_issued,
-        growth_value: points,
-        growth_progress: buildGrowthProgress(points, tierConfig),
+        growth_value: growthValue,
+        growth_progress: buildGrowthProgress(growthValue, tierConfig),
         points
     });
     return {
         ...canonical,
         level: roleLevel,
         level_name: canonical.role_name,
-        distributor_level: distLevel
+        distributor_level: distLevel,
+        account_visibility: toString(user.account_visibility, 'visible'),
+        hidden_reason: toString(user.hidden_reason, ''),
+        hidden_at: toString(user.hidden_at, ''),
+        account_origin: toString(user.account_origin, 'normal')
     };
 }
 
@@ -276,9 +352,10 @@ exports.main = cloudFunctionWrapper(async (event) => {
         if (!userRes.data.length) {
             isNewUser = true;
             let referrerOpenid = '';
+            let inviter = null;
             if (invite_code) {
-                const inviterRes = await db.collection('users').where({ my_invite_code: invite_code }).limit(1).get().catch(() => ({ data: [] }));
-                if (inviterRes.data.length) referrerOpenid = inviterRes.data[0].openid;
+                inviter = await findInviterByInviteCode(invite_code);
+                if (inviter) referrerOpenid = inviter.openid;
             }
 
             const newUser = {
@@ -289,6 +366,10 @@ exports.main = cloudFunctionWrapper(async (event) => {
                 avatar_url: '',
                 phone: '',
                 gender: '',
+                account_visibility: 'visible',
+                hidden_reason: '',
+                hidden_at: '',
+                account_origin: 'auto_login',
                 points: 0,
                 growth_value: 0,
                 agent_wallet_balance: 0,
@@ -300,8 +381,15 @@ exports.main = cloudFunctionWrapper(async (event) => {
                 distributor_level: 0,
                 agent_level: 0,
                 referrer_openid: referrerOpenid,
+                parent_openid: referrerOpenid,
+                parent_id: inviter ? (primaryId(inviter) || null) : null,
                 my_invite_code: createInviteCode(),
                 invite_code: '',  // invite_code 由 my_invite_code 统一读取，不重复生成
+                relation_source: referrerOpenid ? 'share_invite' : '',
+                invitation_source: referrerOpenid ? 'share_invite' : '',
+                joined_team_at: referrerOpenid ? db.serverDate() : null,
+                bound_parent_at: referrerOpenid ? db.serverDate() : null,
+                line_locked: !!referrerOpenid,
                 register_coupons_issued: false,
                 created_at: db.serverDate(),
                 updated_at: db.serverDate()
@@ -312,6 +400,9 @@ exports.main = cloudFunctionWrapper(async (event) => {
                 await awardInviteSuccessPoints(referrerOpenid, openid);
             }
             userRes = await db.collection('users').where({ openid }).limit(1).get();
+        } else if (invite_code) {
+            const reboundUser = await bindExistingUserReferrerIfNeeded(openid, userRes.data[0], invite_code);
+            userRes = { data: [reboundUser] };
         }
 
         const rawUser = userRes.data[0];

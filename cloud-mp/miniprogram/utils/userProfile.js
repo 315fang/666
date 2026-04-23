@@ -17,6 +17,19 @@ function pickString(value, fallback = '') {
     return text || fallback;
 }
 
+function isDefaultNickname(value = '') {
+    const nickname = pickString(value);
+    if (!nickname) return true;
+    return ['新用户', '微信用户'].includes(nickname);
+}
+
+function isDefaultUserProfile(info = {}) {
+    if (!info || typeof info !== 'object') return true;
+    const nickname = pickString(info.nickname || info.nick_name || info.nickName);
+    const avatar = pickString(info.avatar_url || info.avatarUrl || info.avatar);
+    return isDefaultNickname(nickname) || !avatar;
+}
+
 function normalizeUserInfo(info = {}) {
     const roleLevel = toNumber(info.role_level != null ? info.role_level : (info.role || info.distributor_level || 0), 0);
     const nickname = pickString(info.nickname || info.nick_name || info.nickName || '微信用户');
@@ -33,6 +46,8 @@ function normalizeUserInfo(info = {}) {
         growth_progress: patchGrowthProgressForDisplay(info),
         id: info.id || info._id || '',
         _id: info._id || info.id || '',
+        real_name: pickString(info.real_name),
+        contact_name: pickString(info.contact_name),
         nickname,
         nick_name: nickname,
         nickName: nickname,
@@ -40,12 +55,15 @@ function normalizeUserInfo(info = {}) {
         avatarUrl: avatar,
         avatar,
         role_level: roleLevel,
-        role_name: info.role_name || ROLE_NAMES[roleLevel] || ROLE_NAMES[info.role || 0] || 'VIP用户',
+        role_name: ROLE_NAMES[roleLevel] || info.role_name || ROLE_NAMES[info.role || 0] || 'VIP用户',
         commission_balance: commissionBalance,
         balance: commissionBalance,
         goods_fund_balance: goodsFundBalance,
         agent_wallet_balance: goodsFundBalance,
         wallet_balance: goodsFundBalance,
+        portal_password_enabled: !!info.portal_password_enabled,
+        portal_password_change_required: !!info.portal_password_change_required,
+        portal_password_locked_until: info.portal_password_locked_until || '',
         invite_code: info.invite_code || info.my_invite_code || info.member_no || '',
         my_invite_code: info.my_invite_code || info.invite_code || '',
         member_no: info.member_no || info.my_invite_code || info.invite_code || '',
@@ -100,4 +118,11 @@ function calcGrowthPercent(growth, threshold) {
     return Math.min(100, Math.round((growth / threshold) * 100));
 }
 
-module.exports = { fetchUserProfile, truncateNickname, calcGrowthPercent, normalizeUserInfo };
+module.exports = {
+    fetchUserProfile,
+    truncateNickname,
+    calcGrowthPercent,
+    normalizeUserInfo,
+    isDefaultNickname,
+    isDefaultUserProfile
+};

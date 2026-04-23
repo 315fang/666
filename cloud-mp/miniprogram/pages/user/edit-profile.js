@@ -3,20 +3,26 @@ const app = getApp();
 const { get, put, uploadFile } = require('../../utils/request');
 const { ensurePrivacyAuthorization } = require('../../utils/privacy');
 const { requireLogin } = require('../../utils/auth');
+const { isDefaultUserProfile } = require('../../utils/userProfile');
 
 Page({
     data: {
         userInfo: null,
         showAvatarPickSheet: false,
         showNicknameModal: false,
-        newNickname: ''
+        newNickname: '',
+        showRealNameModal: false,
+        newRealName: '',
+        bootstrapMode: false,
+        showBootstrapGuide: false
     },
 
-    onLoad() {
+    onLoad(options) {
         if (!requireLogin()) {
             setTimeout(() => wx.navigateBack(), 100);
             return;
         }
+        this.setData({ bootstrapMode: String(options?.bootstrap || '') === '1' });
         this.loadUserInfo();
     },
 
@@ -28,7 +34,9 @@ Page({
         const userInfo = app.globalData.userInfo || {};
         this.setData({
             userInfo,
-            newNickname: userInfo.nickname || ''
+            newNickname: userInfo.nickname || '',
+            newRealName: userInfo.real_name || '',
+            showBootstrapGuide: !!(this.data.bootstrapMode && isDefaultUserProfile(userInfo))
         });
     },
 
@@ -62,7 +70,10 @@ Page({
                 if (updateRes.code === 0) {
                     this.setData({ 'userInfo.avatar': fullUrl });
                     app.globalData.userInfo.avatar = fullUrl;
+                    app.globalData.userInfo.avatar_url = fullUrl;
+                    app.globalData.userInfo.avatarUrl = fullUrl;
                     wx.setStorageSync('userInfo', app.globalData.userInfo);
+                    this.setData({ showBootstrapGuide: !!(this.data.bootstrapMode && isDefaultUserProfile(app.globalData.userInfo || {})) });
                     wx.showToast({ title: '头像更新成功', icon: 'success' });
                 }
             }
@@ -88,6 +99,21 @@ Page({
 
     onCancelNickname() {
         this.setData({ showNicknameModal: false });
+    },
+
+    onEditRealName() {
+        this.setData({
+            showRealNameModal: true,
+            newRealName: this.data.userInfo?.real_name || ''
+        });
+    },
+
+    onRealNameInput(e) {
+        this.setData({ newRealName: e.detail.value });
+    },
+
+    onCancelRealName() {
+        this.setData({ showRealNameModal: false });
     },
 
     stopP() { },
@@ -117,7 +143,9 @@ Page({
                 });
                 app.globalData.userInfo.nick_name = nickname;
                 app.globalData.userInfo.nickname = nickname;
+                app.globalData.userInfo.nickName = nickname;
                 wx.setStorageSync('userInfo', app.globalData.userInfo);
+                this.setData({ showBootstrapGuide: !!(this.data.bootstrapMode && isDefaultUserProfile(app.globalData.userInfo || {})) });
                 wx.showToast({ title: '修改成功', icon: 'success' });
             } else {
                 wx.showToast({ title: res.message || '修改失败', icon: 'none' });
@@ -126,6 +154,49 @@ Page({
             wx.showToast({ title: '修改失败', icon: 'none' });
         } finally {
             this._submitting = false;
+            wx.hideLoading();
+        }
+    },
+
+    async onConfirmRealName() {
+        if (this._realNameSubmitting) return;
+        const realName = String(this.data.newRealName || '').trim();
+        if (!realName) {
+            wx.showToast({ title: '真实姓名不能为空', icon: 'none' });
+            return;
+        }
+        if (realName.length < 2 || realName.length > 32) {
+            wx.showToast({ title: '真实姓名长度需在2-32个字符之间', icon: 'none' });
+            return;
+        }
+
+        try {
+            await ensurePrivacyAuthorization();
+        } catch (err) {
+            return;
+        }
+
+        this._realNameSubmitting = true;
+        wx.showLoading({ title: '保存中...' });
+        try {
+            const res = await put('/user/profile', { real_name: realName });
+            if (res.code === 0) {
+                const nextUser = { ...(app.globalData.userInfo || {}), ...(res.data || {}), real_name: realName };
+                app.globalData.userInfo = nextUser;
+                wx.setStorageSync('userInfo', nextUser);
+                this.setData({
+                    showRealNameModal: false,
+                    userInfo: nextUser,
+                    newRealName: realName
+                });
+                wx.showToast({ title: '真实姓名已保存', icon: 'success' });
+            } else {
+                wx.showToast({ title: res.message || '保存失败', icon: 'none' });
+            }
+        } catch (err) {
+            wx.showToast({ title: err?.message || '保存失败', icon: 'none' });
+        } finally {
+            this._realNameSubmitting = false;
             wx.hideLoading();
         }
     },

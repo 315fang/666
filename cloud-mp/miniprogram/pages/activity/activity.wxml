@@ -59,12 +59,11 @@
     </view>
   </view>
 
-  <!-- ══ 主内容区：品牌新闻 ══ -->
+  <!-- ══ 主内容区：活动入口 ══ -->
   <view class="content-area">
     <view class="section-block" wx:for="{{activitySections}}" wx:key="key">
       <view class="section-header">
         <text class="section-title">{{item.title}}</text>
-        <text class="section-desc" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
       </view>
 
       <!-- 常驻活动：展示多个子卡片 -->
@@ -90,15 +89,25 @@
           <view class="activity-card-overlay activity-sub-card-overlay">
             <view class="activity-card-left">
               <view class="activity-sub-card-head">
-                <view class="quick-entry-icon-wrap">
-                  <image class="quick-entry-icon" src="{{card.icon}}" mode="aspectFit"></image>
+                <view class="activity-sub-card-head-main">
+                  <view class="quick-entry-icon-wrap">
+                    <image class="quick-entry-icon" src="{{card.icon}}" mode="aspectFit"></image>
+                  </view>
+                  <view class="countdown-chip" wx:if="{{card.countdownLabel && card.countdown}}">
+                    <text class="countdown-chip-icon">⏱</text>
+                    <text class="countdown-chip-text">{{card.countdownLabel}} {{card.countdown.hours}}:{{card.countdown.mins}}:{{card.countdown.secs}}</text>
+                  </view>
                 </view>
-                <text class="activity-sub-card-pill">{{card.pillText || (cardIndex === 0 ? '主推活动' : '常驻入口')}}</text>
               </view>
               <text class="activity-card-title">{{card.title}}</text>
               <text class="activity-card-sub">{{card.subtitle}}</text>
             </view>
-            <text class="activity-card-arrow">›</text>
+            <view class="activity-card-right">
+              <view class="activity-card-entry">
+                <text class="activity-card-entry-text">进入专区</text>
+              </view>
+              <text class="activity-card-arrow">›</text>
+            </view>
           </view>
         </view>
       </view>
@@ -118,7 +127,12 @@
             <text class="activity-card-title">{{item.title}}</text>
             <text class="activity-card-sub">{{item.subtitle}}</text>
           </view>
-          <text class="activity-card-arrow">›</text>
+          <view class="activity-card-right">
+            <view class="activity-card-entry">
+              <text class="activity-card-entry-text">进入专区</text>
+            </view>
+            <text class="activity-card-arrow">›</text>
+          </view>
         </view>
       </view>
     </view>

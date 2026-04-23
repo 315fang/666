@@ -87,6 +87,8 @@
 - 旧阶段修复总结
 - 一次性导入说明
 - 历史交付总结
+- `docs/archive/root-history/*`
+- `docs/archive/root-artifacts/*`
 - `skills/design-md/**` 下的参考 README
 
 其中 `skills/design-md/**` 不是本项目业务文档，只是仓库里的参考素材。

@@ -50,11 +50,11 @@
 
 ## 5. 阶段性历史资料
 
-- `P2_FIXES_README.md`
-- `FINAL_DELIVERY_SUMMARY.md`
-- `CODE_REVIEW.md`
-- `plan.md`
-- `NOTES.md`
+- `docs/archive/root-history/P2_FIXES_README.md`
+- `docs/archive/root-history/FINAL_DELIVERY_SUMMARY.md`
+- `docs/archive/root-history/CODE_REVIEW.md`
+- `docs/archive/root-history/plan.md`
+- `docs/archive/root-history/NOTES.md`
 - 各类阶段总结、修复报告、历史验收资料
 
 这些文件默认视为历史资料或背景材料，不再作为当前实现依据。
@@ -65,6 +65,7 @@
 
 - `skills/design-md/**`
 - `apple/README.md`
+- `docs/archive/root-artifacts/*`
 
 它们可以保留，但不应参与项目真相判断。
 

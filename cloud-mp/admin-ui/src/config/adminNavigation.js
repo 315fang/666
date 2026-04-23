@@ -115,7 +115,7 @@ export const ADMIN_SHORTCUTS = [
     key: 'membership-dashboard',
     label: '会员策略',
     path: '/membership',
-    permission: 'statistics',
+    permission: 'settings_manage',
     priority: 70,
     surface: 'dashboard',
     icon: 'UserFilled',

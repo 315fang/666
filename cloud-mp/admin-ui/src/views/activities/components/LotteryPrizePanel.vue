@@ -48,7 +48,17 @@
       <el-table-column label="价值" width="100">
         <template #default="{ row }">
           <span v-if="row.type === 'miss'" style="color:#ccc">-</span>
+          <span v-else-if="row.type === 'coupon'">{{ row.coupon_amount }}</span>
           <span v-else>{{ row.prize_value }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="履约" width="120">
+        <template #default="{ row }">
+          <span v-if="row.type === 'physical'">实物发货</span>
+          <span v-else-if="row.type === 'mystery'">人工兑奖</span>
+          <span v-else-if="row.type === 'goods_fund'">自动入货款</span>
+          <span v-else-if="row.type === 'coupon'">自动发券</span>
+          <span v-else>自动发放</span>
         </template>
       </el-table-column>
       <el-table-column label="消耗积分" width="100">

@@ -466,6 +466,7 @@
 .record-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 18rpx;
   padding: 22rpx 24rpx;
   border-radius: 22rpx;
@@ -491,6 +492,13 @@
   gap: 6rpx;
 }
 
+.record-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10rpx;
+}
+
 .record-prize {
   font-size: 26rpx;
   color: #17324d;
@@ -500,6 +508,12 @@
 .record-time {
   font-size: 20rpx;
   color: #6f8399;
+}
+
+.record-substatus {
+  font-size: 20rpx;
+  color: #b45309;
+  line-height: 1.5;
 }
 
 .record-status {
@@ -516,14 +530,33 @@
   color: #b77923;
 }
 
-.record-status.claimed {
+.record-status.issued,
+.record-status.completed {
   background: rgba(15, 118, 110, 0.12);
   color: #0f766e;
 }
 
-.record-status.expired {
-  background: rgba(107, 130, 151, 0.12);
-  color: #6f8399;
+.record-status.claim_required,
+.record-status.claim_submitted,
+.record-status.approved,
+.record-status.shipped {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.record-status.failed,
+.record-status.cancelled {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.record-action {
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(36, 95, 147, 0.1);
+  color: #245f93;
+  font-size: 22rpx;
+  font-weight: 600;
 }
 
 .records-toggle {

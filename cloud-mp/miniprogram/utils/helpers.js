@@ -256,7 +256,7 @@ module.exports = {
 };
 
 /**
- * 复制代理网页端链接（含 Token）到剪贴板
+ * 复制代理网页端链接到剪贴板
  * 两种反馈模式：
  *   toast  — 轻提示（默认，适合工作台）
  *   modal  — 弹窗说明（适合分佣中心首次引导）
@@ -265,15 +265,13 @@ module.exports = {
  */
 function copyAgentPortalLink(options) {
     const { mode = 'toast' } = options || {};
-    const token = wx.getStorageSync('token') || '';
     const app = getApp();
     const baseUrl = (app && app.globalData && app.globalData.baseUrl) || '';
     const h5Base = baseUrl.replace('/api', '').replace('/miniapi', '');
     const portalUrl = `${h5Base}/agent/`;
-    const linkWithToken = token ? `${portalUrl}?token=${encodeURIComponent(token)}` : portalUrl;
 
     wx.setClipboardData({
-        data: linkWithToken,
+        data: portalUrl,
         success: () => {
             if (mode === 'modal') {
                 wx.showModal({

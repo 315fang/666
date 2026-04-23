@@ -8,6 +8,8 @@ const PRIZE_STYLE_MAP = {
     physical: { display_emoji: '🎁', theme_color: '#F59E0B', accent_color: '#FDE68A', badge_text: '实物奖' },
     points: { display_emoji: '⭐', theme_color: '#2563EB', accent_color: '#93C5FD', badge_text: '积分奖' },
     coupon: { display_emoji: '🎫', theme_color: '#10B981', accent_color: '#6EE7B7', badge_text: '优惠券' },
+    goods_fund: { display_emoji: '💰', theme_color: '#0F766E', accent_color: '#5EEAD4', badge_text: '货款奖' },
+    mystery: { display_emoji: '✨', theme_color: '#7C3AED', accent_color: '#C4B5FD', badge_text: '神秘大奖' },
     miss: { display_emoji: '🍀', theme_color: '#6B7280', accent_color: '#D1D5DB', badge_text: '好运签' }
 };
 
@@ -19,7 +21,9 @@ function formatPrizeValue(prize = {}) {
     const value = Number(prize.prize_value || 0);
     if (prize.type === 'points' && value > 0) return `${value} 积分`;
     if (prize.type === 'coupon' && value > 0) return `${value} 元券`;
+    if (prize.type === 'goods_fund' && value > 0) return `¥${value} 货款`;
     if (prize.type === 'physical') return '实物礼品';
+    if (prize.type === 'mystery') return '人工兑奖';
     return '试试下一次好运';
 }
 
@@ -39,6 +43,23 @@ function normalizePrize(prize = {}) {
         accent_color: prize.accent_color || style.accent_color,
         badge_text: prize.badge_text || style.badge_text,
         display_value: formatPrizeValue(prize)
+    };
+}
+
+function normalizeRecord(record = {}) {
+    const prizeType = record.reward_actual_type || record.prize_type || record.type || 'miss';
+    const style = getDefaultPrizeStyle(prizeType);
+    return {
+        ...record,
+        prize_type: prizeType,
+        display_emoji: record.display_emoji || style.display_emoji,
+        theme_color: record.theme_color || style.theme_color,
+        accent_color: record.accent_color || style.accent_color,
+        badge_text: record.badge_text || style.badge_text,
+        display_value: record.display_value || formatPrizeValue({ ...record, type: prizeType }),
+        status_text: record.fulfillment_status_text || record.claim_status_text || '处理中',
+        action_text: record.action_text || '',
+        can_action: !!record.action_type
     };
 }
 
@@ -155,16 +176,7 @@ Page({
         try {
             const res = await get('/lottery/records', { page: 1, limit: 10 });
             if (res.code === 0) {
-                const records = (res.data?.list || []).map((item) => {
-                    const raw = String(item.status || '').toLowerCase();
-                    // 库内常无 claimed，或误标 expired；券/积分已入账时应对用户展示「已发放」
-                    const uiStatus = raw === 'pending' ? 'pending' : 'claimed';
-                    return {
-                        ...item,
-                        status: uiStatus,
-                        display_emoji: getDefaultPrizeStyle(item.prize_type).display_emoji
-                    };
-                });
+                const records = (res.data?.list || []).map((item) => normalizeRecord(item));
                 this.setData({ records });
             }
         } catch (e) {
@@ -254,6 +266,28 @@ Page({
 
     closeResult() {
         this.setData({ showResult: false });
+    },
+
+    onRecordActionTap(e) {
+        const recordId = String(e.currentTarget.dataset.recordId || '').trim();
+        const actionType = String(e.currentTarget.dataset.actionType || '').trim();
+        if (!recordId || !actionType) return;
+
+        if (actionType === 'coupon_list') {
+            wx.navigateTo({ url: '/pages/coupon/list' });
+            return;
+        }
+        if (actionType === 'points_page') {
+            wx.navigateTo({ url: '/pages/points/index' });
+            return;
+        }
+        if (actionType === 'goods_fund_wallet') {
+            wx.navigateTo({ url: '/pages/wallet/agent-wallet' });
+            return;
+        }
+        if (actionType === 'claim') {
+            wx.navigateTo({ url: `/pages/lottery/claim?record_id=${encodeURIComponent(recordId)}` });
+        }
     },
 
     onBack() {

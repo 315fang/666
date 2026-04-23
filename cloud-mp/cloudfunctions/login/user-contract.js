@@ -7,7 +7,7 @@ const DEFAULT_ROLE_NAMES = {
     3: '推广合伙人',
     4: '运营合伙人',
     5: '区域合伙人',
-    6: '线下实体门店'
+    6: '店长'
 };
 
 function pickString(value, fallback = '') {
@@ -21,12 +21,19 @@ function toNumber(value, fallback = 0) {
     return Number.isFinite(num) ? num : fallback;
 }
 
+function normalizeRoleLevelValue(value) {
+    const roleLevel = toNumber(value, 0);
+    if (roleLevel === 7) return 5;
+    if (roleLevel < 0) return 0;
+    return roleLevel > 6 ? 6 : roleLevel;
+}
+
 function primaryId(user = {}) {
     return user._id || user.id || user._legacy_id || '';
 }
 
 function resolveRoleLevel(user = {}) {
-    return toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+    return normalizeRoleLevelValue(user.role_level ?? user.distributor_level ?? user.level);
 }
 
 function resolveRoleName(user = {}) {
@@ -65,12 +72,17 @@ function buildCanonicalUser(user = {}, extra = {}) {
     const roleLevel = resolveRoleLevel(user);
     const commissionBalance = resolveCommissionBalance(user);
     const goodsFundBalance = resolveGoodsFundBalance(user);
+    const portalPasswordEnabled = !!pickString(user.portal_password_hash);
+    const portalPasswordChangedAt = pickString(user.portal_password_changed_at);
+    const portalPasswordLockedUntil = pickString(user.portal_password_locked_until);
 
     return {
         ...user,
         id,
         _id: id || user._id || '',
         openid: pickString(user.openid),
+        real_name: pickString(user.real_name),
+        contact_name: pickString(user.contact_name),
         nickname,
         nickName: nickname,
         nick_name: nickname,
@@ -91,6 +103,9 @@ function buildCanonicalUser(user = {}, extra = {}) {
         goods_fund_balance: goodsFundBalance,
         agent_wallet_balance: goodsFundBalance,
         wallet_balance: goodsFundBalance,
+        portal_password_enabled: portalPasswordEnabled,
+        portal_password_change_required: portalPasswordEnabled && !portalPasswordChangedAt,
+        portal_password_locked_until: portalPasswordLockedUntil,
         is_distributor: roleLevel >= 3 || toNumber(user.distributor_level ?? user.agent_level, 0) > 0,
         status_text: toNumber(user.status, 1) === 0 ? '禁用' : '正常',
         ...extra

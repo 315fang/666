@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-04-14T02:32:20.722Z",
+  "generated_at": "2026-04-19T15:10:36.710Z",
   "summary": {
     "missing_internal_wallet_logs": 0,
-    "missing_internal_goods_fund_logs": 0,
+    "missing_internal_goods_fund_logs": 8,
     "missing_reopen_reversal_logs": 0,
     "missing_adjustment_reasons": 0,
     "missing_debt_reasons": 0,
@@ -11,7 +11,16 @@
   },
   "findings": {
     "missingInternalWalletLogs": [],
-    "missingInternalGoodsFundLogs": [],
+    "missingInternalGoodsFundLogs": [
+      "REF1775993281617789 / ORD1775992929604326",
+      "REF1776058290289539 / ORD1776006098733948",
+      "REF1776083909694275 / ORD1776077635910944",
+      "REF1776089368463924 / ORD1776088274225191",
+      "REF1776180590451998 / ORD1776180331262593",
+      "REF1776328201267101 / ORD1776172821100816",
+      "REF1776328202523576 / ORD177617628123673",
+      "REF1776328204080828 / ORD1776239193669385"
+    ],
     "missingReopenReversalLogs": [],
     "missingAdjustmentReasons": [],
     "missingDebtReasons": [],

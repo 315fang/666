@@ -30,7 +30,17 @@ function createFinanceFirewall(deps = {}) {
     }
 
     async function appendWalletLogEntry(entry) {
-        return appendCollectionLogEntry('wallet_logs', entry);
+        const changeType = pickString(
+            entry?.change_type
+            || entry?.changeType
+            || entry?.type
+        );
+        return appendCollectionLogEntry('wallet_logs', {
+            ...entry,
+            // 统一以 change_type 作为钱包流水真相字段；保留 type 仅做兼容读取。
+            change_type: changeType,
+            type: pickString(entry?.type || changeType)
+        });
     }
 
     async function appendGoodsFundLogEntry(entry) {

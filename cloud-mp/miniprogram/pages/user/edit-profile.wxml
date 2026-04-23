@@ -1,4 +1,13 @@
 <view class="container">
+  <view class="bootstrap-guide" wx:if="{{showBootstrapGuide}}">
+    <text class="bootstrap-guide-title">把微信头像和昵称设为默认资料</text>
+    <text class="bootstrap-guide-desc">由于微信小程序不支持静默读取头像昵称，首次登录后需要你手动确认一次。完成后，后续就默认显示你的微信头像和昵称。</text>
+    <view class="bootstrap-guide-actions">
+      <button class="bootstrap-guide-btn bootstrap-guide-btn-primary" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">使用微信头像</button>
+      <button class="bootstrap-guide-btn" bindtap="onEditNickname">使用微信昵称</button>
+    </view>
+  </view>
+
   <!-- 导航栏 -->
   <view class="nav-bar">
     <view class="nav-back" bindtap="onBack">
@@ -31,6 +40,19 @@
     </view>
   </view>
 
+  <view class="profile-section">
+    <view class="profile-item" bindtap="onEditRealName">
+      <view class="profile-left">
+        <text class="profile-label">真实姓名</text>
+        <text class="profile-tip">大额微信提现实名校验使用</text>
+      </view>
+      <view class="profile-right">
+        <text class="profile-value">{{userInfo.real_name || '未填写'}}</text>
+        <text class="profile-arrow">›</text>
+      </view>
+    </view>
+  </view>
+
   <!-- 选择头像弹层 -->
   <view class="avatar-pick-mask" wx:if="{{showAvatarPickSheet}}" catchtap="onCancelAvatarPick">
     <view class="avatar-pick-panel" catchtap="stopP">
@@ -56,6 +78,25 @@
       <view class="nick-modal-actions">
         <view class="nick-modal-btn nick-modal-btn-cancel" bindtap="onCancelNickname">取消</view>
         <view class="nick-modal-btn nick-modal-btn-ok" bindtap="onConfirmNickname">保存</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="nick-modal-mask" wx:if="{{showRealNameModal}}" catchtap="onCancelRealName">
+    <view class="nick-modal" catchtap="stopP">
+      <text class="nick-modal-title">填写真实姓名</text>
+      <text class="real-name-hint">用于大额微信提现实名校验，请填写与你微信实名一致的姓名。</text>
+      <input
+        class="nick-modal-input"
+        type="text"
+        placeholder="输入真实姓名"
+        maxlength="32"
+        value="{{newRealName}}"
+        bindinput="onRealNameInput"
+      />
+      <view class="nick-modal-actions">
+        <view class="nick-modal-btn nick-modal-btn-cancel" bindtap="onCancelRealName">取消</view>
+        <view class="nick-modal-btn nick-modal-btn-ok" bindtap="onConfirmRealName">保存</view>
       </view>
     </view>
   </view>

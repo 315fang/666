@@ -309,7 +309,7 @@ node scripts/verify-p1-fixes.js
 
 ## 📞 相关文档
 
-- 📄 [CODE_REVIEW.md](./CODE_REVIEW.md) - 完整代码审查报告
+- 📄 [CODE_REVIEW.md](./archive/root-history/CODE_REVIEW.md) - 完整代码审查报告
 - 📄 [MYSQL_TO_CLOUDBASE_MAPPING.md](./MYSQL_TO_CLOUDBASE_MAPPING.md) - 字段迁移规范
 - 🔧 [scripts/verify-p1-fixes.js](./scripts/verify-p1-fixes.js) - 验证脚本
 
@@ -340,4 +340,3 @@ node scripts/verify-p1-fixes.js
 ---
 
 **修复状态**: ✅ 完成
-

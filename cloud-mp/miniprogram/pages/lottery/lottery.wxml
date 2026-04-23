@@ -88,10 +88,21 @@
       <view class="record-left">
         <text class="record-prize">{{item.prize_name}}</text>
         <text class="record-time">{{item.created_at}}</text>
+        <text class="record-substatus" wx:if="{{item.failure_reason}}">{{item.failure_reason}}</text>
       </view>
-      <view class="record-status {{item.status}}">
-        <text wx:if="{{item.status === 'pending'}}">待领取</text>
-        <text wx:else>已发放</text>
+      <view class="record-right">
+        <view class="record-status {{item.fulfillment_status}}">
+          <text>{{item.status_text}}</text>
+        </view>
+        <view
+          class="record-action"
+          wx:if="{{item.can_action}}"
+          bindtap="onRecordActionTap"
+          data-record-id="{{item.record_id || item.id}}"
+          data-action-type="{{item.action_type}}"
+        >
+          <text>{{item.action_text}}</text>
+        </view>
       </view>
     </view>
     <view

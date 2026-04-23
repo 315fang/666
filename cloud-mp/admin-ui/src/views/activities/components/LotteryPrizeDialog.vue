@@ -9,13 +9,68 @@
           <el-option label="未中奖（谢谢参与）" value="miss" />
           <el-option label="积分奖励" value="points" />
           <el-option label="优惠券" value="coupon" />
+          <el-option label="货款奖励" value="goods_fund" />
           <el-option label="实物商品" value="physical" />
+          <el-option label="神秘大奖" value="mystery" />
         </el-select>
       </el-form-item>
-      <el-form-item v-if="form.type !== 'miss'" label="奖品价值">
+      <el-form-item v-if="['points', 'goods_fund'].includes(form.type)" label="奖品价值">
         <el-input-number v-model="form.prize_value" :min="0" :precision="2" />
-        <span style="margin-left:8px;font-size:12px;color:#909399;">{{ form.type === 'points' ? '积分数' : form.type === 'coupon' ? '优惠券金额(元)' : '元' }}</span>
+        <span style="margin-left:8px;font-size:12px;color:#909399;">{{ form.type === 'points' ? '积分数' : '货款金额(元)' }}</span>
       </el-form-item>
+      <template v-if="form.type === 'coupon'">
+        <el-form-item label="券金额">
+          <el-input-number v-model="form.coupon_amount" :min="0" :precision="2" />
+          <span style="margin-left:8px;font-size:12px;color:#909399;">固定金额券，直接发到券包</span>
+        </el-form-item>
+        <el-form-item label="使用门槛">
+          <el-input-number v-model="form.coupon_min_purchase" :min="0" :precision="2" />
+        </el-form-item>
+        <el-form-item label="有效天数">
+          <el-input-number v-model="form.coupon_valid_days" :min="1" :precision="0" />
+        </el-form-item>
+        <el-form-item label="适用范围">
+          <el-select v-model="form.coupon_scope" style="width:min(220px, 100%);">
+            <el-option label="全场通用" value="all" />
+            <el-option label="指定商品" value="product" />
+            <el-option label="指定分类" value="category" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="范围ID">
+          <el-input v-model="form.coupon_scope_ids_text" type="textarea" :rows="2" placeholder="商品ID或分类ID，逗号/换行分隔；全场通用可留空" />
+        </el-form-item>
+      </template>
+      <template v-if="form.type === 'goods_fund'">
+        <el-form-item label="可领层级">
+          <el-checkbox-group v-model="form.eligible_role_levels">
+            <el-checkbox :label="3">B1</el-checkbox>
+            <el-checkbox :label="4">B2</el-checkbox>
+            <el-checkbox :label="5">B3</el-checkbox>
+            <el-checkbox :label="6">店长</el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+        <el-form-item label="非代理处理">
+          <el-tag type="warning">自动折算积分发放</el-tag>
+        </el-form-item>
+      </template>
+      <template v-if="['physical', 'mystery'].includes(form.type)">
+        <el-form-item label="需领奖">
+          <el-switch v-model="form.claim_required" />
+        </el-form-item>
+        <el-form-item label="领奖说明">
+          <el-input v-model="form.claim_instruction" type="textarea" :rows="2" placeholder="如：请填写收货地址，后台审核后发放" />
+        </el-form-item>
+        <el-form-item label="领奖时限">
+          <el-input-number v-model="form.claim_deadline_days" :min="0" :precision="0" />
+          <span style="margin-left:8px;font-size:12px;color:#909399;">0 表示不限制</span>
+        </el-form-item>
+        <el-form-item label="需要发货" v-if="form.type === 'physical'">
+          <el-switch v-model="form.shipping_required" />
+        </el-form-item>
+        <el-form-item label="履约方式" v-else>
+          <el-tag type="info">人工兑奖，不自动发货</el-tag>
+        </el-form-item>
+      </template>
       <el-form-item label="消耗积分">
         <el-input-number v-model="form.cost_points" :min="1" />
         <span style="margin-left:8px;font-size:12px;color:#909399;">每次抽奖消耗</span>

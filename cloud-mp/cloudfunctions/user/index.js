@@ -14,7 +14,7 @@ const DEFAULT_ROLE_NAMES = {
     3: '推广合伙人',
     4: '运营合伙人',
     5: '区域合伙人',
-    6: '线下实体门店'
+    6: '店长'
 };
 
 const DEFAULT_AGENT_UPGRADE_RULES = {
@@ -51,6 +51,19 @@ const userDepositOrders = require('./user-deposit-orders');
 const userFavorites = require('./user-favorites');
 const userNotifications = require('./user-notifications');
 const userWallet = require('./user-wallet');
+const portalPassword = require('./user-portal-password');
+const {
+    resolveRoleLevel,
+    resolveRoleName,
+    resolveGoodsFundBalance
+} = require('./user-contract');
+const {
+    pickString,
+    rowMatchesLookup,
+    sortStationsByPickupPreference,
+    summarizeStationStockForItems
+} = require('./shared/pickup-station-stock');
+const { assertPortalPassword } = require('./user-portal-password');
 
 function parseConfigValue(row, fallback) {
     if (!row) return fallback;
@@ -189,7 +202,15 @@ async function loadAgentUpgradeRules() {
 
 function discountText(discount) {
     void discount;
-    return '积分权益';
+    return '成长会员权益';
+}
+
+function resolveGrowthValue(source = {}) {
+    return toNum(source.growth_value, 0);
+}
+
+function resolvePointsValue(source = {}) {
+    return toNum(source.points != null ? source.points : source.growth_value, 0);
 }
 
 function normalizeGrowthTiers(rows = []) {
@@ -242,13 +263,13 @@ function mapGrowthProgressToFrontend(raw) {
 
 async function enrichUserWithGrowthProgress(formattedUser) {
     if (!formattedUser) return formattedUser;
-    const points = toNum(formattedUser.points != null ? formattedUser.points : formattedUser.growth_value, 0);
+    const growthValue = resolveGrowthValue(formattedUser);
     const config = await loadMembershipConfig();
     const growthTiers = normalizeGrowthTiers(config.growth_tiers);
-    const raw = buildGrowthProgress(points, growthTiers.length ? growthTiers : null);
+    const raw = buildGrowthProgress(growthValue, growthTiers.length ? growthTiers : null);
     return {
         ...formattedUser,
-        growth_value: points,
+        growth_value: growthValue,
         growth_progress: mapGrowthProgressToFrontend(raw)
     };
 }
@@ -291,7 +312,12 @@ async function getRechargeTotal(openid) {
         .reduce((sum, row) => sum + toNum(row.amount, 0), 0);
 }
 
+function isTestOrder(order = {}) {
+    return order.is_test_order === true || order.is_test_order === 1 || order.is_test_order === '1';
+}
+
 function isEffectiveUpgradeOrder(order = {}, effectiveDays = DEFAULT_AGENT_UPGRADE_RULES.effective_order_days) {
+    if (isTestOrder(order)) return false;
     const status = String(order.status || '').toLowerCase();
     if (['cancelled', 'canceled', 'refunded', 'pending', 'pending_payment', 'after_sale', 'refunding'].includes(status)) {
         return false;
@@ -443,6 +469,27 @@ function normalizeStation(row = {}) {
     };
 }
 
+function parsePickupItemsParam(rawItems) {
+    if (!rawItems) return [];
+    let source = rawItems;
+    if (typeof rawItems === 'string') {
+        try {
+            source = JSON.parse(rawItems);
+        } catch (_) {
+            return [];
+        }
+    }
+    if (!Array.isArray(source)) return [];
+    return source
+        .map((item) => ({
+            product_id: pickString(item && item.product_id),
+            sku_id: pickString(item && item.sku_id),
+            quantity: Math.max(1, toNum(item && (item.quantity ?? item.qty), 1)),
+            name: pickString(item && (item.name || item.snapshot_name))
+        }))
+        .filter((item) => item.product_id);
+}
+
 async function findUserByOpenid(openid) {
     if (!openid) return null;
     const res = await db.collection('users')
@@ -467,25 +514,799 @@ async function getPickupVerifyScope(openid) {
             requiresStationSelection: false
         };
     }
-    const [stationRes, staffRes, user] = await Promise.all([
+    const [stationRes, staffRes, user, users] = await Promise.all([
         getAllRecords(db, 'stations', { status: 'active' }).catch(() => []),
         getAllRecords(db, 'station_staff', { status: 'active' }).catch(() => []),
-        findUserByOpenid(openid)
+        findUserByOpenid(openid),
+        getAllRecords(db, 'users').catch(() => [])
     ]);
     const stations = (stationRes || []).map(normalizeStation);
     const userIds = user ? buildUserIdCandidates(user).map((id) => String(id)) : [];
-    const activeStaff = (staffRes || []).filter((row) => {
-        if (toNum(row.can_verify, 0) !== 1) return false;
+    const userMap = buildStoreManagerUserMap(users || []);
+    const relatedStaff = (staffRes || []).filter((row) => {
         if (String(row.openid || '') === String(openid)) return true;
         return userIds.includes(String(row.user_id || ''));
     });
-    const allowedStationIds = new Set(activeStaff.map((row) => String(row.station_id || '')));
-    const scopedStations = stations.filter((station) => allowedStationIds.has(String(station.id)));
+    const allowedStationIds = new Set(relatedStaff.map((row) => String(row.station_id || '')));
+    const scopedStations = stations.filter((station) => allowedStationIds.has(String(station.id))).map((station) => {
+        const stationStaff = (staffRes || []).filter((row) => String(row.station_id || '') === String(station.id));
+        const myStaffRow = relatedStaff.find((row) => String(row.station_id || '') === String(station.id));
+        const staffPreview = stationStaff.slice(0, 3).map((row) => {
+            const staffUser = getUserByMap(userMap, row.user_id) || getUserByMap(userMap, row.openid);
+            return {
+                id: row._id || row.id || '',
+                user_id: row.user_id || '',
+                role: pickString(row.role || 'staff'),
+                can_verify: toNum(row.can_verify, 0) === 1,
+                user: staffUser ? {
+                    nick_name: pickString(staffUser.nickName || staffUser.nickname),
+                    nickname: pickString(staffUser.nickName || staffUser.nickname),
+                    phone: pickString(staffUser.phone)
+                } : {
+                    nick_name: '',
+                    nickname: '',
+                    phone: ''
+                }
+            };
+        });
+        return {
+            ...station,
+            my_role: pickString(myStaffRow?.role || 'staff'),
+            can_verify: toNum(myStaffRow?.can_verify, 0) === 1 || pickString(myStaffRow?.role) === 'manager',
+            staff_summary: {
+                total: stationStaff.length,
+                verify_count: stationStaff.filter((row) => toNum(row.can_verify, 0) === 1).length,
+                manager_count: stationStaff.filter((row) => pickString(row.role) === 'manager').length,
+                preview: staffPreview
+            }
+        };
+    });
     return {
-        hasVerifyAccess: scopedStations.length > 0,
+        hasVerifyAccess: scopedStations.some((station) => station.can_verify),
         stations: scopedStations,
         stationCount: scopedStations.length,
-        requiresStationSelection: scopedStations.length > 1
+        requiresStationSelection: scopedStations.filter((station) => station.can_verify).length > 1,
+        managerStationCount: scopedStations.filter((station) => station.my_role === 'manager').length
+    };
+}
+
+function toIsoString(value) {
+    const ts = parseTimestamp(value);
+    return ts ? new Date(ts).toISOString() : '';
+}
+
+function buildStoreManagerUserMap(users = []) {
+    const map = new Map();
+    (Array.isArray(users) ? users : []).forEach((user) => {
+        [user._id, user.id, user._legacy_id, user.openid].forEach((key) => {
+            if (key == null || key === '') return;
+            map.set(String(key), user);
+        });
+    });
+    return map;
+}
+
+function dedupeRows(rows = []) {
+    const merged = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+        if (!row || typeof row !== 'object') return;
+        const key = String(row._id || row.id || row._legacy_id || row.openid || JSON.stringify(row));
+        if (!merged.has(key)) merged.set(key, row);
+    });
+    return Array.from(merged.values());
+}
+
+function buildLookupCandidates(values = []) {
+    const strings = [];
+    const numbers = [];
+    [...new Set((Array.isArray(values) ? values : []).filter((value) => value !== null && value !== undefined && value !== ''))]
+        .forEach((value) => {
+            const str = String(value).trim();
+            if (str) strings.push(str);
+            const num = Number(value);
+            if (Number.isFinite(num)) numbers.push(num);
+        });
+    return {
+        strings: [...new Set(strings)],
+        numbers: [...new Set(numbers)]
+    };
+}
+
+async function queryRecordsByFieldValues(collectionName, field, values = []) {
+    const { strings, numbers } = buildLookupCandidates(values);
+    const tasks = [];
+    if (strings.length) {
+        tasks.push(getAllRecords(db, collectionName, { [field]: _.in(strings) }).catch(() => []));
+    }
+    if (numbers.length) {
+        tasks.push(getAllRecords(db, collectionName, { [field]: _.in(numbers) }).catch(() => []));
+    }
+    if (!tasks.length) return [];
+    return dedupeRows((await Promise.all(tasks)).flat());
+}
+
+async function queryUsersByLookups(values = []) {
+    const { strings, numbers } = buildLookupCandidates(values);
+    const [byOpenid, byId, byLegacy, byDoc] = await Promise.all([
+        strings.length ? getAllRecords(db, 'users', { openid: _.in(strings) }).catch(() => []) : Promise.resolve([]),
+        numbers.length ? getAllRecords(db, 'users', { id: _.in(numbers) }).catch(() => []) : Promise.resolve([]),
+        numbers.length ? getAllRecords(db, 'users', { _legacy_id: _.in(numbers) }).catch(() => []) : Promise.resolve([]),
+        strings.length ? getAllRecords(db, 'users', { _id: _.in(strings) }).catch(() => []) : Promise.resolve([])
+    ]);
+    return dedupeRows([...byOpenid, ...byId, ...byLegacy, ...byDoc]);
+}
+
+function getUserByMap(userMap, lookup) {
+    if (lookup == null || lookup === '') return null;
+    return userMap.get(String(lookup)) || null;
+}
+
+function buildStoreStaffPreview(staffRows = [], userMap = new Map()) {
+    return staffRows.slice(0, 5).map((row) => {
+        const staffUser = getUserByMap(userMap, row.user_id) || getUserByMap(userMap, row.openid);
+        return {
+            id: row._id || row.id || '',
+            user_id: row.user_id || '',
+            role: pickString(row.role || 'staff'),
+            can_verify: toNum(row.can_verify, 0) === 1,
+            user: staffUser ? {
+                nick_name: pickString(staffUser.nickName || staffUser.nickname),
+                nickname: pickString(staffUser.nickName || staffUser.nickname),
+                phone: pickString(staffUser.phone)
+            } : {
+                nick_name: '',
+                nickname: '',
+                phone: ''
+            }
+        };
+    });
+}
+
+function buildStoreManagerStations(stations = [], staffRows = [], users = [], openid, currentUser = null) {
+    const userIds = currentUser ? buildUserIdCandidates(currentUser).map((id) => String(id)) : [];
+    const userMap = buildStoreManagerUserMap(users);
+    const managerRows = (staffRows || []).filter((row) => {
+        if (pickString(row.status || 'active') !== 'active') return false;
+        if (pickString(row.role) !== 'manager') return false;
+        if (String(row.openid || '') === String(openid)) return true;
+        return userIds.includes(String(row.user_id || ''));
+    });
+    const managerStationIds = new Set(managerRows.map((row) => String(row.station_id || '')));
+    return (stations || [])
+        .filter((station) => managerStationIds.has(String(station.id)))
+        .map((station) => {
+            const stationStaff = (staffRows || []).filter((row) => String(row.station_id || '') === String(station.id) && pickString(row.status || 'active') === 'active');
+            const claimant = getUserByMap(userMap, station.pickup_claimant_id || station.pickup_claimant_openid || station.claimant_id || station.claimant_openid);
+            return {
+                ...station,
+                claimant: claimant ? {
+                    id: claimant._id || claimant.id || claimant._legacy_id || '',
+                    openid: claimant.openid || '',
+                    nick_name: pickString(claimant.nickName || claimant.nickname),
+                    nickname: pickString(claimant.nickName || claimant.nickname),
+                    phone: pickString(claimant.phone)
+                } : null,
+                staff_summary: {
+                    total: stationStaff.length,
+                    verify_count: stationStaff.filter((row) => toNum(row.can_verify, 0) === 1).length,
+                    manager_count: stationStaff.filter((row) => pickString(row.role) === 'manager').length,
+                    preview: buildStoreStaffPreview(stationStaff, userMap)
+                }
+            };
+        });
+}
+
+function summarizeMoneyByType(rows = [], allowedTypes = []) {
+    return roundMoney((rows || [])
+        .filter((row) => allowedTypes.includes(pickString(row.type)))
+        .reduce((sum, row) => sum + toNum(row.amount, 0), 0));
+}
+
+function buildStoreManagerOrderSummary(order = {}, context = {}) {
+    const item = Array.isArray(order.items) && order.items[0] ? order.items[0] : {};
+    const station = context.stationMap.get(String(order.pickup_station_id || '')) || null;
+    const verifier = getUserByMap(context.userMap, order.pickup_verified_by);
+    const orderKey = String(order._id || order.id || '');
+    const orderNo = pickString(order.order_no);
+    const orderCommissions = (context.commissions || []).filter((row) => {
+        const rowOrderId = pickString(row.order_id);
+        const rowOrderNo = pickString(row.order_no);
+        return (rowOrderId && rowOrderId === orderKey) || (rowOrderNo && rowOrderNo === orderNo);
+    });
+    const goodsFundLogs = (context.goodsFundLogs || []).filter((row) => {
+        const rowOrderId = pickString(row.order_id);
+        const rowOrderNo = pickString(row.order_no);
+        return (rowOrderId && rowOrderId === orderKey) || (rowOrderNo && rowOrderNo === orderNo);
+    });
+    const serviceFeeAmount = summarizeMoneyByType(orderCommissions, ['pickup_service_fee', 'pickup_subsidy']);
+    const principalReturnAmount = summarizeMoneyByType(goodsFundLogs, ['pickup_principal_return']);
+    const principalReversalAmount = Math.abs(summarizeMoneyByType(goodsFundLogs, ['pickup_principal_reversal']));
+    return {
+        id: orderKey,
+        order_no: orderNo,
+        status: pickString(order.status),
+        product_name: pickString(item.snapshot_name || item.name || order.product_name),
+        product_spec: pickString(item.snapshot_spec || item.spec),
+        quantity: Array.isArray(order.items) ? order.items.reduce((sum, current) => sum + Math.max(1, toNum(current.qty || current.quantity, 1)), 0) : Math.max(1, toNum(order.quantity || order.qty, 1)),
+        pickup_station_name: pickString(station?.name || order.pickupStation?.name),
+        pickup_verified_by: pickString(order.pickup_verified_by),
+        pickup_verified_by_name: pickString(verifier?.nickName || verifier?.nickname),
+        pickup_verified_at: toIsoString(order.verified_at || order.pickup_verified_at || order.confirmed_at),
+        service_fee_amount: serviceFeeAmount,
+        principal_return_amount: principalReturnAmount,
+        principal_reversal_amount: principalReversalAmount,
+        display_pay_amount: roundMoney(toNum(order.pay_amount ?? order.actual_price ?? order.total_amount, 0)).toFixed(2)
+    };
+}
+
+async function buildStoreManagerWorkbench(openid) {
+    const currentUser = await findUserByOpenid(openid);
+    const currentUserIds = buildUserIdCandidates(currentUser).map((id) => String(id));
+    const [managerRowsByOpenid, managerRowsByUserId] = await Promise.all([
+        queryRecordsByFieldValues('station_staff', 'openid', [openid]),
+        queryRecordsByFieldValues('station_staff', 'user_id', currentUserIds)
+    ]);
+    const managerRows = dedupeRows([...managerRowsByOpenid, ...managerRowsByUserId]).filter((row) => {
+        return pickString(row.status || 'active') === 'active' && pickString(row.role) === 'manager';
+    });
+    const managedStationLookups = managerRows.map((row) => row.station_id).filter(Boolean);
+    if (!managedStationLookups.length) {
+        return {
+            summary: {
+                station_count: 0,
+                pending_order_count: 0,
+                recent_verified_count: 0,
+                procurement_pending_count: 0,
+                service_fee_total: 0,
+                principal_return_total: 0
+            },
+            stations: [],
+            pending_orders: [],
+            recent_verified_orders: [],
+            procurements: []
+        };
+    }
+
+    const [stationRowsById, stationRowsByLegacy, stationRowsByDoc, stationStaff] = await Promise.all([
+        queryRecordsByFieldValues('stations', 'id', managedStationLookups),
+        queryRecordsByFieldValues('stations', '_legacy_id', managedStationLookups),
+        queryRecordsByFieldValues('stations', '_id', managedStationLookups),
+        queryRecordsByFieldValues('station_staff', 'station_id', managedStationLookups)
+    ]);
+    const normalizedStationRows = dedupeRows([...stationRowsById, ...stationRowsByLegacy, ...stationRowsByDoc]).map(normalizeStation);
+    const relatedUserLookups = [
+        openid,
+        ...currentUserIds,
+        ...stationStaff.flatMap((row) => [row.user_id, row.openid]),
+        ...normalizedStationRows.flatMap((station) => [
+            station.pickup_claimant_id,
+            station.pickup_claimant_openid,
+            station.claimant_id,
+            station.claimant_openid
+        ])
+    ];
+    const users = await queryUsersByLookups(relatedUserLookups);
+    const stations = buildStoreManagerStations(normalizedStationRows, stationStaff || [], users || [], openid, currentUser);
+    const stationIds = stations.map((station) => String(station.id));
+    const userMap = buildStoreManagerUserMap(users || []);
+    const stationMap = new Map(stations.map((station) => [String(station.id), station]));
+    const [stationOrdersRaw, procurementsRaw] = await Promise.all([
+        queryRecordsByFieldValues('orders', 'pickup_station_id', stationIds),
+        queryRecordsByFieldValues('station_procurement_orders', 'station_id', stationIds)
+    ]);
+    const stationOrders = (stationOrdersRaw || []).filter((order) => String(order.delivery_type || '') === 'pickup');
+    const verifierLookups = stationOrders.flatMap((order) => [order.pickup_verified_by]);
+    const verifierUsers = await queryUsersByLookups(verifierLookups);
+    verifierUsers.forEach((user) => {
+        [user._id, user.id, user._legacy_id, user.openid].forEach((key) => {
+            if (key == null || key === '') return;
+            userMap.set(String(key), user);
+        });
+    });
+    const claimantOpenids = stations.map((station) => pickString(station.claimant?.openid)).filter(Boolean);
+    const [commissionRows, goodsFundLogs] = await Promise.all([
+        claimantOpenids.length ? getAllRecords(db, 'commissions', { openid: _.in(claimantOpenids) }).catch(() => []) : Promise.resolve([]),
+        claimantOpenids.length ? getAllRecords(db, 'goods_fund_logs', { openid: _.in(claimantOpenids) }).catch(() => []) : Promise.resolve([])
+    ]);
+
+    const pendingOrdersAll = stationOrders
+        .filter((order) => pickString(order.status) === 'pickup_pending')
+        .sort((a, b) => parseTimestamp(b.created_at) - parseTimestamp(a.created_at));
+    const pendingOrders = pendingOrdersAll
+        .slice(0, 8)
+        .map((order) => buildStoreManagerOrderSummary(order, { stationMap, userMap, commissions: commissionRows, goodsFundLogs }));
+    const recentVerifiedOrdersAll = stationOrders
+        .filter((order) => hasValue(order.pickup_verified_by) || hasValue(order.pickup_verified_at) || hasValue(order.verified_at))
+        .sort((a, b) => parseTimestamp(b.pickup_verified_at || b.verified_at || b.confirmed_at) - parseTimestamp(a.pickup_verified_at || a.verified_at || a.confirmed_at));
+    const recentVerifiedOrders = recentVerifiedOrdersAll
+        .slice(0, 10)
+        .map((order) => buildStoreManagerOrderSummary(order, { stationMap, userMap, commissions: commissionRows, goodsFundLogs }));
+    const procurementRows = (procurementsRaw || [])
+        .filter((row) => stationIds.includes(String(row.station_id || '')))
+        .sort((a, b) => parseTimestamp(b.created_at) - parseTimestamp(a.created_at))
+        .slice(0, 10)
+        .map((row) => ({
+            id: row._id || row.id || '',
+            procurement_no: pickString(row.procurement_no),
+            station_id: pickString(row.station_id),
+            station_name: pickString(stationMap.get(String(row.station_id))?.name || row.station_snapshot?.name),
+            product_name: pickString(row.product_snapshot?.name),
+            sku_spec: pickString(row.product_snapshot?.sku_spec || row.product_snapshot?.sku_name),
+            quantity: Math.max(0, toNum(row.quantity, 0)),
+            cost_price: roundMoney(row.cost_price).toFixed(2),
+            total_cost: roundMoney(row.total_cost).toFixed(2),
+            status: pickString(row.status),
+            supplier_name: pickString(row.supplier_name),
+            operator_name: pickString(row.operator_name),
+            expected_arrival_date: pickString(row.expected_arrival_date),
+            remark: pickString(row.remark),
+            created_at: toIsoString(row.created_at),
+            received_at: toIsoString(row.received_at)
+        }));
+
+    return {
+        summary: {
+            station_count: stations.length,
+            pending_order_count: pendingOrdersAll.length,
+            recent_verified_count: recentVerifiedOrdersAll.length,
+            procurement_pending_count: procurementRows.filter((row) => row.status === 'pending_receive').length,
+            service_fee_total: roundMoney((commissionRows || [])
+                .filter((row) => claimantOpenids.includes(pickString(row.openid)) && ['pickup_service_fee', 'pickup_subsidy'].includes(pickString(row.type)))
+                .reduce((sum, row) => sum + toNum(row.amount, 0), 0)),
+            principal_return_total: roundMoney((goodsFundLogs || [])
+                .filter((row) => claimantOpenids.includes(pickString(row.openid)) && pickString(row.type) === 'pickup_principal_return')
+                .reduce((sum, row) => sum + toNum(row.amount, 0), 0))
+        },
+        stations,
+        pending_orders: pendingOrders,
+        recent_verified_orders: recentVerifiedOrders,
+        procurements: procurementRows
+    };
+}
+
+function normalizeAgentRoleLevel(roleLevel) {
+    const normalized = Math.floor(toNum(roleLevel, 0));
+    if (normalized >= 5) return 5;
+    if (normalized === 4) return 4;
+    if (normalized === 3) return 3;
+    return 0;
+}
+
+function resolveSupplyPriceByRole(product = {}, sku = {}, roleLevel = 0) {
+    const normalizedRole = normalizeAgentRoleLevel(roleLevel);
+    if (!normalizedRole) return null;
+    const fieldName = `supply_price_b${normalizedRole === 5 ? 3 : normalizedRole}`;
+    const amount = toNum(sku?.[fieldName] ?? product?.[fieldName], NaN);
+    return Number.isFinite(amount) && amount > 0 ? roundMoney(amount) : null;
+}
+
+function productOwnsSku(product = {}, sku = {}) {
+    const productIds = [product._id, product.id, product._legacy_id].filter((value) => value !== null && value !== undefined && value !== '').map(String);
+    const skuProductIds = [sku.product_id, sku.productId].filter((value) => value !== null && value !== undefined && value !== '').map(String);
+    return skuProductIds.some((value) => productIds.includes(value));
+}
+
+async function findOneByAnyId(collectionName, rawId) {
+    if (!rawId) return null;
+    const id = String(rawId);
+    const numeric = toNum(rawId, NaN);
+    const [doc, byId, byLegacy] = await Promise.all([
+        db.collection(collectionName).doc(id).get().catch(() => ({ data: null })),
+        Number.isFinite(numeric) ? db.collection(collectionName).where({ id: numeric }).limit(1).get().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+        Number.isFinite(numeric) ? db.collection(collectionName).where({ _legacy_id: numeric }).limit(1).get().catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
+    ]);
+    return doc.data || byId.data?.[0] || byLegacy.data?.[0] || null;
+}
+
+function getUserGoodsFundBalance(user = {}) {
+    return roundMoney(toNum(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0));
+}
+
+async function ensureWalletAccountForUser(user = {}, seedBalance = 0) {
+    const candidates = [user.id, user._legacy_id, user._id, user.openid].filter((value) => value !== null && value !== undefined && value !== '');
+    for (const candidate of candidates) {
+        const res = await db.collection('wallet_accounts').where({ user_id: candidate }).limit(1).get().catch(() => ({ data: [] }));
+        if (res.data && res.data[0]) return res.data[0];
+    }
+    const accountId = `wallet-${String(user._id || user.id || user._legacy_id || user.openid || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+    const account = {
+        _id: accountId,
+        user_id: user.id || user._legacy_id || user._id || user.openid,
+        openid: pickString(user.openid),
+        balance: roundMoney(seedBalance),
+        account_type: 'goods_fund',
+        status: 'active',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+    };
+    await db.collection('wallet_accounts').doc(accountId).set({ data: account }).catch(() => {});
+    return account;
+}
+
+async function appendGoodsFundLog(entry = {}) {
+    return db.collection('goods_fund_logs').add({
+        data: {
+            ...entry,
+            created_at: entry.created_at || db.serverDate()
+        }
+    }).catch(() => null);
+}
+
+function buildProcurementNo(rows = []) {
+    const seq = (Array.isArray(rows) ? rows.length : 0) + 1;
+    return `PROC${Date.now()}${String(seq).padStart(3, '0')}`;
+}
+
+async function resolveManagerStationBinding(openid, requestedStationId = '') {
+    const [stationRows, staffRows, users, currentUser] = await Promise.all([
+        getAllRecords(db, 'stations', { status: 'active' }).catch(() => []),
+        getAllRecords(db, 'station_staff', { status: 'active' }).catch(() => []),
+        getAllRecords(db, 'users').catch(() => []),
+        findUserByOpenid(openid)
+    ]);
+    const stations = buildStoreManagerStations((stationRows || []).map(normalizeStation), staffRows || [], users || [], openid, currentUser);
+    if (!stations.length) throw badRequest('当前账号未被后台指派为店长');
+    const station = requestedStationId
+        ? stations.find((item) => String(item.id) === String(requestedStationId))
+        : stations[0];
+    if (!station) throw badRequest('当前账号不属于该门店');
+    return {
+        station,
+        currentUser: currentUser || getUserByMap(buildStoreManagerUserMap(users || []), openid)
+    };
+}
+
+async function createStoreManagerProcurement(openid, params = {}) {
+    const stationId = pickString(params.station_id);
+    const productId = pickString(params.product_id);
+    const skuId = pickString(params.sku_id);
+    const quantity = Math.max(0, Math.floor(toNum(params.quantity, 0)));
+    const supplierName = pickString(params.supplier_name);
+    const operatorName = pickString(params.operator_name);
+    const expectedArrivalDate = pickString(params.expected_arrival_date);
+    const remark = pickString(params.remark);
+    const portalPassword = pickString(params.portal_password);
+
+    if (!stationId) throw badRequest('请选择门店');
+    if (!productId) throw badRequest('请选择商品');
+    if (!quantity) throw badRequest('采购数量必须大于 0');
+    if (!supplierName) throw badRequest('请填写供应商');
+    if (!operatorName) throw badRequest('请填写经办人');
+
+    const [{ station, currentUser }, product, sku, procurements] = await Promise.all([
+        resolveManagerStationBinding(openid, stationId),
+        findOneByAnyId('products', productId),
+        skuId ? findOneByAnyId('skus', skuId) : Promise.resolve(null),
+        getAllRecords(db, 'station_procurement_orders').catch(() => [])
+    ]);
+
+    if (!product) throw badRequest('商品不存在');
+    if (skuId && !sku) throw badRequest('规格不存在');
+    if (sku && !productOwnsSku(product, sku)) throw badRequest('规格不属于当前商品');
+
+    await assertPortalPassword(db, openid, portalPassword);
+
+    const roleLevel = resolveRoleLevel(currentUser || {});
+    const defaultCostPrice = resolveSupplyPriceByRole(product, sku || {}, roleLevel)
+        || roundMoney(toNum(sku?.cost_price ?? product.cost_price, 0));
+    const costPrice = roundMoney(toNum(params.cost_price, defaultCostPrice));
+    if (!(costPrice > 0)) throw badRequest('进货成本价必须大于 0');
+    const totalCost = roundMoney(costPrice * quantity);
+
+    const claimantUser = station.claimant?.openid === openid ? (currentUser || null) : await findUserByOpenid(openid);
+    if (!claimantUser) throw badRequest('店长账户异常，无法创建采购单');
+    const goodsFundBalance = getUserGoodsFundBalance(claimantUser);
+    if (goodsFundBalance < totalCost) throw badRequest('货款余额不足，不能创建采购单');
+
+    const userDocId = pickString(claimantUser._id || claimantUser.id);
+    if (!userDocId) throw badRequest('店长账户缺少文档标识');
+    const nextBalance = roundMoney(goodsFundBalance - totalCost);
+    await db.collection('users').doc(userDocId).update({
+        data: {
+            agent_wallet_balance: db.command.inc(-totalCost),
+            wallet_balance: db.command.inc(-totalCost),
+            updated_at: db.serverDate()
+        }
+    }).catch(() => {
+        throw new Error('扣减货款余额失败');
+    });
+
+    const walletAccount = await ensureWalletAccountForUser(claimantUser, goodsFundBalance);
+    await db.collection('wallet_accounts').doc(String(walletAccount._id || walletAccount.id)).set({
+        data: {
+            ...walletAccount,
+            balance: nextBalance,
+            updated_at: new Date().toISOString()
+        }
+    }).catch(() => {});
+
+    const procurement = {
+        id: (Array.isArray(procurements) ? procurements.length : 0) + 1,
+        procurement_no: buildProcurementNo(procurements),
+        station_id: station.id,
+        claimant_id: claimantUser._id || claimantUser.id || claimantUser._legacy_id || '',
+        claimant_openid: claimantUser.openid || '',
+        product_id: product._id || product.id || '',
+        sku_id: sku ? (sku._id || sku.id || '') : '',
+        quantity,
+        cost_price: costPrice,
+        total_cost: totalCost,
+        status: 'pending_receive',
+        supplier_name: supplierName,
+        operator_name: operatorName,
+        expected_arrival_date: expectedArrivalDate,
+        remark,
+        station_snapshot: {
+            id: station.id,
+            name: station.name,
+            city: station.city,
+            district: station.district
+        },
+        product_snapshot: {
+            id: product._id || product.id || '',
+            name: pickString(product.name),
+            sku_name: pickString(sku?.name),
+            sku_spec: pickString(sku?.spec || sku?.spec_value)
+        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+    };
+    await db.collection('station_procurement_orders').add({ data: procurement }).catch(async (error) => {
+        await db.collection('users').doc(userDocId).update({
+            data: {
+                agent_wallet_balance: db.command.inc(totalCost),
+                wallet_balance: db.command.inc(totalCost),
+                updated_at: db.serverDate()
+            }
+        }).catch(() => {});
+        await db.collection('wallet_accounts').doc(String(walletAccount._id || walletAccount.id)).set({
+            data: {
+                ...walletAccount,
+                balance: goodsFundBalance,
+                updated_at: new Date().toISOString()
+            }
+        }).catch(() => {});
+        throw error;
+    });
+    await appendGoodsFundLog({
+        openid,
+        user_id: claimantUser._id || claimantUser.id || claimantUser._legacy_id || openid,
+        type: 'station_procurement',
+        amount: -totalCost,
+        order_no: procurement.procurement_no,
+        description: `门店备货采购 ${procurement.procurement_no}`
+    });
+    return {
+        procurement_no: procurement.procurement_no,
+        status: procurement.status,
+        total_cost: totalCost,
+        station_name: station.name
+    };
+}
+
+const REVIEW_MARKER = '[已评价]';
+
+function hasReviewRemark(remark) {
+    return pickString(remark).includes(REVIEW_MARKER);
+}
+
+function collectReviewLookupTokens(review = {}) {
+    return [...new Set([
+        review && review.order_id,
+        review && review.order_no
+    ].map((value) => pickString(value)).filter(Boolean))];
+}
+
+function collectOrderReviewLookupTokens(order = {}) {
+    return [...new Set([
+        order && order._id,
+        order && order.id,
+        order && order._legacy_id,
+        order && order.order_no
+    ].map((value) => pickString(value)).filter(Boolean))];
+}
+
+function isOrderReviewed(order = {}, reviewLookup) {
+    if (order.reviewed === true || order.reviewed_at || hasReviewRemark(order.remark)) return true;
+    if (!reviewLookup || typeof reviewLookup.has !== 'function') return false;
+    return collectOrderReviewLookupTokens(order).some((token) => reviewLookup.has(token));
+}
+
+function isPendingReviewOrder(order = {}, reviewLookup) {
+    return pickString(order && order.status) === 'completed' && !isOrderReviewed(order, reviewLookup);
+}
+
+async function loadUserReviewLookup(openid) {
+    if (!openid) return new Set();
+    const reviews = await getAllRecords(db, 'reviews', { openid }).catch(() => []);
+    const reviewLookup = new Set();
+    (reviews || []).forEach((review) => {
+        collectReviewLookupTokens(review).forEach((token) => reviewLookup.add(token));
+    });
+    return reviewLookup;
+}
+
+async function getDashboardOrderStats(openid) {
+    const statuses = ['pending_payment', 'pending_group', 'paid', 'shipped'];
+    const counts = {};
+
+    await Promise.all(statuses.map(async (status) => {
+        const res = await db.collection('orders').where({ openid, status }).count().catch(() => ({ total: 0 }));
+        counts[status] = res.total || 0;
+    }));
+
+    const [completedOrders, refundRes, reviewLookup] = await Promise.all([
+        getAllRecords(db, 'orders', { openid, status: 'completed' }).catch(() => []),
+        db.collection('refunds')
+            .where({ openid, status: _.in(['pending', 'approved', 'processing']) })
+            .count()
+            .catch(() => ({ total: 0 })),
+        loadUserReviewLookup(openid)
+    ]);
+
+    return {
+        pending: counts.pending_payment || 0,
+        paid: (counts.paid || 0) + (counts.pending_group || 0),
+        shipped: counts.shipped || 0,
+        pendingReview: (completedOrders || []).filter((order) => isPendingReviewOrder(order, reviewLookup)).length,
+        refund: refundRes.total || 0
+    };
+}
+
+function isCouponExpired(coupon = {}) {
+    const exp = coupon && (coupon.expire_at || coupon.expires_at || coupon.end_at || coupon.valid_until);
+    if (!exp) return false;
+    const ts = new Date(exp).getTime();
+    return Number.isFinite(ts) && ts <= Date.now();
+}
+
+async function countUnreadNotifications(openid) {
+    const res = await db.collection('notifications')
+        .where({ openid, is_read: false })
+        .count()
+        .catch(() => ({ total: 0 }));
+    return Number(res.total || 0);
+}
+
+async function buildDashboardAssetRow(openid) {
+    const [coupons, pointsAccount] = await Promise.all([
+        withTransientDbReadRetry(
+            () => userCoupons.listCoupons(openid, 'unused'),
+            { action: 'dashboardBootstrap.assetRow.coupons', openid }
+        ).catch(() => []),
+        withTransientDbReadRetry(
+            () => userWallet.pointsAccount(openid),
+            { action: 'dashboardBootstrap.assetRow.points', openid }
+        ).catch(() => ({}))
+    ]);
+
+    const validCoupons = (Array.isArray(coupons) ? coupons : []).filter((coupon) => !isCouponExpired(coupon));
+    return {
+        unusedCouponCount: validCoupons.length,
+        pointsBalance: toNum(
+            pointsAccount.balance_points != null
+                ? pointsAccount.balance_points
+                : resolvePointsValue(pointsAccount),
+            0
+        )
+    };
+}
+
+async function buildDashboardFavoritePreview(openid) {
+    const favorites = await userFavorites.getFavorites(openid, {}).catch(() => []);
+    const list = Array.isArray(favorites) ? favorites : [];
+    const image = list[0] && (list[0].image || list[0].product_image) ? (list[0].image || list[0].product_image) : '';
+    return {
+        count: list.length,
+        sub: list.length ? `${list.length}件收藏宝贝` : '暂无收藏',
+        image,
+        hasImage: !!image
+    };
+}
+
+async function buildDashboardDistributionCard(openid) {
+    const user = await findUserByOpenid(openid).catch(() => null);
+    const walletInfo = await userWallet.getWalletInfo(openid).catch(() => ({}));
+    const team = user ? await getDirectMembers(user).catch(() => []) : [];
+    const goodsFundBalance = walletInfo.goods_fund_balance != null
+        ? walletInfo.goods_fund_balance
+        : resolveGoodsFundBalance(user || {});
+    const commissionBalance = walletInfo.commission_balance != null
+        ? walletInfo.commission_balance
+        : (walletInfo.balance != null ? walletInfo.balance : 0);
+    const frozenAmount = walletInfo.commission && walletInfo.commission.frozen != null
+        ? walletInfo.commission.frozen
+        : 0;
+    const roleLevel = resolveRoleLevel(user || {});
+    const roleName = resolveRoleName(user || {});
+
+    return {
+        balance: String(Math.trunc(toNum(goodsFundBalance, 0))),
+        commissionBalance: String(Math.trunc(toNum(commissionBalance, 0))),
+        frozenAmount: toNum(frozenAmount, 0).toFixed(2),
+        teamCount: Array.isArray(team) ? team.length : 0,
+        roleLevel,
+        roleName,
+        isAgent: roleLevel >= 2
+    };
+}
+
+async function buildDashboardPickupScopeLight(openid) {
+    const scope = await getPickupVerifyScope(openid).catch(() => ({
+        hasVerifyAccess: false,
+        stations: [],
+        stationCount: 0
+    }));
+    const stations = Array.isArray(scope.stations) ? scope.stations : [];
+    const managerStations = stations.filter((item) => pickString(item.my_role) === 'manager');
+
+    return {
+        hasVerifyAccess: !!scope.hasVerifyAccess,
+        isStoreManager: managerStations.length > 0,
+        stationCount: Number(scope.stationCount || stations.length || 0),
+        stationName: managerStations[0] && managerStations[0].name ? managerStations[0].name : ''
+    };
+}
+
+async function buildDashboardBootstrapPayload(openid) {
+    const [
+        orderStats,
+        notificationsCount,
+        assetRow,
+        favoritePreview,
+        distributionCard,
+        pickupScopeLight
+    ] = await Promise.all([
+        getDashboardOrderStats(openid).catch(() => ({
+            pending: 0,
+            paid: 0,
+            shipped: 0,
+            pendingReview: 0,
+            refund: 0
+        })),
+        countUnreadNotifications(openid).catch(() => 0),
+        buildDashboardAssetRow(openid).catch(() => ({
+            unusedCouponCount: 0,
+            pointsBalance: 0
+        })),
+        buildDashboardFavoritePreview(openid).catch(() => ({
+            count: 0,
+            sub: '暂无收藏',
+            image: '',
+            hasImage: false
+        })),
+        buildDashboardDistributionCard(openid).catch(() => ({
+            balance: '0',
+            commissionBalance: '0',
+            frozenAmount: '0.00',
+            teamCount: 0,
+            roleLevel: 0,
+            roleName: DEFAULT_ROLE_NAMES[0],
+            isAgent: false
+        })),
+        buildDashboardPickupScopeLight(openid).catch(() => ({
+            hasVerifyAccess: false,
+            isStoreManager: false,
+            stationCount: 0,
+            stationName: ''
+        }))
+    ]);
+
+    return {
+        orderStats,
+        notificationsCount,
+        assetRow,
+        quadPreview: {
+            favorite: favoritePreview,
+            footprint: {
+                count: 0,
+                sub: '看过的商品',
+                image: '',
+                hasImage: false
+            }
+        },
+        distributionCard,
+        pickupScopeLight
     };
 }
 
@@ -659,10 +1480,10 @@ const handleAction = {
         if (!user) throw notFound('用户不存在');
         const config = await loadMembershipConfig();
         const growthTiers = normalizeGrowthTiers(config.growth_tiers);
-        const points = toNum(user.points || user.growth_value, 0);
-        const tier = calculateTier(points, growthTiers.length ? growthTiers : null);
+        const growthValue = resolveGrowthValue(user);
+        const tier = calculateTier(growthValue, growthTiers.length ? growthTiers : null);
         return success({
-            points,
+            growth_value: growthValue,
             tier: tier.level,
             nextTierPoints: tier.nextThreshold,
             progress: tier.pointsNeeded
@@ -676,14 +1497,16 @@ const handleAction = {
         const config = await loadMembershipConfig();
         const growthTiers = normalizeGrowthTiers(config.growth_tiers);
         const memberLevels = normalizeMemberLevels(config.member_levels);
-        const points = toNum(user.points || user.growth_value, 0);
-        const tier = calculateTier(points, growthTiers.length ? growthTiers : null);
+        const growthValue = resolveGrowthValue(user);
+        const points = resolvePointsValue(user);
+        const tier = calculateTier(growthValue, growthTiers.length ? growthTiers : null);
         const roleLevel = toNum(user.role_level, 0);
         const roleLevelConfig = memberLevels.find((item) => Number(item.level) === roleLevel);
         return success({
             current_level: roleLevel,
             current_name: user.role_name || roleLevelConfig?.name || 'VIP用户',
             points,
+            growth_value: growthValue,
             next_level: tier.nextLevel,
             next_level_points: tier.nextThreshold,
             progress: tier.pointsNeeded,
@@ -832,6 +1655,10 @@ const handleAction = {
     'listDepositOrders': asyncHandler(async (openid) => {
         const orders = await userDepositOrders.listDepositOrders(openid);
         return success({ list: orders });
+    }),
+
+    'dashboardBootstrap': asyncHandler(async (openid) => {
+        return success(await buildDashboardBootstrapPayload(openid));
     }),
 
     'claimWelcomeCoupons': asyncHandler(async (openid) => {
@@ -1015,21 +1842,17 @@ const handleAction = {
         return success({ success: true, id: result._id, message: '申请已提交' });
     }),
 
-    'getPreferences': asyncHandler(async (openid) => {
-        const user = await userProfile.getProfile(openid);
-        if (!user) throw notFound('用户不存在');
-        return success(user.preferences || {});
-    }),
-
-    'submitPreferences': asyncHandler(async (openid, params) => {
-        await db.collection('users').where({ openid }).update({
-            data: { preferences: params, updated_at: db.serverDate() },
-        });
-        return success({ success: true });
-    }),
-
     'applyInitialPassword': asyncHandler(async (openid, params) => {
-        throw badRequest('该功能暂未开放');
+        return success(await portalPassword.applyInitialPassword(db, openid));
+    }),
+
+    'changePortalPassword': asyncHandler(async (openid, params) => {
+        return success(await portalPassword.changePortalPassword(
+            db,
+            openid,
+            params.current_password || params.old_password,
+            params.new_password || params.password
+        ));
     }),
 
     'listStations': asyncHandler(async (openid, params) => {
@@ -1043,13 +1866,47 @@ const handleAction = {
             has_verify_access: scope.hasVerifyAccess,
             stations: scope.stations,
             station_count: scope.stationCount,
-            requires_station_selection: scope.requiresStationSelection
+            requires_station_selection: scope.requiresStationSelection,
+            manager_station_count: scope.managerStationCount || 0
         });
     }),
 
+    'storeManagerWorkbench': asyncHandler(async (openid) => {
+        return success(await buildStoreManagerWorkbench(openid));
+    }),
+
+    'storeManagerCreateProcurement': asyncHandler(async (openid, params) => {
+        return success(await createStoreManagerProcurement(openid, params));
+    }),
+
     'pickupOptions': asyncHandler(async (openid, params) => {
-        const res = await getAllRecords(db, 'stations', { status: 'active' }).catch(() => []);
-        return success({ list: (res || []).map(normalizeStation).filter((row) => Number(row.is_pickup_point ?? row.pickup_enabled ?? 1) === 1) });
+        const [stationsRes, stockRows] = await Promise.all([
+            getAllRecords(db, 'stations', { status: 'active' }).catch(() => []),
+            getAllRecords(db, 'station_sku_stocks').catch(() => [])
+        ]);
+        const requestedItems = parsePickupItemsParam(params.items);
+        const sortedStations = sortStationsByPickupPreference(
+            (stationsRes || [])
+                .map(normalizeStation)
+                .filter((row) => Number(row.is_pickup_point ?? row.pickup_enabled ?? 1) === 1),
+            {
+                lat: params.lat,
+                lng: params.lng,
+                sortCity: params.sort_city
+            }
+        );
+        const list = sortedStations
+            .map((station) => {
+                const availability = summarizeStationStockForItems(stockRows || [], station.id, requestedItems);
+                return {
+                    ...station,
+                    stock_status: availability.stock_status,
+                    stock_status_text: availability.stock_status_text,
+                    selectable: requestedItems.length ? availability.selectable : true
+                };
+            })
+            .filter((station) => (requestedItems.length ? station.selectable : true));
+        return success({ list });
     }),
 
     'regionFromPoint': asyncHandler(async (openid, params) => {
@@ -1061,9 +1918,6 @@ const handleAction = {
         return success(await reverseGeocode(lat, lng));
     }),
 
-    'listTickets': asyncHandler(async (openid, params) => {
-        return success({ list: [] });
-    }),
 };
 
 // 别名处理

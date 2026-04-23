@@ -87,6 +87,11 @@ const Product = sequelize.define('Product', {
         allowNull: true,
         comment: '代理价 ¥150'
     },
+    default_sku_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: '默认SKU ID（小程序规格展示与预选真相源）'
+    },
     cost_price: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,

@@ -9,7 +9,7 @@ const {
 const {
     success, badRequest, serverError
 } = require('./shared/response');
-const { getAllRecords } = require('./shared/utils');
+const { getAllRecords, toNumber } = require('./shared/utils');
 
 const db = cloud.database();
 const _ = db.command;
@@ -108,9 +108,17 @@ function isTemporarySignedAsset(value) {
 function pickAssetRef(source = {}) {
     if (!source || typeof source !== 'object') return pickString(source);
     const fileId = pickString(source.file_id || source.fileId);
-    const direct = pickString(source.image_url || source.url || source.image || source.cover_image || source.coverImage);
+    const direct = pickString(
+        source.image_url
+        || source.url
+        || source.image
+        || source.cover_image
+        || source.coverImage
+        || toArray(source.images)[0]
+        || toArray(source.preview_images)[0]
+        || toArray(source.previewImages)[0]
+    );
     if (fileId) return fileId;
-    if (isTemporarySignedAsset(direct)) return '';
     return direct;
 }
 
@@ -157,8 +165,37 @@ function buildResolvedAssetUrl(record = {}, resolvedMap = new Map()) {
         if (resolved) return resolved;
     }
     const fallback = pickAssetRef(record);
-    if (!isHttpAsset(fallback) || isTemporarySignedAsset(fallback)) return '';
+    if (!isHttpAsset(fallback)) return '';
     return fallback;
+}
+
+function normalizeLotteryPrizeType(value) {
+    const raw = pickString(value || 'miss').toLowerCase();
+    if (raw === 'point') return 'points';
+    if (['miss', 'points', 'coupon', 'goods_fund', 'physical', 'mystery'].includes(raw)) return raw;
+    return 'miss';
+}
+
+function getLotteryPrizeVisual(type = 'miss') {
+    return {
+        miss: { emoji: '🍀', badge: '好运签', theme: '#6B7280', accent: '#D1D5DB' },
+        points: { emoji: '⭐', badge: '积分奖', theme: '#2563EB', accent: '#93C5FD' },
+        coupon: { emoji: '🎫', badge: '优惠券', theme: '#10B981', accent: '#6EE7B7' },
+        goods_fund: { emoji: '💰', badge: '货款奖', theme: '#0F766E', accent: '#5EEAD4' },
+        physical: { emoji: '🎁', badge: '实物奖', theme: '#F59E0B', accent: '#FDE68A' },
+        mystery: { emoji: '✨', badge: '神秘大奖', theme: '#7C3AED', accent: '#C4B5FD' }
+    }[type] || { emoji: '🎁', badge: '奖品', theme: '#6B7280', accent: '#D1D5DB' };
+}
+
+function formatLotteryPrizeValue(row = {}, type = 'miss') {
+    const prizeValue = toNumber(row.prize_value != null ? row.prize_value : row.value, 0);
+    const couponAmount = toNumber(row.coupon_amount != null ? row.coupon_amount : prizeValue, 0);
+    if (type === 'points' && prizeValue > 0) return `${Math.floor(prizeValue)} 积分`;
+    if (type === 'coupon' && couponAmount > 0) return `${couponAmount} 元券`;
+    if (type === 'goods_fund' && prizeValue > 0) return `¥${prizeValue} 货款`;
+    if (type === 'physical') return '实物礼品';
+    if (type === 'mystery') return '人工兑奖';
+    return '试试下一次好运';
 }
 
 function pickBannerProductId(item = {}) {
@@ -179,11 +216,28 @@ const ACTIVE_BANNER_STATUS_CONDITIONS = [
     { is_active: 1 },
     { is_active: '1' }
 ];
+const ACTIVE_STATUS_CONDITIONS = [
+    { status: true },
+    { status: 1 },
+    { status: '1' },
+    { status: 'active' },
+    { status: 'enabled' },
+    { status: 'on_sale' },
+    { is_active: true },
+    { is_active: 1 },
+    { is_active: '1' }
+];
 
 function buildActiveBannerWhere(position = '') {
     const activeCondition = _.or(ACTIVE_BANNER_STATUS_CONDITIONS);
     if (!position) return activeCondition;
     return _.and([activeCondition, { position }]);
+}
+
+function buildActiveStatusWhere(extra = null) {
+    const activeCondition = _.or(ACTIVE_STATUS_CONDITIONS);
+    if (!extra || typeof extra !== 'object') return activeCondition;
+    return _.and([activeCondition, extra]);
 }
 
 function bannerFieldProjection() {
@@ -416,6 +470,13 @@ function isTruthyActiveFlag(value, fallback = true) {
     return fallback;
 }
 
+function isMallVisibleProduct(product = {}) {
+    if (!product || typeof product !== 'object') return false;
+    const active = isTruthyActiveFlag(product.status ?? product.is_active ?? product.enabled, true);
+    if (!active) return false;
+    return !(product.visible_in_mall === false || product.visible_in_mall === 0 || product.visible_in_mall === '0');
+}
+
 function boardLookupKeys(board) {
     return uniqueValues([
         board && board.id,
@@ -464,7 +525,7 @@ async function loadBoardMapWithProducts() {
             if (!boardKey) return;
             if (!groupedProducts[boardKey]) groupedProducts[boardKey] = [];
             const product = productMap[String(row.product_id)] || null;
-            if (!product) return;
+            if (!product || !isMallVisibleProduct(product)) return;
             groupedProducts[boardKey].push({
                 ...product,
                 board_relation_id: row.id || row._id,
@@ -580,9 +641,9 @@ async function getActivityLinksConfigValue() {
 function normalizeBrandNewsCategoryKey(value, fallback = 'latest_activity') {
     const raw = pickString(value).toLowerCase().replace(/[\s-]+/g, '_');
     if (!raw) return fallback;
-    if (['latest_activity', 'latest', 'activity', 'activities', 'news', 'newest'].includes(raw)) return 'latest_activity';
-    if (['industry_frontier', 'industry', 'frontier', 'trend'].includes(raw)) return 'industry_frontier';
-    if (['mall_notice', 'notice', 'notices', 'announcement', 'announcements'].includes(raw)) return 'mall_notice';
+    if (['latest_activity', 'latest', 'activity', 'activities', 'news', 'newest', '最新活动'].includes(raw)) return 'latest_activity';
+    if (['industry_frontier', 'industry', 'frontier', 'trend', '行业前沿'].includes(raw)) return 'industry_frontier';
+    if (['mall_notice', 'notice', 'notices', 'announcement', 'announcements', '商城公告'].includes(raw)) return 'mall_notice';
     return fallback;
 }
 
@@ -637,7 +698,10 @@ function sortLimitedSaleSlots(rows = []) {
 
 function parseDateTs(value) {
     if (!value) return 0;
-    const ts = new Date(value).getTime();
+    const raw = pickString(value).trim();
+    if (!raw) return 0;
+    const normalized = /(?:z|[+-]\d{2}:\d{2})$/i.test(raw) ? raw : `${raw}+08:00`;
+    const ts = new Date(normalized).getTime();
     return Number.isFinite(ts) ? ts : 0;
 }
 
@@ -839,6 +903,23 @@ async function getPopupAdConfig() {
     return normalizeSingleAssetRecord(normalized);
 }
 
+async function getPageLayoutByKey(pageKey = '') {
+    const normalizedPageKey = pickString(pageKey);
+    if (!normalizedPageKey) return null;
+    const res = await db.collection('page_layouts')
+        .where(buildActiveStatusWhere({ page_key: normalizedPageKey }))
+        .field({
+            layout_schema: true,
+            sections: true,
+            page_key: true
+        })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    const row = res.data && res.data[0] ? res.data[0] : null;
+    return row ? (row.layout_schema || row.sections || row) : null;
+}
+
 async function findOneByAnyId(collectionName, rawId) {
     if (!hasValue(rawId)) return null;
     const id = String(rawId);
@@ -917,7 +998,7 @@ const handleAction = {
                     .field(bannerFieldProjection())
                     .get().catch(() => ({ data: [] })),
                 db.collection('page_layouts')
-                    .where({ page_key: 'home', status: true })
+                    .where(buildActiveStatusWhere({ page_key: 'home' }))
                     .field({
                         layout_schema: true,
                         sections: true
@@ -925,7 +1006,7 @@ const handleAction = {
                     .limit(1)
                     .get().catch(() => ({ data: [] })),
                 db.collection('products')
-                    .where({ status: true })
+                    .where(buildActiveStatusWhere())
                     .orderBy('sales_count', 'desc')
                     .field({
                         _id: true,
@@ -954,16 +1035,18 @@ const handleAction = {
 
             const miniProgramConfig = configContract.normalizeMiniProgramConfig(miniProgramRaw || {});
             const layout = layoutsRes.data && layoutsRes.data[0] ? layoutsRes.data[0] : null;
-            const hotProducts = (productsRes.data || []).map((p) => ({
-                _id: p._id,
-                id: p.id || p._legacy_id || p._id,
-                name: p.name,
-                images: p.images || [],
-                min_price: p.min_price || p.retail_price,
-                retail_price: p.retail_price || p.min_price,
-                original_price: p.original_price || p.market_price,
-                sales_count: p.sales_count || p.purchase_count || 0,
-            }));
+            const hotProducts = (productsRes.data || [])
+                .filter((item) => isMallVisibleProduct(item))
+                .map((p) => ({
+                    _id: p._id,
+                    id: p.id || p._legacy_id || p._id,
+                    name: p.name,
+                    images: p.images || [],
+                    min_price: p.min_price || p.retail_price,
+                    retail_price: p.retail_price || p.min_price,
+                    original_price: p.original_price || p.market_price,
+                    sales_count: p.sales_count || p.purchase_count || 0,
+                }));
             const payload = configContract.normalizeHomeContentPayload({
                 miniProgramConfig,
                 homepageSettings,
@@ -980,6 +1063,31 @@ const handleAction = {
             });
             return resolveHomeContentAssets(payload);
         });
+        const result = success(cachedPayload.value);
+        result.__perf = { cache_hit: cachedPayload.cacheHit };
+        return result;
+    }),
+
+    'pageContent': asyncHandler(async (params) => {
+        const pageKey = pickString(params.page_key || params.pageKey);
+        if (!pageKey) throw badRequest('缺少 page_key');
+        if (pageKey === 'home') throw badRequest('首页请使用 /page-content/home');
+
+        const cachedPayload = await buildCachedPayload(`pageContent:${pageKey}`, async () => {
+            const layout = await getPageLayoutByKey(pageKey);
+            const resources = {};
+
+            if (pageKey === 'activity') {
+                resources.activity_links = await getActivityLinksConfigValue();
+            }
+
+            return {
+                page_key: pageKey,
+                layout,
+                resources
+            };
+        });
+
         const result = success(cachedPayload.value);
         result.__perf = { cache_hit: cachedPayload.cacheHit };
         return result;
@@ -1026,7 +1134,7 @@ const handleAction = {
     // ===== 活动列表 =====
     'activities': asyncHandler(async (params) => {
         const res = await db.collection('activities')
-            .where({ status: true })
+            .where(buildActiveStatusWhere())
             .orderBy('created_at', 'desc')
             .limit(20)
             .get().catch(() => ({ data: [] }));
@@ -1036,7 +1144,7 @@ const handleAction = {
     // ===== 拼团 =====
     'groups': asyncHandler(async (params) => {
         const res = await db.collection('group_activities')
-            .where({ status: true })
+            .where(buildActiveStatusWhere())
             .orderBy('created_at', 'desc')
             .limit(20)
             .get().catch(() => ({ data: [] }));
@@ -1055,7 +1163,7 @@ const handleAction = {
 
     'groupActivities': asyncHandler(async (params) => {
         const res = await db.collection('group_activities')
-            .where({ status: true })
+            .where(buildActiveStatusWhere())
             .orderBy('created_at', 'desc')
             .limit(20)
             .get().catch(() => ({ data: [] }));
@@ -1066,7 +1174,7 @@ const handleAction = {
     // ===== 砍价 =====
     'slashList': asyncHandler(async (params) => {
         const res = await db.collection('slash_activities')
-            .where({ status: true })
+            .where(buildActiveStatusWhere())
             .orderBy('created_at', 'desc')
             .limit(20)
             .get().catch(() => ({ data: [] }));
@@ -1085,7 +1193,7 @@ const handleAction = {
 
     'slashActivities': asyncHandler(async (params) => {
         const res = await db.collection('slash_activities')
-            .where({ status: true })
+            .where(buildActiveStatusWhere())
             .orderBy('created_at', 'desc')
             .limit(20)
             .get().catch(() => ({ data: [] }));
@@ -1113,11 +1221,36 @@ const handleAction = {
 
     'lotteryPrizes': asyncHandler(async (params) => {
         const res = await db.collection('lottery_prizes')
-            .where({ is_active: true })
+            .where(_.or([
+                { is_active: true },
+                { is_active: 1 },
+                { status: true },
+                { status: 1 }
+            ]))
             .orderBy('sort_order', 'asc')
             .limit(20)
             .get().catch(() => ({ data: [] }));
-        return success({ list: res.data || [] });
+        const rows = Array.isArray(res.data) ? res.data : [];
+        const resolvedMap = await batchResolveManagedFileUrls(rows.map((item) => pickFileId(item)).filter(Boolean));
+        const list = rows.map((row) => {
+            const type = normalizeLotteryPrizeType(row.type);
+            const visual = getLotteryPrizeVisual(type);
+            const imageUrl = buildResolvedAssetUrl(row, resolvedMap);
+            return {
+                ...row,
+                id: row.id || row._legacy_id || row._id,
+                type,
+                image_url: imageUrl,
+                image: imageUrl,
+                cover_image: imageUrl,
+                display_emoji: pickString(row.display_emoji || visual.emoji),
+                badge_text: pickString(row.badge_text || visual.badge),
+                theme_color: pickString(row.theme_color || visual.theme),
+                accent_color: pickString(row.accent_color || visual.accent),
+                display_value: formatLotteryPrizeValue(row, type)
+            };
+        });
+        return success({ list });
     }),
 
     'lotteryRecords': asyncHandler(async (params) => {

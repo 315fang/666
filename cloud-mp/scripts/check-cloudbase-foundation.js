@@ -3,6 +3,8 @@ const path = require('path');
 
 const projectRoot = path.resolve(__dirname, '..');
 const workspaceRoot = path.resolve(projectRoot, '..');
+const seedRoot = path.join(projectRoot, 'cloudbase-seed');
+const importRoot = path.join(projectRoot, 'cloudbase-import');
 
 function exists(targetPath) {
   return fs.existsSync(targetPath);
@@ -28,6 +30,7 @@ function run() {
   const docsPath = path.join(projectRoot, 'docs', 'CLOUDBASE_MIGRATION_PROGRESS.md');
   const adminUiPackagePath = path.join(projectRoot, 'admin-ui', 'package.json');
   const migrationMatrixPath = path.join(projectRoot, 'docs', 'CLOUD_MP_MIGRATION_MATRIX.md');
+  const collectionContractPath = path.join(projectRoot, 'config', 'cloudbase-collection-contract.json');
 
   assert(checks, exists(projectConfigPath), 'project.config.json exists', projectConfigPath);
   assert(checks, exists(packageJsonPath), 'cloud-mp package.json exists', packageJsonPath);
@@ -38,6 +41,7 @@ function run() {
   assert(checks, exists(docsPath), 'migration progress doc exists', docsPath);
   assert(checks, exists(adminUiPackagePath), 'cloud-mp admin-ui exists', adminUiPackagePath);
   assert(checks, exists(migrationMatrixPath), 'migration matrix exists', migrationMatrixPath);
+  assert(checks, exists(collectionContractPath), 'CloudBase collection contract exists', collectionContractPath);
 
   if (exists(projectConfigPath)) {
     const projectConfig = readJson(projectConfigPath);
@@ -64,6 +68,21 @@ function run() {
     const fnIndexPath = path.join(projectRoot, 'cloudfunctions', name, 'index.js');
     assert(checks, exists(fnIndexPath), `cloudfunction ${name} exists`, fnIndexPath);
   });
+
+  if (exists(collectionContractPath)) {
+    const contract = readJson(collectionContractPath);
+    const defaultCollections = new Set((Array.isArray(contract.groups) ? contract.groups : [])
+      .filter((group) => group.createByDefault !== false)
+      .flatMap((group) => Array.isArray(group.collections) ? group.collections : []));
+    [
+      'product_bundles',
+      'lottery_claims'
+    ].forEach((name) => {
+      assert(checks, defaultCollections.has(name), `default collection ${name} in contract`, name);
+      assert(checks, exists(path.join(seedRoot, `${name}.json`)), `seed shell ${name} exists`, path.join(seedRoot, `${name}.json`));
+      assert(checks, exists(path.join(importRoot, `${name}.jsonl`)), `import shell ${name} exists`, path.join(importRoot, `${name}.jsonl`));
+    });
+  }
 
   const failures = checks.filter((item) => !item.ok);
   const report = {

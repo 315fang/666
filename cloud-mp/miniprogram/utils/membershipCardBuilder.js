@@ -49,7 +49,7 @@ function buildConsumeCardSummary({
         growthValue: normalizeNumber(growthValue, 0),
         progressText,
         progressPercent: Math.max(0, Math.min(100, normalizeNumber(barPercent, 0))),
-        benefitText: '成长值用于解锁积分权益与等级；积分按规则抵扣或兑换'
+        benefitText: '成长值用于解锁会员等级与成长会员权益；并按规则升级'
     };
 }
 
@@ -66,7 +66,7 @@ function buildAgentCardSummary({
     );
     const hasLevels = Array.isArray(memberLevels) && memberLevels.length > 0;
 
-    let statusText = '团队与积分权益以当前身份为准';
+    let statusText = '团队与成长会员权益以当前身份为准';
     if (!hasLevels) {
         statusText = '权益信息暂未加载完成，请稍后重试';
     } else if (isAgent) {
@@ -93,22 +93,22 @@ function getMembershipCardMeta({
             title: '代理权益说明',
             desc: normalizeText(
                 agentCardSummary && agentCardSummary.statusText,
-                '团队与积分权益以当前身份为准'
+                '团队与成长会员权益以当前身份为准'
             ) === '权益信息暂未加载完成，请稍后重试'
-                ? '团队与积分权益以当前身份为准'
-                : '团队与积分权益以当前身份为准'
+                ? '团队与成长会员权益以当前身份为准'
+                : '团队与成长会员权益以当前身份为准'
         };
     }
 
     const consumeDesc = normalizeText(
         consumeCardSummary && consumeCardSummary.progressText,
-        '成长值用于积分权益与等级升级'
+        '成长值用于会员等级与成长会员权益升级'
     );
     return {
         title: '成长会员权益',
         desc: consumeDesc === '已达到最高等级'
-            ? '成长值用于积分权益与等级升级'
-            : '成长值用于积分权益与等级升级'
+            ? '成长值用于会员等级与成长会员权益升级'
+            : '成长值用于会员等级与成长会员权益升级'
     };
 }
 

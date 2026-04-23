@@ -1,5 +1,6 @@
 // pages/wallet/index.js
 const { get, post } = require('../../utils/request');
+const { promptPortalPassword } = require('../../utils/portalPassword');
 const app = getApp();
 
 Page({
@@ -22,7 +23,16 @@ Page({
         // 提现弹窗
         showWithdraw: false,
         withdrawAmount: '',
+        withdrawFee: '0.00',
+        withdrawActual: '0.00',
         withdrawing: false,
+        withdrawRules: {
+            min_amount: 100,
+            fee_rate_percent: 3,
+            fee_cap_max: 100,
+            fee_exempt_role_level: 4,
+            ruleText: '最低¥100.00起提，手续费3.00%（封顶¥100.00）'
+        },
         // 代理商货款入口
         isAgent: false,
         goodsFundBalance: '0.00'
@@ -35,6 +45,7 @@ Page({
     },
 
     onShow() {
+        this.loadWithdrawalRules();
         this.loadWalletInfo();
         this.loadLogs();
         this.loadGoodsFund();
@@ -131,7 +142,9 @@ Page({
             'frozen': '冻结中', 'pending': '预计入账',
             'pending_approval': '审核中',
             'approved': '待打款',
+            'processing': '打款中',
             'settled': '已到账', 'completed': '已到账',
+            'failed': '打款失败',
             'cancelled': '已取消', 'rejected': '已驳回'
         };
         return map[status] || status;
@@ -142,14 +155,16 @@ Page({
             'frozen': 'log-status-frozen', 'pending': 'log-status-pending_approval',
             'pending_approval': 'log-status-pending_approval',
             'approved': 'log-status-approved',
+            'processing': 'log-status-pending_approval',
             'settled': 'log-status-settled', 'completed': 'log-status-settled',
+            'failed': 'log-status-cancelled',
             'cancelled': 'log-status-cancelled'
         };
         return map[status] || '';
     },
 
     onWithdrawInput(e) {
-        this.setData({ withdrawAmount: e.detail.value });
+        this.recalculateWithdrawPreview(e.detail.value);
     },
 
     onWithdrawTap() {
@@ -158,7 +173,7 @@ Page({
             wx.showToast({ title: '暂无可提现佣金', icon: 'none' });
             return;
         }
-        this.setData({ showWithdraw: true, withdrawAmount: '' });
+        this.setData({ showWithdraw: true, withdrawAmount: '', withdrawFee: '0.00', withdrawActual: '0.00' });
     },
 
     hideWithdraw() {
@@ -173,15 +188,27 @@ Page({
             wx.showToast({ title: '请输入提现金额', icon: 'none' });
             return;
         }
+        const minAmount = Number(this.data.withdrawRules?.min_amount || 0);
+        if (minAmount > 0 && amount < minAmount) {
+            wx.showToast({ title: `最低提现¥${minAmount.toFixed(2)}`, icon: 'none' });
+            return;
+        }
         const avail = parseFloat(this.data.balance);
         if (amount > avail) {
             wx.showToast({ title: `余额不足（可提现 ¥${avail.toFixed(2)}）`, icon: 'none' });
             return;
         }
+        const readyForLargeWithdraw = await this.ensureLargeWithdrawRealName(amount);
+        if (!readyForLargeWithdraw) return;
+        const portalPassword = await promptPortalPassword({
+            title: '提现验证',
+            placeholderText: '请输入6位数字业务密码'
+        });
+        if (!portalPassword) return;
         this.setData({ withdrawing: true });
         wx.showLoading({ title: '申请中...' });
         try {
-            const res = await post('/wallet/withdraw', { amount });
+            const res = await post('/wallet/withdraw', { amount, portal_password: portalPassword });
             wx.hideLoading();
             if (res.code === 0) {
                 this.hideWithdraw();
@@ -199,5 +226,87 @@ Page({
 
     onGoGoodsFund() {
         wx.navigateTo({ url: '/pages/wallet/agent-wallet' });
+    },
+
+    async loadWithdrawalRules() {
+        try {
+            const res = await get('/wallet/withdraw-rules', {}, { showError: false }).catch(() => null);
+            if (res && res.code === 0 && res.data) {
+                const rules = this.normalizeWithdrawalRules(res.data);
+                this.setData({ withdrawRules: rules });
+                if (this.data.withdrawAmount) {
+                    this.recalculateWithdrawPreview(this.data.withdrawAmount, rules);
+                }
+            }
+        } catch (err) {
+            console.warn('[wallet] 加载提现规则失败:', err);
+        }
+    },
+
+    normalizeWithdrawalRules(raw = {}) {
+        const minAmount = Number(raw.min_amount || 100);
+        const feeRatePercent = Number(raw.fee_rate_percent || 0);
+        const feeCapMax = Number(raw.fee_cap_max || 0);
+        const feeExemptRoleLevel = Number(raw.fee_exempt_role_level || 4);
+        return {
+            min_amount: minAmount,
+            fee_rate_percent: feeRatePercent,
+            fee_cap_max: feeCapMax,
+            fee_exempt_role_level: feeExemptRoleLevel,
+            ruleText: this.formatWithdrawalRuleText({ minAmount, feeRatePercent, feeCapMax, feeExemptRoleLevel })
+        };
+    },
+
+    formatWithdrawalRuleText({ minAmount, feeRatePercent, feeCapMax, feeExemptRoleLevel }) {
+        const roleLevel = Number(app.globalData.userInfo?.role_level || app.globalData.userInfo?.distributor_level || 0);
+        if (roleLevel >= feeExemptRoleLevel) {
+            return `最低¥${Number(minAmount || 0).toFixed(2)}起提，当前等级免手续费`;
+        }
+        if (feeRatePercent > 0) {
+            const capText = feeCapMax > 0 ? `（封顶¥${Number(feeCapMax).toFixed(2)}）` : '';
+            return `最低¥${Number(minAmount || 0).toFixed(2)}起提，手续费${Number(feeRatePercent).toFixed(2)}%${capText}`;
+        }
+        return `最低¥${Number(minAmount || 0).toFixed(2)}起提，免手续费`;
+    },
+
+    async ensureLargeWithdrawRealName(amount) {
+        if (Number(amount || 0) < 2000) return true;
+        const realName = String(this.data.userInfo?.real_name || app.globalData.userInfo?.real_name || '').trim();
+        if (realName) return true;
+        return new Promise((resolve) => {
+            wx.showModal({
+                title: '请先补充真实姓名',
+                content: '单笔提现满 2000 元需要提供与你微信实名一致的真实姓名，补充后才能继续提现。',
+                confirmText: '去完善',
+                cancelText: '取消',
+                success: (res) => {
+                    if (res.confirm) {
+                        wx.navigateTo({ url: '/pages/user/edit-profile' });
+                    }
+                    resolve(false);
+                },
+                fail: () => resolve(false)
+            });
+        });
+    },
+
+    recalculateWithdrawPreview(value, rules = this.data.withdrawRules) {
+        const amount = parseFloat(value) || 0;
+        const roleLevel = Number(app.globalData.userInfo?.role_level || app.globalData.userInfo?.distributor_level || 0);
+        const feeRatePercent = Number(rules?.fee_rate_percent || 0);
+        const feeCapMax = Number(rules?.fee_cap_max || 0);
+        const feeExemptRoleLevel = Number(rules?.fee_exempt_role_level || 4);
+        let fee = 0;
+        if (amount > 0 && roleLevel < feeExemptRoleLevel && feeRatePercent > 0) {
+            fee = amount * feeRatePercent / 100;
+            if (feeCapMax > 0) {
+                fee = Math.min(fee, feeCapMax);
+            }
+        }
+        this.setData({
+            withdrawAmount: value,
+            withdrawFee: fee.toFixed(2),
+            withdrawActual: Math.max(0, amount - fee).toFixed(2)
+        });
     }
 });

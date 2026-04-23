@@ -51,6 +51,7 @@ async function toggleFavorite(page) {
         id: pid,
         name: product.name,
         image: product.images && product.images[0] || '',
+        image_ref: product.cover_image || product.file_id || product.image || product.image_url || '',
         price: String(currentPrice || product.displayPrice || '')
     });
     page.setData({ isFavorite: added });

@@ -1,6 +1,9 @@
 const { get, post } = require('../../utils/request');
 const { ErrorHandler } = require('../../utils/errorHandler');
+const { ensureLogin } = require('../../utils/auth');
 const { ensurePrivacyAuthorization } = require('../../utils/privacy');
+const { normalizeLimitedSpotPayload } = require('../../utils/limitedSpot');
+const { promptPortalPassword } = require('../../utils/portalPassword');
 
 function resolveSubmitOrderMessage(error) {
     if (error && error.message
@@ -24,7 +27,10 @@ async function submitOrder(page, app, brandAnimation) {
         exchangeMode,
         exchangeCouponId,
         limitedSpotOrder,
-        limitedSpotPayload
+        limitedSpotSource,
+        limitedSpotPayload,
+        bundleOrder,
+        bundleMeta
     } = page.data;
 
     if (submitting) return;
@@ -46,11 +52,17 @@ async function submitOrder(page, app, brandAnimation) {
         return;
     }
 
+    const normalizedLimitedSpotPayload = limitedSpotOrder
+        ? normalizeLimitedSpotPayload(limitedSpotPayload)
+        : null;
+    if (limitedSpotOrder && !normalizedLimitedSpotPayload) {
+        wx.showToast({ title: '限时商品信息已失效，请返回活动页重新下单', icon: 'none' });
+        return;
+    }
+
     try {
         await ensurePrivacyAuthorization();
-        if (!app.globalData.isLoggedIn) {
-            await app.wxLogin(false);
-        }
+        await ensureLogin();
     } catch (_err) {
         return;
     }
@@ -72,23 +84,43 @@ async function submitOrder(page, app, brandAnimation) {
                 cart_id: item.cart_id || null
             }))
         };
+        if (bundleOrder && bundleMeta && bundleMeta.id) {
+            orderData.bundle_context = {
+                bundle_id: bundleMeta.id,
+                selected_items: orderItems.map((item) => ({
+                    group_key: item.bundle_group_key || '',
+                    product_id: item.product_id,
+                    sku_id: item.sku_id || '',
+                    quantity: item.quantity
+                }))
+            };
+        }
         console.log('[order submit] payload items:', JSON.stringify(orderData.items));
 
         if (page.data.slashNo) orderData.slash_no = page.data.slashNo;
         if (page.data.groupNo) orderData.group_no = page.data.groupNo;
         if (page.data.groupActivityId) orderData.group_activity_id = page.data.groupActivityId;
         if (page.data.orderType) orderData.type = page.data.orderType;
-        if (!exchangeMode && selectedCoupon) {
+        if (!exchangeMode && page.data.allowCoupon !== false && selectedCoupon) {
             orderData.user_coupon_id = selectedCoupon._id != null ? selectedCoupon._id : selectedCoupon.id;
         }
-        if (!exchangeMode && page.data.usePoints && page.data.pointsToUse > 0) {
+        if (!exchangeMode && page.data.allowPoints !== false && page.data.usePoints && page.data.pointsToUse > 0) {
             orderData.points_to_use = page.data.pointsToUse;
         }
 
         // 代理商选择货款支付：直接在创单时扣款，无需跳支付页
         const useGoodsFund = !!(!exchangeMode && page.data.useWallet && page.data.isAgent);
         if (useGoodsFund) {
+            const portalPassword = await promptPortalPassword({
+                title: '货款支付验证',
+                placeholderText: '请输入6位数字业务密码'
+            });
+            if (!portalPassword) {
+                page.setData({ submitting: false });
+                return;
+            }
             orderData.use_goods_fund = true;
+            orderData.portal_password = portalPassword;
         }
         // 清除旧的 localStorage，货款支付不再依赖它做预支付跳转
         wx.removeStorageSync('useWalletPay');
@@ -97,9 +129,23 @@ async function submitOrder(page, app, brandAnimation) {
         if (exchangeMode) {
             orderData.exchange_coupon_id = exchangeCouponId;
         }
-        if (limitedSpotOrder && limitedSpotPayload) {
-            orderData.limited_sale = limitedSpotPayload;
-            orderData.limited_spot = limitedSpotPayload;
+        if (limitedSpotOrder && normalizedLimitedSpotPayload) {
+            const activitySource = limitedSpotSource || normalizedLimitedSpotPayload.source || 'limited_sale';
+            if (activitySource === 'limited_spot') {
+                orderData.limited_spot = {
+                    card_id: normalizedLimitedSpotPayload.card_id,
+                    offer_id: normalizedLimitedSpotPayload.offer_id,
+                    mode: normalizedLimitedSpotPayload.mode,
+                    redeem_points: normalizedLimitedSpotPayload.redeem_points
+                };
+            } else {
+                orderData.limited_sale = {
+                    slot_id: normalizedLimitedSpotPayload.slot_id,
+                    item_id: normalizedLimitedSpotPayload.item_id,
+                    mode: normalizedLimitedSpotPayload.mode,
+                    redeem_points: normalizedLimitedSpotPayload.redeem_points
+                };
+            }
         }
         const res = await post(exchangeMode ? '/orders/exchange' : '/orders', orderData, { showError: false });
 

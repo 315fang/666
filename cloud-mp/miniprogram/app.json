@@ -8,19 +8,19 @@
         "pages/activity/activity",
         "pages/activity/n-invite",
         "pages/activity/brand-news-detail",
+        "pages/activity/flex-bundles",
         "pages/activity/limited-spot",
         "pages/cart/cart",
         "pages/user/user",
         "pages/user/edit-profile",
         "pages/user/favorites-footprints",
         "pages/user/notifications",
-        "pages/user/preferences",
         "pages/user/portal-password",
         "pages/user/customer-service",
         "pages/user/membership-center",
         "pages/user/deposit-orders",
-        "pages/user/ticket-list",
         "pages/product/detail",
+        "pages/product-bundle/detail",
         "pages/search/search",
         "pages/privacy/privacy"
     ],
@@ -75,12 +75,15 @@
             "name": "packageDistribution",
             "pages": [
                 "center",
+                "directed-invites",
+                "directed-invite",
                 "team",
                 "team-member",
                 "invite-poster",
                 "business-center",
                 "stock-logs",
                 "commission-logs",
+                "goods-fund-transfer-history",
                 "withdraw-history",
                 "promotion-progress",
                 "fund-pool"
@@ -106,7 +109,8 @@
             "root": "pages/lottery",
             "name": "packageLottery",
             "pages": [
-                "lottery"
+                "lottery",
+                "claim"
             ]
         },
         {

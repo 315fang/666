@@ -1,2 +1,15 @@
 docs/release/evidence/runtime/*
 !docs/release/evidence/runtime/.gitkeep
+
+# Root-level temporary artifacts and local scratch outputs
+.tmp-*
+.codex_tmp_*
+tmp_*.json
+tmp_*.jpg
+tmp_*.png
+tmp_*.jpeg
+*.tmp-report
+/.tmp-admin-api-node_modules-backup/
+/.tmp-pdf-pages/
+/.tmp-pdf-review/
+/xiufu/

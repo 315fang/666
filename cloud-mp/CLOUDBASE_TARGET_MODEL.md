@@ -7,10 +7,23 @@
 - 管理后台使用 CloudRun 管理服务。
 - CloudBase 文档库只保留一套正式字段模型。
 
-## 正式集合
+## 契约入口
+
+当前集合真相源拆为两层：
+
+- 高层目标说明：本文件
+- 机器可读契约：`config/cloudbase-collection-contract.json`
+- 详细分层说明：`docs/architecture/cloudbase-collection-contract.md`
+
+默认扫描 / 补建 / 差异检查以集合契约 JSON 为准，不再只依赖本文件的简化列表。
+
+## 集合分层
+
+### 正式主集合
 
 - `users`
 - `products`
+- `product_bundles`
 - `skus`
 - `categories`
 - `cart_items`
@@ -20,29 +33,90 @@
 - `commissions`
 - `withdrawals`
 - `configs`
+- `admin_singletons`
+- `admins`
+- `admin_roles`
+- `admin_audit_logs`
 - `banners`
 - `contents`
 - `materials`
 - `material_groups`
-- `admins`
-- `admin_roles`
-- `admin_audit_logs`
-- `admin_singletons` — 管理端运行配置/单例快照
-- `group_activities` — 拼团活动配置
-- `group_orders` — 拼团订单（同 orders 中 order_type='group'）
-- `group_members` — 拼团参与成员
-- `slash_activities` — 砍价活动配置
-- `slash_records` — 砍价记录
-- `slash_helpers` — 砍价助力记录（内嵌于 slash_records.helpers）
-- `activity_links` — 活动链接/版块配置
-- `lottery_configs` — 抽奖配置
-- `lottery_prizes` — 抽奖奖品
-- `lottery_records` — 抽奖记录
-- `stations` — 自提站点
-- `wallet_accounts` — 代理货款账户
-- `wallet_logs` — 货款流水
-- `wallet_recharge_orders` — 充值订单
-- `wallet_recharge_configs` — 充值配置
+- `activity_links`
+- `brand_news`
+- `page_layouts`
+- `group_activities`
+- `group_orders`
+- `group_members`
+- `slash_activities`
+- `slash_records`
+- `slash_helpers`
+- `lottery_configs`
+- `lottery_prizes`
+- `lottery_records`
+- `stations`
+- `station_staff`
+- `wallet_accounts`
+- `wallet_logs`
+- `wallet_recharge_orders`
+- `wallet_recharge_configs`
+
+### 正式流程集合
+
+- `limited_sale_slots`
+- `limited_sale_items`
+- `goods_fund_transfer_applications`
+- `directed_invites`
+- `station_procurement_orders`
+- `station_sku_stocks`
+- `deposit_orders`
+- `deposit_refunds`
+- `coupon_claim_tickets`
+- `lottery_claims`
+- `upgrade_applications`
+- `agent_exit_applications`
+
+### 正式日志集合
+
+- `goods_fund_logs`
+- `point_logs`
+- `promotion_logs`
+- `fund_pool_logs`
+- `station_stock_logs`
+
+### 兼容读取集合
+
+- `app_configs`
+
+说明：
+
+- 当前代码仍有 fallback 读取。
+- 但新的配置真相源仍应优先收口到 `configs` / `admin_singletons`。
+
+### 兼容残留集合
+
+- `branch_agent_stations`
+- `branch_agent_claims`
+
+说明：
+
+- 仍有后台页面和旧流程引用。
+- 不默认作为新功能主模型扩散。
+- 是否保留取决于后续渠道能力收口结果。
+
+## 重复与别名规则
+
+以下组合不要误判为重复：
+
+- `limited_sale_slots` / `limited_sale_items` 与 `activity_links`
+- `goods_fund_transfer_applications` 与 `goods_fund_logs`
+- `station_procurement_orders` / `station_sku_stocks` / `station_stock_logs`
+- `deposit_orders` / `deposit_refunds` / `coupon_claim_tickets` 与普通订单链
+
+以下旧名不再作为默认正式集合创建：
+
+- `pickup_stations` → 统一用 `stations`
+- `admin_logs` → 统一用 `admin_audit_logs`
+- 所有 `*_bak` → 仅视为备份集合
 
 ## 统一规则
 

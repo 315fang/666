@@ -24,6 +24,16 @@ const CONFIG = {
 let privateKeyPem = null;
 let publicKeyPem = null;
 
+function readDownloadedText(result = {}) {
+    if (Buffer.isBuffer(result.fileContent)) return result.fileContent.toString('utf8');
+    if (typeof result.fileContent === 'string') return result.fileContent;
+    if (result.tempFilePath) {
+        const fs = require('fs');
+        return fs.readFileSync(result.tempFilePath, 'utf8');
+    }
+    return '';
+}
+
 /**
  * 加载私钥（从云存储或本地）
  */
@@ -35,8 +45,7 @@ async function loadPrivateKey(cloud) {
         const result = await cloud.downloadFile({
             fileID: 'cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/payment-certs/apiclient_key.pem',
         });
-        const fs = require('fs');
-        const content = fs.readFileSync(result.fileContent || result.tempFilePath, 'utf8');
+        const content = readDownloadedText(result);
         if (content.includes('PRIVATE KEY')) {
             privateKeyPem = content;
             return privateKeyPem;
@@ -71,8 +80,7 @@ async function loadPublicKey(cloud) {
         const result = await cloud.downloadFile({
             fileID: 'cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/payment-certs/wechatpay_pubkey.pem',
         });
-        const fs = require('fs');
-        const content = fs.readFileSync(result.fileContent || result.tempFilePath, 'utf8');
+        const content = readDownloadedText(result);
         if (content.includes('PUBLIC KEY')) {
             publicKeyPem = content;
             return publicKeyPem;

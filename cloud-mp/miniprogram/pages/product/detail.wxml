@@ -39,7 +39,7 @@
         <swiper wx:if="{{product.images && product.images.length}}" class="gallery-swiper" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}" indicator-color="rgba(250,250,249,0.35)" indicator-active-color="#E2C4A0" bindchange="onImageChange">
           <swiper-item class="gallery-slide" wx:for="{{product.images}}" wx:key="*this">
             <view class="gallery-frame">
-              <image src="{{item}}" mode="aspectFill" class="gallery-image" bindtap="onPreviewImage" binderror="onGalleryImageError" data-index="{{index}}"></image>
+              <image src="{{item}}" mode="aspectFit" class="gallery-image" bindtap="onPreviewImage" binderror="onGalleryImageError" data-index="{{index}}"></image>
             </view>
           </swiper-item>
         </swiper>
@@ -104,17 +104,12 @@
         <text class="explosive-notice-text">此商品不参与优惠券及积分抵扣</text>
       </view>
       <view class="explosive-notice" wx:if="{{limitedSpotOffer}}">
-        <text class="explosive-notice-text">{{limitedSpotMode === 'points' ? ((limitedSpotTitle || '限时专享商品') + '：使用活动积分兑换，不参与普通优惠券、积分抵扣和货款支付') : ((limitedSpotTitle || '限时专享商品') + '：按活动专享价购买，不参与普通优惠券、积分抵扣和货款支付')}}</text>
+        <text class="explosive-notice-text">{{limitedSpotMode === 'points' ? ((limitedSpotTitle || '限时专享商品') + '：按活动积分兑换，不参与优惠券、积分抵扣和货款支付') : ((limitedSpotTitle || '限时专享商品') + '：按活动价结算，不参与优惠券、积分抵扣和货款支付')}}</text>
       </view>
       <view class="explosive-notice" wx:if="{{exchangeMode}}">
-        <text class="explosive-notice-text">{{exchangeTitle || '当前商品支持兑换券兑换，下单金额为 0 元。'}}</text>
+        <text class="explosive-notice-text">{{exchangeTitle || '该商品支持兑换券兑换，下单金额为 0 元。'}}</text>
       </view>
       <view class="product-title">{{product.name}}</view>
-      <view class="product-spec-summary" wx:if="{{product.specSummary}}">
-        <text class="spec-summary-label">规格</text>
-        <text class="spec-summary-text">{{product.specSummary}}</text>
-      </view>
-      <text class="product-subtitle">{{product.description || '围绕肤感、功效与礼赠体验进行精心陈列。'}}</text>
     </view>
 
     <view class="purchase-mode-card" wx:if="{{availablePurchaseModes.length > 1}}">
@@ -161,7 +156,6 @@
     <view class="embedded-section" wx:if="{{product.specs && product.specs.length > 0}}">
       <view class="embedded-section-head">
         <text class="embedded-title">规格选择</text>
-        <text class="selected-spec-text {{!selectedSku ? 'spec-unselected' : ''}}">{{selectedSkuText || '请选择规格'}}</text>
       </view>
       <view class="spec-group" wx:for="{{product.specs}}" wx:key="name">
         <view class="spec-title">{{item.name}}</view>
@@ -180,10 +174,29 @@
     </view>
   </view>
 
+  <view class="section-card" wx:if="{{servicePledges.length > 0}}">
+    <view class="section-title-row compact-row">
+      <text class="section-title">购物保障</text>
+    </view>
+    <view class="tags-row">
+      <view class="tag {{item.tagClass}}" wx:for="{{servicePledges}}" wx:key="id">
+        <image class="tag-icon" src="{{item.icon}}" mode="aspectFit"></image>
+        <text>{{item.title}}</text>
+      </view>
+    </view>
+    <view class="pledges-detail-card">
+      <view class="pledge-detail-block" wx:for="{{servicePledges}}" wx:key="id">
+        <text class="pledge-detail-name">{{item.title}}</text>
+        <text class="pledge-detail-copy" wx:if="{{item.desc}}">{{item.desc}}</text>
+      </view>
+    </view>
+  </view>
+
   <view class="section-card detail-section">
     <view class="section-title-row compact-row">
       <text class="section-title">商品详情</text>
     </view>
+    <text class="detail-description" wx:if="{{product.description}}">{{product.description}}</text>
     <view class="detail-images" wx:if="{{detailImageList.length > 0}}">
       <image class="detail-image" wx:for="{{detailImageList}}" wx:key="*this" src="{{item}}" mode="widthFix" bindtap="onPreviewDetailImage" binderror="onDetailImageError" data-index="{{index}}"></image>
     </view>
@@ -220,24 +233,6 @@
     </view>
     <text class="detail-empty" wx:elif="{{reviewsLoadError}}">评价加载失败，请稍后重试</text>
     <text class="detail-empty" wx:else>暂无评价</text>
-  </view>
-
-  <view class="section-card" wx:if="{{servicePledges.length > 0}}">
-    <view class="section-title-row compact-row">
-      <text class="section-title">购物保障</text>
-    </view>
-    <view class="tags-row">
-      <view class="tag {{item.tagClass}}" wx:for="{{servicePledges}}" wx:key="id">
-        <image class="tag-icon" src="{{item.icon}}" mode="aspectFit"></image>
-        <text>{{item.title}}</text>
-      </view>
-    </view>
-    <view class="pledges-detail-card">
-      <view class="pledge-detail-block" wx:for="{{servicePledges}}" wx:key="id">
-        <text class="pledge-detail-name">{{item.title}}</text>
-        <text class="pledge-detail-copy" wx:if="{{item.desc}}">{{item.desc}}</text>
-      </view>
-    </view>
   </view>
 
   <view class="bottom-safe-area"></view>

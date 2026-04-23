@@ -1,0 +1,59 @@
+<view class="page">
+  <view class="hero-card">
+    <view class="hero-copy">
+      <text class="hero-title">自由组合</text>
+      <text class="hero-subtitle">固定套餐价，自由挑选套餐内商品；结算按整套套餐价统一处理。</text>
+    </view>
+  </view>
+
+  <view class="state-wrap" wx:if="{{loading}}">
+    <text class="state-title">加载自由组合中...</text>
+  </view>
+
+  <view class="state-wrap" wx:elif="{{loadError}}">
+    <text class="state-title">自由组合加载失败</text>
+    <text class="state-desc">请稍后重试，或返回活动页查看其他入口。</text>
+    <view class="retry-btn" bindtap="onRetry">重新加载</view>
+  </view>
+
+  <view class="state-wrap" wx:elif="{{bundles.length === 0}}">
+    <text class="state-title">暂未上架自由组合</text>
+    <text class="state-desc">当前没有可购买套餐，稍后再来看看。</text>
+  </view>
+
+  <view class="bundle-list" wx:else>
+    <view
+      class="bundle-card"
+      wx:for="{{bundles}}"
+      wx:key="id"
+      data-id="{{item.id}}"
+      bindtap="onOpenBundle"
+    >
+      <image
+        class="bundle-cover"
+        src="{{item.cover_preview_url || item.cover_image}}"
+        mode="aspectFill"
+        wx:if="{{item.cover_preview_url || item.cover_image}}"
+      ></image>
+      <view class="bundle-cover bundle-cover-placeholder" wx:else>
+        <text class="bundle-cover-placeholder-text">自由组合</text>
+      </view>
+      <view class="bundle-info">
+        <view class="bundle-tag-row">
+          <text class="bundle-tag">固定套餐价</text>
+          <text class="bundle-tag bundle-tag-soft" wx:for="{{item.channel_tags}}" wx:key="index">{{item}}</text>
+        </view>
+        <text class="bundle-title">{{item.hero_title || item.title}}</text>
+        <text class="bundle-subtitle" wx:if="{{item.hero_subtitle || item.subtitle}}">{{item.hero_subtitle || item.subtitle}}</text>
+        <view class="bundle-meta">
+          <text class="bundle-price">¥{{item.bundle_price}}</text>
+          <text class="bundle-count">{{item.group_count}} 组 / {{item.option_count}} 个候选</text>
+        </view>
+        <view class="bundle-entry">
+          <text class="bundle-entry-text">进入组合</text>
+          <text class="bundle-entry-arrow">›</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

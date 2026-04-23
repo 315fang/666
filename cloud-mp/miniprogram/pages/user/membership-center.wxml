@@ -39,10 +39,10 @@
           <view class="member-card member-card-consume">
             <view class="member-card-head">
               <text class="member-card-label">{{consumeCardSummary.label || '成长会员'}}</text>
-              <text class="member-card-badge">积分权益</text>
+              <text class="member-card-badge">成长权益</text>
             </view>
             <text class="member-card-title">{{consumeCardSummary.tierName || currentTierName || '普通会员'}}</text>
-            <text class="member-card-foot">{{consumeCardSummary.benefitText || '成长值用于解锁积分权益；积分按规则使用'}}</text>
+            <text class="member-card-foot">{{consumeCardSummary.benefitText || '成长值用于解锁会员等级与成长会员权益；并按规则使用'}}</text>
           </view>
         </swiper-item>
 
@@ -54,7 +54,7 @@
             </view>
             <text class="member-card-title">{{agentCardSummary.roleName || currentRoleName || '普通用户'}}</text>
             <view class="member-card-agent-meta">
-              <text class="member-card-agent-points">团队与积分权益以团队中心及当前等级规则为准</text>
+              <text class="member-card-agent-points">团队与成长会员权益以团队中心及当前等级规则为准</text>
               <text class="member-card-agent-status">{{agentCardSummary.statusText || '以当前身份为准'}}</text>
             </view>
           </view>
@@ -76,12 +76,12 @@
     <view class="benefits-panel" wx:if="{{activeCard === 'consume'}}">
       <view class="benefits-panel-head">
         <text class="benefits-panel-title">成长会员权益</text>
-        <text class="benefits-panel-desc">消费1元 = 1成长值，成长值决定积分权益与等级升级</text>
+        <text class="benefits-panel-desc">当前成长值决定会员等级与成长会员权益升级</text>
       </view>
 
       <view class="growth-rule">
         <text class="growth-rule-icon">💡</text>
-        <text class="growth-rule-text">消费越多，积分权益越丰富；升级后权益实时生效</text>
+        <text class="growth-rule-text">成长值越高，会员等级越高；升级后权益实时生效</text>
       </view>
 
       <view
@@ -95,7 +95,7 @@
           <view wx:elif="{{item.passed}}" class="tier-tag-done">已达成</view>
           <view wx:elif="{{item.isNext}}" class="tier-tag-next">下一档</view>
         </view>
-        <text class="tier-meta">成长值 ≥ {{item.min}} · 解锁更多积分权益</text>
+        <text class="tier-meta">成长值 ≥ {{item.min}} · 解锁更多成长会员权益</text>
         <text class="tier-desc" wx:if="{{item.desc}}">{{item.desc}}</text>
       </view>
     </view>
@@ -103,7 +103,7 @@
     <view class="benefits-panel" wx:elif="{{activeCard === 'agent'}}">
       <view class="benefits-panel-head">
         <text class="benefits-panel-title">代理权益说明</text>
-        <text class="benefits-panel-desc">团队与积分权益以当前身份为准</text>
+        <text class="benefits-panel-desc">团队与成长会员权益以当前身份为准</text>
       </view>
 
       <view class="agent-summary-card">
@@ -123,7 +123,7 @@
             <view class="level-badge">Lv.{{item.level}}</view>
             <text wx:if="{{item.level === currentRoleLevel}}" class="tier-tag">当前</text>
           </view>
-          <text class="tier-meta">享受团队与积分权益</text>
+          <text class="tier-meta">享受团队与成长会员权益</text>
           <view class="perks" wx:if="{{item.perks && item.perks.length}}">
             <text class="perk" wx:for="{{item.perks}}" wx:key="*this" wx:for-item="p">{{p}}</text>
           </view>
@@ -139,10 +139,6 @@
       <view class="agent-entry-wrap" wx:if="{{agentCardSummary.showEntry}}">
         <view class="agent-entry-btn" bindtap="goTeamCenter">进入团队中心</view>
       </view>
-    </view>
-
-    <view class="agent-entry-wrap">
-      <view class="agent-entry-btn" bindtap="onOpenDepositCenter">押金与兑换码</view>
     </view>
 
     <view class="bottom-space"></view>

@@ -1,7 +1,11 @@
 const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
 const { resolveProductImage, resolveProductDisplayPrice, genHeatLabel, normalizeAssetUrl } = require('../../utils/dataFormatter');
-const { isCloudFileId, pickPreferredAssetRef, resolveCloudImageUrl } = require('../../utils/cloudAssetRuntime');
+const {
+    pickPreferredAssetRef,
+    warmRenderableImageUrls,
+    resolveRenderableImageUrl
+} = require('../../utils/cloudAssetRuntime');
 const { getMiniProgramConfig } = require('../../utils/miniProgramConfig');
 const app = getApp();
 
@@ -35,6 +39,8 @@ function getPointDeductionRule() {
 
 // 生成规格摘要文本
 function buildSpecSummary(item) {
+    const defaultSpecText = String(item && item.default_spec_text || '').trim();
+    if (defaultSpecText) return defaultSpecText;
     if (!item.skus || !item.skus.length) return '';
     const specMap = {};
     item.skus.forEach((sku) => {
@@ -83,17 +89,12 @@ function mapProductsForCategory(page, list) {
     const pointBalance = page.data.userPointBalance || 0;
     const bestCoupon = page.data.userBestCoupon || 0;
     const showPreview = page.data.pricePreviewEnabled;
-    const activityProductMaps = page.data.activityProductMaps || {};
-    const groupMap = activityProductMaps.group || {};
-    const slashMap = activityProductMaps.slash || {};
     const roleLevel = app.globalData.userInfo?.role_level || 0;
 
     return (list || []).map((item) => {
         const retailPrice = parseFloat(resolveProductDisplayPrice(item, roleLevel) || 0);
         const marketPrice = parseFloat(item.market_price || 0);
         const sales = Number(item.purchase_count || item.sales_count || 0);
-        const groupActivity = groupMap[item.id] || null;
-        const slashActivity = slashMap[item.id] || null;
         let lowestTip = '';
 
         if (showPreview && (pointBalance > 0 || bestCoupon > 0)) {
@@ -118,12 +119,6 @@ function mapProductsForCategory(page, list) {
                 ? (retailPrice / marketPrice * 10).toFixed(1) + '折'
                 : '',
             lowestTip,
-            groupActivity,
-            slashActivity,
-            hasGroupActivity: !!groupActivity,
-            hasSlashActivity: !!slashActivity,
-            groupPrice: groupActivity ? parseFloat(groupActivity.group_price || 0) : 0,
-            slashFloorPrice: slashActivity ? parseFloat(slashActivity.floor_price || 0) : 0,
             role_level_price: retailPrice
         };
     });
@@ -131,9 +126,10 @@ function mapProductsForCategory(page, list) {
 
 async function mapProductsForCategoryAsync(page, list) {
     const mapped = mapProductsForCategory(page, list);
+    await warmRenderableImageUrls(mapped);
     return Promise.all(mapped.map(async (item) => ({
         ...item,
-        image: await resolveCloudImageUrl({
+        image: await resolveRenderableImageUrl({
             file_id: item.file_id || item.fileId || '',
             image: item.image,
             image_url: item.image_url || '',

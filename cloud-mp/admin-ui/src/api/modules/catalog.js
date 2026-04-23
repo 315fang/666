@@ -15,6 +15,13 @@ export const getProductById = (id) => {
   })
 }
 
+export const getProductSkus = (productId) => {
+  return request({
+    url: `/products/${productId}/skus`,
+    method: 'get'
+  })
+}
+
 export const createProduct = (data) => {
   return request({
     url: '/products',
@@ -41,6 +48,44 @@ export const updateProductStatus = (id, data) => {
 
 export const deleteProduct = (id) => {
   return request({ url: `/products/${id}`, method: 'delete' })
+}
+
+export const getProductBundles = (params) => {
+  return request({
+    url: '/product-bundles',
+    method: 'get',
+    params
+  })
+}
+
+export const getProductBundleById = (id) => {
+  return request({
+    url: `/product-bundles/${id}`,
+    method: 'get'
+  })
+}
+
+export const createProductBundle = (data) => {
+  return request({
+    url: '/product-bundles',
+    method: 'post',
+    data
+  })
+}
+
+export const updateProductBundle = (id, data) => {
+  return request({
+    url: `/product-bundles/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+export const deleteProductBundle = (id) => {
+  return request({
+    url: `/product-bundles/${id}`,
+    method: 'delete'
+  })
 }
 
 export const getCategories = () => {

@@ -6,7 +6,7 @@ function onConfirmReceive(page) {
 
     wx.showModal({
         title: '确认收货',
-        content: '确认已收到商品？确认后佣金将进入待审核状态，15天后自动结算至推荐人钱包。',
+        content: '确认已收到商品？确认后订单将完成。',
         success: async (res) => {
             if (res.confirm) {
                 try {
@@ -66,7 +66,7 @@ function onViewLogistics(page) {
     const { order } = page.data;
     const logisticsConfig = getConfigSection('logistics_config');
     if (!page.data.canViewLogistics) {
-        wx.showToast({ title: logisticsConfig.manual_status_desc || '当前未开放物流查询', icon: 'none' });
+        wx.showToast({ title: logisticsConfig.manual_status_desc || '暂不支持物流查询', icon: 'none' });
         return;
     }
     if (order.tracking_no) {

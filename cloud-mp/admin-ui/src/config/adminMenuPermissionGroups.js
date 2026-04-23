@@ -19,7 +19,8 @@ const EXTRA_ITEMS_BY_GROUP = {
     { key: 'user_balance_adjust', label: '用户余额调整' },
     { key: 'user_role_manage', label: '用户角色修改' },
     { key: 'user_parent_manage', label: '用户上级修改' },
-    { key: 'user_status_manage', label: '用户封禁 / 解封' }
+    { key: 'user_status_manage', label: '用户封禁 / 解封' },
+    { key: 'user_portal_password_manage', label: '用户业务密码重置 / 解锁' }
   ]
 }
 

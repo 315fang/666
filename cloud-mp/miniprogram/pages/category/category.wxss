@@ -138,11 +138,166 @@
   overflow: hidden;
 }
 
+.category-banner-slide {
+  width: 100%;
+  height: 265rpx;
+  border-radius: 16rpx;
+  overflow: hidden;
+  position: relative;
+}
+
 .category-banner-img {
   width: 100%;
   height: 265rpx;
   display: block;
   border-radius: 16rpx;
+}
+
+.category-banner-fallback {
+  position: relative;
+  width: 100%;
+  height: 265rpx;
+  overflow: hidden;
+  border-radius: 16rpx;
+  background:
+    radial-gradient(circle at top right, rgba(255,255,255,0.18), transparent 34%),
+    linear-gradient(135deg, #1F3B62 0%, #355B8A 48%, #D9A364 100%);
+}
+
+.category-banner-fallback-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(4rpx);
+  opacity: 0.5;
+}
+
+.category-banner-fallback-orb.orb-a {
+  width: 180rpx;
+  height: 180rpx;
+  right: -20rpx;
+  top: -36rpx;
+  background: rgba(255,255,255,0.14);
+}
+
+.category-banner-fallback-orb.orb-b {
+  width: 220rpx;
+  height: 220rpx;
+  left: -40rpx;
+  bottom: -80rpx;
+  background: rgba(255,255,255,0.12);
+}
+
+.category-banner-fallback-copy {
+  position: absolute;
+  left: 28rpx;
+  right: 28rpx;
+  bottom: 28rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.category-banner-fallback-title {
+  font-size: 34rpx;
+  line-height: 1.28;
+  font-weight: 700;
+  color: #FFF8EE;
+}
+
+.category-banner-fallback-subtitle {
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: rgba(255, 248, 238, 0.82);
+}
+
+.bundle-zone-list {
+  padding: 0 16rpx 8rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.bundle-zone-card {
+  display: flex;
+  gap: 18rpx;
+  padding: 18rpx;
+  border-radius: 18rpx;
+  background: linear-gradient(135deg, #FFF8F0 0%, #F9F3EA 100%);
+  border: 1rpx solid #F0E6D8;
+}
+
+.bundle-zone-image {
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 16rpx;
+  background: #F2EEE9;
+  flex-shrink: 0;
+}
+
+.bundle-zone-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bundle-zone-image-placeholder-text {
+  font-size: 24rpx;
+  color: #B0A396;
+}
+
+.bundle-zone-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10rpx;
+}
+
+.bundle-zone-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1F1A16;
+  line-height: 1.45;
+}
+
+.bundle-zone-subtitle {
+  font-size: 22rpx;
+  color: #8E7F72;
+  line-height: 1.5;
+}
+
+.bundle-zone-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-top: 2rpx;
+}
+
+.bundle-zone-tag {
+  padding: 4rpx 12rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  color: #8b5e34;
+  background: rgba(185, 139, 88, 0.14);
+}
+
+.bundle-zone-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.bundle-zone-price {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #B95E46;
+}
+
+.bundle-zone-count {
+  font-size: 20rpx;
+  color: #9A8D80;
 }
 
 /* ── 外卖风横向商品列表 ── */
@@ -658,5 +813,3 @@
 .ptag-hot { background: linear-gradient(135deg, #FF4D4F, #FF7A45); }
 .ptag-discount { background: linear-gradient(135deg, #FA8C16, #FAAD14); }
 .ptag-new { background: linear-gradient(135deg, #52C41A, #73D13D); }
-.ptag-group { background: linear-gradient(135deg, #F08A4B, #D35C2D); }
-.ptag-slash { background: linear-gradient(135deg, #16B3A5, #0F8A88); }

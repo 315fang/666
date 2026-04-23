@@ -1,5 +1,5 @@
 const { get, post } = require('../../utils/request');
-const app = getApp();
+const { hasLoginSession, ensureLogin } = require('../../utils/auth');
 
 function formatCouponValue(coupon = {}) {
     const type = coupon.coupon_type || coupon.type || 'fixed';
@@ -107,7 +107,7 @@ Page({
     },
 
     onShow() {
-        this.setData({ isLoggedIn: !!app.globalData.isLoggedIn });
+        this.setData({ isLoggedIn: hasLoginSession() });
         if (this._loadedOnce) {
             this.loadPage();
         }
@@ -117,7 +117,7 @@ Page({
     async loadPage() {
         this.setData({
             loading: true,
-            isLoggedIn: !!app.globalData.isLoggedIn
+            isLoggedIn: hasLoginSession()
         });
         try {
             const res = await get('/coupons/center', {}, { showError: false });
@@ -167,9 +167,9 @@ Page({
 
         if (this.data.claimingCouponId === couponId) return;
 
-        if (!app.globalData.isLoggedIn) {
+        if (!hasLoginSession()) {
             try {
-                await app.wxLogin(true);
+                await ensureLogin({ ignorePendingInviteCode: true, message: '请先登录' });
             } catch (_) {
                 wx.showToast({ title: '请先登录', icon: 'none' });
                 return;
@@ -202,16 +202,16 @@ Page({
             this.onOpenMyCoupons();
             return;
         }
-        if (!app.globalData.isLoggedIn) {
+        if (!hasLoginSession()) {
             wx.switchTab({ url: '/pages/user/user' });
             return;
         }
-        wx.showToast({ title: '先领取一张福利券吧', icon: 'none' });
+        wx.showToast({ title: '请先领取优惠券', icon: 'none' });
     },
 
     onShareAppMessage() {
         return {
-            title: '领券中心 · 今日福利限量开放',
+            title: '惊喜礼遇',
             path: '/pages/coupon/center'
         };
     }

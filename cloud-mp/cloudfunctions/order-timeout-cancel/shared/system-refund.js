@@ -9,6 +9,8 @@ const { createRefund, loadPrivateKey } = require('../wechat-pay-v3');
 
 const SYSTEM_REFUND_REASON = '拼团超时未成团，系统自动退款';
 const SYSTEM_REFUND_SCENE = 'group_expired';
+const GROUP_EXPIRED_RECOVERY_STATUSES = ['pending', 'approved', 'processing', 'failed'];
+const DEFAULT_RECOVERY_LIMIT = 20;
 
 function toNumber(value, fallback = 0) {
     if (value === null || value === undefined || value === '') return fallback;
@@ -41,10 +43,23 @@ function normalizePaymentMethodCode(rawValue) {
     return raw;
 }
 
+function hasWechatPaymentEvidence(order = {}) {
+    const payPackage = order.pay_params && typeof order.pay_params === 'object'
+        ? pickString(order.pay_params.package)
+        : '';
+    return !!(
+        pickString(order.trade_id || order.transaction_id || order.wx_transaction_id)
+        || pickString(order.prepay_id)
+        || payPackage.startsWith('prepay_id=')
+    );
+}
+
 function resolveOrderPaymentMethod(order = {}) {
-    return normalizePaymentMethodCode(
+    const explicit = normalizePaymentMethodCode(
         order.payment_method || order.pay_channel || order.pay_type || order.payment_channel || ''
     );
+    if (explicit) return explicit;
+    return hasWechatPaymentEvidence(order) ? 'wechat' : '';
 }
 
 function resolveRefundChannel(paymentMethod) {
@@ -732,6 +747,176 @@ async function markOrderRefundFailure(orderId, message) {
     }).catch(() => {});
 }
 
+async function clearOrderRefundFailure(orderId) {
+    if (!orderId) return;
+    await db.collection('orders').doc(String(orderId)).update({
+        data: {
+            auto_refund_error: _.remove(),
+            auto_refund_failed_at: _.remove(),
+            auto_refund_partial: _.remove(),
+            updated_at: db.serverDate(),
+        }
+    }).catch(() => {});
+}
+
+function shouldRecoverGroupExpiredRefund(refund = {}) {
+    return pickString(refund.system_refund_scene) === SYSTEM_REFUND_SCENE
+        && GROUP_EXPIRED_RECOVERY_STATUSES.includes(pickString(refund.status));
+}
+
+function canRetryFailedWechatRefund(refund = {}) {
+    if (pickString(refund.status) !== 'failed') return false;
+    if (pickString(refund.wx_refund_id)) return false;
+    const wxStatus = pickString(refund.wx_refund_status).toUpperCase();
+    return !wxStatus || wxStatus === 'NOT_FOUND';
+}
+
+async function findOrderByRefund(refund = {}) {
+    if (refund.order_id) {
+        const byId = await db.collection('orders').doc(String(refund.order_id)).get().then((res) => res.data).catch(() => null);
+        if (byId) return byId;
+    }
+    if (refund.order_no) {
+        const byNo = await db.collection('orders')
+            .where({ order_no: String(refund.order_no) })
+            .limit(1)
+            .get()
+            .then((res) => (res.data && res.data[0]) || null)
+            .catch(() => null);
+        if (byNo) return byNo;
+    }
+    return null;
+}
+
+async function syncRefundStatusViaPayment(refund = {}) {
+    const result = await cloud.callFunction({
+        name: process.env.PAYMENT_FUNCTION_NAME || 'payment',
+        data: {
+            action: 'syncRefundStatus',
+            refund_id: pickString(refund._id || refund.id),
+            refund_no: pickString(refund.refund_no)
+        }
+    });
+    const payload = result && result.result;
+    if (payload && payload.code && payload.code !== 0) {
+        throw new Error(payload.message || '支付云函数同步退款状态失败');
+    }
+    return payload && payload.data ? payload.data : (payload || {});
+}
+
+async function retryFailedWechatRefund(refund = {}, order = {}) {
+    if (!refund._id || !refund.refund_no) {
+        throw new Error('退款记录缺少 _id 或 refund_no，无法重试');
+    }
+    if (!order || !order._id || !order.order_no) {
+        throw new Error('退款订单不存在，无法重试');
+    }
+
+    const refundAmount = roundMoney(toNumber(refund.refund_amount ?? refund.amount, resolveOrderPayAmount(order, 0)));
+    if (refundAmount <= 0) {
+        throw new Error('退款金额无效，无法重试');
+    }
+
+    const privateKey = await loadPrivateKey(cloud);
+    const totalFen = Math.round(resolveOrderPayAmount(order, refundAmount) * 100);
+    const refundFen = Math.round(refundAmount * 100);
+    const wxRefund = await createRefund(
+        order.order_no,
+        refund.refund_no,
+        totalFen,
+        refundFen,
+        SYSTEM_REFUND_REASON,
+        privateKey
+    );
+
+    await db.collection('refunds').doc(String(refund._id)).update({
+        data: {
+            status: 'processing',
+            processing_at: refund.processing_at || db.serverDate(),
+            wx_refund_id: wxRefund.refund_id || '',
+            wx_refund_status: wxRefund.status || 'PROCESSING',
+            auto_refund_error: _.remove(),
+            auto_refund_failed_at: _.remove(),
+            updated_at: db.serverDate(),
+        }
+    });
+    await clearOrderRefundFailure(order._id);
+    return {
+        refund_id: String(refund._id),
+        refund_no: refund.refund_no,
+        wx_status: wxRefund.status || 'PROCESSING',
+        retried: true
+    };
+}
+
+async function recoverGroupExpiredRefunds(limit = DEFAULT_RECOVERY_LIMIT) {
+    const res = await db.collection('refunds')
+        .where({
+            system_refund_scene: SYSTEM_REFUND_SCENE,
+            status: _.in(GROUP_EXPIRED_RECOVERY_STATUSES)
+        })
+        .orderBy('updated_at', 'asc')
+        .limit(Math.max(1, Math.min(100, toNumber(limit, DEFAULT_RECOVERY_LIMIT))))
+        .get()
+        .catch(() => ({ data: [] }));
+
+    const refunds = (res.data || []).filter(shouldRecoverGroupExpiredRefund);
+    if (!refunds.length) {
+        return { scanned: 0, synced: 0, retried: 0, completed: 0, errors: [] };
+    }
+
+    let synced = 0;
+    let retried = 0;
+    let completed = 0;
+    const errors = [];
+
+    for (const refund of refunds) {
+        try {
+            const order = await findOrderByRefund(refund);
+            if (!order || !order._id) {
+                errors.push({ refund_id: refund._id, error: '订单不存在，无法补偿退款' });
+                continue;
+            }
+            const paymentMethod = normalizePaymentMethodCode(
+                refund.payment_method || refund.refund_channel || resolveOrderPaymentMethod(order)
+            );
+            if (paymentMethod !== 'wechat') continue;
+
+            if (canRetryFailedWechatRefund(refund)) {
+                const retryResult = await retryFailedWechatRefund(refund, order);
+                retried += 1;
+                if (pickString(retryResult.wx_status).toUpperCase() === 'SUCCESS') {
+                    completed += 1;
+                }
+                continue;
+            }
+
+            if (!pickString(refund.refund_no)) {
+                errors.push({ refund_id: refund._id, error: '退款单缺少 refund_no，无法同步微信状态' });
+                continue;
+            }
+
+            const syncResult = await syncRefundStatusViaPayment(refund);
+            synced += 1;
+            if (pickString(syncResult.local_status) === 'completed') {
+                completed += 1;
+                await clearOrderRefundFailure(order._id);
+            }
+        } catch (error) {
+            errors.push({ refund_id: refund._id, error: error.message });
+            await markOrderRefundFailure(refund.order_id, error.message);
+        }
+    }
+
+    return {
+        scanned: refunds.length,
+        synced,
+        retried,
+        completed,
+        errors
+    };
+}
+
 async function processInternalRefund(order, refundContext) {
     const method = refundContext.paymentMethod;
     await db.collection('refunds').doc(String(refundContext.refundId)).update({
@@ -861,4 +1046,5 @@ module.exports = {
     SYSTEM_REFUND_REASON,
     SYSTEM_REFUND_SCENE,
     autoRefundGroupOrder,
+    recoverGroupExpiredRefunds,
 };

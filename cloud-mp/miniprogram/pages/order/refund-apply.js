@@ -21,14 +21,16 @@ function calculateRefundAmountByItem(item, selectedQuantity) {
 function buildRefundSelections(order, type) {
     const items = Array.isArray(order && order.items) ? order.items : [];
     const singleLine = items.length === 1 ? items[0] : null;
+    const bundleLocked = !!(order && (order.bundle_id || order.bundle_meta));
     return items.map((item) => {
         const refundableQuantity = Math.max(0, Number(item.refundable_quantity || 0));
-        const defaultQuantity = singleLine ? refundableQuantity : 0;
+        const defaultQuantity = bundleLocked ? refundableQuantity : (singleLine ? refundableQuantity : 0);
         return {
             ...item,
             selectedQuantity: defaultQuantity,
             refundAmount: calculateRefundAmountByItem(item, defaultQuantity),
-            disabled: refundableQuantity <= 0
+            disabled: refundableQuantity <= 0,
+            bundleLocked
         };
     });
 }
@@ -67,7 +69,8 @@ Page({
             { value: 'other', label: '其他原因' }
         ],
         reasonIndex: -1,
-        submitting: false
+        submitting: false,
+        bundleOrder: false
     },
 
     onLoad(options) {
@@ -95,10 +98,30 @@ Page({
                 );
             }
             const normalizedOrder = normalizeOrderConsumer(order);
+            if (normalizedOrder && Array.isArray(normalizedOrder.items) && normalizedOrder.items.length > 0) {
+                normalizedOrder.items = await Promise.all(normalizedOrder.items.map(async (item) => {
+                    const product = item.product && typeof item.product === 'object' ? { ...item.product } : null;
+                    if (product) {
+                        product.images = await resolveCloudImageList(
+                            product.images,
+                            parseImages(product.images)
+                        );
+                        product.image = await resolveCloudImageUrl(
+                            product.image || '',
+                            product.images
+                        );
+                    }
+                    return {
+                        ...item,
+                        product
+                    };
+                }));
+            }
             const refundItems = buildRefundSelections(normalizedOrder, this.data.type);
             this.setData({
                 order: normalizedOrder,
                 refundItems,
+                bundleOrder: !!(normalizedOrder.bundle_id || normalizedOrder.bundle_meta),
                 amount: calculateRefundAmount(normalizedOrder, refundItems)
             });
         } catch (err) {
@@ -139,6 +162,7 @@ Page({
     },
 
     updateRefundItemQuantity(index, nextQuantity) {
+        if (this.data.bundleOrder) return;
         const refundItems = (this.data.refundItems || []).slice();
         const current = refundItems[index];
         if (!current) return;
@@ -158,11 +182,13 @@ Page({
     },
 
     onRefundQtyInput(e) {
+        if (this.data.bundleOrder) return;
         const index = Number(e.currentTarget.dataset.index);
         this.updateRefundItemQuantity(index, parseInt(e.detail.value) || 0);
     },
 
     onRefundQtyMinus(e) {
+        if (this.data.bundleOrder) return;
         const index = Number(e.currentTarget.dataset.index);
         const current = this.data.refundItems[index];
         if (!current) return;
@@ -170,6 +196,7 @@ Page({
     },
 
     onRefundQtyPlus(e) {
+        if (this.data.bundleOrder) return;
         const index = Number(e.currentTarget.dataset.index);
         const current = this.data.refundItems[index];
         if (!current) return;

@@ -38,7 +38,7 @@ function buildEffectiveBenefits(account = {}, featureFlags = {}) {
         benefits.splice(1, 0, '可用于积分抽奖');
     }
     if (account.next_level) {
-        benefits.push(`成长值当前主要用于等级展示，距 ${account.next_level.name} 还差 ${account.next_level.growth_needed || 0} 成长值`);
+        benefits.push(`当前积分用于会员等级展示，距 ${account.next_level.name} 还差 ${account.next_level.growth_needed || 0} 积分`);
     } else {
         benefits.push('已达到当前成长体系最高展示档位');
     }
@@ -52,7 +52,7 @@ function getPointsTip(featureFlags = {}) {
         : '下单积分抵扣，以及部分活动商品的积分兑换';
     return {
         title: mod.title || '签到与积分',
-        body: `当前已生效的积分能力包括：每日签到得积分、${pointsUsageText}。成长值等级用于页面展示，未明确开放的额外特权暂不生效。`
+        body: `当前已生效的积分能力包括：每日签到得积分、${pointsUsageText}。当前积分同时用于会员等级展示，未明确开放的额外特权暂不生效。`
     };
 }
 

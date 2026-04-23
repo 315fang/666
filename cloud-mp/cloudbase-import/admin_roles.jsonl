@@ -1,2 +1,8 @@
 {"_id":"super_admin","code":"super_admin","name":"super_admin","permissions":[]}
 {"_id":"admin","code":"admin","name":"admin","permissions":["dashboard","products","orders","logistics","pickup_stations","users","distribution","content","materials","dealers","commissions","statistics","logs","settings_manage","notification","order_amount_adjust","order_force_cancel","order_force_complete","user_balance_adjust","user_role_manage","user_parent_manage","user_status_manage","settlements"]}
+{"_id":"operator","code":"operator","name":"operator","permissions":["dashboard","products","orders","logistics","pickup_stations","content","materials","notification","statistics"]}
+{"_id":"finance","code":"finance","name":"finance","permissions":["dashboard","orders","logistics","pickup_stations","withdrawals","commissions","statistics"]}
+{"_id":"customer_service","code":"customer_service","name":"customer_service","permissions":["dashboard","orders","logistics","pickup_stations","refunds","users","notification"]}
+{"_id":"warehouse","code":"warehouse","name":"warehouse","permissions":["orders","logistics","pickup_stations"]}
+{"_id":"designer","code":"designer","name":"designer","permissions":["content","materials"]}
+{"_id":"channel_manager","code":"channel_manager","name":"channel_manager","permissions":["dashboard","users","dealers","distribution","notification","statistics","logs"]}

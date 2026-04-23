@@ -97,6 +97,7 @@
 | `customer_service` | 客服 | 看板、订单、退款、用户、通知 |
 | `warehouse` | 仓储 | 订单、自提门店 |
 | `designer` | 设计/内容 | 内容、素材 |
+| `channel_manager` | 渠道经理 | 看板、用户、经销商、B1定向邀约、日志、通知 |
 
 注意：
 

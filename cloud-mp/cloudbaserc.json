@@ -43,6 +43,20 @@
           "config": "0 30 */1 * * * *"
         }
       ]
+    },
+    {
+      "name": "visitor-account-cleanup",
+      "runtime": "Nodejs16.13",
+      "handler": "index.main",
+      "timeout": 30,
+      "memorySize": 256,
+      "triggers": [
+        {
+          "name": "visitorAccountCleanupTimer",
+          "type": "timer",
+          "config": "0 30 3 * * * *"
+        }
+      ]
     }
   ]
 }

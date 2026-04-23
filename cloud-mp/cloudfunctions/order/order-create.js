@@ -4,6 +4,55 @@ const db = cloud.database();
 const _ = db.command;
 const { toNumber, toBoolean } = require('./shared/utils');
 const { findUserCouponDoc } = require('./order-coupon');
+const { reservePickupStationInventory, releasePickupStationInventoryForOrder } = require('./pickup-station-stock');
+const { resolveBundleContext } = require('./product-bundle');
+const { assertPortalPassword } = require('./shared/portal-password');
+
+function pickString(value, fallback = '') {
+    if (value == null) return fallback;
+    const text = String(value).replace(/\s+/g, ' ').trim();
+    return text || fallback;
+}
+
+function dedupeSpecParts(parts = []) {
+    const seen = new Set();
+    const result = [];
+    (Array.isArray(parts) ? parts : []).forEach((part) => {
+        const normalized = pickString(part);
+        if (!normalized || seen.has(normalized)) return;
+        seen.add(normalized);
+        result.push(normalized);
+    });
+    return result;
+}
+
+function collapseRepeatedTokenSequence(text = '') {
+    const tokens = pickString(text).split(/\s+/).filter(Boolean);
+    if (tokens.length <= 1) return pickString(text);
+    for (let size = 1; size <= Math.floor(tokens.length / 2); size += 1) {
+        if (tokens.length % size !== 0) continue;
+        const pattern = tokens.slice(0, size).join(' ');
+        let matched = true;
+        for (let index = size; index < tokens.length; index += size) {
+            if (tokens.slice(index, index + size).join(' ') !== pattern) {
+                matched = false;
+                break;
+            }
+        }
+        if (matched) return pattern;
+    }
+    return pickString(text);
+}
+
+function normalizeSpecDisplayText(rawSpec = '') {
+    const text = pickString(rawSpec);
+    if (!text) return '';
+    if (/[·/、,，;；|]/.test(text)) {
+        const parts = dedupeSpecParts(text.split(/\s*[·/、,，;；|]+\s*/));
+        if (parts.length > 0) return parts.join(' / ');
+    }
+    return collapseRepeatedTokenSequence(text);
+}
 
 /**
  * 根据 product_id 查找商品（兼容数字 id 和文档 _id）
@@ -96,6 +145,12 @@ function normalizeAgentRoleLevel(roleLevel) {
     if (normalized === 4) return 4;
     if (normalized === 3) return 3;
     return 0;
+}
+
+function resolveFixedCommissionAmountByRole(roleMap = {}, roleLevel = 0) {
+    if (!roleMap || typeof roleMap !== 'object') return 0;
+    const rawValue = roleMap[roleLevel] ?? roleMap[String(roleLevel)] ?? 0;
+    return roundMoney(Math.max(0, toNumber(rawValue, 0)));
 }
 
 function resolveUserReferrer(user = {}) {
@@ -354,6 +409,14 @@ function couponMatchesOrderItems(coupon = {}, items = []) {
     return true;
 }
 
+function isHotProductTag(value) {
+    return String(value || '').trim().toLowerCase() === 'hot';
+}
+
+function isRestrictedPromotionContext({ isExchangeOrder = false, groupActivity = null, slashRecord = null, limitedSpotContext = null, bundleContext = null } = {}) {
+    return !!(isExchangeOrder || groupActivity || slashRecord || limitedSpotContext || bundleContext);
+}
+
 function normalizeIdList(values) {
     if (!Array.isArray(values)) return [];
     return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
@@ -477,13 +540,44 @@ async function countLimitedSaleReservedOrders(slotId, itemId) {
     return Number(res.total || 0);
 }
 
-async function resolveLimitedSaleContext(rawLimitedSale = {}) {
+function normalizeLimitedSalePayload(rawLimitedSale = null) {
     if (!rawLimitedSale || typeof rawLimitedSale !== 'object') return null;
-    const slotId = String(rawLimitedSale.slot_id || rawLimitedSale.id || '').trim();
-    const itemId = String(rawLimitedSale.item_id || '').trim();
-    if (!slotId || !itemId) {
-        throw new Error('限时商品档期参数缺失');
-    }
+    const slotId = String(rawLimitedSale.slot_id || rawLimitedSale.card_id || rawLimitedSale.id || '').trim();
+    const itemId = String(rawLimitedSale.item_id || rawLimitedSale.offer_id || '').trim();
+    if (!slotId || !itemId) return null;
+    return {
+        ...rawLimitedSale,
+        slot_id: slotId,
+        item_id: itemId
+    };
+}
+
+function normalizeLimitedSpotPayload(rawLimitedSpot = null) {
+    if (!rawLimitedSpot || typeof rawLimitedSpot !== 'object') return null;
+    const cardId = String(rawLimitedSpot.card_id || rawLimitedSpot.slot_id || rawLimitedSpot.id || '').trim();
+    const offerId = String(rawLimitedSpot.offer_id || rawLimitedSpot.item_id || '').trim();
+    if (!cardId || !offerId) return null;
+    return {
+        ...rawLimitedSpot,
+        card_id: cardId,
+        offer_id: offerId
+    };
+}
+
+function isLimitedSaleCompatFallbackError(error) {
+    const message = String(error?.message || '').trim();
+    return [
+        '限时商品档期参数缺失',
+        '限时商品档期不存在',
+        '限时商品不存在或已下架'
+    ].includes(message);
+}
+
+async function resolveLimitedSaleContext(rawLimitedSale = {}) {
+    const normalizedLimitedSale = normalizeLimitedSalePayload(rawLimitedSale);
+    if (!normalizedLimitedSale) return null;
+    const slotId = String(normalizedLimitedSale.slot_id).trim();
+    const itemId = String(normalizedLimitedSale.item_id).trim();
     const slotCandidates = [slotId];
     const itemCandidates = [itemId];
     const numericSlotId = Number(slotId);
@@ -516,7 +610,7 @@ async function resolveLimitedSaleContext(rawLimitedSale = {}) {
     if (!startTs || !endTs || startTs >= endTs) throw new Error('限时商品档期配置异常');
     if (nowTs < startTs || nowTs >= endTs) throw new Error('当前不在限时商品售卖时间内');
 
-    const mode = normalizeLimitedSpotMode(rawLimitedSale.mode || (rawLimitedSale.redeem_points ? 'points' : ''), item);
+    const mode = normalizeLimitedSpotMode(normalizedLimitedSale.mode || (normalizedLimitedSale.redeem_points ? 'points' : ''), item);
     if (mode === 'points' && !isEnabledFlag(item.enable_points, true)) {
         throw new Error('当前限时商品不支持积分兑换');
     }
@@ -549,9 +643,10 @@ async function resolveLimitedSaleContext(rawLimitedSale = {}) {
 }
 
 async function resolveLimitedSpotContext(rawLimitedSpot = {}) {
-    if (!rawLimitedSpot || typeof rawLimitedSpot !== 'object') return null;
-    const cardId = String(rawLimitedSpot.card_id || rawLimitedSpot.id || '').trim();
-    const offerId = String(rawLimitedSpot.offer_id || '').trim();
+    const normalizedLimitedSpot = normalizeLimitedSpotPayload(rawLimitedSpot);
+    if (!normalizedLimitedSpot) return null;
+    const cardId = String(normalizedLimitedSpot.card_id).trim();
+    const offerId = String(normalizedLimitedSpot.offer_id).trim();
     if (!cardId || !offerId) {
         throw new Error('限时专享活动参数缺失');
     }
@@ -576,7 +671,7 @@ async function resolveLimitedSpotContext(rawLimitedSpot = {}) {
         throw new Error('专享商品不存在或已下架');
     }
 
-    const mode = normalizeLimitedSpotMode(rawLimitedSpot.mode || (rawLimitedSpot.redeem_points ? 'points' : ''), offer);
+    const mode = normalizeLimitedSpotMode(normalizedLimitedSpot.mode || (normalizedLimitedSpot.redeem_points ? 'points' : ''), offer);
     if (mode === 'points' && !isEnabledFlag(offer.enable_points, true)) {
         throw new Error('当前专享商品不支持积分兑换');
     }
@@ -606,6 +701,35 @@ async function resolveLimitedSpotContext(rawLimitedSpot = {}) {
         stockLimit,
         soldCount
     };
+}
+
+async function resolveOrderLimitedSpotContext({ limited_sale, limited_spot } = {}) {
+    const normalizedLimitedSale = normalizeLimitedSalePayload(limited_sale);
+    const normalizedLimitedSpot = normalizeLimitedSpotPayload(limited_spot);
+
+    if (!normalizedLimitedSale && !normalizedLimitedSpot) return null;
+
+    if (normalizedLimitedSale) {
+        try {
+            return await resolveLimitedSaleContext(normalizedLimitedSale);
+        } catch (limitedSaleError) {
+            if (!normalizedLimitedSpot || !isLimitedSaleCompatFallbackError(limitedSaleError)) {
+                throw limitedSaleError;
+            }
+            try {
+                console.warn('[order.create] limited_sale payload fallback to legacy limited_spot:', {
+                    limitedSaleError: limitedSaleError.message,
+                    slot_id: normalizedLimitedSale.slot_id,
+                    item_id: normalizedLimitedSale.item_id
+                });
+                return await resolveLimitedSpotContext(normalizedLimitedSpot);
+            } catch (_) {
+                throw limitedSaleError;
+            }
+        }
+    }
+
+    return resolveLimitedSpotContext(normalizedLimitedSpot);
 }
 
 function centsToYuan(value, fallback = 0) {
@@ -670,15 +794,15 @@ function normalizeImages(images) {
 
 function normalizeSpecValue(rawSpec) {
     if (Array.isArray(rawSpec)) {
-        return rawSpec
+        return normalizeSpecDisplayText(rawSpec
             .map((item) => {
                 if (!item || typeof item !== 'object') return '';
                 return item.value || item.spec_value || item.name || '';
             })
             .filter(Boolean)
-            .join(' / ');
+            .join(' / '));
     }
-    return rawSpec ? String(rawSpec) : '';
+    return normalizeSpecDisplayText(rawSpec);
 }
 
 function resolveAddressReceiverName(addressInfo = {}) {
@@ -879,20 +1003,25 @@ async function createOrder(openid, orderData) {
         slash_no,
         use_goods_fund,   // 货款支付标志（仅代理商可用）
         limited_spot,
-        limited_sale
+        limited_sale,
+        bundle_context,
+        portal_password
     } = orderData;
+    const deliveryType = delivery_type === 'pickup' ? 'pickup' : 'express';
 
     if (!items || !Array.isArray(items) || items.length === 0) {
         throw new Error('缺少商品信息');
     }
     const isExchangeOrder = !!exchange_coupon_id;
-    const limitedSpotContext = (await resolveLimitedSaleContext(limited_sale)) || (await resolveLimitedSpotContext(limited_spot));
+    const limitedSpotContext = await resolveOrderLimitedSpotContext({ limited_sale, limited_spot });
     if (isExchangeOrder && items.length !== 1) {
         throw new Error('兑换券订单仅支持单个商品');
     }
     if (limitedSpotContext && items.length !== 1) {
         throw new Error('限时专享订单仅支持单个商品');
     }
+    const bundleContext = bundle_context ? await resolveBundleContext(bundle_context, items) : null;
+    const normalizedInputItems = bundleContext ? bundleContext.normalized_items : items;
 
     const groupActivity = group_activity_id ? await findGroupActivity(group_activity_id) : null;
     if (group_activity_id) {
@@ -910,6 +1039,9 @@ async function createOrder(openid, orderData) {
     }
     if (groupActivity && slashRecord) {
         throw new Error('活动订单类型冲突');
+    }
+    if (bundleContext && (groupActivity || slashRecord || isExchangeOrder || limitedSpotContext)) {
+        throw new Error('组合订单不能与其他活动叠加');
     }
     if (limitedSpotContext && (groupActivity || slashRecord || isExchangeOrder)) {
         throw new Error('限时专享订单不能与其他活动叠加');
@@ -938,6 +1070,13 @@ async function createOrder(openid, orderData) {
         if (toNumber(points_to_use, 0) > 0) throw new Error('限时专享订单不能再使用普通积分抵扣');
         if (use_goods_fund) throw new Error('限时专享订单不支持货款余额支付');
     }
+    if (bundleContext) {
+        if (coupon_id || user_coupon_id) throw new Error('组合订单不能叠加普通优惠券');
+        if (toNumber(points_to_use, 0) > 0) throw new Error('组合订单不能使用积分抵扣');
+    }
+    if (use_goods_fund) {
+        await assertPortalPassword(db, openid, portal_password);
+    }
 
     // 0. 提前获取买家信息（关系链/角色信息）和订单超时配置
     const [earlyBuyerInfo, autoCancelMinutes] = await Promise.all([
@@ -947,7 +1086,9 @@ async function createOrder(openid, orderData) {
     const referralChain = earlyBuyerInfo ? await buildReferralChain(earlyBuyerInfo) : [];
     const directReferrer = referralChain[0] || null;
     const indirectReferrer = referralChain[1] || null;
-    const nearestAgentCandidate = (delivery_type || 'express') === 'express'
+    const directReferrerRoleLevel = directReferrer ? getUserRoleLevel(directReferrer) : 0;
+    const indirectReferrerRoleLevel = indirectReferrer ? getUserRoleLevel(indirectReferrer) : 0;
+    const nearestAgentCandidate = deliveryType === 'express'
         ? (referralChain.find((user) => isAgentRoleLevel(getUserRoleLevel(user))) || null)
         : null;
     const nearestAgentRoleLevel = nearestAgentCandidate ? normalizeAgentRoleLevel(getUserRoleLevel(nearestAgentCandidate)) : 0;
@@ -979,8 +1120,16 @@ async function createOrder(openid, orderData) {
     const orderItems = [];
     const stockDeductions = [];  // 记录已扣减的库存，供回滚用
     const lockedAgentCostCandidates = [];
+    const hasRestrictedPromotionOrder = isRestrictedPromotionContext({
+        isExchangeOrder,
+        groupActivity,
+        slashRecord,
+        limitedSpotContext,
+        bundleContext
+    });
+    const isFlexBundleOrder = !!(bundleContext && pickString(bundleContext.bundle?.scene_type) === 'flex_bundle');
 
-    for (const item of items) {
+    for (const item of normalizedInputItems) {
         const product = await findProductCached(item.product_id);
         if (!product) {
             throw new Error(`商品不存在: ${item.product_id}`);
@@ -995,6 +1144,9 @@ async function createOrder(openid, orderData) {
         let sku = null;
         if (item.sku_id) {
             sku = await findSkuCached(item.sku_id);
+            if (!sku) {
+                throw new Error(`规格不存在: ${item.sku_id}`);
+            }
         }
 
         const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
@@ -1020,30 +1172,35 @@ async function createOrder(openid, orderData) {
                 }
             }
         }
+        if (deliveryType === 'pickup' && !toBoolean(product.supports_pickup, false)) {
+            throw new Error(`当前商品不支持到店自提: ${product.name || item.product_id}`);
+        }
 
-        // 库存校验（乐观锁：条件扣减，防超卖）
-        // 对于 SKU 优先校验 SKU 库存，否则校验商品库存
-        const stockTarget = sku || product;
-        const stockValue = toNumber(stockTarget.stock, -1);
-        if (stockValue !== -1) {  // -1 表示不限库存
-            if (stockValue < qty) {
-                throw new Error(`商品库存不足: ${product.name || item.product_id}（剩余 ${stockValue}，需要 ${qty}）`);
+        if (deliveryType === 'express') {
+            // 库存校验（乐观锁：条件扣减，防超卖）
+            // 对于 SKU 优先校验 SKU 库存，否则校验商品库存
+            const stockTarget = sku || product;
+            const stockValue = toNumber(stockTarget.stock, -1);
+            if (stockValue !== -1) {  // -1 表示不限库存
+                if (stockValue < qty) {
+                    throw new Error(`商品库存不足: ${product.name || item.product_id}（剩余 ${stockValue}，需要 ${qty}）`);
+                }
+                // 条件扣减：where stock >= qty，若 updated === 0 则说明被并发抢占
+                const stockCollection = sku ? 'skus' : 'products';
+                const stockDocId = String((sku || product)._id);
+                const stockUpdateRes = await db.collection(stockCollection)
+                    .where({ _id: stockDocId, stock: _.gte(qty) })
+                    .update({ data: { stock: _.inc(-qty), updated_at: db.serverDate() } })
+                    .catch(() => ({ stats: { updated: 0 } }));
+                if (!stockUpdateRes.stats || stockUpdateRes.stats.updated === 0) {
+                    // 并发失败，回滚已扣减库存
+                    await Promise.all(stockDeductions.map(({ collection, docId, qty: q }) =>
+                        db.collection(collection).doc(docId).update({ data: { stock: _.inc(q) } }).catch(() => {})
+                    ));
+                    throw new Error(`商品库存不足: ${product.name || item.product_id}（请刷新后重试）`);
+                }
+                stockDeductions.push({ collection: stockCollection, docId: stockDocId, qty });
             }
-            // 条件扣减：where stock >= qty，若 updated === 0 则说明被并发抢占
-            const stockCollection = sku ? 'skus' : 'products';
-            const stockDocId = String((sku || product)._id);
-            const stockUpdateRes = await db.collection(stockCollection)
-                .where({ _id: stockDocId, stock: _.gte(qty) })
-                .update({ data: { stock: _.inc(-qty), updated_at: db.serverDate() } })
-                .catch(() => ({ stats: { updated: 0 } }));
-            if (!stockUpdateRes.stats || stockUpdateRes.stats.updated === 0) {
-                // 并发失败，回滚已扣减库存
-                await Promise.all(stockDeductions.map(({ collection, docId, qty: q }) =>
-                    db.collection(collection).doc(docId).update({ data: { stock: _.inc(q) } }).catch(() => {})
-                ));
-                throw new Error(`商品库存不足: ${product.name || item.product_id}（请刷新后重试）`);
-            }
-            stockDeductions.push({ collection: stockCollection, docId: stockDocId, qty });
         }
 
         const activityPrice = groupActivity ? toNumber(groupActivity.group_price || groupActivity.price, 0) : null;
@@ -1099,6 +1256,14 @@ async function createOrder(openid, orderData) {
         const specValue = normalizeSpecValue(sku ? (sku.spec || sku.specs || sku.spec_value || '') : '');
         const image = sku ? (sku.image || productImages[0] || '') : (productImages[0] || '');
         const productName = product.name || sku?.name || '';
+        const isExplosive = (product.is_explosive === true || product.is_explosive === 1);
+        const isHotProduct = isHotProductTag(product.product_tag);
+        const allowCoupon = (!hasRestrictedPromotionOrder && !isExplosive && !isHotProduct)
+            ? (product.enable_coupon == null ? 1 : (product.enable_coupon ? 1 : 0))
+            : 0;
+        const allowPoints = (!hasRestrictedPromotionOrder && !isExplosive && !isHotProduct)
+            ? (product.allow_points == null ? 1 : (product.allow_points ? 1 : 0))
+            : 0;
         const lockedAgentUnitCost = nearestAgentRoleLevel
             ? resolveSupplyPriceByRole(product, sku, nearestAgentRoleLevel)
             : null;
@@ -1125,9 +1290,14 @@ async function createOrder(openid, orderData) {
             locked_agent_cost_candidate: lockedAgentUnitCost,
             locked_agent_cost: null,
             locked_agent_cost_total: null,
-            is_explosive: (product.is_explosive === true || product.is_explosive === 1) ? 1 : 0,
-            allow_points: (isExchangeOrder || limitedSpotContext) ? 0 : ((product.is_explosive === true || product.is_explosive === 1) ? 0
-                : (product.allow_points == null ? 1 : (product.allow_points ? 1 : 0))),
+            pickup_station_stock_id: '',
+            pickup_stock_reserved_qty: 0,
+            pickup_locked_supply_cost: null,
+            pickup_locked_supply_cost_total: null,
+            is_explosive: isExplosive ? 1 : 0,
+            product_tag: pickString(product.product_tag || 'normal'),
+            allow_coupon: allowCoupon,
+            allow_points: allowPoints,
             limited_sale_slot_id: limitedSpotContext && limitedSpotContext.source === 'limited_sale' ? limitedSpotContext.cardId : '',
             limited_sale_item_id: limitedSpotContext && limitedSpotContext.source === 'limited_sale' ? limitedSpotContext.offerId : '',
             exchange_coupon_id: isExchangeOrder ? String(exchange_coupon_id) : '',
@@ -1136,20 +1306,32 @@ async function createOrder(openid, orderData) {
             limited_spot_mode: limitedSpotContext ? limitedSpotContext.mode : '',
             activity_type: limitedSpotContext ? (limitedSpotContext.source === 'limited_sale' ? 'limited_sale' : 'limited_spot') : (groupActivity ? 'group' : (slashRecord ? 'slash' : '')),
             group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : '',
-            slash_no: slashRecord ? (slashRecord.slash_no || slash_no) : ''
+            slash_no: slashRecord ? (slashRecord.slash_no || slash_no) : '',
+            bundle_scene_type: bundleContext ? pickString(bundleContext.bundle?.scene_type) : '',
+            bundle_group_key: bundleContext ? pickString(item.bundle_group_key) : '',
+            bundle_group_title: bundleContext ? pickString(item.bundle_group_title) : '',
+            bundle_parent_title: bundleContext ? pickString(item.bundle_parent_title || bundleContext.bundle.title) : '',
+            direct_commission_fixed_amount: isFlexBundleOrder && directReferrer
+                ? resolveFixedCommissionAmountByRole(item.direct_commission_fixed_by_role, directReferrerRoleLevel)
+                : 0,
+            indirect_commission_fixed_amount: isFlexBundleOrder && indirectReferrer
+                ? resolveFixedCommissionAmountByRole(item.indirect_commission_fixed_by_role, indirectReferrerRoleLevel)
+                : 0
         });
         lockedAgentCostCandidates.push(lockedAgentUnitCost);
     }
 
     totalAmount = Math.round(totalAmount * 100) / 100;
     originalTotalAmount = Math.round(originalTotalAmount * 100) / 100;
+    if (bundleContext && roundMoney(bundleContext.bundle_price) > totalAmount) {
+        throw new Error('组合价不能高于所选商品原价合计，请联系管理员调整配置');
+    }
 
-    // 爆单品订单自动禁用优惠券
-    const hasExplosiveItem = orderItems.some(it => it.is_explosive === 1);
+    const couponAllowedByProducts = orderItems.every(it => it.allow_coupon !== 0);
 
     // 2. 优惠券抵扣（先计算折扣金额，暂不核销；核销放在订单创建成功之后，防止无回滚丢券）
     let couponDiscount = 0;
-    const selectedCouponId = (hasExplosiveItem || isExchangeOrder || limitedSpotContext) ? '' : (user_coupon_id || coupon_id);
+    const selectedCouponId = couponAllowedByProducts ? (user_coupon_id || coupon_id) : '';
     let usedCouponDocId = '';
     let usedCouponTemplateId = '';
     let pendingCouponDoc = null;  // 延迟核销的优惠券文档
@@ -1231,18 +1413,25 @@ async function createOrder(openid, orderData) {
         }
     }
 
+    const bundleDiscount = bundleContext
+        ? Math.max(0, roundMoney(totalAmount - roundMoney(bundleContext.bundle_price)))
+        : 0;
+
     // 4. 计算最终支付金额
-    let payAmount = totalAmount - couponDiscount - pointsDiscount;
+    let payAmount = totalAmount - bundleDiscount - couponDiscount - pointsDiscount;
     payAmount = Math.max(0, Math.round(payAmount * 100) / 100);
 
+    const bundleAllocations = allocateProportionalAmounts(orderItems, bundleDiscount, 'item_amount');
     const couponAllocations = allocateProportionalAmounts(orderItems, couponDiscount, 'item_amount');
     const pointsAllocations = allocateProportionalAmounts(orderItems, pointsDiscount, 'item_amount');
     orderItems.forEach((item, index) => {
+        const bundleAllocatedAmount = roundMoney(bundleAllocations[index]);
         const couponAllocatedAmount = roundMoney(couponAllocations[index]);
         const pointsAllocatedAmount = roundMoney(pointsAllocations[index]);
+        item.bundle_discount_allocated_amount = bundleAllocatedAmount;
         item.coupon_allocated_amount = couponAllocatedAmount;
         item.points_allocated_amount = pointsAllocatedAmount;
-        item.cash_paid_allocated_amount = roundMoney(item.item_amount - couponAllocatedAmount - pointsAllocatedAmount);
+        item.cash_paid_allocated_amount = roundMoney(item.item_amount - bundleAllocatedAmount - couponAllocatedAmount - pointsAllocatedAmount);
         item.refunded_cash_amount = 0;
         item.refunded_quantity = 0;
         item.refund_basis_version = 'snapshot_v1';
@@ -1272,7 +1461,7 @@ async function createOrder(openid, orderData) {
         }
     }
 
-    if ((delivery_type || 'express') === 'express') {
+    if (deliveryType === 'express') {
         if (!addressInfo) {
             throw new Error('收货地址不存在或不可用');
         }
@@ -1295,6 +1484,14 @@ async function createOrder(openid, orderData) {
 
     // 6. 生成订单号
     const orderNo = 'ORD' + Date.now() + Math.floor(Math.random() * 1000);
+    let pickupReservation = null;
+    if (deliveryType === 'pickup') {
+        pickupReservation = await reservePickupStationInventory(db, {
+            stationId: pickup_station_id,
+            orderNo,
+            items: orderItems
+        });
+    }
     const totalQuantity = orderItems.reduce((sum, item) => sum + Math.max(1, toNumber(item.qty || item.quantity, 1)), 0);
     const primaryItem = orderItems[0] || {};
     const addressSnapshot = buildAddressSnapshot(addressInfo);
@@ -1308,13 +1505,19 @@ async function createOrder(openid, orderData) {
         && lockedAgentCostCandidates.length > 0
         && lockedAgentCostCandidates.every((value) => Number.isFinite(value) && value > 0);
     const fulfillmentPartnerSummary = canAgentFulfill ? buildUserSummary(nearestAgentCandidate) : null;
+    const pickupReservationMap = new Map((pickupReservation?.reservations || []).map((entry) => [entry.itemKey, entry]));
     const normalizedOrderItems = orderItems.map((item) => {
+        const pickupReservationLine = pickupReservationMap.get(item.refund_item_key);
         if (!canAgentFulfill) {
             return {
                 ...item,
                 locked_agent_cost_candidate: undefined,
                 locked_agent_cost: null,
-                locked_agent_cost_total: null
+                locked_agent_cost_total: null,
+                pickup_station_stock_id: pickupReservationLine?.stock_id || '',
+                pickup_stock_reserved_qty: pickupReservationLine?.quantity || 0,
+                pickup_locked_supply_cost: pickupReservationLine ? roundMoney(pickupReservationLine.unit_cost) : null,
+                pickup_locked_supply_cost_total: pickupReservationLine ? roundMoney(pickupReservationLine.total_cost) : null
             };
         }
         const lockedAgentCost = roundMoney(item.locked_agent_cost_candidate);
@@ -1322,9 +1525,37 @@ async function createOrder(openid, orderData) {
             ...item,
             locked_agent_cost_candidate: undefined,
             locked_agent_cost: lockedAgentCost,
-            locked_agent_cost_total: roundMoney(lockedAgentCost * Math.max(1, toNumber(item.qty || item.quantity, 1)))
+            locked_agent_cost_total: roundMoney(lockedAgentCost * Math.max(1, toNumber(item.qty || item.quantity, 1))),
+            pickup_station_stock_id: pickupReservationLine?.stock_id || '',
+            pickup_stock_reserved_qty: pickupReservationLine?.quantity || 0,
+            pickup_locked_supply_cost: pickupReservationLine ? roundMoney(pickupReservationLine.unit_cost) : null,
+            pickup_locked_supply_cost_total: pickupReservationLine ? roundMoney(pickupReservationLine.total_cost) : null
         };
     });
+    const bundleMeta = bundleContext ? {
+        id: bundleContext.bundle_id,
+        title: pickString(bundleContext.bundle.title),
+        subtitle: pickString(bundleContext.bundle.subtitle),
+        scene_type: pickString(bundleContext.bundle.scene_type),
+        cover_image: pickString(bundleContext.bundle.cover_file_id || bundleContext.bundle.cover_image || ''),
+        cover_file_id: pickString(bundleContext.bundle.cover_file_id || ''),
+        bundle_price: roundMoney(bundleContext.bundle_price),
+        original_amount: roundMoney(totalAmount),
+        discount_amount: roundMoney(bundleDiscount),
+        display_mode: 'bundle_with_children',
+        stack_policy: 'exclusive',
+        groups: bundleContext.selections.map((selection) => ({
+            group_key: selection.group_key,
+            group_title: selection.group_title,
+            product_id: primaryId(selection.product),
+            sku_id: selection.sku ? primaryId(selection.sku) : '',
+            quantity: selection.quantity,
+            name: selection.product_name,
+            image: selection.product_image,
+            spec: selection.spec_text,
+            unit_price: selection.product_price
+        }))
+    } : null;
     const lockedAgentCostTotal = canAgentFulfill
         ? roundMoney(normalizedOrderItems.reduce((sum, item) => sum + toNumber(item.locked_agent_cost_total, 0), 0))
         : 0;
@@ -1347,6 +1578,7 @@ async function createOrder(openid, orderData) {
         sku: primaryItem.snapshot_spec || primaryItem.spec ? { spec_value: primaryItem.snapshot_spec || primaryItem.spec } : null,
         total_amount: totalAmount,
         original_amount: totalAmount,
+        bundle_discount: bundleDiscount,
         coupon_discount: couponDiscount,
         points_discount: pointsDiscount,
         points_used: actualPoints,
@@ -1354,6 +1586,8 @@ async function createOrder(openid, orderData) {
         buyer_role_level: buyerRoleLevel,
         pay_amount: payAmount,
         actual_price: payAmount,
+        bundle_id: bundleContext ? bundleContext.bundle_id : '',
+        bundle_meta: bundleMeta,
         refunded_cash_total: 0,
         refunded_quantity_total: 0,
         reward_points_clawback_total: 0,
@@ -1364,9 +1598,11 @@ async function createOrder(openid, orderData) {
         address_id: address_id || '',
         address: addressSnapshot,
         address_snapshot: addressSnapshot,
-        delivery_type: delivery_type || 'express',
+        delivery_type: deliveryType,
         pickup_station_id: pickup_station_id || '',
         pickupStation: pickupStationSummary,
+        pickup_station_claimant_id: pickupStationInfo?.pickup_claimant_id || pickupStationInfo?.claimant_id || null,
+        pickup_station_claimant_openid: String(pickupStationInfo?.pickup_claimant_openid || pickupStationInfo?.claimant_openid || ''),
         direct_referrer_id: directReferrer?._id || directReferrer?.id || directReferrer?._legacy_id || '',
         direct_referrer_openid: directReferrer?.openid || '',
         direct_referrer_role_level: directReferrer ? getUserRoleLevel(directReferrer) : 0,
@@ -1421,7 +1657,9 @@ async function createOrder(openid, orderData) {
         } : null,
         memo: memo || '',
         referrer_openid: directReferrer?.openid || '',
-        type: isExchangeOrder ? 'exchange' : (limitedSpotContext ? (limitedSpotContext.source === 'limited_sale' ? 'limited_sale' : 'limited_spot') : (groupActivity ? 'group' : (slashRecord ? 'slash' : (type || 'normal')))),
+        type: bundleContext
+            ? 'bundle'
+            : (isExchangeOrder ? 'exchange' : (limitedSpotContext ? (limitedSpotContext.source === 'limited_sale' ? 'limited_sale' : 'limited_spot') : (groupActivity ? 'group' : (slashRecord ? 'slash' : (type || 'normal'))))),
         group_activity_id: groupActivity ? (groupActivity._id || String(group_activity_id)) : '',
         legacy_group_activity_id: groupActivity ? (groupActivity.id || groupActivity._legacy_id || group_activity_id) : '',
         group_no: group_no || '',
@@ -1432,7 +1670,13 @@ async function createOrder(openid, orderData) {
         payment_timeout_minutes: autoCancelMinutes,
         expire_at: db.serverDate({ offset: autoCancelMinutes * 60 * 1000 }),
         // 标记库存已在创单时扣减，防止 payment-callback 的 ensureStockDeducted 重复扣
-        stock_deducted_at: stockDeductions.length > 0 ? db.serverDate() : null,
+        stock_deducted_at: deliveryType === 'express' && stockDeductions.length > 0 ? db.serverDate() : null,
+        pickup_stock_reservation_mode: deliveryType === 'pickup' ? 'station' : '',
+        pickup_stock_reservation_status: deliveryType === 'pickup' ? 'reserved' : '',
+        pickup_stock_reserved_at: deliveryType === 'pickup' ? db.serverDate() : null,
+        pickup_locked_supply_cost_total: pickupReservation ? roundMoney(pickupReservation.locked_supply_total) : 0,
+        pickup_stock_settlement_status: deliveryType === 'pickup' ? 'pending' : '',
+        pickup_stock_settled_at: null,
         created_at: db.serverDate(),
         updated_at: db.serverDate()
     };
@@ -1451,6 +1695,16 @@ async function createOrder(openid, orderData) {
             await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
                 db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
             ));
+            if (pickupReservation) {
+                await releasePickupStationInventoryForOrder(db, {
+                    _id: `precheck-${orderNo}`,
+                    id: `precheck-${orderNo}`,
+                    order_no: orderNo,
+                    pickup_station_id: pickup_station_id,
+                    items: normalizedOrderItems,
+                    pickup_stock_reservation_status: 'reserved'
+                }, '货款余额不足，释放自提门店预占库存').catch(() => {});
+            }
             throw new Error(`货款余额不足，当前余额 ¥${freshBalance.toFixed(2)}，订单金额 ¥${payAmount.toFixed(2)}`);
         }
     }
@@ -1468,6 +1722,16 @@ async function createOrder(openid, orderData) {
         await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
             db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
         ));
+        if (pickupReservation) {
+            await releasePickupStationInventoryForOrder(db, {
+                _id: `failed-create-${orderNo}`,
+                id: `failed-create-${orderNo}`,
+                order_no: orderNo,
+                pickup_station_id: pickup_station_id,
+                items: normalizedOrderItems,
+                pickup_stock_reservation_status: 'reserved'
+            }, '订单创建失败，释放自提门店预占库存').catch(() => {});
+        }
         throw new Error('创建订单失败，已回滚积分与库存: ' + addErr.message);
     }
 
@@ -1531,13 +1795,25 @@ async function createOrder(openid, orderData) {
                 await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
                     db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
                 ));
+                if (deliveryType === 'pickup') {
+                    await releasePickupStationInventoryForOrder(db, {
+                        _id: orderId,
+                        id: orderId,
+                        order_no: orderNo,
+                        pickup_station_id: pickup_station_id,
+                        items: normalizedOrderItems,
+                        pickup_stock_reservation_status: 'reserved'
+                    }, '货款支付并发失败，释放自提门店预占库存').catch(() => {});
+                }
                 throw new Error('货款余额不足，请刷新后重试');
             }
             goodsFundDeducted = true;
             await decreaseGoodsFundLedger(openid, payAmount, orderNo, '货款支付订单');
-            // 拼团订单货款支付后进入 pending_group（待成团），普通订单直接 paid
+            // 拼团订单货款支付后进入 pending_group（待成团），自提单进入 pickup_pending。
             const isGroupOrder = !!(groupActivity || group_no || group_activity_id);
-            const postPayStatus = isGroupOrder ? 'pending_group' : 'paid';
+            const postPayStatus = deliveryType === 'pickup'
+                ? 'pickup_pending'
+                : (isGroupOrder ? 'pending_group' : 'paid');
             await db.collection('orders').doc(orderId).update({
                 data: {
                     status: postPayStatus,
@@ -1592,6 +1868,16 @@ async function createOrder(openid, orderData) {
                 await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
                     db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
                 ));
+                if (deliveryType === 'pickup') {
+                    await releasePickupStationInventoryForOrder(db, {
+                        _id: orderId,
+                        id: orderId,
+                        order_no: orderNo,
+                        pickup_station_id: pickup_station_id,
+                        items: normalizedOrderItems,
+                        pickup_stock_reservation_status: 'reserved'
+                    }, '货款支付失败，释放自提门店预占库存').catch(() => {});
+                }
             }
             if (err.message.includes('货款')) throw err;
             console.error('[OrderCreate] 货款支付处理异常:', err.message);
@@ -1653,5 +1939,13 @@ async function createExchangeOrder(openid, orderData = {}) {
 
 module.exports = {
     createOrder,
-    createExchangeOrder
+    createExchangeOrder,
+    findUserByOpenid,
+    getUserRoleLevel,
+    isAgentRoleLevel,
+    normalizeAgentRoleLevel,
+    getPointDeductionRule,
+    getUserGoodsFundBalance,
+    ensureWalletAccountForUser,
+    buildAddressSnapshot
 };

@@ -69,15 +69,20 @@ function createCloudBaseStore(options) {
         'branch_agent_claims', 'branch_agent_stations', 'cart_items',
         'categories', 'commissions', 'content_boards', 'content_board_products',
         'coupon_claim_tickets',
-        'contents', 'coupon_auto_rules', 'coupons', 'dividend_executions',
+        'contents', 'coupon_auto_rules', 'coupons', 'directed_invites', 'dividend_executions',
         'deposit_orders', 'deposit_refunds',
+        'fund_pool_logs',
+        'goods_fund_transfer_applications',
         'goods_fund_logs',
+        'station_procurement_orders',
+        'station_sku_stocks',
+        'station_stock_logs',
         'group_activities', 'group_members', 'group_orders',
-        'agent_exit_applications', 'lottery_prizes', 'lottery_records',
+        'agent_exit_applications', 'lottery_prizes', 'lottery_claims', 'lottery_records',
         'limited_sale_slots', 'limited_sale_items',
         'mass_messages', 'material_groups', 'materials', 'notifications',
         'orders', 'page_layouts', 'pickup_stations', 'point_accounts',
-        'point_logs', 'portal_accounts', 'products', 'refunds', 'reviews',
+        'point_logs', 'portal_accounts', 'product_bundles', 'products', 'refunds', 'reviews',
         'skus', 'slash_activities', 'slash_helpers', 'slash_records',
         'splash_screens', 'stations', 'station_staff', 'user_coupons',
         'user_favorites', 'user_mass_messages', 'users', 'upgrade_applications',
@@ -472,9 +477,19 @@ function createCloudBaseStore(options) {
         },
         async reloadCollection(name) {
             const key = normalizeSourceName(name);
-            await ensureCollectionLoaded(key);
+            if (key === 'admin_singletons') {
+                if (dirtySingletons.has(key) || pendingSingletonFlush.has(key)) {
+                    await flushSingleton(key);
+                }
+                await loadCollection(key);
+                state.lastReloadAt = nowIso();
+                return singletonCache;
+            }
+            if (dirty.has(key) || pendingFlush.has(key)) {
+                await flushCollection(key);
+            }
+            await loadCollection(key);
             state.lastReloadAt = nowIso();
-            if (key === 'admin_singletons') return singletonCache;
             if (cache.has(key)) return cache.get(key);
             const meta = getCollectionState(key);
             if (meta.status === 'missing') return [];

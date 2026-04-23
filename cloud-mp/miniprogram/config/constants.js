@@ -18,7 +18,7 @@ const USER_ROLES = {
   AGENT: 3,       // 推广合伙人
   PARTNER: 4,     // 运营合伙人
   REGIONAL: 5,    // 区域合伙人
-  STORE: 6        // 线下实体门店
+  STORE: 6        // 店长
 };
 
 const ROLE_NAMES = {
@@ -28,7 +28,7 @@ const ROLE_NAMES = {
   [USER_ROLES.AGENT]: '推广合伙人',
   [USER_ROLES.PARTNER]: '运营合伙人',
   [USER_ROLES.REGIONAL]: '区域合伙人',
-  [USER_ROLES.STORE]: '线下实体门店'
+  [USER_ROLES.STORE]: '店长'
 };
 
 // ==================== 订单状态 ====================
@@ -72,7 +72,6 @@ const SEARCH_CONFIG = {
 const CACHE_KEYS = {
   USER_INFO: 'userInfo',
   OPENID: 'openid',
-  TOKEN: 'token',
   SEARCH_HISTORY: 'searchHistory',
   DIRECT_BUY_INFO: 'directBuyInfo',
   SELECTED_ADDRESS: 'selectedAddress'

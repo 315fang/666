@@ -3,10 +3,15 @@ const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
 const { navigate } = require('../../utils/navigator');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
-const { pickPreferredAssetRef, resolveCloudImageUrl } = require('../../utils/cloudAssetRuntime');
+const {
+    pickPreferredAssetRef,
+    warmRenderableImageUrls,
+    resolveRenderableImageUrl
+} = require('../../utils/cloudAssetRuntime');
 const { loadConfig } = require('./activityLoader');
-const { startBannerCountdown, clearBannerTimers } = require('./activityTimers');
+const { startBannerCountdown, clearBannerTimers, startSectionCountdown } = require('./activityTimers');
 const { buildActivitySections } = require('../../utils/activitySectionBuilder');
+const { getBrandNewsFallbackCover } = require('../../utils/brandNewsCover');
 const app = getApp();
 
 function getActivityPageConfig() {
@@ -27,32 +32,46 @@ function parsePositiveInt(v) {
 }
 
 async function resolveBannerSlideImages(slides = []) {
-    return Promise.all((Array.isArray(slides) ? slides : []).map(async (item) => ({
+    const items = Array.isArray(slides) ? slides : [];
+    await warmRenderableImageUrls(items);
+    return Promise.all(items.map(async (item) => ({
         ...item,
-        image: await resolveCloudImageUrl(item, '')
+        image: await resolveRenderableImageUrl(item, '')
     })));
 }
 
 async function resolveSectionImages(sections = []) {
-    return Promise.all((Array.isArray(sections) ? sections : []).map(async (section) => {
+    const rows = Array.isArray(sections) ? sections : [];
+    const sectionAssets = [];
+    rows.forEach((section) => {
+        if (Array.isArray(section.subCards) && section.subCards.length) {
+            sectionAssets.push(...section.subCards);
+            return;
+        }
+        sectionAssets.push(section);
+    });
+    await warmRenderableImageUrls(sectionAssets);
+    return Promise.all(rows.map(async (section) => {
         if (Array.isArray(section.subCards) && section.subCards.length) {
             const subCards = await Promise.all(section.subCards.map(async (card) => ({
                 ...card,
-                image: await resolveCloudImageUrl(card, '')
+                image: await resolveRenderableImageUrl(card, '')
             })));
             return { ...section, subCards };
         }
         return {
             ...section,
-            image: await resolveCloudImageUrl(section, '')
+            image: await resolveRenderableImageUrl(section, '')
         };
     }));
 }
 
 async function resolveBrandNewsImages(list = []) {
-    return Promise.all((Array.isArray(list) ? list : []).map(async (item) => ({
+    const items = Array.isArray(list) ? list : [];
+    await warmRenderableImageUrls(items);
+    return Promise.all(items.map(async (item) => ({
         ...item,
-        cover_image: await resolveCloudImageUrl(item, '')
+        cover_image: await resolveRenderableImageUrl(item, getBrandNewsFallbackCover(item))
     })));
 }
 
@@ -248,6 +267,22 @@ Page({
         this._clearBannerTimers();
     },
 
+    _restartSectionCountdowns(activitySections = []) {
+        const sections = Array.isArray(activitySections) ? activitySections : [];
+        sections.forEach((section) => {
+            const cards = Array.isArray(section.subCards) ? section.subCards : [];
+            cards.forEach((card) => {
+                if (!card || !card.countdownMeta) return;
+                startSectionCountdown(this, {
+                    sectionKey: section.key,
+                    cardKey: card.key,
+                    startTime: card.countdownMeta.startTime,
+                    endTime: card.countdownMeta.endTime
+                });
+            });
+        });
+    },
+
     async _applyActivityData({
         banners,
         permanent,
@@ -282,6 +317,7 @@ Page({
         resolvedSlides.forEach((item) => {
             if (item.end_time) this._startBannerCountdown(item.end_time, item.id);
         });
+        this._restartSectionCountdowns(activitySections);
     },
 
     // ── 加载后端配置 ─────────────────────────────────────────────
@@ -326,6 +362,7 @@ Page({
         this.setData({
             activitySections
         });
+        this._restartSectionCountdowns(activitySections);
     },
 
     // ── 构建 Banner 列表 ──────────────────────────────────────────

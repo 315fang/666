@@ -364,7 +364,7 @@ return { level: tier.level, discount: tier.discount };
 
 ## 📚 相关文档
 
-- **CODE_REVIEW.md** - 完整的代码审查报告
+- **docs/archive/root-history/CODE_REVIEW.md** - 完整的代码审查报告
 - **docs/P1_FIXES_SUMMARY.md** - P1 问题修复总结
 - **docs/COMPREHENSIVE_P2_VERIFICATION.md** - 综合验证报告
 - **MYSQL_TO_CLOUDBASE_MAPPING.md** - 数据库迁移指南

@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "updatedAt": "2026-04-19",
+  "description": "CloudBase collection contract for cloud-mp. Use this file as the default source of truth for collection scanning and creation policy.",
+  "groups": [
+    {
+      "key": "active_core",
+      "label": "正式主表",
+      "createByDefault": true,
+      "description": "当前运行主链直接依赖的主数据、配置数据和业务主表。",
+      "collections": [
+        "activities",
+        "activity_bubbles",
+        "activity_links",
+        "addresses",
+        "admins",
+        "admin_roles",
+        "admin_singletons",
+        "banners",
+        "brand_news",
+        "cart_items",
+        "categories",
+        "commissions",
+        "configs",
+        "content_board_products",
+        "content_boards",
+        "contents",
+        "coupon_auto_rules",
+        "coupons",
+        "group_activities",
+        "group_members",
+        "group_orders",
+        "lottery_configs",
+        "lottery_prizes",
+        "lottery_records",
+        "mass_messages",
+        "material_groups",
+        "materials",
+        "notifications",
+        "orders",
+        "page_layouts",
+        "product_bundles",
+        "products",
+        "refunds",
+        "reviews",
+        "skus",
+        "slash_activities",
+        "slash_helpers",
+        "slash_records",
+        "splash_screens",
+        "station_staff",
+        "stations",
+        "user_coupons",
+        "user_favorites",
+        "users",
+        "wallet_accounts",
+        "wallet_recharge_configs",
+        "wallet_recharge_orders",
+        "withdrawals"
+      ]
+    },
+    {
+      "key": "active_flow",
+      "label": "正式流程表",
+      "createByDefault": true,
+      "description": "与主表配套存在的申请单、档期、库存状态和流程状态表。",
+      "collections": [
+        "agent_exit_applications",
+        "coupon_claim_tickets",
+        "deposit_orders",
+        "deposit_refunds",
+        "directed_invites",
+        "dividend_executions",
+        "goods_fund_transfer_applications",
+        "limited_sale_items",
+        "limited_sale_slots",
+        "lottery_claims",
+        "station_procurement_orders",
+        "station_sku_stocks",
+        "upgrade_applications"
+      ]
+    },
+    {
+      "key": "active_logs",
+      "label": "正式日志表",
+      "createByDefault": true,
+      "description": "业务事件、资金流水、审计与库存流水等日志型集合。",
+      "collections": [
+        "admin_audit_logs",
+        "fund_pool_logs",
+        "goods_fund_logs",
+        "point_logs",
+        "promotion_logs",
+        "station_stock_logs",
+        "wallet_logs"
+      ]
+    },
+    {
+      "key": "compatibility_runtime",
+      "label": "兼容读取表",
+      "createByDefault": true,
+      "description": "当前代码仍有读取兼容路径，但不应继续扩散成新的主真相源。",
+      "collections": [
+        "app_configs"
+      ]
+    },
+    {
+      "key": "legacy_report_only",
+      "label": "兼容残留表",
+      "createByDefault": false,
+      "description": "代码仍有后台页面或旧逻辑引用，但应优先做报告和治理，不默认自动创建。",
+      "collections": [
+        "branch_agent_claims",
+        "branch_agent_stations"
+      ]
+    }
+  ],
+  "duplicateWatch": [
+    {
+      "canonical": "stations",
+      "aliases": [
+        "pickup_stations"
+      ],
+      "policy": "do_not_create_alias",
+      "reason": "正式代码统一使用 stations；pickup_stations 视为旧命名，不再扩散。"
+    },
+    {
+      "canonical": "admin_audit_logs",
+      "aliases": [
+        "admin_logs"
+      ],
+      "policy": "do_not_create_alias",
+      "reason": "后台操作审计统一收口到 admin_audit_logs。"
+    },
+    {
+      "canonical": "limited_sale_slots + limited_sale_items",
+      "aliases": [
+        "activity_links"
+      ],
+      "policy": "not_duplicate",
+      "reason": "activity_links 只负责活动入口配置，不承载限时档期和商品售卖状态。"
+    },
+    {
+      "canonical": "goods_fund_transfer_applications",
+      "aliases": [
+        "goods_fund_logs"
+      ],
+      "policy": "not_duplicate",
+      "reason": "前者是申请单/审核流，后者是实际货款流水。"
+    },
+    {
+      "canonical": "station_procurement_orders + station_sku_stocks + station_stock_logs",
+      "aliases": [
+        "stations"
+      ],
+      "policy": "not_duplicate",
+      "reason": "门店主资料、库存状态、库存流水和备货单属于不同层级对象。"
+    },
+    {
+      "canonical": "deposit_orders + deposit_refunds + coupon_claim_tickets",
+      "aliases": [
+        "orders",
+        "refunds",
+        "user_coupons"
+      ],
+      "policy": "not_duplicate",
+      "reason": "押金领券链路独立于普通订单、普通退款和普通用户券。"
+    }
+  ],
+  "reportOnlyLiveCollections": [
+    "mysql",
+    "pickup_verifiers",
+    "point_accounts",
+    "portal_accounts",
+    "user_mass_messages"
+  ]
+}

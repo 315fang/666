@@ -1,0 +1,70 @@
+{
+  "generated_at": "2026-04-19T16:04:36.007Z",
+  "apply": false,
+  "target_count": 9,
+  "targets": [
+    {
+      "docId": "3bef321d69db89b003f7c6f306188194",
+      "openid": "oc0ZD3bWzY7Xcyj02iWm4lyKfBCE",
+      "amount": -1,
+      "type": "withdraw",
+      "description": "提现1元"
+    },
+    {
+      "docId": "da3d566169dd0f0d041a44f11121ba70",
+      "openid": "oc0ZD3Y5yrF5ezpwwSPUtkJWna1Q",
+      "amount": -339.15,
+      "type": "refund_reopen_reversal",
+      "description": "退款回退冲正 ORD202603301847220003575239"
+    },
+    {
+      "docId": "2d12bec269dd0f15042bfbef2e871c33",
+      "openid": "oc0ZD3Y5yrF5ezpwwSPUtkJWna1Q",
+      "amount": -299,
+      "type": "refund_reopen_reversal",
+      "description": "退款回退冲正 ORD202603301859370001586766"
+    },
+    {
+      "docId": "b3c6c3d569dd0f1d0424b99949f2a6c6",
+      "openid": "oc0ZD3Y5yrF5ezpwwSPUtkJWna1Q",
+      "amount": -299,
+      "type": "refund_reopen_reversal",
+      "description": "退款回退冲正 ORD202604021245010002973888"
+    },
+    {
+      "docId": "33956e3d69de26ce043e398b420ad317",
+      "openid": "oc0ZD3Y5yrF5ezpwwSPUtkJWna1Q",
+      "amount": 299,
+      "type": "refund",
+      "description": "订单退款 ORD202603301859370001586766"
+    },
+    {
+      "docId": "8d2e20b369de26d1043fb5795dea5b27",
+      "openid": "oc0ZD3Y5yrF5ezpwwSPUtkJWna1Q",
+      "amount": 299,
+      "type": "refund",
+      "description": "订单退款 ORD202604021245010002973888"
+    },
+    {
+      "docId": "69d4baf669de26d6043d190930df6e34",
+      "openid": "oc0ZD3Y5yrF5ezpwwSPUtkJWna1Q",
+      "amount": 339.15,
+      "type": "refund",
+      "description": "订单退款 ORD202603301847220003575239"
+    },
+    {
+      "docId": "f0df711e69df587c0461f5a338293995",
+      "openid": "oc0ZD3bWzY7Xcyj02iWm4lyKfBCE",
+      "amount": 1,
+      "type": "withdraw_reject_refund",
+      "description": "提现驳回退回 1 元"
+    },
+    {
+      "docId": "f0df711e69df58830461f61277e37ac7",
+      "openid": "oc0ZD3Y5yrF5ezpwwSPUtkJWna1Q",
+      "amount": 10,
+      "type": "withdraw_reject_refund",
+      "description": "提现驳回退回 10 元"
+    }
+  ]
+}

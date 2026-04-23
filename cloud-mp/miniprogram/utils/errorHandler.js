@@ -110,11 +110,6 @@ class ErrorHandler {
    * 登录过期处理
    */
   static handleLoginExpired() {
-    // 清除本地登录信息
-    wx.removeStorageSync('token');
-    wx.removeStorageSync('openid');
-    wx.removeStorageSync('userInfo');
-
     // 显示提示
     wx.showToast({
       title: ERROR_MESSAGES.LOGIN_EXPIRED,
@@ -124,6 +119,19 @@ class ErrorHandler {
 
     // 尝试自动重新登录
     const app = getApp();
+    if (app && typeof app.logout === 'function') {
+      try {
+        app.logout();
+      } catch (_) {
+        wx.removeStorageSync('token');
+        wx.removeStorageSync('openid');
+        wx.removeStorageSync('userInfo');
+      }
+    } else {
+      wx.removeStorageSync('token');
+      wx.removeStorageSync('openid');
+      wx.removeStorageSync('userInfo');
+    }
     if (app && app.wxLogin) {
       setTimeout(() => {
         app.wxLogin().catch(() => {

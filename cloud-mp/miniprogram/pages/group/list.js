@@ -61,7 +61,9 @@ function buildGroupBuyInfo(activity = {}) {
         spec: activity.sku_id ? '拼团·指定规格' : '拼团特惠',
         type: 'group',
         group_activity_id: activity._id || activity.id,
-        supports_pickup: product.supports_pickup ? 1 : 0
+        supports_pickup: product.supports_pickup ? 1 : 0,
+        allow_coupon: 0,
+        allow_points: 0
     };
 }
 
@@ -171,7 +173,7 @@ Page({
             wx.hideLoading();
         }
         if (!targetGroupNo) {
-            wx.showToast({ title: paymentStatus === 'paid' ? '拼团进度生成中，请稍后重试' : '支付成功后可在订单中查看拼团进度', icon: 'none' });
+            wx.showToast({ title: paymentStatus === 'paid' ? '拼团记录生成中，请稍后重试' : '支付后可在订单中查看拼团', icon: 'none' });
             return;
         }
         wx.navigateTo({ url: `/pages/group/detail?group_no=${targetGroupNo}` });
@@ -215,7 +217,7 @@ Page({
             wx.hideLoading();
         }
         if (!targetGroupNo) {
-            wx.showToast({ title: paymentStatus === 'paid' ? '拼团进度生成中，请稍后再试分享' : '支付成功后再分享拼团', icon: 'none' });
+            wx.showToast({ title: paymentStatus === 'paid' ? '拼团记录生成中，请稍后再分享' : '支付后再分享拼团', icon: 'none' });
             return;
         }
         wx.navigateTo({ url: `/pages/group/detail?group_no=${targetGroupNo}&share=1` });

@@ -22,6 +22,7 @@ const { requestCache } = require('../../utils/requestCache');
 const { fetchPointSummary } = require('../../utils/points');
 const { listFavorites, listFootprints } = require('../../utils/localUserContent');
 const { parseImages } = require('../../utils/dataFormatter');
+const { resolveCloudImageUrl } = require('../../utils/cloudAssetRuntime');
 
 const USER_DASHBOARD_TTL = 15 * 1000;
 const USER_SECONDARY_TTL = 60 * 1000;
@@ -99,6 +100,49 @@ function buildDisplayNickname(info) {
     return String(rawName).trim() || '微信用户';
 }
 
+async function resolveQuadPreviewImage(value) {
+    const resolved = await resolveCloudImageUrl(value, QUAD_PLACEHOLDER).catch(() => '');
+    return resolved || QUAD_PLACEHOLDER;
+}
+
+async function buildLocalQuadPreviews() {
+    const favorites = listFavorites();
+    const footprints = listFootprints();
+    const [favoriteImage, footprintImage] = await Promise.all([
+        favorites[0] ? resolveQuadPreviewImage(favorites[0]?.image_ref || favorites[0]?.image) : Promise.resolve(QUAD_PLACEHOLDER),
+        footprints[0] ? resolveQuadPreviewImage(footprints[0]?.image_ref || footprints[0]?.image) : Promise.resolve(QUAD_PLACEHOLDER)
+    ]);
+    return {
+        quadFavorite: {
+            count: favorites.length,
+            sub: favorites.length ? `${favorites.length}件收藏宝贝` : '暂无收藏',
+            image: favoriteImage,
+            hasImage: !!favorites[0]
+        },
+        quadFootprint: {
+            count: footprints.length,
+            sub: footprints.length ? `${footprints.length}条浏览足迹` : '看过的商品',
+            image: footprintImage,
+            hasImage: !!footprints[0]
+        }
+    };
+}
+
+function normalizeQuadPreviewCard(raw = {}, fallback = {}) {
+    const image = raw.image || raw.cover_image || fallback.image || QUAD_PLACEHOLDER;
+    const count = Number.isFinite(Number(raw.count)) ? Number(raw.count) : Number(fallback.count || 0);
+    return {
+        ...fallback,
+        ...raw,
+        count,
+        image: image || QUAD_PLACEHOLDER,
+        hasImage: raw.hasImage != null
+            ? !!raw.hasImage
+            : (raw.has_image != null ? !!raw.has_image : !!(image && image !== QUAD_PLACEHOLDER)),
+        sub: raw.sub || raw.subtitle || fallback.sub || ''
+    };
+}
+
 function orderFirstThumb(order) {
     if (!order || !order.product) return QUAD_PLACEHOLDER;
     const imgs = parseImages(order.product.images);
@@ -123,15 +167,15 @@ function applyGrowthDisplay(page, info) {
 
     let subLine = '';
     if (!nextTier) {
-        subLine = membershipConfig.growth_bar_max_tier_text || '您已达到当前成长体系最高档位';
+        subLine = membershipConfig.growth_bar_max_tier_text || '已达到当前最高等级';
     } else {
         const needRaw = nextThreshold != null ? Number(nextThreshold) - growthValue : 0;
         const need = Math.max(0, Math.ceil(needRaw));
         const template = membershipConfig.growth_bar_subtitle_template || '距离「{next}」还需 {need} 成长值';
         const nextName = nextTier.name || '下一等级';
-        subLine = String(template)
+        subLine = String(template
             .replace(/\{next\}/g, nextName)
-            .replace(/\{need\}/g, String(need));
+            .replace(/\{need\}/g, String(need)));
     }
 
     page.setData({
@@ -176,26 +220,95 @@ function scheduleSecondaryLoads(page, forceRefresh = false) {
     }
 
     clearSecondaryLoadState(page);
-    const delay = forceRefresh ? 0 : 180;
+    const delay = forceRefresh ? 0 : 200;
     page._secondaryLoadPromise = new Promise((resolve) => {
         page._secondaryLoadDone = resolve;
         page._secondaryLoadTimer = setTimeout(() => {
             page._secondaryLoadTimer = null;
-            const tasks = [
-                loadOrderCounts(page),
-                loadNotificationsCount(page),
-                loadAssetRow(page),
-                loadQuadPreviews(page),
-                loadDistributionInfo(page),
-                loadPickupVerifyScope(page)
-            ];
-            Promise.allSettled(tasks).finally(() => {
+            loadDashboardBootstrap(page).catch(() => {
+                const legacyTasks = [
+                    loadOrderCounts(page),
+                    loadNotificationsCount(page),
+                    loadAssetRow(page),
+                    loadQuadPreviews(page),
+                    loadDistributionInfo(page),
+                    loadPickupVerifyScope(page)
+                ];
+                return Promise.allSettled(legacyTasks);
+            }).finally(() => {
                 page._lastSecondaryRefreshAt = Date.now();
                 clearSecondaryLoadState(page);
             });
         }, delay);
     });
     return page._secondaryLoadPromise;
+}
+
+async function loadDashboardBootstrap(page) {
+    if (!app.globalData.isLoggedIn) {
+        const localQuad = await buildLocalQuadPreviews();
+        page.setData(localQuad);
+        return;
+    }
+
+    const response = await get('/user/dashboard-bootstrap', {}, { showError: false });
+    if (!response || response.code !== 0 || !response.data) {
+        throw new Error('dashboard bootstrap failed');
+    }
+
+    const payload = response.data || {};
+    const localQuad = await buildLocalQuadPreviews();
+    const favoriteCard = normalizeQuadPreviewCard(payload.quadPreview?.favorite || {}, localQuad.quadFavorite);
+    const footprintPayload = payload.quadPreview?.footprint || {};
+    const useServerFootprint = Number(footprintPayload.count || 0) > 0 || !!(footprintPayload.image || footprintPayload.cover_image);
+    const footprintCard = useServerFootprint
+        ? normalizeQuadPreviewCard(footprintPayload, localQuad.quadFootprint)
+        : localQuad.quadFootprint;
+
+    const nextStats = {
+        pending: Number(payload.orderStats?.pending || 0),
+        paid: Number(payload.orderStats?.paid || 0),
+        shipped: Number(payload.orderStats?.shipped || 0),
+        pendingReview: Number(payload.orderStats?.pendingReview || 0),
+        refund: Number(payload.orderStats?.refund || 0)
+    };
+    const seenSnapshot = readOrderBadgeSnapshot(page);
+    const freshFlags = buildOrderFreshFlags(nextStats, seenSnapshot);
+    const currentFlags = page.data.orderFreshFlags || {};
+    const mergedFlags = {};
+    ['pending', 'paid', 'shipped', 'pendingReview', 'refund'].forEach((key) => {
+        mergedFlags[key] = freshFlags[key] ? true : (currentFlags[key] || false);
+    });
+
+    const distributionCard = payload.distributionCard || {};
+    const pickupScopeLight = payload.pickupScopeLight || {};
+
+    page.setData({
+        'orderStats.pending': nextStats.pending,
+        'orderStats.paid': nextStats.paid,
+        'orderStats.shipped': nextStats.shipped,
+        'orderStats.pendingReview': nextStats.pendingReview,
+        'orderStats.refund': nextStats.refund,
+        orderFreshFlags: mergedFlags,
+        notificationsCount: Number(payload.notificationsCount || 0),
+        unusedCouponCount: Number(payload.assetRow?.unusedCouponCount || 0),
+        pointsBalanceDisplay: String(payload.assetRow?.pointsBalance != null ? payload.assetRow.pointsBalance : 0),
+        quadFavorite: favoriteCard,
+        quadFootprint: footprintCard,
+        stats: { frozenAmount: distributionCard.frozenAmount || '0.00' },
+        balance: distributionCard.balance != null ? String(distributionCard.balance) : '0',
+        commissionBalance: distributionCard.commissionBalance != null ? String(distributionCard.commissionBalance) : '0',
+        teamCount: Number(distributionCard.teamCount || 0),
+        isAgent: distributionCard.isAgent != null ? !!distributionCard.isAgent : page.data.isAgent,
+        displayAgentRoleLevel: Number(distributionCard.roleLevel != null ? distributionCard.roleLevel : page.data.displayAgentRoleLevel || 0),
+        agentRoleBadgeName: distributionCard.roleName || page.data.agentRoleBadgeName,
+        agentPillSkinClass: agentPillSkinClassForLevel(Number(distributionCard.roleLevel != null ? distributionCard.roleLevel : page.data.displayAgentRoleLevel || 0)),
+        showPickupVerify: !!pickupScopeLight.hasVerifyAccess,
+        isStoreManager: !!pickupScopeLight.isStoreManager,
+        storeManagerStationName: pickupScopeLight.stationName || '',
+        storeManagerStationCount: Number(pickupScopeLight.stationCount || 0),
+        pickupVerifyScope: pickupScopeLight.hasVerifyAccess ? pickupScopeLight : null
+    });
 }
 
 async function loadPageLayoutConfig(page) {
@@ -313,9 +426,9 @@ async function loadUserInfo(page, forceRefresh = false) {
         refreshBusinessCenterVisibility(page);
     }).finally(() => {
         page._dashboardRefreshPromise = null;
+        scheduleSecondaryLoads(page, forceRefresh);
     });
 
-    scheduleSecondaryLoads(page, forceRefresh);
     return page._dashboardRefreshPromise;
 }
 
@@ -349,20 +462,9 @@ async function loadAssetRow(page) {
 }
 
 async function loadQuadPreviews(page) {
-    const favorites = listFavorites();
-    const footprints = listFootprints();
-    let quadFavorite = {
-        count: favorites.length,
-        sub: favorites.length ? `${favorites.length}件收藏宝贝` : '暂无收藏',
-        image: favorites[0]?.image || QUAD_PLACEHOLDER,
-        hasImage: !!favorites[0]?.image
-    };
-    let quadFootprint = {
-        count: footprints.length,
-        sub: footprints.length ? `${footprints.length}条浏览足迹` : '看过的商品',
-        image: footprints[0]?.image || QUAD_PLACEHOLDER,
-        hasImage: !!footprints[0]?.image
-    };
+    const localQuad = await buildLocalQuadPreviews();
+    let quadFavorite = localQuad.quadFavorite;
+    let quadFootprint = localQuad.quadFootprint;
 
     if (!app.globalData.isLoggedIn) {
         page.setData({ quadFavorite, quadFootprint });
@@ -374,13 +476,20 @@ async function loadQuadPreviews(page) {
             get('/user/favorites', {}, { showError: false }).catch(() => null)
         ]);
 
-        if (favoriteResponse && favoriteResponse.code === 0 && Array.isArray(favoriteResponse.data) && favoriteResponse.data.length) {
-            const list = favoriteResponse.data;
+        const favoriteList = favoriteResponse && favoriteResponse.code === 0
+            ? (Array.isArray(favoriteResponse.data)
+                ? favoriteResponse.data
+                : (Array.isArray(favoriteResponse.data && favoriteResponse.data.list) ? favoriteResponse.data.list : []))
+            : [];
+
+        if (favoriteList.length) {
+            const list = favoriteList;
+            const favoriteImage = await resolveQuadPreviewImage(list[0].image_ref || list[0].image || list[0].product_image);
             quadFavorite = {
                 count: list.length,
                 sub: `${list.length}件收藏宝贝`,
-                image: list[0].image || QUAD_PLACEHOLDER,
-                hasImage: !!list[0].image
+                image: favoriteImage,
+                hasImage: favoriteImage !== QUAD_PLACEHOLDER
             };
         }
 
@@ -571,7 +680,10 @@ async function loadPickupVerifyScope(page) {
     if (!app.globalData.isLoggedIn) {
         page.setData({
             showPickupVerify: false,
-            pickupVerifyScope: null
+            pickupVerifyScope: null,
+            isStoreManager: false,
+            storeManagerStationName: '',
+            storeManagerStationCount: 0
         });
         return;
     }
@@ -579,9 +691,14 @@ async function loadPickupVerifyScope(page) {
         const response = await get('/stations/my-scope', {}, { showError: false });
         console.log('[userDashboard] loadPickupVerifyScope response:', JSON.stringify(response?.data || null));
         if (response && response.code === 0 && response.data) {
+            const stations = Array.isArray(response.data.stations) ? response.data.stations : [];
+            const managerStations = stations.filter((item) => String(item.my_role || '') === 'manager');
             page.setData({
                 showPickupVerify: !!response.data.has_verify_access,
-                pickupVerifyScope: response.data
+                pickupVerifyScope: response.data,
+                isStoreManager: managerStations.length > 0,
+                storeManagerStationName: managerStations[0]?.name || '',
+                storeManagerStationCount: managerStations.length
             });
             return;
         }
@@ -590,7 +707,10 @@ async function loadPickupVerifyScope(page) {
     }
     page.setData({
         showPickupVerify: false,
-        pickupVerifyScope: null
+        pickupVerifyScope: null,
+        isStoreManager: false,
+        storeManagerStationName: '',
+        storeManagerStationCount: 0
     });
 }
 

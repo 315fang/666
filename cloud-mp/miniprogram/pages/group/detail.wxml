@@ -59,7 +59,7 @@
 
       <view class="hero-stats">
         <view class="stat-card">
-          <text class="stat-label">当前进度</text>
+          <text class="stat-label">成团进度</text>
           <text class="stat-value">{{detail.current_members || 0}}/{{detail.min_members || 2}}</text>
         </view>
         <view class="stat-card">
@@ -109,11 +109,11 @@
     </view>
 
     <view class="section-card">
-      <text class="section-title block-title">拼团规则</text>
-      <view class="rule-line"><text class="rule-dot"></text><text>本团最多 {{detail._maxCap}} 人，优先级以先付款为准。</text></view>
-      <view class="rule-line" wx:if="{{detail._expireHours}}"><text class="rule-dot"></text><text>开团后 {{detail._expireHours}} 小时内未满员则自动失败。</text></view>
-      <view class="rule-line" wx:if="{{detail.activity && detail.activity.stock_limit > 0}}"><text class="rule-dot"></text><text>活动热度：已拼 {{detail._soldCount}} 件 · 库存剩 {{detail._stockRemain}} 件。</text></view>
-      <view class="rule-line"><text class="rule-dot"></text><text>成团后订单进入履约，未成团将按平台规则处理退款。</text></view>
+      <text class="section-title block-title">活动规则</text>
+      <view class="rule-line"><text class="rule-dot"></text><text>本团最多 {{detail._maxCap}} 人，以付款顺序为准。</text></view>
+      <view class="rule-line" wx:if="{{detail._expireHours}}"><text class="rule-dot"></text><text>开团后 {{detail._expireHours}} 小时内未满员则自动结束。</text></view>
+      <view class="rule-line" wx:if="{{detail.activity && detail.activity.stock_limit > 0}}"><text class="rule-dot"></text><text>已拼 {{detail._soldCount}} 件 · 剩余 {{detail._stockRemain}} 件。</text></view>
+      <view class="rule-line"><text class="rule-dot"></text><text>成团后进入发货流程，未成团按规则退款。</text></view>
     </view>
 
     <view class="section-card" wx:if="{{detail.activity && detail.activity.stock_limit > 0}}">
@@ -141,7 +141,7 @@
 
     <view class="state-banner success-banner" wx:if="{{detail.status === 'success'}}">
       <text class="state-title">恭喜成团</text>
-      <text class="state-desc">拼团成功，订单将自动进入后续履约流程。</text>
+      <text class="state-desc">拼团成功，订单已进入发货流程。</text>
     </view>
 
     <view class="state-banner fail-banner" wx:if="{{detail.status === 'fail' || detail.status === 'cancelled'}}">
@@ -154,12 +154,12 @@
     <block wx:if="{{detail.status === 'open' && detail.my_payment_status === 'paid'}}">
       <button class="btn-col-share share-button-reset" wx:if="{{detail.is_member}}" open-type="share">
         <image src="/assets/icons/share.svg" class="btn-icon" mode="aspectFit"/>
-        <text class="btn-col-main">邀好友</text>
+        <text class="btn-col-main">邀请好友</text>
         <text class="btn-col-sub">差{{detail._needMore}}人</text>
       </button>
       <view class="btn-join-wrap">
         <view class="btn-disabled btn-status-note">
-          <text>你已参团，等待成团</text>
+          <text>已参团，等待成团</text>
         </view>
       </view>
     </block>
@@ -167,7 +167,7 @@
       <view class="btn-join-wrap full-width">
         <view class="btn-join btn-pay" bindtap="onGoPayMyOrder">
           <text class="btn-line1">去支付</text>
-          <text class="btn-line2">完成支付后自动加入拼团</text>
+          <text class="btn-line2">支付后自动加入拼团</text>
         </view>
       </view>
     </block>
@@ -175,7 +175,7 @@
       <view class="btn-join-wrap full-width">
         <view class="btn-join" bindtap="onJoin">
           <text class="btn-line1">重新参团</text>
-          <text class="btn-line2">当前订单已取消，可重新加入本团</text>
+          <text class="btn-line2">原订单已取消，可重新参团</text>
         </view>
       </view>
     </block>
@@ -184,7 +184,7 @@
         <view class="btn-join" bindtap="onJoin">
           <text class="btn-line1">¥{{detail.group_price}} 去参团</text>
           <text class="btn-line2" wx:if="{{detail._saveNum > 0}}">拼团省¥{{detail._savePerUnit}} · 库存{{detail._stockRemain}}件</text>
-          <text class="btn-line2" wx:else>支付成功后占用名额</text>
+          <text class="btn-line2" wx:else>支付成功后锁定名额</text>
         </view>
       </view>
     </block>

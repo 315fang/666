@@ -1,0 +1,91 @@
+{
+  "kind": "cloudbase_product_image_fileid_repair_report",
+  "executed_at": "2026-04-20T13:23:35.997Z",
+  "mode": "apply",
+  "environment": {
+    "env_id": "cloud1-9gywyqe49638e46f",
+    "auth_status": "READY",
+    "env_status": "READY"
+  },
+  "summary": {
+    "scanned_documents": 29,
+    "changed_documents": 3,
+    "failed_documents": 0,
+    "repaired_urls": 37
+  },
+  "collections": [
+    {
+      "name": "products",
+      "scanned": 18,
+      "changed": 3,
+      "failed": 0
+    },
+    {
+      "name": "skus",
+      "scanned": 11,
+      "changed": 0,
+      "failed": 0
+    }
+  ],
+  "changed": [
+    {
+      "collection": "products",
+      "id": "10",
+      "title": "皮脂膜精华液(次抛装)",
+      "changed_urls": [
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776674568505_fcbcbac6576f.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776674569671_2bc9dc2ad869.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776674571603_dd64b731bcbf.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776674573155_c0f875dafdf2.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776674574504_6167934d61d2.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776674601175_03a212af699a.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776674602676_cc5390f3c050.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776674603863_cb1bb7d4a9f6.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776674604850_1e2434d106df.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776674605688_cc18dca3d452.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776674606572_e3974d223fee.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776674607805_a0b281d84680.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776674608901_8cd20c91991e.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776674609830_808ac6d38200.jpg"
+      ]
+    },
+    {
+      "collection": "products",
+      "id": "15",
+      "title": "燕窝奢宠面膜/补水美白修护舒缓保湿维稳亮肤懒人神器",
+      "changed_urls": [
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776669084334_455ca7a43086.png",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776669085229_3152b16c8c04.png",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776669086001_e6e4b884c8ec.png",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776669101540_63348b9da885.png",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776669102442_88434c7b5bb0.png",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776669103542_f0e163466d7c.png",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776669104643_aa9def0192bd.png",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776669105635_481354f18d0b.png",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776669106580_f8d3a4973e5a.png",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776669107527_b55dd7f5c127.png"
+      ]
+    },
+    {
+      "collection": "products",
+      "id": "18",
+      "title": "赋活精华组套/防脱防断固发强韧发根增加发量修复毛囊赋活莹润精华组合万人验证",
+      "changed_urls": [
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776671240489_1ba596ca0627.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776671242161_b102571c8f48.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776671243497_ce021241e2c3.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776671244699_3c7de92598a5.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776671277671_19e041b390aa.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776671278505_00b8946f729c.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776671279697_54600ac11d84.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776671281059_630486204366.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776671282292_0c8c78b79efb.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776671283231_2abc98767839.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776671284555_4d37a76e2e1e.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776671285624_1cc896262043.jpg",
+        "https://636c-cloud1-9gywyqe49638e46f-1419893803.tcb.qcloud.la/materials/2026-04-20/1776671286274_32decda4af1f.jpg"
+      ]
+    }
+  ],
+  "failures": []
+}

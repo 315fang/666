@@ -33,6 +33,7 @@
             <view class="hero-tags">
               <text class="hero-pill">{{member.level_label}}</text>
               <text class="hero-pill light">{{member.role_name}}</text>
+              <text class="hero-pill light">{{member.relation_source_text || (member.relation_source === 'directed_b1' ? '定向邀约' : '普通邀请')}}</text>
             </view>
             <text class="hero-relation">{{member.relation_text}}</text>
           </view>
@@ -71,6 +72,13 @@
         <view>
           <text class="action-title">继续拓展团队</text>
           <text class="action-sub">去生成海报，继续邀请一级成员进入你的团队</text>
+        </view>
+        <text class="action-arrow">›</text>
+      </view>
+      <view class="action-card" wx:if="{{member.can_apply_goods_fund_transfer}}" bindtap="onCreateGoodsFundTransfer">
+        <view>
+          <text class="action-title">申请货款划拨</text>
+          <text class="action-sub">仅支持直属下级；每一笔都需后台审核后才会真正到账</text>
         </view>
         <text class="action-arrow">›</text>
       </view>

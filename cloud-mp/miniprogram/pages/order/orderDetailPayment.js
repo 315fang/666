@@ -1,4 +1,5 @@
 const { get, post } = require('../../utils/request');
+const { promptPortalPassword } = require('../../utils/portalPassword');
 
 function shouldUseWalletForOrder(page, app, orderId) {
     const roleLevel = app.globalData.userInfo && app.globalData.userInfo.role_level || 0;
@@ -37,13 +38,26 @@ async function onPayOrder(page, app) {
     };
     const done = () => { page._paying = false; };
 
-    wx.showLoading({ title: '支付中...' });
-    loadingVisible = true;
     try {
         const useWallet = shouldUseWalletForOrder(page, app, order.id);
+        let portalPassword = '';
+        if (useWallet) {
+            portalPassword = await promptPortalPassword({
+                title: '货款支付验证',
+                placeholderText: '请输入6位数字业务密码'
+            });
+            if (!portalPassword) {
+                safeHideLoading();
+                done();
+                return;
+            }
+        }
+        wx.showLoading({ title: '支付中...' });
+        loadingVisible = true;
 
         const prepayRes = await post(`/orders/${order.id}/prepay`, {
-            use_wallet_balance: useWallet
+            use_wallet_balance: useWallet,
+            portal_password: portalPassword
         });
         if (prepayRes.code !== 0) {
             safeHideLoading();

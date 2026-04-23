@@ -16,9 +16,6 @@ function normalizeTargetLinkValue(linkType, linkValue) {
     if (type === 'flash_sale') {
         return value === '__flash_sale__' ? '' : value
     }
-    if (type === 'coupon_center') {
-        return value || '__coupon_center__'
-    }
     return value
 }
 
@@ -30,7 +27,6 @@ function isValidPagePath(path) {
 
 function matchesTarget(target, linkType, linkValue) {
     if (!target || target.link_type !== String(linkType || 'none').trim()) return false
-    if (target.link_type === 'coupon_center') return true
     return normalizeTargetLinkValue(target.link_type, target.link_value) === normalizeTargetLinkValue(linkType, linkValue)
 }
 

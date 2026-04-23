@@ -364,15 +364,6 @@ class SharePosterCore {
                 fallbackBg: '#E9E1D6',
                 fallbackColor: '#6D5A45'
             });
-        } else {
-            this.fillRoundRect(ctx, textStartX, cardY + 36, 112, 36, 18, '#F1E3CA');
-            ctx.save();
-            ctx.fillStyle = '#8E6A34';
-            ctx.font = '600 18px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(String(brandConfig.official_promo_badge || '官方宣传').slice(0, 6), textStartX + 56, cardY + 54);
-            ctx.restore();
         }
 
         ctx.save();
@@ -388,7 +379,7 @@ class SharePosterCore {
         let titleExtraLines = 0;
         if (isBrandVariant) {
             const titleLines = splitBrandTitleLines(displayName);
-            const titleLineY = cardY + 108;
+            const titleLineY = cardY + 82;
             const titleLineGap = 36;
             titleLines.forEach((line, idx) => {
                 ctx.fillText(line, nameX, titleLineY + idx * titleLineGap);
@@ -404,13 +395,13 @@ class SharePosterCore {
         if (!isBrandVariant) {
             ctx.fillText(introText, textStartX, cardY + 132);
         } else if (brandHasIntro) {
-            ctx.fillText(introText, textStartX, cardY + 150 + introShift);
+            ctx.fillText(introText, textStartX, cardY + 124 + introShift);
         }
 
         ctx.fillStyle = '#B74848';
         ctx.font = '600 17px sans-serif';
         const highlightY = isBrandVariant
-            ? (brandHasIntro ? cardY + 194 : cardY + 158) + introShift
+            ? (brandHasIntro ? cardY + 168 : cardY + 132) + introShift
             : cardY + 182;
         ctx.fillText(highlightLine, textStartX, highlightY);
 

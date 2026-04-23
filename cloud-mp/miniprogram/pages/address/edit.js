@@ -2,8 +2,8 @@
 const { get, post, put } = require('../../utils/request');
 const { validatePhone, isEmpty } = require('../../utils/helpers');
 const { ErrorHandler, showError, showSuccess } = require('../../utils/errorHandler');
+const { ensureLogin } = require('../../utils/auth');
 const { ensurePrivacyAuthorization } = require('../../utils/privacy');
-const app = getApp();
 
 const { REGION_TREE } = require('./regions');
 
@@ -248,9 +248,7 @@ Page({
 
         try {
             await ensurePrivacyAuthorization();
-            if (!app.globalData.isLoggedIn) {
-                await app.wxLogin(false);
-            }
+            await ensureLogin();
         } catch (err) {
             return;
         }

@@ -173,7 +173,7 @@
         </div>
 
         <!-- 会员等级快照 -->
-        <div class="card tiers-card">
+        <div v-if="canManageSettings" class="card tiers-card">
           <div class="card-header">
             <div class="card-title">
               <span class="title-dot"></span>
@@ -210,7 +210,7 @@
         </div>
 
         <!-- 系统状态 -->
-        <div class="card status-card">
+        <div v-if="canManageSettings" class="card status-card">
           <div class="card-header">
             <div class="card-title">
               <span class="title-dot title-dot--green"></span>
@@ -253,6 +253,7 @@ import { buildShortcutItems } from '@/config/adminNavigation'
 
 const router = useRouter()
 const userStore = useUserStore()
+const canManageSettings = computed(() => userStore.hasPermission('settings_manage'))
 const refreshing = ref(false)
 const lastAttemptAt = ref('')
 const lastSuccessAt = ref('')
@@ -373,6 +374,10 @@ const fetchOperationsDashboard = async () => {
 }
 
 const fetchMemberTierConfig = async () => {
+  if (!canManageSettings.value) {
+    memberTierList.value = []
+    return true
+  }
   try {
     const res = await getMemberTierConfig({ skipErrorMessage: true })
     const d = res
@@ -393,6 +398,10 @@ const systemStatus = ref([
 ])
 
 const fetchSystemStatus = async () => {
+  if (!canManageSettings.value) {
+    systemStatus.value = []
+    return true
+  }
   try {
     const data = await getSystemStatus({ skipErrorMessage: true })
     const d = data

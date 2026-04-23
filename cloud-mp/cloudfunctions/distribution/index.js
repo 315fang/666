@@ -18,6 +18,7 @@ const {
     resolveGoodsFundBalance
 } = require('./user-contract');
 const { batchResolveCloudFileUrls, isCloudFileId } = require('./shared/asset-url');
+const { buildWalletAccountSyncDoc } = require('./shared/wallet-account');
 
 const db = cloud.database();
 const _ = db.command;
@@ -25,6 +26,9 @@ const _ = db.command;
 // ==================== 子模块导入 ====================
 const distributionQuery = require('./distribution-query');
 const distributionCommission = require('./distribution-commission');
+const directedInviteService = require('./directed-invite-service');
+const goodsFundTransferService = require('./goods-fund-transfer');
+const { assertPortalPassword } = require('./shared/portal-password');
 const internalActionToken = String(process.env.DISTRIBUTION_INTERNAL_TOKEN || '').trim();
 
 function hasValue(value) {
@@ -56,9 +60,153 @@ function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
 }
 
+function pickString(value, fallback = '') {
+    if (value == null) return fallback;
+    const text = String(value).trim();
+    return text || fallback;
+}
+
+function toPlainObject(value, fallback = {}) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
+    return value;
+}
+
+function parseConfigRowValue(row, fallback = null) {
+    if (!row) return fallback;
+    const raw = row.config_value !== undefined ? row.config_value : row.value;
+    if (raw === undefined || raw === null || raw === '') return fallback;
+    if (typeof raw === 'string') {
+        try {
+            return JSON.parse(raw);
+        } catch (_) {
+            return raw;
+        }
+    }
+    return raw;
+}
+
+function normalizeFeeRatePercent(value, fallback = 0) {
+    const num = toNumber(value, NaN);
+    if (!Number.isFinite(num)) return fallback;
+    if (num <= 0) return 0;
+    return num > 1 ? num : Math.round(num * 10000) / 100;
+}
+
+async function loadConfigRowsByCollection(collectionName, matcher) {
+    return db.collection(collectionName)
+        .where(matcher)
+        .limit(20)
+        .get()
+        .then((res) => res.data || [])
+        .catch(() => []);
+}
+
+async function loadWithdrawalRules() {
+    const [withdrawalRows, miniConfigRows, appConfigRows, standaloneWithdrawalRows] = await Promise.all([
+        loadConfigRowsByCollection('configs', _.or([{ config_group: 'WITHDRAWAL' }, { category: 'WITHDRAWAL' }])),
+        loadConfigRowsByCollection('configs', _.or([{ config_key: 'mini_program_config' }, { key: 'mini_program_config' }])),
+        loadConfigRowsByCollection('app_configs', _.or([{ config_key: 'mini_program_config' }, { key: 'mini_program_config' }])),
+        loadConfigRowsByCollection('app_configs', _.or([{ config_key: 'withdrawal_config' }, { key: 'withdrawal_config' }]))
+    ]);
+
+    const withdrawalMap = {};
+    withdrawalRows.forEach((row) => {
+        const key = pickString(row.config_key || row.key);
+        if (key) withdrawalMap[key] = parseConfigRowValue(row, null);
+    });
+
+    const miniConfigRow = miniConfigRows[0] || appConfigRows[0] || null;
+    const miniConfig = toPlainObject(parseConfigRowValue(miniConfigRow, {}), {});
+    const standaloneWithdrawalConfig = toPlainObject(parseConfigRowValue(standaloneWithdrawalRows[0], {}), {});
+    const withdrawalConfig = toPlainObject(
+        miniConfig.withdrawal_config && typeof miniConfig.withdrawal_config === 'object'
+            ? miniConfig.withdrawal_config
+            : standaloneWithdrawalConfig,
+        {}
+    );
+
+    const minAmount = Math.max(0.01, toNumber(withdrawalMap.MIN_AMOUNT, 100));
+    const feeRatePercent = normalizeFeeRatePercent(
+        withdrawalConfig.fee_rate_percent !== undefined
+            ? withdrawalConfig.fee_rate_percent
+            : withdrawalMap.FEE_RATE,
+        0
+    );
+    const feeCapMax = Math.max(0, toNumber(
+        withdrawalConfig.fee_cap_max !== undefined
+            ? withdrawalConfig.fee_cap_max
+            : withdrawalMap.FEE_CAP_MAX,
+        0
+    ));
+
+    return {
+        min_amount: minAmount,
+        fee_rate_percent: feeRatePercent,
+        fee_cap_max: feeCapMax,
+        fee_exempt_role_level: 4
+    };
+}
+
+function calculateWithdrawalAmounts(amount, roleLevel, rules = {}) {
+    const normalizedAmount = roundMoney(amount);
+    const minAmount = Math.max(0.01, toNumber(rules.min_amount, 100));
+    const feeExemptRoleLevel = Math.max(0, Math.floor(toNumber(rules.fee_exempt_role_level, 4)));
+    let fee = 0;
+    if (roleLevel < feeExemptRoleLevel) {
+        const feeRatePercent = Math.max(0, toNumber(rules.fee_rate_percent, 0));
+        const feeCapMax = Math.max(0, toNumber(rules.fee_cap_max, 0));
+        if (feeRatePercent > 0) {
+            fee = roundMoney(normalizedAmount * feeRatePercent / 100);
+            if (feeCapMax > 0) {
+                fee = Math.min(fee, feeCapMax);
+            }
+        }
+    }
+    return {
+        min_amount: minAmount,
+        fee,
+        actual_amount: roundMoney(Math.max(0, normalizedAmount - fee)),
+        fee_exempt_role_level: feeExemptRoleLevel
+    };
+}
+
+function isTestOrder(order = {}) {
+    return order.is_test_order === true || order.is_test_order === 1 || order.is_test_order === '1';
+}
+
+function isPromotionCountedOrder(order = {}) {
+    if (isTestOrder(order)) return false;
+    const status = String(order.status || '').trim().toLowerCase();
+    if (['cancelled', 'canceled', 'refunded', 'pending', 'pending_payment', 'after_sale', 'refunding'].includes(status)) {
+        return false;
+    }
+    if (toNumber(order.refunded_cash_total, 0) > 0 || order.has_partial_refund === true) {
+        return false;
+    }
+    return true;
+}
+
+async function getPromotionSpendTotal(openid) {
+    if (!openid) return 0;
+    const rows = await getAllRecords(db, 'orders', { openid }).catch(() => []);
+    return roundMoney(rows.reduce((sum, row) => {
+        if (!isPromotionCountedOrder(row)) return sum;
+        return sum + toNumber(row.pay_amount ?? row.actual_price ?? row.total_amount, 0);
+    }, 0));
+}
+
 function goodsFundIdentityCandidates(user = {}, openid = '') {
     const values = [openid, user.id, user._id, user._legacy_id].filter(hasValue);
     return uniqueValues(values);
+}
+
+function getGoodsFundFrozenBalance(user = {}, walletAccount = null) {
+    return roundMoney(toNumber(
+        user.agent_wallet_frozen_amount
+        ?? user.goods_fund_frozen_amount
+        ?? walletAccount?.frozen_balance,
+        0
+    ));
 }
 
 function goodsFundLogTypeText(type = '') {
@@ -67,10 +215,10 @@ function goodsFundLogTypeText(type = '') {
 
 function isGoodsFundInflow(type = '', amount = 0) {
     const normalized = goodsFundLogTypeText(type);
-    if (['recharge', 'manual_recharge', 'refund', 'commission_transfer', 'n_allocate_in', 'wx_recharge'].includes(normalized)) {
+    if (['recharge', 'manual_recharge', 'refund', 'commission_transfer', 'n_allocate_in', 'wx_recharge', 'pickup_principal_return'].includes(normalized)) {
         return true;
     }
-    if (['spend', 'deduct', 'manual_deduct', 'order_ship', 'n_allocate_out', 'adjust', 'refund_reopen_reversal'].includes(normalized)) {
+    if (['spend', 'deduct', 'manual_deduct', 'order_ship', 'n_allocate_out', 'adjust', 'refund_reopen_reversal', 'station_procurement', 'pickup_principal_reversal'].includes(normalized)) {
         return false;
     }
     return amount > 0;
@@ -120,37 +268,42 @@ function walletAccountUserId(user = {}, openid = '') {
 
 async function syncWalletAccountBalanceFromUser(user = {}, walletAccount = null, openid = '') {
     const userBalance = roundMoney(resolveGoodsFundBalance(user));
+    const userFrozenBalance = getGoodsFundFrozenBalance(user, walletAccount);
     const accountBalance = walletAccount ? roundMoney(toNumber(walletAccount.balance, userBalance)) : null;
-    if (accountBalance != null && Math.abs(accountBalance - userBalance) < 0.0001) {
+    const accountFrozenBalance = walletAccount ? roundMoney(toNumber(walletAccount.frozen_balance, userFrozenBalance)) : null;
+    if (
+        accountBalance != null
+        && Math.abs(accountBalance - userBalance) < 0.0001
+        && accountFrozenBalance != null
+        && Math.abs(accountFrozenBalance - userFrozenBalance) < 0.0001
+    ) {
         return {
             balance: userBalance,
+            frozenBalance: userFrozenBalance,
             account: walletAccount
         };
     }
 
-    const accountId = String(walletAccount?._id || walletAccount?.id || `wallet-${String(walletAccountUserId(user, openid)).replace(/[^a-zA-Z0-9_-]/g, '_')}`);
-    const nextAccount = {
-        ...(walletAccount || {}),
-        _id: accountId,
-        id: accountId,
-        user_id: walletAccountUserId(user, openid),
-        openid: user.openid || openid || '',
-        account_type: walletAccount?.account_type || 'goods_fund',
-        status: walletAccount?.status || 'active',
+    const nextAccount = buildWalletAccountSyncDoc({
+        walletAccount,
+        user,
+        openid,
+        userId: walletAccountUserId(user, openid),
         balance: userBalance,
-        updated_at: new Date().toISOString(),
-        created_at: walletAccount?.created_at || new Date().toISOString()
-    };
+        frozenBalance: userFrozenBalance,
+        now: new Date().toISOString()
+    });
 
-    await db.collection('wallet_accounts').doc(accountId).set({
-        data: nextAccount
+    await db.collection('wallet_accounts').doc(nextAccount.accountId).set({
+        data: nextAccount.data
     }).catch((error) => {
         console.error('[distribution.agentWallet] wallet_accounts 对账失败:', error && error.message ? error.message : error);
     });
 
     return {
         balance: userBalance,
-        account: nextAccount
+        frozenBalance: userFrozenBalance,
+        account: nextAccount.view
     };
 }
 
@@ -302,6 +455,7 @@ function resolveJoinedAt(member = {}) {
 function normalizeTeamMember(member = {}, level = 1, extra = {}) {
     const canonical = buildCanonicalUser(member);
     const roleLevel = resolveRoleLevel(member);
+    const relationSource = goodsFundTransferService.buildRelationSourceText(member.relation_source || member.invitation_source || '');
     return {
         ...canonical,
         _id: canonical.id,
@@ -310,6 +464,9 @@ function normalizeTeamMember(member = {}, level = 1, extra = {}) {
         level,
         level_label: level === 2 ? '二级成员' : '一级成员',
         relation_text: level === 2 ? '由你的一级成员继续发展' : '你直接邀请并绑定的成员',
+        relation_source: member.relation_source || member.invitation_source || '',
+        relation_source_text: relationSource,
+        line_locked: !!member.line_locked,
         joined_at: resolveJoinedAt(member),
         created_at: member.created_at,
         role_level: roleLevel,
@@ -539,9 +696,14 @@ const handleAction = {
         return success({ settled: settledCount, total_amount: totalAmount });
     }),
 
+    'withdrawRules': asyncHandler(async () => {
+        return success(await loadWithdrawalRules());
+    }),
+
     // ===== 提现 =====
     'withdraw': asyncHandler(async (openid, params) => {
-        const amount = toNumber(params.amount, 0);
+        await assertPortalPassword(db, openid, params.portal_password || params.password);
+        const amount = roundMoney(params.amount);
         if (amount <= 0) throw badRequest('提现金额必须大于0');
 
         const userRes = await db.collection('users').where({ openid }).limit(1).get();
@@ -550,18 +712,13 @@ const handleAction = {
         const user = await resolveCommissionWalletState(userRes.data[0]);
         const balance = toNumber(user._commission_balance, 0);
         const roleLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
-
-        // B1(3) 及以下：100元起提，3%税费（封顶100元）
-        // B2(4) 及以上：免手续费（需人工审核资质）
-        let fee = 0;
-        if (roleLevel < 4) {
-            if (amount < 100) throw badRequest('最低提现100元');
-            fee = Math.min(roundMoney(amount * 0.03), 100);
-        } else {
-            if (amount < 1) throw badRequest('提现金额必须大于0');
+        const withdrawalRules = await loadWithdrawalRules();
+        if (amount < withdrawalRules.min_amount) {
+            throw badRequest(`最低提现${withdrawalRules.min_amount}元`);
         }
-
-        const actualAmount = roundMoney(amount - fee);
+        const feeCalc = calculateWithdrawalAmounts(amount, roleLevel, withdrawalRules);
+        const fee = feeCalc.fee;
+        const actualAmount = feeCalc.actual_amount;
         if (amount > balance) throw badRequest('佣金余额不足');
 
         const withdrawNo = 'WD' + Date.now() + Math.floor(Math.random() * 1000);
@@ -589,6 +746,15 @@ const handleAction = {
                 actual_amount: actualAmount,
                 role_level: roleLevel,
                 type: params.type || 'wechat',
+                withdraw_account: {
+                    type: params.type || 'wechat',
+                    name: pickString(user.real_name || user.contact_name || ''),
+                    account: '',
+                    openid
+                },
+                fee_rate_percent: withdrawalRules.fee_rate_percent,
+                fee_cap_max: withdrawalRules.fee_cap_max,
+                min_amount: withdrawalRules.min_amount,
                 status: 'pending',
                 created_at: db.serverDate(),
             },
@@ -621,7 +787,14 @@ const handleAction = {
             throw serverError(`提现流水写入失败：${logErr.message}`);
         }
 
-        return success({ withdraw_id: result._id, withdraw_no: withdrawNo, amount, fee, actual_amount: actualAmount });
+        return success({
+            withdraw_id: result._id,
+            withdraw_no: withdrawNo,
+            amount,
+            fee,
+            actual_amount: actualAmount,
+            rules: withdrawalRules
+        });
     }),
 
     'withdrawList': asyncHandler(async (openid, params) => {
@@ -635,6 +808,7 @@ const handleAction = {
 
     // ===== 佣金 1:1 转货款 =====
     'commissionToGoodsFund': asyncHandler(async (openid, params) => {
+        await assertPortalPassword(db, openid, params.portal_password || params.password);
         const amount = toNumber(params.amount, 0);
         if (amount <= 0) throw badRequest('转入金额必须大于0');
         if (amount < 1) throw badRequest('最低转入1元');
@@ -773,9 +947,46 @@ const handleAction = {
         (commRes || []).forEach(c => { contributedAmount += toNumber(c.amount, 0); });
 
         const [resolvedMember] = await batchResolveMemberAvatars([memberData]);
+        const transferSummary = await goodsFundTransferService.buildMemberTransferSummary(db, openid, resolvedMember || memberData, level);
         return success(normalizeTeamMember(resolvedMember || memberData, level, {
-            contributed_amount: contributedAmount
+            contributed_amount: contributedAmount,
+            can_apply_goods_fund_transfer: !!transferSummary.can_apply,
+            goods_fund_transfer_pending_count: transferSummary.pending_count,
+            goods_fund_transfer_latest_status: transferSummary.latest_status,
+            goods_fund_transfer_latest_status_text: transferSummary.latest_status_text,
+            goods_fund_transfer_latest_amount: transferSummary.latest_amount,
+            goods_fund_transfer_latest_created_at: transferSummary.latest_created_at
         }));
+    }),
+
+    'createGoodsFundTransferApplication': asyncHandler(async (openid, params) => {
+        await assertPortalPassword(db, openid, params.portal_password || params.password);
+        return success(await goodsFundTransferService.createGoodsFundTransferApplication(db, openid, params));
+    }),
+
+    'goodsFundTransferApplications': asyncHandler(async (openid, params) => {
+        return success({ list: await goodsFundTransferService.listGoodsFundTransferApplications(db, openid, params) });
+    }),
+
+    'createDirectedInvite': asyncHandler(async (openid, params) => {
+        await assertPortalPassword(db, openid, params.portal_password || params.password);
+        return success(await directedInviteService.createDirectedInvite(db, _, openid, params));
+    }),
+
+    'listDirectedInvites': asyncHandler(async (openid, params) => {
+        return success({ list: await directedInviteService.listDirectedInvites(db, openid, params) });
+    }),
+
+    'getDirectedInviteTicket': asyncHandler(async (openid, params) => {
+        return success(await directedInviteService.getDirectedInviteTicket(db, openid, params));
+    }),
+
+    'acceptDirectedInvite': asyncHandler(async (openid, params) => {
+        return success(await directedInviteService.acceptDirectedInvite(db, _, openid, params));
+    }),
+
+    'revokeDirectedInvite': asyncHandler(async (openid, params) => {
+        return success(await directedInviteService.revokeDirectedInvite(db, openid, params));
     }),
 
     // ===== 代理/团长 =====
@@ -833,13 +1044,14 @@ const handleAction = {
         };
         const roleLevel = toNumber(user.role_level, 0);
         const goodsFundBalance = syncedWallet.balance;
+        const goodsFundFrozenBalance = syncedWallet.frozenBalance ?? getGoodsFundFrozenBalance(user, walletAccount);
         return success({
             role_level: roleLevel,
             role_name: resolveRoleName(user),
             balance: goodsFundBalance,
             goods_fund_balance: goodsFundBalance,
             agent_wallet_balance: goodsFundBalance,
-            frozen_balance: summary.frozen_balance,
+            frozen_balance: goodsFundFrozenBalance,
             total_recharge: summary.total_recharge,
             total_deduct: summary.total_deduct,
             commission_balance: resolveCommissionBalance(user),
@@ -857,7 +1069,12 @@ const handleAction = {
         if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
         const u = userRes.data[0];
         const balance = resolveGoodsFundBalance(u);
-        return success({ balance, goods_fund_balance: balance, agent_wallet_balance: balance });
+        return success({
+            balance,
+            goods_fund_balance: balance,
+            agent_wallet_balance: balance,
+            frozen_balance: getGoodsFundFrozenBalance(u)
+        });
     }),
 
     // ===== 晋升进度 =====
@@ -866,7 +1083,7 @@ const handleAction = {
         if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
         const user = userRes.data[0];
         const currentLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
-        const totalSpent = toNumber(user.total_spent ?? user.growth_value, 0);
+        const totalSpent = await getPromotionSpendTotal(openid);
 
         // 查直属下级
         const clauses = [];
@@ -887,7 +1104,7 @@ const handleAction = {
             .limit(200).get().catch(() => ({ data: [] }));
         const rechargeTotal = (rechargeRes.data || []).reduce((s, r) => s + toNumber(r.amount, 0), 0);
 
-        const ROLE_NAMES = { 0: 'VIP用户', 1: '初级会员', 2: '高级会员', 3: '推广合伙人', 4: '运营合伙人', 5: '区域合伙人', 6: '线下实体门店' };
+        const ROLE_NAMES = { 0: 'VIP用户', 1: '初级会员', 2: '高级会员', 3: '推广合伙人', 4: '运营合伙人', 5: '区域合伙人', 6: '店长' };
         const nextLevel = Math.min(currentLevel + 1, 5);
         const conditions = [];
         if (nextLevel === 1) {
@@ -1197,9 +1414,10 @@ exports.main = cloudFunctionWrapper(async (event) => {
     }
 
     // 查看类 action：非分销员也可访问（返回基础数据）
-    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench', 'stats', 'team', 'teamDetail', 'commissionPreview', 'estimatedCommission', 'promotionProgress', 'promotionLogs', 'myFundPoolSummary', 'agentWallet', 'agentGoodsFund', 'agentWalletLogs'];
+    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench', 'stats', 'team', 'teamDetail', 'commissionPreview', 'estimatedCommission', 'promotionProgress', 'promotionLogs', 'myFundPoolSummary', 'agentWallet', 'agentGoodsFund', 'agentWalletLogs', 'getDirectedInviteTicket', 'goodsFundTransferApplications', 'withdrawRules'];
+    const openWriteActions = new Set(['acceptDirectedInvite']);
 
-    if (!viewActions.includes(action)) {
+    if (!viewActions.includes(action) && !openWriteActions.has(action)) {
         // 写操作需要分销权限
         const user = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
         const userDoc = user.data && user.data[0];

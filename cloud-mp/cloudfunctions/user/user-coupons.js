@@ -133,6 +133,10 @@ function isEnabledFlag(value, fallback = false) {
     return ['true', 'yes', 'on', 'enabled', 'active'].includes(normalized);
 }
 
+function shouldShowInCouponCenter(coupon = {}) {
+    return isEnabledFlag(coupon.show_in_coupon_center, false);
+}
+
 function getClaimedTodayCount(coupon = {}, nowParts = getChinaNowParts()) {
     return String(coupon.claim_day_key || '') === nowParts.dayKey
         ? Math.max(0, toNumber(coupon.claimed_today_count, 0))
@@ -225,6 +229,7 @@ function buildCouponTemplateView(coupon = {}, availability = null) {
         is_active: isActive ? 1 : 0,
         scope: coupon.scope || 'all',
         scope_ids: Array.isArray(coupon.scope_ids) ? coupon.scope_ids : [],
+        show_in_coupon_center: shouldShowInCouponCenter(coupon) ? 1 : 0,
         daily_claim_limit: dailyClaimLimit,
         claimed_today_count: claimedTodayCount,
         claim_time_enabled: claimTimeEnabled,
@@ -259,7 +264,7 @@ function resolveTemplateClaimAvailability(coupon = {}, options = {}) {
 
     if (type === 'exchange') {
         result.state = 'unsupported';
-        result.message = '该券不支持在领券中心领取';
+        result.message = '该券不支持在惊喜礼遇入口领取';
         result.canClaim = false;
         return result;
     }
@@ -630,6 +635,7 @@ async function listCouponCenter(openid) {
     const nowParts = getChinaNowParts();
 
     const coupons = (Array.isArray(rows) ? rows : [])
+        .filter((coupon) => shouldShowInCouponCenter(coupon))
         .filter((coupon) => String(coupon.type || coupon.coupon_type || 'fixed').toLowerCase() !== 'exchange')
         .map((coupon) => {
             const couponId = hasValue(coupon.id) ? coupon.id : coupon._id;
@@ -640,10 +646,8 @@ async function listCouponCenter(openid) {
             });
             return buildCouponTemplateView(coupon, availability);
         })
+        .filter((coupon) => coupon.can_claim)
         .sort((a, b) => {
-            const aRank = a.can_claim ? 0 : (a.claim_status === 'already_owned' ? 1 : 2);
-            const bRank = b.can_claim ? 0 : (b.claim_status === 'already_owned' ? 1 : 2);
-            if (aRank !== bRank) return aRank - bRank;
             return (parseDate(b.updated_at || b.created_at || 0)?.getTime() || 0) - (parseDate(a.updated_at || a.created_at || 0)?.getTime() || 0);
         });
 

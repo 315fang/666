@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-04-14T02:32:56.819Z",
+  "generatedAt": "2026-04-19T15:05:30.678Z",
   "ok": true,
   "results": [
     {
       "name": "refunds",
       "collectionName": "refunds",
       "ok": true,
-      "count": 22,
+      "count": 32,
       "issues": []
     },
     {
@@ -20,35 +20,35 @@
       "name": "commissions",
       "collectionName": "commissions",
       "ok": true,
-      "count": 4,
+      "count": 8,
       "issues": []
     },
     {
       "name": "wallet_logs",
       "collectionName": "wallet_logs",
       "ok": true,
-      "count": 18,
+      "count": 37,
       "issues": []
     },
     {
       "name": "goods_fund_logs",
       "collectionName": "goods_fund_logs",
       "ok": true,
-      "count": 4,
+      "count": 26,
       "issues": []
     },
     {
       "name": "point_logs",
       "collectionName": "point_logs",
       "ok": true,
-      "count": 572,
+      "count": 646,
       "issues": []
     },
     {
       "name": "users",
       "collectionName": "users",
       "ok": true,
-      "count": 180,
+      "count": 187,
       "issues": []
     }
   ]

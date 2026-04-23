@@ -25,7 +25,7 @@
       <text class="info-value restore-tag">{{refund.display_refund_target_text}}</text>
     </view>
     <view class="info-row">
-      <text class="info-label">规则说明</text>
+      <text class="info-label">退款说明</text>
       <text class="info-value">仅退现金，优惠券和积分不返还</text>
     </view>
   </view>

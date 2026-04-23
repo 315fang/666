@@ -23,25 +23,6 @@
     </scroll-view>
   </view>
 
-  <view class="order-activity-quick">
-    <view class="order-quick-btn" bindtap="onQuickGroupTap" hover-class="order-quick-btn-hover">
-      <image class="order-quick-icon" src="/assets/icons/users.svg" mode="aspectFit"></image>
-      <text class="order-quick-text">拼团</text>
-    </view>
-    <view class="order-quick-btn" bindtap="onQuickSlashTap" hover-class="order-quick-btn-hover">
-      <image class="order-quick-icon" src="/assets/icons/tag.svg" mode="aspectFit"></image>
-      <text class="order-quick-text">砍价</text>
-    </view>
-  </view>
-
-  <view class="review-reward-banner" wx:if="{{currentStatus === 'pending_review'}}">
-    <view class="review-reward-badge">评价有礼</view>
-    <view class="review-reward-copy">
-      <text class="review-reward-title">五星好评可获得积分奖励</text>
-      <text class="review-reward-sub">完成评价后，实际到账积分以系统发放结果为准</text>
-    </view>
-  </view>
-
   <!-- 订单列表 -->
   <scroll-view class="order-list" scroll-y bindscrolltolower="onLoadMore">
     <!-- 列表容器 -->
@@ -81,15 +62,15 @@
       </view>
       <view class="activity-strip activity-strip-{{item.activityInfo.type}}" wx:if="{{item.activityInfo}}">
         <text class="activity-strip-label">{{item.activityInfo.label}}订单</text>
-        <text class="activity-strip-text" wx:if="{{item.activityInfo.type === 'group' && item.activityInfo.disabled}}">支付成功后生成拼团进度</text>
-        <text class="activity-strip-text" wx:elif="{{item.activityInfo.type === 'group' && !item.activityInfo.targetNo}}">拼团进度生成中</text>
-        <text class="activity-strip-text" wx:else>可继续查看活动状态</text>
+        <text class="activity-strip-text" wx:if="{{item.activityInfo.type === 'group' && item.activityInfo.disabled}}">支付后生成拼团记录</text>
+        <text class="activity-strip-text" wx:elif="{{item.activityInfo.type === 'group' && !item.activityInfo.targetNo}}">拼团记录生成中</text>
+        <text class="activity-strip-text" wx:else>可查看活动详情</text>
       </view>
 
       <!-- 商品信息 -->
       <view class="order-products" bindtap="onOrderTap" data-order="{{item}}">
         <view class="order-product" wx:if="{{item.product}}">
-          <image class="product-image" src="{{item.product.images[0] || ''}}" mode="aspectFill" wx:if="{{item.product.images && item.product.images.length > 0}}" binderror="onOrderProductImageError" data-index="{{index}}"></image>
+          <image class="product-image" src="{{item.product.images[0] || item.product.image || ''}}" mode="aspectFill" wx:if="{{(item.product.images && item.product.images.length > 0) || item.product.image}}" binderror="onOrderProductImageError" data-index="{{index}}"></image>
           <view class="product-image product-image-placeholder" wx:else>
             <image class="placeholder-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
           </view>
@@ -109,8 +90,10 @@
         <view class="order-total">
           <text class="total-label">共{{item.quantity}}件 实付:</text>
           <text class="total-amount">¥{{item.display_pay_amount}}</text>
-          <text class="pay-method-tag pay-method-wallet" wx:if="{{item.payment_method === 'goods_fund'}}">{{item.display_payment_method_text}}</text>
-          <text class="pay-method-tag pay-method-wechat" wx:elif="{{item.status !== 'pending' && item.status !== 'cancelled' && item.pay_amount > 0}}">{{item.display_payment_method_text}}</text>
+          <text
+            class="pay-method-tag {{(item.payment_method === 'goods_fund' || item.payment_method === 'wallet') ? 'pay-method-wallet' : 'pay-method-wechat'}}"
+            wx:if="{{item.display_payment_method_text && item.status !== 'pending' && item.status !== 'cancelled' && (item.pay_amount > 0 || item.payment_method === 'goods_fund' || item.payment_method === 'wallet')}}"
+          >{{item.display_payment_method_text}}</text>
           <text class="fulfillment-tag" wx:if="{{item.fulfillment_type === 'Agent' || item.fulfillment_type === 'agent'}}">团队发货</text>
         </view>
         <view class="order-total" wx:if="{{item.refunded_cash_total > 0}}">

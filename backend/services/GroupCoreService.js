@@ -24,6 +24,95 @@ function genGroupNo() {
 class GroupCoreService {
 
     /**
+     * 订单支付成功后，将对应拼团成员标记为已支付，并在达到成团门槛时切换团状态。
+     * 该方法用于支付后链路的最小闭环校验，不负责订单创建。
+     */
+    static async handleOrderPaid(order = {}, transaction = null) {
+        const groupNoMatch = String(order?.remark || '').match(/group_no:([A-Z0-9]+)/i);
+        const groupNo = groupNoMatch && groupNoMatch[1] ? groupNoMatch[1] : '';
+        if (!groupNo) {
+            return { skipped: true, reason: 'no_group_no' };
+        }
+
+        const groupOrder = await GroupOrder.findOne({
+            where: { group_no: groupNo },
+            transaction,
+            lock: transaction?.LOCK?.UPDATE
+        });
+        if (!groupOrder) {
+            throw new Error('拼团不存在');
+        }
+
+        const member = await GroupMember.findOne({
+            where: { group_order_id: groupOrder.id, user_id: order.buyer_id },
+            transaction,
+            lock: transaction?.LOCK?.UPDATE
+        });
+        if (!member) {
+            throw new Error('拼团成员不存在');
+        }
+
+        member.status = 'paid';
+        member.order_id = order.id;
+        member.paid_at = new Date();
+        await member.save({ transaction });
+
+        let justSucceeded = false;
+        groupOrder.current_members = Number(groupOrder.current_members || 0) + 1;
+        if (groupOrder.status === 'open' && groupOrder.current_members >= Number(groupOrder.min_members || 0)) {
+            groupOrder.status = 'success';
+            groupOrder.success_at = new Date();
+            justSucceeded = true;
+            await GroupActivity.increment('sold_count', {
+                by: groupOrder.current_members,
+                where: { id: groupOrder.activity_id },
+                transaction
+            });
+        }
+        await groupOrder.save({ transaction });
+
+        return {
+            group_no: groupOrder.group_no,
+            status: groupOrder.status,
+            current_members: groupOrder.current_members,
+            min_members: groupOrder.min_members,
+            justSucceeded
+        };
+    }
+
+    /**
+     * 履约前校验拼团订单是否已成团。
+     */
+    static async ensureGroupOrderReadyForFulfillment(order = {}, transaction = null) {
+        const groupNoMatch = String(order?.remark || '').match(/group_no:([A-Z0-9]+)/i);
+        const groupNo = groupNoMatch && groupNoMatch[1] ? groupNoMatch[1] : '';
+        if (!groupNo) return { ready: true, skipped: true };
+
+        const groupOrder = await GroupOrder.findOne({
+            where: { group_no: groupNo },
+            transaction,
+            lock: transaction?.LOCK?.UPDATE
+        });
+        if (!groupOrder) throw new Error('拼团不存在');
+
+        const member = await GroupMember.findOne({
+            where: { group_order_id: groupOrder.id, user_id: order.buyer_id },
+            transaction,
+            lock: transaction?.LOCK?.UPDATE
+        });
+        if (!member) throw new Error('拼团成员不存在');
+        if (groupOrder.status !== 'success') {
+            throw new Error('该拼团订单尚未成团');
+        }
+
+        return {
+            ready: true,
+            group_no: groupOrder.group_no,
+            status: groupOrder.status
+        };
+    }
+
+    /**
      * 发起拼团
      */
     static async startGroupOrder({ userId, activity_id, sku_id, inviter_id }) {

@@ -266,31 +266,6 @@
   margin-bottom: 10rpx;
 }
 
-/* 规格摘要标签（显眼位置） */
-.product-spec-summary {
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-  margin-bottom: 10rpx;
-  margin-top: 4rpx;
-}
-
-.spec-summary-label {
-  font-size: 20rpx;
-  font-weight: 600;
-  color: #8E6B47;
-  background: #F6E9D7;
-  padding: 4rpx 14rpx;
-  border-radius: 999rpx;
-  flex-shrink: 0;
-}
-
-.spec-summary-text {
-  font-size: 24rpx;
-  color: #6F5A48;
-  font-weight: 500;
-}
-
 .product-subtitle {
   font-size: 24rpx;
   color: #72675D;
@@ -572,12 +547,6 @@
   font-weight: 600;
 }
 
-.selected-spec-text {
-  font-size: 22rpx;
-  color: #8A7A6A;
-  text-align: right;
-}
-
 .section-title-row {
   display: flex;
   align-items: center;
@@ -665,11 +634,6 @@
 .spec-option.disabled {
   opacity: 0.4;
   text-decoration: line-through;
-}
-
-.spec-unselected {
-  color: #C6763A !important;
-  font-weight: 500;
 }
 
 .stepper {
@@ -801,6 +765,14 @@
 
 .review-content,
 .detail-content {
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: #6F645B;
+}
+
+.detail-description {
+  display: block;
+  margin-bottom: 20rpx;
   font-size: 24rpx;
   line-height: 1.8;
   color: #6F645B;

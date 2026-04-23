@@ -34,7 +34,6 @@
       </view>
       <text class="hero-title">{{card.title || '限时商品'}}</text>
       <text class="hero-sub" wx:if="{{card.subtitle}}">{{card.subtitle}}</text>
-      <text class="hero-tip">进入详情后可查看商品图文、规格与限时购买方式。</text>
     </view>
 
     <view class="list-title">当前档期商品</view>

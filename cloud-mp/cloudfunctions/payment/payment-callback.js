@@ -18,6 +18,7 @@ const {
     handleDepositPaidCallback,
     handleDepositRefundCallback
 } = require('./payment-deposit');
+const { handleTransferCallbackNotification } = require('./payment-transfer');
 
 const DEFAULT_ROLE_NAMES = {
     0: 'VIP用户',
@@ -26,7 +27,7 @@ const DEFAULT_ROLE_NAMES = {
     3: '推广合伙人',
     4: '运营合伙人',
     5: '区域合伙人',
-    6: '线下实体门店'
+    6: '店长'
 };
 
 const DEFAULT_AGENT_UPGRADE_RULES = {
@@ -201,6 +202,34 @@ async function getConfigByKeys(keys = []) {
         if (legacyRes.data && legacyRes.data[0]) return legacyRes.data[0];
     }
     return null;
+}
+
+async function upsertJsonConfigRow(key, nextValue, extra = {}) {
+    const existing = await getConfigByKeys([key]);
+    const now = new Date().toISOString();
+    const payload = {
+        key,
+        config_key: key,
+        config_group: extra.config_group || 'agent_system',
+        config_type: extra.config_type || 'json',
+        config_value: nextValue,
+        value: nextValue,
+        updated_at: now
+    };
+    if (existing && existing._id) {
+        await db.collection('configs').doc(String(existing._id)).update({
+            data: payload
+        });
+        return { ...existing, ...payload };
+    }
+    const createPayload = {
+        ...payload,
+        created_at: now
+    };
+    await db.collection('configs').add({
+        data: createPayload
+    });
+    return createPayload;
 }
 
 function normalizePctMap(rawMap = {}, fallback = {}) {
@@ -418,6 +447,9 @@ async function getAllOrdersByOpenid(openid) {
 }
 
 function isEffectiveUpgradeOrder(order = {}, effectiveDays = DEFAULT_AGENT_UPGRADE_RULES.effective_order_days) {
+    if (order.is_test_order === true || order.is_test_order === 1 || order.is_test_order === '1') {
+        return false;
+    }
     const status = String(order.status || '').toLowerCase();
     if (['cancelled', 'canceled', 'refunded', 'pending', 'pending_payment', 'after_sale', 'refunding'].includes(status)) {
         return false;
@@ -735,6 +767,10 @@ function roleBasedCommission(user = {}, level, baseAmount, commissionConfig = DE
     return roundMoney(baseAmount * (rates[role] || 0));
 }
 
+function isFlexBundleCommissionItem(order = {}, item = {}) {
+    return pickString(item.bundle_scene_type || order.bundle_meta?.scene_type) === 'flex_bundle';
+}
+
 function resolveSelfCommissionRate(costSplit = {}) {
     const directSalesPct = toNumber(costSplit?.direct_sales_pct, DEFAULT_COST_SPLIT.direct_sales_pct);
     const normalized = directSalesPct > 1 ? directSalesPct / 100 : directSalesPct;
@@ -911,6 +947,12 @@ async function ensurePointsAwarded(orderId, order) {
         });
         return { skipped: true, reason: 'exchange_order', awarded: 0, growth: 0, multiplier: 0, buyerRole: 0 };
     }
+    if (order.is_test_order === true || order.is_test_order === 1 || order.is_test_order === '1') {
+        await db.collection('orders').doc(orderId).update({
+            data: { points_awarded_at: db.serverDate(), points_earned: 0, updated_at: db.serverDate() },
+        });
+        return { skipped: true, reason: 'test_order', awarded: 0, growth: 0, multiplier: 0, buyerRole: 0 };
+    }
     if (order.points_awarded_at) return { skipped: true };
     const payAmount = getOrderTotalAmount(order);
     if (payAmount <= 0 || !order.openid) {
@@ -981,6 +1023,9 @@ async function ensurePointsAwarded(orderId, order) {
 
 async function ensureStockDeducted(orderId, order) {
     if (order.stock_deducted_at) return { skipped: true };
+    if (pickString(order.delivery_type) === 'pickup' && pickString(order.pickup_stock_reservation_mode) === 'station') {
+        return { skipped: true, mode: 'pickup_station_stock' };
+    }
     const items = toArray(order.items);
     for (const item of items) {
         const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
@@ -1109,6 +1154,7 @@ async function ensureCommissionsCreated(orderId, order) {
         const sku = item.sku_id ? await getDocByIdOrLegacy('skus', item.sku_id) || {} : {};
         const rawBase = roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
         const allocatedBase = itemBaseTotal > 0 ? roundMoney(commissionBase * rawBase / itemBaseTotal) : rawBase;
+        const useFixedBundleCommission = isFlexBundleCommissionItem(order, item);
         if (useMatrix) {
             // 级差矩阵制：parent 拿 matrix[parentRole][buyerRole]%，grandparent 拿级差
             // 即便父级被跳过（因为 openid == buyer 等），也要用父级应得比例计算级差
@@ -1122,16 +1168,20 @@ async function ensureCommissionsCreated(orderId, order) {
             for (const beneficiary of beneficiaries) {
                 const bRole = resolveBenefitRoleLevel(beneficiary.user.role_level ?? beneficiary.user.distributor_level ?? beneficiary.user.level);
 
-                const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
                 let amount;
-                if (configured > 0) {
-                    amount = Math.min(allocatedBase, configured);
+                if (useFixedBundleCommission) {
+                    amount = roundMoney(beneficiary.level === 1 ? item.direct_commission_fixed_amount : item.indirect_commission_fixed_amount);
                 } else {
-                    const myRate = matrixRate(commissionMatrix, bRole, benefitBuyerRole);
-                    const effectiveRate = beneficiary.level === 1
-                        ? myRate
-                        : Math.max(0, myRate - parentMatrixRate);
-                    amount = roundMoney(allocatedBase * effectiveRate);
+                    const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
+                    if (configured > 0) {
+                        amount = Math.min(allocatedBase, configured);
+                    } else {
+                        const myRate = matrixRate(commissionMatrix, bRole, benefitBuyerRole);
+                        const effectiveRate = beneficiary.level === 1
+                            ? myRate
+                            : Math.max(0, myRate - parentMatrixRate);
+                        amount = roundMoney(allocatedBase * effectiveRate);
+                    }
                 }
 
                 if (amount <= 0) continue;
@@ -1148,11 +1198,16 @@ async function ensureCommissionsCreated(orderId, order) {
         } else {
             // 兼容旧模式
             for (const beneficiary of beneficiaries) {
-                const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
-                const roleBased = roleBasedCommission(beneficiary.user, beneficiary.level, allocatedBase, commissionConfig);
-                const amount = configured > 0
-                    ? Math.min(allocatedBase, configured)
-                    : roleBased;
+                let amount;
+                if (useFixedBundleCommission) {
+                    amount = roundMoney(beneficiary.level === 1 ? item.direct_commission_fixed_amount : item.indirect_commission_fixed_amount);
+                } else {
+                    const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
+                    const roleBased = roleBasedCommission(beneficiary.user, beneficiary.level, allocatedBase, commissionConfig);
+                    amount = configured > 0
+                        ? Math.min(allocatedBase, configured)
+                        : roleBased;
+                }
                 if (amount <= 0) continue;
                 if (fulfillmentPartnerOpenid && beneficiary.user.openid === fulfillmentPartnerOpenid) continue;
                 const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
@@ -1403,8 +1458,11 @@ async function recordFundPoolEntry(openid, roleLevel, source, orderId) {
             .get()
             .catch(() => ({ data: [] }));
         const rawConfig = (configRes.data && configRes.data[0]) || {};
-        const config = rawConfig.config_value || rawConfig.value || rawConfig;
+        const config = parseConfigValue(rawConfig, rawConfig) || {};
         const levelKey = LEVEL_KEY[roleLevel] || '';
+        if (config && typeof config === 'object' && config.enabled === false) {
+            return { skipped: true, reason: 'disabled' };
+        }
 
         // 从后台配置中读取该等级的基金池总额和子账户比例
         const levelConfig = (config && typeof config === 'object' && levelKey) ? config[levelKey] : null;
@@ -1481,6 +1539,58 @@ async function recordFundPoolEntry(openid, roleLevel, source, orderId) {
     }
 }
 
+async function accrueDividendPoolContribution(orderId, order) {
+    if (order.dividend_pool_accrued_at) return { skipped: true, reason: 'already_accrued' };
+
+    const amount = roundMoney(getOrderTotalAmount(order));
+    const rulesRow = await getConfigByKeys(['agent_system_dividend-rules', 'agent_system_dividend_rules']);
+    const rules = {
+        enabled: false,
+        source_pct: 0,
+        ...parseConfigValue(rulesRow, {})
+    };
+    const sourcePct = Math.max(0, toNumber(rules.source_pct, 0));
+    const contribution = roundMoney(amount * sourcePct / 100);
+
+    if (!rules.enabled || contribution <= 0) {
+        await db.collection('orders').doc(orderId).update({
+            data: {
+                dividend_pool_accrued_at: db.serverDate(),
+                dividend_pool_contribution: 0,
+                updated_at: db.serverDate()
+            }
+        }).catch(() => {});
+        return { skipped: true, reason: !rules.enabled ? 'disabled' : 'zero_contribution' };
+    }
+
+    const poolKey = 'agent_system_dividend-pool';
+    const poolRow = await getConfigByKeys([poolKey]);
+    const poolState = {
+        balance: 0,
+        total_in: 0,
+        total_out: 0,
+        ...parseConfigValue(poolRow, {})
+    };
+    const nextPoolState = {
+        ...poolState,
+        balance: roundMoney(toNumber(poolState.balance, 0) + contribution),
+        total_in: roundMoney(toNumber(poolState.total_in, 0) + contribution),
+        total_out: roundMoney(toNumber(poolState.total_out, 0)),
+        updated_at: new Date().toISOString()
+    };
+
+    await upsertJsonConfigRow(poolKey, nextPoolState, { config_group: 'agent_system' });
+    await db.collection('orders').doc(orderId).update({
+        data: {
+            dividend_pool_accrued_at: db.serverDate(),
+            dividend_pool_contribution: contribution,
+            updated_at: db.serverDate()
+        }
+    });
+
+    return { accrued: true, contribution, balance: nextPoolState.balance };
+}
+
 async function processPaidOrder(orderId, order) {
     const latest = await db.collection('orders').doc(orderId).get().then((res) => res.data || order).catch(() => order);
     const needsGroupJoin = isGroupOrder(latest) && !latest.group_joined_at;
@@ -1508,11 +1618,17 @@ async function processPaidOrder(orderId, order) {
 
     const peerBonus = await ensurePeerBonusCreated(orderId, { ...latest, stock_deducted_at: true, points_awarded_at: true }, roles);
     const commissions = await ensureCommissionsCreated(orderId, { ...latest, stock_deducted_at: true, points_awarded_at: true });
+    const dividendPool = await accrueDividendPoolContribution(orderId, {
+        ...latest,
+        stock_deducted_at: true,
+        points_awarded_at: true,
+        commissions_created_at: true
+    });
 
     await db.collection('orders').doc(orderId).update({
         data: { payment_post_processed_at: db.serverDate(), updated_at: db.serverDate() },
     });
-    return { group, slash, stock, points, roles, peerBonus, commissions };
+    return { group, slash, stock, points, roles, peerBonus, commissions, dividendPool };
 }
 
 function deriveRefundRevertStatus(order = {}) {
@@ -1685,6 +1801,9 @@ function buildOrderPatchAfterRefund(order = {}, refund = {}) {
                 partially_refunded_at: pickString(order.status) === 'refunded' ? _.remove() : (order.partially_refunded_at || db.serverDate()),
                 status: pickString(order.status || deriveRefundRevertStatus(order)),
                 refunded_at: order.refunded_at || (pickString(order.status) === 'refunded' ? db.serverDate() : _.remove()),
+                auto_refund_error: _.remove(),
+                auto_refund_failed_at: _.remove(),
+                auto_refund_partial: _.remove(),
                 prev_status: _.remove(),
                 updated_at: db.serverDate()
             }
@@ -1735,6 +1854,9 @@ function buildOrderPatchAfterRefund(order = {}, refund = {}) {
             partially_refunded_at: isFullRefund ? _.remove() : db.serverDate(),
             status: isFullRefund ? 'refunded' : deriveRefundRevertStatus(order),
             refunded_at: isFullRefund ? db.serverDate() : _.remove(),
+            auto_refund_error: _.remove(),
+            auto_refund_failed_at: _.remove(),
+            auto_refund_partial: _.remove(),
             prev_status: _.remove(),
             updated_at: db.serverDate()
         }
@@ -2191,6 +2313,13 @@ async function handleCallback(event) {
 
         const eventType = callbackData.event_type || '';
         console.log(`[PaymentCallback] event_type=${eventType}`);
+
+        if (eventType.startsWith('MCHTRANSFER.')) {
+            return handleTransferCallbackNotification({
+                ...callbackData,
+                decrypted: transaction
+            });
+        }
 
         // 5. 退款回调处理（REFUND.SUCCESS / REFUND.ABNORMAL / REFUND.CLOSED）
         if (eventType.startsWith('REFUND.')) {

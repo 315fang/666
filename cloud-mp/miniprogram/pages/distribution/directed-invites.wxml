@@ -1,0 +1,49 @@
+<view class="page">
+  <view class="hero-card">
+    <view class="hero-copy">
+      <text class="hero-title">推广合伙人邀约</text>
+      <text class="hero-desc">仅运营合伙人、区域合伙人、店长可发起。接受后进入审核，通过后激活，并划拨不少于 3000 元货款。</text>
+    </view>
+    <view class="hero-action" bindtap="onCreateInvite">发起邀约</view>
+  </view>
+
+  <view class="tab-bar">
+    <view class="tab-item {{currentTab === 'all' ? 'active' : ''}}" bindtap="onTabChange" data-tab="all">全部</view>
+    <view class="tab-item {{currentTab === 'sent' ? 'active' : ''}}" bindtap="onTabChange" data-tab="sent">邀约中</view>
+    <view class="tab-item {{currentTab === 'accepted' ? 'active' : ''}}" bindtap="onTabChange" data-tab="accepted">待审核</view>
+    <view class="tab-item {{currentTab === 'activated' ? 'active' : ''}}" bindtap="onTabChange" data-tab="activated">已激活</view>
+    <view class="tab-item {{currentTab === 'closed' ? 'active' : ''}}" bindtap="onTabChange" data-tab="closed">已关闭</view>
+  </view>
+
+  <scroll-view class="list-scroll" scroll-y>
+    <view class="invite-list" wx:if="{{filteredInvites.length > 0}}">
+      <view class="invite-card" wx:for="{{filteredInvites}}" wx:key="invite_id">
+        <view class="invite-head">
+          <view>
+            <text class="invite-role">推广合伙人邀约</text>
+            <text class="invite-status">{{item.status_text}}</text>
+          </view>
+          <text class="invite-amount">¥{{item.transfer_amount}}</text>
+        </view>
+        <text class="invite-line">票据：{{item.ticket_id}}</text>
+        <text class="invite-line">创建时间：{{item.created_at}}</text>
+        <text class="invite-line" wx:if="{{item.lock_status_text}}">票据状态：{{item.lock_status_text}}</text>
+        <text class="invite-line" wx:if="{{item.accepted_at}}">接受时间：{{item.accepted_at}}</text>
+        <text class="invite-line" wx:if="{{item.reviewed_at}}">审核时间：{{item.reviewed_at}}</text>
+        <text class="invite-line" wx:if="{{item.accepted_user && item.accepted_user.nickname}}">接受人：{{item.accepted_user.nickname}}（{{item.accepted_user.invite_code || '暂无ID'}}）</text>
+        <text class="invite-line" wx:if="{{item.transfer_txn_no}}">划拨单号：{{item.transfer_txn_no}}</text>
+
+        <view class="invite-actions">
+          <button class="mini-btn" wx:if="{{item.can_share}}" open-type="share" data-ticket="{{item.ticket_id}}" bindtap="onPrepareShare">分享邀约</button>
+          <view class="mini-link" wx:if="{{item.can_preview}}" bindtap="onOpenInvite" data-ticket="{{item.ticket_id}}">查看详情</view>
+          <view class="mini-link danger" wx:if="{{item.can_revoke}}" bindtap="onRevokeInvite" data-id="{{item.invite_id}}">撤销</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="empty-state" wx:else>
+      <text class="empty-title">暂无邀约记录</text>
+      <text class="empty-desc">发起后可在此查看进度。</text>
+    </view>
+  </scroll-view>
+</view>

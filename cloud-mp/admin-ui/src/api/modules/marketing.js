@@ -39,6 +39,13 @@ export const getLotteryPrizes = () => request({ url: '/lottery-prizes', method: 
 export const createLotteryPrize = (data) => request({ url: '/lottery-prizes', method: 'post', data })
 export const updateLotteryPrize = (id, data) => request({ url: `/lottery-prizes/${id}`, method: 'put', data })
 export const deleteLotteryPrize = (id) => request({ url: `/lottery-prizes/${id}`, method: 'delete' })
+export const getLotteryRecords = (params) => request({ url: '/lottery-records', method: 'get', params })
+export const getLotteryClaims = (params) => request({ url: '/lottery-claims', method: 'get', params })
+export const approveLotteryClaim = (id, data) => request({ url: `/lottery-claims/${id}/approve`, method: 'post', data })
+export const rejectLotteryClaim = (id, data) => request({ url: `/lottery-claims/${id}/reject`, method: 'post', data })
+export const shipLotteryClaim = (id, data) => request({ url: `/lottery-claims/${id}/ship`, method: 'post', data })
+export const completeLotteryClaim = (id, data) => request({ url: `/lottery-claims/${id}/complete`, method: 'post', data })
+export const retryLotteryFulfillment = (id) => request({ url: `/lottery-records/${id}/retry-fulfillment`, method: 'post' })
 
 export const getActivityOptions = () => request({ url: '/activity-options', method: 'get' })
 export const getFestivalConfig = () => request({ url: '/festival-config', method: 'get' })

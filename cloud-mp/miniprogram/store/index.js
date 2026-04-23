@@ -12,7 +12,6 @@ const globalStore = createStore({
     // 用户信息
     userInfo: null,
     openid: null,
-    token: null,
     isLoggedIn: false,
     roleLevel: USER_ROLES.GUEST,
 
@@ -51,7 +50,7 @@ const globalStore = createStore({
         [USER_ROLES.AGENT]: '推广合伙人',
         [USER_ROLES.PARTNER]: '运营合伙人',
         [USER_ROLES.REGIONAL]: '区域合伙人',
-        [USER_ROLES.STORE]: '线下实体门店'
+        [USER_ROLES.STORE]: '店长'
       };
       return roleNames[state.roleLevel] || '未知';
     },
@@ -74,13 +73,12 @@ const globalStore = createStore({
         // 从缓存读取
         const userInfo = wx.getStorageSync('userInfo');
         const openid = wx.getStorageSync('openid');
-        const token = wx.getStorageSync('token');
 
-        if (userInfo && openid && token) {
+        if (userInfo && openid) {
+          wx.removeStorageSync('token');
           commit({
             userInfo,
             openid,
-            token,
             isLoggedIn: true,
             roleLevel: userInfo.role_level || USER_ROLES.GUEST
           });
@@ -98,13 +96,12 @@ const globalStore = createStore({
         // 保存到缓存
         wx.setStorageSync('userInfo', userInfo);
         wx.setStorageSync('openid', openid);
-        wx.setStorageSync('token', token);
+        wx.removeStorageSync('token');
 
         // 更新状态
         commit({
           userInfo,
           openid,
-          token,
           isLoggedIn: true,
           roleLevel: userInfo.role_level || USER_ROLES.GUEST
         });
@@ -130,7 +127,6 @@ const globalStore = createStore({
         commit({
           userInfo: null,
           openid: null,
-          token: null,
           isLoggedIn: false,
           roleLevel: USER_ROLES.GUEST,
           cartCount: 0,

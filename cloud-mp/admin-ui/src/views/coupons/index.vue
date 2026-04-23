@@ -112,6 +112,13 @@
             <div>已用: <span style="color:#f56c6c">{{ row.used_count }}</span> 张</div>
           </template>
         </el-table-column>
+        <el-table-column label="惊喜礼遇" width="110">
+          <template #default="{ row }">
+            <el-tag :type="row.show_in_coupon_center === 1 ? 'success' : 'info'">
+              {{ row.show_in_coupon_center === 1 ? '展示' : '隐藏' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-switch
@@ -262,6 +269,11 @@
 
         <el-form-item label="使用说明">
           <el-input v-model="form.description" type="textarea" :rows="2" placeholder="填写给用户看的使用说明" />
+        </el-form-item>
+
+        <el-form-item label="惊喜礼遇展示">
+          <el-switch v-model="form.show_in_coupon_center" :active-value="1" :inactive-value="0" />
+          <div class="form-tip">开启后，该券才会在小程序惊喜礼遇页和首页福利区公开露出。</div>
         </el-form-item>
 
         <el-form-item label="状态">
@@ -569,6 +581,7 @@ const defaultForm = () => ({
   claim_start_time: '09:00',
   claim_end_time: '23:59',
   description: '',
+  show_in_coupon_center: 0,
   is_active: 1
 })
 const form = reactive(defaultForm())
@@ -601,7 +614,7 @@ const rules = {
 const openForm = async (row) => {
   await loadCategories()
   if (row) {
-    Object.assign(form, { ...row })
+    Object.assign(form, defaultForm(), { ...row })
     form.scope_ids = normalizeScopeIds(row.scope_ids)
     productOptions.value = []
     if (form.scope === 'product' && form.scope_ids.length) {
@@ -894,7 +907,9 @@ const submitIssue = async () => {
     issuePreviewTruncated.value = !!res?.truncated
   } catch (e) {
     issueConfirmVisible.value = false
-    ElMessage.error('查询目标用户失败，请重试')
+    if (!e?.__handledByRequest) {
+      ElMessage.error('查询目标用户失败，请重试')
+    }
   } finally {
     issuePreviewLoading.value = false
   }

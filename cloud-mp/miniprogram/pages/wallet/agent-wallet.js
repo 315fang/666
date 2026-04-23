@@ -1,6 +1,6 @@
 // pages/wallet/agent-wallet.js — 代理商货款余额
 const { get, post } = require('../../utils/request');
-const { formatLogItem, groupLogsByDate, formatGroupDate, getChangeLabel } = require('./agentWalletLogs');
+const { formatLogItem, mergeWalletLogPairs, groupLogsByDate, formatGroupDate, getChangeLabel } = require('./agentWalletLogs');
 const {
     DEFAULT_PRESET_AMOUNTS,
     loadRechargeConfig,
@@ -110,15 +110,16 @@ Page({
             }
             const res = await get('/agent/wallet/logs', params);
             if (res && res.code === 0) {
-                const rawList = res.data.list || [];
+                const responseList = res.data.list || [];
+                const rawList = mergeWalletLogPairs(responseList);
                 const newLogs = rawList.map(item => this._formatLogItem(item));
-                const total = res.data.pagination?.total || 0;
+                const total = Number(res.data.pagination?.total || 0);
                 const logs = reset ? newLogs : [...this.data.logs, ...newLogs];
                 this.setData({
                     logs,
                     groupedLogs: this._groupLogsByDate(logs),
                     page: page + 1,
-                    hasMore: logs.length < total
+                    hasMore: total > 0 ? page * this.data.limit < total : responseList.length === this.data.limit
                 });
             } else {
                 // API 返回业务错误
@@ -171,7 +172,7 @@ Page({
     onFilterChange(e) {
         const filter = e.currentTarget.dataset.filter;
         if (filter === this.data.activeFilter) return;
-        const filterTextMap = { all: '全部', in: '充值', out: '扣款' };
+        const filterTextMap = { all: '全部', in: '入账', out: '支出' };
         this.setData({
             activeFilter: filter,
             activeFilterText: filterTextMap[filter] || '全部',

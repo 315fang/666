@@ -69,7 +69,6 @@
 | pages/user/membership-center | miniprogram/pages/user/membership-center | cloud-mp/miniprogram/pages/user/membership-center | 已通 |
 | pages/user/notifications | miniprogram/pages/user/notifications | cloud-mp/miniprogram/pages/user/notifications | 已通 |
 | pages/user/portal-password | miniprogram/pages/user/portal-password | cloud-mp/miniprogram/pages/user/portal-password | 已通 |
-| pages/user/preferences | miniprogram/pages/user/preferences | cloud-mp/miniprogram/pages/user/preferences | 已通 |
 | pages/user/ticket-list | miniprogram/pages/user/ticket-list | cloud-mp/miniprogram/pages/user/ticket-list | 已通 |
 | pages/user/user | miniprogram/pages/user/user | cloud-mp/miniprogram/pages/user/user | 已通 |
 | pages/wallet/agent-wallet | miniprogram/pages/wallet/agent-wallet | cloud-mp/miniprogram/pages/wallet/agent-wallet | 已通 |
@@ -172,7 +171,6 @@
 | user.getAddressDetail | GET /addresses/:id | cloud-mp/cloudfunctions/user/index.js | 已通 |
 | user.getFavorites | GET /user/favorites | cloud-mp/cloudfunctions/user/index.js | 已通 |
 | user.getPickupScope | GET /stations/my-scope | cloud-mp/cloudfunctions/user/index.js | 已通 |
-| user.getPreferences | GET /user/preferences | cloud-mp/cloudfunctions/user/index.js | 已通 |
 | user.getProfile | GET /user/profile | GET /user/info | cloud-mp/cloudfunctions/user/index.js | 已通 |
 | user.getStats | GET /user/stats | GET /points | GET /points/summary | cloud-mp/cloudfunctions/user/index.js | 已通 |
 | user.listAddresses | GET /addresses | cloud-mp/cloudfunctions/user/index.js | 已通 |
@@ -193,7 +191,6 @@
 | user.removeFavoriteById | DELETE /user/favorites/:id | cloud-mp/cloudfunctions/user/index.js | 已通 |
 | user.setDefaultAddress | PUT /addresses/:id/default | POST /addresses/:id/default | cloud-mp/cloudfunctions/user/index.js | 已通 |
 | user.shareEligibility | GET /questionnaire/share-eligibility | cloud-mp/cloudfunctions/user/index.js | 已通 |
-| user.submitPreferences | POST /user/preferences/submit | cloud-mp/cloudfunctions/user/index.js | 已通 |
 | user.submitQuestionnaire | POST /questionnaire/submit | cloud-mp/cloudfunctions/user/index.js | 已通 |
 | user.syncFavorites | POST /user/favorites/sync | cloud-mp/cloudfunctions/user/index.js | 已通 |
 | user.updateAddress | PUT /addresses/:id | cloud-mp/cloudfunctions/user/index.js | 已通 |
@@ -471,4 +468,3 @@
 - `缺验收`：已建模但旧工程引用证据弱，仍需场景级 smoke test。
 - `已验收`：已建模且已通过 live smoke 校验。
 - `仅cloud-mp`：只在新工程中出现的页面或能力。
-

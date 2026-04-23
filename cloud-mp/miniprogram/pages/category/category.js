@@ -3,12 +3,12 @@
 // 联动：当前版本 scroll sync（calculateCategoryHeights + onRightScroll + leftToView）
 // 购物袋：当前版本改进逻辑（items / summary.total_amount + cart_ids 结算）
 const { get } = require('../../utils/request');
-const { normalizeActivityList } = require('../../utils/activityList');
 const { cachedGet } = require('../../utils/requestCache');
 const { normalizeProductId } = require('../../utils/dataFormatter');
 const { ErrorHandler } = require('../../utils/errorHandler');
-const { resolveCloudImageUrl } = require('../../utils/cloudAssetRuntime');
+const { warmRenderableImageUrls, resolveRenderableImageUrl } = require('../../utils/cloudAssetRuntime');
 const navigator = require('../../utils/navigator');
+const { syncCustomTabBar } = require('../../utils/miniProgramConfig');
 const { syncPageTabBar, restorePageTabBar } = require('../../utils/tabBarHelper');
 const {
     loadCategoryProductsBatch,
@@ -37,6 +37,8 @@ const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
 Page({
     data: {
         categories: [],
+        renderedCategories: [],
+        renderedSectionIds: [],
         sidebarCategories: [],
         currentCategory: '',
         headerTopPadding: 20,
@@ -46,16 +48,13 @@ Page({
         leftToView: '',
         categoryHeights: [],
         isManualClick: false,
+        productBundles: [],
 
         // 全分类商品（categoryId -> product[]）
         allProducts: {},
         visibleProducts: {},
         loadedCategories: {},
         loading: false,
-        activityProductMaps: {
-            group: {},
-            slash: {}
-        },
 
         // 购物袋
         cartCount: 0,
@@ -77,9 +76,9 @@ Page({
     },
 
     onShow() {
+        syncCustomTabBar(this);
         this.updateCartData();
         this._loadPricePreviewData();
-        this.loadActivityProducts();
         this._syncOverlayTabBar();
         this._applyPendingCategoryFocus();
     },
@@ -102,14 +101,14 @@ Page({
             headerTopPadding
         });
         this.loadCategoryBanners();
-        this.loadActivityProducts();
+        this.loadProductBundles();
         this.loadSidebarCategories();
     },
 
     onPullDownRefresh() {
         Promise.all([
             this.loadCategoryBanners(),
-            this.loadActivityProducts(true),
+            this.loadProductBundles(true),
             this.loadAllProducts({
                 forceRefresh: true,
                 initialCategoryId: this.data.currentCategory
@@ -122,13 +121,17 @@ Page({
     /** 后台「内容管理 → Banner → 分类页」对应接口 GET /api/banners?position=category */
     async loadCategoryBanners() {
         const mapBanners = async (list) => {
-            const mapped = await Promise.all((list || []).map(async (b) => ({
+            const rows = Array.isArray(list) ? list : [];
+            await warmRenderableImageUrls(rows);
+            const mapped = await Promise.all(rows.map(async (b) => ({
                 id: b.id,
-                image: await resolveCloudImageUrl(b, ''),
+                image: await resolveRenderableImageUrl(b, ''),
+                title: b.title || '',
+                subtitle: b.subtitle || '',
                 link_type: b.link_type || 'none',
                 link_value: b.link_value != null ? String(b.link_value) : ''
             })));
-            return mapped.filter((b) => !!b.image);
+            return mapped.filter((b) => !!(b.image || b.title || b.subtitle));
         };
         try {
             const res = await cachedGet(get, '/banners', { position: 'category' }, {
@@ -164,19 +167,23 @@ Page({
         }
         if (!id) return;
         const categories = this.data.categories || [];
-        if (!categories.length) return;
-        const exists = categories.some((c) => String(c.id) === String(id));
+        const exists = id === 'bundle-zone'
+            ? (this.data.productBundles || []).length > 0
+            : categories.some((c) => String(c.id) === String(id));
         if (!exists) return;
         try {
             wx.removeStorageSync('category_focus_id');
         } catch (e) { /* ignore */ }
         this.setData({
             currentCategory: id,
+            ...this._buildRenderedSectionState({ currentCategory: id }),
             toView: 'cat-' + id,
             leftToView: 'left-' + id,
             isManualClick: true
         });
+        this._scheduleHeightCalc();
         this.ensureCategoryProductsLoaded(id);
+        this._primeNeighborCategories(id);
         setTimeout(() => {
             this.setData({ isManualClick: false });
         }, 800);
@@ -196,7 +203,9 @@ Page({
             if (filteredCats.length > 0) {
                 await new Promise((resolve) => this.setData({
                     categories: filteredCats,
-                    sidebarCategories: this._buildSidebarCategories(filteredCats),
+                    renderedCategories: this._buildRenderedCategories(filteredCats, {}, filteredCats[0].id || filteredCats[0]._id),
+                    renderedSectionIds: this._buildRenderedSectionIds(filteredCats, {}, filteredCats[0].id || filteredCats[0]._id, this.data.productBundles),
+                    sidebarCategories: this._buildSidebarCategories(filteredCats, this.data.productBundles),
                     currentCategory: filteredCats[0].id || filteredCats[0]._id,
                     loadedCategories: {},
                     allProducts: {},
@@ -210,6 +219,8 @@ Page({
             } else {
                 this.setData({
                     categories: [],
+                    renderedCategories: [],
+                    renderedSectionIds: this._buildRenderedSectionIds([], {}, '', this.data.productBundles),
                     sidebarCategories: this._buildSidebarCategories([])
                 });
             }
@@ -219,42 +230,104 @@ Page({
     },
 
     _buildSidebarCategories(categories) {
-        return Array.isArray(categories) ? categories : [];
+        const bundles = Array.isArray(arguments[1]) ? arguments[1] : (this.data.productBundles || []);
+        const base = Array.isArray(categories) ? categories : [];
+        return bundles.length
+            ? [{ id: 'bundle-zone', name: '组合专区', _virtual: true }, ...base]
+            : base;
     },
 
-    async loadActivityProducts(forceRefresh = false) {
-        try {
-            const [groupRes, slashRes] = await Promise.all([
-                get('/group/activities', {}, { showError: false }).catch(() => null),
-                get('/slash/activities', {}, { showError: false }).catch(() => null)
-            ]);
-            const groupMap = this._buildActivityProductMap(normalizeActivityList(groupRes && groupRes.data));
-            const slashMap = this._buildActivityProductMap(normalizeActivityList(slashRes && slashRes.data));
-            this.setData({
-                activityProductMaps: {
-                    group: groupMap,
-                    slash: slashMap
-                }
-            }, () => {
-                this._refreshPricePreviewHints();
-                this._rebuildVisibleProducts();
-            });
-        } catch (err) {
-            if (!forceRefresh) return;
-            this.setData({
-                activityProductMaps: { group: {}, slash: {} }
-            }, () => this._rebuildVisibleProducts());
-        }
-    },
-
-    _buildActivityProductMap(list) {
-        const map = {};
-        (Array.isArray(list) ? list : []).forEach((activity) => {
-            const productId = activity && activity.product && activity.product.id;
-            if (!productId || map[productId]) return;
-            map[productId] = activity;
+    _buildRenderedCategories(categories, loadedCategories, currentCategory) {
+        const rows = Array.isArray(categories) ? categories : [];
+        const loaded = loadedCategories || {};
+        const current = String(currentCategory || '').trim();
+        return rows.filter((item) => {
+            const id = String(item && item.id != null ? item.id : item && item._id != null ? item._id : '').trim();
+            if (!id) return false;
+            return id === current || !!loaded[id];
         });
-        return map;
+    },
+
+    _buildRenderedSectionIds(categories, loadedCategories, currentCategory, productBundles) {
+        const ids = [];
+        if (Array.isArray(productBundles) && productBundles.length > 0) {
+            ids.push('bundle-zone');
+        }
+        this._buildRenderedCategories(categories, loadedCategories, currentCategory).forEach((item) => {
+            const id = String(item && item.id != null ? item.id : item && item._id != null ? item._id : '').trim();
+            if (id) ids.push(id);
+        });
+        return ids;
+    },
+
+    _buildRenderedSectionState(patch = {}) {
+        const categories = patch.categories !== undefined ? patch.categories : this.data.categories;
+        const loadedCategories = patch.loadedCategories !== undefined ? patch.loadedCategories : this.data.loadedCategories;
+        const currentCategory = patch.currentCategory !== undefined ? patch.currentCategory : this.data.currentCategory;
+        const productBundles = patch.productBundles !== undefined ? patch.productBundles : this.data.productBundles;
+        return {
+            renderedCategories: this._buildRenderedCategories(categories, loadedCategories, currentCategory),
+            renderedSectionIds: this._buildRenderedSectionIds(categories, loadedCategories, currentCategory, productBundles)
+        };
+    },
+
+    _getNextCategoryId(currentCategory) {
+        const categories = Array.isArray(this.data.categories) ? this.data.categories : [];
+        if (!categories.length) return '';
+        if (String(currentCategory || '') === 'bundle-zone') {
+            const first = categories[0];
+            return first ? String(first.id || first._id || '') : '';
+        }
+        const currentId = String(currentCategory || '').trim();
+        const currentIndex = categories.findIndex((item) => String(item.id || item._id || '') === currentId);
+        if (currentIndex === -1) return '';
+        const next = categories[currentIndex + 1];
+        return next ? String(next.id || next._id || '') : '';
+    },
+
+    _primeNeighborCategories(currentCategory) {
+        const nextCategoryId = this._getNextCategoryId(currentCategory);
+        if (!nextCategoryId || nextCategoryId === 'bundle-zone') return;
+        this.ensureCategoryProductsLoaded(nextCategoryId);
+    },
+
+    async loadProductBundles(forceRefresh = false) {
+        try {
+            const res = await cachedGet(get, '/product-bundles', { page: 1, limit: 20 }, {
+                cacheTTL: forceRefresh ? 0 : 3 * 60 * 1000,
+                showError: false,
+                maxRetries: 0,
+                timeout: 10000
+            });
+            const raw = res?.data?.list || res?.list || [];
+            const coverSources = (Array.isArray(raw) ? raw : []).map((item) => ({
+                file_id: item.cover_file_id || '',
+                image: item.cover_preview_url || item.cover_image || ''
+            }));
+            await warmRenderableImageUrls(coverSources);
+            const productBundles = await Promise.all((Array.isArray(raw) ? raw : []).map(async (item) => ({
+                ...item,
+                cover_preview_url: await resolveRenderableImageUrl({
+                    file_id: item.cover_file_id || '',
+                    image: item.cover_preview_url || item.cover_image || ''
+                }, '')
+            })));
+            this.setData({
+                productBundles,
+                ...this._buildRenderedSectionState({ productBundles }),
+                sidebarCategories: this._buildSidebarCategories(this.data.categories, productBundles)
+            });
+            this._scheduleHeightCalc();
+            this._applyPendingCategoryFocus();
+        } catch (e) {
+            if (forceRefresh) {
+                this.setData({
+                    productBundles: [],
+                    ...this._buildRenderedSectionState({ productBundles: [] }),
+                    sidebarCategories: this._buildSidebarCategories(this.data.categories, [])
+                });
+            }
+        }
     },
 
     async loadAllProducts(options = {}) {
@@ -262,7 +335,13 @@ Page({
         const categories = this.data.categories || [];
 
         if (!categories.length) {
-            this.setData({ allProducts: {}, visibleProducts: {}, loadedCategories: {}, loading: false });
+            this.setData({
+                allProducts: {},
+                visibleProducts: {},
+                loadedCategories: {},
+                ...this._buildRenderedSectionState({ categories: [], loadedCategories: {} }),
+                loading: false
+            });
             return;
         }
 
@@ -293,7 +372,7 @@ Page({
 
         try {
             await this._loadCategoryProductsBatch(firstBatchIds, loadToken, { setLoadingFalse: true });
-            const remainingIds = orderedIds.filter(categoryId => !firstBatchIds.includes(categoryId));
+            const remainingIds = orderedIds.filter((categoryId) => !firstBatchIds.includes(categoryId));
             this._queueRemainingCategoryLoads(remainingIds, loadToken);
         } catch (err) {
             console.error('加载商品失败:', err);
@@ -342,11 +421,16 @@ Page({
         const categoryId = e.currentTarget.dataset.id;
         this.setData({
             currentCategory: categoryId,
+            ...this._buildRenderedSectionState({ currentCategory: categoryId }),
             toView: 'cat-' + categoryId,
             leftToView: 'left-' + categoryId,
             isManualClick: true
         });
-        this.ensureCategoryProductsLoaded(categoryId);
+        this._scheduleHeightCalc();
+        if (categoryId !== 'bundle-zone') {
+            this.ensureCategoryProductsLoaded(categoryId);
+        }
+        this._primeNeighborCategories(categoryId);
         setTimeout(() => { this.setData({ isManualClick: false }); }, 800);
     },
 
@@ -359,7 +443,10 @@ Page({
             nextVisibleProducts[categoryId] = list;
         });
 
-        this.setData({ visibleProducts: nextVisibleProducts });
+        this.setData({
+            visibleProducts: nextVisibleProducts,
+            ...this._buildRenderedSectionState()
+        });
     },
 
     // ===== 右侧滚动联动左侧菜单（来自当前版本）=====
@@ -367,17 +454,19 @@ Page({
     onRightScroll(e) {
         if (this.data.isManualClick) return;
         const scrollTop = e.detail.scrollTop;
-        const { categoryHeights, sidebarCategories } = this.data;
+        const { categoryHeights, renderedSectionIds } = this.data;
         if (!categoryHeights || categoryHeights.length === 0) return;
 
         for (let i = categoryHeights.length - 1; i >= 0; i--) {
             if (scrollTop >= categoryHeights[i] - 50) {
-                const catId = sidebarCategories[i]?.id;
+                const catId = renderedSectionIds[i];
                 if (catId && this.data.currentCategory !== catId) {
                     this.setData({
                         currentCategory: catId,
+                        ...this._buildRenderedSectionState({ currentCategory: catId }),
                         leftToView: 'left-' + catId
                     });
+                    this._primeNeighborCategories(catId);
                 }
                 break;
             }
@@ -414,6 +503,14 @@ Page({
         }
         wx.navigateTo({
             url: `/pages/product/detail?id=${encodeURIComponent(String(id))}`
+        });
+    },
+
+    onOpenBundleDetail(e) {
+        const id = String(e.currentTarget.dataset.id || '').trim();
+        if (!id) return;
+        wx.navigateTo({
+            url: `/pages/product-bundle/detail?id=${encodeURIComponent(id)}`
         });
     },
 

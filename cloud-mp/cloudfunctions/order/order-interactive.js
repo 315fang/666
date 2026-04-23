@@ -7,6 +7,10 @@ const _ = db.command;
 const { toNumber } = require('./shared/utils');
 const orderCreate = require('./order-create');
 const { freezeCommissionsForOrder } = require('./order-lifecycle');
+const {
+    consumePickupStationInventoryForOrder,
+    settlePickupStationPrincipalForOrder
+} = require('./pickup-station-stock');
 
 const PICKUP_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -84,7 +88,7 @@ async function ensurePickupSubsidyCommission(order, verifierOpenid) {
         .where({
             order_id: order._id,
             openid: claimant.openid,
-            type: 'pickup_subsidy'
+            type: _.in(['pickup_service_fee', 'pickup_subsidy'])
         })
         .limit(1)
         .get()
@@ -106,13 +110,13 @@ async function ensurePickupSubsidyCommission(order, verifierOpenid) {
             order_no: order.order_no || '',
             amount,
             level: toNumber(claimant.role_level ?? claimant.distributor_level, 0),
-            type: 'pickup_subsidy',
+            type: 'pickup_service_fee',
             status: 'pending_approval',
             branch_station_id: station.id || station._id || order.pickup_station_id,
             pickup_verified_by: verifierOpenid || '',
             created_at: db.serverDate(),
             updated_at: db.serverDate(),
-            description: `自提点奖励：${station.name || station.region_name || '站点'}`
+            description: `门店服务费：${station.name || station.region_name || '站点'}`
         }
     });
     return { _id: result._id, amount };
@@ -1559,6 +1563,13 @@ async function finalizePickupVerification(order, openid, stationId) {
         throw new Error(`订单状态不允许核销: ${order.status}`);
     }
 
+    await consumePickupStationInventoryForOrder(db, order, openid).catch(() => null);
+    await ensurePickupSubsidyCommission(order, openid).catch(() => null);
+    await freezeCommissionsForOrder(order._id, { refund_deadline: refundDeadlineDate() }).catch(() => null);
+    await settlePickupStationPrincipalForOrder(db, order, {
+        claimantOpenid: order.pickup_station_claimant_openid
+    }).catch(() => null);
+
     await db.collection('orders').doc(order._id).update({
         data: {
             status: 'completed',
@@ -1569,21 +1580,6 @@ async function finalizePickupVerification(order, openid, stationId) {
             updated_at: db.serverDate(),
         },
     });
-
-    await db.collection('commissions')
-        .where({ order_id: order._id, status: _.in(['pending', 'pending_approval']) })
-        .update({
-            data: {
-                status: 'frozen',
-                frozen_at: db.serverDate(),
-                refund_deadline: refundDeadlineDate(),
-                updated_at: db.serverDate()
-            }
-        })
-        .catch(() => {});
-
-    await ensurePickupSubsidyCommission(order, openid).catch(() => null);
-    await freezeCommissionsForOrder(order._id, { refund_deadline: refundDeadlineDate() }).catch(() => null);
 
     return {
         success: true,

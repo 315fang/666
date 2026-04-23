@@ -1,5 +1,6 @@
 const { get } = require('../../utils/request');
 const { resolveCloudImageUrl } = require('../../utils/cloudAssetRuntime');
+const { getBrandNewsFallbackCover } = require('../../utils/brandNewsCover');
 const {
     getBrandNewsCategoryDef,
     normalizeBrandNewsCategoryKey
@@ -11,7 +12,7 @@ async function resolveNewsListImages(list = []) {
         cover_image: await resolveCloudImageUrl({
             file_id: item.file_id || item.cover_file_id || '',
             image: item.cover_image || item.image || item.image_url || ''
-        }, '')
+        }, getBrandNewsFallbackCover(item))
     })));
 }
 

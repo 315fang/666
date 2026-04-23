@@ -3,7 +3,9 @@ const { get } = require('../../utils/request');
 const WITHDRAW_STATUS_MAP = {
     'pending': { text: '审核中', class: 'status-pending' },
     'approved': { text: '待打款', class: 'status-success' },
+    'processing': { text: '打款中', class: 'status-pending' },
     'completed': { text: '已到账', class: 'status-gray' },
+    'failed': { text: '打款失败', class: 'status-fail' },
     'rejected': { text: '已驳回', class: 'status-fail' }
 };
 

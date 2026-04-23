@@ -301,7 +301,8 @@ function getCommissionLogTypeText(type) {
         agent_fulfillment: '发货利润',
         self: '自购返利',
         withdrawal: '提现申请',
-        admin_adjustment: '系统调整'
+        admin_adjustment: '系统调整',
+        pickup_service_fee: '服务费'
     };
     return map[type] || String(type || '');
 }
@@ -341,7 +342,8 @@ function getCommissionSourceText(item = {}, order = null) {
         direct: '来自直推下级订单',
         indirect: '来自团队下级订单',
         same_level: '来自平级奖励结算',
-        pickup_subsidy: '来自自提核销补贴',
+        pickup_subsidy: '来自门店服务费',
+        pickup_service_fee: '来自门店服务费',
         agent_assist: '来自代理协助奖励',
         agent_fulfillment: '来自代理发货利润',
         stock_diff: '来自级差利润',
@@ -582,10 +584,12 @@ async function pointsAccount(openid) {
 
     const userData = user.data[0];
     const points = toNumber(userData.points != null ? userData.points : userData.growth_value, 0);
+    const growthValue = toNumber(userData.growth_value, 0);
 
     return {
         points,
-        growth_value: points,
+        balance_points: points,
+        growth_value: growthValue,
         level: toNumber(userData.role_level, 0),
         level_name: userData.role_name || 'VIP用户',
     };

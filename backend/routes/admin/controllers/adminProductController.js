@@ -5,6 +5,7 @@ const CacheService = require('../../../services/CacheService');
 const { normalizeProductCommissionRate } = require('../../../utils/commissionRates');
 const { ensureNoTemporaryAssetUrls } = require('../../../utils/assetUrlAudit');
 const { deleteAssetIfUnreferenced } = require('../../../services/AssetReferenceService');
+const { normalizeSkuId, resolveDefaultSpecText } = require('../../../utils/productDefaultSku');
 
 const getProductGrowthReward = async (productId) => {
     const cfg = await AppConfig.findOne({ where: { config_key: `product_growth_reward_${productId}`, status: 1 } });
@@ -34,6 +35,41 @@ const invalidateProductDetailCache = async (productId) => {
     }
 };
 
+function parseDefaultSkuIndex(rawValue, skuList) {
+    if (rawValue === null || rawValue === undefined || rawValue === '') return null;
+    const numeric = Number(rawValue);
+    if (!Number.isInteger(numeric) || numeric < 0) {
+        const error = new Error('默认 SKU 配置无效');
+        error.statusCode = 400;
+        throw error;
+    }
+    if (!Array.isArray(skuList) || numeric >= skuList.length) {
+        const error = new Error('默认 SKU 必须命中当前规格行');
+        error.statusCode = 400;
+        throw error;
+    }
+    return numeric;
+}
+
+function buildProductResponse(productRow) {
+    const data = productRow.toJSON();
+    const skus = Array.isArray(data.skus) ? data.skus : [];
+    data.default_sku_id = data.default_sku_id != null ? normalizeSkuId(data.default_sku_id) : null;
+    data.default_spec_text = resolveDefaultSpecText(data, skus);
+    return data;
+}
+
+function resolvePersistedDefaultSkuId(createdSkus, defaultSkuIndex) {
+    if (!Array.isArray(createdSkus) || createdSkus.length === 0) return null;
+    if (defaultSkuIndex != null) {
+        return normalizeSkuId(createdSkus[defaultSkuIndex] && createdSkus[defaultSkuIndex].id);
+    }
+    if (createdSkus.length === 1) {
+        return normalizeSkuId(createdSkus[0] && createdSkus[0].id);
+    }
+    return null;
+}
+
 // 获取商品列表
 const getProducts = async (req, res) => {
     try {
@@ -60,7 +96,7 @@ const getProducts = async (req, res) => {
         });
 
         const list = await Promise.all(rows.map(async (row) => {
-            const item = row.toJSON();
+            const item = buildProductResponse(row);
             item.growth_value_reward = await getProductGrowthReward(item.id);
             return item;
         }));
@@ -93,7 +129,7 @@ const getProductById = async (req, res) => {
             return res.status(404).json({ code: -1, message: '商品不存在' });
         }
 
-        const data = product.toJSON();
+        const data = buildProductResponse(product);
         data.growth_value_reward = await getProductGrowthReward(data.id);
         res.json({ code: 0, data });
     } catch (error) {
@@ -111,7 +147,7 @@ const createProduct = async (req, res) => {
             supply_price_b1, supply_price_b2, supply_price_b3, stock, skus,
             enable_coupon, enable_group_buy, custom_commissions,
             commission_rate_1, commission_rate_2, commission_amount_1, commission_amount_2, manual_weight, growth_value_reward,
-            market_price, discount_exempt, product_tag, status, supports_pickup, visible_in_mall
+            market_price, discount_exempt, product_tag, status, supports_pickup, visible_in_mall, default_sku_index
         } = req.body;
 
         if (!name || retail_price === undefined || retail_price === null) {
@@ -127,6 +163,7 @@ const createProduct = async (req, res) => {
         const cr1 = normalizeProductCommissionRate(commission_rate_1);
         const cr2 = normalizeProductCommissionRate(commission_rate_2);
 
+        const defaultSkuIndex = parseDefaultSkuIndex(default_sku_index, skus || []);
         const product = await Product.create({
             name, description,
             images: images || [],
@@ -156,14 +193,21 @@ const createProduct = async (req, res) => {
             manual_weight: manual_weight || 0,
             status: Number(status) === 0 ? 0 : 1,
             supports_pickup: supports_pickup ? 1 : 0,
-            visible_in_mall: !(visible_in_mall === false || visible_in_mall === 0 || visible_in_mall === '0')
+            visible_in_mall: !(visible_in_mall === false || visible_in_mall === 0 || visible_in_mall === '0'),
+            default_sku_id: null
         });
 
         // 创建SKU
+        const createdSkus = [];
         if (skus && skus.length > 0) {
             for (const sku of skus) {
-                await SKU.create({ ...sku, product_id: product.id });
+                const createdSku = await SKU.create({ ...sku, product_id: product.id });
+                createdSkus.push(createdSku);
             }
+        }
+        const defaultSkuId = resolvePersistedDefaultSkuId(createdSkus, defaultSkuIndex);
+        if (defaultSkuId !== normalizeSkuId(product.default_sku_id)) {
+            await product.update({ default_sku_id: defaultSkuId });
         }
 
         if (growth_value_reward !== undefined) {
@@ -173,7 +217,7 @@ const createProduct = async (req, res) => {
         const result = await Product.findByPk(product.id, {
             include: [{ model: SKU, as: 'skus' }]
         });
-        const out = result.toJSON();
+        const out = buildProductResponse(result);
         out.growth_value_reward = await getProductGrowthReward(product.id);
         await invalidateProductDetailCache(product.id);
 
@@ -209,6 +253,9 @@ const updateProduct = async (req, res) => {
     try {
         const { id } = req.params;
         const updates = req.body;
+        const hasSkuPayload = Object.prototype.hasOwnProperty.call(updates, 'skus');
+        const nextSkus = hasSkuPayload ? (Array.isArray(updates.skus) ? updates.skus : []) : null;
+        const defaultSkuIndex = parseDefaultSkuIndex(updates.default_sku_index, nextSkus || []);
 
         const product = await Product.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
         if (!product) {
@@ -227,6 +274,8 @@ const updateProduct = async (req, res) => {
         }
         const growthValueReward = updates.growth_value_reward;
         delete updates.growth_value_reward;
+        delete updates.default_sku_index;
+        delete updates.skus;
 
         // 确保 price_member 和 member_price 逻辑兼容
         if (updates.price_member !== undefined && updates.member_price === undefined) {
@@ -263,11 +312,15 @@ const updateProduct = async (req, res) => {
         await product.update(updates, { transaction: t });
 
         // ★ 更新SKU — 在事务内执行删除+重建，防止部分失败导致商品无SKU
-        if (updates.skus) {
+        if (hasSkuPayload) {
             await SKU.destroy({ where: { product_id: id }, transaction: t });
-            for (const sku of updates.skus) {
-                await SKU.create({ ...sku, product_id: id }, { transaction: t });
+            const createdSkus = [];
+            for (const sku of nextSkus) {
+                const createdSku = await SKU.create({ ...sku, product_id: id }, { transaction: t });
+                createdSkus.push(createdSku);
             }
+            const defaultSkuId = resolvePersistedDefaultSkuId(createdSkus, defaultSkuIndex);
+            await product.update({ default_sku_id: defaultSkuId }, { transaction: t });
         }
 
         await t.commit();
@@ -278,7 +331,10 @@ const updateProduct = async (req, res) => {
 
         await invalidateProductDetailCache(id);
 
-        const out = product.toJSON();
+        const freshProduct = await Product.findByPk(id, {
+            include: [{ model: SKU, as: 'skus' }]
+        });
+        const out = buildProductResponse(freshProduct);
         out.growth_value_reward = await getProductGrowthReward(id);
         res.json({ code: 0, data: out, message: '更新成功' });
     } catch (error) {

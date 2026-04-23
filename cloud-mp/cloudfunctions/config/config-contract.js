@@ -8,8 +8,10 @@ const DEFAULT_MINI_PROGRAM_CONFIG = {
         customer_service_hours: '9:00-21:00',
         nav_brand_title: '问兰镜像',
         nav_brand_sub: '品牌甄选',
-        coupon_zone_title: '惊喜福利',
-        coupon_zone_subtitle: '领取后可在结算页直接选择使用',
+        coupon_zone_title: '惊喜礼遇',
+        coupon_zone_subtitle: '领券后下单可用',
+        police_registration_title: '公安备案',
+        police_registration_number: '苏公网安备32050802012518号',
         about_summary: '品牌甄选，值得信赖。',
         activity_share_title: '问兰 · 当季品牌活动进行中',
         logistics_page_title: '物流跟踪',
@@ -79,6 +81,30 @@ const DEFAULT_MINI_PROGRAM_CONFIG = {
     feature_toggles: {}
 };
 
+const FIXED_BRAND_CARD_PRESETS = [
+    {
+        slot_index: 0,
+        category_key: 'latest_activity',
+        title: '最新活动',
+        link_type: 'page',
+        link_value: '/pages/index/brand-news-list?category_key=latest_activity'
+    },
+    {
+        slot_index: 1,
+        category_key: 'industry_frontier',
+        title: '行业前沿',
+        link_type: 'page',
+        link_value: '/pages/index/brand-news-list?category_key=industry_frontier'
+    },
+    {
+        slot_index: 2,
+        category_key: 'mall_notice',
+        title: '商城公告',
+        link_type: 'page',
+        link_value: '/pages/index/brand-news-list?category_key=mall_notice'
+    }
+];
+
 function isPlainObject(value) {
     return Object.prototype.toString.call(value) === '[object Object]';
 }
@@ -108,7 +134,6 @@ function pickAssetRef(source = {}) {
     const fileId = pickString(source.file_id || source.fileId);
     const direct = pickString(source.image_url || source.image || source.url || source.cover_image || source.coverImage);
     if (fileId) return fileId;
-    if (isTemporarySignedAssetUrl(direct)) return '';
     return direct;
 }
 
@@ -132,35 +157,67 @@ function hasBrandZoneLegacyContent(homepageSettings = {}) {
     return endorsements.length > 0 || certifications.length > 0 || !!pickString(homepageSettings.brand_story_body);
 }
 
+function getBrandCardPreset(input, index = 0) {
+    const rawSlotIndex = input && input.slot_index;
+    const slotIndex = rawSlotIndex === '' || rawSlotIndex === null || rawSlotIndex === undefined
+        ? NaN
+        : Number(rawSlotIndex);
+    if (Number.isInteger(slotIndex) && FIXED_BRAND_CARD_PRESETS[slotIndex]) {
+        return FIXED_BRAND_CARD_PRESETS[slotIndex];
+    }
+    const categoryKey = pickString(input && input.category_key);
+    if (categoryKey) {
+        const matched = FIXED_BRAND_CARD_PRESETS.find((item) => item.category_key === categoryKey);
+        if (matched) return matched;
+    }
+    return FIXED_BRAND_CARD_PRESETS[index] || FIXED_BRAND_CARD_PRESETS[0];
+}
+
 function normalizeBrandConfigList(list = [], options = {}) {
     const withLink = !!options.withLink;
     return (Array.isArray(list) ? list : [])
-        .map((item) => {
+        .map((item, index) => {
             if (typeof item === 'string') {
                 const title = pickString(item);
                 if (!title) return null;
+                const preset = withLink ? getBrandCardPreset(null, index) : null;
                 return {
-                    title,
+                    title: withLink ? preset.title : title,
                     subtitle: '',
                     image: '',
                     file_id: '',
-                    ...(withLink ? { link_type: 'none', link_value: '' } : {})
+                    ...(withLink
+                        ? {
+                            slot_index: preset.slot_index,
+                            category_key: preset.category_key,
+                            link_type: preset.link_type,
+                            link_value: preset.link_value
+                        }
+                        : {})
                 };
             }
             if (!item || typeof item !== 'object') return null;
+            const preset = withLink ? getBrandCardPreset(item, index) : null;
             const title = pickString(item.title || item.name || item.label);
             const subtitle = pickString(item.subtitle || item.desc || item.description);
             const fileId = pickString(item.file_id);
             const image = fileId || pickString(item.image || item.image_url || item.url);
-            const linkType = withLink ? pickString(item.link_type, 'none') : 'none';
-            const linkValue = withLink ? pickString(item.link_value) : '';
+            const linkType = withLink ? preset.link_type : 'none';
+            const linkValue = withLink ? preset.link_value : '';
             if (!(title || subtitle || image || fileId || linkValue)) return null;
             return {
-                title: title || subtitle || '未命名内容',
+                title: withLink ? preset.title : (title || subtitle || '未命名内容'),
                 subtitle,
                 image,
                 file_id: fileId,
-                ...(withLink ? { link_type: linkType, link_value: linkValue } : {})
+                ...(withLink
+                    ? {
+                        slot_index: preset.slot_index,
+                        category_key: preset.category_key,
+                        link_type: linkType,
+                        link_value: linkValue
+                    }
+                    : {})
             };
         })
         .filter(Boolean);
@@ -210,6 +267,8 @@ function flattenHomeConfigs(miniProgramConfig = {}, homepageSettings = {}) {
         nav_brand_sub: pickString(homepageSettings.nav_brand_sub || brandConfig.nav_brand_sub, DEFAULT_MINI_PROGRAM_CONFIG.brand_config.nav_brand_sub),
         coupon_zone_title: pickString(homepageSettings.coupon_zone_title || brandConfig.coupon_zone_title, DEFAULT_MINI_PROGRAM_CONFIG.brand_config.coupon_zone_title),
         coupon_zone_subtitle: pickString(homepageSettings.coupon_zone_subtitle || brandConfig.coupon_zone_subtitle, DEFAULT_MINI_PROGRAM_CONFIG.brand_config.coupon_zone_subtitle),
+        police_registration_title: pickString(homepageSettings.police_registration_title || brandConfig.police_registration_title, DEFAULT_MINI_PROGRAM_CONFIG.brand_config.police_registration_title),
+        police_registration_number: pickString(homepageSettings.police_registration_number || brandConfig.police_registration_number, DEFAULT_MINI_PROGRAM_CONFIG.brand_config.police_registration_number),
         show_brand_logo: homepageSettings.show_brand_logo !== undefined ? homepageSettings.show_brand_logo : true,
         brand_logo: pickString(homepageSettings.brand_logo),
         brand_zone_enabled: brandZoneEnabled,

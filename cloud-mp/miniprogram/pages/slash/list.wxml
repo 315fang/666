@@ -12,19 +12,14 @@
     <view class="hero-badge-row">
       <view class="hero-badge">
         <image class="hero-badge-icon" src="/assets/icons/tag.svg" mode="aspectFit"></image>
-        <text class="hero-badge-text">全员可参与</text>
+        <text class="hero-badge-text">全员可参加</text>
       </view>
     </view>
 
     <view class="hero-card">
       <view class="hero-copy">
-        <text class="hero-title">发起砍价，好友一起帮你省</text>
-        <text class="hero-subtitle">发起后分享给好友帮砍，每次都会压低当前价格；随时回到“我的砍价”查看进度和最终成交价。</text>
-      </view>
-
-      <view class="hero-actions">
-        <view class="hero-btn hero-btn-primary" bindtap="onGoMySlash">我的砍价</view>
-        <view class="hero-btn" bindtap="onGoActivities">去发起</view>
+        <text class="hero-title">发起砍价，好友帮你省</text>
+        <text class="hero-subtitle">发起后可邀请好友帮砍，记录可在“我的砍价”查看。</text>
       </view>
     </view>
   </view>
@@ -38,7 +33,7 @@
     <view class="section-head">
       <view>
         <text class="section-title">可发起活动</text>
-        <text class="section-subtitle">重点看原价、可砍到底价和助力规则。</text>
+        <text class="section-subtitle">查看原价、底价和活动规则。</text>
       </view>
     </view>
 
@@ -55,7 +50,7 @@
 
     <view class="empty-wrap" wx:if="{{!activities.length && !loading}}">
       <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
-      <text class="empty-text">暂无砍价活动\n活动上线后可从这里发起，已发起记录看“我的砍价”</text>
+      <text class="empty-text">暂无砍价活动</text>
     </view>
 
     <view class="product-list">
@@ -105,7 +100,7 @@
     <view class="section-head">
       <view>
         <text class="section-title">我的砍价</text>
-        <text class="section-subtitle">查看当前价格、帮砍进度和最终购买入口。</text>
+        <text class="section-subtitle">查看价格进度和购买入口。</text>
       </view>
     </view>
 
@@ -122,7 +117,7 @@
 
     <view class="empty-wrap" wx:if="{{!myRecords.length && !loading}}">
       <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
-      <text class="empty-text">还没有砍价记录\n去砍价商品页发起第一刀吧</text>
+      <text class="empty-text">暂无砍价记录</text>
       <view class="empty-action" bindtap="onGoActivities">去发起砍价</view>
     </view>
 
@@ -150,7 +145,7 @@
             </view>
             <text class="share-hint" wx:if="{{item.status === 'active'}}">继续邀请好友</text>
           </view>
-          <view class="record-action" catchtap="onViewRecord" data-no="{{item.slash_no}}">查看砍价详情</view>
+          <view class="record-action" catchtap="onViewRecord" data-no="{{item.slash_no}}">查看详情</view>
         </view>
       </view>
     </view>

@@ -19,6 +19,8 @@ const {
 const app = getApp();
 
 const INDEX_USER_INFO_TTL = 15 * 1000;
+const HOME_PAGE_ASSET_TTL = 4 * 60 * 60 * 1000;
+const HOME_PAGE_ASSET_RETRY_COOLDOWN = 30 * 1000;
 
 function parseScene(scene) {
     const result = {};
@@ -120,6 +122,8 @@ Page({
         regLightTipTitle: '',
         regLightTipContent: '',
         homeCoupons: [],
+        claimableCouponCount: 0,
+        homeBundles: [],
         unusedCouponCount: 0,
         brandZone: createEmptyBrandZone()
     },
@@ -129,10 +133,10 @@ Page({
         this._assetRefreshAttempted = false;
         this._skipNextHomeRefresh = true;
         const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
-        const viewportHeight = windowInfo.windowHeight || windowInfo.screenHeight || 0;
-        const heroPeekHeight = Math.max(160, Math.round(viewportHeight * 0.20));
+        const viewportHeight = windowInfo.windowHeight || windowInfo.screenHeight || 667;
+        const heroTeaserHeight = 72;
         this.setData({
-            heroViewportHeight: Math.max(480, viewportHeight - heroPeekHeight),
+            heroViewportHeight: Math.max(620, viewportHeight - heroTeaserHeight),
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
             navBarHeight: app.globalData.navBarHeight || 44
@@ -160,7 +164,7 @@ Page({
         this._tryPendingRegisterLightTip();
         if (this._skipNextHomeRefresh) {
             this._skipNextHomeRefresh = false;
-        } else {
+        } else if ((app.globalData.homePageDataExpireAt || 0) <= Date.now()) {
             this.loadData(true);
         }
     },
@@ -250,10 +254,6 @@ Page({
         return loadHomeCoupons(this);
     },
 
-    onCouponTap() {
-        wx.navigateTo({ url: '/pages/coupon/center' });
-    },
-
     onClaimWelcomeCoupons() {
         if (!app.globalData.isLoggedIn) {
             wx.showToast({ title: '请先登录', icon: 'none' });
@@ -277,12 +277,12 @@ Page({
         });
     },
 
+    onCouponTap() {
+        wx.navigateTo({ url: '/pages/coupon/center' });
+    },
+
     onCouponItemTap(e) {
-        if (!app.globalData.isLoggedIn) {
-            wx.navigateTo({ url: '/pages/coupon/center' });
-            return;
-        }
-        wx.navigateTo({ url: '/pages/coupon/list' });
+        wx.navigateTo({ url: '/pages/coupon/center' });
     },
 
     _startBubbleRotation() {
@@ -439,10 +439,6 @@ Page({
 
     onActivityTap() {
         wx.switchTab({ url: '/pages/activity/activity' });
-    },
-
-    onBrandZoneOpen() {
-        wx.navigateTo({ url: '/pages/index/brand-zone-detail' });
     },
 
     onLatestActivityTap() {
@@ -624,6 +620,22 @@ Page({
     onAssetImageError(e) {
         const scene = e?.currentTarget?.dataset?.scene || 'unknown';
         console.warn('[Index] 图片加载失败，使用本地降级内容:', scene, e?.detail || {});
+
+        if (['hero-banner', 'mid-poster', 'bottom-poster'].includes(scene)) {
+            if (!this._assetRefreshInFlight && !this._assetRefreshAttempted) {
+                this._assetRefreshAttempted = true;
+                this._assetRefreshInFlight = true;
+                this.loadData(true)
+                    .catch(() => null)
+                    .finally(() => {
+                        this._assetRefreshInFlight = false;
+                        setTimeout(() => {
+                            this._assetRefreshAttempted = false;
+                        }, HOME_PAGE_ASSET_RETRY_COOLDOWN);
+                    });
+                return;
+            }
+        }
 
         if (scene === 'hero-banner') {
             const heroBanners = (this.data.heroBanners || []).map((item, index) => (

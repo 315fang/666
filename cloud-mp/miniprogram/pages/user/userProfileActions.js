@@ -1,6 +1,7 @@
 const app = getApp();
 const { put, uploadFile } = require('../../utils/request');
 const { ensurePrivacyAuthorization, openPrivacyContract } = require('../../utils/privacy');
+const { isDefaultUserProfile } = require('../../utils/userProfile');
 
 function onTapEditProfile(page) {
     wx.showActionSheet({
@@ -84,7 +85,10 @@ async function onLogin(page) {
             }
             return;
         }
-        page.loadUserInfo(true);
+        await page.loadUserInfo(true);
+        if (result?.userInfo && isDefaultUserProfile(result.userInfo) && typeof page.promptProfileBootstrapIfNeeded === 'function') {
+            page.promptProfileBootstrapIfNeeded(result.userInfo, result);
+        }
         wx.showToast({ title: '登录成功', icon: 'success' });
     } catch (_) {
         wx.hideLoading();

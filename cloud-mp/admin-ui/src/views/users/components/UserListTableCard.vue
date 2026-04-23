@@ -89,8 +89,8 @@
       </el-table-column>
       <el-table-column label="状态" width="80">
         <template #default="{ row }">
-          <el-tag :type="row.status === 0 ? 'danger' : 'success'" size="small">
-            {{ row.status_text || (row.status === 0 ? '封禁' : '正常') }}
+          <el-tag :type="row.account_visibility === 'hidden' ? 'info' : (row.status === 0 ? 'danger' : 'success')" size="small">
+            {{ row.account_visibility === 'hidden' ? '已隐藏' : (row.status_text || (row.status === 0 ? '封禁' : '正常')) }}
           </el-tag>
         </template>
       </el-table-column>
@@ -102,7 +102,7 @@
           <el-button text type="primary" size="small" @click="onOpenDetail(row)">详情</el-button>
           <el-button v-if="canAdjustUserBalance" text type="warning" size="small" @click="onDropdown('account_adjust', row)">调账</el-button>
           <el-button v-if="canManageUserRole" text size="small" @click="onOpenRoleEdit(row)">升级</el-button>
-          <el-button v-if="canManageUserRole" text size="small" @click="onOpenPurchaseLevel(row)">拿货等级</el-button>
+          <el-button v-if="canManagePurchaseLevel" text size="small" @click="onOpenPurchaseLevel(row)">拿货等级</el-button>
           <el-dropdown size="small" @command="(cmd) => onDropdown(cmd, row)">
             <el-button text size="small">更多<el-icon><ArrowDown /></el-icon></el-button>
             <template #dropdown>
@@ -111,6 +111,13 @@
                 <el-dropdown-item command="member_no">修改会员码</el-dropdown-item>
                 <el-dropdown-item command="remark">备注/标签</el-dropdown-item>
                 <el-dropdown-item v-if="canManageUserParent" command="parent">修改上级</el-dropdown-item>
+                <el-dropdown-item
+                  v-if="canManageUserStatus"
+                  command="visibility"
+                  divided
+                >
+                  {{ row.account_visibility === 'hidden' ? '恢复显示' : '隐藏账号' }}
+                </el-dropdown-item>
                 <el-dropdown-item
                   v-if="canManageUserStatus"
                   :command="row.status === 1 ? 'ban' : 'unban'"
@@ -170,6 +177,10 @@ const props = defineProps({
     default: false
   },
   canManageUserRole: {
+    type: Boolean,
+    default: false
+  },
+  canManagePurchaseLevel: {
     type: Boolean,
     default: false
   },

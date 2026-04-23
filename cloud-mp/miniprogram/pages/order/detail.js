@@ -53,23 +53,23 @@ Page({
         statusDescMap: {
             pending: '请尽快完成支付',
             pending_payment: '请尽快完成支付',
-            pending_group: '已支付成功，等待其他团员加入后成团',
-            paid: '已支付成功，等待商家发货',
-            pickup_pending: '订单已支付，等待到指定门店核销提货',
-            agent_confirmed: '代理已确认，正在准备发货',
-            shipping_requested: '发货申请已提交，等待仓库处理',
-            shipped: '商品已发出，请注意查收快递',
-            completed: '交易已完成，佣金将在确认收货后15天结算',
+            pending_group: '已支付，等待成团',
+            paid: '已支付，等待发货',
+            pickup_pending: '已支付，请到指定门店提货',
+            agent_confirmed: '订单已确认，正在备货',
+            shipping_requested: '发货申请已提交',
+            shipped: '商品已发出，请注意查收',
+            completed: '订单已完成',
             cancelled: '订单已取消',
-            refunding: '退款申请处理中，请耐心等待',
+            refunding: '售后申请处理中',
             refunded: '退款已完成'
         },
         refundStatusText: {
             pending: '审核中',
-            approved: '审核通过',
-            processing: '退款处理中',
+            approved: '已通过',
+            processing: '退款中',
             completed: '退款完成',
-            rejected: '申请被拒绝',
+            rejected: '已驳回',
             cancelled: '已取消'
         }
     },
@@ -152,16 +152,16 @@ Page({
         const statusMap = {
             pending: '订单已创建，请尽快完成支付。',
             pending_payment: '订单已创建，请尽快完成支付。',
-            pending_group: '已支付成功，等待其他成员加入成团。',
-            paid: '订单已支付成功，正在等待发货。',
-            pickup_pending: '订单已支付，请前往指定门店完成核销提货。',
-            agent_confirmed: '团队已确认订单，正在准备发货。',
-            shipping_requested: '发货申请已提交，请耐心等待。',
+            pending_group: '已支付，等待成团。',
+            paid: '已支付，等待发货。',
+            pickup_pending: '已支付，请前往指定门店提货。',
+            agent_confirmed: '订单已确认，正在备货。',
+            shipping_requested: '发货申请已提交。',
             shipped: logisticsConfig.shipping_mode === 'manual'
                 ? (logisticsConfig.manual_status_desc || '当前订单走手工发货模式，可查看单号和发货时间')
                 : '商品已发出，可在此页查看物流。',
             completed: '订单已完成，感谢您的信任。',
-            refunding: '退款申请已提交，正在处理中。',
+            refunding: '售后申请已提交，正在处理中。',
             refunded: '退款已完成。'
         };
         const text = canonicalDesc || statusMap[order.status] || '可在此查看订单状态与物流进度。';
@@ -228,7 +228,7 @@ Page({
         const { order, walletBalance } = this.data;
         if (!order) return;
         if (walletBalance <= 0) {
-            wx.showToast({ title: '货款余额不足，请先充值', icon: 'none' });
+            wx.showToast({ title: '货款余额不足', icon: 'none' });
             return;
         }
         if (this._payingWallet) return;
@@ -244,7 +244,7 @@ Page({
             }
             const payParams = res.data || {};
             if (payParams.paid_by_wallet) {
-                wx.showToast({ title: '货款余额支付成功！', icon: 'success' });
+                wx.showToast({ title: '货款支付成功', icon: 'success' });
                 this.startPayStatusPolling(order.id);
                 this._loadWalletBalance(); // 刷新余额显示
             } else if (payParams.wallet_balance_insufficient) {
@@ -330,7 +330,7 @@ Page({
                             wx.navigateTo({ url: `/pages/group/detail?group_no=${groupNo}` });
                             return;
                         }
-                        wx.showToast({ title: '拼团进度生成中，请稍后再试', icon: 'none' });
+                        wx.showToast({ title: '拼团记录生成中，请稍后再试', icon: 'none' });
                         this.loadOrder(orderId);
                     } catch (err) {
                         wx.hideLoading();

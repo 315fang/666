@@ -41,9 +41,15 @@
         <el-input v-model="props.festival.banner_subtitle" placeholder="活动页副标题" />
       </el-form-item>
       <el-form-item label="横幅背景图片">
-        <el-input v-model="props.festival.banner" placeholder="横幅背景图片URL" />
-        <div v-if="props.festival.banner" class="banner-preview">
-          <el-image :src="props.festival.banner" fit="contain" class="banner-image" />
+        <div class="image-field">
+          <el-input v-model="props.festival.banner" placeholder="横幅背景图片URL" @input="onBannerInput" />
+          <div class="image-actions">
+            <el-button size="small" @click="openMediaPicker('banner')">从素材库选择</el-button>
+            <el-button v-if="resolveBannerImage()" size="small" text type="danger" @click="clearBannerImage">清空</el-button>
+          </div>
+        </div>
+        <div v-if="resolveBannerImage()" class="banner-preview">
+          <el-image :src="resolveBannerImage()" fit="contain" class="banner-image" />
         </div>
       </el-form-item>
       <el-form-item label="CTA按钮文案">
@@ -179,7 +185,14 @@
               </div>
               <el-row :gutter="10" class="poster-row">
                 <el-col :span="20">
-                  <el-input v-model="poster.image" placeholder="卡片图片URL（可空）" />
+                  <div class="image-field">
+                    <el-input v-model="poster.image" placeholder="卡片图片URL（可空）" @input="onPosterImageInput(poster)" />
+                    <div class="image-actions">
+                      <el-button size="small" @click="openMediaPicker('poster', idx)">从素材库选择</el-button>
+                      <el-button v-if="resolvePosterImage(poster)" size="small" text type="danger" @click="clearPosterImage(poster)">清空</el-button>
+                    </div>
+                    <el-image v-if="resolvePosterImage(poster)" :src="resolvePosterImage(poster)" fit="cover" class="poster-preview-image" />
+                  </div>
                 </el-col>
                 <el-col :span="4">
                   <el-button size="small" type="danger" text @click="props.removePoster(idx)">删除</el-button>
@@ -196,10 +209,18 @@
       </el-form-item>
     </el-form>
   </el-card>
+  <MediaPicker
+    v-model:visible="mediaPickerVisible"
+    :multiple="false"
+    :max="1"
+    @confirm="handleMediaConfirm"
+  />
 </template>
 
 <script setup>
 import { nextTick, ref } from 'vue'
+import MediaPicker from '@/components/MediaPicker.vue'
+import { buildPersistentAssetRef } from '@/utils/assetUrlAudit'
 
 const props = defineProps({
   festival: { type: Object, required: true },
@@ -224,6 +245,8 @@ const props = defineProps({
 const tagInputVisible = ref(false)
 const tagInputVal = ref('')
 const tagInputRef = ref()
+const mediaPickerVisible = ref(false)
+const mediaPickerContext = ref({ kind: 'banner', index: -1 })
 
 const showTagInput = async () => {
   tagInputVisible.value = true
@@ -237,6 +260,49 @@ const addTag = () => {
   }
   tagInputVal.value = ''
   tagInputVisible.value = false
+}
+
+const resolveBannerImage = () => props.festival.banner || ''
+const resolvePosterImage = (poster = {}) => poster.image || ''
+
+const onBannerInput = () => {
+  props.festival.banner_file_id = ''
+}
+
+const onPosterImageInput = (poster) => {
+  if (!poster) return
+  poster.file_id = ''
+}
+
+const clearBannerImage = () => {
+  props.festival.banner = ''
+  props.festival.banner_file_id = ''
+}
+
+const clearPosterImage = (poster) => {
+  if (!poster) return
+  poster.image = ''
+  poster.file_id = ''
+}
+
+const openMediaPicker = (kind, index = -1) => {
+  mediaPickerContext.value = { kind, index }
+  mediaPickerVisible.value = true
+}
+
+const handleMediaConfirm = (persistIds = [], displayUrls = []) => {
+  const persist = Array.isArray(persistIds) ? (persistIds[0] || '') : ''
+  const display = Array.isArray(displayUrls) ? (displayUrls[0] || '') : ''
+  const stableUrl = buildPersistentAssetRef({ url: display || persist })
+  if (mediaPickerContext.value.kind === 'banner') {
+    props.festival.banner_file_id = persist
+    props.festival.banner = stableUrl || ''
+    return
+  }
+  const poster = Array.isArray(props.festival.card_posters) ? props.festival.card_posters[mediaPickerContext.value.index] : null
+  if (!poster) return
+  poster.file_id = persist
+  poster.image = stableUrl || ''
 }
 </script>
 
@@ -265,6 +331,20 @@ const addTag = () => {
 
 .field-note {
   margin-top: 4px;
+}
+
+.image-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.image-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .field-warn {
@@ -322,6 +402,13 @@ const addTag = () => {
 
 .poster-row {
   margin-top: 10px;
+}
+
+.poster-preview-image {
+  width: 120px;
+  height: 80px;
+  border-radius: 8px;
+  border: 1px solid #ebeef5;
 }
 
 @media (max-width: 767px) {

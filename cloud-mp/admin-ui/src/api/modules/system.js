@@ -37,7 +37,7 @@ export const getAlertConfig = () => request({ url: '/alert-config', method: 'get
 export const saveAlertConfig = (data) => request({ url: '/alert-config', method: 'put', data })
 export const testAlertWebhook = (data) => request({ url: '/alert-config/test', method: 'post', data })
 
-export const getMiniProgramConfig = () => request({ url: '/mini-program-config', method: 'get' })
+export const getMiniProgramConfig = (options = {}) => request({ url: '/mini-program-config', method: 'get', ...options })
 export const updateMiniProgramConfig = (data) => request({ url: '/mini-program-config', method: 'put', data })
 export const getMemberTierConfig = (options = {}) => request({ url: '/member-tier-config', method: 'get', ...options })
 export const updateMemberTierConfig = (data) => request({ url: '/member-tier-config', method: 'put', data })
