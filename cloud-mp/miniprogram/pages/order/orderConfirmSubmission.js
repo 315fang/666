@@ -43,6 +43,10 @@ async function submitOrder(page, app, brandAnimation) {
         wx.showToast({ title: '请选择自提门店', icon: 'none' });
         return;
     }
+    if (deliveryType === 'pickup' && pickupStation && pickupStation.selectable === false) {
+        wx.showToast({ title: '所选门店当前无货，请重新选择', icon: 'none' });
+        return;
+    }
     if (orderItems.length === 0) {
         wx.showToast({ title: '没有可提交的商品', icon: 'none' });
         return;

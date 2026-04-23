@@ -85,7 +85,11 @@ function createPayload() {
                     {
                         product_id: 1,
                         default_qty: 1,
-                        enabled: 1
+                        enabled: 1,
+                        commission_pool_amount: 80,
+                        solo_commission_fixed_by_role: { 3: 60, 5: 80 },
+                        direct_commission_fixed_by_role: { 3: 40 },
+                        indirect_commission_fixed_by_role: { 5: 40 }
                     }
                 ]
             }
@@ -138,6 +142,12 @@ test('creating product bundle waits for persistence flush before success', async
     assert.equal(flushCalls, 1);
     assert.equal(deps.getCollection('product_bundles').length, 1);
     assert.equal(deps.getCollection('product_bundles')[0].scene_type, 'flex_bundle');
+    const option = deps.getCollection('product_bundles')[0].groups[0].options[0];
+    assert.equal(option.commission_pool_amount, 80);
+    assert.equal(option.solo_commission_fixed_by_role['3'], 60);
+    assert.equal(option.solo_commission_fixed_by_role['5'], 80);
+    assert.equal(option.direct_commission_fixed_by_role['3'], 40);
+    assert.equal(option.indirect_commission_fixed_by_role['5'], 40);
 });
 
 test('creating product bundle fails when persistence flush fails', async () => {

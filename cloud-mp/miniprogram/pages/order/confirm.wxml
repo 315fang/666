@@ -50,9 +50,6 @@
     <text class="delivery-hint" wx:if="{{deliveryType === 'express'}}">{{pickupAllowed ? '商品将寄送至下方地址，如需自提可切换到店自提。' : '商品将寄送至下方地址。'}}</text>
     <text class="delivery-hint delivery-hint-muted" wx:if="{{!pickupAllowed}}">该订单商品不支持到店自提。</text>
     <text class="delivery-hint" wx:if="{{pickupAllowed && deliveryType === 'pickup'}}">到店自提免运费，可填写联系地址便于售后。</text>
-    <view class="pickup-map-link" wx:if="{{pickupAllowed && deliveryType === 'pickup'}}" bindtap="onOpenStationsMap">
-      <text class="pickup-map-link-text">查看全部门店地图</text>
-    </view>
   </view>
 
   <!-- 快递：必须收货地址 -->
@@ -128,34 +125,43 @@
   <view class="section pickup-section" wx:if="{{deliveryType === 'pickup'}}">
     <view class="section-head-row">
       <text class="section-title-text">自提门店</text>
-    </view>
-    <view class="pickup-loc-btns">
-      <button class="pickup-loc-btn" size="mini" bindtap="onLocateForPickupSort">使用当前位置</button>
-      <button class="pickup-loc-btn ghost" size="mini" bindtap="onChooseRefLocation">地图选点</button>
-      <button class="pickup-loc-btn ghost" size="mini" wx:if="{{refLocationName}}" bindtap="clearRefLocation">清除参考点</button>
-    </view>
-    <text class="pickup-hint-muted" wx:if="{{pickupDistanceHint}}">未显示距离时按城市与名称排序；定位后优先展示附近门店。</text>
-    <text class="ref-loc-name" wx:if="{{refLocationName}}">参考：{{refLocationName}}</text>
-    <view
-      class="pickup-row {{pickupStation && pickupStation.id === item.id ? 'pickup-row-active' : ''}}"
-      wx:for="{{pickupStations}}"
-      wx:key="id"
-      data-id="{{item.id}}"
-      bindtap="onSelectPickupStation"
-    >
-      <view class="pickup-row-main">
-        <text class="pickup-name">{{item.name}}</text>
-        <text class="pickup-dist" wx:if="{{item.distance_km != null}}">约 {{item.distance_km}} km</text>
+      <view class="section-link-row" bindtap="onChoosePickupStation">
+        <text class="section-link-text">{{pickupStation ? '更换' : '选择'}}</text>
+        <text class="arrow">›</text>
       </view>
-      <text class="pickup-addr">{{item.city}} {{item.district || ''}} {{item.address || ''}}</text>
-      <text class="pickup-rule">库存：{{item.stock_status_text || '库存充足'}}</text>
-      <text class="pickup-rule">仅该门店人员可核销本订单</text>
     </view>
-    <text class="pickup-empty" wx:if="{{pickupStations.length === 0}}">暂无可选自提门店，请稍后再试。</text>
-    <view class="pickup-notice-card" wx:if="{{pickupStation}}">
-      <text class="pickup-notice-title">已选自提门店</text>
-      <text class="pickup-notice-name">{{pickupStation.name}}</text>
-      <text class="pickup-notice-desc">提交后仅限该门店核销，请勿前往其他门店。</text>
+    <view class="pickup-selected-card" wx:if="{{pickupStation}}" bindtap="onChoosePickupStation">
+      <view class="pickup-row-main">
+        <view class="pickup-title-col">
+          <text class="pickup-name">{{pickupStation.name}}</text>
+        </view>
+        <view class="pickup-row-tags">
+          <text class="pickup-stock-badge {{pickupStation.pickup_stock_class}}">{{pickupStation.pickup_stock_text}}</text>
+        </view>
+      </view>
+      <view class="pickup-address-block">
+        <text class="pickup-info-label">地址</text>
+        <text class="pickup-addr">{{pickupStation.full_address || (pickupStation.city + ' ' + (pickupStation.district || '') + ' ' + (pickupStation.address || ''))}}</text>
+      </view>
+      <view class="pickup-info-grid">
+        <view class="pickup-info-pill">
+          <text class="pickup-info-label">电话</text>
+          <text class="pickup-info-value">{{pickupStation.contact_phone_text}}</text>
+        </view>
+        <view class="pickup-info-pill">
+          <text class="pickup-info-label">营业</text>
+          <text class="pickup-info-value">{{pickupStation.business_hours_text}}</text>
+        </view>
+      </view>
+      <text class="pickup-business-days" wx:if="{{pickupStation.business_days_text}}">{{pickupStation.business_days_text}}</text>
+      <text class="pickup-rule">提交后仅限该门店核销，请勿前往其他门店。</text>
+    </view>
+    <view class="pickup-empty-card" wx:else bindtap="onChoosePickupStation">
+      <view class="pickup-empty-main">
+        <text class="pickup-empty-title">请选择自提门店</text>
+        <text class="pickup-empty-desc">进入门店列表后按名称、城市或地址查找，再选择本次自提门店。</text>
+      </view>
+      <text class="arrow">›</text>
     </view>
   </view>
 

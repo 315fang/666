@@ -194,7 +194,7 @@
           :closable="false"
           show-icon
           class="form-alert"
-          title="自由组合只引用现有商品，不继承商品管理里的佣金。每个候选商品都在这里单独配置直推/间推固定佣金额。"
+          title="自由组合只引用现有商品，不继承商品管理里的佣金。每个候选商品独立配置佣金池、单上级独享额和双上级拆分额。"
         />
 
         <div v-if="form.groups.length === 0" class="groups-empty">暂无选择分组，请先新增至少一个分组。</div>
@@ -278,10 +278,38 @@
               <el-button text type="danger" size="small" @click="removeOption(groupIndex, optionIndex)">删除候选</el-button>
             </div>
             <div class="commission-editor">
-              <div class="commission-editor-title">固定佣金配置</div>
+              <div class="commission-editor-title">佣金池配置</div>
+              <div class="commission-pool-row">
+                <div class="commission-pool-control">
+                  <span class="commission-role-label">总佣金池</span>
+                  <el-input-number
+                    v-model="option.commission_pool_amount"
+                    :min="0"
+                    :precision="2"
+                    controls-position="right"
+                    style="width: 100%"
+                  />
+                </div>
+                <div class="commission-pool-hint">订单创建时按实际上下级关系快照佣金；配置总额会作为封顶。</div>
+              </div>
               <div class="commission-grid">
                 <div class="commission-group">
-                  <div class="commission-group-title">直推固定佣金</div>
+                  <div class="commission-group-title">单上级独享</div>
+                  <div class="commission-role-list">
+                    <div class="commission-role-item" v-for="role in COMMISSION_ROLE_OPTIONS" :key="`solo-${role.value}`">
+                      <span class="commission-role-label">{{ role.label }}</span>
+                      <el-input-number
+                        v-model="option.solo_commission_fixed_by_role[role.value]"
+                        :min="0"
+                        :precision="2"
+                        controls-position="right"
+                        style="width: 100%"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div class="commission-group">
+                  <div class="commission-group-title">双上级：直推</div>
                   <div class="commission-role-list">
                     <div class="commission-role-item" v-for="role in COMMISSION_ROLE_OPTIONS" :key="`direct-${role.value}`">
                       <span class="commission-role-label">{{ role.label }}</span>
@@ -296,7 +324,7 @@
                   </div>
                 </div>
                 <div class="commission-group">
-                  <div class="commission-group-title">间推固定佣金</div>
+                  <div class="commission-group-title">双上级：上上级</div>
                   <div class="commission-role-list">
                     <div class="commission-role-item" v-for="role in COMMISSION_ROLE_OPTIONS" :key="`indirect-${role.value}`">
                       <span class="commission-role-label">{{ role.label }}</span>
@@ -399,6 +427,8 @@ const createOption = () => ({
   product_name: '',
   sku_name: '',
   sku_spec: '',
+  commission_pool_amount: 0,
+  solo_commission_fixed_by_role: createEmptyFixedCommissionMap(),
   direct_commission_fixed_by_role: createEmptyFixedCommissionMap(),
   indirect_commission_fixed_by_role: createEmptyFixedCommissionMap()
 })
@@ -625,6 +655,8 @@ const hydrateBundleForm = async (bundle = {}) => {
         product_name: option.product_name || '',
         sku_name: option.sku_name || '',
         sku_spec: option.sku_spec || '',
+        commission_pool_amount: Number(option.commission_pool_amount || 0),
+        solo_commission_fixed_by_role: normalizeFixedCommissionMap(option.solo_commission_fixed_by_role),
         direct_commission_fixed_by_role: normalizeFixedCommissionMap(option.direct_commission_fixed_by_role),
         indirect_commission_fixed_by_role: normalizeFixedCommissionMap(option.indirect_commission_fixed_by_role)
       }
@@ -760,6 +792,8 @@ const buildPayload = () => ({
       default_qty: Number(option.default_qty || 1),
       sort_order: Number(option.sort_order || optionIndex),
       enabled: Number(option.enabled || 0) === 0 ? 0 : 1,
+      commission_pool_amount: Number(option.commission_pool_amount || 0),
+      solo_commission_fixed_by_role: normalizeFixedCommissionMap(option.solo_commission_fixed_by_role),
       direct_commission_fixed_by_role: normalizeFixedCommissionMap(option.direct_commission_fixed_by_role),
       indirect_commission_fixed_by_role: normalizeFixedCommissionMap(option.indirect_commission_fixed_by_role)
     }))
@@ -1002,9 +1036,30 @@ fetchBundles()
   color: #374151;
 }
 
+.commission-pool-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) 1fr;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.commission-pool-control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.commission-pool-hint {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #64748b;
+}
+
 .commission-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -1049,7 +1104,8 @@ fetchBundles()
 
 @media (max-width: 1180px) {
   .group-fields-grid,
-  .option-form-grid {
+  .option-form-grid,
+  .commission-pool-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1074,6 +1130,7 @@ fetchBundles()
 
   .group-fields-grid,
   .option-form-grid,
+  .commission-pool-row,
   .commission-role-list {
     grid-template-columns: 1fr;
   }

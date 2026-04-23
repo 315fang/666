@@ -9,8 +9,6 @@ const {
     navigateToAddressList,
     refreshPickupAllowed,
     loadPickupStations,
-    locateForPickupSort,
-    chooseRefLocation,
     loadDefaultAddress,
     loadCartItems
 } = require('./orderConfirmAddress');
@@ -122,11 +120,6 @@ Page({
         deliveryType: 'express',
         pickupStations: [],
         pickupStation: null,
-        refLat: null,
-        refLng: null,
-        refLocationName: '',
-        /** 无参考坐标时列表不展示距离，用于提示用户可定位 */
-        pickupDistanceHint: false,
         lightTipShow: false,
         lightTipTitle: '',
         lightTipContent: ''
@@ -166,6 +159,21 @@ Page({
         }
         if (!this._hasShownOnce) {
             this._hasShownOnce = true;
+            return;
+        }
+        const selectedPickupStation = wx.getStorageSync('selectedPickupStation');
+        if (selectedPickupStation) {
+            wx.removeStorageSync('selectedPickupStation');
+            const selectedId = String(selectedPickupStation.id || selectedPickupStation._id || selectedPickupStation.station_key || '');
+            const latestStation = (this.data.pickupStations || [])
+                .find((item) => String(item.id || item._id || '') === selectedId);
+            const station = latestStation || selectedPickupStation;
+            if (station.selectable === false) {
+                wx.showToast({ title: '该门店当前无货，请重新选择', icon: 'none' });
+            } else {
+                this.setData({ pickupStation: station });
+            }
+            this._tryAutoCouponUsagePrompt();
             return;
         }
         // 从地址选择页返回时刷新地址
@@ -556,33 +564,26 @@ Page({
         return loadPickupStations(this);
     },
 
-    /**
-     * 当前位置授权后，按当前坐标请求门店距离并排序；
-     * 若用户不在取货地，可继续用地图选点修正参考位置。
-     */
-    async onLocateForPickupSort() {
-        return locateForPickupSort(this);
-    },
-
-    onSelectPickupStation(e) {
-        const id = e.currentTarget.dataset.id;
-        const station = (this.data.pickupStations || []).find((s) => s.id === id);
-        if (station) this.setData({ pickupStation: station });
-    },
-
-    /** 用地图选点（微信原生能力，不产生腾讯位置服务按次计费） */
-    onChooseRefLocation() {
-        return chooseRefLocation(this);
-    },
-
-    clearRefLocation() {
-        this.setData({ refLat: null, refLng: null, refLocationName: '' });
-        this.loadPickupStations();
-    },
-
-    /** 全量服务站点地图（分包页），未登录也可浏览 */
-    onOpenStationsMap() {
-        wx.navigateTo({ url: '/pages/stations/map' });
+    async onChoosePickupStation() {
+        if (this.data.deliveryType !== 'pickup') return;
+        if (!this.data.pickupAllowed) {
+            wx.showToast({ title: '该商品不支持到店自提', icon: 'none' });
+            return;
+        }
+        if ((this.data.pickupStations || []).length === 0) {
+            await this.loadPickupStations();
+        }
+        const stations = this.data.pickupStations || [];
+        if (stations.length === 0) {
+            wx.showToast({ title: '暂无自提门店，请稍后再试', icon: 'none' });
+            return;
+        }
+        wx.setStorageSync('pickupStationSelectPayload', {
+            stations,
+            selectedId: this.data.pickupStation ? (this.data.pickupStation.id || this.data.pickupStation._id || this.data.pickupStation.station_key || '') : '',
+            updatedAt: Date.now()
+        });
+        wx.navigateTo({ url: '/pages/order/pickup-station-list' });
     },
 
     // 加载默认收货地址

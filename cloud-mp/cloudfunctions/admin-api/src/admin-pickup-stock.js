@@ -74,42 +74,27 @@ function registerPickupStockRoutes(app, deps) {
         return account;
     }
 
-    function normalizeAgentRoleLevel(roleLevel) {
-        const normalized = Math.floor(toNumber(roleLevel, 0));
-        if (normalized >= 5) return 5;
-        if (normalized === 4) return 4;
-        if (normalized === 3) return 3;
-        return 0;
-    }
-
     function productOwnsSku(product = {}, sku = {}) {
         const productIds = [product.id, product._legacy_id, product._id].filter((value) => value !== null && value !== undefined && value !== '').map(String);
         const skuProductIds = [sku.product_id, sku.productId].filter((value) => value !== null && value !== undefined && value !== '').map(String);
         return skuProductIds.some((value) => productIds.includes(value));
     }
 
-    function resolveSupplyPriceByRole(product = {}, sku = {}, roleLevel = 0) {
-        const normalizedRole = normalizeAgentRoleLevel(roleLevel);
-        if (!normalizedRole) return null;
-        const fieldName = `supply_price_b${normalizedRole === 5 ? 3 : normalizedRole}`;
-        const amount = toNumber(sku?.[fieldName] ?? product?.[fieldName], NaN);
-        return Number.isFinite(amount) && amount > 0 ? roundMoney(amount) : null;
-    }
-
-    function buildProcurementNo(rows = []) {
-        return `PROC${Date.now()}${String(nextId(rows)).padStart(3, '0')}`;
-    }
-
-    function buildStationClaimant(station = {}, users = [], staffRows = []) {
-        const stationId = primaryId(station);
-        const manager = staffRows.find((row) => rowMatchesLookup(row, stationId, [row.station_id]) && pickString(row.role) === 'manager' && pickString(row.status || 'active') === 'active');
-        const claimantLookup = station.pickup_claimant_openid
-            || station.pickup_claimant_id
-            || manager?.openid
-            || manager?.user_id
-            || station.claimant_id
-            || station.openid;
-        return claimantLookup ? findByLookup(users, claimantLookup, (user) => [user.openid, user.id, user._legacy_id]) : null;
+    function productSkuRows(product = {}, skus = []) {
+        const productIds = [product.id, product._legacy_id, product._id]
+            .filter((value) => value !== null && value !== undefined && value !== '')
+            .map(String);
+        const embeddedSkus = Array.isArray(product.skus)
+            ? product.skus.map((sku) => ({ ...sku, product_id: sku.product_id || sku.productId || productIds[0] || '' }))
+            : [];
+        const matchedSkus = (skus || []).filter((sku) => productOwnsSku(product, sku));
+        const seen = new Set();
+        return [...embeddedSkus, ...matchedSkus].filter((sku) => {
+            const key = String(primaryId(sku) || sku.sku_id || JSON.stringify(sku));
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
     }
 
     function buildInventoryRecord(stockRow = {}, context = {}) {
@@ -382,96 +367,88 @@ function registerPickupStockRoutes(app, deps) {
             supplier_name: pickString(row.supplier_name),
             operator_name: pickString(row.operator_name),
             expected_arrival_date: pickString(row.expected_arrival_date),
-            remark: pickString(row.remark)
+            remark: pickString(row.remark),
+            receive_contact_name: pickString(row.receive_contact_name || row.receive_snapshot?.contact_name),
+            receive_contact_phone: pickString(row.receive_contact_phone || row.receive_snapshot?.contact_phone),
+            receive_address: pickString(row.receive_address || row.receive_snapshot?.full_address),
+            receive_snapshot: row.receive_snapshot || null
         }));
         if (req.query.station_id) rows = rows.filter((row) => rowMatchesLookup(row, req.query.station_id, [row.station_id]));
         if (req.query.status) rows = rows.filter((row) => pickString(row.status) === pickString(req.query.status));
         ok(res, paginate(rows, req));
     });
 
-    app.post('/admin/api/pickup-stations/procurements', auth, requirePermission('pickup_stations'), async (req, res) => {
-        await ensureFreshCollections(['station_procurement_orders', 'stations', 'station_staff', 'users', 'wallet_accounts', 'products', 'skus']);
+    app.post('/admin/api/pickup-stations/procurements', auth, requirePermission('pickup_stations'), async (_req, res) => {
+        fail(res, '后台创建采购单已停用，请由店长在小程序提交采购申请', 410);
+    });
+
+    app.put('/admin/api/pickup-stations/procurements/:id/approve', auth, requirePermission('pickup_stations'), async (req, res) => {
+        await ensureFreshCollections(['station_procurement_orders', 'users', 'wallet_accounts', 'goods_fund_logs', 'products', 'skus']);
         const procurements = getCollection('station_procurement_orders');
-        const stations = getCollection('stations');
-        const staffRows = getCollection('station_staff');
         const users = getCollection('users');
         const walletAccounts = getCollection('wallet_accounts');
+        const goodsFundLogs = getCollection('goods_fund_logs');
         const products = getCollection('products');
         const skus = getCollection('skus');
-        const station = findByLookup(stations, req.body?.station_id);
-        if (!station) return fail(res, '自提门店不存在', 404);
-        const product = findByLookup(products, req.body?.product_id);
-        if (!product) return fail(res, '商品不存在', 404);
-        const sku = req.body?.sku_id ? findByLookup(skus, req.body?.sku_id) : null;
-        if (req.body?.sku_id && !sku) return fail(res, '规格不存在', 404);
+        const index = procurements.findIndex((row) => rowMatchesLookup(row, req.params.id, [row.procurement_no]));
+        if (index === -1) return fail(res, '采购申请不存在', 404);
+        if (pickString(procurements[index].status) !== 'pending_approval') return fail(res, '当前状态不可审核通过', 400);
+
+        const procurement = procurements[index];
+        const product = findByLookup(products, procurement.product_id);
+        if (!product) return fail(res, '采购商品不存在', 404);
+        if (productSkuRows(product, skus).length > 0 && !pickString(procurement.sku_id)) {
+            return fail(res, '采购申请缺少商品规格，不能审核通过', 400);
+        }
+        const sku = procurement.sku_id ? findByLookup(skus, procurement.sku_id) : null;
+        if (procurement.sku_id && !sku) return fail(res, '采购规格不存在', 404);
         if (sku && !productOwnsSku(product, sku)) return fail(res, '规格不属于当前商品', 400);
-        const quantity = Math.max(0, Math.floor(toNumber(req.body?.quantity, 0)));
-        const supplierName = pickString(req.body?.supplier_name, '未填写');
-        const operatorName = pickString(req.body?.operator_name, pickString(req.admin?.username, '后台创建'));
-        const expectedArrivalDate = pickString(req.body?.expected_arrival_date);
-        const remark = pickString(req.body?.remark);
+        const claimant = findByLookup(users, procurement.claimant_openid || procurement.claimant_id, (user) => [user.openid, user.id, user._legacy_id]);
+        if (!claimant || !claimant.openid) return fail(res, '采购申请缺少有效店长账户', 400);
+
+        const quantity = Math.max(0, Math.floor(toNumber(procurement.quantity, 0)));
         if (!quantity) return fail(res, '采购数量必须大于 0', 400);
-        const claimant = buildStationClaimant(station, users, staffRows);
-        if (!claimant || !claimant.openid) return fail(res, '门店缺少有效认领人/店长，不能采购备货', 400);
-        const roleLevel = toNumber(claimant.role_level ?? claimant.distributor_level, 0);
-        const defaultCostPrice = resolveSupplyPriceByRole(product, sku || {}, roleLevel) || roundMoney(toNumber(sku?.cost_price ?? product.cost_price, 0));
-        const costPrice = roundMoney(toNumber(req.body?.cost_price, defaultCostPrice));
+        const costPrice = roundMoney(procurement.cost_price);
         if (!(costPrice > 0)) return fail(res, '进货成本价必须大于 0', 400);
         const totalCost = roundMoney(costPrice * quantity);
+        const storedTotalCost = roundMoney(procurement.total_cost);
+        if (storedTotalCost && Math.abs(storedTotalCost - totalCost) > 0.01) return fail(res, '采购申请金额异常，不能审核通过', 400);
         const balanceBefore = getUserGoodsFundBalance(claimant);
-        if (balanceBefore < totalCost) return fail(res, '门店货款余额不足，不能创建采购单', 400);
+        if (balanceBefore < totalCost) return fail(res, '店长货款余额不足，当前不可审核通过', 400);
 
-        const userSnapshot = JSON.parse(JSON.stringify(users));
+        const usersSnapshot = JSON.parse(JSON.stringify(users));
         const walletSnapshot = JSON.parse(JSON.stringify(walletAccounts));
         const procurementSnapshot = JSON.parse(JSON.stringify(procurements));
+        const goodsFundLogsSnapshot = JSON.parse(JSON.stringify(goodsFundLogs));
+        const reviewedAt = nowIso();
+        const nextBalance = roundMoney(balanceBefore - totalCost);
         try {
             const userIndex = users.findIndex((row) => rowMatchesLookup(row, primaryId(claimant), [claimant.openid]));
-            const nextBalance = roundMoney(balanceBefore - totalCost);
             users[userIndex] = {
                 ...users[userIndex],
                 agent_wallet_balance: nextBalance,
                 wallet_balance: nextBalance,
-                updated_at: nowIso()
+                updated_at: reviewedAt
             };
             const walletAccount = ensureWalletAccount(walletAccounts, users[userIndex]);
             const walletIndex = walletAccounts.findIndex((row) => rowMatchesLookup(row, primaryId(walletAccount), [walletAccount.user_id]));
             walletAccounts[walletIndex] = {
                 ...walletAccount,
                 balance: nextBalance,
-                updated_at: nowIso()
+                updated_at: reviewedAt
             };
-            const procurement = {
-                id: nextId(procurements),
-                procurement_no: buildProcurementNo(procurements),
-                station_id: primaryId(station),
-                claimant_id: primaryId(users[userIndex]),
-                claimant_openid: pickString(users[userIndex].openid),
-                product_id: primaryId(product),
-                sku_id: sku ? primaryId(sku) : '',
+            procurements[index] = {
+                ...procurements[index],
                 quantity,
                 cost_price: costPrice,
                 total_cost: totalCost,
                 status: 'pending_receive',
-                supplier_name: supplierName,
-                operator_name: operatorName,
-                expected_arrival_date: expectedArrivalDate,
-                remark,
-                station_snapshot: {
-                    id: primaryId(station),
-                    name: station.name,
-                    city: station.city,
-                    district: station.district
-                },
-                product_snapshot: {
-                    id: primaryId(product),
-                    name: product.name,
-                    sku_name: sku?.name || '',
-                    sku_spec: sku?.spec || sku?.spec_value || ''
-                },
-                created_at: nowIso(),
-                updated_at: nowIso()
+                reviewed_at: reviewedAt,
+                approved_at: reviewedAt,
+                reviewed_by: String(req.admin?.id || req.admin?.username || ''),
+                review_reason: pickString(req.body?.reason || req.body?.remark),
+                updated_at: reviewedAt
             };
-            procurements.push(procurement);
             saveCollection('users', users);
             saveCollection('wallet_accounts', walletAccounts);
             saveCollection('station_procurement_orders', procurements);
@@ -480,22 +457,52 @@ function registerPickupStockRoutes(app, deps) {
                 user_id: primaryId(users[userIndex]),
                 type: 'station_procurement',
                 amount: -totalCost,
-                order_no: procurement.procurement_no,
-                description: `门店备货采购 ${procurement.procurement_no}`
-            }).catch(() => {});
-            await flush();
-            createAuditLog(req.admin, 'pickup.procurement.create', 'station_procurement_orders', {
-                procurement_no: procurement.procurement_no,
-                station_id: procurement.station_id,
-                total_cost: procurement.total_cost
+                order_no: procurements[index].procurement_no,
+                procurement_id: primaryId(procurements[index]),
+                description: `门店备货采购审批通过 ${procurements[index].procurement_no}`
             });
-            ok(res, procurement);
+            await flush();
         } catch (error) {
-            saveCollection('users', userSnapshot);
+            saveCollection('users', usersSnapshot);
             saveCollection('wallet_accounts', walletSnapshot);
             saveCollection('station_procurement_orders', procurementSnapshot);
-            fail(res, `创建门店采购单失败：${error.message || '未知错误'}`, 500);
+            saveCollection('goods_fund_logs', goodsFundLogsSnapshot);
+            return fail(res, `审核通过失败：${error.message || '写入异常'}`, 500);
         }
+
+        createAuditLog(req.admin, 'pickup.procurement.approve', 'station_procurement_orders', {
+            procurement_no: procurements[index].procurement_no,
+            station_id: procurements[index].station_id,
+            total_cost: procurements[index].total_cost
+        });
+        ok(res, procurements[index]);
+    });
+
+    app.put('/admin/api/pickup-stations/procurements/:id/reject', auth, requirePermission('pickup_stations'), async (req, res) => {
+        await ensureFreshCollections(['station_procurement_orders']);
+        const procurements = getCollection('station_procurement_orders');
+        const index = procurements.findIndex((row) => rowMatchesLookup(row, req.params.id, [row.procurement_no]));
+        if (index === -1) return fail(res, '采购申请不存在', 404);
+        if (pickString(procurements[index].status) !== 'pending_approval') return fail(res, '当前状态不可拒绝', 400);
+        const reason = pickString(req.body?.reason);
+        if (!reason) return fail(res, '请填写拒绝原因', 400);
+        const reviewedAt = nowIso();
+        procurements[index] = {
+            ...procurements[index],
+            status: 'rejected',
+            reviewed_at: reviewedAt,
+            rejected_at: reviewedAt,
+            reviewed_by: String(req.admin?.id || req.admin?.username || ''),
+            review_reason: reason,
+            updated_at: reviewedAt
+        };
+        saveCollection('station_procurement_orders', procurements);
+        await flush();
+        createAuditLog(req.admin, 'pickup.procurement.reject', 'station_procurement_orders', {
+            procurement_no: procurements[index].procurement_no,
+            review_reason: reason
+        });
+        ok(res, procurements[index]);
     });
 
     app.post('/admin/api/pickup-stations/procurements/:id/receive', auth, requirePermission('pickup_stations'), async (req, res) => {
@@ -512,6 +519,9 @@ function registerPickupStockRoutes(app, deps) {
 
         const productIndex = products.findIndex((row) => rowMatchesLookup(row, procurement.product_id));
         if (productIndex === -1) return fail(res, '采购商品不存在', 404);
+        if (productSkuRows(products[productIndex], skus).length > 0 && !pickString(procurement.sku_id)) {
+            return fail(res, '采购单缺少商品规格，不能完成门店入库', 400);
+        }
         const skuIndex = procurement.sku_id ? skus.findIndex((row) => rowMatchesLookup(row, procurement.sku_id)) : -1;
         if (procurement.sku_id && skuIndex === -1) return fail(res, '采购规格不存在', 404);
 

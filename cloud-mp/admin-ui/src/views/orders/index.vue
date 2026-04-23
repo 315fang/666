@@ -179,6 +179,15 @@
             <div class="text-price">¥{{ row.display_pay_amount }}</div>
             <div style="margin-top:6px">
               <el-tag :type="getStatusType(row.status)" size="small">{{ row.display_status_text }}</el-tag>
+              <el-tag
+                v-if="row.display_refund_status_text"
+                :type="refundStatusTagType(row.latest_refund?.status || row.refund_status)"
+                effect="plain"
+                size="small"
+                style="margin-left:6px"
+              >
+                {{ row.display_refund_status_text }}
+              </el-tag>
               <el-tag v-if="row.is_test_order" type="warning" effect="plain" size="small" style="margin-left:6px">测试订单</el-tag>
               <el-tag v-if="row.order_visibility === 'hidden'" type="info" effect="plain" size="small" style="margin-left:6px">已隐藏</el-tag>
             </div>
@@ -267,6 +276,14 @@
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="退款去向">{{ detailData.display_refund_target_text }}</el-descriptions-item>
+          <el-descriptions-item v-if="detailData.display_refund_status_text" label="最新退款状态">
+            <el-tag :type="refundStatusTagType(detailData.latest_refund?.status || detailData.refund_status)" size="small">
+              {{ detailData.display_refund_status_text }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="detailData.display_refund_error" label="退款异常" :span="2">
+            {{ detailData.display_refund_error }}
+          </el-descriptions-item>
           <el-descriptions-item label="配送方式">{{ deliveryTypeText(detailData.delivery_type) }}</el-descriptions-item>
           <el-descriptions-item label="下单时间">{{ fmtDateTime(detailData.created_at) }}</el-descriptions-item>
           <el-descriptions-item label="支付时间">{{ fmtDateTime(detailData.paid_at) }}</el-descriptions-item>
@@ -1014,7 +1031,9 @@ const normalizeOrderDisplay = (row = {}) => {
     display_status_text: row.status_text || getStatusText(row.status),
     display_payment_method_code: paymentMethodCode,
     display_payment_method_text: row.payment_method_text || paymentMethodText(paymentMethodCode),
-    display_refund_target_text: row.refund_target_text || refundDestinationText(paymentMethodCode)
+    display_refund_target_text: row.refund_target_text || refundDestinationText(paymentMethodCode),
+    display_refund_status_text: row.latest_refund?.status_text || row.refund_status_text || '',
+    display_refund_error: row.latest_refund?.error || row.refund_error || ''
   }
 }
 const canShipRow = (row = {}) => {
@@ -1051,6 +1070,15 @@ const paymentMethodTagType = (method) => ({
   goods_fund: 'warning',
   wallet: 'info'
 }[method] || 'info')
+const refundStatusTagType = (status) => ({
+  pending: 'info',
+  approved: 'warning',
+  processing: 'warning',
+  completed: 'success',
+  failed: 'danger',
+  rejected: 'info',
+  cancelled: 'info'
+}[String(status || '').trim().toLowerCase()] || 'info')
 const refundDestinationText = (method) => ({
   wechat: '原路退回微信支付',
   goods_fund: '退回货款余额',

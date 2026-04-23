@@ -30,6 +30,21 @@ function normalizeFixedCommissionMap(raw = {}) {
     }, {});
 }
 
+function maxFixedCommissionAmount(roleMap = {}) {
+    const source = normalizeFixedCommissionMap(roleMap);
+    return FLEX_BUNDLE_COMMISSION_ROLE_LEVELS.reduce((max, level) => Math.max(max, toNumber(source[String(level)], 0)), 0);
+}
+
+function normalizeCommissionPoolAmount(option = {}, maps = {}) {
+    const explicit = option.commission_pool_amount ?? option.commissionPoolAmount ?? option.commission_pool ?? option.total_commission_pool;
+    const explicitAmount = roundMoney(Math.max(0, toNumber(explicit, 0)));
+    if (explicitAmount > 0) return explicitAmount;
+    return roundMoney(Math.max(
+        maxFixedCommissionAmount(maps.solo),
+        maxFixedCommissionAmount(maps.direct) + maxFixedCommissionAmount(maps.indirect)
+    ));
+}
+
 function primaryId(row = {}) {
     return row && (row._id || row.id || row._legacy_id) ? String(row._id || row.id || row._legacy_id) : '';
 }
@@ -94,6 +109,22 @@ function isEnabled(value, fallback = true) {
     return true;
 }
 
+function isPublishedBundle(bundle = {}) {
+    return pickString(bundle.publish_status || 'published', 'published').toLowerCase() === 'published';
+}
+
+function isSellableRecord(row = {}) {
+    const raw = row.status ?? row.is_active ?? row.enabled;
+    if (raw === undefined || raw === null || raw === '') return true;
+    if (raw === true || raw === 1 || raw === '1') return true;
+    if (raw === false || raw === 0 || raw === '0') return false;
+    const normalized = String(raw).trim().toLowerCase();
+    if (!normalized) return true;
+    if (['true', 'yes', 'y', 'on', 'enabled', 'enable', 'active', 'show', 'visible', 'on_sale', 'published'].includes(normalized)) return true;
+    if (['false', 'no', 'n', 'off', 'disabled', 'disable', 'inactive', 'hidden', 'off_sale', 'archived', 'draft'].includes(normalized)) return false;
+    return true;
+}
+
 function resolveProductPrice(product = {}) {
     if (hasValue(product.retail_price)) return roundMoney(product.retail_price);
     if (hasValue(product.price)) return roundMoney(product.price);
@@ -102,8 +133,9 @@ function resolveProductPrice(product = {}) {
 }
 
 function resolveSkuPrice(sku = {}, fallback = 0) {
-    if (hasValue(sku.retail_price)) return roundMoney(sku.retail_price);
-    if (hasValue(sku.price)) return roundMoney(toNumber(sku.price, fallback) / 100);
+    const source = sku && typeof sku === 'object' ? sku : {};
+    if (hasValue(source.retail_price)) return roundMoney(source.retail_price);
+    if (hasValue(source.price)) return roundMoney(toNumber(source.price, fallback) / 100);
     return roundMoney(fallback);
 }
 
@@ -130,7 +162,7 @@ function pickResolvedSku(product = {}, skus = [], explicitSkuId = '') {
     if (expected) {
         const matched = skus.find((item) => [item._id, item.id, item._legacy_id].filter(Boolean).map(String).includes(expected));
         if (!matched) {
-            throw new Error('组合内指定规格不存在');
+            throw new Error('组合内指定规格不存在或已下架');
         }
         return matched;
     }
@@ -162,8 +194,8 @@ async function resolveBundleContext(rawBundleContext = {}, submittedItems = []) 
     if (!bundleId) return null;
 
     const bundle = await findBundleById(bundleId);
-    if (!bundle || !isEnabled(bundle.status, true)) {
-        throw new Error('产品组合不存在或未启用');
+    if (!bundle || !isEnabled(bundle.status, true) || !isPublishedBundle(bundle)) {
+        throw new Error('产品组合不存在、未启用或未发布');
     }
 
     const rawGroups = Array.isArray(bundle.groups) ? bundle.groups : [];
@@ -200,10 +232,10 @@ async function resolveBundleContext(rawBundleContext = {}, submittedItems = []) 
         }
 
         const product = await findProductById(selection.product_id);
-        if (!product) {
+        if (!product || !isSellableRecord(product)) {
             throw new Error('组合中的商品不存在或已下架');
         }
-        const skus = await findSkusForProduct(product);
+        const skus = (await findSkusForProduct(product)).filter(isSellableRecord);
         const matchingOption = (() => {
             for (const option of options) {
                 if (pickString(option.product_id) !== lookupId(product)) continue;
@@ -217,6 +249,9 @@ async function resolveBundleContext(rawBundleContext = {}, submittedItems = []) 
 
         if (!matchingOption) {
             throw new Error(`组合分组「${pickString(group.group_title || group.title || groupKey)}」所选商品已失效`);
+        }
+        if (matchingOption.resolvedSku && !isSellableRecord(matchingOption.resolvedSku)) {
+            throw new Error('组合中的规格不存在或已下架');
         }
 
         const expectedQuantity = Math.max(1, Math.floor(toNumber(matchingOption.option.default_qty, 1)));
@@ -232,6 +267,20 @@ async function resolveBundleContext(rawBundleContext = {}, submittedItems = []) 
         selectionKeys.add(selectionKey);
         groupSelectionCount.set(groupKey, (groupSelectionCount.get(groupKey) || 0) + 1);
 
+        const directCommissionMap = normalizeFixedCommissionMap(matchingOption.option.direct_commission_fixed_by_role);
+        const indirectCommissionMap = normalizeFixedCommissionMap(matchingOption.option.indirect_commission_fixed_by_role);
+        const soloCommissionMap = normalizeFixedCommissionMap(
+            matchingOption.option.solo_commission_fixed_by_role
+            || matchingOption.option.solo_commission_by_role
+            || matchingOption.option.solo_commission_fixed
+            || matchingOption.option.solo_commission
+        );
+        const commissionPoolAmount = normalizeCommissionPoolAmount(matchingOption.option, {
+            solo: soloCommissionMap,
+            direct: directCommissionMap,
+            indirect: indirectCommissionMap
+        });
+
         resolvedSelections.push({
             group_key: groupKey,
             group_title: pickString(group.group_title || group.title || groupKey),
@@ -242,8 +291,10 @@ async function resolveBundleContext(rawBundleContext = {}, submittedItems = []) 
             product_image: resolveProductImage(product, matchingOption.resolvedSku),
             product_name: pickString(product.name || product.title || ''),
             spec_text: matchingOption.resolvedSku ? buildSkuSpecText(matchingOption.resolvedSku) : '',
-            direct_commission_fixed_by_role: normalizeFixedCommissionMap(matchingOption.option.direct_commission_fixed_by_role),
-            indirect_commission_fixed_by_role: normalizeFixedCommissionMap(matchingOption.option.indirect_commission_fixed_by_role)
+            commission_pool_amount: commissionPoolAmount,
+            solo_commission_fixed_by_role: soloCommissionMap,
+            direct_commission_fixed_by_role: directCommissionMap,
+            indirect_commission_fixed_by_role: indirectCommissionMap
         });
     }
 
@@ -269,6 +320,8 @@ async function resolveBundleContext(rawBundleContext = {}, submittedItems = []) 
             bundle_group_key: selection.group_key,
             bundle_group_title: selection.group_title,
             bundle_parent_title: pickString(bundle.title),
+            commission_pool_amount: selection.commission_pool_amount,
+            solo_commission_fixed_by_role: selection.solo_commission_fixed_by_role,
             direct_commission_fixed_by_role: selection.direct_commission_fixed_by_role,
             indirect_commission_fixed_by_role: selection.indirect_commission_fixed_by_role
         }))

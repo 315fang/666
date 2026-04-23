@@ -153,6 +153,37 @@ function resolveFixedCommissionAmountByRole(roleMap = {}, roleLevel = 0) {
     return roundMoney(Math.max(0, toNumber(rawValue, 0)));
 }
 
+function capCommissionAmount(amount, poolAmount = 0, alreadyAllocated = 0) {
+    const normalized = roundMoney(Math.max(0, toNumber(amount, 0)));
+    const pool = roundMoney(Math.max(0, toNumber(poolAmount, 0)));
+    if (pool <= 0) return normalized;
+    const remaining = Math.max(0, roundMoney(pool - Math.max(0, toNumber(alreadyAllocated, 0))));
+    return roundMoney(Math.min(normalized, remaining));
+}
+
+function resolveBundleFixedCommissionAmounts(item = {}, directRoleLevel = 0, indirectRoleLevel = 0, hasIndirectReferrer = false) {
+    const poolAmount = roundMoney(Math.max(0, toNumber(item.commission_pool_amount ?? item.commission_pool, 0)));
+    if (!hasIndirectReferrer) {
+        const soloAmount = resolveFixedCommissionAmountByRole(item.solo_commission_fixed_by_role, directRoleLevel);
+        const directFallbackAmount = resolveFixedCommissionAmountByRole(item.direct_commission_fixed_by_role, directRoleLevel);
+        return {
+            direct: capCommissionAmount(soloAmount > 0 ? soloAmount : directFallbackAmount, poolAmount),
+            indirect: 0
+        };
+    }
+
+    const direct = capCommissionAmount(
+        resolveFixedCommissionAmountByRole(item.direct_commission_fixed_by_role, directRoleLevel),
+        poolAmount
+    );
+    const indirect = capCommissionAmount(
+        resolveFixedCommissionAmountByRole(item.indirect_commission_fixed_by_role, indirectRoleLevel),
+        poolAmount,
+        direct
+    );
+    return { direct, indirect };
+}
+
 function resolveUserReferrer(user = {}) {
     return user.referrer_openid
         || user.parent_openid
@@ -1267,6 +1298,9 @@ async function createOrder(openid, orderData) {
         const lockedAgentUnitCost = nearestAgentRoleLevel
             ? resolveSupplyPriceByRole(product, sku, nearestAgentRoleLevel)
             : null;
+        const bundleFixedCommission = isFlexBundleOrder
+            ? resolveBundleFixedCommissionAmounts(item, directReferrerRoleLevel, indirectReferrerRoleLevel, !!indirectReferrer)
+            : { direct: 0, indirect: 0 };
 
         orderItems.push({
             product_id: productId,
@@ -1311,12 +1345,9 @@ async function createOrder(openid, orderData) {
             bundle_group_key: bundleContext ? pickString(item.bundle_group_key) : '',
             bundle_group_title: bundleContext ? pickString(item.bundle_group_title) : '',
             bundle_parent_title: bundleContext ? pickString(item.bundle_parent_title || bundleContext.bundle.title) : '',
-            direct_commission_fixed_amount: isFlexBundleOrder && directReferrer
-                ? resolveFixedCommissionAmountByRole(item.direct_commission_fixed_by_role, directReferrerRoleLevel)
-                : 0,
-            indirect_commission_fixed_amount: isFlexBundleOrder && indirectReferrer
-                ? resolveFixedCommissionAmountByRole(item.indirect_commission_fixed_by_role, indirectReferrerRoleLevel)
-                : 0
+            bundle_commission_pool_amount: isFlexBundleOrder ? roundMoney(item.commission_pool_amount) : 0,
+            direct_commission_fixed_amount: isFlexBundleOrder && directReferrer ? bundleFixedCommission.direct : 0,
+            indirect_commission_fixed_amount: isFlexBundleOrder && indirectReferrer ? bundleFixedCommission.indirect : 0
         });
         lockedAgentCostCandidates.push(lockedAgentUnitCost);
     }
@@ -1944,6 +1975,7 @@ module.exports = {
     getUserRoleLevel,
     isAgentRoleLevel,
     normalizeAgentRoleLevel,
+    resolveBundleFixedCommissionAmounts,
     getPointDeductionRule,
     getUserGoodsFundBalance,
     ensureWalletAccountForUser,

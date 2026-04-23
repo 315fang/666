@@ -7,7 +7,33 @@ const {
 const { normalizeSpecDisplayText, normalizeOrderItems } = require('./orderSpecText');
 const { resolveCloudImageUrl } = require('./utils/cloudAsset');
 const { ErrorHandler } = require('../../utils/errorHandler');
-const { ensureUserLocationPermission, getCurrentLocation } = require('./utils/location');
+
+const WEEK_DAY_LABELS = {
+    1: '周一',
+    2: '周二',
+    3: '周三',
+    4: '周四',
+    5: '周五',
+    6: '周六',
+    0: '周日',
+    7: '周日'
+};
+
+function compactText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeBusinessDays(value) {
+    if (!Array.isArray(value)) return [];
+    return value
+        .map((item) => {
+            if (typeof item === 'number' || /^\d+$/.test(String(item || ''))) {
+                return WEEK_DAY_LABELS[Number(item)] || '';
+            }
+            return compactText(item);
+        })
+        .filter(Boolean);
+}
 
 async function loadAddresses() {
     const res = await get('/addresses', {}, { showError: false });
@@ -94,6 +120,33 @@ function refreshPickupAllowed(page) {
     page.setData(patch);
 }
 
+function normalizePickupStationOption(station = {}) {
+    const selectable = station.selectable !== false && station.pickup_stock_available !== false;
+    const businessDays = normalizeBusinessDays(station.business_days);
+    const businessHoursText = station.business_time_start && station.business_time_end
+        ? `${station.business_time_start} - ${station.business_time_end}`
+        : compactText(station.business_hours || station.opening_hours || station.open_time);
+    const fullAddress = compactText([
+        station.province,
+        station.city,
+        station.district,
+        station.address
+    ].filter(Boolean).join(' '));
+    const stationId = station.id || station._id || '';
+    return {
+        ...station,
+        id: stationId,
+        selectable,
+        pickup_unavailable: !selectable,
+        pickup_stock_text: selectable ? '有货' : '无货',
+        pickup_stock_class: selectable ? 'stock-ok' : 'stock-empty',
+        full_address: fullAddress,
+        contact_phone_text: compactText(station.contact_phone || station.pickup_contact || station.phone || station.mobile) || '暂无电话',
+        business_days_text: businessDays.join(' / '),
+        business_hours_text: businessHoursText || '请咨询门店'
+    };
+}
+
 async function loadPickupStations(page) {
     try {
         const params = [];
@@ -103,13 +156,6 @@ async function loadPickupStations(page) {
             quantity: item.quantity || item.qty || 1,
             name: item.name
         }));
-        if (page.data.refLat != null && page.data.refLng != null) {
-            params.push(`lat=${encodeURIComponent(page.data.refLat)}`);
-            params.push(`lng=${encodeURIComponent(page.data.refLng)}`);
-        }
-        if (page.data.address && page.data.address.city) {
-            params.push(`sort_city=${encodeURIComponent(page.data.address.city)}`);
-        }
         if (pickupItems.length) {
             params.push(`items=${encodeURIComponent(JSON.stringify(pickupItems))}`);
         }
@@ -118,61 +164,17 @@ async function loadPickupStations(page) {
         const list = Array.isArray(res && res.list)
             ? res.list
             : (Array.isArray(res && res.data && res.data.list) ? res.data.list : []);
+        const normalizedList = list.map((station) => normalizePickupStationOption(station));
         let pickupStation = page.data.pickupStation;
-        if (pickupStation && !list.some((station) => station.id === pickupStation.id)) {
-            pickupStation = list[0] || null;
-        } else if (!pickupStation && list.length) {
-            pickupStation = list[0];
+        if (pickupStation) {
+            const selectedId = String(pickupStation.id || pickupStation._id || '');
+            const latestSelected = normalizedList.find((station) => String(station.id || station._id || '') === selectedId);
+            pickupStation = latestSelected && latestSelected.selectable ? latestSelected : null;
         }
-        const hasRef = page.data.refLat != null && page.data.refLng != null;
-        const pickupDistanceHint = list.length > 0 && !hasRef && list.every((station) => station.distance_km == null);
-        page.setData({ pickupStations: list, pickupStation, pickupDistanceHint });
+        page.setData({ pickupStations: normalizedList, pickupStation });
     } catch (_err) {
-        page.setData({ pickupStations: [], pickupStation: null, pickupDistanceHint: false });
+        page.setData({ pickupStations: [], pickupStation: null });
     }
-}
-
-async function locateForPickupSort(page) {
-    const granted = await ensureUserLocationPermission();
-    if (!granted) {
-        wx.showToast({
-            title: '未开启位置权限，请使用地图选点',
-            icon: 'none'
-        });
-        return;
-    }
-
-    const loc = await getCurrentLocation();
-    if (loc && loc.ok) {
-        page.setData({
-            refLat: loc.latitude,
-            refLng: loc.longitude,
-            refLocationName: '当前位置'
-        });
-        loadPickupStations(page);
-        return;
-    }
-
-    wx.showToast({
-        title: '当前位置获取失败，请用地图选点',
-        icon: 'none'
-    });
-}
-
-function chooseRefLocation(page) {
-    wx.chooseLocation({
-        success: (res) => {
-            page.setData({
-                refLat: res.latitude,
-                refLng: res.longitude,
-                refLocationName: res.name || '已选位置'
-            });
-            loadPickupStations(page);
-        },
-        fail: () => {
-            wx.showToast({ title: '未授权位置或已取消', icon: 'none' });
-        }
-    });
 }
 
 async function loadDefaultAddress(page) {
@@ -320,8 +322,6 @@ module.exports = {
     navigateToAddressList,
     refreshPickupAllowed,
     loadPickupStations,
-    locateForPickupSort,
-    chooseRefLocation,
     loadDefaultAddress,
     loadCartItems
 };

@@ -1,18 +1,33 @@
 const { get } = require('../../utils/request');
 
-const DEFAULT_PRESET_AMOUNTS = [100, 300, 500, 1000, 2000, 5000];
+const DEFAULT_PRESET_AMOUNTS = [];
+
+function normalizePresetAmounts(config = {}) {
+    const rawAmounts = Array.isArray(config.preset_amounts) && config.preset_amounts.length > 0
+        ? config.preset_amounts
+        : (Array.isArray(config.options) ? config.options.map((item) => item && item.amount) : []);
+    const seen = {};
+    return rawAmounts
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value > 0)
+        .filter((value) => {
+            const key = String(value);
+            if (seen[key]) return false;
+            seen[key] = true;
+            return true;
+        });
+}
 
 async function loadRechargeConfig(page) {
     try {
         const res = await get('/agent/wallet/recharge-config');
         if (res && res.code === 0 && res.data) {
-            const presets = Array.isArray(res.data.preset_amounts) && res.data.preset_amounts.length > 0
-                ? res.data.preset_amounts
-                : DEFAULT_PRESET_AMOUNTS;
-            const defIdx = Math.min(2, presets.length - 1);
+            const presets = normalizePresetAmounts(res.data);
+            const defIdx = presets.length > 0 ? Math.min(2, presets.length - 1) : -1;
             page.setData({
+                rechargeEnabled: res.data.enabled !== false,
                 presetAmounts: presets,
-                selectedAmount: presets[defIdx] || 500,
+                selectedAmount: defIdx >= 0 ? presets[defIdx] : null,
                 selectedIdx: defIdx,
                 bonusEnabled: !!res.data.bonus_enabled,
                 bonusTiers: Array.isArray(res.data.bonus_tiers) ? res.data.bonus_tiers.sort((a, b) => a.min - b.min) : []
@@ -47,6 +62,7 @@ function updateBonusHint(page) {
 
 module.exports = {
     DEFAULT_PRESET_AMOUNTS,
+    normalizePresetAmounts,
     loadRechargeConfig,
     getBonusForAmount,
     getRechargeAmount,

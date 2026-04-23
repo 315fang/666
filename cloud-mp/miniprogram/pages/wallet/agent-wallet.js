@@ -31,9 +31,10 @@ Page({
         activeFilter: 'all',
         activeFilterText: '全部',  // 空状态文案用
         showRechargePanel: false,
+        rechargeEnabled: true,
         presetAmounts: DEFAULT_PRESET_AMOUNTS,
-        selectedAmount: 500,
-        selectedIdx: 2,
+        selectedAmount: null,
+        selectedIdx: -1,
         customAmount: '',
         useCustom: false,
         recharging: false,
@@ -201,8 +202,18 @@ Page({
             });
             return;
         }
-        const defaultIdx = Math.min(2, this.data.presetAmounts.length - 1);
-        this.setData({ showRechargePanel: true, customAmount: '', useCustom: false, selectedAmount: this.data.presetAmounts[defaultIdx] || 500, selectedIdx: defaultIdx });
+        if (!this.data.rechargeEnabled) {
+            wx.showToast({ title: '货款充值暂未开放', icon: 'none' });
+            return;
+        }
+        const defaultIdx = this.data.presetAmounts.length > 0 ? Math.min(2, this.data.presetAmounts.length - 1) : -1;
+        this.setData({
+            showRechargePanel: true,
+            customAmount: '',
+            useCustom: false,
+            selectedAmount: defaultIdx >= 0 ? this.data.presetAmounts[defaultIdx] : null,
+            selectedIdx: defaultIdx
+        });
     },
 
     onPanelTap() { },
@@ -232,6 +243,10 @@ Page({
     },
 
     async onConfirmRecharge() {
+        if (!this.data.rechargeEnabled) {
+            wx.showToast({ title: '货款充值暂未开放', icon: 'none' });
+            return;
+        }
         const amount = this._getRechargeAmount();
         if (!amount || isNaN(amount) || amount <= 0) {
             wx.showToast({ title: '请选择或输入充值金额', icon: 'none' });

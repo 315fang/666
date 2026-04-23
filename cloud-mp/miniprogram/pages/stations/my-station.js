@@ -12,6 +12,49 @@ function normalizeDate(value = '') {
     return String(value).replace('T', ' ').slice(0, 16);
 }
 
+function compactText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function buildSkuLabel(sku = {}) {
+    return [
+        sku.name,
+        sku.spec,
+        sku.spec_value
+    ].map(compactText).filter(Boolean).join(' / ') || '默认规格';
+}
+
+function normalizeSkuOptions(skus = []) {
+    return (Array.isArray(skus) ? skus : []).map((sku) => ({
+        ...sku,
+        sku_picker_name: buildSkuLabel(sku)
+    }));
+}
+
+function buildStationReceiveSnapshot(station = {}) {
+    const claimant = station.claimant || {};
+    return {
+        receive_contact_name: compactText(station.contact_name || station.manager_name || claimant.nick_name || claimant.nickname || station.name),
+        receive_contact_phone: compactText(station.contact_phone || station.phone || claimant.phone),
+        receive_address: compactText([
+            station.province,
+            station.city,
+            station.district,
+            station.address
+        ].filter(Boolean).join(' '))
+    };
+}
+
+function procurementStatusMeta(status = '') {
+    const map = {
+        pending_approval: { text: '待审批', className: 'tag-warn' },
+        pending_receive: { text: '待入库', className: 'tag-info' },
+        received: { text: '已入库', className: 'tag-ok' },
+        rejected: { text: '已拒绝', className: 'tag-danger' }
+    };
+    return map[status] || { text: status || '未知', className: 'tag-info' };
+}
+
 Page({
     data: {
         loading: true,
@@ -27,12 +70,16 @@ Page({
             product_name: '',
             sku_id: '',
             sku_name: '',
+            sku_required: false,
             quantity: 1,
             supplier_name: '',
             operator_name: '',
             expected_arrival_date: '',
             remark: '',
-            cost_price: ''
+            cost_price: '',
+            receive_contact_name: '',
+            receive_contact_phone: '',
+            receive_address: ''
         }
     },
 
@@ -64,8 +111,10 @@ Page({
             const firstStation = stations[0] || null;
             const nextForm = { ...this.data.procurementForm };
             if (!nextForm.station_id && firstStation?.id) {
+                const receiveSnapshot = buildStationReceiveSnapshot(firstStation);
                 nextForm.station_id = String(firstStation.id);
                 nextForm.station_name = firstStation.name || '';
+                Object.assign(nextForm, receiveSnapshot);
             }
             this.setData({
                 loading: false,
@@ -87,6 +136,8 @@ Page({
                     })),
                     procurements: (data.procurements || []).map((item) => ({
                         ...item,
+                        status_text: procurementStatusMeta(item.status).text,
+                        status_class: procurementStatusMeta(item.status).className,
                         created_at_text: normalizeDate(item.created_at),
                         received_at_text: normalizeDate(item.received_at)
                     })),
@@ -126,14 +177,33 @@ Page({
         const index = Number(e.detail.value || 0);
         const selected = this.data.products[index] || null;
         const productId = selected ? String(selected.id || selected._id || '') : '';
-        const nextForm = { ...this.data.procurementForm, product_id: productId, product_name: selected?.name || '', sku_id: '', sku_name: '' };
+        const nextForm = {
+            ...this.data.procurementForm,
+            product_id: productId,
+            product_name: selected?.name || '',
+            sku_id: '',
+            sku_name: '',
+            sku_required: false
+        };
         this.setData({ procurementForm: nextForm, skuOptions: [] });
         if (!productId) return;
         try {
             const res = await get(`/products/${productId}`, {}, { showError: false });
             const product = res?.data || res || {};
+            const skuOptions = normalizeSkuOptions(product.skus);
+            const patch = { skuOptions };
+            if (skuOptions.length === 1) {
+                patch.procurementForm = {
+                    ...this.data.procurementForm,
+                    sku_id: String(skuOptions[0].id || skuOptions[0]._id || ''),
+                    sku_name: skuOptions[0].sku_picker_name,
+                    sku_required: true
+                };
+            } else if (skuOptions.length > 1) {
+                patch['procurementForm.sku_required'] = true;
+            }
             this.setData({
-                skuOptions: Array.isArray(product.skus) ? product.skus : []
+                ...patch
             });
         } catch (e) {
             console.error('[my-station] load product detail failed', e);
@@ -157,9 +227,17 @@ Page({
     onStationChange(e) {
         const index = Number(e.detail.value || 0);
         const selected = (this.data.scope?.stations || [])[index] || null;
+        const receiveSnapshot = selected ? buildStationReceiveSnapshot(selected) : {
+            receive_contact_name: '',
+            receive_contact_phone: '',
+            receive_address: ''
+        };
         this.setData({
             'procurementForm.station_id': selected ? String(selected.id || '') : '',
-            'procurementForm.station_name': selected?.name || ''
+            'procurementForm.station_name': selected?.name || '',
+            'procurementForm.receive_contact_name': receiveSnapshot.receive_contact_name,
+            'procurementForm.receive_contact_phone': receiveSnapshot.receive_contact_phone,
+            'procurementForm.receive_address': receiveSnapshot.receive_address
         });
     },
 
@@ -168,7 +246,7 @@ Page({
         const selected = this.data.skuOptions[index] || null;
         this.setData({
             'procurementForm.sku_id': selected ? String(selected.id || selected._id || '') : '',
-            'procurementForm.sku_name': selected ? `${selected.name || ''}${selected.spec || selected.spec_value ? ' / ' + (selected.spec || selected.spec_value) : ''}` : ''
+            'procurementForm.sku_name': selected ? (selected.sku_picker_name || buildSkuLabel(selected)) : ''
         });
     },
 
@@ -189,6 +267,10 @@ Page({
             wx.showToast({ title: '请选择商品', icon: 'none' });
             return;
         }
+        if (form.sku_required && !form.sku_id) {
+            wx.showToast({ title: '请选择规格', icon: 'none' });
+            return;
+        }
         if (!(Number(form.quantity || 0) > 0)) {
             wx.showToast({ title: '请输入采购数量', icon: 'none' });
             return;
@@ -203,7 +285,7 @@ Page({
         }
 
         const portalPassword = await promptPortalPassword({
-            title: '采购单验证',
+            title: '采购申请验证',
             placeholderText: '请输入6位数字业务密码'
         });
         if (!portalPassword) return;
@@ -216,29 +298,33 @@ Page({
                 cost_price: form.cost_price ? Number(form.cost_price) : undefined,
                 portal_password: portalPassword
             }, { showError: false });
-            wx.showToast({ title: '采购单已创建', icon: 'success' });
+            wx.showToast({ title: '已提交审批', icon: 'success' });
             const firstStationId = this.data.scope?.stations?.[0]?.id || '';
+            const firstStation = this.data.scope?.stations?.find((item) => String(item.id) === String(firstStationId || form.station_id || '')) || null;
+            const receiveSnapshot = buildStationReceiveSnapshot(firstStation || {});
             this.setData({
                 procurementForm: {
                     station_id: String(firstStationId || form.station_id || ''),
-                    station_name: this.data.scope?.stations?.find((item) => String(item.id) === String(firstStationId || form.station_id || ''))?.name || '',
+                    station_name: firstStation?.name || '',
                     product_id: '',
                     product_name: '',
                     sku_id: '',
                     sku_name: '',
+                    sku_required: false,
                     quantity: 1,
                     supplier_name: '',
                     operator_name: '',
                     expected_arrival_date: '',
                     remark: '',
-                    cost_price: ''
+                    cost_price: '',
+                    ...receiveSnapshot
                 },
                 skuOptions: []
             });
             this.loadWorkbench();
         } catch (e) {
             console.error('[my-station] create procurement failed', e);
-            wx.showToast({ title: e?.message || '采购单创建失败', icon: 'none' });
+            wx.showToast({ title: e?.message || '采购申请提交失败', icon: 'none' });
         } finally {
             this.setData({ procurementSubmitting: false });
         }

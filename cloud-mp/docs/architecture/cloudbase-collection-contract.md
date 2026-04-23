@@ -58,6 +58,18 @@
 - `lottery_claims`
 - `upgrade_applications`
 
+`station_procurement_orders` 状态约定：
+
+- `pending_approval`：店长已提交采购申请，后台尚未审批；此状态不扣货款、不写 `goods_fund_logs`
+- `pending_receive`：后台已审批通过并扣减店长货款，等待确认入库
+- `received`：已确认入库，门店库存与库存流水已写入
+- `rejected`：后台已拒绝，需保留拒绝原因，不产生货款流水
+
+字段约束：
+
+- 多规格商品必须写入具体 `sku_id`，不得落成商品级采购单。
+- 采购申请需保留 `receive_snapshot` / `receive_address` / `receive_contact_*`，用于记录提交时的门店收货信息。
+
 ### 2.3 正式日志表
 
 作用：
@@ -115,7 +127,7 @@
 | --- | --- |
 | `limited_sale_slots` + `limited_sale_items` vs `activity_links` | 前者是限时档期与商品售卖状态，后者只是活动入口配置 |
 | `goods_fund_transfer_applications` vs `goods_fund_logs` | 前者是申请审核单，后者是实际货款流水 |
-| `station_procurement_orders` vs `station_sku_stocks` vs `station_stock_logs` | 分别对应备货单、库存状态、库存流水 |
+| `station_procurement_orders` vs `station_sku_stocks` vs `station_stock_logs` | 分别对应备货申请/采购单、库存状态、库存流水 |
 | `deposit_orders` / `deposit_refunds` / `coupon_claim_tickets` vs `orders` / `refunds` / `user_coupons` | 押金领券链路，不是普通交易链 |
 | `promotion_logs` vs `users` | 晋升事件日志，不是用户主资料 |
 | `fund_pool_logs` vs `goods_fund_logs` | 基金池入池流水，不是货款收支流水 |

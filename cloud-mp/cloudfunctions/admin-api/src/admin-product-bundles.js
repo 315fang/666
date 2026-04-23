@@ -60,6 +60,21 @@ function registerProductBundleRoutes(app, deps) {
         }, {});
     }
 
+    function maxFixedCommissionAmount(roleMap = {}) {
+        const source = normalizeFixedCommissionMap(roleMap);
+        return FLEX_BUNDLE_COMMISSION_ROLE_LEVELS.reduce((max, level) => Math.max(max, toNumber(source[String(level)], 0)), 0);
+    }
+
+    function normalizeCommissionPoolAmount(raw = {}, maps = {}) {
+        const explicit = raw.commission_pool_amount ?? raw.commissionPoolAmount ?? raw.commission_pool ?? raw.total_commission_pool;
+        const explicitAmount = Math.round(Math.max(0, toNumber(explicit, 0)) * 100) / 100;
+        if (explicitAmount > 0) return explicitAmount;
+        const soloMax = maxFixedCommissionAmount(maps.solo);
+        const directMax = maxFixedCommissionAmount(maps.direct);
+        const indirectMax = maxFixedCommissionAmount(maps.indirect);
+        return Math.round(Math.max(soloMax, directMax + indirectMax) * 100) / 100;
+    }
+
     function pickProduct(productLookup) {
         const products = getCollection('products');
         return findByLookup(products, productLookup, (item) => [item.id, item._id, item._legacy_id]);
@@ -107,6 +122,19 @@ function registerProductBundleRoutes(app, deps) {
         if (sku && !productOwnsSku(product, sku)) {
             throw new Error(`第 ${index + 1} 个候选规格不属于所选商品`);
         }
+        const directCommissionMap = normalizeFixedCommissionMap(raw.direct_commission_fixed_by_role);
+        const indirectCommissionMap = normalizeFixedCommissionMap(raw.indirect_commission_fixed_by_role);
+        const soloCommissionMap = normalizeFixedCommissionMap(
+            raw.solo_commission_fixed_by_role
+            || raw.solo_commission_by_role
+            || raw.solo_commission_fixed
+            || raw.solo_commission
+        );
+        const commissionPoolAmount = normalizeCommissionPoolAmount(raw, {
+            solo: soloCommissionMap,
+            direct: directCommissionMap,
+            indirect: indirectCommissionMap
+        });
         return {
             option_key: normalizeKey(raw.option_key || raw.optionKey, `option_${index + 1}`),
             product_id: lookupId(product),
@@ -114,8 +142,10 @@ function registerProductBundleRoutes(app, deps) {
             default_qty: Math.max(1, Math.floor(toNumber(raw.default_qty ?? raw.quantity, 1))),
             sort_order: toNumber(raw.sort_order, index),
             enabled: toBoolean(raw.enabled ?? raw.status ?? raw.is_active, true) ? 1 : 0,
-            direct_commission_fixed_by_role: normalizeFixedCommissionMap(raw.direct_commission_fixed_by_role),
-            indirect_commission_fixed_by_role: normalizeFixedCommissionMap(raw.indirect_commission_fixed_by_role)
+            commission_pool_amount: commissionPoolAmount,
+            solo_commission_fixed_by_role: soloCommissionMap,
+            direct_commission_fixed_by_role: directCommissionMap,
+            indirect_commission_fixed_by_role: indirectCommissionMap
         };
     }
 
@@ -224,6 +254,8 @@ function registerProductBundleRoutes(app, deps) {
                         name: pickString(sku.name || ''),
                         spec: buildSkuSpecText(sku)
                     } : null,
+                    commission_pool_amount: Math.round(Math.max(0, toNumber(option.commission_pool_amount, 0)) * 100) / 100,
+                    solo_commission_fixed_by_role: normalizeFixedCommissionMap(option.solo_commission_fixed_by_role),
                     direct_commission_fixed_by_role: normalizeFixedCommissionMap(option.direct_commission_fixed_by_role),
                     indirect_commission_fixed_by_role: normalizeFixedCommissionMap(option.indirect_commission_fixed_by_role)
                 };

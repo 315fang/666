@@ -591,10 +591,11 @@ function getPaymentConfigSnapshot() {
     const runtimeConfig = readPaymentRuntimeConfig();
     const paymentEnv = { ...runtimeConfig, ...process.env };
     const baseDir = path.resolve(__dirname, '..');
+    const isPaymentPlaceholderValue = (value) => /^\$\{[^}]+\}$/.test(pickString(value).trim());
     const pickPaymentEnv = (keys, fallback = '') => {
         for (const key of keys) {
             const value = pickString(paymentEnv[key]).trim();
-            if (value) return value;
+            if (value && !isPaymentPlaceholderValue(value)) return value;
         }
         return fallback;
     };
@@ -1899,7 +1900,41 @@ function calculatePickupPrincipalAmounts(order = {}, goodsFundLogs = []) {
     };
 }
 
-function buildOrderRecord(order, users, products, commissions, goodsFundLogs = []) {
+function buildLatestRefundSummary(order = {}, refunds = []) {
+    const orderLookupId = primaryId(order) || order.order_no || '';
+    const orderNo = pickString(order.order_no);
+    const relatedRefunds = (Array.isArray(refunds) ? refunds : [])
+        .filter((row) => rowMatchesLookup(row, orderLookupId, [row.order_id, row.order_no, orderNo]));
+    const latest = sortByUpdatedDesc(relatedRefunds)[0] || null;
+    if (!latest) return null;
+    const status = pickString(latest.status || 'pending');
+    const paymentMethod = orderContract.normalizePaymentMethodCode(
+        latest.payment_method || latest.refund_channel || orderContract.resolveOrderPaymentMethod(order)
+    );
+    return {
+        id: primaryId(latest),
+        refund_no: pickString(latest.refund_no),
+        order_id: pickString(latest.order_id),
+        order_no: pickString(latest.order_no || orderNo),
+        status,
+        status_text: orderContract.getRefundStatusText(status),
+        status_desc: orderContract.getRefundStatusDesc(status),
+        amount: roundMoney(latest.amount ?? latest.cash_refund_amount),
+        payment_method: paymentMethod,
+        refund_channel: pickString(latest.refund_channel || paymentMethod),
+        refund_target_text: orderContract.getRefundTargetText(paymentMethod, latest.refund_target_text),
+        wx_refund_status: pickString(latest.wx_refund_status || latest.wx_status),
+        wx_refund_id: pickString(latest.wx_refund_id),
+        wx_success_time: normalizeDateValue(latest.wx_success_time),
+        error: pickString(latest.error || latest.auto_refund_error || latest.failed_reason || latest.callback_error),
+        created_at: normalizeDateValue(latest.created_at),
+        processing_at: normalizeDateValue(latest.processing_at),
+        completed_at: normalizeDateValue(latest.completed_at),
+        updated_at: normalizeDateValue(latest.updated_at)
+    };
+}
+
+function buildOrderRecord(order, users, products, commissions, goodsFundLogs = [], refunds = []) {
     const orderLookupId = primaryId(order) || order.order_no || '';
     const buyer = findUserByAnyId(users, order.openid)
         || findUserByAnyId(users, order.buyer_id)
@@ -1953,6 +1988,7 @@ function buildOrderRecord(order, users, products, commissions, goodsFundLogs = [
     const productImages = product ? toArray(product.images).map(assetUrl) : [];
     const paymentMethod = orderContract.resolveOrderPaymentMethod(order);
     const canonicalPayAmount = toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0);
+    const latestRefund = buildLatestRefundSummary(order, refunds);
     const normalizedBuyer = buyer ? {
         ...buyer,
         id: primaryId(buyer),
@@ -2007,7 +2043,13 @@ function buildOrderRecord(order, users, products, commissions, goodsFundLogs = [
         actual_price: canonicalPayAmount,
         payment_method: paymentMethod,
         payment_method_text: orderContract.getPaymentMethodText(paymentMethod),
-        refund_target_text: orderContract.getRefundTargetText(paymentMethod),
+        refund_target_text: latestRefund?.refund_target_text || orderContract.getRefundTargetText(paymentMethod),
+        latest_refund: latestRefund,
+        refund_status: latestRefund?.status || '',
+        refund_status_text: latestRefund?.status_text || '',
+        refund_status_desc: latestRefund?.status_desc || '',
+        refund_failed: latestRefund?.status === 'failed',
+        refund_error: latestRefund?.error || pickString(order.auto_refund_error),
         address: parseAddressSnapshot(order.address_snapshot),
         address_snapshot: parseAddressSnapshot(order.address_snapshot),
         pickup_station: order.pickupStation || order.pickup_station || null,
@@ -7977,7 +8019,8 @@ app.get('/admin/api/orders', auth, requirePermission('orders'), async (req, res)
     const users = getCollection('users');
     const products = getCollection('products');
     const commissions = getCollection('commissions');
-    let rows = sortByUpdatedDesc(getCollection('orders')).map((item) => buildOrderRecord(item, users, products, commissions));
+    const refunds = getCollection('refunds');
+    let rows = sortByUpdatedDesc(getCollection('orders')).map((item) => buildOrderRecord(item, users, products, commissions, [], refunds));
 
     const status = pickString(req.query.status).trim();
     const statusGroup = pickString(req.query.status_group).trim();
@@ -8051,9 +8094,10 @@ app.get('/admin/api/orders/:id', auth, requirePermission('orders'), async (req, 
     const products = getCollection('products');
     const commissions = getCollection('commissions');
     const goodsFundLogs = getCollection('goods_fund_logs');
+    const refunds = getCollection('refunds');
     const order = findByLookup(getCollection('orders'), req.params.id, (item) => [item.order_no]);
     if (!order) return fail(res, '订单不存在', 404);
-    okStrongRead(res, buildOrderRecord(order, users, products, commissions, goodsFundLogs), readMeta.freshness);
+    okStrongRead(res, buildOrderRecord(order, users, products, commissions, goodsFundLogs, refunds), readMeta.freshness);
 });
 
 app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), async (req, res) => {

@@ -2,9 +2,9 @@
   min-height: 100vh;
   background: linear-gradient(180deg, #E3EDF4 0%, #F4F8FA 28%, #ECF5F2 100%);
   /* Reserve enough space for the custom tab bar plus iPhone safe area. */
-  padding-bottom: 200rpx;
-  padding-bottom: calc(200rpx + constant(safe-area-inset-bottom));
-  padding-bottom: calc(200rpx + env(safe-area-inset-bottom));
+  padding-bottom: 120rpx;
+  padding-bottom: calc(120rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(120rpx + env(safe-area-inset-bottom));
 }
 
 /* ── 导航栏 ── */
@@ -255,7 +255,7 @@
 .products-empty { text-align: center; padding: 60rpx 0; font-size: 26rpx; color: #B0A396; }
 
 .brand-zone-section {
-  padding: 0 24rpx 96rpx;
+  padding: 0 24rpx 28rpx;
 }
 
 .brand-zone-header {
@@ -471,29 +471,55 @@
 }
 
 .home-compliance-footer {
-  margin-top: 8rpx;
-  margin-bottom: -48rpx;
-  padding: 12rpx 24rpx 16rpx;
+  margin: 0 32rpx;
+  padding: 8rpx 0 2rpx;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10rpx;
+  gap: 8rpx;
 }
 
-.home-compliance-label {
-  font-size: 20rpx;
-  line-height: 1.4;
-  font-weight: 500;
-  color: rgba(100, 116, 139, 0.72);
+.home-compliance-rule {
+  width: 104rpx;
+  height: 1rpx;
+  background: rgba(198, 161, 110, 0.36);
+}
+
+.home-compliance-row {
+  min-height: 52rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14rpx;
+}
+
+.home-compliance-badge {
+  width: 44rpx;
+  height: 48rpx;
   flex-shrink: 0;
 }
 
+.home-compliance-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2rpx;
+  min-width: 0;
+}
+
+.home-compliance-label {
+  font-size: 21rpx;
+  line-height: 1.35;
+  font-weight: 600;
+  color: rgba(30, 74, 109, 0.78);
+}
+
 .home-compliance-text {
-  font-size: 20rpx;
-  line-height: 1.5;
-  color: rgba(100, 116, 139, 0.88);
-  text-align: center;
+  font-size: 22rpx;
+  line-height: 1.45;
+  color: rgba(71, 85, 105, 0.92);
+  white-space: nowrap;
 }
 
 /* 气泡足迹导航栏版：占据原品牌甄选位置 */

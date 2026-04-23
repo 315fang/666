@@ -840,6 +840,10 @@ async function buildStoreManagerWorkbench(openid) {
             operator_name: pickString(row.operator_name),
             expected_arrival_date: pickString(row.expected_arrival_date),
             remark: pickString(row.remark),
+            review_reason: pickString(row.review_reason),
+            receive_contact_name: pickString(row.receive_contact_name || row.receive_snapshot?.contact_name),
+            receive_contact_phone: pickString(row.receive_contact_phone || row.receive_snapshot?.contact_phone),
+            receive_address: pickString(row.receive_address || row.receive_snapshot?.full_address),
             created_at: toIsoString(row.created_at),
             received_at: toIsoString(row.received_at)
         }));
@@ -849,7 +853,7 @@ async function buildStoreManagerWorkbench(openid) {
             station_count: stations.length,
             pending_order_count: pendingOrdersAll.length,
             recent_verified_count: recentVerifiedOrdersAll.length,
-            procurement_pending_count: procurementRows.filter((row) => row.status === 'pending_receive').length,
+            procurement_pending_count: procurementRows.filter((row) => ['pending_approval', 'pending_receive'].includes(row.status)).length,
             service_fee_total: roundMoney((commissionRows || [])
                 .filter((row) => claimantOpenids.includes(pickString(row.openid)) && ['pickup_service_fee', 'pickup_subsidy'].includes(pickString(row.type)))
                 .reduce((sum, row) => sum + toNum(row.amount, 0), 0)),
@@ -886,6 +890,46 @@ function productOwnsSku(product = {}, sku = {}) {
     return skuProductIds.some((value) => productIds.includes(value));
 }
 
+function buildProductLookupValues(product = {}) {
+    return [product._id, product.id, product._legacy_id]
+        .filter((value) => value !== null && value !== undefined && value !== '');
+}
+
+async function loadProductSkus(product = {}) {
+    const productLookups = buildProductLookupValues(product);
+    const fallbackProductId = productLookups[0] || '';
+    const embeddedSkus = Array.isArray(product.skus)
+        ? product.skus.map((sku) => ({
+            ...sku,
+            product_id: sku.product_id || sku.productId || fallbackProductId
+        }))
+        : [];
+    if (!productLookups.length) return embeddedSkus;
+    const [byProductId, byProductIdCamel] = await Promise.all([
+        queryRecordsByFieldValues('skus', 'product_id', productLookups),
+        queryRecordsByFieldValues('skus', 'productId', productLookups)
+    ]);
+    return dedupeRows([...embeddedSkus, ...byProductId, ...byProductIdCamel]);
+}
+
+function buildStationReceiveSnapshot(station = {}, claimantUser = {}) {
+    const fullAddress = [
+        station.province,
+        station.city,
+        station.district,
+        station.address
+    ].map((item) => pickString(item)).filter(Boolean).join(' ');
+    return {
+        contact_name: pickString(station.contact_name || station.manager_name || station.claimant?.nick_name || station.claimant?.nickname || claimantUser.nickName || claimantUser.nickname || station.name),
+        contact_phone: pickString(station.contact_phone || station.phone || station.claimant?.phone || claimantUser.phone),
+        province: pickString(station.province),
+        city: pickString(station.city),
+        district: pickString(station.district),
+        address: pickString(station.address),
+        full_address: fullAddress
+    };
+}
+
 async function findOneByAnyId(collectionName, rawId) {
     if (!rawId) return null;
     const id = String(rawId);
@@ -896,40 +940,6 @@ async function findOneByAnyId(collectionName, rawId) {
         Number.isFinite(numeric) ? db.collection(collectionName).where({ _legacy_id: numeric }).limit(1).get().catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
     ]);
     return doc.data || byId.data?.[0] || byLegacy.data?.[0] || null;
-}
-
-function getUserGoodsFundBalance(user = {}) {
-    return roundMoney(toNum(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0));
-}
-
-async function ensureWalletAccountForUser(user = {}, seedBalance = 0) {
-    const candidates = [user.id, user._legacy_id, user._id, user.openid].filter((value) => value !== null && value !== undefined && value !== '');
-    for (const candidate of candidates) {
-        const res = await db.collection('wallet_accounts').where({ user_id: candidate }).limit(1).get().catch(() => ({ data: [] }));
-        if (res.data && res.data[0]) return res.data[0];
-    }
-    const accountId = `wallet-${String(user._id || user.id || user._legacy_id || user.openid || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-    const account = {
-        _id: accountId,
-        user_id: user.id || user._legacy_id || user._id || user.openid,
-        openid: pickString(user.openid),
-        balance: roundMoney(seedBalance),
-        account_type: 'goods_fund',
-        status: 'active',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-    };
-    await db.collection('wallet_accounts').doc(accountId).set({ data: account }).catch(() => {});
-    return account;
-}
-
-async function appendGoodsFundLog(entry = {}) {
-    return db.collection('goods_fund_logs').add({
-        data: {
-            ...entry,
-            created_at: entry.created_at || db.serverDate()
-        }
-    }).catch(() => null);
 }
 
 function buildProcurementNo(rows = []) {
@@ -973,7 +983,7 @@ async function createStoreManagerProcurement(openid, params = {}) {
     if (!supplierName) throw badRequest('请填写供应商');
     if (!operatorName) throw badRequest('请填写经办人');
 
-    const [{ station, currentUser }, product, sku, procurements] = await Promise.all([
+    const [{ station, currentUser }, product, initialSku, procurements] = await Promise.all([
         resolveManagerStationBinding(openid, stationId),
         findOneByAnyId('products', productId),
         skuId ? findOneByAnyId('skus', skuId) : Promise.resolve(null),
@@ -981,6 +991,12 @@ async function createStoreManagerProcurement(openid, params = {}) {
     ]);
 
     if (!product) throw badRequest('商品不存在');
+    const productSkus = await loadProductSkus(product);
+    let sku = initialSku;
+    if (skuId && !sku) {
+        sku = productSkus.find((item) => rowMatchesLookup(item, skuId, [item.sku_id])) || null;
+    }
+    if (productSkus.length > 0 && !skuId) throw badRequest('请选择商品规格');
     if (skuId && !sku) throw badRequest('规格不存在');
     if (sku && !productOwnsSku(product, sku)) throw badRequest('规格不属于当前商品');
 
@@ -995,31 +1011,7 @@ async function createStoreManagerProcurement(openid, params = {}) {
 
     const claimantUser = station.claimant?.openid === openid ? (currentUser || null) : await findUserByOpenid(openid);
     if (!claimantUser) throw badRequest('店长账户异常，无法创建采购单');
-    const goodsFundBalance = getUserGoodsFundBalance(claimantUser);
-    if (goodsFundBalance < totalCost) throw badRequest('货款余额不足，不能创建采购单');
-
-    const userDocId = pickString(claimantUser._id || claimantUser.id);
-    if (!userDocId) throw badRequest('店长账户缺少文档标识');
-    const nextBalance = roundMoney(goodsFundBalance - totalCost);
-    await db.collection('users').doc(userDocId).update({
-        data: {
-            agent_wallet_balance: db.command.inc(-totalCost),
-            wallet_balance: db.command.inc(-totalCost),
-            updated_at: db.serverDate()
-        }
-    }).catch(() => {
-        throw new Error('扣减货款余额失败');
-    });
-
-    const walletAccount = await ensureWalletAccountForUser(claimantUser, goodsFundBalance);
-    await db.collection('wallet_accounts').doc(String(walletAccount._id || walletAccount.id)).set({
-        data: {
-            ...walletAccount,
-            balance: nextBalance,
-            updated_at: new Date().toISOString()
-        }
-    }).catch(() => {});
-
+    const receiveSnapshot = buildStationReceiveSnapshot(station, claimantUser);
     const procurement = {
         id: (Array.isArray(procurements) ? procurements.length : 0) + 1,
         procurement_no: buildProcurementNo(procurements),
@@ -1031,16 +1023,25 @@ async function createStoreManagerProcurement(openid, params = {}) {
         quantity,
         cost_price: costPrice,
         total_cost: totalCost,
-        status: 'pending_receive',
+        status: 'pending_approval',
         supplier_name: supplierName,
         operator_name: operatorName,
         expected_arrival_date: expectedArrivalDate,
         remark,
+        receive_contact_name: receiveSnapshot.contact_name,
+        receive_contact_phone: receiveSnapshot.contact_phone,
+        receive_address: receiveSnapshot.full_address,
+        receive_snapshot: receiveSnapshot,
         station_snapshot: {
             id: station.id,
             name: station.name,
+            province: station.province,
             city: station.city,
-            district: station.district
+            district: station.district,
+            address: station.address,
+            contact_name: receiveSnapshot.contact_name,
+            contact_phone: receiveSnapshot.contact_phone,
+            full_address: receiveSnapshot.full_address
         },
         product_snapshot: {
             id: product._id || product.id || '',
@@ -1051,31 +1052,7 @@ async function createStoreManagerProcurement(openid, params = {}) {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
     };
-    await db.collection('station_procurement_orders').add({ data: procurement }).catch(async (error) => {
-        await db.collection('users').doc(userDocId).update({
-            data: {
-                agent_wallet_balance: db.command.inc(totalCost),
-                wallet_balance: db.command.inc(totalCost),
-                updated_at: db.serverDate()
-            }
-        }).catch(() => {});
-        await db.collection('wallet_accounts').doc(String(walletAccount._id || walletAccount.id)).set({
-            data: {
-                ...walletAccount,
-                balance: goodsFundBalance,
-                updated_at: new Date().toISOString()
-            }
-        }).catch(() => {});
-        throw error;
-    });
-    await appendGoodsFundLog({
-        openid,
-        user_id: claimantUser._id || claimantUser.id || claimantUser._legacy_id || openid,
-        type: 'station_procurement',
-        amount: -totalCost,
-        order_no: procurement.procurement_no,
-        description: `门店备货采购 ${procurement.procurement_no}`
-    });
+    await db.collection('station_procurement_orders').add({ data: procurement });
     return {
         procurement_no: procurement.procurement_no,
         status: procurement.status,
@@ -1898,14 +1875,16 @@ const handleAction = {
         const list = sortedStations
             .map((station) => {
                 const availability = summarizeStationStockForItems(stockRows || [], station.id, requestedItems);
+                const selectable = requestedItems.length ? availability.selectable : true;
                 return {
                     ...station,
                     stock_status: availability.stock_status,
                     stock_status_text: availability.stock_status_text,
-                    selectable: requestedItems.length ? availability.selectable : true
+                    pickup_stock_text: selectable ? '有货' : '无货',
+                    pickup_stock_available: selectable,
+                    selectable
                 };
-            })
-            .filter((station) => (requestedItems.length ? station.selectable : true));
+            });
         return success({ list });
     }),
 

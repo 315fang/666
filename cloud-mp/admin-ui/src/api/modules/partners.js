@@ -25,7 +25,8 @@ export const getPickupWarehouseOverview = () => request({ url: '/pickup-stations
 export const getPickupStationInventory = (params) => request({ url: '/pickup-stations/inventory', method: 'get', params })
 export const adjustPickupStationInventory = (id, data) => request({ url: `/pickup-stations/inventory/${id}/adjust`, method: 'post', data })
 export const getPickupProcurements = (params) => request({ url: '/pickup-stations/procurements', method: 'get', params })
-export const createPickupProcurement = (data) => request({ url: '/pickup-stations/procurements', method: 'post', data })
+export const approvePickupProcurement = (id, data) => request({ url: `/pickup-stations/procurements/${id}/approve`, method: 'put', data })
+export const rejectPickupProcurement = (id, data) => request({ url: `/pickup-stations/procurements/${id}/reject`, method: 'put', data })
 export const receivePickupProcurement = (id, data) => request({ url: `/pickup-stations/procurements/${id}/receive`, method: 'post', data })
 
 export const getBranchAgentStations = (params) => request({ url: '/branch-agents/stations', method: 'get', params })

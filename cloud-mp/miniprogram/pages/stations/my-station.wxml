@@ -4,7 +4,7 @@
   <block wx:elif="{{workbench}}">
     <view class="hero">
       <text class="hero-title">店长工作台</text>
-      <text class="hero-sub">门店由后台指派绑定；你可在这里查看门店、核销订单、采购单与两笔结算去向。</text>
+      <text class="hero-sub">门店由后台指派绑定；你可在这里查看门店、核销订单、采购申请与两笔结算去向。</text>
     </view>
 
     <view class="summary-card">
@@ -68,12 +68,16 @@
     </view>
 
     <view class="section">
-      <text class="section-title">发起采购</text>
+      <text class="section-title">发起采购申请</text>
       <view class="field">
         <text class="field-label">门店</text>
         <picker mode="selector" range="{{scope.stations}}" range-key="name" bindchange="onStationChange">
           <view class="field-box">{{procurementForm.station_name || '请选择门店'}}</view>
         </picker>
+        <view class="receive-preview" wx:if="{{procurementForm.receive_address || procurementForm.receive_contact_name || procurementForm.receive_contact_phone}}">
+          <text class="receive-line">收货：{{procurementForm.receive_address || '门店地址未维护'}}</text>
+          <text class="receive-line">联系人：{{procurementForm.receive_contact_name || '未维护'}} {{procurementForm.receive_contact_phone || ''}}</text>
+        </view>
       </view>
       <view class="field">
         <text class="field-label">商品</text>
@@ -82,10 +86,11 @@
         </picker>
       </view>
       <view class="field" wx:if="{{skuOptions.length > 0}}">
-        <text class="field-label">规格</text>
-        <picker mode="selector" range="{{skuOptions}}" range-key="name" bindchange="onSkuChange">
+        <text class="field-label">规格{{procurementForm.sku_required ? '（必选）' : ''}}</text>
+        <picker mode="selector" range="{{skuOptions}}" range-key="sku_picker_name" bindchange="onSkuChange">
           <view class="field-box">{{procurementForm.sku_name || '请选择规格'}}</view>
         </picker>
+        <text class="field-tip" wx:if="{{procurementForm.sku_required}}">该商品按规格管理库存，采购申请必须选择具体规格。</text>
       </view>
       <view class="field">
         <text class="field-label">采购数量</text>
@@ -113,24 +118,26 @@
         <text class="field-label">备注</text>
         <textarea class="field-textarea" value="{{procurementForm.remark}}" data-field="remark" bindinput="onFieldInput" placeholder="可填写采购说明"></textarea>
       </view>
-      <button class="action-btn" loading="{{procurementSubmitting}}" bindtap="submitProcurement">提交采购单</button>
+      <button class="action-btn" loading="{{procurementSubmitting}}" bindtap="submitProcurement">提交采购申请</button>
     </view>
 
     <view class="section">
-      <text class="section-title">最近采购单</text>
+      <text class="section-title">最近采购申请</text>
       <view class="simple-list" wx:if="{{workbench.procurements.length > 0}}">
         <view class="simple-card" wx:for="{{workbench.procurements}}" wx:key="id">
           <view class="simple-top">
             <text class="simple-title">{{item.procurement_no}}</text>
-            <text class="simple-tag {{item.status === 'received' ? 'tag-ok' : 'tag-warn'}}">{{item.status === 'received' ? '已入库' : '待入库'}}</text>
+            <text class="simple-tag {{item.status_class}}">{{item.status_text}}</text>
           </view>
           <text class="simple-line">{{item.station_name}} / {{item.product_name}}{{item.sku_spec ? (' / ' + item.sku_spec) : ''}}</text>
           <text class="simple-line">数量 {{item.quantity}} · 成本 ¥{{item.cost_price}} · 总成本 ¥{{item.total_cost}}</text>
           <text class="simple-line">供应商 {{item.supplier_name || '—'}} · 经办人 {{item.operator_name || '—'}}</text>
+          <text class="simple-line" wx:if="{{item.receive_address}}">收货 {{item.receive_address}} · {{item.receive_contact_name || '—'}} {{item.receive_contact_phone || ''}}</text>
           <text class="simple-line">预计到货 {{item.expected_arrival_date || '—'}} · 创建 {{item.created_at_text || '—'}}</text>
+          <text class="simple-line" wx:if="{{item.review_reason}}">审核说明 {{item.review_reason}}</text>
         </view>
       </view>
-      <text class="empty-desc" wx:else>暂未创建采购单。</text>
+      <text class="empty-desc" wx:else>暂未提交采购申请。</text>
     </view>
 
     <view class="section">

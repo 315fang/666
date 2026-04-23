@@ -27,6 +27,18 @@ function isEnabled(value, fallback = true) {
     return true;
 }
 
+function isSellableRecord(row = {}) {
+    const raw = row.status ?? row.is_active ?? row.enabled;
+    if (raw === undefined || raw === null || raw === '') return true;
+    if (raw === true || raw === 1 || raw === '1') return true;
+    if (raw === false || raw === 0 || raw === '0') return false;
+    const normalized = String(raw).trim().toLowerCase();
+    if (!normalized) return true;
+    if (['true', 'yes', 'y', 'on', 'enabled', 'enable', 'active', 'show', 'visible', 'on_sale', 'published'].includes(normalized)) return true;
+    if (['false', 'no', 'n', 'off', 'disabled', 'disable', 'inactive', 'hidden', 'off_sale', 'archived', 'draft'].includes(normalized)) return false;
+    return true;
+}
+
 function primaryId(row = {}) {
     return row && (row._id || row.id || row._legacy_id) ? String(row._id || row.id || row._legacy_id) : '';
 }
@@ -153,9 +165,10 @@ function buildProductSnapshot(product = {}, sku = null) {
 
 async function buildBundleOption(option = {}) {
     const product = await findProductById(option.product_id);
-    if (!product) return null;
-    const skus = await findSkusForProduct(product);
+    if (!product || !isSellableRecord(product)) return null;
+    const skus = (await findSkusForProduct(product)).filter(isSellableRecord);
     const resolvedSku = pickDefaultSku(product, skus, option.sku_id);
+    if (pickString(option.sku_id) && !resolvedSku) return null;
     const productSnapshot = buildProductSnapshot(product, resolvedSku);
     return {
         option_key: pickString(option.option_key),
@@ -222,7 +235,7 @@ async function listActiveBundles(params = {}) {
     const sceneType = pickString(params.scene_type).toLowerCase();
     const allRows = await db.collection('product_bundles').limit(200).get().catch(() => ({ data: [] }));
     let rows = (allRows.data || [])
-        .filter((item) => isEnabled(item.status, true) && pickString(item.publish_status || 'published', 'published') === 'published')
+        .filter((item) => isEnabled(item.status, true) && pickString(item.publish_status || 'published', 'published').toLowerCase() === 'published')
         .sort((left, right) => {
             const sortDiff = toNumber(right.sort_weight, right.sort_order || 0) - toNumber(left.sort_weight, left.sort_order || 0);
             if (sortDiff !== 0) return sortDiff;
@@ -247,7 +260,7 @@ async function listActiveBundles(params = {}) {
 
 async function getActiveBundleDetail(bundleId) {
     const bundle = await findBundleById(bundleId);
-    if (!bundle || !isEnabled(bundle.status, true) || pickString(bundle.publish_status || 'published', 'published') !== 'published') return null;
+    if (!bundle || !isEnabled(bundle.status, true) || pickString(bundle.publish_status || 'published', 'published').toLowerCase() !== 'published') return null;
     return normalizeBundleForClient(bundle);
 }
 

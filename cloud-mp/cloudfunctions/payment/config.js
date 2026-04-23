@@ -16,10 +16,14 @@ function toText(value, fallback = '') {
     return value == null ? fallback : String(value).trim();
 }
 
+function isPlaceholderValue(value) {
+    return /^\$\{[^}]+\}$/.test(toText(value));
+}
+
 function pickEnvText(env, keys, fallback = '') {
     for (const key of keys) {
         const value = toText(env[key]);
-        if (value) return value;
+        if (value && !isPlaceholderValue(value)) return value;
     }
     return fallback;
 }
@@ -149,6 +153,7 @@ module.exports = {
     loadWechatFormalConfig,
     buildFormalCheckSummary,
     loadRuntimeConfigFile,
+    isPlaceholderValue,
     toBoolean,
     toText
 };

@@ -1,0 +1,64 @@
+<view class="container">
+  <view class="search-section">
+    <view class="search-box">
+      <input
+        class="search-input"
+        placeholder="搜索门店名称、城市或地址"
+        value="{{keyword}}"
+        bindinput="onSearchInput"
+        confirm-type="search"
+      />
+      <view class="search-clear" wx:if="{{keyword}}" catchtap="onClearSearch">清除</view>
+    </view>
+  </view>
+
+  <view class="station-summary">
+    <text class="summary-title">可选门店</text>
+    <text class="summary-count">{{filteredStations.length}} / {{stations.length}}</text>
+  </view>
+
+  <view class="station-list" wx:if="{{filteredStations.length > 0}}">
+    <view
+      class="station-card {{selectedId === item.station_key ? 'selected' : ''}} {{item.pickup_unavailable ? 'disabled' : ''}}"
+      wx:for="{{filteredStations}}"
+      wx:key="station_key"
+      data-id="{{item.station_key}}"
+      bindtap="onSelectStation"
+    >
+      <view class="station-card-head">
+        <view class="station-title-col">
+          <text class="station-name">{{item.name}}</text>
+          <text class="station-area">{{item.city}} {{item.district || ''}}</text>
+        </view>
+        <view class="station-tags">
+          <text class="stock-badge {{item.pickup_stock_class}}">{{item.pickup_stock_text}}</text>
+          <text class="selected-mark" wx:if="{{selectedId === item.station_key}}">已选</text>
+        </view>
+      </view>
+
+      <view class="station-address-row">
+        <text class="info-label">地址</text>
+        <text class="station-address">{{item.full_address || (item.city + ' ' + (item.district || '') + ' ' + (item.address || ''))}}</text>
+      </view>
+
+      <view class="station-info-grid">
+        <view class="station-info-pill">
+          <text class="info-label">电话</text>
+          <text class="info-value">{{item.contact_phone_text}}</text>
+        </view>
+        <view class="station-info-pill">
+          <text class="info-label">营业</text>
+          <text class="info-value">{{item.business_hours_text}}</text>
+        </view>
+      </view>
+
+      <text class="station-days" wx:if="{{item.business_days_text}}">{{item.business_days_text}}</text>
+      <text class="station-rule">{{item.pickup_unavailable ? '该商品当前不可在此门店自提' : '可在该门店自提'}}</text>
+    </view>
+  </view>
+
+  <view class="empty-state" wx:else>
+    <text class="empty-title">{{stations.length === 0 ? '暂无自提门店' : '未找到匹配门店'}}</text>
+    <text class="empty-desc">{{stations.length === 0 ? '请稍后重试' : '换个关键词试试'}}</text>
+  </view>
+</view>

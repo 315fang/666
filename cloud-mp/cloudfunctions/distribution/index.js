@@ -147,6 +147,72 @@ async function loadWithdrawalRules() {
     };
 }
 
+function normalizeRechargeAmounts(values = []) {
+    const seen = new Set();
+    const amounts = [];
+    values.forEach((value) => {
+        const amount = roundMoney(value);
+        if (amount <= 0) return;
+        const key = String(amount);
+        if (seen.has(key)) return;
+        seen.add(key);
+        amounts.push(amount);
+    });
+    return amounts;
+}
+
+function normalizeRechargeBonusTiers(values = []) {
+    if (!Array.isArray(values)) return [];
+    return values
+        .map((item) => ({
+            min: roundMoney(item && item.min),
+            bonus: roundMoney(item && item.bonus)
+        }))
+        .filter((item) => item.min > 0 && item.bonus > 0)
+        .sort((a, b) => a.min - b.min);
+}
+
+function normalizeAgentRechargeConfig(rawConfig = null) {
+    const config = toPlainObject(rawConfig, null);
+    if (!config) return null;
+    const optionAmounts = Array.isArray(config.options)
+        ? config.options.map((item) => item && item.amount)
+        : [];
+    const presetAmounts = normalizeRechargeAmounts(
+        Array.isArray(config.preset_amounts) && config.preset_amounts.length
+            ? config.preset_amounts
+            : optionAmounts
+    );
+    const bonusTiers = normalizeRechargeBonusTiers(config.bonus_tiers);
+    return {
+        enabled: config.enabled !== false,
+        preset_amounts: presetAmounts,
+        bonus_enabled: config.bonus_enabled === true && bonusTiers.length > 0,
+        bonus_tiers: bonusTiers
+    };
+}
+
+function buildRechargeOptions(config = {}) {
+    const bonusByMin = new Map((config.bonus_tiers || []).map((tier) => [roundMoney(tier.min), roundMoney(tier.bonus)]));
+    return (config.preset_amounts || []).map((amount, index) => ({
+        id: `agent-recharge-${amount}`,
+        title: `充值${amount}元`,
+        amount,
+        bonus: config.bonus_enabled ? (bonusByMin.get(roundMoney(amount)) || 0) : 0,
+        sort_order: (index + 1) * 10
+    }));
+}
+
+async function loadAgentRechargeConfig() {
+    const rows = await loadConfigRowsByCollection('configs', _.or([
+        { key: 'agent_system_recharge-config' },
+        { config_key: 'agent_system_recharge-config' },
+        { key: 'agent_system_recharge_config' },
+        { config_key: 'agent_system_recharge_config' }
+    ]));
+    return normalizeAgentRechargeConfig(parseConfigRowValue(rows[0], null));
+}
+
 function calculateWithdrawalAmounts(amount, roleLevel, rules = {}) {
     const normalizedAmount = roundMoney(amount);
     const minAmount = Math.max(0.01, toNumber(rules.min_amount, 100));
@@ -1234,14 +1300,31 @@ const handleAction = {
         return success({ list: list.slice(0, 50) });
     }),
 
-    'agentWalletRechargeConfig': asyncHandler(async (openid) => {
+    'agentWalletRechargeConfig': asyncHandler(async () => {
+        const agentConfig = await loadAgentRechargeConfig();
+        if (agentConfig) {
+            return success({
+                ...agentConfig,
+                options: buildRechargeOptions(agentConfig)
+            });
+        }
+
         const configRes = await db.collection('wallet_recharge_configs')
             .where({ is_active: true })
             .orderBy('sort_order', 'asc')
             .limit(20)
             .get().catch(() => ({ data: [] }));
         if (configRes.data && configRes.data.length) {
+            const presetAmounts = normalizeRechargeAmounts(configRes.data.map((item) => item.amount));
+            const bonusTiers = normalizeRechargeBonusTiers(configRes.data.map((item) => ({
+                min: item.amount,
+                bonus: item.bonus_amount != null ? item.bonus_amount : item.bonus
+            })));
             return success({
+                enabled: true,
+                preset_amounts: presetAmounts,
+                bonus_enabled: bonusTiers.length > 0,
+                bonus_tiers: bonusTiers,
                 options: configRes.data.map((item) => ({
                     id: item._id,
                     title: item.title || `充值${toNumber(item.amount, 0)}元`,
@@ -1252,11 +1335,11 @@ const handleAction = {
             });
         }
         return success({
-            options: [
-                { amount: 100, bonus: 5 },
-                { amount: 500, bonus: 30 },
-                { amount: 1000, bonus: 80 },
-            ],
+            enabled: false,
+            preset_amounts: [],
+            bonus_enabled: false,
+            bonus_tiers: [],
+            options: []
         });
     }),
 

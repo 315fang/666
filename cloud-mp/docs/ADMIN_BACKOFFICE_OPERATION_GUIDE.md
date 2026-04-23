@@ -293,7 +293,33 @@
 - 绑定门店成员
 - 管理自提核销相关基础信息
 
-#### 5.2.3 售后退款
+#### 5.2.3 门店备货
+
+- 路由：`/pickup-procurements`
+- 权限：`pickup_stations`
+- 页面文件：[admin-ui/src/views/pickup-procurements/index.vue](/C:/Users/21963/WeChatProjects/zz/cloud-mp/admin-ui/src/views/pickup-procurements/index.vue:1)
+
+主要用途：
+
+- 审核店长从小程序提交的采购申请
+- 审核通过后扣减店长货款，采购单进入待入库
+- 拒绝采购申请时记录拒绝原因，不产生货款流水
+- 对已通过的采购单确认入库，写入门店库存与库存流水
+- 多规格商品必须在小程序提交时选择具体规格；采购申请会保留门店收货地址、联系人与电话快照
+
+状态说明：
+
+- `pending_approval`：待后台审批，未扣货款
+- `pending_receive`：已审批通过，已扣货款，待确认入库
+- `received`：已入库
+- `rejected`：已拒绝
+
+注意事项：
+
+- 后台不再新建采购单；采购必须由店长在小程序发起。
+- 历史 `pending_receive` 采购单视为已审批，可继续确认入库。
+
+#### 5.2.4 售后退款
 
 - 路由：`/refunds`
 - 权限：`refunds`
@@ -324,7 +350,7 @@
 2. 当前代码已支持在 `processing` 状态下手动执行“同步状态”。
 3. 如果线上环境暂时还看不到“同步状态”按钮，说明后台还没部署到当前版本。
 
-#### 5.2.4 提现审核
+#### 5.2.5 提现审核
 
 - 路由：`/withdrawals`
 - 权限：`withdrawals`
@@ -342,7 +368,7 @@
 - 拒绝提现会回退余额，必须确认理由。
 - 标记完成前要确认真实打款已经完成。
 
-#### 5.2.5 佣金结算
+#### 5.2.6 佣金结算
 
 - 路由：`/commissions`
 - 权限：`commissions`
@@ -765,6 +791,9 @@
 | 经营与策略 | 会员策略 | `/membership` | `statistics` |
 | 交易与履约 | 订单管理 | `/orders` | `orders` |
 | 交易与履约 | 自提门店 | `/pickup-stations` | `pickup_stations` |
+| 交易与履约 | 门店备货 | `/pickup-procurements` | `pickup_stations` |
+| 交易与履约 | 门店库存 | `/pickup-inventory` | `pickup_stations` |
+| 交易与履约 | 仓库总览 | `/warehouse-overview` | `pickup_stations` |
 | 交易与履约 | 售后退款 | `/refunds` | `refunds` |
 | 交易与履约 | 押金订单 | `/deposit-orders` | `refunds` |
 | 交易与履约 | 提现审核 | `/withdrawals` | `withdrawals` |

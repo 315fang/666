@@ -299,8 +299,18 @@
   </view>
 
   <view class="home-compliance-footer">
-    <text class="home-compliance-label">{{homeConfigs.police_registration_title || '公安备案'}}</text>
-    <text class="home-compliance-text">{{homeConfigs.police_registration_number || '苏公网安备32050802012518号'}}</text>
+    <view class="home-compliance-rule"></view>
+    <view class="home-compliance-row">
+      <image
+        class="home-compliance-badge"
+        src="{{homeConfigs.police_registration_icon || '/assets/images/police-badge.jpg'}}"
+        mode="aspectFit"
+      ></image>
+      <view class="home-compliance-copy">
+        <text class="home-compliance-label">{{homeConfigs.police_registration_title || '公安备案'}}</text>
+        <text class="home-compliance-text">{{homeConfigs.police_registration_number || '苏公网安备32050802012518号'}}</text>
+      </view>
+    </view>
   </view>
 
   <brand-animation id="brandAnimation"></brand-animation>

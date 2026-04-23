@@ -117,6 +117,16 @@
   color: #c26a1d;
 }
 
+.tag-info {
+  background: #edf4ff;
+  color: #0d61ce;
+}
+
+.tag-danger {
+  background: #ffecec;
+  color: #c73939;
+}
+
 .staff-summary {
   margin-top: 20rpx;
   padding: 20rpx;
@@ -173,6 +183,23 @@
   background: #f6f9ff;
   color: #14386e;
   font-size: 26rpx;
+}
+
+.field-tip,
+.receive-line {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #7c8ea8;
+}
+
+.receive-preview {
+  margin-top: 12rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 16rpx;
+  background: #f9fbff;
+  border: 1rpx solid #e7eef9;
 }
 
 .field-textarea {
