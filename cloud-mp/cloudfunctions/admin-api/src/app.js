@@ -46,6 +46,19 @@ const {
     isVisibleOrder,
     normalizeOrderVisibility
 } = require('./shared/record-visibility');
+const {
+    normalizeAdministrativeRegionText,
+    normalizeCityText
+} = require('./shared/region-scope');
+
+const BRANCH_AGENT_COMMISSION_ORDER_STATUSES = [
+    'paid',
+    'pickup_pending',
+    'agent_confirmed',
+    'shipping_requested',
+    'shipped',
+    'completed'
+];
 
 // Express 4 async handler patch: auto-catch rejected promises (Express 5 does this natively)
 const Layer = require('express/lib/router/layer');
@@ -243,6 +256,17 @@ function saveCollection(name, rows) {
     invalidateRuntimeCachesForCollection(name);
     bumpConfigCacheKeysForCollection(name);
     return result;
+}
+
+function trackPendingWrite(promise) {
+    const tracked = Promise.resolve(promise);
+    const context = writeConfirmationContext.getStore();
+    if (context) {
+        context.pendingWrites = true;
+        if (!Array.isArray(context.pendingWritePromises)) context.pendingWritePromises = [];
+        context.pendingWritePromises.push(tracked);
+    }
+    return tracked;
 }
 
 function getSingleton(name, fallback) {
@@ -1299,10 +1323,12 @@ function paginate(rows, req) {
     return { list, total: rows.length, pagination: { page, limit, total: rows.length } };
 }
 
-function createAuditLog(admin, action, target, detail) {
-    const rows = getCollection('admin_audit_logs');
-    rows.push({
-        id: nextId(rows),
+function buildAuditLogRow(admin, action, target, detail, rows = null) {
+    const fallbackId = `audit_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+    const id = Array.isArray(rows) ? nextId(rows) : fallbackId;
+    return {
+        _id: String(id),
+        id,
         admin_id: admin?.id || null,
         admin_name: admin?.name || admin?.username || 'system',
         action,
@@ -1310,8 +1336,24 @@ function createAuditLog(admin, action, target, detail) {
         detail,
         status: 'success',
         created_at: nowIso()
-    });
-    saveCollection('admin_audit_logs', rows);
+    };
+}
+
+function createAuditLog(admin, action, target, detail) {
+    try {
+        const rows = getCollection('admin_audit_logs');
+        const row = buildAuditLogRow(admin, action, target, detail, rows);
+        rows.push(row);
+        saveCollection('admin_audit_logs', rows);
+        return row;
+    } catch (error) {
+        if (error?.code !== 'NOT_LOADED' || typeof dataStore.appendCollectionDocument !== 'function') {
+            throw error;
+        }
+        const row = buildAuditLogRow(admin, action, target, detail);
+        trackPendingWrite(dataStore.appendCollectionDocument('admin_audit_logs', row));
+        return row;
+    }
 }
 
 function getRequestId(req) {
@@ -1340,6 +1382,14 @@ async function flushPendingWritesForResponse(res) {
     const context = writeConfirmationContext.getStore();
     if (!context?.pendingWrites) return true;
     try {
+        if (Array.isArray(context.pendingWritePromises) && context.pendingWritePromises.length) {
+            const promises = context.pendingWritePromises.splice(0);
+            const results = await Promise.allSettled(promises);
+            const failed = results.find((item) => item.status === 'rejected');
+            if (failed) {
+                throw failed.reason || new Error('数据保存失败');
+            }
+        }
         await flushDataStoreOrThrow();
         context.pendingWrites = false;
         return true;
@@ -2948,7 +2998,7 @@ function normalizeBranchAgentPolicySnapshot(rawPolicy) {
             rate: normalizeRate(tier?.rate, defaults.region_reward_tiers[index]?.rate || 0),
             label: pickString(tier?.label || defaults.region_reward_tiers[index]?.label || '')
         }))
-        .filter((tier) => tier.threshold > 0 && tier.rate > 0)
+        .filter((tier) => tier.rate > 0)
         .sort((a, b) => a.threshold - b.threshold);
     return {
         enabled: toBoolean(policy.enabled),
@@ -2976,7 +3026,7 @@ function getBranchAgentStationsSnapshot() {
 }
 
 function normalizeScopeText(value) {
-    return pickString(value).replace(/\s+/g, '').trim().toLowerCase();
+    return normalizeAdministrativeRegionText(value);
 }
 
 function normalizeBranchScopeLevel(value) {
@@ -3089,6 +3139,26 @@ function syncBranchStationToPickupStation(station) {
     return pickupRows[index];
 }
 
+function clearBranchStationFromPickupStation(station) {
+    if (!station) return null;
+    const pickupRows = getCollection('stations');
+    const index = pickupRows.findIndex((row) => rowMatchesLookup(row, primaryId(station), [row.id, row._legacy_id]));
+    if (index === -1) return null;
+    const current = pickupRows[index];
+    const claimantId = pickString(station.claimant_id);
+    const branchType = normalizeBranchScopeLevel(station.branch_type);
+    const currentBranchType = pickString(current.branch_type);
+    pickupRows[index] = {
+        ...current,
+        claimant_id: claimantId && pickString(current.claimant_id) === claimantId ? null : current.claimant_id,
+        branch_type: currentBranchType && branchType && normalizeBranchScopeLevel(currentBranchType) === branchType ? null : current.branch_type,
+        region_name: pickString(current.region_name) && pickString(current.region_name) === pickString(station.region_name) ? '' : current.region_name,
+        updated_at: nowIso()
+    };
+    saveCollection('stations', pickupRows);
+    return pickupRows[index];
+}
+
 function getBranchAgentTargetUser(station, users) {
     return findUserByAnyId(users, station?.claimant_id || station?.openid || station?.user_id);
 }
@@ -3106,9 +3176,10 @@ function getOrderAddressText(order = {}) {
 
 function getOrderRegionParts(order = {}) {
     const addr = order.address_snapshot || order.address || {};
+    const province = normalizeScopeText(addr.province);
     return {
-        province: normalizeScopeText(addr.province),
-        city: normalizeScopeText(addr.city),
+        province,
+        city: normalizeCityText(addr.city, addr.province),
         district: normalizeScopeText(addr.district)
     };
 }
@@ -3119,7 +3190,7 @@ function branchAssignmentMatchesOrder(station = {}, order = {}) {
     const orderRegion = getOrderRegionParts(order);
     if (!orderRegion.province) return false;
     const stationProvince = normalizeScopeText(station.province);
-    const stationCity = normalizeScopeText(station.city);
+    const stationCity = normalizeCityText(station.city, station.province);
     const stationDistrict = normalizeScopeText(station.district);
     if (scopeLevel === 'province') {
         return !!stationProvince && stationProvince === orderRegion.province;
@@ -3217,7 +3288,7 @@ function ensureBranchAgentCommissionForOrder(order, options = {}) {
     const stationId = primaryId(station);
     const cumulativeAmount = roundMoney(getCollection('orders').reduce((sum, row) => {
         const status = getEffectiveOrderStatus(row);
-        if (!['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'].includes(status)) return sum;
+        if (!BRANCH_AGENT_COMMISSION_ORDER_STATUSES.includes(status)) return sum;
         const matchedStation = matchBranchAgentStationForOrder(row, { preferPickup: false });
         if (!matchedStation || !rowMatchesLookup(matchedStation, stationId, [stationId])) return sum;
         return sum + toNumber(row.pay_amount ?? row.actual_price ?? row.total_amount, 0);
@@ -7482,7 +7553,7 @@ app.get('/admin/api/branch-agents/stations', auth, requirePermission('dealers'),
 });
 
 app.post('/admin/api/branch-agents/stations', auth, requirePermission('dealers'), async (req, res) => {
-    await ensureFreshCollections(['branch_agent_stations']);
+    await ensureFreshCollections(['branch_agent_stations', 'stations']);
     const rows = getCollection('branch_agent_stations');
     const row = {
         id: nextId(rows),
@@ -7504,7 +7575,7 @@ app.post('/admin/api/branch-agents/stations', auth, requirePermission('dealers')
 });
 
 app.put('/admin/api/branch-agents/stations/:id', auth, requirePermission('dealers'), async (req, res) => {
-    await ensureFreshCollections(['branch_agent_stations']);
+    await ensureFreshCollections(['branch_agent_stations', 'stations']);
     const updated = patchCollectionRow('branch_agent_stations', req.params.id, (row) => ({
         ...row,
         name: req.body?.name != null ? pickString(req.body.name) : row.name,
@@ -7522,6 +7593,17 @@ app.put('/admin/api/branch-agents/stations/:id', auth, requirePermission('dealer
     ok(res, updated);
 });
 
+app.delete('/admin/api/branch-agents/stations/:id', auth, requirePermission('dealers'), async (req, res) => {
+    await ensureFreshCollections(['branch_agent_stations', 'stations']);
+    const rows = getCollection('branch_agent_stations');
+    const target = rows.find((item) => rowMatchesLookup(item, req.params.id));
+    if (!target) return fail(res, '区域归属不存在', 404);
+    saveCollection('branch_agent_stations', rows.filter((item) => !rowMatchesLookup(item, req.params.id)));
+    clearBranchStationFromPickupStation(target);
+    createAuditLog(req.admin, 'branch-agent.station.delete', 'branch_agent_stations', { station_id: primaryId(target) });
+    ok(res, { success: true, id: primaryId(target) });
+});
+
 app.get('/admin/api/branch-agents/claims', auth, requirePermission('dealers'), async (req, res) => {
     await ensureFreshCollections(['users', 'branch_agent_claims', 'branch_agent_stations']);
     const users = getCollection('users');
@@ -7531,7 +7613,7 @@ app.get('/admin/api/branch-agents/claims', auth, requirePermission('dealers'), a
 });
 
 app.put('/admin/api/branch-agents/claims/:id/review', auth, requirePermission('dealers'), async (req, res) => {
-    await ensureFreshCollections(['branch_agent_claims', 'branch_agent_stations']);
+    await ensureFreshCollections(['branch_agent_claims', 'branch_agent_stations', 'stations']);
     const action = pickString(req.body?.action).trim();
     if (!['approve', 'reject'].includes(action)) return fail(res, '请提供有效操作');
     const updated = patchCollectionRow('branch_agent_claims', req.params.id, (row) => ({
@@ -8002,6 +8084,38 @@ app.get('/admin/api/commissions', auth, requirePermission('commissions'), async 
     okStrongRead(res, { ...pageResult, stats: commissionStats(rows) }, readMeta.freshness);
 });
 
+app.post('/admin/api/commissions/repair-region-agent', auth, requirePermission('commissions'), async (req, res) => {
+    await ensureFreshCollections(['orders', 'users', 'commissions', 'branch_agent_stations']);
+    const orderLookup = pickString(req.body?.order_id || req.body?.order_no || req.query.order_id || req.query.order_no).trim();
+    let orders = getCollection('orders')
+        .filter((row) => BRANCH_AGENT_COMMISSION_ORDER_STATUSES.includes(getEffectiveOrderStatus(row)));
+    if (orderLookup) {
+        orders = orders.filter((row) => rowMatchesLookup(row, orderLookup, [row.order_no]));
+    }
+    let scanned = 0;
+    let created = 0;
+    let existing = 0;
+    let skipped = 0;
+    for (const order of orders) {
+        scanned += 1;
+        const beforeCount = getCollection('commissions').length;
+        const result = ensureBranchAgentCommissionForOrder(order, { preferPickup: false });
+        const afterCount = getCollection('commissions').length;
+        if (afterCount > beforeCount) created += afterCount - beforeCount;
+        else if (result) existing += 1;
+        else skipped += 1;
+    }
+    createAuditLog(req.admin, 'commission.repair_region_agent', 'commissions', {
+        order_lookup: orderLookup || null,
+        scanned,
+        created,
+        existing,
+        skipped
+    });
+    await flushDataStoreOrThrow();
+    ok(res, { scanned, created, existing, skipped });
+});
+
 app.put('/admin/api/commissions/:id/approve', auth, requirePermission('commissions'), async (req, res) => {
     await ensureFreshCollections(['commissions', 'users', 'orders']);
     const rows = getCollection('commissions');
@@ -8197,11 +8311,13 @@ app.get('/admin/api/orders', auth, requirePermission('orders'), async (req, res)
     const includeSuborders = toBoolean(req.query.include_suborders);
     const includeTest = toBoolean(req.query.include_test);
     const includeHidden = toBoolean(req.query.include_hidden);
+    const includeCancelled = toBoolean(req.query.include_cancelled) || status === 'cancelled';
     const searchContext = { users, products, userIndex, productIndex };
 
     if (!includeHidden) rows = rows.filter(isVisibleOrder);
     if (!includeTest) rows = rows.filter((item) => !isTestOrder(item));
     if (!includeSuborders) rows = rows.filter((item) => !item.parent_order_id);
+    if (!includeCancelled) rows = rows.filter((item) => getEffectiveOrderStatus(item) !== 'cancelled');
     if (status) rows = rows.filter((item) => getEffectiveOrderStatus(item) === status);
     else if (statusGroup && statusGroup !== 'all') rows = rows.filter((item) => normalizeOrderStatusGroup(item) === statusGroup);
     if (paymentMethod) {
@@ -8231,11 +8347,13 @@ app.get('/admin/api/orders/export', auth, requirePermission('orders'), async (re
     await ensureFreshCollections(['orders']);
     const includeTest = toBoolean(req.query.include_test);
     const includeHidden = toBoolean(req.query.include_hidden);
+    const includeCancelled = toBoolean(req.query.include_cancelled);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename=\"orders.json\"');
     let rows = getCollection('orders');
     if (!includeHidden) rows = rows.filter(isVisibleOrder);
     if (!includeTest) rows = rows.filter(isBusinessOrder);
+    if (!includeCancelled) rows = rows.filter((item) => getEffectiveOrderStatus(item) !== 'cancelled');
     res.send(JSON.stringify(rows, null, 2));
 });
 

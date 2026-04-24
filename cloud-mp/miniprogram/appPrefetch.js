@@ -12,6 +12,7 @@ const HOME_PAGE_ASSET_TTL = 5 * 60 * 1000;
 const CATEGORY_BOOTSTRAP_TTL = 5 * 60 * 1000;
 const ACTIVITY_BOOTSTRAP_TTL = 60 * 1000;
 const LIMITED_SALE_OVERVIEW_TTL = 30 * 1000;
+const USER_DASHBOARD_BOOTSTRAP_TTL = 15 * 1000;
 
 module.exports = {
     prefetchHomeData(options = {}) {
@@ -112,6 +113,23 @@ module.exports = {
                 cacheTTL: CATEGORY_BOOTSTRAP_TTL,
                 showError: false,
                 maxRetries: 0
+            }),
+            cachedGet(get, '/product-bundles', { page: 1, limit: 20 }, {
+                cacheTTL: CATEGORY_BOOTSTRAP_TTL,
+                showError: false,
+                maxRetries: 0
+            }),
+            cachedGet(get, '/products', {
+                page: 1,
+                limit: 100,
+                sort: 'manual_weight',
+                view: 'card',
+                include_skus: 0,
+                include_total: 1
+            }, {
+                cacheTTL: CATEGORY_BOOTSTRAP_TTL,
+                showError: false,
+                maxRetries: 0
             })
         ])
             .catch((err) => {
@@ -153,6 +171,53 @@ module.exports = {
 
         this.globalData.activityBootstrapPromise = promise;
         return promise;
+    },
+
+    prefetchUserBootstrap() {
+        if (!this.globalData.isLoggedIn) {
+            return Promise.resolve(null);
+        }
+        if (this.globalData.userDashboardBootstrapPromise) {
+            return this.globalData.userDashboardBootstrapPromise;
+        }
+
+        const openid = this.globalData.openid || wx.getStorageSync('openid') || '';
+        const promise = cachedGet(get, '/user/dashboard-bootstrap', { _openid_cache_key: openid }, {
+            cacheTTL: USER_DASHBOARD_BOOTSTRAP_TTL,
+            showError: false,
+            maxRetries: 0
+        })
+            .catch((err) => {
+                console.warn('[Prefetch] 用户 dashboard 预拉取失败（不影响我的页兜底加载）', err);
+                return null;
+            })
+            .finally(() => {
+                this.globalData.userDashboardBootstrapPromise = null;
+            });
+
+        this.globalData.userDashboardBootstrapPromise = promise;
+        return promise;
+    },
+
+    runDeferredStartupPrefetch() {
+        setTimeout(() => {
+            const runWarmup = () => {
+                this.prefetchCategoryBootstrap();
+                this.prefetchActivityBootstrap();
+                this.prefetchUserBootstrap();
+            };
+            if (!wx.getNetworkType) {
+                runWarmup();
+                return;
+            }
+            wx.getNetworkType({
+                success: (res) => {
+                    if (res && res.networkType === 'wifi') {
+                        runWarmup();
+                    }
+                }
+            });
+        }, 3500);
     },
 
     _cacheHomePayload(payload, expireAt = Date.now() + HOME_PAGE_ASSET_TTL) {

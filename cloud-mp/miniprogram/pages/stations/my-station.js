@@ -45,6 +45,10 @@ function buildStationReceiveSnapshot(station = {}) {
     };
 }
 
+function getStationSubmitId(station = {}) {
+    return String(station.binding_station_id || station.id || station._id || station._legacy_id || '');
+}
+
 function procurementStatusMeta(status = '') {
     const map = {
         pending_approval: { text: '待审批', className: 'tag-warn' },
@@ -110,9 +114,10 @@ Page({
             };
             const firstStation = stations[0] || null;
             const nextForm = { ...this.data.procurementForm };
-            if (!nextForm.station_id && firstStation?.id) {
+            const firstStationSubmitId = firstStation ? getStationSubmitId(firstStation) : '';
+            if (!nextForm.station_id && firstStationSubmitId) {
                 const receiveSnapshot = buildStationReceiveSnapshot(firstStation);
-                nextForm.station_id = String(firstStation.id);
+                nextForm.station_id = firstStationSubmitId;
                 nextForm.station_name = firstStation.name || '';
                 Object.assign(nextForm, receiveSnapshot);
             }
@@ -233,7 +238,7 @@ Page({
             receive_address: ''
         };
         this.setData({
-            'procurementForm.station_id': selected ? String(selected.id || '') : '',
+            'procurementForm.station_id': selected ? getStationSubmitId(selected) : '',
             'procurementForm.station_name': selected?.name || '',
             'procurementForm.receive_contact_name': receiveSnapshot.receive_contact_name,
             'procurementForm.receive_contact_phone': receiveSnapshot.receive_contact_phone,
@@ -299,8 +304,8 @@ Page({
                 portal_password: portalPassword
             }, { showError: false });
             wx.showToast({ title: '已提交审批', icon: 'success' });
-            const firstStationId = this.data.scope?.stations?.[0]?.id || '';
-            const firstStation = this.data.scope?.stations?.find((item) => String(item.id) === String(firstStationId || form.station_id || '')) || null;
+            const firstStation = this.data.scope?.stations?.[0] || null;
+            const firstStationId = firstStation ? getStationSubmitId(firstStation) : '';
             const receiveSnapshot = buildStationReceiveSnapshot(firstStation || {});
             this.setData({
                 procurementForm: {
@@ -338,15 +343,16 @@ Page({
         const stations = Array.isArray(this.data.scope?.stations) ? this.data.scope.stations : [];
         if (!stations.length) return;
         if (stations.length === 1) {
-            wx.navigateTo({ url: `/pages/pickup/orders?station_id=${stations[0].id}` });
+            wx.navigateTo({ url: `/pages/pickup/orders?station_id=${getStationSubmitId(stations[0])}` });
             return;
         }
         wx.showActionSheet({
             itemList: stations.map((item) => item.name || '未命名门店'),
             success: (res) => {
                 const station = stations[res.tapIndex];
-                if (!station?.id) return;
-                wx.navigateTo({ url: `/pages/pickup/orders?station_id=${station.id}` });
+                const stationId = getStationSubmitId(station);
+                if (!stationId) return;
+                wx.navigateTo({ url: `/pages/pickup/orders?station_id=${stationId}` });
             }
         });
     },

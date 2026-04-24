@@ -1,6 +1,22 @@
 const { get, post } = require('../../utils/request');
 const { requireLogin } = require('../../utils/auth');
 
+function getStationSubmitId(station = {}) {
+    return String(station.binding_station_id || station.id || station._id || station._legacy_id || '');
+}
+
+function stationMatchesSelectedId(station = {}, selectedId = '') {
+    const target = String(selectedId || '');
+    if (!target) return false;
+    return [
+        station.binding_station_id,
+        station.id,
+        station._id,
+        station._legacy_id,
+        ...(Array.isArray(station.station_lookup_ids) ? station.station_lookup_ids : [])
+    ].some((value) => String(value || '') === target);
+}
+
 Page({
     data: {
         code: '',
@@ -31,10 +47,10 @@ Page({
             const res = await get('/stations/my-scope', {}, { showError: false });
             const scope = res.data || null;
             const stations = scope?.stations || [];
-            const matchedIndex = stations.findIndex((item) => String(item.id) === String(this.data.selectedStationId));
+            const matchedIndex = stations.findIndex((item) => stationMatchesSelectedId(item, this.data.selectedStationId));
             const nextStationId = matchedIndex >= 0
-                ? String(stations[matchedIndex].id)
-                : (stations.length === 1 ? String(stations[0].id) : '');
+                ? getStationSubmitId(stations[matchedIndex])
+                : (stations.length === 1 ? getStationSubmitId(stations[0]) : '');
             this.setData({
                 verifyScope: scope,
                 selectedStationId: nextStationId,
@@ -54,7 +70,7 @@ Page({
         const station = (this.data.verifyScope?.stations || [])[index];
         this.setData({
             selectedStationIndex: index,
-            selectedStationId: station ? String(station.id) : ''
+            selectedStationId: station ? getStationSubmitId(station) : ''
         });
     },
 
@@ -70,13 +86,13 @@ Page({
         const { verifyScope, selectedStationId } = this.data;
         if (!verifyScope?.has_verify_access) return null;
         if ((verifyScope.stations || []).length === 1) {
-            return verifyScope.stations[0].id;
+            return getStationSubmitId(verifyScope.stations[0]);
         }
         if (!selectedStationId) {
             wx.showToast({ title: '请选择当前核销门店', icon: 'none' });
             return null;
         }
-        return Number(selectedStationId);
+        return selectedStationId;
     },
 
     async onVerifyCode() {

@@ -84,6 +84,256 @@ function getAnyUser() {
     return users[0];
 }
 
+test('POST /admin/api/branch-agents/stations loads pickup stations before sync', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const originalReloadCollections = dataStore.reloadCollections?.bind(dataStore);
+    const originalGetCollection = dataStore.getCollection.bind(dataStore);
+    const originalSaveCollection = dataStore.saveCollection?.bind(dataStore);
+    let loadedStations = false;
+    let createdId = null;
+    const requestedCollections = [];
+
+    dataStore.reloadCollections = async (names = []) => {
+        const list = Array.isArray(names) ? names : [];
+        requestedCollections.push(...list);
+        if (list.includes('stations')) loadedStations = true;
+        if (originalReloadCollections) return originalReloadCollections(names);
+        return list.map((name) => originalGetCollection(name));
+    };
+    dataStore.getCollection = (name) => {
+        if (String(name) === 'stations') {
+            if (!loadedStations) {
+                const error = new Error('CloudBase 集合 stations 尚未完成加载，当前状态：not_loaded');
+                error.code = 'NOT_LOADED';
+                throw error;
+            }
+            return [];
+        }
+        return originalGetCollection(name);
+    };
+    dataStore.saveCollection = (name, rows) => {
+        if (String(name) === 'stations') return undefined;
+        return originalSaveCollection(name, rows);
+    };
+
+    try {
+        const response = await invoke('/admin/api/branch-agents/stations', {
+            method: 'POST',
+            admin,
+            body: {
+                name: '测试区域归属加载',
+                branch_type: 'district',
+                province: '江苏',
+                city: '苏州',
+                district: '虎丘',
+                claimant_id: 'test-claimant',
+                status: 'active'
+            }
+        });
+        assert.equal(response.statusCode, 200, response.body?.message || JSON.stringify(response.body));
+        assert.ok(requestedCollections.includes('stations'), 'expected route to load stations before sync');
+        createdId = response.body.data?.id;
+    } finally {
+        dataStore.reloadCollections = originalReloadCollections;
+        dataStore.getCollection = originalGetCollection;
+        dataStore.saveCollection = originalSaveCollection;
+        if (createdId != null && originalSaveCollection) {
+            const rows = originalGetCollection('branch_agent_stations')
+                .filter((row) => String(row.id || row._id) !== String(createdId));
+            originalSaveCollection('branch_agent_stations', rows);
+        }
+    }
+});
+
+test('DELETE /admin/api/branch-agents/stations removes region assignment and clears synced pickup binding', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const stationId = 'test-branch-delete-station';
+    const claimantId = 'test-branch-delete-user';
+    const cleanup = () => {
+        dataStore.saveCollection?.('branch_agent_stations', dataStore.getCollection('branch_agent_stations')
+            .filter((row) => String(row.id || row._id) !== stationId));
+        dataStore.saveCollection?.('stations', dataStore.getCollection('stations')
+            .filter((row) => String(row.id || row._id) !== stationId));
+    };
+
+    cleanup();
+    const branchRows = dataStore.getCollection('branch_agent_stations');
+    const pickupRows = dataStore.getCollection('stations');
+    branchRows.push({
+        _id: stationId,
+        id: stationId,
+        name: '待删除区域归属',
+        branch_type: 'district',
+        province: '江苏',
+        city: '苏州',
+        district: '虎丘',
+        claimant_id: claimantId,
+        status: 'active'
+    });
+    pickupRows.push({
+        _id: stationId,
+        id: stationId,
+        name: '同 ID 自提点',
+        branch_type: 'district',
+        claimant_id: claimantId,
+        region_name: '',
+        status: 'active'
+    });
+    dataStore.saveCollection?.('branch_agent_stations', branchRows);
+    dataStore.saveCollection?.('stations', pickupRows);
+
+    try {
+        const response = await invoke(`/admin/api/branch-agents/stations/${stationId}`, {
+            method: 'DELETE',
+            admin
+        });
+
+        assert.equal(response.statusCode, 200, response.body?.message || JSON.stringify(response.body));
+        assert.equal(response.body.data?.success, true);
+        assert.equal(
+            dataStore.getCollection('branch_agent_stations').some((row) => String(row.id || row._id) === stationId),
+            false
+        );
+        const pickup = dataStore.getCollection('stations').find((row) => String(row.id || row._id) === stationId);
+        assert.equal(pickup?.claimant_id, null);
+        assert.equal(pickup?.branch_type, null);
+        assert.equal(pickup?.status, 'active');
+    } finally {
+        cleanup();
+    }
+});
+
+test('POST /admin/api/commissions/repair-region-agent backfills missing region reward', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const tempPrefix = 'test-region-reward-backfill';
+    const claimantOpenid = `${tempPrefix}-openid`;
+    const orderNo = `${tempPrefix}-order`;
+    const cleanup = () => {
+        dataStore.saveCollection?.('users', dataStore.getCollection('users')
+            .filter((row) => String(row.openid || row.id || row._id) !== claimantOpenid));
+        dataStore.saveCollection?.('branch_agent_stations', dataStore.getCollection('branch_agent_stations')
+            .filter((row) => String(row.id || row._id) !== `${tempPrefix}-station`));
+        dataStore.saveCollection?.('orders', dataStore.getCollection('orders')
+            .filter((row) => String(row.order_no || row.id || row._id) !== orderNo));
+        dataStore.saveCollection?.('commissions', dataStore.getCollection('commissions')
+            .filter((row) => String(row.order_no || '') !== orderNo));
+    };
+    const originalPolicy = dataStore.getSingleton?.('branch-agent-policy', null);
+
+    cleanup();
+    dataStore.saveSingleton?.('branch-agent-policy', {
+        enabled: true,
+        region_reward_tiers: [{ threshold: 0, rate: 0.01, label: '测试1%' }]
+    });
+    dataStore.saveCollection?.('users', dataStore.getCollection('users').concat({
+        _id: `${tempPrefix}-user`,
+        id: `${tempPrefix}-user`,
+        openid: claimantOpenid,
+        nickname: '区域奖励测试用户',
+        role_level: 5,
+        status: 1
+    }));
+    dataStore.saveCollection?.('branch_agent_stations', dataStore.getCollection('branch_agent_stations').concat({
+        _id: `${tempPrefix}-station`,
+        id: `${tempPrefix}-station`,
+        name: '区域奖励测试区',
+        branch_type: 'district',
+        province: '测试甲省',
+        city: '测试乙市',
+        district: '测试丙区',
+        claimant_id: claimantOpenid,
+        status: 'active',
+        created_at: '2026-04-24T00:00:00.000Z'
+    }));
+    dataStore.saveCollection?.('orders', dataStore.getCollection('orders').concat({
+        _id: `${tempPrefix}-order-id`,
+        id: `${tempPrefix}-order-id`,
+        order_no: orderNo,
+        openid: claimantOpenid,
+        status: 'paid',
+        pay_amount: 100,
+        address_snapshot: {
+            province: '测试甲',
+            city: '测试乙',
+            district: '测试丙'
+        },
+        created_at: '2026-04-24T00:00:00.000Z'
+    }));
+
+    try {
+        const response = await invoke('/admin/api/commissions/repair-region-agent', {
+            method: 'POST',
+            admin,
+            body: { order_no: orderNo }
+        });
+        assert.equal(response.statusCode, 200, response.body?.message || JSON.stringify(response.body));
+        assert.equal(response.body.data?.created, 1);
+        const commission = dataStore.getCollection('commissions').find((row) => String(row.order_no) === orderNo && row.type === 'region_agent');
+        assert.ok(commission, 'expected region_agent commission to be created');
+        assert.equal(commission.openid, claimantOpenid);
+        assert.equal(Number(commission.amount), 1);
+        assert.equal(commission.status, 'pending_approval');
+    } finally {
+        cleanup();
+        if (originalPolicy) {
+            dataStore.saveSingleton?.('branch-agent-policy', originalPolicy);
+        }
+    }
+});
+
+test('GET /admin/api/orders hides cancelled orders unless explicitly included', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const orders = app.locals.dataStore.getCollection('orders');
+    const tempOrder = {
+        _id: 'test-order-cancelled-hidden',
+        id: 999090,
+        order_no: 'TEST-CANCELLED-HIDDEN',
+        status: 'cancelled',
+        is_test_order: false,
+        order_visibility: 'visible',
+        openid: 'test-openid',
+        created_at: '2026-04-20T00:00:00.000Z',
+        updated_at: '2026-04-20T00:00:00.000Z'
+    };
+    orders.push(tempOrder);
+    app.locals.dataStore.saveCollection?.('orders', orders);
+
+    try {
+        const hiddenResponse = await invoke('/admin/api/orders', {
+            admin,
+            query: {
+                search_field: 'order_no',
+                search_value: tempOrder.order_no
+            }
+        });
+        assert.equal(hiddenResponse.statusCode, 200);
+        assert.equal(hiddenResponse.body.data?.list?.length, 0);
+
+        const includedResponse = await invoke('/admin/api/orders', {
+            admin,
+            query: {
+                search_field: 'order_no',
+                search_value: tempOrder.order_no,
+                include_cancelled: '1'
+            }
+        });
+        assert.equal(includedResponse.statusCode, 200);
+        assert.equal(includedResponse.body.data?.list?.length, 1);
+        assert.equal(includedResponse.body.data.list[0].order_no, tempOrder.order_no);
+    } finally {
+        const nextOrders = app.locals.dataStore.getCollection('orders')
+            .filter((row) => String(row.id || row._id) !== String(tempOrder.id));
+        app.locals.dataStore.saveCollection?.('orders', nextOrders);
+    }
+});
+
 test('GET /admin/api/finance/agent-performance rejects invalid date', async () => {
     const admin = getEnabledAdmin();
     const response = await invoke('/admin/api/finance/agent-performance', {

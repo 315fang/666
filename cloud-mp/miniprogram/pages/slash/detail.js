@@ -120,6 +120,9 @@ Page({
                     d._remainMins = 0;
                     d._remainSecs = 0;
                 }
+                if (d._expired && d.status !== 'purchased') {
+                    d.status = 'expired';
+                }
 
                 // 提取角色标记到顶层（供底部按钮判断用）
                 const isOwner = !!d.is_owner;

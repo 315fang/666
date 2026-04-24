@@ -126,7 +126,7 @@
           >
             <!-- 正方形缩略图 -->
             <view class="product-img-wrap">
-              <image class="product-img" src="{{prod.image}}" mode="aspectFill" lazy-load binderror="onProductImageError" data-category-id="{{item.id}}" data-id="{{prod.id}}"></image>
+              <image class="product-img" src="{{prod.display_image || prod.image || prod.image_url || prod.image_ref}}" mode="aspectFill" lazy-load binderror="onProductImageError" data-category-id="{{item.id}}" data-id="{{prod.id}}"></image>
             </view>
             <!-- 中间信息 -->
             <view class="product-info">

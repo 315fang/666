@@ -2362,5 +2362,39 @@
     },
     "status": "success",
     "created_at": "2026-04-24T06:31:24.086Z"
+  },
+  {
+    "_id": "179",
+    "id": 179,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.repair_region_agent",
+    "target": "commissions",
+    "detail": {
+      "order_lookup": "debug-region-reward-backfill-order",
+      "scanned": 1,
+      "created": 0,
+      "existing": 0,
+      "skipped": 1
+    },
+    "status": "success",
+    "created_at": "2026-04-24T14:55:12.507Z"
+  },
+  {
+    "_id": "180",
+    "id": 180,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.repair_region_agent",
+    "target": "commissions",
+    "detail": {
+      "order_lookup": "debug-region-reward-backfill2-order",
+      "scanned": 1,
+      "created": 0,
+      "existing": 0,
+      "skipped": 1
+    },
+    "status": "success",
+    "created_at": "2026-04-24T14:57:30.267Z"
   }
 ]

@@ -11,11 +11,12 @@ const navigator = require('../../utils/navigator');
 const { syncCustomTabBar } = require('../../utils/miniProgramConfig');
 const { syncPageTabBar, restorePageTabBar } = require('../../utils/tabBarHelper');
 const {
-    loadCategoryProductsBatch,
-    queueRemainingCategoryLoads,
+    loadAllCategoryProducts,
+    prefetchCategoryProductFirstPage,
     ensureCategoryProductsLoaded,
     refreshPricePreviewHints
 } = require('./categoryProductLoader');
+const { imageLazyLoader } = require('../../utils/imageLazyLoader');
 const { loadPricePreviewData } = require('./categoryPricePreview');
 const {
     updateCartData,
@@ -30,7 +31,6 @@ const {
     changeCartItemQty
 } = require('./categoryCart');
 
-const CATEGORY_INITIAL_BATCH_SIZE = 2;
 const CATEGORY_PRICE_PREVIEW_TTL = 60 * 1000;
 const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
 
@@ -100,6 +100,7 @@ Page({
             statusBarHeight: windowInfo.statusBarHeight || 20,
             headerTopPadding
         });
+        this._categoryFirstProductPagePromise = prefetchCategoryProductFirstPage(false).catch(() => null);
         this.loadCategoryBanners();
         this.loadProductBundles();
         this.loadSidebarCategories();
@@ -239,12 +240,9 @@ Page({
 
     _buildRenderedCategories(categories, loadedCategories, currentCategory) {
         const rows = Array.isArray(categories) ? categories : [];
-        const loaded = loadedCategories || {};
-        const current = String(currentCategory || '').trim();
         return rows.filter((item) => {
             const id = String(item && item.id != null ? item.id : item && item._id != null ? item._id : '').trim();
-            if (!id) return false;
-            return id === current || !!loaded[id];
+            return !!id;
         });
     },
 
@@ -356,26 +354,26 @@ Page({
             loadedCategories: forceRefresh ? {} : (this.data.loadedCategories || {})
         }, resolve));
 
-        const orderedIds = categories.map(cat => cat.id);
-        const firstBatchIds = [];
+        const orderedIds = categories
+            .map(cat => cat && (cat.id || cat._id))
+            .filter(Boolean);
         const preferredId = initialCategoryId || this.data.currentCategory || orderedIds[0];
 
-        if (preferredId) {
-            firstBatchIds.push(preferredId);
-        }
-
-        orderedIds.forEach((categoryId) => {
-            if (firstBatchIds.length < CATEGORY_INITIAL_BATCH_SIZE && !firstBatchIds.includes(categoryId)) {
-                firstBatchIds.push(categoryId);
-            }
-        });
-
         try {
-            await this._loadCategoryProductsBatch(firstBatchIds, loadToken, { setLoadingFalse: true });
-            const nextCategoryId = this._getNextCategoryId(preferredId);
-            if (nextCategoryId && !firstBatchIds.includes(nextCategoryId)) {
-                this._queueRemainingCategoryLoads([nextCategoryId], loadToken);
+            const firstPagePromise = forceRefresh ? null : this._categoryFirstProductPagePromise;
+            this._categoryFirstProductPagePromise = null;
+            await loadAllCategoryProducts(this, orderedIds, loadToken, {
+                forceRefresh,
+                setLoadingFalse: true,
+                firstPagePromise
+            });
+            if (preferredId && this.data.currentCategory !== preferredId) {
+                this.setData({
+                    currentCategory: preferredId,
+                    ...this._buildRenderedSectionState({ currentCategory: preferredId })
+                });
             }
+            this._preloadInitialProductImages();
         } catch (err) {
             console.error('加载商品失败:', err);
             if (this._categoryLoadToken === loadToken) {
@@ -384,22 +382,9 @@ Page({
         }
     },
 
-    async _loadCategoryProductsBatch(categoryIds, loadToken, options = {}) {
-        return loadCategoryProductsBatch(this, categoryIds, loadToken, options);
-    },
-
-    async _fetchCategoryProducts(categoryId) {
-        return loadCategoryProductsBatch(this, [categoryId], this._categoryLoadToken || Date.now())
-            .then((results) => Array.isArray(results) && results[0] ? results[0] : { catId: categoryId, products: [] });
-    },
-
     _mapProductsForCategory(list) {
         const { mapProductsForCategory } = require('./categoryProductLoader');
         return mapProductsForCategory(this, list);
-    },
-
-    _queueRemainingCategoryLoads(categoryIds, loadToken) {
-        return queueRemainingCategoryLoads(this, categoryIds, loadToken);
     },
 
     ensureCategoryProductsLoaded(categoryId) {
@@ -415,6 +400,32 @@ Page({
 
     _clearCategoryTimers() {
         clearTimeout(this._heightCalcTimer);
+    },
+
+    _preloadInitialProductImages() {
+        const allProducts = this.data.allProducts || {};
+        const currentCategory = this.data.currentCategory;
+        const images = [];
+        const addImages = (list = [], limit = 8) => {
+            (Array.isArray(list) ? list : []).slice(0, limit).forEach((item) => {
+                const image = String(item && item.image || '').trim();
+                if (image && image !== PRODUCT_PLACEHOLDER && !image.startsWith('/assets/')) {
+                    images.push(image);
+                }
+            });
+        };
+
+        if (currentCategory && allProducts[currentCategory]) {
+            addImages(allProducts[currentCategory], 10);
+        }
+        Object.keys(allProducts).forEach((categoryId) => {
+            if (images.length >= 14 || categoryId === currentCategory) return;
+            addImages(allProducts[categoryId], 2);
+        });
+
+        const uniqueImages = [...new Set(images)].slice(0, 14);
+        if (!uniqueImages.length) return;
+        imageLazyLoader.preloadImages(uniqueImages, 3).catch(() => {});
     },
 
     // ===== 侧边栏点击 =====
@@ -530,6 +541,9 @@ Page({
                 changed = true;
                 return {
                     ...product,
+                    display_image: '',
+                    image_url: '',
+                    image_ref: '',
                     image: PRODUCT_PLACEHOLDER
                 };
             });
@@ -541,7 +555,7 @@ Page({
         if (categoryId && Array.isArray(visibleProducts[categoryId])) {
             visibleProducts[categoryId] = visibleProducts[categoryId].map((product) => (
                 String(product?.id) === String(productId)
-                    ? { ...product, image: PRODUCT_PLACEHOLDER }
+                    ? { ...product, display_image: '', image_url: '', image_ref: '', image: PRODUCT_PLACEHOLDER }
                     : product
             ));
         }

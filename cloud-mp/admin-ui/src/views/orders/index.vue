@@ -113,6 +113,7 @@
                 <el-checkbox v-model="searchForm.include_suborders">含拆分子单</el-checkbox>
                 <el-checkbox v-model="searchForm.include_test">含测试订单</el-checkbox>
                 <el-checkbox v-model="searchForm.include_hidden">含清理箱订单</el-checkbox>
+                <el-checkbox v-model="searchForm.include_cancelled">显示已取消订单</el-checkbox>
                 <el-button type="primary" @click="handleSearch">查询</el-button>
                 <el-button @click="handleReset">清空条件</el-button>
                 <el-button @click="handleExport" :loading="exporting">导出 JSON</el-button>
@@ -308,7 +309,8 @@ const searchForm = reactive({
   delivery_type: '',
   include_suborders: false,
   include_test: false,
-  include_hidden: false
+  include_hidden: false,
+  include_cancelled: false
 })
 const dateRange = ref([])
 
@@ -325,6 +327,7 @@ function applyRouteQueryToFilters(query = {}) {
   searchForm.include_suborders = ['1', 'true', 'yes'].includes(String(query?.include_suborders || '').toLowerCase())
   searchForm.include_test = ['1', 'true', 'yes'].includes(String(query?.include_test || '').toLowerCase())
   searchForm.include_hidden = ['1', 'true', 'yes'].includes(String(query?.include_hidden || '').toLowerCase())
+  searchForm.include_cancelled = ['1', 'true', 'yes'].includes(String(query?.include_cancelled || '').toLowerCase())
   if (query?.start_date && query?.end_date) {
     dateRange.value = [String(query.start_date), String(query.end_date)]
   } else {
@@ -450,6 +453,7 @@ const buildListQueryParams = (forExport = false) => {
   if (searchForm.include_suborders) params.include_suborders = '1'
   if (searchForm.include_test) params.include_test = '1'
   if (searchForm.include_hidden) params.include_hidden = '1'
+  if (searchForm.include_cancelled || searchForm.status === 'cancelled') params.include_cancelled = '1'
   return params
 }
 
@@ -630,6 +634,7 @@ const handleReset = () => {
   searchForm.include_suborders = false
   searchForm.include_test = false
   searchForm.include_hidden = false
+  searchForm.include_cancelled = false
   dateRange.value = []
   handleSearch()
 }

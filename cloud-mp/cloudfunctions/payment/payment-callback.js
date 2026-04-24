@@ -76,6 +76,24 @@ const DEFAULT_COST_SPLIT = {
     profit_pct: 30
 };
 
+const DEFAULT_BRANCH_AGENT_POLICY = {
+    enabled: true,
+    region_reward_tiers: [
+        { threshold: 100000, rate: 0.01, label: '10万' },
+        { threshold: 300000, rate: 0.02, label: '30万' },
+        { threshold: 1000000, rate: 0.03, label: '100万' }
+    ]
+};
+
+const BRANCH_REGION_ELIGIBLE_STATUSES = [
+    'paid',
+    'pickup_pending',
+    'agent_confirmed',
+    'shipping_requested',
+    'shipped',
+    'completed'
+];
+
 const DEFAULT_PEER_BONUS_CONFIG = {
     enabled: true,
     default_version: 'team',
@@ -649,6 +667,216 @@ function getOrderTotalAmount(order = {}) {
     return resolveOrderPayAmount(order, 0);
 }
 
+function normalizeAdministrativeRegionText(value) {
+    let text = pickString(value).replace(/\s+/g, '').trim().toLowerCase();
+    if (!text) return '';
+    const suffixes = ['特别行政区', '维吾尔自治区', '壮族自治区', '回族自治区', '自治区', '自治州', '地区', '盟', '省', '市', '区', '县'];
+    let changed = true;
+    while (changed) {
+        changed = false;
+        for (const suffix of suffixes) {
+            if (text.length > suffix.length && text.endsWith(suffix)) {
+                text = text.slice(0, -suffix.length);
+                changed = true;
+                break;
+            }
+        }
+    }
+    return text;
+}
+
+function normalizeCityText(city, province) {
+    const normalizedCity = normalizeAdministrativeRegionText(city);
+    if (normalizedCity && !['市辖', '县辖', '省直辖', '自治区直辖'].includes(normalizedCity)) {
+        return normalizedCity;
+    }
+    return normalizeAdministrativeRegionText(province);
+}
+
+function normalizeBranchScopeLevel(value) {
+    const raw = pickString(value).trim().toLowerCase();
+    if (raw === 'area') return 'district';
+    if (['province', 'city', 'district', 'school'].includes(raw)) return raw;
+    return 'district';
+}
+
+function branchScopePriority(scopeLevel) {
+    return ({
+        district: 3,
+        city: 2,
+        province: 1
+    }[normalizeBranchScopeLevel(scopeLevel)] || 0);
+}
+
+function getOrderRegionParts(order = {}) {
+    const addr = order.address_snapshot || order.address || order.receiver_address || {};
+    const province = normalizeAdministrativeRegionText(addr.province || order.province);
+    return {
+        province,
+        city: normalizeCityText(addr.city || order.city, addr.province || order.province),
+        district: normalizeAdministrativeRegionText(addr.district || order.district)
+    };
+}
+
+function branchAssignmentMatchesOrder(station = {}, order = {}) {
+    const scopeLevel = normalizeBranchScopeLevel(station.branch_type);
+    if (!['province', 'city', 'district'].includes(scopeLevel)) return false;
+    const orderRegion = getOrderRegionParts(order);
+    if (!orderRegion.province) return false;
+    const stationProvince = normalizeAdministrativeRegionText(station.province);
+    const stationCity = normalizeCityText(station.city, station.province);
+    const stationDistrict = normalizeAdministrativeRegionText(station.district);
+    if (scopeLevel === 'province') {
+        return !!stationProvince && stationProvince === orderRegion.province;
+    }
+    if (scopeLevel === 'city') {
+        return !!stationProvince && !!stationCity
+            && stationProvince === orderRegion.province
+            && stationCity === orderRegion.city;
+    }
+    return !!stationProvince && !!stationCity && !!stationDistrict
+        && stationProvince === orderRegion.province
+        && stationCity === orderRegion.city
+        && stationDistrict === orderRegion.district;
+}
+
+function normalizeBranchAgentPolicy(rawPolicy = {}) {
+    const tiers = Array.isArray(rawPolicy.region_reward_tiers) && rawPolicy.region_reward_tiers.length
+        ? rawPolicy.region_reward_tiers
+        : DEFAULT_BRANCH_AGENT_POLICY.region_reward_tiers;
+    return {
+        ...DEFAULT_BRANCH_AGENT_POLICY,
+        ...rawPolicy,
+        enabled: rawPolicy.enabled === undefined ? DEFAULT_BRANCH_AGENT_POLICY.enabled : rawPolicy.enabled !== false,
+        region_reward_tiers: tiers.map((tier) => ({
+            threshold: Math.max(0, toNumber(tier.threshold, 0)),
+            rate: Math.max(0, toNumber(tier.rate, 0)),
+            label: pickString(tier.label)
+        })).sort((left, right) => left.threshold - right.threshold)
+    };
+}
+
+async function fetchCollectionRows(collectionName, whereClause = null, maxRows = 5000) {
+    const rows = [];
+    const pageSize = 100;
+    let offset = 0;
+    while (rows.length < maxRows) {
+        let query = db.collection(collectionName);
+        if (whereClause) query = query.where(whereClause);
+        const response = await query.skip(offset).limit(Math.min(pageSize, maxRows - rows.length)).get().catch(() => ({ data: [] }));
+        const batch = Array.isArray(response.data) ? response.data : [];
+        rows.push(...batch);
+        if (batch.length < pageSize) break;
+        offset += batch.length;
+    }
+    return rows;
+}
+
+async function loadBranchAgentPolicy() {
+    const row = await getConfigByKeys(['branch-agent-policy']);
+    return normalizeBranchAgentPolicy(parseConfigValue(row, {}));
+}
+
+async function loadActiveBranchAgentStations() {
+    const rows = await fetchCollectionRows('branch_agent_stations', null, 1000);
+    return rows
+        .filter((row) => pickString(row.status || 'active') === 'active')
+        .map((row) => ({
+            ...row,
+            branch_type: normalizeBranchScopeLevel(row.branch_type || row.type || 'district')
+        }))
+        .sort((left, right) => {
+            const scopeDiff = branchScopePriority(right.branch_type) - branchScopePriority(left.branch_type);
+            if (scopeDiff !== 0) return scopeDiff;
+            return parseTimestamp(right.updated_at || right.created_at) - parseTimestamp(left.updated_at || left.created_at);
+        });
+}
+
+function findBranchAgentStationForOrder(order = {}, stations = []) {
+    return stations.find((station) => branchAssignmentMatchesOrder(station, order)) || null;
+}
+
+function branchStationId(station = {}) {
+    return station.id || station._legacy_id || station._id || null;
+}
+
+function isVirtualB3SettlementUser(user = {}) {
+    return user.is_virtual_settlement === true
+        || pickString(user.virtual_settlement_type).toLowerCase() === 'b3_region';
+}
+
+function isBranchRegionEligibleOrder(order = {}) {
+    if (isExchangeOrder(order)) return false;
+    const status = pickString(order.status).toLowerCase();
+    return BRANCH_REGION_ELIGIBLE_STATUSES.includes(status);
+}
+
+async function calculateBranchStationCumulativeAmount(station, stations) {
+    const stationId = branchStationId(station);
+    const rows = await fetchCollectionRows('orders', { status: _.in(BRANCH_REGION_ELIGIBLE_STATUSES) }, 5000);
+    return roundMoney(rows.reduce((sum, row) => {
+        if (!isBranchRegionEligibleOrder(row)) return sum;
+        const matched = findBranchAgentStationForOrder(row, stations);
+        if (!matched || String(branchStationId(matched)) !== String(stationId)) return sum;
+        return sum + toNumber(row.pay_amount ?? row.actual_price ?? row.total_amount, 0);
+    }, 0));
+}
+
+async function ensureBranchAgentRegionCommissionForOrder(orderId, order = {}, options = {}) {
+    if (isExchangeOrder(order)) return { skipped: true, reason: 'exchange_order' };
+    const payAmount = roundMoney(options.orderPayAmount ?? getOrderTotalAmount(order));
+    if (payAmount <= 0) return { skipped: true, reason: 'non_positive_amount' };
+    const [policy, stations] = await Promise.all([
+        loadBranchAgentPolicy(),
+        loadActiveBranchAgentStations()
+    ]);
+    if (!policy.enabled) return { skipped: true, reason: 'policy_disabled' };
+    const station = findBranchAgentStationForOrder(order, stations);
+    if (!station) return { skipped: true, reason: 'no_station_match' };
+    const claimantId = station.claimant_id || station.openid || station.user_id;
+    const claimant = await findUserByAny(claimantId);
+    if (!claimant?.openid) return { skipped: true, reason: 'no_claimant' };
+    const isVirtualB3 = isVirtualB3SettlementUser(claimant);
+    const type = isVirtualB3 ? 'region_b3_virtual' : 'region_agent';
+    const existing = await db.collection('commissions')
+        .where({ order_id: orderId, openid: claimant.openid, type })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    if (existing.data && existing.data[0]) return { skipped: true, existing: true, id: existing.data[0]._id };
+
+    const cumulativeAmount = await calculateBranchStationCumulativeAmount(station, stations);
+    const rate = (policy.region_reward_tiers || []).reduce((current, tier) => {
+        return cumulativeAmount >= toNumber(tier.threshold, 0) ? toNumber(tier.rate, current) : current;
+    }, 0);
+    const amount = roundMoney(payAmount * rate);
+    if (amount <= 0) return { skipped: true, reason: 'zero_amount', cumulative_amount: cumulativeAmount, rate };
+
+    const result = await db.collection('commissions').add({
+        data: {
+            openid: claimant.openid,
+            user_id: claimant.id || claimant._legacy_id || claimant._id || claimant.openid,
+            from_openid: order.openid || order.buyer_id || '',
+            order_id: orderId,
+            order_no: order.order_no || '',
+            amount,
+            level: isVirtualB3 ? 5 : toNumber(claimant.role_level ?? claimant.distributor_level, 0),
+            status: 'pending_approval',
+            type,
+            branch_station_id: branchStationId(station),
+            branch_type: normalizeBranchScopeLevel(station.branch_type),
+            claimant_virtual_settlement: isVirtualB3,
+            claimant_virtual_settlement_type: pickString(claimant.virtual_settlement_type),
+            region_cumulative_amount: cumulativeAmount,
+            region_reward_rate: rate,
+            description: `${isVirtualB3 ? '虚拟B3区域佣金' : '区域奖励'}：${station.name || station.region_name || '区域'}（累计${cumulativeAmount.toFixed(2)}元）`,
+            created_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    });
+    return { created: 1, id: result._id, amount, rate, cumulative_amount: cumulativeAmount, type };
+}
+
 function buildPaidOrderPatch(paymentMethod, payAmount, extra = {}) {
     return buildPaymentWritePatch(paymentMethod, payAmount, extra);
 }
@@ -1060,12 +1288,21 @@ async function ensureCommissionsCreated(orderId, order) {
         return { skipped: true, reason: 'exchange_order', created: 0 };
     }
     if (order.commissions_created_at) return { skipped: true };
+    const orderPayAmount = getOrderTotalAmount(order);
+    const commissionBase = orderPayAmount;
+    const branchRegion = commissionBase > 0
+        ? await ensureBranchAgentRegionCommissionForOrder(orderId, order, { orderPayAmount })
+            .catch((err) => {
+                console.error('[PaymentCallback] 区域代理佣金创建失败:', err.message);
+                return { error: err.message, created: 0 };
+            })
+        : { skipped: true, reason: 'non_positive_amount' };
     const buyer = await findUserByAny(order.openid || order.buyer_id || order.user_id);
     if (!buyer) {
         await db.collection('orders').doc(orderId).update({
             data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
         });
-        return { created: 0 };
+        return { created: toNumber(branchRegion.created, 0), branch_region: branchRegion };
     }
 
     const parent = await findUserByAny(order.direct_referrer_openid || getUserReferrer(buyer));
@@ -1086,13 +1323,11 @@ async function ensureCommissionsCreated(orderId, order) {
     const items = toArray(order.items);
 
     // 佣金基数 = 实付金额（pay_amount 已扣除积分抵扣和优惠券，无需再减 points_discount）
-    const orderPayAmount = getOrderTotalAmount(order);
-    const commissionBase = orderPayAmount;
     if (commissionBase <= 0) {
         await db.collection('orders').doc(orderId).update({
             data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
         });
-        return { created: 0, reason: 'all_points_payment' };
+        return { created: 0, reason: 'all_points_payment', branch_region: branchRegion };
     }
 
     if (isAgentSelfPurchase) {
@@ -1130,9 +1365,10 @@ async function ensureCommissionsCreated(orderId, order) {
             data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
         });
         return {
-            created: selfCommissionAmount > 0 ? 1 : 0,
+            created: (selfCommissionAmount > 0 ? 1 : 0) + toNumber(branchRegion.created, 0),
             commission_base: orderPayAmount,
-            mode: 'self_purchase'
+            mode: 'self_purchase',
+            branch_region: branchRegion
         };
     }
 
@@ -1140,7 +1376,7 @@ async function ensureCommissionsCreated(orderId, order) {
         await db.collection('orders').doc(orderId).update({
             data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
         });
-        return { created: 0 };
+        return { created: toNumber(branchRegion.created, 0), branch_region: branchRegion };
     }
 
     const itemBaseTotal = items.reduce((sum, item) => {
@@ -1222,7 +1458,7 @@ async function ensureCommissionsCreated(orderId, order) {
         }
     }
 
-    let created = 0;
+    let created = toNumber(branchRegion.created, 0);
     for (const commission of totals.values()) {
         if (commission.amount <= 0) continue;
         const existing = await db.collection('commissions')
@@ -1251,7 +1487,7 @@ async function ensureCommissionsCreated(orderId, order) {
     await db.collection('orders').doc(orderId).update({
         data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
     });
-    return { created, commission_base: commissionBase };
+    return { created, commission_base: commissionBase, branch_region: branchRegion };
 }
 
 function isGroupOrder(order = {}) {
@@ -1284,20 +1520,45 @@ async function promoteGroupOrdersToPaid(groupOrder) {
     if (!groupOrder) return;
     const groupNo = groupOrder.group_no;
     const activityId = groupOrder.activity_id || groupOrder.legacy_activity_id || '';
+    const resolveCompletedGroupOrderStatus = (order = {}) => (
+        pickString(order.delivery_type).toLowerCase() === 'pickup' ? 'pickup_pending' : 'paid'
+    );
     try {
         // 通过 group_no 查找关联订单
         if (groupNo) {
-            await db.collection('orders')
+            const pendingRes = await db.collection('orders')
                 .where({ group_no: groupNo, status: 'pending_group' })
-                .update({ data: { status: 'paid', group_completed_at: db.serverDate(), updated_at: db.serverDate() } })
-                .catch(() => {});
+                .limit(100)
+                .get()
+                .catch(() => ({ data: [] }));
+            for (const order of pendingRes.data || []) {
+                await db.collection('orders').doc(String(order._id))
+                    .update({
+                        data: {
+                            status: resolveCompletedGroupOrderStatus(order),
+                            group_completed_at: db.serverDate(),
+                            updated_at: db.serverDate()
+                        }
+                    })
+                    .catch(() => {});
+            }
         }
         // 通过 members 列表精确更新（防止误更新同活动其他团的订单）
         const members = Array.isArray(groupOrder.members) ? groupOrder.members : [];
         for (const m of members) {
             if (m.order_id) {
+                const orderDoc = await db.collection('orders').doc(String(m.order_id)).get().catch(() => ({ data: null }));
+                const order = orderDoc.data || {};
+                if (order.status && order.status !== 'pending_group') continue;
                 await db.collection('orders').doc(String(m.order_id))
-                    .update({ data: { status: 'paid', group_no: groupNo, group_completed_at: db.serverDate(), updated_at: db.serverDate() } })
+                    .update({
+                        data: {
+                            status: resolveCompletedGroupOrderStatus(order),
+                            group_no: groupNo,
+                            group_completed_at: db.serverDate(),
+                            updated_at: db.serverDate()
+                        }
+                    })
                     .catch(() => {});
             }
         }

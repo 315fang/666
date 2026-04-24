@@ -306,10 +306,7 @@
         src="{{homeConfigs.police_registration_icon || '/assets/images/police-badge.jpg'}}"
         mode="aspectFit"
       ></image>
-      <view class="home-compliance-copy">
-        <text class="home-compliance-label">{{homeConfigs.police_registration_title || '公安备案'}}</text>
-        <text class="home-compliance-text">{{homeConfigs.police_registration_number || '苏公网安备32050802012518号'}}</text>
-      </view>
+      <text class="home-compliance-text">{{homeConfigs.police_registration_number || '苏公网安备32050802012518号'}}</text>
     </view>
   </view>
 

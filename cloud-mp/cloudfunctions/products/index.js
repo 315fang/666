@@ -41,6 +41,19 @@ function isCloudFileId(value) {
     return /^cloud:\/\//i.test(pickString(value));
 }
 
+function isTruthyFlag(value, fallback = false) {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (value === true || value === 1) return true;
+    const text = String(value).trim().toLowerCase();
+    if (['1', 'true', 'yes', 'y', 'on'].includes(text)) return true;
+    if (['0', 'false', 'no', 'n', 'off'].includes(text)) return false;
+    return fallback;
+}
+
+function isFalsyFlag(value, fallback = false) {
+    return !isTruthyFlag(value, !fallback);
+}
+
 function parseAssetArray(value) {
     if (Array.isArray(value)) return value.filter((item) => item !== null && item !== undefined && item !== '');
     if (!hasValue(value)) return [];
@@ -241,11 +254,12 @@ async function queryActiveProductsPage(params = {}) {
     const sortField = sort === 'hot' || sort === 'sales' ? 'sales_count' : 'manual_weight';
     const categoryId = params.category_id ? String(params.category_id) : '';
     const categoryCandidates = buildCategoryIdCandidates(categoryId);
-    const countQuery = resolveActiveProductQuery(categoryId);
+    const includeTotal = params.includeTotal !== false;
+    const countQuery = includeTotal ? resolveActiveProductQuery(categoryId) : null;
     const listQuery = resolveActiveProductQuery(categoryId);
 
     try {
-        const countRes = await countQuery.count().catch(() => ({ total: 0 }));
+        const countRes = includeTotal ? await countQuery.count().catch(() => ({ total: 0 })) : { total: undefined };
         const listRes = await listQuery
             .orderBy(sortField, 'desc')
             .skip(start)
@@ -255,7 +269,8 @@ async function queryActiveProductsPage(params = {}) {
 
         return {
             list: listRes.data || [],
-            total: toNumber(countRes.total, 0),
+            total: includeTotal ? toNumber(countRes.total, 0) : undefined,
+            hasTotal: includeTotal,
             page,
             limit: pageSize
         };
@@ -269,13 +284,14 @@ async function queryActiveProductsPage(params = {}) {
             );
             return {
                 list: filteredRows.slice(start, start + pageSize),
-                total: filteredRows.length,
+                total: includeTotal ? filteredRows.length : undefined,
+                hasTotal: includeTotal,
                 page,
                 limit: pageSize
             };
         } catch (fallbackErr) {
             console.error('[products] queryActiveProductsPage 回退失败:', fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr);
-            return { list: [], total: 0, page, limit: pageSize };
+            return { list: [], total: includeTotal ? 0 : undefined, hasTotal: includeTotal, page, limit: pageSize };
         }
     }
 }
@@ -414,36 +430,88 @@ function formatProduct(p, resolvedMap = new Map()) {
     };
 }
 
+function collectProductCardAssetFileIds(product = {}) {
+    const primaryRef = resolvePrimaryAsset(product, new Map(), { preferCloudId: true });
+    return isCloudFileId(primaryRef) ? [primaryRef] : [];
+}
+
+function formatProductCard(product = {}, resolvedMap = new Map()) {
+    const price = resolveProductPrice(product);
+    const originalPrice = resolveProductOriginalPrice(product, price);
+    const imageRef = resolvePrimaryAsset(product, resolvedMap, { preferCloudId: true }) || '';
+    const displayImage = resolvePrimaryAsset(product, resolvedMap) || imageRef;
+    const defaultSpecText = pickString(
+        product.default_spec_text
+        || product.defaultSpecText
+        || product.spec_text
+        || product.specSummary
+        || product.spec_summary
+    );
+
+    return {
+        id: product.id || product._id,
+        _id: product._id,
+        _legacy_id: product._legacy_id,
+        category_id: product.category_id,
+        name: pickString(product.name),
+        price,
+        retail_price: price,
+        market_price: originalPrice,
+        stock: toNumber(product.stock, 0),
+        sales_count: toNumber(product.sales_count || product.purchase_count, 0),
+        purchase_count: toNumber(product.purchase_count || product.sales_count, 0),
+        product_tag: product.product_tag || product.tag || product.badge || '',
+        default_spec_text: defaultSpecText,
+        specSummary: pickString(product.specSummary || product.spec_summary || defaultSpecText),
+        display_image: displayImage,
+        image_ref: imageRef,
+        image_url: displayImage,
+        preview_images: displayImage ? [displayImage] : []
+    };
+}
+
 // 主处理函数
 const handleAction = {
     'list': asyncHandler(async (params) => {
-        const { list: rawList, total, page, limit } = await queryActiveProductsPage(params);
+        const view = String(params.view || '').trim().toLowerCase();
+        const isCardView = view === 'card';
+        const includeSkus = !isCardView && !isFalsyFlag(params.include_skus, false);
+        const includeTotal = isTruthyFlag(params.include_total, true);
+        const { list: rawList, total, hasTotal, page, limit } = await queryActiveProductsPage({
+            ...params,
+            includeTotal
+        });
         let list = rawList.slice();
 
         // 为列表商品按 product_id 查询 SKU（仅查询当前页的商品，避免拉全表）
         let skuList = [];
-        try {
-            const productIds = list.map((p) => p._id || p.id).filter(Boolean);
-            const productIdStrs = [...new Set(productIds.map(String))];
-            if (productIdStrs.length > 0) {
-                // 微信云开发 _.in() 最多支持 100 个元素
-                const chunks = [];
-                for (let i = 0; i < productIdStrs.length; i += 100) {
-                    chunks.push(productIdStrs.slice(i, i + 100));
+        if (includeSkus) {
+            try {
+                const productIds = list.map((p) => p._id || p.id).filter(Boolean);
+                const productIdStrs = [...new Set(productIds.map(String))];
+                if (productIdStrs.length > 0) {
+                    // 微信云开发 _.in() 最多支持 100 个元素
+                    const chunks = [];
+                    for (let i = 0; i < productIdStrs.length; i += 100) {
+                        chunks.push(productIdStrs.slice(i, i + 100));
+                    }
+                    const chunkResults = await Promise.all(chunks.map((ids) =>
+                        db.collection('skus').where({ product_id: _.in(ids) }).limit(500).get().catch(() => ({ data: [] }))
+                    ));
+                    skuList = chunkResults.flatMap((r) => r.data || []);
                 }
-                const chunkResults = await Promise.all(chunks.map((ids) =>
-                    db.collection('skus').where({ product_id: _.in(ids) }).limit(500).get().catch(() => ({ data: [] }))
-                ));
-                skuList = chunkResults.flatMap((r) => r.data || []);
+            } catch (e) {
+                console.warn('[products/list] 查询 SKU 失败，跳过规格摘要:', e.message);
             }
-        } catch (e) {
-            console.warn('[products/list] 查询 SKU 失败，跳过规格摘要:', e.message);
         }
 
-        const assetUrlMap = await batchResolveCloudAssetUrls(rawList.flatMap((product) => collectProductAssetFileIds(product, skuList)));
-        list = rawList.map((item) => formatProduct(item, assetUrlMap));
+        const assetIds = isCardView
+            ? rawList.flatMap((product) => collectProductCardAssetFileIds(product))
+            : rawList.flatMap((product) => collectProductAssetFileIds(product, skuList));
+        const assetUrlMap = await batchResolveCloudAssetUrls(assetIds);
+        list = rawList.map((item) => (isCardView ? formatProductCard(item, assetUrlMap) : formatProduct(item, assetUrlMap)));
 
-        if (skuList.length > 0) {
+        if (!isCardView && skuList.length > 0) {
             const skuMap = {};
             skuList.forEach((sku) => {
                 const pid = String(sku.product_id || '');
@@ -490,8 +558,9 @@ const handleAction = {
             });
         }
 
-        const listTotal = total || list.length;
-        return success({ list, page, size: limit, total: listTotal });
+        const payload = { list, page, size: limit };
+        if (hasTotal) payload.total = total || list.length;
+        return success(payload);
     }),
 
     'detail': asyncHandler(async (params) => {

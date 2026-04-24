@@ -163,8 +163,14 @@ Page({
             loginAgreementHint: membershipConfig.login_agreement_hint || '登录后查看订单、积分、佣金等信息'
         });
         this._syncPortalPasswordEntryVisibility();
-        this.loadPageLayoutConfig();
-        this.loadUserInfo();
+        clearTimeout(this._pageLayoutLoadTimer);
+        Promise.resolve(this.loadUserInfo())
+            .finally(() => {
+                this._pageLayoutLoadTimer = setTimeout(() => {
+                    this.loadPageLayoutConfig();
+                }, 120);
+            })
+            .catch(() => null);
         this._refreshBusinessCenterVisibility();
         this._tryPendingRegisterLightTip();
     },
@@ -178,10 +184,12 @@ Page({
     },
 
     onHide() {
+        clearTimeout(this._pageLayoutLoadTimer);
         clearSecondaryLoadState(this);
     },
 
     onUnload() {
+        clearTimeout(this._pageLayoutLoadTimer);
         clearSecondaryLoadState(this);
     },
 

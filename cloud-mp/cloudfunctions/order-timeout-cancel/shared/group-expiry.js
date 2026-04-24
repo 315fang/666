@@ -7,11 +7,14 @@ const _ = db.command;
 
 const {
     SYSTEM_REFUND_REASON,
+    GROUP_EXPIRED_REFUNDABLE_ORDER_STATUSES,
     autoRefundGroupOrder,
 } = require('./system-refund');
 
 const ACTIVE_GROUP_STATUSES = ['pending', 'open'];
+const EXPIRED_GROUP_STATUSES = ['expired', 'failed'];
 const PAID_LIKE_ORDER_STATUSES = new Set(['pending_group', 'paid', 'pickup_pending', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed']);
+const GROUP_EXPIRED_REFUNDABLE_STATUS_SET = new Set(GROUP_EXPIRED_REFUNDABLE_ORDER_STATUSES);
 
 function toNumber(value, fallback = 0) {
     const num = Number(value);
@@ -268,7 +271,7 @@ async function processExpiredGroups(limit = 100) {
             expiredGroups += 1;
 
             for (const order of relatedOrders) {
-                if (!order || order.status !== 'pending_group') continue;
+                if (!order || !GROUP_EXPIRED_REFUNDABLE_STATUS_SET.has(order.status)) continue;
                 const result = await autoRefundGroupOrder(order, {
                     reason: SYSTEM_REFUND_REASON,
                     description: `拼团 ${group.group_no || ''} 超时未成团，系统自动退款`,
@@ -290,6 +293,54 @@ async function processExpiredGroups(limit = 100) {
     return { expiredGroups, refundedOrders, errors };
 }
 
+async function recoverExpiredGroupRefundOrders(limit = 50) {
+    const res = await db.collection('group_orders')
+        .where({ status: _.in(EXPIRED_GROUP_STATUSES) })
+        .orderBy('updated_at', 'asc')
+        .limit(Math.max(1, Math.min(100, toNumber(limit, 50))))
+        .get()
+        .catch(() => ({ data: [] }));
+
+    const groups = res.data || [];
+    if (!groups.length) {
+        return { scannedGroups: 0, recoveredOrders: 0, errors: [] };
+    }
+
+    let recoveredOrders = 0;
+    const errors = [];
+    const activityCache = new Map();
+
+    for (const group of groups) {
+        try {
+            const activityKey = String(group.activity_id || group.legacy_activity_id || '');
+            let activity = activityCache.get(activityKey) || null;
+            if (!activity && activityKey) {
+                activity = await findOneByAnyId('group_activities', activityKey);
+                activityCache.set(activityKey, activity || null);
+            }
+            const relatedOrders = await loadGroupOrders(group);
+            for (const order of relatedOrders) {
+                if (!order || !GROUP_EXPIRED_REFUNDABLE_STATUS_SET.has(order.status)) continue;
+                const result = await autoRefundGroupOrder(order, {
+                    reason: SYSTEM_REFUND_REASON,
+                    description: `拼团 ${group.group_no || ''} 超时未成团，系统自动退款补偿`,
+                    groupNo: group.group_no || '',
+                    groupActivityId: group.activity_id || group.legacy_activity_id || activity?._id || '',
+                });
+                if (!result.skipped && !result.error) recoveredOrders += 1;
+                if (result.error) {
+                    errors.push({ group_no: group.group_no || '', order_id: order._id, error: result.error });
+                }
+            }
+        } catch (error) {
+            errors.push({ group_no: group.group_no || '', error: error.message });
+        }
+    }
+
+    return { scannedGroups: groups.length, recoveredOrders, errors };
+}
+
 module.exports = {
     processExpiredGroups,
+    recoverExpiredGroupRefundOrders,
 };

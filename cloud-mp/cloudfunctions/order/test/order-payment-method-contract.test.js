@@ -39,3 +39,18 @@ test('explicit internal payment methods still win over WeChat evidence', () => {
         payment_method: 'balance'
     }), 'wallet');
 });
+
+test('group orders enter pending_group before fulfillment-specific statuses', () => {
+    assert.equal(paymentOrder.resolvePostPayStatus({
+        type: 'group',
+        delivery_type: 'pickup'
+    }), 'pending_group');
+    assert.equal(paymentOrder.resolvePostPayStatus({
+        group_activity_id: 'group-1',
+        delivery_type: 'express'
+    }), 'pending_group');
+    assert.equal(paymentOrder.resolvePostPayStatus({
+        type: 'normal',
+        delivery_type: 'pickup'
+    }), 'pickup_pending');
+});

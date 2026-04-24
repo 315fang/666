@@ -88,9 +88,9 @@ function createCloudBaseStore(options) {
         'user_favorites', 'user_mass_messages', 'users', 'upgrade_applications',
         'wallet_accounts', 'wallet_logs', 'wallet_recharge_orders', 'withdrawals'
     ]);
-    // Cold start should only load login/permission/config essentials.
-    // Route handlers call reloadCollections before touching their own data sets.
-    const preloadCollections = Array.from(basePreloadCollections);
+    // Admin API favors runtime reliability over cold-start speed: preload all known
+    // collections so handlers never fail with a route-level "not_loaded" surprise.
+    const preloadCollections = Array.from(allKnownCollections);
 
     function setCollectionState(name, meta = {}) {
         const key = normalizeSourceName(name);
@@ -473,7 +473,7 @@ function createCloudBaseStore(options) {
                 env_id: cloudbase.envId || '',
                 region: cloudbase.region || '',
                 collection_prefix: cloudbase.collectionPrefix || '',
-                preload_mode: 'base_collections_lazy_route_load',
+                preload_mode: 'all_known_collections',
                 known_collections: allKnownCollections.size,
                 preloaded_collections: preloadCollections.length,
                 ready: state.ready
@@ -550,6 +550,33 @@ function createCloudBaseStore(options) {
                 }
             }
             return true;
+        },
+        async appendCollectionDocument(name, row = {}) {
+            const key = normalizeSourceName(name);
+            const collection = db.collection(getCollectionName(key));
+            const docId = toDocumentId(row);
+            const nextRow = {
+                ...row,
+                _id: row._id || docId
+            };
+            const { _id, ...safeRow } = nextRow;
+            await collection.doc(String(docId)).set({
+                data: {
+                    ...safeRow
+                }
+            });
+            if (cache.has(key)) {
+                const rows = cache.get(key) || [];
+                rows.push(nextRow);
+                cache.set(key, rows);
+                collectionSnapshots.set(key, cloneRows(rows));
+            }
+            setCollectionState(key, {
+                status: cache.has(key) ? 'loaded' : (getCollectionState(key).status || 'not_loaded'),
+                loaded_at: cache.has(key) ? nowIso() : getCollectionState(key).loaded_at,
+                last_error: null
+            });
+            return nextRow;
         },
         waitForCollection,
         getCollectionState,

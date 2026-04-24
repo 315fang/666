@@ -143,7 +143,7 @@
               <text wx:elif="{{item.status === 'expired'}}">已过期</text>
               <text wx:else>已购买</text>
             </view>
-            <text class="share-hint" wx:if="{{item.status === 'active'}}">继续邀请好友</text>
+            <text class="share-hint" wx:if="{{item.status === 'active'}}">{{item._remainText || '继续邀请好友'}}</text>
           </view>
           <view class="record-action" catchtap="onViewRecord" data-no="{{item.slash_no}}">查看详情</view>
         </view>

@@ -259,7 +259,6 @@ Page({
         if (this._activityReloading) return this._activityReloading;
         const promise = Promise.resolve()
             .then(() => this.loadConfig())
-            .then(() => this.loadActivityPreviews())
             .finally(() => {
                 this._activityReloading = null;
             });
@@ -303,14 +302,12 @@ Page({
         const permanentActivities = Array.isArray(permanent) ? permanent : [];
         this._limitedActivities = Array.isArray(limited) ? limited : [];
         this._activityLinksMeta = linksMeta && typeof linksMeta === 'object' ? linksMeta : {};
-        const [resolvedSlides, resolvedBrandNews, activitySections] = await Promise.all([
-            resolveBannerSlideImages(slides),
-            resolveBrandNewsImages(brandNews),
-            this._buildActivitySections(permanentActivities)
-        ]);
+        const applyToken = (this._activityApplyToken || 0) + 1;
+        this._activityApplyToken = applyToken;
+        const activitySections = this._buildActivitySectionsRaw(permanentActivities);
         this.setData({
-            bannerSlides: resolvedSlides,
-            brandNews: resolvedBrandNews,
+            bannerSlides: slides,
+            brandNews,
             brandNewsSectionTitle: brandNewsSectionTitle || '品牌动态',
             permanentActivities,
             activitySections,
@@ -319,10 +316,27 @@ Page({
             bannerIndex: 0
         });
         this._clearBannerTimers();
-        resolvedSlides.forEach((item) => {
+        slides.forEach((item) => {
             if (item.end_time) this._startBannerCountdown(item.end_time, item.id);
         });
         this._restartSectionCountdowns(activitySections);
+        Promise.all([
+            resolveBannerSlideImages(slides),
+            resolveBrandNewsImages(brandNews),
+            resolveSectionImages(activitySections)
+        ]).then(([resolvedSlides, resolvedBrandNews, resolvedSections]) => {
+            if (this._activityApplyToken !== applyToken) return;
+            this.setData({
+                bannerSlides: resolvedSlides,
+                brandNews: resolvedBrandNews,
+                activitySections: resolvedSections
+            });
+            this._clearBannerTimers();
+            resolvedSlides.forEach((item) => {
+                if (item.end_time) this._startBannerCountdown(item.end_time, item.id);
+            });
+            this._restartSectionCountdowns(resolvedSections);
+        }).catch(() => null);
     },
 
     // ── 加载后端配置 ─────────────────────────────────────────────
@@ -349,7 +363,7 @@ Page({
         });
     },
 
-    async _buildActivitySections(permanentActivities) {
+    _buildActivitySectionsRaw(permanentActivities) {
         const { buildActivitySections } = require('../../utils/activitySectionBuilder');
         const meta = this._activityLinksMeta || {};
         const built = buildActivitySections({
@@ -358,9 +372,13 @@ Page({
             permanentSectionTitle: meta.permanent_section_title || '',
             permanentSectionSubtitle: meta.permanent_section_subtitle || ''
         });
-        return resolveSectionImages((built.sections || []).map((section) => ({
+        return (built.sections || []).map((section) => ({
             ...section
-        })));
+        }));
+    },
+
+    async _buildActivitySections(permanentActivities) {
+        return resolveSectionImages(this._buildActivitySectionsRaw(permanentActivities));
     },
 
     async loadActivityPreviews() {

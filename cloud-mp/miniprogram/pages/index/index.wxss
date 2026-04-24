@@ -471,8 +471,8 @@
 }
 
 .home-compliance-footer {
-  margin: 0 32rpx;
-  padding: 8rpx 0 2rpx;
+  margin: 0 32rpx 48rpx;
+  padding: 8rpx 0 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -487,37 +487,23 @@
 }
 
 .home-compliance-row {
-  min-height: 52rpx;
+  min-height: 38rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14rpx;
+  gap: 10rpx;
+  flex-wrap: nowrap;
 }
 
 .home-compliance-badge {
-  width: 44rpx;
-  height: 48rpx;
+  width: 32rpx;
+  height: 34rpx;
   flex-shrink: 0;
 }
 
-.home-compliance-copy {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2rpx;
-  min-width: 0;
-}
-
-.home-compliance-label {
-  font-size: 21rpx;
-  line-height: 1.35;
-  font-weight: 600;
-  color: rgba(30, 74, 109, 0.78);
-}
-
 .home-compliance-text {
-  font-size: 22rpx;
-  line-height: 1.45;
+  font-size: 26rpx;
+  line-height: 1.4;
   color: rgba(71, 85, 105, 0.92);
   white-space: nowrap;
 }

@@ -32,6 +32,9 @@ const DEFAULT_AGENT_UPGRADE_RULES = {
     effective_order_days: 7
 };
 
+const DASHBOARD_BOOTSTRAP_CACHE_TTL = 15 * 1000;
+const dashboardBootstrapCache = new Map();
+
 const {
     CloudBaseError, cloudFunctionWrapper, withTransientDbReadRetry
 } = require('./shared/errors');
@@ -63,6 +66,14 @@ const {
     sortStationsByPickupPreference,
     summarizeStationStockForItems
 } = require('./shared/pickup-station-stock');
+const {
+    buildStationLookupValues,
+    stationRowMatchesStation,
+    buildStationLookupSet,
+    buildStationLookupMap,
+    findStationByLookup,
+    findStationInLookupMap
+} = require('./shared/station-lookup');
 const { assertPortalPassword } = require('./user-portal-password');
 
 function parseConfigValue(row, fallback) {
@@ -527,10 +538,12 @@ async function getPickupVerifyScope(openid) {
         if (String(row.openid || '') === String(openid)) return true;
         return userIds.includes(String(row.user_id || ''));
     });
-    const allowedStationIds = new Set(relatedStaff.map((row) => String(row.station_id || '')));
-    const scopedStations = stations.filter((station) => allowedStationIds.has(String(station.id))).map((station) => {
-        const stationStaff = (staffRes || []).filter((row) => String(row.station_id || '') === String(station.id));
-        const myStaffRow = relatedStaff.find((row) => String(row.station_id || '') === String(station.id));
+    const allowedStationIds = new Set(relatedStaff.map((row) => pickString(row.station_id)).filter(Boolean));
+    const scopedStations = stations.filter((station) => {
+        return buildStationLookupValues(station).some((lookup) => allowedStationIds.has(lookup));
+    }).map((station) => {
+        const stationStaff = (staffRes || []).filter((row) => stationRowMatchesStation(row, station));
+        const myStaffRow = relatedStaff.find((row) => stationRowMatchesStation(row, station));
         const staffPreview = stationStaff.slice(0, 3).map((row) => {
             const staffUser = getUserByMap(userMap, row.user_id) || getUserByMap(userMap, row.openid);
             return {
@@ -551,6 +564,8 @@ async function getPickupVerifyScope(openid) {
         });
         return {
             ...station,
+            binding_station_id: pickString(myStaffRow?.station_id || station.id),
+            station_lookup_ids: buildStationLookupValues(station),
             my_role: pickString(myStaffRow?.role || 'staff'),
             can_verify: toNum(myStaffRow?.can_verify, 0) === 1 || pickString(myStaffRow?.role) === 'manager',
             staff_summary: {
@@ -586,11 +601,14 @@ function buildStoreManagerUserMap(users = []) {
     return map;
 }
 
-function dedupeRows(rows = []) {
+function dedupeRows(rows = [], collectionName = '') {
     const merged = new Map();
     (Array.isArray(rows) ? rows : []).forEach((row) => {
         if (!row || typeof row !== 'object') return;
-        const key = String(row._id || row.id || row._legacy_id || row.openid || JSON.stringify(row));
+        const rawKey = row._id || row.id || row._legacy_id || row.openid || JSON.stringify(row);
+        const key = collectionName === 'station_staff'
+            ? `${pickString(row.station_id, 'station')}:${String(rawKey)}`
+            : String(rawKey);
         if (!merged.has(key)) merged.set(key, row);
     });
     return Array.from(merged.values());
@@ -622,7 +640,7 @@ async function queryRecordsByFieldValues(collectionName, field, values = []) {
         tasks.push(getAllRecords(db, collectionName, { [field]: _.in(numbers) }).catch(() => []));
     }
     if (!tasks.length) return [];
-    return dedupeRows((await Promise.all(tasks)).flat());
+    return dedupeRows((await Promise.all(tasks)).flat(), collectionName);
 }
 
 async function queryUsersByLookups(values = []) {
@@ -633,7 +651,7 @@ async function queryUsersByLookups(values = []) {
         numbers.length ? getAllRecords(db, 'users', { _legacy_id: _.in(numbers) }).catch(() => []) : Promise.resolve([]),
         strings.length ? getAllRecords(db, 'users', { _id: _.in(strings) }).catch(() => []) : Promise.resolve([])
     ]);
-    return dedupeRows([...byOpenid, ...byId, ...byLegacy, ...byDoc]);
+    return dedupeRows([...byOpenid, ...byId, ...byLegacy, ...byDoc], 'users');
 }
 
 function getUserByMap(userMap, lookup) {
@@ -671,14 +689,19 @@ function buildStoreManagerStations(stations = [], staffRows = [], users = [], op
         if (String(row.openid || '') === String(openid)) return true;
         return userIds.includes(String(row.user_id || ''));
     });
-    const managerStationIds = new Set(managerRows.map((row) => String(row.station_id || '')));
+    const managerStationIds = new Set(managerRows.map((row) => pickString(row.station_id)).filter(Boolean));
     return (stations || [])
-        .filter((station) => managerStationIds.has(String(station.id)))
+        .filter((station) => buildStationLookupValues(station).some((lookup) => managerStationIds.has(lookup)))
         .map((station) => {
-            const stationStaff = (staffRows || []).filter((row) => String(row.station_id || '') === String(station.id) && pickString(row.status || 'active') === 'active');
+            const myManagerRow = managerRows.find((row) => stationRowMatchesStation(row, station));
+            const stationStaff = (staffRows || []).filter((row) => stationRowMatchesStation(row, station) && pickString(row.status || 'active') === 'active');
             const claimant = getUserByMap(userMap, station.pickup_claimant_id || station.pickup_claimant_openid || station.claimant_id || station.claimant_openid);
             return {
                 ...station,
+                binding_station_id: pickString(myManagerRow?.station_id || station.id),
+                station_lookup_ids: buildStationLookupValues(station),
+                my_role: pickString(myManagerRow?.role || 'manager'),
+                can_verify: toNum(myManagerRow?.can_verify, 0) === 1 || pickString(myManagerRow?.role) === 'manager',
                 claimant: claimant ? {
                     id: claimant._id || claimant.id || claimant._legacy_id || '',
                     openid: claimant.openid || '',
@@ -704,7 +727,7 @@ function summarizeMoneyByType(rows = [], allowedTypes = []) {
 
 function buildStoreManagerOrderSummary(order = {}, context = {}) {
     const item = Array.isArray(order.items) && order.items[0] ? order.items[0] : {};
-    const station = context.stationMap.get(String(order.pickup_station_id || '')) || null;
+    const station = findStationInLookupMap(context.stationMap, order.pickup_station_id);
     const verifier = getUserByMap(context.userMap, order.pickup_verified_by);
     const orderKey = String(order._id || order.id || '');
     const orderNo = pickString(order.order_no);
@@ -746,10 +769,10 @@ async function buildStoreManagerWorkbench(openid) {
         queryRecordsByFieldValues('station_staff', 'openid', [openid]),
         queryRecordsByFieldValues('station_staff', 'user_id', currentUserIds)
     ]);
-    const managerRows = dedupeRows([...managerRowsByOpenid, ...managerRowsByUserId]).filter((row) => {
+    const managerRows = dedupeRows([...managerRowsByOpenid, ...managerRowsByUserId], 'station_staff').filter((row) => {
         return pickString(row.status || 'active') === 'active' && pickString(row.role) === 'manager';
     });
-    const managedStationLookups = managerRows.map((row) => row.station_id).filter(Boolean);
+    const managedStationLookups = [...new Set(managerRows.map((row) => pickString(row.station_id)).filter(Boolean))];
     if (!managedStationLookups.length) {
         return {
             summary: {
@@ -767,13 +790,17 @@ async function buildStoreManagerWorkbench(openid) {
         };
     }
 
-    const [stationRowsById, stationRowsByLegacy, stationRowsByDoc, stationStaff] = await Promise.all([
+    const [stationRowsById, stationRowsByLegacy, stationRowsByDoc] = await Promise.all([
         queryRecordsByFieldValues('stations', 'id', managedStationLookups),
         queryRecordsByFieldValues('stations', '_legacy_id', managedStationLookups),
-        queryRecordsByFieldValues('stations', '_id', managedStationLookups),
-        queryRecordsByFieldValues('station_staff', 'station_id', managedStationLookups)
+        queryRecordsByFieldValues('stations', '_id', managedStationLookups)
     ]);
     const normalizedStationRows = dedupeRows([...stationRowsById, ...stationRowsByLegacy, ...stationRowsByDoc]).map(normalizeStation);
+    const stationLookupsForStaff = [
+        ...managedStationLookups,
+        ...normalizedStationRows.flatMap((station) => buildStationLookupValues(station))
+    ];
+    const stationStaff = await queryRecordsByFieldValues('station_staff', 'station_id', stationLookupsForStaff);
     const relatedUserLookups = [
         openid,
         ...currentUserIds,
@@ -787,12 +814,12 @@ async function buildStoreManagerWorkbench(openid) {
     ];
     const users = await queryUsersByLookups(relatedUserLookups);
     const stations = buildStoreManagerStations(normalizedStationRows, stationStaff || [], users || [], openid, currentUser);
-    const stationIds = stations.map((station) => String(station.id));
+    const stationLookupIds = [...buildStationLookupSet(stations)];
     const userMap = buildStoreManagerUserMap(users || []);
-    const stationMap = new Map(stations.map((station) => [String(station.id), station]));
+    const stationMap = buildStationLookupMap(stations);
     const [stationOrdersRaw, procurementsRaw] = await Promise.all([
-        queryRecordsByFieldValues('orders', 'pickup_station_id', stationIds),
-        queryRecordsByFieldValues('station_procurement_orders', 'station_id', stationIds)
+        queryRecordsByFieldValues('orders', 'pickup_station_id', stationLookupIds),
+        queryRecordsByFieldValues('station_procurement_orders', 'station_id', stationLookupIds)
     ]);
     const stationOrders = (stationOrdersRaw || []).filter((order) => String(order.delivery_type || '') === 'pickup');
     const verifierLookups = stationOrders.flatMap((order) => [order.pickup_verified_by]);
@@ -822,14 +849,14 @@ async function buildStoreManagerWorkbench(openid) {
         .slice(0, 10)
         .map((order) => buildStoreManagerOrderSummary(order, { stationMap, userMap, commissions: commissionRows, goodsFundLogs }));
     const procurementRows = (procurementsRaw || [])
-        .filter((row) => stationIds.includes(String(row.station_id || '')))
+        .filter((row) => findStationInLookupMap(stationMap, row.station_id))
         .sort((a, b) => parseTimestamp(b.created_at) - parseTimestamp(a.created_at))
         .slice(0, 10)
         .map((row) => ({
             id: row._id || row.id || '',
             procurement_no: pickString(row.procurement_no),
             station_id: pickString(row.station_id),
-            station_name: pickString(stationMap.get(String(row.station_id))?.name || row.station_snapshot?.name),
+            station_name: pickString(findStationInLookupMap(stationMap, row.station_id)?.name || row.station_snapshot?.name),
             product_name: pickString(row.product_snapshot?.name),
             sku_spec: pickString(row.product_snapshot?.sku_spec || row.product_snapshot?.sku_name),
             quantity: Math.max(0, toNum(row.quantity, 0)),
@@ -957,7 +984,7 @@ async function resolveManagerStationBinding(openid, requestedStationId = '') {
     const stations = buildStoreManagerStations((stationRows || []).map(normalizeStation), staffRows || [], users || [], openid, currentUser);
     if (!stations.length) throw badRequest('当前账号未被后台指派为店长');
     const station = requestedStationId
-        ? stations.find((item) => String(item.id) === String(requestedStationId))
+        ? findStationByLookup(stations, requestedStationId)
         : stations[0];
     if (!station) throw badRequest('当前账号不属于该门店');
     return {
@@ -1012,10 +1039,11 @@ async function createStoreManagerProcurement(openid, params = {}) {
     const claimantUser = station.claimant?.openid === openid ? (currentUser || null) : await findUserByOpenid(openid);
     if (!claimantUser) throw badRequest('店长账户异常，无法创建采购单');
     const receiveSnapshot = buildStationReceiveSnapshot(station, claimantUser);
+    const boundStationId = pickString(station.binding_station_id || station.id);
     const procurement = {
         id: (Array.isArray(procurements) ? procurements.length : 0) + 1,
         procurement_no: buildProcurementNo(procurements),
-        station_id: station.id,
+        station_id: boundStationId,
         claimant_id: claimantUser._id || claimantUser.id || claimantUser._legacy_id || '',
         claimant_openid: claimantUser.openid || '',
         product_id: product._id || product.id || '',
@@ -1034,6 +1062,7 @@ async function createStoreManagerProcurement(openid, params = {}) {
         receive_snapshot: receiveSnapshot,
         station_snapshot: {
             id: station.id,
+            binding_station_id: boundStationId,
             name: station.name,
             province: station.province,
             city: station.city,
@@ -1284,6 +1313,50 @@ async function buildDashboardBootstrapPayload(openid) {
         },
         distributionCard,
         pickupScopeLight
+    };
+}
+
+function getDashboardBootstrapCache(openid) {
+    const key = pickString(openid);
+    if (!key) return null;
+    const item = dashboardBootstrapCache.get(key);
+    if (!item) return null;
+    if (Date.now() > item.expireAt) {
+        dashboardBootstrapCache.delete(key);
+        return null;
+    }
+    return item.payload;
+}
+
+function setDashboardBootstrapCache(openid, payload) {
+    const key = pickString(openid);
+    if (!key) return;
+    dashboardBootstrapCache.set(key, {
+        payload,
+        expireAt: Date.now() + DASHBOARD_BOOTSTRAP_CACHE_TTL
+    });
+    if (dashboardBootstrapCache.size > 500) {
+        const now = Date.now();
+        dashboardBootstrapCache.forEach((item, cacheKey) => {
+            if (now > item.expireAt) dashboardBootstrapCache.delete(cacheKey);
+        });
+    }
+}
+
+async function getDashboardBootstrapPayloadCached(openid) {
+    const cached = getDashboardBootstrapCache(openid);
+    if (cached) {
+        return {
+            ...cached,
+            __perf: { cache_hit: true }
+        };
+    }
+
+    const payload = await buildDashboardBootstrapPayload(openid);
+    setDashboardBootstrapCache(openid, payload);
+    return {
+        ...payload,
+        __perf: { cache_hit: false }
     };
 }
 
@@ -1635,7 +1708,7 @@ const handleAction = {
     }),
 
     'dashboardBootstrap': asyncHandler(async (openid) => {
-        return success(await buildDashboardBootstrapPayload(openid));
+        return success(await getDashboardBootstrapPayloadCached(openid));
     }),
 
     'claimWelcomeCoupons': asyncHandler(async (openid) => {

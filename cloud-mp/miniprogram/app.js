@@ -33,6 +33,7 @@ App({
         homeDataPromise: null,
         categoryBootstrapPromise: null,
         activityBootstrapPromise: null,
+        userDashboardBootstrapPromise: null,
         miniProgramConfig: cloneDefaults(),
         miniProgramConfigPromise: null,
         brandName: '问兰',
@@ -78,6 +79,7 @@ App({
 
         // 并行预拉取首页数据
         this.globalData.homeDataPromise = this.prefetchHomeData();
+        this.runDeferredStartupPrefetch();
 
         // 版本更新检测
         this.checkUpdate();

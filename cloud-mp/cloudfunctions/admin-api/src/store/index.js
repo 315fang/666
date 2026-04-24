@@ -91,6 +91,23 @@ function withCommonStoreHelpers(store) {
             store.saveCollection(key, nextRows);
             return true;
         },
+        async appendCollectionDocument(name, row = {}) {
+            if (typeof store.appendCollectionDocument === 'function') {
+                return store.appendCollectionDocument(name, row);
+            }
+            if (typeof store.getCollection !== 'function' || typeof store.saveCollection !== 'function') {
+                throw new Error('当前数据源不支持追加写入');
+            }
+            const key = String(name || '').trim();
+            const rows = store.getCollection(key);
+            if (!Array.isArray(rows)) {
+                throw new Error(`集合 ${key} 读取结果不是数组，无法执行追加写入`);
+            }
+            const nextRow = { ...row };
+            const nextRows = rows.concat(nextRow);
+            store.saveCollection(key, nextRows);
+            return nextRow;
+        },
         async waitUntilReady(timeoutMs = 8000) {
             if (typeof store.waitUntilReady === 'function') {
                 return store.waitUntilReady(timeoutMs);

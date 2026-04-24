@@ -76,6 +76,8 @@ function pickDirectAssetUrl(record = {}) {
     }
 
     const directCandidates = [
+        record.display_image,
+        record.displayImage,
         record.image_url,
         record.imageUrl,
         record.url,
@@ -114,10 +116,12 @@ function pickPreferredAssetRef(record = {}) {
     if (typeof record === 'string') return normalizeAssetUrl(record);
     if (typeof record !== 'object') return normalizeAssetUrl(record);
 
-    const fileId = normalizeAssetUrl(record.file_id || record.fileId || '');
+    const fileId = normalizeAssetUrl(record.image_ref || record.imageRef || record.file_id || record.fileId || '');
     if (fileId) return fileId;
 
     const candidates = [
+        record.display_image,
+        record.displayImage,
         record.image_url,
         record.imageUrl,
         record.url,

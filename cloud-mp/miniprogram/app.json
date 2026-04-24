@@ -162,7 +162,15 @@
     "preloadRule": {
         "pages/index/index": {
             "network": "wifi",
-            "packages": ["packageOrder"]
+            "packages": ["packageProduct", "packageProductBundle", "packageOrder"]
+        },
+        "pages/category/category": {
+            "network": "wifi",
+            "packages": ["packageProduct", "packageProductBundle", "packageOrder"]
+        },
+        "pages/user/user": {
+            "network": "wifi",
+            "packages": ["packageOrder", "packageWallet", "packagePoints"]
         },
         "pages/cart/cart": {
             "network": "wifi",

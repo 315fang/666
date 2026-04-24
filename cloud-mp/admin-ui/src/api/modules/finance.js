@@ -79,6 +79,7 @@ export const syncRefundStatus = (id) => {
 }
 
 export const getCommissions = (params) => request({ url: '/commissions', method: 'get', params: withStrongReadParams(params) })
+export const repairRegionAgentCommissions = (data) => request({ url: '/commissions/repair-region-agent', method: 'post', data }).then(normalizeStrongMutationPayload)
 export const approveCommissionItem = (id) => request({ url: `/commissions/${id}/approve`, method: 'put' }).then(normalizeStrongMutationPayload)
 export const rejectCommissionItem = (id, data) => request({ url: `/commissions/${id}/reject`, method: 'put', data }).then(normalizeStrongMutationPayload)
 export const batchApproveCommissions = (data) => request({ url: '/commissions/batch-approve', method: 'post', data }).then(normalizeStrongMutationPayload)

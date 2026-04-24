@@ -14,7 +14,7 @@
  *   const url = await uploadToCloud(tempFilePath, 'avatars/xxx.jpg');
  */
 
-// 防重复调用 Map（key = fnName:action:JSON(data)）
+// 防重复调用 Map（key = fnName:action:stableJSON(data)）
 const pendingCalls = new Map();
 const TRANSIENT_DB_PATTERNS = [
     'DATABASE_REQUEST_FAILED',
@@ -43,6 +43,18 @@ function isTransientDbError(error) {
     const message = getErrorMessage(error);
     if (!message) return false;
     return TRANSIENT_DB_PATTERNS.some((pattern) => message.includes(pattern));
+}
+
+function stableStringify(value) {
+    if (value === null || typeof value !== 'object') {
+        return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) {
+        return `[${value.map(item => stableStringify(item)).join(',')}]`;
+    }
+    return `{${Object.keys(value).sort().map((key) => (
+        `${JSON.stringify(key)}:${stableStringify(value[key])}`
+    )).join(',')}}`;
 }
 
 function normalizeBusinessError(result) {
@@ -111,7 +123,7 @@ function callFn(name, data = {}, opts = {}) {
         readOnly = false
     } = opts;
 
-    const dupKey = `${name}:${data.action || ''}:${JSON.stringify(data)}`;
+    const dupKey = `${name}:${data.action || ''}:${stableStringify(data)}`;
     if (preventDup && pendingCalls.has(dupKey)) {
         return pendingCalls.get(dupKey);
     }

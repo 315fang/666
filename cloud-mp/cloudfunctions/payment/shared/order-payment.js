@@ -107,10 +107,13 @@ function isGroupOrder(order = {}) {
 }
 
 function resolvePostPayStatus(order = {}) {
+    if (isGroupOrder(order)) {
+        return 'pending_group';
+    }
     if (pickString(order.delivery_type).toLowerCase() === 'pickup') {
         return 'pickup_pending';
     }
-    return isGroupOrder(order) ? 'pending_group' : 'paid';
+    return 'paid';
 }
 
 module.exports = {

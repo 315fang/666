@@ -24,7 +24,9 @@ function request(options = {}) {
         data = {},
         showLoading = false,
         showError = true,
-        maxRetries
+        maxRetries,
+        preventDup,
+        preventDuplicate
     } = options
 
     const upperMethod = String(method).toUpperCase()
@@ -49,10 +51,14 @@ function request(options = {}) {
     const resolvedMaxRetries = typeof maxRetries === 'number'
         ? Math.max(0, maxRetries)
         : (isReadOnly ? config.maxRetries : 0)
+    const resolvedPreventDup = preventDup !== undefined
+        ? preventDup
+        : (preventDuplicate !== undefined ? preventDuplicate : isReadOnly)
 
     return callFn(route.fn, fnData, {
         showLoading,
         showError,
+        preventDup: resolvedPreventDup,
         maxRetries: resolvedMaxRetries,
         retryDelay: config.retryDelay,
         readOnly: isReadOnly

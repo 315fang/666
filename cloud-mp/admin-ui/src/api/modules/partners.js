@@ -32,6 +32,7 @@ export const receivePickupProcurement = (id, data) => request({ url: `/pickup-st
 export const getBranchAgentStations = (params) => request({ url: '/branch-agents/stations', method: 'get', params })
 export const createBranchAgentStation = (data) => request({ url: '/branch-agents/stations', method: 'post', data })
 export const updateBranchAgentStation = (id, data) => request({ url: `/branch-agents/stations/${id}`, method: 'put', data })
+export const deleteBranchAgentStation = (id) => request({ url: `/branch-agents/stations/${id}`, method: 'delete' })
 export const getBranchAgentClaims = (params) => request({ url: '/branch-agents/claims', method: 'get', params })
 export const reviewBranchAgentClaim = (id, data) => request({ url: `/branch-agents/claims/${id}/review`, method: 'put', data })
 

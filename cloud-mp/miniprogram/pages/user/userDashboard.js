@@ -18,7 +18,7 @@ function agentPillSkinClassForLevel(roleLevel) {
 const { ErrorHandler } = require('../../utils/errorHandler');
 const { fetchUserProfile } = require('../../utils/userProfile');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
-const { requestCache } = require('../../utils/requestCache');
+const { requestCache, cachedGet } = require('../../utils/requestCache');
 const { fetchPointSummary } = require('../../utils/points');
 const { listFavorites, listFootprints } = require('../../utils/localUserContent');
 const { parseImages } = require('../../utils/dataFormatter');
@@ -251,7 +251,12 @@ async function loadDashboardBootstrap(page) {
         return;
     }
 
-    const response = await get('/user/dashboard-bootstrap', {}, { showError: false });
+    const openid = app.globalData.openid || wx.getStorageSync('openid') || '';
+    const response = await cachedGet(get, '/user/dashboard-bootstrap', { _openid_cache_key: openid }, {
+        cacheTTL: USER_DASHBOARD_TTL,
+        showError: false,
+        maxRetries: 0
+    });
     if (!response || response.code !== 0 || !response.data) {
         throw new Error('dashboard bootstrap failed');
     }
@@ -375,6 +380,29 @@ async function loadUserInfo(page, forceRefresh = false) {
     }
 
     page._dashboardRefreshPromise = (async () => {
+        const cached = app.globalData.userInfo;
+        if (cached) {
+            const roleLevel = Number(cached.role_level) || 0;
+            page.setData({
+                userInfo: cached,
+                displayNickname: buildDisplayNickname(cached),
+                hasUserInfo: true,
+                isAgent: roleLevel >= 2,
+                displayAgentRoleLevel: roleLevel,
+                agentRoleBadgeName: resolveAgentRoleBadgeName(roleLevel),
+                agentPillSkinClass: agentPillSkinClassForLevel(roleLevel)
+            });
+            applyGrowthDisplay(page, cached);
+            refreshBusinessCenterVisibility(page);
+        }
+
+        const bootstrapPromise = loadDashboardBootstrap(page)
+            .then(() => {
+                page._lastSecondaryRefreshAt = Date.now();
+                return true;
+            })
+            .catch(() => false);
+
         const result = await fetchUserProfile();
         if (result) {
             const info = result.info;
@@ -406,6 +434,19 @@ async function loadUserInfo(page, forceRefresh = false) {
             applyGrowthDisplay(page, cached);
             refreshBusinessCenterVisibility(page);
         }
+        const bootstrapOk = await bootstrapPromise;
+        if (!bootstrapOk) {
+            const legacyTasks = [
+                loadOrderCounts(page),
+                loadNotificationsCount(page),
+                loadAssetRow(page),
+                loadQuadPreviews(page),
+                loadDistributionInfo(page),
+                loadPickupVerifyScope(page)
+            ];
+            await Promise.allSettled(legacyTasks);
+            page._lastSecondaryRefreshAt = Date.now();
+        }
         page._lastDashboardRefreshAt = Date.now();
     })().catch((error) => {
         ErrorHandler.handle(error, {
@@ -426,7 +467,6 @@ async function loadUserInfo(page, forceRefresh = false) {
         refreshBusinessCenterVisibility(page);
     }).finally(() => {
         page._dashboardRefreshPromise = null;
-        scheduleSecondaryLoads(page, forceRefresh);
     });
 
     return page._dashboardRefreshPromise;
@@ -689,7 +729,6 @@ async function loadPickupVerifyScope(page) {
     }
     try {
         const response = await get('/stations/my-scope', {}, { showError: false });
-        console.log('[userDashboard] loadPickupVerifyScope response:', JSON.stringify(response?.data || null));
         if (response && response.code === 0 && response.data) {
             const stations = Array.isArray(response.data.stations) ? response.data.stations : [];
             const managerStations = stations.filter((item) => String(item.my_role || '') === 'manager');

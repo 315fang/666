@@ -88,9 +88,10 @@
                 <el-tag :type="row.status === 'active' ? 'success' : 'info'">{{ row.status }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="110" fixed="right">
+            <el-table-column label="操作" width="160" fixed="right">
               <template #default="{ row }">
                 <el-button text type="primary" @click="openStationDialog(row)">编辑</el-button>
+                <el-button text type="danger" @click="deleteStation(row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -156,8 +157,33 @@
             <el-col :span="8"><el-input v-model="stationForm.district" placeholder="区/县" /></el-col>
           </el-row>
         </el-form-item>
-        <el-form-item label="认领人ID">
-          <el-input v-model="stationForm.claimant_id" placeholder="填写用户ID / 文档ID / OPENID；可绑定虚拟结算用户" />
+        <el-form-item label="认领人">
+          <el-select
+            v-model="stationForm.claimant_id"
+            filterable
+            remote
+            reserve-keyword
+            clearable
+            placeholder="输入昵称 / 手机号 / 用户ID / 会员码搜索"
+            :remote-method="searchClaimantUsers"
+            :loading="claimantSearching"
+            style="width:100%"
+          >
+            <el-option
+              v-for="option in claimantOptions"
+              :key="option.id"
+              :label="formatClaimantOption(option)"
+              :value="option.id"
+            />
+          </el-select>
+          <div class="form-tip">支持按昵称、手机号、用户ID、会员码搜索；选中后自动绑定，不需要手填 OPENID。</div>
+        </el-form-item>
+        <el-form-item v-if="selectedClaimant" label="认领人信息">
+          <div class="claimant-preview">
+            <div>{{ displayUserName(selectedClaimant, `用户${selectedClaimant.id}`) }}</div>
+            <div class="sub">ID: {{ selectedClaimant.id }} / 会员码: {{ selectedClaimant.invite_code || selectedClaimant.member_no || '—' }}</div>
+            <div class="sub" v-if="selectedClaimant.phone">手机号: {{ selectedClaimant.phone }}</div>
+          </div>
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="stationForm.status" style="width: 220px">
@@ -176,13 +202,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CompactIdCell from '@/components/CompactIdCell.vue'
 import {
   getBranchAgentPolicy, updateBranchAgentPolicy,
-  getBranchAgentStations, createBranchAgentStation, updateBranchAgentStation,
-  getBranchAgentClaims, reviewBranchAgentClaim
+  getBranchAgentStations, createBranchAgentStation, updateBranchAgentStation, deleteBranchAgentStation,
+  getBranchAgentClaims, reviewBranchAgentClaim,
+  searchUsersLite
 } from '@/api'
 import { getUserNickname } from '@/utils/userDisplay'
 
@@ -217,6 +244,8 @@ const loadingStations = ref(false)
 const loadingClaims = ref(false)
 const savingStation = ref(false)
 const stationDialogVisible = ref(false)
+const claimantSearching = ref(false)
+const claimantOptions = ref([])
 
 const policy = reactive({
   enabled: true,
@@ -236,6 +265,48 @@ const stationForm = reactive({
 
 const branchTypeText = (v) => ({ district: '区代理', area: '区代理', city: '市代理', province: '省代理', school: '学校代理（停用）' }[v] || v)
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
+
+function buildClaimantOption(user = {}) {
+  return {
+    ...user,
+    id: user.id || user._id || user._legacy_id || user.openid || user.user_id || ''
+  }
+}
+
+const selectedClaimant = computed(() => {
+  const current = String(stationForm.claimant_id || '')
+  if (!current) return null
+  const matchesCurrent = (user = {}) => [user.id, user._id, user._legacy_id, user.user_id, user.openid]
+    .filter((value) => value !== null && value !== undefined && value !== '')
+    .some((value) => String(value) === current)
+  return claimantOptions.value.find(matchesCurrent)
+    || stations.value.find((row) => String(row.claimant_id || '') === current)?.claimant
+    || null
+})
+
+function formatClaimantOption(user = {}) {
+  const displayId = user._legacy_id || user.user_id || user.id || user._id || user.openid || ''
+  const nickname = displayUserName(user, `用户${displayId}`)
+  const memberNo = user.invite_code || user.member_no || '无会员码'
+  const phone = user.phone ? ` / ${user.phone}` : ''
+  const role = user.role_name || (user.role_level != null ? `Lv${user.role_level}` : '')
+  return `${nickname}${phone} / ID:${displayId} / ${memberNo}${role ? ` / ${role}` : ''}`
+}
+
+async function searchClaimantUsers(keyword) {
+  const q = String(keyword || '').trim()
+  if (!q) {
+    claimantOptions.value = selectedClaimant.value ? [buildClaimantOption(selectedClaimant.value)] : []
+    return
+  }
+  claimantSearching.value = true
+  try {
+    const res = await searchUsersLite({ keyword: q, limit: 20 })
+    claimantOptions.value = (res?.list || []).map((item) => buildClaimantOption(item))
+  } finally {
+    claimantSearching.value = false
+  }
+}
 
 const loadPolicy = async () => {
   try {
@@ -273,6 +344,7 @@ const loadStations = async () => {
 }
 
 const openStationDialog = (row = null) => {
+  claimantOptions.value = []
   if (row) {
     Object.assign(stationForm, {
       id: row.id,
@@ -284,6 +356,9 @@ const openStationDialog = (row = null) => {
       claimant_id: row.claimant_id || '',
       status: row.status || 'active'
     })
+    if (row.claimant) {
+      claimantOptions.value = [buildClaimantOption({ ...row.claimant, id: row.claimant_id || row.claimant.id })]
+    }
   } else {
     Object.assign(stationForm, {
       id: null, name: '', branch_type: 'district',
@@ -303,7 +378,7 @@ const saveStation = async () => {
       province: stationForm.province,
       city: stationForm.city,
       district: stationForm.district,
-      claimant_id: stationForm.claimant_id?.trim() || null,
+      claimant_id: String(stationForm.claimant_id || '').trim() || null,
       status: stationForm.status
     }
     let resData
@@ -319,6 +394,23 @@ const saveStation = async () => {
   } finally {
     savingStation.value = false
   }
+}
+
+const deleteStation = async (row) => {
+  const id = row?.id || row?._id || row?._legacy_id
+  if (!id) return
+  try {
+    await ElMessageBox.confirm(
+      `确认删除区域“${row.name || id}”？删除后该区域不再参与订单归属和结算。`,
+      '删除区域归属',
+      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
+    )
+  } catch (_) {
+    return
+  }
+  await deleteBranchAgentStation(id)
+  ElMessage.success('删除成功')
+  loadStations()
 }
 
 const loadClaims = async () => {
@@ -366,5 +458,12 @@ onMounted(() => {
   font-size: 12px;
   color: #909399;
   line-height: 1.5;
+}
+.claimant-preview {
+  line-height: 1.6;
+}
+.claimant-preview .sub {
+  font-size: 12px;
+  color: #909399;
 }
 </style>

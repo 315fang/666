@@ -7,6 +7,10 @@ const { findUserCouponDoc } = require('./order-coupon');
 const { reservePickupStationInventory, releasePickupStationInventoryForOrder } = require('./pickup-station-stock');
 const { resolveBundleContext } = require('./product-bundle');
 const { assertPortalPassword } = require('./shared/portal-password');
+const {
+    normalizeSlashRecordStatus,
+    resolveSlashExpiryState
+} = require('./shared/slash-expiry');
 
 function pickString(value, fallback = '') {
     if (value == null) return fallback;
@@ -105,6 +109,27 @@ async function findSlashRecord(slashNo) {
         .get()
         .catch(() => ({ data: [] }));
     return res.data && res.data[0] ? res.data[0] : null;
+}
+
+async function findSlashActivity(activityId) {
+    if (!activityId) return null;
+    const num = toNumber(activityId, NaN);
+    const [legacy, doc] = await Promise.all([
+        Number.isFinite(num) ? db.collection('slash_activities').where({ id: num }).limit(1).get().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+        db.collection('slash_activities').doc(String(activityId)).get().catch(() => ({ data: null }))
+    ]);
+    return legacy.data[0] || doc.data || null;
+}
+
+async function markSlashRecordExpired(record = {}) {
+    if (!record || !record._id || record.status === 'expired' || record.status === 'purchased') return;
+    await db.collection('slash_records').doc(String(record._id)).update({
+        data: {
+            status: 'expired',
+            expired_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    }).catch(() => {});
 }
 
 async function findUserByOpenid(openid) {
@@ -1067,11 +1092,18 @@ async function createOrder(openid, orderData) {
         if (endAt && new Date(endAt) < new Date()) throw new Error('拼团活动已过期');
     }
     const slashRecord = slash_no ? await findSlashRecord(slash_no) : null;
+    let slashActivity = null;
     if (slash_no) {
         if (!slashRecord) throw new Error('砍价记录不存在');
         if (slashRecord.openid !== openid) throw new Error('砍价记录归属异常');
         if (slashRecord.status === 'purchased') throw new Error('该砍价已完成购买');
         if (slashRecord.status === 'expired') throw new Error('砍价已过期');
+        slashActivity = await findSlashActivity(slashRecord.activity_id || slashRecord.legacy_activity_id);
+        const slashStatus = normalizeSlashRecordStatus(slashRecord, slashActivity);
+        if (slashStatus === 'expired' || resolveSlashExpiryState(slashRecord, slashActivity).expired) {
+            await markSlashRecordExpired(slashRecord);
+            throw new Error('砍价已过期');
+        }
     }
     if (groupActivity && slashRecord) {
         throw new Error('活动订单类型冲突');
@@ -1847,9 +1879,9 @@ async function createOrder(openid, orderData) {
             await decreaseGoodsFundLedger(openid, payAmount, orderNo, '货款支付订单');
             // 拼团订单货款支付后进入 pending_group（待成团），自提单进入 pickup_pending。
             const isGroupOrder = !!(groupActivity || group_no || group_activity_id);
-            const postPayStatus = deliveryType === 'pickup'
-                ? 'pickup_pending'
-                : (isGroupOrder ? 'pending_group' : 'paid');
+            const postPayStatus = isGroupOrder
+                ? 'pending_group'
+                : (deliveryType === 'pickup' ? 'pickup_pending' : 'paid');
             await db.collection('orders').doc(orderId).update({
                 data: {
                     status: postPayStatus,

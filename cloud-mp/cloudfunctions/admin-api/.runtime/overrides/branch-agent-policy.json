@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "region_reward_tiers": [
+    {
+      "threshold": 0,
+      "rate": 0.01,
+      "label": "测试1%"
+    }
+  ]
+}

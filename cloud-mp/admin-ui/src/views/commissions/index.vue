@@ -22,6 +22,7 @@
           <div class="header-actions">
             <span class="sync-text">最后同步：{{ lastSyncedAt ? formatDate(lastSyncedAt) : '—' }}</span>
             <el-button size="small" @click="fetchData" :loading="loading">刷新</el-button>
+            <el-button size="small" @click="handleRepairRegionAgent" :loading="repairingRegionAgent">补建区域奖励</el-button>
             <el-button
               type="success"
               :disabled="selectedIds.length === 0"
@@ -196,7 +197,14 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { getCommissions, approveCommissionItem, rejectCommissionItem, batchApproveCommissions, batchRejectCommissions } from '@/api'
+import {
+  getCommissions,
+  repairRegionAgentCommissions,
+  approveCommissionItem,
+  rejectCommissionItem,
+  batchApproveCommissions,
+  batchRejectCommissions
+} from '@/api'
 import CompactIdCell from '@/components/CompactIdCell.vue'
 import { formatDate } from '@/utils/format'
 import { COMMISSION_TYPE_OPTIONS, getCommissionTypeLabel } from '@/utils/commission'
@@ -207,6 +215,7 @@ import { extractReadAt, mergeStrongSuccessMessage } from '@/api/consistency'
 
 const loading = ref(false)
 const submitting = ref(false)
+const repairingRegionAgent = ref(false)
 const route = useRoute()
 const router = useRouter()
 const rejectDialogVisible = ref(false)
@@ -290,6 +299,29 @@ const fetchData = async () => {
     console.error('获取佣金列表失败:', e)
   } finally {
     loading.value = false
+  }
+}
+
+const handleRepairRegionAgent = async () => {
+  try {
+    await ElMessageBox.confirm('将扫描已支付/已发货/已完成订单，补建缺失的区域代理奖励。确认继续？', '补建区域奖励', {
+      confirmButtonText: '开始补建',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch (_) {
+    return
+  }
+  repairingRegionAgent.value = true
+  try {
+    const result = await repairRegionAgentCommissions({})
+    ElMessage.success(`补建完成：扫描 ${result.scanned || 0} 单，新增 ${result.created || 0} 条，已存在 ${result.existing || 0} 条`)
+    await fetchData()
+  } catch (e) {
+    ElMessage.error(e?.message || '补建区域奖励失败')
+    console.error('补建区域奖励失败:', e)
+  } finally {
+    repairingRegionAgent.value = false
   }
 }
 

@@ -3,7 +3,10 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
-const { processExpiredGroups } = require('./shared/group-expiry');
+const {
+    processExpiredGroups,
+    recoverExpiredGroupRefundOrders
+} = require('./shared/group-expiry');
 const { recoverGroupExpiredRefunds } = require('./shared/system-refund');
 
 function toNumber(value, fallback = 0) {
@@ -29,6 +32,61 @@ function parseSingletonValue(row, fallback = {}) {
         }
     }
     return value && typeof value === 'object' ? value : fallback;
+}
+
+function parseDate(value) {
+    if (!value) return null;
+    if (value instanceof Date) return Number.isFinite(value.getTime()) ? value : null;
+    if (typeof value === 'string' || typeof value === 'number') {
+        const parsed = new Date(value);
+        return Number.isFinite(parsed.getTime()) ? parsed : null;
+    }
+    if (typeof value === 'object') {
+        if (value.$date) return parseDate(value.$date);
+        if (typeof value._seconds === 'number') return new Date(value._seconds * 1000);
+        if (typeof value.seconds === 'number') return new Date(value.seconds * 1000);
+        if (typeof value.toDate === 'function') return parseDate(value.toDate());
+    }
+    return null;
+}
+
+function normalizeSlashExpireHours(value, fallback = 24) {
+    const hours = Math.floor(toNumber(value, fallback));
+    return Math.max(1, Math.min(720, hours));
+}
+
+async function findOneByAnyId(collectionName, rawId) {
+    if (rawId === null || rawId === undefined || rawId === '') return null;
+    const id = String(rawId);
+    const byDocId = await db.collection(collectionName).doc(id).get().catch(() => ({ data: null }));
+    if (byDocId.data) return byDocId.data;
+    const candidates = [id];
+    const numericId = Number(id);
+    if (Number.isFinite(numericId)) candidates.push(numericId);
+    const res = await db.collection(collectionName)
+        .where(_.or([
+            { id: _.in(candidates) },
+            { _legacy_id: _.in(candidates) }
+        ]))
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return res.data && res.data[0] ? res.data[0] : null;
+}
+
+function resolveSlashExpiry(record = {}, activity = {}, now = new Date()) {
+    const expireHours = normalizeSlashExpireHours(
+        record.expire_hours_snapshot ?? record.expire_hours ?? activity?.expire_hours,
+        24
+    );
+    const explicitExpireAt = parseDate(record.expire_at || record.expires_at);
+    const createdAt = parseDate(record.created_at || record.started_at);
+    const expireAt = explicitExpireAt || (createdAt ? new Date(createdAt.getTime() + expireHours * 3600 * 1000) : null);
+    return {
+        expireHours,
+        expireAt,
+        expired: !!expireAt && expireAt.getTime() <= now.getTime()
+    };
 }
 
 async function getDefaultOrderAutoCancelMinutes() {
@@ -215,6 +273,51 @@ async function recoverPendingGoodsFundRefunds(limit = 20) {
     return payload && payload.data ? payload.data : (payload || { scanned: 0, completed: 0, errors: [] });
 }
 
+async function expireTimedOutSlashRecords(limit = 50, now = new Date()) {
+    const res = await db.collection('slash_records')
+        .where({ status: _.in(['active', 'completed', 'success']) })
+        .orderBy('created_at', 'asc')
+        .limit(Math.max(1, Math.min(100, toNumber(limit, 50))))
+        .get()
+        .catch(() => ({ data: [] }));
+
+    const records = res.data || [];
+    if (!records.length) return { scanned: 0, expired: 0, errors: [] };
+
+    let expired = 0;
+    const errors = [];
+    const activityCache = new Map();
+
+    for (const record of records) {
+        try {
+            const activityKey = String(record.activity_id || record.legacy_activity_id || '');
+            let activity = activityCache.get(activityKey) || null;
+            if (!activity && activityKey) {
+                activity = await findOneByAnyId('slash_activities', activityKey);
+                activityCache.set(activityKey, activity || null);
+            }
+            const expiry = resolveSlashExpiry(record, activity, now);
+            if (!expiry.expired) continue;
+            const updateRes = await db.collection('slash_records')
+                .where({ _id: String(record._id), status: _.in(['active', 'completed', 'success']) })
+                .update({
+                    data: {
+                        status: 'expired',
+                        expired_at: db.serverDate(),
+                        expire_hours_snapshot: record.expire_hours_snapshot || expiry.expireHours,
+                        expire_at: record.expire_at || (expiry.expireAt ? expiry.expireAt.toISOString() : ''),
+                        updated_at: db.serverDate()
+                    }
+                });
+            if (updateRes.stats && updateRes.stats.updated > 0) expired += 1;
+        } catch (error) {
+            errors.push({ slash_no: record.slash_no || record._id || '', error: error.message });
+        }
+    }
+
+    return { scanned: records.length, expired, errors };
+}
+
 /**
  * 订单超时自动取消定时触发器
  * 每5分钟执行，取消超时未支付的订单
@@ -226,15 +329,24 @@ exports.main = async (event, context) => {
     console.log(`[OrderTimeoutCancel] 开始扫描，默认超时分钟: ${TIMEOUT_MINUTES}`);
 
     try {
-        const [pendingResult, groupResult, goodsFundRecoveryResult] = await Promise.all([
+        const [pendingResult, groupResult, goodsFundRecoveryResult, slashExpiryResult] = await Promise.all([
             cancelTimedOutPendingOrders(TIMEOUT_MINUTES, now),
             processExpiredGroups(100),
-            recoverPendingGoodsFundRefunds(50)
+            recoverPendingGoodsFundRefunds(50),
+            expireTimedOutSlashRecords(50, now)
         ]);
+        const expiredGroupRecoveryResult = await recoverExpiredGroupRefundOrders(50);
         const refundRecoveryResult = await recoverGroupExpiredRefunds(50);
 
-        const errors = [...pendingResult.errors, ...groupResult.errors, ...refundRecoveryResult.errors, ...(goodsFundRecoveryResult.errors || [])];
-        console.log(`[OrderTimeoutCancel] 完成，取消 ${pendingResult.cancelled} 个待支付订单，过期 ${groupResult.expiredGroups} 个拼团，触发 ${groupResult.refundedOrders} 笔自动退款，拼团退款补偿扫描 ${refundRecoveryResult.scanned} 笔，已同步 ${refundRecoveryResult.synced} 笔，重试 ${refundRecoveryResult.retried} 笔，货款退款补偿完成 ${goodsFundRecoveryResult.completed || 0} 笔`);
+        const errors = [
+            ...pendingResult.errors,
+            ...groupResult.errors,
+            ...expiredGroupRecoveryResult.errors,
+            ...refundRecoveryResult.errors,
+            ...(goodsFundRecoveryResult.errors || []),
+            ...(slashExpiryResult.errors || [])
+        ];
+        console.log(`[OrderTimeoutCancel] 完成，取消 ${pendingResult.cancelled} 个待支付订单，过期 ${groupResult.expiredGroups} 个拼团，触发 ${groupResult.refundedOrders} 笔自动退款，历史拼团补偿 ${expiredGroupRecoveryResult.recoveredOrders} 笔，拼团退款补偿扫描 ${refundRecoveryResult.scanned} 笔，已同步 ${refundRecoveryResult.synced} 笔，重试 ${refundRecoveryResult.retried} 笔，货款退款补偿完成 ${goodsFundRecoveryResult.completed || 0} 笔，过期砍价 ${slashExpiryResult.expired || 0} 条`);
         if (errors.length > 0) {
             console.error('[OrderTimeoutCancel] 部分失败:', JSON.stringify(errors));
         }
@@ -243,10 +355,12 @@ exports.main = async (event, context) => {
             cancelled: pendingResult.cancelled,
             expired_groups: groupResult.expiredGroups,
             refunded_orders: groupResult.refundedOrders,
+            recovered_group_refund_orders: expiredGroupRecoveryResult.recoveredOrders,
             recovered_refunds: refundRecoveryResult.completed,
             synced_refunds: refundRecoveryResult.synced,
             retried_refunds: refundRecoveryResult.retried,
             recovered_goods_fund_refunds: goodsFundRecoveryResult.completed || 0,
+            expired_slash_records: slashExpiryResult.expired || 0,
             errors: errors.length
         };
     } catch (err) {

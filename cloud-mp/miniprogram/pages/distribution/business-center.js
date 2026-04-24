@@ -71,9 +71,12 @@ Page({
             const userInfo = this.data.userInfo || {};
             const roleLevel = Number(userInfo.role_level || 0);
             const isStoreManager = roleLevel >= USER_ROLES.STORE || managerStations.length > 0;
+            const stationName = managerStations.length > 1
+                ? `${managerStations[0]?.name || '门店'}等${managerStations.length}个门店`
+                : (managerStations[0]?.name || '');
             this.setData({
                 isStoreManager,
-                storeManagerStationName: managerStations[0]?.name || '',
+                storeManagerStationName: stationName,
                 canDirectedInvite: roleLevel >= 4 || managerStations.length > 0
             });
         } catch (_) {

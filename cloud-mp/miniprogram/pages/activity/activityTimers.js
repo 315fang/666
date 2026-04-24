@@ -93,10 +93,9 @@ function startSectionCountdown(page, { sectionKey, cardKey, startTime, endTime }
             clearInterval(page[timerKey]);
             requestCache.deleteByPrefix('/limited-sales/overview');
             requestCache.deleteByPrefix('/limited-sales/detail');
-            if (typeof page.loadConfig === 'function' && typeof page.loadActivityPreviews === 'function') {
+            if (typeof page.loadConfig === 'function') {
                 Promise.resolve()
                     .then(() => page.loadConfig())
-                    .then(() => page.loadActivityPreviews())
                     .catch(() => null);
             }
             return;

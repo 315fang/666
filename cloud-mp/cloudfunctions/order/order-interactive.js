@@ -5,6 +5,12 @@ const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
 const { toNumber } = require('./shared/utils');
+const {
+    buildSlashExpireAt,
+    normalizeSlashExpireHours,
+    normalizeSlashRecordStatus,
+    resolveSlashExpiryState
+} = require('./shared/slash-expiry');
 const orderCreate = require('./order-create');
 const { freezeCommissionsForOrder } = require('./order-lifecycle');
 const {
@@ -161,6 +167,58 @@ function buildUserIdCandidates(user = {}) {
         .map((id) => String(id));
 }
 
+function normalizeLookupTokens(values = []) {
+    const seen = new Set();
+    const tokens = [];
+    (Array.isArray(values) ? values : [values]).forEach((value) => {
+        if (!hasValue(value)) return;
+        const raw = String(value).trim();
+        if (!raw) return;
+        const candidates = [raw];
+        const numeric = Number(raw);
+        if (Number.isFinite(numeric)) candidates.push(String(numeric));
+        candidates.forEach((candidate) => {
+            if (!candidate || seen.has(candidate)) return;
+            seen.add(candidate);
+            tokens.push(candidate);
+        });
+    });
+    return tokens;
+}
+
+function buildLookupQueryValues(values = []) {
+    const output = [];
+    const seen = new Set();
+    normalizeLookupTokens(values).forEach((token) => {
+        [
+            token,
+            Number.isFinite(Number(token)) ? Number(token) : null
+        ].forEach((value) => {
+            if (!hasValue(value)) return;
+            const key = `${typeof value}:${value}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            output.push(value);
+        });
+    });
+    return output;
+}
+
+function buildStationLookupValues(station = {}, extraValues = []) {
+    return normalizeLookupTokens([
+        station._id,
+        station.id,
+        station._legacy_id,
+        station.station_id,
+        ...extraValues
+    ]);
+}
+
+function lookupValuesIntersect(leftValues = [], rightValues = []) {
+    const right = new Set(normalizeLookupTokens(rightValues));
+    return normalizeLookupTokens(leftValues).some((token) => right.has(token));
+}
+
 function normalizePickupCode(rawCode) {
     return String(rawCode || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
@@ -286,15 +344,17 @@ async function requireVerifierStation(openid, rawStationId) {
     if (!targetStationId) {
         throw new Error('请选择当前核销门店');
     }
-    if (!scope.stationIds.includes(String(targetStationId))) {
-        throw new Error('当前账号不属于该自提门店，无法查看或核销');
-    }
     const station = await findOneByAnyId('stations', targetStationId);
     if (!station) {
         throw new Error('自提门店不存在');
     }
+    const stationLookupIds = buildStationLookupValues(station, [targetStationId]);
+    if (!lookupValuesIntersect(stationLookupIds, scope.stationIds)) {
+        throw new Error('当前账号不属于该自提门店，无法查看或核销');
+    }
     return {
         stationId: String(targetStationId),
+        stationLookupIds,
         station,
         scope
     };
@@ -993,6 +1053,42 @@ async function groupOrderDetail(openid, params) {
 
 // ==================== 砍价 ====================
 
+function resolveSlashOriginalPrice(activity = {}, product = null) {
+    return toNumber(
+        activity.original_price
+        ?? activity.initial_price
+        ?? activity.price
+        ?? product?.retail_price
+        ?? product?.price,
+        0
+    );
+}
+
+function resolveSlashFloorPrice(activity = {}) {
+    return toNumber(activity.target_price ?? activity.floor_price ?? activity.slash_price, 0);
+}
+
+async function markSlashRecordExpired(record = {}) {
+    if (!record || !record._id || record.status === 'expired' || record.status === 'purchased') return;
+    await db.collection('slash_records').doc(String(record._id)).update({
+        data: {
+            status: 'expired',
+            expired_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    }).catch(() => {});
+}
+
+function buildSlashTimingPayload(record = {}, activity = {}) {
+    const expiryState = resolveSlashExpiryState(record, activity);
+    return {
+        expire_hours: expiryState.expireHours,
+        expire_at: expiryState.expireAt,
+        expires_at: expiryState.expireAt,
+        remain_seconds: expiryState.remainSeconds
+    };
+}
+
 /**
  * 发起砍价
  * @param {string} openid - 用户 openid
@@ -1008,35 +1104,46 @@ async function slashStart(openid, params) {
     const activityId = activity._id || String(slashActivityId);
 
     if (!isActivityOpen(activity)) throw new Error('砍价活动已结束');
+    const expireHours = normalizeSlashExpireHours(activity.expire_hours, 24);
 
     // 2. 检查是否已发起
     const existingRes = await db.collection('slash_records')
         .where({
             openid,
-            status: 'active',
+            status: _.in(['active', 'completed', 'success']),
             activity_id: _.in([activityId, String(slashActivityId)].filter(Boolean))
         })
-        .limit(1).get().catch(() => ({ data: [] }));
-    if (existingRes.data && existingRes.data.length > 0) {
-        const existingRecord = existingRes.data[0];
+        .limit(5).get().catch(() => ({ data: [] }));
+    const existingRecords = existingRes.data || [];
+    for (const existingRecord of existingRecords) {
+        const status = normalizeSlashRecordStatus(existingRecord, activity);
+        if (status === 'expired') {
+            await markSlashRecordExpired(existingRecord);
+            continue;
+        }
+        const timing = buildSlashTimingPayload(existingRecord, activity);
         return {
             success: true,
             existing: true,
             slash_id: existingRecord._id,
             slash_no: existingRecord.slash_no,
+            status,
             current_price: existingRecord.current_price,
             target_price: existingRecord.target_price,
+            ...timing,
             message: '已为你找到进行中的砍价，继续查看即可'
         };
     }
 
 
     // 3. 创建砍价记录
-    const originalPrice = toNumber(activity.original_price || activity.price, 0);
-    const targetPrice = toNumber(activity.target_price || activity.slash_price, 0);
+    const product = await loadProductSummary(activity.product_id || params.product_id);
+    const originalPrice = resolveSlashOriginalPrice(activity, product);
+    const targetPrice = resolveSlashFloorPrice(activity);
     const maxSlash = toNumber(activity.max_slash || activity.max_cut, originalPrice - targetPrice);
     const currentPrice = originalPrice;
     const slashNo = 'SLH' + Date.now() + Math.floor(Math.random() * 1000);
+    const expireAt = buildSlashExpireAt(expireHours);
 
     const record = {
         slash_no: slashNo,
@@ -1052,6 +1159,8 @@ async function slashStart(openid, params) {
         slash_count: 0,
         helpers: [],
         status: 'active',
+        expire_hours_snapshot: expireHours,
+        expire_at: expireAt,
         created_at: db.serverDate(),
         updated_at: db.serverDate(),
     };
@@ -1065,6 +1174,11 @@ async function slashStart(openid, params) {
         original_price: originalPrice,
         target_price: targetPrice,
         current_price: currentPrice,
+        status: 'active',
+        expire_hours: expireHours,
+        expire_at: expireAt,
+        expires_at: expireAt,
+        remain_seconds: expireHours * 3600
     };
 }
 
@@ -1089,6 +1203,12 @@ async function slashHelp(openid, params) {
     const record = recordRes.data && recordRes.data[0] ? recordRes.data[0] : null;
     if (!record) throw new Error('砍价记录不存在');
 
+    const activity = await findOneByAnyId('slash_activities', record.activity_id || record.legacy_activity_id);
+    const normalizedStatus = normalizeSlashRecordStatus(record, activity);
+    if (normalizedStatus === 'expired') {
+        await markSlashRecordExpired(record);
+        throw new Error('砍价已过期');
+    }
     if (record.status !== 'active') throw new Error('砍价已结束');
 
     // 2. 不能帮自己砍
@@ -1101,14 +1221,19 @@ async function slashHelp(openid, params) {
     }
 
     // 4. 计算砍价金额（随机，但不超过剩余可砍金额）
-    const remaining = record.current_price - record.target_price;
+    const targetPrice = toNumber(record.target_price, resolveSlashFloorPrice(activity || {}));
+    const currentPrice = toNumber(record.current_price, resolveSlashOriginalPrice(activity || {}, null));
+    const remaining = currentPrice - targetPrice;
     if (remaining <= 0) throw new Error('已砍到目标价');
 
     const minCut = Math.max(0.01, remaining * 0.05);
-    const maxCut = Math.min(remaining * 0.3, record.max_slash / (record.slash_count + 5 + 1));
+    const maxSlash = toNumber(record.max_slash, remaining);
+    const maxCut = Math.min(remaining * 0.3, maxSlash / (record.slash_count + 5 + 1));
     const cutAmount = Math.round((minCut + Math.random() * (maxCut - minCut)) * 100) / 100;
-    const newPrice = Math.max(record.target_price, Math.round((record.current_price - cutAmount) * 100) / 100);
-    const actualCut = Math.round((record.current_price - newPrice) * 100) / 100;
+    const newPrice = Math.max(targetPrice, Math.round((currentPrice - cutAmount) * 100) / 100);
+    const actualCut = Math.round((currentPrice - newPrice) * 100) / 100;
+    const nextStatus = newPrice <= targetPrice ? 'completed' : 'active';
+    const timing = buildSlashTimingPayload(record, activity);
 
     // 5. 更新记录
     await db.collection('slash_records').doc(record._id).update({
@@ -1121,7 +1246,7 @@ async function slashHelp(openid, params) {
                 cut_amount: actualCut,
                 helped_at: db.serverDate(),
             }),
-            status: newPrice <= record.target_price ? 'completed' : 'active',
+            status: nextStatus,
             updated_at: db.serverDate(),
         },
     });
@@ -1130,8 +1255,10 @@ async function slashHelp(openid, params) {
         success: true,
         cut_amount: actualCut,
         current_price: newPrice,
-        target_price: record.target_price,
-        is_completed: newPrice <= record.target_price,
+        target_price: targetPrice,
+        is_completed: newPrice <= targetPrice,
+        status: nextStatus === 'completed' ? 'success' : 'active',
+        ...timing
     };
 }
 
@@ -1158,12 +1285,19 @@ async function slashDetail(openid, params) {
     const record = recordRes.data[0];
     const activity = await findOneByAnyId('slash_activities', record.activity_id || record.legacy_activity_id);
     const product = await loadProductSummary(record.product_id || activity?.product_id);
-    const originalPrice = toNumber(record.original_price || activity?.original_price, 0);
-    const floorPrice = toNumber(record.target_price || activity?.floor_price || activity?.target_price, 0);
+    const originalPrice = toNumber(record.original_price, resolveSlashOriginalPrice(activity || {}, product));
+    const floorPrice = toNumber(record.target_price, resolveSlashFloorPrice(activity || {}));
     const currentPrice = toNumber(record.current_price, originalPrice);
-    let status = record.status || 'active';
-    if (status === 'completed') status = 'success';
-    if (currentPrice <= floorPrice && floorPrice > 0) status = 'success';
+    let status = normalizeSlashRecordStatus({
+        ...record,
+        original_price: originalPrice,
+        target_price: floorPrice,
+        current_price: currentPrice
+    }, activity);
+    if (status === 'expired') {
+        await markSlashRecordExpired(record);
+    }
+    const timing = buildSlashTimingPayload(record, activity);
 
     const helpers = Array.isArray(record.helpers) ? record.helpers : [];
     const maxHelpers = activity?.max_helpers;
@@ -1213,6 +1347,7 @@ async function slashDetail(openid, params) {
         is_owner: isOwner,          // 当前用户是否是砍价发起人
         already_helped: alreadyHelped, // 当前用户是否已帮砍过
         helper_full: helperFull,    // 帮砍名额是否已满
+        ...timing,
         product,
         activity: activity ? {
             _id: activity._id,
@@ -1222,7 +1357,7 @@ async function slashDetail(openid, params) {
             max_slash_per_helper: activity.max_slash_per_helper,
             stock_limit: activity.stock_limit || 0,
             sold_count: activity.sold_count || 0,
-            expire_hours: activity.expire_hours || 0
+            expire_hours: timing.expire_hours
         } : {},
         created_at: record.created_at,
         updated_at: record.updated_at
@@ -1266,23 +1401,30 @@ async function mySlashList(openid, params = {}) {
         list: records.map(r => {
             const related = activityMap[r.slash_no] || {};
             const activity = related.activity || {};
+            const timing = buildSlashTimingPayload(r, activity);
+            const status = normalizeSlashRecordStatus(r, activity);
+            if (status === 'expired') {
+                markSlashRecordExpired(r).catch(() => {});
+            }
             return {
-            _id: r._id,
-            id: r._id || r.slash_no,
-            slash_no: r.slash_no,
-            activity_id: r.activity_id,
-            product_id: r.product_id,
-            original_price: r.original_price,
-            target_price: r.target_price,
-            floor_price: r.target_price || activity.floor_price || activity.target_price || 0,
-            current_price: r.current_price,
-            total_slashed: r.total_slashed,
-            slash_count: r.slash_count,
-            helper_count: r.slash_count || (Array.isArray(r.helpers) ? r.helpers.length : 0),
-            product: related.product,
-            status: r.status,
-            created_at: r.created_at,
-        };
+                _id: r._id,
+                id: r._id || r.slash_no,
+                slash_no: r.slash_no,
+                activity_id: r.activity_id,
+                product_id: r.product_id,
+                original_price: r.original_price,
+                target_price: r.target_price,
+                floor_price: r.target_price || activity.floor_price || activity.target_price || 0,
+                current_price: r.current_price,
+                total_slashed: r.total_slashed,
+                slash_count: r.slash_count,
+                helper_count: r.slash_count || (Array.isArray(r.helpers) ? r.helpers.length : 0),
+                product: related.product,
+                status,
+                raw_status: r.status,
+                ...timing,
+                created_at: r.created_at,
+            };
         }),
         total: totalRes.total || 0,
         page,
@@ -1453,7 +1595,7 @@ async function lotteryDraw(openid, params) {
  * 待核销订单列表（门店管理员查看）
  */
 async function pickupPendingOrders(openid, params = {}) {
-    const { stationId, station } = await requireVerifierStation(openid, params.station_id || params.pickup_station_id);
+    const { stationId, station, stationLookupIds } = await requireVerifierStation(openid, params.station_id || params.pickup_station_id);
     const page = toNumber(params.page, 1);
     const pageSize = toNumber(params.pageSize || params.size, 20);
 
@@ -1462,7 +1604,10 @@ async function pickupPendingOrders(openid, params = {}) {
         status: _.in(['paid', 'pickup_pending']),
     });
 
-    query = query.where({ pickup_station_id: stationId });
+    const stationQueryValues = buildLookupQueryValues(stationLookupIds.length ? stationLookupIds : [stationId]);
+    query = stationQueryValues.length > 1
+        ? query.where({ pickup_station_id: _.in(stationQueryValues) })
+        : query.where({ pickup_station_id: stationQueryValues[0] || stationId });
 
     const [res, totalRes] = await Promise.all([
         query.orderBy('paid_at', 'desc')
@@ -1550,12 +1695,12 @@ async function pickupMyOrder(openid, params) {
     };
 }
 
-async function finalizePickupVerification(order, openid, stationId) {
+async function finalizePickupVerification(order, openid, stationId, stationLookupIds = [stationId]) {
     if (!order) {
         throw new Error('核销码无效');
     }
 
-    if (String(order.pickup_station_id || '') !== String(stationId)) {
+    if (!lookupValuesIntersect([order.pickup_station_id], stationLookupIds)) {
         throw new Error('当前订单不属于你所在门店');
     }
 
@@ -1595,7 +1740,7 @@ async function finalizePickupVerification(order, openid, stationId) {
 async function pickupVerifyCode(openid, params) {
     const code = normalizePickupCode(params.pickup_code || params.code);
     if (!code) throw new Error('缺少核销码');
-    const { stationId } = await requireVerifierStation(openid, params.station_id || params.pickup_station_id);
+    const { stationId, stationLookupIds } = await requireVerifierStation(openid, params.station_id || params.pickup_station_id);
 
     // 1. 查找对应订单
     const orderRes = await db.collection('orders')
@@ -1606,14 +1751,14 @@ async function pickupVerifyCode(openid, params) {
         throw new Error('核销码无效');
     }
 
-    return finalizePickupVerification(orderRes.data[0], openid, stationId);
+    return finalizePickupVerification(orderRes.data[0], openid, stationId, stationLookupIds);
 }
 
 /**
  * 二维码核销（门店管理员用）
  */
 async function pickupVerifyQr(openid, params) {
-    const { stationId } = await requireVerifierStation(openid, params.station_id || params.pickup_station_id);
+    const { stationId, stationLookupIds } = await requireVerifierStation(openid, params.station_id || params.pickup_station_id);
     const rawQr = String(params.qr_token || params.pickup_qr_token || params.qr_data || params.qr_code || params.pickup_code || '').trim();
     if (!rawQr) throw new Error('缺少二维码数据');
 
@@ -1635,7 +1780,7 @@ async function pickupVerifyQr(openid, params) {
             .catch(() => ({ data: [] }));
 
         if (orderRes.data && orderRes.data[0]) {
-            return finalizePickupVerification(orderRes.data[0], openid, stationId);
+            return finalizePickupVerification(orderRes.data[0], openid, stationId, stationLookupIds);
         }
     }
 

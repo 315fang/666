@@ -3,6 +3,22 @@
  * 提供 TTL 缓存机制，减少不必要的网络请求
  */
 
+const { isDevelopment, isDebugEnabled } = require('../config/env');
+
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(item => stableStringify(item)).join(',')}]`;
+  }
+  return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+}
+
+function shouldLogPerf(debugCache) {
+  return Boolean(debugCache) && (isDevelopment() || isDebugEnabled());
+}
+
 class RequestCache {
   constructor() {
     this.cache = new Map();
@@ -19,7 +35,7 @@ class RequestCache {
   generateKey(url, params = {}) {
     const sortedParams = Object.keys(params)
       .sort()
-      .map(key => `${key}=${JSON.stringify(params[key])}`)
+      .map(key => `${key}=${stableStringify(params[key])}`)
       .join('&');
     return `${url}?${sortedParams}`;
   }
@@ -228,10 +244,17 @@ function getCacheStrategy(url) {
  */
 function cachedGet(requestFn, url, params = {}, options = {}) {
   const { useCache = true, cacheTTL, debugCache = false, ...restOptions } = options;
+  const shouldUseCache = useCache && cacheTTL !== 0;
+  const debugPerf = shouldLogPerf(debugCache);
 
   // 如果不使用缓存，直接发起请求
-  if (!useCache) {
-    return requestFn(url, params, restOptions);
+  if (!shouldUseCache) {
+    const startedAt = Date.now();
+    return requestFn(url, params, restOptions).finally(() => {
+      if (debugPerf) {
+        console.log(`[RequestCache] bypass ${url} ${Date.now() - startedAt}ms`);
+      }
+    });
   }
 
   // 生成缓存键
@@ -240,7 +263,7 @@ function cachedGet(requestFn, url, params = {}, options = {}) {
   // 尝试从缓存获取
   const cachedData = requestCache.get(cacheKey);
   if (cachedData) {
-    if (debugCache) {
+    if (debugPerf) {
       console.log('[RequestCache] 命中缓存:', url);
     }
     return Promise.resolve(cachedData);
@@ -248,25 +271,31 @@ function cachedGet(requestFn, url, params = {}, options = {}) {
 
   const pendingRequest = requestCache.getPending(cacheKey);
   if (pendingRequest) {
-    if (debugCache) {
+    if (debugPerf) {
       console.log('[RequestCache] 合并进行中的请求:', url);
     }
     return pendingRequest;
   }
 
   // 首次请求或缓存已过期都属于正常路径，默认不打印，避免开发时误判成异常。
-  if (debugCache) {
+  if (debugPerf) {
     console.log('[RequestCache] 发起请求（首次或缓存过期）:', url);
   }
+  const startedAt = Date.now();
   const requestPromise = requestFn(url, params, restOptions).then(data => {
     // 获取缓存策略
-    const ttl = cacheTTL || getCacheStrategy(url);
+    const ttl = cacheTTL !== undefined ? cacheTTL : getCacheStrategy(url);
 
     // 存入缓存
-    requestCache.set(cacheKey, data, ttl);
+    if (ttl > 0) {
+      requestCache.set(cacheKey, data, ttl);
+    }
 
     return data;
   }).finally(() => {
+    if (debugPerf) {
+      console.log(`[RequestCache] request ${url} ${Date.now() - startedAt}ms`);
+    }
     requestCache.deletePending(cacheKey);
   });
 

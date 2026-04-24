@@ -62,7 +62,26 @@ function normalizeSlashRecord(record) {
     if (Number.isFinite(currentPrice) && Number.isFinite(floorPrice) && floorPrice > 0 && currentPrice <= floorPrice) {
         status = 'success';
     }
-    return { ...record, status };
+    const remainSeconds = typeof record.remain_seconds === 'number' ? record.remain_seconds : null;
+    const expireAt = record.expire_at || record.expires_at;
+    let remainText = '';
+    let expiredByTime = false;
+    if (remainSeconds !== null) {
+        expiredByTime = remainSeconds <= 0;
+        const hours = Math.floor(Math.max(0, remainSeconds) / 3600);
+        const mins = Math.floor((Math.max(0, remainSeconds) % 3600) / 60);
+        remainText = hours > 0 ? `剩余${hours}小时${mins}分` : `剩余${mins}分钟`;
+    } else if (expireAt) {
+        const ms = new Date(expireAt).getTime() - Date.now();
+        expiredByTime = Number.isFinite(ms) && ms <= 0;
+        if (Number.isFinite(ms) && ms > 0) {
+            const hours = Math.floor(ms / 3600000);
+            const mins = Math.floor((ms % 3600000) / 60000);
+            remainText = hours > 0 ? `剩余${hours}小时${mins}分` : `剩余${mins}分钟`;
+        }
+    }
+    if (expiredByTime && status !== 'purchased') status = 'expired';
+    return { ...record, status, _remainText: remainText };
 }
 
 Page({

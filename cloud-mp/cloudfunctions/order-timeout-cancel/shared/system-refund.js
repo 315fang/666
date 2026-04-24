@@ -10,6 +10,7 @@ const { createRefund, loadPrivateKey } = require('../wechat-pay-v3');
 const SYSTEM_REFUND_REASON = '拼团超时未成团，系统自动退款';
 const SYSTEM_REFUND_SCENE = 'group_expired';
 const GROUP_EXPIRED_RECOVERY_STATUSES = ['pending', 'approved', 'processing', 'failed'];
+const GROUP_EXPIRED_REFUNDABLE_ORDER_STATUSES = ['pending_group', 'paid', 'pickup_pending', 'refunding'];
 const DEFAULT_RECOVERY_LIMIT = 20;
 
 function toNumber(value, fallback = 0) {
@@ -631,7 +632,7 @@ async function findExistingActiveRefund(order = {}) {
     const res = await db.collection('refunds')
         .where({
             order_id: _.in(orderTokens),
-            status: _.in(['pending', 'approved', 'processing', 'completed'])
+            status: _.in(['pending', 'approved', 'processing', 'failed', 'completed'])
         })
         .limit(5)
         .get()
@@ -711,9 +712,33 @@ async function createRefundRecord(order = {}, options = {}) {
     };
 }
 
+async function markExistingRefundAsGroupExpired(refund = {}, options = {}) {
+    if (!refund || !refund._id) return;
+    const patch = { updated_at: db.serverDate() };
+    if (pickString(refund.system_refund_scene) !== SYSTEM_REFUND_SCENE) patch.system_refund_scene = SYSTEM_REFUND_SCENE;
+    if (!pickString(refund.reason)) patch.reason = options.reason || SYSTEM_REFUND_REASON;
+    if (!pickString(refund.description) && options.description) patch.description = options.description;
+    if (!pickString(refund.group_no) && options.groupNo) patch.group_no = options.groupNo;
+    if (!pickString(refund.group_activity_id) && options.groupActivityId) patch.group_activity_id = options.groupActivityId;
+    if (refund.skip_order_revert_on_fail !== true) patch.skip_order_revert_on_fail = true;
+    if (Object.keys(patch).length <= 1) return;
+    await db.collection('refunds').doc(String(refund._id)).update({ data: patch }).catch(() => {});
+}
+
 async function moveOrderIntoRefunding(order = {}, options = {}) {
+    if (pickString(order.status) === 'refunding') {
+        await db.collection('orders').doc(String(order._id)).update({
+            data: {
+                group_expired_at: order.group_expired_at || db.serverDate(),
+                group_expired_group_no: options.groupNo || order.group_expired_group_no || '',
+                group_expired_reason: options.reason || order.group_expired_reason || SYSTEM_REFUND_REASON,
+                updated_at: db.serverDate(),
+            }
+        }).catch(() => {});
+        return true;
+    }
     const updateRes = await db.collection('orders')
-        .where({ _id: String(order._id), status: 'pending_group' })
+        .where({ _id: String(order._id), status: _.in(GROUP_EXPIRED_REFUNDABLE_ORDER_STATUSES) })
         .update({
             data: {
                 status: 'refunding',
@@ -757,6 +782,15 @@ async function clearOrderRefundFailure(orderId) {
             updated_at: db.serverDate(),
         }
     }).catch(() => {});
+}
+
+function isGroupExpiredRefundCandidate(order = {}) {
+    return !!(
+        order
+        && order._id
+        && order.openid
+        && GROUP_EXPIRED_REFUNDABLE_ORDER_STATUSES.includes(pickString(order.status))
+    );
 }
 
 function shouldRecoverGroupExpiredRefund(refund = {}) {
@@ -1008,13 +1042,31 @@ async function processWechatRefund(order, refundContext) {
     }
 }
 
+async function settleCompletedGroupExpiredRefund(order = {}, refund = {}) {
+    if (!order || !order._id || !refund || !refund._id || pickString(refund.status) !== 'completed') {
+        return { skipped: true };
+    }
+    const refundRecord = {
+        ...refund,
+        amount: roundMoney(refund.amount ?? refund.refund_amount),
+        refund_amount: roundMoney(refund.refund_amount ?? refund.amount),
+    };
+    const { isFullRefund } = await applyRefundProgress(order._id, order, refundRecord);
+    await reverseBuyerRefundAssetsWithMarker(order.openid, order._id, order, refundRecord, isFullRefund);
+    await cancelRefundRelatedCommissions(order._id, SYSTEM_REFUND_REASON);
+    await restoreOrderStock(order._id, order, refundRecord);
+    await clearOrderRefundFailure(order._id);
+    return { settled: true, refundId: refund._id };
+}
+
 async function autoRefundGroupOrder(order = {}, options = {}) {
-    if (!order || !order._id || order.status !== 'pending_group' || !order.openid) {
+    if (!isGroupExpiredRefundCandidate(order)) {
         return { skipped: true };
     }
 
     const existingRefund = await findExistingActiveRefund(order);
     if (existingRefund) {
+        await markExistingRefundAsGroupExpired(existingRefund, options);
         if (existingRefund.status !== 'completed') {
             await db.collection('orders').doc(String(order._id)).update({
                 data: {
@@ -1025,6 +1077,10 @@ async function autoRefundGroupOrder(order = {}, options = {}) {
                     updated_at: db.serverDate(),
                 }
             }).catch(() => {});
+        } else {
+            await settleCompletedGroupExpiredRefund(order, existingRefund).catch((error) => {
+                console.error('[GroupExpiredRefund] settle completed refund failed:', order._id, error.message);
+            });
         }
         return { skipped: true, reason: 'refund_exists', refundId: existingRefund._id || '' };
     }
@@ -1045,6 +1101,11 @@ async function autoRefundGroupOrder(order = {}, options = {}) {
 module.exports = {
     SYSTEM_REFUND_REASON,
     SYSTEM_REFUND_SCENE,
+    GROUP_EXPIRED_REFUNDABLE_ORDER_STATUSES,
     autoRefundGroupOrder,
     recoverGroupExpiredRefunds,
+    __test__: {
+        isGroupExpiredRefundCandidate,
+        shouldRecoverGroupExpiredRefund
+    }
 };

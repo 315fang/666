@@ -326,7 +326,14 @@ async function loadFeaturedProducts(page, options = {}) {
         list = Array.isArray(boardProducts) ? boardProducts : [];
 
         if (!list.length) {
-            const res = await cachedGet(get, '/products', { page: 1, limit: 6, sort: 'hot' }, {
+            const res = await cachedGet(get, '/products', {
+                page: 1,
+                limit: 6,
+                sort: 'hot',
+                view: 'card',
+                include_skus: 0,
+                include_total: 0
+            }, {
                 useCache: !forceRefresh,
                 cacheTTL: 2 * 60 * 1000,
                 showError: false,
@@ -342,7 +349,8 @@ async function loadFeaturedProducts(page, options = {}) {
             const processed = processProduct(product, roleLevel);
             const displayPrice = Number(resolveProductDisplayPrice(product, roleLevel) || 0);
             const marketPrice = Number(normalizePriceValue(product.market_price ?? product.original_price) || 0);
-            const coverImage = normalizeAssetUrl(resolveProductImage(product))
+            const coverImage = normalizeAssetUrl(product.display_image || product.image_url || product.image_ref)
+                || normalizeAssetUrl(resolveProductImage(product))
                 || normalizeAssetUrl(processed.firstImage)
                 || pickImageSource(product)
                 || '/assets/images/placeholder.svg';
@@ -500,7 +508,12 @@ async function loadCoupons(page) {
         return;
     }
     try {
-        const res = await get('/coupons/mine', { status: 'unused' });
+        const res = await cachedGet(get, '/coupons/mine', { status: 'unused' }, {
+            cacheTTL: 60 * 1000,
+            showError: false,
+            maxRetries: 0,
+            timeout: 10000
+        });
         if (res.code === 0) {
             const source = Array.isArray(res && res.list)
                 ? res.list
