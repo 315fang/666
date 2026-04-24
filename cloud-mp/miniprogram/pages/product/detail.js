@@ -1,11 +1,10 @@
 // pages/product/detail.js
 const { get, post } = require('../../utils/request');
-const { normalizeActivityList } = require('../../utils/activityList');
+const { normalizeActivityList, resolveSlashResumePayload } = require('./utils/activityHelpers');
 const { normalizeProductId } = require('../../utils/dataFormatter');
 const { USER_ROLES } = require('../../config/constants');
 const { safeBack } = require('../../utils/navigator');
 const { requireLogin } = require('../../utils/auth');
-const { resolveSlashResumePayload } = require('../../utils/activityResume');
 const { fetchLimitedSpotContext, normalizeLimitedSpotMode } = require('../../utils/limitedSpot');
 const { loadProduct, resolveDetailImageList, resolvePayableUnitPrice, buildSkuText } = require('./productDetailData');
 const { refreshFavoriteState, toggleFavorite } = require('./productDetailFavorite');

@@ -1,8 +1,7 @@
 // pages/slash/list.js
 const { get, post } = require('../../utils/request');
-const { normalizeActivityList } = require('../../utils/activityList');
+const { normalizeActivityList, resolveSlashResumePayload } = require('./utils/activityHelpers');
 const { requireLogin } = require('../../utils/auth');
-const { resolveSlashResumePayload } = require('../../utils/activityResume');
 const app = getApp();
 const PRODUCT_PLACEHOLDER = '/assets/icons/package.svg';
 

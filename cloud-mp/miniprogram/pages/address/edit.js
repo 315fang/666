@@ -1,6 +1,6 @@
 // pages/address/edit.js - 地址新增/编辑
 const { get, post, put } = require('../../utils/request');
-const { validatePhone, isEmpty } = require('../../utils/helpers');
+const { validatePhone, isEmpty } = require('./utils/formValidators');
 const { ErrorHandler, showError, showSuccess } = require('../../utils/errorHandler');
 const { ensureLogin } = require('../../utils/auth');
 const { ensurePrivacyAuthorization } = require('../../utils/privacy');

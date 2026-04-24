@@ -1,6 +1,6 @@
 // pages/group/list.js
 const { get, post } = require('../../utils/request');
-const { normalizeActivityList } = require('../../utils/activityList');
+const { normalizeActivityList } = require('./utils/activityList');
 const { requireLogin } = require('../../utils/auth');
 const app = getApp();
 const PRODUCT_PLACEHOLDER = '/assets/icons/package.svg';

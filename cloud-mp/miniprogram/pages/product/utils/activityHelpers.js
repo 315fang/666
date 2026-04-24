@@ -1,3 +1,10 @@
+function normalizeActivityList(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (payload && Array.isArray(payload.list)) return payload.list;
+    if (payload && Array.isArray(payload.data)) return payload.data;
+    return [];
+}
+
 function pickData(payload) {
     return payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object'
         ? payload.data
@@ -7,22 +14,6 @@ function pickData(payload) {
 function hasResumeMessage(message, keywords) {
     const text = message ? String(message) : '';
     return keywords.some((keyword) => text.includes(keyword));
-}
-
-function resolveGroupResumePayload(payload) {
-    const data = pickData(payload);
-    const groupNo = (data && data.group_no) || (payload && payload.group_no) || '';
-    const existing = Boolean(
-        (data && data.existing) ||
-        (payload && payload.existing) ||
-        (groupNo && hasResumeMessage(payload && payload.message, ['进行中的拼团', '继续上次拼团']))
-    );
-
-    return {
-        resumable: Boolean(groupNo && existing),
-        groupNo: groupNo || '',
-        existing
-    };
 }
 
 function resolveSlashResumePayload(payload) {
@@ -42,6 +33,6 @@ function resolveSlashResumePayload(payload) {
 }
 
 module.exports = {
-    resolveGroupResumePayload,
+    normalizeActivityList,
     resolveSlashResumePayload
 };

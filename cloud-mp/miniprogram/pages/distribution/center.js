@@ -2,7 +2,7 @@
 const app = getApp();
 const { get, post } = require('../../utils/request');
 const { ROLE_NAMES, USER_ROLES } = require('../../config/constants');
-const { copyAgentPortalLink } = require('../../utils/helpers');
+const { copyAgentPortalLink } = require('./utils/agentPortal');
 const { promptPortalPassword } = require('../../utils/portalPassword');
 
 // 状态字典

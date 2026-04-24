@@ -3,7 +3,7 @@ const { get } = require('../../utils/request');
 const { SEARCH_CONFIG } = require('../../config/constants');
 const { ErrorHandler, showError } = require('../../utils/errorHandler');
 const { processProducts } = require('../../utils/dataFormatter');
-const { debounce } = require('../../utils/helpers');
+const { debounce } = require('./utils/debounce');
 const { cachedGet, CACHE_STRATEGIES } = require('../../utils/requestCache');
 
 Page({
