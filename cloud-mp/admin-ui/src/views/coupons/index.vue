@@ -456,23 +456,41 @@ const fetchData = async () => {
     }
     const res = await getCoupons(params)
     tableData.value = res?.list || []
-    couponOptions.value = tableData.value
+    if (!searchForm.keyword && searchForm.status === '' && pagination.page === 1) {
+      couponOptions.value = tableData.value
+    }
     applyResponse(res)
   } finally {
     loading.value = false
   }
 }
 
+const fetchCouponOptions = async () => {
+  try {
+    const res = await getCoupons({ page: 1, limit: 200 })
+    couponOptions.value = res?.list || []
+  } catch (e) {
+    if (!couponOptions.value.length) couponOptions.value = tableData.value
+  }
+}
+
+const applyAutoRule = (rules = []) => {
+  const reg = (rules || []).find(r => r.trigger_event === 'register') || null
+  if (!reg) {
+    autoRule.enabled = false
+    autoRule.coupon_id = null
+    autoRule.target_levels = []
+    return
+  }
+  autoRule.enabled = reg.enabled === true || reg.enabled === 1 || reg.enabled === '1' || reg.enabled === 'true'
+  autoRule.coupon_id = reg.coupon_id || null
+  autoRule.target_levels = Array.isArray(reg.target_levels) ? reg.target_levels : []
+}
+
 const fetchAutoRule = async () => {
   try {
     const res = await getCouponAutoRules()
-    const rules = res || []
-    const reg = (rules || []).find(r => r.trigger_event === 'register') || null
-    if (reg) {
-      autoRule.enabled = !!reg.enabled
-      autoRule.coupon_id = reg.coupon_id || null
-      autoRule.target_levels = Array.isArray(reg.target_levels) ? reg.target_levels : []
-    }
+    applyAutoRule(res || [])
   } catch (e) {
     console.warn('获取自动发券规则失败', e)
   }
@@ -489,7 +507,8 @@ const saveAutoRule = async () => {
       coupon_id: autoRule.coupon_id || null,
       target_levels: Array.isArray(autoRule.target_levels) ? autoRule.target_levels : []
     }]
-    await saveCouponAutoRules({ rules })
+    const saved = await saveCouponAutoRules({ rules })
+    applyAutoRule(saved || rules)
     ElMessage.success('自动发券规则已保存')
   } finally {
     autoRuleSaving.value = false
@@ -586,6 +605,39 @@ const defaultForm = () => ({
 })
 const form = reactive(defaultForm())
 
+const couponPayloadKeys = [
+  'name',
+  'type',
+  'value',
+  'min_purchase',
+  'scope',
+  'scope_ids',
+  'valid_days',
+  'stock',
+  'daily_claim_limit',
+  'claim_time_enabled',
+  'claim_start_time',
+  'claim_end_time',
+  'description',
+  'show_in_coupon_center',
+  'is_active'
+]
+
+function resetCouponForm(next = {}) {
+  const base = defaultForm()
+  Object.keys(form).forEach((key) => {
+    if (!(key in base) && !(key in next)) delete form[key]
+  })
+  Object.assign(form, base, next)
+}
+
+function buildCouponPayload() {
+  return couponPayloadKeys.reduce((payload, key) => {
+    payload[key] = form[key]
+    return payload
+  }, {})
+}
+
 const rules = {
   name: [{ required: true, message: '请输入券名称', trigger: 'blur' }],
   value: [
@@ -614,7 +666,7 @@ const rules = {
 const openForm = async (row) => {
   await loadCategories()
   if (row) {
-    Object.assign(form, defaultForm(), { ...row })
+    resetCouponForm({ ...row })
     form.scope_ids = normalizeScopeIds(row.scope_ids)
     productOptions.value = []
     if (form.scope === 'product' && form.scope_ids.length) {
@@ -632,7 +684,7 @@ const openForm = async (row) => {
       }
     }
   } else {
-    Object.assign(form, defaultForm())
+    resetCouponForm()
     productOptions.value = []
     await searchProducts('')
   }
@@ -654,7 +706,7 @@ const submitForm = async () => {
   if (!valid) return
   submitting.value = true
   try {
-    const data = { ...form }
+    const data = buildCouponPayload()
     if (data.type === 'no_threshold') {
       data.min_purchase = 0
     }
@@ -663,15 +715,17 @@ const submitForm = async () => {
     } else {
       data.scope_ids = normalizeScopeIds(data.scope_ids)
     }
-    if (data.id) {
-      await updateCoupon(data.id, data)
+    const editingId = form.id
+    if (editingId) {
+      await updateCoupon(editingId, data)
       ElMessage.success('更新成功')
     } else {
       await createCoupon(data)
       ElMessage.success('创建成功')
     }
     formVisible.value = false
-    fetchData()
+    await fetchData()
+    await fetchCouponOptions()
   } catch (e) {
     ElMessage.error(e?.message || '保存失败，请重试')
   } finally {
@@ -934,6 +988,7 @@ const doIssue = async () => {
 
 onMounted(() => {
   fetchData()
+  fetchCouponOptions()
   fetchAutoRule()
 })
 </script>

@@ -365,3 +365,203 @@ test('coupon issue dry-run accepts synthesized coupon id on a fresh instance', a
         }
     ]);
 });
+
+test('coupon create ignores stale client identity fields and preserves submitted amount', async () => {
+    const app = express();
+    const deps = createDeps({
+        initialCollections: {
+            coupons: [
+                {
+                    _id: 'coupon-doc-1',
+                    id: 6,
+                    name: '原新人券',
+                    type: 'fixed',
+                    coupon_type: 'fixed',
+                    value: 10,
+                    coupon_value: 10
+                }
+            ]
+        }
+    });
+    registerMarketingRoutes(app, deps);
+
+    const response = await invoke(app, {
+        method: 'POST',
+        path: '/admin/api/coupons',
+        body: {
+            _id: 'coupon-doc-1',
+            id: null,
+            name: '新增满减券',
+            type: 'fixed',
+            value: 88.8,
+            min_purchase: 0,
+            scope: 'all',
+            valid_days: 30,
+            stock: -1,
+            is_active: 1
+        }
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.code, 0);
+    assert.equal(response.body.data.id, 2);
+    assert.equal(response.body.data.value, 88.8);
+    assert.equal(response.body.data.coupon_value, 88.8);
+
+    const rows = deps.getCollection('coupons');
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0]._id, 'coupon-doc-1');
+    assert.equal(rows[0].value, 10);
+    assert.equal(rows[1].id, 2);
+    assert.equal(rows[1]._id, undefined);
+    assert.equal(rows[1].value, 88.8);
+    assert.equal(rows[1].coupon_value, 88.8);
+});
+
+test('coupon update persists edited amount instead of creating a duplicate row', async () => {
+    const app = express();
+    const deps = createDeps({
+        initialCollections: {
+            coupons: [
+                {
+                    _id: 'coupon-doc-1',
+                    id: 6,
+                    name: '新人券',
+                    type: 'fixed',
+                    coupon_type: 'fixed',
+                    value: 10,
+                    coupon_value: 10
+                }
+            ]
+        }
+    });
+    registerMarketingRoutes(app, deps);
+
+    const response = await invoke(app, {
+        method: 'PUT',
+        path: '/admin/api/coupons/6',
+        body: {
+            name: '新人券',
+            type: 'fixed',
+            value: 66.6,
+            min_purchase: 0,
+            scope: 'all',
+            valid_days: 30,
+            stock: -1,
+            is_active: 1
+        }
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.code, 0);
+    assert.equal(response.body.data.id, 6);
+    assert.equal(response.body.data.value, 66.6);
+
+    const rows = deps.getCollection('coupons');
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].id, 6);
+    assert.equal(rows[0]._id, 'coupon-doc-1');
+    assert.equal(rows[0].value, 66.6);
+    assert.equal(rows[0].coupon_value, 66.6);
+});
+
+test('coupon list keeps fourth and fifth created coupons instead of reverting to the initial three', async () => {
+    const app = express();
+    const deps = createDeps({
+        initialCollections: {
+            coupons: [
+                { id: 1, name: '券 1', type: 'fixed', value: 10 },
+                { id: 2, name: '券 2', type: 'fixed', value: 20 },
+                { id: 3, name: '券 3', type: 'fixed', value: 30 }
+            ]
+        }
+    });
+    registerMarketingRoutes(app, deps);
+
+    for (const [name, value] of [['券 4', 40], ['券 5', 50]]) {
+        const response = await invoke(app, {
+            method: 'POST',
+            path: '/admin/api/coupons',
+            body: {
+                name,
+                type: 'fixed',
+                value,
+                min_purchase: 0,
+                scope: 'all',
+                valid_days: 30,
+                stock: -1,
+                is_active: 1
+            }
+        });
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.code, 0);
+    }
+
+    const listResponse = await invoke(app, {
+        path: '/admin/api/coupons',
+        query: { page: 1, limit: 20 }
+    });
+
+    assert.equal(listResponse.statusCode, 200);
+    assert.equal(listResponse.body.code, 0);
+    assert.equal(listResponse.body.data.total, 5);
+    assert.equal(listResponse.body.data.list.length, 5);
+    assert.deepEqual(
+        listResponse.body.data.list.map((item) => item.name).sort(),
+        ['券 1', '券 2', '券 3', '券 4', '券 5']
+    );
+});
+
+test('coupon auto rule enabled state is persisted and returned by the read endpoint', async () => {
+    const app = express();
+    const deps = createDeps({
+        initialCollections: {
+            coupon_auto_rules: [{
+                id: 1,
+                trigger_event: 'register',
+                enabled: false,
+                coupon_id: null,
+                target_levels: []
+            }]
+        }
+    });
+    registerMarketingRoutes(app, deps);
+
+    const initial = await invoke(app, {
+        path: '/admin/api/coupon-auto-rules'
+    });
+    assert.equal(initial.statusCode, 200);
+    assert.equal(initial.body.code, 0);
+    assert.equal(initial.body.data[0].trigger_event, 'register');
+    assert.equal(initial.body.data[0].enabled, false);
+
+    const saved = await invoke(app, {
+        method: 'PUT',
+        path: '/admin/api/coupon-auto-rules',
+        body: {
+            rules: [{
+                id: 'register_welcome',
+                name: '新用户注册发券',
+                trigger_event: 'register',
+                enabled: true,
+                coupon_id: 6,
+                target_levels: [0, 1]
+            }]
+        }
+    });
+
+    assert.equal(saved.statusCode, 200);
+    assert.equal(saved.body.code, 0);
+    assert.equal(saved.body.data[0].enabled, true);
+    assert.equal(saved.body.data[0].coupon_id, 6);
+    assert.equal(deps.getCollection('coupon_auto_rules').length, 1);
+
+    const reread = await invoke(app, {
+        path: '/admin/api/coupon-auto-rules'
+    });
+    assert.equal(reread.statusCode, 200);
+    assert.equal(reread.body.code, 0);
+    assert.equal(reread.body.data[0].enabled, true);
+    assert.equal(reread.body.data[0].coupon_id, 6);
+    assert.deepEqual(reread.body.data[0].target_levels, [0, 1]);
+});

@@ -11,6 +11,8 @@ const {
 const { getApiBaseUrl } = require('../../config/env');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
 
+const HOME_COUPON_PREVIEW_LIMIT = 10;
+
 const FIXED_BRAND_CARD_PRESETS = [
     {
         slot_index: 0,
@@ -523,8 +525,7 @@ async function loadCoupons(page) {
                     expire_at_formatted: formatCouponExpire(c.expire_at)
                 };
             });
-            // 只展示前 3 张
-            page.setData({ homeCoupons: coupons.slice(0, 3), unusedCouponCount: coupons.length });
+            page.setData({ homeCoupons: coupons.slice(0, HOME_COUPON_PREVIEW_LIMIT), unusedCouponCount: coupons.length });
         }
     } catch (_) {
         // 静默失败

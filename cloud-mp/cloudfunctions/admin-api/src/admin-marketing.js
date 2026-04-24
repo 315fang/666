@@ -879,11 +879,18 @@ function registerMarketingRoutes(app, deps) {
         };
     }
 
+    function hasMeaningfulValue(value) {
+        return value !== null && value !== undefined && value !== '';
+    }
+
     function normalizeCouponPayload(body = {}, existing = {}) {
         const type = pickString(body.type ?? body.coupon_type ?? existing.type ?? 'fixed');
         const value = toNumber(body.value ?? body.coupon_value ?? existing.value, 0);
         const minPurchase = type === 'no_threshold' ? 0 : toNumber(body.min_purchase ?? existing.min_purchase, 0);
-        return {
+        const identityId = hasMeaningfulValue(body.id)
+            ? body.id
+            : (hasMeaningfulValue(existing.id) ? existing.id : existing._legacy_id);
+        const normalized = {
             ...existing,
             ...body,
             type,
@@ -906,6 +913,11 @@ function registerMarketingRoutes(app, deps) {
             status: toBoolean(body.is_active ?? existing.is_active ?? existing.status ?? 1) ? 1 : 0,
             updated_at: nowIso()
         };
+        if (hasMeaningfulValue(identityId)) normalized.id = identityId;
+        else delete normalized.id;
+        if (hasMeaningfulValue(existing._id)) normalized._id = existing._id;
+        else delete normalized._id;
+        return normalized;
     }
 
     function hasCouponNumericId(row = {}) {
@@ -1176,6 +1188,7 @@ function registerMarketingRoutes(app, deps) {
         if (!pickString(row.name).trim()) return fail(res, '优惠券名称不能为空');
         rows.push(row);
         saveCollection('coupons', rows);
+        await flush();
         createAuditLog(req.admin, 'coupon.create', 'coupons', { coupon_id: row.id, name: row.name });
         ok(res, normalizeCoupon(row));
     });
@@ -1187,6 +1200,7 @@ function registerMarketingRoutes(app, deps) {
         if (index === -1) return fail(res, '优惠券不存在', 404);
         rows[index] = normalizeCouponPayload(req.body, rows[index]);
         saveCollection('coupons', rows);
+        await flush();
         createAuditLog(req.admin, 'coupon.update', 'coupons', { coupon_id: rows[index].id || rows[index]._id });
         ok(res, normalizeCoupon(rows[index]));
     });
@@ -1197,6 +1211,7 @@ function registerMarketingRoutes(app, deps) {
         const nextRows = rows.filter((item) => !rowMatchesLookup(item, req.params.id));
         if (rows.length === nextRows.length) return fail(res, '优惠券不存在', 404);
         saveCollection('coupons', nextRows);
+        await flush();
         createAuditLog(req.admin, 'coupon.delete', 'coupons', { coupon_id: req.params.id });
         ok(res, { success: true });
     });
@@ -1213,6 +1228,7 @@ function registerMarketingRoutes(app, deps) {
             updated_at: nowIso()
         };
         saveCollection('coupons', rows);
+        await flush();
         const row = rows[index];
         createAuditLog(req.admin, 'coupon.status', 'coupons', { coupon_id: req.params.id, status: row.status });
         ok(res, normalizeCoupon(row));
@@ -1297,26 +1313,56 @@ function registerMarketingRoutes(app, deps) {
         saveCollection('coupons', coupons.map((item) => rowMatchesLookup(item, req.params.id)
             ? { ...item, issued_count: toNumber(item.issued_count, 0) + issued, updated_at: nowIso() }
             : item));
+        await flush();
         createAuditLog(req.admin, 'coupon.issue', 'coupons', { coupon_id: couponId, issued });
         ok(res, { success: true, issued, skipped: targets.length - issued, message: `已发放 ${issued} 张优惠券` });
     });
 
+    function normalizeCouponAutoRule(item = {}, index = 0) {
+        const triggerEvent = pickString(item.trigger_event || item.triggerEvent || 'register', 'register');
+        return {
+            ...item,
+            id: hasMeaningfulValue(item.id) ? item.id : (triggerEvent === 'register' ? 'register_welcome' : index + 1),
+            name: pickString(item.name || (triggerEvent === 'register' ? '新用户注册发券' : '自动发券规则')),
+            trigger_event: triggerEvent,
+            enabled: toBoolean(item.enabled ?? item.status ?? false),
+            coupon_id: hasMeaningfulValue(item.coupon_id) ? item.coupon_id : null,
+            target_levels: toArray(item.target_levels).map((level) => Number(level)).filter((level) => Number.isFinite(level)),
+            updated_at: item.updated_at || nowIso()
+        };
+    }
+
+    function couponAutoRuleKey(item = {}) {
+        const triggerEvent = pickString(item.trigger_event || item.triggerEvent || 'register', 'register');
+        if (triggerEvent === 'register') return 'trigger:register';
+        return pickString(item.id || triggerEvent);
+    }
+
+    function getCouponAutoRuleRows() {
+        const merged = new Map();
+        toArray(getCollection('coupon_auto_rules')).forEach((item, index) => {
+            const normalized = normalizeCouponAutoRule(item, index);
+            merged.set(couponAutoRuleKey(normalized), normalized);
+        });
+        return Array.from(merged.values());
+    }
+
     app.get('/admin/api/coupon-auto-rules', auth, requirePermission('products'), async (_req, res) => {
         await ensureFreshCollections(['coupon_auto_rules']);
-        ok(res, getCollection('coupon_auto_rules'));
+        const rows = getCouponAutoRuleRows();
+        const hasRegisterRule = rows.some((item) => item.trigger_event === 'register');
+        ok(res, hasRegisterRule ? rows : [normalizeCouponAutoRule({ id: 'register_welcome', trigger_event: 'register', enabled: false })]);
     });
 
     app.put('/admin/api/coupon-auto-rules', auth, requirePermission('products'), async (req, res) => {
         await ensureFreshCollections(['coupon_auto_rules']);
-        const rules = toArray(req.body?.rules).map((item, index) => ({
-            id: item.id || index + 1,
-            trigger_event: pickString(item.trigger_event || 'register'),
-            enabled: toBoolean(item.enabled),
-            coupon_id: item.coupon_id || null,
-            target_levels: toArray(item.target_levels).map((level) => Number(level)),
-            updated_at: nowIso()
-        }));
+        const existing = getCouponAutoRuleRows();
+        const incoming = toArray(req.body?.rules).map((item, index) => normalizeCouponAutoRule({ ...item, updated_at: nowIso() }, index));
+        const merged = new Map(existing.map((item) => [couponAutoRuleKey(item), item]));
+        incoming.forEach((item) => merged.set(couponAutoRuleKey(item), item));
+        const rules = Array.from(merged.values());
         saveCollection('coupon_auto_rules', rules);
+        await flush();
         createAuditLog(req.admin, 'coupon.auto_rules.update', 'coupon_auto_rules', { count: rules.length });
         ok(res, rules);
     });

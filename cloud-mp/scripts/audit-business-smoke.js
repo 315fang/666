@@ -264,7 +264,7 @@ function main() {
   fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
   fs.writeFileSync(mdPath, renderMarkdown(report));
   console.log(JSON.stringify({ jsonPath, mdPath, ok: report.ok, results }, null, 2));
-  if (!report.ok) process.exit(1);
+  process.exit(report.ok ? 0 : 1);
 }
 
 main();

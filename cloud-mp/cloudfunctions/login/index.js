@@ -205,12 +205,78 @@ async function awardInviteSuccessPoints(referrerOpenid, inviteeOpenid) {
     return rule.points;
 }
 
-async function getWelcomeCouponTemplates() {
+function toCouponIdCandidates(couponId) {
+    if (!hasValue(couponId)) return [];
+    const raw = String(couponId).trim();
+    const numeric = Number(raw);
+    return uniqueValues([
+        raw,
+        Number.isFinite(numeric) ? numeric : null
+    ]);
+}
+
+function isActiveCouponTemplate(tpl = {}) {
+    return tpl
+        && tpl.is_active !== false
+        && tpl.is_active !== 0
+        && tpl.status !== false
+        && tpl.status !== 0;
+}
+
+async function getRegisterCouponAutoRule() {
+    const res = await db.collection('coupon_auto_rules')
+        .where({ trigger_event: 'register' })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    const row = res.data && res.data[0] ? res.data[0] : null;
+    if (!row) return { configured: false, enabled: false, coupon_id: null, target_levels: [] };
+    return {
+        configured: true,
+        enabled: toBoolean(row.enabled, false),
+        coupon_id: hasValue(row.coupon_id) ? row.coupon_id : null,
+        target_levels: toArray(row.target_levels).map((level) => Number(level)).filter((level) => Number.isFinite(level))
+    };
+}
+
+function userMatchesAutoCouponRule(rule = {}, user = {}) {
+    const levels = Array.isArray(rule.target_levels) ? rule.target_levels : [];
+    if (!levels.length) return true;
+    const level = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+    return levels.includes(level);
+}
+
+async function findCouponTemplateByRuleCouponId(couponId) {
+    const candidates = toCouponIdCandidates(couponId);
+    if (!candidates.length) return null;
+    const byNumericId = await db.collection('coupons')
+        .where({ id: _.in(candidates) })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    if (byNumericId.data && byNumericId.data[0]) return byNumericId.data[0];
+
+    const byDocId = await db.collection('coupons')
+        .doc(String(couponId).trim())
+        .get()
+        .catch(() => null);
+    return byDocId && byDocId.data ? byDocId.data : null;
+}
+
+async function getWelcomeCouponTemplates(user = {}) {
+    const rule = await getRegisterCouponAutoRule();
+    if (!rule.enabled || !userMatchesAutoCouponRule(rule, user)) return [];
+
+    if (hasValue(rule.coupon_id)) {
+        const tpl = await findCouponTemplateByRuleCouponId(rule.coupon_id);
+        return isActiveCouponTemplate(tpl) ? [tpl] : [];
+    }
+
     const tplRes = await db.collection('coupons').where({
         name: db.RegExp({ regexp: '注册|见面礼|开运|新人', options: 'i' })
     }).get();
 
-    return (tplRes.data || []).filter((tpl) => tpl.type !== undefined && tpl.is_active !== false);
+    return (tplRes.data || []).filter(isActiveCouponTemplate);
 }
 
 function buildWelcomeCouponIdCandidates(templates = []) {
@@ -233,7 +299,7 @@ function buildUserIdCandidates(openid, user = {}) {
 }
 
 async function hasAnyWelcomeCouponRecord(openid, user = {}) {
-    const templates = await getWelcomeCouponTemplates();
+    const templates = await getWelcomeCouponTemplates(user);
     const couponIds = buildWelcomeCouponIdCandidates(templates);
     if (!couponIds.length) return false;
 
@@ -261,10 +327,10 @@ async function hasAnyWelcomeCouponRecord(openid, user = {}) {
 }
 
 // 自动为用户发放新人注册优惠券（幂等）
-async function ensureWelcomeCoupons(openid, userId) {
+async function ensureWelcomeCoupons(openid, userId, user = {}) {
     try {
         // 查找所有注册/见面礼/开运/新人券模板
-        const templates = await getWelcomeCouponTemplates();
+        const templates = await getWelcomeCouponTemplates(user);
         if (!templates.length) return 0;
 
         let claimedCount = 0;
@@ -284,14 +350,16 @@ async function ensureWelcomeCoupons(openid, userId) {
             }
 
             const validDays = toNumber(tpl.valid_days, 30);
+            const templateType = tpl.type || tpl.coupon_type || 'fixed';
+            const templateValue = tpl.value != null ? tpl.value : tpl.coupon_value;
             await db.collection('user_coupons').add({
                 data: {
                     openid,
                     user_id: userId || openid,
                     coupon_id: cid,
-                    coupon_name: tpl.name,
-                    coupon_type: tpl.type === 'percent' ? 'percent' : 'fixed',
-                    coupon_value: toNumber(tpl.value, 0),
+                    coupon_name: tpl.name || tpl.coupon_name || '优惠券',
+                    coupon_type: templateType === 'percent' ? 'percent' : (templateType === 'exchange' ? 'exchange' : 'fixed'),
+                    coupon_value: toNumber(templateValue, 0),
                     min_purchase: toNumber(tpl.min_purchase, 0),
                     scope: tpl.scope || 'all',
                     scope_ids: Array.isArray(tpl.scope_ids) ? tpl.scope_ids : [],
@@ -417,7 +485,7 @@ exports.main = cloudFunctionWrapper(async (event) => {
             if (rawUser.register_coupons_issued && !hasWelcomeCouponRecord) {
                 console.warn('[Login] register_coupons_issued=true 但缺少券记录，尝试补发新人券:', openid);
             }
-            await ensureWelcomeCoupons(openid, rawUser._id);
+            await ensureWelcomeCoupons(openid, rawUser._id, rawUser);
             // 重新读取以获取更新后的 register_coupons_issued
             userRes = await db.collection('users').where({ openid }).limit(1).get();
         }

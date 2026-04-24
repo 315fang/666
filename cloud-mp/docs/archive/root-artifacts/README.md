@@ -9,5 +9,6 @@
 - `tmp_*.json`
 - `tmp_*.jpg`
 - 根目录散落的无语义图片快照
+- 旧版 `docs/` 根层审计/Smoke 快照；当前脚本默认输出到 `docs/audit/generated/`
 
 这些文件默认不再作为当前实现、设计或运行依据。

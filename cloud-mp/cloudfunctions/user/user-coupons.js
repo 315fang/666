@@ -137,6 +137,54 @@ function shouldShowInCouponCenter(coupon = {}) {
     return isEnabledFlag(coupon.show_in_coupon_center, false);
 }
 
+function isActiveCouponTemplate(coupon = {}) {
+    if (!coupon) return false;
+    return isEnabledFlag(coupon.is_active != null ? coupon.is_active : coupon.status, true);
+}
+
+async function getRegisterCouponAutoRule() {
+    const res = await db.collection('coupon_auto_rules')
+        .where({ trigger_event: 'register' })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    const row = res.data && res.data[0] ? res.data[0] : null;
+    if (!row) return { enabled: false, coupon_id: null, target_levels: [] };
+
+    const targetLevels = Array.isArray(row.target_levels)
+        ? row.target_levels
+        : (hasValue(row.target_levels) ? [row.target_levels] : []);
+    return {
+        enabled: isEnabledFlag(row.enabled != null ? row.enabled : row.status, false),
+        coupon_id: hasValue(row.coupon_id) ? row.coupon_id : null,
+        target_levels: targetLevels
+            .map((level) => Number(level))
+            .filter((level) => Number.isFinite(level))
+    };
+}
+
+function userMatchesAutoCouponRule(rule = {}, user = {}) {
+    const levels = Array.isArray(rule.target_levels) ? rule.target_levels : [];
+    if (!levels.length) return true;
+    const level = toNumber(user.role_level != null ? user.role_level : (user.distributor_level != null ? user.distributor_level : user.level), 0);
+    return levels.includes(level);
+}
+
+async function getWelcomeCouponTemplates(user = {}) {
+    const rule = await getRegisterCouponAutoRule();
+    if (!rule.enabled || !userMatchesAutoCouponRule(rule, user)) return [];
+
+    if (hasValue(rule.coupon_id)) {
+        const coupon = await findCouponTemplate(rule.coupon_id);
+        return isActiveCouponTemplate(coupon) ? [coupon] : [];
+    }
+
+    const tplRes = await db.collection('coupons').where({
+        name: db.RegExp({ regexp: '注册|见面礼|开运|新人', options: 'i' })
+    }).get();
+    return (tplRes.data || []).filter(isActiveCouponTemplate);
+}
+
 function getClaimedTodayCount(coupon = {}, nowParts = getChinaNowParts()) {
     return String(coupon.claim_day_key || '') === nowParts.dayKey
         ? Math.max(0, toNumber(coupon.claimed_today_count, 0))
@@ -726,18 +774,13 @@ async function claimCoupon(openid, couponId) {
  */
 async function claimWelcomeCoupons(openid) {
     try {
-        // 查找所有新人/注册类优惠券模板
-        const tplRes = await db.collection('coupons').where({
-            name: db.RegExp({ regexp: '注册|见面礼|开运|新人', options: 'i' })
-        }).get();
-
-        const templates = tplRes.data.filter(t => t.is_active !== false);
+        const identity = await getCouponIdentity(openid);
+        const templates = await getWelcomeCouponTemplates(identity.user || {});
         if (!templates.length) return 0;
 
         let claimedCount = 0;
         for (const tpl of templates) {
             const cid = tpl.id != null ? String(tpl.id) : tpl._id;
-            const identity = await getCouponIdentity(openid);
             if (await hasOwnedCoupon(identity, cid)) continue;
 
             // 检查库存
@@ -749,14 +792,16 @@ async function claimWelcomeCoupons(openid) {
             }
 
             const validDays = toNumber(tpl.valid_days, 30);
+            const templateType = tpl.type || tpl.coupon_type || 'fixed';
+            const templateValue = tpl.value != null ? tpl.value : tpl.coupon_value;
             await db.collection('user_coupons').add({
                 data: {
                     openid,
                     user_id: identity.user && (identity.user.id || identity.user._id) ? (identity.user.id || identity.user._id) : openid,
                     coupon_id: cid,
-                    coupon_name: tpl.name,
-                    coupon_type: tpl.type === 'percent' ? 'percent' : 'fixed',
-                    coupon_value: toNumber(tpl.value, 0),
+                    coupon_name: tpl.name || tpl.coupon_name || '优惠券',
+                    coupon_type: templateType === 'percent' ? 'percent' : (templateType === 'exchange' ? 'exchange' : 'fixed'),
+                    coupon_value: toNumber(templateValue, 0),
                     min_purchase: toNumber(tpl.min_purchase, 0),
                     scope: tpl.scope || 'all',
                     scope_ids: Array.isArray(tpl.scope_ids) ? tpl.scope_ids : [],

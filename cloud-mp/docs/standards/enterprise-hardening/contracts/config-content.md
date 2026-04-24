@@ -19,7 +19,7 @@
 - `cloudfunctions/admin-api/src/config-contract.js`
 - `cloudfunctions/config/index.js`
 - `docs/audit/2026-04-14-config-content-field-truth.md`
-- `docs/CONFIG_CONTENT_CONTRACT_AUDIT.md`
+- `docs/audit/generated/CONFIG_CONTENT_CONTRACT_AUDIT.md`
 
 ## 2. 正式字段
 

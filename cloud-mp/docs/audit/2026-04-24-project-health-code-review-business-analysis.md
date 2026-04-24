@@ -44,8 +44,8 @@
 证据：
 
 - `scripts/check-cloudbase-runtime-status.js:232-241`
-- `docs/CLOUDBASE_ENV_RUNTIME_STATUS.md`
-- `docs/FINANCE_SMOKE_AUDIT.md`
+- `docs/audit/generated/CLOUDBASE_ENV_RUNTIME_STATUS.md`
+- `docs/audit/generated/FINANCE_SMOKE_AUDIT.md`
 
 `runtime:status` 先用 `readNoSqlDatabaseStructure listCollections` 构建集合存在性，再只对已列出的集合读取 total。当前它报告 `users/refunds/withdrawals` missing；但 `audit:finance-smoke` 直接读取同名集合成功，并得到非零数量。
 

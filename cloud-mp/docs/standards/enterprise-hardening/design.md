@@ -131,7 +131,7 @@
 
 - 新功能不得直接把业务逻辑塞进 request 层
 - `ROUTE_TABLE` 作为兼容映射保留，但只能增受控映射，不能扩展新职责
-- 路由审计输出是 `docs/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
+- 路由审计输出是 `docs/audit/generated/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
 
 ## 4. 兼容策略
 

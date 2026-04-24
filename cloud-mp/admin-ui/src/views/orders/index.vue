@@ -123,116 +123,39 @@
       </el-form>
 
       <!-- 订单表格 -->
-      <el-table :data="tableData" v-loading="loading" stripe empty-text="暂无订单数据" class="orders-table">
-        <el-table-column label="ID" width="90">
-          <template #default="{ row }">
-            <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
-          </template>
-        </el-table-column>
-        <el-table-column label="订单信息" min-width="200">
-          <template #default="{ row }">
-            <div class="stack-block">
-              <div><span class="stack-label">订单编号</span> {{ row.order_no }}</div>
-              <div><span class="stack-label">类型</span> {{ orderTypeText(row) }}</div>
-              <div><span class="stack-label">下单</span> {{ formatDateTime(row.created_at) }}</div>
-              <div><span class="stack-label">支付</span> {{ row.paid_at ? formatDateTime(row.paid_at) : '-' }}</div>
-              <div><span class="stack-label">来源</span> {{ orderSourceText(row) }}</div>
-              <div class="hide-mobile"><span class="stack-label">配送</span> {{ deliveryTypeText(row.delivery_type) }}</div>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="会员信息" min-width="168" width="188">
-          <template #default="{ row }">
-            <div class="member-cell">
-              <el-avatar :src="displayBuyerAvatar(row.buyer)" :size="36" class="member-avatar">{{ displayBuyerName(row.buyer, '?').slice(0, 1) }}</el-avatar>
-              <div class="member-meta">
-                <div class="text-secondary">编号 {{ row.buyer?.member_no || '-' }}</div>
-                <div class="member-nick">{{ displayBuyerName(row.buyer) }}</div>
-                <div class="text-secondary hide-mobile">{{ row.buyer?.phone || '-' }}</div>
-                <el-tag size="small" :type="roleTagType(row.buyer?.role_level)" style="margin-top:4px">
-                  {{ roleText(row.buyer?.role_level) }}
-                </el-tag>
-                <div class="hide-mobile" style="margin-top:4px">
-                  <el-button link type="primary" size="small" @click="goUserManage(row)">找该会员</el-button>
-                </div>
-              </div>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="商品信息" min-width="240">
-          <template #default="{ row }">
-            <div class="cell-info-vertical">
-              <el-image :src="row.product?.images?.[0]" class="product-thumb" fit="cover" />
-              <div class="cell-info__body">
-                <el-link type="primary" :underline="false" class="prod-title-link" @click="goProductManage(row)">
-                  {{ row.product?.name || '-' }}
-                </el-link>
-                <div class="cell-info__sub">{{ listSkuText(row) }}</div>
-                <div class="cell-info__sub">单价 ¥{{ lineUnitPrice(row) }} × {{ row.qty || row.quantity || 1 }}</div>
-                <div class="cell-info__sub text-price">小计 ¥{{ money(row.total_amount) }}</div>
-              </div>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="实付 / 状态" width="180">
-          <template #default="{ row }">
-            <div class="text-price">¥{{ row.display_pay_amount }}</div>
-            <div style="margin-top:6px">
-              <el-tag :type="getStatusType(row.status)" size="small">{{ row.display_status_text }}</el-tag>
-              <el-tag
-                v-if="row.display_refund_status_text"
-                :type="refundStatusTagType(row.latest_refund?.status || row.refund_status)"
-                effect="plain"
-                size="small"
-                style="margin-left:6px"
-              >
-                {{ row.display_refund_status_text }}
-              </el-tag>
-              <el-tag v-if="row.is_test_order" type="warning" effect="plain" size="small" style="margin-left:6px">测试订单</el-tag>
-              <el-tag v-if="row.order_visibility === 'hidden'" type="info" effect="plain" size="small" style="margin-left:6px">已隐藏</el-tag>
-            </div>
-            <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;">
-              <el-tag :type="paymentMethodTagType(row.display_payment_method_code || detailPaymentMethod(row))" effect="plain" size="small">
-                {{ row.display_payment_method_text }}
-              </el-tag>
-              <el-tag
-                v-if="['refunding', 'refunded'].includes(row.status)"
-                type="danger"
-                effect="plain"
-                size="small"
-              >
-                {{ row.display_refund_target_text }}
-              </el-tag>
-            </div>
-            <div class="text-secondary hide-mobile" style="margin-top:4px;font-size:12px">{{ fulfillmentText(row) }}</div>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
-          <template #default="{ row }">
-            <el-button text type="primary" size="small" @click="handleDetail(row)">订单详情</el-button>
-            <el-button text type="primary" size="small" v-if="canViewLogistics(row)" @click="openLogisticsDrawer(row)">物流轨迹</el-button>
-            <el-button text type="success" size="small" v-if="canShipRow(row)" @click="handleShip(row)">发货</el-button>
-            <el-dropdown size="small" @command="(cmd) => handleDropdown(cmd, row)">
-              <el-button text size="small">更多<el-icon><ArrowDown /></el-icon></el-button>
-              <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item v-if="canAdjustOrderAmount" command="amount" :disabled="!canAdjustAmountRow(row)">改价</el-dropdown-item>
-                    <el-dropdown-item command="remark">备注</el-dropdown-item>
-                    <el-dropdown-item v-if="canManageSettings" command="test_flag">
-                      {{ row.is_test_order ? '取消测试订单标记' : '标记为测试订单' }}
-                    </el-dropdown-item>
-                    <el-dropdown-item v-if="canManageSettings" command="visibility" :class="row.order_visibility === 'hidden' ? '' : 'warning-text'">
-                      {{ row.order_visibility === 'hidden' ? '移出清理箱' : '移入清理箱' }}
-                    </el-dropdown-item>
-                    <el-dropdown-item command="repair_fulfillment" :disabled="['shipped', 'completed', 'refunding', 'refunded', 'cancelled'].includes(row.status)">修复履约</el-dropdown-item>
-                    <el-dropdown-item v-if="canForceCompleteOrder && row.status === 'shipped'" command="force_complete" class="warning-text">强制完成</el-dropdown-item>
-                    <el-dropdown-item v-if="canForceCancelOrder" command="force_cancel" :disabled="['completed', 'cancelled', 'refunded'].includes(row.status)" class="danger-text">强制取消</el-dropdown-item>
-                  </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </template>
-        </el-table-column>
-      </el-table>
+      <OrderTable
+        :rows="tableData"
+        :loading="loading"
+        :can-adjust-order-amount="canAdjustOrderAmount"
+        :can-manage-settings="canManageSettings"
+        :can-force-complete-order="canForceCompleteOrder"
+        :can-force-cancel-order="canForceCancelOrder"
+        :order-type-text="orderTypeText"
+        :format-date-time="formatDateTime"
+        :order-source-text="orderSourceText"
+        :delivery-type-text="deliveryTypeText"
+        :display-buyer-avatar="displayBuyerAvatar"
+        :display-buyer-name="displayBuyerName"
+        :role-tag-type="roleTagType"
+        :role-text="roleText"
+        :list-sku-text="listSkuText"
+        :line-unit-price="lineUnitPrice"
+        :money="money"
+        :get-status-type="getStatusType"
+        :refund-status-tag-type="refundStatusTagType"
+        :payment-method-tag-type="paymentMethodTagType"
+        :detail-payment-method="detailPaymentMethod"
+        :fulfillment-text="fulfillmentText"
+        :can-view-logistics="canViewLogistics"
+        :can-ship-row="canShipRow"
+        :can-adjust-amount-row="canAdjustAmountRow"
+        @detail="handleDetail"
+        @logistics="openLogisticsDrawer"
+        @ship="handleShip"
+        @dropdown="handleDropdown"
+        @user-manage="goUserManage"
+        @product-manage="goProductManage"
+      />
 
       <!-- 分页 -->
       <el-pagination
@@ -247,371 +170,92 @@
       />
     </el-card>
 
-    <!-- ===== 订单详情抽屉 ===== -->
-    <el-drawer v-model="detailVisible" :title="`订单详情 · ${detailData?.order_no || ''}`" size="820px">
-      <template v-if="detailData">
-        <el-alert
-          type="info"
-          :closable="false"
-          show-icon
-          style="margin-bottom: 16px;"
-          title="请核对状态、履约、收货与金额后再操作；当前已区分买家留言、内部备注和历史旧备注。"
-        />
+    <OrderDetailDrawer
+      v-if="detailVisible"
+      v-model="detailVisible"
+      :detail-data="detailData"
+      :detail-line-items="detailLineItems"
+      :order-type-text="orderTypeText"
+      :get-status-type="getStatusType"
+      :cleanup-category-text="cleanupCategoryText"
+      :fulfillment-text="fulfillmentText"
+      :payment-method-tag-type="paymentMethodTagType"
+      :detail-payment-method="detailPaymentMethod"
+      :refund-status-tag-type="refundStatusTagType"
+      :delivery-type-text="deliveryTypeText"
+      :fmt-date-time="fmtDateTime"
+      :display-buyer-avatar="displayBuyerAvatar"
+      :display-buyer-name="displayBuyerName"
+      :role-tag-type="roleTagType"
+      :role-text="roleText"
+      :money="money"
+      :resolved-address="resolvedAddress"
+      :agent-fulfillment-profit="agentFulfillmentProfit"
+      :referral-commission-total="referralCommissionTotal"
+      :fulfillment-profit-note="fulfillmentProfitNote"
+      :can-view-logistics="canViewLogistics"
+      :detail-timeline="detailTimeline"
+      :commission-type-text="commissionTypeText"
+      :commission-status-text="commissionStatusText"
+      @view-logistics="openLogisticsDrawer"
+    />
 
-        <el-descriptions :column="2" border size="small" style="margin-bottom:20px">
-          <el-descriptions-item label="订单号" :span="2">{{ detailData.order_no }}</el-descriptions-item>
-          <el-descriptions-item label="订单类型">{{ orderTypeText(detailData) }}</el-descriptions-item>
-          <el-descriptions-item label="订单状态">
-            <el-tag :type="getStatusType(detailData.status)">{{ detailData.display_status_text }}</el-tag>
-            <el-tag v-if="detailData.is_test_order" type="warning" effect="plain" size="small" style="margin-left:8px">测试订单</el-tag>
-            <el-tag v-if="detailData.order_visibility === 'hidden'" type="info" effect="plain" size="small" style="margin-left:8px">已隐藏</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="清理分类">
-            {{ detailData.order_visibility === 'hidden' ? cleanupCategoryText(detailData.cleanup_category) : '正常显示' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="履约方式">{{ fulfillmentText(detailData) }}</el-descriptions-item>
-          <el-descriptions-item label="支付方式">
-            <el-tag :type="paymentMethodTagType(detailData.display_payment_method_code || detailPaymentMethod(detailData))" size="small">
-              {{ detailData.display_payment_method_text }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="退款去向">{{ detailData.display_refund_target_text }}</el-descriptions-item>
-          <el-descriptions-item v-if="detailData.display_refund_status_text" label="最新退款状态">
-            <el-tag :type="refundStatusTagType(detailData.latest_refund?.status || detailData.refund_status)" size="small">
-              {{ detailData.display_refund_status_text }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item v-if="detailData.display_refund_error" label="退款异常" :span="2">
-            {{ detailData.display_refund_error }}
-          </el-descriptions-item>
-          <el-descriptions-item label="配送方式">{{ deliveryTypeText(detailData.delivery_type) }}</el-descriptions-item>
-          <el-descriptions-item label="下单时间">{{ fmtDateTime(detailData.created_at) }}</el-descriptions-item>
-          <el-descriptions-item label="支付时间">{{ fmtDateTime(detailData.paid_at) }}</el-descriptions-item>
-          <el-descriptions-item label="发货时间">{{ fmtDateTime(detailData.shipped_at) }}</el-descriptions-item>
-          <el-descriptions-item label="完成时间">{{ fmtDateTime(detailData.completed_at) }}</el-descriptions-item>
-          <el-descriptions-item label="代理确认">{{ fmtDateTime(detailData.agent_confirmed_at) }}</el-descriptions-item>
-          <el-descriptions-item label="申请发货">{{ fmtDateTime(detailData.shipping_requested_at) }}</el-descriptions-item>
-        </el-descriptions>
+    <OrderLogisticsDrawer
+      v-if="logisticsVisible"
+      v-model="logisticsVisible"
+      :order="logisticsOrder"
+      :data="logisticsData"
+      :loading="logisticsLoading"
+      :resolved-address="resolvedAddress"
+      :display-buyer-name="displayBuyerName"
+      :get-logistics-tag-type="getLogisticsTagType"
+      @refresh="refreshLogisticsDrawer"
+    />
 
-        <el-row :gutter="16" style="margin-bottom: 16px;">
-          <el-col :span="24">
-            <div class="detail-card">
-              <div class="detail-card-title">会员信息</div>
-              <div class="detail-member-row">
-                <el-avatar :src="displayBuyerAvatar(detailData.buyer)" :size="48">{{ displayBuyerName(detailData.buyer, '?').slice(0, 1) }}</el-avatar>
-                <el-descriptions :column="2" border size="small" class="detail-member-desc">
-                  <el-descriptions-item label="买家昵称">{{ displayBuyerName(detailData.buyer) }}</el-descriptions-item>
-                  <el-descriptions-item label="会员编号">{{ detailData.buyer?.member_no || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="手机号">{{ detailData.buyer?.phone || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="会员层级">
-                    <el-tag size="small" :type="roleTagType(detailData.buyer?.role_level)">{{ roleText(detailData.buyer?.role_level) }}</el-tag>
-                  </el-descriptions-item>
-                  <el-descriptions-item label="用户ID">{{ detailData.buyer?.invite_code || '-' }}</el-descriptions-item>
-                </el-descriptions>
-              </div>
-            </div>
-          </el-col>
-        </el-row>
-
-        <div class="detail-section-bar">商品信息</div>
-        <div v-if="detailData.bundle_meta" class="detail-card" style="margin-bottom:16px;">
-          <div class="detail-card-title">组合信息</div>
-          <el-descriptions :column="2" border size="small">
-            <el-descriptions-item label="组合标题">{{ detailData.bundle_meta.title || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="组合价">¥{{ money(detailData.bundle_meta.bundle_price || detailData.pay_amount) }}</el-descriptions-item>
-            <el-descriptions-item label="组合副标题" :span="2">{{ detailData.bundle_meta.subtitle || '-' }}</el-descriptions-item>
-          </el-descriptions>
-        </div>
-        <el-row :gutter="16" class="detail-goods-row">
-          <el-col :xs="24" :lg="15">
-            <el-table :data="detailLineItems" border size="small" class="goods-lines-table">
-              <el-table-column label="商品信息" min-width="220">
-                <template #default="{ row }">
-                  <div class="line-prod">
-                    <el-image :src="row.image" class="line-prod-thumb" fit="cover" />
-                    <div>
-                      <div class="line-prod-name">{{ row.name }}</div>
-                      <div class="line-prod-spec">{{ row.spec }}</div>
-                    </div>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column label="价格(元)" width="100" align="right">
-                <template #default="{ row }">¥{{ row.unitPrice }}</template>
-              </el-table-column>
-              <el-table-column prop="qty" label="数量" width="72" align="center">
-                <template #default="{ row }">{{ row.qty || row.quantity || 1 }}</template>
-              </el-table-column>
-              <el-table-column label="小计(元)" width="100" align="right">
-                <template #default="{ row }">¥{{ row.lineTotal }}</template>
-              </el-table-column>
-            </el-table>
-          </el-col>
-          <el-col :xs="24" :lg="9">
-            <div class="amount-summary">
-              <div class="amount-row"><span>商品金额</span><span>¥{{ money(detailData.total_amount) }}</span></div>
-              <div class="amount-row"><span>运费金额</span><span>¥{{ money(detailData.shipping_fee) }}</span></div>
-              <div class="amount-row danger" v-if="Number(detailData.bundle_discount || 0) > 0"><span>组合优惠</span><span>-¥{{ money(detailData.bundle_discount) }}</span></div>
-              <div class="amount-row danger"><span>优惠金额</span><span>-¥{{ money(detailData.coupon_discount) }}</span></div>
-              <div class="amount-row danger"><span>积分抵扣</span><span>-¥{{ money(detailData.points_discount) }}</span></div>
-              <div class="amount-row total"><span>应付金额</span><span class="text-price">¥{{ detailData.display_pay_amount }}</span></div>
-              <div class="amount-row">
-                <span>支付方式</span>
-                <span>{{ detailData.display_payment_method_text }}</span>
-              </div>
-            </div>
-          </el-col>
-        </el-row>
-
-        <div class="detail-section-bar" style="margin-top:20px">买家留言</div>
-        <div class="buyer-remark-block">
-          {{ detailData.memo?.trim() ? detailData.memo : '无' }}
-        </div>
-
-        <div class="detail-section-bar" style="margin-top:20px">内部备注</div>
-        <div class="buyer-remark-block">
-          {{ detailData.admin_remark?.trim() ? detailData.admin_remark : '无' }}
-        </div>
-
-        <template v-if="detailData.remark?.trim()">
-          <div class="detail-section-bar" style="margin-top:20px">历史备注</div>
-          <div class="buyer-remark-block buyer-remark-block--legacy">
-            {{ detailData.remark }}
-          </div>
-        </template>
-
-        <el-divider content-position="left">收货信息</el-divider>
-        <div class="info-block detail-address">
-          <template v-if="resolvedAddress(detailData)">
-            <div class="detail-address-name">{{ resolvedAddress(detailData).receiver_name || resolvedAddress(detailData).name }} - {{ resolvedAddress(detailData).phone }}</div>
-            <div class="detail-address-text">
-              {{ resolvedAddress(detailData).province }} {{ resolvedAddress(detailData).city }} {{ resolvedAddress(detailData).district }}
-              <br />
-              {{ resolvedAddress(detailData).detail }}
-            </div>
-          </template>
-          <template v-else>暂无收货信息</template>
-        </div>
-
-        <el-divider content-position="left">物流与履约</el-divider>
-        <el-descriptions :column="2" border size="small" style="margin-bottom:20px">
-          <el-descriptions-item label="承运方">{{ detailData.logistics_company || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="物流单号">{{ detailData.tracking_no || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="自提门店" v-if="detailData.delivery_type === 'pickup'">{{ detailData.pickup_station?.name || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="核销人ID" v-if="detailData.delivery_type === 'pickup'">{{ detailData.pickup_verified_by || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="核销人" v-if="detailData.delivery_type === 'pickup'">{{ detailData.pickup_verified_user?.nickname || detailData.pickup_verified_by || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="核销时间" v-if="detailData.delivery_type === 'pickup'">{{ fmtDateTime(detailData.pickup_verified_at) || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="服务费" v-if="detailData.delivery_type === 'pickup'">¥{{ money(detailData.pickup_service_fee_amount) }}</el-descriptions-item>
-          <el-descriptions-item label="进货价补偿" v-if="detailData.delivery_type === 'pickup'">¥{{ money(detailData.pickup_principal_return_amount) }}</el-descriptions-item>
-          <el-descriptions-item label="补偿冲回" v-if="detailData.delivery_type === 'pickup' && Number(detailData.pickup_principal_reversal_amount || 0) > 0">¥{{ money(detailData.pickup_principal_reversal_amount) }}</el-descriptions-item>
-          <el-descriptions-item label="最近代理商ID">{{ detailData.nearest_agent_id || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="实际履约人ID">{{ detailData.fulfillment_partner_id || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="锁定进货价">¥{{ money(detailData.locked_agent_cost) }}</el-descriptions-item>
-          <el-descriptions-item label="代理发货利润">¥{{ money(agentFulfillmentProfit(detailData)) }}</el-descriptions-item>
-          <el-descriptions-item label="推荐佣金合计">¥{{ money(referralCommissionTotal(detailData)) }}</el-descriptions-item>
-        </el-descriptions>
-        <div v-if="fulfillmentProfitNote(detailData)" class="text-secondary" style="margin-bottom:12px;font-size:12px;line-height:1.6">
-          {{ fulfillmentProfitNote(detailData) }}
-        </div>
-        <div v-if="canViewLogistics(detailData)" class="detail-inline-actions">
-          <el-button type="primary" plain size="small" @click="openLogisticsDrawer(detailData)">查看物流轨迹</el-button>
-        </div>
-
-        <el-divider content-position="left">订单时间线</el-divider>
-        <el-timeline style="margin-bottom: 20px;">
-          <el-timeline-item
-            v-for="item in detailTimeline(detailData)"
-            :key="`${item.label}-${item.time}`"
-            :timestamp="item.time"
-            placement="top"
-          >
-            {{ item.label }}
-          </el-timeline-item>
-        </el-timeline>
-
-        <el-divider content-position="left">佣金记录</el-divider>
-        <div v-if="detailData.commissions?.length" class="commission-list">
-          <div v-for="item in detailData.commissions" :key="item.id" class="commission-item">
-            <div class="commission-main">
-              <span>{{ commissionTypeText(item.type) }}</span>
-              <span class="commission-amount">¥{{ money(item.amount) }}</span>
-            </div>
-            <div class="commission-sub">
-              <span>{{ commissionStatusText(item.status) }}</span>
-              <span>{{ fmtDateTime(item.available_at) }}</span>
-            </div>
-            <div class="commission-remark" v-if="item.remark">{{ item.remark }}</div>
-          </div>
-        </div>
-        <el-empty v-else description="暂无佣金记录" :image-size="80" />
-      </template>
-    </el-drawer>
-
-    <el-drawer v-model="logisticsVisible" :title="`物流轨迹 · ${logisticsOrder?.order_no || ''}`" size="460px" destroy-on-close>
-      <div v-if="logisticsOrder" class="logistics-drawer" v-loading="logisticsLoading">
-        <el-descriptions :column="1" border size="small" style="margin-bottom:20px">
-          <el-descriptions-item label="订单号">{{ logisticsOrder.order_no || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="快递公司">{{ logisticsOrder.logistics_company || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="运单号">{{ logisticsOrder.tracking_no || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="收件人">
-            {{ resolvedAddress(logisticsOrder)?.receiver_name || resolvedAddress(logisticsOrder)?.name || displayBuyerName(logisticsOrder.buyer) }} · {{ resolvedAddress(logisticsOrder)?.phone || '-' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="收货地址">
-            <template v-if="resolvedAddress(logisticsOrder)">
-              {{ resolvedAddress(logisticsOrder).province }} {{ resolvedAddress(logisticsOrder).city }} {{ resolvedAddress(logisticsOrder).district }} {{ resolvedAddress(logisticsOrder).detail }}
-            </template>
-            <template v-else>-</template>
-          </el-descriptions-item>
-          <el-descriptions-item label="物流状态">
-            <el-tag v-if="logisticsData" :type="getLogisticsTagType(logisticsData.status)" size="small">
-              {{ logisticsData.statusText || '未查询' }}
-            </el-tag>
-            <span v-else>-</span>
-          </el-descriptions-item>
-        </el-descriptions>
-
-        <div v-if="logisticsData?.traces?.length">
-          <div class="detail-section-bar" style="margin-top:0">物流轨迹</div>
-          <el-timeline>
-            <el-timeline-item
-              v-for="(trace, idx) in logisticsData.traces"
-              :key="`${trace.time || idx}-${idx}`"
-              :timestamp="trace.time || ''"
-              :type="idx === 0 ? 'primary' : ''"
-              placement="top"
-            >
-              {{ trace.desc || trace.status || '-' }}
-            </el-timeline-item>
-          </el-timeline>
-        </div>
-        <el-empty v-else-if="!logisticsLoading" description="暂无物流轨迹" :image-size="80" />
-
-        <div class="detail-inline-actions">
-          <el-button type="primary" size="small" :loading="logisticsLoading" @click="refreshLogisticsDrawer">
-            刷新物流
-          </el-button>
-          <el-button size="small" @click="logisticsVisible = false">关闭</el-button>
-        </div>
-      </div>
-    </el-drawer>
-
-    <!-- ===== 发货弹窗 ===== -->
-    <el-dialog v-model="shipDialogVisible" title="订单发货" width="400px">
-      <el-form :model="shipForm" label-width="80px">
-        <el-form-item label="履约方式">
-          <el-tag :type="shipForm.fulfillment_type === 'agent' ? 'warning' : 'primary'">
-            {{ shipFulfillmentLabel }}
-          </el-tag>
-        </el-form-item>
-          <el-alert
-            :title="logisticsMode === 'manual' ? '当前为手工发货模式，不会调用第三方物流轨迹查询。' : '当前为第三方物流模式，请尽量填写标准物流信息。'"
-            type="info"
-            :closable="false"
-            style="margin-bottom:12px"
-          />
-        <el-form-item label="快递公司">
-          <el-select
-            v-model="shipForm.logistics_company"
-            filterable
-            allow-create
-            clearable
-            default-first-option
-            :reserve-keyword="false"
-            style="width:100%"
-            :placeholder="logisticsMode === 'manual' ? '选择或输入承运方，如顺丰速运 / 同城配送' : '选择或输入快递公司，如顺丰速运'"
-          >
-            <el-option
-              v-for="company in shippingCompanyOptions"
-              :key="company"
-              :label="company"
-              :value="company"
-            />
-          </el-select>
-          <div class="text-secondary" style="font-size:12px; line-height:1.6; margin-top:6px;">
-            支持直接输入新公司；发货成功后会自动记住{{ canManageSettings ? '并同步到共享配置' : '' }}。
-          </div>
-        </el-form-item>
-        <el-form-item label="快递单号">
-            <el-input v-model="shipForm.tracking_no" :placeholder="logisticsMode === 'manual' ? '输入运单号或手工单号' : '输入快递单号'" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="shipDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitShip" :loading="submittingShip">确认发货</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- ===== 修改金额弹窗 ===== -->
-    <el-dialog v-model="amountVisible" title="修改订单金额" width="400px">
-      <el-form :model="amountForm" label-width="90px">
-        <el-form-item label="当前金额">
-          <span style="color:#f56c6c; font-weight:bold; font-size:16px">¥{{ money(currentOrder?.pay_amount) }}</span>
-        </el-form-item>
-        <el-form-item label="新金额">
-          <el-input-number v-model="amountForm.pay_amount" :min="0" :precision="2" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="调整原因">
-          <el-input v-model="amountForm.reason" placeholder="如：客服协商改价" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="amountVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitAmount" :loading="submittingAmount">确认修改</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- ===== 添加备注弹窗 ===== -->
-    <el-dialog v-model="remarkVisible" title="添加内部备注" width="400px">
-      <el-form>
-        <el-input v-model="remarkText" type="textarea" :rows="4" placeholder="备注内容仅管理员可见，会追加到已有内部备注末尾" />
-      </el-form>
-      <template #footer>
-        <el-button @click="remarkVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitRemark" :loading="submittingRemark">保存</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- ===== 清理箱弹窗 ===== -->
-    <el-dialog v-model="visibilityVisible" :title="visibilityForm.visibility === 'hidden' ? '移入订单清理箱' : '移出订单清理箱'" width="440px">
-      <el-form :model="visibilityForm" label-width="90px">
-        <el-form-item label="清理分类" required>
-          <el-select v-model="visibilityForm.cleanup_category" :disabled="visibilityForm.visibility === 'visible'" style="width:100%">
-            <el-option v-for="item in cleanupCategoryOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="操作原因" required>
-          <el-input v-model="visibilityForm.reason" type="textarea" :rows="3" maxlength="200" show-word-limit />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="visibilityVisible = false">取消</el-button>
-        <el-button :type="visibilityForm.visibility === 'hidden' ? 'warning' : 'primary'" @click="submitOrderVisibility" :loading="submittingVisibility">
-          {{ visibilityForm.visibility === 'hidden' ? '移入清理箱' : '恢复显示' }}
-        </el-button>
-      </template>
-    </el-dialog>
-
-    <!-- ===== 强制动作弹窗 ===== -->
-    <el-dialog v-model="forceVisible" :title="forceType === 'complete' ? '强制完成订单' : '强制取消订单'" width="400px">
-      <el-alert v-if="forceType === 'cancel'" title="取消订单将自动发起退款，不可逆操作！" type="error" :closable="false" style="margin-bottom:15px" />
-      <el-form :model="forceForm" label-width="90px">
-        <el-form-item label="操作原因" required>
-          <el-input v-model="forceForm.reason" placeholder="必填项" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="forceVisible = false">取消</el-button>
-        <el-button :type="forceType === 'cancel' ? 'danger' : 'warning'" @click="submitForce" :loading="submittingForce">确认</el-button>
-      </template>
-    </el-dialog>
+    <OrderMutationDialogs
+      v-if="shipDialogVisible || amountVisible || remarkVisible || visibilityVisible || forceVisible"
+      :ship-visible="shipDialogVisible"
+      :amount-visible="amountVisible"
+      :remark-visible="remarkVisible"
+      :visibility-visible="visibilityVisible"
+      :force-visible="forceVisible"
+      :ship-form="shipForm"
+      :amount-form="amountForm"
+      :visibility-form="visibilityForm"
+      :force-form="forceForm"
+      :current-order="currentOrder"
+      :remark-text="remarkText"
+      :force-type="forceType"
+      :ship-fulfillment-label="shipFulfillmentLabel"
+      :logistics-mode="logisticsMode"
+      :shipping-company-options="shippingCompanyOptions"
+      :cleanup-category-options="cleanupCategoryOptions"
+      :can-manage-settings="canManageSettings"
+      :submitting-ship="submittingShip"
+      :submitting-amount="submittingAmount"
+      :submitting-remark="submittingRemark"
+      :submitting-visibility="submittingVisibility"
+      :submitting-force="submittingForce"
+      :money="money"
+      @update:ship-visible="shipDialogVisible = $event"
+      @update:amount-visible="amountVisible = $event"
+      @update:remark-visible="remarkVisible = $event"
+      @update:remark-text="remarkText = $event"
+      @update:visibility-visible="visibilityVisible = $event"
+      @update:force-visible="forceVisible = $event"
+      @submit-ship="submitShip"
+      @submit-amount="submitAmount"
+      @submit-remark="submitRemark"
+      @submit-visibility="submitOrderVisibility"
+      @submit-force="submitForce"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, computed, watch, defineAsyncComponent } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown } from '@element-plus/icons-vue'
 import {
   getOrders,
   getOrderDetail,
@@ -637,6 +281,10 @@ import { getUserAvatar, getUserNickname, normalizeUserDisplay } from '@/utils/us
 import { usePagination } from '@/composables/usePagination'
 import { useUserStore } from '@/store/user'
 import { extractReadAt, mergeStrongSuccessMessage } from '@/api/consistency'
+import OrderTable from './components/OrderTable.vue'
+const OrderDetailDrawer = defineAsyncComponent(() => import('./components/OrderDetailDrawer.vue'))
+const OrderLogisticsDrawer = defineAsyncComponent(() => import('./components/OrderLogisticsDrawer.vue'))
+const OrderMutationDialogs = defineAsyncComponent(() => import('./components/OrderMutationDialogs.vue'))
 
 const router = useRouter()
 const route = useRoute()
@@ -1554,164 +1202,4 @@ onMounted(() => {
 .status-tabs { margin-bottom: 16px; }
 .filter-form { margin-bottom: 8px; }
 .search-combo { display: flex; gap: 8px; width: 100%; align-items: center; flex-wrap: wrap; }
-.stack-block { font-size: 12px; line-height: 1.65; color: var(--el-text-color-regular); }
-.stack-label { color: #909399; margin-right: 4px; }
-.member-cell { display: flex; gap: 10px; align-items: flex-start; }
-.member-avatar { flex-shrink: 0; }
-.member-meta { min-width: 0; flex: 1; }
-.member-nick { font-weight: 600; color: #303133; font-size: 13px; }
-.prod-title-link { text-align: left; white-space: normal; line-height: 1.45; font-weight: 600; }
-.orders-table { margin-top: 8px; }
-
-.detail-section-bar {
-  font-size: 14px;
-  font-weight: 600;
-  padding-bottom: 8px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-.detail-goods-row { margin-bottom: 16px; }
-.line-prod { display: flex; gap: 10px; align-items: flex-start; }
-.line-prod-thumb { width: 48px; height: 48px; border-radius: 6px; flex-shrink: 0; }
-.line-prod-name { font-weight: 600; font-size: 13px; }
-.line-prod-spec { font-size: 12px; color: #909399; margin-top: 4px; }
-.amount-summary {
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-  padding: 12px 16px;
-  font-size: 13px;
-}
-.amount-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 0;
-  border-bottom: 1px dashed var(--el-border-color-lighter);
-}
-.amount-row:last-child { border-bottom: none; }
-.amount-row.danger span:last-child { color: var(--el-color-danger); }
-.amount-row.total {
-  font-weight: 700;
-  font-size: 15px;
-  padding-top: 10px;
-  margin-top: 4px;
-  border-top: 1px solid var(--el-border-color-lighter);
-}
-.buyer-remark-block {
-  min-height: 48px;
-  padding: 12px;
-  background: #fafafa;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #606266;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.buyer-remark-block--legacy {
-  background: #f4f4f5;
-  color: #909399;
-}
-.detail-inline-actions {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.logistics-drawer {
-  padding: 0 4px;
-}
-.detail-member-row { display: flex; gap: 12px; align-items: flex-start; }
-.detail-member-desc { flex: 1; min-width: 0; }
-
-.danger-text { color: var(--el-color-danger) !important; }
-.warning-text { color: var(--el-color-warning) !important; }
-
-.product-thumb { width: 50px; height: 50px; border-radius: 4px; }
-.detail-address { margin-bottom: 20px; }
-.detail-card {
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  padding: 12px;
-  background: #fff;
-}
-.detail-card-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #303133;
-  margin-bottom: 10px;
-}
-.detail-product {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-.detail-product-thumb {
-  width: 64px;
-  height: 64px;
-  border-radius: 6px;
-  flex-shrink: 0;
-}
-.detail-product-body {
-  flex: 1;
-  min-width: 0;
-}
-.detail-product-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1f2937;
-  line-height: 1.5;
-}
-.detail-product-spec {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #6b7280;
-}
-.detail-address-name {
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-.detail-address-text {
-  color: #606266;
-  font-size: 13px;
-  line-height: 1.7;
-}
-.order-remark {
-  color: #e6a23c;
-  font-size: 13px;
-  background: #fdf6ec;
-  padding: 10px;
-  border-radius: 4px;
-}
-.commission-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.commission-item {
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: #fff;
-}
-.commission-main {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-weight: 600;
-  color: #303133;
-}
-.commission-amount {
-  color: #f56c6c;
-}
-.commission-sub {
-  display: flex;
-  gap: 12px;
-  margin-top: 4px;
-  font-size: 12px;
-  color: #909399;
-}
-.commission-remark {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #606266;
-  line-height: 1.6;
-}
 </style>

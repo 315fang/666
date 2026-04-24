@@ -51,7 +51,7 @@ Generated at: 2026-04-09T02:55:10.285Z
 - Missing functions: none
 - Extra deployed functions: none
 - CloudRun services: 0
-- Runtime status report: [cloud-mp/docs/CLOUDBASE_ENV_RUNTIME_STATUS.md](C:\Users\21963\WeChatProjects\zz\cloud-mp\docs\CLOUDBASE_ENV_RUNTIME_STATUS.md)
+- Runtime status report: [docs/audit/generated/CLOUDBASE_ENV_RUNTIME_STATUS.md](audit/generated/CLOUDBASE_ENV_RUNTIME_STATUS.md)
 
 ## Runtime Blockers
 

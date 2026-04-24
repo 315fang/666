@@ -44,8 +44,8 @@
 
 配套证据文件：
 
-- [docs/CLOUDBASE_ENV_RUNTIME_STATUS.json](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/CLOUDBASE_ENV_RUNTIME_STATUS.json)
-- [docs/FINANCE_SMOKE_AUDIT.json](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/FINANCE_SMOKE_AUDIT.json)
+- [docs/audit/generated/CLOUDBASE_ENV_RUNTIME_STATUS.json](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/audit/generated/CLOUDBASE_ENV_RUNTIME_STATUS.json)
+- [docs/audit/generated/FINANCE_SMOKE_AUDIT.json](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/audit/generated/FINANCE_SMOKE_AUDIT.json)
 - [docs/audit/2026-04-19-cloudbase-collection-matrix.json](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/audit/2026-04-19-cloudbase-collection-matrix.json)
 - [docs/audit/2026-04-19-cloudbase-live-extra-collections.json](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/audit/2026-04-19-cloudbase-live-extra-collections.json)
 - [docs/audit/2026-04-19-live-finance-samples.json](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/audit/2026-04-19-live-finance-samples.json)

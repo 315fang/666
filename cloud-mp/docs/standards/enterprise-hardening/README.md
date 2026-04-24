@@ -40,8 +40,8 @@
 - `docs/audit/2026-04-14-config-content-field-truth.md`
 - `docs/ORDER_MAIN_CONTRACT_AUDIT.md`
 - `docs/USER_DISTRIBUTION_CONTRACT_AUDIT.md`
-- `docs/CONFIG_CONTENT_CONTRACT_AUDIT.md`
-- `docs/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
+- `docs/audit/generated/CONFIG_CONTENT_CONTRACT_AUDIT.md`
+- `docs/audit/generated/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
 - `docs/CLOUDBASE_LEGACY_COMPAT_AUDIT.md`
 
 如果规范文档与最新已验证代码冲突，必须在同一轮同步修正，不允许长期偏离。

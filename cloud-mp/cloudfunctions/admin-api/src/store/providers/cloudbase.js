@@ -419,9 +419,17 @@ function createCloudBaseStore(options) {
             : 'CloudBase 文档数据库（@cloudbase/node-sdk）+ CloudBase 单例配置',
         readyPromise,
         async flush() {
+            const collectionNames = new Set([
+                ...Array.from(dirty),
+                ...Array.from(pendingFlush.keys())
+            ]);
+            const singletonNames = new Set([
+                ...Array.from(dirtySingletons),
+                ...Array.from(pendingSingletonFlush.keys())
+            ]);
             const tasks = [
-                ...Array.from(dirty).map((name) => flushCollection(name)),
-                ...Array.from(dirtySingletons).map((name) => flushSingleton(name))
+                ...Array.from(collectionNames).map((name) => flushCollection(name)),
+                ...Array.from(singletonNames).map((name) => flushSingleton(name))
             ];
             return Promise.allSettled(tasks);
         },

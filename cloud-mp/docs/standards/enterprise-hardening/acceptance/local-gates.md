@@ -24,9 +24,9 @@ npm run audit:response-shape
 
 - `docs/ORDER_MAIN_CONTRACT_AUDIT.md`
 - `docs/USER_DISTRIBUTION_CONTRACT_AUDIT.md`
-- `docs/CONFIG_CONTENT_CONTRACT_AUDIT.md`
-- `docs/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
-- `docs/ADMIN_RESPONSE_SHAPE_AUDIT.md`
+- `docs/audit/generated/CONFIG_CONTENT_CONTRACT_AUDIT.md`
+- `docs/audit/generated/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
+- `docs/audit/generated/ADMIN_RESPONSE_SHAPE_AUDIT.md`
 
 ## 3. 构建与静态检查
 

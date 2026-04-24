@@ -314,7 +314,11 @@ function createMysqlStore(options) {
         description: 'MySQL + Sequelize 真实数据源',
         readyPromise,
         async flush() {
-            const tasks = Array.from(dirty).map((name) => flushCollection(name));
+            const collectionNames = new Set([
+                ...Array.from(dirty),
+                ...Array.from(pendingFlush.keys())
+            ]);
+            const tasks = Array.from(collectionNames).map((name) => flushCollection(name));
             return Promise.allSettled(tasks);
         },
         health() {

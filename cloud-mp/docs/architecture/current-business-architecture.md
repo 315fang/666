@@ -10,8 +10,8 @@
 - [项目总体说明](../../PROJECT_OVERVIEW.md)
 - [订单 / 支付 / 退款契约](../standards/enterprise-hardening/contracts/order.md)
 - [用户 / 分销 / 钱包契约](../standards/enterprise-hardening/contracts/user-distribution.md)
-- [Business Smoke Audit](../BUSINESS_SMOKE_AUDIT.md)
-- [Mini Program Route Table Audit](../MINIPROGRAM_ROUTE_TABLE_AUDIT.md)
+- [Business Smoke Audit](../audit/generated/BUSINESS_SMOKE_AUDIT.md)
+- [Mini Program Route Table Audit](../audit/generated/MINIPROGRAM_ROUTE_TABLE_AUDIT.md)
 - `cloudfunctions/order/index.js`
 - `cloudfunctions/payment/payment-callback.js`
 - `cloudfunctions/distribution/index.js`
@@ -396,17 +396,17 @@
 - 当前页面和接口能兼容历史数据。
 - 但“单一真相字段”还没彻底收口，后续仍有误读风险。
 
-### 7.5 首页品牌区配置键不齐
+### 7.5 首页品牌区配置键完整性
 
-当前已知问题：
+当前状态：
 
-- [Business Smoke Audit](../BUSINESS_SMOKE_AUDIT.md) 明确显示 `config.homeContent` 失败。
-- 缺失键包括 `brand_zone_enabled`、`brand_zone_title`、`brand_zone_welcome_title`、`brand_endorsements`、`brand_certifications`。
+- [Business Smoke Audit](../audit/generated/BUSINESS_SMOKE_AUDIT.md) 当前显示 `config.homeContent` 通过。
+- `brand_zone_enabled`、`brand_zone_title`、`brand_zone_welcome_title`、`brand_endorsements`、`brand_certifications` 已纳入 smoke 校验。
 
 这意味着：
 
 - 商城主交易链不受阻。
-- 但首页品牌背书和内容表达链还不是完全可信状态。
+- 首页品牌背书配置已有基础 smoke 兜底；后续风险主要在真实内容运营质量，而不是配置键缺失。
 
 ### 7.6 实名、账号注销、年终分红、部分企业 / 发票闭环未见完整实现
 

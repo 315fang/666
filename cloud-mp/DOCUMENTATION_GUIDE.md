@@ -74,7 +74,7 @@
 ### C. 审计、运行快照、阶段性结果
 
 - `docs/AUDIT_ALL_SUMMARY.md`
-- `docs/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
+- `docs/audit/generated/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
 - `docs/ADMIN_*`
 - `docs/*_AUDIT.md`
 - `docs/reports/*`
@@ -100,7 +100,7 @@
 看：
 
 - `miniprogram/utils/requestRoutes.js`
-- `docs/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
+- `docs/audit/generated/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
 
 ### “管理后台写操作经过哪里？”
 

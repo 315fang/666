@@ -8,7 +8,7 @@
 
 - `miniprogram/utils/request.js`
 - `miniprogram/utils/cloud.js`
-- `docs/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
+- `docs/audit/generated/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
 
 本专题不定义业务字段真相，而定义：
 
@@ -45,7 +45,7 @@
 
 权威证据入口：
 
-- `docs/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
+- `docs/audit/generated/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
 
 ### 3.2 request 层允许承担的职责
 

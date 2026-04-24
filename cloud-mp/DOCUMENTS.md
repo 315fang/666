@@ -37,7 +37,7 @@
 ## 4. 审计与运行结果
 
 - `docs/AUDIT_ALL_SUMMARY.md`
-- `docs/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
+- `docs/audit/generated/MINIPROGRAM_ROUTE_TABLE_AUDIT.md`
 - `docs/ADMIN_*`
 - `docs/*_AUDIT.md`
 - `docs/reports/*`
