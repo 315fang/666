@@ -1,54 +1,54 @@
 {
-  "generatedAt": "2026-04-19T15:05:30.678Z",
+  "generatedAt": "2026-04-24T01:27:47.408Z",
   "ok": true,
   "results": [
     {
       "name": "refunds",
       "collectionName": "refunds",
       "ok": true,
-      "count": 32,
+      "count": 33,
       "issues": []
     },
     {
       "name": "withdrawals",
       "collectionName": "withdrawals",
       "ok": true,
-      "count": 5,
+      "count": 6,
       "issues": []
     },
     {
       "name": "commissions",
       "collectionName": "commissions",
       "ok": true,
-      "count": 8,
+      "count": 10,
       "issues": []
     },
     {
       "name": "wallet_logs",
       "collectionName": "wallet_logs",
       "ok": true,
-      "count": 37,
+      "count": 46,
       "issues": []
     },
     {
       "name": "goods_fund_logs",
       "collectionName": "goods_fund_logs",
       "ok": true,
-      "count": 26,
+      "count": 36,
       "issues": []
     },
     {
       "name": "point_logs",
       "collectionName": "point_logs",
       "ok": true,
-      "count": 646,
+      "count": 691,
       "issues": []
     },
     {
       "name": "users",
       "collectionName": "users",
       "ok": true,
-      "count": 187,
+      "count": 211,
       "issues": []
     }
   ]

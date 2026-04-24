@@ -88,7 +88,9 @@ function createCloudBaseStore(options) {
         'user_favorites', 'user_mass_messages', 'users', 'upgrade_applications',
         'wallet_accounts', 'wallet_logs', 'wallet_recharge_orders', 'withdrawals'
     ]);
-    const preloadCollections = Array.from(allKnownCollections);
+    // Cold start should only load login/permission/config essentials.
+    // Route handlers call reloadCollections before touching their own data sets.
+    const preloadCollections = Array.from(basePreloadCollections);
 
     function setCollectionState(name, meta = {}) {
         const key = normalizeSourceName(name);
@@ -463,7 +465,9 @@ function createCloudBaseStore(options) {
                 env_id: cloudbase.envId || '',
                 region: cloudbase.region || '',
                 collection_prefix: cloudbase.collectionPrefix || '',
-                preload_mode: 'all_known_collections',
+                preload_mode: 'base_collections_lazy_route_load',
+                known_collections: allKnownCollections.size,
+                preloaded_collections: preloadCollections.length,
                 ready: state.ready
             };
         },

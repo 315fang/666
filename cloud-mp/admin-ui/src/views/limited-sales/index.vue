@@ -222,6 +222,20 @@ import {
 import MediaPicker from '@/components/MediaPicker.vue'
 import { buildPersistentAssetRef } from '@/utils/assetUrlAudit'
 
+const CHINA_TIME_ZONE = 'Asia/Shanghai'
+const HAS_TIME_ZONE_SUFFIX_RE = /(?:Z|[+-]\d{2}:\d{2})$/i
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/
+const CHINA_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  timeZone: CHINA_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false
+})
+
 const slotLoading = ref(false)
 const slotSaving = ref(false)
 const itemLoading = ref(false)
@@ -282,12 +296,42 @@ const runtimeTagType = (status) => ({
   invalid: 'danger'
 }[status] || 'info')
 
+const parseChinaDateTime = (value) => {
+  if (!value) return null
+  const raw = String(value).trim()
+  if (!raw) return null
+  const normalized = DATE_ONLY_RE.test(raw)
+    ? `${raw}T00:00:00+08:00`
+    : (HAS_TIME_ZONE_SUFFIX_RE.test(raw) ? raw : `${raw}+08:00`)
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+const getChinaDateTimeParts = (value) => {
+  const date = parseChinaDateTime(value)
+  if (!date) return null
+  const parts = CHINA_DATE_TIME_FORMATTER.formatToParts(date)
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  const day = parts.find((part) => part.type === 'day')?.value
+  const hour = parts.find((part) => part.type === 'hour')?.value
+  const minute = parts.find((part) => part.type === 'minute')?.value
+  const second = parts.find((part) => part.type === 'second')?.value
+  if (!year || !month || !day || !hour || !minute || !second) return null
+  return { year, month, day, hour, minute, second }
+}
+
+const toChinaNaiveDateTime = (value) => {
+  const parts = getChinaDateTimeParts(value)
+  if (!parts) return value ? String(value) : ''
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`
+}
+
 const formatDateTime = (value) => {
   if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value)
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+  const parts = getChinaDateTimeParts(value)
+  if (!parts) return String(value)
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`
 }
 
 const resetSlotForm = () => {
@@ -371,8 +415,8 @@ const openSlotDialog = (row = null) => {
       subtitle: row.subtitle || '',
       file_id: row.file_id || '',
       cover_image: row.cover_image || '',
-      start_time: row.start_time || '',
-      end_time: row.end_time || '',
+      start_time: toChinaNaiveDateTime(row.start_time),
+      end_time: toChinaNaiveDateTime(row.end_time),
       sort_order: Number(row.sort_order || 0),
       status: row.status !== 0
     })
@@ -427,8 +471,8 @@ const submitSlot = async () => {
       subtitle: slotForm.subtitle,
       file_id: slotForm.file_id,
       cover_image: slotForm.cover_image,
-      start_time: slotForm.start_time,
-      end_time: slotForm.end_time,
+      start_time: toChinaNaiveDateTime(slotForm.start_time),
+      end_time: toChinaNaiveDateTime(slotForm.end_time),
       sort_order: slotForm.sort_order,
       status: slotForm.status
     }

@@ -1,11 +1,10 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { getAuditArtifactPaths } = require('./lib/audit-output');
 
 const cloudRoot = path.resolve(__dirname, '..');
-const docsDir = path.join(cloudRoot, 'docs');
-const jsonPath = path.join(docsDir, 'ADMIN_HOSTING_AUDIT.json');
-const mdPath = path.join(docsDir, 'ADMIN_HOSTING_AUDIT.md');
+const { outputDir: docsDir, jsonPath, mdPath } = getAuditArtifactPaths(cloudRoot, 'ADMIN_HOSTING_AUDIT');
 
 function readLocalAssets() {
   const html = fs.readFileSync(path.join(cloudRoot, 'admin-ui', 'dist', 'index.html'), 'utf8');

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { resolveAuditInputPath } = require('./lib/audit-output');
 
 const projectRoot = path.resolve(__dirname, '..');
 const workspaceRoot = path.resolve(projectRoot, '..');
@@ -29,7 +30,7 @@ function run() {
   const importSummaryPath = path.join(projectRoot, 'cloudbase-import', '_summary.json');
   const docsPath = path.join(projectRoot, 'docs', 'CLOUDBASE_MIGRATION_PROGRESS.md');
   const adminUiPackagePath = path.join(projectRoot, 'admin-ui', 'package.json');
-  const migrationMatrixPath = path.join(projectRoot, 'docs', 'CLOUD_MP_MIGRATION_MATRIX.md');
+  const migrationMatrixPath = resolveAuditInputPath(projectRoot, 'CLOUD_MP_MIGRATION_MATRIX.md');
   const collectionContractPath = path.join(projectRoot, 'config', 'cloudbase-collection-contract.json');
 
   assert(checks, exists(projectConfigPath), 'project.config.json exists', projectConfigPath);

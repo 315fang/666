@@ -63,6 +63,7 @@ function registerCleanupRoutes(app, deps) {
         requirePermission,
         rejectUnknownBodyFields,
         requireNonEmptyStringField,
+        ensureFreshCollections = async () => {},
         findByLookup,
         findUserByAnyId,
         getCollection,
@@ -79,6 +80,7 @@ function registerCleanupRoutes(app, deps) {
     } = deps;
 
     app.put('/admin/api/orders/:id/visibility', auth, requirePermission('settings_manage'), async (req, res) => {
+        await ensureFreshCollections(['orders']);
         if (rejectUnknownBodyFields(res, req.body, ['visibility', 'order_visibility', 'cleanup_category', 'reason'], '订单清理参数不合法')) return;
 
         const nextVisibility = normalizeVisibilityInput(req.body?.order_visibility || req.body?.visibility);
@@ -118,6 +120,7 @@ function registerCleanupRoutes(app, deps) {
     });
 
     app.put('/admin/api/users/:id/visibility', auth, requirePermission('user_status_manage'), async (req, res) => {
+        await ensureFreshCollections(['users']);
         if (rejectUnknownBodyFields(res, req.body, ['visibility', 'account_visibility', 'cleanup_category', 'reason'], '用户清理参数不合法')) return;
 
         const nextVisibility = normalizeVisibilityInput(req.body?.account_visibility || req.body?.visibility);

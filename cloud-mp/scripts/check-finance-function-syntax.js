@@ -3,11 +3,10 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { getAuditArtifactPaths } = require('./lib/audit-output');
 
 const cloudRoot = path.resolve(__dirname, '..');
-const docsDir = path.join(cloudRoot, 'docs');
-const jsonPath = path.join(docsDir, 'FINANCE_FUNCTION_SYNTAX_CHECK.json');
-const mdPath = path.join(docsDir, 'FINANCE_FUNCTION_SYNTAX_CHECK.md');
+const { outputDir: docsDir, jsonPath, mdPath } = getAuditArtifactPaths(cloudRoot, 'FINANCE_FUNCTION_SYNTAX_CHECK');
 
 const files = [
     'cloudfunctions/admin-api/src/app.js',

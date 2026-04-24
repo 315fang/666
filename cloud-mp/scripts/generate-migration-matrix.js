@@ -1,12 +1,11 @@
 const fs = require('fs');
 const path = require('path');
+const { getAuditArtifactPaths, resolveAuditInputPath } = require('./lib/audit-output');
 
 const cloudRoot = path.resolve(__dirname, '..');
 const workspaceRoot = path.resolve(cloudRoot, '..');
-const docsDir = path.join(cloudRoot, 'docs');
-const jsonPath = path.join(docsDir, 'CLOUD_MP_MIGRATION_MATRIX.json');
-const mdPath = path.join(docsDir, 'CLOUD_MP_MIGRATION_MATRIX.md');
-const liveSmokePath = path.join(docsDir, 'CLOUDBASE_LIVE_SMOKE.json');
+const { outputDir: docsDir, jsonPath, mdPath } = getAuditArtifactPaths(cloudRoot, 'CLOUD_MP_MIGRATION_MATRIX');
+const liveSmokePath = resolveAuditInputPath(cloudRoot, 'CLOUDBASE_LIVE_SMOKE.json');
 
 const ignoreDirs = new Set(['node_modules', '.git', 'dist', 'build', '.runtime', '.omx']);
 const textExtensions = new Set(['.js', '.json', '.md', '.vue', '.wxml', '.wxss']);

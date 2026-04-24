@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
+import { clearStoredAdminSession } from '@/utils/adminSession'
 
 const localAdminProxyTarget = String(import.meta.env.VITE_ADMIN_DEV_PROXY_TARGET || 'http://127.0.0.1:3001').replace(/\/$/, '')
 const localDirectAdminApiBaseURL = `${localAdminProxyTarget}/admin/api`
@@ -168,13 +169,7 @@ request.interceptors.response.use(
             break
           }
           if (!skipErrorMessage) ElMessage.error(data?.message || '登录已过期，请重新登录')
-          try {
-            const { useUserStore } = await import('@/store/user')
-            useUserStore().clearSession()
-          } catch (_) {
-            localStorage.removeItem('admin_token')
-            localStorage.removeItem('admin_info')
-          }
+          clearStoredAdminSession()
           if (router.currentRoute.value.path !== '/login') {
             await router.replace('/login')
           }

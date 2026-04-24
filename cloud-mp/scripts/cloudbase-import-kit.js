@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { getAuditArtifactPaths, toMarkdownFileLink } = require('./lib/audit-output');
 
 const projectRoot = path.resolve(__dirname, '..');
 const docsRoot = path.join(projectRoot, 'docs');
@@ -33,8 +34,7 @@ const readinessDocPath = path.join(docsRoot, 'CLOUDBASE_ENV_IMPORT_READINESS.md'
 const readinessJsonPath = path.join(docsRoot, 'CLOUDBASE_ENV_IMPORT_READINESS.json');
 const resultDocPath = path.join(docsRoot, 'CLOUDBASE_ENV_IMPORT_RESULT.md');
 const resultJsonPath = path.join(docsRoot, 'CLOUDBASE_ENV_IMPORT_RESULT.json');
-const runtimeStatusDocPath = path.join(docsRoot, 'CLOUDBASE_ENV_RUNTIME_STATUS.md');
-const runtimeStatusJsonPath = path.join(docsRoot, 'CLOUDBASE_ENV_RUNTIME_STATUS.json');
+const { jsonPath: runtimeStatusJsonPath, mdPath: runtimeStatusDocPath } = getAuditArtifactPaths(projectRoot, 'CLOUDBASE_ENV_RUNTIME_STATUS');
 
 function readJson(filePath, fallback = null) {
   try {
@@ -194,10 +194,12 @@ function buildResultReport(context = readContext()) {
     ? {
       checked_at: runtimeStatus.generated_at || '',
       env_id: (runtimeStatus.environment && runtimeStatus.environment.env_id) || '',
-      required_collections_match: !!(runtimeStatus.summary && runtimeStatus.summary.required_collection_counts_match),
+      required_collections_readable: !!(runtimeStatus.summary && runtimeStatus.summary.required_collections_readable),
+      required_collection_baseline_met: !!(runtimeStatus.summary && runtimeStatus.summary.required_collection_baseline_met),
       matched_required_collection_count: Number((runtimeStatus.summary && runtimeStatus.summary.matched_required_collection_count) || 0),
       required_collection_count: Number((runtimeStatus.summary && runtimeStatus.summary.required_collection_count) || 0),
-      missing_required_collections: (runtimeStatus.collections && runtimeStatus.collections.missing_or_mismatched_required) || [],
+      missing_required_collections: (runtimeStatus.collections && (runtimeStatus.collections.missing_required || runtimeStatus.collections.missing_or_mismatched_required)) || [],
+      below_import_baseline: (runtimeStatus.collections && runtimeStatus.collections.below_import_baseline) || [],
       functions_match: !!(runtimeStatus.summary && runtimeStatus.summary.functions_match),
       missing_functions: (runtimeStatus.functions && runtimeStatus.functions.missing) || [],
       extra_functions: (runtimeStatus.functions && runtimeStatus.functions.extra) || [],
@@ -209,7 +211,7 @@ function buildResultReport(context = readContext()) {
   const status = context.importStatus || (runtimeValidation ? (runtimeStatus.ok ? 'VERIFIED' : 'PARTIAL') : 'DRAFT');
   const envId = context.envIdInput || context.projectConfig.cloudbaseEnv || '';
   const completedChecks = runtimeValidation
-    ? (runtimeValidation.required_collections_match
+    ? (runtimeValidation.required_collections_readable
       ? `YES (${runtimeValidation.matched_required_collection_count}/${runtimeValidation.required_collection_count})`
       : `NO (${runtimeValidation.matched_required_collection_count}/${runtimeValidation.required_collection_count}; missing: ${runtimeValidation.missing_required_collections.join(', ') || 'unknown'})`)
     : process.env.CLOUDBASE_IMPORT_COUNTS_MATCH === '1'
@@ -312,14 +314,16 @@ function renderResultMarkdown(report) {
 
 - Checked at: ${runtimeValidation.checked_at || 'PENDING'}
 - Runtime env ID: ${runtimeValidation.env_id || 'PENDING'}
-- Required collections match: ${runtimeValidation.required_collections_match ? 'YES' : 'NO'}
+- Required collections readable: ${runtimeValidation.required_collections_readable ? 'YES' : 'NO'}
+- Import baseline met: ${runtimeValidation.required_collection_baseline_met ? 'YES' : 'NO'}
 - Matched required collections: ${runtimeValidation.matched_required_collection_count}/${runtimeValidation.required_collection_count}
 - Missing required collections: ${runtimeValidation.missing_required_collections.length ? runtimeValidation.missing_required_collections.join(', ') : 'none'}
+- Below import baseline: ${runtimeValidation.below_import_baseline.length ? runtimeValidation.below_import_baseline.join(', ') : 'none'}
 - Functions match local source: ${runtimeValidation.functions_match ? 'YES' : 'NO'}
 - Missing functions: ${runtimeValidation.missing_functions.length ? runtimeValidation.missing_functions.join(', ') : 'none'}
 - Extra deployed functions: ${runtimeValidation.extra_functions.length ? runtimeValidation.extra_functions.join(', ') : 'none'}
 - CloudRun services: ${runtimeValidation.cloudrun_service_count}
-- Runtime status report: [cloud-mp/docs/CLOUDBASE_ENV_RUNTIME_STATUS.md](C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\docs\\CLOUDBASE_ENV_RUNTIME_STATUS.md)
+- Runtime status report: ${toMarkdownFileLink(runtimeStatusDocPath, 'CLOUDBASE_ENV_RUNTIME_STATUS.md')}
 
 ## Runtime Blockers
 

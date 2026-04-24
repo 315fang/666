@@ -198,12 +198,13 @@
     </view>
     <text class="detail-description" wx:if="{{product.description}}">{{product.description}}</text>
     <view class="detail-images" wx:if="{{detailImageList.length > 0}}">
-      <image class="detail-image" wx:for="{{detailImageList}}" wx:key="*this" src="{{item}}" mode="widthFix" bindtap="onPreviewDetailImage" binderror="onDetailImageError" data-index="{{index}}"></image>
+      <image class="detail-image" wx:for="{{detailImageList}}" wx:key="*this" src="{{item}}" mode="widthFix" lazy-load="true" bindtap="onPreviewDetailImage" binderror="onDetailImageError" data-index="{{index}}"></image>
     </view>
+    <text class="detail-empty" wx:elif="{{detailImageSourceList.length && !detailImagesLoaded}}">详情图片加载中...</text>
     <view class="detail-content" wx:if="{{hasRichDetail}}">
       <rich-text nodes="{{product.detail_html || '暂无详情'}}"></rich-text>
     </view>
-    <text class="detail-empty" wx:if="{{!detailImageList.length && !hasRichDetail}}">暂无详情</text>
+    <text class="detail-empty" wx:if="{{detailImagesLoaded && !detailImageList.length && !hasRichDetail}}">暂无详情</text>
   </view>
 
   <view class="section-card reviews-section" wx:if="{{reviewsLoaded}}">

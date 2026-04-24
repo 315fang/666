@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-04-18T06:29:06.732Z",
+  "generatedAt": "2026-04-24T05:50:12.102Z",
   "envId": "cloud1-9gywyqe49638e46f",
-  "ok": false,
+  "ok": true,
   "results": [
     {
       "area": "admin",
@@ -13,7 +13,7 @@
       "area": "admin",
       "name": "products",
       "ok": true,
-      "count": 11,
+      "count": 19,
       "issues": []
     },
     {
@@ -41,7 +41,7 @@
       "area": "admin",
       "name": "withdrawals",
       "ok": true,
-      "count": 5,
+      "count": 6,
       "issues": []
     },
     {
@@ -75,7 +75,7 @@
       "area": "mini",
       "name": "products.list",
       "ok": true,
-      "count": 9,
+      "count": 10,
       "issues": []
     },
     {
@@ -88,20 +88,14 @@
       "area": "mini",
       "name": "products.categories",
       "ok": true,
-      "count": 9,
+      "count": 8,
       "issues": []
     },
     {
       "area": "mini",
       "name": "config.homeContent",
-      "ok": false,
-      "issues": [
-        "configs 缺少键 brand_zone_enabled",
-        "configs 缺少键 brand_zone_title",
-        "configs 缺少键 brand_zone_welcome_title",
-        "configs 缺少键 brand_endorsements",
-        "configs 缺少键 brand_certifications"
-      ]
+      "ok": true,
+      "issues": []
     },
     {
       "area": "mini",

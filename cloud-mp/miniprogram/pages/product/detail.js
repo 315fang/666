@@ -7,7 +7,7 @@ const { safeBack } = require('../../utils/navigator');
 const { requireLogin } = require('../../utils/auth');
 const { resolveSlashResumePayload } = require('../../utils/activityResume');
 const { fetchLimitedSpotContext, normalizeLimitedSpotMode } = require('../../utils/limitedSpot');
-const { loadProduct, resolvePayableUnitPrice, buildSkuText } = require('./productDetailData');
+const { loadProduct, resolveDetailImageList, resolvePayableUnitPrice, buildSkuText } = require('./productDetailData');
 const { refreshFavoriteState, toggleFavorite } = require('./productDetailFavorite');
 const {
     onSpecSelect,
@@ -123,6 +123,9 @@ Page({
         currentStock: 0,
         isOutOfStock: false,
         detailImageList: [],
+        detailImageSourceList: [],
+        detailImagesLoaded: false,
+        detailImagesLoading: false,
         hasRichDetail: false,
         roleLevel: USER_ROLES.GUEST,
         isAgent: false,
@@ -239,13 +242,100 @@ Page({
 
     onReady() {
         this.brandAnimation = this.selectComponent('#brandAnimation');
+        this._scheduleDetailSectionObserver();
     },
 
-    onUnload() {},
+    onUnload() {
+        this._clearDetailSectionObserver();
+    },
+
+    onPageScroll(e) {
+        if (Number(e?.scrollTop || 0) > 500) {
+            this.loadDetailImages();
+        }
+    },
 
     // 加载商品详情
     async loadProduct(id) {
-        return loadProduct(this, id);
+        const result = await loadProduct(this, id);
+        this._scheduleDetailSectionObserver();
+        return result;
+    },
+
+    _clearDetailSectionObserver() {
+        if (this._detailSectionObserverTimer) {
+            clearTimeout(this._detailSectionObserverTimer);
+            this._detailSectionObserverTimer = null;
+        }
+        if (this._detailSectionObserver) {
+            this._detailSectionObserver.disconnect();
+            this._detailSectionObserver = null;
+        }
+    },
+
+    _scheduleDetailSectionObserver() {
+        if (this._detailSectionObserverTimer) {
+            clearTimeout(this._detailSectionObserverTimer);
+            this._detailSectionObserverTimer = null;
+        }
+        const attachObserver = () => {
+            this._detailSectionObserverTimer = null;
+            this._observeDetailSection({ reset: true });
+        };
+        if (typeof wx.nextTick === 'function') {
+            wx.nextTick(attachObserver);
+        } else {
+            this._detailSectionObserverTimer = setTimeout(attachObserver, 0);
+        }
+    },
+
+    _observeDetailSection({ reset = false } = {}) {
+        if (this.data.pageLoading || this.data.detailImagesLoaded || this.data.detailImagesLoading) return;
+        const sources = this.data.detailImageSourceList || [];
+        if (!sources.length) return;
+        if (reset && this._detailSectionObserver) {
+            this._detailSectionObserver.disconnect();
+            this._detailSectionObserver = null;
+        }
+        if (this._detailSectionObserver) return;
+        if (typeof wx.createIntersectionObserver !== 'function') {
+            this.loadDetailImages();
+            return;
+        }
+        const observer = wx.createIntersectionObserver(this);
+        observer.relativeToViewport({ bottom: 300 }).observe('.detail-section', () => {
+            this.loadDetailImages();
+            if (this._detailSectionObserver) {
+                this._detailSectionObserver.disconnect();
+                this._detailSectionObserver = null;
+            }
+        });
+        this._detailSectionObserver = observer;
+    },
+
+    async loadDetailImages() {
+        if (this.data.detailImagesLoaded || this.data.detailImagesLoading) return;
+        const sources = this.data.detailImageSourceList || [];
+        if (!sources.length) {
+            this.setData({ detailImagesLoaded: true, detailImagesLoading: false });
+            return;
+        }
+
+        this.setData({ detailImagesLoading: true });
+        try {
+            const detailImageList = await resolveDetailImageList(sources);
+            this.setData({
+                detailImageList,
+                detailImagesLoaded: true,
+                detailImagesLoading: false
+            });
+        } catch (error) {
+            console.warn('[ProductDetail] 详情图片解析失败', error);
+            this.setData({
+                detailImagesLoaded: true,
+                detailImagesLoading: false
+            });
+        }
     },
 
     applyLimitedSpotSkuLock(offer) {

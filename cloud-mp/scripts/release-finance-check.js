@@ -3,11 +3,11 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { getAuditArtifactPaths, getAuditOutputDir } = require('./lib/audit-output');
 
 const cloudRoot = path.resolve(__dirname, '..');
-const docsDir = path.join(cloudRoot, 'docs');
-const jsonPath = path.join(docsDir, 'FINANCE_RELEASE_CHECK.json');
-const mdPath = path.join(docsDir, 'FINANCE_RELEASE_CHECK.md');
+const docsDir = getAuditOutputDir(cloudRoot);
+const { jsonPath, mdPath } = getAuditArtifactPaths(cloudRoot, 'FINANCE_RELEASE_CHECK');
 
 const steps = [
     { name: 'financeFirewall', command: 'npm run audit:finance-firewall', jsonPath: path.join(docsDir, 'STRATEGIC_FINANCE_FIREWALL_AUDIT.json') },
@@ -23,7 +23,11 @@ function runCommand(command, cwd = cloudRoot) {
             cwd,
             encoding: 'utf8',
             stdio: ['ignore', 'pipe', 'pipe'],
-            shell: true
+            shell: true,
+            env: {
+                ...process.env,
+                AUDIT_OUTPUT_DIR: docsDir
+            }
         });
         return { ok: true, output };
     } catch (error) {

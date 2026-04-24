@@ -19,12 +19,30 @@
         "pages/user/customer-service",
         "pages/user/membership-center",
         "pages/user/deposit-orders",
-        "pages/product/detail",
-        "pages/product-bundle/detail",
-        "pages/search/search",
         "pages/privacy/privacy"
     ],
     "subPackages": [
+        {
+            "root": "pages/product",
+            "name": "packageProduct",
+            "pages": [
+                "detail"
+            ]
+        },
+        {
+            "root": "pages/product-bundle",
+            "name": "packageProductBundle",
+            "pages": [
+                "detail"
+            ]
+        },
+        {
+            "root": "pages/search",
+            "name": "packageSearch",
+            "pages": [
+                "search"
+            ]
+        },
         {
             "root": "pages/order",
             "name": "packageOrder",
@@ -143,11 +161,11 @@
     ],
     "preloadRule": {
         "pages/index/index": {
-            "network": "all",
+            "network": "wifi",
             "packages": ["packageOrder"]
         },
         "pages/cart/cart": {
-            "network": "all",
+            "network": "wifi",
             "packages": ["packageOrder"]
         }
     },

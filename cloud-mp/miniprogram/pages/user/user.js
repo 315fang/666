@@ -17,16 +17,6 @@ const {
     scheduleSecondaryLoads
 } = require('./userDashboard');
 const {
-    onCancelAvatarPick: handleCancelAvatarPick,
-    onCancelNickname: handleCancelNickname,
-    onChooseAvatar: handleChooseAvatar,
-    onConfirmNickname: handleConfirmNickname,
-    onEditNickname: handleEditNickname,
-    onLogin: handleLogin,
-    onNicknameInput: handleNicknameInput,
-    onTapEditProfile: handleTapEditProfile
-} = require('./userProfileActions');
-const {
     buildSharePayload,
     goTeamCenter: navigateTeamCenter,
     goAllProducts: navigateAllProducts,
@@ -57,6 +47,10 @@ const {
     stopP: handleStopP,
     tryPendingRegisterLightTip: handlePendingRegisterLightTip
 } = require('./userPageInteractions');
+
+function getUserProfileActions() {
+    return require('./userProfileActions');
+}
 
 Page({
     data: {
@@ -346,16 +340,16 @@ Page({
     // ======== 编辑资料：先选「头像 / 昵称」 ========
     onTapEditProfile() {
         if (!requireLogin()) return;
-        return handleTapEditProfile(this);
+        return getUserProfileActions().onTapEditProfile(this);
     },
 
     onCancelAvatarPick() {
-        return handleCancelAvatarPick(this);
+        return getUserProfileActions().onCancelAvatarPick(this);
     },
 
     // ======== 头像（仅通过「编辑 → 修改头像 → 选择头像」进入） ========
     async onChooseAvatar(e) {
-        return handleChooseAvatar(this, e);
+        return getUserProfileActions().onChooseAvatar(this, e);
     },
 
     // ======== 登录（WXML 用 onLoginTap / onLoginBtnTap） ========
@@ -365,7 +359,7 @@ Page({
     },
 
     async onLogin() {
-        return handleLogin(this);
+        return getUserProfileActions().onLogin(this);
     },
 
     onLoginBtnTap() {
@@ -382,15 +376,15 @@ Page({
     // ======== 修改昵称（由「编辑」选「修改昵称」进入） ========
     onEditNickname() {
         if (!requireLogin()) return;
-        return handleEditNickname(this);
+        return getUserProfileActions().onEditNickname(this);
     },
 
     onNicknameInput(e) {
-        return handleNicknameInput(this, e);
+        return getUserProfileActions().onNicknameInput(this, e);
     },
 
     onCancelNickname() {
-        return handleCancelNickname(this);
+        return getUserProfileActions().onCancelNickname(this);
     },
 
     preventTap() {
@@ -403,7 +397,7 @@ Page({
     },
 
     async onConfirmNickname() {
-        return handleConfirmNickname(this);
+        return getUserProfileActions().onConfirmNickname(this);
     },
 
     // ======== ★ 佣金中心 ========

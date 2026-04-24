@@ -3,12 +3,11 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { getAuditArtifactPaths } = require('./lib/audit-output');
 
 const cloudRoot = path.resolve(__dirname, '..');
 const workspaceRoot = path.resolve(cloudRoot, '..');
-const docsDir = path.join(cloudRoot, 'docs');
-const jsonPath = path.join(docsDir, 'STAGING_BUSINESS_GATE_AUDIT.json');
-const mdPath = path.join(docsDir, 'STAGING_BUSINESS_GATE_AUDIT.md');
+const { outputDir: docsDir, jsonPath, mdPath } = getAuditArtifactPaths(cloudRoot, 'STAGING_BUSINESS_GATE_AUDIT');
 const mcporterConfigPath = path.join(workspaceRoot, 'config', 'mcporter.json');
 const mcporterCliPath = process.env.MCPORTER_CLI_PATH || 'D:/nodejs/node_global/node_modules/mcporter/dist/cli.js';
 

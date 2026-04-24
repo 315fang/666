@@ -1242,5 +1242,1125 @@
     },
     "status": "success",
     "created_at": "2026-04-23T06:39:03.734Z"
+  },
+  {
+    "id": 95,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.goods_fund.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999401,
+      "type": "add",
+      "amount": 10,
+      "reason": "管理员补贴"
+    },
+    "status": "success",
+    "created_at": "2026-04-23T15:34:47.418Z"
+  },
+  {
+    "id": 96,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.points.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999402,
+      "type": "add",
+      "amount": 8,
+      "reason": "活动补点"
+    },
+    "status": "success",
+    "created_at": "2026-04-23T15:34:47.468Z"
+  },
+  {
+    "id": 97,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.approve_settle",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999302"
+    },
+    "status": "success",
+    "created_at": "2026-04-23T15:34:47.549Z"
+  },
+  {
+    "id": 98,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999303"
+    },
+    "status": "success",
+    "created_at": "2026-04-23T15:34:47.571Z"
+  },
+  {
+    "id": 99,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_approve_settle",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-23T15:34:47.590Z"
+  },
+  {
+    "id": 100,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-23T15:34:47.605Z"
+  },
+  {
+    "id": 101,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.goods_fund.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999401,
+      "type": "add",
+      "amount": 10,
+      "reason": "管理员补贴"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T00:49:32.612Z"
+  },
+  {
+    "id": 102,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.points.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999402,
+      "type": "add",
+      "amount": 8,
+      "reason": "活动补点"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T00:49:32.680Z"
+  },
+  {
+    "id": 103,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.approve_settle",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999302"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T00:49:32.774Z"
+  },
+  {
+    "id": 104,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999303"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T00:49:32.795Z"
+  },
+  {
+    "id": 105,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_approve_settle",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T00:49:32.818Z"
+  },
+  {
+    "id": 106,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T00:49:32.837Z"
+  },
+  {
+    "id": 107,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.goods_fund.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999401,
+      "type": "add",
+      "amount": 10,
+      "reason": "管理员补贴"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:11:09.026Z"
+  },
+  {
+    "id": 108,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.points.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999402,
+      "type": "add",
+      "amount": 8,
+      "reason": "活动补点"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:11:09.073Z"
+  },
+  {
+    "id": 109,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.approve_settle",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999302"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:11:09.162Z"
+  },
+  {
+    "id": 110,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999303"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:11:09.185Z"
+  },
+  {
+    "id": 111,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_approve_settle",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:11:09.206Z"
+  },
+  {
+    "id": 112,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:11:09.223Z"
+  },
+  {
+    "id": 113,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.goods_fund.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999401,
+      "type": "add",
+      "amount": 10,
+      "reason": "管理员补贴"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:25:48.859Z"
+  },
+  {
+    "id": 114,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.points.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999402,
+      "type": "add",
+      "amount": 8,
+      "reason": "活动补点"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:25:48.929Z"
+  },
+  {
+    "id": 115,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.approve_settle",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999302"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:25:49.026Z"
+  },
+  {
+    "id": 116,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999303"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:25:49.043Z"
+  },
+  {
+    "id": 117,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_approve_settle",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:25:49.063Z"
+  },
+  {
+    "id": 118,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:25:49.080Z"
+  },
+  {
+    "id": 119,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.goods_fund.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999401,
+      "type": "add",
+      "amount": 10,
+      "reason": "管理员补贴"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:26:11.886Z"
+  },
+  {
+    "id": 120,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.points.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999402,
+      "type": "add",
+      "amount": 8,
+      "reason": "活动补点"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:26:11.942Z"
+  },
+  {
+    "id": 121,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.approve_settle",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999302"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:26:12.027Z"
+  },
+  {
+    "id": 122,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999303"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:26:12.044Z"
+  },
+  {
+    "id": 123,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_approve_settle",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:26:12.063Z"
+  },
+  {
+    "id": 124,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T01:26:12.078Z"
+  },
+  {
+    "id": 125,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.goods_fund.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999401,
+      "type": "add",
+      "amount": 10,
+      "reason": "管理员补贴"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T05:45:57.798Z"
+  },
+  {
+    "id": 126,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.points.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999402,
+      "type": "add",
+      "amount": 8,
+      "reason": "活动补点"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T05:45:57.851Z"
+  },
+  {
+    "id": 127,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.approve_settle",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999302"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T05:45:57.926Z"
+  },
+  {
+    "id": 128,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999303"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T05:45:57.944Z"
+  },
+  {
+    "id": 129,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_approve_settle",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T05:45:57.960Z"
+  },
+  {
+    "id": 130,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T05:45:57.976Z"
+  },
+  {
+    "id": 131,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.goods_fund.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999401,
+      "type": "add",
+      "amount": 10,
+      "reason": "管理员补贴"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:07:38.955Z"
+  },
+  {
+    "id": 132,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.points.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999402,
+      "type": "add",
+      "amount": 8,
+      "reason": "活动补点"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:07:39.000Z"
+  },
+  {
+    "id": 133,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.approve_settle",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999302"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:07:39.076Z"
+  },
+  {
+    "id": 134,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999303"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:07:39.099Z"
+  },
+  {
+    "id": 135,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_approve_settle",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:07:39.118Z"
+  },
+  {
+    "id": 136,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:07:39.135Z"
+  },
+  {
+    "id": 137,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.goods_fund.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999401,
+      "type": "add",
+      "amount": 10,
+      "reason": "管理员补贴"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:08:47.546Z"
+  },
+  {
+    "id": 138,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.points.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999402,
+      "type": "add",
+      "amount": 8,
+      "reason": "活动补点"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:08:47.610Z"
+  },
+  {
+    "id": 139,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.approve_settle",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999302"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:08:47.712Z"
+  },
+  {
+    "id": 140,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999303"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:08:47.732Z"
+  },
+  {
+    "id": 141,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_approve_settle",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:08:47.751Z"
+  },
+  {
+    "id": 142,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:08:47.769Z"
+  },
+  {
+    "id": 143,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.goods_fund.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999401,
+      "type": "add",
+      "amount": 10,
+      "reason": "管理员补贴"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:10:15.803Z"
+  },
+  {
+    "id": 144,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.points.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999402,
+      "type": "add",
+      "amount": 8,
+      "reason": "活动补点"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:10:15.853Z"
+  },
+  {
+    "id": 145,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.approve_settle",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999302"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:10:15.944Z"
+  },
+  {
+    "id": 146,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999303"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:10:15.961Z"
+  },
+  {
+    "id": 147,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_approve_settle",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:10:15.980Z"
+  },
+  {
+    "id": 148,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:10:15.998Z"
+  },
+  {
+    "id": 149,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.goods_fund.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999401,
+      "type": "add",
+      "amount": 10,
+      "reason": "管理员补贴"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:10:38.694Z"
+  },
+  {
+    "id": 150,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.points.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999402,
+      "type": "add",
+      "amount": 8,
+      "reason": "活动补点"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:10:38.746Z"
+  },
+  {
+    "id": 151,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.approve_settle",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999302"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:10:38.843Z"
+  },
+  {
+    "id": 152,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999303"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:10:38.862Z"
+  },
+  {
+    "id": 153,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_approve_settle",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:10:38.881Z"
+  },
+  {
+    "id": 154,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:10:38.902Z"
+  },
+  {
+    "id": 155,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.goods_fund.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999401,
+      "type": "add",
+      "amount": 10,
+      "reason": "管理员补贴"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:22:30.275Z"
+  },
+  {
+    "id": 156,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.points.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999402,
+      "type": "add",
+      "amount": 8,
+      "reason": "活动补点"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:22:30.348Z"
+  },
+  {
+    "id": 157,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.approve_settle",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999302"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:22:30.431Z"
+  },
+  {
+    "id": 158,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999303"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:22:30.450Z"
+  },
+  {
+    "id": 159,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_approve_settle",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:22:30.467Z"
+  },
+  {
+    "id": 160,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:22:30.486Z"
+  },
+  {
+    "id": 161,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.goods_fund.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999401,
+      "type": "add",
+      "amount": 10,
+      "reason": "管理员补贴"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:27:07.875Z"
+  },
+  {
+    "id": 162,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.points.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999402,
+      "type": "add",
+      "amount": 8,
+      "reason": "活动补点"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:27:07.923Z"
+  },
+  {
+    "id": 163,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.approve_settle",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999302"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:27:08.001Z"
+  },
+  {
+    "id": 164,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999303"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:27:08.020Z"
+  },
+  {
+    "id": 165,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_approve_settle",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:27:08.038Z"
+  },
+  {
+    "id": 166,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:27:08.056Z"
+  },
+  {
+    "id": 167,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.goods_fund.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999401,
+      "type": "add",
+      "amount": 10,
+      "reason": "管理员补贴"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:30:45.351Z"
+  },
+  {
+    "id": 168,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.points.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999402,
+      "type": "add",
+      "amount": 8,
+      "reason": "活动补点"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:30:45.400Z"
+  },
+  {
+    "id": 169,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.approve_settle",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999302"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:30:45.478Z"
+  },
+  {
+    "id": 170,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999303"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:30:45.496Z"
+  },
+  {
+    "id": 171,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_approve_settle",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:30:45.518Z"
+  },
+  {
+    "id": 172,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:30:45.534Z"
+  },
+  {
+    "id": 173,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.goods_fund.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999401,
+      "type": "add",
+      "amount": 10,
+      "reason": "管理员补贴"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:31:23.875Z"
+  },
+  {
+    "id": 174,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "user.points.adjust",
+    "target": "users",
+    "detail": {
+      "user_id": 999402,
+      "type": "add",
+      "amount": 8,
+      "reason": "活动补点"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:31:23.939Z"
+  },
+  {
+    "id": 175,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.approve_settle",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999302"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:31:24.028Z"
+  },
+  {
+    "id": 176,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "commission_id": "999303"
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:31:24.051Z"
+  },
+  {
+    "id": 177,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_approve_settle",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:31:24.068Z"
+  },
+  {
+    "id": 178,
+    "admin_id": 1,
+    "admin_name": "超级管理员",
+    "action": "commission.batch_reject_cancel",
+    "target": "commissions",
+    "detail": {
+      "affected": 1,
+      "blocked_ids": []
+    },
+    "status": "success",
+    "created_at": "2026-04-24T06:31:24.086Z"
   }
 ]

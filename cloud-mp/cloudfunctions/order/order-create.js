@@ -258,7 +258,12 @@ function parseTimestamp(value) {
     if (value instanceof Date) return value.getTime();
     if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
     if (typeof value === 'string') {
-        const ts = new Date(value).getTime();
+        const raw = String(value).trim();
+        if (!raw) return 0;
+        const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+            ? `${raw}T00:00:00+08:00`
+            : (/(?:z|[+-]\d{2}:\d{2})$/i.test(raw) ? raw : `${raw}+08:00`);
+        const ts = new Date(normalized).getTime();
         return Number.isFinite(ts) ? ts : 0;
     }
     if (typeof value === 'object') {

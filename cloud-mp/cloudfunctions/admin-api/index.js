@@ -6,31 +6,6 @@ const cloud = require('wx-server-sdk');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
-const db = cloud.database();
-const _ = db.command;
-
-// ==================== 共享模块导入 ====================
-const {
-    validateAction, validateAmount, validateInteger, validateString,
-    validateArray, validateRequiredFields
-} = require('./shared/validators');
-const {
-    CloudBaseError, ERROR_CODES, errorHandler, cloudFunctionWrapper
-} = require('./shared/errors');
-const {
-    success, error, paginated, list, created, updated, deleted,
-    badRequest, unauthorized, forbidden, notFound, conflict, serverError
-} = require('./shared/response');
-const {
-    DEFAULT_GROWTH_TIERS, calculateTier, buildGrowthProgress, loadTierConfig
-} = require('./shared/growth');
-const {
-    toNumber, toArray, toString, toBoolean, getDeep, setDeep, deepClone, merge, pick, omit, generateId, delay
-} = require('./shared/utils');
-
-// ==================== 云初始化 ====================
-
-
 process.env.ADMIN_DATA_SOURCE = process.env.ADMIN_DATA_SOURCE
     || (process.env.ADMIN_CLOUDBASE_ENV_ID || process.env.TCB_ENV || process.env.SCF_NAMESPACE ? 'cloudbase' : 'filesystem');
 if (!process.env.ADMIN_JWT_SECRET) {

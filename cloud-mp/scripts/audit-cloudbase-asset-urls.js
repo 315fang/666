@@ -3,11 +3,14 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { getAuditArtifactPaths } = require('./lib/audit-output');
 
 const projectRoot = path.resolve(__dirname, '..');
-const docsDir = path.join(projectRoot, 'docs');
-const outputJsonPath = path.join(docsDir, 'CLOUDBASE_ASSET_URL_AUDIT.json');
-const outputMarkdownPath = path.join(docsDir, 'CLOUDBASE_ASSET_URL_AUDIT.md');
+const {
+  outputDir: docsDir,
+  jsonPath: outputJsonPath,
+  mdPath: outputMarkdownPath
+} = getAuditArtifactPaths(projectRoot, 'CLOUDBASE_ASSET_URL_AUDIT');
 
 const TARGET_COLLECTIONS = [
   {

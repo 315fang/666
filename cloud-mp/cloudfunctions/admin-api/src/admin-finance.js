@@ -1,9 +1,235 @@
 'use strict';
 
+const { isBusinessOrder, isVisibleAccount } = require('./shared/account-visibility');
+const { isVisibleOrder } = require('./shared/record-visibility');
+
+const ADMIN_FINANCE_TIME_ZONE = process.env.ADMIN_DEFAULT_TIME_ZONE || 'Asia/Shanghai';
+const ADMIN_FINANCE_DEFAULT_OFFSET = '+08:00';
+const ADMIN_FINANCE_BASELINE_AT = process.env.ADMIN_FINANCE_TRUSTED_BASELINE_AT || '2026-04-24T00:00:00+08:00';
+const HAS_TIME_ZONE_SUFFIX_RE = /(?:z|[+-]\d{2}:\d{2})$/i;
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_PARTS_FORMATTER = new Intl.DateTimeFormat('en-US', {
+    timeZone: ADMIN_FINANCE_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+});
+
+function normalizeDateString(raw) {
+    const text = String(raw || '').trim();
+    if (!text) return '';
+    if (HAS_TIME_ZONE_SUFFIX_RE.test(text)) return text;
+    if (DATE_ONLY_RE.test(text)) return `${text}T00:00:00${ADMIN_FINANCE_DEFAULT_OFFSET}`;
+    return `${text}${ADMIN_FINANCE_DEFAULT_OFFSET}`;
+}
+
+function parseDateTimestamp(value) {
+    if (!value) return 0;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+        const ts = new Date(normalizeDateString(value)).getTime();
+        return Number.isFinite(ts) ? ts : 0;
+    }
+    if (typeof value === 'object') {
+        if (typeof value._seconds === 'number') return value._seconds * 1000;
+        if (typeof value.seconds === 'number') return value.seconds * 1000;
+        if (value.$date !== undefined) return parseDateTimestamp(value.$date);
+        if (typeof value.toDate === 'function') {
+            const date = value.toDate();
+            return date instanceof Date ? date.getTime() : 0;
+        }
+    }
+    return 0;
+}
+
+function isValidTimestamp(value) {
+    const ts = Number(value);
+    return Number.isFinite(ts) && ts > 0;
+}
+
+function extractDateParts(ts) {
+    if (!isValidTimestamp(ts)) return {};
+    const parts = DATE_PARTS_FORMATTER.formatToParts(new Date(ts));
+    const year = parts.find((part) => part.type === 'year')?.value;
+    const month = parts.find((part) => part.type === 'month')?.value;
+    const day = parts.find((part) => part.type === 'day')?.value;
+    return { year, month, day };
+}
+
+function getDateKeyInReportTimeZone(value, fallback = '') {
+    const ts = parseDateTimestamp(value);
+    if (!ts) return fallback;
+    const { year, month, day } = extractDateParts(ts);
+    return year && month && day ? `${year}-${month}-${day}` : fallback;
+}
+
+const ADMIN_FINANCE_BASELINE_TS = parseDateTimestamp(ADMIN_FINANCE_BASELINE_AT);
+const ADMIN_FINANCE_BASELINE_DATE = getDateKeyInReportTimeZone(ADMIN_FINANCE_BASELINE_TS, '2026-04-24');
+
+function buildFinanceScope(extra = {}) {
+    return {
+        mode: 'trusted_since',
+        timezone: ADMIN_FINANCE_TIME_ZONE,
+        baseline_at: ADMIN_FINANCE_BASELINE_AT,
+        baseline_date: ADMIN_FINANCE_BASELINE_DATE,
+        stock_fields_note: '代理欠款、基金池余额等存量字段仍显示当前值，不按起算点裁切。',
+        ...extra
+    };
+}
+
+function pickFirstTimestamp(row = {}, fields = []) {
+    for (const field of fields) {
+        const ts = parseDateTimestamp(row?.[field]);
+        if (ts) return ts;
+    }
+    return 0;
+}
+
+function isRecordInFinanceScope(row = {}, fields = []) {
+    const ts = pickFirstTimestamp(row, fields);
+    return !!ts && ts >= ADMIN_FINANCE_BASELINE_TS;
+}
+
+function getUserLinkedRefs(row = {}) {
+    return [row?.openid, row?.user_id, row?.buyer_id, row?.member_openid]
+        .map((value) => String(value ?? '').trim())
+        .filter(Boolean);
+}
+
+function valueLookupTokens(value) {
+    if (value == null || value === '') return [];
+    const raw = String(value).trim();
+    if (!raw) return [];
+    const tokens = new Set([raw]);
+    const numeric = Number(raw);
+    if (Number.isFinite(numeric)) tokens.add(String(numeric));
+    return Array.from(tokens);
+}
+
+function userLookupTokens(user = {}) {
+    return [
+        user.id,
+        user._legacy_id,
+        user._id,
+        user.openid,
+        user.user_id,
+        user.buyer_id,
+        user.phone,
+        user.member_no,
+        user.my_invite_code,
+        user.invite_code
+    ].flatMap(valueLookupTokens);
+}
+
+function buildUserFinanceContext(users = [], fallbackFindUserByAnyId) {
+    const rows = Array.isArray(users) ? users : [];
+    const lookup = new Map();
+    const userByOpenid = new Map();
+
+    rows.forEach((user) => {
+        if (!user || typeof user !== 'object') return;
+        userLookupTokens(user).forEach((token) => {
+            if (!lookup.has(token)) lookup.set(token, user);
+        });
+        const openid = String(user.openid || '').trim();
+        if (openid && !userByOpenid.has(openid)) userByOpenid.set(openid, user);
+    });
+
+    const visibleUsers = rows.filter(isVisibleAccount);
+    const childrenByParentOpenid = new Map();
+    visibleUsers.forEach((user) => {
+        const openid = String(user.openid || '').trim();
+        const parentOpenid = String(user.invited_by || user.referrer_openid || user.parent_openid || '').trim();
+        if (!openid || !parentOpenid) return;
+        if (!childrenByParentOpenid.has(parentOpenid)) childrenByParentOpenid.set(parentOpenid, []);
+        childrenByParentOpenid.get(parentOpenid).push(user);
+    });
+
+    const findUserByAnyIdIndexed = (sourceUsers, value) => {
+        for (const token of valueLookupTokens(value)) {
+            const user = lookup.get(token);
+            if (user) return user;
+        }
+        return typeof fallbackFindUserByAnyId === 'function' ? fallbackFindUserByAnyId(sourceUsers, value) : null;
+    };
+
+    return {
+        visibleUsers,
+        userByOpenid,
+        childrenByParentOpenid,
+        findUserByAnyId: findUserByAnyIdIndexed
+    };
+}
+
+function collectDescendants(childrenByParentOpenid, openid) {
+    const rootOpenid = String(openid || '').trim();
+    if (!rootOpenid) return [];
+    const result = [];
+    const visited = new Set([rootOpenid]);
+    const stack = [...(childrenByParentOpenid.get(rootOpenid) || [])];
+
+    while (stack.length) {
+        const user = stack.shift();
+        const userOpenid = String(user?.openid || '').trim();
+        if (!userOpenid || visited.has(userOpenid)) continue;
+        visited.add(userOpenid);
+        result.push(user);
+        stack.push(...(childrenByParentOpenid.get(userOpenid) || []));
+    }
+
+    return result;
+}
+
+function resolveVisibleOwnerByRefs(row = {}, users = [], findUserByAnyId) {
+    const refs = getUserLinkedRefs(row);
+    let visibleOwner = null;
+    for (const ref of refs) {
+        const owner = findUserByAnyId(users, ref);
+        if (!owner) continue;
+        if (!isVisibleAccount(owner)) {
+            return { hasRefs: true, owner: null };
+        }
+        if (!visibleOwner) visibleOwner = owner;
+    }
+    return { hasRefs: refs.length > 0, owner: visibleOwner };
+}
+
+function isVisibleUserLinkedRow(row = {}, users = [], findUserByAnyId) {
+    const resolved = resolveVisibleOwnerByRefs(row, users, findUserByAnyId);
+    if (!resolved.hasRefs) return true;
+    return !!resolved.owner;
+}
+
+function clampPeriodStart(periodStart) {
+    if (!periodStart) return ADMIN_FINANCE_BASELINE_DATE;
+    return periodStart < ADMIN_FINANCE_BASELINE_DATE ? ADMIN_FINANCE_BASELINE_DATE : periodStart;
+}
+
+function buildBuyerSalesMap(orders = [], pickString, toNumber) {
+    return orders.reduce((acc, order) => {
+        const openid = pickString(order?.openid).trim();
+        if (!openid) return acc;
+        acc[openid] = (acc[openid] || 0) + toNumber(order.pay_amount ?? order.total_amount ?? order.actual_price, 0);
+        return acc;
+    }, {});
+}
+
+function buildSettledCommissionMap(commissions = [], users = [], findUserByAnyId, pickString, toNumber) {
+    return commissions.reduce((acc, commission) => {
+        const { owner } = resolveVisibleOwnerByRefs(commission, users, findUserByAnyId);
+        const openid = pickString(owner?.openid).trim();
+        if (!openid) return acc;
+        acc[openid] = (acc[openid] || 0) + toNumber(commission.amount, 0);
+        return acc;
+    }, {});
+}
+
 function registerFinanceRoutes(app, deps) {
     const {
         auth,
         requirePermission,
+        ensureFreshCollections = async () => {},
         getCollection,
         sortByUpdatedDesc,
         findUserByAnyId,
@@ -12,10 +238,12 @@ function registerFinanceRoutes(app, deps) {
         toNumber,
         roundMoney,
         paginate,
-        ok
+        ok,
+        fail
     } = deps;
 
-    app.get('/admin/api/finance/overview', auth, requirePermission('statistics'), (_req, res) => {
+    app.get('/admin/api/finance/overview', auth, requirePermission('statistics'), async (_req, res) => {
+        await ensureFreshCollections(['orders', 'commissions', 'withdrawals', 'users', 'dividend_executions', 'fund_pool_logs', 'configs']);
         const orders = getCollection('orders');
         const commissions = getCollection('commissions');
         const withdrawals = getCollection('withdrawals');
@@ -23,6 +251,7 @@ function registerFinanceRoutes(app, deps) {
         const dividendExecs = getCollection('dividend_executions');
         const fundPoolLogs = getCollection('fund_pool_logs');
         const configs = getCollection('configs');
+        const userFinance = buildUserFinanceContext(users, findUserByAnyId);
 
         function getAgentConfig(key, fallback) {
             const row = configs.find((c) => c.config_key === `agent_system_${key}` || c.key === `agent_system_${key}`);
@@ -33,60 +262,76 @@ function registerFinanceRoutes(app, deps) {
             return row.value !== undefined ? row.value : fallback;
         }
 
+        const visibleUsers = userFinance.visibleUsers;
         const paidStatuses = ['paid', 'pending_group', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
-        const paidOrders = orders.filter((o) => paidStatuses.includes(String(o.status || '')));
-        const since30d = Date.now() - 30 * 86400000;
-        const gmv = paidOrders.reduce((s, o) => s + toNumber(o.pay_amount ?? o.total_amount ?? o.actual_price, 0), 0);
+        const financeOrders = orders.filter((order) => (
+            isBusinessOrder(order)
+            && isVisibleOrder(order)
+            && isRecordInFinanceScope(order, ['paid_at', 'pay_time', 'created_at'])
+        ));
+        const paidOrders = financeOrders.filter((order) => paidStatuses.includes(String(order.status || '')));
+        const since30d = Math.max(Date.now() - 30 * 86400000, ADMIN_FINANCE_BASELINE_TS);
+        const gmv = paidOrders.reduce((sum, order) => sum + toNumber(order.pay_amount ?? order.total_amount ?? order.actual_price, 0), 0);
         const gmv30d = paidOrders
-            .filter((o) => new Date(o.created_at || 0).getTime() >= since30d)
-            .reduce((s, o) => s + toNumber(o.pay_amount ?? o.total_amount ?? o.actual_price, 0), 0);
+            .filter((order) => pickFirstTimestamp(order, ['paid_at', 'pay_time', 'created_at']) >= since30d)
+            .reduce((sum, order) => sum + toNumber(order.pay_amount ?? order.total_amount ?? order.actual_price, 0), 0);
 
+        const scopedCommissions = commissions.filter((commission) => (
+            isRecordInFinanceScope(commission, ['created_at', 'settled_at', 'unfrozen_at', 'updated_at'])
+            && isVisibleUserLinkedRow(commission, users, userFinance.findUserByAnyId)
+        ));
         const commissionStats = { total: 0, frozen: 0, pending_approval: 0, settled: 0, cancelled: 0 };
-        commissions.forEach((c) => {
-            const amt = toNumber(c.amount, 0);
-            commissionStats.total += amt;
-            const status = String(c.status || '');
-            if (status === 'frozen') commissionStats.frozen += amt;
-            else if (status === 'pending_approval') commissionStats.pending_approval += amt;
-            else if (['settled', 'completed', 'approved'].includes(status)) commissionStats.settled += amt;
-            else if (status === 'cancelled') commissionStats.cancelled += amt;
+        scopedCommissions.forEach((commission) => {
+            const amount = toNumber(commission.amount, 0);
+            commissionStats.total += amount;
+            const status = String(commission.status || '');
+            if (status === 'frozen') commissionStats.frozen += amount;
+            else if (status === 'pending_approval') commissionStats.pending_approval += amount;
+            else if (['settled', 'completed', 'approved'].includes(status)) commissionStats.settled += amount;
+            else if (status === 'cancelled') commissionStats.cancelled += amount;
         });
 
+        const scopedWithdrawals = withdrawals.filter((withdrawal) => (
+            isRecordInFinanceScope(withdrawal, ['created_at', 'completed_at', 'processing_at', 'updated_at'])
+            && isVisibleUserLinkedRow(withdrawal, users, userFinance.findUserByAnyId)
+        ));
         const withdrawalStats = { pending_amount: 0, completed_amount: 0, total_fee: 0, pending_count: 0 };
-        withdrawals.forEach((w) => {
-            const amt = toNumber(w.amount, 0);
-            const fee = toNumber(w.fee, 0);
-            const status = String(w.status || '');
+        scopedWithdrawals.forEach((withdrawal) => {
+            const amount = toNumber(withdrawal.amount, 0);
+            const fee = toNumber(withdrawal.fee, 0);
+            const status = String(withdrawal.status || '');
             if (['pending', 'approved', 'processing'].includes(status)) {
-                withdrawalStats.pending_amount += amt;
+                withdrawalStats.pending_amount += amount;
                 withdrawalStats.pending_count += 1;
             }
             if (status === 'completed') {
-                withdrawalStats.completed_amount += amt;
+                withdrawalStats.completed_amount += amount;
             }
             withdrawalStats.total_fee += fee;
         });
 
-        const debtors = users
-            .filter((u) => toNumber(u.debt_amount, 0) > 0)
-            .map((u) => ({
-                user_id: u.id || u._legacy_id || u._id,
-                nickname: pickString(u.nickname || u.nickName || u.name || ''),
-                invite_code: pickString(u.my_invite_code || u.invite_code || u.member_no || ''),
-                member_no: pickString(u.my_invite_code || u.invite_code || u.member_no || ''),
-                role_level: normalizeLegacyRoleLevel(u.role_level ?? u.distributor_level),
-                debt_amount: toNumber(u.debt_amount, 0),
-                debt_reason: pickString(u.debt_reason || '')
+        const debtors = visibleUsers
+            .filter((user) => toNumber(user.debt_amount, 0) > 0)
+            .map((user) => ({
+                user_id: user.id || user._legacy_id || user._id,
+                nickname: pickString(user.nickname || user.nickName || user.name || ''),
+                invite_code: pickString(user.my_invite_code || user.invite_code || user.member_no || ''),
+                member_no: pickString(user.my_invite_code || user.invite_code || user.member_no || ''),
+                role_level: normalizeLegacyRoleLevel(user.role_level ?? user.distributor_level),
+                debt_amount: toNumber(user.debt_amount, 0),
+                debt_reason: pickString(user.debt_reason || '')
             }))
-            .sort((a, b) => b.debt_amount - a.debt_amount);
+            .sort((left, right) => right.debt_amount - left.debt_amount);
 
         const fundPool = getAgentConfig('fund-pool', { enabled: false });
-        const fundPoolRow = configs.find((c) => c.config_key === 'agent_system_fund-pool' || c.key === 'agent_system_fund-pool') || {};
-        const sortedExecs = sortByUpdatedDesc(dividendExecs);
+        const fundPoolRow = configs.find((row) => row.config_key === 'agent_system_fund-pool' || row.key === 'agent_system_fund-pool') || {};
+        const scopedFundPoolLogs = fundPoolLogs.filter((row) => isRecordInFinanceScope(row, ['created_at', 'updated_at']));
+        const sortedExecs = sortByUpdatedDesc(dividendExecs.filter((row) => isRecordInFinanceScope(row, ['created_at', 'updated_at'])));
         const lastExec = sortedExecs[0] || null;
         const dividendPool = getAgentConfig('dividend-pool', { balance: 0, total_in: 0, total_out: 0 });
 
         ok(res, {
+            scope: buildFinanceScope(),
             gmv,
             gmv_30d: gmv30d,
             commissions: commissionStats,
@@ -104,11 +349,11 @@ function registerFinanceRoutes(app, deps) {
                 personal: toNumber(fundPoolRow.sub_personal, 0),
                 total_balance: toNumber(fundPoolRow.balance, 0),
                 total_in: toNumber(fundPoolRow.total_in, 0),
-                log_count: fundPoolLogs.length
+                log_count: scopedFundPoolLogs.length
             },
             dividend: {
                 last_executed_year: lastExec?.year || null,
-                last_total_distributed: toNumber(lastExec?.totalDistributed, dividendPool.last_total_distributed || 0),
+                last_total_distributed: toNumber(lastExec?.totalDistributed, 0),
                 pool: {
                     balance: toNumber(dividendPool.balance, 0),
                     total_in: toNumber(dividendPool.total_in, 0),
@@ -119,14 +364,21 @@ function registerFinanceRoutes(app, deps) {
         });
     });
 
-    app.get('/admin/api/finance/fund-pool-logs', auth, requirePermission('statistics'), (req, res) => {
+    app.get('/admin/api/finance/fund-pool-logs', auth, requirePermission('statistics'), async (req, res) => {
+        await ensureFreshCollections(['users', 'fund_pool_logs']);
         const users = getCollection('users');
+        const userFinance = buildUserFinanceContext(users, findUserByAnyId);
         const sourceLabelMap = {
             upgrade_payment: '升级支付入池',
             admin_upgrade: '后台升级入池'
         };
-        const rows = sortByUpdatedDesc(getCollection('fund_pool_logs')).map((row) => {
-            const user = findUserByAnyId(users, row.openid || row.user_id);
+        const rows = sortByUpdatedDesc(
+            getCollection('fund_pool_logs').filter((row) => (
+                isRecordInFinanceScope(row, ['created_at', 'updated_at'])
+                && isVisibleUserLinkedRow(row, users, userFinance.findUserByAnyId)
+            ))
+        ).map((row) => {
+            const { owner: user } = resolveVisibleOwnerByRefs(row, users, userFinance.findUserByAnyId);
             const roleLevel = normalizeLegacyRoleLevel(row.role_level);
             return {
                 ...row,
@@ -139,48 +391,68 @@ function registerFinanceRoutes(app, deps) {
                 sub_amounts: row.sub_amounts || {}
             };
         });
-        ok(res, paginate(rows, req));
+        ok(res, {
+            ...paginate(rows, req),
+            scope: buildFinanceScope()
+        });
     });
 
-    app.get('/admin/api/finance/dividend-executions', auth, requirePermission('statistics'), (req, res) => {
-        const rows = sortByUpdatedDesc(getCollection('dividend_executions')).map((row) => ({
+    app.get('/admin/api/finance/dividend-executions', auth, requirePermission('statistics'), async (req, res) => {
+        await ensureFreshCollections(['dividend_executions']);
+        const rows = sortByUpdatedDesc(
+            getCollection('dividend_executions').filter((row) => isRecordInFinanceScope(row, ['created_at', 'updated_at']))
+        ).map((row) => ({
             ...row,
             totalDistributed: roundMoney(row.totalDistributed),
             pool_balance_before: roundMoney(row.pool_balance_before),
             pool_balance_after: roundMoney(row.pool_balance_after)
         }));
-        ok(res, paginate(rows, req));
+        ok(res, {
+            ...paginate(rows, req),
+            scope: buildFinanceScope()
+        });
     });
 
-    app.get('/admin/api/finance/agent-performance', auth, requirePermission('statistics'), (req, res) => {
+    app.get('/admin/api/finance/agent-performance', auth, requirePermission('statistics'), async (req, res) => {
         const period = pickString(req.query.period || 'month');
-        const refDate = req.query.date ? new Date(req.query.date) : new Date();
+        const requestedDate = pickString(req.query.date || '');
+        const refTs = requestedDate ? parseDateTimestamp(requestedDate) : Date.now();
+        if (requestedDate && !refTs) return fail(res, '财务统计日期参数不合法', 400);
         const limit = toNumber(req.query.limit, 50);
+        const { year, month } = extractDateParts(refTs);
+        const fallbackParts = extractDateParts(Date.now());
+        const numericYear = Number(year || fallbackParts.year || new Date().getFullYear());
+        const numericMonth = Math.max(1, Number(month || fallbackParts.month || (new Date().getMonth() + 1)));
 
         let periodStart;
         let periodEnd;
-        const year = refDate.getFullYear();
-        const month = refDate.getMonth();
         if (period === 'day') {
-            const iso = refDate.toISOString().slice(0, 10);
-            periodStart = iso;
-            periodEnd = iso;
+            const dateKey = getDateKeyInReportTimeZone(refTs, ADMIN_FINANCE_BASELINE_DATE);
+            periodStart = dateKey;
+            periodEnd = dateKey;
         } else if (period === 'month') {
-            periodStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-            const lastDay = new Date(year, month + 1, 0).getDate();
-            periodEnd = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+            periodStart = `${numericYear}-${String(numericMonth).padStart(2, '0')}-01`;
+            const lastDay = new Date(numericYear, numericMonth, 0).getDate();
+            periodEnd = `${numericYear}-${String(numericMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
         } else {
-            const quarter = Math.floor(month / 3);
-            const quarterStartMonth = quarter * 3;
+            const quarter = Math.floor((numericMonth - 1) / 3);
+            const quarterStartMonth = quarter * 3 + 1;
             const quarterEndMonth = quarterStartMonth + 2;
-            periodStart = `${year}-${String(quarterStartMonth + 1).padStart(2, '0')}-01`;
-            const quarterEndLastDay = new Date(year, quarterEndMonth + 1, 0).getDate();
-            periodEnd = `${year}-${String(quarterEndMonth + 1).padStart(2, '0')}-${String(quarterEndLastDay).padStart(2, '0')}`;
+            periodStart = `${numericYear}-${String(quarterStartMonth).padStart(2, '0')}-01`;
+            const quarterEndLastDay = new Date(numericYear, quarterEndMonth, 0).getDate();
+            periodEnd = `${numericYear}-${String(quarterEndMonth).padStart(2, '0')}-${String(quarterEndLastDay).padStart(2, '0')}`;
+        }
+
+        periodStart = clampPeriodStart(periodStart);
+        if (periodEnd < periodStart) {
+            periodEnd = periodStart;
         }
 
         const paidStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
+        await ensureFreshCollections(['orders', 'users']);
         const orders = getCollection('orders');
         const users = getCollection('users');
+        const userFinance = buildUserFinanceContext(users, findUserByAnyId);
 
         function getOrderAgentOpenid(order) {
             return order?.fulfillment_partner_openid
@@ -193,9 +465,12 @@ function registerFinanceRoutes(app, deps) {
         }
 
         const periodOrders = orders.filter((order) => {
+            if (!isBusinessOrder(order) || !isVisibleOrder(order)) return false;
             if (!paidStatuses.includes(String(order.status || ''))) return false;
-            const dateStr = String(order.created_at || order.pay_time || '').slice(0, 10);
-            return dateStr >= periodStart && dateStr <= periodEnd;
+            const eventTs = pickFirstTimestamp(order, ['paid_at', 'pay_time', 'created_at']);
+            if (!eventTs || eventTs < ADMIN_FINANCE_BASELINE_TS) return false;
+            const dateKey = getDateKeyInReportTimeZone(eventTs, '');
+            return dateKey >= periodStart && dateKey <= periodEnd;
         });
 
         const agentMap = {};
@@ -210,10 +485,10 @@ function registerFinanceRoutes(app, deps) {
         }
 
         const ranked = Object.values(agentMap)
-            .sort((a, b) => b.gmv - a.gmv)
+            .sort((left, right) => right.gmv - left.gmv)
             .slice(0, limit)
             .map((item, index) => {
-                const user = users.find((row) => row.openid === item.openid) || {};
+                const user = userFinance.userByOpenid.get(item.openid) || {};
                 return {
                     rank: index + 1,
                     openid: item.openid,
@@ -228,6 +503,7 @@ function registerFinanceRoutes(app, deps) {
             });
 
         ok(res, {
+            scope: buildFinanceScope(),
             period,
             period_start: periodStart,
             period_end: periodEnd,
@@ -236,13 +512,16 @@ function registerFinanceRoutes(app, deps) {
         });
     });
 
-    app.get('/admin/api/finance/pool-contributions', auth, requirePermission('statistics'), (req, res) => {
+    app.get('/admin/api/finance/pool-contributions', auth, requirePermission('statistics'), async (req, res) => {
+        await ensureFreshCollections(['users', 'configs', 'commissions', 'orders']);
         const users = getCollection('users');
         const configs = getCollection('configs');
         const commissions = getCollection('commissions');
+        const orders = getCollection('orders');
+        const userFinance = buildUserFinanceContext(users, findUserByAnyId);
 
         function getAgentCfg(key, fallback) {
-            const row = configs.find((c) => c.config_key === `agent_system_${key}` || c.key === `agent_system_${key}`);
+            const row = configs.find((config) => config.config_key === `agent_system_${key}` || config.key === `agent_system_${key}`);
             if (!row) return fallback;
             if (row.config_value !== undefined) {
                 try { return typeof row.config_value === 'string' ? JSON.parse(row.config_value) : row.config_value; } catch (_) { return row.config_value; }
@@ -251,29 +530,29 @@ function registerFinanceRoutes(app, deps) {
         }
 
         const dividendRules = getAgentCfg('dividend-rules', { enabled: false, source_pct: 0, b_team_award: { enabled: false, ranks: [] }, b1_personal_award: { enabled: false, ranks: [] } });
+        const visibleUsers = userFinance.visibleUsers;
+        const scopedPaidOrders = orders.filter((order) => (
+            isBusinessOrder(order)
+            && isVisibleOrder(order)
+            && ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'].includes(String(order.status || ''))
+            && isRecordInFinanceScope(order, ['paid_at', 'pay_time', 'created_at'])
+        ));
+        const scopedSettledCommissions = commissions.filter((commission) => (
+            ['settled', 'completed', 'approved'].includes(String(commission.status || ''))
+            && isRecordInFinanceScope(commission, ['created_at', 'settled_at', 'unfrozen_at', 'updated_at'])
+            && isVisibleUserLinkedRow(commission, users, userFinance.findUserByAnyId)
+        ));
+        const personalSalesByOpenid = buildBuyerSalesMap(scopedPaidOrders, pickString, toNumber);
+        const settledCommissionByOpenid = buildSettledCommissionMap(scopedSettledCommissions, users, userFinance.findUserByAnyId, pickString, toNumber);
 
-        function getAllDescendants(userList, openid, visited = new Set()) {
-            visited.add(openid);
-            const result = [];
-            for (const user of userList) {
-                const parentOpenid = user.invited_by || user.referrer_openid || user.parent_openid || '';
-                if (parentOpenid === openid && !visited.has(user.openid)) {
-                    result.push(user);
-                    result.push(...getAllDescendants(userList, user.openid, visited));
-                }
-            }
-            return result;
-        }
-
-        const partnerContributions = users
+        const partnerContributions = visibleUsers
             .filter((user) => toNumber(user.role_level ?? user.distributor_level, 0) >= 4)
             .map((user) => {
-                const descendants = getAllDescendants(users, user.openid, new Set());
-                const teamSales = [user, ...descendants].reduce((sum, member) => sum + toNumber(member.total_spent, 0), 0);
-                const personalSales = toNumber(user.total_spent, 0);
-                const totalCommission = commissions
-                    .filter((commission) => (commission.openid === user.openid || commission.user_id === String(user.id || user._id)) && ['settled', 'completed', 'approved'].includes(String(commission.status || '')))
-                    .reduce((sum, commission) => sum + toNumber(commission.amount, 0), 0);
+                const descendants = collectDescendants(userFinance.childrenByParentOpenid, user.openid);
+                const personalSales = toNumber(personalSalesByOpenid[user.openid], 0);
+                const teamSales = [user, ...descendants]
+                    .reduce((sum, member) => sum + toNumber(personalSalesByOpenid[member.openid], 0), 0);
+                const totalCommission = toNumber(settledCommissionByOpenid[user.openid], 0);
                 return {
                     user_id: user.id || user._legacy_id || user._id,
                     openid: user.openid,
@@ -287,15 +566,13 @@ function registerFinanceRoutes(app, deps) {
                     settled_commission: Number(totalCommission.toFixed(2))
                 };
             })
-            .sort((a, b) => b.team_sales - a.team_sales);
+            .sort((left, right) => right.team_sales - left.team_sales);
 
-        const agentContributions = users
+        const agentContributions = visibleUsers
             .filter((user) => toNumber(user.role_level ?? user.distributor_level, 0) === 3)
             .map((user) => {
-                const personalSales = toNumber(user.total_spent, 0);
-                const totalCommission = commissions
-                    .filter((commission) => (commission.openid === user.openid || commission.user_id === String(user.id || user._id)) && ['settled', 'completed', 'approved'].includes(String(commission.status || '')))
-                    .reduce((sum, commission) => sum + toNumber(commission.amount, 0), 0);
+                const personalSales = toNumber(personalSalesByOpenid[user.openid], 0);
+                const totalCommission = toNumber(settledCommissionByOpenid[user.openid], 0);
                 return {
                     user_id: user.id || user._legacy_id || user._id,
                     openid: user.openid,
@@ -306,10 +583,11 @@ function registerFinanceRoutes(app, deps) {
                     settled_commission: Number(totalCommission.toFixed(2))
                 };
             })
-            .sort((a, b) => b.personal_sales - a.personal_sales)
+            .sort((left, right) => right.personal_sales - left.personal_sales)
             .slice(0, 50);
 
         ok(res, {
+            scope: buildFinanceScope(),
             dividend_enabled: !!dividendRules.enabled,
             dividend_source_pct: toNumber(dividendRules.source_pct, 0),
             partner_contributions: partnerContributions,

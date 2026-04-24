@@ -643,6 +643,7 @@ const route = useRoute()
 
 // ===== 列表 =====
 const loading = ref(false)
+let ordersRequestSeq = 0
 const exporting = ref(false)
 const summaryPendingShip = ref(null)
 const userStore = useUserStore()
@@ -805,9 +806,11 @@ const buildListQueryParams = (forExport = false) => {
 }
 
 const fetchOrders = async () => {
+  const requestSeq = ++ordersRequestSeq
   loading.value = true
   try {
     const res = await getOrders(buildListQueryParams(false))
+    if (requestSeq !== ordersRequestSeq) return
     tableData.value = (res?.list || []).map(normalizeOrderDisplay)
     applyResponse(res)
     const readAt = extractReadAt(res)
@@ -815,12 +818,15 @@ const fetchOrders = async () => {
     const pShip = res?.pendingShip ?? res?.pending_ship ?? res?.summary?.pending_ship
     if (pShip != null) summaryPendingShip.value = pShip
   } catch (error) {
+    if (requestSeq !== ordersRequestSeq) return
     console.error(error)
     if (!error?.__handledByRequest) {
       ElMessage.error(error?.message || '加载订单列表失败')
     }
   } finally {
-    loading.value = false
+    if (requestSeq === ordersRequestSeq) {
+      loading.value = false
+    }
   }
 }
 

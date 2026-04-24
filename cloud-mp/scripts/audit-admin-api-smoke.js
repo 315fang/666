@@ -1,10 +1,9 @@
 const fs = require('fs');
 const path = require('path');
+const { getAuditArtifactPaths } = require('./lib/audit-output');
 
 const cloudRoot = path.resolve(__dirname, '..');
-const docsDir = path.join(cloudRoot, 'docs');
-const jsonPath = path.join(docsDir, 'ADMIN_API_SMOKE.json');
-const mdPath = path.join(docsDir, 'ADMIN_API_SMOKE.md');
+const { outputDir: docsDir, jsonPath, mdPath } = getAuditArtifactPaths(cloudRoot, 'ADMIN_API_SMOKE');
 
 function loadJwt() {
   try {

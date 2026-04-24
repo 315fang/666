@@ -1,0 +1,134 @@
+{
+  "generatedAt": "2026-04-24T06:49:58.873Z",
+  "envId": "cloud1-9gywyqe49638e46f",
+  "ok": true,
+  "results": [
+    {
+      "area": "admin",
+      "name": "dashboard-overview",
+      "ok": true,
+      "issues": []
+    },
+    {
+      "area": "admin",
+      "name": "products",
+      "ok": true,
+      "count": 19,
+      "issues": []
+    },
+    {
+      "area": "admin",
+      "name": "orders",
+      "ok": true,
+      "count": 20,
+      "issues": []
+    },
+    {
+      "area": "admin",
+      "name": "users",
+      "ok": true,
+      "count": 20,
+      "issues": []
+    },
+    {
+      "area": "admin",
+      "name": "refunds",
+      "ok": true,
+      "count": 20,
+      "issues": []
+    },
+    {
+      "area": "admin",
+      "name": "withdrawals",
+      "ok": true,
+      "count": 6,
+      "issues": []
+    },
+    {
+      "area": "admin",
+      "name": "group-buys",
+      "ok": true,
+      "count": 2,
+      "issues": []
+    },
+    {
+      "area": "admin",
+      "name": "lottery-prizes",
+      "ok": true,
+      "count": 13,
+      "issues": []
+    },
+    {
+      "area": "admin",
+      "name": "activity-links",
+      "ok": true,
+      "issues": []
+    },
+    {
+      "area": "admin",
+      "name": "pickup-stations",
+      "ok": true,
+      "count": 3,
+      "issues": []
+    },
+    {
+      "area": "mini",
+      "name": "products.list",
+      "ok": true,
+      "count": 10,
+      "issues": []
+    },
+    {
+      "area": "mini",
+      "name": "products.detail",
+      "ok": true,
+      "issues": []
+    },
+    {
+      "area": "mini",
+      "name": "products.categories",
+      "ok": true,
+      "count": 8,
+      "issues": []
+    },
+    {
+      "area": "mini",
+      "name": "config.homeContent",
+      "ok": true,
+      "issues": []
+    },
+    {
+      "area": "mini",
+      "name": "config.groups",
+      "ok": true,
+      "count": 1,
+      "issues": []
+    },
+    {
+      "area": "mini",
+      "name": "config.slashList",
+      "ok": true,
+      "count": 1,
+      "issues": []
+    },
+    {
+      "area": "mini",
+      "name": "config.lottery",
+      "ok": true,
+      "issues": []
+    },
+    {
+      "area": "mini",
+      "name": "config.miniProgramConfig",
+      "ok": true,
+      "issues": []
+    },
+    {
+      "area": "mini",
+      "name": "user.listStations",
+      "ok": true,
+      "count": 3,
+      "issues": []
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "generatedAt": "2026-04-24T06:27:06.658Z",
+  "ok": true,
+  "total": 14,
+  "failed": 0,
+  "findings": [
+    {
+      "module": "config",
+      "name": "mini program config logistics options",
+      "ok": true,
+      "detail": "normalizeMiniProgramConfig => [\"顺丰速运\",\"申通快递\"]"
+    },
+    {
+      "module": "config",
+      "name": "popup ad canonical field",
+      "ok": true,
+      "detail": "normalizePopupAdConfig => \"cloud://img\""
+    },
+    {
+      "module": "config",
+      "name": "home content brand zone defaults",
+      "ok": true,
+      "detail": "flattenHomeConfigs => {\"enabled\":false,\"title\":\"品牌专区\",\"welcomeTitle\":\"Welcome\",\"cards\":0,\"certifications\":0}"
+    },
+    {
+      "module": "config",
+      "name": "home content brand zone legacy compatibility",
+      "ok": true,
+      "detail": "flattenHomeConfigs => {\"enabled\":true,\"card\":{\"title\":\"最新活动\",\"subtitle\":\"过程可追溯\",\"image\":\"cloud://brand-card\",\"file_id\":\"cloud://brand-card\",\"slot_index\":0,\"category_key\":\"latest_activity\",\"link_type\":\"page\",\"link_value\":\"/pages/index/brand-news-list?category_key=latest_activity\"},\"certification\":{\"title\":\"企业认证\",\"subtitle\":\"\",\"image\":\"\",\"file_id\":\"\"}}"
+    },
+    {
+      "module": "admin-api",
+      "name": "home section canonical field",
+      "ok": true,
+      "detail": "normalizeHomeSectionRecord => \"home.hero\""
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/config/index.js contains normalizeMiniProgramConfig",
+      "ok": true,
+      "detail": "cloudfunctions/config/index.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/config/index.js contains normalizeHomeContentPayload",
+      "ok": true,
+      "detail": "cloudfunctions/config/index.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/config/index.js contains normalizeSplashConfig",
+      "ok": true,
+      "detail": "cloudfunctions/config/index.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/admin-api/src/app.js contains configContract.normalizeMiniProgramConfig",
+      "ok": true,
+      "detail": "cloudfunctions/admin-api/src/app.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/admin-api/src/app.js contains configContract.normalizePopupAdConfig",
+      "ok": true,
+      "detail": "cloudfunctions/admin-api/src/app.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/admin-api/src/app.js contains patchCollectionRow('content_boards'",
+      "ok": true,
+      "detail": "cloudfunctions/admin-api/src/app.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/config/config-contract.js contains brand_zone_enabled",
+      "ok": true,
+      "detail": "cloudfunctions/config/config-contract.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/config/config-contract.js contains brand_zone_cover_file_id",
+      "ok": true,
+      "detail": "cloudfunctions/config/config-contract.js"
+    },
+    {
+      "module": "source",
+      "name": "cloudfunctions/config/config-contract.js contains flattenHomeConfigs",
+      "ok": true,
+      "detail": "cloudfunctions/config/config-contract.js"
+    }
+  ]
+}

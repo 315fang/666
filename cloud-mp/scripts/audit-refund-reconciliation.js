@@ -4,15 +4,17 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { loadPaymentConfig } = require('../cloudfunctions/payment/config');
+const { getAuditArtifactPaths } = require('./lib/audit-output');
 
 const projectRoot = path.resolve(__dirname, '..');
 const workspaceRoot = path.resolve(projectRoot, '..');
-const docsRoot = path.join(projectRoot, 'docs');
 const localJsonlRoot = path.join(projectRoot, 'mysql', 'jsonl');
 const mcporterConfigPath = path.join(workspaceRoot, 'config', 'mcporter.json');
 const mcporterCliPath = process.env.MCPORTER_CLI_PATH || 'D:/nodejs/node_global/node_modules/mcporter/dist/cli.js';
-const defaultJsonPath = path.join(docsRoot, 'REFUND_RECON_AUDIT.json');
-const defaultMarkdownPath = path.join(docsRoot, 'REFUND_RECON_AUDIT.md');
+const {
+    jsonPath: defaultJsonPath,
+    mdPath: defaultMarkdownPath
+} = getAuditArtifactPaths(projectRoot, 'REFUND_RECON_AUDIT');
 const pageLimit = 500;
 
 function parseArgs(argv) {

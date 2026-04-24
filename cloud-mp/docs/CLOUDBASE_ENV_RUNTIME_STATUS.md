@@ -1,6 +1,6 @@
 # CloudBase Environment Runtime Status
 
-Generated at: 2026-04-19T15:06:03.898Z
+Generated at: 2026-04-24T01:27:09.759Z
 
 ## Environment
 
@@ -10,26 +10,26 @@ Generated at: 2026-04-19T15:06:03.898Z
 
 ## Required Collections
 
-- `users`: expected=167, actual=missing, status=missing_collection
-- `products`: expected=11, actual=11, status=ok
-- `skus`: expected=11, actual=missing, status=missing_collection
-- `categories`: expected=9, actual=9, status=ok
-- `cart_items`: expected=25, actual=51, status=count_above_seed
-- `orders`: expected=59, actual=180, status=count_above_seed
-- `refunds`: expected=9, actual=32, status=count_above_seed
-- `reviews`: expected=3, actual=missing, status=missing_collection
-- `commissions`: expected=3, actual=8, status=count_above_seed
-- `withdrawals`: expected=3, actual=missing, status=missing_collection
+- `users`: expected=167, actual=211, status=count_above_seed, structure=not_listed_direct_read_ok
+- `products`: expected=11, actual=19, status=count_above_seed
+- `skus`: expected=11, actual=11, status=ok, structure=not_listed_direct_read_ok
+- `categories`: expected=9, actual=8, status=count_below_expected
+- `cart_items`: expected=25, actual=71, status=count_above_seed
+- `orders`: expected=59, actual=192, status=count_above_seed
+- `refunds`: expected=9, actual=33, status=count_above_seed, structure=not_listed_direct_read_ok
+- `reviews`: expected=3, actual=5, status=count_above_seed, structure=not_listed_direct_read_ok
+- `commissions`: expected=3, actual=10, status=count_above_seed
+- `withdrawals`: expected=3, actual=6, status=count_above_seed, structure=not_listed_direct_read_ok
 - `banners`: expected=5, actual=5, status=ok
-- `materials`: expected=52, actual=62, status=count_above_seed
+- `materials`: expected=52, actual=193, status=count_above_seed
 - `material_groups`: expected=1, actual=1, status=ok
-- `admins`: expected=8, actual=8, status=ok
+- `admins`: expected=9, actual=15, status=count_above_seed
 - `admin_roles`: expected=8, actual=8, status=ok
 
 ## Functions
 
-- Local function count: 12
-- Deployed function count: 13
+- Local function count: 13
+- Deployed function count: 14
 - Function names match: NO
 
 - `admin-api`: deployed=yes
@@ -44,6 +44,7 @@ Generated at: 2026-04-19T15:06:03.898Z
 - `payment`: deployed=yes
 - `products`: deployed=yes
 - `user`: deployed=yes
+- `visitor-account-cleanup`: deployed=yes
 
 ## Admin Chain
 
@@ -59,14 +60,15 @@ Generated at: 2026-04-19T15:06:03.898Z
 ## Summary
 
 - Required collection baseline met: NO
-- Required collections at or above baseline: 11/15
+- Required collections at or above baseline: 14/15
 - Runtime ready: NO
 
 ## Blockers
 
-- Required collections missing or below import baseline: users, skus, reviews, withdrawals
+- Required collections missing or below import baseline: categories
 
 ## Warnings
 
-- Required collections contain runtime data beyond import baseline: cart_items, orders, refunds, commissions, materials
+- Required collections contain runtime data beyond import baseline: users, products, cart_items, orders, refunds, reviews, commissions, withdrawals, materials, admins
+- Required collection structure list differs from direct reads: users(not_listed_direct_read_ok), skus(not_listed_direct_read_ok), refunds(not_listed_direct_read_ok), reviews(not_listed_direct_read_ok), withdrawals(not_listed_direct_read_ok)
 - Extra deployed functions not found in local cloudfunctions/: shared

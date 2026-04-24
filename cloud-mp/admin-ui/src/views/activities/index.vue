@@ -602,6 +602,7 @@ const globalUi = reactive({
   featured_products: { limit: 4, title: '精选好物', kicker: "EDITOR'S PICK", button_text: '去选购' }
 })
 const activityOptionsLoading = ref(false)
+const activityOptionsLoaded = ref(false)
 const activityOptions = ref([])
 const staticActivityOptions = MINI_PROGRAM_TARGETS.map((target) => ({
   key: target.key,
@@ -751,14 +752,19 @@ const saveFestival = async () => {
   }
 }
 
-const fetchActivityOptions = async () => {
+const fetchActivityOptions = async ({ force = false } = {}) => {
+  if (activityOptionsLoading.value) return
+  if (activityOptionsLoaded.value && !force) return
   activityOptionsLoading.value = true
   try {
     const res = await getActivityOptions()
     activityOptions.value = Array.isArray(res) ? res : []
+    activityOptionsLoaded.value = true
   } catch (e) {
     console.error('获取活动入口选项失败:', e)
-    activityOptions.value = []
+    if (!activityOptionsLoaded.value) {
+      activityOptions.value = []
+    }
   } finally {
     activityOptionsLoading.value = false
   }

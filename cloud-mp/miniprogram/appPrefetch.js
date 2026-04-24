@@ -7,8 +7,8 @@
 const { callFn } = require('./utils/cloud');
 const { get } = require('./utils/request');
 const { cachedGet } = require('./utils/requestCache');
-const HOME_PAGE_CACHE_KEY = 'home_config_cache_v2';
-const HOME_PAGE_ASSET_TTL = 4 * 60 * 60 * 1000;
+const HOME_PAGE_CACHE_KEY = 'home_config_cache';
+const HOME_PAGE_ASSET_TTL = 5 * 60 * 1000;
 const CATEGORY_BOOTSTRAP_TTL = 5 * 60 * 1000;
 const ACTIVITY_BOOTSTRAP_TTL = 60 * 1000;
 const LIMITED_SALE_OVERVIEW_TTL = 30 * 1000;
@@ -26,8 +26,16 @@ module.exports = {
         if (forceRefresh) {
             this.globalData.homePageData = null;
             this.globalData.homePageDataExpireAt = 0;
+            try { wx.removeStorageSync(HOME_PAGE_CACHE_KEY); } catch (_) {}
+        } else {
+            try {
+                const cached = wx.getStorageSync(HOME_PAGE_CACHE_KEY);
+                if (cached && cached.data && cached.expireAt > Date.now()) {
+                    this._cacheHomePayload(cached.data, Number(cached.expireAt) || 0);
+                    return Promise.resolve(cached.data);
+                }
+            } catch (_) {}
         }
-        try { wx.removeStorageSync(HOME_PAGE_CACHE_KEY); } catch (_) {}
 
         // ★ 改为调用云函数
         const promise = callFn('config', { action: 'homeContent' }, { showError: false })
@@ -147,9 +155,9 @@ module.exports = {
         return promise;
     },
 
-    _cacheHomePayload(payload) {
+    _cacheHomePayload(payload, expireAt = Date.now() + HOME_PAGE_ASSET_TTL) {
         this.globalData.homePageData = payload;
-        this.globalData.homePageDataExpireAt = Date.now() + HOME_PAGE_ASSET_TTL;
+        this.globalData.homePageDataExpireAt = expireAt;
         this.globalData.homePageDataVersion = '';
         const configs = payload?.configs || payload?.resources?.configs || {};
         if (configs) {
@@ -157,6 +165,6 @@ module.exports = {
             this.globalData.shareTitle = configs.share_title || this.globalData.shareTitle;
             this.globalData.customerServiceWechat = configs.customer_service_wechat || this.globalData.customerServiceWechat;
         }
-        try { wx.removeStorageSync(HOME_PAGE_CACHE_KEY); } catch (_) {}
+        try { wx.setStorageSync(HOME_PAGE_CACHE_KEY, { data: payload, expireAt }); } catch (_) {}
     }
 };

@@ -6,6 +6,19 @@
  *   <section-renderer wx:for="{{sections}}" wx:key="id" section="{{item}}" wx:if="{{item.is_visible}}"/>
  */
 const { get } = require('../../utils/request');
+const HAS_TIME_ZONE_SUFFIX_RE = /(?:Z|[+-]\d{2}:\d{2})$/i;
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseChinaTime(value) {
+    if (!value) return NaN;
+    const raw = String(value).trim();
+    if (!raw) return NaN;
+    const normalized = DATE_ONLY_RE.test(raw)
+        ? `${raw}T00:00:00+08:00`
+        : (HAS_TIME_ZONE_SUFFIX_RE.test(raw) ? raw : `${raw}+08:00`);
+    const ts = new Date(normalized).getTime();
+    return Number.isFinite(ts) ? ts : NaN;
+}
 
 Component({
     properties: {
@@ -61,12 +74,14 @@ Component({
         _startCountdown() {
             const cfg = this.properties.section.config || {};
             if (!cfg.endTime) return;
-            const endMs = new Date(cfg.endTime).getTime();
+            const endMs = parseChinaTime(cfg.endTime);
+            if (!Number.isFinite(endMs)) return;
+            let timer = null;
 
             const update = () => {
                 const diff = endMs - Date.now();
                 if (diff <= 0) {
-                    clearInterval(timer);
+                    if (timer) clearInterval(timer);
                     this.setData({ countdown: { hours: '00', minutes: '00', seconds: '00' } });
                     return;
                 }
@@ -77,7 +92,7 @@ Component({
             };
 
             update();
-            const timer = setInterval(update, 1000);
+            timer = setInterval(update, 1000);
             this.setData({ _countdownTimer: timer });
         },
 

@@ -6,6 +6,7 @@
 class RequestCache {
   constructor() {
     this.cache = new Map();
+    this.pending = new Map();
     this.defaultTTL = 5 * 60 * 1000; // 默认 5 分钟
   }
 
@@ -64,6 +65,7 @@ class RequestCache {
    */
   delete(key) {
     this.cache.delete(key);
+    this.pending.delete(key);
   }
 
   /**
@@ -71,6 +73,7 @@ class RequestCache {
    */
   clear() {
     this.cache.clear();
+    this.pending.clear();
   }
 
   /**
@@ -78,13 +81,44 @@ class RequestCache {
    * @param {string} prefix - URL 前缀
    */
   deleteByPrefix(prefix) {
-    const keysToDelete = [];
+    const keysToDelete = new Set();
     this.cache.forEach((value, key) => {
       if (key.startsWith(prefix)) {
-        keysToDelete.push(key);
+        keysToDelete.add(key);
       }
     });
-    keysToDelete.forEach(key => this.cache.delete(key));
+    this.pending.forEach((value, key) => {
+      if (key.startsWith(prefix)) {
+        keysToDelete.add(key);
+      }
+    });
+    keysToDelete.forEach(key => this.delete(key));
+  }
+
+  /**
+   * 获取正在进行中的同 key 请求
+   * @param {string} key - 缓存键
+   * @returns {Promise|null} 请求 Promise
+   */
+  getPending(key) {
+    return this.pending.get(key) || null;
+  }
+
+  /**
+   * 记录正在进行中的同 key 请求
+   * @param {string} key - 缓存键
+   * @param {Promise} promise - 请求 Promise
+   */
+  setPending(key, promise) {
+    this.pending.set(key, promise);
+  }
+
+  /**
+   * 清理正在进行中的同 key 请求
+   * @param {string} key - 缓存键
+   */
+  deletePending(key) {
+    this.pending.delete(key);
   }
 
   /**
@@ -106,7 +140,8 @@ class RequestCache {
     return {
       total: totalSize,
       expired: expiredCount,
-      active: totalSize - expiredCount
+      active: totalSize - expiredCount,
+      pending: this.pending.size
     };
   }
 
@@ -211,11 +246,19 @@ function cachedGet(requestFn, url, params = {}, options = {}) {
     return Promise.resolve(cachedData);
   }
 
+  const pendingRequest = requestCache.getPending(cacheKey);
+  if (pendingRequest) {
+    if (debugCache) {
+      console.log('[RequestCache] 合并进行中的请求:', url);
+    }
+    return pendingRequest;
+  }
+
   // 首次请求或缓存已过期都属于正常路径，默认不打印，避免开发时误判成异常。
   if (debugCache) {
     console.log('[RequestCache] 发起请求（首次或缓存过期）:', url);
   }
-  return requestFn(url, params, restOptions).then(data => {
+  const requestPromise = requestFn(url, params, restOptions).then(data => {
     // 获取缓存策略
     const ttl = cacheTTL || getCacheStrategy(url);
 
@@ -223,7 +266,12 @@ function cachedGet(requestFn, url, params = {}, options = {}) {
     requestCache.set(cacheKey, data, ttl);
 
     return data;
+  }).finally(() => {
+    requestCache.deletePending(cacheKey);
   });
+
+  requestCache.setPending(cacheKey, requestPromise);
+  return requestPromise;
 }
 
 // CommonJS 导出

@@ -1,11 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { getAuditArtifactPaths } = require('./lib/audit-output');
 
 const cloudRoot = path.resolve(__dirname, '..');
-const docsDir = path.join(cloudRoot, 'docs');
-const jsonPath = path.join(docsDir, 'ADMIN_WRITE_SMOKE.json');
-const mdPath = path.join(docsDir, 'ADMIN_WRITE_SMOKE.md');
+const { outputDir: docsDir, jsonPath, mdPath } = getAuditArtifactPaths(cloudRoot, 'ADMIN_WRITE_SMOKE');
 
 const TINY_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0r8AAAAASUVORK5CYII=';

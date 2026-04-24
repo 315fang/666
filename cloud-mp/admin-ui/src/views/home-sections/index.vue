@@ -956,8 +956,16 @@ const productOptions = ref([])
 const selectedProducts = ref([])
 let dragFrom = -1
 
-const currentBoard = computed(() => productBoards.value.find((item) => String(item.id) === String(boardId.value)) || null)
-const currentBoardIndex = computed(() => productBoards.value.findIndex((item) => String(item.id) === String(boardId.value)))
+const productBoardLookup = computed(() => {
+  const lookup = new Map()
+  productBoards.value.forEach((item, index) => {
+    lookup.set(String(item.id), { item, index })
+  })
+  return lookup
+})
+const currentBoardEntry = computed(() => productBoardLookup.value.get(String(boardId.value)) || null)
+const currentBoard = computed(() => currentBoardEntry.value?.item || null)
+const currentBoardIndex = computed(() => currentBoardEntry.value?.index ?? -1)
 
 const syncBoardDraft = () => {
   const board = currentBoard.value
@@ -991,7 +999,7 @@ const loadProductBoards = async () => {
       featuredRows.value = []
       return
     }
-    if (!boardId.value || !productBoards.value.some((item) => String(item.id) === String(boardId.value))) {
+    if (!boardId.value || !productBoardLookup.value.has(String(boardId.value))) {
       boardId.value = productBoards.value[0].id
     }
     syncBoardDraft()

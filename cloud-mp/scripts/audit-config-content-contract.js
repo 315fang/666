@@ -1,10 +1,9 @@
 const fs = require('fs');
 const path = require('path');
+const { getAuditArtifactPaths } = require('./lib/audit-output');
 
 const projectRoot = path.join(__dirname, '..');
-const docsDir = path.join(projectRoot, 'docs');
-const jsonPath = path.join(docsDir, 'CONFIG_CONTENT_CONTRACT_AUDIT.json');
-const mdPath = path.join(docsDir, 'CONFIG_CONTENT_CONTRACT_AUDIT.md');
+const { outputDir: docsDir, jsonPath, mdPath } = getAuditArtifactPaths(projectRoot, 'CONFIG_CONTENT_CONTRACT_AUDIT');
 
 const configContract = require(path.join(projectRoot, 'cloudfunctions', 'config', 'config-contract.js'));
 const adminConfigContract = require(path.join(projectRoot, 'cloudfunctions', 'admin-api', 'src', 'config-contract.js'));
@@ -62,12 +61,14 @@ const configContractCases = [
     expected: {
       enabled: true,
       card: {
-        title: '实验检测',
+        title: '最新活动',
         subtitle: '过程可追溯',
-        image: '',
+        image: 'cloud://brand-card',
         file_id: 'cloud://brand-card',
+        slot_index: 0,
+        category_key: 'latest_activity',
         link_type: 'page',
-        link_value: '/pages/activity/activity'
+        link_value: '/pages/index/brand-news-list?category_key=latest_activity'
       },
       certification: {
         title: '企业认证',

@@ -1,10 +1,14 @@
 const fs = require('fs');
 const path = require('path');
+const { getAuditArtifactPaths } = require('./lib/audit-output');
 
 const workspaceRoot = path.resolve(__dirname, '..', '..');
-const reportDir = path.join(workspaceRoot, 'cloud-mp', 'docs');
-const reportPath = path.join(reportDir, 'CLOUDBASE_LEGACY_COMPAT_AUDIT.md');
-const jsonPath = path.join(reportDir, 'CLOUDBASE_LEGACY_COMPAT_AUDIT.json');
+const projectRoot = path.resolve(__dirname, '..');
+const {
+  outputDir: reportDir,
+  jsonPath,
+  mdPath: reportPath
+} = getAuditArtifactPaths(projectRoot, 'CLOUDBASE_LEGACY_COMPAT_AUDIT');
 
 const targets = [
   { name: 'miniprogram', root: path.join(workspaceRoot, 'cloud-mp', 'miniprogram') },

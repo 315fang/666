@@ -1,7 +1,25 @@
 const path = require('path');
+const os = require('os');
 
 const serviceRoot = path.resolve(__dirname, '..');
 const isFunctionRuntime = Boolean(process.env.TENCENTCLOUD_RUNENV || process.env.SCF_RUNTIME_API || process.env.TCB_ROUTE_KEY);
+const testRoot = path.resolve(serviceRoot, 'test');
+function isPathInside(parent, candidate) {
+    const relative = path.relative(parent, candidate);
+    return !!relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+const isAdminApiTestRuntime = process.argv
+    .map((arg) => {
+        try {
+            return path.resolve(arg);
+        } catch (_) {
+            return '';
+        }
+    })
+    .some((candidate) => isPathInside(testRoot, candidate));
+const isNodeTestRuntime = process.env.NODE_ENV === 'test'
+    || process.execArgv.some((arg) => arg === '--test' || arg.startsWith('--test='))
+    || isAdminApiTestRuntime;
 const enforceCloudbaseRuntime = isFunctionRuntime || process.env.ADMIN_FORCE_CLOUDBASE === 'true';
 const inferredCloudbaseEnvId = process.env.ADMIN_CLOUDBASE_ENV_ID
     || process.env.TCB_ENV
@@ -22,7 +40,9 @@ const runtimeRoot = process.env.ADMIN_RUNTIME_ROOT
     ? path.resolve(process.env.ADMIN_RUNTIME_ROOT)
     : (isFunctionRuntime
         ? path.resolve(process.env.TMPDIR || process.env.TMP || '/tmp', 'cloudrun-admin-service-runtime')
-        : path.resolve(serviceRoot, '.runtime'));
+        : (isNodeTestRuntime
+            ? path.resolve(os.tmpdir(), 'cloudrun-admin-service-test-runtime', String(process.pid))
+            : path.resolve(serviceRoot, '.runtime')));
 const uploadsRoot = path.resolve(runtimeRoot, 'uploads');
 const dataSource = enforceCloudbaseRuntime ? 'cloudbase' : defaultDataSource;
 const singletonSource = enforceCloudbaseRuntime

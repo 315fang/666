@@ -347,6 +347,34 @@ function registerMarketingRoutes(app, deps) {
         };
     }
 
+    function stripHtmlText(value) {
+        return pickString(value)
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function shouldIncludeActivityLinksContent(req) {
+        const flag = pickString(req?.query?.include_content).toLowerCase();
+        return ['1', 'true', 'yes', 'full'].includes(flag);
+    }
+
+    function summarizeActivityLinksForList(config = {}) {
+        return {
+            ...config,
+            brand_news: toArray(config.brand_news).map((item) => {
+                const contentHtml = pickString(item?.content_html);
+                return {
+                    ...item,
+                    content_html: '',
+                    has_content_html: !!contentHtml,
+                    content_preview: pickString(item?.content_preview || item?.summary || stripHtmlText(contentHtml).slice(0, 160)),
+                    content_html_bytes: Buffer.byteLength(contentHtml, 'utf8')
+                };
+            })
+        };
+    }
+
     function parseCoordinate(value) {
         if (value === '' || value == null) return null;
         const num = Number(value);
@@ -1060,178 +1088,8 @@ function registerMarketingRoutes(app, deps) {
         return rows[index];
     }
 
-    function parseDateTimestamp(value) {
-        if (!value) return 0;
-        const raw = pickString(value).trim();
-        if (!raw) return 0;
-        const normalized = /(?:z|[+-]\d{2}:\d{2})$/i.test(raw) ? raw : `${raw}+08:00`;
-        const ts = new Date(normalized).getTime();
-        return Number.isFinite(ts) ? ts : 0;
-    }
-
-    function sortLimitedSaleSlots(rows = []) {
-        return [...(Array.isArray(rows) ? rows : [])].sort((a, b) => {
-            const sortDiff = toNumber(a.sort_order, 0) - toNumber(b.sort_order, 0);
-            if (sortDiff !== 0) return sortDiff;
-            const startDiff = parseDateTimestamp(a.start_time) - parseDateTimestamp(b.start_time);
-            if (startDiff !== 0) return startDiff;
-            return String(a.id || a._id || '').localeCompare(String(b.id || b._id || ''));
-        });
-    }
-
-    function isLimitedSaleSlotEnabled(row = {}) {
-        return toBoolean(row.status ?? row.is_active ?? row.enabled ?? 1);
-    }
-
-    function resolveLimitedSaleSlotRuntimeStatus(row = {}, nowTs = Date.now()) {
-        if (!isLimitedSaleSlotEnabled(row)) return 'disabled';
-        const startTs = parseDateTimestamp(row.start_time);
-        const endTs = parseDateTimestamp(row.end_time);
-        if (!startTs || !endTs || startTs >= endTs) return 'invalid';
-        if (endTs <= nowTs) return 'ended';
-        if (startTs > nowTs) return 'upcoming';
-        return 'running';
-    }
-
-    function timeRangesOverlap(leftStart, leftEnd, rightStart, rightEnd) {
-        return leftStart < rightEnd && rightStart < leftEnd;
-    }
-
-    function normalizeLimitedSaleSlotPayload(body = {}, existing = {}) {
-        return {
-            ...existing,
-            ...body,
-            title: pickString(body.title ?? existing.title),
-            subtitle: pickString(body.subtitle ?? existing.subtitle),
-            file_id: pickString(body.file_id ?? existing.file_id),
-            cover_image: pickString(body.cover_image ?? body.image ?? body.image_url ?? existing.cover_image ?? existing.image_url),
-            image_url: pickString(body.image_url ?? body.cover_image ?? body.image ?? existing.image_url ?? existing.cover_image),
-            start_time: pickString(body.start_time ?? existing.start_time),
-            end_time: pickString(body.end_time ?? existing.end_time),
-            status: toBoolean(body.status ?? body.is_active ?? existing.status ?? existing.is_active ?? 1) ? 1 : 0,
-            is_active: toBoolean(body.status ?? body.is_active ?? existing.status ?? existing.is_active ?? 1) ? 1 : 0,
-            sort_order: toNumber(body.sort_order ?? existing.sort_order, 0),
-            updated_at: nowIso()
-        };
-    }
-
-    function validateLimitedSaleSlot(row = {}, rows = [], currentId = '') {
-        const title = pickString(row.title).trim();
-        const startTs = parseDateTimestamp(row.start_time);
-        const endTs = parseDateTimestamp(row.end_time);
-        if (!title) return '档期标题不能为空';
-        if (!startTs || !endTs) return '请填写有效的开始和结束时间';
-        if (startTs >= endTs) return '档期开始时间必须早于结束时间';
-        if (isLimitedSaleSlotEnabled(row)) {
-            const overlap = rows.find((item) => {
-                if (currentId && rowMatchesLookup(item, currentId)) return false;
-                if (!isLimitedSaleSlotEnabled(item)) return false;
-                const otherStart = parseDateTimestamp(item.start_time);
-                const otherEnd = parseDateTimestamp(item.end_time);
-                if (!otherStart || !otherEnd || otherStart >= otherEnd) return false;
-                return timeRangesOverlap(startTs, endTs, otherStart, otherEnd);
-            });
-            if (overlap) {
-                return `启用中的档期不能重叠；当前与「${pickString(overlap.title, '未命名档期')}」冲突`;
-            }
-        }
-        return '';
-    }
-
-    async function resolveLimitedSaleSlotImage(row = {}) {
-        const fileId = pickString(row.file_id);
-        const fallback = pickString(row.cover_image || row.image_url || row.image);
-        if (fileId) {
-            try {
-                return await resolveManagedFileUrl(fileId);
-            } catch (_) {
-                return assetUrl(fallback || fileId);
-            }
-        }
-        return assetUrl(fallback);
-    }
-
-    async function normalizeLimitedSaleSlot(row = {}) {
-        const imageUrl = await resolveLimitedSaleSlotImage(row);
-        return {
-            ...row,
-            id: row.id || row._legacy_id || row._id,
-            title: pickString(row.title),
-            subtitle: pickString(row.subtitle),
-            file_id: pickString(row.file_id),
-            cover_image: imageUrl,
-            image_url: imageUrl,
-            status: isLimitedSaleSlotEnabled(row) ? 1 : 0,
-            is_active: isLimitedSaleSlotEnabled(row) ? 1 : 0,
-            sort_order: toNumber(row.sort_order, 0),
-            runtime_status: resolveLimitedSaleSlotRuntimeStatus(row)
-        };
-    }
-
-    function normalizeLimitedSaleItemPayload(body = {}, existing = {}, slotId = '') {
-        const status = toBoolean(body.status ?? body.is_active ?? existing.status ?? existing.is_active ?? 1) ? 1 : 0;
-        return {
-            ...existing,
-            ...body,
-            slot_id: String(slotId || body.slot_id || existing.slot_id || '').trim(),
-            product_id: body.product_id != null ? String(body.product_id).trim() : String(existing.product_id || '').trim(),
-            sku_id: body.sku_id != null && body.sku_id !== '' ? String(body.sku_id).trim() : '',
-            enable_points: toBoolean(body.enable_points ?? existing.enable_points ?? true),
-            enable_money: toBoolean(body.enable_money ?? existing.enable_money ?? true),
-            points_price: Math.max(0, Math.floor(toNumber(body.points_price ?? existing.points_price, 0))),
-            money_price: Math.max(0, toNumber(body.money_price ?? existing.money_price, 0)),
-            stock_limit: Math.max(0, Math.floor(toNumber(body.stock_limit ?? existing.stock_limit, 0))),
-            sort_order: toNumber(body.sort_order ?? existing.sort_order, 0),
-            status,
-            is_active: status,
-            updated_at: nowIso()
-        };
-    }
-
-    function validateLimitedSaleItem(row = {}, { products = [], skus = [] } = {}) {
-        if (!pickString(row.slot_id).trim()) return '缺少档期 ID';
-        if (!pickString(row.product_id).trim()) return '请选择商品';
-        if (!findByLookup(products, row.product_id)) return '关联商品不存在或未同步';
-        if (pickString(row.sku_id).trim() && !findByLookup(skus, row.sku_id)) return '关联 SKU 不存在或未同步';
-        if (!row.enable_points && !row.enable_money) return '积分价 / 现金价至少启用一种';
-        if (row.enable_points && row.points_price < 1) return '积分价需大于等于 1';
-        if (row.enable_money && row.money_price <= 0) return '现金价需大于 0';
-        if (row.stock_limit < 1) return '名额至少为 1';
-        return '';
-    }
-
-    function sortLimitedSaleItems(rows = []) {
-        return [...(Array.isArray(rows) ? rows : [])].sort((a, b) => {
-            const sortDiff = toNumber(a.sort_order, 0) - toNumber(b.sort_order, 0);
-            if (sortDiff !== 0) return sortDiff;
-            return String(a.id || a._id || '').localeCompare(String(b.id || b._id || ''));
-        });
-    }
-
-    async function normalizeLimitedSaleItem(row = {}, products = [], skus = []) {
-        const product = normalizeLinkedProduct(findByLookup(products, row.product_id));
-        const sku = row.sku_id ? findByLookup(skus, row.sku_id) : null;
-        return {
-            ...row,
-            id: row.id || row._legacy_id || row._id,
-            slot_id: pickString(row.slot_id),
-            product_id: pickString(row.product_id),
-            sku_id: pickString(row.sku_id),
-            enable_points: row.enable_points !== false,
-            enable_money: row.enable_money !== false,
-            points_price: Math.max(0, Math.floor(toNumber(row.points_price, 0))),
-            money_price: Math.max(0, toNumber(row.money_price, 0)),
-            stock_limit: Math.max(0, Math.floor(toNumber(row.stock_limit, 0))),
-            sort_order: toNumber(row.sort_order, 0),
-            status: toBoolean(row.status ?? row.is_active ?? 1) ? 1 : 0,
-            is_active: toBoolean(row.status ?? row.is_active ?? 1) ? 1 : 0,
-            product,
-            product_name: pickString(product?.name),
-            sku_name: pickString(sku?.name || sku?.spec_text || sku?.spec || '')
-        };
-    }
-
-    app.get('/admin/api/coupons', auth, requirePermission('products'), (req, res) => {
+    app.get('/admin/api/coupons', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['coupons']);
         let rows = sortByUpdatedDesc(getCouponRows()).map(normalizeCoupon);
         const keyword = pickString(req.query.keyword).trim().toLowerCase();
         const status = pickString(req.query.status).trim();
@@ -1240,13 +1098,15 @@ function registerMarketingRoutes(app, deps) {
         ok(res, paginate(rows, req));
     });
 
-    app.get('/admin/api/coupons/:id', auth, requirePermission('products'), (req, res) => {
+    app.get('/admin/api/coupons/:id', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['coupons']);
         const row = findCouponByLookup(req.params.id);
         if (!row) return fail(res, '优惠券不存在', 404);
         ok(res, normalizeCoupon(row));
     });
 
     app.get('/admin/api/coupons/:id/wxacode', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['coupons']);
         const coupon = findCouponByLookup(req.params.id);
         if (!coupon) return fail(res, '优惠券不存在', 404);
 
@@ -1304,7 +1164,8 @@ function registerMarketingRoutes(app, deps) {
         });
     });
 
-    app.post('/admin/api/coupons', auth, requirePermission('products'), (req, res) => {
+    app.post('/admin/api/coupons', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['coupons']);
         const rows = getCollection('coupons');
         const row = normalizeCouponPayload(req.body, {
             id: nextId(rows),
@@ -1319,7 +1180,8 @@ function registerMarketingRoutes(app, deps) {
         ok(res, normalizeCoupon(row));
     });
 
-    app.put('/admin/api/coupons/:id', auth, requirePermission('products'), (req, res) => {
+    app.put('/admin/api/coupons/:id', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['coupons']);
         const rows = getCouponRows();
         const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
         if (index === -1) return fail(res, '优惠券不存在', 404);
@@ -1329,7 +1191,8 @@ function registerMarketingRoutes(app, deps) {
         ok(res, normalizeCoupon(rows[index]));
     });
 
-    app.delete('/admin/api/coupons/:id', auth, requirePermission('products'), (req, res) => {
+    app.delete('/admin/api/coupons/:id', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['coupons']);
         const rows = getCouponRows();
         const nextRows = rows.filter((item) => !rowMatchesLookup(item, req.params.id));
         if (rows.length === nextRows.length) return fail(res, '优惠券不存在', 404);
@@ -1338,7 +1201,8 @@ function registerMarketingRoutes(app, deps) {
         ok(res, { success: true });
     });
 
-    function updateCouponStatus(req, res) {
+    async function updateCouponStatus(req, res) {
+        await ensureFreshCollections(['coupons']);
         const rows = getCouponRows();
         const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
         if (index === -1) return fail(res, '优惠券不存在', 404);
@@ -1381,7 +1245,8 @@ function registerMarketingRoutes(app, deps) {
         };
     }
 
-    app.post('/admin/api/coupons/:id/issue', auth, requirePermission('products'), (req, res) => {
+    app.post('/admin/api/coupons/:id/issue', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['coupons', 'users', 'user_coupons']);
         const coupons = getCouponRows();
         const coupon = findByLookup(coupons, req.params.id);
         if (!coupon) return fail(res, '优惠券不存在', 404);
@@ -1436,11 +1301,13 @@ function registerMarketingRoutes(app, deps) {
         ok(res, { success: true, issued, skipped: targets.length - issued, message: `已发放 ${issued} 张优惠券` });
     });
 
-    app.get('/admin/api/coupon-auto-rules', auth, requirePermission('products'), (_req, res) => {
+    app.get('/admin/api/coupon-auto-rules', auth, requirePermission('products'), async (_req, res) => {
+        await ensureFreshCollections(['coupon_auto_rules']);
         ok(res, getCollection('coupon_auto_rules'));
     });
 
-    app.put('/admin/api/coupon-auto-rules', auth, requirePermission('products'), (req, res) => {
+    app.put('/admin/api/coupon-auto-rules', auth, requirePermission('products'), async (req, res) => {
+        await ensureFreshCollections(['coupon_auto_rules']);
         const rules = toArray(req.body?.rules).map((item, index) => ({
             id: item.id || index + 1,
             trigger_event: pickString(item.trigger_event || 'register'),
@@ -1491,7 +1358,12 @@ function registerMarketingRoutes(app, deps) {
 
     function parseDateTimestamp(value) {
         if (!value) return 0;
-        const ts = new Date(value).getTime();
+        const raw = pickString(value).trim();
+        if (!raw) return 0;
+        const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+            ? `${raw}T00:00:00+08:00`
+            : (/(?:z|[+-]\d{2}:\d{2})$/i.test(raw) ? raw : `${raw}+08:00`);
+        const ts = new Date(normalized).getTime();
         return Number.isFinite(ts) ? ts : 0;
     }
 
@@ -1934,9 +1806,10 @@ function registerMarketingRoutes(app, deps) {
         ok(res, setConfigValue('global_ui_config', req.body || {}, 'marketing'));
     });
 
-    app.get('/admin/api/activity-links', auth, requirePermission('products'), async (_req, res) => {
+    app.get('/admin/api/activity-links', auth, requirePermission('products'), async (req, res) => {
         await ensureFreshCollections(['configs']);
-        ok(res, normalizeActivityLinksConfig(getConfigValueByKeys(['activity_links', 'activity_links_config'], null)));
+        const normalized = normalizeActivityLinksConfig(getConfigValueByKeys(['activity_links', 'activity_links_config'], null));
+        ok(res, shouldIncludeActivityLinksContent(req) ? normalized : summarizeActivityLinksForList(normalized));
     });
 
     app.put('/admin/api/activity-links', auth, requirePermission('products'), async (req, res) => {
@@ -1947,11 +1820,13 @@ function registerMarketingRoutes(app, deps) {
         ok(res, normalized);
     });
 
-    app.get('/admin/api/splash', auth, requirePermission('content'), (_req, res) => {
+    app.get('/admin/api/splash', auth, requirePermission('content'), async (_req, res) => {
+        await ensureFreshCollections(['configs', 'splash_screens']);
         ok(res, getConfigValue('splash_config', getCollection('splash_screens')[0] || { enabled: false }));
     });
 
-    app.put('/admin/api/splash', auth, requirePermission('content'), (req, res) => {
+    app.put('/admin/api/splash', auth, requirePermission('content'), async (req, res) => {
+        await ensureFreshCollections(['configs']);
         ok(res, setConfigValue('splash_config', req.body || {}, 'content'));
     });
 
@@ -2093,7 +1968,8 @@ function registerMarketingRoutes(app, deps) {
         ok(res, { success: true });
     });
 
-    app.get('/admin/api/boards', auth, requirePermission('content'), (req, res) => {
+    app.get('/admin/api/boards', auth, requirePermission('content'), async (req, res) => {
+        await ensureFreshCollections(['content_boards']);
         let rows = getCollection('content_boards');
         if (!rows.length) {
             rows = [{ id: 1, board_key: 'home.featuredProducts', name: '首页精选商品榜', created_at: nowIso(), updated_at: nowIso() }];
@@ -2103,7 +1979,8 @@ function registerMarketingRoutes(app, deps) {
         ok(res, rows.map((row) => ({ ...row, id: row.id || row._id })));
     });
 
-    app.get('/admin/api/boards/:id/products', auth, requirePermission('content'), (req, res) => {
+    app.get('/admin/api/boards/:id/products', auth, requirePermission('content'), async (req, res) => {
+        await ensureFreshCollections(['products', 'content_board_products']);
         const products = getCollection('products');
         const list = sortByUpdatedDesc(getCollection('content_board_products')
             .filter((row) => String(row.board_id) === String(req.params.id)))
@@ -2120,7 +1997,8 @@ function registerMarketingRoutes(app, deps) {
         ok(res, { list, total: list.length });
     });
 
-    app.post('/admin/api/boards/:id/products', auth, requirePermission('content'), (req, res) => {
+    app.post('/admin/api/boards/:id/products', auth, requirePermission('content'), async (req, res) => {
+        await ensureFreshCollections(['content_board_products']);
         const rows = getCollection('content_board_products');
         const productIds = toArray(req.body?.product_ids);
         let added = 0;
@@ -2134,7 +2012,8 @@ function registerMarketingRoutes(app, deps) {
         ok(res, { success: true, added });
     });
 
-    app.post('/admin/api/boards/:id/products/sort', auth, requirePermission('content'), (req, res) => {
+    app.post('/admin/api/boards/:id/products/sort', auth, requirePermission('content'), async (req, res) => {
+        await ensureFreshCollections(['content_board_products']);
         const orders = toArray(req.body?.orders);
         const rows = getCollection('content_board_products').map((row) => {
             const order = orders.find((item) => rowMatchesLookup(row, item.id));
@@ -2144,7 +2023,8 @@ function registerMarketingRoutes(app, deps) {
         ok(res, { success: true });
     });
 
-    app.put('/admin/api/boards/:id/products/:relationId', auth, requirePermission('content'), (req, res) => {
+    app.put('/admin/api/boards/:id/products/:relationId', auth, requirePermission('content'), async (req, res) => {
+        await ensureFreshCollections(['content_board_products']);
         const rows = getCollection('content_board_products');
         const index = rows.findIndex((row) => String(row.board_id) === String(req.params.id) && rowMatchesLookup(row, req.params.relationId));
         if (index === -1) return fail(res, '榜单商品不存在', 404);
@@ -2153,7 +2033,8 @@ function registerMarketingRoutes(app, deps) {
         ok(res, rows[index]);
     });
 
-    app.delete('/admin/api/boards/:id/products/:relationId', auth, requirePermission('content'), (req, res) => {
+    app.delete('/admin/api/boards/:id/products/:relationId', auth, requirePermission('content'), async (req, res) => {
+        await ensureFreshCollections(['content_board_products']);
         const rows = getCollection('content_board_products');
         const nextRows = rows.filter((row) => !(String(row.board_id) === String(req.params.id) && rowMatchesLookup(row, req.params.relationId)));
         if (rows.length === nextRows.length) return fail(res, '榜单商品不存在', 404);
@@ -2174,14 +2055,16 @@ function registerMarketingRoutes(app, deps) {
     };
 
     Object.keys(agentConfigDefaults).forEach((key) => {
-        app.get(`/admin/api/agent-system/${key}`, auth, requirePermission('settings_manage'), (_req, res) => {
+        app.get(`/admin/api/agent-system/${key}`, auth, requirePermission('settings_manage'), async (_req, res) => {
+            await ensureFreshCollections(['configs']);
             if (key === 'dividend-rules') {
                 ok(res, getDividendRulesSnapshot());
                 return;
             }
             ok(res, getConfigValue(`agent_system_${key}`, agentConfigDefaults[key]));
         });
-        app.put(`/admin/api/agent-system/${key}`, auth, requirePermission('settings_manage'), (req, res) => {
+        app.put(`/admin/api/agent-system/${key}`, auth, requirePermission('settings_manage'), async (req, res) => {
+            await ensureFreshCollections(['configs']);
             if (key === 'dividend-rules') {
                 const normalizedRules = normalizeDividendRulesConfig(req.body || {});
                 const validation = validateDividendRulesConfig(normalizedRules);
@@ -2193,7 +2076,8 @@ function registerMarketingRoutes(app, deps) {
         });
     });
 
-    app.get('/admin/api/agent-system/dividend/preview', auth, requirePermission('settings_manage'), (req, res) => {
+    app.get('/admin/api/agent-system/dividend/preview', auth, requirePermission('settings_manage'), async (req, res) => {
+        await ensureFreshCollections(['users', 'configs']);
         const users = getCollection('users');
         const amount = toNumber(req.query.amount || req.query.pool_amount || req.query.pool, 0);
         const rules = getDividendRulesSnapshot();
@@ -2213,6 +2097,7 @@ function registerMarketingRoutes(app, deps) {
     });
 
     app.post('/admin/api/agent-system/dividend/execute', auth, requirePermission('settings_manage'), async (req, res) => {
+        await ensureFreshCollections(['dividend_executions', 'users', 'commissions', 'configs', 'wallet_logs']);
         const executions = getCollection('dividend_executions');
         const users = getCollection('users');
         const commissions = getCollection('commissions');
@@ -2316,13 +2201,15 @@ function registerMarketingRoutes(app, deps) {
         ok(res, row);
     });
 
-    app.get('/admin/api/agent-system/exit-applications', auth, requirePermission('users'), (req, res) => {
+    app.get('/admin/api/agent-system/exit-applications', auth, requirePermission('users'), async (req, res) => {
+        await ensureFreshCollections(['agent_exit_applications']);
         let rows = sortByUpdatedDesc(getCollection('agent_exit_applications'));
         if (req.query.status) rows = rows.filter((row) => row.status === req.query.status);
         ok(res, paginate(rows, req));
     });
 
-    app.post('/admin/api/agent-system/exit-applications/:userId', auth, requirePermission('users'), (req, res) => {
+    app.post('/admin/api/agent-system/exit-applications/:userId', auth, requirePermission('users'), async (req, res) => {
+        await ensureFreshCollections(['agent_exit_applications', 'users', 'commissions']);
         const rows = getCollection('agent_exit_applications');
         const users = getCollection('users');
         const commissions = getCollection('commissions');
@@ -2333,6 +2220,7 @@ function registerMarketingRoutes(app, deps) {
     });
 
     app.put('/admin/api/agent-system/exit-applications/:id/review', auth, requirePermission('users'), async (req, res) => {
+        await ensureFreshCollections(['agent_exit_applications', 'users', 'commissions', 'wallet_logs']);
         const rows = getCollection('agent_exit_applications');
         const index = rows.findIndex((row) => rowMatchesLookup(row, req.params.id));
         if (index === -1) return fail(res, '退出申请不存在', 404);

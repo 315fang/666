@@ -1,11 +1,10 @@
 const fs = require('fs');
 const path = require('path');
+const { getAuditArtifactPaths } = require('./lib/audit-output');
 
 const cloudRoot = path.resolve(__dirname, '..');
 const viewsRoot = path.join(cloudRoot, 'admin-ui', 'src', 'views');
-const docsDir = path.join(cloudRoot, 'docs');
-const jsonPath = path.join(docsDir, 'ADMIN_RESPONSE_SHAPE_AUDIT.json');
-const mdPath = path.join(docsDir, 'ADMIN_RESPONSE_SHAPE_AUDIT.md');
+const { outputDir: docsDir, jsonPath, mdPath } = getAuditArtifactPaths(cloudRoot, 'ADMIN_RESPONSE_SHAPE_AUDIT');
 
 const rules = [
   {

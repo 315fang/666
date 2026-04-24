@@ -3,6 +3,19 @@ const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
 const { navigateToLimitedSpotProduct, normalizeLimitedSpotMode } = require('../../utils/limitedSpot');
 const LIMITED_SALE_OVERVIEW_TTL = 30 * 1000;
+const HAS_TIME_ZONE_SUFFIX_RE = /(?:Z|[+-]\d{2}:\d{2})$/i;
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseChinaTime(value) {
+    if (!value) return NaN;
+    const raw = String(value).trim();
+    if (!raw) return NaN;
+    const normalized = DATE_ONLY_RE.test(raw)
+        ? `${raw}T00:00:00+08:00`
+        : (HAS_TIME_ZONE_SUFFIX_RE.test(raw) ? raw : `${raw}+08:00`);
+    const ts = new Date(normalized).getTime();
+    return Number.isFinite(ts) ? ts : NaN;
+}
 
 function formatCountdown(ms = 0) {
     const safe = Math.max(0, Math.floor(ms / 1000));
@@ -15,8 +28,14 @@ function formatCountdown(ms = 0) {
 
 function resolveSlotCountdown(slot = {}) {
     const now = Date.now();
-    const startTs = slot && slot.start_time ? new Date(slot.start_time).getTime() : 0;
-    const endTs = slot && slot.end_time ? new Date(slot.end_time).getTime() : 0;
+    const startTs = parseChinaTime(slot?.start_time);
+    const endTs = parseChinaTime(slot?.end_time);
+    if (!Number.isFinite(startTs) || !Number.isFinite(endTs) || startTs >= endTs) {
+        return {
+            label: slot.runtime_status === 'ended' ? '已结束' : '时间异常',
+            text: '--:--:--'
+        };
+    }
     if (slot.runtime_status === 'upcoming' && startTs > now) {
         return {
             label: '距开始',

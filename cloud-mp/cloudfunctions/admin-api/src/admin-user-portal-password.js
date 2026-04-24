@@ -15,6 +15,7 @@ function registerUserPortalPasswordRoutes(app, deps) {
         auth,
         requirePermission,
         rejectUnknownBodyFields,
+        ensureFreshCollections = async () => {},
         getCollection,
         findUserByAnyId,
         patchCollectionRow,
@@ -25,6 +26,7 @@ function registerUserPortalPasswordRoutes(app, deps) {
     } = deps;
 
     app.post('/admin/api/users/:id/portal-password/reset', auth, requirePermission('user_portal_password_manage'), async (req, res) => {
+        await ensureFreshCollections(['users']);
         if (rejectUnknownBodyFields(res, req.body, [], '业务密码重置参数不合法')) return;
 
         const user = findUserByAnyId(getCollection('users'), req.params.id);
@@ -72,6 +74,7 @@ function registerUserPortalPasswordRoutes(app, deps) {
     });
 
     app.post('/admin/api/users/:id/portal-password/unlock', auth, requirePermission('user_portal_password_manage'), async (req, res) => {
+        await ensureFreshCollections(['users']);
         if (rejectUnknownBodyFields(res, req.body, [], '业务密码解锁参数不合法')) return;
 
         const user = findUserByAnyId(getCollection('users'), req.params.id);

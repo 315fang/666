@@ -5,6 +5,7 @@ function registerOrderTestFlagRoutes(app, deps) {
         auth,
         requirePermission,
         rejectUnknownBodyFields,
+        ensureFreshCollections = async () => {},
         patchCollectionRow,
         createAuditLog,
         buildFreshOrderWriteResponse,
@@ -15,6 +16,7 @@ function registerOrderTestFlagRoutes(app, deps) {
     } = deps;
 
     app.put('/admin/api/orders/:id/test-flag', auth, requirePermission('settings_manage'), async (req, res) => {
+        await ensureFreshCollections(['orders']);
         if (rejectUnknownBodyFields(res, req.body, ['is_test_order', 'reason'], '测试订单参数不合法')) return;
 
         const isTestOrder = toBoolean(req.body?.is_test_order);

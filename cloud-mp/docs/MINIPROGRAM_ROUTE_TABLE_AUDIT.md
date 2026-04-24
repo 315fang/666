@@ -1,6 +1,6 @@
 # Mini Program Route Table Audit
 
-生成时间：2026-04-19T03:17:37.138Z
+生成时间：2026-04-24T05:46:08.599Z
 结果：PASS
 
 | 路由 | Action | ROUTE_TABLE | 云函数 Action | 结果 |

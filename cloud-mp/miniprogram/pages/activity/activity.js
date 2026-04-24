@@ -1,6 +1,4 @@
 // pages/activity/activity.js
-const { get } = require('../../utils/request');
-const { cachedGet } = require('../../utils/requestCache');
 const { navigate } = require('../../utils/navigator');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
 const {
@@ -8,9 +6,6 @@ const {
     warmRenderableImageUrls,
     resolveRenderableImageUrl
 } = require('../../utils/cloudAssetRuntime');
-const { loadConfig } = require('./activityLoader');
-const { startBannerCountdown, clearBannerTimers, startSectionCountdown } = require('./activityTimers');
-const { buildActivitySections } = require('../../utils/activitySectionBuilder');
 const { getBrandNewsFallbackCover } = require('../../utils/brandNewsCover');
 const app = getApp();
 
@@ -244,8 +239,8 @@ Page({
         initialSlides.forEach((item) => {
             if (item.end_time) this._startBannerCountdown(item.end_time, item.id);
         });
-        this.loadConfig();
-        this.loadActivityPreviews();
+        this._skipNextOnShowReload = true;
+        this._reloadActivityData();
     },
 
     onShow() {
@@ -253,14 +248,23 @@ Page({
         if (tabBar && typeof tabBar.refresh === 'function') {
             tabBar.refresh();
         }
-        if (this._activityReloading) return;
-        this._activityReloading = true;
-        Promise.resolve()
+        if (this._skipNextOnShowReload) {
+            this._skipNextOnShowReload = false;
+            return;
+        }
+        this._reloadActivityData();
+    },
+
+    _reloadActivityData() {
+        if (this._activityReloading) return this._activityReloading;
+        const promise = Promise.resolve()
             .then(() => this.loadConfig())
             .then(() => this.loadActivityPreviews())
             .finally(() => {
-                this._activityReloading = false;
+                this._activityReloading = null;
             });
+        this._activityReloading = promise;
+        return promise;
     },
 
     onUnload() {
@@ -268,6 +272,7 @@ Page({
     },
 
     _restartSectionCountdowns(activitySections = []) {
+        const { startSectionCountdown } = require('./activityTimers');
         const sections = Array.isArray(activitySections) ? activitySections : [];
         sections.forEach((section) => {
             const cards = Array.isArray(section.subCards) ? section.subCards : [];
@@ -323,6 +328,7 @@ Page({
     // ── 加载后端配置 ─────────────────────────────────────────────
 
     async loadConfig() {
+        const { loadConfig } = require('./activityLoader');
         return loadConfig(this, {
             getDefaultBanners,
             getDefaultPermanentActivities,
@@ -344,6 +350,7 @@ Page({
     },
 
     async _buildActivitySections(permanentActivities) {
+        const { buildActivitySections } = require('../../utils/activitySectionBuilder');
         const meta = this._activityLinksMeta || {};
         const built = buildActivitySections({
             permanentActivities: Array.isArray(permanentActivities) ? permanentActivities : [],
@@ -445,10 +452,12 @@ Page({
     // ── 轮播内限时活动倒计时 ─────────────────────────────────────────
 
     _startBannerCountdown(endTimeStr, slideId) {
+        const { startBannerCountdown } = require('./activityTimers');
         return startBannerCountdown(this, endTimeStr, slideId);
     },
 
     _clearBannerTimers() {
+        const { clearBannerTimers } = require('./activityTimers');
         return clearBannerTimers(this);
     },
 
@@ -514,8 +523,7 @@ Page({
 
     onRetryLoad() {
         this.setData({ loadError: false });
-        this.loadConfig();
-        this.loadActivityPreviews();
+        this._reloadActivityData();
     },
 
     _resolveWallpaperClass(wallpaperCfg) {

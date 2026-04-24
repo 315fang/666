@@ -1934,6 +1934,90 @@ function buildLatestRefundSummary(order = {}, refunds = []) {
     };
 }
 
+function buildRowLookupIndex(rows = [], extraValuesGetter) {
+    const index = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+        const extraValues = typeof extraValuesGetter === 'function' ? extraValuesGetter(row) : [];
+        rowLookupTokens(row, extraValues).forEach((token) => {
+            if (!index.has(token)) index.set(token, row);
+        });
+    });
+    return index;
+}
+
+function findByLookupIndex(index, value) {
+    for (const token of valueTokens(value)) {
+        const hit = index.get(token);
+        if (hit) return hit;
+    }
+    return null;
+}
+
+function findOrderBuyerForList(order = {}, users = [], userIndex) {
+    return findByLookupIndex(userIndex, order.openid)
+        || findByLookupIndex(userIndex, order.buyer_id)
+        || findByLookupIndex(userIndex, order.user_id)
+        || findUserByAnyId(users, order.openid)
+        || findUserByAnyId(users, order.buyer_id)
+        || findUserByAnyId(users, order.user_id)
+        || null;
+}
+
+function findOrderProductForList(order = {}, products = [], productIndex) {
+    const primaryItem = toArray(order.items)[0] || null;
+    const productId = order.product_id ?? primaryItem?.product_id;
+    return findByLookupIndex(productIndex, productId) || findByLookup(products, productId) || null;
+}
+
+function orderListMatchesProductName(order = {}, keyword = '', products = [], productIndex) {
+    if (!keyword) return true;
+    const product = findOrderProductForList(order, products, productIndex);
+    const itemNames = toArray(order.items).map((item) => item.snapshot_name || item.product_name || '').join(' ');
+    return [
+        order.product_name,
+        order.product?.name,
+        itemNames,
+        product?.name
+    ].some((value) => String(value || '').toLowerCase().includes(keyword));
+}
+
+function orderListMatchesSearch(order = {}, searchField = 'auto', searchValue = '', context = {}) {
+    if (!searchValue) return true;
+    const buyer = findOrderBuyerForList(order, context.users, context.userIndex);
+    const product = findOrderProductForList(order, context.products, context.productIndex);
+    const address = parseAddressSnapshot(order.address_snapshot);
+    const primaryItem = toArray(order.items)[0] || null;
+    const haystack = {
+        order_no: order.order_no || '',
+        buyer_nickname: buyer?.nickname || buyer?.nickName || buyer?.name || '',
+        buyer_phone: buyer?.phone || '',
+        member_no: buyer?.member_no || buyer?.my_invite_code || buyer?.invite_code || '',
+        receiver_name: address?.receiver_name || address?.name || '',
+        receiver_phone: address?.phone || '',
+        product_name: product?.name || order.product?.name || primaryItem?.snapshot_name || order.product_name || ''
+    };
+    if (searchField !== 'auto') return String(haystack[searchField] || '').toLowerCase().includes(searchValue);
+    return Object.values(haystack).some((value) => String(value).toLowerCase().includes(searchValue));
+}
+
+function summarizeOrderStatusGroups(rows = []) {
+    const summary = {
+        pending_pay: 0,
+        pending_group: 0,
+        pending_ship: 0,
+        pending_receive: 0,
+        completed: 0,
+        closed: 0
+    };
+    (Array.isArray(rows) ? rows : []).forEach((item) => {
+        const group = normalizeOrderStatusGroup(item);
+        if (Object.prototype.hasOwnProperty.call(summary, group)) {
+            summary[group] += 1;
+        }
+    });
+    return summary;
+}
+
 function buildOrderRecord(order, users, products, commissions, goodsFundLogs = [], refunds = []) {
     const orderLookupId = primaryId(order) || order.order_no || '';
     const buyer = findUserByAnyId(users, order.openid)
@@ -5434,7 +5518,8 @@ registerDirectedInviteRoutes(app, {
 // ===== SKU 管理 API（多规格支持）=====
 
 // 获取商品的所有 SKU
-app.get('/admin/api/products/:productId/skus', auth, requirePermission('products'), (req, res) => {
+app.get('/admin/api/products/:productId/skus', auth, requirePermission('products'), async (req, res) => {
+    await ensureFreshCollections(['skus']);
     const productId = Number(req.params.productId);
     const skus = getCollection('skus');
     const productSkus = skus.filter((item) => Number(item.product_id) === productId).map((item) => ({
@@ -5448,7 +5533,8 @@ app.get('/admin/api/products/:productId/skus', auth, requirePermission('products
 });
 
 // 批量更新商品 SKU（整体替换，支持多规格）
-app.put('/admin/api/products/:productId/skus', auth, requirePermission('products'), (req, res) => {
+app.put('/admin/api/products/:productId/skus', auth, requirePermission('products'), async (req, res) => {
+    await ensureFreshCollections(['products', 'skus']);
     const productId = Number(req.params.productId);
     const products = getCollection('products');
     const product = products.find((item) => Number(item.id || item._legacy_id || item._id) === productId);
@@ -5509,7 +5595,8 @@ app.put('/admin/api/products/:productId/skus', auth, requirePermission('products
 });
 
 // 新增单个 SKU
-app.post('/admin/api/products/:productId/skus', auth, requirePermission('products'), (req, res) => {
+app.post('/admin/api/products/:productId/skus', auth, requirePermission('products'), async (req, res) => {
+    await ensureFreshCollections(['products', 'skus']);
     const productId = Number(req.params.productId);
     const products = getCollection('products');
     const product = products.find((item) => Number(item.id || item._legacy_id || item._id) === productId);
@@ -5557,7 +5644,8 @@ app.post('/admin/api/products/:productId/skus', auth, requirePermission('product
 });
 
 // 更新单个 SKU
-app.put('/admin/api/products/:productId/skus/:skuId', auth, requirePermission('products'), (req, res) => {
+app.put('/admin/api/products/:productId/skus/:skuId', auth, requirePermission('products'), async (req, res) => {
+    await ensureFreshCollections(['products', 'skus']);
     const productId = Number(req.params.productId);
     const skuId = Number(req.params.skuId);
     const skus = getCollection('skus');
@@ -5597,7 +5685,8 @@ app.put('/admin/api/products/:productId/skus/:skuId', auth, requirePermission('p
 });
 
 // 删除单个 SKU
-app.delete('/admin/api/products/:productId/skus/:skuId', auth, requirePermission('products'), (req, res) => {
+app.delete('/admin/api/products/:productId/skus/:skuId', auth, requirePermission('products'), async (req, res) => {
+    await ensureFreshCollections(['products', 'skus']);
     const productId = Number(req.params.productId);
     const skuId = Number(req.params.skuId);
     const skus = getCollection('skus');
@@ -5665,6 +5754,7 @@ app.post('/admin/api/categories', auth, requirePermission('products'), async (re
 });
 
 app.put('/admin/api/categories/:id', auth, requirePermission('products'), async (req, res) => {
+    await ensureFreshCollections(['categories']);
     const rows = getCollection('categories');
     const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
     if (index === -1) return fail(res, '分类不存在', 404);
@@ -5676,6 +5766,7 @@ app.put('/admin/api/categories/:id', auth, requirePermission('products'), async 
 });
 
 app.delete('/admin/api/categories/:id', auth, requirePermission('products'), async (req, res) => {
+    await ensureFreshCollections(['categories', 'products']);
     const products = getCollection('products');
     const catIdStr = String(req.params.id);
     if (products.some((item) => item.category_id != null && String(item.category_id) === catIdStr)) {
@@ -5696,7 +5787,8 @@ app.delete('/admin/api/categories/:id', auth, requirePermission('products'), asy
     ok(res, { success: true });
 });
 
-app.get('/admin/api/material-groups', auth, requirePermission('materials'), (req, res) => {
+app.get('/admin/api/material-groups', auth, requirePermission('materials'), async (req, res) => {
+    await ensureFreshCollections(['materials', 'material_groups']);
     const materials = getCollection('materials');
     const groups = sortByUpdatedDesc(getCollection('material_groups')).map((item) => ({
         ...item,
@@ -5705,7 +5797,8 @@ app.get('/admin/api/material-groups', auth, requirePermission('materials'), (req
     ok(res, [{ id: null, name: '全部素材', count: materials.length, _virtual: true }, ...groups]);
 });
 
-app.post('/admin/api/material-groups', auth, requirePermission('materials'), (req, res) => {
+app.post('/admin/api/material-groups', auth, requirePermission('materials'), async (req, res) => {
+    await ensureFreshCollections(['material_groups']);
     const rows = getCollection('material_groups');
     const row = {
         id: nextId(rows),
@@ -5723,7 +5816,8 @@ app.post('/admin/api/material-groups', auth, requirePermission('materials'), (re
     ok(res, row);
 });
 
-app.put('/admin/api/material-groups/:id', auth, requirePermission('materials'), (req, res) => {
+app.put('/admin/api/material-groups/:id', auth, requirePermission('materials'), async (req, res) => {
+    await ensureFreshCollections(['material_groups']);
     const rows = getCollection('material_groups');
     const index = rows.findIndex((item) => Number(item.id) === Number(req.params.id));
     if (index === -1) return fail(res, '素材分组不存在', 404);
@@ -5732,7 +5826,8 @@ app.put('/admin/api/material-groups/:id', auth, requirePermission('materials'), 
     ok(res, rows[index]);
 });
 
-app.delete('/admin/api/material-groups/:id', auth, requirePermission('materials'), (req, res) => {
+app.delete('/admin/api/material-groups/:id', auth, requirePermission('materials'), async (req, res) => {
+    await ensureFreshCollections(['material_groups', 'materials']);
     const groupId = Number(req.params.id);
     const groups = getCollection('material_groups');
     const nextGroups = groups.filter((item) => Number(item.id) !== groupId);
@@ -5745,7 +5840,8 @@ app.delete('/admin/api/material-groups/:id', auth, requirePermission('materials'
     ok(res, { success: true });
 });
 
-app.post('/admin/api/material-groups/move', auth, requirePermission('materials'), (req, res) => {
+app.post('/admin/api/material-groups/move', auth, requirePermission('materials'), async (req, res) => {
+    await ensureFreshCollections(['materials']);
     const ids = toArray(req.body?.material_ids || req.body?.ids).map((item) => Number(item));
     const groupId = req.body?.group_id != null && req.body?.group_id !== '' ? Number(req.body.group_id) : null;
     const rows = getCollection('materials').map((item) => ids.includes(Number(item.id))
@@ -5756,6 +5852,7 @@ app.post('/admin/api/material-groups/move', auth, requirePermission('materials')
 });
 
 app.get('/admin/api/materials', auth, requirePermission('materials'), async (req, res) => {
+    await ensureFreshCollections(['materials']);
     let rows = await Promise.all(sortByUpdatedDesc(getCollection('materials')).map((item) => normalizeMaterialRecordAsync(item)));
     const keyword = pickString(req.query.keyword).trim().toLowerCase();
     const type = pickString(req.query.type).trim();
@@ -5765,7 +5862,8 @@ app.get('/admin/api/materials', auth, requirePermission('materials'), async (req
     ok(res, paginate(rows, req));
 });
 
-app.post('/admin/api/materials', auth, requirePermission('materials'), (req, res) => {
+app.post('/admin/api/materials', auth, requirePermission('materials'), async (req, res) => {
+    await ensureFreshCollections(['materials']);
     const rows = getCollection('materials');
     const materialType = normalizeMaterialType(req.body?.type, 'image');
     const materialFileId = pickString(req.body?.file_id).trim();
@@ -5792,7 +5890,8 @@ app.post('/admin/api/materials', auth, requirePermission('materials'), (req, res
     ok(res, row);
 });
 
-app.put('/admin/api/materials/:id', auth, requirePermission('materials'), (req, res) => {
+app.put('/admin/api/materials/:id', auth, requirePermission('materials'), async (req, res) => {
+    await ensureFreshCollections(['materials']);
     const rows = getCollection('materials');
     const index = rows.findIndex((item) => Number(item.id) === Number(req.params.id));
     if (index === -1) return fail(res, '素材不存在', 404);
@@ -5816,7 +5915,8 @@ app.put('/admin/api/materials/:id', auth, requirePermission('materials'), (req, 
     ok(res, rows[index]);
 });
 
-app.delete('/admin/api/materials/:id', auth, requirePermission('materials'), (req, res) => {
+app.delete('/admin/api/materials/:id', auth, requirePermission('materials'), async (req, res) => {
+    await ensureFreshCollections(['materials']);
     const rows = getCollection('materials');
     const nextRows = rows.filter((item) => Number(item.id) !== Number(req.params.id));
     if (rows.length === nextRows.length) return fail(res, '素材不存在', 404);
@@ -5958,6 +6058,7 @@ app.post('/admin/api/storage/test', auth, requirePermission('materials'), async 
 });
 
 app.get('/admin/api/banners', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['products', 'banners']);
     const products = getCollection('products');
     let rows = await Promise.all(sortByUpdatedDesc(getCollection('banners')).map(async (item) => {
         const normalized = await normalizeBannerRecordAsync(item);
@@ -5973,6 +6074,7 @@ app.get('/admin/api/banners', auth, requirePermission('content'), async (req, re
 });
 
 app.post('/admin/api/banners', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['banners']);
     const rows = getCollection('banners');
     const row = {
         id: nextId(rows),
@@ -5996,6 +6098,7 @@ app.post('/admin/api/banners', auth, requirePermission('content'), async (req, r
 });
 
 app.put('/admin/api/banners/:id', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['banners']);
     const rows = getCollection('banners');
     const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
     if (index === -1) return fail(res, 'Banner 不存在', 404);
@@ -6013,6 +6116,7 @@ app.put('/admin/api/banners/:id', auth, requirePermission('content'), async (req
 });
 
 async function updateBannerStatus(req, res) {
+    await ensureFreshCollections(['banners']);
     const row = patchCollectionRow('banners', req.params.id, (item) => {
         const nextStatus = toBoolean(req.body?.status ?? req.body?.is_active ?? req.body?.enabled ?? req.body?.value ?? 1) ? 1 : 0;
         return {
@@ -6031,7 +6135,8 @@ app.post('/admin/api/banners/:id/status', auth, requirePermission('content'), up
 app.put('/admin/api/banners/:id/toggle', auth, requirePermission('content'), updateBannerStatus);
 app.post('/admin/api/banners/:id/toggle', auth, requirePermission('content'), updateBannerStatus);
 
-app.delete('/admin/api/banners/:id', auth, requirePermission('content'), (req, res) => {
+app.delete('/admin/api/banners/:id', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['banners']);
     const rows = getCollection('banners');
     const nextRows = rows.filter((item) => Number(item.id) !== Number(req.params.id));
     if (rows.length === nextRows.length) return fail(res, 'Banner 不存在', 404);
@@ -6039,7 +6144,8 @@ app.delete('/admin/api/banners/:id', auth, requirePermission('content'), (req, r
     ok(res, { success: true });
 });
 
-app.get('/admin/api/contents', auth, requirePermission('content'), (req, res) => {
+app.get('/admin/api/contents', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['contents', 'content_boards']);
     let rows = sortByUpdatedDesc(getCollection('contents'));
     if (!rows.length) {
         rows = sortByUpdatedDesc(getCollection('content_boards')).map((item) => ({
@@ -6057,7 +6163,8 @@ app.get('/admin/api/contents', auth, requirePermission('content'), (req, res) =>
     ok(res, paginate(rows, req));
 });
 
-app.post('/admin/api/contents', auth, requirePermission('content'), (req, res) => {
+app.post('/admin/api/contents', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['contents']);
     const rows = getCollection('contents');
     const row = {
         id: nextId(rows),
@@ -6076,7 +6183,8 @@ app.post('/admin/api/contents', auth, requirePermission('content'), (req, res) =
     ok(res, row);
 });
 
-app.put('/admin/api/contents/:id', auth, requirePermission('content'), (req, res) => {
+app.put('/admin/api/contents/:id', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['contents']);
     const rows = getCollection('contents');
     const index = rows.findIndex((item) => Number(item.id) === Number(req.params.id));
     if (index === -1) return fail(res, '内容不存在', 404);
@@ -6085,7 +6193,8 @@ app.put('/admin/api/contents/:id', auth, requirePermission('content'), (req, res
     ok(res, rows[index]);
 });
 
-app.delete('/admin/api/contents/:id', auth, requirePermission('content'), (req, res) => {
+app.delete('/admin/api/contents/:id', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['contents']);
     const rows = getCollection('contents');
     const nextRows = rows.filter((item) => Number(item.id) !== Number(req.params.id));
     if (rows.length === nextRows.length) return fail(res, '内容不存在', 404);
@@ -6093,7 +6202,8 @@ app.delete('/admin/api/contents/:id', auth, requirePermission('content'), (req, 
     ok(res, { success: true });
 });
 
-app.get('/admin/api/logs', auth, requirePermission('logs'), (req, res) => {
+app.get('/admin/api/logs', auth, requirePermission('logs'), async (req, res) => {
+    await ensureFreshCollections(['admin_audit_logs']);
     let rows = sortByUpdatedDesc(getCollection('admin_audit_logs'));
     const { action, resource, target, start_date, end_date, admin_id } = req.query;
     // 按 action 前缀过滤（支持 "create" 匹配 "product.create" 等）
@@ -6125,13 +6235,15 @@ app.get('/admin/api/logs', auth, requirePermission('logs'), (req, res) => {
     ok(res, paginate(rows, req));
 });
 
-app.get('/admin/api/logs/export', auth, requirePermission('logs'), (req, res) => {
+app.get('/admin/api/logs/export', auth, requirePermission('logs'), async (req, res) => {
+    await ensureFreshCollections(['admin_audit_logs']);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename=\"admin-logs.json\"');
     res.send(JSON.stringify(getCollection('admin_audit_logs'), null, 2));
 });
 
-app.get('/admin/api/reviews', auth, requirePermission('content'), (req, res) => {
+app.get('/admin/api/reviews', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['users', 'products', 'orders', 'reviews']);
     const users = getCollection('users');
     const products = getCollection('products');
     const orders = getCollection('orders');
@@ -6151,7 +6263,8 @@ app.get('/admin/api/reviews', auth, requirePermission('content'), (req, res) => 
     ok(res, paginate(rows, req));
 });
 
-function updateReviewRow(req, res, patcher) {
+async function updateReviewRow(req, res, patcher) {
+    await ensureFreshCollections(['users', 'products', 'orders', 'reviews']);
     const row = patchCollectionRow('reviews', req.params.id, (item) => ({
         ...item,
         ...patcher(item),
@@ -6173,7 +6286,8 @@ app.post('/admin/api/reviews/:id/featured', auth, requirePermission('content'), 
 app.put('/admin/api/reviews/:id/reply', auth, requirePermission('content'), (req, res) => updateReviewRow(req, res, () => ({ reply_content: pickString(req.body?.reply_content ?? req.body?.reply ?? req.body?.content) })));
 app.post('/admin/api/reviews/:id/reply', auth, requirePermission('content'), (req, res) => updateReviewRow(req, res, () => ({ reply_content: pickString(req.body?.reply_content ?? req.body?.reply ?? req.body?.content) })));
 
-app.get('/admin/api/home-sections', auth, requirePermission('content'), (req, res) => {
+app.get('/admin/api/home-sections', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['products', 'content_boards', 'content_board_products']);
     const products = getCollection('products');
     const rows = sortByUpdatedDesc(getCollection('content_boards')).map((row) => {
         const linkedProducts = getCollection('content_board_products')
@@ -6198,7 +6312,8 @@ app.get('/admin/api/home-sections/schemas', auth, requirePermission('content'), 
     { key: 'product_board', label: '商品板块', fields: ['board_key', 'board_name'] }
 ]));
 
-app.post('/admin/api/home-sections', auth, requirePermission('content'), (req, res) => {
+app.post('/admin/api/home-sections', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['content_boards']);
     const rows = getCollection('content_boards');
     const nextRow = configContract.normalizeHomeSectionRecord({
         id: nextId(rows),
@@ -6210,7 +6325,8 @@ app.post('/admin/api/home-sections', auth, requirePermission('content'), (req, r
     saveCollection('content_boards', rows);
     ok(res, nextRow);
 });
-app.put('/admin/api/home-sections/:id', auth, requirePermission('content'), (req, res) => {
+app.put('/admin/api/home-sections/:id', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['content_boards']);
     const updated = patchCollectionRow('content_boards', req.params.id, (row) => configContract.normalizeHomeSectionRecord({
         ...row,
         ...toObject(req.body, {}),
@@ -6219,7 +6335,8 @@ app.put('/admin/api/home-sections/:id', auth, requirePermission('content'), (req
     if (!updated) return fail(res, '首页内容位不存在', 404);
     ok(res, updated);
 });
-app.put('/admin/api/home-sections/:id/toggle', auth, requirePermission('content'), (req, res) => {
+app.put('/admin/api/home-sections/:id/toggle', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['content_boards']);
     const updated = patchCollectionRow('content_boards', req.params.id, (row) => configContract.normalizeHomeSectionRecord({
         ...row,
         is_visible: row.is_visible ? 0 : 1,
@@ -6228,7 +6345,8 @@ app.put('/admin/api/home-sections/:id/toggle', auth, requirePermission('content'
     if (!updated) return fail(res, '首页内容位不存在', 404);
     ok(res, { success: true, id: updated.id, is_visible: updated.is_visible });
 });
-app.delete('/admin/api/home-sections/:id', auth, requirePermission('content'), (req, res) => {
+app.delete('/admin/api/home-sections/:id', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['content_boards']);
     const rows = getCollection('content_boards');
     const before = rows.length;
     const nextRows = rows.filter((item) => !rowMatchesLookup(item, req.params.id));
@@ -6236,7 +6354,8 @@ app.delete('/admin/api/home-sections/:id', auth, requirePermission('content'), (
     saveCollection('content_boards', nextRows);
     ok(res, { success: true, id: req.params.id });
 });
-app.post('/admin/api/home-sections/sort', auth, requirePermission('content'), (req, res) => {
+app.post('/admin/api/home-sections/sort', auth, requirePermission('content'), async (req, res) => {
+    await ensureFreshCollections(['content_boards']);
     const orders = Array.isArray(req.body?.orders) ? req.body.orders : [];
     const rows = getCollection('content_boards').map((item) => {
         const hit = orders.find((order) => rowMatchesLookup(item, order.id));
@@ -6252,10 +6371,14 @@ app.post('/admin/api/home-sections/sort', auth, requirePermission('content'), (r
     ok(res, { success: true, sort: orders });
 });
 
-app.get('/admin/api/mass-messages', auth, requirePermission('settings_manage'), (req, res) => ok(res, paginate(sortByUpdatedDesc(getCollection('mass_messages')), req)));
+app.get('/admin/api/mass-messages', auth, requirePermission('settings_manage'), async (req, res) => {
+    await ensureFreshCollections(['mass_messages']);
+    ok(res, paginate(sortByUpdatedDesc(getCollection('mass_messages')), req));
+});
 
 // 群发消息：预览目标用户（不实际发送，只返回匹配用户名单）
-app.post('/admin/api/mass-messages/preview', auth, requirePermission('settings_manage'), (req, res) => {
+app.post('/admin/api/mass-messages/preview', auth, requirePermission('settings_manage'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     if (rejectUnknownBodyFields(res, req.body, ['targetType', 'targetRoles', 'targetUsers'], '群发预览参数不合法')) return;
     const targetTypeCheck = requireEnumField(req.body?.targetType, 'targetType', '目标用户类型', ['all', 'role', 'specific', 'distributor', 'active_30d']);
     if (!targetTypeCheck.ok) return failWithFieldErrors(res, [targetTypeCheck.error], '群发预览参数不合法');
@@ -6306,7 +6429,8 @@ app.post('/admin/api/mass-messages/preview', auth, requirePermission('settings_m
     });
 });
 
-app.post('/admin/api/mass-messages', auth, requirePermission('settings_manage'), (req, res) => {
+app.post('/admin/api/mass-messages', auth, requirePermission('settings_manage'), async (req, res) => {
+    await ensureFreshCollections(['mass_messages']);
     if (rejectUnknownBodyFields(res, req.body, ['title', 'content', 'contentType', 'sendType', 'scheduledAt', 'jump_path', 'targetType', 'targetRoles', 'targetUsers', 'channel', 'summary', 'remark'], '群发消息参数不合法')) return;
     const titleCheck = requireNonEmptyStringField(req.body?.title, 'title', '消息标题', { maxLength: 80 });
     const contentCheck = requireNonEmptyStringField(req.body?.content, 'content', '消息内容', { maxLength: 2000 });
@@ -6350,7 +6474,8 @@ app.post('/admin/api/mass-messages', auth, requirePermission('settings_manage'),
     ok(res, row);
 });
 
-app.post('/admin/api/mass-messages/:id/send', auth, requirePermission('settings_manage'), (req, res) => {
+app.post('/admin/api/mass-messages/:id/send', auth, requirePermission('settings_manage'), async (req, res) => {
+    await ensureFreshCollections(['mass_messages']);
     const rows = getCollection('mass_messages');
     const index = rows.findIndex((item) => Number(item.id) === Number(req.params.id));
     if (index === -1) return fail(res, '群发任务不存在', 404);
@@ -6359,7 +6484,8 @@ app.post('/admin/api/mass-messages/:id/send', auth, requirePermission('settings_
     ok(res, rows[index]);
 });
 
-app.delete('/admin/api/mass-messages/:id', auth, requirePermission('settings_manage'), (req, res) => {
+app.delete('/admin/api/mass-messages/:id', auth, requirePermission('settings_manage'), async (req, res) => {
+    await ensureFreshCollections(['mass_messages']);
     const rows = getCollection('mass_messages');
     saveCollection('mass_messages', rows.filter((item) => Number(item.id) !== Number(req.params.id)));
     ok(res, { success: true });
@@ -6428,7 +6554,8 @@ app.get('/admin/api/users', auth, requirePermission('users'), (req, res) => {
     })();
 });
 
-app.get('/admin/api/users/search', auth, requirePermission('users'), (req, res) => {
+app.get('/admin/api/users/search', auth, requirePermission('users'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     const keyword = pickString(req.query.keyword).trim();
     const limit = Math.max(1, Math.min(50, toNumber(req.query.limit, 20)));
     const includeHidden = toBoolean(req.query.include_hidden);
@@ -6495,6 +6622,7 @@ app.get('/admin/api/users/:id/team-summary', auth, requirePermission('users'), (
 });
 
 app.put('/admin/api/users/:id/role', auth, requirePermission('user_role_manage'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     if (rejectUnknownBodyFields(res, req.body, ['role_level', 'agent_level'], '用户角色参数不合法')) return;
     const roleLevelCheck = requireNumberField(req.body?.role_level, 'role_level', '角色等级', { min: 0, max: 6, integer: true });
     const agentLevelCheck = req.body?.agent_level == null
@@ -6529,6 +6657,7 @@ app.put('/admin/api/users/:id/role', auth, requirePermission('user_role_manage')
 
 // ── 货款余额手动调整 ──
 app.put('/admin/api/users/:id/goods-fund', auth, requirePermission('user_balance_adjust'), async (req, res) => {
+    await ensureFreshCollections(['users', 'wallet_accounts']);
     if (rejectUnknownBodyFields(res, req.body, ['amount', 'type', 'reason'], '货款调整参数不合法')) return;
     const amountCheck = requireNumberField(req.body?.amount, 'amount', '货款金额', { min: 0 });
     const typeCheck = requireEnumField(req.body?.type ?? 'add', 'type', '调整类型', ['add', 'subtract']);
@@ -6641,6 +6770,7 @@ app.put('/admin/api/users/:id/goods-fund', auth, requirePermission('user_balance
 
 // ── 积分手动调整 ──
 app.put('/admin/api/users/:id/points', auth, requirePermission('user_balance_adjust'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     if (rejectUnknownBodyFields(res, req.body, ['amount', 'type', 'reason'], '积分调整参数不合法')) return;
     const amountCheck = requireNumberField(req.body?.amount, 'amount', '积分', { min: 0, integer: true });
     const typeCheck = requireEnumField(req.body?.type ?? 'add', 'type', '调整类型', ['add', 'subtract']);
@@ -6698,6 +6828,7 @@ app.put('/admin/api/users/:id/points', auth, requirePermission('user_balance_adj
 
 // ── 成长值手动调整 ──
 app.put('/admin/api/users/:id/growth', auth, requirePermission('user_balance_adjust'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     if (rejectUnknownBodyFields(res, req.body, ['amount', 'type', 'reason'], '成长值调整参数不合法')) return;
     const amountCheck = requireNumberField(req.body?.amount, 'amount', '成长值', { min: 0, integer: true });
     const typeCheck = requireEnumField(req.body?.type ?? 'add', 'type', '调整类型', ['add', 'subtract']);
@@ -6755,6 +6886,7 @@ app.put('/admin/api/users/:id/growth', auth, requirePermission('user_balance_adj
 
 // ── 佣金手动调整（直接向 commissions 集合插入一条记录） ──
 app.post('/admin/api/users/:id/commission', auth, requirePermission('user_balance_adjust'), async (req, res) => {
+    await ensureFreshCollections(['users', 'commissions']);
     const amount = toNumber(req.body?.amount, NaN);
     if (!Number.isFinite(amount) || amount <= 0) return fail(res, '金额必须大于0');
     const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '调整原因');
@@ -6819,6 +6951,7 @@ app.post('/admin/api/users/:id/commission', auth, requirePermission('user_balanc
 });
 
 app.post('/admin/api/users/:id/debt-settlement', auth, requirePermission('user_balance_adjust'), async (req, res) => {
+    await ensureFreshCollections(['users', 'orders', 'commissions']);
     const amount = roundMoney(toNumber(req.body?.amount, NaN));
     if (!Number.isFinite(amount) || amount <= 0) return fail(res, '处理金额必须大于 0');
     const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '处理原因');
@@ -6911,6 +7044,7 @@ app.post('/admin/api/users/:id/debt-settlement', auth, requirePermission('user_b
 });
 
 app.put('/admin/api/users/:id/status', auth, requirePermission('user_status_manage'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         status: toBoolean(req.body?.status) ? 1 : 0,
@@ -6928,6 +7062,7 @@ app.put('/admin/api/users/:id/status', auth, requirePermission('user_status_mana
 });
 
 app.post('/admin/api/users/batch-role', auth, requirePermission('user_role_manage'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     const ids = toArray(req.body?.user_ids || req.body?.ids);
     const roleLevel = toNumber(req.body?.role_level, NaN);
     if (!ids.length || !Number.isFinite(roleLevel) || roleLevel < 0 || roleLevel > 6) return fail(res, '请提供合法的用户列表和角色等级');
@@ -6945,6 +7080,7 @@ app.post('/admin/api/users/batch-role', auth, requirePermission('user_role_manag
 });
 
 app.put('/admin/api/users/:id/remark', auth, requirePermission('users'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         remark: pickString(req.body?.remark),
@@ -6961,6 +7097,7 @@ app.put('/admin/api/users/:id/remark', auth, requirePermission('users'), async (
 });
 
 app.put('/admin/api/users/:id/profile', auth, requirePermission('users'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     if (rejectUnknownBodyFields(res, req.body, ['real_name'], '用户资料参数不合法')) return;
     const hasRealName = Object.prototype.hasOwnProperty.call(req.body || {}, 'real_name');
     if (!hasRealName) return fail(res, '请提供 real_name');
@@ -6987,6 +7124,7 @@ app.put('/admin/api/users/:id/profile', auth, requirePermission('users'), async 
 });
 
 app.put('/admin/api/users/:id/commerce', auth, requirePermission('users'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         participate_distribution: req.body?.participate_distribution == null ? row.participate_distribution : (toBoolean(req.body.participate_distribution) ? 1 : 0),
@@ -7002,6 +7140,7 @@ app.put('/admin/api/users/:id/commerce', auth, requirePermission('users'), async
 });
 
 app.put('/admin/api/users/:id/invite-code', auth, requirePermission('users'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         invite_code: pickString(req.body?.invite_code),
@@ -7017,6 +7156,7 @@ app.put('/admin/api/users/:id/invite-code', auth, requirePermission('users'), as
 });
 
 app.put('/admin/api/users/:id/member-no', auth, requirePermission('users'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         member_no: pickString(req.body?.member_no),
@@ -7032,6 +7172,7 @@ app.put('/admin/api/users/:id/member-no', auth, requirePermission('users'), asyn
 });
 
 app.put('/admin/api/users/:id/parent', auth, requirePermission('user_parent_manage'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     const users = getCollection('users');
     const current = findUserByAnyId(users, req.params.id);
     if (!current) return fail(res, '用户不存在', 404);
@@ -7063,6 +7204,7 @@ app.put('/admin/api/users/:id/parent', auth, requirePermission('user_parent_mana
 });
 
 app.put('/admin/api/users/:id/purchase-level', auth, requirePermission('users'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         purchase_level_code: req.body?.purchase_level_code == null ? '' : pickString(req.body.purchase_level_code),
@@ -7077,7 +7219,8 @@ app.put('/admin/api/users/:id/purchase-level', auth, requirePermission('users'),
     });
 });
 
-app.get('/admin/api/dealers', auth, requirePermission('dealers'), (req, res) => {
+app.get('/admin/api/dealers', auth, requirePermission('dealers'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     const users = getCollection('users');
     const keyword = pickString(req.query.keyword).trim().toLowerCase();
     const status = normalizeDealerStatus(req.query.status, '');
@@ -7101,6 +7244,7 @@ app.get('/admin/api/dealers', auth, requirePermission('dealers'), (req, res) => 
 });
 
 app.put('/admin/api/dealers/:id/approve', auth, requirePermission('dealers'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     const approvedAt = nowIso();
     const users = getCollection('users');
     const existingUser = findByLookup(users, req.params.id);
@@ -7127,7 +7271,8 @@ app.put('/admin/api/dealers/:id/approve', auth, requirePermission('dealers'), as
     ok(res, buildDealerRecord(updated));
 });
 
-app.put('/admin/api/dealers/:id/reject', auth, requirePermission('dealers'), (req, res) => {
+app.put('/admin/api/dealers/:id/reject', auth, requirePermission('dealers'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     const rejectedAt = nowIso();
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
@@ -7141,6 +7286,7 @@ app.put('/admin/api/dealers/:id/reject', auth, requirePermission('dealers'), (re
 });
 
 app.put('/admin/api/dealers/:id/level', auth, requirePermission('dealers'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     const level = toNumber(req.body?.level, NaN);
     if (!Number.isFinite(level) || level < 1 || level > 3) return fail(res, '请提供有效的经销商等级');
     const updatedAt = nowIso();
@@ -7168,7 +7314,8 @@ app.put('/admin/api/dealers/:id/level', auth, requirePermission('dealers'), asyn
     ok(res, buildDealerRecord(updated));
 });
 
-app.put('/admin/api/dealers/:id/profile', auth, requirePermission('dealers'), (req, res) => {
+app.put('/admin/api/dealers/:id/profile', auth, requirePermission('dealers'), async (req, res) => {
+    await ensureFreshCollections(['users']);
     const updated = patchCollectionRow('users', req.params.id, (row) => ({
         ...row,
         company_name: req.body?.company_name != null ? pickString(req.body.company_name) : row.company_name,
@@ -7327,13 +7474,15 @@ app.put('/admin/api/branch-agent-policy', auth, requirePermission('dealers'), (r
     ok(res, nextPolicy);
 });
 
-app.get('/admin/api/branch-agents/stations', auth, requirePermission('dealers'), (req, res) => {
+app.get('/admin/api/branch-agents/stations', auth, requirePermission('dealers'), async (req, res) => {
+    await ensureFreshCollections(['users', 'branch_agent_stations']);
     const users = getCollection('users');
     const rows = sortByUpdatedDesc(getBranchAgentStationsSnapshot()).map((item) => buildBranchAgentStationRecord(item, users));
     ok(res, rows);
 });
 
-app.post('/admin/api/branch-agents/stations', auth, requirePermission('dealers'), (req, res) => {
+app.post('/admin/api/branch-agents/stations', auth, requirePermission('dealers'), async (req, res) => {
+    await ensureFreshCollections(['branch_agent_stations']);
     const rows = getCollection('branch_agent_stations');
     const row = {
         id: nextId(rows),
@@ -7354,7 +7503,8 @@ app.post('/admin/api/branch-agents/stations', auth, requirePermission('dealers')
     ok(res, row);
 });
 
-app.put('/admin/api/branch-agents/stations/:id', auth, requirePermission('dealers'), (req, res) => {
+app.put('/admin/api/branch-agents/stations/:id', auth, requirePermission('dealers'), async (req, res) => {
+    await ensureFreshCollections(['branch_agent_stations']);
     const updated = patchCollectionRow('branch_agent_stations', req.params.id, (row) => ({
         ...row,
         name: req.body?.name != null ? pickString(req.body.name) : row.name,
@@ -7372,14 +7522,16 @@ app.put('/admin/api/branch-agents/stations/:id', auth, requirePermission('dealer
     ok(res, updated);
 });
 
-app.get('/admin/api/branch-agents/claims', auth, requirePermission('dealers'), (req, res) => {
+app.get('/admin/api/branch-agents/claims', auth, requirePermission('dealers'), async (req, res) => {
+    await ensureFreshCollections(['users', 'branch_agent_claims', 'branch_agent_stations']);
     const users = getCollection('users');
     const stations = getBranchAgentStationsSnapshot();
     const rows = sortByUpdatedDesc(getCollection('branch_agent_claims')).map((item) => buildBranchAgentClaimRecord(item, users, stations));
     ok(res, rows);
 });
 
-app.put('/admin/api/branch-agents/claims/:id/review', auth, requirePermission('dealers'), (req, res) => {
+app.put('/admin/api/branch-agents/claims/:id/review', auth, requirePermission('dealers'), async (req, res) => {
+    await ensureFreshCollections(['branch_agent_claims', 'branch_agent_stations']);
     const action = pickString(req.body?.action).trim();
     if (!['approve', 'reject'].includes(action)) return fail(res, '请提供有效操作');
     const updated = patchCollectionRow('branch_agent_claims', req.params.id, (row) => ({
@@ -7403,7 +7555,8 @@ app.put('/admin/api/branch-agents/claims/:id/review', auth, requirePermission('d
     ok(res, updated);
 });
 
-app.get('/admin/api/upgrade-applications', auth, requirePermission('dealers'), (req, res) => {
+app.get('/admin/api/upgrade-applications', auth, requirePermission('dealers'), async (req, res) => {
+    await ensureFreshCollections(['users', 'upgrade_applications']);
     const users = getCollection('users');
     const status = pickString(req.query.status).trim();
     const pathTypes = pickString(req.query.path_type).split(',').map((item) => item.trim()).filter(Boolean);
@@ -7413,7 +7566,8 @@ app.get('/admin/api/upgrade-applications', auth, requirePermission('dealers'), (
     ok(res, paginate(rows, req));
 });
 
-app.put('/admin/api/upgrade-applications/:id/review', auth, requirePermission('dealers'), (req, res) => {
+app.put('/admin/api/upgrade-applications/:id/review', auth, requirePermission('dealers'), async (req, res) => {
+    await ensureFreshCollections(['users', 'upgrade_applications']);
     const action = pickString(req.body?.action).trim();
     if (!['approve', 'reject'].includes(action)) return fail(res, '请提供有效操作');
     const status = action === 'approve' ? 'approved' : 'rejected';
@@ -7774,6 +7928,7 @@ registerUserPortalPasswordRoutes(app, {
     auth,
     requirePermission,
     rejectUnknownBodyFields,
+    ensureFreshCollections,
     getCollection,
     findUserByAnyId,
     patchCollectionRow,
@@ -7787,6 +7942,7 @@ registerOrderTestFlagRoutes(app, {
     auth,
     requirePermission,
     rejectUnknownBodyFields,
+    ensureFreshCollections,
     patchCollectionRow,
     createAuditLog,
     buildFreshOrderWriteResponse,
@@ -7801,6 +7957,7 @@ registerCleanupRoutes(app, {
     requirePermission,
     rejectUnknownBodyFields,
     requireNonEmptyStringField,
+    ensureFreshCollections,
     findByLookup,
     findUserByAnyId,
     getCollection,
@@ -7846,6 +8003,7 @@ app.get('/admin/api/commissions', auth, requirePermission('commissions'), async 
 });
 
 app.put('/admin/api/commissions/:id/approve', auth, requirePermission('commissions'), async (req, res) => {
+    await ensureFreshCollections(['commissions', 'users', 'orders']);
     const rows = getCollection('commissions');
     const users = getCollection('users');
     const index = rows.findIndex((row) => rowMatchesLookup(row, req.params.id));
@@ -7890,6 +8048,7 @@ app.put('/admin/api/commissions/:id/approve', auth, requirePermission('commissio
 });
 
 app.put('/admin/api/commissions/:id/reject', auth, requirePermission('commissions'), async (req, res) => {
+    await ensureFreshCollections(['commissions', 'users', 'orders']);
     const rows = getCollection('commissions');
     const index = rows.findIndex((row) => rowMatchesLookup(row, req.params.id));
     if (index === -1) return fail(res, '佣金记录不存在', 404);
@@ -7919,6 +8078,7 @@ app.put('/admin/api/commissions/:id/reject', auth, requirePermission('commission
 });
 
 app.post('/admin/api/commissions/batch-approve', auth, requirePermission('commissions'), async (req, res) => {
+    await ensureFreshCollections(['commissions', 'users']);
     const ids = toArray(req.body?.commission_ids || req.body?.ids);
     if (!ids.length) return fail(res, '请选择要操作的佣金记录');
     const users = getCollection('users');
@@ -7971,6 +8131,7 @@ app.post('/admin/api/commissions/batch-approve', auth, requirePermission('commis
 });
 
 app.post('/admin/api/commissions/batch-reject', auth, requirePermission('commissions'), async (req, res) => {
+    await ensureFreshCollections(['commissions', 'users']);
     const ids = toArray(req.body?.commission_ids || req.body?.ids);
     if (!ids.length) return fail(res, '请选择要操作的佣金记录');
     const users = getCollection('users');
@@ -8020,7 +8181,9 @@ app.get('/admin/api/orders', auth, requirePermission('orders'), async (req, res)
     const products = getCollection('products');
     const commissions = getCollection('commissions');
     const refunds = getCollection('refunds');
-    let rows = sortByUpdatedDesc(getCollection('orders')).map((item) => buildOrderRecord(item, users, products, commissions, [], refunds));
+    const userIndex = buildRowLookupIndex(users, buildUserLookupExtras);
+    const productIndex = buildRowLookupIndex(products);
+    let rows = sortByUpdatedDesc(getCollection('orders'));
 
     const status = pickString(req.query.status).trim();
     const statusGroup = pickString(req.query.status_group).trim();
@@ -8034,9 +8197,10 @@ app.get('/admin/api/orders', auth, requirePermission('orders'), async (req, res)
     const includeSuborders = toBoolean(req.query.include_suborders);
     const includeTest = toBoolean(req.query.include_test);
     const includeHidden = toBoolean(req.query.include_hidden);
+    const searchContext = { users, products, userIndex, productIndex };
 
     if (!includeHidden) rows = rows.filter(isVisibleOrder);
-    if (!includeTest) rows = rows.filter((item) => !item.is_test_order);
+    if (!includeTest) rows = rows.filter((item) => !isTestOrder(item));
     if (!includeSuborders) rows = rows.filter((item) => !item.parent_order_id);
     if (status) rows = rows.filter((item) => getEffectiveOrderStatus(item) === status);
     else if (statusGroup && statusGroup !== 'all') rows = rows.filter((item) => normalizeOrderStatusGroup(item) === statusGroup);
@@ -8044,40 +8208,27 @@ app.get('/admin/api/orders', auth, requirePermission('orders'), async (req, res)
         rows = rows.filter((item) => orderContract.resolveOrderPaymentMethod(item) === paymentMethod);
     }
     if (deliveryType) rows = rows.filter((item) => (item.delivery_type || 'express') === deliveryType);
-    if (productName) rows = rows.filter((item) => `${item.product?.name || ''}`.toLowerCase().includes(productName));
+    if (productName) rows = rows.filter((item) => orderListMatchesProductName(item, productName, products, productIndex));
     if (startDate) rows = rows.filter((item) => getDateKey(item.created_at, '') >= startDate);
     if (endDate) rows = rows.filter((item) => getDateKey(item.created_at, '') <= endDate);
 
     if (searchValue) {
-        rows = rows.filter((item) => {
-            const haystack = {
-                order_no: item.order_no || '',
-                buyer_nickname: item.buyer?.nickname || '',
-                buyer_phone: item.buyer?.phone || '',
-                member_no: item.buyer?.member_no || '',
-                receiver_name: item.address?.receiver_name || item.address?.name || '',
-                receiver_phone: item.address?.phone || '',
-                product_name: item.product?.name || ''
-            };
-            if (searchField !== 'auto') return String(haystack[searchField] || '').toLowerCase().includes(searchValue);
-            return Object.values(haystack).some((value) => String(value).toLowerCase().includes(searchValue));
-        });
+        rows = rows.filter((item) => orderListMatchesSearch(item, searchField, searchValue, searchContext));
     }
 
+    const summary = summarizeOrderStatusGroups(rows);
+    const pageResult = paginate(rows, req);
+    const list = pageResult.list.map((item) => buildOrderRecord(item, users, products, commissions, [], refunds));
+
     okStrongRead(res, {
-        ...paginate(rows, req),
-        summary: {
-            pending_pay: rows.filter((item) => normalizeOrderStatusGroup(item) === 'pending_pay').length,
-            pending_group: rows.filter((item) => normalizeOrderStatusGroup(item) === 'pending_group').length,
-            pending_ship: rows.filter((item) => normalizeOrderStatusGroup(item) === 'pending_ship').length,
-            pending_receive: rows.filter((item) => normalizeOrderStatusGroup(item) === 'pending_receive').length,
-            completed: rows.filter((item) => normalizeOrderStatusGroup(item) === 'completed').length,
-            closed: rows.filter((item) => normalizeOrderStatusGroup(item) === 'closed').length
-        }
+        ...pageResult,
+        list,
+        summary
     }, readMeta.freshness);
 });
 
-app.get('/admin/api/orders/export', auth, requirePermission('orders'), (req, res) => {
+app.get('/admin/api/orders/export', auth, requirePermission('orders'), async (req, res) => {
+    await ensureFreshCollections(['orders']);
     const includeTest = toBoolean(req.query.include_test);
     const includeHidden = toBoolean(req.query.include_hidden);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -8089,7 +8240,7 @@ app.get('/admin/api/orders/export', auth, requirePermission('orders'), (req, res
 });
 
 app.get('/admin/api/orders/:id', auth, requirePermission('orders'), async (req, res) => {
-    const readMeta = await freshReadMeta(req, STRONG_CONSISTENCY_COLLECTIONS.orders, true);
+    const readMeta = await freshReadMeta(req, [...STRONG_CONSISTENCY_COLLECTIONS.orders, 'goods_fund_logs'], true);
     const users = getCollection('users');
     const products = getCollection('products');
     const commissions = getCollection('commissions');
@@ -8386,6 +8537,7 @@ app.get('/admin/api/logistics/order/:id', auth, requirePermission('orders'), asy
 registerFinanceRoutes(app, {
     auth,
     requirePermission,
+    ensureFreshCollections,
     getCollection,
     sortByUpdatedDesc,
     findUserByAnyId,
@@ -8394,16 +8546,18 @@ registerFinanceRoutes(app, {
     toNumber,
     roundMoney,
     paginate,
-    ok
+    ok,
+    fail
 });
 
-app.get('/admin/api/statistics/overview', auth, requirePermission('statistics'), (req, res) => {
+app.get('/admin/api/statistics/overview', auth, requirePermission('statistics'), async (req, res) => {
     const cached = getRuntimeCache('statistics-overview');
     if (cached) {
         res.set('x-runtime-cache-hit', '1');
         ok(res, cached);
         return;
     }
+    await ensureFreshCollections(['orders', 'products', 'users', 'refunds']);
     const orders = getCollection('orders');
     const products = getCollection('products');
     const users = getCollection('users').filter(isVisibleAccount);
@@ -8900,6 +9054,7 @@ app.put('/admin/api/popup-ad-config', auth, requirePermission('content'), async 
 // Storage migration: move legacy local /uploads and remote COS/http materials to CloudBase storage
 app.get('/admin/api/storage/migrate/preview', auth, requirePermission('materials'), async (req, res) => {
     try {
+        await ensureFreshCollections(['materials']);
         const rows = getCollection('materials');
         const needMigrate = rows
             .map((item) => ({ item, source: getMaterialMigrationSource(item) }))
@@ -8930,6 +9085,7 @@ app.post('/admin/api/storage/migrate', auth, requirePermission('materials'), asy
     let failed = 0;
     const details = [];
     try {
+        await ensureFreshCollections(['materials']);
         const rows = getCollection('materials');
         const candidates = rows
             .map((item) => ({ item, source: getMaterialMigrationSource(item) }))

@@ -14,7 +14,10 @@ const {
 const { ErrorHandler } = require('../../utils/errorHandler');
 const { USER_ROLES } = require('../../config/constants');
 const LocalUserContent = require('../../utils/localUserContent');
-const { resolveRenderableImageList } = require('../../utils/cloudAssetRuntime');
+const {
+    pickPreferredAssetRef,
+    resolveRenderableImageList
+} = require('../../utils/cloudAssetRuntime');
 const app = getApp();
 
 const PRODUCT_PLACEHOLDER = '';
@@ -43,6 +46,44 @@ function sanitizeImageList(value, fallback) {
     const images = parseImages(value).filter((item) => !!item);
     if (images.length) return images;
     return fallback ? [fallback] : [];
+}
+
+function expandDetailImageSources(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) {
+        return value.flatMap((item) => expandDetailImageSources(item));
+    }
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return [];
+        if (trimmed[0] === '[') {
+            try {
+                return expandDetailImageSources(JSON.parse(trimmed));
+            } catch (_) {
+                return [trimmed];
+            }
+        }
+        return [trimmed];
+    }
+    if (typeof value === 'object') {
+        const picked = pickPreferredAssetRef(value);
+        return picked ? [picked] : [];
+    }
+    return [];
+}
+
+function sanitizeDetailImageSources(value) {
+    const seen = new Set();
+    return expandDetailImageSources(value).filter((item) => {
+        const key = String(item || '').trim();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function resolveDetailImageList(sources = []) {
+    return resolveRenderableImageList(sources, []);
 }
 
 // 构建 SKU 规格文本（只显示规格值，例如 "120ml" / "120ml / 礼盒"）
@@ -95,9 +136,8 @@ async function loadProduct(page, id) {
         if (!product.images.length) {
             product.images = sanitizeImageList(resolveProductImage(product, PRODUCT_PLACEHOLDER), PRODUCT_PLACEHOLDER);
         }
-        product.detail_images = await resolveRenderableImageList(
-            product.preview_detail_images || product.previewDetailImages || product.detail_images,
-            []
+        product.detail_image_sources = sanitizeDetailImageSources(
+            product.preview_detail_images || product.previewDetailImages || product.detail_images
         );
 
         let specs = [];
@@ -174,7 +214,10 @@ async function loadProduct(page, id) {
             currentPrice,
             currentStock,
             isOutOfStock,
-            detailImageList: product.detail_images || [],
+            detailImageSourceList: product.detail_image_sources || [],
+            detailImageList: [],
+            detailImagesLoaded: !(product.detail_image_sources || []).length,
+            detailImagesLoading: false,
             hasRichDetail: !!product.detail_html,
             servicePledges,
             pageLoading: false
@@ -207,6 +250,7 @@ async function loadProduct(page, id) {
 
 module.exports = {
     loadProduct,
+    resolveDetailImageList,
     resolvePayableUnitPrice,
     parseApiDisplayPrice,
     parseApiCentPrice,

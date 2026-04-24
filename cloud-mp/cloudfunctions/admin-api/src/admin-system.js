@@ -252,7 +252,8 @@ function registerSystemRoutes(app, deps) {
         memory: process.memoryUsage()
     }));
 
-    app.get('/admin/api/debug/anomalies', auth, requirePermission(SUPER_ADMIN_ROLE), (_req, res) => {
+    app.get('/admin/api/debug/anomalies', auth, requirePermission(SUPER_ADMIN_ROLE), async (_req, res) => {
+        await ensureFreshCollections(['orders']);
         const orders = getCollection('orders');
         const longPendingOrders = orders.filter((item) => pickString(item.status) === 'pending_payment').length;
         const recentPayments = orders.filter((item) => deps.isPaidLikeOrder(item)).length;
@@ -322,7 +323,8 @@ function registerSystemRoutes(app, deps) {
         ok(res, buildCronRuntimeStatus(probe));
     });
 
-    app.get('/admin/api/debug/logs', auth, requirePermission(SUPER_ADMIN_ROLE), (req, res) => {
+    app.get('/admin/api/debug/logs', auth, requirePermission(SUPER_ADMIN_ROLE), async (req, res) => {
+        await ensureFreshCollections(['admin_audit_logs']);
         const lines = deps.sortByUpdatedDesc(getCollection('admin_audit_logs'))
             .slice(0, toNumber(req.query.lines, 100))
             .map((item) => `[${item.created_at || nowIso()}] ${item.admin_name || 'system'} ${item.action} ${item.target}`);

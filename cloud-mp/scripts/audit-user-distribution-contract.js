@@ -1,10 +1,9 @@
 const fs = require('fs');
 const path = require('path');
+const { getAuditArtifactPaths } = require('./lib/audit-output');
 
 const projectRoot = path.join(__dirname, '..');
-const docsDir = path.join(projectRoot, 'docs');
-const jsonPath = path.join(docsDir, 'USER_DISTRIBUTION_CONTRACT_AUDIT.json');
-const mdPath = path.join(docsDir, 'USER_DISTRIBUTION_CONTRACT_AUDIT.md');
+const { outputDir: docsDir, jsonPath, mdPath } = getAuditArtifactPaths(projectRoot, 'USER_DISTRIBUTION_CONTRACT_AUDIT');
 
 const userContract = require(path.join(projectRoot, 'cloudfunctions', 'user', 'user-contract.js'));
 const loginContract = require(path.join(projectRoot, 'cloudfunctions', 'login', 'user-contract.js'));

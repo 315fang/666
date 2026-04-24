@@ -3,13 +3,12 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { getAuditArtifactPaths } = require('./lib/audit-output');
 
 const projectRoot = path.resolve(__dirname, '..');
-const docsRoot = path.join(projectRoot, 'docs');
 const importSummaryPath = path.join(projectRoot, 'cloudbase-import', '_summary.json');
 const cloudfunctionsRoot = path.join(projectRoot, 'cloudfunctions');
-const outputJsonPath = path.join(docsRoot, 'CLOUDBASE_ENV_RUNTIME_STATUS.json');
-const outputMarkdownPath = path.join(docsRoot, 'CLOUDBASE_ENV_RUNTIME_STATUS.md');
+const { jsonPath: outputJsonPath, mdPath: outputMarkdownPath } = getAuditArtifactPaths(projectRoot, 'CLOUDBASE_ENV_RUNTIME_STATUS');
 
 const requiredCollections = [
     'users',
@@ -95,10 +94,11 @@ function getLocalFunctionNames() {
     }
 }
 
-function buildCollectionRows(expectedSummary, actualCollections) {
+function buildCollectionRows(expectedSummary, actualCollections, collectionMeta = {}) {
     return requiredCollections.map((name) => {
         const hasExpected = Object.prototype.hasOwnProperty.call(expectedSummary, name);
         const hasActual = Object.prototype.hasOwnProperty.call(actualCollections, name);
+        const meta = collectionMeta[name] || {};
         const expected = hasExpected ? Number(expectedSummary[name]) || 0 : null;
         const actual = hasActual ? Number(actualCollections[name]) || 0 : null;
         let status = 'ok';
@@ -109,7 +109,17 @@ function buildCollectionRows(expectedSummary, actualCollections) {
         } else if (hasExpected && actual > expected) {
             status = 'count_above_seed';
         }
-        return { name, expected, actual, status };
+        return {
+            name,
+            expected,
+            actual,
+            status,
+            listed: meta.listed === true,
+            structure_count: meta.structure_count ?? null,
+            structure_status: meta.structure_status || (meta.listed ? 'listed' : 'not_listed'),
+            read_source: meta.read_source || (hasActual ? 'unknown' : 'none'),
+            read_error: meta.read_error || ''
+        };
     });
 }
 
@@ -161,7 +171,13 @@ function resolveAdminChain(localFunctions, deployedFunctions, cloudRunServices) 
 
 function renderMarkdown(report) {
     const collectionLines = report.collections.required.map((item) => {
-        return `- \`${item.name}\`: expected=${item.expected == null ? 'n/a' : item.expected}, actual=${item.actual == null ? 'missing' : item.actual}, status=${item.status}`;
+        const structure = item.structure_status && item.structure_status !== 'listed'
+            ? `, structure=${item.structure_status}`
+            : '';
+        const readSource = item.read_source && item.read_source !== 'direct_read'
+            ? `, read=${item.read_source}`
+            : '';
+        return `- \`${item.name}\`: expected=${item.expected == null ? 'n/a' : item.expected}, actual=${item.actual == null ? 'missing' : item.actual}, status=${item.status}${structure}${readSource}`;
     }).join('\n');
 
     const functionLines = report.functions.local.map((name) => {
@@ -213,7 +229,7 @@ ${functionLines || '- none'}
 ## Summary
 
 - Required collection baseline met: ${report.summary.required_collection_baseline_met ? 'YES' : 'NO'}
-- Required collections at or above baseline: ${report.summary.matched_required_collection_count}/${report.summary.required_collection_count}
+- Required collections readable: ${report.summary.required_collections_readable ? 'YES' : 'NO'} (${report.summary.matched_required_collection_count}/${report.summary.required_collection_count})
 - Runtime ready: ${report.ok ? 'YES' : 'NO'}
 
 ## Blockers
@@ -233,20 +249,49 @@ function main() {
     const functionPayload = callMcporter(['call', 'cloudbase.queryFunctions', 'action=listFunctions', 'limit=100', '--output', 'json']);
     const cloudRunPayload = callMcporter(['call', 'cloudbase.queryCloudRun', 'action=list', 'pageSize=100', 'pageNum=1', '--output', 'json']);
 
-    const listedCollections = uniqueSorted((collectionPayload.collections || []).map((item) => item.CollectionName));
+    const collectionRows = Array.isArray(collectionPayload.collections) ? collectionPayload.collections : [];
+    const listedCollectionMap = new Map(collectionRows.map((item) => [item.CollectionName, item]));
     const actualCollections = {};
-    listedCollections.forEach((name) => {
-        actualCollections[name] = requiredCollections.includes(name)
-            ? readCollectionTotal(name)
-            : (((collectionPayload.collections || []).find((item) => item.CollectionName === name) || {}).Count || 0);
+    const collectionMeta = {};
+    requiredCollections.forEach((name) => {
+        const listedRow = listedCollectionMap.get(name) || {};
+        const listed = listedCollectionMap.has(name);
+        const structureCount = typeof listedRow.Count === 'number' ? listedRow.Count : null;
+        collectionMeta[name] = {
+            listed,
+            structure_count: structureCount,
+            structure_status: listed ? 'listed' : 'not_listed'
+        };
+
+        try {
+            actualCollections[name] = readCollectionTotal(name);
+            collectionMeta[name].read_source = 'direct_read';
+            collectionMeta[name].structure_status = listed ? 'listed' : 'not_listed_direct_read_ok';
+        } catch (error) {
+            collectionMeta[name].read_error = String(error?.message || error || '').slice(0, 240);
+            if (listed) {
+                actualCollections[name] = structureCount == null ? 0 : structureCount;
+                collectionMeta[name].read_source = 'listCollections';
+                collectionMeta[name].structure_status = 'listed_direct_read_failed';
+            } else {
+                collectionMeta[name].read_source = 'direct_read_failed';
+                collectionMeta[name].structure_status = 'not_listed_direct_read_failed';
+            }
+        }
     });
-    const requiredRows = buildCollectionRows(expectedSummary, actualCollections);
-    const blockingRequiredRows = requiredRows
-        .filter((item) => item.status === 'missing_collection' || item.status === 'count_below_expected')
+    const requiredRows = buildCollectionRows(expectedSummary, actualCollections, collectionMeta);
+    const missingRequiredRows = requiredRows
+        .filter((item) => item.status === 'missing_collection')
+        .map((item) => item.name);
+    const belowImportBaselineRows = requiredRows
+        .filter((item) => item.status === 'count_below_expected')
         .map((item) => item.name);
     const grownRequiredRows = requiredRows
         .filter((item) => item.status === 'count_above_seed')
         .map((item) => item.name);
+    const structureMismatchRows = requiredRows
+        .filter((item) => item.structure_status !== 'listed')
+        .map((item) => `${item.name}(${item.structure_status})`);
 
     const localFunctions = getLocalFunctionNames();
     const deployedFunctions = uniqueSorted((((functionPayload.data || {}).functions) || []).map((item) => item.FunctionName));
@@ -262,12 +307,20 @@ function main() {
         blockers.push(`CloudBase auth/env not ready: auth=${authStatus.auth_status || 'unknown'}, env=${authStatus.env_status || 'unknown'}`);
     }
 
-    if (blockingRequiredRows.length) {
-        blockers.push(`Required collections missing or below import baseline: ${blockingRequiredRows.join(', ')}`);
+    if (missingRequiredRows.length) {
+        blockers.push(`Required collections missing or unreadable: ${missingRequiredRows.join(', ')}`);
+    }
+
+    if (belowImportBaselineRows.length) {
+        warnings.push(`Required collections are below mutable import baseline: ${belowImportBaselineRows.join(', ')}`);
     }
 
     if (grownRequiredRows.length) {
         warnings.push(`Required collections contain runtime data beyond import baseline: ${grownRequiredRows.join(', ')}`);
+    }
+
+    if (structureMismatchRows.length) {
+        warnings.push(`Required collection structure list differs from direct reads: ${structureMismatchRows.join(', ')}`);
     }
 
     if (missingFunctions.length) {
@@ -293,8 +346,11 @@ function main() {
         },
         collections: {
             required: requiredRows,
-            missing_or_below_required: blockingRequiredRows,
-            above_seed_required: grownRequiredRows
+            missing_required: missingRequiredRows,
+            below_import_baseline: belowImportBaselineRows,
+            missing_or_below_required: missingRequiredRows.concat(belowImportBaselineRows),
+            above_seed_required: grownRequiredRows,
+            structure_mismatches: structureMismatchRows
         },
         functions: {
             local: localFunctions,
@@ -309,8 +365,9 @@ function main() {
         },
         summary: {
             required_collection_count: requiredRows.length,
-            matched_required_collection_count: requiredRows.filter((item) => item.status === 'ok' || item.status === 'count_above_seed').length,
-            required_collection_baseline_met: blockingRequiredRows.length === 0,
+            matched_required_collection_count: requiredRows.filter((item) => item.status !== 'missing_collection').length,
+            required_collections_readable: missingRequiredRows.length === 0,
+            required_collection_baseline_met: missingRequiredRows.length === 0 && belowImportBaselineRows.length === 0,
             local_function_count: localFunctions.length,
             deployed_function_count: deployedFunctions.length,
             functions_match: missingFunctions.length === 0 && extraFunctions.length === 0,

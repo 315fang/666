@@ -372,8 +372,10 @@ Page({
 
         try {
             await this._loadCategoryProductsBatch(firstBatchIds, loadToken, { setLoadingFalse: true });
-            const remainingIds = orderedIds.filter((categoryId) => !firstBatchIds.includes(categoryId));
-            this._queueRemainingCategoryLoads(remainingIds, loadToken);
+            const nextCategoryId = this._getNextCategoryId(preferredId);
+            if (nextCategoryId && !firstBatchIds.includes(nextCategoryId)) {
+                this._queueRemainingCategoryLoads([nextCategoryId], loadToken);
+            }
         } catch (err) {
             console.error('加载商品失败:', err);
             if (this._categoryLoadToken === loadToken) {

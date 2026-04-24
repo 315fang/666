@@ -2,11 +2,13 @@ const fs = require('fs');
 const path = require('path');
 const { loadPaymentConfig } = require('../cloudfunctions/payment/config');
 const { readJson } = require('./release-runtime-kit');
+const { resolveAuditInputPath } = require('./lib/audit-output');
 
 const root = path.resolve(__dirname, '..', '..');
 const projectRoot = root;
 const cloudMpRoot = path.resolve(__dirname, '..');
 const runtimeEvidenceRoot = path.join(projectRoot, 'cloud-mp', 'docs', 'release', 'evidence', 'runtime');
+const legacyAuditPath = resolveAuditInputPath(cloudMpRoot, 'CLOUDBASE_LEGACY_COMPAT_AUDIT.json');
 
 function readText(relativePath) {
   try {
@@ -101,7 +103,7 @@ const warnings = [];
 const paymentConfig = loadPaymentConfig(process.env);
 
 // ✅ P1-3 修复：安全读取字段（添加类型检查）
-const legacyAudit = tryReadJson('cloud-mp/docs/CLOUDBASE_LEGACY_COMPAT_AUDIT.json');
+const legacyAudit = readJson(legacyAuditPath, null);
 if (legacyAudit && 
     typeof legacyAudit === 'object' &&
     legacyAudit.summary &&

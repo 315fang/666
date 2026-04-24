@@ -1,10 +1,9 @@
 const fs = require('fs');
 const path = require('path');
+const { getAuditArtifactPaths } = require('./lib/audit-output');
 
 const projectRoot = path.join(__dirname, '..');
-const docsDir = path.join(projectRoot, 'docs');
-const jsonPath = path.join(docsDir, 'MINIPROGRAM_ROUTE_TABLE_AUDIT.json');
-const mdPath = path.join(docsDir, 'MINIPROGRAM_ROUTE_TABLE_AUDIT.md');
+const { outputDir: docsDir, jsonPath, mdPath } = getAuditArtifactPaths(projectRoot, 'MINIPROGRAM_ROUTE_TABLE_AUDIT');
 
 const requestRouteTablePath = path.join(projectRoot, 'miniprogram', 'utils', 'requestRoutes.js');
 const orderIndexPath = path.join(projectRoot, 'cloudfunctions', 'order', 'index.js');

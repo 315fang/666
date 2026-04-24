@@ -6,8 +6,18 @@
         <el-icon class="title-icon"><Money /></el-icon>
         <span>财务看板</span>
       </div>
-      <el-button :loading="loading" @click="fetchAll" :icon="Refresh" size="small">刷新</el-button>
+      <el-button :loading="fetchAllLoading || loading" @click="fetchAll" :icon="Refresh" size="small">刷新</el-button>
     </div>
+
+    <el-alert
+      v-if="financeScope"
+      :title="financeScopeTitle"
+      :description="financeScopeDescription"
+      type="info"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 16px"
+    />
 
     <el-tabs v-model="activeTopTab">
       <el-tab-pane label="总览" name="overview">
@@ -519,6 +529,7 @@ import { buildUserManagementQuery } from '@/utils/userRouting'
 import FinanceRulesPanel from './components/FinanceRulesPanel.vue'
 
 const loading = ref(false)
+const fetchAllLoading = ref(false)
 const data = ref({})
 const userStore = useUserStore()
 const router = useRouter()
@@ -549,6 +560,12 @@ const fundPoolLogRows = ref([])
 const dividendExecDialogVisible = ref(false)
 const dividendExecutionLoading = ref(false)
 const dividendExecutionRows = ref([])
+const financeScope = computed(() => data.value.scope || null)
+const financeScopeTitle = computed(() => {
+  if (!financeScope.value) return ''
+  return `累计流水口径从 ${financeScope.value.baseline_date || '2026-04-24'} 起计算（${financeScope.value.timezone || 'Asia/Shanghai'}）`
+})
+const financeScopeDescription = computed(() => financeScope.value?.stock_fields_note || '')
 
 const normalizeRoleLevel = (level) => {
   const n = Number(level ?? 0)
@@ -635,7 +652,13 @@ const openDividendExecutions = async () => {
 }
 
 const fetchAll = async () => {
-  await Promise.all([fetchOverview(), fetchPerformance(), fetchPoolContributions()])
+  if (fetchAllLoading.value) return
+  fetchAllLoading.value = true
+  try {
+    await Promise.all([fetchOverview(), fetchPerformance(), fetchPoolContributions()])
+  } finally {
+    fetchAllLoading.value = false
+  }
 }
 
 const openDebtDialog = (row) => {

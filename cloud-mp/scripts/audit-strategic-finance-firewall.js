@@ -3,14 +3,13 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { getAuditArtifactPaths } = require('./lib/audit-output');
 
 const projectRoot = path.resolve(__dirname, '..');
 const workspaceRoot = path.resolve(projectRoot, '..');
-const docsRoot = path.join(projectRoot, 'docs');
 const mcporterConfigPath = path.join(workspaceRoot, 'config', 'mcporter.json');
 const mcporterCliPath = process.env.MCPORTER_CLI_PATH || 'D:/nodejs/node_global/node_modules/mcporter/dist/cli.js';
-const outputJsonPath = path.join(docsRoot, 'STRATEGIC_FINANCE_FIREWALL_AUDIT.json');
-const outputMarkdownPath = path.join(docsRoot, 'STRATEGIC_FINANCE_FIREWALL_AUDIT.md');
+const { jsonPath: outputJsonPath, mdPath: outputMarkdownPath } = getAuditArtifactPaths(projectRoot, 'STRATEGIC_FINANCE_FIREWALL_AUDIT');
 const pageLimit = 500;
 
 function ensureDir(dirPath) {

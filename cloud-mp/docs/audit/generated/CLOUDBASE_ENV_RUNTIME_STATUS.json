@@ -1,0 +1,268 @@
+{
+  "kind": "runtime_status",
+  "generated_at": "2026-04-24T06:56:23.718Z",
+  "ok": true,
+  "environment": {
+    "env_id": "cloud1-9gywyqe49638e46f",
+    "auth_status": "READY",
+    "env_status": "READY"
+  },
+  "collections": {
+    "required": [
+      {
+        "name": "users",
+        "expected": 167,
+        "actual": 211,
+        "status": "count_above_seed",
+        "listed": false,
+        "structure_count": null,
+        "structure_status": "not_listed_direct_read_ok",
+        "read_source": "direct_read",
+        "read_error": ""
+      },
+      {
+        "name": "products",
+        "expected": 11,
+        "actual": 19,
+        "status": "count_above_seed",
+        "listed": true,
+        "structure_count": 19,
+        "structure_status": "listed",
+        "read_source": "direct_read",
+        "read_error": ""
+      },
+      {
+        "name": "skus",
+        "expected": 11,
+        "actual": 11,
+        "status": "ok",
+        "listed": false,
+        "structure_count": null,
+        "structure_status": "not_listed_direct_read_ok",
+        "read_source": "direct_read",
+        "read_error": ""
+      },
+      {
+        "name": "categories",
+        "expected": 9,
+        "actual": 8,
+        "status": "count_below_expected",
+        "listed": true,
+        "structure_count": 8,
+        "structure_status": "listed",
+        "read_source": "direct_read",
+        "read_error": ""
+      },
+      {
+        "name": "cart_items",
+        "expected": 25,
+        "actual": 71,
+        "status": "count_above_seed",
+        "listed": true,
+        "structure_count": 71,
+        "structure_status": "listed",
+        "read_source": "direct_read",
+        "read_error": ""
+      },
+      {
+        "name": "orders",
+        "expected": 59,
+        "actual": 192,
+        "status": "count_above_seed",
+        "listed": true,
+        "structure_count": 192,
+        "structure_status": "listed",
+        "read_source": "direct_read",
+        "read_error": ""
+      },
+      {
+        "name": "refunds",
+        "expected": 9,
+        "actual": 33,
+        "status": "count_above_seed",
+        "listed": false,
+        "structure_count": null,
+        "structure_status": "not_listed_direct_read_ok",
+        "read_source": "direct_read",
+        "read_error": ""
+      },
+      {
+        "name": "reviews",
+        "expected": 3,
+        "actual": 5,
+        "status": "count_above_seed",
+        "listed": false,
+        "structure_count": null,
+        "structure_status": "not_listed_direct_read_ok",
+        "read_source": "direct_read",
+        "read_error": ""
+      },
+      {
+        "name": "commissions",
+        "expected": 3,
+        "actual": 10,
+        "status": "count_above_seed",
+        "listed": true,
+        "structure_count": 10,
+        "structure_status": "listed",
+        "read_source": "direct_read",
+        "read_error": ""
+      },
+      {
+        "name": "withdrawals",
+        "expected": 3,
+        "actual": 6,
+        "status": "count_above_seed",
+        "listed": false,
+        "structure_count": null,
+        "structure_status": "not_listed_direct_read_ok",
+        "read_source": "direct_read",
+        "read_error": ""
+      },
+      {
+        "name": "banners",
+        "expected": 5,
+        "actual": 5,
+        "status": "ok",
+        "listed": true,
+        "structure_count": 5,
+        "structure_status": "listed",
+        "read_source": "direct_read",
+        "read_error": ""
+      },
+      {
+        "name": "materials",
+        "expected": 52,
+        "actual": 195,
+        "status": "count_above_seed",
+        "listed": true,
+        "structure_count": 195,
+        "structure_status": "listed",
+        "read_source": "direct_read",
+        "read_error": ""
+      },
+      {
+        "name": "material_groups",
+        "expected": 1,
+        "actual": 1,
+        "status": "ok",
+        "listed": true,
+        "structure_count": 1,
+        "structure_status": "listed",
+        "read_source": "direct_read",
+        "read_error": ""
+      },
+      {
+        "name": "admins",
+        "expected": 9,
+        "actual": 15,
+        "status": "count_above_seed",
+        "listed": true,
+        "structure_count": 15,
+        "structure_status": "listed",
+        "read_source": "direct_read",
+        "read_error": ""
+      },
+      {
+        "name": "admin_roles",
+        "expected": 8,
+        "actual": 8,
+        "status": "ok",
+        "listed": true,
+        "structure_count": 8,
+        "structure_status": "listed",
+        "read_source": "direct_read",
+        "read_error": ""
+      }
+    ],
+    "missing_required": [],
+    "below_import_baseline": [
+      "categories"
+    ],
+    "missing_or_below_required": [
+      "categories"
+    ],
+    "above_seed_required": [
+      "users",
+      "products",
+      "cart_items",
+      "orders",
+      "refunds",
+      "reviews",
+      "commissions",
+      "withdrawals",
+      "materials",
+      "admins"
+    ],
+    "structure_mismatches": [
+      "users(not_listed_direct_read_ok)",
+      "skus(not_listed_direct_read_ok)",
+      "refunds(not_listed_direct_read_ok)",
+      "reviews(not_listed_direct_read_ok)",
+      "withdrawals(not_listed_direct_read_ok)"
+    ]
+  },
+  "functions": {
+    "local": [
+      "admin-api",
+      "cart",
+      "commission-deadline-process",
+      "config",
+      "distribution",
+      "login",
+      "order",
+      "order-auto-confirm",
+      "order-timeout-cancel",
+      "payment",
+      "products",
+      "user",
+      "visitor-account-cleanup"
+    ],
+    "deployed": [
+      "admin-api",
+      "cart",
+      "commission-deadline-process",
+      "config",
+      "distribution",
+      "login",
+      "order",
+      "order-auto-confirm",
+      "order-timeout-cancel",
+      "payment",
+      "products",
+      "shared",
+      "user",
+      "visitor-account-cleanup"
+    ],
+    "missing": [],
+    "extra": [
+      "shared"
+    ]
+  },
+  "admin_chain": {
+    "mode": "function_gateway",
+    "ready": true,
+    "evidence": "Admin chain currently resolves through the deployed admin-api cloud function gateway."
+  },
+  "cloudrun": {
+    "service_count": 0,
+    "services": []
+  },
+  "summary": {
+    "required_collection_count": 15,
+    "matched_required_collection_count": 15,
+    "required_collections_readable": true,
+    "required_collection_baseline_met": false,
+    "local_function_count": 13,
+    "deployed_function_count": 14,
+    "functions_match": false,
+    "admin_chain_ready": true
+  },
+  "blockers": [],
+  "warnings": [
+    "Required collections are below mutable import baseline: categories",
+    "Required collections contain runtime data beyond import baseline: users, products, cart_items, orders, refunds, reviews, commissions, withdrawals, materials, admins",
+    "Required collection structure list differs from direct reads: users(not_listed_direct_read_ok), skus(not_listed_direct_read_ok), refunds(not_listed_direct_read_ok), reviews(not_listed_direct_read_ok), withdrawals(not_listed_direct_read_ok)",
+    "Extra deployed functions not found in local cloudfunctions/: shared"
+  ]
+}

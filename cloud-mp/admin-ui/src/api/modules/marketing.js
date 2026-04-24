@@ -52,7 +52,7 @@ export const getFestivalConfig = () => request({ url: '/festival-config', method
 export const updateFestivalConfig = (data) => request({ url: '/festival-config', method: 'put', data })
 export const getGlobalUiConfig = () => request({ url: '/global-ui-config', method: 'get' })
 export const updateGlobalUiConfig = (data) => request({ url: '/global-ui-config', method: 'put', data })
-export const getActivityLinks = () => request({ url: '/activity-links', method: 'get' })
+export const getActivityLinks = () => request({ url: '/activity-links', method: 'get', params: { include_content: 1 } })
 export const updateActivityLinks = (data) => request({ url: '/activity-links', method: 'put', data })
 
 export const getSplashConfig = () => request({ url: '/splash', method: 'get' })

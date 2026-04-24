@@ -3,10 +3,11 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { getAuditOutputDir, resolveAuditInputPath } = require('./lib/audit-output');
 
 const projectRoot = path.resolve(__dirname, '..');
-const docsRoot = path.join(projectRoot, 'docs');
-const auditJsonPath = path.join(docsRoot, 'CLOUDBASE_ASSET_URL_AUDIT.json');
+const docsRoot = getAuditOutputDir(projectRoot);
+const auditJsonPath = resolveAuditInputPath(projectRoot, 'CLOUDBASE_ASSET_URL_AUDIT.json');
 const reportJsonPath = path.join(docsRoot, 'CLOUDBASE_ASSET_URL_REPAIR_REPORT.json');
 const reportMdPath = path.join(docsRoot, 'CLOUDBASE_ASSET_URL_REPAIR_REPORT.md');
 const migrationTodoJsonPath = path.join(docsRoot, 'CLOUDBASE_ASSET_URL_MIGRATION_TODO.json');

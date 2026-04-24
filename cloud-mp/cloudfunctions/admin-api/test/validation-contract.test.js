@@ -84,6 +84,167 @@ function getAnyUser() {
     return users[0];
 }
 
+test('GET /admin/api/finance/agent-performance rejects invalid date', async () => {
+    const admin = getEnabledAdmin();
+    const response = await invoke('/admin/api/finance/agent-performance', {
+        admin,
+        query: { date: 'not-a-date' }
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.body.success, false);
+    assert.match(response.body.message, /日期/);
+});
+
+test('GET /admin/api/finance/overview excludes hidden owner when first user ref is orphaned', async () => {
+    const admin = getEnabledAdmin();
+    const users = app.locals.dataStore.getCollection('users');
+    const commissions = app.locals.dataStore.getCollection('commissions');
+    const tempUserId = 'test-hidden-finance-user';
+    const tempCommissionId = 'test-hidden-finance-commission';
+    const removeTemps = () => {
+        for (let index = users.length - 1; index >= 0; index -= 1) {
+            if (String(users[index]?.id || users[index]?._id) === tempUserId) users.splice(index, 1);
+        }
+        for (let index = commissions.length - 1; index >= 0; index -= 1) {
+            if (String(commissions[index]?.id || commissions[index]?._id) === tempCommissionId) commissions.splice(index, 1);
+        }
+    };
+
+    removeTemps();
+    const baselineResponse = await invoke('/admin/api/finance/overview', { admin });
+    assert.equal(baselineResponse.statusCode, 200);
+    const baselineSettled = Number(baselineResponse.body.data?.commissions?.settled || 0);
+
+    users.push({
+        _id: tempUserId,
+        id: tempUserId,
+        openid: 'test-hidden-finance-openid',
+        nickname: 'hidden finance account',
+        account_visibility: 'hidden',
+        status: 1
+    });
+    commissions.push({
+        _id: tempCommissionId,
+        id: tempCommissionId,
+        openid: 'test-orphan-finance-openid',
+        user_id: tempUserId,
+        amount: 987654321,
+        status: 'settled',
+        created_at: '2026-04-24T10:00:00+08:00'
+    });
+
+    try {
+        const response = await invoke('/admin/api/finance/overview', { admin });
+        assert.equal(response.statusCode, 200);
+        assert.equal(Number(response.body.data?.commissions?.settled || 0), baselineSettled);
+    } finally {
+        removeTemps();
+    }
+});
+
+test('GET /admin/api/finance/pool-contributions counts visible descendants only', async () => {
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const originalGetCollection = dataStore.getCollection.bind(dataStore);
+    const baseUsers = originalGetCollection('users');
+    const baseOrders = originalGetCollection('orders');
+    const tempPrefix = 'test-finance-team-index';
+    const partnerOpenid = `${tempPrefix}-partner`;
+    const childOpenid = `${tempPrefix}-child`;
+    const grandchildOpenid = `${tempPrefix}-grandchild`;
+    const hiddenOpenid = `${tempPrefix}-hidden`;
+    const tempUsers = [
+        {
+            _id: `${tempPrefix}-partner-user`,
+            id: `${tempPrefix}-partner-user`,
+            openid: partnerOpenid,
+            nickname: 'finance partner',
+            role_level: 4,
+            status: 1
+        },
+        {
+            _id: `${tempPrefix}-child-user`,
+            id: `${tempPrefix}-child-user`,
+            openid: childOpenid,
+            invited_by: partnerOpenid,
+            nickname: 'finance child',
+            role_level: 3,
+            status: 1
+        },
+        {
+            _id: `${tempPrefix}-grandchild-user`,
+            id: `${tempPrefix}-grandchild-user`,
+            openid: grandchildOpenid,
+            parent_openid: childOpenid,
+            nickname: 'finance grandchild',
+            role_level: 0,
+            status: 1
+        },
+        {
+            _id: `${tempPrefix}-hidden-user`,
+            id: `${tempPrefix}-hidden-user`,
+            openid: hiddenOpenid,
+            invited_by: partnerOpenid,
+            nickname: 'finance hidden child',
+            role_level: 3,
+            account_visibility: 'hidden',
+            status: 1
+        }
+    ];
+    const tempOrders = [
+        {
+            _id: `${tempPrefix}-order-partner`,
+            id: `${tempPrefix}-order-partner`,
+            openid: partnerOpenid,
+            status: 'paid',
+            pay_amount: 100,
+            created_at: '2026-04-24T10:00:00+08:00'
+        },
+        {
+            _id: `${tempPrefix}-order-child`,
+            id: `${tempPrefix}-order-child`,
+            openid: childOpenid,
+            status: 'paid',
+            pay_amount: 50,
+            created_at: '2026-04-24T10:01:00+08:00'
+        },
+        {
+            _id: `${tempPrefix}-order-grandchild`,
+            id: `${tempPrefix}-order-grandchild`,
+            openid: grandchildOpenid,
+            status: 'paid',
+            pay_amount: 25,
+            created_at: '2026-04-24T10:02:00+08:00'
+        },
+        {
+            _id: `${tempPrefix}-order-hidden`,
+            id: `${tempPrefix}-order-hidden`,
+            openid: hiddenOpenid,
+            status: 'paid',
+            pay_amount: 999,
+            created_at: '2026-04-24T10:03:00+08:00'
+        }
+    ];
+
+    dataStore.getCollection = (name) => {
+        if (name === 'users') return [...baseUsers, ...tempUsers];
+        if (name === 'orders') return [...baseOrders, ...tempOrders];
+        return originalGetCollection(name);
+    };
+
+    try {
+        const response = await invoke('/admin/api/finance/pool-contributions', { admin });
+        assert.equal(response.statusCode, 200);
+        const record = response.body.data?.partner_contributions?.find((item) => item.openid === partnerOpenid);
+        assert.ok(record, 'expected temp partner contribution row');
+        assert.equal(record.team_size, 3);
+        assert.equal(Number(record.team_sales), 175);
+    } finally {
+        dataStore.getCollection = originalGetCollection;
+    }
+});
+
 test('PUT /admin/api/orders/:id/ship returns field_errors for invalid body', async () => {
     const admin = getEnabledAdmin();
     const order = getShippableOrder();

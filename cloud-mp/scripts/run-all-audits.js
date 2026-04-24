@@ -1,11 +1,11 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { getAuditArtifactPaths, getAuditOutputDir, toMarkdownFileLink } = require('./lib/audit-output');
 
 const cloudRoot = path.resolve(__dirname, '..');
-const docsDir = path.join(cloudRoot, 'docs');
-const jsonPath = path.join(docsDir, 'AUDIT_ALL_SUMMARY.json');
-const mdPath = path.join(docsDir, 'AUDIT_ALL_SUMMARY.md');
+const docsDir = getAuditOutputDir(cloudRoot);
+const { jsonPath, mdPath } = getAuditArtifactPaths(cloudRoot, 'AUDIT_ALL_SUMMARY');
 
 const steps = [
   { name: 'foundation', command: 'npm run check:foundation', jsonPath: null },
@@ -24,7 +24,11 @@ function runCommand(command) {
       cwd: cloudRoot,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: true
+      shell: true,
+      env: {
+        ...process.env,
+        AUDIT_OUTPUT_DIR: docsDir
+      }
     });
     return { ok: true, output };
   } catch (error) {
@@ -58,13 +62,13 @@ function renderMarkdown(summary) {
   lines.push('');
   lines.push('## 文件输出');
   lines.push('');
-  lines.push(`- 迁移矩阵：[CLOUD_MP_MIGRATION_MATRIX.md](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/CLOUD_MP_MIGRATION_MATRIX.md)`);
-  lines.push(`- 云端集合 smoke：[CLOUDBASE_LIVE_SMOKE.md](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/CLOUDBASE_LIVE_SMOKE.md)`);
-  lines.push(`- 静态托管审计：[ADMIN_HOSTING_AUDIT.md](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/ADMIN_HOSTING_AUDIT.md)`);
-  lines.push(`- 展示字段审计：[ADMIN_DISPLAY_AUDIT.md](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/ADMIN_DISPLAY_AUDIT.md)`);
-  lines.push(`- 管理端 API smoke：[ADMIN_API_SMOKE.md](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/ADMIN_API_SMOKE.md)`);
-  lines.push(`- 业务 smoke：[BUSINESS_SMOKE_AUDIT.md](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/BUSINESS_SMOKE_AUDIT.md)`);
-  lines.push(`- 响应结构审计：[ADMIN_RESPONSE_SHAPE_AUDIT.md](/C:/Users/21963/WeChatProjects/zz/cloud-mp/docs/ADMIN_RESPONSE_SHAPE_AUDIT.md)`);
+  lines.push(`- 迁移矩阵：${toMarkdownFileLink(path.join(docsDir, 'CLOUD_MP_MIGRATION_MATRIX.md'))}`);
+  lines.push(`- 云端集合 smoke：${toMarkdownFileLink(path.join(docsDir, 'CLOUDBASE_LIVE_SMOKE.md'))}`);
+  lines.push(`- 静态托管审计：${toMarkdownFileLink(path.join(docsDir, 'ADMIN_HOSTING_AUDIT.md'))}`);
+  lines.push(`- 展示字段审计：${toMarkdownFileLink(path.join(docsDir, 'ADMIN_DISPLAY_AUDIT.md'))}`);
+  lines.push(`- 管理端 API smoke：${toMarkdownFileLink(path.join(docsDir, 'ADMIN_API_SMOKE.md'))}`);
+  lines.push(`- 业务 smoke：${toMarkdownFileLink(path.join(docsDir, 'BUSINESS_SMOKE_AUDIT.md'))}`);
+  lines.push(`- 响应结构审计：${toMarkdownFileLink(path.join(docsDir, 'ADMIN_RESPONSE_SHAPE_AUDIT.md'))}`);
   lines.push('');
   return `${lines.join('\n')}\n`;
 }

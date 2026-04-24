@@ -515,6 +515,16 @@ const normalizeSkuOption = (item = {}) => ({
   label: normalizeSkuLabel(item)
 })
 
+const dedupeSelectOptions = (items = []) => {
+  const seen = new Set()
+  return items.filter((item) => {
+    const key = String(item?.value ?? '').trim()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 const loadSkuOptions = async (productId, preferredRows = []) => {
   const key = String(productId || '').trim()
   if (!key) return
@@ -533,7 +543,7 @@ const loadSkuOptions = async (productId, preferredRows = []) => {
 
 const mergedProductOptions = (option) => {
   const current = option?.product_id ? [{ value: String(option.product_id), label: option.product_name || String(option.product_id) }] : []
-  return [...current, ...productSelectOptions.value].filter((item, index, list) => list.findIndex((row) => row.value === item.value) === index)
+  return dedupeSelectOptions([...current, ...productSelectOptions.value])
 }
 
 const skuOptionsForProduct = (productId, option) => {
@@ -552,7 +562,7 @@ const skuOptionsForProduct = (productId, option) => {
         })
       }]
     : []
-  return [...current, ...(skuOptionsMap[key] || [])].filter((item, index, list) => list.findIndex((row) => row.value === item.value) === index)
+  return dedupeSelectOptions([...current, ...(skuOptionsMap[key] || [])])
 }
 
 const optionSkuDisplay = (option = {}) => {

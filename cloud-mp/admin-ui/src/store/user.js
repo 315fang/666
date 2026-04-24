@@ -1,16 +1,19 @@
 import { defineStore } from 'pinia'
 import { login as loginApi, getAdminInfo, logout as logoutApi } from '@/api'
 import { ADMIN_ROLE_PRESETS, normalizeAdminPermission } from '@/config/adminRolePresets'
+import {
+  clearStoredAdminSession,
+  readStoredAdminInfo,
+  readStoredAdminToken,
+  writeStoredAdminInfo,
+  writeStoredAdminSession
+} from '@/utils/adminSession'
 
 export const useUserStore = defineStore('user', {
-  state: () => {
-    let userInfo = {}
-    try { userInfo = JSON.parse(localStorage.getItem('admin_info') || '{}') } catch (_) { localStorage.removeItem('admin_info') }
-    return {
-      token: localStorage.getItem('admin_token') || '',
-      userInfo
-    }
-  },
+  state: () => ({
+    token: readStoredAdminToken(),
+    userInfo: readStoredAdminInfo()
+  }),
 
   getters: {
     isLoggedIn: (state) => !!state.token,
@@ -36,8 +39,7 @@ export const useUserStore = defineStore('user', {
     clearSession() {
       this.token = ''
       this.userInfo = {}
-      localStorage.removeItem('admin_token')
-      localStorage.removeItem('admin_info')
+      clearStoredAdminSession()
     },
 
     async login(loginForm) {
@@ -45,8 +47,7 @@ export const useUserStore = defineStore('user', {
       this.token = data.token
       this.userInfo = data.admin
 
-      localStorage.setItem('admin_token', data.token)
-      localStorage.setItem('admin_info', JSON.stringify(data.admin))
+      writeStoredAdminSession(data.token, data.admin)
 
       return data
     },
@@ -54,7 +55,7 @@ export const useUserStore = defineStore('user', {
     async getUserInfo() {
       const data = await getAdminInfo()
       this.userInfo = data
-      localStorage.setItem('admin_info', JSON.stringify(data))
+      writeStoredAdminInfo(data)
       return data
     },
 
