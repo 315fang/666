@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-04-19",
+  "updatedAt": "2026-04-25",
   "description": "CloudBase collection contract for cloud-mp. Use this file as the default source of truth for collection scanning and creation policy.",
   "groups": [
     {
@@ -90,8 +90,10 @@
         "fund_pool_logs",
         "goods_fund_logs",
         "point_logs",
+        "promotion_lineage_logs",
         "promotion_logs",
         "station_stock_logs",
+        "upgrade_piggy_bank_logs",
         "wallet_logs"
       ]
     },
@@ -165,6 +167,15 @@
       ],
       "policy": "not_duplicate",
       "reason": "押金领券链路独立于普通订单、普通退款和普通用户券。"
+    },
+    {
+      "canonical": "promotion_lineage_logs",
+      "aliases": [
+        "promotion_logs",
+        "users"
+      ],
+      "policy": "not_duplicate",
+      "reason": "promotion_lineage_logs 记录晋升脱离后的关系改挂审计；promotion_logs 记录晋升事件，users 保存当前关系快照。"
     }
   ],
   "reportOnlyLiveCollections": [

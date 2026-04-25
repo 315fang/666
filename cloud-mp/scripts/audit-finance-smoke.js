@@ -102,6 +102,7 @@ function main() {
         validateCollection('withdrawals', 'withdrawals', { min: 0, requiredFields: ['status', 'amount'] }),
         validateCollection('commissions', 'commissions', { min: 0, requiredFields: ['status', 'amount'] }),
         validateCollection('wallet_logs', 'wallet_logs', { min: 1, requiredFields: ['amount'], requiredAnyOf: [['type', 'change_type']] }),
+        validateCollection('upgrade_piggy_bank_logs', 'upgrade_piggy_bank_logs', { min: 0, requiredFields: ['openid', 'status', 'incremental_amount'] }),
         validateCollection('goods_fund_logs', 'goods_fund_logs', { min: 1, requiredFields: ['type', 'amount'] }),
         validateCollection('point_logs', 'point_logs', { min: 1, requiredFields: ['type'], requiredAnyOf: [['amount', 'points']] }),
         validateCollection('users', 'users', { min: 1, requiredFields: ['balance', 'debt_amount'], requiredAnyOf: [['commission_balance', 'balance'], ['agent_wallet_balance', 'wallet_balance', 'balance']] })

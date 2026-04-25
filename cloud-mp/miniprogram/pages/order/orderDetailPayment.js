@@ -71,9 +71,12 @@ async function onPayOrder(page, app) {
 
         if (payParams.wallet_balance_insufficient) {
             wx.showToast({
-                title: `货款余额不足，已切换微信支付（余额¥${Number(payParams.wallet_balance || 0).toFixed(2)}）`,
+                title: `货款余额不足（¥${Number(payParams.wallet_balance || 0).toFixed(2)}），请改用微信支付或先充值`,
                 icon: 'none'
             });
+            safeHideLoading();
+            done();
+            return;
         }
 
         if (payParams.paid_by_wallet) {

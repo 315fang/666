@@ -1,4 +1,4 @@
-// pages/distribution/center.js - 分佣中心（整合钱包、邀请、团队入口）
+// pages/distribution/center.js - 历史整合页（当前不作为用户主入口）
 const app = getApp();
 const { get, post } = require('../../utils/request');
 const { ROLE_NAMES, USER_ROLES } = require('../../config/constants');

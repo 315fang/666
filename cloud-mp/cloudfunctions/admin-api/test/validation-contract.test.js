@@ -343,6 +343,164 @@ test('POST /admin/api/commissions/repair-region-agent backfills missing region r
     }
 });
 
+test('GET /admin/api/branch-agents/earnings summarizes region and store rewards', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const tempPrefix = 'test-branch-earnings';
+    const regionUserOpenid = `${tempPrefix}-region-openid`;
+    const managerOpenid = `${tempPrefix}-manager-openid`;
+    const regionStationId = `${tempPrefix}-region`;
+    const storeStationId = `${tempPrefix}-store`;
+    const regionOrderId = `${tempPrefix}-region-order`;
+    const regionOrderNo = `${tempPrefix}-region-no`;
+    const storeOrderId = `${tempPrefix}-store-order`;
+    const storeOrderNo = `${tempPrefix}-store-no`;
+    const cleanup = () => {
+        dataStore.saveCollection?.('users', dataStore.getCollection('users')
+            .filter((row) => ![regionUserOpenid, managerOpenid].includes(String(row.openid || row.id || row._id))));
+        dataStore.saveCollection?.('branch_agent_stations', dataStore.getCollection('branch_agent_stations')
+            .filter((row) => String(row.id || row._id) !== regionStationId));
+        dataStore.saveCollection?.('stations', dataStore.getCollection('stations')
+            .filter((row) => String(row.id || row._id) !== storeStationId));
+        dataStore.saveCollection?.('station_staff', dataStore.getCollection('station_staff')
+            .filter((row) => !String(row.id || row._id || '').startsWith(tempPrefix)));
+        dataStore.saveCollection?.('orders', dataStore.getCollection('orders')
+            .filter((row) => ![regionOrderId, storeOrderId].includes(String(row.id || row._id))));
+        dataStore.saveCollection?.('commissions', dataStore.getCollection('commissions')
+            .filter((row) => !String(row.id || row._id || '').startsWith(tempPrefix)));
+    };
+
+    cleanup();
+    dataStore.saveCollection?.('users', dataStore.getCollection('users').concat([
+        {
+            _id: `${tempPrefix}-region-user`,
+            id: `${tempPrefix}-region-user`,
+            openid: regionUserOpenid,
+            nickname: '区域收益测试用户',
+            role_level: 5,
+            status: 1
+        },
+        {
+            _id: `${tempPrefix}-manager-user`,
+            id: `${tempPrefix}-manager-user`,
+            openid: managerOpenid,
+            nickname: '门店收益测试店长',
+            role_level: 4,
+            status: 1
+        }
+    ]));
+    dataStore.saveCollection?.('branch_agent_stations', dataStore.getCollection('branch_agent_stations').concat({
+        _id: regionStationId,
+        id: regionStationId,
+        name: '收益测试区域',
+        branch_type: 'district',
+        province: '测试收益省',
+        city: '测试收益市',
+        district: '测试收益区',
+        claimant_id: regionUserOpenid,
+        status: 'active',
+        created_at: '2026-04-24T00:00:00.000Z'
+    }));
+    dataStore.saveCollection?.('stations', dataStore.getCollection('stations').concat({
+        _id: storeStationId,
+        id: storeStationId,
+        name: '收益测试门店',
+        province: '测试门店省',
+        city: '测试门店市',
+        district: '测试门店区',
+        status: 'active',
+        is_pickup_point: true,
+        pickup_commission_tier: 'B',
+        pickup_claimant_id: managerOpenid
+    }));
+    dataStore.saveCollection?.('station_staff', dataStore.getCollection('station_staff').concat({
+        _id: `${tempPrefix}-staff`,
+        id: `${tempPrefix}-staff`,
+        station_id: storeStationId,
+        openid: managerOpenid,
+        role: 'manager',
+        status: 'active'
+    }));
+    dataStore.saveCollection?.('orders', dataStore.getCollection('orders').concat([
+        {
+            _id: regionOrderId,
+            id: regionOrderId,
+            order_no: regionOrderNo,
+            openid: `${tempPrefix}-buyer-a`,
+            status: 'paid',
+            pay_amount: 200,
+            address_snapshot: {
+                province: '测试收益省',
+                city: '测试收益市',
+                district: '测试收益区'
+            },
+            created_at: '2026-04-24T00:00:00.000Z'
+        },
+        {
+            _id: storeOrderId,
+            id: storeOrderId,
+            order_no: storeOrderNo,
+            openid: `${tempPrefix}-buyer-b`,
+            status: 'completed',
+            pay_amount: 80,
+            pickup_verified_station_id: storeStationId,
+            pickup_verified_at: '2026-04-24T01:00:00.000Z',
+            created_at: '2026-04-24T01:00:00.000Z'
+        }
+    ]));
+    dataStore.saveCollection?.('commissions', dataStore.getCollection('commissions').concat([
+        {
+            _id: `${tempPrefix}-region-commission`,
+            id: `${tempPrefix}-region-commission`,
+            openid: regionUserOpenid,
+            user_id: `${tempPrefix}-region-user`,
+            order_id: regionOrderId,
+            order_no: regionOrderNo,
+            amount: 2,
+            type: 'region_agent',
+            status: 'pending_approval',
+            branch_station_id: regionStationId,
+            created_at: '2026-04-24T02:00:00.000Z'
+        },
+        {
+            _id: `${tempPrefix}-store-commission`,
+            id: `${tempPrefix}-store-commission`,
+            openid: managerOpenid,
+            user_id: `${tempPrefix}-manager-user`,
+            order_id: storeOrderId,
+            order_no: storeOrderNo,
+            amount: 3,
+            type: 'pickup_service_fee',
+            status: 'settled',
+            station_id: storeStationId,
+            created_at: '2026-04-24T03:00:00.000Z'
+        }
+    ]));
+
+    try {
+        const response = await invoke('/admin/api/branch-agents/earnings', { admin });
+        assert.equal(response.statusCode, 200, response.body?.message || JSON.stringify(response.body));
+        const region = response.body.data?.regions?.find((row) => String(row.id) === regionStationId);
+        const store = response.body.data?.stores?.find((row) => String(row.id) === storeStationId);
+        assert.ok(region, 'expected temp region earnings row');
+        assert.ok(store, 'expected temp store earnings row');
+        assert.equal(region.claimant?.openid, regionUserOpenid);
+        assert.equal(region.order_count, 1);
+        assert.equal(Number(region.order_amount), 200);
+        assert.equal(Number(region.rewards?.pending_approval), 2);
+        assert.equal(store.managers?.[0]?.openid, managerOpenid);
+        assert.equal(store.order_count, 1);
+        assert.equal(store.verified_order_count, 1);
+        assert.equal(Number(store.order_amount), 80);
+        assert.equal(Number(store.rewards?.settled), 3);
+        assert.ok(Number(response.body.data?.summary?.regions?.reward_total || 0) >= 2);
+        assert.ok(Number(response.body.data?.summary?.stores?.reward_total || 0) >= 3);
+    } finally {
+        cleanup();
+    }
+});
+
 test('GET /admin/api/orders hides cancelled orders unless explicitly included', async () => {
     await ensureReady();
     const admin = getEnabledAdmin();
@@ -539,6 +697,92 @@ test('GET /admin/api/finance/overview excludes hidden owner when first user ref 
         const response = await invoke('/admin/api/finance/overview', { admin });
         assert.equal(response.statusCode, 200);
         assert.equal(Number(response.body.data?.commissions?.settled || 0), baselineSettled);
+    } finally {
+        removeTemps();
+    }
+});
+
+test('GET /admin/api/finance/overview includes upgrade piggy bank summary', async () => {
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const tempPrefix = 'test-finance-piggy';
+    const userId = `${tempPrefix}-user`;
+    const userOpenid = `${tempPrefix}-openid`;
+    const removeTemps = () => {
+        dataStore.saveCollection?.(
+            'users',
+            dataStore.getCollection('users').filter((row) => !String(row?._id || row?.id).startsWith(tempPrefix))
+        );
+        dataStore.saveCollection?.(
+            'upgrade_piggy_bank_logs',
+            dataStore.getCollection('upgrade_piggy_bank_logs').filter((row) => !String(row?._id || row?.id).startsWith(tempPrefix))
+        );
+    };
+
+    removeTemps();
+    dataStore.saveCollection?.(
+        'users',
+        [
+            ...dataStore.getCollection('users'),
+            {
+                _id: userId,
+                id: userId,
+                openid: userOpenid,
+                nickname: 'piggy finance account',
+                role_level: 2,
+                status: 1
+            }
+        ]
+    );
+    dataStore.saveCollection?.(
+        'upgrade_piggy_bank_logs',
+        [
+            ...dataStore.getCollection('upgrade_piggy_bank_logs'),
+            {
+                _id: `${tempPrefix}-locked`,
+                openid: userOpenid,
+                user_id: userId,
+                status: 'locked',
+                incremental_amount: 12.5,
+                created_at: '2026-04-24T10:00:00+08:00'
+            },
+            {
+                _id: `${tempPrefix}-unlocked`,
+                openid: userOpenid,
+                user_id: userId,
+                status: 'unlocked',
+                incremental_amount: 8,
+                created_at: '2026-04-24T10:05:00+08:00'
+            },
+            {
+                _id: `${tempPrefix}-reversed`,
+                openid: userOpenid,
+                user_id: userId,
+                status: 'reversed',
+                incremental_amount: 3,
+                created_at: '2026-04-24T10:10:00+08:00'
+            },
+            {
+                _id: `${tempPrefix}-clawed`,
+                openid: userOpenid,
+                user_id: userId,
+                status: 'clawed_back',
+                incremental_amount: 2,
+                created_at: '2026-04-24T10:15:00+08:00'
+            }
+        ]
+    );
+
+    try {
+        const response = await invoke('/admin/api/finance/overview', { admin });
+        assert.equal(response.statusCode, 200);
+        const piggyBank = response.body.data?.upgrade_piggy_bank || {};
+        assert.equal(Number(piggyBank.locked_amount), 12.5);
+        assert.equal(Number(piggyBank.unlocked_amount), 8);
+        assert.equal(Number(piggyBank.reversed_amount), 3);
+        assert.equal(Number(piggyBank.clawed_back_amount), 2);
+        assert.equal(Number(piggyBank.total_count), 4);
+        assert.equal(piggyBank.top_users?.[0]?.user_id, userId);
     } finally {
         removeTemps();
     }

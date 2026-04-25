@@ -55,6 +55,15 @@ function logPerf(entry) {
     console.log(JSON.stringify(payload));
 }
 
+function canRunWithoutOpenid(event = {}) {
+    const action = event && event.action ? String(event.action) : '';
+    if (['syncRefundStatus', 'createWithdrawalTransfer', 'syncWithdrawalTransfer'].includes(action)) {
+        return true;
+    }
+    if (action !== '_postProcessPaid') return false;
+    return ['order-create'].includes(String(event.internal_source || '').trim());
+}
+
 // ==================== 主处理函数 ====================
 async function handlePaymentAction(event, openid) {
     const { action, ...params } = event;
@@ -343,7 +352,7 @@ exports.main = async (event, context) => {
         const httpCallbackEvent = normalizeHttpCallbackEvent(event || {});
         if (httpCallbackEvent) {
             result = await handlePaymentAction(httpCallbackEvent, '');
-        } else if (['syncRefundStatus', 'createWithdrawalTransfer', 'syncWithdrawalTransfer'].includes(event.action)) {
+        } else if (canRunWithoutOpenid(event || {})) {
             result = await handlePaymentAction(event, '');
         }
 

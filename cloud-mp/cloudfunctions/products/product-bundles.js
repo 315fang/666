@@ -61,6 +61,18 @@ function normalizeImages(images) {
     return [];
 }
 
+function uniqStrings(values = []) {
+    const seen = new Set();
+    return values
+        .flatMap((value) => normalizeImages(value))
+        .map((value) => pickString(value))
+        .filter((value) => {
+            if (!value || seen.has(value)) return false;
+            seen.add(value);
+            return true;
+        });
+}
+
 function resolveProductPrice(product = {}) {
     if (hasValue(product.retail_price)) return toNumber(product.retail_price, 0);
     if (hasValue(product.price)) return toNumber(product.price, 0);
@@ -147,15 +159,27 @@ function pickDefaultSku(product = {}, skus = [], explicitSkuId = '') {
 }
 
 function buildProductSnapshot(product = {}, sku = null) {
-    const images = normalizeImages(product.images);
-    const image = pickString((sku && (sku.image || sku.image_url)) || images[0] || product.image || product.image_url || product.cover_image || '');
+    const imageCandidates = uniqStrings([
+        sku && (sku.image || sku.image_url),
+        product.image,
+        product.image_url,
+        product.cover_image,
+        product.file_id,
+        product.image_ref,
+        product.images
+    ]);
+    const image = imageCandidates[0] || '';
     const basePrice = resolveProductPrice(product);
     const price = sku ? resolveSkuPrice(sku, basePrice) : basePrice;
     return {
         id: lookupId(product),
         name: pickString(product.name || product.title || '商品'),
         image,
-        images: image ? [image] : images,
+        image_url: image,
+        cover_image: pickString(product.cover_image || ''),
+        file_id: pickString(product.file_id || product.image_ref || ''),
+        images: imageCandidates,
+        image_candidates: imageCandidates,
         retail_price: price,
         stock: toNumber((sku && sku.stock) ?? product.stock, 0),
         supports_pickup: product.supports_pickup ? 1 : 0,

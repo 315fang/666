@@ -98,6 +98,124 @@
         </el-card>
       </el-tab-pane>
 
+      <el-tab-pane label="收益概览" name="earnings">
+        <el-row :gutter="16" class="earning-summary-row">
+          <el-col :span="12" :xs="24">
+            <el-card shadow="never">
+              <div class="earning-summary-card">
+                <div>
+                  <div class="summary-label">区域代理收益</div>
+                  <div class="summary-value">¥{{ fmtMoney(earnings.summary.regions.reward_total) }}</div>
+                </div>
+                <div class="summary-meta">
+                  <span>订单额 ¥{{ fmtMoney(earnings.summary.regions.order_amount) }}</span>
+                  <span>待审批 ¥{{ fmtMoney(earnings.summary.regions.pending_approval) }}</span>
+                </div>
+              </div>
+            </el-card>
+          </el-col>
+          <el-col :span="12" :xs="24">
+            <el-card shadow="never">
+              <div class="earning-summary-card">
+                <div>
+                  <div class="summary-label">门店店长收益</div>
+                  <div class="summary-value">¥{{ fmtMoney(earnings.summary.stores.reward_total) }}</div>
+                </div>
+                <div class="summary-meta">
+                  <span>自提订单额 ¥{{ fmtMoney(earnings.summary.stores.order_amount) }}</span>
+                  <span>待审批 ¥{{ fmtMoney(earnings.summary.stores.pending_approval) }}</span>
+                </div>
+              </div>
+            </el-card>
+          </el-col>
+        </el-row>
+
+        <el-card class="earning-card">
+          <template #header>
+            <div class="header-row">
+              <span>区域代理收益</span>
+              <el-button size="small" :loading="loadingEarnings" @click="loadEarnings">刷新</el-button>
+            </div>
+          </template>
+          <el-table :data="earnings.regions" v-loading="loadingEarnings" stripe>
+            <el-table-column label="区域" min-width="190">
+              <template #default="{ row }">
+                <div>{{ row.name }}</div>
+                <div class="sub">{{ branchTypeText(row.branch_type) }} · {{ row.scope_label || '-' }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="收益人" min-width="140">
+              <template #default="{ row }">
+                <span>{{ displayUserName(row.claimant, row.claimant_id || '-') }}</span>
+                <el-tag v-if="row.claimant?.is_virtual_settlement" size="small" type="warning" style="margin-left:6px">虚拟结算</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="订单" width="150" align="right">
+              <template #default="{ row }">
+                <div>¥{{ fmtMoney(row.order_amount) }}</div>
+                <div class="sub">{{ row.order_count }} 单</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="当前比例" width="100" align="right">
+              <template #default="{ row }">{{ fmtPercent(row.reward_rate) }}</template>
+            </el-table-column>
+            <el-table-column label="理论收益" width="110" align="right">
+              <template #default="{ row }">¥{{ fmtMoney(row.expected_reward_amount) }}</template>
+            </el-table-column>
+            <el-table-column label="已生成收益" width="120" align="right">
+              <template #default="{ row }">¥{{ fmtMoney(row.rewards?.total) }}</template>
+            </el-table-column>
+            <el-table-column label="待审批" width="110" align="right">
+              <template #default="{ row }">¥{{ fmtMoney(row.rewards?.pending_approval) }}</template>
+            </el-table-column>
+            <el-table-column label="已结算" width="110" align="right">
+              <template #default="{ row }">¥{{ fmtMoney(row.rewards?.settled) }}</template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+
+        <el-card class="earning-card">
+          <template #header>
+            <div class="header-row">
+              <span>门店店长收益</span>
+              <el-button size="small" :loading="loadingEarnings" @click="loadEarnings">刷新</el-button>
+            </div>
+          </template>
+          <el-table :data="earnings.stores" v-loading="loadingEarnings" stripe>
+            <el-table-column label="门店" min-width="190">
+              <template #default="{ row }">
+                <div>{{ row.name }}</div>
+                <div class="sub">{{ row.scope_label || '-' }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="店长/认领人" min-width="160">
+              <template #default="{ row }">
+                <div>{{ displayStoreOwner(row) }}</div>
+                <div class="sub" v-if="row.staff_count">成员 {{ row.staff_count }} 人</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="自提订单" width="150" align="right">
+              <template #default="{ row }">
+                <div>¥{{ fmtMoney(row.order_amount) }}</div>
+                <div class="sub">{{ row.verified_order_count }}/{{ row.order_count }} 单已核销</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="档位" width="80">
+              <template #default="{ row }">{{ row.pickup_commission_tier || 'A' }}</template>
+            </el-table-column>
+            <el-table-column label="已生成服务费" width="130" align="right">
+              <template #default="{ row }">¥{{ fmtMoney(row.rewards?.total) }}</template>
+            </el-table-column>
+            <el-table-column label="待审批" width="110" align="right">
+              <template #default="{ row }">¥{{ fmtMoney(row.rewards?.pending_approval) }}</template>
+            </el-table-column>
+            <el-table-column label="已结算" width="110" align="right">
+              <template #default="{ row }">¥{{ fmtMoney(row.rewards?.settled) }}</template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-tab-pane>
+
       <el-tab-pane label="申请审核" name="claims">
         <el-card>
           <template #header><span>区域代理申请</span></template>
@@ -209,6 +327,7 @@ import {
   getBranchAgentPolicy, updateBranchAgentPolicy,
   getBranchAgentStations, createBranchAgentStation, updateBranchAgentStation, deleteBranchAgentStation,
   getBranchAgentClaims, reviewBranchAgentClaim,
+  getBranchAgentEarnings,
   searchUsersLite
 } from '@/api'
 import { getUserNickname } from '@/utils/userDisplay'
@@ -242,6 +361,7 @@ const activeTab = ref('policy')
 const savingPolicy = ref(false)
 const loadingStations = ref(false)
 const loadingClaims = ref(false)
+const loadingEarnings = ref(false)
 const savingStation = ref(false)
 const stationDialogVisible = ref(false)
 const claimantSearching = ref(false)
@@ -257,6 +377,14 @@ const policy = reactive({
 })
 const stations = ref([])
 const claims = ref([])
+const earnings = reactive({
+  summary: {
+    regions: { order_count: 0, order_amount: 0, reward_total: 0, pending_approval: 0, settled: 0, frozen: 0 },
+    stores: { order_count: 0, order_amount: 0, reward_total: 0, pending_approval: 0, settled: 0, frozen: 0 }
+  },
+  regions: [],
+  stores: []
+})
 const stationForm = reactive({
   id: null, name: '', branch_type: 'district',
   province: '', city: '', district: '',
@@ -265,6 +393,14 @@ const stationForm = reactive({
 
 const branchTypeText = (v) => ({ district: '区代理', area: '区代理', city: '市代理', province: '省代理', school: '学校代理（停用）' }[v] || v)
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
+const fmtMoney = (value) => Number(value || 0).toFixed(2)
+const fmtPercent = (value) => `${(Number(value || 0) * 100).toFixed(2)}%`
+
+function displayStoreOwner(row = {}) {
+  const manager = Array.isArray(row.managers) && row.managers.length ? row.managers[0] : null
+  if (manager) return displayUserName(manager, manager.id || '-')
+  return displayUserName(row.claimant, row.claimant_id || '-')
+}
 
 function buildClaimantOption(user = {}) {
   return {
@@ -423,6 +559,25 @@ const loadClaims = async () => {
   }
 }
 
+const loadEarnings = async () => {
+  loadingEarnings.value = true
+  try {
+    const res = await getBranchAgentEarnings()
+    const data = res?.data || res || {}
+    earnings.summary = {
+      regions: data.summary?.regions || earnings.summary.regions,
+      stores: data.summary?.stores || earnings.summary.stores
+    }
+    earnings.regions = Array.isArray(data.regions) ? data.regions : []
+    earnings.stores = Array.isArray(data.stores) ? data.stores : []
+  } catch (e) {
+    ElMessage.error(e?.message || '收益概览加载失败')
+    console.error('收益概览加载失败:', e)
+  } finally {
+    loadingEarnings.value = false
+  }
+}
+
 const reviewClaim = async (row, action) => {
   let note = ''
   if (action === 'reject') {
@@ -443,6 +598,7 @@ onMounted(() => {
   loadPolicy()
   loadStations()
   loadClaims()
+  loadEarnings()
 })
 </script>
 
@@ -458,6 +614,36 @@ onMounted(() => {
   font-size: 12px;
   color: #909399;
   line-height: 1.5;
+}
+.earning-summary-row {
+  margin-bottom: 16px;
+}
+.earning-summary-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.summary-label {
+  font-size: 13px;
+  color: #909399;
+  margin-bottom: 6px;
+}
+.summary-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #303133;
+}
+.summary-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+  font-size: 12px;
+  color: #606266;
+}
+.earning-card {
+  margin-top: 16px;
 }
 .claimant-preview {
   line-height: 1.6;

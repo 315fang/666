@@ -178,10 +178,6 @@ Page({
         wx.navigateTo({ url: '/pages/distribution/fund-pool' });
     },
 
-    goDistributionCenter() {
-        wx.navigateTo({ url: '/pages/distribution/center' });
-    },
-
     goMyStation() {
         wx.navigateTo({ url: '/pages/stations/my-station' });
     },

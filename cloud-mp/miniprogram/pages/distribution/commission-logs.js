@@ -1,5 +1,8 @@
 const { get } = require('../../utils/request');
 
+const app = getApp();
+const REGION_AGENT_ROLE_LEVEL = 5;
+
 const COMMISSION_STATUS_MAP = {
     'pending': { text: '预计入账', class: 'status-pending' },
     'frozen': { text: '冻结中', class: 'status-frozen' },
@@ -25,11 +28,22 @@ const TYPE_MAP = {
     'year_end_dividend': { name: '年终分红', icon: '/assets/icons/dollar-sign.svg' },
     'Stock_Diff': { name: '级差利润', icon: '/assets/icons/bar-chart.svg' },
     'agent_fulfillment': { name: '发货利润', icon: '/assets/icons/truck.svg' },
-    'region_agent': { name: '区域代理奖', icon: '/assets/icons/bar-chart.svg' },
+    'region_agent': { name: '区域奖励', icon: '/assets/icons/bar-chart.svg' },
+    'region_b3_virtual': { name: '区域奖励', icon: '/assets/icons/bar-chart.svg' },
     'admin_deduct': { name: '系统扣除', icon: '/assets/icons/dollar-sign.svg' },
     'admin_credit': { name: '系统补发', icon: '/assets/icons/dollar-sign.svg' },
     'admin_adjustment': { name: '系统调整', icon: '/assets/icons/dollar-sign.svg' }
 };
+
+function getUserInfoSnapshot() {
+    return app.globalData.userInfo || wx.getStorageSync('userInfo') || {};
+}
+
+function canViewRegionReward(userInfo = {}) {
+    const roleLevel = Number(userInfo.role_level ?? userInfo.distributor_level ?? userInfo.level ?? 0);
+    const virtualSettlementType = String(userInfo.virtual_settlement_type || '').trim().toLowerCase();
+    return roleLevel === REGION_AGENT_ROLE_LEVEL || virtualSettlementType === 'b3_region';
+}
 
 Page({
     data: {
@@ -37,14 +51,20 @@ Page({
         totalEarnings: '0.00',
         frozenAmount: '0.00',
         currentType: 'all',
+        canViewRegionReward: false,
         page: 1,
         loading: false,
         hasMore: true
     },
 
     onLoad() {
+        this.refreshRegionRewardVisibility();
         this.loadStats();
         this.loadLogs(true);
+    },
+
+    onShow() {
+        this.refreshRegionRewardVisibility();
     },
 
     onPullDownRefresh() {
@@ -76,6 +96,9 @@ Page({
 
     async loadLogs(reset = false) {
         if (this.data.loading) return;
+        if (this.data.currentType === 'region' && !this.data.canViewRegionReward) {
+            this.setData({ currentType: 'all' });
+        }
 
         const page = reset ? 1 : this.data.page;
         this.setData({ loading: true });
@@ -126,8 +149,19 @@ Page({
         }
     },
 
+    refreshRegionRewardVisibility() {
+        const nextCanView = canViewRegionReward(getUserInfoSnapshot());
+        const patch = { canViewRegionReward: nextCanView };
+        if (!nextCanView && this.data.currentType === 'region') {
+            patch.currentType = 'all';
+        }
+        this.setData(patch);
+        return nextCanView;
+    },
+
     onTypeChange(e) {
         const type = e.currentTarget.dataset.type;
+        if (type === 'region' && !this.data.canViewRegionReward) return;
         if (type === this.data.currentType) return;
 
         this.setData({ currentType: type }, () => {

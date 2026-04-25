@@ -58,7 +58,13 @@
       </el-table-column>
       <el-table-column label="佣金余额" width="100">
         <template #default="{ row }">
-          <span class="text-price">¥{{ Number(row.balance || 0).toFixed(2) }}</span>
+          <span class="text-price">¥{{ formatMoney(row.balance) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="存钱罐" width="120" class-name="hide-mobile">
+        <template #default="{ row }">
+          <div class="text-price">锁 ¥{{ formatMoney(row.piggy_bank_locked_amount) }}</div>
+          <div class="sub-text">解 ¥{{ formatMoney(row.piggy_bank_unlocked_amount) }}</div>
         </template>
       </el-table-column>
       <el-table-column label="货款" width="90" class-name="hide-mobile">
@@ -251,6 +257,10 @@ const batchRoleModel = computed({
   set: (value) => props.onBatchRoleChange(value)
 })
 
+const formatMoney = (value) => {
+  const amount = Number(value ?? 0)
+  return Number.isFinite(amount) ? amount.toFixed(2) : '0.00'
+}
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 const displayUserAvatar = (user) => getUserAvatar(user || {})
 </script>

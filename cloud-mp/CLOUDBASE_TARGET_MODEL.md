@@ -79,8 +79,10 @@
 
 - `goods_fund_logs`
 - `point_logs`
+- `promotion_lineage_logs`
 - `promotion_logs`
 - `fund_pool_logs`
+- `upgrade_piggy_bank_logs`
 - `station_stock_logs`
 
 ### 兼容读取集合

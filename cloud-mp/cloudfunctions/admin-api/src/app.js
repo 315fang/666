@@ -35,6 +35,7 @@ const { registerUserParentRepairRoutes } = require('./admin-user-parent-repair')
 const { registerUserPortalPasswordRoutes } = require('./admin-user-portal-password');
 const { registerOrderTestFlagRoutes } = require('./admin-order-test-flags');
 const { registerCleanupRoutes } = require('./admin-cleanup');
+const { registerBranchAgentEarningsRoutes } = require('./admin-branch-agent-earnings');
 const { buildWalletAccountWriteModel } = require('./shared/wallet-account');
 const {
     isBusinessOrder,
@@ -7913,6 +7914,15 @@ app.put('/admin/api/branch-agents/claims/:id/review', auth, requirePermission('d
     }
     createAuditLog(req.admin, `branch-agent.claim.${action}`, 'branch_agent_claims', { claim_id: primaryId(updated) });
     ok(res, updated);
+});
+
+registerBranchAgentEarningsRoutes(app, {
+    auth,
+    requirePermission,
+    ensureFreshCollections,
+    getCollection,
+    ok,
+    getBranchAgentPolicySnapshot
 });
 
 app.get('/admin/api/upgrade-applications', auth, requirePermission('dealers'), async (req, res) => {

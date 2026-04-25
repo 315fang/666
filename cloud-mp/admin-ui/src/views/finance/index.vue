@@ -34,6 +34,11 @@
           <div class="kpi-value">¥{{ fmt(data.commissions?.total) }}</div>
           <div class="kpi-sub">已结算 ¥{{ fmt(data.commissions?.settled) }}</div>
         </div>
+        <div class="kpi-card gold">
+          <div class="kpi-label">升级存钱罐</div>
+          <div class="kpi-value">¥{{ fmt(data.upgrade_piggy_bank?.locked_amount) }}</div>
+          <div class="kpi-sub">已解锁 ¥{{ fmt(data.upgrade_piggy_bank?.unlocked_amount) }}</div>
+        </div>
         <div class="kpi-card orange kpi-card--clickable" @click="goCommissions({ status: 'pending_approval' })">
           <div class="kpi-label">冻结中佣金</div>
           <div class="kpi-value">¥{{ fmt(data.commissions?.frozen) }}</div>
@@ -136,6 +141,87 @@
           </el-card>
         </el-col>
       </el-row>
+
+      <!-- 升级存钱罐 -->
+      <el-card class="section-card" style="margin-top: 16px">
+        <template #header>
+          <div class="card-header">
+            <el-icon><Coin /></el-icon>
+            <span>升级存钱罐（升级激励预算）</span>
+            <el-tag size="small" type="info">
+              涉及 {{ data.upgrade_piggy_bank?.active_user_count ?? 0 }} 人 · {{ data.upgrade_piggy_bank?.total_count ?? 0 }} 笔
+            </el-tag>
+          </div>
+        </template>
+        <el-descriptions :column="4" border size="small" style="margin-bottom:12px">
+          <el-descriptions-item label="锁定中">
+            <span class="amount orange">¥{{ fmt(data.upgrade_piggy_bank?.locked_amount) }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="已解锁入佣金">
+            <span class="amount green">¥{{ fmt(data.upgrade_piggy_bank?.unlocked_amount) }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="未解锁回滚">
+            <span class="amount red">¥{{ fmt(data.upgrade_piggy_bank?.reversed_amount) }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="已解锁扣回">
+            <span class="amount red">¥{{ fmt(data.upgrade_piggy_bank?.clawed_back_amount) }}</span>
+          </el-descriptions-item>
+        </el-descriptions>
+        <el-row :gutter="16">
+          <el-col :span="9">
+            <el-table :data="piggyBankRows" size="small" stripe>
+              <el-table-column label="状态" width="110">
+                <template #default="{ row }">
+                  <el-tag :type="row.tagType" size="small">{{ row.label }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="金额（元）" align="right">
+                <template #default="{ row }">
+                  <span :class="['amount', row.cls]">¥{{ fmt(row.amount) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="笔数" width="70" align="right" prop="count" />
+            </el-table>
+          </el-col>
+          <el-col :span="15">
+            <el-empty
+              v-if="!data.upgrade_piggy_bank?.top_users?.length"
+              description="暂无升级存钱罐流水"
+              :image-size="50"
+            />
+            <el-table v-else :data="data.upgrade_piggy_bank.top_users" size="small" stripe max-height="260">
+              <el-table-column label="用户" min-width="140">
+                <template #default="{ row }">
+                  <el-button text type="primary" size="small" @click="goUserManage(row)">
+                    {{ row.nickname || row.openid || '-' }}
+                  </el-button>
+                  <el-tag v-if="row.invite_code || row.member_no" size="small" type="info" style="margin-left:4px">{{ row.invite_code || row.member_no }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="等级" width="90">
+                <template #default="{ row }">
+                  <el-tag size="small" :type="roleLevelType(row.role_level)">{{ roleLevelLabel(row.role_level) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="锁定中" width="110" align="right">
+                <template #default="{ row }">
+                  <span class="amount orange">¥{{ fmt(row.locked_amount) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="已解锁" width="110" align="right">
+                <template #default="{ row }">
+                  <span class="amount green">¥{{ fmt(row.unlocked_amount) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="回滚/扣回" width="110" align="right">
+                <template #default="{ row }">
+                  <span class="amount red">¥{{ fmt((row.reversed_amount || 0) + (row.clawed_back_amount || 0)) }}</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-col>
+        </el-row>
+      </el-card>
 
       <!-- ===== 区域 3：代理商货款 ===== -->
       <el-card class="section-card" style="margin-top: 16px">
@@ -745,6 +831,20 @@ const commissionRows = computed(() => {
   }))
 })
 
+const piggyBankRows = computed(() => {
+  const p = data.value.upgrade_piggy_bank || {}
+  return [
+    { label: '锁定中', amount: p.locked_amount, count: p.locked_count, tagType: 'warning', cls: 'orange' },
+    { label: '已解锁', amount: p.unlocked_amount, count: p.unlocked_count, tagType: 'success', cls: 'green' },
+    { label: '未解锁回滚', amount: p.reversed_amount, count: p.reversed_count, tagType: 'danger', cls: 'red' },
+    { label: '已解锁扣回', amount: p.clawed_back_amount, count: p.clawed_back_count, tagType: 'danger', cls: 'red' }
+  ].map((row) => ({
+    ...row,
+    amount: row.amount ?? 0,
+    count: row.count ?? 0
+  }))
+})
+
 // 基金池展示字段（过滤无意义的 enabled 字段）
 const fundPoolDisplayItems = computed(() => {
   const pool = data.value.fund_pool || {}
@@ -824,6 +924,7 @@ onMounted(fetchAll)
 .kpi-card.teal    { background: linear-gradient(135deg, #17a2b8, #0e7890); }
 .kpi-card.indigo  { background: linear-gradient(135deg, #5c6bc0, #3949a9); }
 .kpi-card.pink    { background: linear-gradient(135deg, #ec407a, #c2185b); }
+.kpi-card.gold    { background: linear-gradient(135deg, #d49a2f, #a76613); }
 
 .kpi-label { font-size: 12px; opacity: 0.9; }
 .kpi-value { font-size: 20px; font-weight: 700; }

@@ -309,6 +309,8 @@ function getCommissionLogTypeText(type) {
         gap: '级差利润',
         Stock_Diff: '级差利润',
         agent_fulfillment: '发货利润',
+        region_agent: '区域奖励',
+        region_b3_virtual: '区域奖励',
         self: '自购返利',
         withdrawal: '提现申请',
         admin_adjustment: '系统调整',
@@ -356,10 +358,22 @@ function getCommissionSourceText(item = {}, order = null) {
         pickup_service_fee: '来自门店服务费',
         agent_assist: '来自代理协助奖励',
         agent_fulfillment: '来自代理发货利润',
+        region_agent: item.description || '来自区域代理奖励',
+        region_b3_virtual: item.description || '来自区域代理奖励',
         stock_diff: '来自级差利润',
         self: '来自自购返利'
     };
     return sourceMap[type] || (order ? `来自${getOrderSourceText(order)}` : '来自佣金结算');
+}
+
+function isRegionRewardCommissionType(type) {
+    return ['region_agent', 'region_b3_virtual'].includes(String(type || '').trim().toLowerCase());
+}
+
+function canViewRegionRewardCommissions(user = {}) {
+    const roleLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+    const virtualSettlementType = String(user.virtual_settlement_type || '').trim().toLowerCase();
+    return roleLevel === 5 || virtualSettlementType === 'b3_region';
 }
 
 function getAgentWalletBalance(user = {}) {
@@ -499,6 +513,10 @@ async function walletCommissions(openid, params = {}) {
     const typeFilter = params.type ? String(params.type).toLowerCase() : '';
     const identity = await getCommissionIdentity(openid);
     let list = await listCommissionRows(identity);
+    const canViewRegionReward = canViewRegionRewardCommissions(identity.user || {});
+    if (!canViewRegionReward) {
+        list = list.filter(item => !isRegionRewardCommissionType(item.type));
+    }
 
     list.sort((a, b) => {
         const ta = new Date(a.created_at || 0).getTime();
@@ -510,6 +528,7 @@ async function walletCommissions(openid, params = {}) {
     if (typeFilter && typeFilter !== 'all') {
         list = list.filter(item => {
             const t = String(item.type || '').toLowerCase();
+            if (typeFilter === 'region') return canViewRegionReward && isRegionRewardCommissionType(t);
             return t === typeFilter;
         });
     }

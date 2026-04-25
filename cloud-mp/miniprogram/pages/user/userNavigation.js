@@ -34,21 +34,13 @@ function onOrderTap(page, event) {
 }
 
 function onSettingsTap(page) {
+    void page;
     const itemList = [];
-    const isStoreManager = !!(page && page.data && page.data.isStoreManager);
-    if (isStoreManager) {
-        itemList.push('店长工作台');
-    }
     itemList.push('安全中心', '关于版本', '清除缓存');
     wx.showActionSheet({
         itemList,
         success: (res) => {
             const selected = itemList[res.tapIndex];
-            if (selected === '店长工作台') {
-                if (!requireLogin()) return;
-                wx.navigateTo({ url: '/pages/stations/my-station' });
-                return;
-            }
             if (selected === '安全中心') {
                 if (!requireLogin()) return;
                 wx.navigateTo({ url: '/pages/user/portal-password' });

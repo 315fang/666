@@ -134,6 +134,8 @@ Page({
             'indirect': '团队佣金', 'Indirect': '团队佣金',
             'gap': '级差利润', 'Stock_Diff': '级差利润',
             'agent_fulfillment': '发货利润',
+            'region_agent': '区域奖励',
+            'region_b3_virtual': '区域奖励',
             'self': '自购返利',
             'withdrawal': '提现申请',
             'admin_adjustment': '系统调整'

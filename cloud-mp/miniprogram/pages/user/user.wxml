@@ -210,7 +210,13 @@
       <text class="func-label">自提站点</text>
       <text class="func-arrow">›</text>
     </view>
-    <view class="func-divider" wx:if="{{featureFlags.show_station_entry}}"></view>
+    <view class="func-divider" wx:if="{{featureFlags.show_station_entry && isStoreManager}}"></view>
+    <view class="func-row" wx:if="{{isStoreManager}}" bindtap="goStoreManagerExclusive" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/package.svg" mode="aspectFit"></image>
+      <text class="func-label">店长专属</text>
+      <text class="func-arrow">›</text>
+    </view>
+    <view class="func-divider" wx:if="{{featureFlags.show_station_entry || isStoreManager}}"></view>
     <view class="func-row" bindtap="goInvitePoster" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
       <text class="func-label">品牌推荐</text>
@@ -219,12 +225,18 @@
     <view class="func-divider" wx:if="{{showPickupVerify}}"></view>
     <view class="func-row" wx:if="{{showPickupVerify}}" bindtap="goPickupVerify" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/package.svg" mode="aspectFit"></image>
-      <text class="func-label">{{isStoreManager ? '门店核销台' : '核销管理'}}</text>
+      <text class="func-label">自提核销</text>
       <text class="func-arrow">›</text>
     </view>
   </view>
 
   <view class="section-card func-card">
+    <view class="func-row" bindtap="goUpgradePiggyBank" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/dollar-sign.svg" mode="aspectFit"></image>
+      <text class="func-label">升级存钱罐</text>
+      <text class="func-arrow">›</text>
+    </view>
+    <view class="func-divider"></view>
     <view class="func-row" bindtap="onSettingsTap" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/settings.svg" mode="aspectFit"></image>
       <text class="func-label">设置</text>

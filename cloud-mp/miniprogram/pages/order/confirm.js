@@ -29,6 +29,7 @@ const {
 } = require('./orderConfirmAccount');
 
 const DISCOUNT_RESTRICTED_ORDER_TYPES = new Set(['group', 'slash', 'limited_sale', 'limited_spot', 'bundle', 'exchange']);
+const GOODS_IMAGE_PLACEHOLDER = '/assets/images/placeholder.svg';
 const DEFAULT_PURCHASE_POINTS_BY_ROLE = {
     0: 50,
     1: 100,
@@ -80,6 +81,77 @@ function isPointsRestrictedItem(item = {}) {
         || Number(item.is_explosive) === 1
         || String(item.product_tag || '').trim().toLowerCase() === 'hot'
         || String(item.activity_type || '').trim() !== '';
+}
+
+function appendImageCandidates(target, value) {
+    if (!value) return;
+    if (Array.isArray(value)) {
+        value.forEach((item) => appendImageCandidates(target, item));
+        return;
+    }
+    if (typeof value === 'string') {
+        const text = value.trim();
+        if (!text) return;
+        if (text.startsWith('[')) {
+            try {
+                appendImageCandidates(target, JSON.parse(text));
+                return;
+            } catch (_) {}
+        }
+        target.push(text);
+        return;
+    }
+    if (typeof value !== 'object') return;
+    [
+        value.display_image,
+        value.displayImage,
+        value.product_image,
+        value.productImage,
+        value.image_url,
+        value.imageUrl,
+        value.url,
+        value.temp_url,
+        value.image,
+        value.cover_image,
+        value.coverImage,
+        value.cover,
+        value.cover_url,
+        value.coverUrl,
+        value.file_id,
+        value.fileId,
+        value.image_ref,
+        value.imageRef,
+        value.thumb,
+        value.thumbnail,
+        value.images,
+        value.preview_images,
+        value.previewImages,
+        value.image_candidates,
+        value.imageCandidates,
+        value.product,
+        value.sku
+    ].forEach((item) => appendImageCandidates(target, item));
+}
+
+function collectOrderItemImageCandidates(item = {}) {
+    const seen = new Set();
+    const candidates = [];
+    appendImageCandidates(candidates, item);
+    return candidates.filter((candidate) => {
+        if (!candidate || seen.has(candidate)) return false;
+        seen.add(candidate);
+        return true;
+    });
+}
+
+async function resolveOrderItemImage(item = {}) {
+    const imageCandidates = collectOrderItemImageCandidates(item);
+    const image = await resolveCloudImageUrl(imageCandidates[0] || item, GOODS_IMAGE_PLACEHOLDER);
+    return {
+        image,
+        image_candidates: imageCandidates,
+        image_candidate_index: imageCandidates.length ? 0 : -1
+    };
 }
 
 Page({
@@ -265,6 +337,37 @@ Page({
         this._tryAutoCouponUsagePrompt();
     },
 
+    async onGoodsImageError(e) {
+        const index = Number(e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.index);
+        if (!Number.isInteger(index) || index < 0) return;
+        const item = (this.data.orderItems || [])[index];
+        if (!item) return;
+
+        const candidates = Array.isArray(item.image_candidates) && item.image_candidates.length
+            ? item.image_candidates
+            : collectOrderItemImageCandidates(item);
+        let nextIndex = Math.max(-1, Number(item.image_candidate_index || 0)) + 1;
+        while (nextIndex < candidates.length) {
+            const nextImage = await resolveCloudImageUrl(candidates[nextIndex], '');
+            if (nextImage && nextImage !== item.image) {
+                this.setData({
+                    [`orderItems[${index}].image`]: nextImage,
+                    [`orderItems[${index}].image_candidates`]: candidates,
+                    [`orderItems[${index}].image_candidate_index`]: nextIndex
+                });
+                return;
+            }
+            nextIndex += 1;
+        }
+        if (item.image !== GOODS_IMAGE_PLACEHOLDER) {
+            this.setData({
+                [`orderItems[${index}].image`]: GOODS_IMAGE_PLACEHOLDER,
+                [`orderItems[${index}].image_candidates`]: candidates,
+                [`orderItems[${index}].image_candidate_index`]: candidates.length
+            });
+        }
+    },
+
     async _loadPrimaryOrderData(options = {}) {
         if (options.from === 'direct') {
             const directBuy = wx.getStorageSync('directBuyInfo');
@@ -280,7 +383,7 @@ Page({
                 const bundleItems = Array.isArray(directBuy.items) ? directBuy.items : [];
                 const resolvedItems = await Promise.all(bundleItems.map(async (item) => normalizeOrderItemSpec({
                     ...item,
-                    image: await resolveCloudImageUrl(item.image, '/assets/images/placeholder.svg')
+                    ...(await resolveOrderItemImage(item))
                 })));
                 const originalAmount = Number(directBuy.bundle_original_amount || 0);
                 const bundlePrice = Number(directBuy.bundle_price || 0);
@@ -331,14 +434,14 @@ Page({
                 await this._refreshMiniProgramConfigAndPricing(resolvedItems);
                 return true;
             }
-            const image = await resolveCloudImageUrl(directBuy.image, '/assets/images/placeholder.svg');
+            const resolvedImage = await resolveOrderItemImage(directBuy);
             const amt = (parseFloat(directBuy.price) * directBuy.quantity).toFixed(2);
             const limitedSpotPayload = normalizeLimitedSpotPayload(
                 directBuy.limited_sale || directBuy.limited_spot || null,
                 directBuy.limited_spot_mode || ''
             );
             const limitedSpotMode = limitedSpotPayload ? limitedSpotPayload.mode : '';
-            const directBuyItem = normalizeOrderItemSpec({ ...directBuy, image });
+            const directBuyItem = normalizeOrderItemSpec({ ...directBuy, ...resolvedImage });
             this.setData({
                 orderItems: [directBuyItem],
                 totalAmount: amt,

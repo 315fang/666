@@ -88,6 +88,7 @@ async function queryPaymentStatus(orderId, callerOpenid) {
                     trade_state: wxResult.trade_state,
                     paidAt: new Date().toISOString(),
                     post_processed: !postProcess?.error,
+                    post_process_retried: Boolean(postProcess),
                 };
             }
 
@@ -113,6 +114,7 @@ async function queryPaymentStatus(orderId, callerOpenid) {
         trade_state: order.status === 'paid' ? 'SUCCESS' : order.status,
         paidAt: order.paid_at,
         post_processed: localPostProcess ? !localPostProcess.error : Boolean(order.payment_post_processed_at),
+        post_process_retried: Boolean(localPostProcess),
     };
 }
 

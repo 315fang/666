@@ -22,6 +22,10 @@ function pickString(value, fallback = '') {
     return text || fallback;
 }
 
+function primaryId(row = {}) {
+    return row && (row._id || row.id || row._legacy_id) ? String(row._id || row.id || row._legacy_id) : '';
+}
+
 function resolvePostPayStatus(order = {}) {
     const isGroupOrder = order.type === 'group'
         || order.order_type === 'group'
@@ -1950,7 +1954,7 @@ async function createOrder(openid, orderData) {
     if (shouldAutoPayFreeOrder) {
         cloud.callFunction({
             name: 'payment',
-            data: { action: '_postProcessPaid', order_id: result._id }
+            data: { action: '_postProcessPaid', order_id: result._id, internal_source: 'order-create' }
         }).catch((err) => {
             console.error('[OrderCreate] 零元积分订单支付后处理调用失败（不影响下单）:', err.message);
         });
@@ -2030,7 +2034,7 @@ async function createOrder(openid, orderData) {
             // 触发支付后处理（佣金创建、积分奖励、代理升级、拼团/砍价等）
             cloud.callFunction({
                 name: 'payment',
-                data: { action: '_postProcessPaid', order_id: orderId }
+                data: { action: '_postProcessPaid', order_id: orderId, internal_source: 'order-create' }
             }).catch((err) => {
                 console.error('[OrderCreate] 货款支付后处理调用失败（不影响下单）:', err.message);
             });

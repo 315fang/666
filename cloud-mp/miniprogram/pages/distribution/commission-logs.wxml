@@ -21,6 +21,7 @@
     <view class="filter-item {{currentType === 'all' ? 'active' : ''}}" bindtap="onTypeChange" data-type="all">全部</view>
     <view class="filter-item {{currentType === 'direct' ? 'active' : ''}}" bindtap="onTypeChange" data-type="direct">直推佣金</view>
     <view class="filter-item {{currentType === 'indirect' ? 'active' : ''}}" bindtap="onTypeChange" data-type="indirect">团队佣金</view>
+    <view wx:if="{{canViewRegionReward}}" class="filter-item {{currentType === 'region' ? 'active' : ''}}" bindtap="onTypeChange" data-type="region">区域奖励</view>
   </view>
 
   <!-- 明细列表 -->

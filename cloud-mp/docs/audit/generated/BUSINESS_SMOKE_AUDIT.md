@@ -1,6 +1,6 @@
 # Business Smoke Audit
 
-生成时间：2026-04-25T03:32:38.452Z
+生成时间：2026-04-25T10:27:36.886Z
 环境：cloud1-9gywyqe49638e46f
 
 | 范围 | 项目 | 结果 | 数量 | 问题 |
@@ -10,7 +10,7 @@
 | admin | orders | 通过 | 20 | - |
 | admin | users | 通过 | 20 | - |
 | admin | refunds | 通过 | 20 | - |
-| admin | withdrawals | 通过 | 6 | - |
+| admin | withdrawals | 通过 | 7 | - |
 | admin | group-buys | 通过 | 2 | - |
 | admin | lottery-prizes | 通过 | 13 | - |
 | admin | activity-links | 通过 | - | - |

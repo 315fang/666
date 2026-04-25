@@ -41,7 +41,7 @@ const DEFAULT_CONFIG = {
     show_pickup_entry: true,
     show_agent_service_entry: false,
     enable_logistics_entry: true,
-    enable_lottery_entry: false
+    enable_lottery_entry: true
   },
   activity_page_config: {
     default_banners: [],

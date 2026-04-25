@@ -30,7 +30,11 @@ const COLLECTION_GROUPS = [
   },
   {
     group: 'user_finance',
-    collections: ['users', 'commissions', 'withdrawals', 'wallet_accounts', 'wallet_logs', 'point_accounts', 'point_logs', 'user_coupons']
+    collections: ['users', 'commissions', 'withdrawals', 'wallet_accounts', 'wallet_logs', 'upgrade_piggy_bank_logs', 'point_accounts', 'point_logs', 'user_coupons']
+  },
+  {
+    group: 'distribution_lineage',
+    collections: ['promotion_lineage_logs']
   },
   {
     group: 'configs',

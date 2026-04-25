@@ -18,6 +18,63 @@ function cloneSelectedMap(source = {}) {
     return result;
 }
 
+function appendImageCandidates(target, value) {
+    if (!value) return;
+    if (Array.isArray(value)) {
+        value.forEach((item) => appendImageCandidates(target, item));
+        return;
+    }
+    if (typeof value === 'string') {
+        const text = value.trim();
+        if (!text) return;
+        if (text.startsWith('[')) {
+            try {
+                appendImageCandidates(target, JSON.parse(text));
+                return;
+            } catch (_) {}
+        }
+        target.push(text);
+        return;
+    }
+    if (typeof value !== 'object') return;
+    [
+        value.display_image,
+        value.displayImage,
+        value.image_url,
+        value.imageUrl,
+        value.url,
+        value.temp_url,
+        value.image,
+        value.cover_image,
+        value.coverImage,
+        value.cover,
+        value.cover_url,
+        value.coverUrl,
+        value.file_id,
+        value.fileId,
+        value.image_ref,
+        value.imageRef,
+        value.thumb,
+        value.thumbnail,
+        value.images,
+        value.preview_images,
+        value.previewImages,
+        value.image_candidates,
+        value.imageCandidates
+    ].forEach((item) => appendImageCandidates(target, item));
+}
+
+function uniqImageCandidates(values = []) {
+    const seen = new Set();
+    const result = [];
+    appendImageCandidates(result, values);
+    return result.filter((item) => {
+        if (!item || seen.has(item)) return false;
+        seen.add(item);
+        return true;
+    });
+}
+
 function buildGroupRuleText(group = {}) {
     const minSelect = Math.max(0, Number(group.min_select || 0));
     const maxSelect = Math.max(minSelect || 1, Number(group.max_select || minSelect || 1));
@@ -34,7 +91,7 @@ function buildGroupStatusText(selectedCount, minSelect, maxSelect) {
 }
 
 function getOptionImage(option = {}) {
-    return option.product && option.product.image ? option.product.image : '';
+    return uniqImageCandidates([option.sku, option.product, option.image, option.image_url])[0] || '';
 }
 
 Page({
@@ -93,13 +150,20 @@ Page({
             await warmRenderableImageUrls([coverSource, ...optionProducts]);
             const groups = await Promise.all((Array.isArray(rawBundle.groups) ? rawBundle.groups : []).map(async (group) => ({
                 ...group,
-                options: await Promise.all((Array.isArray(group.options) ? group.options : []).map(async (option) => ({
-                    ...option,
-                    product: {
-                        ...(option.product || {}),
-                        image: await resolveRenderableImageUrl(option.product || {}, '')
-                    }
-                })))
+                options: await Promise.all((Array.isArray(group.options) ? group.options : []).map(async (option) => {
+                    const sourceProduct = option.product || {};
+                    const resolvedImage = await resolveRenderableImageUrl(sourceProduct, '');
+                    const imageCandidates = uniqImageCandidates([resolvedImage, sourceProduct, option.sku]);
+                    return {
+                        ...option,
+                        product: {
+                            ...sourceProduct,
+                            image: resolvedImage || imageCandidates[0] || '',
+                            images: imageCandidates.length ? imageCandidates : sourceProduct.images,
+                            image_candidates: imageCandidates
+                        }
+                    };
+                }))
             })));
             const bundle = {
                 ...rawBundle,
@@ -184,6 +248,8 @@ Page({
             selectedOptions.forEach((option) => {
                 const qty = Math.max(1, Number(option.default_qty || 1));
                 const unitPrice = roundMoney(option.product && option.product.retail_price);
+                const imageCandidates = uniqImageCandidates([option.sku, option.product, option.image, option.image_url]);
+                const image = imageCandidates[0] || '';
                 selectedCount += 1;
                 totalQuantity += qty;
                 originalAmount += roundMoney(unitPrice * qty);
@@ -193,7 +259,11 @@ Page({
                     quantity: qty,
                     price: unitPrice,
                     name: option.product && option.product.name || '商品',
-                    image: option.product && option.product.image || '',
+                    image,
+                    product_image: image,
+                    image_url: image,
+                    images: imageCandidates,
+                    image_candidates: imageCandidates,
                     spec: option.sku && option.sku.spec_value || '',
                     supports_pickup: option.product && option.product.supports_pickup ? 1 : 0,
                     allow_points: 0,

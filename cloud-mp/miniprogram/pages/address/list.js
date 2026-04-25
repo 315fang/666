@@ -2,7 +2,7 @@
 const { get, post } = require('../../utils/request');
 
 function getAddressId(address = {}) {
-    return String(address.id || address._id || address.address_id || '');
+    return String(address._id || address.address_id || address.id || '');
 }
 
 function isDefaultAddress(address = {}) {
@@ -106,7 +106,7 @@ Page({
     onDeleteAddress(e) {
         const id = e.currentTarget.dataset.id;
         // 找到索引
-        const index = this.data.addresses.findIndex(item => (item._id || item.id) === id);
+        const index = this.data.addresses.findIndex(item => getAddressId(item) === id);
         
         wx.showModal({
             title: '确认删除',
@@ -145,6 +145,10 @@ Page({
         const id = String(e.currentTarget.dataset.id || '');
         if (!id) {
             wx.showToast({ title: '地址信息异常，请刷新后重试', icon: 'none' });
+            return;
+        }
+        const target = this.data.addresses.find((item) => getAddressId(item) === id);
+        if (target && isDefaultAddress(target)) {
             return;
         }
         try {

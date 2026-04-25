@@ -1,9 +1,9 @@
 <view class="page">
-  <view class="loading" wx:if="{{loading}}">加载店长工作台...</view>
+  <view class="loading" wx:if="{{loading}}">加载店长专属...</view>
 
   <block wx:elif="{{workbench}}">
     <view class="hero">
-      <text class="hero-title">店长工作台</text>
+      <text class="hero-title">店长专属</text>
       <text class="hero-sub">门店由后台指派绑定；你可在这里查看门店、核销订单、采购申请与两笔结算去向。</text>
     </view>
 

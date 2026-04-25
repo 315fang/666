@@ -7,6 +7,7 @@ const Module = require('node:module');
 function createAddressDb(records) {
     const ops = [];
     let nextId = 1;
+    const matchesQuery = (row, query) => Object.entries(query).every(([key, value]) => row[key] === value);
     const db = {
         serverDate: () => new Date('2026-04-25T00:00:00.000Z'),
         collection: (name) => {
@@ -35,19 +36,32 @@ function createAddressDb(records) {
                         return { stats: { removed: 1 } };
                     }
                 }),
-                where: (query) => ({
-                    update: async ({ data }) => {
-                        let updated = 0;
-                        Object.entries(records).forEach(([id, row]) => {
-                            const matched = Object.entries(query).every(([key, value]) => row[key] === value);
-                            if (!matched) return;
-                            records[id] = { ...row, ...data };
-                            ops.push({ type: 'where.update', id, query, data });
-                            updated += 1;
-                        });
-                        return { stats: { updated } };
-                    }
-                })
+                where: (query) => {
+                    let limitCount = Infinity;
+                    const api = {
+                        limit: (count) => {
+                            limitCount = count;
+                            return api;
+                        },
+                        get: async () => ({
+                            data: Object.entries(records)
+                                .filter(([, row]) => matchesQuery(row, query))
+                                .slice(0, limitCount)
+                                .map(([id, row]) => ({ _id: id, ...row }))
+                        }),
+                        update: async ({ data }) => {
+                            let updated = 0;
+                            Object.entries(records).forEach(([id, row]) => {
+                                if (!matchesQuery(row, query)) return;
+                                records[id] = { ...row, ...data };
+                                ops.push({ type: 'where.update', id, query, data });
+                                updated += 1;
+                            });
+                            return { stats: { updated } };
+                        }
+                    };
+                    return api;
+                }
             };
         }
     };
@@ -161,5 +175,21 @@ test('setDefaultAddress only switches default inside the caller address set', as
 
     assert.equal(records.alice_addr_1.is_default, false);
     assert.equal(records.alice_addr_2.is_default, true);
+    assert.equal(records.bob_addr.is_default, true);
+});
+
+test('setDefaultAddress resolves legacy numeric id before updating document', async () => {
+    const records = {
+        alice_addr_1: { openid: 'alice', id: 2, receiver_name: 'Alice 1', is_default: false },
+        alice_addr_2: { openid: 'alice', id: 3, receiver_name: 'Alice 2', is_default: true },
+        bob_addr: { openid: 'bob', id: 2, receiver_name: 'Bob', is_default: true }
+    };
+    const { db } = createAddressDb(records);
+    const addresses = loadAddressModule(db);
+
+    await addresses.setDefaultAddress('alice', '2');
+
+    assert.equal(records.alice_addr_1.is_default, true);
+    assert.equal(records.alice_addr_2.is_default, false);
     assert.equal(records.bob_addr.is_default, true);
 });

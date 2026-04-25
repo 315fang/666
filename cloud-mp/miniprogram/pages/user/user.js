@@ -113,7 +113,7 @@ Page({
             show_station_entry: true,
             show_pickup_entry: true,
             show_agent_service_entry: false,
-            enable_lottery_entry: false
+            enable_lottery_entry: true
         },
         showPortalPasswordEntry: false,
         loginAgreementHint: '登录后查看订单、积分、佣金等信息',
@@ -424,6 +424,10 @@ Page({
         return navigateTeamCenter(this);
     },
 
+    goUpgradePiggyBank() {
+        navigateIfLoggedIn('/pages/distribution/promotion-progress');
+    },
+
     /** @deprecated 请使用 goTeamCenter */
     goCommerceHub() {
         this.goTeamCenter();
@@ -451,6 +455,10 @@ Page({
 
     goStationsMap() {
         wx.navigateTo({ url: '/pages/stations/map' });
+    },
+
+    goStoreManagerExclusive() {
+        navigateIfLoggedIn('/pages/stations/my-station');
     },
 
     goPickupVerify() {

@@ -79,6 +79,9 @@ function buildCanonicalUser(user = {}, extra = {}) {
     const goodsFundBalance = resolveGoodsFundBalance(user);
     const accountVisibility = normalizeAccountVisibility(user);
     const accountOrigin = normalizeAccountOrigin(user);
+    const piggyBankLockedAmount = toNumber(user.piggy_bank_locked_amount, 0);
+    const piggyBankUnlockedAmount = toNumber(user.piggy_bank_unlocked_amount, 0);
+    const piggyBankReversedAmount = toNumber(user.piggy_bank_reversed_amount, 0);
 
     return {
         ...user,
@@ -108,6 +111,9 @@ function buildCanonicalUser(user = {}, extra = {}) {
         goods_fund_balance: goodsFundBalance,
         agent_wallet_balance: goodsFundBalance,
         wallet_balance: goodsFundBalance,
+        piggy_bank_locked_amount: piggyBankLockedAmount,
+        piggy_bank_unlocked_amount: piggyBankUnlockedAmount,
+        piggy_bank_reversed_amount: piggyBankReversedAmount,
         account_visibility: accountVisibility,
         hidden_reason: pickString(user.hidden_reason),
         hidden_at: pickString(user.hidden_at),

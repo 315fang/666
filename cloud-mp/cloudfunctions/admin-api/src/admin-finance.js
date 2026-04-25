@@ -225,6 +225,101 @@ function buildSettledCommissionMap(commissions = [], users = [], findUserByAnyId
     }, {});
 }
 
+function buildUpgradePiggyBankFinance(rows = [], users = [], findUserByAnyId, pickString, toNumber, roundMoney) {
+    const stats = {
+        total_amount: 0,
+        locked_amount: 0,
+        unlocked_amount: 0,
+        reversed_amount: 0,
+        clawed_back_amount: 0,
+        total_count: 0,
+        locked_count: 0,
+        unlocked_count: 0,
+        reversed_count: 0,
+        clawed_back_count: 0,
+        active_user_count: 0,
+        top_users: []
+    };
+    const userBuckets = new Map();
+
+    rows.forEach((row) => {
+        const amount = toNumber(row.incremental_amount, 0);
+        if (amount <= 0) return;
+        const status = pickString(row.status || 'locked');
+        const { owner } = resolveVisibleOwnerByRefs(row, users, findUserByAnyId);
+        const ownerOpenid = pickString(owner?.openid || row.openid);
+        const ownerKey = ownerOpenid || pickString(owner?.id || owner?._legacy_id || owner?._id || row.user_id);
+
+        stats.total_amount += amount;
+        stats.total_count += 1;
+
+        if (status === 'unlocked') {
+            stats.unlocked_amount += amount;
+            stats.unlocked_count += 1;
+        } else if (status === 'reversed') {
+            stats.reversed_amount += amount;
+            stats.reversed_count += 1;
+        } else if (status === 'clawed_back') {
+            stats.clawed_back_amount += amount;
+            stats.clawed_back_count += 1;
+        } else {
+            stats.locked_amount += amount;
+            stats.locked_count += 1;
+        }
+
+        if (!ownerKey) return;
+        if (!userBuckets.has(ownerKey)) {
+            userBuckets.set(ownerKey, {
+                user_id: owner?.id || owner?._legacy_id || owner?._id || row.user_id || ownerOpenid,
+                openid: ownerOpenid,
+                nickname: pickString(owner?.nickname || owner?.nickName || owner?.name || ''),
+                invite_code: pickString(owner?.my_invite_code || owner?.invite_code || owner?.member_no || ''),
+                member_no: pickString(owner?.my_invite_code || owner?.invite_code || owner?.member_no || ''),
+                role_level: toNumber(owner?.role_level ?? owner?.distributor_level, row.current_role_level ?? 0),
+                locked_amount: 0,
+                unlocked_amount: 0,
+                reversed_amount: 0,
+                clawed_back_amount: 0,
+                total_count: 0
+            });
+        }
+        const bucket = userBuckets.get(ownerKey);
+        bucket.total_count += 1;
+        if (status === 'unlocked') bucket.unlocked_amount += amount;
+        else if (status === 'reversed') bucket.reversed_amount += amount;
+        else if (status === 'clawed_back') bucket.clawed_back_amount += amount;
+        else bucket.locked_amount += amount;
+    });
+
+    const roundFields = (item) => ({
+        ...item,
+        locked_amount: roundMoney(item.locked_amount),
+        unlocked_amount: roundMoney(item.unlocked_amount),
+        reversed_amount: roundMoney(item.reversed_amount),
+        clawed_back_amount: roundMoney(item.clawed_back_amount)
+    });
+
+    const topUsers = Array.from(userBuckets.values())
+        .map(roundFields)
+        .filter((item) => item.locked_amount > 0 || item.unlocked_amount > 0 || item.reversed_amount > 0 || item.clawed_back_amount > 0)
+        .sort((left, right) => (
+            right.locked_amount - left.locked_amount
+            || right.unlocked_amount - left.unlocked_amount
+            || right.total_count - left.total_count
+        ));
+
+    return {
+        ...stats,
+        total_amount: roundMoney(stats.total_amount),
+        locked_amount: roundMoney(stats.locked_amount),
+        unlocked_amount: roundMoney(stats.unlocked_amount),
+        reversed_amount: roundMoney(stats.reversed_amount),
+        clawed_back_amount: roundMoney(stats.clawed_back_amount),
+        active_user_count: topUsers.length,
+        top_users: topUsers.slice(0, 10)
+    };
+}
+
 function registerFinanceRoutes(app, deps) {
     const {
         auth,
@@ -243,13 +338,14 @@ function registerFinanceRoutes(app, deps) {
     } = deps;
 
     app.get('/admin/api/finance/overview', auth, requirePermission('statistics'), async (_req, res) => {
-        await ensureFreshCollections(['orders', 'commissions', 'withdrawals', 'users', 'dividend_executions', 'fund_pool_logs', 'configs']);
+        await ensureFreshCollections(['orders', 'commissions', 'withdrawals', 'users', 'dividend_executions', 'fund_pool_logs', 'upgrade_piggy_bank_logs', 'configs']);
         const orders = getCollection('orders');
         const commissions = getCollection('commissions');
         const withdrawals = getCollection('withdrawals');
         const users = getCollection('users');
         const dividendExecs = getCollection('dividend_executions');
         const fundPoolLogs = getCollection('fund_pool_logs');
+        const upgradePiggyBankLogs = getCollection('upgrade_piggy_bank_logs');
         const configs = getCollection('configs');
         const userFinance = buildUserFinanceContext(users, findUserByAnyId);
 
@@ -326,6 +422,18 @@ function registerFinanceRoutes(app, deps) {
         const fundPool = getAgentConfig('fund-pool', { enabled: false });
         const fundPoolRow = configs.find((row) => row.config_key === 'agent_system_fund-pool' || row.key === 'agent_system_fund-pool') || {};
         const scopedFundPoolLogs = fundPoolLogs.filter((row) => isRecordInFinanceScope(row, ['created_at', 'updated_at']));
+        const scopedUpgradePiggyBankLogs = upgradePiggyBankLogs.filter((row) => (
+            isRecordInFinanceScope(row, ['created_at', 'unlocked_at', 'reversed_at', 'updated_at'])
+            && isVisibleUserLinkedRow(row, users, userFinance.findUserByAnyId)
+        ));
+        const upgradePiggyBank = buildUpgradePiggyBankFinance(
+            scopedUpgradePiggyBankLogs,
+            users,
+            userFinance.findUserByAnyId,
+            pickString,
+            toNumber,
+            roundMoney
+        );
         const sortedExecs = sortByUpdatedDesc(dividendExecs.filter((row) => isRecordInFinanceScope(row, ['created_at', 'updated_at'])));
         const lastExec = sortedExecs[0] || null;
         const dividendPool = getAgentConfig('dividend-pool', { balance: 0, total_in: 0, total_out: 0 });
@@ -336,6 +444,7 @@ function registerFinanceRoutes(app, deps) {
             gmv_30d: gmv30d,
             commissions: commissionStats,
             withdrawals: withdrawalStats,
+            upgrade_piggy_bank: upgradePiggyBank,
             agent_debt: {
                 total_debt: debtors.reduce((sum, item) => sum + item.debt_amount, 0),
                 debtor_count: debtors.length,

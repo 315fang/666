@@ -32,7 +32,7 @@ const DEFAULT_MINI_PROGRAM_CONFIG = {
         show_station_entry: true,
         show_pickup_entry: false,
         enable_logistics_entry: true,
-        enable_lottery_entry: false
+        enable_lottery_entry: true
     },
     activity_page_config: {
         permanent_section_title: '常驻活动',

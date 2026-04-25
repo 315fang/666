@@ -15,6 +15,18 @@ function resolveSubmitOrderMessage(error) {
     return '下单失败，请稍后重试';
 }
 
+function syncPaidOrderPostProcess(orderId) {
+    if (!orderId) return Promise.resolve(null);
+    return post(`/orders/${orderId}/sync-wechat-pay`, {}, {
+        showError: false,
+        maxRetries: 0,
+        timeout: 12000
+    }).catch((err) => {
+        console.warn('[OrderConfirm] 货款支付后处理同步失败:', err && (err.message || err.errMsg) || err);
+        return null;
+    });
+}
+
 async function submitOrder(page, app, brandAnimation) {
     const {
         address,
@@ -164,6 +176,9 @@ async function submitOrder(page, app, brandAnimation) {
             wx.removeStorageSync('activeExchangeCoupon');
         }
         const goodsFundPaid = !!(createdOrders[0] && createdOrders[0].goods_fund_paid);
+        const paidOrderSync = goodsFundPaid && orderId
+            ? syncPaidOrderPostProcess(orderId)
+            : Promise.resolve(null);
         const isSplitOrders = createdOrders.length > 1;
 
         if (goodsFundPaid) {
@@ -183,6 +198,10 @@ async function submitOrder(page, app, brandAnimation) {
 
         setTimeout(async () => {
             page.setData({ submitting: false });
+
+            if (goodsFundPaid && orderId) {
+                await paidOrderSync;
+            }
 
             // 货款支付的拼团订单：尝试获取 group_no 再跳转
             if (goodsFundPaid && isGroupOrder) {

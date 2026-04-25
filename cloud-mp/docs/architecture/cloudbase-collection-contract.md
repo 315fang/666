@@ -83,8 +83,10 @@
 - `wallet_logs`
 - `goods_fund_logs`
 - `point_logs`
+- `promotion_lineage_logs`
 - `promotion_logs`
 - `fund_pool_logs`
+- `upgrade_piggy_bank_logs`
 - `station_stock_logs`
 
 ### 2.4 兼容读取表
@@ -130,7 +132,9 @@
 | `station_procurement_orders` vs `station_sku_stocks` vs `station_stock_logs` | 分别对应备货申请/采购单、库存状态、库存流水 |
 | `deposit_orders` / `deposit_refunds` / `coupon_claim_tickets` vs `orders` / `refunds` / `user_coupons` | 押金领券链路，不是普通交易链 |
 | `promotion_logs` vs `users` | 晋升事件日志，不是用户主资料 |
+| `promotion_lineage_logs` vs `promotion_logs` / `users` | 脱离后的关系改挂审计，不是晋升事件日志，也不是当前用户关系快照 |
 | `fund_pool_logs` vs `goods_fund_logs` | 基金池入池流水，不是货款收支流水 |
+| `upgrade_piggy_bank_logs` vs `commissions` / `wallet_logs` | 存钱罐锁定桶是升级激励预算日志；解锁后才进入佣金和钱包流水 |
 
 ## 4. 旧名治理
 

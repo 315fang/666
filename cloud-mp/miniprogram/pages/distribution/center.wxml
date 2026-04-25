@@ -108,7 +108,7 @@
         <view class="menu-icon promotion">
           <image class="icon-img" src="/assets/icons/trending-up.svg" mode="aspectFit"/>
         </view>
-        <text class="menu-name">晋升进度</text>
+        <text class="menu-name">升级存钱罐</text>
       </view>
       <view class="menu-arrow">›</view>
     </view>

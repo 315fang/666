@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-25T03:32:38.452Z",
+  "generatedAt": "2026-04-25T10:27:36.886Z",
   "envId": "cloud1-9gywyqe49638e46f",
   "ok": true,
   "results": [
@@ -41,7 +41,7 @@
       "area": "admin",
       "name": "withdrawals",
       "ok": true,
-      "count": 6,
+      "count": 7,
       "issues": []
     },
     {

@@ -28,6 +28,22 @@
       ]
     },
     {
+      "name": "upgrade_piggy_bank_logs",
+      "indexes": [
+        { "name": "order_id", "fields": [{ "field": "order_id", "order": "asc" }], "purpose": "退款按订单回滚存钱罐日志" },
+        { "name": "openid_status_target", "fields": [{ "field": "openid", "order": "asc" }, { "field": "status", "order": "asc" }, { "field": "target_role_level", "order": "asc" }], "purpose": "用户晋升时查询可解锁桶" },
+        { "name": "idempotency_key", "fields": [{ "field": "order_id", "order": "asc" }, { "field": "openid", "order": "asc" }, { "field": "source_type", "order": "asc" }, { "field": "target_role_level", "order": "asc" }], "purpose": "同一订单同一用户同一目标等级幂等检查" }
+      ]
+    },
+    {
+      "name": "promotion_lineage_logs",
+      "indexes": [
+        { "name": "openid_created_at", "fields": [{ "field": "openid", "order": "asc" }, { "field": "created_at", "order": "desc" }], "purpose": "按晋升用户查看脱离改挂审计日志" },
+        { "name": "trigger_order_id", "fields": [{ "field": "trigger_order_id", "order": "asc" }], "purpose": "按触发晋升订单追踪关系改挂" },
+        { "name": "previous_parent_openid", "fields": [{ "field": "previous_parent_openid", "order": "asc" }], "purpose": "按原上级追踪脱离事件" }
+      ]
+    },
+    {
       "name": "products",
       "indexes": [
         { "name": "status_sales_count", "fields": [{ "field": "status", "order": "asc" }, { "field": "sales_count", "order": "desc" }], "purpose": "商品列表销量排序" },

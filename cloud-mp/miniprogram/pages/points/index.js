@@ -172,7 +172,7 @@ Page({
         navTopPadding: 20,
         navBarHeight: 44,
         featureFlags: {
-            enable_lottery_entry: false
+            enable_lottery_entry: true
         },
         showLotteryEntry: false,
         lightTipShow: false,

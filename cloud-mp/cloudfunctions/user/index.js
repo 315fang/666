@@ -1459,10 +1459,15 @@ function normalizeAddressRecord(address = {}) {
     const phone = resolveAddressPhone(address);
     const detail = resolveAddressDetail(address);
     const isDefault = address.is_default === true || address.is_default === 1 || address.is_default === '1';
+    const primaryId = address._id || address.address_id || address.id || '';
+    const legacyId = address._legacy_id || (
+        address.id && address._id && String(address.id) !== String(address._id) ? address.id : ''
+    );
 
     return {
         ...address,
-        id: address.id || address._id || address.address_id || '',
+        id: primaryId,
+        legacy_id: legacyId,
         receiver_name: receiverName,
         recipient: receiverName,
         name: pickAddressText(address.name) || receiverName,
@@ -1475,6 +1480,14 @@ function normalizeAddressRecord(address = {}) {
         detail_address: pickAddressText(address.detail_address) || detail,
         is_default: isDefault
     };
+}
+
+function addressMatchesLookup(address = {}, lookup = '') {
+    const key = String(lookup || '');
+    if (!key) return false;
+    return [address._id, address.address_id, address.id, address._legacy_id, address.legacy_id]
+        .filter((value) => value !== null && value !== undefined && value !== '')
+        .some((value) => String(value) === key);
 }
 
 function pickDefaultAddressRecord(addresses = []) {
@@ -1613,7 +1626,7 @@ const handleAction = {
             () => userAddresses.listAddresses(openid),
             { action: 'getAddressDetail', openid }
         );
-        const addr = addresses.find(a => a._id === id);
+        const addr = addresses.find(a => addressMatchesLookup(a, id));
         if (!addr) throw notFound('地址不存在');
         return success(normalizeAddressRecord(addr));
     }),

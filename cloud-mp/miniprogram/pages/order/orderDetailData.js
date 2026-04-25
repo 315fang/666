@@ -4,6 +4,21 @@ const { resolveCloudImageList, resolveCloudImageUrl } = require('./utils/cloudAs
 const { logisticsCompanyLabel } = require('./utils/logisticsCompany');
 const { normalizeOrderConsumer, normalizeRefundConsumer, toMoney } = require('./orderConsumerFields');
 
+const PAID_ORDER_POST_PROCESS_STATUSES = new Set([
+    'paid',
+    'pending_group',
+    'pickup_pending',
+    'agent_confirmed',
+    'shipping_requested',
+    'shipped',
+    'completed'
+]);
+
+function shouldSyncPaidOrderPostProcess(order = {}) {
+    const status = String(order.status || '').trim();
+    return PAID_ORDER_POST_PROCESS_STATUSES.has(status);
+}
+
 function buildOrderActivityInfo(order = {}) {
     const firstItem = Array.isArray(order.items) ? (order.items[0] || {}) : {};
     const type = order.type || order.order_type || firstItem.activity_type || '';
@@ -136,6 +151,10 @@ async function loadOrder(page, idOrNo) {
 
         page.showOrderBubble(order);
 
+        if (order && shouldSyncPaidOrderPostProcess(order)) {
+            page._maybeSyncWechatPayAfterLoad(order.id);
+        }
+
         if (order && (order.status === 'pending' || order.status === 'pending_payment')) {
             page._maybeSyncWechatPayAfterLoad(order.id);
             // 启动支付倒计时
@@ -168,7 +187,8 @@ function maybeSyncWechatPayAfterLoad(page, orderId) {
     page._pendingPaySyncTs[orderId] = now;
     post(`/orders/${orderId}/sync-wechat-pay`, {}, { showError: false, maxRetries: 0, timeout: 12000 })
         .then((result) => {
-            if (result && result.code === 0 && result.data && result.data.synced) {
+            const data = result && result.data;
+            if (result && result.code === 0 && data && (data.synced || (data.post_process_retried && data.post_processed))) {
                 page.loadOrder(orderId);
             }
         })
