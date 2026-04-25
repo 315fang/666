@@ -20,6 +20,8 @@ function roundMoney(value) {
 }
 
 const FLEX_BUNDLE_COMMISSION_ROLE_LEVELS = [0, 1, 2, 3, 4, 5, 6];
+const FIXED_BUNDLE_COMMISSION_MODE = 'fixed';
+const FIXED_BUNDLE_COMMISSION_SOURCE = 'bundle_option_fixed';
 
 function normalizeFixedCommissionMap(raw = {}) {
     const source = raw && typeof raw === 'object' ? raw : {};
@@ -291,6 +293,8 @@ async function resolveBundleContext(rawBundleContext = {}, submittedItems = []) 
             product_image: resolveProductImage(product, matchingOption.resolvedSku),
             product_name: pickString(product.name || product.title || ''),
             spec_text: matchingOption.resolvedSku ? buildSkuSpecText(matchingOption.resolvedSku) : '',
+            commission_mode: pickString(matchingOption.option.commission_mode || FIXED_BUNDLE_COMMISSION_MODE, FIXED_BUNDLE_COMMISSION_MODE),
+            commission_source: pickString(matchingOption.option.commission_source || FIXED_BUNDLE_COMMISSION_SOURCE, FIXED_BUNDLE_COMMISSION_SOURCE),
             commission_pool_amount: commissionPoolAmount,
             solo_commission_fixed_by_role: soloCommissionMap,
             direct_commission_fixed_by_role: directCommissionMap,
@@ -320,6 +324,8 @@ async function resolveBundleContext(rawBundleContext = {}, submittedItems = []) 
             bundle_group_key: selection.group_key,
             bundle_group_title: selection.group_title,
             bundle_parent_title: pickString(bundle.title),
+            commission_mode: selection.commission_mode,
+            commission_source: selection.commission_source,
             commission_pool_amount: selection.commission_pool_amount,
             solo_commission_fixed_by_role: selection.solo_commission_fixed_by_role,
             direct_commission_fixed_by_role: selection.direct_commission_fixed_by_role,

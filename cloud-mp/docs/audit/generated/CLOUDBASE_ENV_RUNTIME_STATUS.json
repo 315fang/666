@@ -1,6 +1,6 @@
 {
   "kind": "runtime_status",
-  "generated_at": "2026-04-24T06:56:23.718Z",
+  "generated_at": "2026-04-25T03:09:59.593Z",
   "ok": true,
   "environment": {
     "env_id": "cloud1-9gywyqe49638e46f",
@@ -12,7 +12,7 @@
       {
         "name": "users",
         "expected": 167,
-        "actual": 211,
+        "actual": 213,
         "status": "count_above_seed",
         "listed": false,
         "structure_count": null,
@@ -23,10 +23,10 @@
       {
         "name": "products",
         "expected": 11,
-        "actual": 19,
+        "actual": 20,
         "status": "count_above_seed",
         "listed": true,
-        "structure_count": 19,
+        "structure_count": 20,
         "structure_status": "listed",
         "read_source": "direct_read",
         "read_error": ""
@@ -56,10 +56,10 @@
       {
         "name": "cart_items",
         "expected": 25,
-        "actual": 71,
+        "actual": 73,
         "status": "count_above_seed",
         "listed": true,
-        "structure_count": 71,
+        "structure_count": 73,
         "structure_status": "listed",
         "read_source": "direct_read",
         "read_error": ""
@@ -67,10 +67,10 @@
       {
         "name": "orders",
         "expected": 59,
-        "actual": 192,
+        "actual": 193,
         "status": "count_above_seed",
         "listed": true,
-        "structure_count": 192,
+        "structure_count": 193,
         "structure_status": "listed",
         "read_source": "direct_read",
         "read_error": ""
@@ -78,7 +78,7 @@
       {
         "name": "refunds",
         "expected": 9,
-        "actual": 33,
+        "actual": 34,
         "status": "count_above_seed",
         "listed": false,
         "structure_count": null,

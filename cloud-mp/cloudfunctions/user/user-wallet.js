@@ -55,6 +55,16 @@ function uniqueValues(values) {
     return list;
 }
 
+function getDateKey(date = new Date()) {
+    const value = date instanceof Date ? date : new Date(date);
+    if (Number.isNaN(value.getTime())) return '';
+    return [
+        value.getFullYear(),
+        String(value.getMonth() + 1).padStart(2, '0'),
+        String(value.getDate()).padStart(2, '0')
+    ].join('-');
+}
+
 function parseConfigValue(row, fallback) {
     if (!row) return fallback;
     const value = row.config_value !== undefined ? row.config_value : row.value;
@@ -606,9 +616,10 @@ async function pointsSignInStatus(openid) {
     const pointRules = await loadPointRules();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const todayKey = getDateKey(today);
 
     const lastSignIn = userData.last_sign_in_at ? new Date(userData.last_sign_in_at) : null;
-    const signedToday = lastSignIn && lastSignIn >= today;
+    const signedToday = userData.last_sign_in_date === todayKey || (lastSignIn && lastSignIn >= today);
 
     // 计算连续签到天数
     let consecutiveDays = toNumber(userData.consecutive_sign_days, 0);
@@ -639,9 +650,10 @@ async function pointsSignIn(openid) {
     const pointRules = await loadPointRules();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const todayKey = getDateKey(today);
 
     const lastSignIn = userData.last_sign_in_at ? new Date(userData.last_sign_in_at) : null;
-    if (lastSignIn && lastSignIn >= today) {
+    if (userData.last_sign_in_date === todayKey || (lastSignIn && lastSignIn >= today)) {
         throw new Error('今日已签到');
     }
 
@@ -657,27 +669,46 @@ async function pointsSignIn(openid) {
 
     const rewardPoints = getSignInReward(consecutiveDays, pointRules);
 
-    // 发放积分
-    await db.collection('users').where({ openid }).update({
+    // 发放积分：按 last_sign_in_date 做条件更新，避免多端并发重复领取。
+    const signInUpdateRes = await db.collection('users').where({ openid, last_sign_in_date: _.neq(todayKey) }).update({
         data: {
             points: _.inc(rewardPoints),
             consecutive_sign_days: consecutiveDays,
             last_sign_in_at: db.serverDate(),
+            last_sign_in_date: todayKey,
             updated_at: db.serverDate(),
         },
     });
+    if (!signInUpdateRes.stats || signInUpdateRes.stats.updated === 0) {
+        throw new Error('今日已签到');
+    }
 
     // 记录日志
-    await db.collection('point_logs').add({
-        data: {
-            openid,
-            type: 'earn',
-            amount: rewardPoints,
-            source: 'sign_in',
-            description: `签到奖励（连续${consecutiveDays}天）`,
-            created_at: db.serverDate(),
-        },
-    });
+    try {
+        await db.collection('point_logs').add({
+            data: {
+                openid,
+                type: 'earn',
+                amount: rewardPoints,
+                source: 'sign_in',
+                description: `签到奖励（连续${consecutiveDays}天）`,
+                created_at: db.serverDate(),
+            },
+        });
+    } catch (logErr) {
+        const rollbackData = {
+            points: _.inc(-rewardPoints),
+            consecutive_sign_days: toNumber(userData.consecutive_sign_days, 0),
+            last_sign_in_at: userData.last_sign_in_at || _.remove(),
+            last_sign_in_date: userData.last_sign_in_date || _.remove(),
+            updated_at: db.serverDate()
+        };
+        await db.collection('users')
+            .where({ openid, last_sign_in_date: todayKey })
+            .update({ data: rollbackData })
+            .catch(() => {});
+        throw new Error(`签到流水写入失败：${logErr.message || '未知错误'}`);
+    }
 
     return {
         success: true,

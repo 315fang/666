@@ -1,0 +1,76 @@
+{
+  "generatedAt": "2026-04-25T03:31:38.522Z",
+  "baseUrl": "https://cloud1-9gywyqe49638e46f.service.tcloudbase.com/admin/api",
+  "ok": true,
+  "results": [
+    {
+      "name": "products",
+      "ok": true,
+      "status": 200,
+      "count": 20,
+      "issues": []
+    },
+    {
+      "name": "orders",
+      "ok": true,
+      "status": 200,
+      "count": 20,
+      "issues": []
+    },
+    {
+      "name": "users",
+      "ok": true,
+      "status": 200,
+      "count": 20,
+      "issues": []
+    },
+    {
+      "name": "refunds",
+      "ok": true,
+      "status": 200,
+      "count": 20,
+      "issues": []
+    },
+    {
+      "name": "withdrawals",
+      "ok": true,
+      "status": 200,
+      "count": 6,
+      "issues": []
+    },
+    {
+      "name": "commissions",
+      "ok": true,
+      "status": 200,
+      "count": 10,
+      "issues": []
+    },
+    {
+      "name": "group-buys",
+      "ok": true,
+      "status": 200,
+      "count": 2,
+      "issues": []
+    },
+    {
+      "name": "lottery-prizes",
+      "ok": true,
+      "status": 200,
+      "count": 13,
+      "issues": []
+    },
+    {
+      "name": "pickup-stations",
+      "ok": true,
+      "status": 200,
+      "count": 4,
+      "issues": []
+    },
+    {
+      "name": "activity-links",
+      "ok": true,
+      "status": 200,
+      "issues": []
+    }
+  ]
+}

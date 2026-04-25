@@ -5,7 +5,10 @@
       :leader-search-loading="leaderSearchLoading"
       :leader-options="leaderOptions"
       :remote-search-leaders="remoteSearchLeaders"
-      :on-open-team-summary="openTeamSummary"
+      :team-level-stats="teamLevelStats"
+      :team-level-stats-loading="teamLevelStatsLoading"
+      :on-team-level-change="handleTeamLevelChange"
+      :on-team-leader-change="handleTeamLeaderChange"
       :on-search="handleSearch"
       :on-reset="handleReset"
     />
@@ -36,18 +39,6 @@
       :on-dropdown="handleDropdown"
     />
 
-    <TeamSummaryDialog
-      :visible="teamSummaryVisible"
-      :loading="teamSummaryLoading"
-      :data="teamSummaryData"
-      :range="teamSummaryRange"
-      :on-visibility-change="(value) => { teamSummaryVisible = value }"
-      :on-opened="onTeamSummaryOpened"
-      :on-closed="onTeamSummaryClosed"
-      :on-range-change="(value) => { teamSummaryRange = value; loadTeamSummary() }"
-      :on-apply-filter="applyTeamListFilter"
-    />
-
     <UserDetailDrawer
       :visible="detailVisible"
       :detail-user="detailUser"
@@ -55,7 +46,6 @@
       :detail-stats="detailStats"
       :detail-tag-list="detailTagList"
       :detail-avg-order-amount="detailAvgOrderAmount"
-      :detail-team-preview="detailTeamPreview"
       :commerce-saving="commerceSaving"
       :profile-saving="profileSaving"
       :can-manage-user-portal-password="canManageUserPortalPassword"
@@ -71,7 +61,6 @@
       :on-commerce-toggle="onCommerceToggle"
       :on-edit-real-name="onEditRealName"
       :on-open-parent-detail="openParentDetail"
-      :on-open-team-summary="openTeamSummaryFromDetail"
       :on-go-team-member-list="goTeamMemberListFromDetail"
       :on-reset-portal-password="onResetPortalPassword"
       :on-unlock-portal-password="onUnlockPortalPassword"
@@ -166,7 +155,6 @@ import {
   searchUsersLite,
   getUserById,
   getUserTeam,
-  getUserTeamSummary,
   getMemberTierConfig,
   updateUserRole,
   updateUserPurchaseLevel,
@@ -184,7 +172,6 @@ import {
 } from '@/api'
 import UserSearchPanel from './components/UserSearchPanel.vue'
 import UserListTableCard from './components/UserListTableCard.vue'
-import TeamSummaryDialog from './components/TeamSummaryDialog.vue'
 import UserDetailDrawer from './components/UserDetailDrawer.vue'
 import UserActionDialogsPrimary from './components/UserActionDialogsPrimary.vue'
 import UserActionDialogsSecondary from './components/UserActionDialogsSecondary.vue'
@@ -209,18 +196,16 @@ const { pagination, resetPage, applyResponse } = usePagination()
  *  role_level  - 用户角色等级（0 VIP用户 1 初级会员 … 5 区域合伙人 6 线下实体门店）
  *  status      - 账号状态（active/disabled）
  *  team_leader_id - 按所属负责人 ID 筛选，远程搜索后选择
+ *  team_level     - 团队筛选层级：1 一级直推，2 二级扩散
  *  lookup      - 精确匹配任意用户标识（跨页跳转专用，不暴露在表单里）
  */
-const searchForm = reactive({ keyword: String(route.query.keyword || ''), member_no: '', role_level: '', status: '', team_leader_id: '', include_hidden: false })
+const searchForm = reactive({ keyword: String(route.query.keyword || ''), member_no: '', role_level: '', status: '', team_leader_id: '', team_level: '1', include_hidden: false })
 const routeLookup = ref(String(route.query.lookup || ''))
 const leaderOptions = ref([])
 const leaderSearchLoading = ref(false)
-const teamSummaryVisible = ref(false)
-const teamSummaryLoading = ref(false)
-const teamSummaryData = ref(null)
-const teamSummaryRange = ref('all')
-/** 弹窗当前针对的负责人 ID（列表筛选或详情进入） */
-const teamSummaryActiveId = ref(null)
+const teamLevelStats = reactive({ 1: null, 2: null })
+const teamLevelStatsLoading = ref(false)
+let teamLevelStatsSeq = 0
 const displayUser = (user) => normalizeUserDisplay(user || {})
 const displayUserName = (user, fallback = '-') => getUserNickname(displayUser(user), fallback)
 const selectedIds = ref([])
@@ -260,6 +245,7 @@ const fetchUsers = async () => {
       team_leader_id: searchForm.team_leader_id !== '' && searchForm.team_leader_id != null
         ? searchForm.team_leader_id
         : undefined,
+      team_level: searchForm.team_leader_id ? (searchForm.team_level || '1') : undefined,
       include_hidden: searchForm.include_hidden ? '1' : undefined,
       lookup: routeLookup.value || undefined,
       page: pagination.page,
@@ -310,15 +296,46 @@ const inferUserCleanupCategory = (row = {}) => {
   return 'manual_cleanup'
 }
 
+const clearTeamLevelStats = () => {
+  teamLevelStats[1] = null
+  teamLevelStats[2] = null
+}
+
+const loadTeamLevelStats = async () => {
+  const leaderId = searchForm.team_leader_id
+  const seq = ++teamLevelStatsSeq
+  if (!leaderId) {
+    clearTeamLevelStats()
+    teamLevelStatsLoading.value = false
+    return
+  }
+  teamLevelStatsLoading.value = true
+  try {
+    const [firstLevel, secondLevel] = await Promise.all([
+      getUserTeam(leaderId, { level: 1, page: 1, limit: 1 }),
+      getUserTeam(leaderId, { level: 2, page: 1, limit: 1 })
+    ])
+    if (seq !== teamLevelStatsSeq) return
+    teamLevelStats[1] = firstLevel?.total ?? firstLevel?.pagination?.total ?? 0
+    teamLevelStats[2] = secondLevel?.total ?? secondLevel?.pagination?.total ?? 0
+  } catch (e) {
+    if (seq === teamLevelStatsSeq) clearTeamLevelStats()
+  } finally {
+    if (seq === teamLevelStatsSeq) teamLevelStatsLoading.value = false
+  }
+}
+
 const handleSearch = () => {
   routeLookup.value = ''
   resetPage()
+  loadTeamLevelStats()
   refreshUsers()
 }
 const handleReset = () => {
   routeLookup.value = ''
-  Object.assign(searchForm, { keyword: '', member_no: '', role_level: '', status: '', team_leader_id: '', include_hidden: false })
+  Object.assign(searchForm, { keyword: '', member_no: '', role_level: '', status: '', team_leader_id: '', team_level: '1', include_hidden: false })
   leaderOptions.value = []
+  clearTeamLevelStats()
   handleSearch()
 }
 
@@ -347,65 +364,33 @@ const remoteSearchLeaders = (query) => {
   }, 300)
 }
 
-const loadTeamSummary = async () => {
-  const id = teamSummaryActiveId.value ?? searchForm.team_leader_id
-  if (!id) return
-  teamSummaryLoading.value = true
-  teamSummaryData.value = null
-  try {
-    const data = await getUserTeamSummary(id, { range: teamSummaryRange.value })
-    teamSummaryData.value = data
-  } catch (e) {
-    ElMessage.error(e?.message || '加载团队概况失败')
-  } finally {
-    teamSummaryLoading.value = false
-  }
-}
-
-const openTeamSummary = () => {
+const handleTeamLevelChange = () => {
   if (!searchForm.team_leader_id) return
-  teamSummaryActiveId.value = searchForm.team_leader_id
-  teamSummaryVisible.value = true
+  resetPage()
+  refreshUsers()
 }
 
-const onTeamSummaryOpened = () => {
-  loadTeamSummary()
-}
-
-const onTeamSummaryClosed = () => {
-  teamSummaryActiveId.value = null
-}
-
-const openTeamSummaryFromDetail = () => {
-  if (!detailUser.value?.id) return
-  teamSummaryActiveId.value = detailUser.value.id
-  teamSummaryVisible.value = true
+const handleTeamLeaderChange = () => {
+  routeLookup.value = ''
+  searchForm.team_level = searchForm.team_level || '1'
+  resetPage()
+  loadTeamLevelStats()
+  refreshUsers()
 }
 
 const goTeamMemberListFromDetail = () => {
   if (!detailUser.value?.id) return
   const u = detailUser.value
   searchForm.team_leader_id = u.id
+  searchForm.team_level = '1'
   if (!leaderOptions.value.some((x) => x.id === u.id)) {
     leaderOptions.value = [{ id: u.id, nickname: displayUserName(u, `用户#${u.id}`) }, ...leaderOptions.value]
   }
   detailVisible.value = false
   resetPage()
+  loadTeamLevelStats()
   refreshUsers()
-  ElMessage.success('已按该用户为「团队负责人」筛选列表（全体后代）')
-}
-
-const applyTeamListFilter = () => {
-  const lid = teamSummaryActiveId.value ?? searchForm.team_leader_id
-  if (lid) {
-    searchForm.team_leader_id = lid
-    if (!leaderOptions.value.some((x) => x.id === lid)) {
-      leaderOptions.value = [{ id: lid, nickname: `用户 #${lid}` }, ...leaderOptions.value]
-    }
-  }
-  teamSummaryVisible.value = false
-  resetPage()
-  refreshUsers()
+  ElMessage.success('已切到该用户的一级团队列表')
 }
 const handleSelectionChange = (rows) => { selectedIds.value = rows.map(r => r.id) }
 const handleBatchRoleChange = (value) => { batchRole.value = value }
@@ -431,7 +416,6 @@ const handleBatchRole = async () => {
 const detailVisible = ref(false)
 const detailUser = ref(null)
 const detailStats = ref(null)
-const detailTeamPreview = ref(null)
 const detailTab = ref('info')
 
 const teamData = ref([])
@@ -464,13 +448,9 @@ const applyDetailUserRecord = (record) => {
   detailStats.value = stats
 }
 
-const loadDetailUser = async (userId, { loadTeamSummary: withTeamSummary = true } = {}) => {
-  const [full, teamSum] = await Promise.all([
-    getUserById(userId),
-    withTeamSummary ? getUserTeamSummary(userId, { range: 'all' }).catch(() => null) : Promise.resolve(null)
-  ])
+const loadDetailUser = async (userId) => {
+  const full = await getUserById(userId)
   applyDetailUserRecord(full && typeof full === 'object' ? full : {})
-  if (withTeamSummary) detailTeamPreview.value = teamSum
 }
 
 const handleDetailVisibilityChange = (value) => {
@@ -494,7 +474,7 @@ watch(detailTab, async (val) => {
   if (val === 'team' && detailUser.value && teamData.value.length === 0) {
     teamLoading.value = true
     try {
-      const res = await getUserTeam(detailUser.value.id, { page: 1, limit: 100 })
+      const res = await getUserTeam(detailUser.value.id, { level: 1, page: 1, limit: 100 })
       teamData.value = res?.list || []
     } catch (e) {
       ElMessage.error(e?.message || '加载团队数据失败')
@@ -507,7 +487,6 @@ watch(detailTab, async (val) => {
 const openDetail = async (row) => {
   detailUser.value = row
   detailStats.value = null
-  detailTeamPreview.value = null
   detailTab.value = 'info'
   teamData.value = []
   detailVisible.value = true

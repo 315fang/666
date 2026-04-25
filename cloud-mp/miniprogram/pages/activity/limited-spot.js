@@ -73,7 +73,7 @@ Page({
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navBarHeight: app.globalData.navBarHeight || 44,
-            slotId: query.slot_id || ''
+            slotId: query.slot_id || query.id || ''
         });
         this.loadPage();
     },

@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-04-25T03:33:51.329Z",
+  "ok": true,
+  "results": [
+    {
+      "file": "cloudfunctions/admin-api/src/app.js",
+      "ok": true,
+      "output": ""
+    },
+    {
+      "file": "cloudfunctions/admin-api/src/admin-marketing.js",
+      "ok": true,
+      "output": ""
+    },
+    {
+      "file": "cloudfunctions/distribution/index.js",
+      "ok": true,
+      "output": ""
+    },
+    {
+      "file": "cloudfunctions/distribution/distribution-commission.js",
+      "ok": true,
+      "output": ""
+    },
+    {
+      "file": "cloudfunctions/payment/payment-prepay.js",
+      "ok": true,
+      "output": ""
+    },
+    {
+      "file": "cloudfunctions/order/order-create.js",
+      "ok": true,
+      "output": ""
+    }
+  ]
+}

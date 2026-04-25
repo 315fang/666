@@ -17,6 +17,13 @@ const {
 } = getAuditArtifactPaths(projectRoot, 'REFUND_RECON_AUDIT');
 const pageLimit = 500;
 
+function parseNameList(value) {
+    return pickString(value)
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
 function parseArgs(argv) {
     const options = {
         source: 'cloud',
@@ -26,7 +33,8 @@ function parseArgs(argv) {
         queryLimit: 100,
         jsonPath: defaultJsonPath,
         markdownPath: defaultMarkdownPath,
-        maxMarkdownRows: 50
+        maxMarkdownRows: 50,
+        ignoreTestOwners: parseNameList(process.env.REFUND_AUDIT_IGNORE_TEST_OWNERS)
     };
 
     argv.forEach((arg) => {
@@ -54,6 +62,8 @@ function parseArgs(argv) {
             if (Number.isFinite(value) && value > 0) {
                 options.maxMarkdownRows = value;
             }
+        } else if (arg.startsWith('--ignore-test-owners=')) {
+            options.ignoreTestOwners = parseNameList(arg.slice('--ignore-test-owners='.length));
         }
     });
 
@@ -103,6 +113,25 @@ function primaryId(row) {
     return row && (row._id || row.id || row._legacy_id || null);
 }
 
+function rowLookupTokens(row, extraValues = []) {
+    return [
+        row && row._id,
+        row && row.id,
+        row && row._legacy_id,
+        row && row.openid,
+        row && row.user_id,
+        row && row.buyer_id,
+        row && row.order_no,
+        row && row.refund_no,
+        row && row.member_no,
+        row && row.my_invite_code,
+        row && row.invite_code,
+        ...extraValues
+    ]
+        .map((value) => pickString(value))
+        .filter(Boolean);
+}
+
 function buildOrderLookup(orders) {
     const lookup = new Map();
     orders.forEach((order) => {
@@ -114,6 +143,57 @@ function buildOrderLookup(orders) {
         if (orderNo) lookup.set(orderNo, order);
     });
     return lookup;
+}
+
+function buildUserLookup(users = []) {
+    const lookup = new Map();
+    users.forEach((user) => {
+        rowLookupTokens(user, [user && user.uid]).forEach((key) => {
+            if (!lookup.has(key)) lookup.set(key, user);
+        });
+    });
+    return lookup;
+}
+
+function getUserDisplayName(user) {
+    return pickString(user && (user.nickname || user.nickName || user.name || user.username));
+}
+
+function resolveRefundOwner(refund, order, userLookup) {
+    const keys = [
+        refund && refund.openid,
+        refund && refund.user_openid,
+        refund && refund.user_id,
+        refund && refund.buyer_id,
+        order && order.openid,
+        order && order.user_id,
+        order && order.buyer_id
+    ].map((value) => pickString(value)).filter(Boolean);
+
+    for (const key of keys) {
+        const user = userLookup.get(key);
+        if (user) {
+            return {
+                key,
+                name: getUserDisplayName(user),
+                user_id: pickString(primaryId(user) || user.openid || key)
+            };
+        }
+    }
+
+    return {
+        key: keys[0] || '',
+        name: '',
+        user_id: keys[0] || ''
+    };
+}
+
+function resolveEffectivePaymentMethod(refund, order, ownerName, ignoreTestOwnerNames = new Set()) {
+    const raw = normalizePaymentMethodCode(refund.payment_method || (order && (order.payment_method || order.pay_type || order.pay_channel || order.payment_channel)));
+    if (raw === 'wallet' && ignoreTestOwnerNames.has(ownerName)) return 'test_wallet';
+    if (raw === 'unknown' && ignoreTestOwnerNames.has(ownerName)) return 'test_unknown';
+    if (raw === 'unknown' && ownerName) return 'wechat';
+    return raw;
 }
 
 function parseJsonlCollection(filePath) {
@@ -181,12 +261,16 @@ function loadCollections(source) {
     if (source === 'jsonl') {
         const ordersResult = parseJsonlCollection(path.join(localJsonlRoot, 'orders.json'));
         const refundsResult = parseJsonlCollection(path.join(localJsonlRoot, 'refunds.json'));
+        const usersPath = path.join(localJsonlRoot, 'users.json');
+        const usersResult = fs.existsSync(usersPath) ? parseJsonlCollection(usersPath) : { rows: [], parseErrors: [] };
         return {
             orders: ordersResult.rows,
             refunds: refundsResult.rows,
+            users: usersResult.rows,
             parseErrors: {
                 orders: ordersResult.parseErrors,
-                refunds: refundsResult.parseErrors
+                refunds: refundsResult.parseErrors,
+                users: usersResult.parseErrors
             }
         };
     }
@@ -201,9 +285,11 @@ function loadCollections(source) {
     return {
         orders: readCloudCollection('orders'),
         refunds: readCloudCollection('refunds'),
+        users: readCloudCollection('users'),
         parseErrors: {
             orders: [],
-            refunds: []
+            refunds: [],
+            users: []
         }
     };
 }
@@ -303,9 +389,27 @@ function buildActionDecision(localStatus, wxStatus) {
 function buildInternalDecision(paymentMethod, localStatus) {
     if (paymentMethod === 'goods_fund') {
         return {
-            action: 'internal_goods_fund_review',
-            severity: localStatus === 'completed' ? 'info' : 'warning',
-            reason: localStatus === 'completed' ? '货款余额退款，默认视为内部完成' : `货款余额退款，本地当前为 ${localStatus || 'unknown'}`
+            action: 'ignored_test_goods_fund',
+            severity: 'info',
+            reason: localStatus === 'completed'
+                ? '货款余额退款为已确认测试数据，本次审计忽略'
+                : `货款余额退款为已确认测试数据，本地当前为 ${localStatus || 'unknown'}`
+        };
+    }
+
+    if (paymentMethod === 'test_wallet') {
+        return {
+            action: 'ignored_test_wallet',
+            severity: 'info',
+            reason: '账户余额退款为已确认测试数据，本次审计忽略'
+        };
+    }
+
+    if (paymentMethod === 'test_unknown') {
+        return {
+            action: 'ignored_test_unknown',
+            severity: 'info',
+            reason: '缺少支付方式的退款属于已确认测试用户，本次审计忽略'
         };
     }
 
@@ -324,6 +428,10 @@ function buildInternalDecision(paymentMethod, localStatus) {
         severity: 'warning',
         reason: '缺少支付方式或关联订单信息，暂时无法判断真实退款通道'
     };
+}
+
+function isActionableRefundItem(item) {
+    return !['noop', 'ignored_test_goods_fund', 'ignored_test_wallet', 'ignored_test_unknown'].includes(item.action);
 }
 
 function formatDateTime(value) {
@@ -364,16 +472,16 @@ function renderMarkdown(report) {
         });
 
     const actionableItems = report.items
-        .filter((item) => item.action !== 'noop')
+        .filter(isActionableRefundItem)
         .slice(0, report.options.maxMarkdownRows);
 
     summaryLines.push('');
     summaryLines.push(`## 待处理记录（前 ${actionableItems.length} 条）`);
     summaryLines.push('');
-    summaryLines.push('| 退款单 | 订单号 | 通道 | 本地状态 | 微信状态 | 动作 | 说明 |');
-    summaryLines.push('| --- | --- | --- | --- | --- | --- | --- |');
+    summaryLines.push('| 退款单 | 订单号 | 用户 | 通道 | 本地状态 | 微信状态 | 动作 | 说明 |');
+    summaryLines.push('| --- | --- | --- | --- | --- | --- | --- | --- |');
     actionableItems.forEach((item) => {
-        summaryLines.push(`| ${item.refund_no || item.refund_id} | ${item.order_no || item.order_id || '-'} | ${item.payment_method} | ${item.local_status} | ${item.wechat_status || '-'} | ${item.action} | ${item.reason} |`);
+        summaryLines.push(`| ${item.refund_no || item.refund_id} | ${item.order_no || item.order_id || '-'} | ${item.owner_nickname || '-'} | ${item.payment_method} | ${item.local_status} | ${item.wechat_status || '-'} | ${item.action} | ${item.reason} |`);
     });
 
     if (report.items.length > actionableItems.length) {
@@ -381,12 +489,13 @@ function renderMarkdown(report) {
         summaryLines.push(`其余 ${report.items.length - actionableItems.length} 条记录见 JSON：\`${path.relative(projectRoot, report.paths.json)}\``);
     }
 
-    if (report.parse_errors.orders.length || report.parse_errors.refunds.length) {
+    if (report.parse_errors.orders.length || report.parse_errors.refunds.length || report.parse_errors.users.length) {
         summaryLines.push('');
         summaryLines.push('## 解析警告');
         summaryLines.push('');
         summaryLines.push(`- orders 解析失败：${report.parse_errors.orders.length}`);
         summaryLines.push(`- refunds 解析失败：${report.parse_errors.refunds.length}`);
+        summaryLines.push(`- users 解析失败：${report.parse_errors.users.length}`);
     }
 
     return `${summaryLines.join('\n')}\n`;
@@ -396,6 +505,8 @@ async function main() {
     const options = parseArgs(process.argv.slice(2));
     const collections = loadCollections(options.source);
     const orderLookup = buildOrderLookup(collections.orders);
+    const userLookup = buildUserLookup(collections.users);
+    const ignoreTestOwnerNames = new Set(options.ignoreTestOwners);
     const wechatQuery = options.skipWechat ? {
         available: false,
         reason: '显式跳过微信官方查询'
@@ -405,7 +516,8 @@ async function main() {
         const localStatus = normalizeRefundStatus(refund.status);
         if (options.statuses.length && !options.statuses.includes(localStatus)) return false;
         const order = orderLookup.get(String(refund.order_id)) || orderLookup.get(pickString(refund.order_no));
-        const paymentMethod = normalizePaymentMethodCode(refund.payment_method || (order && (order.payment_method || order.pay_type || order.pay_channel || order.payment_channel)));
+        const owner = resolveRefundOwner(refund, order, userLookup);
+        const paymentMethod = resolveEffectivePaymentMethod(refund, order, owner.name, ignoreTestOwnerNames);
         if (options.onlyWechat && paymentMethod !== 'wechat') return false;
         return true;
     });
@@ -416,7 +528,9 @@ async function main() {
 
     for (const refund of filteredRefunds) {
         const order = orderLookup.get(String(refund.order_id)) || orderLookup.get(pickString(refund.order_no)) || null;
-        const paymentMethod = normalizePaymentMethodCode(refund.payment_method || (order && (order.payment_method || order.pay_type || order.pay_channel || order.payment_channel)));
+        const rawPaymentMethod = normalizePaymentMethodCode(refund.payment_method || (order && (order.payment_method || order.pay_type || order.pay_channel || order.payment_channel)));
+        const owner = resolveRefundOwner(refund, order, userLookup);
+        const paymentMethod = resolveEffectivePaymentMethod(refund, order, owner.name, ignoreTestOwnerNames);
         const localStatus = normalizeRefundStatus(refund.status);
         const baseItem = {
             refund_id: primaryId(refund),
@@ -425,6 +539,9 @@ async function main() {
             order_no: pickString(refund.order_no || (order && order.order_no)),
             amount: toNumber(refund.amount, 0),
             payment_method: paymentMethod,
+            raw_payment_method: rawPaymentMethod,
+            owner_nickname: owner.name,
+            owner_user_id: owner.user_id,
             local_status: localStatus,
             created_at: formatDateTime(refund.created_at),
             completed_at: formatDateTime(refund.completed_at),
@@ -487,11 +604,12 @@ async function main() {
                 wx_success_time: formatDateTime(wxResult && wxResult.success_time)
             });
         } catch (error) {
+            const isNotFound = /退款单不存在|not\s*exist|not\s*found/i.test(error.message || '');
             items.push({
                 ...baseItem,
-                action: 'wechat_query_error',
-                severity: 'high',
-                reason: `微信查询失败: ${error.message}`,
+                action: isNotFound ? 'wechat_refund_not_found' : 'wechat_query_error',
+                severity: isNotFound ? 'warning' : 'high',
+                reason: isNotFound ? '微信官方未查询到该退款单，需确认是否实际发起过微信退款' : `微信查询失败: ${error.message}`,
                 authoritative_status: 'ERROR'
             });
         }
@@ -527,8 +645,10 @@ async function main() {
             audited_refunds: filteredRefunds.length,
             wechat_refunds: items.filter((item) => item.payment_method === 'wechat').length,
             internal_refunds: items.filter((item) => item.payment_method !== 'wechat').length,
-            actionable_refunds: items.filter((item) => item.action !== 'noop').length,
-            unknown_channel_refunds: items.filter((item) => item.payment_method === 'unknown').length,
+            actionable_refunds: items.filter(isActionableRefundItem).length,
+            unknown_channel_refunds: items.filter((item) => item.raw_payment_method === 'unknown').length,
+            inferred_wechat_refunds: items.filter((item) => item.raw_payment_method === 'unknown' && item.payment_method === 'wechat').length,
+            ignored_test_refunds: items.filter((item) => String(item.action || '').startsWith('ignored_test_')).length,
             actions: summaryActions,
             severities: summarySeverities
         },

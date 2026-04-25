@@ -111,11 +111,21 @@ function resolveOrderExpireAt(order, defaultMinutes) {
     return explicit.getTime() >= fallback.getTime() ? explicit : fallback;
 }
 
+function buildCouponRestorePatch() {
+    return {
+        status: 'unused',
+        used_at: _.remove(),
+        used_order_id: _.remove(),
+        order_id: _.remove(),
+        updated_at: db.serverDate()
+    };
+}
+
 async function restoreUsedCoupon(order) {
     if (order.user_coupon_id) {
         const restored = await db.collection('user_coupons')
             .doc(String(order.user_coupon_id))
-            .update({ data: { status: 'unused', used_at: _.remove() } })
+            .update({ data: buildCouponRestorePatch() })
             .then(() => true)
             .catch(() => false);
         if (restored) return;
@@ -123,7 +133,7 @@ async function restoreUsedCoupon(order) {
     if (order.coupon_id) {
         await db.collection('user_coupons')
             .where({ openid: order.openid, coupon_id: order.coupon_id, status: 'used' })
-            .update({ data: { status: 'unused', used_at: _.remove() } })
+            .update({ data: buildCouponRestorePatch() })
             .catch(() => {});
     }
 }

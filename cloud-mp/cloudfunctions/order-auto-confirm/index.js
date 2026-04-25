@@ -28,63 +28,79 @@ exports.main = async () => {
     let hasMore = true;
 
     while (hasMore) {
-    const res = await db.collection('orders')
-        .where({
-            status: 'shipped',
-            shipped_at: _.lte(cutoff)
-        })
-        .limit(batchSize)
-        .get()
-        .catch((err) => {
-            console.error('[OrderAutoConfirm] query failed:', err.message);
-            return { data: [] };
-        });
-
-    const batch = res.data || [];
-    if (batch.length === 0) break;
-    hasMore = batch.length === batchSize;
-
-    for (const order of batch) {
-        try {
-            const pendingRefund = await db.collection('refunds')
-                .where({
-                    order_id: order._id,
-                    status: _.in(['pending', 'approved', 'processing'])
-                })
-                .limit(1)
-                .get()
-                .catch(() => ({ data: [] }));
-
-            if (pendingRefund.data && pendingRefund.data.length > 0) {
-                continue;
-            }
-
-            await db.collection('orders').doc(order._id).update({
-                data: {
-                    status: 'completed',
-                    confirmed_at: db.serverDate(),
-                    auto_confirmed_at: db.serverDate(),
-                    updated_at: db.serverDate()
-                }
+        const res = await db.collection('orders')
+            .where({
+                status: 'shipped',
+                shipped_at: _.lte(cutoff)
+            })
+            .limit(batchSize)
+            .get()
+            .catch((err) => {
+                console.error('[OrderAutoConfirm] query failed:', err.message);
+                return { data: [] };
             });
 
-            await db.collection('commissions')
-                .where({ order_id: order._id, status: _.in(['pending', 'pending_approval']) })
-                .update({
-                    data: {
-                        status: 'frozen',
-                        frozen_at: db.serverDate(),
-                        refund_deadline: refundDeadlineDate(),
-                        updated_at: db.serverDate()
-                    }
-                })
-                .catch(() => {});
+        const batch = res.data || [];
+        if (batch.length === 0) break;
+        hasMore = batch.length === batchSize;
 
-            confirmed += 1;
-        } catch (err) {
-            errors.push({ order_id: order._id, error: err.message });
+        for (const order of batch) {
+            try {
+                const orderTokens = [order._id, order.id, order.order_no]
+                    .filter((value) => value !== undefined && value !== null && value !== '');
+                const pendingRefund = await db.collection('refunds')
+                    .where(_.and([
+                        _.or([
+                            { order_id: _.in(orderTokens) },
+                            { order_no: _.in(orderTokens) }
+                        ]),
+                        { status: _.in(['pending', 'approved', 'processing']) }
+                    ]))
+                    .limit(1)
+                    .get()
+                    .catch(() => ({ data: [] }));
+
+                if (pendingRefund.data && pendingRefund.data.length > 0) {
+                    continue;
+                }
+
+                const updateRes = await db.collection('orders')
+                    .where({ _id: order._id, status: 'shipped' })
+                    .update({
+                        data: {
+                            status: 'completed',
+                            confirmed_at: db.serverDate(),
+                            auto_confirmed_at: db.serverDate(),
+                            updated_at: db.serverDate()
+                        }
+                    });
+                if (!updateRes.stats || updateRes.stats.updated === 0) {
+                    continue;
+                }
+
+                const commissionRes = await db.collection('commissions')
+                    .where({ order_id: order._id, status: _.in(['pending', 'pending_approval']) })
+                    .get()
+                    .catch(() => ({ data: [] }));
+                for (const commission of (commissionRes.data || [])) {
+                    await db.collection('commissions').doc(String(commission._id)).update({
+                        data: {
+                            status: 'frozen',
+                            pre_freeze_status: commission.status,
+                            commission_freeze_reason: 'order_confirm',
+                            frozen_at: db.serverDate(),
+                            refund_deadline: refundDeadlineDate(),
+                            updated_at: db.serverDate()
+                        }
+                    })
+                    .catch(() => {});
+                }
+
+                confirmed += 1;
+            } catch (err) {
+                errors.push({ order_id: order._id, error: err.message });
+            }
         }
-    }
     } // end while
 
     console.log(`[OrderAutoConfirm] confirmed=${confirmed}, errors=${errors.length}`);

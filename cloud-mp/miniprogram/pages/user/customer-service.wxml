@@ -8,7 +8,6 @@
       <view class="hero-header">
         <view class="hero-copy">
           <text class="screen-title">专属客服</text>
-          <text class="screen-subtitle">订单、售后、商品使用问题，都从这里快速找到正确入口。</text>
         </view>
         <view class="hero-mark">
           <image class="hero-mark-icon" src="/assets/icons/headphones.svg" mode="aspectFit"></image>
@@ -31,7 +30,6 @@
       <view class="command-head">
         <view>
           <text class="command-title">当前推荐联系渠道</text>
-          <text class="command-subtitle">优先使用当前已配置的官方客服方式，响应路径更短。</text>
         </view>
         <view class="advisor-status">可用</view>
       </view>
@@ -66,7 +64,6 @@
 
     <view class="section-heading section-heading--faq">
       <text class="section-heading-title">常见问题</text>
-      <text class="section-heading-desc">先看处理路径，再联系顾问，沟通会更快。</text>
     </view>
 
     <view class="surface-card surface-card--list">

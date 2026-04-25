@@ -75,9 +75,18 @@ function main() {
         let brief = result.ok ? '执行完成' : '执行失败';
 
         if (step.name === 'financeFirewall' && payload?.summary) {
-            brief = `缺口项 ${Object.values(payload.summary).reduce((sum, value) => sum + Number(value || 0), 0)}`;
+            const gapCount = Object.entries(payload.summary)
+                .filter(([key]) => key.startsWith('missing_'))
+                .reduce((sum, [, value]) => sum + Number(value || 0), 0);
+            brief = `缺口项 ${gapCount}`;
         } else if (step.name === 'refundRecon' && payload?.summary) {
-            brief = `退款 ${payload.summary.audited_refunds} 笔，微信 ${payload.summary.wechat_refunds}，未知通道 ${payload.summary.unknown_channel_refunds || 0}`;
+            brief = [
+                `退款 ${payload.summary.audited_refunds} 笔`,
+                `微信 ${payload.summary.wechat_refunds}`,
+                `原始未知 ${payload.summary.unknown_channel_refunds || 0}`,
+                `推断微信 ${payload.summary.inferred_wechat_refunds || 0}`,
+                `测试忽略 ${payload.summary.ignored_test_refunds || 0}`
+            ].join('，');
         } else if (step.name === 'financeSmoke' && payload?.results) {
             brief = `接口 ${payload.results.length} 个，失败 ${payload.results.filter((item) => !item.ok).length} 个`;
         } else if (step.name === 'financeSyntax' && payload?.results) {

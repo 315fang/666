@@ -106,6 +106,7 @@ function renderMarkdown(report) {
         '| --- | ---: |',
         `| 内部余额退款缺少流水 | ${report.summary.missing_internal_wallet_logs} |`,
         `| 内部货款退款缺少流水 | ${report.summary.missing_internal_goods_fund_logs} |`,
+        `| 已忽略货款测试退款 | ${report.summary.ignored_goods_fund_test_refunds} |`,
         `| 回退修复缺少反向流水 | ${report.summary.missing_reopen_reversal_logs} |`,
         `| 管理员战略调账缺少原因 | ${report.summary.missing_adjustment_reasons} |`,
         `| 代理商欠款缺少原因 | ${report.summary.missing_debt_reasons} |`,
@@ -116,6 +117,7 @@ function renderMarkdown(report) {
     const sections = [
         { title: '内部余额退款缺少流水', rows: report.findings.missingInternalWalletLogs },
         { title: '内部货款退款缺少流水', rows: report.findings.missingInternalGoodsFundLogs },
+        { title: '已忽略货款测试退款', rows: report.findings.ignoredGoodsFundTestRefunds },
         { title: '回退修复缺少反向流水', rows: report.findings.missingReopenReversalLogs },
         { title: '管理员战略调账缺少原因', rows: report.findings.missingAdjustmentReasons },
         { title: '代理商欠款缺少原因', rows: report.findings.missingDebtReasons },
@@ -157,6 +159,7 @@ function main() {
 
     const missingInternalWalletLogs = [];
     const missingInternalGoodsFundLogs = [];
+    const ignoredGoodsFundTestRefunds = [];
     const missingReopenReversalLogs = [];
 
     refunds.forEach((refund) => {
@@ -171,14 +174,14 @@ function main() {
             missingInternalWalletLogs.push(`${refundNo} / ${pickString(order?.order_no || refund.order_no || refund.order_id || '-')}`);
         }
         if (status === 'completed' && paymentMethod === 'goods_fund' && !goodsFundRefundLogNos.has(refundNo)) {
-            missingInternalGoodsFundLogs.push(`${refundNo} / ${pickString(order?.order_no || refund.order_no || refund.order_id || '-')}`);
+            ignoredGoodsFundTestRefunds.push(`${refundNo} / ${pickString(order?.order_no || refund.order_no || refund.order_id || '-')}`);
         }
         if (reopenedAt) {
             if (paymentMethod === 'wallet' && !walletReversalLogNos.has(refundNo)) {
                 missingReopenReversalLogs.push(`${refundNo} / wallet / ${pickString(order?.order_no || refund.order_no || refund.order_id || '-')}`);
             }
             if (paymentMethod === 'goods_fund' && !goodsFundReversalLogNos.has(refundNo)) {
-                missingReopenReversalLogs.push(`${refundNo} / goods_fund / ${pickString(order?.order_no || refund.order_no || refund.order_id || '-')}`);
+                ignoredGoodsFundTestRefunds.push(`${refundNo} / goods_fund reopen / ${pickString(order?.order_no || refund.order_no || refund.order_id || '-')}`);
             }
         }
     });
@@ -217,6 +220,7 @@ function main() {
         summary: {
             missing_internal_wallet_logs: missingInternalWalletLogs.length,
             missing_internal_goods_fund_logs: missingInternalGoodsFundLogs.length,
+            ignored_goods_fund_test_refunds: ignoredGoodsFundTestRefunds.length,
             missing_reopen_reversal_logs: missingReopenReversalLogs.length,
             missing_adjustment_reasons: missingAdjustmentReasons.length,
             missing_debt_reasons: missingDebtReasons.length,
@@ -226,6 +230,7 @@ function main() {
         findings: {
             missingInternalWalletLogs,
             missingInternalGoodsFundLogs,
+            ignoredGoodsFundTestRefunds,
             missingReopenReversalLogs,
             missingAdjustmentReasons,
             missingDebtReasons,

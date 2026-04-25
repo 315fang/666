@@ -6,6 +6,33 @@ const { queryOrderByOutTradeNo, loadPrivateKey } = require('./wechat-pay-v3');
 const { processPaidOrder } = require('./payment-callback');
 const { resolvePostPayStatus } = require('./shared/order-payment');
 
+const PAID_POST_PROCESS_STATUSES = new Set([
+    'paid',
+    'pending_group',
+    'pickup_pending',
+    'agent_confirmed',
+    'shipping_requested',
+    'shipped',
+    'completed'
+]);
+
+function normalizeStatus(status) {
+    return String(status || '').trim().toLowerCase();
+}
+
+function needsPaidOrderPostProcess(order = {}) {
+    return PAID_POST_PROCESS_STATUSES.has(normalizeStatus(order.status))
+        && (!order.payment_post_processed_at || order.branch_region_commission_retry_required === true);
+}
+
+async function retryPaidOrderPostProcess(orderId, order) {
+    if (!needsPaidOrderPostProcess(order)) return null;
+    return processPaidOrder(orderId, order).catch((postErr) => {
+        console.error('[PaymentQuery] 已支付订单后处理补偿失败:', postErr.message);
+        return { error: postErr.message };
+    });
+}
+
 /**
  * 查询支付状态（优先查微信侧，回退查本地）
  * @param {string} orderId - 订单 ID
@@ -22,11 +49,16 @@ async function queryPaymentStatus(orderId, callerOpenid) {
     if (!orderRes.data) {
         throw new Error('订单不存在');
     }
-    const order = orderRes.data;
+    let order = orderRes.data;
 
     // 校验订单归属（callerOpenid 为 null 时为内部调用，跳过校验）
     if (callerOpenid !== null && callerOpenid !== undefined && order.openid && order.openid !== callerOpenid) {
         throw new Error('无权查询该订单');
+    }
+
+    const localPostProcess = await retryPaidOrderPostProcess(orderId, order);
+    if (localPostProcess && !localPostProcess.error) {
+        order = await db.collection('orders').doc(orderId).get().then((res) => res.data || order).catch(() => order);
     }
 
     // 2. 如果是待支付，尝试查微信侧获取最新状态
@@ -47,9 +79,7 @@ async function queryPaymentStatus(orderId, callerOpenid) {
                         updated_at: db.serverDate(),
                     },
                 });
-                await processPaidOrder(orderId, { ...order, status: postPayStatus, paid_at: new Date() }).catch((postErr) => {
-                    console.error('[PaymentQuery] 支付后补偿处理失败:', postErr.message);
-                });
+                const postProcess = await retryPaidOrderPostProcess(orderId, { ...order, status: postPayStatus, paid_at: new Date() });
                 return {
                     orderId: order._id,
                     order_no: order.order_no,
@@ -57,6 +87,7 @@ async function queryPaymentStatus(orderId, callerOpenid) {
                     amount: order.pay_amount,
                     trade_state: wxResult.trade_state,
                     paidAt: new Date().toISOString(),
+                    post_processed: !postProcess?.error,
                 };
             }
 
@@ -81,6 +112,7 @@ async function queryPaymentStatus(orderId, callerOpenid) {
         amount: order.pay_amount,
         trade_state: order.status === 'paid' ? 'SUCCESS' : order.status,
         paidAt: order.paid_at,
+        post_processed: localPostProcess ? !localPostProcess.error : Boolean(order.payment_post_processed_at),
     };
 }
 

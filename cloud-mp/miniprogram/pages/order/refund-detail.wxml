@@ -30,7 +30,7 @@
     </view>
   </view>
 
-  <view class="card" wx:if="{{refund.type === 'return_refund' && refund.status === 'approved'}}">
+  <view class="card" wx:if="{{refund.type === 'return_refund' && (refund.status === 'approved' || refund.status === 'processing')}}">
     <view class="card-title">退货物流</view>
     <view class="form-row">
       <text class="form-label">快递公司</text>

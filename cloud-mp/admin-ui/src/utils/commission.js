@@ -3,6 +3,9 @@ const COMMISSION_TYPE_LABELS = {
   indirect: '间推佣金',
   gap: '级差收益',
   agent_fulfillment: '代理发货利润',
+  team: '团队佣金',
+  peer: '平级奖',
+  assist: '代理协助奖',
   same_level: '平级奖',
   n_price_gap: 'N路径差价',
   n_separation_bonus: 'N路径脱离奖励',
@@ -14,6 +17,7 @@ const COMMISSION_TYPE_LABELS = {
   region_agent: '区域代理收益',
   region_b3_virtual: '虚拟B3区域佣金',
   pickup_subsidy: '自提核销补贴',
+  pickup_service_fee: '自提核销补贴',
   year_end_dividend: '年终分红'
 }
 
@@ -23,16 +27,20 @@ export const COMMISSION_TYPE_OPTIONS = [
   { value: 'gap', label: COMMISSION_TYPE_LABELS.gap },
   { value: 'agent_fulfillment', label: COMMISSION_TYPE_LABELS.agent_fulfillment },
   { value: 'same_level', label: COMMISSION_TYPE_LABELS.same_level },
+  { value: 'team', label: COMMISSION_TYPE_LABELS.team },
+  { value: 'peer', label: COMMISSION_TYPE_LABELS.peer },
   { value: 'n_price_gap', label: COMMISSION_TYPE_LABELS.n_price_gap },
   { value: 'n_separation_bonus', label: COMMISSION_TYPE_LABELS.n_separation_bonus },
-  { value: 'Fund_Pool', label: COMMISSION_TYPE_LABELS.fund_pool },
+  { value: 'fund_pool', label: COMMISSION_TYPE_LABELS.fund_pool },
   { value: 'self', label: COMMISSION_TYPE_LABELS.self },
-  { value: 'Stock_Diff', label: COMMISSION_TYPE_LABELS.stock_diff },
+  { value: 'stock_diff', label: COMMISSION_TYPE_LABELS.stock_diff },
   { value: 'agent_assist', label: COMMISSION_TYPE_LABELS.agent_assist },
-  { value: 'B2_Assist', label: COMMISSION_TYPE_LABELS.b2_assist },
+  { value: 'assist', label: COMMISSION_TYPE_LABELS.assist },
+  { value: 'b2_assist', label: COMMISSION_TYPE_LABELS.b2_assist },
   { value: 'region_agent', label: COMMISSION_TYPE_LABELS.region_agent },
   { value: 'region_b3_virtual', label: COMMISSION_TYPE_LABELS.region_b3_virtual },
   { value: 'pickup_subsidy', label: COMMISSION_TYPE_LABELS.pickup_subsidy },
+  { value: 'pickup_service_fee', label: COMMISSION_TYPE_LABELS.pickup_service_fee },
   { value: 'year_end_dividend', label: COMMISSION_TYPE_LABELS.year_end_dividend }
 ]
 

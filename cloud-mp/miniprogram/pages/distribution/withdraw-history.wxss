@@ -24,6 +24,23 @@
 
 .item-info { display: flex; justify-content: space-between; font-size: 22rpx; color: #9A8D80; }
 
+.item-status-hint {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #8B7355;
+  line-height: 1.5;
+}
+
+.item-extra {
+  margin-top: 8rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  font-size: 20rpx;
+  color: #B0A396;
+  line-height: 1.5;
+}
+
 .reject-reason {
   margin-top: 16rpx; padding: 14rpx 16rpx;
   background: rgba(183, 100, 71, 0.08); color: #B76447;

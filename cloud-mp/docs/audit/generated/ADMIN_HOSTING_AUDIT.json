@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-04-25T03:30:17.606Z",
+  "url": "https://cloud1-9gywyqe49638e46f-1419893803.tcloudbaseapp.com/admin/index.html?v=1777087816918",
+  "ok": true,
+  "localAssets": [
+    "assets/index-BGtjYQCV.js",
+    "assets/vue-vendor-Bpk2tobt.js",
+    "assets/http-vendor-C0Zqfgkc.js",
+    "assets/element-plus-icons-B-gE_hao.js",
+    "assets/index-XFU74PjQ.css"
+  ],
+  "remoteAssets": [
+    "assets/index-BGtjYQCV.js",
+    "assets/vue-vendor-Bpk2tobt.js",
+    "assets/http-vendor-C0Zqfgkc.js",
+    "assets/element-plus-icons-B-gE_hao.js",
+    "assets/index-XFU74PjQ.css"
+  ],
+  "diff": []
+}

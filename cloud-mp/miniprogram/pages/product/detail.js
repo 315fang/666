@@ -545,9 +545,6 @@ Page({
             }];
             const currentMeta = availableModes.find((item) => item.key === purchaseMode) || availableModes[0];
             const effectiveMode = currentMeta && currentMeta.key ? currentMeta.key : 'limited_money';
-            const activityDesc = effectiveMode === 'limited_points'
-                ? '该商品按活动积分兑换，不参与优惠券、积分抵扣和货款支付。'
-                : '该商品按活动价结算，不参与优惠券、积分抵扣和货款支付。';
             this.setData({
                 availablePurchaseModes: availableModes,
                 purchaseMode: effectiveMode,
@@ -555,11 +552,7 @@ Page({
                 purchaseModeHint: currentMeta.hint,
                 actionLeftLabel: '不可加购',
                 actionRightLabel: effectiveMode === 'limited_points' ? '立即兑换' : '立即秒杀',
-                activityStatusCard: {
-                    badge: '限时专享',
-                    title: this.data.limitedSpotTitle || '限时专享商品',
-                    desc: activityDesc
-                },
+                activityStatusCard: null,
                 activityQuickLinks: []
             });
             return;

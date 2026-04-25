@@ -12,10 +12,23 @@ const {
     resolveSlashExpiryState
 } = require('./shared/slash-expiry');
 
+const FIXED_BUNDLE_COMMISSION_MODE = 'fixed';
+const FIXED_BUNDLE_COMMISSION_SOURCE = 'bundle_option_fixed';
+const FIXED_BUNDLE_COMMISSION_VERSION = 'fixed_bundle_v1';
+
 function pickString(value, fallback = '') {
     if (value == null) return fallback;
     const text = String(value).replace(/\s+/g, ' ').trim();
     return text || fallback;
+}
+
+function resolvePostPayStatus(order = {}) {
+    const isGroupOrder = order.type === 'group'
+        || order.order_type === 'group'
+        || !!(order.group_activity_id || order.group_no || order.group_id);
+    if (isGroupOrder) return 'pending_group';
+    if (pickString(order.delivery_type).toLowerCase() === 'pickup') return 'pickup_pending';
+    return 'paid';
 }
 
 function dedupeSpecParts(parts = []) {
@@ -95,6 +108,16 @@ async function findGroupActivity(activityId) {
         db.collection('group_activities').doc(String(activityId)).get().catch(() => ({ data: null }))
     ]);
     return legacy.data[0] || doc.data || null;
+}
+
+async function findGroupOrder(groupNo) {
+    if (!groupNo) return null;
+    const res = await db.collection('group_orders')
+        .where({ group_no: String(groupNo) })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return res.data && res.data[0] ? res.data[0] : null;
 }
 
 async function findSlashRecord(slashNo) {
@@ -207,6 +230,29 @@ function resolveBundleFixedCommissionAmounts(item = {}, directRoleLevel = 0, ind
         direct
     );
     return { direct, indirect };
+}
+
+function buildBundleCommissionSnapshot(orderItems = [], isFlexBundleOrder = false) {
+    if (!isFlexBundleOrder) return null;
+    const items = (Array.isArray(orderItems) ? orderItems : []).map((item, index) => ({
+        item_key: item.refund_item_key || `${item.product_id || 'product'}::${item.sku_id || 'nosku'}::${index}`,
+        product_id: pickString(item.product_id),
+        sku_id: pickString(item.sku_id),
+        group_key: pickString(item.bundle_group_key),
+        group_title: pickString(item.bundle_group_title),
+        pool_amount: roundMoney(item.bundle_commission_pool_amount),
+        direct_fixed_amount: roundMoney(item.direct_commission_fixed_amount),
+        indirect_fixed_amount: roundMoney(item.indirect_commission_fixed_amount)
+    }));
+    return {
+        mode: FIXED_BUNDLE_COMMISSION_MODE,
+        source: FIXED_BUNDLE_COMMISSION_SOURCE,
+        version: FIXED_BUNDLE_COMMISSION_VERSION,
+        total_pool_amount: roundMoney(items.reduce((sum, item) => sum + toNumber(item.pool_amount, 0), 0)),
+        direct_fixed_amount: roundMoney(items.reduce((sum, item) => sum + toNumber(item.direct_fixed_amount, 0), 0)),
+        indirect_fixed_amount: roundMoney(items.reduce((sum, item) => sum + toNumber(item.indirect_fixed_amount, 0), 0)),
+        items
+    };
 }
 
 function resolveUserReferrer(user = {}) {
@@ -408,8 +454,14 @@ async function getPointDeductionRule() {
 function isActivityOpen(activity) {
     return activity && (
         activity.status === true
+        || activity.status === 1
+        || activity.status === '1'
         || activity.status === 'active'
+        || activity.is_active === 1
+        || activity.is_active === '1'
         || activity.is_active === true
+        || activity.active === 1
+        || activity.active === '1'
         || activity.active === true
     );
 }
@@ -418,6 +470,34 @@ function sameProduct(activity = {}, product = {}) {
     const expected = [activity.product_id, activity.productId].filter((value) => value !== undefined && value !== null);
     const actual = [product._id, product.id, product._legacy_id].filter((value) => value !== undefined && value !== null);
     return expected.length === 0 || expected.some((left) => actual.some((right) => String(left) === String(right)));
+}
+
+function valuesOverlap(leftValues = [], rightValues = []) {
+    const left = leftValues.filter(hasValue).map((value) => String(value));
+    const right = new Set(rightValues.filter(hasValue).map((value) => String(value)));
+    if (!left.length || !right.size) return true;
+    return left.some((value) => right.has(value));
+}
+
+function assertGroupOrderInputMatches(groupOrder = {}, groupActivity = {}, inputItems = []) {
+    const item = Array.isArray(inputItems) && inputItems[0] ? inputItems[0] : {};
+    const activityMatches = valuesOverlap(
+        [groupOrder.activity_id, groupOrder.legacy_activity_id],
+        [groupActivity._id, groupActivity.id, groupActivity._legacy_id]
+    );
+    if (!activityMatches) throw new Error('拼团活动与订单不一致');
+
+    const productMatches = valuesOverlap(
+        [groupOrder.product_id, groupOrder.productId],
+        [item.product_id, groupActivity.product_id]
+    );
+    if (!productMatches) throw new Error('拼团商品与订单不一致');
+
+    const skuMatches = valuesOverlap(
+        [groupOrder.sku_id, groupOrder.skuId],
+        [item.sku_id]
+    );
+    if (!skuMatches) throw new Error('拼团规格与订单不一致');
 }
 
 function hasValue(value) {
@@ -1091,6 +1171,14 @@ async function createOrder(openid, orderData) {
         const endAt = groupActivity.end_time || groupActivity.end_at;
         if (endAt && new Date(endAt) < new Date()) throw new Error('拼团活动已过期');
     }
+    const groupOrder = group_no ? await findGroupOrder(group_no) : null;
+    if (group_no) {
+        if (!groupOrder) throw new Error('拼团不存在或已结束');
+        if (!['pending', 'open'].includes(String(groupOrder.status || '').trim())) {
+            throw new Error('拼团已结束');
+        }
+        assertGroupOrderInputMatches(groupOrder, groupActivity || {}, normalizedInputItems);
+    }
     const slashRecord = slash_no ? await findSlashRecord(slash_no) : null;
     let slashActivity = null;
     if (slash_no) {
@@ -1382,6 +1470,9 @@ async function createOrder(openid, orderData) {
             bundle_group_key: bundleContext ? pickString(item.bundle_group_key) : '',
             bundle_group_title: bundleContext ? pickString(item.bundle_group_title) : '',
             bundle_parent_title: bundleContext ? pickString(item.bundle_parent_title || bundleContext.bundle.title) : '',
+            bundle_commission_mode: isFlexBundleOrder ? FIXED_BUNDLE_COMMISSION_MODE : '',
+            bundle_commission_source: isFlexBundleOrder ? FIXED_BUNDLE_COMMISSION_SOURCE : '',
+            bundle_commission_version: isFlexBundleOrder ? FIXED_BUNDLE_COMMISSION_VERSION : '',
             bundle_commission_pool_amount: isFlexBundleOrder ? roundMoney(item.commission_pool_amount) : 0,
             direct_commission_fixed_amount: isFlexBundleOrder && directReferrer ? bundleFixedCommission.direct : 0,
             indirect_commission_fixed_amount: isFlexBundleOrder && indirectReferrer ? bundleFixedCommission.indirect : 0
@@ -1610,6 +1701,8 @@ async function createOrder(openid, orderData) {
         bundle_price: roundMoney(bundleContext.bundle_price),
         original_amount: roundMoney(totalAmount),
         discount_amount: roundMoney(bundleDiscount),
+        commission_mode: isFlexBundleOrder ? FIXED_BUNDLE_COMMISSION_MODE : '',
+        commission_source: isFlexBundleOrder ? FIXED_BUNDLE_COMMISSION_SOURCE : '',
         display_mode: 'bundle_with_children',
         stack_policy: 'exclusive',
         groups: bundleContext.selections.map((selection) => ({
@@ -1624,15 +1717,29 @@ async function createOrder(openid, orderData) {
             unit_price: selection.product_price
         }))
     } : null;
+    const bundleCommissionSnapshot = buildBundleCommissionSnapshot(normalizedOrderItems, isFlexBundleOrder);
     const lockedAgentCostTotal = canAgentFulfill
         ? roundMoney(normalizedOrderItems.reduce((sum, item) => sum + toNumber(item.locked_agent_cost_total, 0), 0))
         : 0;
+
+    const shouldAutoPayFreeOrder = !use_goods_fund
+        && payAmount <= 0
+        && limitedSpotContext
+        && limitedSpotContext.mode === 'points';
+    const initialOrderStatus = shouldAutoPayFreeOrder
+        ? resolvePostPayStatus({
+            type: limitedSpotContext.source === 'limited_sale' ? 'limited_sale' : 'limited_spot',
+            delivery_type: deliveryType,
+            group_activity_id,
+            group_no
+        })
+        : 'pending_payment';
 
     // 7. 构建订单
     const order = {
         order_no: orderNo,
         openid,
-        status: 'pending_payment',
+        status: initialOrderStatus,
         items: normalizedOrderItems,
         product_id: primaryItem.product_id || '',
         product_name: primaryItem.snapshot_name || primaryItem.name || '',
@@ -1654,8 +1761,13 @@ async function createOrder(openid, orderData) {
         buyer_role_level: buyerRoleLevel,
         pay_amount: payAmount,
         actual_price: payAmount,
+        payment_method: shouldAutoPayFreeOrder ? '' : '',
+        pay_channel: shouldAutoPayFreeOrder ? 'free' : '',
+        paid_at: shouldAutoPayFreeOrder ? db.serverDate() : null,
+        pay_time: shouldAutoPayFreeOrder ? db.serverDate() : null,
         bundle_id: bundleContext ? bundleContext.bundle_id : '',
         bundle_meta: bundleMeta,
+        bundle_commission_snapshot: bundleCommissionSnapshot,
         refunded_cash_total: 0,
         refunded_quantity_total: 0,
         reward_points_clawback_total: 0,
@@ -1835,6 +1947,15 @@ async function createOrder(openid, orderData) {
         });
     }
 
+    if (shouldAutoPayFreeOrder) {
+        cloud.callFunction({
+            name: 'payment',
+            data: { action: '_postProcessPaid', order_id: result._id }
+        }).catch((err) => {
+            console.error('[OrderCreate] 零元积分订单支付后处理调用失败（不影响下单）:', err.message);
+        });
+    }
+
     // 7.8 货款支付：原子扣减余额并将订单直接标为已付款
     let goodsFundPaid = false;
     if (use_goods_fund) {
@@ -1979,7 +2100,9 @@ async function createOrder(openid, orderData) {
         pay_amount: payAmount,
         group_no: group_no || '',
         slash_no: slashRecord ? (slashRecord.slash_no || slash_no || '') : '',
-        goods_fund_paid: goodsFundPaid  // 货款已完成支付，前端可跳过微信支付步骤
+        goods_fund_paid: goodsFundPaid,  // 货款已完成支付，前端可跳过微信支付步骤
+        paid_by_free: shouldAutoPayFreeOrder,
+        payment_completed: goodsFundPaid || shouldAutoPayFreeOrder
     };
 }
 
@@ -2013,6 +2136,7 @@ module.exports = {
     isAgentRoleLevel,
     normalizeAgentRoleLevel,
     resolveBundleFixedCommissionAmounts,
+    buildBundleCommissionSnapshot,
     getPointDeductionRule,
     getUserGoodsFundBalance,
     ensureWalletAccountForUser,

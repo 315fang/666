@@ -37,7 +37,7 @@ function onSettingsTap(page) {
     if (isStoreManager) {
         itemList.push('店长工作台');
     }
-    itemList.push('密码中心', '隐私协议', '关于', '清除缓存');
+    itemList.push('安全中心', '隐私协议', '关于', '清除缓存');
     wx.showActionSheet({
         itemList,
         success: (res) => {
@@ -47,7 +47,7 @@ function onSettingsTap(page) {
                 wx.navigateTo({ url: '/pages/stations/my-station' });
                 return;
             }
-            if (selected === '密码中心') {
+            if (selected === '安全中心') {
                 if (!requireLogin()) return;
                 wx.navigateTo({ url: '/pages/user/portal-password' });
                 return;

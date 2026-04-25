@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-24T07:26:50.451Z",
+  "generatedAt": "2026-04-25T03:32:38.452Z",
   "envId": "cloud1-9gywyqe49638e46f",
   "ok": true,
   "results": [
@@ -13,7 +13,7 @@
       "area": "admin",
       "name": "products",
       "ok": true,
-      "count": 19,
+      "count": 20,
       "issues": []
     },
     {
@@ -68,7 +68,7 @@
       "area": "admin",
       "name": "pickup-stations",
       "ok": true,
-      "count": 3,
+      "count": 4,
       "issues": []
     },
     {
@@ -127,7 +127,7 @@
       "area": "mini",
       "name": "user.listStations",
       "ok": true,
-      "count": 3,
+      "count": 4,
       "issues": []
     }
   ]

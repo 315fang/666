@@ -1220,6 +1220,21 @@ const handleAction = {
     }),
 
     'lotteryPrizes': asyncHandler(async (params) => {
+        const lotteryId = pickString(params.lottery_id || params.pool_id || 'default', 'default');
+        const normalizePrizeScopes = (value) => {
+            if (Array.isArray(value)) return [...new Set(value.map((item) => pickString(item)).filter(Boolean))];
+            const raw = pickString(value);
+            if (!raw) return [];
+            if (raw.startsWith('[') && raw.endsWith(']')) {
+                try { return normalizePrizeScopes(JSON.parse(raw)); } catch (_) { return []; }
+            }
+            return [...new Set(raw.split(',').map((item) => item.trim()).filter(Boolean))];
+        };
+        const prizeMatchesLottery = (row) => {
+            const scopes = normalizePrizeScopes(row.lottery_ids || row.lottery_id || row.pool_ids || row.pool_id || row.pool);
+            if (lotteryId === 'default') return scopes.length === 0 || scopes.includes('default');
+            return scopes.includes(lotteryId);
+        };
         const res = await db.collection('lottery_prizes')
             .where(_.or([
                 { is_active: true },
@@ -1230,7 +1245,7 @@ const handleAction = {
             .orderBy('sort_order', 'asc')
             .limit(20)
             .get().catch(() => ({ data: [] }));
-        const rows = Array.isArray(res.data) ? res.data : [];
+        const rows = (Array.isArray(res.data) ? res.data : []).filter(prizeMatchesLottery);
         const resolvedMap = await batchResolveManagedFileUrls(rows.map((item) => pickFileId(item)).filter(Boolean));
         const list = rows.map((row) => {
             const type = normalizeLotteryPrizeType(row.type);

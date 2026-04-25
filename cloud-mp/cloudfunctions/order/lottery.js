@@ -83,6 +83,96 @@ function addDaysIso(days = 0) {
     return new Date(Date.now() + safeDays * 24 * 60 * 60 * 1000).toISOString();
 }
 
+function parseConfigValue(value, fallback = {}) {
+    if (value === null || value === undefined || value === '') return fallback;
+    if (typeof value === 'string') {
+        try {
+            return JSON.parse(value);
+        } catch (_) {
+            return fallback;
+        }
+    }
+    return value && typeof value === 'object' ? value : fallback;
+}
+
+function isEnabledFlag(value, fallback = true) {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (value === true || value === 1 || value === '1') return true;
+    if (value === false || value === 0 || value === '0') return false;
+    const normalized = String(value).trim().toLowerCase();
+    if (['true', 'yes', 'y', 'on', 'enabled', 'active'].includes(normalized)) return true;
+    if (['false', 'no', 'n', 'off', 'disabled', 'inactive'].includes(normalized)) return false;
+    return fallback;
+}
+
+function resolveLotteryId(params = {}) {
+    return pickString(params.lottery_id || params.pool_id || params.lotteryId || params.poolId || 'default', 'default');
+}
+
+function prizeMatchesLottery(prize = {}, lotteryId = 'default') {
+    const target = pickString(lotteryId, 'default');
+    const scopes = normalizeScopeIds(
+        prize.lottery_ids
+        || prize.lottery_id
+        || prize.pool_ids
+        || prize.pool_id
+        || prize.pool
+    );
+    if (target === 'default') return scopes.length === 0 || scopes.includes('default');
+    return scopes.includes(target);
+}
+
+function resolveClaimDeadline(record = {}, claim = null) {
+    return parseDateValue(
+        claim && claim.claim_deadline_at
+            ? claim.claim_deadline_at
+            : record.claim_deadline_at
+    );
+}
+
+function isClaimDeadlineExpired(record = {}, claim = null) {
+    const deadline = resolveClaimDeadline(record, claim);
+    return !!deadline && deadline.getTime() < Date.now();
+}
+
+async function expireClaimIfNeeded(record = {}, claim = null) {
+    if (!isClaimDeadlineExpired(record, claim)) return { record, claim, expired: false };
+    const finalClaimStatuses = new Set(['approved', 'shipped', 'completed', 'expired', 'cancelled']);
+    const finalRecordStatuses = new Set(['issued', 'completed', 'cancelled']);
+    if (finalRecordStatuses.has(pickString(record.fulfillment_status))) {
+        return { record, claim, expired: false };
+    }
+    const claimStatus = pickString(claim && claim.status);
+    if (claim && finalClaimStatuses.has(claimStatus) && claimStatus !== 'expired') {
+        return { record, claim, expired: false };
+    }
+    const nextRecord = {
+        ...record,
+        fulfillment_status: 'expired',
+        failure_reason: pickString(record.failure_reason || '领奖已截止')
+    };
+    if (pickString(record.id)) {
+        await persistIssuedRecord(record.id, {
+            fulfillment_status: 'expired',
+            failure_reason: nextRecord.failure_reason
+        }).catch(() => null);
+    }
+    let nextClaim = claim;
+    if (claim && !finalClaimStatuses.has(claimStatus)) {
+        const claimId = pickString(claim._id || claim.id);
+        nextClaim = { ...claim, status: 'expired', updated_at: new Date().toISOString() };
+        if (claimId) {
+            await db.collection('lottery_claims').doc(claimId).update({
+                data: {
+                    status: 'expired',
+                    updated_at: db.serverDate()
+                }
+            }).catch(() => null);
+        }
+    }
+    return { record: nextRecord, claim: nextClaim, expired: true };
+}
+
 function getPrizeVisual(type = 'miss') {
     return {
         miss: { emoji: '🍀', badge: '好运签', theme: '#6B7280', accent: '#D1D5DB' },
@@ -305,7 +395,8 @@ function getRecordStatusText(status = '') {
         shipped: '已发货',
         completed: '已完成',
         failed: '发放失败',
-        cancelled: '已取消'
+        cancelled: '已取消',
+        expired: '已过期'
     }[pickString(status)] || '处理中';
 }
 
@@ -318,6 +409,7 @@ function requiresLotteryClaim(record = {}) {
 function buildLotteryAction(record = {}) {
     const rewardType = normalizePrizeType(record.reward_actual_type || record.prize_type);
     const status = pickString(record.fulfillment_status);
+    if (isClaimDeadlineExpired(record)) return { type: '', text: '' };
     if (status === 'issued') {
         if (rewardType === 'coupon') return { type: 'coupon_list', text: '去券包' };
         if (rewardType === 'goods_fund') return { type: 'goods_fund_wallet', text: '去货款钱包' };
@@ -600,7 +692,7 @@ async function fulfillLotteryRecord(record, user = null) {
 
 async function createLotteryClaim(openid, params = {}) {
     const recordId = pickString(params.record_id || params.id);
-    const record = await getLotteryRecordById(recordId, openid);
+    let record = await getLotteryRecordById(recordId, openid);
     if (!record) throw new Error('中奖记录不存在');
 
     const rewardType = normalizePrizeType(record.reward_actual_type || record.prize_type);
@@ -608,9 +700,15 @@ async function createLotteryClaim(openid, params = {}) {
         throw new Error('当前奖品不需要领取');
     }
 
-    const existingClaim = record.claim_id
+    let existingClaim = record.claim_id
         ? await getLotteryClaimById(record.claim_id)
         : await getLotteryClaimByRecordId(record.id);
+    const expireResult = await expireClaimIfNeeded(record, existingClaim);
+    record = expireResult.record;
+    existingClaim = expireResult.claim;
+    if (expireResult.expired) {
+        throw new Error('领奖已截止');
+    }
     const existingStatus = pickString(existingClaim && existingClaim.status);
     if (['approved', 'shipped', 'completed'].includes(existingStatus)) {
         return {
@@ -694,16 +792,19 @@ async function createLotteryClaim(openid, params = {}) {
 }
 
 async function getLotteryClaimDetail(openid, recordId) {
-    const record = await getLotteryRecordById(recordId, openid);
+    let record = await getLotteryRecordById(recordId, openid);
     if (!record) throw new Error('中奖记录不存在');
-    const claim = record.claim_id
+    let claim = record.claim_id
         ? await getLotteryClaimById(record.claim_id)
         : await getLotteryClaimByRecordId(record.id);
+    const expireResult = await expireClaimIfNeeded(record, claim);
+    record = expireResult.record;
+    claim = expireResult.claim;
     const rewardNeedsClaim = requiresLotteryClaim(record);
     return {
         record,
         claim,
-        can_submit: rewardNeedsClaim && (
+        can_submit: !expireResult.expired && rewardNeedsClaim && (
             ['claim_required', 'failed'].includes(pickString(record.fulfillment_status))
             || pickString(claim && claim.status) === 'rejected'
         )
@@ -756,20 +857,51 @@ async function listLotteryRecords(openid, params = {}) {
     };
 }
 
-async function drawLottery(openid, params = {}) {
-    const lotteryId = pickString(params.lottery_id || 'default', 'default');
+function pickConfigPayload(row = {}) {
+    if (!row) return {};
+    return parseConfigValue(row.config_value !== undefined ? row.config_value : (row.value !== undefined ? row.value : row), {});
+}
 
+async function loadMiniProgramConfig() {
+    const query = _.or([
+        { config_key: 'mini_program_config' },
+        { key: 'mini_program_config' }
+    ]);
+    const [configRes, appConfigRes] = await Promise.all([
+        db.collection('configs').where(query).limit(1).get().catch(() => ({ data: [] })),
+        db.collection('app_configs').where(query).limit(1).get().catch(() => ({ data: [] }))
+    ]);
+    const row = (configRes.data && configRes.data[0]) || (appConfigRes.data && appConfigRes.data[0]) || null;
+    return pickConfigPayload(row);
+}
+
+async function loadLotteryRuntimeConfig() {
     const configRes = await db.collection('configs')
         .where(_.or([
             { type: 'lottery', active: true },
             { config_group: 'lottery' },
-            { config_key: 'lottery_config' }
+            { config_key: 'lottery_config' },
+            { key: 'lottery_config' }
         ]))
         .limit(1)
         .get()
         .catch(() => ({ data: [] }));
     const configRow = configRes.data && configRes.data[0] ? configRes.data[0] : null;
-    const config = configRow ? (configRow.config_value || configRow.value || {}) : {};
+    const config = pickConfigPayload(configRow);
+    const miniProgramConfig = await loadMiniProgramConfig();
+    const featureFlags = miniProgramConfig.feature_flags || miniProgramConfig.feature_toggles || {};
+    if (featureFlags.enable_lottery_entry === false || featureFlags.enable_lottery_entry === 0 || featureFlags.enable_lottery_entry === '0') {
+        throw new Error('积分抽奖暂未开放');
+    }
+    if (!isEnabledFlag(config.enabled ?? config.active ?? config.status, true)) {
+        throw new Error('积分抽奖活动未启用');
+    }
+    return config;
+}
+
+async function drawLottery(openid, params = {}) {
+    const lotteryId = resolveLotteryId(params);
+    const config = await loadLotteryRuntimeConfig();
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -798,7 +930,7 @@ async function drawLottery(openid, params = {}) {
     const prizes = [];
     for (const prizeRow of (prizesRes.data || [])) {
         const normalized = await normalizePrizeRuntime(prizeRow);
-        if (normalized.is_active) prizes.push(normalized);
+        if (normalized.is_active && prizeMatchesLottery(normalized, lotteryId)) prizes.push(normalized);
     }
     if (!prizes.length) throw new Error('暂无奖品');
     const drawCostPoints = Math.max(0, Math.floor(toNumber(prizes[0].cost_points || config.cost_points, 0)));

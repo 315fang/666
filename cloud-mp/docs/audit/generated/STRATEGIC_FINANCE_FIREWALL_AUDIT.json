@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-04-25T03:33:31.595Z",
+  "summary": {
+    "missing_internal_wallet_logs": 0,
+    "missing_internal_goods_fund_logs": 0,
+    "ignored_goods_fund_test_refunds": 9,
+    "missing_reopen_reversal_logs": 0,
+    "missing_adjustment_reasons": 0,
+    "missing_debt_reasons": 0,
+    "missing_dividend_remarks": 0,
+    "missing_exit_review_remarks": 0
+  },
+  "findings": {
+    "missingInternalWalletLogs": [],
+    "missingInternalGoodsFundLogs": [],
+    "ignoredGoodsFundTestRefunds": [
+      "REF1775993281617789 / ORD1775992929604326",
+      "REF1776058290289539 / ORD1776006098733948",
+      "REF1776083909694275 / ORD1776077635910944",
+      "REF1776089368463924 / ORD1776088274225191",
+      "REF1776180590451998 / ORD1776180331262593",
+      "REF1776328201267101 / ORD1776172821100816",
+      "REF1776328202523576 / ORD177617628123673",
+      "REF1776328204080828 / ORD1776239193669385",
+      "REF1777047004943126 / ORD177608386229345"
+    ],
+    "missingReopenReversalLogs": [],
+    "missingAdjustmentReasons": [],
+    "missingDebtReasons": [],
+    "missingDividendRemarks": [],
+    "missingExitReviewRemarks": []
+  }
+}

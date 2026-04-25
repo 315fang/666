@@ -796,31 +796,52 @@ async function restoreRefundOrderStock(orderId, order = {}, refund = {}) {
 }
 
 async function freezeCommissionsForOrder(orderId, extraData = {}) {
-    await db.collection('commissions')
+    const res = await db.collection('commissions')
         .where({ order_id: orderId, status: _.in(['pending', 'pending_approval']) })
-        .update({
+        .get()
+        .catch(() => ({ data: [] }));
+    for (const row of (res.data || [])) {
+        await db.collection('commissions').doc(String(row._id)).update({
             data: {
                 status: 'frozen',
+                pre_freeze_status: row.status,
+                commission_freeze_reason: extraData.commission_freeze_reason || 'order_confirm',
                 frozen_at: db.serverDate(),
                 updated_at: db.serverDate(),
                 ...extraData
             }
         })
         .catch(() => {});
+    }
 }
 
 async function restoreFrozenCommissions(orderId) {
-    await db.collection('commissions')
+    const approvalTypes = new Set(['agent_fulfillment', 'pickup_service_fee', 'pickup_subsidy', 'region_agent', 'region_b3_virtual']);
+    const res = await db.collection('commissions')
         .where({ order_id: orderId, status: 'frozen' })
-        .update({
+        .get()
+        .catch(() => ({ data: [] }));
+    for (const row of (res.data || [])) {
+        const isRefundFreeze = row.commission_freeze_reason === 'refund'
+            || row.pre_freeze_status
+            || (!row.refund_deadline && !row.peer_bonus_release_at);
+        if (!isRefundFreeze) continue;
+        const previousStatus = String(row.pre_freeze_status || '').trim().toLowerCase();
+        const restoredStatus = ['pending', 'pending_approval'].includes(previousStatus)
+            ? previousStatus
+            : (approvalTypes.has(String(row.type || '').trim().toLowerCase()) ? 'pending_approval' : 'pending');
+        await db.collection('commissions').doc(String(row._id)).update({
             data: {
-                status: 'pending',
+                status: restoredStatus,
                 frozen_at: _.remove(),
+                pre_freeze_status: _.remove(),
+                commission_freeze_reason: _.remove(),
                 refund_deadline: _.remove(),
                 updated_at: db.serverDate()
             }
         })
         .catch(() => {});
+    }
 }
 
 function deriveRefundRevertStatus(order = {}) {
@@ -954,14 +975,17 @@ async function cancelOrder(openid, orderId) {
     }
 
     // 先原子更新状态，防止与支付回调竞态
-    const updateRes = await db.collection('orders').doc(orderId).update({
-        data: {
-            status: 'cancelled',
-            cancelled_at: db.serverDate(),
-            cancel_reason: '用户取消',
-            updated_at: db.serverDate(),
-        },
-    });
+    const updateRes = await db.collection('orders')
+        .where({ _id: orderId, status: 'pending_payment' })
+        .update({
+            data: {
+                status: 'cancelled',
+                cancelled_at: db.serverDate(),
+                cancel_reason: '用户取消',
+                updated_at: db.serverDate(),
+            },
+        })
+        .catch(() => ({ stats: { updated: 0 } }));
 
     // 如果状态已被其他流程修改（如支付成功），不再退还资产
     if (!updateRes.stats || updateRes.stats.updated === 0) {
@@ -1206,7 +1230,7 @@ async function applyRefund(openid, params) {
 
     // 退款申请时，冻结佣金（防止提现）
     try {
-        await freezeCommissionsForOrder(canonicalOrderId);
+        await freezeCommissionsForOrder(canonicalOrderId, { commission_freeze_reason: 'refund' });
     } catch (freezeErr) {
         console.error('[OrderLifecycle] 佣金冻结失败:', freezeErr.message);
     }
@@ -1286,7 +1310,7 @@ async function cancelRefund(openid, refundId) {
         data: { status: 'cancelled', cancelled_at: db.serverDate(), updated_at: db.serverDate() },
     });
 
-    // 取消退款时，解冻佣金（恢复为 pending 状态）
+    // 取消退款时，仅恢复由退款申请临时冻结的佣金，不能释放确认收货后的售后期冻结。
     try {
         const order = await getOrderByIdOrNo(openid, refundRes.data.order_id || refundRes.data.order_no);
         if (order && order._id) {
@@ -1335,12 +1359,13 @@ async function returnShipping(openid, refundId, shippingData) {
         throw new Error('退款记录不存在');
     }
 
-    if (refundRes.data.status !== 'processing') {
+    if (!['approved', 'processing'].includes(refundRes.data.status)) {
         throw new Error(`退款状态不允许填写物流: ${refundRes.data.status}`);
     }
 
     await db.collection('refunds').doc(refundId).update({
         data: {
+            status: 'processing',
             return_company: shippingData.company || '',
             return_tracking_no: shippingData.tracking_no || '',
             return_shipping: {

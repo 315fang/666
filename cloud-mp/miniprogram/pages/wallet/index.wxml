@@ -17,6 +17,9 @@
           <view class="withdraw-btn" bindtap="onWithdrawTap">
             <text class="withdraw-btn-text">立即提现</text>
           </view>
+          <view class="withdraw-history-btn" bindtap="onWithdrawHistoryTap">
+            <text class="withdraw-history-btn-text">提现记录</text>
+          </view>
         </view>
       </view>
     </view>
@@ -114,6 +117,47 @@
       <view class="gfe-right">
         <text class="gfe-balance">¥{{goodsFundBalance}}</text>
         <text class="gfe-arrow">›</text>
+      </view>
+    </view>
+
+    <!-- ═══ 提现记录 ═══ -->
+    <view class="section-card">
+      <view class="section-header">
+        <text class="section-title section-title-inline">提现记录</text>
+        <view class="section-more" bindtap="onWithdrawHistoryTap">查看全部 ›</view>
+      </view>
+
+      <view class="withdraw-skeleton" wx:if="{{withdrawalsLoading && withdrawals.length === 0}}">
+        <view class="sk-log" wx:for="{{[1,2]}}" wx:key="index">
+          <view class="sk-info">
+            <view class="sk-line sk-long"></view>
+            <view class="sk-line sk-short"></view>
+          </view>
+          <view class="sk-amount"></view>
+        </view>
+      </view>
+
+      <view wx:if="{{withdrawals.length > 0}}">
+        <view class="withdraw-record" wx:for="{{withdrawals}}" wx:key="_id" bindtap="onWithdrawHistoryTap">
+          <view class="withdraw-record-main">
+            <view class="withdraw-record-top">
+              <text class="withdraw-record-title">提现申请</text>
+              <text class="withdraw-record-status {{item.statusClass}}">{{item.statusText}}</text>
+            </view>
+            <text class="withdraw-record-time">{{item.created_at}}</text>
+            <text class="withdraw-record-hint">{{item.statusHint}}</text>
+            <text class="withdraw-record-reason" wx:if="{{item.reject_reason}}">原因：{{item.reject_reason}}</text>
+          </view>
+          <view class="withdraw-record-side">
+            <text class="withdraw-record-amount">-¥{{item.amount}}</text>
+            <text class="withdraw-record-actual">实到 ¥{{item.actual_amount}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="withdraw-empty" wx:if="{{!withdrawalsLoading && withdrawals.length === 0}}">
+        <text class="withdraw-empty-title">暂无提现记录</text>
+        <text class="withdraw-empty-sub">提交提现后，这里会显示审核、打款和到账状态。</text>
       </view>
     </view>
 

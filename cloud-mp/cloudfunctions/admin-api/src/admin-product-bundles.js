@@ -49,13 +49,19 @@ function registerProductBundleRoutes(app, deps) {
         return raw;
     }
 
+    function roundMoney(value) {
+        return Math.round(Math.max(0, toNumber(value, 0)) * 100) / 100;
+    }
+
     const FLEX_BUNDLE_COMMISSION_ROLE_LEVELS = [0, 1, 2, 3, 4, 5, 6];
+    const FIXED_BUNDLE_COMMISSION_MODE = 'fixed';
+    const FIXED_BUNDLE_COMMISSION_SOURCE = 'bundle_option_fixed';
 
     function normalizeFixedCommissionMap(raw = {}) {
         const source = raw && typeof raw === 'object' ? raw : {};
         return FLEX_BUNDLE_COMMISSION_ROLE_LEVELS.reduce((result, level) => {
             const directValue = source[level] ?? source[String(level)] ?? 0;
-            result[String(level)] = Math.round(Math.max(0, toNumber(directValue, 0)) * 100) / 100;
+            result[String(level)] = roundMoney(directValue);
             return result;
         }, {});
     }
@@ -65,14 +71,24 @@ function registerProductBundleRoutes(app, deps) {
         return FLEX_BUNDLE_COMMISSION_ROLE_LEVELS.reduce((max, level) => Math.max(max, toNumber(source[String(level)], 0)), 0);
     }
 
-    function normalizeCommissionPoolAmount(raw = {}, maps = {}) {
-        const explicit = raw.commission_pool_amount ?? raw.commissionPoolAmount ?? raw.commission_pool ?? raw.total_commission_pool;
-        const explicitAmount = Math.round(Math.max(0, toNumber(explicit, 0)) * 100) / 100;
-        if (explicitAmount > 0) return explicitAmount;
+    function calculateRequiredCommissionPoolAmount(maps = {}) {
         const soloMax = maxFixedCommissionAmount(maps.solo);
         const directMax = maxFixedCommissionAmount(maps.direct);
         const indirectMax = maxFixedCommissionAmount(maps.indirect);
-        return Math.round(Math.max(soloMax, directMax + indirectMax) * 100) / 100;
+        return roundMoney(Math.max(soloMax, directMax + indirectMax));
+    }
+
+    function normalizeCommissionPoolAmount(raw = {}, maps = {}) {
+        const explicit = raw.commission_pool_amount ?? raw.commissionPoolAmount ?? raw.commission_pool ?? raw.total_commission_pool;
+        const explicitAmount = roundMoney(explicit);
+        const requiredAmount = calculateRequiredCommissionPoolAmount(maps);
+        if (explicitAmount > 0) {
+            if (explicitAmount < requiredAmount) {
+                throw new Error(`固定佣金池不能小于 ${requiredAmount} 元，否则结算会被截断`);
+            }
+            return explicitAmount;
+        }
+        return requiredAmount;
     }
 
     function pickProduct(productLookup) {
@@ -142,6 +158,8 @@ function registerProductBundleRoutes(app, deps) {
             default_qty: Math.max(1, Math.floor(toNumber(raw.default_qty ?? raw.quantity, 1))),
             sort_order: toNumber(raw.sort_order, index),
             enabled: toBoolean(raw.enabled ?? raw.status ?? raw.is_active, true) ? 1 : 0,
+            commission_mode: FIXED_BUNDLE_COMMISSION_MODE,
+            commission_source: FIXED_BUNDLE_COMMISSION_SOURCE,
             commission_pool_amount: commissionPoolAmount,
             solo_commission_fixed_by_role: soloCommissionMap,
             direct_commission_fixed_by_role: directCommissionMap,
@@ -254,7 +272,9 @@ function registerProductBundleRoutes(app, deps) {
                         name: pickString(sku.name || ''),
                         spec: buildSkuSpecText(sku)
                     } : null,
-                    commission_pool_amount: Math.round(Math.max(0, toNumber(option.commission_pool_amount, 0)) * 100) / 100,
+                    commission_mode: pickString(option.commission_mode || FIXED_BUNDLE_COMMISSION_MODE, FIXED_BUNDLE_COMMISSION_MODE),
+                    commission_source: pickString(option.commission_source || FIXED_BUNDLE_COMMISSION_SOURCE, FIXED_BUNDLE_COMMISSION_SOURCE),
+                    commission_pool_amount: roundMoney(option.commission_pool_amount),
                     solo_commission_fixed_by_role: normalizeFixedCommissionMap(option.solo_commission_fixed_by_role),
                     direct_commission_fixed_by_role: normalizeFixedCommissionMap(option.direct_commission_fixed_by_role),
                     indirect_commission_fixed_by_role: normalizeFixedCommissionMap(option.indirect_commission_fixed_by_role)

@@ -30,9 +30,30 @@ function loadJwt() {
   return require(path.join(cloudRoot, 'cloudfunctions', 'admin-api', 'node_modules', 'jsonwebtoken'));
 }
 
+function queryFunctionDetail(functionName) {
+  const output = execCommand(
+    `npx mcporter call cloudbase.queryFunctions action=getFunctionDetail functionName=${functionName} --output json`
+  );
+  const payload = JSON.parse(output);
+  return payload?.data?.functionDetail || payload?.data?.raw || {};
+}
+
+function resolveAdminJwtSecret() {
+  if (process.env.ADMIN_JWT_SECRET) return process.env.ADMIN_JWT_SECRET;
+  const detail = queryFunctionDetail('admin-api');
+  const vars = Array.isArray(detail?.Environment?.Variables) ? detail.Environment.Variables : [];
+  const hit = vars.find((item) => item?.Key === 'ADMIN_JWT_SECRET');
+  if (hit?.Value) return hit.Value;
+  throw new Error('无法解析云端 admin-api 的 ADMIN_JWT_SECRET');
+}
+
 function createAdminToken() {
   const jwt = loadJwt();
-  return jwt.sign({ id: 1, username: 'admin', role: 'super_admin' }, 'admin-api-function-secret', { expiresIn: '12h' });
+  return jwt.sign(
+    { id: 1, username: 'admin', role: 'super_admin' },
+    resolveAdminJwtSecret(),
+    { expiresIn: '12h' }
+  );
 }
 
 function invokeAdmin(method, pathname, token, body) {

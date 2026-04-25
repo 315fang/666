@@ -58,7 +58,7 @@ function logPerf(entry) {
 // ==================== 主处理函数 ====================
 async function handlePaymentAction(event, openid) {
     const { action, ...params } = event;
-    const internalActions = new Set(['createWithdrawalTransfer', 'syncWithdrawalTransfer']);
+    const internalActions = new Set(['syncRefundStatus', 'refund', 'createWithdrawalTransfer', 'syncWithdrawalTransfer']);
     if (internalActions.has(action)) {
         const expectedToken = String(process.env.PAYMENT_INTERNAL_TOKEN || '').trim();
         const providedToken = String(params.internal_token || '').trim();
@@ -91,8 +91,12 @@ async function handlePaymentAction(event, openid) {
 
     // 支付回调 — 微信服务器调用，无 openid
     if (action === 'callback') {
+        if (params.__trusted_http_callback !== true) {
+            throw unauthorized('支付回调只能通过 HTTP 网关访问');
+        }
         try {
-            const result = await paymentCallback.handleCallback(params);
+            const { __trusted_http_callback, ...callbackParams } = params;
+            const result = await paymentCallback.handleCallback(callbackParams);
             return result; // 直接返回微信要求的格式
         } catch (err) {
             if (err instanceof CloudBaseError) throw err;
@@ -291,6 +295,40 @@ async function handlePaymentAction(event, openid) {
     throw badRequest(`未知 action: ${action}`);
 }
 
+function pickHeader(headers = {}, name) {
+    if (!headers || typeof headers !== 'object') return '';
+    const target = String(name || '').toLowerCase();
+    const key = Object.keys(headers).find((item) => String(item).toLowerCase() === target);
+    return key ? String(headers[key] || '').trim() : '';
+}
+
+function getHttpMethod(event = {}) {
+    return String(
+        event.httpMethod
+        || event.method
+        || event.requestContext?.httpMethod
+        || event.requestContext?.http?.method
+        || ''
+    ).toUpperCase();
+}
+
+function normalizeHttpCallbackEvent(event = {}) {
+    if (getHttpMethod(event) !== 'POST') return null;
+    const headers = event.headers || {};
+    let body = event.body;
+    if (event.isBase64Encoded && typeof body === 'string') {
+        body = Buffer.from(body, 'base64').toString('utf8');
+    }
+    if (body === undefined || body === null || body === '') return null;
+
+    return {
+        action: 'callback',
+        __trusted_http_callback: true,
+        headers,
+        body
+    };
+}
+
 // ==================== 云函数导出 ====================
 exports.main = async (event, context) => {
     const startedAt = Date.now();
@@ -302,19 +340,11 @@ exports.main = async (event, context) => {
     // 支付回调：微信服务器 HTTP 调用，可能没有 openid
     try {
         let result;
-        if (['callback', 'syncRefundStatus', 'createWithdrawalTransfer', 'syncWithdrawalTransfer'].includes(event.action)) {
+        const httpCallbackEvent = normalizeHttpCallbackEvent(event || {});
+        if (httpCallbackEvent) {
+            result = await handlePaymentAction(httpCallbackEvent, '');
+        } else if (['syncRefundStatus', 'createWithdrawalTransfer', 'syncWithdrawalTransfer'].includes(event.action)) {
             result = await handlePaymentAction(event, '');
-        } else if (event.httpMethod === 'POST' && event.body) {
-            try {
-                const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
-                if (body && body.resource) {
-                    result = await handlePaymentAction({ action: 'callback', ...body }, '');
-                }
-            } catch (e) {
-                console.error('[Payment] HTTP body 解析失败:', e.message);
-            }
-        } else if (!event.action && event.resource && event.event_type) {
-            result = await handlePaymentAction({ action: 'callback', ...event }, '');
         }
 
         if (result === undefined) {

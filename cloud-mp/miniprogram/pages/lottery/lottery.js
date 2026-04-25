@@ -1,7 +1,7 @@
 // pages/lottery/lottery.js
 const app = getApp();
 const { get, post } = require('../../utils/request');
-const { getConfigSection } = require('../../utils/miniProgramConfig');
+const { getConfigSection, getFeatureFlags } = require('../../utils/miniProgramConfig');
 const { fetchPointBalance } = require('../../utils/points');
 
 const PRIZE_STYLE_MAP = {
@@ -101,6 +101,8 @@ Page({
         recordsExpanded: false,
         pointBalance: 0,
         costPoints: 50,
+        lotteryId: 'default',
+        lotteryDisabled: false,
         spinning: false,
         opening: false,
         showResult: false,
@@ -111,9 +113,18 @@ Page({
         }, {})
     },
 
-    onLoad() {
+    onLoad(options = {}) {
         const lotteryConfig = getConfigSection('lottery_config');
+        const featureFlags = getFeatureFlags();
+        const lotteryId = String(options.lottery_id || options.pool_id || 'default').trim() || 'default';
+        if (featureFlags.enable_lottery_entry === false) {
+            this.setData({ lotteryDisabled: true });
+            wx.showToast({ title: '积分抽奖暂未开放', icon: 'none' });
+            setTimeout(() => wx.navigateBack({ delta: 1 }), 800);
+            return;
+        }
         this.setData({
+            lotteryId,
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
             navBarHeight: app.globalData.navBarHeight || 44,
@@ -129,6 +140,7 @@ Page({
     },
 
     onShow() {
+        if (this.data.lotteryDisabled) return;
         if (this._lotteryReloading) return;
         this._lotteryReloading = true;
         this.loadData().finally(() => {
@@ -148,6 +160,7 @@ Page({
     },
 
     async loadData() {
+        if (this.data.lotteryDisabled) return;
         await Promise.allSettled([
             this.loadPrizes(),
             this.loadRecords(),
@@ -157,7 +170,7 @@ Page({
 
     async loadPrizes() {
         try {
-            const res = await get('/lottery/prizes');
+            const res = await get('/lottery/prizes', { lottery_id: this.data.lotteryId });
             if (res.code === 0) {
                 const prizeList = res.list || res.data?.list || res.data || [];
                 const prizes = (Array.isArray(prizeList) ? prizeList : []).map(normalizePrize);
@@ -228,7 +241,7 @@ Page({
         });
 
         try {
-            const res = await post('/lottery/draw');
+            const res = await post('/lottery/draw', { lottery_id: this.data.lotteryId });
             if (res.code !== 0) {
                 wx.showToast({ title: res.message || '抽奖失败', icon: 'none' });
                 this.setData({ spinning: false, opening: false });

@@ -54,6 +54,16 @@ async function refundPayment(openid, params) {
     if (order.status !== 'paid' && order.status !== 'shipped') {
         throw new Error(`订单状态不允许退款: ${order.status}`);
     }
+    const payAmount = toNumber(order.pay_amount || order.total_amount, 0);
+    if (params.refund_amount !== undefined && params.refund_amount !== null && params.refund_amount !== '') {
+        const requestedAmount = toNumber(params.refund_amount, NaN);
+        if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+            throw new Error('退款金额必须大于0');
+        }
+        if (Math.round(requestedAmount * 100) !== Math.round(payAmount * 100)) {
+            throw new Error('旧退款入口不支持部分退款，请从订单售后流程发起退款');
+        }
+    }
 
     // 2. 创建本地退款记录
     const refundResult = await applyRefund(orderId, params.reason || '用户申请退款');
@@ -62,7 +72,6 @@ async function refundPayment(openid, params) {
     // 3. 调用微信支付退款 API
     try {
         const privateKey = await loadPrivateKey(cloud);
-        const payAmount = toNumber(order.pay_amount || order.total_amount, 0);
         const totalFen = Math.round(payAmount * 100);
         const requestedFen = params.refund_amount ? Math.round(toNumber(params.refund_amount, payAmount) * 100) : totalFen;
         const refundAmount = Math.min(Math.max(0, requestedFen), totalFen);

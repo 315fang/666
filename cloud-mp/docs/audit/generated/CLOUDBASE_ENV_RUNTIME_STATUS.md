@@ -1,6 +1,6 @@
 # CloudBase Environment Runtime Status
 
-Generated at: 2026-04-24T06:56:23.718Z
+Generated at: 2026-04-25T03:09:59.593Z
 
 ## Environment
 
@@ -10,13 +10,13 @@ Generated at: 2026-04-24T06:56:23.718Z
 
 ## Required Collections
 
-- `users`: expected=167, actual=211, status=count_above_seed, structure=not_listed_direct_read_ok
-- `products`: expected=11, actual=19, status=count_above_seed
+- `users`: expected=167, actual=213, status=count_above_seed, structure=not_listed_direct_read_ok
+- `products`: expected=11, actual=20, status=count_above_seed
 - `skus`: expected=11, actual=11, status=ok, structure=not_listed_direct_read_ok
 - `categories`: expected=9, actual=8, status=count_below_expected
-- `cart_items`: expected=25, actual=71, status=count_above_seed
-- `orders`: expected=59, actual=192, status=count_above_seed
-- `refunds`: expected=9, actual=33, status=count_above_seed, structure=not_listed_direct_read_ok
+- `cart_items`: expected=25, actual=73, status=count_above_seed
+- `orders`: expected=59, actual=193, status=count_above_seed
+- `refunds`: expected=9, actual=34, status=count_above_seed, structure=not_listed_direct_read_ok
 - `reviews`: expected=3, actual=5, status=count_above_seed, structure=not_listed_direct_read_ok
 - `commissions`: expected=3, actual=10, status=count_above_seed
 - `withdrawals`: expected=3, actual=6, status=count_above_seed, structure=not_listed_direct_read_ok

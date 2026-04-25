@@ -52,6 +52,7 @@ const {
 } = require('./shared/region-scope');
 
 const BRANCH_AGENT_COMMISSION_ORDER_STATUSES = [
+    'pending_group',
     'paid',
     'pickup_pending',
     'agent_confirmed',
@@ -140,6 +141,110 @@ async function directPatchDocument(collectionName, docId, updateData) {
         // Filesystem 模式：走原有 patchCollectionRow + flush
         return true; // 让上层继续走原逻辑
     }
+}
+
+function hasWechatWithdrawalTransferStarted(withdrawal = {}) {
+    return [
+        withdrawal.wx_batch_id,
+        withdrawal.wx_detail_id,
+        withdrawal.wx_out_batch_no,
+        withdrawal.wx_out_detail_no,
+        withdrawal.wx_transfer_requested_at
+    ].some((value) => pickString(value));
+}
+
+function syncPatchedDocumentCache(collectionName, docId, patch = {}) {
+    const cache = dataStore._internals?.cache;
+    if (!cache || !cache.has(collectionName)) return;
+    const rows = cache.get(collectionName) || [];
+    const idx = rows.findIndex((row) => String(row?._id || row?.id || row?._legacy_id) === String(docId));
+    if (idx === -1) return;
+    rows[idx] = { ...rows[idx], ...patch };
+    cache.set(collectionName, rows);
+}
+
+function namespacedCollectionName(collectionName) {
+    return typeof dataStore?.getCollectionName === 'function'
+        ? dataStore.getCollectionName(collectionName)
+        : (typeof dataStore?._internals?.getCollectionName === 'function'
+            ? dataStore._internals.getCollectionName(collectionName)
+            : collectionName);
+}
+
+async function patchWithdrawalStatusIf(currentRow = {}, allowedStatuses = [], patch = {}, predicate = () => true) {
+    const docId = pickString(currentRow._id || currentRow.id);
+    if (!docId) return { ok: false, row: null };
+    const allowed = allowedStatuses.map((status) => pickString(status)).filter(Boolean);
+    if (!allowed.length) return { ok: false, row: currentRow };
+    const db = dataStore._internals?.db;
+    const patchData = {
+        ...patch,
+        updated_at: patch.updated_at || nowIso()
+    };
+
+    if (db) {
+        const command = db.command;
+        const statusCondition = allowed.length === 1 ? allowed[0] : command.in(allowed);
+        const updateRes = await db.collection(namespacedCollectionName('withdrawals'))
+            .where({ _id: docId, status: statusCondition })
+            .update({ data: patchData })
+            .catch(() => ({ stats: { updated: 0 } }));
+        if (updateRes.stats && updateRes.stats.updated > 0) {
+            syncPatchedDocumentCache('withdrawals', docId, patchData);
+            return { ok: true, row: { ...currentRow, ...patchData } };
+        }
+        await ensureFreshCollections(['withdrawals']);
+        const fresh = findByLookup(ensureWithdrawalNumericIds(), docId);
+        return { ok: false, row: fresh || null };
+    }
+
+    const updated = patchCollectionRow('withdrawals', docId, (row) => {
+        if (!allowed.includes(pickString(row.status)) || !predicate(row)) return row;
+        return { ...row, ...patchData };
+    });
+    const matched = !!updated
+        && allowed.includes(pickString(currentRow.status))
+        && predicate(currentRow)
+        && pickString(updated.updated_at) === pickString(patchData.updated_at);
+    return { ok: matched, row: updated || currentRow };
+}
+
+async function patchOrderStatusIf(currentRow = {}, allowedStatuses = [], patch = {}, predicate = () => true) {
+    const docId = pickString(currentRow._id || currentRow.id);
+    if (!docId) return { ok: false, row: null };
+    const allowed = allowedStatuses.map((status) => pickString(status)).filter(Boolean);
+    if (!allowed.length) return { ok: false, row: currentRow };
+    const db = dataStore._internals?.db;
+    const patchData = {
+        ...patch,
+        updated_at: patch.updated_at || nowIso()
+    };
+
+    if (db) {
+        const command = db.command;
+        const statusCondition = allowed.length === 1 ? allowed[0] : command.in(allowed);
+        const updateRes = await db.collection(namespacedCollectionName('orders'))
+            .where({ _id: docId, status: statusCondition })
+            .update({ data: patchData })
+            .catch(() => ({ stats: { updated: 0 } }));
+        if (updateRes.stats && updateRes.stats.updated > 0) {
+            syncPatchedDocumentCache('orders', docId, patchData);
+            return { ok: true, row: { ...currentRow, ...patchData } };
+        }
+        await ensureFreshCollections(['orders']);
+        const fresh = findByLookup(getCollection('orders'), docId, (item) => [item.order_no]);
+        return { ok: false, row: fresh || null };
+    }
+
+    const updated = patchCollectionRow('orders', docId, (row) => {
+        if (!allowed.includes(pickString(row.status)) || !predicate(row)) return row;
+        return { ...row, ...patchData };
+    });
+    const matched = !!updated
+        && allowed.includes(pickString(currentRow.status))
+        && predicate(currentRow)
+        && pickString(updated.updated_at) === pickString(patchData.updated_at);
+    return { ok: matched, row: updated || currentRow };
 }
 
 const ADMIN_ROLE_PRESETS = {
@@ -918,10 +1023,15 @@ async function syncRefundStatusViaPayment(refund = {}) {
     if (!cloud?.callFunction) {
         throw new Error('当前运行环境不支持调用支付云函数');
     }
+    const internalToken = pickString(process.env.PAYMENT_INTERNAL_TOKEN).trim();
+    if (!internalToken) {
+        throw new Error('当前环境缺少 PAYMENT_INTERNAL_TOKEN，不能同步微信退款状态');
+    }
     const result = await cloud.callFunction({
         name: 'payment',
         data: {
             action: 'syncRefundStatus',
+            internal_token: internalToken,
             refund_id: pickString(refund._id || refund.id),
             refund_no: pickString(refund.refund_no)
         }
@@ -934,12 +1044,17 @@ async function syncRefundStatusViaPayment(refund = {}) {
 }
 
 function buildWithdrawalTransferNo(prefix = 'WDTX', withdrawal = {}) {
-    const lookup = pickString(primaryId(withdrawal) || withdrawal.withdraw_no || withdrawal._id || withdrawal.id)
+    const source = pickString(primaryId(withdrawal) || withdrawal.withdraw_no || withdrawal._id || withdrawal.id);
+    const lookup = source
         .replace(/[^0-9A-Za-z]/g, '')
-        .slice(-10);
-    const stamp = Date.now().toString().slice(-10);
-    const rand = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `${prefix}${lookup}${stamp}${rand}`.slice(0, 32);
+        .toUpperCase()
+        .slice(-12);
+    const digest = crypto.createHash('sha256')
+        .update(`${prefix}:${source}`)
+        .digest('hex')
+        .toUpperCase()
+        .slice(0, 12);
+    return `${prefix}${lookup}${digest}`.slice(0, 32);
 }
 
 function resolveWithdrawalPayoutRealName(withdrawal = {}, user = {}) {
@@ -2325,6 +2440,38 @@ function rowMatchesLookup(row, value, extraValues = []) {
     return targets.some((token) => tokens.includes(token));
 }
 
+function userIdentityTokens(user = {}) {
+    return [
+        primaryId(user),
+        user?.id,
+        user?._legacy_id,
+        user?._id,
+        user?.openid
+    ].flatMap((item) => valueTokens(item));
+}
+
+function userIdentityTokenSet(users = []) {
+    return new Set((Array.isArray(users) ? users : []).flatMap((user) => userIdentityTokens(user)));
+}
+
+function userMatchesIdentitySet(user, identityTokens) {
+    if (!identityTokens || identityTokens.size === 0) return false;
+    return userIdentityTokens(user).some((token) => identityTokens.has(token));
+}
+
+function getGraphTeamMembers(graph, leader, level) {
+    if (!graph || !leader) return [];
+    const normalizedLevel = pickString(level).trim();
+    if (normalizedLevel === '1') return graph.getDirectChildren(leader);
+    if (normalizedLevel === '2') {
+        const directChildren = graph.getDirectChildren(leader);
+        const directIdentityTokens = userIdentityTokenSet(directChildren);
+        return graph.getDescendants(leader, 2)
+            .filter((item) => !userMatchesIdentitySet(item, directIdentityTokens));
+    }
+    return graph.getDescendants(leader);
+}
+
 function findByLookup(rows, value, extraValuesGetter) {
     if (value == null || value === '') return null;
     return rows.find((row) => rowMatchesLookup(row, value, typeof extraValuesGetter === 'function' ? extraValuesGetter(row) : [])) || null;
@@ -3619,14 +3766,18 @@ function buildCommissionRecord(commission, users, orders) {
 function commissionStats(rows) {
     return rows.reduce((stats, row) => {
         const amount = toNumber(row.amount, 0);
-        if (row.status === 'frozen') stats.totalFrozen += amount;
+        if (row.status === 'pending') stats.totalPending += amount;
+        else if (row.status === 'frozen') stats.totalFrozen += amount;
         else if (row.status === 'pending_approval') stats.totalPendingApproval += amount;
+        else if (row.status === 'approved') stats.totalApproved += amount;
         else if (['settled', 'completed'].includes(row.status)) stats.totalSettled += amount;
         else if (row.status === 'unknown') stats.totalUnknown += amount;
         return stats;
     }, {
+        totalPending: 0,
         totalFrozen: 0,
         totalPendingApproval: 0,
+        totalApproved: 0,
         totalSettled: 0,
         totalUnknown: 0
     });
@@ -3634,6 +3785,21 @@ function commissionStats(rows) {
 
 function commissionOwnerRef(row) {
     return row.openid || row.user_id || row.receiver_openid || row.beneficiary_openid || null;
+}
+
+const REFUND_RESTORABLE_COMMISSION_TYPES = new Set([
+    'agent_fulfillment',
+    'pickup_service_fee',
+    'pickup_subsidy',
+    'region_agent',
+    'region_b3_virtual'
+]);
+
+function normalizeRestoredCommissionStatus(row = {}) {
+    const previousStatus = pickString(row.pre_freeze_status).toLowerCase();
+    if (['pending', 'pending_approval'].includes(previousStatus)) return previousStatus;
+    const type = pickString(row.type).toLowerCase();
+    return REFUND_RESTORABLE_COMMISSION_TYPES.has(type) ? 'pending_approval' : 'pending';
 }
 
 function applyUserMoneyChange(users, userRef, amount, options = {}) {
@@ -3724,12 +3890,18 @@ async function restoreFrozenCommissionsForOrder(orderId) {
     const changedCommissionIds = new Set();
     const nextRows = rows.map((row) => {
         if (!rowMatchesLookup(row, orderId, [row.order_id, row.order_no]) || row.status !== 'frozen') return row;
+        const restorable = pickString(row.commission_freeze_reason) === 'refund'
+            || pickString(row.pre_freeze_status)
+            || (!row.refund_deadline && !row.peer_bonus_release_at);
+        if (!restorable) return row;
         changed += 1;
         changedCommissionIds.add(String(primaryId(row)));
         return {
             ...row,
-            status: 'pending',
+            status: normalizeRestoredCommissionStatus(row),
             frozen_at: null,
+            pre_freeze_status: null,
+            commission_freeze_reason: null,
             refund_deadline: null,
             updated_at: nowIso()
         };
@@ -6602,6 +6774,7 @@ app.get('/admin/api/users', auth, requirePermission('users'), (req, res) => {
     const roleLevel = pickString(req.query.role_level).trim();
     const status = normalizeUserStatusFilter(req.query.status);
     const leaderId = pickString(req.query.team_leader_id).trim();
+    const teamLevel = pickString(req.query.team_level).trim();
 
     if (lookup) {
         rows = rows.filter((item) => userMatchesLookup(item, lookup));
@@ -6616,9 +6789,9 @@ app.get('/admin/api/users', auth, requirePermission('users'), (req, res) => {
     if (status !== null) rows = rows.filter((item) => Number(item.status) === Number(status));
     if (leaderId) {
         const leader = context.graph.resolveUser(leaderId);
-        const descendants = leader ? context.graph.getDescendants(leader) : [];
-        const descendantIds = new Set(descendants.map((item) => String(primaryId(item))));
-        rows = rows.filter((item) => descendantIds.has(String(item.id)));
+        const descendants = getGraphTeamMembers(context.graph, leader, teamLevel);
+        const descendantIdentityTokens = userIdentityTokenSet(descendants);
+        rows = rows.filter((item) => userMatchesIdentitySet(item, descendantIdentityTokens));
     }
 
     okStrongRead(res, paginate(rows, req), readMeta.freshness);
@@ -7652,6 +7825,11 @@ app.put('/admin/api/upgrade-applications/:id/review', auth, requirePermission('d
     await ensureFreshCollections(['users', 'upgrade_applications']);
     const action = pickString(req.body?.action).trim();
     if (!['approve', 'reject'].includes(action)) return fail(res, '请提供有效操作');
+    const current = findByLookup(getUpgradeApplicationsSnapshot(), req.params.id);
+    if (!current) return fail(res, '申请不存在', 404);
+    if (pickString(current.status) !== 'pending') {
+        return fail(res, '该申请已处理，请刷新后查看最新状态', 409);
+    }
     const status = action === 'approve' ? 'approved' : 'rejected';
     const updated = patchCollectionRow('upgrade_applications', req.params.id, (row) => ({
         ...row,
@@ -7675,6 +7853,11 @@ app.put('/admin/api/upgrade-applications/:id/review', auth, requirePermission('d
         patchCollectionRow('users', updated.user_id, (row) => ({
             ...row,
             role_level: newLevel,
+            role_name: userContract.resolveRoleName({ ...row, role_level: newLevel, role_name: '' }),
+            distributor_level: Math.max(toNumber(row.distributor_level ?? row.agent_level, 0), newLevel),
+            agent_level: Math.max(toNumber(row.agent_level ?? row.distributor_level, 0), newLevel),
+            participate_distribution: 1,
+            discount_rate: toNumber(row.discount_rate, 1) || 1,
             role_upgraded_at: newLevel > oldLevel ? nowIso() : (row.role_upgraded_at || nowIso()),
             updated_at: nowIso()
         }));
@@ -7740,21 +7923,29 @@ app.put('/admin/api/withdrawals/:id/reject', auth, requirePermission('withdrawal
     await ensureFreshCollections(['withdrawals', 'users']);
     const current = findByLookup(ensureWithdrawalNumericIds(), req.params.id);
     if (!current) return fail(res, '提现记录不存在', 404);
-    if (['processing', 'completed', 'rejected', 'failed', 'cancelled'].includes(pickString(current.status))) {
+    const currentStatus = pickString(current.status);
+    if (!['pending', 'approved'].includes(currentStatus)) {
         return fail(res, '当前状态不可驳回', 400);
+    }
+    if (currentStatus === 'approved' && hasWechatWithdrawalTransferStarted(current)) {
+        return fail(res, '该提现已发起微信提现，请先同步微信提现状态，不能直接驳回', 400);
     }
     const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '拒绝原因');
     if (!reasonCheck.ok) return fail(res, reasonCheck.message);
     const withdrawalPatch = {
-        ...current,
         status: 'rejected',
         reject_reason: reasonCheck.reason,
         remark: reasonCheck.reason,
         refunded_at: nowIso(),
         updated_at: nowIso()
     };
-    const persisted = await persistPatchedRow('withdrawals', req.params.id, current, withdrawalPatch);
-    if (!persisted.ok) return fail(res, '提现状态更新失败，请稍后重试', 500);
+    const persisted = await patchWithdrawalStatusIf(
+        current,
+        [currentStatus],
+        withdrawalPatch,
+        (row) => pickString(row.status) === currentStatus && !hasWechatWithdrawalTransferStarted(row)
+    );
+    if (!persisted.ok) return fail(res, '提现状态已变化，请刷新后重试', 409);
     const updated = persisted.row || withdrawalPatch;
 
     const refundAmount = toNumber(current.amount, 0);
@@ -7855,7 +8046,11 @@ app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdraw
     await ensureFreshCollections(['withdrawals', 'users']);
     const current = findByLookup(ensureWithdrawalNumericIds(), req.params.id);
     if (!current) return fail(res, '提现记录不存在', 404);
-    if (!['approved', 'failed'].includes(pickString(current.status))) return fail(res, '当前状态不可确认打款', 400);
+    const currentStatus = pickString(current.status);
+    if (!['approved', 'failed'].includes(currentStatus)) return fail(res, '当前状态不可确认打款', 400);
+    if (hasWechatWithdrawalTransferStarted(current)) {
+        return fail(res, '该提现已发起微信提现，请使用同步状态核对结果，不能重复确认打款', 400);
+    }
     const reasonCheck = requireManualAdjustmentReason(req.body?.remark, '打款备注');
     if (!reasonCheck.ok) return fail(res, reasonCheck.message);
     if (getWithdrawalAccountType(buildWithdrawalRecord(current, getCollection('users'))) !== 'wechat') {
@@ -7873,6 +8068,7 @@ app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdraw
     const outDetailNo = buildWithdrawalTransferNo('WDD', current);
     const payoutRealName = resolveWithdrawalPayoutRealName(current, user);
 
+    let claimedWithdrawal = null;
     try {
         const cloud = getManagedCloud();
         if (!cloud?.callFunction) {
@@ -7882,12 +8078,38 @@ app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdraw
         if (!internalToken) {
             throw new Error('当前环境缺少 PAYMENT_INTERNAL_TOKEN，不能发起微信提现');
         }
+        const requestedAt = nowIso();
+        const claimPatch = buildWithdrawalTransferPatch(current, {
+            out_batch_no: outBatchNo,
+            out_detail_no: outDetailNo,
+            batch_status: 'REQUESTING',
+            detail_status: 'INIT',
+            local_status: 'processing'
+        }, {
+            fallbackStatus: 'processing',
+            remark: reasonCheck.reason,
+            processingAt: requestedAt
+        });
+        claimPatch.wx_transfer_requested_at = requestedAt;
+        claimPatch.wx_transfer_amount = amountToTransfer;
+        claimPatch.wx_transfer_lock_id = crypto.randomUUID();
+        const claimed = await patchWithdrawalStatusIf(
+            current,
+            [currentStatus],
+            claimPatch,
+            (row) => pickString(row.status) === currentStatus && !hasWechatWithdrawalTransferStarted(row)
+        );
+        if (!claimed.ok) {
+            return fail(res, '提现状态已变化，请刷新或同步微信提现状态后再处理', 409);
+        }
+        claimedWithdrawal = claimed.row || { ...current, ...claimPatch };
+
         const result = await cloud.callFunction({
             name: 'payment',
             data: {
                 action: 'createWithdrawalTransfer',
                 internal_token: internalToken,
-                withdrawal_id: pickString(primaryId(current)),
+                withdrawal_id: pickString(primaryId(claimedWithdrawal)),
                 out_batch_no: outBatchNo,
                 out_detail_no: outDetailNo,
                 openid: payoutOpenid,
@@ -7903,7 +8125,7 @@ app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdraw
             throw new Error(payload.message || '支付云函数发起微信提现失败');
         }
         const transfer = payload?.data || payload || {};
-        const patch = buildWithdrawalTransferPatch(current, {
+        const patch = buildWithdrawalTransferPatch(claimedWithdrawal, {
             ...transfer,
             out_batch_no: transfer.out_batch_no || outBatchNo,
             out_detail_no: outDetailNo,
@@ -7913,16 +8135,16 @@ app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdraw
         }, {
             fallbackStatus: 'processing',
             remark: reasonCheck.reason,
-            processingAt: nowIso()
+            processingAt: claimedWithdrawal.processing_at || requestedAt
         });
-        patch.wx_transfer_requested_at = nowIso();
+        patch.wx_transfer_requested_at = claimedWithdrawal.wx_transfer_requested_at || requestedAt;
         patch.wx_transfer_amount = amountToTransfer;
-        const persisted = await persistPatchedRow('withdrawals', req.params.id, current, patch);
+        const persisted = await persistPatchedRow('withdrawals', req.params.id, claimedWithdrawal, patch);
         if (!persisted.ok) return fail(res, '微信提现请求已发起，但本地状态写入失败，请立即核对微信提现记录', 500);
-        const updated = persisted.row || { ...current, ...patch };
+        const updated = persisted.row || { ...claimedWithdrawal, ...patch };
         createAuditLog(req.admin, 'withdrawal.complete', 'withdrawals', {
-            withdrawal_id: primaryId(updated || current),
-            amount: toNumber(current.amount, 0),
+            withdrawal_id: primaryId(updated || claimedWithdrawal),
+            amount: toNumber(claimedWithdrawal.amount, 0),
             actual_amount: amountToTransfer,
             remark: reasonCheck.reason,
             out_batch_no: pickString(patch.wx_out_batch_no),
@@ -7936,6 +8158,14 @@ app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdraw
             read_at: reloadMeta.read_at
         });
     } catch (error) {
+        if (claimedWithdrawal) {
+            await persistPatchedRow('withdrawals', req.params.id, claimedWithdrawal, {
+                wx_transfer_request_error: error.message || '未知错误',
+                wx_transfer_error_at: nowIso(),
+                updated_at: nowIso()
+            }).catch(() => null);
+            return fail(res, `微信提现请求状态未知：${error.message || '未知错误'}。已保留本地批次号，请使用同步状态核对后再处理`, 500);
+        }
         return fail(res, `微信提现发起失败：${error.message || '未知错误'}`, 500);
     }
 });
@@ -8396,6 +8626,21 @@ app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), async (
     if (!ORDER_SHIPPABLE_STATUSES.has(String(current.status || ''))) {
         return fail(res, `当前订单状态不允许发货：${current.status || '-'}`, 400);
     }
+    const shippingClaimedAt = nowIso();
+    const shippingClaim = await patchOrderStatusIf(
+        current,
+        Array.from(ORDER_SHIPPABLE_STATUSES),
+        {
+            status: 'shipping_processing',
+            shipping_processing_at: shippingClaimedAt,
+            shipping_processing_by: req.admin?.id || req.admin?.username || '',
+            updated_at: shippingClaimedAt
+        },
+        (row) => ORDER_SHIPPABLE_STATUSES.has(String(row.status || ''))
+    );
+    if (!shippingClaim.ok) {
+        return fail(res, '订单发货状态已变化，请刷新后重试', 409);
+    }
     let finalFulfillmentType = requestedFulfillmentType || current.fulfillment_type || 'company';
     let fallbackNotice = '';
     let deductionResult = null;
@@ -8459,6 +8704,17 @@ app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), async (
         if (deductionResult?.rollback) {
             await deductionResult.rollback().catch(() => {});
         }
+        await patchOrderStatusIf(
+            shippingClaim.row || { ...current, status: 'shipping_processing' },
+            ['shipping_processing'],
+            {
+                status: current.status,
+                shipping_processing_failed_at: nowIso(),
+                shipping_processing_error: pickString(error.message || '订单发货失败'),
+                updated_at: nowIso()
+            },
+            (row) => pickString(row.status) === 'shipping_processing'
+        ).catch(() => null);
         return fail(res, error.message || '订单发货失败', 500);
     }
 

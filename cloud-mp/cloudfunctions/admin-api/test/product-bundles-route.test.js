@@ -143,6 +143,8 @@ test('creating product bundle waits for persistence flush before success', async
     assert.equal(deps.getCollection('product_bundles').length, 1);
     assert.equal(deps.getCollection('product_bundles')[0].scene_type, 'flex_bundle');
     const option = deps.getCollection('product_bundles')[0].groups[0].options[0];
+    assert.equal(option.commission_mode, 'fixed');
+    assert.equal(option.commission_source, 'bundle_option_fixed');
     assert.equal(option.commission_pool_amount, 80);
     assert.equal(option.solo_commission_fixed_by_role['3'], 60);
     assert.equal(option.solo_commission_fixed_by_role['5'], 80);
@@ -168,4 +170,24 @@ test('creating product bundle fails when persistence flush fails', async () => {
 
     assert.equal(response.statusCode, 500);
     assert.equal(response.body.code, 500);
+});
+
+test('creating product bundle rejects fixed commission above explicit pool', async () => {
+    const app = express();
+    const deps = createDeps();
+    const payload = createPayload();
+    payload.groups[0].options[0].commission_pool_amount = 60;
+
+    registerProductBundleRoutes(app, deps);
+
+    const response = await invoke(app, {
+        method: 'POST',
+        path: '/admin/api/product-bundles',
+        body: payload
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.body.code, 400);
+    assert.match(response.body.message, /固定佣金池不能小于 80 元/);
+    assert.equal(deps.getCollection('product_bundles').length, 0);
 });

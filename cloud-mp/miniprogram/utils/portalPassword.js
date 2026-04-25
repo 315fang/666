@@ -35,7 +35,7 @@ function ensurePortalPasswordReady() {
     if (!userInfo.portal_password_enabled) {
         wx.showModal({
             title: '请先设置业务密码',
-            content: '该操作需要先在密码中心申领并修改业务密码。',
+            content: '该操作需要先在安全中心申领并修改业务密码。',
             confirmText: '去设置',
             success: (res) => {
                 if (res.confirm) {

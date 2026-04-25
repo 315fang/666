@@ -298,18 +298,6 @@
     </view>
   </view>
 
-  <view class="home-compliance-footer">
-    <view class="home-compliance-rule"></view>
-    <view class="home-compliance-row">
-      <image
-        class="home-compliance-badge"
-        src="{{homeConfigs.police_registration_icon || '/assets/images/police-badge.jpg'}}"
-        mode="aspectFit"
-      ></image>
-      <text class="home-compliance-text">{{homeConfigs.police_registration_number || '苏公网安备32050802012518号'}}</text>
-    </view>
-  </view>
-
   <brand-animation id="brandAnimation"></brand-animation>
 
   <!-- 弹窗广告 -->

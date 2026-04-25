@@ -279,6 +279,18 @@ test('POST /admin/api/commissions/repair-region-agent backfills missing region r
         assert.equal(commission.openid, claimantOpenid);
         assert.equal(Number(commission.amount), 1);
         assert.equal(commission.status, 'pending_approval');
+
+        const secondResponse = await invoke('/admin/api/commissions/repair-region-agent', {
+            method: 'POST',
+            admin,
+            body: { order_no: orderNo }
+        });
+        assert.equal(secondResponse.statusCode, 200, secondResponse.body?.message || JSON.stringify(secondResponse.body));
+        assert.equal(secondResponse.body.data?.created, 0);
+        assert.equal(secondResponse.body.data?.existing, 1);
+        const commissions = dataStore.getCollection('commissions')
+            .filter((row) => String(row.order_no) === orderNo && row.type === 'region_agent');
+        assert.equal(commissions.length, 1);
     } finally {
         cleanup();
         if (originalPolicy) {
@@ -331,6 +343,101 @@ test('GET /admin/api/orders hides cancelled orders unless explicitly included', 
         const nextOrders = app.locals.dataStore.getCollection('orders')
             .filter((row) => String(row.id || row._id) !== String(tempOrder.id));
         app.locals.dataStore.saveCollection?.('orders', nextOrders);
+    }
+});
+
+test('PUT /admin/api/refunds/:id/reject restores refund-frozen commissions without cancelling settled rows', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const tempPrefix = 'test-refund-reject-commission';
+    const orderId = `${tempPrefix}-order`;
+    const orderNo = `${tempPrefix}-no`;
+    const refundId = `${tempPrefix}-refund`;
+    const userOpenid = `${tempPrefix}-openid`;
+    const cleanup = () => {
+        dataStore.saveCollection?.('users', dataStore.getCollection('users')
+            .filter((row) => String(row.openid || row.id || row._id) !== userOpenid));
+        dataStore.saveCollection?.('orders', dataStore.getCollection('orders')
+            .filter((row) => String(row._id || row.id || row.order_no) !== orderId && String(row.order_no || '') !== orderNo));
+        dataStore.saveCollection?.('refunds', dataStore.getCollection('refunds')
+            .filter((row) => String(row._id || row.id) !== refundId));
+        dataStore.saveCollection?.('commissions', dataStore.getCollection('commissions')
+            .filter((row) => String(row.order_id || row.order_no) !== orderId && String(row.order_no || '') !== orderNo));
+    };
+
+    cleanup();
+    dataStore.saveCollection?.('users', dataStore.getCollection('users').concat({
+        _id: `${tempPrefix}-user`,
+        id: `${tempPrefix}-user`,
+        openid: userOpenid,
+        nickname: '退款拒绝测试用户',
+        balance: 10,
+        commission_balance: 10
+    }));
+    dataStore.saveCollection?.('orders', dataStore.getCollection('orders').concat({
+        _id: orderId,
+        id: orderId,
+        order_no: orderNo,
+        openid: userOpenid,
+        status: 'refunding',
+        prev_status: 'paid',
+        paid_at: '2026-04-24T00:00:00.000Z'
+    }));
+    dataStore.saveCollection?.('refunds', dataStore.getCollection('refunds').concat({
+        _id: refundId,
+        id: refundId,
+        order_id: orderId,
+        order_no: orderNo,
+        openid: userOpenid,
+        status: 'pending',
+        amount: 100,
+        created_at: '2026-04-24T00:00:00.000Z'
+    }));
+    dataStore.saveCollection?.('commissions', dataStore.getCollection('commissions').concat([
+        {
+            _id: `${tempPrefix}-region`,
+            id: `${tempPrefix}-region`,
+            order_id: orderId,
+            order_no: orderNo,
+            openid: userOpenid,
+            type: 'region_agent',
+            status: 'frozen',
+            pre_freeze_status: 'pending_approval',
+            commission_freeze_reason: 'refund',
+            amount: 1
+        },
+        {
+            _id: `${tempPrefix}-settled`,
+            id: `${tempPrefix}-settled`,
+            order_id: orderId,
+            order_no: orderNo,
+            openid: userOpenid,
+            type: 'direct',
+            status: 'settled',
+            amount: 10
+        }
+    ]));
+
+    try {
+        const response = await invoke(`/admin/api/refunds/${refundId}/reject`, {
+            method: 'PUT',
+            admin,
+            body: { reason: '测试拒绝退款' }
+        });
+
+        assert.equal(response.statusCode, 200, response.body?.message || JSON.stringify(response.body));
+        const commissions = dataStore.getCollection('commissions');
+        const restored = commissions.find((row) => String(row._id || row.id) === `${tempPrefix}-region`);
+        const settled = commissions.find((row) => String(row._id || row.id) === `${tempPrefix}-settled`);
+        const user = dataStore.getCollection('users').find((row) => String(row.openid) === userOpenid);
+        const order = dataStore.getCollection('orders').find((row) => String(row._id || row.id) === orderId);
+        assert.equal(restored?.status, 'pending_approval');
+        assert.equal(settled?.status, 'settled');
+        assert.equal(Number(user?.commission_balance), 10);
+        assert.equal(order?.status, 'paid');
+    } finally {
+        cleanup();
     }
 });
 
@@ -530,6 +637,68 @@ test('PUT /admin/api/refunds/:id/reject returns field_errors for invalid body', 
     assert.equal(response.body.success, false);
     assert.ok(Array.isArray(response.body.field_errors));
     assert.ok(response.body.field_errors.some((item) => item.field === 'unexpected'));
+});
+
+test('PUT /admin/api/withdrawals/:id/complete rejects records with existing WeChat transfer markers', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const rows = dataStore.getCollection('withdrawals');
+    const tempId = 'test-withdrawal-repeat-transfer';
+    rows.push({
+        _id: tempId,
+        id: tempId,
+        openid: 'test-withdrawal-openid',
+        status: 'approved',
+        type: 'wechat',
+        amount: 10,
+        actual_amount: 10,
+        wx_out_batch_no: 'WDBEXISTINGBATCH',
+        created_at: '2026-04-25T00:00:00.000Z',
+        updated_at: '2026-04-25T00:00:00.000Z'
+    });
+    dataStore.saveCollection('withdrawals', rows);
+
+    const response = await invoke(`/admin/api/withdrawals/${tempId}/complete`, {
+        method: 'PUT',
+        admin,
+        body: { remark: '测试重复打款拦截' }
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.body.success, false);
+    assert.match(response.body.message || '', /已发起微信提现/);
+});
+
+test('PUT /admin/api/withdrawals/:id/reject rejects approved records after WeChat transfer request starts', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const rows = dataStore.getCollection('withdrawals');
+    const tempId = 'test-withdrawal-reject-started';
+    rows.push({
+        _id: tempId,
+        id: tempId,
+        openid: 'test-withdrawal-openid',
+        status: 'approved',
+        type: 'wechat',
+        amount: 10,
+        actual_amount: 10,
+        wx_transfer_requested_at: '2026-04-25T00:00:00.000Z',
+        created_at: '2026-04-25T00:00:00.000Z',
+        updated_at: '2026-04-25T00:00:00.000Z'
+    });
+    dataStore.saveCollection('withdrawals', rows);
+
+    const response = await invoke(`/admin/api/withdrawals/${tempId}/reject`, {
+        method: 'PUT',
+        admin,
+        body: { reason: '测试已发起打款后禁止驳回' }
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.body.success, false);
+    assert.match(response.body.message || '', /已发起微信提现/);
 });
 
 test('PUT /admin/api/users/:id/goods-fund returns field_errors for invalid body', async () => {

@@ -194,7 +194,7 @@
           :closable="false"
           show-icon
           class="form-alert"
-          title="自由组合只引用现有商品，不继承商品管理里的佣金。每个候选商品独立配置佣金池、单上级独享额和双上级拆分额。"
+          title="自由组合使用固定金额佣金，不继承商品管理或运营体系的佣金矩阵百分比。每个候选商品独立配置单上级独享额、双上级直推额和间推额。"
         />
 
         <div v-if="form.groups.length === 0" class="groups-empty">暂无选择分组，请先新增至少一个分组。</div>
@@ -278,7 +278,7 @@
               <el-button text type="danger" size="small" @click="removeOption(groupIndex, optionIndex)">删除候选</el-button>
             </div>
             <div class="commission-editor">
-              <div class="commission-editor-title">佣金池配置</div>
+              <div class="commission-editor-title">固定佣金配置</div>
               <div class="commission-pool-row">
                 <div class="commission-pool-control">
                   <span class="commission-role-label">总佣金池</span>
@@ -290,7 +290,7 @@
                     style="width: 100%"
                   />
                 </div>
-                <div class="commission-pool-hint">订单创建时按实际上下级关系快照佣金；配置总额会作为封顶。</div>
+                <div class="commission-pool-hint">总佣金池用于校验和封顶；不填时按固定佣金最大值自动计算，直推加间推不能超过池。</div>
               </div>
               <div class="commission-grid">
                 <div class="commission-group">
@@ -324,7 +324,7 @@
                   </div>
                 </div>
                 <div class="commission-group">
-                  <div class="commission-group-title">双上级：上上级</div>
+                  <div class="commission-group-title">双上级：间推 / 上上级</div>
                   <div class="commission-role-list">
                     <div class="commission-role-item" v-for="role in COMMISSION_ROLE_OPTIONS" :key="`indirect-${role.value}`">
                       <span class="commission-role-label">{{ role.label }}</span>
@@ -386,6 +386,8 @@ const COMMISSION_ROLE_OPTIONS = [
   { value: 5, label: 'B3' },
   { value: 6, label: '店长' }
 ]
+const FIXED_BUNDLE_COMMISSION_MODE = 'fixed'
+const FIXED_BUNDLE_COMMISSION_SOURCE = 'bundle_option_fixed'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -417,6 +419,21 @@ const normalizeFixedCommissionMap = (source = {}) => COMMISSION_ROLE_OPTIONS.red
   return result
 }, {})
 
+const roundMoney = (value) => {
+  const amount = Number(value || 0)
+  return Number.isFinite(amount) ? Math.round(Math.max(0, amount) * 100) / 100 : 0
+}
+
+const maxFixedCommissionAmount = (source = {}) => Math.max(
+  0,
+  ...COMMISSION_ROLE_OPTIONS.map((item) => roundMoney(source?.[item.value] ?? source?.[String(item.value)] ?? 0))
+)
+
+const requiredFixedCommissionPoolAmount = (option = {}) => roundMoney(Math.max(
+  maxFixedCommissionAmount(option.solo_commission_fixed_by_role),
+  maxFixedCommissionAmount(option.direct_commission_fixed_by_role) + maxFixedCommissionAmount(option.indirect_commission_fixed_by_role)
+))
+
 const createOption = () => ({
   local_key: `option-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
   product_id: '',
@@ -427,6 +444,8 @@ const createOption = () => ({
   product_name: '',
   sku_name: '',
   sku_spec: '',
+  commission_mode: FIXED_BUNDLE_COMMISSION_MODE,
+  commission_source: FIXED_BUNDLE_COMMISSION_SOURCE,
   commission_pool_amount: 0,
   solo_commission_fixed_by_role: createEmptyFixedCommissionMap(),
   direct_commission_fixed_by_role: createEmptyFixedCommissionMap(),
@@ -665,6 +684,8 @@ const hydrateBundleForm = async (bundle = {}) => {
         product_name: option.product_name || '',
         sku_name: option.sku_name || '',
         sku_spec: option.sku_spec || '',
+        commission_mode: option.commission_mode || FIXED_BUNDLE_COMMISSION_MODE,
+        commission_source: option.commission_source || FIXED_BUNDLE_COMMISSION_SOURCE,
         commission_pool_amount: Number(option.commission_pool_amount || 0),
         solo_commission_fixed_by_role: normalizeFixedCommissionMap(option.solo_commission_fixed_by_role),
         direct_commission_fixed_by_role: normalizeFixedCommissionMap(option.direct_commission_fixed_by_role),
@@ -768,6 +789,11 @@ const validateForm = () => {
     if (!Array.isArray(group.options) || group.options.length === 0) return `分组「${group.group_title}」至少需要 1 个候选商品`
     for (const option of group.options) {
       if (!String(option.product_id || '').trim()) return `分组「${group.group_title}」存在未选择商品的候选项`
+      const explicitPool = roundMoney(option.commission_pool_amount)
+      const requiredPool = requiredFixedCommissionPoolAmount(option)
+      if (explicitPool > 0 && explicitPool < requiredPool) {
+        return `分组「${group.group_title}」的固定佣金池不能小于 ${requiredPool} 元`
+      }
     }
   }
   return ''
@@ -802,6 +828,8 @@ const buildPayload = () => ({
       default_qty: Number(option.default_qty || 1),
       sort_order: Number(option.sort_order || optionIndex),
       enabled: Number(option.enabled || 0) === 0 ? 0 : 1,
+      commission_mode: FIXED_BUNDLE_COMMISSION_MODE,
+      commission_source: FIXED_BUNDLE_COMMISSION_SOURCE,
       commission_pool_amount: Number(option.commission_pool_amount || 0),
       solo_commission_fixed_by_role: normalizeFixedCommissionMap(option.solo_commission_fixed_by_role),
       direct_commission_fixed_by_role: normalizeFixedCommissionMap(option.direct_commission_fixed_by_role),

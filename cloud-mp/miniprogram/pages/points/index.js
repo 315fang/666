@@ -67,6 +67,83 @@ function extractList(res, extraKey) {
     return Array.isArray(list) ? list : [];
 }
 
+function pickText(...values) {
+    for (const value of values) {
+        if (value === null || value === undefined) continue;
+        const text = String(value).trim();
+        if (text) return text;
+    }
+    return '';
+}
+
+function toPointAmount(value, fallback = 0) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+}
+
+function pad2(value) {
+    return String(value).padStart(2, '0');
+}
+
+function formatLogTime(value) {
+    const raw = pickText(value);
+    if (!raw) return '';
+    const date = new Date(raw);
+    if (!Number.isFinite(date.getTime())) return raw;
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+const POINT_LOG_TYPE_LABELS = {
+    earn: '积分获得',
+    income: '积分获得',
+    add: '积分增加',
+    reward: '积分奖励',
+    spend: '积分使用',
+    deduct: '积分抵扣',
+    consume: '积分使用',
+    use: '积分使用',
+    refund: '积分退回',
+    return: '积分退回',
+    expired: '积分过期',
+    expire: '积分过期',
+    adjust: '积分调整',
+    adjustment: '积分调整'
+};
+
+const POINT_LOG_SOURCE_LABELS = {
+    sign_in: '每日签到',
+    checkin: '每日签到',
+    order_pay: '订单积分',
+    invite_success: '邀请奖励',
+    lottery_draw: '积分抽奖',
+    lottery_prize: '抽奖奖励',
+    admin_adjustment: '后台调整'
+};
+
+const POINT_DECREASE_TYPES = new Set(['spend', 'deduct', 'consume', 'use', 'expired', 'expire']);
+
+function resolvePointLogLabel(log = {}) {
+    const type = pickText(log.type || log.change_type).toLowerCase();
+    const source = pickText(log.source || log.scene || log.ref_type).toLowerCase();
+    return POINT_LOG_SOURCE_LABELS[source] || POINT_LOG_TYPE_LABELS[type] || '积分变动';
+}
+
+function normalizePointLog(log = {}) {
+    const rawType = pickText(log.type || log.change_type).toLowerCase();
+    const rawAmount = log.amount != null ? log.amount : log.points;
+    let amount = toPointAmount(rawAmount, 0);
+    if (POINT_DECREASE_TYPES.has(rawType) && amount > 0) {
+        amount = -amount;
+    }
+    return {
+        ...log,
+        amount,
+        display_title: pickText(log.remark, log.description, resolvePointLogLabel(log)),
+        display_time: formatLogTime(log.created_at || log.createdAt || log.time),
+        balance_after: log.balance_after != null ? log.balance_after : (log.balanceAfter != null ? log.balanceAfter : '')
+    };
+}
+
 function normalizeTask(task = {}) {
     const points = task.points != null ? task.points : task.points_reward;
     const completed = task.completed != null ? task.completed : task.done;
@@ -196,10 +273,7 @@ Page({
             const res = await get('/points/logs', { page: 1, limit: 30 });
             if (res.code === 0) {
                 this.setData({
-                    logs: extractList(res).map((log) => ({
-                        ...log,
-                        amount: log.amount != null ? log.amount : log.points
-                    }))
+                    logs: extractList(res).map(normalizePointLog)
                 });
             }
         } catch (e) {

@@ -20,6 +20,9 @@ Page({
         // 明细流水
         logs: [],
         logsLoading: true,
+        // 提现记录
+        withdrawals: [],
+        withdrawalsLoading: true,
         // 提现弹窗
         showWithdraw: false,
         withdrawAmount: '',
@@ -48,6 +51,7 @@ Page({
         this.loadWithdrawalRules();
         this.loadWalletInfo();
         this.loadLogs();
+        this.loadWithdrawals();
         this.loadGoodsFund();
     },
 
@@ -163,6 +167,86 @@ Page({
         return map[status] || '';
     },
 
+    async loadWithdrawals() {
+        this.setData({ withdrawalsLoading: true });
+        try {
+            const res = await get('/wallet/withdrawals', { page: 1, limit: 3 }, { showError: false });
+            if (res.code === 0) {
+                const withdrawals = (res.data.list || []).slice(0, 3).map((item) => {
+                    const status = String(item.status || '');
+                    return {
+                        ...item,
+                        amount: this._fmtMoney(item.amount),
+                        fee: this._fmtMoney(item.fee),
+                        actual_amount: this._fmtMoney(item.actual_amount != null ? item.actual_amount : item.amount),
+                        statusText: this._withdrawStatusText(status),
+                        statusClass: this._withdrawStatusClass(status),
+                        statusHint: this._withdrawStatusHint(status),
+                        created_at: this._formatTime(item.created_at),
+                        updated_at: this._formatTime(item.updated_at || item.paid_at || item.completed_at)
+                    };
+                });
+                this.setData({ withdrawals });
+            }
+        } catch (err) {
+            console.error('[wallet] 加载提现记录失败:', err);
+        }
+        this.setData({ withdrawalsLoading: false });
+    },
+
+    _fmtMoney(value) {
+        return parseFloat(value || 0).toFixed(2);
+    },
+
+    _formatTime(value) {
+        if (!value) return '';
+        if (typeof value === 'string') return value.replace('T', ' ').slice(0, 16);
+        if (value instanceof Date) return value.toISOString().replace('T', ' ').slice(0, 16);
+        return String(value).replace('T', ' ').slice(0, 16);
+    },
+
+    _withdrawStatusText(status) {
+        const map = {
+            pending: '审核中',
+            approved: '待打款',
+            processing: '打款中',
+            completed: '已到账',
+            settled: '已到账',
+            failed: '打款失败',
+            rejected: '已驳回',
+            cancelled: '已取消'
+        };
+        return map[status] || status || '处理中';
+    },
+
+    _withdrawStatusClass(status) {
+        const map = {
+            pending: 'withdraw-status-pending',
+            approved: 'withdraw-status-approved',
+            processing: 'withdraw-status-processing',
+            completed: 'withdraw-status-success',
+            settled: 'withdraw-status-success',
+            failed: 'withdraw-status-fail',
+            rejected: 'withdraw-status-fail',
+            cancelled: 'withdraw-status-muted'
+        };
+        return map[status] || 'withdraw-status-pending';
+    },
+
+    _withdrawStatusHint(status) {
+        const map = {
+            pending: '平台正在审核，请等待处理',
+            approved: '审核已通过，等待平台打款',
+            processing: '打款处理中，请留意微信零钱',
+            completed: '提现已到账',
+            settled: '提现已到账',
+            failed: '打款失败，金额将按规则处理',
+            rejected: '申请未通过，请查看原因',
+            cancelled: '提现申请已取消'
+        };
+        return map[status] || '提现申请处理中';
+    },
+
     onWithdrawInput(e) {
         this.recalculateWithdrawPreview(e.detail.value);
     },
@@ -212,8 +296,19 @@ Page({
             wx.hideLoading();
             if (res.code === 0) {
                 this.hideWithdraw();
-                wx.showToast({ title: '提现申请已提交', icon: 'success' });
-                setTimeout(() => this.loadWalletInfo(), 1200);
+                this.loadWalletInfo();
+                this.loadWithdrawals();
+                wx.showModal({
+                    title: '提现申请已提交',
+                    content: '当前状态：审核中。可在我的钱包的提现记录查看审核、打款和到账进度。',
+                    confirmText: '查看记录',
+                    cancelText: '知道了',
+                    success: (modalRes) => {
+                        if (modalRes.confirm) {
+                            this.onWithdrawHistoryTap();
+                        }
+                    }
+                });
             } else {
                 wx.showToast({ title: res.message || '申请失败', icon: 'none' });
             }
@@ -226,6 +321,10 @@ Page({
 
     onGoGoodsFund() {
         wx.navigateTo({ url: '/pages/wallet/agent-wallet' });
+    },
+
+    onWithdrawHistoryTap() {
+        wx.navigateTo({ url: '/pages/distribution/withdraw-history' });
     },
 
     async loadWithdrawalRules() {

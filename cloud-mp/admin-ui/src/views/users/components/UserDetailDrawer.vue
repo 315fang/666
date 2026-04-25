@@ -116,43 +116,15 @@
             </el-table-column>
           </el-table>
 
-          <div class="detail-section-title" style="margin-top:20px">团队（以本人为负责人 · 全体后代）</div>
-          <p class="sub-hint" style="margin-bottom:10px">不含本人；含多级下级。可打开弹窗看订单维度，或跳到列表逐人查看。</p>
-          <el-row v-if="detailTeamPreview" :gutter="12" class="team-preview-row">
-            <el-col :span="12">
-              <el-card shadow="never" class="mini-stat-card">
-                <div class="mini-stat-label">后代人数</div>
-                <div class="mini-stat-value">{{ detailTeamPreview.descendant_count }}</div>
-              </el-card>
-            </el-col>
-            <el-col :span="12">
-              <el-card shadow="never" class="mini-stat-card">
-                <div class="mini-stat-label">后代累计消费(用户表)</div>
-                <div class="mini-stat-value">¥{{ Number(detailTeamPreview.user_total_sales_sum || 0).toFixed(0) }}</div>
-              </el-card>
-            </el-col>
-            <el-col :span="12" style="margin-top:8px">
-              <el-card shadow="never" class="mini-stat-card">
-                <div class="mini-stat-label">有效订单实付(全量)</div>
-                <div class="mini-stat-value">¥{{ Number(detailTeamPreview.order_actual_price_sum || 0).toFixed(0) }}</div>
-              </el-card>
-            </el-col>
-            <el-col :span="12" style="margin-top:8px">
-              <el-card shadow="never" class="mini-stat-card">
-                <div class="mini-stat-label">已支付实付(全量)</div>
-                <div class="mini-stat-value">¥{{ Number(detailTeamPreview.order_paid_actual_sum || 0).toFixed(0) }}</div>
-              </el-card>
-            </el-col>
-          </el-row>
-          <div v-else class="sub-hint" style="margin-bottom:10px">团队数据加载中或暂不可用</div>
+          <div class="detail-section-title" style="margin-top:20px">团队（小程序口径）</div>
+          <p class="sub-hint" style="margin-bottom:10px">不含本人；列表页可切换查看一级直推和二级扩散成员。</p>
           <el-space wrap style="margin-top:12px">
-            <el-button type="primary" @click="onOpenTeamSummary">团队概况（弹窗）</el-button>
-            <el-button @click="onGoTeamMemberList">在列表中查看其整树团队</el-button>
+            <el-button type="primary" @click="onGoTeamMemberList">在列表中查看一级/二级团队</el-button>
           </el-space>
         </el-tab-pane>
 
         <el-tab-pane label="直推团队 (下级)" name="team">
-          <p class="sub-hint" style="margin-bottom:10px">此处仅一级直推。多层级全体后代请在列表用「团队负责人」筛选或打开「团队概况」。</p>
+          <p class="sub-hint" style="margin-bottom:10px">此处仅一级直推；二级团队请回列表页切换查看。</p>
           <el-table :data="teamData" stripe size="small" v-loading="teamLoading">
             <el-table-column label="昵称">
               <template #default="{ row }">{{ displayUserName(row) }}</template>
@@ -202,10 +174,6 @@ defineProps({
   detailAvgOrderAmount: {
     type: [String, Number],
     default: '0.00'
-  },
-  detailTeamPreview: {
-    type: Object,
-    default: null
   },
   commerceSaving: {
     type: Boolean,
@@ -264,10 +232,6 @@ defineProps({
     required: true
   },
   onEditRealName: {
-    type: Function,
-    required: true
-  },
-  onOpenTeamSummary: {
     type: Function,
     required: true
   },

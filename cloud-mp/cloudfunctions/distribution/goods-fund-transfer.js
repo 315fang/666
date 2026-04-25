@@ -101,12 +101,11 @@ function relationText(level = 0) {
 
 async function listApplicationsForPair(db, fromOpenid = '', toOpenid = '') {
     if (!fromOpenid || !toOpenid) return [];
-    const res = await db.collection('goods_fund_transfer_applications')
-        .where({ from_openid: fromOpenid, to_openid: toOpenid })
-        .orderBy('created_at', 'desc')
-        .limit(50)
-        .get()
-        .catch(() => ({ data: [] }));
+    let query = db.collection('goods_fund_transfer_applications')
+        .where({ from_openid: fromOpenid, to_openid: toOpenid });
+    if (typeof query.orderBy === 'function') query = query.orderBy('created_at', 'desc');
+    if (typeof query.limit === 'function') query = query.limit(50);
+    const res = await query.get().catch(() => ({ data: [] }));
     return res.data || [];
 }
 
@@ -211,6 +210,12 @@ async function createGoodsFundTransferApplication(db, openid, params = {}) {
 
     const inviterBalance = roundMoney(toNumber(currentUser.agent_wallet_balance != null ? currentUser.agent_wallet_balance : currentUser.wallet_balance, 0));
     if (inviterBalance < amountCheck.amount) throw new Error('当前货款余额不足，不能发起划拨申请');
+
+    const existingApplications = await listApplicationsForPair(db, pickString(currentUser.openid), pickString(member.openid));
+    const pendingApplication = existingApplications.find((row) => normalizeGoodsFundTransferStatus(row.status) === GOODS_FUND_TRANSFER_STATUS.PENDING);
+    if (pendingApplication) {
+        throw new Error('该成员已有待审核货款划拨申请，请先处理后再发起新申请');
+    }
 
     const applicationId = `gft_apply_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const createdAt = nowIso();

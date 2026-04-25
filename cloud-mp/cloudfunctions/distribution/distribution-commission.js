@@ -56,6 +56,8 @@ function resolveBenefitRoleLevel(roleLevel) {
 }
 
 function isFlexBundleCommissionItem(order = {}, item = {}) {
+    const commissionMode = String(item.bundle_commission_mode || order.bundle_commission_snapshot?.mode || order.bundle_meta?.commission_mode || '').trim();
+    if (commissionMode) return commissionMode === 'fixed';
     const bundleSceneType = String(item.bundle_scene_type || order.bundle_meta?.scene_type || '').trim();
     return bundleSceneType === 'flex_bundle';
 }

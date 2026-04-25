@@ -48,6 +48,16 @@ function couponPriority(coupon = {}) {
     return 2;
 }
 
+function buildCouponRestorePatch() {
+    return {
+        status: 'unused',
+        used_at: _.remove(),
+        used_order_id: _.remove(),
+        order_id: _.remove(),
+        updated_at: db.serverDate()
+    };
+}
+
 async function getCouponIdentity(openid) {
     const userRes = await db.collection('users')
         .where({ openid })
@@ -193,7 +203,7 @@ async function restoreUsedCoupon(order) {
     if (hasValue(order.user_coupon_id)) {
         const restored = await db.collection('user_coupons')
             .doc(String(order.user_coupon_id))
-            .update({ data: { status: 'unused', used_at: _.remove() } })
+            .update({ data: buildCouponRestorePatch() })
             .then(() => true)
             .catch(() => false);
         if (restored) return true;
@@ -210,7 +220,7 @@ async function restoreUsedCoupon(order) {
     const updates = [
         db.collection('user_coupons')
             .where({ openid: order.openid, coupon_id: _.in(couponIdCandidates), status: 'used' })
-            .update({ data: { status: 'unused', used_at: _.remove() } })
+            .update({ data: buildCouponRestorePatch() })
             .then((result) => Boolean(result && result.stats && result.stats.updated > 0))
             .catch(() => false)
     ];
@@ -219,7 +229,7 @@ async function restoreUsedCoupon(order) {
         updates.push(
             db.collection('user_coupons')
                 .where({ user_id: _.in(identity.userIds), coupon_id: _.in(couponIdCandidates), status: 'used' })
-                .update({ data: { status: 'unused', used_at: _.remove() } })
+                .update({ data: buildCouponRestorePatch() })
                 .then((result) => Boolean(result && result.stats && result.stats.updated > 0))
                 .catch(() => false)
         );

@@ -50,6 +50,51 @@ function registerRefundRoutes(app, deps) {
         pickupStockAdmin
     } = deps;
 
+    function resolveCollectionName(name) {
+        return typeof dataStore?.getCollectionName === 'function'
+            ? dataStore.getCollectionName(name)
+            : (typeof dataStore?._internals?.getCollectionName === 'function'
+                ? dataStore._internals.getCollectionName(name)
+                : name);
+    }
+
+    async function claimRefundExecution(refund, lookupId, processingData) {
+        const docId = pickString(refund?._id || refund?.id);
+        if (!docId) return { ok: false, message: '退款记录缺少文档 ID' };
+
+        const db = dataStore._internals?.db;
+        if (db) {
+            const writeRes = await db.collection(resolveCollectionName('refunds'))
+                .where({ _id: docId, status: 'approved' })
+                .update({ data: processingData })
+                .catch((err) => {
+                    console.error('[AdminRefund] 退款执行锁获取失败:', err.message);
+                    return { stats: { updated: 0 }, error: err };
+                });
+            if (!writeRes.stats || writeRes.stats.updated === 0) {
+                return { ok: false, message: '退款状态已变更或正在处理中' };
+            }
+            const cache = dataStore._internals?.cache;
+            if (cache && cache.has('refunds')) {
+                const rows = cache.get('refunds') || [];
+                const index = rows.findIndex((row) => pickString(row._id || row.id) === docId);
+                if (index !== -1) {
+                    rows[index] = { ...rows[index], ...processingData };
+                    cache.set('refunds', rows);
+                }
+            }
+            return { ok: true, row: { ...refund, ...processingData } };
+        }
+
+        const current = findByLookup(getCollection('refunds'), lookupId);
+        if (!current || pickString(current.status) !== 'approved') {
+            return { ok: false, message: '退款状态已变更或正在处理中' };
+        }
+        const persisted = await persistPatchedRow('refunds', lookupId, current, processingData);
+        if (!persisted.ok) return { ok: false, message: '退款状态更新失败，请稍后重试' };
+        return { ok: true, row: persisted.row };
+    }
+
     app.get('/admin/api/refunds', auth, requirePermission('refunds'), async (req, res) => {
         const readMeta = await freshReadMeta(req, STRONG_CONSISTENCY_COLLECTIONS.refunds, true);
         const users = getCollection('users');
@@ -133,7 +178,7 @@ function registerRefundRoutes(app, deps) {
         if (rejectUnknownBodyFields(res, req.body, ['reason'], '退款拒绝参数不合法')) return;
         const reasonField = requireNonEmptyStringField(req.body?.reason, 'reason', '拒绝原因', { maxLength: 200 });
         if (!reasonField.ok) return failWithFieldErrors(res, [reasonField.error], '退款拒绝参数不合法');
-        await ensureFreshCollections(['refunds', 'orders', 'users']);
+        await ensureFreshCollections(['refunds', 'orders', 'users', 'commissions']);
         const rejectedRefund = findByLookup(getCollection('refunds'), req.params.id);
         if (!rejectedRefund) return fail(res, '退款记录不存在', 404);
         if (!['pending', 'approved'].includes(pickString(rejectedRefund.status))) {
@@ -147,7 +192,6 @@ function registerRefundRoutes(app, deps) {
         }
         const orderId = rejectedRefund?.order_id || rejectedRefund?.order_no;
         if (orderId) {
-            await cancelCommissionsForOrder(orderId, '退款拒绝，恢复原佣金链前状态');
             await deps.restoreFrozenCommissionsForOrder(orderId);
             const currentOrder = findByLookup(getCollection('orders'), orderId, (row) => [row.order_no]);
             if (currentOrder) {
@@ -188,10 +232,10 @@ function registerRefundRoutes(app, deps) {
         if (completeFieldErrors.length) return failWithFieldErrors(res, completeFieldErrors, '退款执行参数不合法');
         await ensureFreshCollections(['refunds', 'orders', 'users', 'wallet_accounts', 'station_sku_stocks', 'station_stock_logs', 'goods_fund_logs']);
         const refunds = getCollection('refunds');
-        const refund = findByLookup(refunds, req.params.id);
+        let refund = findByLookup(refunds, req.params.id);
         if (!refund) return fail(res, '退款记录不存在', 404);
-        if (!['approved', 'processing'].includes(pickString(refund.status))) {
-            return fail(res, refund.status === 'completed' ? '退款已完成' : '当前状态不允许退款', 400);
+        if (pickString(refund.status) !== 'approved') {
+            return fail(res, refund.status === 'completed' ? '退款已完成' : (refund.status === 'processing' ? '退款已在处理中，请同步微信状态' : '当前状态不允许退款'), 400);
         }
 
         const users = getCollection('users');
@@ -218,6 +262,8 @@ function registerRefundRoutes(app, deps) {
         const processingData = {
             status: 'processing',
             processing_at: refund.processing_at || nowIso(),
+            refund_execution_token: `refund_exec_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+            refund_execution_status: 'processing',
             payment_method: paymentMethod,
             refund_channel: refundRoute.refund_channel,
             refund_target_text: refundRoute.refund_target_text,
@@ -225,8 +271,9 @@ function registerRefundRoutes(app, deps) {
             return_tracking_no: returnTrackingCheck.value || pickString(refund.return_tracking_no),
             updated_at: nowIso()
         };
-        const processingPersisted = await persistPatchedRow('refunds', req.params.id, refund, processingData);
-        if (!processingPersisted.ok) return fail(res, '退款状态更新失败，请稍后重试', 500);
+        const processingPersisted = await claimRefundExecution(refund, req.params.id, processingData);
+        if (!processingPersisted.ok) return fail(res, processingPersisted.message || '退款状态更新失败，请稍后重试', 409);
+        refund = processingPersisted.row;
 
         const orderRefundingPatch = {
             status: 'refunding',

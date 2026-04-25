@@ -803,28 +803,44 @@ const handleAction = {
             throw badRequest('余额不足或并发冲突，请稍后重试');
         }
 
-        const result = await db.collection('withdrawals').add({
-            data: {
-                openid,
-                withdraw_no: withdrawNo,
-                amount,
-                fee,
-                actual_amount: actualAmount,
-                role_level: roleLevel,
-                type: params.type || 'wechat',
-                withdraw_account: {
+        let result;
+        try {
+            result = await db.collection('withdrawals').add({
+                data: {
+                    openid,
+                    withdraw_no: withdrawNo,
+                    amount,
+                    fee,
+                    actual_amount: actualAmount,
+                    role_level: roleLevel,
                     type: params.type || 'wechat',
-                    name: pickString(user.real_name || user.contact_name || ''),
-                    account: '',
-                    openid
+                    withdraw_account: {
+                        type: params.type || 'wechat',
+                        name: pickString(user.real_name || user.contact_name || ''),
+                        account: '',
+                        openid
+                    },
+                    fee_rate_percent: withdrawalRules.fee_rate_percent,
+                    fee_cap_max: withdrawalRules.fee_cap_max,
+                    min_amount: withdrawalRules.min_amount,
+                    status: 'pending',
+                    created_at: db.serverDate(),
                 },
-                fee_rate_percent: withdrawalRules.fee_rate_percent,
-                fee_cap_max: withdrawalRules.fee_cap_max,
-                min_amount: withdrawalRules.min_amount,
-                status: 'pending',
-                created_at: db.serverDate(),
-            },
-        });
+            });
+        } catch (createErr) {
+            await db.collection('users')
+                .where({ openid })
+                .update({
+                    data: {
+                        commission_balance: _.inc(amount),
+                        balance: _.inc(amount),
+                        total_withdrawn: _.inc(-amount),
+                        updated_at: db.serverDate()
+                    }
+                })
+                .catch(() => {});
+            throw serverError(`提现申请创建失败，余额已回滚：${createErr.message || '未知错误'}`);
+        }
 
         const feeDesc = fee > 0 ? `（手续费${fee}元，到账${actualAmount}元）` : '';
         try {

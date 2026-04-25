@@ -25,10 +25,22 @@ async function addAddress(openid, addressData) {
     return result;
 }
 
+async function getOwnedAddress(openid, addressId) {
+    const res = await db.collection('addresses').doc(addressId).get();
+    const address = res && res.data;
+    if (!address || address.openid !== openid) {
+        const err = new Error('地址不存在');
+        err.code = 'NOT_FOUND';
+        throw err;
+    }
+    return address;
+}
+
 /**
  * 更新地址
  */
-async function updateAddress(addressId, addressData) {
+async function updateAddress(openid, addressId, addressData) {
+    await getOwnedAddress(openid, addressId);
     await db.collection('addresses').doc(addressId).update({
         data: {
             updated_at: db.serverDate(),
@@ -41,7 +53,8 @@ async function updateAddress(addressId, addressData) {
 /**
  * 删除地址
  */
-async function deleteAddress(addressId) {
+async function deleteAddress(openid, addressId) {
+    await getOwnedAddress(openid, addressId);
     await db.collection('addresses').doc(addressId).remove();
     return { success: true };
 }
@@ -50,6 +63,7 @@ async function deleteAddress(addressId) {
  * 设置默认地址
  */
 async function setDefaultAddress(openid, addressId) {
+    await getOwnedAddress(openid, addressId);
     // 先取消当前默认
     await db.collection('addresses')
         .where({ openid, is_default: true })

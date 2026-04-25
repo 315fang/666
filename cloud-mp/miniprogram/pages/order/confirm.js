@@ -651,12 +651,14 @@ Page({
 
     // 选择地址
     onSelectAddress() {
-        navigateToAddressList();
+        const address = this.data.address || {};
+        navigateToAddressList(true, address._id || address.id || '');
     },
 
     // 新增地址
     onAddAddress() {
-        navigateToAddressList();
+        const address = this.data.address || {};
+        navigateToAddressList(true, address._id || address.id || '');
     },
 
     async onRetryCartLoad() {

@@ -470,44 +470,6 @@
   color: #475569;
 }
 
-.home-compliance-footer {
-  margin: 0 32rpx 48rpx;
-  padding: 8rpx 0 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8rpx;
-}
-
-.home-compliance-rule {
-  width: 104rpx;
-  height: 1rpx;
-  background: rgba(198, 161, 110, 0.36);
-}
-
-.home-compliance-row {
-  min-height: 38rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10rpx;
-  flex-wrap: nowrap;
-}
-
-.home-compliance-badge {
-  width: 32rpx;
-  height: 34rpx;
-  flex-shrink: 0;
-}
-
-.home-compliance-text {
-  font-size: 26rpx;
-  line-height: 1.4;
-  color: rgba(71, 85, 105, 0.92);
-  white-space: nowrap;
-}
-
 /* 气泡足迹导航栏版：占据原品牌甄选位置 */
 .nav-bubble-bar {
   position: absolute; left: 28rpx; right: 190rpx;

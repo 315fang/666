@@ -10,6 +10,7 @@
     "/pages/category/",
     "/pages/activity/",
     "/pages/user/",
+    "/pages/product-bundle/",
     "/pages/product/detail",
     "/pages/order/",
     "/pages/address/",
@@ -77,6 +78,14 @@
       "link_type": "category",
       "link_value": "bundle-zone",
       "note": "分类页组合专区"
+    },
+    {
+      "key": "page:product-bundle-detail",
+      "title": "组合商品详情",
+      "group": "营销入口",
+      "link_type": "page",
+      "link_value": "/pages/product-bundle/detail",
+      "note": "组合商品详情页，链接可追加 id 参数"
     },
     {
       "key": "page:brand-zone",

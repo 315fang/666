@@ -6,15 +6,20 @@ Page({
         addresses: [],
         loading: true,
         selectMode: false, // 是否为选择模式（从订单确认页进入）
-        pickSource: '' // order | limited_spot
+        pickSource: '', // order | limited_spot
+        selectedAddressId: ''
     },
 
-    onLoad(options) {
+    onLoad(options = {}) {
+        const selectedAddressId = options.selectedId ? decodeURIComponent(options.selectedId) : this.getStoredSelectedAddressId(options);
         if (options.select === 'true' || options.from === 'limited_spot') {
             this.setData({
                 selectMode: true,
-                pickSource: options.from === 'limited_spot' ? 'limited_spot' : 'order'
+                pickSource: options.from === 'limited_spot' ? 'limited_spot' : 'order',
+                selectedAddressId
             });
+        } else if (selectedAddressId) {
+            this.setData({ selectedAddressId });
         }
     },
 
@@ -26,11 +31,33 @@ Page({
         try {
             this.setData({ loading: true });
             const res = await get('/addresses');
-            const addresses = res.data?.list || res.list || res.data || [];
+            const rawAddresses = res.data?.list || res.list || res.data || [];
+            const addresses = this.markSelectedAddresses(rawAddresses, this.data.selectedAddressId);
             this.setData({ addresses, loading: false });
         } catch (err) {
             console.error('加载地址失败:', err);
             this.setData({ loading: false });
+        }
+    },
+
+    markSelectedAddresses(addresses = [], selectedAddressId = '') {
+        const targetId = String(selectedAddressId || '');
+        return addresses.map((item) => ({
+            ...item,
+            selected: !!targetId && String(item._id || item.id || '') === targetId
+        }));
+    },
+
+    getStoredSelectedAddressId(options = {}) {
+        try {
+            if (options.from === 'limited_spot') {
+                const picked = wx.getStorageSync('limited_spot_pick_address');
+                return picked && picked.id ? String(picked.id) : '';
+            }
+            const selected = wx.getStorageSync('selectedAddress');
+            return selected && (selected._id || selected.id) ? String(selected._id || selected.id) : '';
+        } catch (_err) {
+            return '';
         }
     },
 
@@ -39,12 +66,17 @@ Page({
         if (!this.data.selectMode) return;
         const index = e.currentTarget.dataset.index;
         const address = this.data.addresses[index];
+        const selectedAddressId = String(address._id || address.id || '');
         if (this.data.pickSource === 'limited_spot') {
             const summary = `${address.receiver_name} ${address.phone} ${address.province || ''}${address.city || ''}${address.district || ''}${address.detail || ''}`;
-            wx.setStorageSync('limited_spot_pick_address', { id: address._id || address.id, summary });
+            wx.setStorageSync('limited_spot_pick_address', { id: selectedAddressId, summary });
         } else {
             wx.setStorageSync('selectedAddress', address);
         }
+        this.setData({
+            selectedAddressId,
+            addresses: this.markSelectedAddresses(this.data.addresses, selectedAddressId)
+        });
         wx.navigateBack();
     },
 

@@ -73,3 +73,39 @@ test('bundle fixed commission caps two-level split by the commission pool', () =
         restore();
     }
 });
+
+test('bundle fixed commission snapshot records fixed mode and item totals', () => {
+    const { module, restore } = loadOrderCreateModule();
+    try {
+        const snapshot = module.buildBundleCommissionSnapshot([
+            {
+                refund_item_key: 'product-1::nosku::0',
+                product_id: 'product-1',
+                sku_id: '',
+                bundle_group_key: 'main',
+                bundle_group_title: '主选',
+                bundle_commission_pool_amount: 80,
+                direct_commission_fixed_amount: 55,
+                indirect_commission_fixed_amount: 25
+            }
+        ], true);
+        assert.equal(snapshot.mode, 'fixed');
+        assert.equal(snapshot.source, 'bundle_option_fixed');
+        assert.equal(snapshot.version, 'fixed_bundle_v1');
+        assert.equal(snapshot.total_pool_amount, 80);
+        assert.equal(snapshot.direct_fixed_amount, 55);
+        assert.equal(snapshot.indirect_fixed_amount, 25);
+        assert.deepEqual(snapshot.items[0], {
+            item_key: 'product-1::nosku::0',
+            product_id: 'product-1',
+            sku_id: '',
+            group_key: 'main',
+            group_title: '主选',
+            pool_amount: 80,
+            direct_fixed_amount: 55,
+            indirect_fixed_amount: 25
+        });
+    } finally {
+        restore();
+    }
+});

@@ -53,9 +53,9 @@
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="全部状态" clearable style="width:140px">
+            <el-option label="待结算" value="pending" />
             <el-option label="冻结中" value="frozen" />
             <el-option label="待审批" value="pending_approval" />
-            <el-option label="已审批" value="approved" />
             <el-option label="已结算" value="settled" />
             <el-option label="已撤销" value="cancelled" />
           </el-select>
@@ -229,7 +229,7 @@ const statsCards = ref([
   { label: '总佣金金额', value: '0.00', icon: 'Money', color: '#409eff' },
   { label: '待审批金额', value: '0.00', icon: 'Clock', color: '#e6a23c' },
   { label: '已结算金额', value: '0.00', icon: 'SuccessFilled', color: '#67c23a' },
-  { label: '已审批金额', value: '0.00', icon: 'TrendCharts', color: '#f56c6c' }
+  { label: '冻结中金额', value: '0.00', icon: 'TrendCharts', color: '#f56c6c' }
 ])
 const commissionTypeOptions = COMMISSION_TYPE_OPTIONS
 
@@ -290,10 +290,10 @@ const fetchData = async () => {
     // 更新统计卡片
     const stats = res?.stats || res?.data?.stats
     if (stats) {
-      statsCards.value[0].value = Number((stats.totalFrozen || 0) + (stats.totalPendingApproval || 0) + (stats.totalApproved || 0) + (stats.totalSettled || 0)).toFixed(2)
+      statsCards.value[0].value = Number((stats.totalPending || 0) + (stats.totalFrozen || 0) + (stats.totalPendingApproval || 0) + (stats.totalApproved || 0) + (stats.totalSettled || 0)).toFixed(2)
       statsCards.value[1].value = Number(stats.totalPendingApproval || 0).toFixed(2)
-      statsCards.value[2].value = Number(stats.totalSettled || 0).toFixed(2)
-      statsCards.value[3].value = Number(stats.totalApproved || 0).toFixed(2)
+      statsCards.value[2].value = Number((stats.totalSettled || 0) + (stats.totalApproved || 0)).toFixed(2)
+      statsCards.value[3].value = Number(stats.totalFrozen || 0).toFixed(2)
     }
   } catch (e) {
     console.error('获取佣金列表失败:', e)
@@ -405,8 +405,8 @@ const submitReject = async () => {
   }
 }
 
-const statusText = (s) => ({ frozen: '冻结中', pending_approval: '待审批', approved: '已审批', settled: '已结算', cancelled: '已撤销' }[s] || s)
-const statusTagType = (s) => ({ frozen: 'info', pending_approval: 'warning', approved: 'primary', settled: 'success', cancelled: 'danger' }[s] || '')
+const statusText = (s) => ({ pending: '待结算', frozen: '冻结中', pending_approval: '待审批', approved: '已结算', settled: '已结算', cancelled: '已撤销' }[s] || s)
+const statusTagType = (s) => ({ pending: 'warning', frozen: 'info', pending_approval: 'warning', approved: 'primary', settled: 'success', cancelled: 'danger' }[s] || '')
 
 const syncRouteQueryToSearch = () => {
   const q = route.query || {}

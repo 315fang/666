@@ -1626,14 +1626,14 @@ const handleAction = {
         if (!addressData.province || !addressData.city || !addressData.detail) {
             throw badRequest('缺少必要地址信息');
         }
-        await userAddresses.updateAddress(id, addressData);
+        await userAddresses.updateAddress(openid, id, addressData);
         return success(null);
     }),
 
     'deleteAddress': asyncHandler(async (openid, params) => {
         const id = params.address_id || params.id;
         if (!id) throw badRequest('缺少地址 ID');
-        await userAddresses.deleteAddress(id);
+        await userAddresses.deleteAddress(openid, id);
         return success(null);
     }),
 
@@ -1875,8 +1875,10 @@ const handleAction = {
             return success({ success: true, id: existing.data[0]._id, status: existing.data[0].status, message: '申请已存在' });
         }
 
-        const result = await db.collection('upgrade_applications').add({
+        const applicationId = `upgrade_${String(openid).replace(/[^0-9A-Za-z_-]/g, '')}_${pathType.replace(/[^0-9A-Za-z_-]/g, '')}`.slice(0, 120);
+        await db.collection('upgrade_applications').doc(applicationId).set({
             data: {
+                id: applicationId,
                 openid,
                 user_id: user._id || user.id || '',
                 role_level: toNum(user.role_level, 0),
@@ -1889,7 +1891,7 @@ const handleAction = {
                 updatedAt: db.serverDate()
             }
         });
-        return success({ success: true, id: result._id, message: '申请已提交' });
+        return success({ success: true, id: applicationId, message: '申请已提交' });
     }),
 
     'applyInitialPassword': asyncHandler(async (openid, params) => {

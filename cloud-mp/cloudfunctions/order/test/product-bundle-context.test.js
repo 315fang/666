@@ -147,6 +147,8 @@ test('resolveBundleContext carries commission pool and solo/split maps', async (
             selected_items: [{ group_key: 'main', product_id: '1', quantity: 1 }]
         });
         const item = context.normalized_items[0];
+        assert.equal(item.commission_mode, 'fixed');
+        assert.equal(item.commission_source, 'bundle_option_fixed');
         assert.equal(item.commission_pool_amount, 80);
         assert.equal(item.solo_commission_fixed_by_role['3'], 60);
         assert.equal(item.solo_commission_fixed_by_role['5'], 80);

@@ -50,8 +50,10 @@ async function getDefaultAddress() {
     }
 }
 
-function navigateToAddressList(isSelect = true) {
-    wx.navigateTo({ url: `/pages/address/list?select=${isSelect}` });
+function navigateToAddressList(isSelect = true, selectedId = '') {
+    const query = [`select=${isSelect}`];
+    if (selectedId) query.push(`selectedId=${encodeURIComponent(selectedId)}`);
+    wx.navigateTo({ url: `/pages/address/list?${query.join('&')}` });
 }
 
 const _productCache = {};

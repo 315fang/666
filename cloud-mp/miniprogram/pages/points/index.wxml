@@ -108,8 +108,8 @@
     <view class="tab-panel" wx:if="{{activeTab === 'logs'}}">
       <view class="log-item" wx:for="{{logs}}" wx:key="id">
         <view class="log-left">
-          <text class="log-remark">{{item.remark || item.type}}</text>
-          <text class="log-time">{{item.created_at}}</text>
+          <text class="log-remark">{{item.display_title || item.remark || '积分变动'}}</text>
+          <text class="log-time">{{item.display_time || item.created_at}}</text>
         </view>
         <view class="log-right">
           <text class="log-amount {{item.amount > 0 ? 'positive' : 'negative'}}">{{item.amount > 0 ? '+' : ''}}{{item.amount}}</text>

@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-04-24T06:50:29.085Z",
+  "generatedAt": "2026-04-25T03:33:50.396Z",
   "ok": true,
   "results": [
     {
       "name": "refunds",
       "collectionName": "refunds",
       "ok": true,
-      "count": 33,
+      "count": 34,
       "issues": []
     },
     {
@@ -27,28 +27,28 @@
       "name": "wallet_logs",
       "collectionName": "wallet_logs",
       "ok": true,
-      "count": 46,
+      "count": 49,
       "issues": []
     },
     {
       "name": "goods_fund_logs",
       "collectionName": "goods_fund_logs",
       "ok": true,
-      "count": 36,
+      "count": 39,
       "issues": []
     },
     {
       "name": "point_logs",
       "collectionName": "point_logs",
       "ok": true,
-      "count": 691,
+      "count": 696,
       "issues": []
     },
     {
       "name": "users",
       "collectionName": "users",
       "ok": true,
-      "count": 211,
+      "count": 213,
       "issues": []
     }
   ]

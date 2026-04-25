@@ -9,6 +9,11 @@
         <text class="time">{{item.created_at}}</text>
         <text class="actual" wx:if="{{item.actual_amount}}">实到: ¥{{item.actual_amount}}</text>
       </view>
+      <view class="item-status-hint">{{item.statusHint}}</view>
+      <view class="item-extra" wx:if="{{item.fee && item.fee !== '0.00' || item.withdraw_no}}">
+        <text wx:if="{{item.fee && item.fee !== '0.00'}}">手续费: ¥{{item.fee}}</text>
+        <text wx:if="{{item.withdraw_no}}">单号: {{item.withdraw_no}}</text>
+      </view>
       <view class="reject-reason" wx:if="{{item.reject_reason}}">
         拒绝原因: {{item.reject_reason}}
       </view>

@@ -86,7 +86,18 @@ const DEFAULT_BRANCH_AGENT_POLICY = {
 };
 
 const BRANCH_REGION_ELIGIBLE_STATUSES = [
+    'pending_group',
     'paid',
+    'pickup_pending',
+    'agent_confirmed',
+    'shipping_requested',
+    'shipped',
+    'completed'
+];
+
+const PAID_POST_PROCESS_STATUSES = [
+    'paid',
+    'pending_group',
     'pickup_pending',
     'agent_confirmed',
     'shipping_requested',
@@ -162,6 +173,19 @@ function toArray(value) {
     if (Array.isArray(value)) return value;
     if (value === null || value === undefined || value === '') return [];
     return [value];
+}
+
+function pickHeader(headers = {}, name) {
+    if (!headers || typeof headers !== 'object') return '';
+    const target = String(name || '').toLowerCase();
+    const key = Object.keys(headers).find((item) => String(item).toLowerCase() === target);
+    return key ? pickString(headers[key]) : '';
+}
+
+function isWechatpayTimestampFresh(value) {
+    const seconds = Number(value);
+    if (!Number.isFinite(seconds) || seconds <= 0) return false;
+    return Math.abs(Math.floor(Date.now() / 1000) - seconds) <= 5 * 60;
 }
 
 function roundMoney(value) {
@@ -877,6 +901,38 @@ async function ensureBranchAgentRegionCommissionForOrder(orderId, order = {}, op
     return { created: 1, id: result._id, amount, rate, cumulative_amount: cumulativeAmount, type };
 }
 
+async function ensureBranchAgentRegionCommissionWithRetryState(orderId, order = {}, options = {}) {
+    try {
+        const result = await ensureBranchAgentRegionCommissionForOrder(orderId, order, options);
+        const patch = {
+            branch_region_commission_checked_at: db.serverDate(),
+            branch_region_commission_error: _.remove(),
+            branch_region_commission_retry_required: _.remove(),
+            updated_at: db.serverDate()
+        };
+        if (result.created || result.existing) {
+            patch.branch_region_commission_created_at = db.serverDate();
+            patch.branch_region_commission_skip_reason = _.remove();
+        } else if (result.reason) {
+            patch.branch_region_commission_skip_reason = result.reason;
+        }
+        await db.collection('orders').doc(orderId).update({ data: patch }).catch(() => {});
+        return result;
+    } catch (err) {
+        const message = err?.message || 'branch_region_commission_failed';
+        await db.collection('orders').doc(orderId).update({
+            data: {
+                branch_region_commission_error: message,
+                branch_region_commission_retry_required: true,
+                branch_region_commission_failed_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        }).catch(() => {});
+        console.error('[PaymentCallback] 区域代理佣金创建失败:', message);
+        return { error: message, created: 0 };
+    }
+}
+
 function buildPaidOrderPatch(paymentMethod, payAmount, extra = {}) {
     return buildPaymentWritePatch(paymentMethod, payAmount, extra);
 }
@@ -996,6 +1052,8 @@ function roleBasedCommission(user = {}, level, baseAmount, commissionConfig = DE
 }
 
 function isFlexBundleCommissionItem(order = {}, item = {}) {
+    const commissionMode = pickString(item.bundle_commission_mode || order.bundle_commission_snapshot?.mode || order.bundle_meta?.commission_mode);
+    if (commissionMode) return commissionMode === 'fixed';
     return pickString(item.bundle_scene_type || order.bundle_meta?.scene_type) === 'flex_bundle';
 }
 
@@ -1291,11 +1349,7 @@ async function ensureCommissionsCreated(orderId, order) {
     const orderPayAmount = getOrderTotalAmount(order);
     const commissionBase = orderPayAmount;
     const branchRegion = commissionBase > 0
-        ? await ensureBranchAgentRegionCommissionForOrder(orderId, order, { orderPayAmount })
-            .catch((err) => {
-                console.error('[PaymentCallback] 区域代理佣金创建失败:', err.message);
-                return { error: err.message, created: 0 };
-            })
+        ? await ensureBranchAgentRegionCommissionWithRetryState(orderId, order, { orderPayAmount })
         : { skipped: true, reason: 'non_positive_amount' };
     const buyer = await findUserByAny(order.openid || order.buyer_id || order.user_id);
     if (!buyer) {
@@ -1392,6 +1446,7 @@ async function ensureCommissionsCreated(orderId, order) {
         const allocatedBase = itemBaseTotal > 0 ? roundMoney(commissionBase * rawBase / itemBaseTotal) : rawBase;
         const useFixedBundleCommission = isFlexBundleCommissionItem(order, item);
         if (useMatrix) {
+            // 组合商品固定佣金优先使用订单快照；普通商品继续走级差矩阵。
             // 级差矩阵制：parent 拿 matrix[parentRole][buyerRole]%，grandparent 拿级差
             // 即便父级被跳过（因为 openid == buyer 等），也要用父级应得比例计算级差
             const parentBeneficiary = beneficiaries.find(b => b.level === 1);
@@ -1497,8 +1552,14 @@ function isGroupOrder(order = {}) {
 function isActivityOpen(activity) {
     return activity && (
         activity.status === true
+        || activity.status === 1
+        || activity.status === '1'
         || activity.status === 'active'
+        || activity.is_active === 1
+        || activity.is_active === '1'
         || activity.is_active === true
+        || activity.active === 1
+        || activity.active === '1'
         || activity.active === true
     );
 }
@@ -1511,6 +1572,38 @@ async function findGroupOrder(groupNo) {
         .get()
         .catch(() => ({ data: [] }));
     return res.data && res.data[0] ? res.data[0] : null;
+}
+
+function valuesOverlap(leftValues = [], rightValues = []) {
+    const left = leftValues.filter(hasValue).map((value) => String(value));
+    const right = new Set(rightValues.filter(hasValue).map((value) => String(value)));
+    if (!left.length || !right.size) return true;
+    return left.some((value) => right.has(value));
+}
+
+function firstOrderItem(order = {}) {
+    return toArray(order.items)[0] || {};
+}
+
+function assertGroupOrderMatchesPaidOrder(groupOrder = {}, order = {}, activity = {}) {
+    const activityMatches = valuesOverlap(
+        [groupOrder.activity_id, groupOrder.legacy_activity_id],
+        [order.group_activity_id, order.legacy_group_activity_id, order.activity_id, activity?._id, activity?.id, activity?._legacy_id]
+    );
+    if (!activityMatches) throw new Error('拼团活动与订单不一致');
+
+    const item = firstOrderItem(order);
+    const productMatches = valuesOverlap(
+        [groupOrder.product_id, groupOrder.productId],
+        [order.product_id, item.product_id, activity?.product_id]
+    );
+    if (!productMatches) throw new Error('拼团商品与订单不一致');
+
+    const skuMatches = valuesOverlap(
+        [groupOrder.sku_id, groupOrder.skuId],
+        [order.sku_id, item.sku_id]
+    );
+    if (!skuMatches) throw new Error('拼团规格与订单不一致');
 }
 
 /**
@@ -1590,6 +1683,9 @@ async function ensurePaidGroupJoined(orderId, order) {
     if (!groupOrder && groupNo) {
         throw new Error('拼团不存在或已结束');
     }
+    if (groupOrder) {
+        assertGroupOrderMatchesPaidOrder(groupOrder, order, activity);
+    }
 
     const member = {
         openid: order.openid,
@@ -1616,13 +1712,17 @@ async function ensurePaidGroupJoined(orderId, order) {
 
     if (!groupOrder) {
         groupNo = groupNo || ('GRP' + Date.now() + Math.floor(Math.random() * 1000));
+        const item = firstOrderItem(order);
         const data = {
             group_no: groupNo,
             activity_id: activity?._id || order.group_activity_id || '',
             legacy_activity_id: activity?.id || activity?._legacy_id || order.legacy_group_activity_id || '',
+            product_id: order.product_id || item.product_id || activity?.product_id || '',
+            sku_id: order.sku_id || item.sku_id || '',
             leader_openid: order.openid,
             status: groupSize <= 1 ? 'completed' : 'pending',
             members: [member],
+            member_count: 1,
             group_size: groupSize,
             created_order_id: orderId,
             created_at: db.serverDate(),
@@ -1638,29 +1738,49 @@ async function ensurePaidGroupJoined(orderId, order) {
 
     const members = Array.isArray(groupOrder.members) ? groupOrder.members : [];
     const exists = members.some((item) => item.openid === order.openid || item.order_id === orderId);
+    const persistedMemberCount = toNumber(groupOrder.member_count, NaN);
+    let currentMemberCount = Number.isFinite(persistedMemberCount) ? persistedMemberCount : members.length;
+    if (!Number.isFinite(persistedMemberCount)) {
+        await db.collection('group_orders').doc(groupOrder._id).update({
+            data: { member_count: currentMemberCount, updated_at: db.serverDate() }
+        }).catch(() => {});
+    }
     const nextMembers = exists ? members : [...members, member];
     if (!exists) {
-        if (members.length >= groupSize) throw new Error('该团已满员');
-        await db.collection('group_orders').doc(groupOrder._id).update({
-            data: {
-                members: _.push(member),
-                updated_at: db.serverDate(),
-            },
-        });
+        if (currentMemberCount >= groupSize) throw new Error('该团已满员');
+        const joinRes = await db.collection('group_orders')
+            .where({ _id: groupOrder._id, status: _.in(['pending', 'open']), member_count: _.lt(groupSize) })
+            .update({
+                data: {
+                    members: _.push(member),
+                    member_count: _.inc(1),
+                    updated_at: db.serverDate(),
+                },
+            })
+            .catch(() => ({ stats: { updated: 0 } }));
+        if (!joinRes.stats || joinRes.stats.updated === 0) {
+            throw new Error('拼团人数已变更，请刷新后重试');
+        }
+        currentMemberCount += 1;
     }
 
-    const memberCount = nextMembers.length;
+    const memberCount = exists ? currentMemberCount : Math.max(currentMemberCount, nextMembers.length);
     const completed = memberCount >= groupSize;
     await writeGroupNoToOrder(groupOrder.group_no);
     if (completed && groupOrder.status !== 'completed') {
-        await db.collection('group_orders').doc(groupOrder._id).update({
-            data: { status: 'completed', completed_at: db.serverDate(), updated_at: db.serverDate() },
-        });
-        await promoteGroupOrdersToPaid({
-            ...groupOrder,
-            status: 'completed',
-            members: nextMembers
-        });
+        const completeRes = await db.collection('group_orders')
+            .where({ _id: groupOrder._id, status: _.in(['pending', 'open']), member_count: _.gte(groupSize) })
+            .update({
+                data: { status: 'completed', completed_at: db.serverDate(), updated_at: db.serverDate() },
+            })
+            .catch(() => ({ stats: { updated: 0 } }));
+        if (completeRes.stats && completeRes.stats.updated > 0) {
+            await promoteGroupOrdersToPaid({
+                ...groupOrder,
+                status: 'completed',
+                members: nextMembers
+            });
+        }
     }
     return { joined: !exists, group_no: groupOrder.group_no, member_count: memberCount, completed };
 }
@@ -1681,16 +1801,29 @@ async function ensureSlashOrderPurchased(orderId, order) {
     const record = recordRes.data && recordRes.data[0] ? recordRes.data[0] : null;
     if (!record) throw new Error('砍价记录不存在');
     if (record.openid !== order.openid) throw new Error('砍价记录归属异常');
-
-    await db.collection('slash_records').doc(record._id).update({
-        data: {
-            status: 'purchased',
-            order_id: orderId,
-            order_no: order.order_no,
-            purchased_at: db.serverDate(),
-            updated_at: db.serverDate()
+    const existingOrderId = pickString(record.order_id || record.locked_order_id);
+    if (record.status === 'purchased') {
+        if (existingOrderId && existingOrderId !== String(orderId)) {
+            throw new Error('该砍价已被其他订单使用');
         }
-    });
+    } else {
+        if (record.status === 'expired') throw new Error('砍价已过期');
+        const updateRes = await db.collection('slash_records')
+            .where({ _id: record._id, openid: order.openid, status: _.in(['active', 'completed']) })
+            .update({
+                data: {
+                    status: 'purchased',
+                    order_id: orderId,
+                    order_no: order.order_no,
+                    purchased_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                }
+            })
+            .catch(() => ({ stats: { updated: 0 } }));
+        if (!updateRes.stats || updateRes.stats.updated === 0) {
+            throw new Error('砍价状态已变更，请刷新后重试');
+        }
+    }
     await db.collection('orders').doc(orderId).update({
         data: {
             slash_no: record.slash_no || order.slash_no,
@@ -1856,16 +1989,19 @@ async function processPaidOrder(orderId, order) {
     const latest = await db.collection('orders').doc(orderId).get().then((res) => res.data || order).catch(() => order);
     const needsGroupJoin = isGroupOrder(latest) && !latest.group_joined_at;
     const needsSlashPurchase = hasValue(latest.slash_no) && !latest.slash_purchased_at;
-    if (latest.payment_post_processed_at && !needsGroupJoin && !needsSlashPurchase) return { skipped: true };
+    const needsBranchRegionRetry = latest.branch_region_commission_retry_required === true;
+    if (latest.payment_post_processed_at && !needsGroupJoin && !needsSlashPurchase) {
+        if (needsBranchRegionRetry && PAID_POST_PROCESS_STATUSES.includes(pickString(latest.status).toLowerCase())) {
+            const branchRegion = await ensureBranchAgentRegionCommissionWithRetryState(orderId, latest, {
+                orderPayAmount: getOrderTotalAmount(latest)
+            });
+            return { branchRegion };
+        }
+        return { skipped: true };
+    }
 
-    const group = needsGroupJoin ? await ensurePaidGroupJoined(orderId, latest).catch(err => {
-        console.error('[PostPay] ensurePaidGroupJoined 失败:', err.message);
-        return { error: err.message };
-    }) : { skipped: true };
-    const slash = needsSlashPurchase ? await ensureSlashOrderPurchased(orderId, latest).catch(err => {
-        console.error('[PostPay] ensureSlashOrderPurchased 失败:', err.message);
-        return { error: err.message };
-    }) : { skipped: true };
+    const group = needsGroupJoin ? await ensurePaidGroupJoined(orderId, latest) : { skipped: true };
+    const slash = needsSlashPurchase ? await ensureSlashOrderPurchased(orderId, latest) : { skipped: true };
     if (latest.payment_post_processed_at) return { group, slash };
 
     const stock = await ensureStockDeducted(orderId, latest);
@@ -2520,29 +2656,29 @@ async function handleCallback(event) {
         const body = typeof event.body === 'string' ? event.body : JSON.stringify(event.body || event);
 
         // 2. 验证签名
-        const wxTimestamp = headers['wechatpay-timestamp'] || headers['Wechatpay-Timestamp'];
-        const wxNonce = headers['wechatpay-nonce'] || headers['Wechatpay-Nonce'];
-        const wxSignature = headers['wechatpay-signature'] || headers['Wechatpay-Signature'];
+        const wxTimestamp = pickHeader(headers, 'wechatpay-timestamp');
+        const wxNonce = pickHeader(headers, 'wechatpay-nonce');
+        const wxSignature = pickHeader(headers, 'wechatpay-signature');
+        const wxSerial = pickHeader(headers, 'wechatpay-serial');
 
-        if (wxTimestamp && wxNonce && wxSignature) {
-            try {
-                const publicKey = await loadPublicKey(cloud);
-                const isValid = verifySignature(wxTimestamp, wxNonce, body, wxSignature, publicKey);
-                if (!isValid) {
-                    console.error('[PaymentCallback] 签名验证失败，拒绝处理');
-                    return { code: 'FAIL', message: 'Signature verification failed' };
-                }
-            } catch (verifyErr) {
-                console.error('[PaymentCallback] 签名验证异常，拒绝处理:', verifyErr.message);
-                return { code: 'FAIL', message: 'Signature verification error' };
-            }
-        } else if (wxTimestamp || wxNonce || wxSignature) {
+        if (!wxTimestamp || !wxNonce || !wxSignature || !wxSerial) {
             console.error('[PaymentCallback] 签名头信息不完整，拒绝处理');
             return { code: 'FAIL', message: 'Incomplete signature headers' };
-        } else if (event.headers && Object.keys(headers).length > 0) {
-            // HTTP 请求有 headers 但缺少全部签名头 → 外部伪造，拒绝
-            console.error('[PaymentCallback] HTTP 请求缺少微信签名头，拒绝处理');
-            return { code: 'FAIL', message: 'Missing signature headers' };
+        }
+        if (!isWechatpayTimestampFresh(wxTimestamp)) {
+            console.error('[PaymentCallback] 签名时间戳非法或过期，拒绝处理');
+            return { code: 'FAIL', message: 'Invalid signature timestamp' };
+        }
+        try {
+            const publicKey = await loadPublicKey(cloud);
+            const isValid = verifySignature(wxTimestamp, wxNonce, body, wxSignature, publicKey);
+            if (!isValid) {
+                console.error('[PaymentCallback] 签名验证失败，拒绝处理');
+                return { code: 'FAIL', message: 'Signature verification failed' };
+            }
+        } catch (verifyErr) {
+            console.error('[PaymentCallback] 签名验证异常，拒绝处理:', verifyErr.message);
+            return { code: 'FAIL', message: 'Signature verification error' };
         }
 
         // 3. 解析回调数据
@@ -2556,20 +2692,19 @@ async function handleCallback(event) {
 
         // 4. 解密资源数据
         let transaction;
-        if (callbackData.resource && callbackData.resource.ciphertext) {
-            try {
-                transaction = decryptResource(
-                    callbackData.resource.ciphertext,
-                    callbackData.resource.nonce,
-                    callbackData.resource.associated_data || 'transaction'
-                );
-            } catch (decryptErr) {
-                console.error('[PaymentCallback] 解密失败:', decryptErr.message);
-                return { code: 'FAIL', message: 'Decryption failed' };
-            }
-        } else {
-            // 兼容非加密格式（测试/旧版）
-            transaction = callbackData;
+        if (!callbackData.resource || !callbackData.resource.ciphertext) {
+            console.error('[PaymentCallback] 回调缺少加密 resource，拒绝处理');
+            return { code: 'FAIL', message: 'Missing encrypted resource' };
+        }
+        try {
+            transaction = decryptResource(
+                callbackData.resource.ciphertext,
+                callbackData.resource.nonce,
+                callbackData.resource.associated_data || 'transaction'
+            );
+        } catch (decryptErr) {
+            console.error('[PaymentCallback] 解密失败:', decryptErr.message);
+            return { code: 'FAIL', message: 'Decryption failed' };
         }
 
         const eventType = callbackData.event_type || '';

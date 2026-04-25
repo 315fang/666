@@ -10,6 +10,7 @@ module.exports = {
         '/pages/category/',
         '/pages/activity/',
         '/pages/user/',
+        '/pages/product-bundle/',
         '/pages/product/detail',
         '/pages/order/',
         '/pages/address/',
@@ -109,6 +110,14 @@ module.exports = {
             link_type: 'page',
             link_value: '/pages/activity/flex-bundles',
             note: '活动页自由组合入口'
+        },
+        {
+            key: 'page:product-bundle-detail',
+            title: '组合商品详情',
+            group: '营销入口',
+            link_type: 'page',
+            link_value: '/pages/product-bundle/detail',
+            note: '组合商品详情页，链接可追加 id 参数'
         },
         {
             key: 'page:points',

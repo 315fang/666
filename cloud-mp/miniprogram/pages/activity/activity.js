@@ -94,7 +94,7 @@ function deriveActivityNav(item = {}) {
     if (spots.length > 0 && item.id != null && String(item.id) !== '') {
         return {
             link_type: 'page',
-            link_value: `/pages/activity/limited-spot?id=${encodeURIComponent(String(item.id))}`
+            link_value: `/pages/activity/limited-spot?slot_id=${encodeURIComponent(String(item.id))}`
         };
     }
 

@@ -1,0 +1,4 @@
+# Do not package local payment credentials or local runtime overrides.
+certs/
+*.pem
+payment.runtime.json

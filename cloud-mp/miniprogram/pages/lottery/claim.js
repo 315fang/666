@@ -122,7 +122,8 @@ Page({
 
     onChooseAddress() {
         if (!this.data.requiresClaim) return;
-        wx.navigateTo({ url: '/pages/address/list?select=true' });
+        const selectedId = this.data.addressId ? `&selectedId=${encodeURIComponent(this.data.addressId)}` : '';
+        wx.navigateTo({ url: `/pages/address/list?select=true${selectedId}` });
     },
 
     onPhoneInput(e) {
