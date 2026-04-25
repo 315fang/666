@@ -100,13 +100,13 @@
     <view class="section-card">
       <view class="section-head">
         <text class="section-title">团队结构</text>
-        <text class="section-sub">一级负责直推，二级用于看团队扩散效果</text>
+        <text class="section-sub">一级按当前归属统计，详情页会单独显示邀请人</text>
       </view>
 
       <view class="team-level-card" bindtap="goTeam" data-tab="direct">
         <view class="team-level-left">
           <text class="team-level-name">一级团队</text>
-          <text class="team-level-desc">你直接邀请并绑定的成员</text>
+          <text class="team-level-desc">当前归属在你名下的成员</text>
         </view>
         <text class="team-level-num">{{directCount}} 人</text>
       </view>
@@ -114,7 +114,7 @@
       <view class="team-level-card light" bindtap="goTeam" data-tab="indirect">
         <view class="team-level-left">
           <text class="team-level-name">二级团队</text>
-          <text class="team-level-desc">由你一级成员继续发展出的成员</text>
+          <text class="team-level-desc">当前归属在你一级成员名下的成员</text>
         </view>
         <text class="team-level-num">{{indirectCount}} 人</text>
       </view>

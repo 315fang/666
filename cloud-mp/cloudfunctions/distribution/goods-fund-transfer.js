@@ -96,7 +96,7 @@ async function findUserByAnyId(db, id) {
 }
 
 function relationText(level = 0) {
-    return level === 2 ? '由你的一级成员继续发展' : '你直接邀请并绑定的成员';
+    return level === 2 ? '当前关系：你的二级团队成员' : '当前关系：你的一级团队成员';
 }
 
 async function listApplicationsForPair(db, fromOpenid = '', toOpenid = '') {

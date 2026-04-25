@@ -970,7 +970,20 @@ function getStorageConfigSnapshot() {
     });
 }
 
-function getManagedStorageFolder() {
+function normalizeUploadFolderInput(value) {
+    const raw = pickString(value).trim();
+    if (!raw) return '';
+    const folder = raw
+        .replace(/^\/+/, '')
+        .replace(/\/+$/, '');
+    if (!folder) return '';
+    if (!/^[a-zA-Z0-9/_-]{1,120}$/.test(folder)) return '';
+    return folder;
+}
+
+function getManagedStorageFolder(folder) {
+    const requested = normalizeUploadFolderInput(folder);
+    if (requested) return requested;
     const configured = pickString(getStorageConfigSnapshot().folder, 'materials')
         .replace(/^\/+/, '')
         .replace(/\/+$/, '');
@@ -1248,12 +1261,13 @@ async function normalizeMaterialRecordAsync(item) {
     };
 }
 
-async function uploadManagedAsset(file) {
+async function uploadManagedAsset(file, folder) {
     const cloud = getManagedCloud();
     if (!cloud?.uploadFile) return null;
     const ext = path.extname(file.originalname || '') || '';
     const fileName = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`;
-    const cloudPath = `${getManagedStorageFolder()}/${new Date().toISOString().slice(0, 10)}/${fileName}`;
+    const cloudFolder = getManagedStorageFolder(folder);
+    const cloudPath = `${cloudFolder}/${new Date().toISOString().slice(0, 10)}/${fileName}`;
     const fileContent = Buffer.isBuffer(file.buffer) ? file.buffer : fs.readFileSync(file.path);
     const uploaded = await cloud.uploadFile({
         cloudPath,
@@ -1266,6 +1280,7 @@ async function uploadManagedAsset(file) {
         provider: 'cloudbase',
         file_id: fileId,
         url,
+        folder: cloudFolder,
         cloud_path: cloudPath
     };
 }
@@ -6106,10 +6121,14 @@ app.delete('/admin/api/categories/:id', auth, requirePermission('products'), asy
 app.get('/admin/api/material-groups', auth, requirePermission('materials'), async (req, res) => {
     await ensureFreshCollections(['materials', 'material_groups']);
     const materials = getCollection('materials');
-    const groups = sortByUpdatedDesc(getCollection('material_groups')).map((item) => ({
-        ...item,
-        count: materials.filter((material) => Number(material.group_id || 0) === Number(item.id)).length
-    }));
+    const groups = sortByUpdatedDesc(getCollection('material_groups')).map((item) => {
+        const id = item.id ?? item._legacy_id ?? item._id;
+        return {
+            ...item,
+            id,
+            count: materials.filter((material) => Number(material.group_id || 0) === Number(id)).length
+        };
+    });
     ok(res, [{ id: null, name: '全部素材', count: materials.length, _virtual: true }, ...groups]);
 });
 
@@ -6135,9 +6154,9 @@ app.post('/admin/api/material-groups', auth, requirePermission('materials'), asy
 app.put('/admin/api/material-groups/:id', auth, requirePermission('materials'), async (req, res) => {
     await ensureFreshCollections(['material_groups']);
     const rows = getCollection('material_groups');
-    const index = rows.findIndex((item) => Number(item.id) === Number(req.params.id));
+    const index = rows.findIndex((item) => Number(item.id ?? item._legacy_id ?? item._id) === Number(req.params.id));
     if (index === -1) return fail(res, '素材分组不存在', 404);
-    rows[index] = { ...rows[index], ...req.body, updated_at: nowIso() };
+    rows[index] = { ...rows[index], id: rows[index].id ?? rows[index]._legacy_id ?? rows[index]._id, ...req.body, updated_at: nowIso() };
     saveCollection('material_groups', rows);
     ok(res, rows[index]);
 });
@@ -6146,7 +6165,7 @@ app.delete('/admin/api/material-groups/:id', auth, requirePermission('materials'
     await ensureFreshCollections(['material_groups', 'materials']);
     const groupId = Number(req.params.id);
     const groups = getCollection('material_groups');
-    const nextGroups = groups.filter((item) => Number(item.id) !== groupId);
+    const nextGroups = groups.filter((item) => Number(item.id ?? item._legacy_id ?? item._id) !== groupId);
     if (groups.length === nextGroups.length) return fail(res, '素材分组不存在', 404);
     saveCollection('material_groups', nextGroups);
     const materials = getCollection('materials').map((item) => Number(item.group_id || 0) === groupId
@@ -6284,7 +6303,8 @@ app.post('/admin/api/upload', auth, requirePermission('materials'), uploadSingle
     }
     if (!uploadFile) return fail(res, '未收到上传文件');
     try {
-        const managedUpload = await uploadManagedAsset(uploadFile);
+        const uploadFolder = normalizeUploadFolderInput(uploadBody.folder || uploadBody.upload_folder);
+        const managedUpload = await uploadManagedAsset(uploadFile, uploadFolder);
         if (managedUpload) {
             if (uploadFile.path) {
                 try { fs.unlinkSync(uploadFile.path); } catch (_) {}
@@ -6296,6 +6316,7 @@ app.post('/admin/api/upload', auth, requirePermission('materials'), uploadSingle
                 size: uploadFile.size,
                 mime_type: uploadFile.mimetype,
                 provider: managedUpload.provider,
+                folder: managedUpload.folder,
                 cloud_path: managedUpload.cloud_path
             });
         }

@@ -3,6 +3,8 @@ const { requireLogin } = require('../../utils/auth');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
 const { clearUserCache } = require('./userDashboard');
 
+const FALLBACK_VERSION = '8.351';
+
 function navigateIfLoggedIn(url) {
     if (!requireLogin()) return false;
     wx.navigateTo({ url });
@@ -64,32 +66,39 @@ function onSettingsTap(page) {
     });
 }
 
+function normalizeVersionText(version) {
+    const text = String(version || '').trim();
+    if (!text) return '';
+    return text.startsWith('v') ? text : `v${text}`;
+}
+
 function getRuntimeVersionText() {
+    const fallbackVersion = normalizeVersionText(FALLBACK_VERSION);
     try {
-        if (typeof wx.getAccountInfoSync !== 'function') return '当前版本';
+        if (typeof wx.getAccountInfoSync !== 'function') return fallbackVersion || '当前版本';
         const accountInfo = wx.getAccountInfoSync();
         const miniProgram = accountInfo && accountInfo.miniProgram ? accountInfo.miniProgram : {};
-        const version = String(miniProgram.version || '').trim();
-        if (version) return version.startsWith('v') ? version : `v${version}`;
         const envText = {
             develop: '开发版',
             trial: '体验版',
             release: '正式版'
         }[miniProgram.envVersion];
+        const runtimeVersion = normalizeVersionText(miniProgram.version);
+        if (runtimeVersion) return envText ? `${runtimeVersion}（${envText}）` : runtimeVersion;
+        if (fallbackVersion) return envText ? `${fallbackVersion}（${envText}）` : fallbackVersion;
         return envText || '当前版本';
     } catch (_e) {
-        return '当前版本';
+        return fallbackVersion || '当前版本';
     }
 }
 
 function onAboutTap() {
     const brandConfig = getConfigSection('brand_config');
-    const brandName = app.globalData.brandName || brandConfig.brand_name || '问兰';
     const customerServiceWechat = app.globalData.customerServiceWechat || brandConfig.customer_service_wechat || 'wl_service';
     const versionText = getRuntimeVersionText();
     wx.showModal({
         title: '版本信息',
-        content: `${brandName}\n版本号：${versionText}\n${brandConfig.about_summary || '品牌甄选，值得信赖。'}\n\n客服微信：${customerServiceWechat}`,
+        content: `版本号：${versionText}\n客服微信：${customerServiceWechat}`,
         showCancel: false
     });
 }

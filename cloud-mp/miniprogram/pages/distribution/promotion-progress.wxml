@@ -27,6 +27,44 @@
     </view>
   </view>
 
+  <!-- 升级存钱罐 -->
+  <view class="piggy-card" wx:if="{{progress && progress.piggy_bank}}">
+    <view class="piggy-head">
+      <view>
+        <text class="piggy-title">升级存钱罐</text>
+        <text class="piggy-sub" wx:if="{{progress.next_name}}">升至 {{progress.next_name}} 可解锁</text>
+        <text class="piggy-sub" wx:else>已达当前最高目标</text>
+      </view>
+      <view class="piggy-amount-box">
+        <text class="piggy-currency">¥</text>
+        <text class="piggy-amount">{{progress.piggy_bank.next_level_unlock_amount_text}}</text>
+      </view>
+    </view>
+    <view class="piggy-summary">
+      <view class="piggy-summary-item">
+        <text class="piggy-summary-value">¥{{progress.piggy_bank.locked_amount_text}}</text>
+        <text class="piggy-summary-label">锁定中</text>
+      </view>
+      <view class="piggy-summary-item">
+        <text class="piggy-summary-value">¥{{progress.piggy_bank.unlocked_amount_text}}</text>
+        <text class="piggy-summary-label">已解锁</text>
+      </view>
+      <view class="piggy-summary-item">
+        <text class="piggy-summary-value">¥{{progress.piggy_bank.unlockable_amount_text}}</text>
+        <text class="piggy-summary-label">待入账</text>
+      </view>
+    </view>
+    <scroll-view class="piggy-buckets" scroll-x>
+      <view class="piggy-bucket-list">
+        <view class="piggy-bucket {{item.has_amount ? 'active' : ''}}" wx:for="{{progress.piggy_bank.buckets}}" wx:key="target_level">
+          <text class="piggy-bucket-name">{{item.target_name}}</text>
+          <text class="piggy-bucket-amount">¥{{item.locked_amount_text}}</text>
+          <text class="piggy-bucket-sub">已解 ¥{{item.unlocked_amount_text}}</text>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
   <!-- 下一级目标 -->
   <view class="next-target" wx:if="{{progress && progress.next_level != null}}">
     <view class="section-title">距离 {{progress.next_name}}</view>

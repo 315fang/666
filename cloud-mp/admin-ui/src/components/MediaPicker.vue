@@ -179,7 +179,8 @@ const fetchMaterials = async () => {
 const fetchGroups = async () => {
   try {
     const res = await getMaterialGroups()
-    groups.value = Array.isArray(res) ? res : (res?.list || [])
+    const rows = Array.isArray(res) ? res : (res?.list || [])
+    groups.value = rows.filter(g => !g._virtual)
   } catch (e) {
     console.warn('加载素材分组失败:', e)
   }
@@ -256,7 +257,8 @@ const handleUpload = async (e) => {
           type: 'image',
           title: file.name.replace(/\.[^.]+$/, ''),
           url: buildPersistentAssetRef({ url, fileId }),
-          file_id: fileId
+          file_id: fileId,
+          group_id: activeGroup.value || null
         })
         const row = mat && typeof mat === 'object' ? mat : null
         appended.push({

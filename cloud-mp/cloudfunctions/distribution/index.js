@@ -48,6 +48,16 @@ const DEFAULT_AGENT_UPGRADE_RULES = {
     effective_order_days: 7
 };
 
+const ROLE_NAMES = {
+    0: 'VIP用户',
+    1: '初级会员',
+    2: '高级会员',
+    3: '推广合伙人',
+    4: '运营合伙人',
+    5: '区域合伙人',
+    6: '店长'
+};
+
 // ==================== 子模块导入 ====================
 const distributionQuery = require('./distribution-query');
 const distributionCommission = require('./distribution-commission');
@@ -348,6 +358,57 @@ async function getPromotionSpendTotal(openid) {
     }, 0));
 }
 
+async function listUpgradePiggyBankRows(openid, limit = 500) {
+    if (!openid) return [];
+    const res = await db.collection('upgrade_piggy_bank_logs')
+        .where({ openid })
+        .orderBy('created_at', 'desc')
+        .limit(limit)
+        .get()
+        .catch(() => ({ data: [] }));
+    return res.data || [];
+}
+
+function buildUpgradePiggyBankSummary(rows = [], currentLevel = 0, nextLevel = null) {
+    const buckets = [];
+    for (let level = 1; level <= 5; level += 1) {
+        const levelRows = rows.filter((row) => toNumber(row.target_role_level, 0) === level);
+        const lockedAmount = roundMoney(levelRows
+            .filter((row) => row.status === 'locked')
+            .reduce((sum, row) => sum + toNumber(row.incremental_amount, 0), 0));
+        const unlockedAmount = roundMoney(levelRows
+            .filter((row) => row.status === 'unlocked')
+            .reduce((sum, row) => sum + toNumber(row.incremental_amount, 0), 0));
+        const reversedAmount = roundMoney(levelRows
+            .filter((row) => row.status === 'reversed' || row.status === 'clawed_back')
+            .reduce((sum, row) => sum + toNumber(row.incremental_amount, 0), 0));
+        buckets.push({
+            target_level: level,
+            target_name: ROLE_NAMES[level] || `等级${level}`,
+            locked_amount: lockedAmount,
+            unlocked_amount: unlockedAmount,
+            reversed_amount: reversedAmount
+        });
+    }
+    const lockedAmount = roundMoney(buckets.reduce((sum, item) => sum + item.locked_amount, 0));
+    const unlockedAmount = roundMoney(buckets.reduce((sum, item) => sum + item.unlocked_amount, 0));
+    const reversedAmount = roundMoney(buckets.reduce((sum, item) => sum + item.reversed_amount, 0));
+    const unlockableAmount = roundMoney(rows
+        .filter((row) => row.status === 'locked' && toNumber(row.target_role_level, 0) <= currentLevel)
+        .reduce((sum, row) => sum + toNumber(row.incremental_amount, 0), 0));
+    const nextLevelUnlockAmount = nextLevel == null ? 0 : roundMoney(rows
+        .filter((row) => row.status === 'locked' && toNumber(row.target_role_level, 0) === nextLevel)
+        .reduce((sum, row) => sum + toNumber(row.incremental_amount, 0), 0));
+    return {
+        locked_amount: lockedAmount,
+        unlocked_amount: unlockedAmount,
+        reversed_amount: reversedAmount,
+        unlockable_amount: unlockableAmount,
+        next_level_unlock_amount: nextLevelUnlockAmount,
+        buckets
+    };
+}
+
 function goodsFundIdentityCandidates(user = {}, openid = '') {
     const values = [openid, user.id, user._id, user._legacy_id].filter(hasValue);
     return uniqueValues(values);
@@ -605,10 +666,40 @@ function resolveJoinedAt(member = {}) {
     return member.joined_team_at || member.bound_parent_at || member.created_at || null;
 }
 
+function maskOpenid(openid = '') {
+    const text = pickString(openid);
+    if (!text) return '';
+    if (text.length <= 8) return text;
+    return `${text.slice(0, 4)}...${text.slice(-4)}`;
+}
+
+function resolveInviterName(member = {}) {
+    return pickString(
+        member.invited_by_name
+        || member.inviter_name
+        || member.inviter_nickname
+        || member.inviter_snapshot?.nickname
+        || member.inviter_snapshot?.nick_name
+    );
+}
+
+function resolveInviterText(member = {}, level = 1) {
+    const name = resolveInviterName(member);
+    if (name) return `邀请人：${name}`;
+    const openid = pickString(member.invited_by_openid || member.invited_by || member.inviter_openid);
+    if (openid) return `邀请人：${maskOpenid(openid)}`;
+    return level === 1 ? '邀请人：你' : '邀请人：一级团队成员';
+}
+
+function resolveCurrentRelationText(level = 1) {
+    return level === 2 ? '当前关系：你的二级团队成员' : '当前关系：你的一级团队成员';
+}
+
 function normalizeTeamMember(member = {}, level = 1, extra = {}) {
     const canonical = buildCanonicalUser(member);
     const roleLevel = resolveRoleLevel(member);
     const relationSource = goodsFundTransferService.buildRelationSourceText(member.relation_source || member.invitation_source || '');
+    const currentRelationText = resolveCurrentRelationText(level);
     return {
         ...canonical,
         _id: canonical.id,
@@ -616,7 +707,11 @@ function normalizeTeamMember(member = {}, level = 1, extra = {}) {
         legacy_id: member.id || member._legacy_id || '',
         level,
         level_label: level === 2 ? '二级成员' : '一级成员',
-        relation_text: level === 2 ? '由你的一级成员继续发展' : '你直接邀请并绑定的成员',
+        relation_text: currentRelationText,
+        current_relation_text: currentRelationText,
+        inviter_text: resolveInviterText(member, level),
+        invited_by_openid: pickString(member.invited_by_openid || member.invited_by || member.inviter_openid),
+        invited_by_name: resolveInviterName(member),
         relation_source: member.relation_source || member.invitation_source || '',
         relation_source_text: relationSource,
         line_locked: !!member.line_locked,
@@ -1297,8 +1392,8 @@ const handleAction = {
             .limit(200).get().catch(() => ({ data: [] }));
         const rechargeTotal = (rechargeRes.data || []).reduce((s, r) => s + toNumber(r.amount, 0), 0);
 
-        const ROLE_NAMES = { 0: 'VIP用户', 1: '初级会员', 2: '高级会员', 3: '推广合伙人', 4: '运营合伙人', 5: '区域合伙人', 6: '店长' };
         const nextLevel = Math.min(currentLevel + 1, 5);
+        const normalizedNextLevel = currentLevel >= 5 ? null : nextLevel;
         const conditions = [];
         if (nextLevel === 1) {
             const c1Target = toNumber(upgradeRules.c1_min_purchase, DEFAULT_AGENT_UPGRADE_RULES.c1_min_purchase);
@@ -1335,13 +1430,26 @@ const handleAction = {
             conditions.push({ type: 'recharge', label: `充值${b3RechargeTarget}元`, current: rechargeTotal, target: b3RechargeTarget, met: rechargeTotal >= b3RechargeTarget });
         }
 
+        const piggyRows = await listUpgradePiggyBankRows(openid, 500);
+        const piggyBank = buildUpgradePiggyBankSummary(piggyRows, currentLevel, normalizedNextLevel);
+
         return success({
             current_level: currentLevel,
             current_name: ROLE_NAMES[currentLevel] || 'VIP用户',
-            next_level: currentLevel >= 5 ? null : nextLevel,
-            next_name: currentLevel >= 5 ? null : (ROLE_NAMES[nextLevel] || ''),
+            next_level: normalizedNextLevel,
+            next_name: normalizedNextLevel == null ? null : (ROLE_NAMES[nextLevel] || ''),
             conditions,
-            stats: { total_spent: totalSpent, recharge_total: rechargeTotal, growth_value: growthValue, c1_count: c1Count, b1_count: b1Count, b2_count: b2Count }
+            stats: { total_spent: totalSpent, recharge_total: rechargeTotal, growth_value: growthValue, c1_count: c1Count, b1_count: b1Count, b2_count: b2Count },
+            piggy_bank: piggyBank
+        });
+    }),
+
+    'upgradePiggyBankLogs': asyncHandler(async (openid, params = {}) => {
+        const limit = Math.min(100, Math.max(1, toNumber(params.limit || params.pageSize, 50)));
+        const rows = await listUpgradePiggyBankRows(openid, limit);
+        return success({
+            list: rows,
+            summary: buildUpgradePiggyBankSummary(rows, 0, null)
         });
     }),
 
@@ -1642,7 +1750,7 @@ exports.main = cloudFunctionWrapper(async (event) => {
     }
 
     // 查看类 action：非分销员也可访问（返回基础数据）
-    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench', 'stats', 'team', 'teamDetail', 'commissionPreview', 'estimatedCommission', 'promotionProgress', 'promotionLogs', 'myFundPoolSummary', 'agentWallet', 'agentGoodsFund', 'agentWalletLogs', 'getDirectedInviteTicket', 'goodsFundTransferApplications', 'withdrawRules'];
+    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench', 'stats', 'team', 'teamDetail', 'commissionPreview', 'estimatedCommission', 'promotionProgress', 'promotionLogs', 'upgradePiggyBankLogs', 'myFundPoolSummary', 'agentWallet', 'agentGoodsFund', 'agentWalletLogs', 'getDirectedInviteTicket', 'goodsFundTransferApplications', 'withdrawRules'];
     const openWriteActions = new Set(['acceptDirectedInvite']);
 
     if (!viewActions.includes(action) && !openWriteActions.has(action)) {

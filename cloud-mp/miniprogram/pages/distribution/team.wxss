@@ -280,6 +280,7 @@
 }
 
 .member-tag-row,
+.member-relation-row,
 .member-meta-row {
   margin-top: 10rpx;
 }
@@ -331,6 +332,23 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.member-relation-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex-wrap: wrap;
+}
+
+.member-relation {
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #345174;
+}
+
+.member-relation.muted {
+  color: #7f93af;
 }
 
 .member-meta-row {

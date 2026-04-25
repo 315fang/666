@@ -8,6 +8,25 @@
 .stat-val { display: block; font-size: 32rpx; font-weight: 600; }
 .stat-lbl { display: block; font-size: 22rpx; opacity: 0.85; margin-top: 4rpx; }
 
+.piggy-card { background: #fff; border-radius: 18rpx; padding: 30rpx; margin-bottom: 24rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06); }
+.piggy-head { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; margin-bottom: 22rpx; }
+.piggy-title { display: block; font-size: 32rpx; line-height: 1.3; font-weight: 700; color: #303133; }
+.piggy-sub { display: block; margin-top: 8rpx; font-size: 24rpx; color: #909399; }
+.piggy-amount-box { flex-shrink: 0; display: flex; align-items: baseline; color: #d94838; }
+.piggy-currency { font-size: 28rpx; font-weight: 700; }
+.piggy-amount { font-size: 44rpx; line-height: 1; font-weight: 800; }
+.piggy-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14rpx; margin-bottom: 22rpx; }
+.piggy-summary-item { min-height: 104rpx; border-radius: 14rpx; background: #f7f9fc; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8rpx; }
+.piggy-summary-value { font-size: 26rpx; font-weight: 700; color: #303133; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.piggy-summary-label { font-size: 22rpx; color: #909399; }
+.piggy-buckets { width: 100%; white-space: nowrap; }
+.piggy-bucket-list { display: inline-flex; gap: 14rpx; padding-bottom: 2rpx; }
+.piggy-bucket { width: 178rpx; min-height: 132rpx; box-sizing: border-box; padding: 18rpx; border-radius: 14rpx; background: #f7f9fc; border: 1rpx solid #ebeef5; display: flex; flex-direction: column; gap: 8rpx; }
+.piggy-bucket.active { background: #fff6ed; border-color: #f0c08a; }
+.piggy-bucket-name { font-size: 24rpx; font-weight: 600; color: #303133; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.piggy-bucket-amount { font-size: 28rpx; font-weight: 800; color: #d94838; }
+.piggy-bucket-sub { font-size: 20rpx; color: #909399; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
 .next-target { background: #fff; border-radius: 16rpx; padding: 30rpx; margin-bottom: 24rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06); }
 .section-title { font-size: 30rpx; font-weight: 600; color: #303133; margin-bottom: 20rpx; }
 .conditions { display: flex; flex-direction: column; gap: 20rpx; }

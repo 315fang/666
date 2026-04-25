@@ -11,13 +11,14 @@ function buildDetailItems(member) {
     const items = [
         { label: '团队层级', value: member.level_label || '未知' },
         { label: '成员身份', value: member.role_name || 'VIP用户' },
+        { label: '当前关系', value: member.current_relation_text || member.relation_text || '团队成员' },
+        { label: '邀请人', value: member.inviter_text || '暂未记录' },
         { label: '加入来源', value: member.relation_source_text || (member.relation_source === 'directed_b1' ? '定向邀约' : '普通邀请') },
         { label: '成员ID', value: member.invite_code || '暂无ID' },
         { label: '手机号', value: member.phone || '未绑定' },
         { label: '订单数', value: `${Number(member.order_count || 0)} 单` },
         { label: '累计业绩', value: `¥${member.total_sales || '0.00'}` },
         { label: '加入时间', value: formatDate(member.joined_at) || '未知' },
-        { label: '关系说明', value: member.relation_text || '团队成员' },
         { label: '线路状态', value: member.line_locked ? '已锁定' : '未锁定' }
     ];
     if (member.can_apply_goods_fund_transfer) {

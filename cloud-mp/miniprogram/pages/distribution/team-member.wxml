@@ -35,7 +35,8 @@
               <text class="hero-pill light">{{member.role_name}}</text>
               <text class="hero-pill light">{{member.relation_source_text || (member.relation_source === 'directed_b1' ? '定向邀约' : '普通邀请')}}</text>
             </view>
-            <text class="hero-relation">{{member.relation_text}}</text>
+            <text class="hero-relation">{{member.current_relation_text || member.relation_text}}</text>
+            <text class="hero-relation inviter">{{member.inviter_text}}</text>
           </view>
         </view>
 

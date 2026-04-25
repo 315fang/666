@@ -76,6 +76,10 @@
             <view class="member-tag" wx:if="{{item.line_locked}}">已锁线路</view>
             <text class="member-tag-sub">{{item.invite_code || '暂无ID'}}</text>
           </view>
+          <view class="member-relation-row">
+            <text class="member-relation">{{item.inviter_text}}</text>
+            <text class="member-relation muted">{{item.current_relation_text || item.relation_text}}</text>
+          </view>
           <view class="member-meta-row">
             <text class="member-meta">加入 {{item.joined_at_format}}</text>
             <text class="member-meta">订单 {{item.order_count_format}}</text>

@@ -19,6 +19,13 @@ const {
     handleDepositRefundCallback
 } = require('./payment-deposit');
 const { handleTransferCallbackNotification } = require('./payment-transfer');
+const { applyPromotionSeparation } = require('./promotion-lineage');
+const {
+    DEFAULT_UPGRADE_PIGGY_BANK_CONFIG,
+    createUpgradePiggyBankForOrder,
+    reverseUpgradePiggyBankForRefund,
+    unlockUpgradePiggyBankForRole
+} = require('./upgrade-piggy-bank');
 
 const DEFAULT_ROLE_NAMES = {
     0: 'VIP用户',
@@ -354,7 +361,7 @@ async function loadAgentRuntimeConfig() {
     if (agentRuntimeConfigCache.value && Date.now() - Number(agentRuntimeConfigCache.updatedAt || 0) <= AGENT_RUNTIME_CONFIG_TTL) {
         return agentRuntimeConfigCache.value;
     }
-    const [upgradeRow, commissionRow, matrixRow, bundleMatrixRow, memberLevelRow, peerBonusRow, pointRuleRow, growthRuleRow] = await Promise.all([
+    const [upgradeRow, commissionRow, matrixRow, bundleMatrixRow, memberLevelRow, peerBonusRow, pointRuleRow, growthRuleRow, piggyBankRow] = await Promise.all([
         getConfigByKeys(['member_upgrade_rule_config', 'agent_system_upgrade-rules', 'agent_system_upgrade_rules']),
         getConfigByKeys(['agent_system_commission-config', 'agent_system_commission_config']),
         getConfigByKeys(['agent_system_commission-matrix', 'agent_system_commission_matrix']),
@@ -362,7 +369,8 @@ async function loadAgentRuntimeConfig() {
         getConfigByKeys(['member_level_config']),
         getConfigByKeys(['agent_system_peer-bonus', 'agent_system_peer_bonus']),
         getConfigByKeys(['point_rule_config']),
-        getConfigByKeys(['growth_rule_config'])
+        getConfigByKeys(['growth_rule_config']),
+        getConfigByKeys(['agent_system_upgrade-piggy-bank', 'agent_system_upgrade_piggy_bank'])
     ]);
     const upgradeRules = { ...DEFAULT_AGENT_UPGRADE_RULES, ...parseConfigValue(upgradeRow, {}) };
     const commission = parseConfigValue(commissionRow, {});
@@ -400,6 +408,10 @@ async function loadAgentRuntimeConfig() {
             ...(growthRuleRaw.purchase || {})
         }
     };
+    const piggyBank = {
+        ...DEFAULT_UPGRADE_PIGGY_BANK_CONFIG,
+        ...(parseConfigValue(piggyBankRow, {}) || {})
+    };
     const commissionMatrix = normalizeCommissionMatrix(
         dbMatrix || commission?.commission_matrix,
         DEFAULT_COMMISSION_MATRIX
@@ -424,6 +436,7 @@ async function loadAgentRuntimeConfig() {
         bundleCommissionMatrix,
         memberLevels,
         peerBonus,
+        piggyBank,
         pointRules,
         growthRules
     };
@@ -1127,7 +1140,7 @@ async function ensureAgentRoleSynced(orderId, order) {
     const user = await findUserByAny(order.openid);
     if (!user) return { skipped: true };
 
-    const { upgradeRules, memberLevels } = await loadAgentRuntimeConfig();
+    const { upgradeRules, memberLevels, piggyBank } = await loadAgentRuntimeConfig();
     if (upgradeRules.enabled === false) return { skipped: true };
 
     const [directMembers, rechargeTotal, effectiveSales] = await Promise.all([
@@ -1143,6 +1156,8 @@ async function ensureAgentRoleSynced(orderId, order) {
         return { skipped: true, currentRoleLevel, nextRoleLevel };
     }
 
+    const previousParent = await findUserByAny(getUserReferrer(user));
+    const previousGrandparent = previousParent ? await findUserByAny(getUserReferrer(previousParent)) : null;
     const roleMeta = getRoleMeta(nextRoleLevel, memberLevels);
     const nextDistributorLevel = Math.max(
         toNumber(user.distributor_level != null ? user.distributor_level : user.agent_level, 0),
@@ -1181,7 +1196,60 @@ async function ensureAgentRoleSynced(orderId, order) {
         }
     }).catch((err) => console.error('[RoleSync] 晋升日志写入失败:', err.message));
 
-    return { upgraded: true, previousRoleLevel: currentRoleLevel, nextRoleLevel, roleName: roleMeta.roleName };
+    let separation = { skipped: true, reason: 'disabled' };
+    if (upgradeRules.promotion_separation_enabled !== false) {
+        try {
+            separation = await applyPromotionSeparation(db, _, {
+                user,
+                parent: previousParent,
+                directMembers,
+                previousRoleLevel: currentRoleLevel,
+                nextRoleLevel,
+                triggerOrderId: orderId,
+                minRoleLevel: upgradeRules.promotion_separation_min_role_level || 3
+            });
+        } catch (err) {
+            separation = { error: err.message };
+            console.error('[RoleSync] 晋升脱离关系重排失败:', err.message);
+            await db.collection('users').where({ openid: order.openid }).update({
+                data: {
+                    promotion_separation_error: err.message,
+                    promotion_separation_failed_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                }
+            }).catch(() => {});
+        }
+    }
+
+    let piggyBankUnlock = { skipped: true, reason: 'not_checked' };
+    try {
+        piggyBankUnlock = await unlockUpgradePiggyBankForRole({
+            db,
+            command: _,
+            findUserByAny
+        }, {
+            openid: order.openid,
+            targetRoleLevel: nextRoleLevel,
+            triggerOrderId: orderId,
+            config: piggyBank
+        });
+    } catch (err) {
+        piggyBankUnlock = { error: err.message };
+        console.error('[RoleSync] 升级存钱罐解锁失败:', err.message);
+    }
+
+    return {
+        upgraded: true,
+        previousRoleLevel: currentRoleLevel,
+        nextRoleLevel,
+        roleName: roleMeta.roleName,
+        previousParentOpenid: previousParent?.openid || '',
+        previousParentId: previousParent ? (previousParent._id || previousParent.id || previousParent._legacy_id || '') : '',
+        previousGrandparentOpenid: previousGrandparent?.openid || '',
+        previousGrandparentId: previousGrandparent ? (previousGrandparent._id || previousGrandparent.id || previousGrandparent._legacy_id || '') : '',
+        separation,
+        piggyBankUnlock
+    };
 }
 
 async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
@@ -1189,7 +1257,7 @@ async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
     if (!roleSyncResult?.upgraded) return { skipped: true };
     const buyer = await findUserByAny(order.openid || order.buyer_id || order.user_id);
     if (!buyer) return { skipped: true };
-    const parent = await findUserByAny(getUserReferrer(buyer));
+    const parent = await findUserByAny(roleSyncResult.previousParentOpenid || getUserReferrer(buyer));
     if (!parent || !parent.openid) return { skipped: true };
 
     const { peerBonus } = await loadAgentRuntimeConfig();
@@ -2062,14 +2130,31 @@ async function processPaidOrder(orderId, order) {
     const stock = await ensureStockDeducted(orderId, latest);
     const points = await ensurePointsAwarded(orderId, { ...latest, stock_deducted_at: true });
     const roles = await ensureAgentRoleSynced(orderId, { ...latest, stock_deducted_at: true, points_awarded_at: true });
+    const settlementOrder = {
+        ...latest,
+        stock_deducted_at: true,
+        points_awarded_at: true,
+        direct_referrer_openid: latest.direct_referrer_openid || roles.previousParentOpenid || '',
+        indirect_referrer_openid: latest.indirect_referrer_openid || roles.previousGrandparentOpenid || ''
+    };
 
     // 代理升级时记录基金池入池
     if (roles && roles.upgraded && roles.nextRoleLevel >= 3) {
         await recordFundPoolEntry(order.openid, roles.nextRoleLevel, 'upgrade_payment', orderId).catch(() => {});
     }
 
-    const peerBonus = await ensurePeerBonusCreated(orderId, { ...latest, stock_deducted_at: true, points_awarded_at: true }, roles);
-    const commissions = await ensureCommissionsCreated(orderId, { ...latest, stock_deducted_at: true, points_awarded_at: true });
+    const peerBonus = await ensurePeerBonusCreated(orderId, settlementOrder, roles);
+    const commissions = await ensureCommissionsCreated(orderId, settlementOrder);
+    const runtimeConfig = await loadAgentRuntimeConfig();
+    const piggyBank = await createUpgradePiggyBankForOrder({
+        db,
+        command: _,
+        findUserByAny,
+        getDocByIdOrLegacy
+    }, orderId, settlementOrder, runtimeConfig).catch((err) => {
+        console.error('[PaymentCallback] 升级存钱罐计算失败:', err.message);
+        return { error: err.message };
+    });
     const dividendPool = await accrueDividendPoolContribution(orderId, {
         ...latest,
         stock_deducted_at: true,
@@ -2080,7 +2165,7 @@ async function processPaidOrder(orderId, order) {
     await db.collection('orders').doc(orderId).update({
         data: { payment_post_processed_at: db.serverDate(), updated_at: db.serverDate() },
     });
-    return { group, slash, stock, points, roles, peerBonus, commissions, dividendPool };
+    return { group, slash, stock, points, roles, peerBonus, commissions, piggyBank, dividendPool };
 }
 
 function deriveRefundRevertStatus(order = {}) {
@@ -2614,6 +2699,10 @@ async function handleRefundCallback(refundData, eventType) {
                     if (!order?.refund_commissions_resolved_at) {
                         await cancelPendingCommissionsForRefund(canonicalOrderId, '退款完成，佣金作废');
                         await clawBackSettledCommissions(canonicalOrderId);
+                        await reverseUpgradePiggyBankForRefund({
+                            db,
+                            command: _
+                        }, canonicalOrderId);
                         await db.collection('orders').doc(canonicalOrderId).update({
                         data: { refund_commissions_resolved_at: db.serverDate(), updated_at: db.serverDate() }
                     }).catch(() => {});
