@@ -1,4 +1,11 @@
 <view class="container">
+  <view class="message-topbar">
+    <view class="privacy-icon-btn" bindtap="onPrivacyTap" aria-label="隐私协议">
+      <image class="privacy-icon-img" src="/assets/icons/shield.svg" mode="aspectFit"></image>
+      <view class="privacy-icon-dot"></view>
+    </view>
+  </view>
+
   <view class="notif-list" wx:if="{{notifications.length > 0}}">
     <view class="notif-item {{item.is_read ? '' : 'unread'}}" wx:for="{{notifications}}" wx:key="id" bindtap="onRead" data-id="{{item.id}}" data-index="{{index}}">
       <view class="notif-icon-box {{item.type}}-bg">

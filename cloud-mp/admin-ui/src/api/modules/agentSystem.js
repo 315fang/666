@@ -4,6 +4,8 @@ export const getCommissionConfig = () => request({ url: '/agent-system/commissio
 export const updateCommissionConfig = (data) => request({ url: '/agent-system/commission-config', method: 'put', data })
 export const getCommissionMatrix = () => request({ url: '/agent-system/commission-matrix', method: 'get' })
 export const updateCommissionMatrix = (data) => request({ url: '/agent-system/commission-matrix', method: 'put', data })
+export const getBundleCommissionMatrix = () => request({ url: '/agent-system/bundle-commission-matrix', method: 'get' })
+export const updateBundleCommissionMatrix = (data) => request({ url: '/agent-system/bundle-commission-matrix', method: 'put', data })
 
 export const getPeerBonusConfig = () => request({ url: '/agent-system/peer-bonus', method: 'get' })
 export const updatePeerBonusConfig = (data) => request({ url: '/agent-system/peer-bonus', method: 'put', data })

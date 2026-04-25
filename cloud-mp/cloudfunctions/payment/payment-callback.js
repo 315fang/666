@@ -34,12 +34,14 @@ const DEFAULT_AGENT_UPGRADE_RULES = {
     enabled: true,
     // C1 晋升：购买满299（文档要求为"爆单产品"，系统暂以总消费额近似）
     c1_min_purchase: 299,
-    // C2 晋升：直推 2 名 C1 + 销售额超580（文档要求需有"实物产品消耗"）
+    // C2 晋升：成长值达标，或直推 2 名 C1 + 销售额超580
     c2_referee_count: 2,
     c2_min_sales: 580,
-    // B1 晋升：推荐10名C1 或 充值3000（代理加盟费）
+    c2_growth_value: 999,
+    // B1 晋升：成长值达标、推荐10名C1 或充值3000（代理加盟费）
     b1_referee_count: 10,
     b1_recharge: 3000,
+    b1_growth_value: 3000,
     // B2 晋升：推荐10名B1 或 充值30000
     b2_referee_count: 10,
     b2_recharge: 30000,
@@ -61,11 +63,21 @@ const DEFAULT_COMMISSION_MATRIX = {
     5: { 1: 35, 2: 25, 3: 15, 4: 5 }           // B3 从 C1 赚 35%，C2 赚 25%，B1 赚 15%，B2 赚 5%
 };
 
+// 组合商品使用同一套级差矩阵算法，但参数独立配置，避免被普通商品矩阵或旧固定佣金污染。
+const DEFAULT_BUNDLE_COMMISSION_MATRIX = {
+    1: { 0: 20 },
+    2: { 0: 30, 1: 5 },
+    3: { 1: 20, 2: 10 },
+    4: { 1: 30, 2: 20, 3: 10 },
+    5: { 1: 35, 2: 25, 3: 15, 4: 5 }
+};
+
 // 兼容旧格式（供 distribution-commission.js 等引用）
 const DEFAULT_AGENT_COMMISSION_CONFIG = {
     direct_pct_by_role: { 1: 20, 2: 30, 3: 40, 4: 40, 5: 40 },
     indirect_pct_by_role: { 2: 0, 3: 0, 4: 10, 5: 10 },
-    commission_matrix: DEFAULT_COMMISSION_MATRIX
+    commission_matrix: DEFAULT_COMMISSION_MATRIX,
+    bundle_commission_matrix: DEFAULT_BUNDLE_COMMISSION_MATRIX
 };
 
 const DEFAULT_COST_SPLIT = {
@@ -79,8 +91,8 @@ const DEFAULT_COST_SPLIT = {
 const DEFAULT_BRANCH_AGENT_POLICY = {
     enabled: true,
     region_reward_tiers: [
-        { threshold: 100000, rate: 0.01, label: '10万' },
-        { threshold: 300000, rate: 0.02, label: '30万' },
+        { threshold: 0, rate: 0.01, label: '0元' },
+        { threshold: 100000, rate: 0.02, label: '10万' },
         { threshold: 1000000, rate: 0.03, label: '100万' }
     ]
 };
@@ -342,10 +354,11 @@ async function loadAgentRuntimeConfig() {
     if (agentRuntimeConfigCache.value && Date.now() - Number(agentRuntimeConfigCache.updatedAt || 0) <= AGENT_RUNTIME_CONFIG_TTL) {
         return agentRuntimeConfigCache.value;
     }
-    const [upgradeRow, commissionRow, matrixRow, memberLevelRow, peerBonusRow, pointRuleRow, growthRuleRow] = await Promise.all([
+    const [upgradeRow, commissionRow, matrixRow, bundleMatrixRow, memberLevelRow, peerBonusRow, pointRuleRow, growthRuleRow] = await Promise.all([
         getConfigByKeys(['member_upgrade_rule_config', 'agent_system_upgrade-rules', 'agent_system_upgrade_rules']),
         getConfigByKeys(['agent_system_commission-config', 'agent_system_commission_config']),
         getConfigByKeys(['agent_system_commission-matrix', 'agent_system_commission_matrix']),
+        getConfigByKeys(['agent_system_bundle-commission-matrix', 'agent_system_bundle_commission_matrix']),
         getConfigByKeys(['member_level_config']),
         getConfigByKeys(['agent_system_peer-bonus', 'agent_system_peer_bonus']),
         getConfigByKeys(['point_rule_config']),
@@ -354,6 +367,7 @@ async function loadAgentRuntimeConfig() {
     const upgradeRules = { ...DEFAULT_AGENT_UPGRADE_RULES, ...parseConfigValue(upgradeRow, {}) };
     const commission = parseConfigValue(commissionRow, {});
     const dbMatrix = parseConfigValue(matrixRow, null);
+    const dbBundleMatrix = parseConfigValue(bundleMatrixRow, null);
     const memberLevels = Array.isArray(parseConfigValue(memberLevelRow, [])) ? parseConfigValue(memberLevelRow, []) : [];
     const peerBonus = { ...DEFAULT_PEER_BONUS_CONFIG, ...parseConfigValue(peerBonusRow, {}) };
     const pointRuleRaw = parseConfigValue(pointRuleRow, {}) || {};
@@ -390,18 +404,24 @@ async function loadAgentRuntimeConfig() {
         dbMatrix || commission?.commission_matrix,
         DEFAULT_COMMISSION_MATRIX
     );
+    const bundleCommissionMatrix = normalizeCommissionMatrix(
+        dbBundleMatrix || commission?.bundle_commission_matrix,
+        DEFAULT_BUNDLE_COMMISSION_MATRIX
+    );
     const result = {
         upgradeRules,
         commissionConfig: {
             direct_pct_by_role: normalizePctMap(commission?.direct_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.direct_pct_by_role),
             indirect_pct_by_role: normalizePctMap(commission?.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role),
-            commission_matrix: commissionMatrix
+            commission_matrix: commissionMatrix,
+            bundle_commission_matrix: bundleCommissionMatrix
         },
         costSplit: {
             ...DEFAULT_COST_SPLIT,
             ...(commission?.cost_split && typeof commission.cost_split === 'object' ? commission.cost_split : {})
         },
         commissionMatrix,
+        bundleCommissionMatrix,
         memberLevels,
         peerBonus,
         pointRules,
@@ -513,10 +533,16 @@ async function getEffectiveOrderSales(openid, effectiveDays = DEFAULT_AGENT_UPGR
     }, 0));
 }
 
-function deriveEligibleRoleLevel(currentRoleLevel = 0, effectiveSales = 0, directMembers = [], rechargeTotal = 0, upgradeRules = DEFAULT_AGENT_UPGRADE_RULES) {
+function isGrowthRuleMet(growthValue, target) {
+    const threshold = toNumber(target, 0);
+    return threshold > 0 && toNumber(growthValue, 0) >= threshold;
+}
+
+function deriveEligibleRoleLevel(currentRoleLevel = 0, effectiveSales = 0, directMembers = [], rechargeTotal = 0, upgradeRules = DEFAULT_AGENT_UPGRADE_RULES, growthValue = 0) {
     const resolvedCurrentRoleLevel = toNumber(currentRoleLevel, 0);
     let nextRoleLevel = resolvedCurrentRoleLevel;
     const totalSpent = roundMoney(effectiveSales);
+    const currentGrowthValue = toNumber(growthValue, 0);
 
     if (totalSpent >= toNumber(upgradeRules.c1_min_purchase, DEFAULT_AGENT_UPGRADE_RULES.c1_min_purchase)) {
         nextRoleLevel = Math.max(nextRoleLevel, 1);
@@ -524,16 +550,20 @@ function deriveEligibleRoleLevel(currentRoleLevel = 0, effectiveSales = 0, direc
 
     const c1OrAboveCount = directMembers.filter((member) => toNumber(member.role_level ?? member.distributor_level, 0) >= 1).length;
     if (
-        totalSpent >= toNumber(upgradeRules.c2_min_sales, DEFAULT_AGENT_UPGRADE_RULES.c2_min_sales)
-        && c1OrAboveCount >= toNumber(upgradeRules.c2_referee_count, DEFAULT_AGENT_UPGRADE_RULES.c2_referee_count)
+        (
+            totalSpent >= toNumber(upgradeRules.c2_min_sales, DEFAULT_AGENT_UPGRADE_RULES.c2_min_sales)
+            && c1OrAboveCount >= toNumber(upgradeRules.c2_referee_count, DEFAULT_AGENT_UPGRADE_RULES.c2_referee_count)
+        )
+        || isGrowthRuleMet(currentGrowthValue, upgradeRules.c2_growth_value ?? DEFAULT_AGENT_UPGRADE_RULES.c2_growth_value)
     ) {
         nextRoleLevel = Math.max(nextRoleLevel, 2);
     }
 
-    // B1 晋级：推荐 10 个 C1（及以上）或充值 3000
+    // B1 晋级：推荐 10 个 C1（及以上）、充值 3000 或成长值达标
     if (
         c1OrAboveCount >= toNumber(upgradeRules.b1_referee_count, DEFAULT_AGENT_UPGRADE_RULES.b1_referee_count)
         || rechargeTotal >= toNumber(upgradeRules.b1_recharge, DEFAULT_AGENT_UPGRADE_RULES.b1_recharge)
+        || isGrowthRuleMet(currentGrowthValue, upgradeRules.b1_growth_value ?? DEFAULT_AGENT_UPGRADE_RULES.b1_growth_value)
     ) {
         nextRoleLevel = Math.max(nextRoleLevel, 3);
     }
@@ -558,6 +588,15 @@ function deriveEligibleRoleLevel(currentRoleLevel = 0, effectiveSales = 0, direc
     }
 
     return nextRoleLevel;
+}
+
+function resolveUpgradeTriggerType(nextRoleLevel, growthValue, rechargeTotal, upgradeRules = DEFAULT_AGENT_UPGRADE_RULES) {
+    if (nextRoleLevel >= 3 && isGrowthRuleMet(growthValue, upgradeRules.b1_growth_value ?? DEFAULT_AGENT_UPGRADE_RULES.b1_growth_value)) return 'growth';
+    if (nextRoleLevel === 2 && isGrowthRuleMet(growthValue, upgradeRules.c2_growth_value ?? DEFAULT_AGENT_UPGRADE_RULES.c2_growth_value)) return 'growth';
+    if (nextRoleLevel >= 5 && rechargeTotal >= toNumber(upgradeRules.b3_recharge, DEFAULT_AGENT_UPGRADE_RULES.b3_recharge)) return 'recharge';
+    if (nextRoleLevel >= 4 && rechargeTotal >= toNumber(upgradeRules.b2_recharge, DEFAULT_AGENT_UPGRADE_RULES.b2_recharge)) return 'recharge';
+    if (nextRoleLevel >= 3 && rechargeTotal >= toNumber(upgradeRules.b1_recharge, DEFAULT_AGENT_UPGRADE_RULES.b1_recharge)) return 'recharge';
+    return 'referral';
 }
 
 function isExchangeOrder(order = {}) {
@@ -765,9 +804,12 @@ function branchAssignmentMatchesOrder(station = {}, order = {}) {
 }
 
 function normalizeBranchAgentPolicy(rawPolicy = {}) {
-    const tiers = Array.isArray(rawPolicy.region_reward_tiers) && rawPolicy.region_reward_tiers.length
+    const rawTiers = Array.isArray(rawPolicy.region_reward_tiers) && rawPolicy.region_reward_tiers.length
         ? rawPolicy.region_reward_tiers
         : DEFAULT_BRANCH_AGENT_POLICY.region_reward_tiers;
+    const tiers = isLegacyDefaultRegionRewardTiers(rawTiers)
+        ? DEFAULT_BRANCH_AGENT_POLICY.region_reward_tiers
+        : rawTiers;
     return {
         ...DEFAULT_BRANCH_AGENT_POLICY,
         ...rawPolicy,
@@ -778,6 +820,20 @@ function normalizeBranchAgentPolicy(rawPolicy = {}) {
             label: pickString(tier.label)
         })).sort((left, right) => left.threshold - right.threshold)
     };
+}
+
+function isLegacyDefaultRegionRewardTiers(tiers = []) {
+    if (!Array.isArray(tiers) || tiers.length !== 3) return false;
+    const legacy = [
+        { threshold: 100000, rate: 0.01 },
+        { threshold: 300000, rate: 0.02 },
+        { threshold: 1000000, rate: 0.03 }
+    ];
+    return legacy.every((expected, index) => {
+        const tier = tiers[index] || {};
+        return toNumber(tier.threshold, -1) === expected.threshold
+            && Math.abs(toNumber(tier.rate, -1) - expected.rate) < 0.000001;
+    });
 }
 
 async function fetchCollectionRows(collectionName, whereClause = null, maxRows = 5000) {
@@ -842,7 +898,7 @@ async function calculateBranchStationCumulativeAmount(station, stations) {
         if (!isBranchRegionEligibleOrder(row)) return sum;
         const matched = findBranchAgentStationForOrder(row, stations);
         if (!matched || String(branchStationId(matched)) !== String(stationId)) return sum;
-        return sum + toNumber(row.pay_amount ?? row.actual_price ?? row.total_amount, 0);
+        return sum + getOrderTotalAmount(row);
     }, 0));
 }
 
@@ -1053,7 +1109,7 @@ function roleBasedCommission(user = {}, level, baseAmount, commissionConfig = DE
 
 function isFlexBundleCommissionItem(order = {}, item = {}) {
     const commissionMode = pickString(item.bundle_commission_mode || order.bundle_commission_snapshot?.mode || order.bundle_meta?.commission_mode);
-    if (commissionMode) return commissionMode === 'fixed';
+    if (commissionMode) return commissionMode === 'fixed' || commissionMode === 'matrix';
     return pickString(item.bundle_scene_type || order.bundle_meta?.scene_type) === 'flex_bundle';
 }
 
@@ -1081,7 +1137,8 @@ async function ensureAgentRoleSynced(orderId, order) {
     ]);
 
     const currentRoleLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
-    const nextRoleLevel = deriveEligibleRoleLevel(currentRoleLevel, effectiveSales, directMembers, rechargeTotal, upgradeRules);
+    const growthValue = toNumber(user.growth_value, 0);
+    const nextRoleLevel = deriveEligibleRoleLevel(currentRoleLevel, effectiveSales, directMembers, rechargeTotal, upgradeRules, growthValue);
     if (nextRoleLevel <= currentRoleLevel) {
         return { skipped: true, currentRoleLevel, nextRoleLevel };
     }
@@ -1113,10 +1170,11 @@ async function ensureAgentRoleSynced(orderId, order) {
             to_level: nextRoleLevel,
             from_name: DEFAULT_ROLE_NAMES[currentRoleLevel] || 'VIP用户',
             to_name: roleMeta.roleName,
-            trigger_type: rechargeTotal >= toNumber(upgradeRules.b1_recharge, 3000) ? 'recharge' : 'referral',
+            trigger_type: resolveUpgradeTriggerType(nextRoleLevel, growthValue, rechargeTotal, upgradeRules),
             trigger_order_id: orderId,
             total_spent: effectiveSales,
             recharge_total: rechargeTotal,
+            growth_value: growthValue,
             direct_member_count: directMembers.length,
             promoted_at: db.serverDate(),
             created_at: db.serverDate()
@@ -1368,8 +1426,7 @@ async function ensureCommissionsCreated(orderId, order) {
         { level: 2, type: 'indirect', user: grandparent }
     ].filter((b) => b.user && b.user.openid && b.user.openid !== order.openid);
 
-    const { commissionConfig, commissionMatrix, costSplit } = await loadAgentRuntimeConfig();
-    const useMatrix = commissionMatrix && Object.keys(commissionMatrix).length > 0;
+    const { commissionConfig, commissionMatrix, bundleCommissionMatrix, costSplit } = await loadAgentRuntimeConfig();
     const buyerRole = toNumber(buyer.role_level ?? buyer.distributor_level ?? buyer.level, 0);
     const benefitBuyerRole = resolveBenefitRoleLevel(buyerRole);
     const isAgentSelfPurchase = buyerRole >= 3;
@@ -1444,9 +1501,11 @@ async function ensureCommissionsCreated(orderId, order) {
         const sku = item.sku_id ? await getDocByIdOrLegacy('skus', item.sku_id) || {} : {};
         const rawBase = roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
         const allocatedBase = itemBaseTotal > 0 ? roundMoney(commissionBase * rawBase / itemBaseTotal) : rawBase;
-        const useFixedBundleCommission = isFlexBundleCommissionItem(order, item);
+        const useBundleMatrix = isFlexBundleCommissionItem(order, item);
+        const activeMatrix = useBundleMatrix ? bundleCommissionMatrix : commissionMatrix;
+        const useMatrix = activeMatrix && Object.keys(activeMatrix).length > 0;
         if (useMatrix) {
-            // 组合商品固定佣金优先使用订单快照；普通商品继续走级差矩阵。
+            // 组合商品与普通商品使用同一套级差矩阵算法，但矩阵参数各自独立。
             // 级差矩阵制：parent 拿 matrix[parentRole][buyerRole]%，grandparent 拿级差
             // 即便父级被跳过（因为 openid == buyer 等），也要用父级应得比例计算级差
             const parentBeneficiary = beneficiaries.find(b => b.level === 1);
@@ -1454,25 +1513,21 @@ async function ensureCommissionsCreated(orderId, order) {
                 ? resolveBenefitRoleLevel(parentBeneficiary.user.role_level ?? parentBeneficiary.user.distributor_level ?? parentBeneficiary.user.level)
                 : 0;
             // 无论是否使用商品级配置，都应基于矩阵比例计算级差基准
-            const parentMatrixRate = parentBeneficiary ? matrixRate(commissionMatrix, parentRole, benefitBuyerRole) : 0;
+            const parentMatrixRate = parentBeneficiary ? matrixRate(activeMatrix, parentRole, benefitBuyerRole) : 0;
 
             for (const beneficiary of beneficiaries) {
                 const bRole = resolveBenefitRoleLevel(beneficiary.user.role_level ?? beneficiary.user.distributor_level ?? beneficiary.user.level);
 
                 let amount;
-                if (useFixedBundleCommission) {
-                    amount = roundMoney(beneficiary.level === 1 ? item.direct_commission_fixed_amount : item.indirect_commission_fixed_amount);
+                const configured = useBundleMatrix ? 0 : commissionConfigForLevel(product, beneficiary.level, allocatedBase);
+                if (configured > 0) {
+                    amount = Math.min(allocatedBase, configured);
                 } else {
-                    const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
-                    if (configured > 0) {
-                        amount = Math.min(allocatedBase, configured);
-                    } else {
-                        const myRate = matrixRate(commissionMatrix, bRole, benefitBuyerRole);
-                        const effectiveRate = beneficiary.level === 1
-                            ? myRate
-                            : Math.max(0, myRate - parentMatrixRate);
-                        amount = roundMoney(allocatedBase * effectiveRate);
-                    }
+                    const myRate = matrixRate(activeMatrix, bRole, benefitBuyerRole);
+                    const effectiveRate = beneficiary.level === 1
+                        ? myRate
+                        : Math.max(0, myRate - parentMatrixRate);
+                    amount = roundMoney(allocatedBase * effectiveRate);
                 }
 
                 if (amount <= 0) continue;
@@ -1490,7 +1545,7 @@ async function ensureCommissionsCreated(orderId, order) {
             // 兼容旧模式
             for (const beneficiary of beneficiaries) {
                 let amount;
-                if (useFixedBundleCommission) {
+                if (useBundleMatrix) {
                     amount = roundMoney(beneficiary.level === 1 ? item.direct_commission_fixed_amount : item.indirect_commission_fixed_amount);
                 } else {
                     const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);

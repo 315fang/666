@@ -155,9 +155,9 @@ const TARGET_LABEL = {
   configs: '配置', config: '配置',
   group_activities: '团购活动', group_buy: '团购活动',
   lottery_prizes: '抽奖奖品',
-  branch_agent_stations: '分仓站点',
-  'branch-agent-policy': '分销商政策',
-  branch_agent_claims: '分销申请',
+  branch_agent_stations: '区域代理',
+  'branch-agent-policy': '区域代理政策',
+  branch_agent_claims: '区域代理申请',
   upgrade_applications: '升级申请',
   'upgrade-application': '升级申请',
   slash_activities: '砍价活动',
@@ -184,8 +184,9 @@ const ACTION_LABEL_FULL = {
   'commission.approve_settle': '佣金结算审批', 'commission.reject_cancel': '佣金取消',
   'commission.batch_approve_settle': '批量结算佣金', 'commission.batch_reject_cancel': '批量取消佣金',
   'group_buy.create': '创建团购', 'group_buy.update': '编辑团购', 'group_buy.delete': '删除团购',
-  'branch-agent.policy.update': '更新分销商政策',
-  'branch-agent.station.create': '创建分仓站点', 'branch-agent.station.update': '编辑分仓站点',
+  'branch-agent.policy.update': '更新区域代理政策',
+  'branch-agent.station.create': '创建区域代理', 'branch-agent.station.update': '编辑区域代理', 'branch-agent.station.delete': '删除区域代理',
+  'branch-agent.claim.approve': '通过区域代理申请', 'branch-agent.claim.reject': '拒绝区域代理申请',
   'member-tier-config.update': '更新会员等级配置'
 }
 

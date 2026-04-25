@@ -10,6 +10,7 @@
 }
 
 .address-card {
+  position: relative;
   background: #fff;
   border-radius: 16rpx;
   padding: 28rpx 24rpx;
@@ -26,6 +27,10 @@
   padding-right: 64rpx;
 }
 
+.address-card.selected .address-main {
+  padding-right: 64rpx;
+}
+
 .address-card.selectable:active {
   background: #EFF6FF;
   border-color: #BFDBFE;
@@ -39,6 +44,12 @@
 
 .address-card.selected .address-name {
   color: #166534;
+}
+
+.address-card.default-active .address-tag {
+  color: #15803D;
+  border-color: #22C55E;
+  background: #DCFCE7;
 }
 
 /* 选择模式顶部提示 */

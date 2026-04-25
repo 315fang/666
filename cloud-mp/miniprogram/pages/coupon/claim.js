@@ -181,6 +181,10 @@ Page({
         });
     },
 
+    goToProducts() {
+        wx.switchTab({ url: '/pages/category/category' });
+    },
+
     onShareAppMessage() {
         const { coupon, couponId, ticketId } = this.data;
         return {

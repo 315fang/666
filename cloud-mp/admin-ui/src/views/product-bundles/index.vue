@@ -3,7 +3,7 @@
     <el-card class="search-card">
         <el-form :inline="true" :model="searchForm">
           <el-form-item>
-          <el-input v-model="searchForm.keyword" placeholder="自由组合标题" clearable style="width: 220px" @keyup.enter="handleSearch" />
+          <el-input v-model="searchForm.keyword" placeholder="套装名称" clearable style="width: 220px" @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item>
           <el-select v-model="searchForm.status" placeholder="全部状态" clearable style="width: 140px">
@@ -20,7 +20,7 @@
         </el-form-item>
         <el-form-item>
           <el-select v-model="searchForm.scene_type" placeholder="类型" style="width: 140px">
-            <el-option label="自由组合" value="flex_bundle" />
+            <el-option label="搭配套装" value="flex_bundle" />
             <el-option label="全部类型" value="" />
             <el-option label="历史组合" value="explosive_bundle" />
           </el-select>
@@ -28,19 +28,19 @@
         <el-form-item>
           <el-button type="primary" @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
-          <el-button type="success" :icon="Plus" @click="openForm()">新建自由组合</el-button>
+          <el-button type="success" :icon="Plus" @click="openForm()">新建搭配套装</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <el-card style="margin-top: 16px">
       <el-table :data="tableData" v-loading="loading" stripe>
-        <el-table-column label="自由组合" min-width="280">
+        <el-table-column label="搭配套装" min-width="280">
           <template #default="{ row }">
             <div class="bundle-cell">
               <el-image :src="row.cover_preview_url || row.cover_image" class="bundle-thumb" fit="cover">
                 <template #error>
-                  <div class="bundle-thumb bundle-thumb-placeholder">自由组合</div>
+                  <div class="bundle-thumb bundle-thumb-placeholder">套装</div>
                 </template>
               </el-image>
               <div class="bundle-meta">
@@ -53,14 +53,14 @@
         <el-table-column label="类型" width="110" align="center">
           <template #default="{ row }">
             <el-tag :type="row.scene_type === 'flex_bundle' ? 'warning' : 'info'">
-              {{ row.scene_type === 'flex_bundle' ? '自由组合' : '历史组合' }}
+              {{ row.scene_type === 'flex_bundle' ? '搭配套装' : '历史组合' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="组合价" width="120" align="right">
+        <el-table-column label="套装价" width="120" align="right">
           <template #default="{ row }">¥{{ money(row.bundle_price) }}</template>
         </el-table-column>
-        <el-table-column label="分组/候选" width="120" align="center">
+        <el-table-column label="步骤/候选" width="120" align="center">
           <template #default="{ row }">{{ row.group_count }} / {{ row.option_count }}</template>
         </el-table-column>
         <el-table-column label="状态" width="100" align="center">
@@ -100,46 +100,26 @@
 
     <el-drawer
       v-model="formVisible"
-      :title="form.id ? '编辑自由组合' : '新建自由组合'"
+      :title="form.id ? '编辑搭配套装' : '新建搭配套装'"
       size="min(1120px, 96vw)"
       destroy-on-close
       :close-on-click-modal="false"
     >
       <el-form ref="formRef" :model="form" label-width="92px" class="bundle-form">
         <div class="form-section-title">基础信息</div>
-        <el-form-item label="组合标题">
-          <el-input v-model="form.title" maxlength="40" placeholder="如：399 自由选套餐一" />
+        <el-form-item label="套装名称">
+          <el-input v-model="form.title" maxlength="40" placeholder="如：399 体验搭配套装" />
         </el-form-item>
-        <el-form-item label="组合副标题">
-          <el-input v-model="form.subtitle" maxlength="80" placeholder="选填，给小程序详情页展示套餐卖点" />
+        <el-form-item label="展示说明">
+          <el-input v-model="form.subtitle" maxlength="80" placeholder="选填，给小程序详情页展示一句卖点" />
         </el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="主视觉标题">
-              <el-input v-model="form.hero_title" maxlength="40" placeholder="默认沿用自由组合标题" />
+          <el-col :span="8">
+            <el-form-item label="套装价">
+              <el-input-number v-model="form.bundle_price" :min="0.01" :precision="2" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
-            <el-form-item label="主视觉副标题">
-              <el-input v-model="form.hero_subtitle" maxlength="80" placeholder="默认沿用副标题" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="10">
-            <el-form-item label="渠道标签">
-              <el-input v-model="form.channel_tags_text" placeholder="逗号分隔，如：自由组合,套餐专区" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="7">
-            <el-form-item label="场景">
-              <el-select v-model="form.scene_type" style="width:100%" disabled>
-                <el-option label="自由组合" value="flex_bundle" />
-                <el-option label="历史组合" value="explosive_bundle" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="7">
+          <el-col :span="8">
             <el-form-item label="发布状态">
               <el-select v-model="form.publish_status" style="width:100%">
                 <el-option label="已发布" value="published" />
@@ -148,33 +128,14 @@
               </el-select>
             </el-form-item>
           </el-col>
-        </el-row>
-        <el-row :gutter="16">
           <el-col :span="8">
-            <el-form-item label="组合价">
-              <el-input-number v-model="form.bundle_price" :min="0.01" :precision="2" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="排序">
-              <el-input-number v-model="form.sort_order" :min="0" :precision="0" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="权重">
-              <el-input-number v-model="form.sort_weight" :min="0" :precision="0" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="8">
-            <el-form-item label="状态">
+            <el-form-item label="上架状态">
               <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="上架" inactive-text="下架" />
             </el-form-item>
           </el-col>
         </el-row>
 
-        <el-form-item label="组合封面">
+        <el-form-item label="套装封面">
           <div class="cover-row">
             <el-image v-if="coverPreviewUrl" :src="coverPreviewUrl" class="cover-preview" fit="cover" />
             <div v-else class="cover-preview cover-preview-placeholder">封面</div>
@@ -186,34 +147,45 @@
         </el-form-item>
 
         <div class="form-section-title section-row">
-          <span>选择分组</span>
-          <el-button size="small" type="primary" plain @click="addGroup">新增分组</el-button>
+          <span>选择步骤</span>
+          <el-button size="small" type="primary" plain @click="addGroup">新增步骤</el-button>
         </div>
         <el-alert
           type="info"
           :closable="false"
           show-icon
           class="form-alert"
-          title="自由组合使用固定金额佣金，不继承商品管理或运营体系的佣金矩阵百分比。每个候选商品独立配置单上级独享额、双上级直推额和间推额。"
+          title="配置方式：先添加选择步骤，再给每一步放候选商品。用户按步骤选完后，用上方套装价下单；组合商品佣金在财务规则中统一设置。"
         />
 
-        <div v-if="form.groups.length === 0" class="groups-empty">暂无选择分组，请先新增至少一个分组。</div>
+        <div v-if="form.groups.length === 0" class="groups-empty">暂无选择步骤，请先新增至少一个步骤。</div>
         <div v-for="(group, groupIndex) in form.groups" :key="group.local_key" class="group-editor">
           <div class="group-editor-head">
-            <span>分组 {{ groupIndex + 1 }}</span>
-            <el-button text type="danger" size="small" @click="removeGroup(groupIndex)">删除分组</el-button>
+            <div>
+              <span>第 {{ groupIndex + 1 }} 步</span>
+              <span class="group-rule-summary">{{ groupRuleSummary(group) }}</span>
+            </div>
+            <el-button text type="danger" size="small" @click="removeGroup(groupIndex)">删除步骤</el-button>
           </div>
           <div class="group-fields-grid">
-            <el-form-item label="分组标题" label-width="72px" class="group-field">
-              <el-input v-model="group.group_title" placeholder="如：洁面" />
+            <el-form-item label="步骤名称" label-width="72px" class="group-field">
+              <el-input v-model="group.group_title" placeholder="如：主品、搭配护理、赠品" />
             </el-form-item>
-            <el-form-item label="分组键" label-width="72px" class="group-field">
-              <el-input v-model="group.group_key" placeholder="如：cleanser" />
+            <el-form-item label="选择方式" label-width="72px" class="group-field group-field--mode">
+              <el-radio-group v-model="group.selection_mode" @change="() => onGroupSelectionModeChange(group)">
+                <el-radio-button label="required_one">必选1件</el-radio-button>
+                <el-radio-button label="optional_one">可选1件</el-radio-button>
+                <el-radio-button label="multi">多选</el-radio-button>
+                <el-radio-button label="custom">自定义</el-radio-button>
+              </el-radio-group>
             </el-form-item>
-            <el-form-item label="最少" label-width="48px" class="group-field group-field--number">
+            <el-form-item v-if="group.selection_mode === 'multi'" label="最多" label-width="48px" class="group-field group-field--number">
+              <el-input-number v-model="group.max_select" :min="2" :precision="0" style="width:100%" />
+            </el-form-item>
+            <el-form-item v-if="group.selection_mode === 'custom'" label="最少" label-width="48px" class="group-field group-field--number">
               <el-input-number v-model="group.min_select" :min="0" :precision="0" style="width:100%" />
             </el-form-item>
-            <el-form-item label="最多" label-width="48px" class="group-field group-field--number">
+            <el-form-item v-if="group.selection_mode === 'custom'" label="最多" label-width="48px" class="group-field group-field--number">
               <el-input-number v-model="group.max_select" :min="1" :precision="0" style="width:100%" />
             </el-form-item>
           </div>
@@ -222,7 +194,7 @@
             <span>候选商品</span>
             <el-button size="small" plain @click="addOption(groupIndex)">新增候选</el-button>
           </div>
-          <div v-if="group.options.length === 0" class="group-options-empty">该分组还没有候选商品。</div>
+          <div v-if="group.options.length === 0" class="group-options-empty">该步骤还没有候选商品。</div>
           <div v-for="(option, optionIndex) in group.options" :key="option.local_key" class="option-editor">
             <div class="option-form-grid">
               <el-form-item label="商品" label-width="56px" class="option-form-item option-form-item--product">
@@ -266,78 +238,15 @@
               <el-form-item label="数量" label-width="44px" class="option-form-item option-form-item--qty">
                 <el-input-number v-model="option.default_qty" :min="1" :precision="0" style="width: 100%" />
               </el-form-item>
-              <el-form-item label="启用" label-width="44px" class="option-form-item option-form-item--enabled">
-                <el-switch v-model="option.enabled" :active-value="1" :inactive-value="0" />
-              </el-form-item>
             </div>
             <div class="option-meta-row">
               <div class="option-meta-text">
                 <span>{{ option.product_name || '未选商品' }}</span>
                 <span v-if="optionSkuDisplay(option)"> / {{ optionSkuDisplay(option) }}</span>
               </div>
-              <el-button text type="danger" size="small" @click="removeOption(groupIndex, optionIndex)">删除候选</el-button>
-            </div>
-            <div class="commission-editor">
-              <div class="commission-editor-title">固定佣金配置</div>
-              <div class="commission-pool-row">
-                <div class="commission-pool-control">
-                  <span class="commission-role-label">总佣金池</span>
-                  <el-input-number
-                    v-model="option.commission_pool_amount"
-                    :min="0"
-                    :precision="2"
-                    controls-position="right"
-                    style="width: 100%"
-                  />
-                </div>
-                <div class="commission-pool-hint">总佣金池用于校验和封顶；不填时按固定佣金最大值自动计算，直推加间推不能超过池。</div>
-              </div>
-              <div class="commission-grid">
-                <div class="commission-group">
-                  <div class="commission-group-title">单上级独享</div>
-                  <div class="commission-role-list">
-                    <div class="commission-role-item" v-for="role in COMMISSION_ROLE_OPTIONS" :key="`solo-${role.value}`">
-                      <span class="commission-role-label">{{ role.label }}</span>
-                      <el-input-number
-                        v-model="option.solo_commission_fixed_by_role[role.value]"
-                        :min="0"
-                        :precision="2"
-                        controls-position="right"
-                        style="width: 100%"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div class="commission-group">
-                  <div class="commission-group-title">双上级：直推</div>
-                  <div class="commission-role-list">
-                    <div class="commission-role-item" v-for="role in COMMISSION_ROLE_OPTIONS" :key="`direct-${role.value}`">
-                      <span class="commission-role-label">{{ role.label }}</span>
-                      <el-input-number
-                        v-model="option.direct_commission_fixed_by_role[role.value]"
-                        :min="0"
-                        :precision="2"
-                        controls-position="right"
-                        style="width: 100%"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div class="commission-group">
-                  <div class="commission-group-title">双上级：间推 / 上上级</div>
-                  <div class="commission-role-list">
-                    <div class="commission-role-item" v-for="role in COMMISSION_ROLE_OPTIONS" :key="`indirect-${role.value}`">
-                      <span class="commission-role-label">{{ role.label }}</span>
-                      <el-input-number
-                        v-model="option.indirect_commission_fixed_by_role[role.value]"
-                        :min="0"
-                        :precision="2"
-                        controls-position="right"
-                        style="width: 100%"
-                      />
-                    </div>
-                  </div>
-                </div>
+              <div class="option-actions">
+                <el-switch v-model="option.enabled" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
+                <el-button text type="danger" size="small" @click="removeOption(groupIndex, optionIndex)">删除候选</el-button>
               </div>
             </div>
           </div>
@@ -419,20 +328,55 @@ const normalizeFixedCommissionMap = (source = {}) => COMMISSION_ROLE_OPTIONS.red
   return result
 }, {})
 
-const roundMoney = (value) => {
-  const amount = Number(value || 0)
-  return Number.isFinite(amount) ? Math.round(Math.max(0, amount) * 100) / 100 : 0
+const deriveSelectionMode = (minSelect = 1, maxSelect = 1) => {
+  const min = Number(minSelect || 0)
+  const max = Number(maxSelect || 1)
+  if (min === 1 && max === 1) return 'required_one'
+  if (min === 0 && max === 1) return 'optional_one'
+  if (min === 1 && max > 1) return 'multi'
+  return 'custom'
 }
 
-const maxFixedCommissionAmount = (source = {}) => Math.max(
-  0,
-  ...COMMISSION_ROLE_OPTIONS.map((item) => roundMoney(source?.[item.value] ?? source?.[String(item.value)] ?? 0))
-)
+const resolveGroupSelectRule = (group = {}) => {
+  const mode = group.selection_mode || deriveSelectionMode(group.min_select, group.max_select)
+  if (mode === 'required_one') return { min: 1, max: 1 }
+  if (mode === 'optional_one') return { min: 0, max: 1 }
+  if (mode === 'multi') return { min: 1, max: Math.max(2, Number(group.max_select || 2)) }
+  return {
+    min: Math.max(0, Number(group.min_select || 0)),
+    max: Math.max(1, Number(group.max_select || 1))
+  }
+}
 
-const requiredFixedCommissionPoolAmount = (option = {}) => roundMoney(Math.max(
-  maxFixedCommissionAmount(option.solo_commission_fixed_by_role),
-  maxFixedCommissionAmount(option.direct_commission_fixed_by_role) + maxFixedCommissionAmount(option.indirect_commission_fixed_by_role)
-))
+const applyGroupSelectionMode = (group = {}) => {
+  const rule = resolveGroupSelectRule(group)
+  group.min_select = rule.min
+  group.max_select = Math.max(rule.min || 1, rule.max)
+}
+
+const onGroupSelectionModeChange = (group = {}) => {
+  applyGroupSelectionMode(group)
+}
+
+const groupRuleSummary = (group = {}) => {
+  const rule = resolveGroupSelectRule(group)
+  if (rule.min === 1 && rule.max === 1) return '用户必须选 1 件'
+  if (rule.min === 0 && rule.max === 1) return '用户可选 0-1 件'
+  if (rule.min === 1) return `用户至少选 1 件，最多 ${rule.max} 件`
+  return `用户至少选 ${rule.min} 件，最多 ${rule.max} 件`
+}
+
+const buildAutoGroupKey = (group = {}, groupIndex = 0, seen = new Set()) => {
+  const base = String(group.group_key || '').trim() || `step_${groupIndex + 1}`
+  let key = base
+  let suffix = 2
+  while (seen.has(key)) {
+    key = `${base}_${suffix}`
+    suffix += 1
+  }
+  seen.add(key)
+  return key
+}
 
 const createOption = () => ({
   local_key: `option-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -456,6 +400,7 @@ const createGroup = () => ({
   local_key: `group-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
   group_title: '',
   group_key: '',
+  selection_mode: 'required_one',
   min_select: 1,
   max_select: 1,
   sort_order: 0,
@@ -669,6 +614,7 @@ const hydrateBundleForm = async (bundle = {}) => {
     local_key: `group-${groupIndex}-${Date.now()}`,
     group_title: group.group_title || '',
     group_key: group.group_key || '',
+    selection_mode: deriveSelectionMode(group.min_select, group.max_select),
     min_select: Number(group.min_select || 1),
     max_select: Number(group.max_select || 1),
     sort_order: Number(group.sort_order || groupIndex),
@@ -780,20 +726,20 @@ const onCoverConfirm = (persistIds, displayUrls = []) => {
 }
 
 const validateForm = () => {
-  if (!String(form.title || '').trim()) return '自由组合标题不能为空'
-  if (!(Number(form.bundle_price || 0) > 0)) return '组合价必须大于 0'
-  if (!Array.isArray(form.groups) || form.groups.length === 0) return '至少需要 1 个选择分组'
+  if (!String(form.title || '').trim()) return '套装名称不能为空'
+  if (!(Number(form.bundle_price || 0) > 0)) return '套装价必须大于 0'
+  if (!Array.isArray(form.groups) || form.groups.length === 0) return '至少需要 1 个选择步骤'
   for (const group of form.groups) {
-    if (!String(group.group_title || '').trim()) return '分组标题不能为空'
-    if (!String(group.group_key || '').trim()) return '分组键不能为空'
-    if (!Array.isArray(group.options) || group.options.length === 0) return `分组「${group.group_title}」至少需要 1 个候选商品`
+    applyGroupSelectionMode(group)
+    if (!String(group.group_title || '').trim()) return '步骤名称不能为空'
+    if (!Array.isArray(group.options) || group.options.length === 0) return `步骤「${group.group_title}」至少需要 1 个候选商品`
+    if (Number(group.max_select || 0) < Number(group.min_select || 0)) return `步骤「${group.group_title}」的最多数量不能小于最少数量`
+    const enabledOptionCount = group.options.filter((option) => Number(option.enabled || 0) !== 0).length
+    if (enabledOptionCount === 0) return `步骤「${group.group_title}」至少需要启用 1 个候选商品`
+    if (Number(group.min_select || 0) > enabledOptionCount) return `步骤「${group.group_title}」的必选数量不能超过已启用候选商品数`
+    if (Number(group.max_select || 0) > enabledOptionCount) return `步骤「${group.group_title}」的最多数量不能超过已启用候选商品数`
     for (const option of group.options) {
-      if (!String(option.product_id || '').trim()) return `分组「${group.group_title}」存在未选择商品的候选项`
-      const explicitPool = roundMoney(option.commission_pool_amount)
-      const requiredPool = requiredFixedCommissionPoolAmount(option)
-      if (explicitPool > 0 && explicitPool < requiredPool) {
-        return `分组「${group.group_title}」的固定佣金池不能小于 ${requiredPool} 元`
-      }
+      if (!String(option.product_id || '').trim()) return `步骤「${group.group_title}」存在未选择商品的候选项`
     }
   }
   return ''
@@ -816,26 +762,32 @@ const buildPayload = () => ({
   sort_weight: Number(form.sort_weight || 0),
   status: Number(form.status || 0) === 0 ? 0 : 1,
   publish_status: form.publish_status || 'published',
-  groups: form.groups.map((group, groupIndex) => ({
-    group_title: group.group_title,
-    group_key: group.group_key,
-    min_select: Number(group.min_select || 0),
-    max_select: Number(group.max_select || 1),
-    sort_order: Number(group.sort_order || groupIndex),
-    options: group.options.map((option, optionIndex) => ({
-      product_id: option.product_id,
-      sku_id: option.sku_id || '',
-      default_qty: Number(option.default_qty || 1),
-      sort_order: Number(option.sort_order || optionIndex),
-      enabled: Number(option.enabled || 0) === 0 ? 0 : 1,
-      commission_mode: FIXED_BUNDLE_COMMISSION_MODE,
-      commission_source: FIXED_BUNDLE_COMMISSION_SOURCE,
-      commission_pool_amount: Number(option.commission_pool_amount || 0),
-      solo_commission_fixed_by_role: normalizeFixedCommissionMap(option.solo_commission_fixed_by_role),
-      direct_commission_fixed_by_role: normalizeFixedCommissionMap(option.direct_commission_fixed_by_role),
-      indirect_commission_fixed_by_role: normalizeFixedCommissionMap(option.indirect_commission_fixed_by_role)
-    }))
-  }))
+  groups: (() => {
+    const seenGroupKeys = new Set()
+    return form.groups.map((group, groupIndex) => {
+      const rule = resolveGroupSelectRule(group)
+      return {
+        group_title: group.group_title,
+        group_key: buildAutoGroupKey(group, groupIndex, seenGroupKeys),
+        min_select: rule.min,
+        max_select: Math.max(rule.min || 1, rule.max),
+        sort_order: Number(group.sort_order || groupIndex),
+        options: group.options.map((option, optionIndex) => ({
+          product_id: option.product_id,
+          sku_id: option.sku_id || '',
+          default_qty: Number(option.default_qty || 1),
+          sort_order: Number(option.sort_order || optionIndex),
+          enabled: Number(option.enabled || 0) === 0 ? 0 : 1,
+          commission_mode: FIXED_BUNDLE_COMMISSION_MODE,
+          commission_source: FIXED_BUNDLE_COMMISSION_SOURCE,
+          commission_pool_amount: 0,
+          solo_commission_fixed_by_role: createEmptyFixedCommissionMap(),
+          direct_commission_fixed_by_role: createEmptyFixedCommissionMap(),
+          indirect_commission_fixed_by_role: createEmptyFixedCommissionMap()
+        }))
+      }
+    })
+  })()
 })
 
 const submitForm = async () => {
@@ -849,15 +801,15 @@ const submitForm = async () => {
     const payload = buildPayload()
     if (form.id) {
       await updateProductBundle(form.id, payload)
-      ElMessage.success('自由组合已更新')
+      ElMessage.success('搭配套装已更新')
     } else {
       await createProductBundle(payload)
-      ElMessage.success('自由组合已创建')
+      ElMessage.success('搭配套装已创建')
     }
     formVisible.value = false
     fetchBundles()
   } catch (error) {
-    ElMessage.error(error?.message || '保存自由组合失败')
+    ElMessage.error(error?.message || '保存搭配套装失败')
   } finally {
     submitting.value = false
   }
@@ -997,9 +949,16 @@ fetchBundles()
   color: #111827;
 }
 
+.group-rule-summary {
+  margin-left: 10px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #6b7280;
+}
+
 .group-fields-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 1.3fr) minmax(220px, 1fr) minmax(172px, 0.55fr) minmax(172px, 0.55fr);
+  grid-template-columns: minmax(260px, 1fr) minmax(430px, 1.6fr) minmax(160px, 0.5fr) minmax(160px, 0.5fr);
   gap: 12px;
   align-items: flex-start;
 }
@@ -1022,7 +981,7 @@ fetchBundles()
 
 .option-form-grid {
   display: grid;
-  grid-template-columns: minmax(280px, 1.8fr) minmax(190px, 1fr) minmax(170px, 0.6fr) minmax(96px, auto);
+  grid-template-columns: minmax(280px, 1.8fr) minmax(190px, 1fr) minmax(150px, 0.5fr);
   gap: 12px;
   align-items: flex-start;
 }
@@ -1059,6 +1018,13 @@ fetchBundles()
   white-space: nowrap;
   font-size: 12px;
   color: #6b7280;
+}
+
+.option-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .commission-editor {

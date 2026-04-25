@@ -3,7 +3,7 @@ const { get } = require('../../utils/request');
 const { resolveCloudImageUrl } = require('./utils/cloudAsset');
 const { normalizeOrderItemSpec } = require('./orderSpecText');
 const app = getApp();
-const { getLightPromptModals } = require('../../utils/miniProgramConfig');
+const { getLightPromptModals, getMiniProgramConfig } = require('../../utils/miniProgramConfig');
 const { shouldShowDaily, markDailyShown } = require('../../utils/lightPrompt');
 const {
     navigateToAddressList,
@@ -29,6 +29,40 @@ const {
 } = require('./orderConfirmAccount');
 
 const DISCOUNT_RESTRICTED_ORDER_TYPES = new Set(['group', 'slash', 'limited_sale', 'limited_spot', 'bundle', 'exchange']);
+const DEFAULT_PURCHASE_POINTS_BY_ROLE = {
+    0: 50,
+    1: 100,
+    2: 150,
+    3: 300,
+    4: 400,
+    5: 500,
+    6: 400
+};
+
+function toFiniteNumber(value, fallback = 0) {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+}
+
+function resolveBenefitRoleLevel(roleLevel) {
+    const normalized = toFiniteNumber(roleLevel, 0);
+    return normalized === 6 ? 4 : normalized;
+}
+
+function getPurchasePointsPerHundred(roleLevel) {
+    const config = getMiniProgramConfig();
+    const rule = config.point_rule_config || {};
+    const purchaseByRole = rule.purchase_multiplier_by_role && typeof rule.purchase_multiplier_by_role === 'object'
+        ? rule.purchase_multiplier_by_role
+        : {};
+    const benefitRole = resolveBenefitRoleLevel(roleLevel);
+    const fallback = DEFAULT_PURCHASE_POINTS_BY_ROLE[benefitRole] ?? DEFAULT_PURCHASE_POINTS_BY_ROLE[0];
+    return Math.max(0, toFiniteNumber(purchaseByRole[benefitRole], fallback));
+}
+
+function formatMoney(value) {
+    return toFiniteNumber(value, 0).toFixed(2);
+}
 
 function isDiscountRestrictedOrderType(orderType = '') {
     return DISCOUNT_RESTRICTED_ORDER_TYPES.has(String(orderType || '').trim().toLowerCase());
@@ -86,6 +120,9 @@ Page({
         couponDiscount: '0.00',
         allowCoupon: true,
         finalAmount: '0.00',
+        expectedCommissionAmount: 0,
+        expectedCommission: '0.00',
+        expectedPoints: 0,
         shippingFee: 0,
         // 积分抵扣
         pointBalance: 0,
@@ -129,6 +166,14 @@ Page({
         this.brandAnimation = this.selectComponent('#brandAnimation');
     },
 
+    onUnload() {
+        if (this._benefitPreviewTimer) {
+            clearTimeout(this._benefitPreviewTimer);
+            this._benefitPreviewTimer = null;
+        }
+        this._benefitPreviewSeq = (this._benefitPreviewSeq || 0) + 1;
+    },
+
     async onLoad(options) {
         const safeOptions = options || {};
         this._loadOptions = { ...safeOptions };
@@ -156,6 +201,7 @@ Page({
                 roleLevel,
                 isAgent: roleLevel >= 3
             });
+            this.scheduleOrderBenefitPreviewRefresh();
         }
         if (!this._hasShownOnce) {
             this._hasShownOnce = true;
@@ -601,6 +647,65 @@ Page({
         return recalcFinal(this);
     },
 
+    getOrderBenefitPreviewAmount() {
+        if (this.data.exchangeMode) return 0;
+        if (this.data.limitedSpotOrder && this.data.limitedSpotMode === 'points') return 0;
+        return Math.max(0, toFiniteNumber(this.data.finalAmount, 0));
+    },
+
+    calculateExpectedOrderPoints(amount) {
+        const payAmount = Math.max(0, toFiniteNumber(amount, 0));
+        if (payAmount <= 0) return 0;
+        const perHundred = getPurchasePointsPerHundred(this.data.roleLevel);
+        return Math.max(0, Math.floor((payAmount * perHundred) / 100));
+    },
+
+    scheduleOrderBenefitPreviewRefresh() {
+        if (this._benefitPreviewTimer) {
+            clearTimeout(this._benefitPreviewTimer);
+        }
+        this._benefitPreviewTimer = setTimeout(() => {
+            this._benefitPreviewTimer = null;
+            this.refreshOrderBenefitPreview();
+        }, 180);
+    },
+
+    async refreshOrderBenefitPreview() {
+        const seq = (this._benefitPreviewSeq || 0) + 1;
+        this._benefitPreviewSeq = seq;
+        const amount = this.getOrderBenefitPreviewAmount();
+        const expectedPoints = this.calculateExpectedOrderPoints(amount);
+        const emptyCommission = {
+            expectedCommissionAmount: 0,
+            expectedCommission: '0.00'
+        };
+
+        this.setData({
+            expectedPoints,
+            ...emptyCommission
+        });
+
+        if (amount <= 0) return;
+
+        try {
+            const res = await get('/commissions/preview', {
+                self_purchase: 1,
+                base_amount: amount.toFixed(2)
+            }, { showError: false, maxRetries: 1, timeout: 5000 });
+            if (seq !== this._benefitPreviewSeq) return;
+            const data = res && res.data ? res.data : {};
+            const commissionAmount = data.self_commission_eligible === false
+                ? 0
+                : Math.max(0, toFiniteNumber(data.self_commission, 0));
+            this.setData({
+                expectedCommissionAmount: commissionAmount,
+                expectedCommission: formatMoney(commissionAmount)
+            });
+        } catch (_err) {
+            if (seq !== this._benefitPreviewSeq) return;
+        }
+    },
+
     // 加载可用优惠券
     async loadAvailableCoupons() {
         await loadAvailableCoupons(this);
@@ -668,6 +773,9 @@ Page({
             totalAmount: '0.00',
             totalCount: 0,
             finalAmount: '0.00',
+            expectedCommissionAmount: 0,
+            expectedCommission: '0.00',
+            expectedPoints: 0,
             bundleOrder: false,
             bundleMeta: null,
             bundlePrice: '0.00',

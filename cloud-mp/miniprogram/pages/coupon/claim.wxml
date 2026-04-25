@@ -63,7 +63,7 @@
         <view class="status-badge success">
           <text>领取成功</text>
         </view>
-        <view class="btn-primary" bindtap="goToCouponList">去我的券包使用</view>
+        <view class="btn-primary" bindtap="goToProducts">去使用</view>
       </view>
 
       <!-- 已持有 -->
@@ -71,7 +71,7 @@
         <view class="status-badge owned">
           <text>你已领过此券</text>
         </view>
-        <view class="btn-primary" bindtap="goToCouponList">去使用</view>
+        <view class="btn-primary" bindtap="goToProducts">去使用</view>
       </view>
 
       <!-- 领取码已被使用 -->

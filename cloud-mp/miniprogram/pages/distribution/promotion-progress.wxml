@@ -9,6 +9,10 @@
         <text class="stat-lbl">累计消费</text>
       </view>
       <view class="stat">
+        <text class="stat-val">{{progress.stats.growth_value || 0}}</text>
+        <text class="stat-lbl">成长值</text>
+      </view>
+      <view class="stat">
         <text class="stat-val">¥{{progress.stats.recharge_total || 0}}</text>
         <text class="stat-lbl">累计充值</text>
       </view>
@@ -33,7 +37,7 @@
           <text class="cond-status {{item.met ? 'met' : ''}}">{{item.met ? '✓ 已达成' : item.current + ' / ' + item.target}}</text>
         </view>
         <view class="progress-bar">
-          <view class="progress-fill {{item.met ? 'full' : ''}}" style="width: {{item.met ? 100 : (item.current / item.target * 100 > 100 ? 100 : item.current / item.target * 100)}}%"></view>
+          <view class="progress-fill {{item.met ? 'full' : ''}}" style="width: {{item.met ? 100 : (item.target > 0 ? (item.current / item.target * 100 > 100 ? 100 : item.current / item.target * 100) : 0)}}%"></view>
         </view>
       </view>
     </view>
@@ -52,10 +56,12 @@
           <view class="timeline-title">{{item.from_name}} → {{item.to_name}}</view>
           <view class="timeline-desc">
             <text wx:if="{{item.trigger_type === 'recharge'}}">通过充值晋升</text>
+            <text wx:elif="{{item.trigger_type === 'growth'}}">通过成长值晋升</text>
             <text wx:else>通过推荐业绩晋升</text>
           </view>
           <view class="timeline-meta">
             <text>消费 ¥{{item.total_spent || 0}}</text>
+            <text>成长值 {{item.growth_value || 0}}</text>
             <text>充值 ¥{{item.recharge_total || 0}}</text>
             <text>下级 {{item.direct_member_count || 0}} 人</text>
           </view>

@@ -300,6 +300,24 @@
     <text class="points-deduct-text">本单将从货款余额扣款，无需微信支付</text>
   </view>
 
+  <view class="section benefit-preview-section" wx:if="{{expectedCommissionAmount > 0 || expectedPoints > 0}}">
+    <view class="section-head-row benefit-preview-head">
+      <text class="section-title-text">本单权益预估</text>
+      <text class="benefit-preview-note">支付后结算</text>
+    </view>
+    <view class="benefit-preview-grid">
+      <view class="benefit-preview-item" wx:if="{{expectedCommissionAmount > 0}}">
+        <text class="benefit-preview-label">自购预计佣金</text>
+        <text class="benefit-preview-value">¥{{expectedCommission}}</text>
+      </view>
+      <view class="benefit-preview-item {{expectedCommissionAmount > 0 ? 'benefit-preview-item-split' : ''}}" wx:if="{{expectedPoints > 0}}">
+        <text class="benefit-preview-label">积分奖励</text>
+        <text class="benefit-preview-value">预计可得{{expectedPoints}}积分</text>
+      </view>
+    </view>
+    <text class="benefit-preview-tip">以订单实际支付成功后的结果为准</text>
+  </view>
+
   <view class="coupon-picker {{showCouponPicker ? 'show' : ''}}" wx:if="{{showCouponPicker}}">
     <view class="coupon-picker-mask" bindtap="onCloseCouponPicker"></view>
     <view class="coupon-picker-panel">

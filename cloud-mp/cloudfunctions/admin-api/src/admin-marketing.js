@@ -2092,6 +2092,7 @@ function registerMarketingRoutes(app, deps) {
         'upgrade-rules': { enabled: true },
         'commission-config': { enabled: true },
         'commission-matrix': {},
+        'bundle-commission-matrix': {},
         'peer-bonus': { enabled: false },
         'assist-bonus': { enabled: false },
         'fund-pool': { enabled: false },

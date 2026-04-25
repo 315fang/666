@@ -6,6 +6,7 @@ const { USER_ROLES } = require('../../config/constants');
 const { safeBack } = require('../../utils/navigator');
 const { requireLogin } = require('../../utils/auth');
 const { fetchLimitedSpotContext, normalizeLimitedSpotMode } = require('../../utils/limitedSpot');
+const { getMiniProgramConfig } = require('../../utils/miniProgramConfig');
 const { loadProduct, resolveDetailImageList, resolvePayableUnitPrice, buildSkuText } = require('./productDetailData');
 const { refreshFavoriteState, toggleFavorite } = require('./productDetailFavorite');
 const {
@@ -36,6 +37,76 @@ function formatLimitedSpotMoney(value) {
     const amount = Number(value || 0);
     if (!Number.isFinite(amount) || amount < 0) return '0.00';
     return amount.toFixed(2);
+}
+
+const DEFAULT_PURCHASE_POINTS_BY_ROLE = {
+    0: 50,
+    1: 100,
+    2: 150,
+    3: 300,
+    4: 400,
+    5: 500,
+    6: 500
+};
+
+function toFiniteNumber(value, fallback = 0) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+}
+
+function resolveBenefitRoleLevel(roleLevel) {
+    const normalized = toFiniteNumber(roleLevel, 0);
+    return normalized === 6 ? 4 : normalized;
+}
+
+function getPurchasePointsPerHundred(roleLevel) {
+    const config = getMiniProgramConfig();
+    const rule = config.point_rule_config || {};
+    const multipliers = {
+        ...DEFAULT_PURCHASE_POINTS_BY_ROLE,
+        ...(rule.purchase_multiplier_by_role || {})
+    };
+    const benefitRole = resolveBenefitRoleLevel(roleLevel);
+    return Math.max(0, toFiniteNumber(multipliers[benefitRole], toFiniteNumber(multipliers[0], 0)));
+}
+
+function formatCouponValue(coupon = {}) {
+    const type = String(coupon.coupon_type || coupon.type || '').toLowerCase();
+    const value = toFiniteNumber(coupon.coupon_value != null ? coupon.coupon_value : coupon.value, 0);
+    if (type === 'percent') {
+        const discount = value <= 1 ? value * 10 : value;
+        return `${discount % 1 === 0 ? discount.toFixed(0) : discount.toFixed(1)}折券`;
+    }
+    if (type === 'exchange') return '兑换券';
+    return `¥${value % 1 === 0 ? value.toFixed(0) : value.toFixed(2)}券`;
+}
+
+function formatCouponThreshold(coupon = {}) {
+    const minPurchase = toFiniteNumber(coupon.min_purchase, 0);
+    return minPurchase > 0 ? `满${minPurchase % 1 === 0 ? minPurchase.toFixed(0) : minPurchase.toFixed(2)}可用` : '无门槛';
+}
+
+function getCouponDiscountAmount(coupon = {}, amount = 0) {
+    const orderAmount = Math.max(0, toFiniteNumber(amount, 0));
+    const type = String(coupon.coupon_type || coupon.type || '').toLowerCase();
+    const value = toFiniteNumber(coupon.coupon_value != null ? coupon.coupon_value : coupon.value, 0);
+    if (orderAmount <= 0 || value <= 0) return 0;
+    if (type === 'percent') {
+        const rate = value <= 1 ? value : value / 10;
+        return Math.max(0, Math.min(orderAmount, orderAmount * (1 - rate)));
+    }
+    if (type === 'fixed' || type === 'no_threshold' || !type) {
+        return Math.max(0, Math.min(orderAmount, value));
+    }
+    return 0;
+}
+
+function extractCouponList(payload) {
+    if (!payload) return [];
+    if (Array.isArray(payload.data)) return payload.data;
+    if (payload.data && Array.isArray(payload.data.list)) return payload.data.list;
+    if (Array.isArray(payload.list)) return payload.list;
+    return [];
 }
 
 function isSameProductId(productId, candidate) {
@@ -151,7 +222,9 @@ Page({
         limitedSpotOffer: null,
         limitedSpotTitle: '',
         limitedSpotOriginalPrice: '',
-        limitedSpotLockedSkuId: ''
+        limitedSpotLockedSkuId: '',
+        productCouponChips: [],
+        estimatedPoints: 0
     },
 
     onLoad(options) {
@@ -245,6 +318,10 @@ Page({
     },
 
     onUnload() {
+        if (this._benefitsRefreshTimer) {
+            clearTimeout(this._benefitsRefreshTimer);
+            this._benefitsRefreshTimer = null;
+        }
         this._clearDetailSectionObserver();
     },
 
@@ -257,8 +334,122 @@ Page({
     // 加载商品详情
     async loadProduct(id) {
         const result = await loadProduct(this, id);
+        this.schedulePurchaseBenefitsRefresh({ reloadCoupons: true });
         this._scheduleDetailSectionObserver();
         return result;
+    },
+
+    getCurrentPurchaseAmount() {
+        if (this.data.limitedSpotOffer) {
+            return this.data.limitedSpotMode === 'money'
+                ? toFiniteNumber(this.data.limitedSpotOffer.money_price, 0)
+                : 0;
+        }
+        if (this.data.exchangeMode) return 0;
+        const unitPrice = toFiniteNumber(this.data.currentPrice || this.data.product.displayPrice || this.data.product.price, 0);
+        const quantity = Math.max(1, Math.floor(toFiniteNumber(this.data.quantity, 1)));
+        return Math.max(0, unitPrice * quantity);
+    },
+
+    isProductCouponEnabled() {
+        const product = this.data.product || {};
+        const productTag = String(product.product_tag || '').trim().toLowerCase();
+        if (this.data.exchangeMode || this.data.limitedSpotOffer) return false;
+        if (product.is_explosive || productTag === 'hot') return false;
+        return product.enable_coupon == null || product.enable_coupon === true || product.enable_coupon === 1 || product.enable_coupon === '1';
+    },
+
+    isProductPointsEnabled() {
+        const product = this.data.product || {};
+        const productTag = String(product.product_tag || '').trim().toLowerCase();
+        if (this.data.exchangeMode || this.data.limitedSpotOffer) return false;
+        if (product.is_explosive || productTag === 'hot') return false;
+        return product.allow_points == null || product.allow_points === true || product.allow_points === 1 || product.allow_points === '1';
+    },
+
+    buildCouponQueryContext(amount) {
+        const product = this.data.product || {};
+        const productIds = [product.id, product._id, product.product_id]
+            .filter((value) => value !== null && value !== undefined && value !== '')
+            .map((value) => String(value));
+        const category = product.category && typeof product.category === 'object' ? product.category : {};
+        const categoryIds = [product.category_id, product.categoryId, product.category_key, category.id, category._id]
+            .filter((value) => value !== null && value !== undefined && value !== '')
+            .map((value) => String(value));
+        return {
+            amount: amount.toFixed(2),
+            product_ids: [...new Set(productIds)].join(','),
+            category_ids: [...new Set(categoryIds)].join(',')
+        };
+    },
+
+    buildCouponChips(coupons = [], amount = 0) {
+        return coupons
+            .filter((coupon) => String(coupon.coupon_type || coupon.type || '').toLowerCase() !== 'exchange')
+            .map((coupon) => ({
+                coupon,
+                discountAmount: getCouponDiscountAmount(coupon, amount)
+            }))
+            .filter((item) => item.discountAmount > 0)
+            .sort((a, b) => {
+                if (b.discountAmount !== a.discountAmount) return b.discountAmount - a.discountAmount;
+                return toFiniteNumber(a.coupon.min_purchase, 0) - toFiniteNumber(b.coupon.min_purchase, 0);
+            })
+            .map(({ coupon }) => ({
+                id: coupon._id || coupon.id || coupon.coupon_id || `${coupon.coupon_name || coupon.name}:${coupon.coupon_value}`,
+                valueText: formatCouponValue(coupon),
+                thresholdText: formatCouponThreshold(coupon)
+            }));
+    },
+
+    calculateEstimatedPoints(amount) {
+        if (!this.isProductPointsEnabled() || amount <= 0) return 0;
+        const pointsPerHundred = getPurchasePointsPerHundred(this.data.roleLevel);
+        return Math.max(0, Math.floor((amount * pointsPerHundred) / 100));
+    },
+
+    schedulePurchaseBenefitsRefresh(options = {}) {
+        if (this._benefitsRefreshTimer) {
+            clearTimeout(this._benefitsRefreshTimer);
+            this._benefitsRefreshTimer = null;
+        }
+        this._benefitsRefreshTimer = setTimeout(() => {
+            this._benefitsRefreshTimer = null;
+            this.refreshPurchaseBenefits(options);
+        }, 180);
+    },
+
+    async refreshPurchaseBenefits({ reloadCoupons = false } = {}) {
+        if (!this.data.product || !(this.data.product.id || this.data.product._id)) return;
+        const amount = this.getCurrentPurchaseAmount();
+        const estimatedPoints = this.calculateEstimatedPoints(amount);
+
+        if (!this.isProductCouponEnabled() || amount <= 0) {
+            this._availableProductCoupons = [];
+            this.setData({ productCouponChips: [], estimatedPoints });
+            return;
+        }
+
+        if (!reloadCoupons) {
+            this.setData({
+                productCouponChips: this.buildCouponChips(this._availableProductCoupons || [], amount),
+                estimatedPoints
+            });
+            return;
+        }
+
+        try {
+            const res = await get('/coupons/available', this.buildCouponQueryContext(amount), { showError: false });
+            const coupons = extractCouponList(res);
+            this._availableProductCoupons = coupons;
+            this.setData({
+                productCouponChips: this.buildCouponChips(coupons, amount),
+                estimatedPoints
+            });
+        } catch (_err) {
+            this._availableProductCoupons = [];
+            this.setData({ productCouponChips: [], estimatedPoints });
+        }
     },
 
     _clearDetailSectionObserver() {
@@ -555,6 +746,7 @@ Page({
                 activityStatusCard: null,
                 activityQuickLinks: []
             });
+            this.schedulePurchaseBenefitsRefresh({ reloadCoupons: true });
             return;
         }
         if (this.data.exchangeMode) {
@@ -569,6 +761,7 @@ Page({
                 },
                 activityQuickLinks: []
             });
+            this.schedulePurchaseBenefitsRefresh({ reloadCoupons: true });
             return;
         }
         const mode = this.data.purchaseMode || 'normal';
@@ -639,6 +832,7 @@ Page({
         };
         const current = modeMeta[mode] || modeMeta.normal;
         this.setData(current);
+        this.schedulePurchaseBenefitsRefresh({ reloadCoupons: true });
     },
 
     getPurchaseHint(mode) {
@@ -833,6 +1027,7 @@ Page({
         }
         const result = onSpecSelect(this, e, resolvePayableUnitPrice);
         this.syncPurchaseActionState();
+        this.schedulePurchaseBenefitsRefresh({ reloadCoupons: true });
         return result;
     },
 
@@ -870,7 +1065,9 @@ Page({
             return;
         }
         if (this.data.exchangeMode) return;
-        return onMinus(this);
+        const result = onMinus(this);
+        this.schedulePurchaseBenefitsRefresh({ reloadCoupons: true });
+        return result;
     },
 
     // 数量增加 (Renamed to match WXML: onPlus)
@@ -880,7 +1077,9 @@ Page({
             return;
         }
         if (this.data.exchangeMode) return;
-        return onPlus(this);
+        const result = onPlus(this);
+        this.schedulePurchaseBenefitsRefresh({ reloadCoupons: true });
+        return result;
     },
 
     // Quantity Input (Added)
@@ -893,7 +1092,9 @@ Page({
             this.setData({ quantity: 1 })
             return
         }
-        return onQtyInput(this, e);
+        const result = onQtyInput(this, e);
+        this.schedulePurchaseBenefitsRefresh({ reloadCoupons: true });
+        return result;
     },
 
     // 加入购物袋入口（防重复点击）

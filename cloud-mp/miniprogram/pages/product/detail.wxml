@@ -54,6 +54,19 @@
   </view>
 
   <view class="product-info-card">
+    <scroll-view class="benefit-rail" scroll-x="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}" wx:if="{{estimatedPoints > 0 || productCouponChips.length > 0}}">
+      <view class="benefit-rail-track">
+        <view class="benefit-rail-item points-benefit-card" wx:if="{{estimatedPoints > 0}}">
+          <text class="benefit-rail-label">预计积分</text>
+          <text class="benefit-rail-value">{{estimatedPoints}}</text>
+        </view>
+        <view class="benefit-rail-item coupon-benefit-card" wx:for="{{productCouponChips}}" wx:key="id">
+          <text class="benefit-rail-value">{{item.valueText}}</text>
+          <text class="benefit-rail-label">{{item.thresholdText}}</text>
+        </view>
+      </view>
+    </scroll-view>
+
     <view class="summary-top-row">
       <view class="summary-price-wrap">
         <view class="price-section">
@@ -70,26 +83,6 @@
           <view class="price-discount" wx:if="{{limitedSpotOffer}}">限时专享</view>
           <view class="price-discount" wx:elif="{{product.market_price}}">{{discount}}折</view>
         </view>
-      </view>
-
-      <view class="qty-inline-panel">
-        <text class="qty-inline-label">{{limitedSpotOffer ? '活动数量' : '选购数量'}}</text>
-        <view class="stepper {{isOutOfStock ? 'stepper-disabled' : ''}}" wx:if="{{!limitedSpotOffer}}">
-          <view class="stepper-btn {{quantity <= 1 || isOutOfStock ? 'disabled' : ''}}" bindtap="onMinus">
-            <image class="icon-xs" src="/assets/icons/minus.svg" mode="aspectFit"></image>
-          </view>
-          <input class="stepper-input" type="number" value="{{quantity}}" bindinput="onQtyInput" disabled="{{isOutOfStock}}" />
-          <view class="stepper-btn {{isOutOfStock ? 'disabled' : ''}}" bindtap="onPlus">
-            <image class="icon-xs" src="/assets/icons/plus.svg" mode="aspectFit"></image>
-          </view>
-        </view>
-        <view class="stepper stepper-static" wx:else>
-          <text class="stepper-static-value">1 件</text>
-        </view>
-        <text class="stock-text stock-out" wx:if="{{limitedSpotOffer && limitedSpotOffer.sold_out}}">已抢完</text>
-        <text class="stock-text" wx:elif="{{limitedSpotOffer}}">{{limitedSpotOffer.stock_label || ('活动剩余 ' + limitedSpotOffer.remaining + ' 件')}}</text>
-        <text class="stock-text stock-out" wx:elif="{{isOutOfStock}}">已售罄</text>
-        <text class="stock-text" wx:else>库存 {{currentStock}} 件</text>
       </view>
     </view>
 
@@ -152,20 +145,48 @@
         </view>
       </view>
     </view>
+  </view>
 
-    <view class="embedded-section" wx:if="{{product.specs && product.specs.length > 0}}">
-      <view class="embedded-section-head">
-        <text class="embedded-title">规格选择</text>
+  <view class="section-card selection-card" wx:if="{{product.specs && product.specs.length > 0 || !limitedSpotOffer}}">
+    <view class="embedded-section">
+      <view wx:if="{{product.specs && product.specs.length > 0}}">
+        <view class="embedded-section-head">
+          <text class="embedded-title">规格选择</text>
+        </view>
+        <view class="spec-group" wx:for="{{product.specs}}" wx:key="name">
+          <view class="spec-title" wx:if="{{item.showTitle}}">{{item.name}}</view>
+          <view class="spec-options">
+            <view class="spec-option {{selectedSpecs[item.name] === val ? 'active' : ''}} {{isSpecValueDisabled(item.name, val) ? 'disabled' : ''}}" wx:for="{{item.values}}" wx:for-item="val" wx:key="*this" bindtap="onSpecSelect" data-key="{{item.name}}" data-val="{{val}}">{{val}}</view>
+          </view>
+        </view>
       </view>
-      <view class="spec-group" wx:for="{{product.specs}}" wx:key="name">
-        <view class="spec-title">{{item.name}}</view>
-        <view class="spec-options">
-          <view class="spec-option {{selectedSpecs[item.name] === val ? 'active' : ''}} {{isSpecValueDisabled(item.name, val) ? 'disabled' : ''}}" wx:for="{{item.values}}" wx:for-item="val" wx:key="*this" bindtap="onSpecSelect" data-key="{{item.name}}" data-val="{{val}}">{{val}}</view>
+
+      <view class="qty-section {{product.specs && product.specs.length > 0 ? 'with-specs-border' : ''}}">
+        <view class="qty-section-head">
+          <text class="embedded-title">{{limitedSpotOffer ? '活动数量' : '选购数量'}}</text>
+          <text class="stock-text stock-out" wx:if="{{limitedSpotOffer && limitedSpotOffer.sold_out}}">已抢完</text>
+          <text class="stock-text" wx:elif="{{limitedSpotOffer}}">{{limitedSpotOffer.stock_label || ('活动剩余 ' + limitedSpotOffer.remaining + ' 件')}}</text>
+          <text class="stock-text stock-out" wx:elif="{{isOutOfStock}}">已售罄</text>
+          <text class="stock-text" wx:else>库存 {{currentStock}} 件</text>
+        </view>
+        <view class="stepper {{isOutOfStock ? 'stepper-disabled' : ''}}" wx:if="{{!limitedSpotOffer}}">
+          <view class="stepper-btn {{quantity <= 1 || isOutOfStock ? 'disabled' : ''}}" bindtap="onMinus">
+            <image class="icon-xs" src="/assets/icons/minus.svg" mode="aspectFit"></image>
+          </view>
+          <input class="stepper-input" type="number" value="{{quantity}}" bindinput="onQtyInput" disabled="{{isOutOfStock}}" />
+          <view class="stepper-btn {{isOutOfStock ? 'disabled' : ''}}" bindtap="onPlus">
+            <image class="icon-xs" src="/assets/icons/plus.svg" mode="aspectFit"></image>
+          </view>
+        </view>
+        <view class="stepper stepper-static" wx:else>
+          <text class="stepper-static-value">1 件</text>
         </view>
       </view>
     </view>
+  </view>
 
-    <view class="service-note-card" wx:if="{{isAgent && commission > 0}}">
+  <view class="section-card" wx:if="{{isAgent && commission > 0}}">
+    <view class="service-note-card">
       <view class="service-note-copy">
         <text class="service-note-title">品牌挚友礼遇</text>
         <text class="service-note-desc">分享后若产生成交，预计可获得 ¥{{commission}} 的服务礼遇。</text>

@@ -6,11 +6,18 @@ const Module = require('node:module');
 
 function createAddressDb(records) {
     const ops = [];
+    let nextId = 1;
     const db = {
         serverDate: () => new Date('2026-04-25T00:00:00.000Z'),
         collection: (name) => {
             assert.equal(name, 'addresses');
             return {
+                add: async ({ data }) => {
+                    const id = `generated_addr_${nextId++}`;
+                    records[id] = { ...data };
+                    ops.push({ type: 'add', id, data });
+                    return { _id: id, id };
+                },
                 doc: (id) => ({
                     get: async () => ({
                         data: records[id] ? { _id: id, ...records[id] } : null
@@ -84,6 +91,45 @@ test('address update and delete reject records owned by another openid', async (
         /地址不存在/
     );
     assert.ok(records.bob_addr);
+});
+
+test('addAddress with default clears old default and marks new address', async () => {
+    const records = {
+        alice_addr_1: { openid: 'alice', receiver_name: 'Alice 1', is_default: true },
+        bob_addr: { openid: 'bob', receiver_name: 'Bob', is_default: true }
+    };
+    const { db } = createAddressDb(records);
+    const addresses = loadAddressModule(db);
+
+    const result = await addresses.addAddress('alice', {
+        receiver_name: 'Alice 2',
+        phone: '13800000000',
+        is_default: true
+    });
+
+    assert.equal(records.alice_addr_1.is_default, false);
+    assert.equal(records[result._id].is_default, true);
+    assert.equal(records.bob_addr.is_default, true);
+});
+
+test('updateAddress with default clears old default and marks target', async () => {
+    const records = {
+        alice_addr_1: { openid: 'alice', receiver_name: 'Alice 1', is_default: true },
+        alice_addr_2: { openid: 'alice', receiver_name: 'Alice 2', is_default: false },
+        bob_addr: { openid: 'bob', receiver_name: 'Bob', is_default: true }
+    };
+    const { db } = createAddressDb(records);
+    const addresses = loadAddressModule(db);
+
+    await addresses.updateAddress('alice', 'alice_addr_2', {
+        receiver_name: 'Alice 2 Updated',
+        is_default: true
+    });
+
+    assert.equal(records.alice_addr_1.is_default, false);
+    assert.equal(records.alice_addr_2.is_default, true);
+    assert.equal(records.alice_addr_2.receiver_name, 'Alice 2 Updated');
+    assert.equal(records.bob_addr.is_default, true);
 });
 
 test('setDefaultAddress validates target ownership before clearing current default', async () => {

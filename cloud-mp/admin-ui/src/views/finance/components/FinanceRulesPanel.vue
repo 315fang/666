@@ -24,15 +24,22 @@
               type="info"
               :closable="false"
               style="margin-bottom:12px"
-              title="矩阵值表示“该上级角色对该买家角色”的总比例。二级上级实际拿级差，即：上上级矩阵值减去直推上级矩阵值。Lv6 线下实体门店在普通佣金矩阵中按 Lv4 运营合伙人口径计算；同级奖不适用于 Lv6。"
+              title="矩阵值表示“该上级角色对该买家角色”的总比例。二级上级实际拿级差，即：上上级矩阵值减去直推上级矩阵值。组合商品使用同样算法，但参数独立保存。Lv6 线下实体门店按 Lv4 运营合伙人口径计算。"
             />
+            <el-form-item label="矩阵类型">
+              <el-radio-group v-model="commissionMatrixScope" class="matrix-scope-switch">
+                <el-radio-button label="standard">普通商品</el-radio-button>
+                <el-radio-button label="bundle">组合商品</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <div class="matrix-caption">{{ matrixScopeLabel }}</div>
             <el-table :data="matrixParentRoles" border size="small" style="max-width:920px;margin-bottom:16px">
               <el-table-column label="上级角色" width="120">
                 <template #default="{ row }">{{ matrixRoleLabels[row] }}</template>
               </el-table-column>
               <el-table-column v-for="buyerRole in matrixBuyerRoles" :key="buyerRole" :label="matrixRoleLabels[buyerRole]" width="140">
                 <template #default="{ row }">
-                  <el-input-number v-model="commissionMatrix[row][buyerRole]" :min="0" :max="100" :step="0.5" :precision="1" style="width:110px" />
+                  <el-input-number v-model="activeCommissionMatrix[row][buyerRole]" :min="0" :max="100" :step="0.5" :precision="1" style="width:110px" />
                   <span class="unit-suffix">%</span>
                 </template>
               </el-table-column>
@@ -275,6 +282,7 @@ import {
   createExitApplication,
   executeDividend,
   getAssistBonusConfig,
+  getBundleCommissionMatrix,
   getCommissionConfig,
   getCommissionMatrix,
   getDividendPreview,
@@ -284,6 +292,7 @@ import {
   getMemberTierConfig,
   getRechargeConfig,
   updateAssistBonusConfig,
+  updateBundleCommissionMatrix,
   updateCommissionConfig,
   updateCommissionMatrix,
   updateDividendRulesConfig,
@@ -319,6 +328,10 @@ const defaultCommissionMatrix = () => ({
   5: { 0: 0, 1: 35, 2: 25, 3: 15, 4: 5 }
 })
 const commissionMatrix = reactive(defaultCommissionMatrix())
+const bundleCommissionMatrix = reactive(defaultCommissionMatrix())
+const commissionMatrixScope = ref('standard')
+const activeCommissionMatrix = computed(() => (commissionMatrixScope.value === 'bundle' ? bundleCommissionMatrix : commissionMatrix))
+const matrixScopeLabel = computed(() => (commissionMatrixScope.value === 'bundle' ? '组合商品佣金矩阵' : '普通商品佣金矩阵'))
 const assistBonus = reactive({ enabled: false, tiers: [] })
 const fundPool = reactive({
   enabled: false,
@@ -418,26 +431,26 @@ function mergePeerBonusFromApi(from) {
 
 const parseIdText = (value) => String(value || '').split(/[,，\n]/).map((item) => item.trim()).filter(Boolean)
 
-function mergeCommissionMatrixFromApi(from) {
+function mergeCommissionMatrixFromApi(from, target = commissionMatrix) {
   const source = from && typeof from === 'object' ? from : {}
   const defaults = defaultCommissionMatrix()
   matrixParentRoles.forEach((parentRole) => {
-    if (!commissionMatrix[parentRole] || typeof commissionMatrix[parentRole] !== 'object') {
-      commissionMatrix[parentRole] = {}
+    if (!target[parentRole] || typeof target[parentRole] !== 'object') {
+      target[parentRole] = {}
     }
     matrixBuyerRoles.forEach((buyerRole) => {
       const rawValue = source?.[parentRole]?.[buyerRole]
-      commissionMatrix[parentRole][buyerRole] = Number.isFinite(Number(rawValue)) ? Number(rawValue) : defaults[parentRole][buyerRole]
+      target[parentRole][buyerRole] = Number.isFinite(Number(rawValue)) ? Number(rawValue) : defaults[parentRole][buyerRole]
     })
   })
 }
 
-function buildCommissionMatrixPayload() {
+function buildCommissionMatrixPayload(source = commissionMatrix) {
   const payload = {}
   matrixParentRoles.forEach((parentRole) => {
     payload[parentRole] = {}
     matrixBuyerRoles.forEach((buyerRole) => {
-      payload[parentRole][buyerRole] = Math.max(0, Number(commissionMatrix[parentRole]?.[buyerRole] || 0))
+      payload[parentRole][buyerRole] = Math.max(0, Number(source[parentRole]?.[buyerRole] || 0))
     })
   })
   return payload
@@ -511,13 +524,14 @@ const middlePreview = computed(() => {
   const buyerRole = resolvePreviewCommissionRole(previewChain.buyerRole)
   const parentRole = resolvePreviewCommissionRole(previewChain.parentRole)
   const gpRole = resolvePreviewCommissionRole(previewChain.gpRole)
-  const directPct = clampPctMap(commissionMatrix[parentRole], buyerRole)
+  const matrix = activeCommissionMatrix.value
+  const directPct = clampPctMap(matrix[parentRole], buyerRole)
   const directAmt = Math.round(paid * directPct) / 100
   if (directAmt > 0) {
     rows.push({ key: 'd', layer: '直推', roleLabel: ROLE_NAMES[previewChain.parentRole], rateLabel: `${directPct}%`, amount: directAmt })
     total += directAmt
   }
-  const gpTotalPct = clampPctMap(commissionMatrix[gpRole], buyerRole)
+  const gpTotalPct = clampPctMap(matrix[gpRole], buyerRole)
   const indirectPct = Math.max(0, gpTotalPct - directPct)
   const indirectAmt = Math.round(paid * indirectPct) / 100
   if (indirectAmt > 0) {
@@ -558,12 +572,14 @@ const resolveApiData = async (fn) => {
 
 const configLoaders = {
   commission: async () => {
-    const [configData, matrixData] = await Promise.all([
+    const [configData, matrixData, bundleMatrixData] = await Promise.all([
       resolveApiData(getCommissionConfig),
-      resolveApiData(getCommissionMatrix)
+      resolveApiData(getCommissionMatrix),
+      resolveApiData(getBundleCommissionMatrix)
     ])
     deepAssign(commission, configData)
-    mergeCommissionMatrixFromApi(matrixData)
+    mergeCommissionMatrixFromApi(matrixData, commissionMatrix)
+    mergeCommissionMatrixFromApi(bundleMatrixData, bundleCommissionMatrix)
   },
   peer: async () => {
     const data = await resolveApiData(getMemberTierConfig)
@@ -590,7 +606,8 @@ const save = async (key) => {
   await withLoading(saving, async () => {
     if (key === 'commission') {
       await updateCommissionConfig(JSON.parse(JSON.stringify(commission)))
-      await updateCommissionMatrix(buildCommissionMatrixPayload())
+      await updateCommissionMatrix(buildCommissionMatrixPayload(commissionMatrix))
+      await updateBundleCommissionMatrix(buildCommissionMatrixPayload(bundleCommissionMatrix))
     }
     if (key === 'assist') await updateAssistBonusConfig(JSON.parse(JSON.stringify(assistBonus)))
     if (key === 'fund') await updateFundPoolConfig(JSON.parse(JSON.stringify(fundPool)))
@@ -645,6 +662,8 @@ onMounted(loadAll)
 .card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .header-actions { display: flex; gap: 8px; align-items: center; }
 .unit-suffix { margin-left: 8px; font-size: 13px; color: #606266; }
+.matrix-scope-switch { margin-top: 2px; }
+.matrix-caption { font-size: 13px; font-weight: 600; color: #303133; margin: 0 0 8px; }
 .preview-bar-caption { font-size: 12px; color: #909399; margin: 10px 0 6px; }
 .preview-bar { display: flex; height: 32px; border-radius: 6px; overflow: hidden; border: 1px solid #ebeef5; }
 .preview-bar-seg { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; min-width: 2px; padding: 0 2px; color: #fff; }

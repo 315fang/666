@@ -1,83 +1,135 @@
 <view class="page">
-  <view class="loading-wrap" wx:if="{{loading}}">加载自由组合中...</view>
+  <view class="loading-wrap" wx:if="{{loading}}">加载搭配套装中...</view>
 
   <view class="error-wrap" wx:elif="{{loadError}}">
-    <text class="error-title">自由组合加载失败</text>
-    <text class="error-desc">请稍后重试或联系管理员检查自由组合配置。</text>
+    <text class="error-title">搭配套装加载失败</text>
+    <text class="error-desc">请稍后重试或联系管理员检查套装配置。</text>
     <view class="retry-btn" bindtap="onRetry">重新加载</view>
   </view>
 
   <block wx:elif="{{bundle}}">
-    <image class="hero-image" src="{{bundle.cover_preview_url || bundle.cover_image}}" mode="aspectFill" wx:if="{{bundle.cover_preview_url || bundle.cover_image}}"></image>
-    <view class="hero-card">
-      <view class="hero-badge-row">
-        <text class="hero-badge">{{bundle.scene_type === 'flex_bundle' ? '自由组合套餐' : '自由搭配爆单品'}}</text>
-        <text class="hero-tag" wx:for="{{bundle.channel_tags}}" wx:key="index">{{item}}</text>
+    <view class="bundle-hero">
+      <view class="hero-media">
+        <image class="hero-image" src="{{bundle.cover_preview_url || bundle.cover_image}}" mode="aspectFill" wx:if="{{bundle.cover_preview_url || bundle.cover_image}}"></image>
+        <view class="hero-image-fallback" wx:else>套装</view>
       </view>
-      <text class="bundle-title">{{bundle.hero_title || bundle.title}}</text>
-      <text class="bundle-subtitle" wx:if="{{bundle.hero_subtitle || bundle.subtitle}}">{{bundle.hero_subtitle || bundle.subtitle}}</text>
-      <view class="price-row">
-        <text class="bundle-price">¥{{bundle.bundle_price}}</text>
-        <text class="bundle-origin" wx:if="{{originalAmount > 0}}">原合计 ¥{{originalAmountText}}</text>
-      </view>
-      <text class="bundle-discount" wx:if="{{bundleDiscount > 0}}">{{bundle.scene_type === 'flex_bundle' ? '套餐优惠' : '组合优惠'}} -¥{{bundleDiscountText}}</text>
-    </view>
-
-    <view class="group-card" wx:for="{{bundle.groups}}" wx:for-item="group" wx:key="group_key">
-      <view class="group-head">
-        <text class="group-title">{{group.group_title}}</text>
-        <text class="group-rule">需选 {{group.min_select}}-{{group.max_select}} 项</text>
-      </view>
-      <view class="option-list">
-        <view
-          class="option-card {{option.selected ? 'option-card-active' : ''}}"
-          wx:for="{{group.options}}"
-          wx:for-item="option"
-          wx:key="option_key"
-          data-group-key="{{group.group_key}}"
-          data-option-key="{{option.option_key}}"
-          bindtap="onToggleOption"
-        >
-          <image class="option-image" src="{{option.product.image}}" mode="aspectFill" wx:if="{{option.product.image}}"></image>
-          <view class="option-info">
-            <text class="option-name">{{option.product.name}}</text>
-            <text class="option-spec" wx:if="{{option.sku && option.sku.spec_value}}">{{option.sku.spec_value}}</text>
-            <view class="option-bottom">
-              <text class="option-price">¥{{option.product.retail_price}}</text>
-              <text class="option-qty">×{{option.default_qty}}</text>
-            </view>
+      <view class="hero-content">
+        <view class="hero-badge-row">
+          <text class="hero-badge">{{bundle.scene_type === 'flex_bundle' ? '搭配套装' : '组合套装'}}</text>
+          <text class="hero-tag" wx:for="{{bundle.channel_tags}}" wx:key="index">{{item}}</text>
+        </view>
+        <text class="bundle-title">{{bundle.hero_title || bundle.title}}</text>
+        <text class="bundle-subtitle" wx:if="{{bundle.hero_subtitle || bundle.subtitle}}">{{bundle.hero_subtitle || bundle.subtitle}}</text>
+        <view class="price-line">
+          <view class="price-main">
+            <text class="currency">¥</text>
+            <text class="bundle-price">{{bundle.bundle_price}}</text>
           </view>
+          <text class="bundle-origin" wx:if="{{originalAmount > 0}}">原合计 ¥{{originalAmountText}}</text>
+          <text class="bundle-discount" wx:if="{{bundleDiscount > 0}}">已省 ¥{{bundleDiscountText}}</text>
         </view>
       </view>
     </view>
 
-    <view class="summary-card">
+    <view class="selection-panel">
+      <view class="section-head">
+        <view>
+          <text class="section-title">搭配进度</text>
+          <text class="section-subtitle">{{completedGroupCount}}/{{totalGroupCount}} 组已完成</text>
+        </view>
+        <text class="section-state">{{selectionValid ? '可结算' : selectionMessage}}</text>
+      </view>
+      <scroll-view class="slot-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+        <view
+          class="slot-item {{item.active ? 'slot-item-active' : ''}} {{item.complete ? 'slot-item-complete' : 'slot-item-missing'}}"
+          wx:for="{{selectionSlots}}"
+          wx:key="group_key"
+          data-group-key="{{item.group_key}}"
+          bindtap="onSwitchGroup"
+        >
+          <view class="slot-image-wrap">
+            <image class="slot-image" src="{{item.image}}" mode="aspectFill" wx:if="{{item.image}}"></image>
+            <text class="slot-index" wx:else>{{item.index}}</text>
+            <text class="slot-extra" wx:if="{{item.extra_count > 0}}">+{{item.extra_count}}</text>
+          </view>
+          <view class="slot-info">
+            <text class="slot-title">{{item.group_title}}</text>
+            <text class="slot-status">{{item.status_text}}</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <block wx:for="{{bundle.groups}}" wx:for-item="group" wx:for-index="groupIndex" wx:key="group_key">
+      <view class="picker-panel" wx:if="{{group.active}}">
+        <view class="active-group-head">
+          <view>
+            <text class="step-label">第 {{groupIndex + 1}} 步</text>
+            <text class="active-group-title">{{group.group_title}}</text>
+          </view>
+          <view class="active-group-meta">
+            <text>{{group.rule_text}}</text>
+            <text>{{group.progress_text}}</text>
+          </view>
+        </view>
+
+        <view class="option-list">
+          <view
+            class="option-card {{option.selected ? 'option-card-active' : ''}} {{option.disabled_by_limit ? 'option-card-disabled' : ''}}"
+            wx:for="{{group.options}}"
+            wx:for-item="option"
+            wx:key="option_key"
+            data-group-key="{{group.group_key}}"
+            data-option-key="{{option.option_key}}"
+            bindtap="onToggleOption"
+          >
+            <image class="option-image" src="{{option.product.image}}" mode="aspectFill" wx:if="{{option.product.image}}"></image>
+            <view class="option-image option-image-empty" wx:else></view>
+            <view class="option-info">
+              <view>
+                <text class="option-name">{{option.product.name}}</text>
+                <text class="option-spec" wx:if="{{option.sku && option.sku.spec_value}}">{{option.sku.spec_value}}</text>
+              </view>
+              <view class="option-bottom">
+                <view class="option-price-wrap">
+                  <text class="option-price">¥{{option.product.retail_price}}</text>
+                  <text class="option-qty">×{{option.default_qty}}</text>
+                </view>
+                <text class="select-pill {{option.selected ? 'select-pill-active' : ''}}">{{option.selected ? '已选' : (option.disabled_by_limit ? '已满' : '选这个')}}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <view class="summary-panel">
       <view class="summary-row">
         <text class="summary-label">已选商品</text>
         <text class="summary-value">{{selectedCount}} 项 / {{totalQuantity}} 件</text>
       </view>
       <view class="summary-row">
-        <text class="summary-label">套餐原价</text>
+        <text class="summary-label">套装原价</text>
         <text class="summary-value">¥{{originalAmountText}}</text>
       </view>
       <view class="summary-row" wx:if="{{bundleDiscount > 0}}">
-        <text class="summary-label">套餐优惠</text>
+        <text class="summary-label">套装优惠</text>
         <text class="summary-value summary-discount">-¥{{bundleDiscountText}}</text>
       </view>
-      <view class="summary-row">
+      <view class="summary-row summary-row-final">
         <text class="summary-label">支付金额</text>
         <text class="summary-value summary-price">¥{{bundle.bundle_price}}</text>
       </view>
-      <text class="summary-tip">自由组合订单不叠加优惠券、积分和其他活动，售后仅支持整套退款。</text>
+      <text class="summary-tip">套装订单不叠加优惠券、积分和其他活动，售后仅支持整套退款。</text>
     </view>
 
     <view class="bottom-bar">
       <view class="bottom-left">
-        <text class="bottom-title">{{bundle.hero_title || bundle.title}}</text>
+        <text class="bottom-progress">{{bottomProgressText}}</text>
         <text class="bottom-price">¥{{bundle.bundle_price}}</text>
       </view>
       <view class="buy-btn {{selectionValid ? '' : 'buy-btn-disabled'}}" bindtap="onBuyNow">
-        {{selectionValid ? '立即购买' : selectionMessage}}
+        {{bottomActionText}}
       </view>
     </view>
   </block>

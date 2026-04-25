@@ -153,9 +153,9 @@
         </el-form-item>
         <el-form-item label="自提核销档位">
           <el-select v-model="form.pickup_commission_tier" style="width:220px">
-            <el-option v-for="t in ['A','B','C','D']" :key="t" :label="`${t} 档（分支代理策略中配置）`" :value="t" />
+            <el-option v-for="t in ['A','B','C','D']" :key="t" :label="`${t} 档（区域代理策略中配置）`" :value="t" />
           </el-select>
-          <div class="form-tip">核销补贴 = 实付×该档比例 + 该档固定金额；在「分支代理 → 策略配置」中维护各档数值。</div>
+          <div class="form-tip">核销补贴 = 实付×该档比例 + 该档固定金额；在「区域代理 → 策略配置」中维护各档数值。</div>
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="form.status" style="width:200px">

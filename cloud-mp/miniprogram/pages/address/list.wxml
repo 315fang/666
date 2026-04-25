@@ -10,11 +10,11 @@
   <view class="address-list-container">
     <!-- 地址列表 -->
     <view class="address-list" wx:if="{{addresses.length > 0}}">
-      <view class="address-card {{selectMode ? 'selectable' : ''}} {{item.selected ? 'selected' : ''}} {{item.deleting ? 'deleting' : ''}}"
+      <view class="address-card {{selectMode ? 'selectable' : ''}} {{item.selected ? 'selected' : ''}} {{item.is_default ? 'default-active' : ''}} {{item.deleting ? 'deleting' : ''}}"
             wx:for="{{addresses}}" wx:key="id"
             data-index="{{index}}" bindtap="onSelectAddress">
         <!-- 选择模式右侧标识 -->
-        <view class="selected-mark" wx:if="{{selectMode && item.selected}}">✓</view>
+        <view class="selected-mark" wx:if="{{item.selected}}">✓</view>
         <view class="select-arrow" wx:elif="{{selectMode}}">›</view>
         <view class="address-main">
           <view class="address-top">
@@ -22,6 +22,7 @@
             <text class="address-phone">{{item.phone}}</text>
             <text class="address-tag" wx:if="{{item.is_default}}">默认</text>
             <text class="address-selected-tag" wx:if="{{selectMode && item.selected}}">已选</text>
+            <text class="address-selected-tag" wx:elif="{{!selectMode && item.is_default}}">当前默认</text>
           </view>
           <view class="address-detail">
             {{item.province}} {{item.city}} {{item.district}} {{item.detail}}

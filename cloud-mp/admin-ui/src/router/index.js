@@ -152,7 +152,7 @@ const routes = [
         path: 'branch-agents',
         name: 'BranchAgents',
         component: () => import('@/views/branch-agents/index.vue'),
-        meta: { title: '分支代理', icon: 'Location', group: '用户与渠道', section: '渠道管理', sectionOrder: 2, order: 2, permission: 'dealers' }
+        meta: { title: '区域代理', icon: 'Location', group: '用户与渠道', section: '渠道管理', sectionOrder: 2, order: 2, permission: 'dealers' }
       },
       {
         path: 'directed-invites',

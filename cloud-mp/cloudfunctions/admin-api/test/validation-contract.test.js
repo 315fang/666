@@ -125,9 +125,9 @@ test('POST /admin/api/branch-agents/stations loads pickup stations before sync',
             body: {
                 name: '测试区域归属加载',
                 branch_type: 'district',
-                province: '江苏',
-                city: '苏州',
-                district: '虎丘',
+                province: '测试加载省',
+                city: '测试加载市',
+                district: '测试加载区',
                 claimant_id: 'test-claimant',
                 status: 'active'
             }
@@ -144,6 +144,50 @@ test('POST /admin/api/branch-agents/stations loads pickup stations before sync',
                 .filter((row) => String(row.id || row._id) !== String(createdId));
             originalSaveCollection('branch_agent_stations', rows);
         }
+    }
+});
+
+test('POST /admin/api/branch-agents/stations rejects duplicate active region assignment', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const tempPrefix = 'test-branch-duplicate';
+    const cleanup = () => {
+        dataStore.saveCollection?.('branch_agent_stations', dataStore.getCollection('branch_agent_stations')
+            .filter((row) => !String(row.id || row._id || row.name || '').includes(tempPrefix)));
+    };
+
+    cleanup();
+    dataStore.saveCollection?.('branch_agent_stations', dataStore.getCollection('branch_agent_stations').concat({
+        _id: `${tempPrefix}-existing`,
+        id: `${tempPrefix}-existing`,
+        name: `${tempPrefix}-existing`,
+        branch_type: 'district',
+        province: '测试重复省',
+        city: '测试重复市',
+        district: '测试重复区',
+        claimant_id: `${tempPrefix}-claimant-a`,
+        status: 'active'
+    }));
+
+    try {
+        const response = await invoke('/admin/api/branch-agents/stations', {
+            method: 'POST',
+            admin,
+            body: {
+                name: `${tempPrefix}-new`,
+                branch_type: 'district',
+                province: '测试重复省',
+                city: '测试重复市',
+                district: '测试重复区',
+                claimant_id: `${tempPrefix}-claimant-b`,
+                status: 'active'
+            }
+        });
+        assert.equal(response.statusCode, 409, response.body?.message || JSON.stringify(response.body));
+        assert.match(String(response.body?.message || ''), /已有启用中的代理/);
+    } finally {
+        cleanup();
     }
 });
 

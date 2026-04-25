@@ -5,15 +5,15 @@
         <el-card>
           <template #header>
             <div class="header-row">
-              <span>分支代理策略</span>
+              <span>区域代理策略</span>
               <el-button type="primary" :loading="savingPolicy" @click="savePolicy">保存策略</el-button>
             </div>
           </template>
           <el-form label-width="220px" style="max-width: 860px">
-            <el-form-item label="门店/区域分佣总开关">
+            <el-form-item label="区域代理分佣总开关">
               <el-switch v-model="policy.enabled" active-text="启用" inactive-text="冻结" />
             </el-form-item>
-            <el-form-item label="申请最低等级（role_level）">
+            <el-form-item label="申请最低等级">
               <el-input-number v-model="policy.min_apply_role_level" :min="0" :max="10" />
             </el-form-item>
             <el-divider content-position="left">自提点奖励</el-divider>
@@ -29,7 +29,7 @@
               <div class="form-tip">当比例为 0 时，可用此处金额作为单笔兜底补贴。</div>
             </el-form-item>
             <el-divider content-position="left">区域奖励阶梯</el-divider>
-            <div class="form-tip" style="margin-bottom:12px">按收货地匹配区域后，以累计订单实付金额套用区间比例。默认规则：10万=1%，30万=2%，100万=3%。</div>
+            <div class="form-tip" style="margin-bottom:12px">按收货地址匹配区域，累计当前地区订单实际支付总金额。默认规则：0元=1%，10万=2%，100万=3%。代理自购订单也参与计算。</div>
             <el-table :data="regionRewardTierTableRows" border size="small" style="max-width:720px">
               <el-table-column prop="index" label="档位" width="72" />
               <el-table-column label="累计金额门槛（元）" min-width="220">
@@ -56,8 +56,8 @@
         <el-card>
           <template #header>
             <div class="header-row">
-              <span>区域归属管理</span>
-              <el-button type="primary" @click="openStationDialog()">新增区域</el-button>
+              <span>区域代理管理</span>
+              <el-button type="primary" @click="openStationDialog()">新增区域代理</el-button>
             </div>
           </template>
           <el-table :data="stations" v-loading="loadingStations" stripe>
@@ -100,7 +100,7 @@
 
       <el-tab-pane label="申请审核" name="claims">
         <el-card>
-          <template #header><span>分支代理申请</span></template>
+          <template #header><span>区域代理申请</span></template>
           <el-table :data="claims" v-loading="loadingClaims" stripe>
             <el-table-column label="ID" width="90">
               <template #default="{ row }">
@@ -140,7 +140,7 @@
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="stationDialogVisible" :title="stationForm.id ? '编辑区域' : '新增区域'" width="680px">
+    <el-dialog v-model="stationDialogVisible" :title="stationForm.id ? '编辑区域代理' : '新增区域代理'" width="680px">
       <el-form :model="stationForm" label-width="110px">
         <el-form-item label="区域名称"><el-input v-model="stationForm.name" placeholder="如：浦东新区区域代理" /></el-form-item>
         <el-form-item label="归属层级">
@@ -215,8 +215,8 @@ import { getUserNickname } from '@/utils/userDisplay'
 
 function defaultRegionRewardTiers() {
   return [
-    { threshold: 100000, rate: 0.01, label: '10万' },
-    { threshold: 300000, rate: 0.02, label: '30万' },
+    { threshold: 0, rate: 0.01, label: '0元' },
+    { threshold: 100000, rate: 0.02, label: '10万' },
     { threshold: 1000000, rate: 0.03, label: '100万' }
   ]
 }

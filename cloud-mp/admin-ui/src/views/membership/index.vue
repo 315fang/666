@@ -66,6 +66,33 @@
             <el-form-item label="每单额外成长值">
               <el-input-number v-model="growthRules.purchase.fixed" :min="0" :max="999999" style="width:160px" />
             </el-form-item>
+            <el-divider content-position="left">自动晋升门槛</el-divider>
+            <el-alert
+              type="info"
+              :closable="false"
+              style="margin-bottom:12px"
+              title="支付成功后会先累计成长值，再按这里的门槛判断自动晋升；成长值达标是新增通道，原有推荐/充值通道仍保留。"
+            />
+            <el-form-item label="C2 成长值门槛">
+              <el-input-number v-model="upgradeRules.c2_growth_value" :min="0" :max="999999" :step="1" style="width:160px" />
+              <span class="form-hint">默认 999，达到后可升 C2</span>
+            </el-form-item>
+            <el-form-item label="B1 成长值门槛">
+              <el-input-number v-model="upgradeRules.b1_growth_value" :min="0" :max="999999" :step="1" style="width:160px" />
+              <span class="form-hint">默认 3000，达到后可升 B1</span>
+            </el-form-item>
+            <el-form-item label="原 C2 复合条件">
+              <el-input-number v-model="upgradeRules.c2_min_sales" :min="0" :max="999999" :step="1" style="width:140px" />
+              <span class="inline-separator">元销售额 +</span>
+              <el-input-number v-model="upgradeRules.c2_referee_count" :min="0" :max="9999" :step="1" style="width:120px" />
+              <span class="form-hint">个 C1 直推</span>
+            </el-form-item>
+            <el-form-item label="原 B1 推荐/充值">
+              <el-input-number v-model="upgradeRules.b1_referee_count" :min="0" :max="9999" :step="1" style="width:120px" />
+              <span class="inline-separator">个 C1 或充值</span>
+              <el-input-number v-model="upgradeRules.b1_recharge" :min="0" :max="9999999" :step="100" style="width:150px" />
+              <span class="form-hint">元</span>
+            </el-form-item>
             <el-divider content-position="left">权益口径说明</el-divider>
             <el-alert
               type="warning"
@@ -306,8 +333,10 @@ const upgradeRules = reactive({
   c1_min_purchase: 299,
   c2_referee_count: 2,
   c2_min_sales: 580,
+  c2_growth_value: 999,
   b1_referee_count: 10,
   b1_recharge: 3000,
+  b1_growth_value: 3000,
   b2_referee_count: 10,
   b2_recharge: 30000,
   b3_referee_b2_count: 3,
@@ -340,7 +369,7 @@ const peerBonus = reactive(defaultPeerBonusConfig())
 const defaultGrowthTiers = () => [
   { min: 0, discount: 1, name: 'VIP用户', desc: '基础积分权益' },
   { min: 299, discount: 1, name: '初级会员', desc: '成长值提升后解锁更多积分权益' },
-  { min: 580, discount: 1, name: '高级会员', desc: '成长值提升后解锁更多积分权益' },
+  { min: 999, discount: 1, name: '高级会员', desc: '成长值提升后解锁更多积分权益' },
   { min: 3000, discount: 1, name: '推广合伙人', desc: '享受团队与复购积分权益' },
   { min: 30000, discount: 1, name: '运营合伙人', desc: '享受团队与复购积分权益' },
   { min: 198000, discount: 1, name: '区域合伙人', desc: '享受团队与复购积分权益' }
@@ -426,8 +455,8 @@ const buildPeerBonusPayload = () => {
 const getUpgradeSummary = (level) => {
   if (level === 0) return '注册进入基础会员层，普通品复购每消费 100 元赠送 50 积分。'
   if (level === 1) return `消费满 ${upgradeRules.c1_min_purchase} 元升级。`
-  if (level === 2) return `直推 ${upgradeRules.c2_referee_count} 个 C1 且销售满 ${upgradeRules.c2_min_sales} 元升级。`
-  if (level === 3) return `推荐 ${upgradeRules.b1_referee_count} 个 C1 或充值 ${upgradeRules.b1_recharge} 元升级。`
+  if (level === 2) return `成长值达 ${upgradeRules.c2_growth_value}，或直推 ${upgradeRules.c2_referee_count} 个 C1 且销售满 ${upgradeRules.c2_min_sales} 元升级。`
+  if (level === 3) return `成长值达 ${upgradeRules.b1_growth_value}，或推荐 ${upgradeRules.b1_referee_count} 个 C1，或充值 ${upgradeRules.b1_recharge} 元升级。`
   if (level === 4) return `推荐 ${upgradeRules.b2_referee_count} 个 B1 或充值 ${upgradeRules.b2_recharge} 元升级。`
   if (level === 5) return `推荐 ${upgradeRules.b3_referee_b2_count} 个 B2 或 ${upgradeRules.b3_referee_b1_count} 个 B1，或充值 ${upgradeRules.b3_recharge} 元升级。`
   if (level === 6) return '线下实体门店由后台人工认定，不走自动升级规则。'
@@ -606,6 +635,7 @@ onMounted(loadConfig)
 .level-header { display: flex; align-items: center; }
 .purchase-level-actions { margin-bottom: 10px; display: flex; justify-content: flex-end; }
 .header-actions { display: flex; gap: 8px; align-items: center; }
+.inline-separator { margin: 0 10px; color: var(--el-text-color-secondary); font-size: 12px; }
 .form-hint { margin-left: 12px; color: var(--el-text-color-secondary); font-size: 12px; }
 .form-tip { color: var(--el-text-color-secondary); font-size: 12px; line-height: 1.6; }
 .level-rule-summary { color: var(--el-text-color-secondary); line-height: 1.6; }

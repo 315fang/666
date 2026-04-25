@@ -269,19 +269,6 @@
     </view>
   </view>
 
-  <!-- 团队归属信息 -->
-  <view class="card" wx:if="{{order.agent_info || order.agent}}">
-    <view class="card-title">团队归属</view>
-    <view class="info-row" wx:if="{{order.agent}}">
-      <text class="info-label">发货代理</text>
-      <text class="info-value">{{order.agent.nickname}}的团队</text>
-    </view>
-    <view class="info-row" wx:if="{{order.distributor}}">
-      <text class="info-label">推荐人</text>
-      <text class="info-value">{{order.distributor.nick_name || order.distributor.nickname}}</text>
-    </view>
-  </view>
-
   <!-- 佣金结算提示 -->
   <view class="card settlement-card" wx:if="{{order.status === 'completed' && order.settlement_at}}">
     <view class="settlement-info">

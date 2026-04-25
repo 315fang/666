@@ -91,6 +91,11 @@ function buildSkuText(sku) {
     return buildSkuValueText(sku, '默认规格');
 }
 
+function isGenericSpecName(name) {
+    const text = String(name || '').trim().toLowerCase();
+    return !text || text === '规格' || text === '默认规格' || text === 'spec' || text === 'sku';
+}
+
 function resolvePayableUnitPrice(product, sku, roleLevel) {
     const resolved = resolveProductCurrentPrice(product, sku, roleLevel);
     if (Number.isFinite(Number(resolved)) && Number(resolved) >= 0) {
@@ -154,8 +159,10 @@ async function loadProduct(page, id) {
                 });
             });
 
-            specs = Object.keys(specMap).map((name) => ({
+            const specNames = Object.keys(specMap);
+            specs = specNames.map((name) => ({
                 name,
+                showTitle: specNames.length > 1 || !isGenericSpecName(name),
                 values: Array.from(specMap[name])
             }));
         }

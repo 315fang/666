@@ -37,7 +37,7 @@ function onSettingsTap(page) {
     if (isStoreManager) {
         itemList.push('店长工作台');
     }
-    itemList.push('安全中心', '隐私协议', '关于', '清除缓存');
+    itemList.push('安全中心', '关于版本', '清除缓存');
     wx.showActionSheet({
         itemList,
         success: (res) => {
@@ -52,11 +52,7 @@ function onSettingsTap(page) {
                 wx.navigateTo({ url: '/pages/user/portal-password' });
                 return;
             }
-            if (selected === '隐私协议') {
-                goPrivacy();
-                return;
-            }
-            if (selected === '关于') {
+            if (selected === '关于版本') {
                 onAboutTap();
                 return;
             }
@@ -68,13 +64,32 @@ function onSettingsTap(page) {
     });
 }
 
+function getRuntimeVersionText() {
+    try {
+        if (typeof wx.getAccountInfoSync !== 'function') return '当前版本';
+        const accountInfo = wx.getAccountInfoSync();
+        const miniProgram = accountInfo && accountInfo.miniProgram ? accountInfo.miniProgram : {};
+        const version = String(miniProgram.version || '').trim();
+        if (version) return version.startsWith('v') ? version : `v${version}`;
+        const envText = {
+            develop: '开发版',
+            trial: '体验版',
+            release: '正式版'
+        }[miniProgram.envVersion];
+        return envText || '当前版本';
+    } catch (_e) {
+        return '当前版本';
+    }
+}
+
 function onAboutTap() {
     const brandConfig = getConfigSection('brand_config');
     const brandName = app.globalData.brandName || brandConfig.brand_name || '问兰';
     const customerServiceWechat = app.globalData.customerServiceWechat || brandConfig.customer_service_wechat || 'wl_service';
+    const versionText = getRuntimeVersionText();
     wx.showModal({
-        title: '关于' + brandName,
-        content: `${brandName} ${brandConfig.app_version_text || 'v1.0.0'}\n${brandConfig.about_summary || '品牌甄选，值得信赖。'}\n\n客服微信：${customerServiceWechat}`,
+        title: '版本信息',
+        content: `${brandName}\n版本号：${versionText}\n${brandConfig.about_summary || '品牌甄选，值得信赖。'}\n\n客服微信：${customerServiceWechat}`,
         showCancel: false
     });
 }

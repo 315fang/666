@@ -10,18 +10,28 @@ async function listAddresses(openid) {
     return getAllRecords(db, 'addresses', { openid });
 }
 
+function isDefaultFlag(value) {
+    return value === true || value === 1 || value === '1';
+}
+
 /**
  * 添加地址
  */
 async function addAddress(openid, addressData) {
+    const shouldSetDefault = isDefaultFlag(addressData.is_default);
     const result = await db.collection('addresses').add({
         data: {
             openid,
             created_at: db.serverDate(),
             updated_at: db.serverDate(),
-            ...addressData
+            ...addressData,
+            is_default: false
         }
     });
+    const createdId = result && (result._id || result.id);
+    if (shouldSetDefault && createdId) {
+        await setDefaultAddress(openid, createdId);
+    }
     return result;
 }
 
@@ -41,12 +51,17 @@ async function getOwnedAddress(openid, addressId) {
  */
 async function updateAddress(openid, addressId, addressData) {
     await getOwnedAddress(openid, addressId);
+    const shouldSetDefault = isDefaultFlag(addressData.is_default);
     await db.collection('addresses').doc(addressId).update({
         data: {
             updated_at: db.serverDate(),
-            ...addressData
+            ...addressData,
+            is_default: shouldSetDefault
         }
     });
+    if (shouldSetDefault) {
+        await setDefaultAddress(openid, addressId);
+    }
     return db.collection('addresses').doc(addressId).get();
 }
 

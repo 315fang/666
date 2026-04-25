@@ -1,6 +1,14 @@
 // pages/address/list.js - 收货地址列表
 const { get, post } = require('../../utils/request');
 
+function getAddressId(address = {}) {
+    return String(address.id || address._id || address.address_id || '');
+}
+
+function isDefaultAddress(address = {}) {
+    return address.is_default === true || address.is_default === 1 || address.is_default === '1';
+}
+
 Page({
     data: {
         addresses: [],
@@ -11,15 +19,13 @@ Page({
     },
 
     onLoad(options = {}) {
-        const selectedAddressId = options.selectedId ? decodeURIComponent(options.selectedId) : this.getStoredSelectedAddressId(options);
         if (options.select === 'true' || options.from === 'limited_spot') {
+            const selectedAddressId = options.selectedId ? decodeURIComponent(options.selectedId) : this.getStoredSelectedAddressId(options);
             this.setData({
                 selectMode: true,
                 pickSource: options.from === 'limited_spot' ? 'limited_spot' : 'order',
                 selectedAddressId
             });
-        } else if (selectedAddressId) {
-            this.setData({ selectedAddressId });
         }
     },
 
@@ -32,7 +38,8 @@ Page({
             this.setData({ loading: true });
             const res = await get('/addresses');
             const rawAddresses = res.data?.list || res.list || res.data || [];
-            const addresses = this.markSelectedAddresses(rawAddresses, this.data.selectedAddressId);
+            const selectedAddressId = this.data.selectMode ? this.data.selectedAddressId : '';
+            const addresses = this.markSelectedAddresses(rawAddresses, selectedAddressId);
             this.setData({ addresses, loading: false });
         } catch (err) {
             console.error('加载地址失败:', err);
@@ -42,9 +49,13 @@ Page({
 
     markSelectedAddresses(addresses = [], selectedAddressId = '') {
         const targetId = String(selectedAddressId || '');
+        const defaultAddress = addresses.find(isDefaultAddress);
+        const activeId = targetId || getAddressId(defaultAddress);
         return addresses.map((item) => ({
             ...item,
-            selected: !!targetId && String(item._id || item.id || '') === targetId
+            id: getAddressId(item),
+            is_default: isDefaultAddress(item),
+            selected: !!activeId && getAddressId(item) === activeId
         }));
     },
 
@@ -66,7 +77,7 @@ Page({
         if (!this.data.selectMode) return;
         const index = e.currentTarget.dataset.index;
         const address = this.data.addresses[index];
-        const selectedAddressId = String(address._id || address.id || '');
+        const selectedAddressId = getAddressId(address);
         if (this.data.pickSource === 'limited_spot') {
             const summary = `${address.receiver_name} ${address.phone} ${address.province || ''}${address.city || ''}${address.district || ''}${address.detail || ''}`;
             wx.setStorageSync('limited_spot_pick_address', { id: selectedAddressId, summary });
@@ -131,12 +142,25 @@ Page({
 
     // 设为默认
     async onSetDefault(e) {
-        const id = e.currentTarget.dataset.id;
+        const id = String(e.currentTarget.dataset.id || '');
+        if (!id) {
+            wx.showToast({ title: '地址信息异常，请刷新后重试', icon: 'none' });
+            return;
+        }
         try {
+            const addresses = this.data.addresses.map((item) => ({
+                ...item,
+                is_default: getAddressId(item) === id
+            }));
+            this.setData({
+                selectedAddressId: this.data.selectMode ? id : '',
+                addresses: this.markSelectedAddresses(addresses, id)
+            });
             await post(`/addresses/${id}/default`);
             wx.showToast({ title: '设置成功', icon: 'success' });
             this.loadAddresses();
         } catch (err) {
+            this.loadAddresses();
             wx.showToast({ title: '设置失败', icon: 'none' });
         }
     }

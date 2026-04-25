@@ -22,8 +22,10 @@ const DEFAULT_AGENT_UPGRADE_RULES = {
     c1_min_purchase: 299,
     c2_referee_count: 2,
     c2_min_sales: 580,
+    c2_growth_value: 999,
     b1_referee_count: 10,
     b1_recharge: 3000,
+    b1_growth_value: 3000,
     b2_referee_count: 10,
     b2_recharge: 30000,
     b3_referee_b1_count: 30,
@@ -351,9 +353,15 @@ async function getEffectiveOrderSales(openid, effectiveDays = DEFAULT_AGENT_UPGR
     }, 0));
 }
 
-function deriveEligibleRoleLevel(currentRoleLevel = 0, effectiveSales = 0, directMembers = [], rechargeTotal = 0, upgradeRules = DEFAULT_AGENT_UPGRADE_RULES) {
+function isGrowthRuleMet(growthValue, target) {
+    const threshold = toNum(target, 0);
+    return threshold > 0 && toNum(growthValue, 0) >= threshold;
+}
+
+function deriveEligibleRoleLevel(currentRoleLevel = 0, effectiveSales = 0, directMembers = [], rechargeTotal = 0, upgradeRules = DEFAULT_AGENT_UPGRADE_RULES, growthValue = 0) {
     const totalSpent = toNum(effectiveSales, 0);
     let nextRoleLevel = toNum(currentRoleLevel, 0);
+    const currentGrowthValue = toNum(growthValue, 0);
 
     if (totalSpent >= toNum(upgradeRules.c1_min_purchase, DEFAULT_AGENT_UPGRADE_RULES.c1_min_purchase)) {
         nextRoleLevel = Math.max(nextRoleLevel, 1);
@@ -361,8 +369,11 @@ function deriveEligibleRoleLevel(currentRoleLevel = 0, effectiveSales = 0, direc
 
     const c1OrAboveCount = directMembers.filter((member) => toNum(member.role_level ?? member.distributor_level, 0) >= 1).length;
     if (
-        totalSpent >= toNum(upgradeRules.c2_min_sales, DEFAULT_AGENT_UPGRADE_RULES.c2_min_sales)
-        && c1OrAboveCount >= toNum(upgradeRules.c2_referee_count, DEFAULT_AGENT_UPGRADE_RULES.c2_referee_count)
+        (
+            totalSpent >= toNum(upgradeRules.c2_min_sales, DEFAULT_AGENT_UPGRADE_RULES.c2_min_sales)
+            && c1OrAboveCount >= toNum(upgradeRules.c2_referee_count, DEFAULT_AGENT_UPGRADE_RULES.c2_referee_count)
+        )
+        || isGrowthRuleMet(currentGrowthValue, upgradeRules.c2_growth_value ?? DEFAULT_AGENT_UPGRADE_RULES.c2_growth_value)
     ) {
         nextRoleLevel = Math.max(nextRoleLevel, 2);
     }
@@ -370,6 +381,7 @@ function deriveEligibleRoleLevel(currentRoleLevel = 0, effectiveSales = 0, direc
     if (
         c1OrAboveCount >= toNum(upgradeRules.b1_referee_count, DEFAULT_AGENT_UPGRADE_RULES.b1_referee_count)
         || rechargeTotal >= toNum(upgradeRules.b1_recharge, DEFAULT_AGENT_UPGRADE_RULES.b1_recharge)
+        || isGrowthRuleMet(currentGrowthValue, upgradeRules.b1_growth_value ?? DEFAULT_AGENT_UPGRADE_RULES.b1_growth_value)
     ) {
         nextRoleLevel = Math.max(nextRoleLevel, 3);
     }
@@ -408,7 +420,8 @@ async function evaluateAgentUpgrade(openid) {
     ]);
     const memberLevels = normalizeMemberLevels(membershipConfig.member_levels);
     const currentRoleLevel = toNum(user.role_level, 0);
-    const nextRoleLevel = deriveEligibleRoleLevel(currentRoleLevel, effectiveSales, directMembers, rechargeTotal, upgradeRules);
+    const growthValue = toNum(user.growth_value, 0);
+    const nextRoleLevel = deriveEligibleRoleLevel(currentRoleLevel, effectiveSales, directMembers, rechargeTotal, upgradeRules, growthValue);
     const roleMeta = memberLevels.find((item) => Number(item.level) === nextRoleLevel);
     return {
         user,
@@ -416,6 +429,7 @@ async function evaluateAgentUpgrade(openid) {
         upgradeRules,
         currentRoleLevel,
         nextRoleLevel,
+        growthValue,
         rechargeTotal,
         effectiveSales,
         directMembers,
@@ -1824,14 +1838,20 @@ const handleAction = {
     'upgradeEligibility': asyncHandler(async (openid) => {
         const evaluation = await evaluateAgentUpgrade(openid);
         const points = toNum(evaluation.user.points || evaluation.user.growth_value, 0);
+        const canUpgrade = evaluation.nextRoleLevel > evaluation.currentRoleLevel;
         return success({
             current_level: evaluation.currentRoleLevel,
             current_name: evaluation.user.role_name || DEFAULT_ROLE_NAMES[evaluation.currentRoleLevel] || 'VIP用户',
             current_points: points,
-            can_upgrade: evaluation.nextRoleLevel > evaluation.currentRoleLevel,
+            current_growth_value: evaluation.growthValue,
+            can_upgrade: canUpgrade,
             next_level: evaluation.nextRoleLevel,
             next_name: evaluation.roleName,
-            required_points: null,
+            required_points: !canUpgrade
+                ? null
+                : (evaluation.nextRoleLevel >= 3
+                ? toNum(evaluation.upgradeRules.b1_growth_value, DEFAULT_AGENT_UPGRADE_RULES.b1_growth_value)
+                : (evaluation.nextRoleLevel === 2 ? toNum(evaluation.upgradeRules.c2_growth_value, DEFAULT_AGENT_UPGRADE_RULES.c2_growth_value) : null)),
             direct_member_count: evaluation.directMembers.length,
             recharge_total: Number(evaluation.rechargeTotal.toFixed(2)),
             rules: evaluation.upgradeRules

@@ -131,7 +131,7 @@ Page({
     onUse(e) {
         const coupon = e.currentTarget.dataset.coupon || {};
         if (!coupon.is_exchange) {
-            wx.showToast({ title: '下单时可在结算页直接选择优惠券', icon: 'none', duration: 2500 });
+            wx.switchTab({ url: '/pages/category/category' });
             return;
         }
         if (!coupon.exchange_ready) {

@@ -75,6 +75,9 @@ function recalcFinal(page) {
         pointsToUse,
         pointsDeduction: (pointsDeductionFen / 100).toFixed(2)
     });
+    if (typeof page.scheduleOrderBenefitPreviewRefresh === 'function') {
+        page.scheduleOrderBenefitPreviewRefresh();
+    }
 }
 
 async function loadAvailableCoupons(page) {

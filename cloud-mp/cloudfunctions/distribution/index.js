@@ -23,6 +23,31 @@ const { buildWalletAccountSyncDoc } = require('./shared/wallet-account');
 const db = cloud.database();
 const _ = db.command;
 
+const DEFAULT_COST_SPLIT = {
+    enabled: true,
+    direct_sales_pct: 40,
+    operations_pct: 25,
+    mirror_operations_pct: 5,
+    profit_pct: 30
+};
+
+const DEFAULT_AGENT_UPGRADE_RULES = {
+    enabled: true,
+    c1_min_purchase: 299,
+    c2_referee_count: 2,
+    c2_min_sales: 580,
+    c2_growth_value: 999,
+    b1_referee_count: 10,
+    b1_recharge: 3000,
+    b1_growth_value: 3000,
+    b2_referee_count: 10,
+    b2_recharge: 30000,
+    b3_referee_b2_count: 3,
+    b3_referee_b1_count: 30,
+    b3_recharge: 198000,
+    effective_order_days: 7
+};
+
 // ==================== 子模块导入 ====================
 const distributionQuery = require('./distribution-query');
 const distributionCommission = require('./distribution-commission');
@@ -83,6 +108,68 @@ function parseConfigRowValue(row, fallback = null) {
         }
     }
     return raw;
+}
+
+async function getConfigByKeys(keys = []) {
+    for (const key of keys) {
+        const current = pickString(key);
+        if (!current) continue;
+        const res = await db.collection('configs')
+            .where(_.or([{ config_key: current }, { key: current }]))
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+        if (res.data && res.data[0]) return res.data[0];
+        const legacyRes = await db.collection('app_configs')
+            .where({ config_key: current, status: _.in([true, 1, '1']) })
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+        if (legacyRes.data && legacyRes.data[0]) return legacyRes.data[0];
+    }
+    return null;
+}
+
+async function loadCommissionCostSplit() {
+    const configRow = await getConfigByKeys(['agent_system_commission-config', 'agent_system_commission_config']);
+    const config = toPlainObject(parseConfigRowValue(configRow, {}), {});
+    return {
+        ...DEFAULT_COST_SPLIT,
+        ...(toPlainObject(config.cost_split, {}))
+    };
+}
+
+async function loadAgentUpgradeRules() {
+    const configRow = await getConfigByKeys([
+        'member_upgrade_rule_config',
+        'agent_system_upgrade-rules',
+        'agent_system_upgrade_rules'
+    ]);
+    return {
+        ...DEFAULT_AGENT_UPGRADE_RULES,
+        ...toPlainObject(parseConfigRowValue(configRow, {}), {})
+    };
+}
+
+function resolveSelfCommissionRate(costSplit = {}) {
+    const directSalesPct = toNumber(costSplit.direct_sales_pct, DEFAULT_COST_SPLIT.direct_sales_pct);
+    const normalized = directSalesPct > 1 ? directSalesPct / 100 : directSalesPct;
+    return Math.max(0, normalized);
+}
+
+function isGrowthRuleMet(growthValue, target) {
+    const threshold = toNumber(target, 0);
+    return threshold > 0 && toNumber(growthValue, 0) >= threshold;
+}
+
+async function findUserByOpenid(openid) {
+    if (!hasValue(openid)) return null;
+    const res = await db.collection('users')
+        .where({ openid })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return res.data && res.data[0] ? res.data[0] : null;
 }
 
 function normalizeFeeRatePercent(value, fallback = 0) {
@@ -701,12 +788,30 @@ const handleAction = {
 
     'commissionPreview': asyncHandler(async (openid, params = {}) => {
         const quantity = Math.max(1, toNumber(params.quantity, 1));
+        const requestedBaseAmount = firstNumber([params.base_amount, params.amount, params.pay_amount]);
         const product = await getProductById(params.product_id || params.id);
         const sku = await getSkuById(params.sku_id);
         const unitPrice = sku ? resolveSkuPrice(sku) : resolveProductPrice(product || {});
-        const baseAmount = Math.round(unitPrice * quantity * 100) / 100;
+        const baseAmount = requestedBaseAmount !== null ? roundMoney(requestedBaseAmount) : Math.round(unitPrice * quantity * 100) / 100;
         const commissions = product ? buildCommissionPreview(product, baseAmount) : [];
         const totalCommission = commissions.reduce((sum, item) => sum + toNumber(item.amount, 0), 0);
+        const selfPurchase = params.self_purchase === true
+            || params.self_purchase === 1
+            || params.self_purchase === '1'
+            || params.mode === 'self_purchase';
+        let selfCommission = 0;
+        let selfCommissionRate = 0;
+        let selfCommissionEligible = false;
+        if (selfPurchase && baseAmount > 0) {
+            const user = await findUserByOpenid(openid);
+            const roleLevel = user ? resolveRoleLevel(user) : 0;
+            selfCommissionEligible = roleLevel >= 3;
+            if (selfCommissionEligible) {
+                const costSplit = await loadCommissionCostSplit();
+                selfCommissionRate = resolveSelfCommissionRate(costSplit);
+                selfCommission = roundMoney(baseAmount * selfCommissionRate);
+            }
+        }
         return success({
             product_id: params.product_id || params.id || null,
             sku_id: params.sku_id || null,
@@ -714,7 +819,11 @@ const handleAction = {
             unit_price: unitPrice,
             base_amount: baseAmount,
             commissions,
-            total_commission: Math.round(totalCommission * 100) / 100
+            total_commission: Math.round(totalCommission * 100) / 100,
+            self_purchase: selfPurchase,
+            self_commission_eligible: selfCommissionEligible,
+            self_commission_rate: selfCommissionRate,
+            self_commission: selfCommission
         });
     }),
 
@@ -1165,6 +1274,8 @@ const handleAction = {
         if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
         const user = userRes.data[0];
         const currentLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+        const growthValue = toNumber(user.growth_value, 0);
+        const upgradeRules = await loadAgentUpgradeRules();
         const totalSpent = await getPromotionSpendTotal(openid);
 
         // 查直属下级
@@ -1190,20 +1301,38 @@ const handleAction = {
         const nextLevel = Math.min(currentLevel + 1, 5);
         const conditions = [];
         if (nextLevel === 1) {
-            conditions.push({ type: 'spend', label: '消费满299元', current: totalSpent, target: 299, met: totalSpent >= 299 });
+            const c1Target = toNumber(upgradeRules.c1_min_purchase, DEFAULT_AGENT_UPGRADE_RULES.c1_min_purchase);
+            conditions.push({ type: 'spend', label: `消费满${c1Target}元`, current: totalSpent, target: c1Target, met: totalSpent >= c1Target });
         } else if (nextLevel === 2) {
-            conditions.push({ type: 'spend', label: '销售额超580元', current: totalSpent, target: 580, met: totalSpent >= 580 });
-            conditions.push({ type: 'referral', label: '直推2个C1', current: c1Count, target: 2, met: c1Count >= 2 });
+            const c2GrowthTarget = toNumber(upgradeRules.c2_growth_value, DEFAULT_AGENT_UPGRADE_RULES.c2_growth_value);
+            const c2SalesTarget = toNumber(upgradeRules.c2_min_sales, DEFAULT_AGENT_UPGRADE_RULES.c2_min_sales);
+            const c2ReferralTarget = toNumber(upgradeRules.c2_referee_count, DEFAULT_AGENT_UPGRADE_RULES.c2_referee_count);
+            if (c2GrowthTarget > 0) {
+                conditions.push({ type: 'growth', label: `成长值达${c2GrowthTarget}`, current: growthValue, target: c2GrowthTarget, met: isGrowthRuleMet(growthValue, c2GrowthTarget) });
+            }
+            conditions.push({ type: 'spend', label: `或销售额超${c2SalesTarget}元`, current: totalSpent, target: c2SalesTarget, met: totalSpent >= c2SalesTarget });
+            conditions.push({ type: 'referral', label: `且直推${c2ReferralTarget}个C1`, current: c1Count, target: c2ReferralTarget, met: c1Count >= c2ReferralTarget });
         } else if (nextLevel === 3) {
-            conditions.push({ type: 'referral', label: '推荐10个C1', current: c1Count, target: 10, met: c1Count >= 10 });
-            conditions.push({ type: 'recharge', label: '充值3000元', current: rechargeTotal, target: 3000, met: rechargeTotal >= 3000 });
+            const b1GrowthTarget = toNumber(upgradeRules.b1_growth_value, DEFAULT_AGENT_UPGRADE_RULES.b1_growth_value);
+            const b1ReferralTarget = toNumber(upgradeRules.b1_referee_count, DEFAULT_AGENT_UPGRADE_RULES.b1_referee_count);
+            const b1RechargeTarget = toNumber(upgradeRules.b1_recharge, DEFAULT_AGENT_UPGRADE_RULES.b1_recharge);
+            if (b1GrowthTarget > 0) {
+                conditions.push({ type: 'growth', label: `成长值达${b1GrowthTarget}`, current: growthValue, target: b1GrowthTarget, met: isGrowthRuleMet(growthValue, b1GrowthTarget) });
+            }
+            conditions.push({ type: 'referral', label: `或推荐${b1ReferralTarget}个C1`, current: c1Count, target: b1ReferralTarget, met: c1Count >= b1ReferralTarget });
+            conditions.push({ type: 'recharge', label: `或充值${b1RechargeTarget}元`, current: rechargeTotal, target: b1RechargeTarget, met: rechargeTotal >= b1RechargeTarget });
         } else if (nextLevel === 4) {
-            conditions.push({ type: 'referral', label: '推荐10个B1', current: b1Count, target: 10, met: b1Count >= 10 });
-            conditions.push({ type: 'recharge', label: '充值30000元', current: rechargeTotal, target: 30000, met: rechargeTotal >= 30000 });
+            const b2ReferralTarget = toNumber(upgradeRules.b2_referee_count, DEFAULT_AGENT_UPGRADE_RULES.b2_referee_count);
+            const b2RechargeTarget = toNumber(upgradeRules.b2_recharge, DEFAULT_AGENT_UPGRADE_RULES.b2_recharge);
+            conditions.push({ type: 'referral', label: `推荐${b2ReferralTarget}个B1`, current: b1Count, target: b2ReferralTarget, met: b1Count >= b2ReferralTarget });
+            conditions.push({ type: 'recharge', label: `充值${b2RechargeTarget}元`, current: rechargeTotal, target: b2RechargeTarget, met: rechargeTotal >= b2RechargeTarget });
         } else if (nextLevel === 5) {
-            conditions.push({ type: 'referral', label: '推荐3个B2', current: b2Count, target: 3, met: b2Count >= 3 });
-            conditions.push({ type: 'referral', label: '推荐30个B1', current: b1Count, target: 30, met: b1Count >= 30 });
-            conditions.push({ type: 'recharge', label: '充值198000元', current: rechargeTotal, target: 198000, met: rechargeTotal >= 198000 });
+            const b3ReferralB2Target = toNumber(upgradeRules.b3_referee_b2_count, DEFAULT_AGENT_UPGRADE_RULES.b3_referee_b2_count);
+            const b3ReferralB1Target = toNumber(upgradeRules.b3_referee_b1_count, DEFAULT_AGENT_UPGRADE_RULES.b3_referee_b1_count);
+            const b3RechargeTarget = toNumber(upgradeRules.b3_recharge, DEFAULT_AGENT_UPGRADE_RULES.b3_recharge);
+            conditions.push({ type: 'referral', label: `推荐${b3ReferralB2Target}个B2`, current: b2Count, target: b3ReferralB2Target, met: b2Count >= b3ReferralB2Target });
+            conditions.push({ type: 'referral', label: `推荐${b3ReferralB1Target}个B1`, current: b1Count, target: b3ReferralB1Target, met: b1Count >= b3ReferralB1Target });
+            conditions.push({ type: 'recharge', label: `充值${b3RechargeTarget}元`, current: rechargeTotal, target: b3RechargeTarget, met: rechargeTotal >= b3RechargeTarget });
         }
 
         return success({
@@ -1212,7 +1341,7 @@ const handleAction = {
             next_level: currentLevel >= 5 ? null : nextLevel,
             next_name: currentLevel >= 5 ? null : (ROLE_NAMES[nextLevel] || ''),
             conditions,
-            stats: { total_spent: totalSpent, recharge_total: rechargeTotal, c1_count: c1Count, b1_count: b1Count, b2_count: b2Count }
+            stats: { total_spent: totalSpent, recharge_total: rechargeTotal, growth_value: growthValue, c1_count: c1Count, b1_count: b1Count, b2_count: b2Count }
         });
     }),
 

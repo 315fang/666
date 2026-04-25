@@ -3127,8 +3127,8 @@ function createDefaultBranchAgentPolicy() {
         pickup_station_reward_rate: 0.025,
         pickup_station_subsidy_amount: 0,
         region_reward_tiers: [
-            { threshold: 100000, rate: 0.01, label: '10万' },
-            { threshold: 300000, rate: 0.02, label: '30万' },
+            { threshold: 0, rate: 0.01, label: '0元' },
+            { threshold: 100000, rate: 0.02, label: '10万' },
             { threshold: 1000000, rate: 0.03, label: '100万' }
         ]
     };
@@ -3139,7 +3139,11 @@ function normalizeBranchAgentPolicySnapshot(rawPolicy) {
     const policy = toObject(rawPolicy, {});
     const normalizeRate = (value, fallback) => Math.min(1, Math.max(0, toNumber(value, fallback)));
     const normalizeMoney = (value, fallback) => Math.max(0, toNumber(value, fallback));
-    const normalizedRegionRewardTiers = toArray(policy.region_reward_tiers)
+    const rawRegionRewardTiers = toArray(policy.region_reward_tiers);
+    const sourceRegionRewardTiers = isLegacyDefaultRegionRewardTiers(rawRegionRewardTiers)
+        ? defaults.region_reward_tiers
+        : rawRegionRewardTiers;
+    const normalizedRegionRewardTiers = sourceRegionRewardTiers
         .map((tier, index) => ({
             threshold: Math.max(0, normalizeMoney(tier?.threshold, defaults.region_reward_tiers[index]?.threshold || 0)),
             rate: normalizeRate(tier?.rate, defaults.region_reward_tiers[index]?.rate || 0),
@@ -3157,6 +3161,20 @@ function normalizeBranchAgentPolicySnapshot(rawPolicy) {
         pickup_station_subsidy_amount: normalizeMoney(policy.pickup_station_subsidy_amount, defaults.pickup_station_subsidy_amount),
         region_reward_tiers: normalizedRegionRewardTiers.length ? normalizedRegionRewardTiers : defaults.region_reward_tiers
     };
+}
+
+function isLegacyDefaultRegionRewardTiers(tiers = []) {
+    if (!Array.isArray(tiers) || tiers.length !== 3) return false;
+    const legacy = [
+        { threshold: 100000, rate: 0.01 },
+        { threshold: 300000, rate: 0.02 },
+        { threshold: 1000000, rate: 0.03 }
+    ];
+    return legacy.every((expected, index) => {
+        const tier = tiers[index] || {};
+        return toNumber(tier.threshold, -1) === expected.threshold
+            && Math.abs(toNumber(tier.rate, -1) - expected.rate) < 0.000001;
+    });
 }
 
 function getBranchAgentPolicySnapshot() {
@@ -3203,6 +3221,36 @@ function buildBranchScopeLabel(station = {}) {
         return pickString(station.province);
     }
     return [pickString(station.province), pickString(station.city), pickString(station.district)].filter(Boolean).join(' / ');
+}
+
+function buildBranchScopeKey(station = {}) {
+    const scopeLevel = normalizeBranchScopeLevel(station.branch_type);
+    const province = normalizeScopeText(station.province);
+    const city = normalizeCityText(station.city, station.province);
+    const district = normalizeScopeText(station.district);
+    if (scopeLevel === 'province') return province ? `province:${province}` : '';
+    if (scopeLevel === 'city') return province && city ? `city:${province}:${city}` : '';
+    if (scopeLevel === 'district') return province && city && district ? `district:${province}:${city}:${district}` : '';
+    return '';
+}
+
+function validateBranchScope(station = {}) {
+    const scopeLevel = normalizeBranchScopeLevel(station.branch_type);
+    if (scopeLevel === 'province' && !normalizeScopeText(station.province)) return '省代理需要填写省份';
+    if (scopeLevel === 'city' && (!normalizeScopeText(station.province) || !normalizeCityText(station.city, station.province))) return '市代理需要填写省份和城市';
+    if (scopeLevel === 'district' && (!normalizeScopeText(station.province) || !normalizeCityText(station.city, station.province) || !normalizeScopeText(station.district))) return '区代理需要填写省份、城市和区县';
+    return '';
+}
+
+function findDuplicateActiveBranchAssignment(rows = [], candidate = {}, currentId = null) {
+    if (pickString(candidate.status || 'active') !== 'active') return null;
+    const candidateKey = buildBranchScopeKey(candidate);
+    if (!candidateKey) return null;
+    return rows.find((row) => {
+        if (currentId && rowMatchesLookup(row, currentId)) return false;
+        if (pickString(row.status || 'active') !== 'active') return false;
+        return buildBranchScopeKey(row) === candidateKey;
+    }) || null;
 }
 
 function sortBranchAssignments(rows = []) {
@@ -3422,7 +3470,7 @@ function ensureBranchAgentCommissionForOrder(order, options = {}) {
     if (!station) return null;
 
     if (options.preferPickup) {
-        const orderAmount = toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0);
+        const orderAmount = getOrderAmount(order);
         let amount = orderAmount * toNumber(policy.pickup_station_reward_rate, 0);
         if (amount <= 0) amount = toNumber(policy.pickup_station_subsidy_amount, 0);
         return createBranchAgentCommission(order, station, users, {
@@ -3438,12 +3486,12 @@ function ensureBranchAgentCommissionForOrder(order, options = {}) {
         if (!BRANCH_AGENT_COMMISSION_ORDER_STATUSES.includes(status)) return sum;
         const matchedStation = matchBranchAgentStationForOrder(row, { preferPickup: false });
         if (!matchedStation || !rowMatchesLookup(matchedStation, stationId, [stationId])) return sum;
-        return sum + toNumber(row.pay_amount ?? row.actual_price ?? row.total_amount, 0);
+        return sum + getOrderAmount(row);
     }, 0));
     const rate = (policy.region_reward_tiers || []).reduce((current, tier) => {
         return cumulativeAmount >= toNumber(tier.threshold, 0) ? toNumber(tier.rate, current) : current;
     }, 0);
-    const amount = toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0) * rate;
+    const amount = getOrderAmount(order) * rate;
     const isVirtualB3 = isVirtualB3SettlementUser(getBranchAgentTargetUser(station, users));
     return createBranchAgentCommission(order, station, users, {
         amount,
@@ -3996,6 +4044,14 @@ const DEFAULT_REFERRAL_COMMISSION_MATRIX = {
     5: { 1: 35, 2: 25, 3: 15, 4: 5 }
 };
 
+const DEFAULT_BUNDLE_COMMISSION_MATRIX = {
+    1: { 0: 20 },
+    2: { 0: 30, 1: 5 },
+    3: { 1: 20, 2: 10 },
+    4: { 1: 30, 2: 20, 3: 10 },
+    5: { 1: 35, 2: 25, 3: 15, 4: 5 }
+};
+
 function normalizeCommissionMatrixSnapshot(rawMatrix = {}, fallback = DEFAULT_REFERRAL_COMMISSION_MATRIX) {
     const result = {};
     const keys = new Set([...Object.keys(fallback || {}), ...Object.keys(rawMatrix || {})]);
@@ -4030,6 +4086,20 @@ function getReferralCommissionMatrixSnapshot() {
         {}
     );
     return normalizeCommissionMatrixSnapshot(configValue, DEFAULT_REFERRAL_COMMISSION_MATRIX);
+}
+
+function getBundleCommissionMatrixSnapshot() {
+    const configValue = toObject(
+        getConfigRowValue('agent_system_bundle-commission-matrix', getConfigRowValue('agent_system_bundle_commission_matrix', {})),
+        {}
+    );
+    return normalizeCommissionMatrixSnapshot(configValue, DEFAULT_BUNDLE_COMMISSION_MATRIX);
+}
+
+function isFlexBundleCommissionItemSnapshot(order = {}, item = {}) {
+    const commissionMode = pickString(item.bundle_commission_mode || order.bundle_commission_snapshot?.mode || order.bundle_meta?.commission_mode);
+    if (commissionMode) return commissionMode === 'fixed' || commissionMode === 'matrix';
+    return pickString(item.bundle_scene_type || order.bundle_meta?.scene_type) === 'flex_bundle';
 }
 
 function commissionConfigAmountForLevel(product = {}, level, baseAmount = 0) {
@@ -4106,6 +4176,7 @@ function ensurePlatformSettlementCommissionsForOrder(order = {}) {
     if (payAmount <= 0) return 0;
 
     const matrix = getReferralCommissionMatrixSnapshot();
+    const bundleMatrix = getBundleCommissionMatrixSnapshot();
     const itemBaseTotal = orderItems.reduce((sum, item) => {
         const qty = Math.max(1, toNumber(item.qty ?? item.quantity, 1));
         return sum + roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
@@ -4117,11 +4188,13 @@ function ensurePlatformSettlementCommissionsForOrder(order = {}) {
         const product = findByLookup(products, item.product_id) || {};
         const rawBase = roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
         const allocatedBase = itemBaseTotal > 0 ? roundMoney(payAmount * rawBase / itemBaseTotal) : rawBase;
+        const useBundleMatrix = isFlexBundleCommissionItemSnapshot(order, item);
+        const activeMatrix = useBundleMatrix ? bundleMatrix : matrix;
         const directBeneficiary = beneficiaries.find((entry) => entry.level === 1);
         const directRole = directBeneficiary
             ? resolveBenefitRoleLevelSnapshot(directBeneficiary.user.role_level ?? directBeneficiary.user.distributor_level ?? directBeneficiary.user.level)
             : 0;
-        const directMatrixRate = directBeneficiary ? matrixRateSnapshot(matrix, directRole, benefitBuyerRole) : 0;
+        const directMatrixRate = directBeneficiary ? matrixRateSnapshot(activeMatrix, directRole, benefitBuyerRole) : 0;
 
         for (const beneficiary of beneficiaries) {
             const existing = rows.find((row) =>
@@ -4132,13 +4205,13 @@ function ensurePlatformSettlementCommissionsForOrder(order = {}) {
             );
             if (existing) continue;
 
-            const configured = commissionConfigAmountForLevel(product, beneficiary.level, allocatedBase);
+            const configured = useBundleMatrix ? 0 : commissionConfigAmountForLevel(product, beneficiary.level, allocatedBase);
             let amount = 0;
             if (configured > 0) {
                 amount = Math.min(allocatedBase, configured);
             } else {
                 const roleLevel = resolveBenefitRoleLevelSnapshot(beneficiary.user.role_level ?? beneficiary.user.distributor_level ?? beneficiary.user.level);
-                const myRate = matrixRateSnapshot(matrix, roleLevel, benefitBuyerRole);
+                const myRate = matrixRateSnapshot(activeMatrix, roleLevel, benefitBuyerRole);
                 const effectiveRate = beneficiary.level === 1 ? myRate : Math.max(0, myRate - directMatrixRate);
                 amount = roundMoney(allocatedBase * effectiveRate);
             }
@@ -7712,7 +7785,7 @@ app.put('/admin/api/branch-agent-policy', auth, requirePermission('dealers'), (r
     upsertConfigRow('branch-agent-policy', nextPolicy, {
         category: 'dealers',
         group: 'dealers',
-        description: '分支代理策略'
+        description: '区域代理策略'
     });
     createAuditLog(req.admin, 'branch-agent.policy.update', 'branch-agent-policy', {});
     ok(res, nextPolicy);
@@ -7740,6 +7813,10 @@ app.post('/admin/api/branch-agents/stations', auth, requirePermission('dealers')
         created_at: nowIso(),
         updated_at: nowIso()
     };
+    const scopeError = validateBranchScope(row);
+    if (scopeError) return fail(res, scopeError, 400);
+    const duplicate = findDuplicateActiveBranchAssignment(rows, row);
+    if (duplicate) return fail(res, `该区域已有启用中的代理：${pickString(duplicate.name || buildBranchScopeLabel(duplicate))}`, 409);
     rows.push(row);
     saveCollection('branch_agent_stations', rows);
     syncBranchStationToPickupStation(row);
@@ -7749,18 +7826,25 @@ app.post('/admin/api/branch-agents/stations', auth, requirePermission('dealers')
 
 app.put('/admin/api/branch-agents/stations/:id', auth, requirePermission('dealers'), async (req, res) => {
     await ensureFreshCollections(['branch_agent_stations', 'stations']);
-    const updated = patchCollectionRow('branch_agent_stations', req.params.id, (row) => ({
-        ...row,
-        name: req.body?.name != null ? pickString(req.body.name) : row.name,
-        branch_type: req.body?.branch_type != null ? normalizeBranchScopeLevel(req.body.branch_type) : normalizeBranchScopeLevel(row.branch_type),
-        province: req.body?.province != null ? pickString(req.body.province) : row.province,
-        city: req.body?.city != null ? pickString(req.body.city) : row.city,
-        district: req.body?.district != null ? pickString(req.body.district) : row.district,
-        claimant_id: req.body?.claimant_id !== undefined ? (req.body.claimant_id || null) : row.claimant_id,
-        status: req.body?.status != null ? pickString(req.body.status) : row.status,
+    const rows = getCollection('branch_agent_stations');
+    const current = rows.find((row) => rowMatchesLookup(row, req.params.id));
+    if (!current) return fail(res, '点位不存在', 404);
+    const nextRow = {
+        ...current,
+        name: req.body?.name != null ? pickString(req.body.name) : current.name,
+        branch_type: req.body?.branch_type != null ? normalizeBranchScopeLevel(req.body.branch_type) : normalizeBranchScopeLevel(current.branch_type),
+        province: req.body?.province != null ? pickString(req.body.province) : current.province,
+        city: req.body?.city != null ? pickString(req.body.city) : current.city,
+        district: req.body?.district != null ? pickString(req.body.district) : current.district,
+        claimant_id: req.body?.claimant_id !== undefined ? (req.body.claimant_id || null) : current.claimant_id,
+        status: req.body?.status != null ? pickString(req.body.status) : current.status,
         updated_at: nowIso()
-    }));
-    if (!updated) return fail(res, '点位不存在', 404);
+    };
+    const scopeError = validateBranchScope(nextRow);
+    if (scopeError) return fail(res, scopeError, 400);
+    const duplicate = findDuplicateActiveBranchAssignment(rows, nextRow, req.params.id);
+    if (duplicate) return fail(res, `该区域已有启用中的代理：${pickString(duplicate.name || buildBranchScopeLabel(duplicate))}`, 409);
+    const updated = patchCollectionRow('branch_agent_stations', req.params.id, () => nextRow);
     syncBranchStationToPickupStation(updated);
     createAuditLog(req.admin, 'branch-agent.station.update', 'branch_agent_stations', { station_id: primaryId(updated) });
     ok(res, updated);
@@ -9395,8 +9479,10 @@ function getMemberTierConfigSnapshot() {
             c1_min_purchase: 299,
             c2_referee_count: 2,
             c2_min_sales: 580,
+            c2_growth_value: 999,
             b1_referee_count: 10,
             b1_recharge: 3000,
+            b1_growth_value: 3000,
             b2_referee_count: 10,
             b2_recharge: 30000,
             b3_referee_b2_count: 3,

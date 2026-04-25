@@ -3,8 +3,8 @@
 
 .current-level { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20rpx; padding: 40rpx 30rpx; color: #fff; margin-bottom: 24rpx; }
 .level-badge { font-size: 40rpx; font-weight: 700; text-align: center; margin-bottom: 24rpx; }
-.level-stats { display: flex; justify-content: space-around; }
-.stat { text-align: center; }
+.level-stats { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 16rpx 12rpx; }
+.stat { min-width: 120rpx; text-align: center; }
 .stat-val { display: block; font-size: 32rpx; font-weight: 600; }
 .stat-lbl { display: block; font-size: 22rpx; opacity: 0.85; margin-top: 4rpx; }
 

@@ -23,10 +23,19 @@ const DEFAULT_COMMISSION_MATRIX = {
     5: { 1: 35, 2: 25, 3: 15, 4: 5 }
 };
 
+const DEFAULT_BUNDLE_COMMISSION_MATRIX = {
+    1: { 0: 20 },
+    2: { 0: 30, 1: 5 },
+    3: { 1: 20, 2: 10 },
+    4: { 1: 30, 2: 20, 3: 10 },
+    5: { 1: 35, 2: 25, 3: 15, 4: 5 }
+};
+
 const DEFAULT_AGENT_COMMISSION_CONFIG = {
     direct_pct_by_role: { 1: 20, 2: 30, 3: 40, 4: 40, 5: 40 },
     indirect_pct_by_role: { 2: 0, 3: 0, 4: 10, 5: 10 },
-    commission_matrix: DEFAULT_COMMISSION_MATRIX
+    commission_matrix: DEFAULT_COMMISSION_MATRIX,
+    bundle_commission_matrix: DEFAULT_BUNDLE_COMMISSION_MATRIX
 };
 
 function hasValue(value) {
@@ -57,7 +66,7 @@ function resolveBenefitRoleLevel(roleLevel) {
 
 function isFlexBundleCommissionItem(order = {}, item = {}) {
     const commissionMode = String(item.bundle_commission_mode || order.bundle_commission_snapshot?.mode || order.bundle_meta?.commission_mode || '').trim();
-    if (commissionMode) return commissionMode === 'fixed';
+    if (commissionMode) return commissionMode === 'fixed' || commissionMode === 'matrix';
     const bundleSceneType = String(item.bundle_scene_type || order.bundle_meta?.scene_type || '').trim();
     return bundleSceneType === 'flex_bundle';
 }
@@ -137,20 +146,34 @@ function normalizeCommissionMatrix(dbMatrix, fallback) {
 }
 
 async function loadAgentCommissionConfig() {
-    const [configRow, matrixRow] = await Promise.all([
+    const [configRow, matrixRow, bundleMatrixRow] = await Promise.all([
         getConfigByKeys(['agent_system_commission-config', 'agent_system_commission_config']),
-        getConfigByKeys(['agent_system_commission-matrix', 'agent_system_commission_matrix'])
+        getConfigByKeys(['agent_system_commission-matrix', 'agent_system_commission_matrix']),
+        getConfigByKeys(['agent_system_bundle-commission-matrix', 'agent_system_bundle_commission_matrix'])
     ]);
     const config = parseConfigValue(configRow, {});
     const dbMatrix = parseConfigValue(matrixRow, null);
+    const dbBundleMatrix = parseConfigValue(bundleMatrixRow, null);
     return {
         direct_pct_by_role: normalizePctMap(config?.direct_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.direct_pct_by_role),
         indirect_pct_by_role: normalizePctMap(config?.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role),
         commission_matrix: normalizeCommissionMatrix(
             dbMatrix || config?.commission_matrix,
             DEFAULT_COMMISSION_MATRIX
+        ),
+        bundle_commission_matrix: normalizeCommissionMatrix(
+            dbBundleMatrix || config?.bundle_commission_matrix,
+            DEFAULT_BUNDLE_COMMISSION_MATRIX
         )
     };
+}
+
+function matrixRate(matrix = {}, parentRole, buyerRole) {
+    const row = matrix[parentRole] || matrix[String(parentRole)];
+    if (!row) return 0;
+    const value = toNumber(row[buyerRole] ?? row[String(buyerRole)], NaN);
+    if (!Number.isFinite(value)) return 0;
+    return value > 1 ? value / 100 : value;
 }
 
 function toList(value) {
@@ -317,10 +340,28 @@ async function calculateOrderCommissions(order, explicitReferrerOpenid) {
         const product = await getDocByIdOrLegacy('products', item.product_id) || {};
         const rawBase = roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price || orderAmount, 0) * qty));
         const allocatedBase = itemBaseTotal > 0 ? roundMoney(orderAmount * rawBase / itemBaseTotal) : rawBase;
-        const useFixedBundleCommission = isFlexBundleCommissionItem(order, item);
+        const useBundleMatrix = isFlexBundleCommissionItem(order, item);
+        const activeMatrix = useBundleMatrix ? commissionConfig.bundle_commission_matrix : commissionConfig.commission_matrix;
+        const useMatrix = activeMatrix && Object.keys(activeMatrix).length > 0;
+        const parentBeneficiary = beneficiaries.find((beneficiary) => beneficiary.level === 1);
+        const parentRole = parentBeneficiary
+            ? resolveBenefitRoleLevel(parentBeneficiary.user.role_level ?? parentBeneficiary.user.distributor_level ?? parentBeneficiary.user.level)
+            : 0;
+        const parentMatrixRate = parentBeneficiary && useMatrix ? matrixRate(activeMatrix, parentRole, resolveBenefitRoleLevel(buyer?.role_level ?? buyer?.distributor_level ?? buyer?.level)) : 0;
+
         for (const beneficiary of beneficiaries) {
             let amount;
-            if (useFixedBundleCommission) {
+            if (useMatrix) {
+                const configured = useBundleMatrix ? 0 : configuredCommission(product, beneficiary.level, allocatedBase);
+                if (configured > 0) {
+                    amount = Math.min(allocatedBase, configured);
+                } else {
+                    const bRole = resolveBenefitRoleLevel(beneficiary.user.role_level ?? beneficiary.user.distributor_level ?? beneficiary.user.level);
+                    const myRate = matrixRate(activeMatrix, bRole, resolveBenefitRoleLevel(buyer?.role_level ?? buyer?.distributor_level ?? buyer?.level));
+                    const effectiveRate = beneficiary.level === 1 ? myRate : Math.max(0, myRate - parentMatrixRate);
+                    amount = roundMoney(allocatedBase * effectiveRate);
+                }
+            } else if (useBundleMatrix) {
                 amount = roundMoney(beneficiary.level === 1 ? item.direct_commission_fixed_amount : item.indirect_commission_fixed_amount);
             } else {
                 const configured = configuredCommission(product, beneficiary.level, allocatedBase);
