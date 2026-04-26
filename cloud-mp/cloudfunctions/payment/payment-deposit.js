@@ -250,14 +250,18 @@ async function ensureDepositClaimTicket(order = {}) {
         }
     });
 
-    await db.collection('deposit_orders').doc(String(order._id || order.id)).update({
-        data: {
-            active_ticket_id: ticketId,
-            coupon_claim_state: 'unused',
-            reward_config_snapshot: rewardConfig,
-            updated_at: db.serverDate()
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('deposit_orders').doc(String(order._id || order.id)).update({
+            data: {
+                active_ticket_id: ticketId,
+                coupon_claim_state: 'unused',
+                reward_config_snapshot: rewardConfig,
+                updated_at: db.serverDate()
+            }
+        });
+    } catch (err) {
+        console.error('[payment-deposit] failed to update active_ticket_id on deposit order', String(order._id || order.id), err);
+    }
 
     return {
         _id: ticketId,
@@ -306,13 +310,17 @@ async function prepareDepositPay(openid, params = {}) {
     }
 
     const payParams = buildMiniPayParams(wxResult.prepay_id, privateKey);
-    await db.collection('deposit_orders').doc(String(order._id)).update({
-        data: {
-            prepay_id: wxResult.prepay_id,
-            pay_params: payParams,
-            updated_at: db.serverDate()
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('deposit_orders').doc(String(order._id)).update({
+            data: {
+                prepay_id: wxResult.prepay_id,
+                pay_params: payParams,
+                updated_at: db.serverDate()
+            }
+        });
+    } catch (err) {
+        console.error('[payment-deposit] failed to update prepay_id on deposit order', String(order._id), err);
+    }
 
     return {
         deposit_order_id: order._id,
@@ -407,58 +415,88 @@ async function handleDepositRefundCallback(refundData = {}, eventType = '') {
     if (refundStatus === 'SUCCESS' && order) {
         const nextRefundedTotal = roundMoney(toNumber(order.refunded_total, 0) + toNumber(refund.refund_amount, 0));
         const nextRefundableBalance = roundMoney(Math.max(0, toNumber(order.amount_paid, DEPOSIT_AMOUNT) - nextRefundedTotal));
-        await db.collection('deposit_refunds').doc(String(refund._id)).update({
-            data: {
-                status: 'completed',
-                wx_refund_id: pickString(refundData.refund_id || refund.wx_refund_id),
-                wx_refund_status: refundStatus,
-                completed_at: db.serverDate(),
-                updated_at: db.serverDate(),
-                failed_reason: _.remove()
+        try {
+            const completedUpdate = await db.collection('deposit_refunds')
+                .where({ _id: String(refund._id), status: _.in(['processing', 'pending']) })
+                .update({
+                    data: {
+                        status: 'completed',
+                        wx_refund_id: pickString(refundData.refund_id || refund.wx_refund_id),
+                        wx_refund_status: refundStatus,
+                        completed_at: db.serverDate(),
+                        updated_at: db.serverDate(),
+                        failed_reason: _.remove()
+                    }
+                });
+            if (!completedUpdate || !completedUpdate.stats || completedUpdate.stats.updated === 0) {
+                console.warn('[payment-deposit] deposit refund not in processable state, skipping depositId=%s', refund._id);
+                return { handled: true, code: 'SUCCESS', message: 'Deposit refund already processed' };
             }
-        }).catch(() => {});
-        await db.collection('deposit_orders').doc(String(order._id)).update({
-            data: {
-                refunded_total: nextRefundedTotal,
-                refundable_balance: nextRefundableBalance,
-                refund_count: _.inc(1),
-                status: normalizeDepositOrderStatusAfterRefund(order, nextRefundedTotal),
-                coupon_claim_state: order.coupon_claim_state || 'invalidated_by_refund',
-                updated_at: db.serverDate()
-            }
-        }).catch(() => {});
+        } catch (err) {
+            console.error('[payment-deposit] ⚠️ failed to mark refund completed', String(refund._id), refundNo, err);
+            try { await db.collection('rollback_error_logs').add({ data: { collection: 'deposit_refunds', doc_id: String(refund._id), operation: 'update_status_completed', error: err?.message || String(err), refund_no: refundNo, created_at: db.serverDate() } }); } catch (_) {}
+        }
+        try {
+            await db.collection('deposit_orders').doc(String(order._id)).update({
+                data: {
+                    refunded_total: nextRefundedTotal,
+                    refundable_balance: nextRefundableBalance,
+                    refund_count: _.inc(1),
+                    status: normalizeDepositOrderStatusAfterRefund(order, nextRefundedTotal),
+                    coupon_claim_state: order.coupon_claim_state || 'invalidated_by_refund',
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (err) {
+            console.error('[payment-deposit] ⚠️ failed to update deposit order balance after refund', String(order._id), err);
+            try { await db.collection('rollback_error_logs').add({ data: { collection: 'deposit_orders', doc_id: String(order._id), operation: 'update_balance_after_refund', error: err?.message || String(err), deposit_no: order.deposit_no, created_at: db.serverDate() } }); } catch (_) {}
+        }
         return { handled: true, code: 'SUCCESS', message: `Deposit refund settled: ${eventType || refundStatus}` };
     }
 
     if (['ABNORMAL', 'CLOSED'].includes(refundStatus)) {
-        await db.collection('deposit_refunds').doc(String(refund._id)).update({
-            data: {
-                status: 'failed',
-                wx_refund_id: pickString(refundData.refund_id || refund.wx_refund_id),
-                wx_refund_status: refundStatus,
-                failed_reason: pickString(refundData.user_received_account || refundData.reason || refundStatus),
-                updated_at: db.serverDate()
-            }
-        }).catch(() => {});
+        try {
+            await db.collection('deposit_refunds')
+                .where({ _id: String(refund._id), status: _.in(['processing', 'pending']) })
+                .update({
+                    data: {
+                        status: 'failed',
+                        wx_refund_id: pickString(refundData.refund_id || refund.wx_refund_id),
+                        wx_refund_status: refundStatus,
+                        failed_reason: pickString(refundData.user_received_account || refundData.reason || refundStatus),
+                        updated_at: db.serverDate()
+                    }
+                });
+        } catch (err) {
+            console.error('[payment-deposit] ⚠️ failed to mark refund failed', String(refund._id), refundNo, err);
+        }
         if (order) {
-            await db.collection('deposit_orders').doc(String(order._id)).update({
-                data: {
-                    status: normalizeDepositOrderStatusAfterRefund(order, toNumber(order.refunded_total, 0)),
-                    updated_at: db.serverDate()
-                }
-            }).catch(() => {});
+            try {
+                await db.collection('deposit_orders').doc(String(order._id)).update({
+                    data: {
+                        status: normalizeDepositOrderStatusAfterRefund(order, toNumber(order.refunded_total, 0)),
+                        updated_at: db.serverDate()
+                    }
+                });
+            } catch (err) {
+                console.error('[payment-deposit] ⚠️ failed to update deposit order status after refund failure', String(order._id), err);
+            }
         }
         return { handled: true, code: 'SUCCESS', message: `Deposit refund marked failed: ${eventType || refundStatus}` };
     }
 
-    await db.collection('deposit_refunds').doc(String(refund._id)).update({
-        data: {
-            status: 'processing',
-            wx_refund_id: pickString(refundData.refund_id || refund.wx_refund_id),
-            wx_refund_status: refundStatus || pickString(refund.wx_refund_status || 'PROCESSING'),
-            updated_at: db.serverDate()
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('deposit_refunds').doc(String(refund._id)).update({
+            data: {
+                status: 'processing',
+                wx_refund_id: pickString(refundData.refund_id || refund.wx_refund_id),
+                wx_refund_status: refundStatus || pickString(refund.wx_refund_status || 'PROCESSING'),
+                updated_at: db.serverDate()
+            }
+        });
+    } catch (err) {
+        console.error('[payment-deposit] ⚠️ failed to update refund processing status', String(refund._id), refundNo, err);
+    }
 
     return { handled: true, code: 'SUCCESS', message: 'Deposit refund still processing' };
 }

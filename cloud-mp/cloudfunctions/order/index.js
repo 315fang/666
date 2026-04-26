@@ -336,7 +336,11 @@ exports.main = cloudFunctionWrapper(async (event) => {
 
         if (currentAction === 'recoverGoodsFundRefunds') {
             const providedToken = String(params.internal_token || '').trim();
-            if (!internalActionToken || providedToken !== internalActionToken) {
+            if (!internalActionToken) {
+                console.error('[order] ⚠️ ORDER_INTERNAL_TOKEN 未配置，拒绝内部接口访问');
+                throw unauthorized('内部订单接口未正确配置');
+            }
+            if (providedToken !== internalActionToken) {
                 throw unauthorized('内部订单接口禁止直接访问');
             }
             const result = await handleAction[currentAction]('', params);

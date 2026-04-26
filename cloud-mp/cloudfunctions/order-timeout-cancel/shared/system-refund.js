@@ -1030,8 +1030,9 @@ async function recoverGroupExpiredRefunds(limit = DEFAULT_RECOVERY_LIMIT) {
 
 async function processInternalRefund(order, refundContext) {
     const method = refundContext.paymentMethod;
-    try {
-        await db.collection('refunds').doc(String(refundContext.refundId)).update({
+    const processingUpdate = await db.collection('refunds')
+        .where({ _id: String(refundContext.refundId), status: _.in(['pending', 'approved']) })
+        .update({
             data: {
                 status: 'processing',
                 processing_at: db.serverDate(),
@@ -1041,8 +1042,9 @@ async function processInternalRefund(order, refundContext) {
                 updated_at: db.serverDate(),
             }
         });
-    } catch (e) {
-        console.error('[system-refund] ⚠️ 退款processing标记失败 refundId=%s error=%s', refundContext.refundId, e.message);
+    if (!processingUpdate || !processingUpdate.stats || processingUpdate.stats.updated === 0) {
+        console.warn('[system-refund] 退款已不在pending/approved状态，跳过处理 refundId=%s', refundContext.refundId);
+        return { mode: method, refunded: false, refundId: refundContext.refundId, error: 'refund_not_in_pending_state' };
     }
 
     let rollbackInternalFunds = null;

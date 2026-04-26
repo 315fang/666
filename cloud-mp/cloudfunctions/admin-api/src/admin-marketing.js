@@ -1059,7 +1059,7 @@ function registerMarketingRoutes(app, deps) {
                 patchTasks.push(
                     Promise.resolve(
                         directPatchDocument('coupons', String(row._id), { id: assignedId })
-                    ).catch(() => {})
+                    ).catch((err) => { console.error('[admin-marketing] 优惠券 ID 补丁写入失败:', err.message || err); })
                 );
             }
         }

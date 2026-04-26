@@ -927,18 +927,23 @@ async function ensureBranchAgentRegionCommissionWithRetryState(orderId, order = 
         } else if (result.reason) {
             patch.branch_region_commission_skip_reason = result.reason;
         }
-        await db.collection('orders').doc(orderId).update({ data: patch }).catch(() => {});
+        try { await db.collection('orders').doc(orderId).update({ data: patch }); } catch (e) { console.error('[payment-callback] ⚠️ 区域代理佣金状态更新失败', e.message); await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'branch_region_commission_patch', error: e.message, order_id: orderId, created_at: db.serverDate() } }).catch(() => {}); }
         return result;
     } catch (err) {
         const message = err?.message || 'branch_region_commission_failed';
-        await db.collection('orders').doc(orderId).update({
-            data: {
-                branch_region_commission_error: message,
-                branch_region_commission_retry_required: true,
-                branch_region_commission_failed_at: db.serverDate(),
-                updated_at: db.serverDate()
-            }
-        }).catch(() => {});
+try {
+            await db.collection('orders').doc(orderId).update({
+                data: {
+                    branch_region_commission_error: message,
+                    branch_region_commission_retry_required: true,
+                    branch_region_commission_failed_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (e) {
+            console.error('[payment-callback] ⚠️ 区域代理佣金错误状态记录失败', e.message);
+            await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'branch_region_commission_error', error: e.message, order_id: orderId, created_at: db.serverDate() } }).catch(() => {});
+        }
         console.error('[PaymentCallback] 区域代理佣金创建失败:', message);
         return { error: message, created: 0 };
     }
@@ -1153,13 +1158,17 @@ async function ensureAgentRoleSynced(orderId, order) {
         } catch (err) {
             separation = { error: err.message };
             console.error('[RoleSync] 晋升脱离关系重排失败:', err.message);
-            await db.collection('users').where({ openid: order.openid }).update({
-                data: {
-                    promotion_separation_error: err.message,
-                    promotion_separation_failed_at: db.serverDate(),
-                    updated_at: db.serverDate()
-                }
-            }).catch(() => {});
+            try {
+                await db.collection('users').where({ openid: order.openid }).update({
+                    data: {
+                        promotion_separation_error: err.message,
+                        promotion_separation_failed_at: db.serverDate(),
+                        updated_at: db.serverDate()
+                    }
+                });
+            } catch (e) {
+                console.error('[payment-callback] 晋升脱离错误标记失败', e.message);
+            }
         }
     }
 
@@ -1390,10 +1399,8 @@ async function ensureStockDeducted(orderId, order) {
                     .where({ _id: String(product._id), stock: _.gte(qty) })
                     .update({ data: { stock: _.inc(-qty), sales_count: _.inc(qty), updated_at: db.serverDate() } });
                 if (!productRes.stats || productRes.stats.updated === 0) {
-                    console.error('[payment-callback] ⚠️ 商品库存并发扣减失败 productId=%s qty=%s', product._id, qty);
-                    await db.collection('products').doc(String(product._id)).update({
-                        data: { stock: _.inc(-qty), sales_count: _.inc(qty), updated_at: db.serverDate() }
-                    }).catch((e) => { console.error('[payment-callback] ⚠️ 商品库存强制扣减失败 productId=%s error=%s', product._id, e.message); });
+                    console.error('[payment-callback] ⚠️ 商品库存不足或并发冲突 productId=%s qty=%s', product._id, qty);
+                    return { deducted: 0, stockError: `商品库存不足: ${product.name || item.product_id}` };
                 }
             }
         }
@@ -1404,10 +1411,8 @@ async function ensureStockDeducted(orderId, order) {
                     .where({ _id: String(sku._id), stock: _.gte(qty) })
                     .update({ data: { stock: _.inc(-qty), updated_at: db.serverDate() } });
                 if (!skuRes.stats || skuRes.stats.updated === 0) {
-                    console.error('[payment-callback] ⚠️ SKU库存并发扣减失败 skuId=%s qty=%s', sku._id, qty);
-                    await db.collection('skus').doc(String(sku._id)).update({
-                        data: { stock: _.inc(-qty), updated_at: db.serverDate() }
-                    }).catch((e) => { console.error('[payment-callback] ⚠️ SKU库存强制扣减失败 skuId=%s error=%s', sku._id, e.message); });
+                    console.error('[payment-callback] ⚠️ SKU库存不足或并发冲突 skuId=%s qty=%s', sku._id, qty);
+                    return { deducted: 0, stockError: `SKU库存不足: ${item.sku_id}` };
                 }
             }
         }
@@ -1702,15 +1707,18 @@ async function promoteGroupOrdersToPaid(groupOrder) {
                 .get()
                 .catch(() => ({ data: [] }));
             for (const order of pendingRes.data || []) {
-                await db.collection('orders').doc(String(order._id))
-                    .update({
-                        data: {
-                            status: resolveCompletedGroupOrderStatus(order),
-                            group_completed_at: db.serverDate(),
-                            updated_at: db.serverDate()
-                        }
-                    })
-                    .catch(() => {});
+                try {
+                    await db.collection('orders').doc(String(order._id))
+                        .update({
+                            data: {
+                                status: resolveCompletedGroupOrderStatus(order),
+                                group_completed_at: db.serverDate(),
+                                updated_at: db.serverDate()
+                            }
+                        });
+                } catch (e) {
+                    console.error('[payment-callback] ⚠️ 团单完成状态更新失败', e.message);
+                }
             }
         }
         // 通过 members 列表精确更新（防止误更新同活动其他团的订单）
@@ -1720,16 +1728,19 @@ async function promoteGroupOrdersToPaid(groupOrder) {
                 const orderDoc = await db.collection('orders').doc(String(m.order_id)).get().catch(() => ({ data: null }));
                 const order = orderDoc.data || {};
                 if (order.status && order.status !== 'pending_group') continue;
-                await db.collection('orders').doc(String(m.order_id))
-                    .update({
-                        data: {
-                            status: resolveCompletedGroupOrderStatus(order),
-                            group_no: groupNo,
-                            group_completed_at: db.serverDate(),
-                            updated_at: db.serverDate()
-                        }
-                    })
-                    .catch(() => {});
+                try {
+                    await db.collection('orders').doc(String(m.order_id))
+                        .update({
+                            data: {
+                                status: resolveCompletedGroupOrderStatus(order),
+                                group_no: groupNo,
+                                group_completed_at: db.serverDate(),
+                                updated_at: db.serverDate()
+                            }
+                        });
+                } catch (e) {
+                    console.error('[payment-callback] ⚠️ 团成员订单状态更新失败', e.message);
+                }
             }
         }
         console.log('[GroupJoin] 成团，已将参团订单从 pending_group 更新为 paid, group_no:', groupNo);
@@ -1818,9 +1829,13 @@ async function ensurePaidGroupJoined(orderId, order) {
     const persistedMemberCount = toNumber(groupOrder.member_count, NaN);
     let currentMemberCount = Number.isFinite(persistedMemberCount) ? persistedMemberCount : members.length;
     if (!Number.isFinite(persistedMemberCount)) {
-        await db.collection('group_orders').doc(groupOrder._id).update({
-            data: { member_count: currentMemberCount, updated_at: db.serverDate() }
-        }).catch(() => {});
+        try {
+            await db.collection('group_orders').doc(groupOrder._id).update({
+                data: { member_count: currentMemberCount, updated_at: db.serverDate() }
+            });
+        } catch (e) {
+            console.error('[payment-callback] 团成员数量修正失败', e.message);
+        }
     }
     const nextMembers = exists ? members : [...members, member];
     if (!exists) {
@@ -2024,13 +2039,17 @@ async function accrueDividendPoolContribution(orderId, order) {
     const contribution = roundMoney(amount * sourcePct / 100);
 
     if (!rules.enabled || contribution <= 0) {
-        await db.collection('orders').doc(orderId).update({
-            data: {
-                dividend_pool_accrued_at: db.serverDate(),
-                dividend_pool_contribution: 0,
-                updated_at: db.serverDate()
-            }
-        }).catch(() => {});
+        try {
+            await db.collection('orders').doc(orderId).update({
+                data: {
+                    dividend_pool_accrued_at: db.serverDate(),
+                    dividend_pool_contribution: 0,
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (e) {
+            console.error('[payment-callback] 分红池标记更新失败', e.message);
+        }
         return { skipped: true, reason: !rules.enabled ? 'disabled' : 'zero_contribution' };
     }
 
@@ -2094,7 +2113,12 @@ async function processPaidOrder(orderId, order) {
 
     // 代理升级时记录基金池入池
     if (roles && roles.upgraded && roles.nextRoleLevel >= 3) {
-        await recordFundPoolEntry(order.openid, roles.nextRoleLevel, 'upgrade_payment', orderId).catch(() => {});
+        try {
+            await recordFundPoolEntry(order.openid, roles.nextRoleLevel, 'upgrade_payment', orderId);
+        } catch (e) {
+            console.error('[payment-callback] ⚠️ 基金池入池记录失败', e.message);
+            await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'fund_pool_entry', error: e.message, order_id: orderId, created_at: db.serverDate() } }).catch(() => {});
+        }
     }
 
     const peerBonus = await ensurePeerBonusCreated(orderId, settlementOrder, roles);
@@ -2386,17 +2410,21 @@ function buildRefundRuntime(refund = {}, order = null) {
 }
 
 async function cancelPendingCommissionsForRefund(orderId, reason) {
-    await db.collection('commissions')
-        .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval', 'approved']) })
-        .update({
-            data: {
-                status: 'cancelled',
-                cancel_reason: reason,
-                cancelled_reason: reason,
-                updated_at: db.serverDate()
-            }
-        })
-        .catch(() => {});
+    try {
+        await db.collection('commissions')
+            .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval', 'approved']) })
+            .update({
+                data: {
+                    status: 'cancelled',
+                    cancel_reason: reason,
+                    cancelled_reason: reason,
+                    updated_at: db.serverDate()
+                }
+            });
+    } catch (e) {
+        console.error('[payment-callback] ⚠️ 取消退款待结算佣金失败', e.message);
+        await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'cancel_pending_commissions', error: e.message, order_id: orderId, created_at: db.serverDate() } }).catch(() => {});
+    }
 }
 
 async function clawBackSettledCommissions(orderId) {
@@ -2407,24 +2435,33 @@ async function clawBackSettledCommissions(orderId) {
     for (const comm of (settledRes.data || [])) {
         const commAmount = toNumber(comm.amount, 0);
         if (commAmount <= 0 || comm.clawed_back_at) continue;
-        await db.collection('users').where({ openid: comm.openid }).update({
-            data: {
-                commission_balance: _.inc(-commAmount),
-                balance: _.inc(-commAmount),
-                updated_at: db.serverDate()
-            }
-        }).catch((err) => {
-            console.error('[RefundCallback] 追回已结算佣金余额失败:', err.message);
-        });
-        await db.collection('commissions').doc(String(comm._id)).update({
-            data: {
-                status: 'cancelled',
-                cancel_reason: '退款追回已结算佣金',
-                cancelled_reason: '退款追回已结算佣金',
-                clawed_back_at: db.serverDate(),
-                updated_at: db.serverDate()
-            }
-        }).catch(() => {});
+        const statusUpdate = await db.collection('commissions')
+            .where({ _id: String(comm._id), status: 'settled' })
+            .update({
+                data: {
+                    status: 'cancelled',
+                    cancel_reason: '退款追回已结算佣金',
+                    cancelled_reason: '退款追回已结算佣金',
+                    clawed_back_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                }
+            }).catch((err) => {
+                console.error('[payment-callback] ⚠️ 佣金取消状态更新失败', err.message);
+                return { stats: { updated: 0 } };
+            });
+        if (!statusUpdate || !statusUpdate.stats || statusUpdate.stats.updated === 0) continue;
+        try {
+            await db.collection('users').where({ openid: comm.openid }).update({
+                data: {
+                    commission_balance: _.inc(-commAmount),
+                    balance: _.inc(-commAmount),
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (err) {
+            console.error('[payment-callback] ⚠️ 追回已结算佣金余额失败:', err.message);
+            await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'clawback_commission_balance', openid: comm.openid, commission_id: String(comm._id), amount: commAmount, error: err.message, created_at: db.serverDate() } }).catch(() => {});
+        }
     }
 }
 
@@ -2436,20 +2473,34 @@ async function restoreRefundOrderInventory(orderId, order = {}, refund = {}) {
     const allocations = buildRefundItemAllocations(order, inferRefundQuantityEffective(order, refund), refund);
     for (const { item, qty } of allocations) {
         if (item.product_id) {
-            await db.collection('products').doc(String(item.product_id)).update({
-                data: { stock: _.inc(qty), sales_count: _.inc(-qty), updated_at: db.serverDate() }
-            }).catch(() => {});
+            try {
+                await db.collection('products').doc(String(item.product_id)).update({
+                    data: { stock: _.inc(qty), sales_count: _.inc(-qty), updated_at: db.serverDate() }
+                });
+            } catch (e) {
+                console.error('[payment-callback] ⚠️ 商品库存回滚失败', e.message);
+                await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'product_stock_restore', error: e.message, order_id: orderId, product_id: String(item.product_id), created_at: db.serverDate() } }).catch(() => {});
+            }
         }
         if (item.sku_id) {
-            await db.collection('skus').doc(String(item.sku_id)).update({
-                data: { stock: _.inc(qty), updated_at: db.serverDate() }
-            }).catch(() => {});
+            try {
+                await db.collection('skus').doc(String(item.sku_id)).update({
+                    data: { stock: _.inc(qty), updated_at: db.serverDate() }
+                });
+            } catch (e) {
+                console.error('[payment-callback] ⚠️ SKU库存回滚失败', e.message);
+                await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'sku_stock_restore', error: e.message, order_id: orderId, sku_id: String(item.sku_id), created_at: db.serverDate() } }).catch(() => {});
+            }
         }
     }
     if (refund && refund._id) {
-        await db.collection('refunds').doc(String(refund._id)).update({
-            data: { stock_restored_at: db.serverDate(), updated_at: db.serverDate() }
-        }).catch(() => {});
+        try {
+            await db.collection('refunds').doc(String(refund._id)).update({
+                data: { stock_restored_at: db.serverDate(), updated_at: db.serverDate() }
+            });
+        } catch (e) {
+            console.error('[payment-callback] 退款库存回滚标记失败', e.message);
+        }
     }
 }
 
@@ -2472,42 +2523,58 @@ async function reverseBuyerAssetsForRefund(orderId, order = {}, refund = {}) {
         .catch((err) => { console.error('[RefundCallback] 用户数据回退失败:', err.message); });
 
     if (refund && refund._id) {
-        await db.collection('refunds').doc(String(refund._id)).update({
-            data: {
-                reward_points_clawback_amount: settlement.rewardPointsClawback,
-                growth_clawback_amount: settlement.growthClawback,
-                order_progress_applied_at: db.serverDate(),
-                buyer_assets_reversed_at: db.serverDate(),
-                updated_at: db.serverDate()
-            }
-        }).catch(() => {});
+        try {
+            await db.collection('refunds').doc(String(refund._id)).update({
+                data: {
+                    reward_points_clawback_amount: settlement.rewardPointsClawback,
+                    growth_clawback_amount: settlement.growthClawback,
+                    order_progress_applied_at: db.serverDate(),
+                    buyer_assets_reversed_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (e) {
+            console.error('[payment-callback] ⚠️ 退款扣回信息更新失败', e.message);
+            await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'refund_clawback_update', error: e.message, refund_id: String(refund._id), created_at: db.serverDate() } }).catch(() => {});
+        }
     }
 
     if (settlement.rewardPointsClawback > 0) {
-        await db.collection('point_logs').add({
-            data: {
-                openid: order.openid,
-                type: 'deduct',
-                amount: -settlement.rewardPointsClawback,
-                source: 'order_refund_revoke',
-                order_id: orderId,
-                description: `退款扣回 ${settlement.rewardPointsClawback} 奖励积分`,
-                created_at: db.serverDate()
-            }
-        }).catch(() => {});
+        try {
+            await db.collection('point_logs').add({
+                data: {
+                    openid: order.openid,
+                    type: 'deduct',
+                    amount: -settlement.rewardPointsClawback,
+                    source: 'order_refund_revoke',
+                    order_id: orderId,
+                    description: `退款扣回 ${settlement.rewardPointsClawback} 奖励积分`,
+                    created_at: db.serverDate()
+                }
+            });
+        } catch (e) {
+            console.error('[payment-callback] ⚠️ 奖励积分扣回日志写入失败', e.message);
+            await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'reward_points_clawback_log', error: e.message, order_id: orderId, created_at: db.serverDate() } }).catch(() => {});
+        }
     }
     if (settlement.growthClawback > 0) {
-        await db.collection('point_logs').add({
-            data: {
-                openid: order.openid,
-                type: 'deduct',
-                amount: -settlement.growthClawback,
-                source: 'order_refund_growth_revoke',
-                order_id: orderId,
-                description: `退款扣回 ${settlement.growthClawback} 成长值`,
-                created_at: db.serverDate()
-            }
-        }).catch(() => {});
+        try {
+            await db.collection('point_logs').add({
+                data: {
+                    openid: order.openid,
+                    type: 'deduct',
+                    amount: -settlement.growthClawback,
+                    source: 'order_refund_growth_revoke',
+                    order_id: orderId,
+                    description: `退款扣回 ${settlement.growthClawback} 成长值`,
+                    created_at: db.serverDate()
+                }
+            });
+        } catch (e) {
+            console.error('[payment-callback] ⚠️ 成长值扣回日志写入失败', e.message);
+            await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'growth_clawback_log', error: e.message, order_id: orderId, created_at: db.serverDate() } }).catch(() => {});
+        }
+    }
     }
 }
 
@@ -2568,17 +2635,22 @@ async function handleRechargeCallback(outTradeNo, transaction) {
     await increaseGoodsFundLedger(openid, amount, outTradeNo, '货款余额充值', 'wx_recharge').catch(() => false);
 
     // 写流水日志
-    await db.collection('goods_fund_logs').add({
-        data: {
-            openid,
-            type: 'recharge',
-            amount,
-            recharge_order_id: recharge._id,
-            order_no: outTradeNo,
-            remark: '货款余额充值',
-            created_at: db.serverDate(),
-        },
-    }).catch(() => {});
+    try {
+        await db.collection('goods_fund_logs').add({
+            data: {
+                openid,
+                type: 'recharge',
+                amount,
+                recharge_order_id: recharge._id,
+                order_no: outTradeNo,
+                remark: '货款余额充值',
+                created_at: db.serverDate(),
+            },
+        });
+    } catch (e) {
+        console.error('[payment-callback] ⚠️ 充值流水日志写入失败', e.message);
+        await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'recharge_goods_fund_log', error: e.message, order_no: outTradeNo, created_at: db.serverDate() } }).catch(() => {});
+    }
 
     console.log(`[RechargeCallback] 充值成功: ${outTradeNo}, 金额: ${amount}, openid: ${openid}`);
     return { code: 'SUCCESS', message: 'Recharge processed' };
@@ -2633,20 +2705,27 @@ async function handleRefundCallback(refundData, eventType) {
 
     if (refundStatus === 'SUCCESS') {
         // 先写入规范字段，待下游回滚完成后再标记 completed，避免过早进入终态。
-        await db.collection('refunds').doc(refund._id).update({
-            data: {
-                status: 'processing',
-                processing_at: refund.processing_at || db.serverDate(),
-                amount: refundRuntime.amount,
-                payment_method: refundRuntime.paymentMethod,
-                refund_channel: refundRuntime.refundChannel,
-                refund_target_text: refundRuntime.refundTargetText,
-                wx_refund_id: wxRefundId || refund.wx_refund_id || '',
-                wx_refund_status: refundStatus,
-                wx_success_time: refundData.success_time || '',
-                updated_at: db.serverDate()
-            }
-        });
+        // 使用 where 条件确保只从非终态转换，防止并发回调双倍处理
+        const processingUpdate = await db.collection('refunds')
+            .where({ _id: refund._id, status: _.in(['pending', 'approved', 'processing']) })
+            .update({
+                data: {
+                    status: 'processing',
+                    processing_at: refund.processing_at || db.serverDate(),
+                    amount: refundRuntime.amount,
+                    payment_method: refundRuntime.paymentMethod,
+                    refund_channel: refundRuntime.refundChannel,
+                    refund_target_text: refundRuntime.refundTargetText,
+                    wx_refund_id: wxRefundId || refund.wx_refund_id || '',
+                    wx_refund_status: refundStatus,
+                    wx_success_time: refundData.success_time || '',
+                    updated_at: db.serverDate()
+                }
+            });
+        if (!processingUpdate || !processingUpdate.stats || processingUpdate.stats.updated === 0) {
+            console.warn('[RefundCallback] 退款不在可处理状态，跳过 refundId=%s', refund._id);
+            return { code: 'SUCCESS', message: 'Refund not in processable state' };
+        }
 
         try {
                 if (canonicalOrderId) {
@@ -2657,20 +2736,29 @@ async function handleRefundCallback(refundData, eventType) {
                             db,
                             command: _
                         }, canonicalOrderId);
-                        await db.collection('orders').doc(canonicalOrderId).update({
-                        data: { refund_commissions_resolved_at: db.serverDate(), updated_at: db.serverDate() }
-                    }).catch(() => {});
+                        try {
+                            await db.collection('orders').doc(canonicalOrderId).update({
+                            data: { refund_commissions_resolved_at: db.serverDate(), updated_at: db.serverDate() }
+                        });
+                        } catch (e) {
+                            console.error('[payment-callback] 退款佣金处理标记失败', e.message);
+                        }
                     }
 
                     if (order) {
                         const settlement = buildOrderPatchAfterRefund(order, refund);
                         await restoreRefundOrderInventory(canonicalOrderId, order, refund);
                         await reverseBuyerAssetsForRefund(canonicalOrderId, order, refund);
-                        await db.collection('orders').doc(canonicalOrderId).update({ data: settlement.patch }).catch(() => {});
+                        try {
+                            await db.collection('orders').doc(canonicalOrderId).update({ data: settlement.patch });
+                        } catch (e) {
+                            console.error('[payment-callback] ⚠️ 退款结算补丁更新失败', e.message);
+                            await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'refund_settlement_patch', error: e.message, order_id: canonicalOrderId, created_at: db.serverDate() } }).catch(() => {});
+                        }
                     }
                 }
 
-            await db.collection('refunds').doc(refund._id).update({
+            await db.collection('refunds').where({ _id: refund._id, status: 'processing' }).update({
                 data: {
                     status: 'completed',
                     completed_at: db.serverDate(),
@@ -2680,14 +2768,19 @@ async function handleRefundCallback(refundData, eventType) {
                 }
             });
         } catch (settleErr) {
-            await db.collection('refunds').doc(refund._id).update({
-                data: {
-                    status: 'processing',
-                    callback_error: settleErr.message,
-                    callback_retry_needed_at: db.serverDate(),
-                    updated_at: db.serverDate()
-                }
-            }).catch(() => {});
+            try {
+                await db.collection('refunds').doc(refund._id).update({
+                    data: {
+                        status: 'processing',
+                        callback_error: settleErr.message,
+                        callback_retry_needed_at: db.serverDate(),
+                        updated_at: db.serverDate()
+                    }
+                });
+            } catch (e) {
+                console.error('[payment-callback] ⚠️ 退款结算错误状态更新失败', e.message);
+                await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'refund_settle_error_status', error: e.message, refund_id: String(refund._id), created_at: db.serverDate() } }).catch(() => {});
+            }
             throw settleErr;
         }
 
@@ -2711,17 +2804,25 @@ async function handleRefundCallback(refundData, eventType) {
             || pickString(refund.system_refund_scene) === 'group_expired';
         if (canonicalOrderId && order && order.status === 'refunding' && !shouldKeepRefunding) {
             const revertStatus = deriveRefundRevertStatus(order);
-            await db.collection('orders').doc(canonicalOrderId).update({
-                data: { status: revertStatus, prev_status: _.remove(), updated_at: db.serverDate() }
-                }).catch(() => {});
+try {
+                await db.collection('orders').doc(canonicalOrderId).update({
+                    data: { status: revertStatus, prev_status: _.remove(), updated_at: db.serverDate() }
+                });
+            } catch (e) {
+                console.error('[payment-callback] ⚠️ 退款失败订单状态回退失败', e.message);
+            }
         } else if (canonicalOrderId && order && shouldKeepRefunding) {
-            await db.collection('orders').doc(canonicalOrderId).update({
-                data: {
-                    auto_refund_error: `微信退款失败: ${refundStatus}`,
-                    auto_refund_failed_at: db.serverDate(),
-                    updated_at: db.serverDate()
-                }
-            }).catch(() => {});
+            try {
+                await db.collection('orders').doc(canonicalOrderId).update({
+                    data: {
+                        auto_refund_error: `微信退款失败: ${refundStatus}`,
+                        auto_refund_failed_at: db.serverDate(),
+                        updated_at: db.serverDate()
+                    }
+                });
+            } catch (e) {
+                console.error('[payment-callback] ⚠️ 退款失败状态标记失败', e.message);
+            }
         }
 
         console.warn(`[RefundCallback] 退款异常/关闭: ${outRefundNo}, status=${refundStatus}`);
@@ -2895,10 +2996,13 @@ async function handleCallback(event) {
                             .catch(() => false);
                     }
                     if (!couponConfirmed && order.coupon_id) {
-                        await db.collection('user_coupons')
-                            .where({ openid: order.openid, coupon_id: order.coupon_id, status: 'unused' })
-                            .update({ data: { status: 'used', used_at: db.serverDate() } })
-                            .catch(() => {});
+                        try {
+                            await db.collection('user_coupons')
+                                .where({ openid: order.openid, coupon_id: order.coupon_id, status: 'unused' })
+                                .update({ data: { status: 'used', used_at: db.serverDate() } });
+                        } catch (e) {
+                            console.error('[payment-callback] 优惠券标记已用失败', e.message);
+                        }
                     }
                 } catch (postErr) {
                     console.error('[PaymentCallback] 后续处理失败:', postErr.message);
@@ -2918,9 +3022,13 @@ async function handleCallback(event) {
 
         // 6. 处理支付关闭/退款等事件
         if (tradeState === 'CLOSED') {
-            await db.collection('orders').where({ order_no: outTradeNo }).update({
-                data: { status: 'closed', updated_at: db.serverDate() },
-            }).catch(() => {});
+            try {
+                await db.collection('orders').where({ order_no: outTradeNo }).update({
+                    data: { status: 'closed', updated_at: db.serverDate() },
+                });
+            } catch (e) {
+                console.error('[payment-callback] ⚠️ 订单关闭状态更新失败', e.message);
+            }
             return { code: 'SUCCESS', message: 'Order closed' };
         }
 

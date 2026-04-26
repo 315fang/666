@@ -69,7 +69,11 @@ async function ensureWalletAccountForUser(db, user = {}, seedBalance = 0) {
         created_at: nowIso(),
         updated_at: nowIso()
     };
-    await db.collection('wallet_accounts').doc(docId).set({ data: row }).catch(() => {});
+    try {
+        await db.collection('wallet_accounts').doc(docId).set({ data: row });
+    } catch (err) {
+        console.error('[pickup-stock] wallet account seed write failed', docId, err);
+    }
     return row;
 }
 
@@ -200,13 +204,17 @@ async function reservePickupStationInventory(db, { stationId, orderNo, items = [
         };
     } catch (error) {
         for (const reservation of reservations) {
-            await db.collection('station_sku_stocks').doc(String(reservation.stock_id)).update({
-                data: {
-                    available_qty: db.command.inc(reservation.quantity),
-                    reserved_qty: db.command.inc(-reservation.quantity),
-                    updated_at: db.serverDate()
-                }
-            }).catch(() => {});
+            try {
+                await db.collection('station_sku_stocks').doc(String(reservation.stock_id)).update({
+                    data: {
+                        available_qty: db.command.inc(reservation.quantity),
+                        reserved_qty: db.command.inc(-reservation.quantity),
+                        updated_at: db.serverDate()
+                    }
+                });
+            } catch (rollbackErr) {
+                console.error('[pickup-stock] ⚠️ rollback reserve failed, stock_id=%s', reservation.stock_id, rollbackErr);
+            }
             await appendStationStockLog(db, {
                 station_id: reservation.station_id,
                 stock_id: reservation.stock_id,
@@ -235,13 +243,17 @@ async function releasePickupStationInventoryForOrder(db, order = {}, reason = '�
 
     let released = 0;
     for (const line of lines) {
-        await db.collection('station_sku_stocks').doc(String(line.station_stock_id)).update({
-            data: {
-                available_qty: db.command.inc(line.quantity),
-                reserved_qty: db.command.inc(-line.quantity),
-                updated_at: db.serverDate()
-            }
-        }).catch(() => {});
+        try {
+            await db.collection('station_sku_stocks').doc(String(line.station_stock_id)).update({
+                data: {
+                    available_qty: db.command.inc(line.quantity),
+                    reserved_qty: db.command.inc(-line.quantity),
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (releaseErr) {
+            console.error('[pickup-stock] ⚠️ release stock failed, stock_id=%s', line.station_stock_id, releaseErr);
+        }
         released += line.quantity;
         await appendStationStockLog(db, {
             station_id: stationId,
@@ -256,13 +268,17 @@ async function releasePickupStationInventoryForOrder(db, order = {}, reason = '�
         });
     }
 
-    await db.collection('orders').doc(String(order._id || order.id)).update({
-        data: {
-            pickup_stock_reservation_status: 'released',
-            pickup_stock_released_at: db.serverDate(),
-            updated_at: db.serverDate()
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('orders').doc(String(order._id || order.id)).update({
+            data: {
+                pickup_stock_reservation_status: 'released',
+                pickup_stock_released_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        });
+    } catch (orderErr) {
+        console.error('[pickup-stock] ⚠️ order release status update failed, order=%s', String(order._id || order.id), orderErr);
+    }
     return { released };
 }
 
@@ -276,12 +292,16 @@ async function consumePickupStationInventoryForOrder(db, order = {}, verifierOpe
 
     let consumed = 0;
     for (const line of lines) {
-        await db.collection('station_sku_stocks').doc(String(line.station_stock_id)).update({
-            data: {
-                reserved_qty: db.command.inc(-line.quantity),
-                updated_at: db.serverDate()
-            }
-        }).catch(() => {});
+        try {
+            await db.collection('station_sku_stocks').doc(String(line.station_stock_id)).update({
+                data: {
+                    reserved_qty: db.command.inc(-line.quantity),
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (consumeErr) {
+            console.error('[pickup-stock] ⚠️ consume stock failed, stock_id=%s', line.station_stock_id, consumeErr);
+        }
         consumed += line.quantity;
         await appendStationStockLog(db, {
             station_id: stationId,
@@ -296,13 +316,17 @@ async function consumePickupStationInventoryForOrder(db, order = {}, verifierOpe
             remark: `订单核销消耗库存 ${pickString(order.order_no)}`
         });
     }
-    await db.collection('orders').doc(String(order._id || order.id)).update({
-        data: {
-            pickup_stock_consumed_at: db.serverDate(),
-            pickup_stock_reservation_status: 'consumed',
-            updated_at: db.serverDate()
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('orders').doc(String(order._id || order.id)).update({
+            data: {
+                pickup_stock_consumed_at: db.serverDate(),
+                pickup_stock_reservation_status: 'consumed',
+                updated_at: db.serverDate()
+            }
+        });
+    } catch (orderErr) {
+        console.error('[pickup-stock] ⚠️ order consumed status update failed, order=%s', String(order._id || order.id), orderErr);
+    }
     return { consumed };
 }
 
@@ -321,13 +345,17 @@ async function adjustPickupClaimantGoodsFund(db, claimantOpenid, amount, options
         }
     });
     const walletAccount = await ensureWalletAccountForUser(db, claimant, balanceBefore);
-    await db.collection('wallet_accounts').doc(String(walletAccount._id || walletAccount.id)).set({
-        data: {
-            ...walletAccount,
-            balance: balanceAfter,
-            updated_at: nowIso()
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('wallet_accounts').doc(String(walletAccount._id || walletAccount.id)).set({
+            data: {
+                ...walletAccount,
+                balance: balanceAfter,
+                updated_at: nowIso()
+            }
+        });
+    } catch (walletErr) {
+        console.error('[pickup-stock] ⚠️ wallet account balance update failed', String(walletAccount._id || walletAccount.id), walletErr);
+    }
     await appendGoodsFundLog(db, {
         openid: claimant.openid,
         user_id: claimant.id || claimant._legacy_id || claimant._id || claimant.openid,
@@ -361,14 +389,18 @@ async function settlePickupStationPrincipalForOrder(db, order = {}, options = {}
         remark: `自提订单进货本金返还 ${pickString(order.order_no)}`,
         description: `自提订单进货本金返还 ${pickString(order.order_no)}`
     });
-    await db.collection('orders').doc(String(order._id || order.id)).update({
-        data: {
-            pickup_stock_settlement_status: 'settled',
-            pickup_stock_settled_at: db.serverDate(),
-            pickup_stock_settlement_txn_no: transferNo,
-            updated_at: db.serverDate()
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('orders').doc(String(order._id || order.id)).update({
+            data: {
+                pickup_stock_settlement_status: 'settled',
+                pickup_stock_settled_at: db.serverDate(),
+                pickup_stock_settlement_txn_no: transferNo,
+                updated_at: db.serverDate()
+            }
+        });
+    } catch (orderErr) {
+        console.error('[pickup-stock] ⚠️ order settlement status update failed, order=%s', String(order._id || order.id), orderErr);
+    }
     return { settled: true, amount, transfer_no: transferNo };
 }
 
@@ -391,13 +423,17 @@ async function rollbackPickupStationPrincipalForOrder(db, order = {}, refund = {
         remark: pickString(reason),
         description: pickString(reason)
     });
-    await db.collection('refunds').doc(String(refund._id)).update({
-        data: {
-            pickup_principal_reversal_amount: amount,
-            pickup_principal_reversed_at: db.serverDate(),
-            updated_at: db.serverDate()
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('refunds').doc(String(refund._id)).update({
+            data: {
+                pickup_principal_reversal_amount: amount,
+                pickup_principal_reversed_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        });
+    } catch (refundErr) {
+        console.error('[pickup-stock] ⚠️ refund reversal status update failed, refund=%s', String(refund._id), refundErr);
+    }
     return { reversed: true, amount, transfer_no: transferNo };
 }
 
@@ -413,12 +449,16 @@ async function restorePickupStationInventoryForRefund(db, order = {}, refund = {
     let restored = 0;
     for (const line of allocations) {
         if (!pickString(line.station_stock_id) || line.quantity <= 0) continue;
-        await db.collection('station_sku_stocks').doc(String(line.station_stock_id)).update({
-            data: {
-                available_qty: db.command.inc(line.quantity),
-                updated_at: db.serverDate()
-            }
-        }).catch(() => {});
+        try {
+            await db.collection('station_sku_stocks').doc(String(line.station_stock_id)).update({
+                data: {
+                    available_qty: db.command.inc(line.quantity),
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (restoreErr) {
+            console.error('[pickup-stock] ⚠️ refund restore stock failed, stock_id=%s', line.station_stock_id, restoreErr);
+        }
         restored += line.quantity;
         await appendStationStockLog(db, {
             station_id: stationId,
@@ -433,12 +473,16 @@ async function restorePickupStationInventoryForRefund(db, order = {}, refund = {
             remark: `退货退款恢复库存 ${pickString(order.order_no)}`
         });
     }
-    await db.collection('refunds').doc(String(refund._id)).update({
-        data: {
-            pickup_stock_restored_at: db.serverDate(),
-            updated_at: db.serverDate()
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('refunds').doc(String(refund._id)).update({
+            data: {
+                pickup_stock_restored_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        });
+    } catch (refundErr) {
+        console.error('[pickup-stock] ⚠️ refund restore status update failed, refund=%s', String(refund._id), refundErr);
+    }
     return { restored };
 }
 

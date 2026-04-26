@@ -244,7 +244,7 @@ Page({
         const { footprintItems } = this.data;
         if (!footprintItems.length) return;
         wx.showModal({
-            title: '清空足迹',
+            title: '清空近期浏览',
             content: '确定删除全部浏览记录？',
             success: (res) => {
                 if (res.confirm) {

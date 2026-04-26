@@ -940,9 +940,15 @@ const handleAction = {
             }
             const amount = toNumber(comm.amount, 0);
             try {
-                await db.collection('commissions').doc(comm._id).update({
-                    data: { status: 'settled', settled_at: db.serverDate(), updated_at: db.serverDate() }
-                });
+                const statusUpdate = await db.collection('commissions')
+                    .where({ _id: comm._id, status: _.in(['frozen', 'pending_approval']) })
+                    .update({
+                        data: { status: 'settled', settled_at: db.serverDate(), updated_at: db.serverDate() }
+                    });
+                if (!statusUpdate || !statusUpdate.stats || statusUpdate.stats.updated === 0) {
+                    skippedCount++;
+                    continue;
+                }
             } catch (e) {
                 console.error('[distribution] ⚠️ 佣金状态更新失败 commissionId=%s error=%s', comm._id, e.message);
                 continue;
@@ -1771,7 +1777,11 @@ exports.main = cloudFunctionWrapper(async (event) => {
     const internalActions = new Set(['createCommissions', 'unfreezeCommissions', 'cancelCommissions']);
     if (internalActions.has(action)) {
         const providedToken = String(event.internal_token || '').trim();
-        if (!internalActionToken || providedToken !== internalActionToken) {
+        if (!internalActionToken) {
+            console.error('[distribution] ⚠️ DISTRIBUTION_INTERNAL_TOKEN 未配置，拒绝内部接口访问');
+            throw forbidden('内部佣金接口未正确配置');
+        }
+        if (providedToken !== internalActionToken) {
             throw forbidden('内部佣金接口禁止直接访问');
         }
     }

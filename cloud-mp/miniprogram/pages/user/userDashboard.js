@@ -132,6 +132,15 @@ async function resolveQuadPreviewImage(value) {
     return resolved || QUAD_PLACEHOLDER;
 }
 
+function buildBrowseFavoriteSub(favoriteCount = 0, footprintCount = 0) {
+    const favCount = Math.max(0, Number(favoriteCount) || 0);
+    const viewCount = Math.max(0, Number(footprintCount) || 0);
+    if (favCount > 0 && viewCount > 0) return `${viewCount}条近期浏览 · ${favCount}件收藏`;
+    if (viewCount > 0) return `${viewCount}条近期浏览`;
+    if (favCount > 0) return `${favCount}件收藏`;
+    return '暂无浏览与收藏';
+}
+
 async function buildLocalQuadPreviews() {
     const favorites = listFavorites();
     const footprints = listFootprints();
@@ -142,7 +151,7 @@ async function buildLocalQuadPreviews() {
     return {
         quadFavorite: {
             count: favorites.length,
-            sub: favorites.length ? `${favorites.length}件收藏宝贝` : '暂无收藏',
+            sub: buildBrowseFavoriteSub(favorites.length, footprints.length),
             image: favoriteImage,
             hasImage: !!favorites[0]
         },
@@ -427,6 +436,10 @@ async function loadDashboardBootstrap(page) {
     const footprintCard = useServerFootprint
         ? normalizeQuadPreviewCard(footprintPayload, localQuad.quadFootprint)
         : localQuad.quadFootprint;
+    const browseFavoriteCard = {
+        ...favoriteCard,
+        sub: buildBrowseFavoriteSub(favoriteCard.count, footprintCard.count)
+    };
 
     const nextStats = {
         pending: Number(payload.orderStats?.pending || 0),
@@ -458,7 +471,7 @@ async function loadDashboardBootstrap(page) {
         pointsBalanceDisplay: String(payload.assetRow?.pointsBalance != null ? payload.assetRow.pointsBalance : 0),
         piggyBankBalance: formatMoneyInt(pickPiggyBankLockedAmount(payload.assetRow || {})),
         cartPreview,
-        quadFavorite: favoriteCard,
+        quadFavorite: browseFavoriteCard,
         quadFootprint: footprintCard,
         stats: { frozenAmount: distributionCard.frozenAmount || '0.00' },
         balance: distributionCard.balance != null ? String(distributionCard.balance) : '0',
@@ -715,7 +728,7 @@ async function loadQuadPreviews(page) {
             const favoriteImage = await resolveQuadPreviewImage(list[0].image_ref || list[0].image || list[0].product_image);
             quadFavorite = {
                 count: list.length,
-                sub: `${list.length}件收藏宝贝`,
+                sub: buildBrowseFavoriteSub(list.length, quadFootprint.count),
                 image: favoriteImage,
                 hasImage: favoriteImage !== QUAD_PLACEHOLDER
             };
@@ -726,7 +739,10 @@ async function loadQuadPreviews(page) {
     }
 
     page.setData({
-        quadFavorite,
+        quadFavorite: {
+            ...quadFavorite,
+            sub: buildBrowseFavoriteSub(quadFavorite.count, quadFootprint.count)
+        },
         quadFootprint
     });
 }

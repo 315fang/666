@@ -9,7 +9,7 @@
       class="tab-item {{activeTab === 'footprints' ? 'tab-active' : ''}}"
       bindtap="switchTab"
       data-tab="footprints"
-    >我的足迹</view>
+    >近期浏览</view>
   </view>
 
   <!-- 我的收藏 -->
@@ -41,7 +41,7 @@
     </scroll-view>
   </view>
 
-  <!-- 我的足迹 -->
+  <!-- 近期浏览 -->
   <view class="panel" wx:if="{{activeTab === 'footprints'}}">
     <view class="head-row" wx:if="{{footprintItems.length > 0}}">
       <text class="clear-all" bindtap="onClearFootprintsTap">清空</text>

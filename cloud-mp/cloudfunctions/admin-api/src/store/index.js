@@ -7,7 +7,7 @@ function buildUnsupportedStore(mode, error) {
     const message = error instanceof Error ? error.message : String(error || `${mode} unavailable`);
     const failure = error instanceof Error ? error : new Error(message);
     const rejectedReady = Promise.reject(failure);
-    rejectedReady.catch(() => {});
+    rejectedReady.catch((err) => { console.error('[store] 数据源初始化失败:', err.message || err); });
     return {
         kind: mode,
         description: `${mode} provider unavailable`,

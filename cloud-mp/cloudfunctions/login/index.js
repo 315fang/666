@@ -376,9 +376,13 @@ async function ensureWelcomeCoupons(openid, userId, user = {}) {
         }
 
         // 标记已发放
-        await db.collection('users').where({ openid }).update({
-            data: { register_coupons_issued: true, updated_at: db.serverDate() }
-        }).catch(() => {});
+        try {
+            await db.collection('users').where({ openid }).update({
+                data: { register_coupons_issued: true, updated_at: db.serverDate() }
+            });
+        } catch (err) {
+            console.error('[login] 标记注册优惠券已发放失败:', err);
+        }
 
         return claimedCount;
     } catch (err) {

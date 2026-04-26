@@ -286,7 +286,7 @@ function registerPickupStockRoutes(app, deps) {
                 order_no: pickString(order.order_no),
                 refund_id: primaryId(refund),
                 description: `退款冲回门店进货本金 ${pickString(order.order_no)}`
-            }).catch(() => {});
+            }).catch((err) => { console.error('[admin-pickup-stock] ⚠️ 货款流水记录失败:', err.message || err); });
         }
         return { reversed: true, amount };
     }

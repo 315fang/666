@@ -1070,13 +1070,17 @@ function resolveSlashFloorPrice(activity = {}) {
 
 async function markSlashRecordExpired(record = {}) {
     if (!record || !record._id || record.status === 'expired' || record.status === 'purchased') return;
-    await db.collection('slash_records').doc(String(record._id)).update({
-        data: {
-            status: 'expired',
-            expired_at: db.serverDate(),
-            updated_at: db.serverDate()
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('slash_records').doc(String(record._id)).update({
+            data: {
+                status: 'expired',
+                expired_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        });
+    } catch (err) {
+        console.error('[order-interactive] ⚠️ 砍价记录过期标记失败:', err);
+    }
 }
 
 function buildSlashTimingPayload(record = {}, activity = {}) {
@@ -1404,7 +1408,7 @@ async function mySlashList(openid, params = {}) {
             const timing = buildSlashTimingPayload(r, activity);
             const status = normalizeSlashRecordStatus(r, activity);
             if (status === 'expired') {
-                markSlashRecordExpired(r).catch(() => {});
+                try { await markSlashRecordExpired(r); } catch (err) { console.error('[order-interactive] ⚠️ 砍价记录过期标记失败:', err); }
             }
             return {
                 _id: r._id,
@@ -1570,9 +1574,13 @@ async function lotteryDraw(openid, params) {
 
     // 8. 扣减库存
     if (selectedPrize.stock !== undefined && selectedPrize.stock !== null && selectedPrize.stock > 0) {
-        await db.collection('lottery_prizes').doc(selectedPrize._id).update({
-            data: { stock: _.inc(-1) },
-        }).catch(() => {});
+        try {
+            await db.collection('lottery_prizes').doc(selectedPrize._id).update({
+                data: { stock: _.inc(-1) },
+            });
+        } catch (err) {
+            console.error('[order-interactive] ⚠️ 抽奖奖品库存扣减失败:', err);
+        }
     }
 
     return {

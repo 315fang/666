@@ -4494,7 +4494,7 @@ async function deductAgentFulfillmentGoodsFund(order = {}, admin = {}) {
                     agent_wallet_balance: currentGoodsFund,
                     updated_at: nowIso()
                 }
-            }).catch(() => {});
+            }).catch((err) => { console.error('[admin-api] ⚠️ 货款退款回滚用户余额失败:', err.message || err); });
             if (walletAccountId) {
                 const walletWriteModel = buildWalletAccountWriteModel({
                     existingAccount: existingWalletAccount,
@@ -4509,7 +4509,7 @@ async function deductAgentFulfillmentGoodsFund(order = {}, admin = {}) {
                 });
                 await db.collection('wallet_accounts').doc(String(walletAccountId)).set({
                     data: walletWriteModel.cloudData
-                }).catch(() => {});
+                }).catch((err) => { console.error('[admin-api] ⚠️ 货款退款回滚钱包账户失败:', err.message || err); });
             }
         } else {
             patchCollectionRow('users', claimant.openid || primaryId(claimant), (row) => ({
@@ -5217,7 +5217,7 @@ function restoreOrderStockForRefund(orderId, refund = {}) {
         updated_at: nowIso()
     }));
     if (dataStore._internals?.db) {
-        directPatchDocument('refunds', String(refund._id || refund.id), { stock_restored_at: nowIso() }).catch(() => {});
+        directPatchDocument('refunds', String(refund._id || refund.id), { stock_restored_at: nowIso() }).catch((err) => { console.error('[admin-api] 退款库存恢复时间戳写入失败:', err.message || err); });
     }
     return { restored, quantity: refundQuantity };
 }
@@ -5318,7 +5318,7 @@ async function refundOrderExtras(orderId, refund = {}) {
             growth_clawback_amount: settlement.growthClawback,
             order_progress_applied_at: nowIso(),
             buyer_assets_applied_at: nowIso()
-        }).catch(() => {});
+        }).catch((err) => { console.error('[admin-api] 退款结算元数据写入失败:', err.message || err); });
     }
 
     return settlement;
@@ -7111,7 +7111,7 @@ app.put('/admin/api/users/:id/role', auth, requirePermission('user_role_manage')
     if (!updated) return fail(res, '用户不存在', 404);
     const openid = updated.openid;
     if (openid && roleLevel > oldLevel && roleLevel >= 3) {
-        recordAdminFundPoolEntry(openid, roleLevel, oldLevel).catch(() => {});
+        recordAdminFundPoolEntry(openid, roleLevel, oldLevel).catch((err) => { console.error('[admin-api] ⚠️ 基金池入池记录失败:', err.message || err); });
     }
     createAuditLog(req.admin, 'user.role.update', 'users', { user_id: primaryId(updated), role_level: roleLevel });
     const fresh = await buildFreshUserWriteResponse(req.params.id, updated);
@@ -7732,7 +7732,7 @@ app.put('/admin/api/dealers/:id/approve', auth, requirePermission('dealers'), as
     if (!updated) return fail(res, '经销商不存在', 404);
     const newLevel = toNumber(updated.role_level, 0);
     if (updated.openid && newLevel > oldLevel && newLevel >= 3) {
-        recordAdminFundPoolEntry(updated.openid, newLevel, oldLevel).catch(() => {});
+        recordAdminFundPoolEntry(updated.openid, newLevel, oldLevel).catch((err) => { console.error('[admin-api] ⚠️ 经销商审批基金池入池记录失败:', err.message || err); });
     }
     createAuditLog(req.admin, 'dealer.approve', 'users', { dealer_user_id: primaryId(updated) });
     ok(res, buildDealerRecord(updated));
@@ -7775,7 +7775,7 @@ app.put('/admin/api/dealers/:id/level', auth, requirePermission('dealers'), asyn
     if (!updated) return fail(res, '经销商不存在', 404);
     const newLevel = toNumber(updated.role_level, 0);
     if (updated.openid && newLevel > oldLevel && newLevel >= 3) {
-        recordAdminFundPoolEntry(updated.openid, newLevel, oldLevel).catch(() => {});
+        recordAdminFundPoolEntry(updated.openid, newLevel, oldLevel).catch((err) => { console.error('[admin-api] ⚠️ 经销商等级变更基金池入池记录失败:', err.message || err); });
     }
     createAuditLog(req.admin, 'dealer.level.update', 'users', { dealer_user_id: primaryId(updated), level });
     ok(res, buildDealerRecord(updated));
@@ -8106,7 +8106,7 @@ app.put('/admin/api/upgrade-applications/:id/review', auth, requirePermission('d
         }));
         const patchedUser = findByLookup(getCollection('users'), updated.user_id);
         if (patchedUser && patchedUser.openid && newLevel > oldLevel && newLevel >= 3) {
-            recordAdminFundPoolEntry(patchedUser.openid, newLevel, oldLevel).catch(() => {});
+            recordAdminFundPoolEntry(patchedUser.openid, newLevel, oldLevel).catch((err) => { console.error('[admin-api] ⚠️ 升级审批基金池入池记录失败:', err.message || err); });
         }
     }
     createAuditLog(req.admin, `upgrade-application.${action}`, 'upgrade_applications', { application_id: primaryId(updated) });
@@ -8945,7 +8945,7 @@ app.put('/admin/api/orders/:id/ship', auth, requirePermission('orders'), async (
         }
     } catch (error) {
         if (deductionResult?.rollback) {
-            await deductionResult.rollback().catch(() => {});
+            await deductionResult.rollback().catch((err) => { console.error('[admin-api] ⚠️ 发货失败回滚扣款失败:', err.message || err); });
         }
         await patchOrderStatusIf(
             shippingClaim.row || { ...current, status: 'shipping_processing' },
@@ -9076,7 +9076,7 @@ app.put('/admin/api/orders/:id/repair-fulfillment', auth, requirePermission('ord
         removeConflictingReferralCommissions(result.order, claimant);
     }
     const docId = String(result.order?._id || result.order?.id || req.params.id);
-    await directPatchDocument('orders', docId, result.order).catch(() => {});
+    await directPatchDocument('orders', docId, result.order).catch((err) => { console.error('[admin-api] 订单修复链路写入失败:', err.message || err); });
     await ensureFreshCollections(['orders', 'users', 'products', 'commissions']);
     const users = getCollection('users');
     const products = getCollection('products');

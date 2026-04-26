@@ -428,12 +428,16 @@ async function syncWalletFields(user = {}, stats = {}) {
     }
 
     if (Object.keys(updates).length && user._id) {
+        try {
         await db.collection('users').doc(String(user._id)).update({
             data: {
                 ...updates,
                 updated_at: db.serverDate()
             }
-        }).catch(() => {});
+        });
+    } catch (err) {
+        console.error('[user-wallet] ⚠️ 同步钱包字段失败:', err);
+    }
         return { ...user, ...updates };
     }
     return user;
@@ -722,10 +726,13 @@ async function pointsSignIn(openid) {
             last_sign_in_date: userData.last_sign_in_date || _.remove(),
             updated_at: db.serverDate()
         };
-        await db.collection('users')
-            .where({ openid, last_sign_in_date: todayKey })
-            .update({ data: rollbackData })
-            .catch(() => {});
+        try {
+            await db.collection('users')
+                .where({ openid, last_sign_in_date: todayKey })
+                .update({ data: rollbackData });
+        } catch (rollbackErr) {
+            console.error('[user-wallet] ⚠️ 签到回滚失败:', rollbackErr);
+        }
         throw new Error(`签到流水写入失败：${logErr.message || '未知错误'}`);
     }
 

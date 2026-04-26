@@ -169,11 +169,11 @@ module.exports = {
         },
         {
             key: 'page:favorites',
-            title: '足迹收藏',
+            title: '近期浏览与收藏',
             group: '会员服务',
             link_type: 'page',
             link_value: '/pages/user/favorites-footprints',
-            note: '收藏与足迹'
+            note: '近期浏览与收藏'
         },
         {
             key: 'page:distribution-center',

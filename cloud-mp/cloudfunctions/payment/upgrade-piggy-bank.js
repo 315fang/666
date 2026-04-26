@@ -426,14 +426,18 @@ async function createUpgradePiggyBankForOrder(context, orderId, order = {}, runt
     }
     const result = await addPiggyRows(context, rows);
 
-    await db.collection('orders').doc(String(orderId)).update({
-        data: {
-            piggy_bank_created_at: db.serverDate(),
-            piggy_bank_log_count: result.created,
-            piggy_bank_locked_amount: result.amount,
-            updated_at: db.serverDate()
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('orders').doc(String(orderId)).update({
+            data: {
+                piggy_bank_created_at: db.serverDate(),
+                piggy_bank_log_count: result.created,
+                piggy_bank_locked_amount: result.amount,
+                updated_at: db.serverDate()
+            }
+        });
+    } catch (e) {
+        console.error('[piggy-bank] 订单存钱罐状态标记失败 orderId=%s error=%s', orderId, e.message);
+    }
 
     return {
         ...result,
@@ -461,51 +465,75 @@ async function reverseUpgradePiggyBankForRefund(context, orderId) {
         const amount = roundMoney(row.incremental_amount);
         if (amount <= 0) continue;
         if (row.status === 'locked') {
-            await db.collection('upgrade_piggy_bank_logs').doc(String(row._id)).update({
-                data: {
-                    status: 'reversed',
-                    reversed_at: db.serverDate(),
-                    updated_at: db.serverDate()
-                }
-            }).catch(() => {});
-            await db.collection('users').where({ openid: row.openid }).update({
-                data: {
-                    piggy_bank_locked_amount: command.inc(-amount),
-                    piggy_bank_reversed_amount: command.inc(amount),
-                    updated_at: db.serverDate()
-                }
-            }).catch(() => {});
+            try {
+                await db.collection('upgrade_piggy_bank_logs').doc(String(row._id)).update({
+                    data: {
+                        status: 'reversed',
+                        reversed_at: db.serverDate(),
+                        updated_at: db.serverDate()
+                    }
+                });
+            } catch (e) {
+                console.error('[piggy-bank] ⚠️ 存钱罐日志状态反写失败 id=%s openid=%s error=%s', row._id, row.openid, e.message);
+                await db.collection('rollback_error_logs').add({ data: { module: 'piggy-bank', operation: 'reverse_log_status', error: e.message, log_id: String(row._id), openid: row.openid, order_id: orderId, created_at: db.serverDate() } }).catch(() => {});
+            }
+            try {
+                await db.collection('users').where({ openid: row.openid }).update({
+                    data: {
+                        piggy_bank_locked_amount: command.inc(-amount),
+                        piggy_bank_reversed_amount: command.inc(amount),
+                        updated_at: db.serverDate()
+                    }
+                });
+            } catch (e) {
+                console.error('[piggy-bank] ⚠️ 用户存钱罐锁定金额回滚失败 openid=%s amount=%s error=%s', row.openid, amount, e.message);
+                await db.collection('rollback_error_logs').add({ data: { module: 'piggy-bank', operation: 'reverse_user_balance', error: e.message, openid: row.openid, amount, order_id: orderId, created_at: db.serverDate() } }).catch(() => {});
+            }
             reversedLockedAmount = roundMoney(reversedLockedAmount + amount);
             changed += 1;
         } else if (row.status === 'unlocked') {
-            await db.collection('upgrade_piggy_bank_logs').doc(String(row._id)).update({
-                data: {
-                    status: 'clawed_back',
-                    reversed_at: db.serverDate(),
-                    updated_at: db.serverDate()
-                }
-            }).catch(() => {});
-            await db.collection('users').where({ openid: row.openid }).update({
-                data: {
-                    commission_balance: command.inc(-amount),
-                    balance: command.inc(-amount),
-                    total_earned: command.inc(-amount),
-                    piggy_bank_unlocked_amount: command.inc(-amount),
-                    piggy_bank_reversed_amount: command.inc(amount),
-                    updated_at: db.serverDate()
-                }
-            }).catch(() => {});
-            await db.collection('wallet_logs').add({
-                data: {
-                    openid: row.openid,
-                    type: 'upgrade_piggy_bank_clawback',
-                    amount: -amount,
-                    order_id: orderId,
-                    order_no: row.order_no || '',
-                    description: `退款扣回升级存钱罐 ${amount} 元`,
-                    created_at: db.serverDate()
-                }
-            }).catch(() => {});
+            try {
+                await db.collection('upgrade_piggy_bank_logs').doc(String(row._id)).update({
+                    data: {
+                        status: 'clawed_back',
+                        reversed_at: db.serverDate(),
+                        updated_at: db.serverDate()
+                    }
+                });
+            } catch (e) {
+                console.error('[piggy-bank] ⚠️ 存钱罐日志状态扣回标记失败 id=%s openid=%s error=%s', row._id, row.openid, e.message);
+                await db.collection('rollback_error_logs').add({ data: { module: 'piggy-bank', operation: 'clawback_log_status', error: e.message, log_id: String(row._id), openid: row.openid, order_id: orderId, created_at: db.serverDate() } }).catch(() => {});
+            }
+            try {
+                await db.collection('users').where({ openid: row.openid }).update({
+                    data: {
+                        commission_balance: command.inc(-amount),
+                        balance: command.inc(-amount),
+                        total_earned: command.inc(-amount),
+                        piggy_bank_unlocked_amount: command.inc(-amount),
+                        piggy_bank_reversed_amount: command.inc(amount),
+                        updated_at: db.serverDate()
+                    }
+                });
+            } catch (e) {
+                console.error('[piggy-bank] ⚠️ 用户佣金余额扣回失败 openid=%s amount=%s error=%s', row.openid, amount, e.message);
+                await db.collection('rollback_error_logs').add({ data: { module: 'piggy-bank', operation: 'clawback_user_balance', error: e.message, openid: row.openid, amount, order_id: orderId, created_at: db.serverDate() } }).catch(() => {});
+            }
+            try {
+                await db.collection('wallet_logs').add({
+                    data: {
+                        openid: row.openid,
+                        type: 'upgrade_piggy_bank_clawback',
+                        amount: -amount,
+                        order_id: orderId,
+                        order_no: row.order_no || '',
+                        description: `退款扣回升级存钱罐 ${amount} 元`,
+                        created_at: db.serverDate()
+                    }
+                });
+            } catch (e) {
+                console.error('[piggy-bank] 钱包日志写入失败(clawback) openid=%s amount=%s error=%s', row.openid, amount, e.message);
+            }
             clawedBackAmount = roundMoney(clawedBackAmount + amount);
             changed += 1;
         }
@@ -536,7 +564,7 @@ async function unlockUpgradePiggyBankForRole(context, payload = {}) {
     const userId = primaryId(user);
 
     if (config.unlock_to_commission_balance) {
-        await db.collection('users').where({ openid }).update({
+        const unlockRes = await db.collection('users').where({ openid, piggy_bank_locked_amount: _.gte(total) }).update({
             data: {
                 commission_balance: command.inc(total),
                 balance: command.inc(total),
@@ -546,44 +574,67 @@ async function unlockUpgradePiggyBankForRole(context, payload = {}) {
                 updated_at: db.serverDate()
             }
         });
-        await db.collection('commissions').add({
-            data: {
-                openid,
-                user_id: userId,
-                from_openid: '',
-                order_id: payload.triggerOrderId || '',
-                order_no: '',
-                amount: total,
-                level: targetRoleLevel,
-                type: 'upgrade_piggy_bank_unlock',
-                status: 'settled',
-                settled_at: db.serverDate(),
-                created_at: db.serverDate(),
-                updated_at: db.serverDate()
-            }
-        }).catch(() => {});
-        await db.collection('wallet_logs').add({
-            data: {
-                openid,
-                user_id: userId,
-                type: 'upgrade_piggy_bank_unlock',
-                amount: total,
-                order_id: payload.triggerOrderId || '',
-                description: `升级解锁存钱罐 ${total} 元`,
-                created_at: db.serverDate()
-            }
-        }).catch(() => {});
+        if (!unlockRes || !unlockRes.stats || unlockRes.stats.updated === 0) {
+            console.error('[piggy-bank] ⚠️ 存钱罐解锁余额更新失败（并发冲突） openid=%s total=%s', openid, total);
+            return { unlocked: 0, amount: 0, error: 'concurrent_unlock_conflict' };
+        }
+        try {
+            await db.collection('commissions').add({
+                data: {
+                    openid,
+                    user_id: userId,
+                    from_openid: '',
+                    order_id: payload.triggerOrderId || '',
+                    order_no: '',
+                    amount: total,
+                    level: targetRoleLevel,
+                    type: 'upgrade_piggy_bank_unlock',
+                    status: 'settled',
+                    settled_at: db.serverDate(),
+                    created_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (e) {
+            console.error('[piggy-bank] ⚠️ 佣金记录创建失败 openid=%s amount=%s error=%s', openid, total, e.message);
+            await db.collection('rollback_error_logs').add({ data: { module: 'piggy-bank', operation: 'unlock_commission_create', error: e.message, openid, amount: total, order_id: payload.triggerOrderId || '', created_at: db.serverDate() } }).catch(() => {});
+        }
+        try {
+            await db.collection('wallet_logs').add({
+                data: {
+                    openid,
+                    user_id: userId,
+                    type: 'upgrade_piggy_bank_unlock',
+                    amount: total,
+                    order_id: payload.triggerOrderId || '',
+                    description: `升级解锁存钱罐 ${total} 元`,
+                    created_at: db.serverDate()
+                }
+            });
+        } catch (e) {
+            console.error('[piggy-bank] 钱包日志写入失败(unlock) openid=%s amount=%s error=%s', openid, total, e.message);
+        }
     }
 
     for (const row of rows) {
-        await db.collection('upgrade_piggy_bank_logs').doc(String(row._id)).update({
-            data: {
-                status: 'unlocked',
-                unlock_order_id: payload.triggerOrderId || '',
-                unlocked_at: db.serverDate(),
-                updated_at: db.serverDate()
+        try {
+            const logUpdate = await db.collection('upgrade_piggy_bank_logs')
+                .where({ _id: String(row._id), status: 'locked' })
+                .update({
+                    data: {
+                        status: 'unlocked',
+                        unlock_order_id: payload.triggerOrderId || '',
+                        unlocked_at: db.serverDate(),
+                        updated_at: db.serverDate()
+                    }
+                });
+            if (!logUpdate || !logUpdate.stats || logUpdate.stats.updated === 0) {
+                console.warn('[piggy-bank] 存钱罐日志已不是locked状态，跳过 id=%s', row._id);
             }
-        }).catch(() => {});
+        } catch (e) {
+            console.error('[piggy-bank] ⚠️ 存钱罐日志状态解锁失败 id=%s error=%s', row._id, e.message);
+            await db.collection('rollback_error_logs').add({ data: { module: 'piggy-bank', operation: 'unlock_log_status', error: e.message, log_id: String(row._id), openid, order_id: payload.triggerOrderId || '', created_at: db.serverDate() } }).catch(() => {});
+        }
     }
     return { unlocked: rows.length, amount: total };
 }

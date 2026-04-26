@@ -199,7 +199,7 @@
 
   <view class="section-card favorite-strip" bindtap="onQuadFavoriteTap" hover-class="favorite-strip-hover">
     <view class="favorite-strip-copy">
-      <text class="favorite-strip-title">收藏</text>
+      <text class="favorite-strip-title">近期浏览与收藏</text>
       <text class="favorite-strip-sub">{{quadFavorite.sub}}</text>
     </view>
     <image class="favorite-strip-thumb" wx:if="{{quadFavorite.hasImage}}" src="{{quadFavorite.image}}" mode="aspectFill"></image>

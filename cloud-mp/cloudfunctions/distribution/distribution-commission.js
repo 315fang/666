@@ -425,14 +425,18 @@ async function settleCommission(openid, amount, meta = {}) {
             description: `佣金结算入账 ${roundMoney(amount)} 元`
         });
     } catch (logErr) {
-        await db.collection('users').where({ openid }).update({
-            data: {
-                commission_balance: _.inc(-amount),
-                balance: _.inc(-amount),
-                total_earned: _.inc(-amount),
-                updated_at: db.serverDate()
-            }
-        }).catch(() => {});
+        try {
+            await db.collection('users').where({ openid }).update({
+                data: {
+                    commission_balance: _.inc(-amount),
+                    balance: _.inc(-amount),
+                    total_earned: _.inc(-amount),
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (rollbackErr) {
+            console.error('[distribution-commission] ⚠️ 佣金结算回滚失败:', rollbackErr);
+        }
         throw new Error(`佣金结算流水写入失败：${logErr.message}`);
     }
     return { success: true };
@@ -550,9 +554,10 @@ async function unfreezeCommissions(orderId) {
 
     let totalSettled = 0;
     for (const comm of (res.data || [])) {
-        await db.collection('commissions').doc(comm._id).update({
-            data: { status: 'settled', settled_at: db.serverDate(), updated_at: db.serverDate() },
-        });
+        const statusRes = await db.collection('commissions')
+            .where({ _id: comm._id, status: _.in(['frozen', 'pending_approval']) })
+            .update({ data: { status: 'settled', settled_at: db.serverDate(), updated_at: db.serverDate() } });
+        if (!statusRes || !statusRes.stats || statusRes.stats.updated === 0) continue;
         const amount = toNumber(comm.amount, 0);
         if (amount > 0) {
             await settleCommission(comm.openid, amount, {
@@ -575,10 +580,12 @@ async function cancelCommissions(orderId) {
 
     let totalCancelled = 0;
     for (const comm of (res.data || [])) {
-        await db.collection('commissions').doc(comm._id).update({
-            data: { status: 'cancelled', cancelled_at: db.serverDate(), updated_at: db.serverDate() },
-        });
-        totalCancelled += toNumber(comm.amount, 0);
+        const cancelRes = await db.collection('commissions')
+            .where({ _id: comm._id, status: _.in(['pending', 'frozen', 'pending_approval']) })
+            .update({ data: { status: 'cancelled', cancelled_at: db.serverDate(), updated_at: db.serverDate() } });
+        if (cancelRes && cancelRes.stats && cancelRes.stats.updated > 0) {
+            totalCancelled += toNumber(comm.amount, 0);
+        }
     }
 
     return { cancelled: (res.data || []).length, total_amount: roundMoney(totalCancelled) };

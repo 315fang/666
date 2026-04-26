@@ -193,26 +193,34 @@ async function payByWalletBalance(openid, orderId, order, payAmount) {
             }
         });
     } catch (err) {
-        await db.collection('users')
-            .where({ openid })
-            .update({
-                data: {
-                    agent_wallet_balance: _.inc(payAmount),
-                    goods_fund_total_spent: _.inc(-payAmount),
-                    updated_at: db.serverDate()
-                }
-            })
-            .catch(() => {});
+        try {
+            await db.collection('users')
+                .where({ openid })
+                .update({
+                    data: {
+                        agent_wallet_balance: _.inc(payAmount),
+                        goods_fund_total_spent: _.inc(-payAmount),
+                        updated_at: db.serverDate()
+                    }
+                });
+        } catch (rollbackErr) {
+            console.error('[prepay] ⚠️ 货款余额回滚失败 openid=%s amount=%s error=%s', openid, payAmount, rollbackErr.message);
+            try { await db.collection('rollback_error_logs').add({ data: { module: 'prepay', operation: 'goods_fund_balance_rollback', openid, order_id: orderId, error: rollbackErr.message, created_at: db.serverDate() } }); } catch (_) {}
+        }
         await rollbackGoodsFundLedger(openid, payAmount, order.order_no || orderId, `货款支付回滚 ${order.order_no || orderId}`).catch((rollbackErr) => {
             console.error('[prepay] 货款账本回滚失败:', rollbackErr.message);
         });
-        await db.collection('orders').doc(orderId).update({
-            data: buildPaymentWritePatch('', payAmount, {
-                status: 'pending_payment',
-                paid_at: null,
-                updated_at: db.serverDate()
-            })
-        }).catch(() => {});
+        try {
+            await db.collection('orders').doc(orderId).update({
+                data: buildPaymentWritePatch('', payAmount, {
+                    status: 'pending_payment',
+                    paid_at: null,
+                    updated_at: db.serverDate()
+                })
+            });
+        } catch (orderErr) {
+            console.error('[prepay] ⚠️ 订单状态回滚失败 orderId=%s error=%s', orderId, orderErr.message);
+        }
         throw new Error(`货款支付流水或订单状态写入失败：${err.message}`);
     }
 

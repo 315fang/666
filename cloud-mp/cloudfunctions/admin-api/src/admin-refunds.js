@@ -344,7 +344,7 @@ function registerRefundRoutes(app, deps) {
                                 agent_wallet_balance: previousGoodsFund,
                                 updated_at: new Date().toISOString()
                             }
-                        }).catch(() => {});
+                        }).catch((err) => { console.error('[admin-refunds] ⚠️ 货款退款回滚用户余额失败:', err.message || err); });
                         await db.collection('wallet_accounts').doc(String(accountId)).set({
                             data: {
                                 user_id: walletAccountUserIds[0],
@@ -355,7 +355,7 @@ function registerRefundRoutes(app, deps) {
                                 created_at: pickString(walletAccount?.created_at || new Date().toISOString()),
                                 updated_at: new Date().toISOString()
                             }
-                        }).catch(() => {});
+                        }).catch((err) => { console.error('[admin-refunds] ⚠️ 货款退款回滚钱包账户失败:', err.message || err); });
                     };
                     await appendWalletLogEntry({
                         openid: buyerOpenid,
@@ -458,7 +458,7 @@ function registerRefundRoutes(app, deps) {
                 await cancelCommissionsForOrder(orderId, '货款退款完成，佣金作废');
                 restoreOrderStockForRefund(orderId, refund);
                 pickupStockAdmin?.restorePickupStockForRefund?.(order, refund);
-                await Promise.resolve(pickupStockAdmin?.rollbackPickupPrincipalForRefund?.(order, refund)).catch(() => {});
+                await Promise.resolve(pickupStockAdmin?.rollbackPickupPrincipalForRefund?.(order, refund)).catch((err) => { console.error('[admin-refunds] ⚠️ 回滚门店进货本金失败:', err.message || err); });
                 const settlement = await refundOrderExtras(orderId, refund);
 
                 const completedData = { status: 'completed', completed_at: nowIso(), updated_at: nowIso() };
@@ -545,7 +545,7 @@ function registerRefundRoutes(app, deps) {
                 await cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
                 restoreOrderStockForRefund(orderId, refund);
                 pickupStockAdmin?.restorePickupStockForRefund?.(order, refund);
-                await Promise.resolve(pickupStockAdmin?.rollbackPickupPrincipalForRefund?.(order, refund)).catch(() => {});
+                await Promise.resolve(pickupStockAdmin?.rollbackPickupPrincipalForRefund?.(order, refund)).catch((err) => { console.error('[admin-refunds] ⚠️ 回滚门店进货本金失败:', err.message || err); });
                 const settlement = await refundOrderExtras(orderId, refund);
 
                 const completedData = { status: 'completed', completed_at: nowIso(), updated_at: nowIso() };
@@ -591,7 +591,7 @@ function registerRefundRoutes(app, deps) {
                     await cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
                     restoreOrderStockForRefund(orderId, refund);
                     pickupStockAdmin?.restorePickupStockForRefund?.(order, refund);
-                    await Promise.resolve(pickupStockAdmin?.rollbackPickupPrincipalForRefund?.(order, refund)).catch(() => {});
+                    await Promise.resolve(pickupStockAdmin?.rollbackPickupPrincipalForRefund?.(order, refund)).catch((err) => { console.error('[admin-refunds] ⚠️ 回滚门店进货本金失败:', err.message || err); });
                     const settlement = await refundOrderExtras(orderId, refund);
 
                     const completedData = { status: 'completed', completed_at: nowIso(), wx_refund_id: wxRefundId, wx_status: wxStatus, updated_at: nowIso() };
@@ -629,7 +629,7 @@ function registerRefundRoutes(app, deps) {
             }
         } catch (error) {
             if (rollbackInternalFunds) {
-                await rollbackInternalFunds().catch(() => {});
+                await rollbackInternalFunds().catch((err) => { console.error('[admin-refunds] ⚠️ 退款失败回滚内部资金失败:', err.message || err); });
             }
             const revertData = { status: 'approved', wx_error: pickString(error.message), updated_at: nowIso() };
             await persistPatchedRow('refunds', req.params.id, refund, revertData);
@@ -742,7 +742,7 @@ function registerRefundRoutes(app, deps) {
                 await cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
                 restoreOrderStockForRefund(orderId, refund);
                 pickupStockAdmin?.restorePickupStockForRefund?.(order, refund);
-                await Promise.resolve(pickupStockAdmin?.rollbackPickupPrincipalForRefund?.(order, refund)).catch(() => {});
+                await Promise.resolve(pickupStockAdmin?.rollbackPickupPrincipalForRefund?.(order, refund)).catch((err) => { console.error('[admin-refunds] ⚠️ 回滚门店进货本金失败:', err.message || err); });
                 const settlement = await refundOrderExtras(orderId, refund);
 
                 if (order) {

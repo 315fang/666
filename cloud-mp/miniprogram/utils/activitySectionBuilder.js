@@ -79,7 +79,7 @@ const FALLBACK_SECTION_CONFIG = {
     }
 };
 
-const SECTION_ORDER = ['flash_sale', 'bundle_zone', 'flex_bundle', 'lottery', 'group', 'slash'];
+const SECTION_ORDER = ['flash_sale', 'flex_bundle', 'bundle_zone', 'lottery', 'group', 'slash'];
 
 function normalizeText(value) {
     return typeof value === 'string' ? value.trim() : '';

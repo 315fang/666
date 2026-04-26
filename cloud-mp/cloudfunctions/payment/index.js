@@ -71,7 +71,11 @@ async function handlePaymentAction(event, openid) {
     if (internalActions.has(action)) {
         const expectedToken = String(process.env.PAYMENT_INTERNAL_TOKEN || '').trim();
         const providedToken = String(params.internal_token || '').trim();
-        if (!expectedToken || providedToken !== expectedToken) {
+        if (!expectedToken) {
+            console.error('[payment] ⚠️ PAYMENT_INTERNAL_TOKEN 未配置，拒绝内部接口访问');
+            throw unauthorized('内部支付接口未正确配置');
+        }
+        if (providedToken !== expectedToken) {
             throw unauthorized('内部支付接口禁止直接访问');
         }
     }
@@ -178,7 +182,7 @@ async function handlePaymentAction(event, openid) {
                         wx_refund_status: refundStatus,
                         updated_at: db.serverDate()
                     }
-                }).catch(() => {});
+                }).catch((e) => { console.error('[payment] ⚠️ 退款processing状态更新失败 refundId=%s error=%s', refund._id, e.message); });
             }
 
             const freshRefund = await db.collection('refunds').doc(String(refund._id)).get().then(r => r.data).catch(() => null);

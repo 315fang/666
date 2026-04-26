@@ -85,7 +85,7 @@ Page({
         commissionBalance: '0',
         piggyBankBalance: '0',
         quadExpress: { sub: '暂无在途订单', image: QUAD_PLACEHOLDER, orderId: null },
-        quadFavorite: { sub: '暂无收藏', image: QUAD_PLACEHOLDER, count: 0 },
+        quadFavorite: { sub: '暂无浏览与收藏', image: QUAD_PLACEHOLDER, count: 0 },
         quadFootprint: { sub: '看过的商品', image: QUAD_PLACEHOLDER, count: 0 },
         cartPreview: {
             count: 0,

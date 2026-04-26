@@ -1436,6 +1436,10 @@ function pickAddressText(value) {
     return String(value).trim();
 }
 
+function hasValue(value) {
+    return value !== null && value !== undefined && value !== '';
+}
+
 function resolveAddressReceiverName(source = {}) {
     return pickAddressText(
         source.receiver_name
