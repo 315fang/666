@@ -1,22 +1,22 @@
 {
   "kind": "cloudbase_all_asset_migration_report",
-  "executed_at": "2026-04-18T05:57:26.839Z",
-  "mode": "apply",
+  "executed_at": "2026-04-25T12:48:23.061Z",
+  "mode": "dry-run",
   "environment": {
     "env_id": "cloud1-9gywyqe49638e46f",
     "auth_status": "READY",
     "env_status": "READY"
   },
   "summary": {
-    "scanned_records": 289,
-    "changed_records": 140,
-    "failed_records": 50
+    "scanned_records": 467,
+    "changed_records": 334,
+    "failed_records": 0
   },
   "collections": [
     {
       "name": "banners",
-      "scanned": 5,
-      "changed": 5,
+      "scanned": 3,
+      "changed": 3,
       "failed": 0
     },
     {
@@ -27,32 +27,32 @@
     },
     {
       "name": "materials",
-      "scanned": 59,
-      "changed": 59,
+      "scanned": 200,
+      "changed": 200,
       "failed": 0
     },
     {
       "name": "products",
-      "scanned": 11,
-      "changed": 1,
-      "failed": 9
+      "scanned": 20,
+      "changed": 6,
+      "failed": 0
     },
     {
       "name": "skus",
       "scanned": 11,
-      "changed": 6,
-      "failed": 5
+      "changed": 11,
+      "failed": 0
     },
     {
       "name": "users",
-      "scanned": 186,
-      "changed": 66,
-      "failed": 36
+      "scanned": 214,
+      "changed": 112,
+      "failed": 0
     },
     {
       "name": "reviews",
-      "scanned": 3,
-      "changed": 1,
+      "scanned": 5,
+      "changed": 0,
       "failed": 0
     },
     {
@@ -68,306 +68,5 @@
       "failed": 0
     }
   ],
-  "failures": [
-    {
-      "collection": "products",
-      "id": "1",
-      "title": "镜像案例库奢护/体验理套装+赠瞬间抗皱神器",
-      "error": "Client network socket disconnected before secure TLS connection was established"
-    },
-    {
-      "collection": "products",
-      "id": "2",
-      "title": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
-      "error": "Client network socket disconnected before secure TLS connection was established"
-    },
-    {
-      "collection": "products",
-      "id": "4",
-      "title": "问兰灯塔皮脂膜精华乳",
-      "error": "\n"
-    },
-    {
-      "collection": "products",
-      "id": "5",
-      "title": "玻色因紧致面霜",
-      "error": "\n"
-    },
-    {
-      "collection": "products",
-      "id": "7",
-      "title": "问兰燕窝精萃露",
-      "error": "\n"
-    },
-    {
-      "collection": "products",
-      "id": "8",
-      "title": "绿魔方抗皱焕颜霜/",
-      "error": "\n"
-    },
-    {
-      "collection": "products",
-      "id": "9",
-      "title": "小极光焕彩面霜",
-      "error": "\n"
-    },
-    {
-      "collection": "products",
-      "id": "10",
-      "title": "皮脂膜精华液(次抛装)",
-      "error": "\n"
-    },
-    {
-      "collection": "products",
-      "id": "11",
-      "title": "问兰护肤尊享礼盒",
-      "error": "\n"
-    },
-    {
-      "collection": "skus",
-      "id": "fallback-sku-1",
-      "title": "fallback-sku-1",
-      "error": "\n"
-    },
-    {
-      "collection": "skus",
-      "id": "fallback-sku-2",
-      "title": "fallback-sku-2",
-      "error": "下载失败，状态码 404"
-    },
-    {
-      "collection": "skus",
-      "id": "fallback-sku-4",
-      "title": "fallback-sku-4",
-      "error": "\n"
-    },
-    {
-      "collection": "skus",
-      "id": "fallback-sku-8",
-      "title": "fallback-sku-8",
-      "error": "socket hang up"
-    },
-    {
-      "collection": "skus",
-      "id": "fallback-sku-11",
-      "title": "fallback-sku-11",
-      "error": "Client network socket disconnected before secure TLS connection was established"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834480357a475ee",
-      "title": "小锚点和他的老婆 | 37970789",
-      "error": "Client network socket disconnected before secure TLS connection was established"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448050a68a281",
-      "title": "小锚点！ | 8H8W69RV",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448091912035e",
-      "title": "金水桥 | 16161349",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448115fa1b295",
-      "title": "wxid_8khbfdaygdka12 | 25026235",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448124d6d16df",
-      "title": "王志霞 | 12376649",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448135a00a57c",
-      "title": "wxid_p0wm1yv1mt3y12 | 45875499",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f92108344817589ccb52",
-      "title": "微信用户 | 36298534",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834481a7f2f33c6",
-      "title": "微信用户 | 50728217",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834481d2b60dbb5",
-      "title": "曦曦是大太阳 | 70663814",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448316e56f4e7",
-      "title": "小星 | 55971482",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448320a96fa12",
-      "title": "Jovial | 55048693",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448335b5f5131",
-      "title": "爱吃月亮的猫 | H89B6JDA",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448340d2ba467",
-      "title": "园园在成长 | 30797192",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834483602e955b3",
-      "title": "知水 | YZVUCD8M",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f92108344837342dac16",
-      "title": "微信用户 | 39087681",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834483a61ece60e",
-      "title": "微信用户 | 14934399",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448417884dfbb",
-      "title": "星月夜 | 80648116",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448423f520885",
-      "title": "九如 | 75231361",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834484335259085",
-      "title": "司宇 | 74595622",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834484423ee1815",
-      "title": "满庭芳 | 14590029",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448471ec1e50e",
-      "title": "妤🍭 | 78607629",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834484e7df6b4ee",
-      "title": "李玲玲 | WNDN6YB2",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834485025e3d31b",
-      "title": "万木成行 | 70081182",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834485226560492",
-      "title": "二分之蓝 | 81942694",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834485345c3e695",
-      "title": "Go! | 45303179",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448541b9c2488",
-      "title": "何妨 | 34545895",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834485557179bd2",
-      "title": "曦 | 17209413",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448575409a7a9",
-      "title": "wxid_vw5s67h5khhp12 | 66337742",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f92108344858727a1a19",
-      "title": "次旦普尺 | 51497043",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448594ca2763e",
-      "title": "未熵 | 51910694",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834485c7c25d97b",
-      "title": "CiCi | 34475598",
-      "error": "socket hang up"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834485f09d9c913",
-      "title": "小焰 | 30639478",
-      "error": "Client network socket disconnected before secure TLS connection was established"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448603d0cdac0",
-      "title": "微信用户 | 19471684",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834486471398552",
-      "title": "刘祐祎（yī） | 29190657",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f921083448652e5647b2",
-      "title": "政权和他的老师们 | 98382507",
-      "error": "\n"
-    },
-    {
-      "collection": "users",
-      "id": "9eb3651569d4f9210834486716ddeaed",
-      "title": "Sein zum Tode | 25439712",
-      "error": "socket hang up"
-    }
-  ]
+  "failures": []
 }

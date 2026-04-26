@@ -65,12 +65,22 @@ function ensurePortalPasswordReady() {
     return true;
 }
 
-function promptPortalPassword(options = {}) {
-    if (!ensurePortalPasswordReady()) {
-        return Promise.resolve('');
+function findPortalPasswordDialog() {
+    try {
+        const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : [];
+        for (let index = pages.length - 1; index >= 0; index -= 1) {
+            const page = pages[index];
+            if (!page || typeof page.selectComponent !== 'function') continue;
+            const dialog = page.selectComponent('#portalPasswordDialog');
+            if (dialog && typeof dialog.open === 'function') return dialog;
+        }
+    } catch (_error) {
+        // fall through to the platform modal fallback
     }
-    const title = options.title || '输入业务密码';
-    const placeholderText = options.placeholderText || '请输入6位数字业务密码';
+    return null;
+}
+
+function promptWithSystemModal(title, placeholderText) {
     return new Promise((resolve) => {
         wx.showModal({
             title,
@@ -94,9 +104,28 @@ function promptPortalPassword(options = {}) {
     });
 }
 
+function promptPortalPassword(options = {}) {
+    if (!ensurePortalPasswordReady()) {
+        return Promise.resolve('');
+    }
+    const title = options.title || '输入业务密码';
+    const placeholderText = options.placeholderText || '请输入6位数字业务密码';
+    const dialog = findPortalPasswordDialog();
+    if (dialog) {
+        return dialog.open({
+            title,
+            placeholderText,
+            confirmText: options.confirmText || '确认',
+            cancelText: options.cancelText || '取消'
+        });
+    }
+    return promptWithSystemModal(title, placeholderText);
+}
+
 module.exports = {
     getUserInfoSnapshot,
     syncPortalPasswordFlags,
     ensurePortalPasswordReady,
+    findPortalPasswordDialog,
     promptPortalPassword
 };

@@ -18,6 +18,7 @@ const {
     onCopyTrackingNo,
     onPickupCredentialTap
 } = require('./orderDetailActions');
+const { resolveNextProductImage } = require('./orderImageResolver');
 const app = getApp();
 
 Page({
@@ -295,12 +296,29 @@ Page({
         return onCopyTrackingNo(this);
     },
 
-    onProductImageError() {
+    async onProductImageError() {
         const order = this.data.order;
         if (!order || !order.product) return;
+        const nextImage = await resolveNextProductImage(order.product);
         this.setData({
-            'order.product.image': '',
-            'order.product.images': []
+            'order.product.image': nextImage.image,
+            'order.product.images': nextImage.image ? [nextImage.image] : [],
+            'order.product.image_candidates': nextImage.image_candidates,
+            'order.product.image_candidate_index': nextImage.image_candidate_index
+        });
+    },
+
+    async onBundleItemImageError(e) {
+        const index = Number(e.currentTarget.dataset.index);
+        const order = this.data.order;
+        const item = order && Array.isArray(order.items) ? order.items[index] : null;
+        if (!Number.isInteger(index) || !item || !item.product) return;
+        const nextImage = await resolveNextProductImage(item.product);
+        this.setData({
+            [`order.items[${index}].product.image`]: nextImage.image,
+            [`order.items[${index}].product.images`]: nextImage.image ? [nextImage.image] : [],
+            [`order.items[${index}].product.image_candidates`]: nextImage.image_candidates,
+            [`order.items[${index}].product.image_candidate_index`]: nextImage.image_candidate_index
         });
     },
 

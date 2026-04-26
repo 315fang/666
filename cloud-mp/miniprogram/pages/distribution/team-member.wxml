@@ -87,4 +87,5 @@
 
     <view class="bottom-space"></view>
   </scroll-view>
+  <portal-password-dialog id="portalPasswordDialog" />
 </view>

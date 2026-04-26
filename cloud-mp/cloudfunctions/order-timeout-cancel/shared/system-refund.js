@@ -404,17 +404,21 @@ async function writeWalletRefundLogs({ openid, userId, accountId, amount, before
     });
 
     if (method === 'goods_fund') {
-        await db.collection('goods_fund_logs').add({
-            data: {
-                openid,
-                type: 'refund',
-                amount,
-                order_id: orderId,
-                order_no: orderNo,
-                remark: `订单退款 ${orderNo}`,
-                created_at: db.serverDate(),
-            }
-        }).catch(() => {});
+        try {
+            await db.collection('goods_fund_logs').add({
+                data: {
+                    openid,
+                    type: 'refund',
+                    amount,
+                    order_id: orderId,
+                    order_no: orderNo,
+                    remark: `订单退款 ${orderNo}`,
+                    created_at: db.serverDate(),
+                }
+            });
+        } catch (logErr) {
+            console.error('[system-refund] ⚠️ 货款退款日志写入失败 openid=%s orderId=%s error=%s', openid, orderId, logErr.message);
+        }
     }
 }
 
@@ -469,23 +473,41 @@ async function creditInternalBalance(order = {}, method = 'wallet', amount = 0) 
     });
 
     return async () => {
-        await db.collection('users').where({ openid: order.openid }).update({
-            data: {
-                [userBalanceInfo.field]: userBalanceInfo.balance,
-                updated_at: db.serverDate(),
-            }
-        }).catch(() => {});
-        await db.collection('wallet_accounts').doc(accountId).set({
-            data: {
-                user_id: userId,
-                openid: order.openid,
-                balance: previousAccountBalance,
-                account_type: method,
-                status: 'active',
-                created_at: account.created_at || db.serverDate(),
-                updated_at: db.serverDate(),
-            }
-        }).catch(() => {});
+        try {
+            await db.collection('users').where({ openid: order.openid }).update({
+                data: {
+                    [userBalanceInfo.field]: userBalanceInfo.balance,
+                    updated_at: db.serverDate(),
+                }
+            });
+        } catch (rollbackErr) {
+            console.error('[system-refund] ⚠️ 余额回滚失败(用户) openid=%s field=%s error=%s', order.openid, userBalanceInfo.field, rollbackErr.message);
+            try {
+                await db.collection('rollback_error_logs').add({
+                    data: { context: 'creditInternalBalance_rollback_user', openid: order.openid, field: userBalanceInfo.field, original_balance: userBalanceInfo.balance, error: rollbackErr.message, created_at: db.serverDate() }
+                });
+            } catch (_) {}
+        }
+        try {
+            await db.collection('wallet_accounts').doc(accountId).set({
+                data: {
+                    user_id: userId,
+                    openid: order.openid,
+                    balance: previousAccountBalance,
+                    account_type: method,
+                    status: 'active',
+                    created_at: account.created_at || db.serverDate(),
+                    updated_at: db.serverDate(),
+                }
+            });
+        } catch (rollbackErr) {
+            console.error('[system-refund] ⚠️ 余额回滚失败(钱包账户) accountId=%s error=%s', accountId, rollbackErr.message);
+            try {
+                await db.collection('rollback_error_logs').add({
+                    data: { context: 'creditInternalBalance_rollback_wallet_account', openid: order.openid, accountId, previousBalance: previousAccountBalance, error: rollbackErr.message, created_at: db.serverDate() }
+                });
+            } catch (_) {}
+        }
     };
 }
 
@@ -502,17 +524,25 @@ function buildBuyerRefundReversal(order = {}, refund = {}, isFullRefund = false)
 }
 
 async function reverseBuyerRefundAssets(openid, order = {}, refund = {}, isFullRefund = false) {
-    await db.collection('users').where({ openid }).update({
-        data: buildBuyerRefundReversal(order, refund, isFullRefund)
-    }).catch(() => {});
+    try {
+        await db.collection('users').where({ openid }).update({
+            data: buildBuyerRefundReversal(order, refund, isFullRefund)
+        });
+    } catch (e) {
+        console.error('[system-refund] ⚠️ 买家资产冲回失败 openid=%s error=%s', openid, e.message);
+    }
 }
 
 async function reverseBuyerRefundAssetsWithMarker(openid, orderId, order = {}, refund = {}, isFullRefund = false) {
     if (refund.buyer_assets_reversed_at) return;
     await reverseBuyerRefundAssets(openid, order, refund, isFullRefund);
-    await db.collection('refunds').doc(String(refund._id)).update({
-        data: { buyer_assets_reversed_at: db.serverDate(), updated_at: db.serverDate() }
-    }).catch(() => {});
+    try {
+        await db.collection('refunds').doc(String(refund._id)).update({
+            data: { buyer_assets_reversed_at: db.serverDate(), updated_at: db.serverDate() }
+        });
+    } catch (e) {
+        console.error('[system-refund] ⚠️ 退款冲回标记写入失败 refundId=%s error=%s', refund._id, e.message);
+    }
 }
 
 async function applyRefundProgress(orderId, order = {}, refund = {}) {
@@ -555,47 +585,58 @@ async function applyRefundProgress(orderId, order = {}, refund = {}) {
         ? Math.max(0, totalGrowthEarned - growthClawedBefore)
         : Math.max(0, Math.min(totalGrowthEarned - growthClawedBefore, Math.round(totalGrowthEarned * (refundAmount / Math.max(progress.payAmount, 0.01)))));
 
-    await db.collection('orders').doc(String(orderId)).update({
-        data: {
-            items: nextOrderItems,
-            refunded_quantity_total: nextRefundedQuantity,
-            refunded_cash_total: nextRefundedCash,
-            reward_points_clawback_total: rewardPointsClawedBefore + rewardPointsClawback,
-            growth_clawback_total: growthClawedBefore + growthClawback,
-            has_partial_refund: !isFullRefund && nextRefundedCash > 0,
-            last_refunded_at: db.serverDate(),
-            partially_refunded_at: isFullRefund ? _.remove() : db.serverDate(),
-            status: isFullRefund ? 'refunded' : 'paid',
-            refunded_at: isFullRefund ? db.serverDate() : _.remove(),
-            prev_status: _.remove(),
-            updated_at: db.serverDate(),
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('orders').doc(String(orderId)).update({
+            data: {
+                items: nextOrderItems,
+                refunded_quantity_total: nextRefundedQuantity,
+                refunded_cash_total: nextRefundedCash,
+                reward_points_clawback_total: rewardPointsClawedBefore + rewardPointsClawback,
+                growth_clawback_total: growthClawedBefore + growthClawback,
+                has_partial_refund: !isFullRefund && nextRefundedCash > 0,
+                last_refunded_at: db.serverDate(),
+                partially_refunded_at: isFullRefund ? _.remove() : db.serverDate(),
+                status: isFullRefund ? 'refunded' : 'paid',
+                refunded_at: isFullRefund ? db.serverDate() : _.remove(),
+                prev_status: _.remove(),
+                updated_at: db.serverDate(),
+            }
+        });
+    } catch (e) {
+        console.error('[system-refund] ⚠️ 订单退款进度更新失败 orderId=%s error=%s', orderId, e.message);
+    }
 
-    await db.collection('refunds').doc(String(refund._id)).update({
-        data: {
-            reward_points_clawback_amount: rewardPointsClawback,
-            growth_clawback_amount: growthClawback,
-            order_progress_applied_at: db.serverDate(),
-            updated_at: db.serverDate(),
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('refunds').doc(String(refund._id)).update({
+            data: {
+                reward_points_clawback_amount: rewardPointsClawback,
+                growth_clawback_amount: growthClawback,
+                order_progress_applied_at: db.serverDate(),
+                updated_at: db.serverDate(),
+            }
+        });
+    } catch (e) {
+        console.error('[system-refund] ⚠️ 退款记录更新失败 refundId=%s error=%s', refund._id, e.message);
+    }
 
     return { isFullRefund, refundQuantity, refundAmount, rewardPointsClawback, growthClawback };
 }
 
 async function cancelRefundRelatedCommissions(orderId, reason) {
-    await db.collection('commissions')
-        .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval']) })
-        .update({
-            data: {
-                status: 'cancelled',
-                cancel_reason: reason,
-                cancelled_at: db.serverDate(),
-                updated_at: db.serverDate(),
-            }
-        })
-        .catch(() => {});
+    try {
+        await db.collection('commissions')
+            .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval']) })
+            .update({
+                data: {
+                    status: 'cancelled',
+                    cancel_reason: reason,
+                    cancelled_at: db.serverDate(),
+                    updated_at: db.serverDate(),
+                }
+            });
+    } catch (e) {
+        console.error('[system-refund] ⚠️ 退款佣金取消失败 orderId=%s error=%s', orderId, e.message);
+    }
 }
 
 async function restoreOrderStock(orderId, order = {}, refund = {}) {
@@ -604,22 +645,38 @@ async function restoreOrderStock(orderId, order = {}, refund = {}) {
     const allocations = buildRefundItemAllocations(order, refundQuantity, refund);
     for (const { item, qty } of allocations) {
         if (item.product_id) {
-            await db.collection('products').doc(String(item.product_id)).update({
-                data: { stock: _.inc(qty), sales_count: _.inc(-qty), updated_at: db.serverDate() },
-            }).catch(() => {});
+            try {
+                await db.collection('products').doc(String(item.product_id)).update({
+                    data: { stock: _.inc(qty), sales_count: _.inc(-qty), updated_at: db.serverDate() },
+                });
+            } catch (e) {
+                console.error('[system-refund] ⚠️ 商品库存恢复失败 productId=%s qty=%s error=%s', item.product_id, qty, e.message);
+            }
         }
         if (item.sku_id) {
-            await db.collection('skus').doc(String(item.sku_id)).update({
-                data: { stock: _.inc(qty), updated_at: db.serverDate() },
-            }).catch(() => {});
+            try {
+                await db.collection('skus').doc(String(item.sku_id)).update({
+                    data: { stock: _.inc(qty), updated_at: db.serverDate() },
+                });
+            } catch (e) {
+                console.error('[system-refund] ⚠️ SKU库存恢复失败 skuId=%s qty=%s error=%s', item.sku_id, qty, e.message);
+            }
         }
     }
-    await db.collection('refunds').doc(String(refund._id)).update({
-        data: { stock_restored_at: db.serverDate(), updated_at: db.serverDate() },
-    }).catch(() => {});
-    await db.collection('orders').doc(String(orderId)).update({
-        data: { group_expired_stock_restored_at: db.serverDate(), updated_at: db.serverDate() },
-    }).catch(() => {});
+    try {
+        await db.collection('refunds').doc(String(refund._id)).update({
+            data: { stock_restored_at: db.serverDate(), updated_at: db.serverDate() },
+        });
+    } catch (e) {
+        console.error('[system-refund] ⚠️ 退款库存恢复标记失败 refundId=%s error=%s', refund._id, e.message);
+    }
+    try {
+        await db.collection('orders').doc(String(orderId)).update({
+            data: { group_expired_stock_restored_at: db.serverDate(), updated_at: db.serverDate() },
+        });
+    } catch (e) {
+        console.error('[system-refund] ⚠️ 订单库存恢复标记失败 orderId=%s error=%s', orderId, e.message);
+    }
     return { restored: true };
 }
 
@@ -722,19 +779,27 @@ async function markExistingRefundAsGroupExpired(refund = {}, options = {}) {
     if (!pickString(refund.group_activity_id) && options.groupActivityId) patch.group_activity_id = options.groupActivityId;
     if (refund.skip_order_revert_on_fail !== true) patch.skip_order_revert_on_fail = true;
     if (Object.keys(patch).length <= 1) return;
-    await db.collection('refunds').doc(String(refund._id)).update({ data: patch }).catch(() => {});
+    try {
+        await db.collection('refunds').doc(String(refund._id)).update({ data: patch });
+    } catch (e) {
+        console.error('[system-refund] ⚠️ 退款拼团过期标记失败 refundId=%s error=%s', refund._id, e.message);
+    }
 }
 
 async function moveOrderIntoRefunding(order = {}, options = {}) {
     if (pickString(order.status) === 'refunding') {
-        await db.collection('orders').doc(String(order._id)).update({
-            data: {
-                group_expired_at: order.group_expired_at || db.serverDate(),
-                group_expired_group_no: options.groupNo || order.group_expired_group_no || '',
-                group_expired_reason: options.reason || order.group_expired_reason || SYSTEM_REFUND_REASON,
-                updated_at: db.serverDate(),
-            }
-        }).catch(() => {});
+        try {
+            await db.collection('orders').doc(String(order._id)).update({
+                data: {
+                    group_expired_at: order.group_expired_at || db.serverDate(),
+                    group_expired_group_no: options.groupNo || order.group_expired_group_no || '',
+                    group_expired_reason: options.reason || order.group_expired_reason || SYSTEM_REFUND_REASON,
+                    updated_at: db.serverDate(),
+                }
+            });
+        } catch (e) {
+            console.error('[system-refund] ⚠️ 订单退款状态更新失败 orderId=%s error=%s', order._id, e.message);
+        }
         return true;
     }
     const updateRes = await db.collection('orders')
@@ -752,36 +817,48 @@ async function moveOrderIntoRefunding(order = {}, options = {}) {
 }
 
 async function markRefundFailed(refundId, message) {
-    await db.collection('refunds').doc(String(refundId)).update({
-        data: {
-            status: 'failed',
-            auto_refund_error: message,
-            auto_refund_failed_at: db.serverDate(),
-            updated_at: db.serverDate(),
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('refunds').doc(String(refundId)).update({
+            data: {
+                status: 'failed',
+                auto_refund_error: message,
+                auto_refund_failed_at: db.serverDate(),
+                updated_at: db.serverDate(),
+            }
+        });
+    } catch (e) {
+        console.error('[system-refund] ⚠️ 退款失败标记失败 refundId=%s error=%s', refundId, e.message);
+    }
 }
 
 async function markOrderRefundFailure(orderId, message) {
-    await db.collection('orders').doc(String(orderId)).update({
-        data: {
-            auto_refund_error: message,
-            auto_refund_failed_at: db.serverDate(),
-            updated_at: db.serverDate(),
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('orders').doc(String(orderId)).update({
+            data: {
+                auto_refund_error: message,
+                auto_refund_failed_at: db.serverDate(),
+                updated_at: db.serverDate(),
+            }
+        });
+    } catch (e) {
+        console.error('[system-refund] ⚠️ 订单退款失败标记失败 orderId=%s error=%s', orderId, e.message);
+    }
 }
 
 async function clearOrderRefundFailure(orderId) {
     if (!orderId) return;
-    await db.collection('orders').doc(String(orderId)).update({
-        data: {
-            auto_refund_error: _.remove(),
-            auto_refund_failed_at: _.remove(),
-            auto_refund_partial: _.remove(),
-            updated_at: db.serverDate(),
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('orders').doc(String(orderId)).update({
+            data: {
+                auto_refund_error: _.remove(),
+                auto_refund_failed_at: _.remove(),
+                auto_refund_partial: _.remove(),
+                updated_at: db.serverDate(),
+            }
+        });
+    } catch (e) {
+        console.error('[system-refund] ⚠️ 订单退款失败标记清除失败 orderId=%s error=%s', orderId, e.message);
+    }
 }
 
 function isGroupExpiredRefundCandidate(order = {}) {
@@ -953,16 +1030,20 @@ async function recoverGroupExpiredRefunds(limit = DEFAULT_RECOVERY_LIMIT) {
 
 async function processInternalRefund(order, refundContext) {
     const method = refundContext.paymentMethod;
-    await db.collection('refunds').doc(String(refundContext.refundId)).update({
-        data: {
-            status: 'processing',
-            processing_at: db.serverDate(),
-            payment_method: method,
-            refund_channel: refundContext.refundChannel,
-            refund_target_text: refundContext.refundTargetText,
-            updated_at: db.serverDate(),
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('refunds').doc(String(refundContext.refundId)).update({
+            data: {
+                status: 'processing',
+                processing_at: db.serverDate(),
+                payment_method: method,
+                refund_channel: refundContext.refundChannel,
+                refund_target_text: refundContext.refundTargetText,
+                updated_at: db.serverDate(),
+            }
+        });
+    } catch (e) {
+        console.error('[system-refund] ⚠️ 退款processing标记失败 refundId=%s error=%s', refundContext.refundId, e.message);
+    }
 
     let rollbackInternalFunds = null;
     try {
@@ -987,17 +1068,30 @@ async function processInternalRefund(order, refundContext) {
         return { mode: method, refunded: true, refundId: refundContext.refundId };
     } catch (error) {
         if (rollbackInternalFunds) {
-            await rollbackInternalFunds().catch(() => {});
-        }
-        await db.collection('refunds').doc(String(refundContext.refundId)).update({
-            data: {
-                status: 'processing',
-                auto_refund_error: error.message,
-                auto_refund_partial: true,
-                auto_refund_failed_at: db.serverDate(),
-                updated_at: db.serverDate(),
+            try {
+                await rollbackInternalFunds();
+            } catch (rollbackErr) {
+                console.error('[system-refund] ⚠️ 内部退款回滚失败 orderId=%s refundId=%s error=%s', order._id, refundContext.refundId, rollbackErr.message);
+                try {
+                    await db.collection('rollback_error_logs').add({
+                        data: { context: 'processInternalRefund_rollback', openid: order.openid, order_id: order._id, refund_id: refundContext.refundId, original_error: error.message, rollback_error: rollbackErr.message, created_at: db.serverDate() }
+                    });
+                } catch (_) {}
             }
-        }).catch(() => {});
+        }
+        try {
+            await db.collection('refunds').doc(String(refundContext.refundId)).update({
+                data: {
+                    status: 'processing',
+                    auto_refund_error: error.message,
+                    auto_refund_partial: true,
+                    auto_refund_failed_at: db.serverDate(),
+                    updated_at: db.serverDate(),
+                }
+            });
+        } catch (e) {
+            console.error('[system-refund] ⚠️ 退款错误标记失败 refundId=%s error=%s', refundContext.refundId, e.message);
+        }
         await markOrderRefundFailure(order._id, error.message);
         return { mode: method, refunded: false, refundId: refundContext.refundId, error: error.message };
     }
@@ -1016,18 +1110,22 @@ async function processWechatRefund(order, refundContext) {
             privateKey
         );
 
-        await db.collection('refunds').doc(String(refundContext.refundId)).update({
-            data: {
-                status: 'processing',
-                processing_at: db.serverDate(),
-                payment_method: refundContext.paymentMethod,
-                refund_channel: refundContext.refundChannel,
-                refund_target_text: refundContext.refundTargetText,
-                wx_refund_id: wxRefund.refund_id || '',
-                wx_refund_status: wxRefund.status || 'PROCESSING',
-                updated_at: db.serverDate(),
-            }
-        }).catch(() => {});
+        try {
+            await db.collection('refunds').doc(String(refundContext.refundId)).update({
+                data: {
+                    status: 'processing',
+                    processing_at: db.serverDate(),
+                    payment_method: refundContext.paymentMethod,
+                    refund_channel: refundContext.refundChannel,
+                    refund_target_text: refundContext.refundTargetText,
+                    wx_refund_id: wxRefund.refund_id || '',
+                    wx_refund_status: wxRefund.status || 'PROCESSING',
+                    updated_at: db.serverDate(),
+                }
+            });
+        } catch (e) {
+            console.error('[system-refund] ⚠️ 微信退款processing标记失败 refundId=%s error=%s', refundContext.refundId, e.message);
+        }
 
         return {
             mode: 'wechat',
@@ -1076,7 +1174,7 @@ async function autoRefundGroupOrder(order = {}, options = {}) {
                     group_expired_reason: options.reason || SYSTEM_REFUND_REASON,
                     updated_at: db.serverDate(),
                 }
-            }).catch(() => {});
+            }).catch((e) => { console.error('[system-refund] ⚠️ 订单退款中状态更新失败 orderId=%s error=%s', order._id, e.message); });
         } else {
             await settleCompletedGroupExpiredRefund(order, existingRefund).catch((error) => {
                 console.error('[GroupExpiredRefund] settle completed refund failed:', order._id, error.message);

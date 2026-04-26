@@ -7,32 +7,10 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 
-const DEFAULT_ROLE_NAMES = {
-    0: 'VIP用户',
-    1: '初级会员',
-    2: '高级会员',
-    3: '推广合伙人',
-    4: '运营合伙人',
-    5: '区域合伙人',
-    6: '店长'
-};
-
-const DEFAULT_AGENT_UPGRADE_RULES = {
-    enabled: true,
-    c1_min_purchase: 299,
-    c2_referee_count: 2,
-    c2_min_sales: 580,
-    c2_growth_value: 999,
-    b1_referee_count: 10,
-    b1_recharge: 3000,
-    b1_growth_value: 3000,
-    b2_referee_count: 10,
-    b2_recharge: 30000,
-    b3_referee_b1_count: 30,
-    b3_referee_b2_count: 3,
-    b3_recharge: 198000,
-    effective_order_days: 7
-};
+const {
+    DEFAULT_ROLE_NAMES,
+    DEFAULT_AGENT_UPGRADE_RULES
+} = require('./shared/agent-config');
 
 const DASHBOARD_BOOTSTRAP_CACHE_TTL = 15 * 1000;
 const dashboardBootstrapCache = new Map();
@@ -55,6 +33,7 @@ const userCouponTickets = require('./user-coupon-tickets');
 const userDepositOrders = require('./user-deposit-orders');
 const userFavorites = require('./user-favorites');
 const userNotifications = require('./user-notifications');
+const userPiggyBank = require('./user-piggy-bank');
 const userWallet = require('./user-wallet');
 const portalPassword = require('./user-portal-password');
 const {
@@ -1189,7 +1168,7 @@ async function countUnreadNotifications(openid) {
 }
 
 async function buildDashboardAssetRow(openid) {
-    const [coupons, pointsAccount] = await Promise.all([
+    const [coupons, pointsAccount, piggyBank] = await Promise.all([
         withTransientDbReadRetry(
             () => userCoupons.listCoupons(openid, 'unused'),
             { action: 'dashboardBootstrap.assetRow.coupons', openid }
@@ -1197,7 +1176,15 @@ async function buildDashboardAssetRow(openid) {
         withTransientDbReadRetry(
             () => userWallet.pointsAccount(openid),
             { action: 'dashboardBootstrap.assetRow.points', openid }
-        ).catch(() => ({}))
+        ).catch(() => ({})),
+        withTransientDbReadRetry(
+            () => userPiggyBank.getUpgradePiggyBankAsset(openid),
+            { action: 'dashboardBootstrap.assetRow.piggyBank', openid }
+        ).catch(() => ({
+            locked_amount: 0,
+            unlocked_amount: 0,
+            reversed_amount: 0
+        }))
     ]);
 
     const validCoupons = (Array.isArray(coupons) ? coupons : []).filter((coupon) => !isCouponExpired(coupon));
@@ -1208,7 +1195,13 @@ async function buildDashboardAssetRow(openid) {
                 ? pointsAccount.balance_points
                 : resolvePointsValue(pointsAccount),
             0
-        )
+        ),
+        piggyBankLockedAmount: toNum(piggyBank.locked_amount, 0),
+        piggyBank: {
+            locked_amount: toNum(piggyBank.locked_amount, 0),
+            unlocked_amount: toNum(piggyBank.unlocked_amount, 0),
+            reversed_amount: toNum(piggyBank.reversed_amount, 0)
+        }
     };
 }
 
@@ -1287,7 +1280,13 @@ async function buildDashboardBootstrapPayload(openid) {
         countUnreadNotifications(openid).catch(() => 0),
         buildDashboardAssetRow(openid).catch(() => ({
             unusedCouponCount: 0,
-            pointsBalance: 0
+            pointsBalance: 0,
+            piggyBankLockedAmount: 0,
+            piggyBank: {
+                locked_amount: 0,
+                unlocked_amount: 0,
+                reversed_amount: 0
+            }
         })),
         buildDashboardFavoritePreview(openid).catch(() => ({
             count: 0,

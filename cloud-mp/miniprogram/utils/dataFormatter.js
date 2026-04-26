@@ -60,6 +60,7 @@ function isExpiredSignedAssetUrl(url) {
   const text = String(url || '').trim();
   if (!/^https?:\/\//i.test(text)) return false;
   if (!/[?&]sign=/.test(text)) return false;
+  if (/tcb\.qcloud\.la/i.test(text)) return false;
   const expireAt = parseSignedAssetExpireAt(text);
   return expireAt > 0 && expireAt <= Date.now();
 }

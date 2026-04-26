@@ -83,17 +83,21 @@ exports.main = async () => {
                     .get()
                     .catch(() => ({ data: [] }));
                 for (const commission of (commissionRes.data || [])) {
-                    await db.collection('commissions').doc(String(commission._id)).update({
-                        data: {
-                            status: 'frozen',
-                            pre_freeze_status: commission.status,
-                            commission_freeze_reason: 'order_confirm',
-                            frozen_at: db.serverDate(),
-                            refund_deadline: refundDeadlineDate(),
-                            updated_at: db.serverDate()
-                        }
-                    })
-                    .catch(() => {});
+                    try {
+                        await db.collection('commissions').doc(String(commission._id)).update({
+                            data: {
+                                status: 'frozen',
+                                pre_freeze_status: commission.status,
+                                commission_freeze_reason: 'order_confirm',
+                                frozen_at: db.serverDate(),
+                                refund_deadline: refundDeadlineDate(),
+                                updated_at: db.serverDate()
+                            }
+                        });
+                    } catch (commissionErr) {
+                        console.error('[OrderAutoConfirm] ⚠️ 佣金冻结失败 order_id=%s commission_id=%s error=%s', order._id, commission._id, commissionErr.message);
+                        errors.push({ order_id: order._id, commission_id: commission._id, error: `佣金冻结失败: ${commissionErr.message}` });
+                    }
                 }
 
                 confirmed += 1;

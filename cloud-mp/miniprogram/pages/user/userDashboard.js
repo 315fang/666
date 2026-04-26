@@ -1,5 +1,6 @@
 const app = getApp();
 const { get } = require('../../utils/request');
+const { callFn } = require('../../utils/cloud');
 const { ROLE_NAMES } = require('../../config/constants');
 
 /** 与后台 DEFAULT_ROLE_NAMES / 分销侧代理等级一致，避免接口里旧文案（如「代理会员」）与等级不符 */
@@ -23,6 +24,13 @@ const { fetchPointSummary } = require('../../utils/points');
 const { listFavorites, listFootprints } = require('../../utils/localUserContent');
 const { parseImages } = require('../../utils/dataFormatter');
 const { resolveCloudImageUrl } = require('../../utils/cloudAssetRuntime');
+const {
+    calculateCumulativeGrowthPercent,
+    getDisplayNextTierForGrowth,
+    getDisplayTierForGrowth,
+    pickProgressPercent,
+    resolveNextThreshold
+} = require('../../utils/growthTierDisplay');
 
 const USER_DASHBOARD_TTL = 15 * 1000;
 const USER_SECONDARY_TTL = 60 * 1000;
@@ -95,6 +103,25 @@ function formatMoneyInt(value, fallback = '0') {
     return String(Math.trunc(n));
 }
 
+function pickPiggyBankLockedAmount(source = {}) {
+    const piggyBank = source.piggyBank || source.piggy_bank || {};
+    return source.piggyBankLockedAmount
+        ?? source.piggy_bank_locked_amount
+        ?? piggyBank.locked_amount
+        ?? piggyBank.lockedAmount
+        ?? 0;
+}
+
+async function loadPiggyBankBalanceDisplay() {
+    const progress = await callFn('distribution', { action: 'promotionProgress' }, {
+        showError: false,
+        preventDup: true,
+        maxRetries: 0,
+        readOnly: true
+    }).catch(() => null);
+    return formatMoneyInt(pickPiggyBankLockedAmount(progress || {}));
+}
+
 function buildDisplayNickname(info) {
     const rawName = info?.nick_name || info?.nickname || info?.nickName || '微信用户';
     return String(rawName).trim() || '微信用户';
@@ -143,6 +170,127 @@ function normalizeQuadPreviewCard(raw = {}, fallback = {}) {
     };
 }
 
+function createEmptyCartPreview(loggedIn = true) {
+    return {
+        count: 0,
+        total: '0.00',
+        sub: loggedIn ? '购物袋空空如也' : '登录后同步购物袋',
+        meta: loggedIn ? '去挑选喜欢的商品' : '登录后查看待购商品',
+        primaryName: loggedIn ? '暂无待购商品' : '登录后查看购物袋',
+        hasItems: false,
+        items: [],
+        cartIds: '',
+        remainingCount: 0,
+        actionText: loggedIn ? '去挑选' : '去登录'
+    };
+}
+
+function extractCartItems(response) {
+    if (!response) return [];
+    const data = response.data;
+    if (Array.isArray(response.items)) return response.items;
+    if (Array.isArray(response.list)) return response.list;
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.items)) return data.items;
+    if (data && Array.isArray(data.list)) return data.list;
+    return [];
+}
+
+function parseCartQuantity(item = {}) {
+    const qty = Number(item.quantity != null ? item.quantity : item.qty);
+    return Number.isFinite(qty) && qty > 0 ? qty : 1;
+}
+
+function parseCartPrice(item = {}) {
+    const candidates = [
+        item.effective_price,
+        item.price,
+        item.snapshot_price,
+        item.sku && item.sku.retail_price,
+        item.sku && item.sku.price,
+        item.product && item.product.retail_price,
+        item.product && item.product.price
+    ];
+    for (const value of candidates) {
+        const price = Number(value);
+        if (Number.isFinite(price) && price >= 0) return price;
+    }
+    return 0;
+}
+
+function pickCartProductName(item = {}) {
+    return String(
+        item.product?.name
+        || item.snapshot_name
+        || item.name
+        || '购物袋商品'
+    ).trim();
+}
+
+function pickCartSpecText(item = {}) {
+    const raw = item.snapshot_spec || item.sku?.spec_value || item.sku?.spec || item.spec || '';
+    if (!raw) return '';
+    if (typeof raw === 'string') return raw;
+    if (Array.isArray(raw)) {
+        return raw
+            .map((entry) => entry && (entry.value || entry.name))
+            .filter(Boolean)
+            .join(' / ');
+    }
+    if (typeof raw === 'object') {
+        return Object.keys(raw)
+            .map((key) => raw[key])
+            .filter(Boolean)
+            .join(' / ');
+    }
+    return String(raw);
+}
+
+function pickCartImageSource(item = {}) {
+    return item.image
+        || item.firstImage
+        || item.sku?.image
+        || item.snapshot_image
+        || item.product?.display_image
+        || item.product?.preview_images
+        || item.product?.images
+        || item.product?.image_url
+        || item.product?.image
+        || QUAD_PLACEHOLDER;
+}
+
+async function buildCartPreview(response, loggedIn = true) {
+    if (!loggedIn) return createEmptyCartPreview(false);
+
+    const items = extractCartItems(response);
+    if (!items.length) return createEmptyCartPreview(true);
+
+    const count = items.reduce((sum, item) => sum + parseCartQuantity(item), 0);
+    const total = items.reduce((sum, item) => sum + parseCartPrice(item) * parseCartQuantity(item), 0);
+    const previewItems = await Promise.all(items.slice(0, 3).map(async (item) => ({
+        id: item.id || item._id || '',
+        name: pickCartProductName(item),
+        spec: pickCartSpecText(item),
+        quantity: parseCartQuantity(item),
+        image: await resolveQuadPreviewImage(pickCartImageSource(item))
+    })));
+    const primary = previewItems[0] || {};
+    const cartIds = items.map((item) => item.id || item._id).filter(Boolean).join(',');
+
+    return {
+        count,
+        total: formatMoney(total),
+        sub: `共 ${count} 件，合计 ¥${formatMoney(total)}`,
+        meta: primary.spec ? `${primary.spec} · x${primary.quantity}` : `x${primary.quantity || 1}`,
+        primaryName: primary.name || '购物袋商品',
+        hasItems: true,
+        items: previewItems,
+        cartIds,
+        remainingCount: Math.max(0, items.length - previewItems.length),
+        actionText: '去结算'
+    };
+}
+
 function orderFirstThumb(order) {
     if (!order || !order.product) return QUAD_PLACEHOLDER;
     const imgs = parseImages(order.product.images);
@@ -158,12 +306,15 @@ function applyGrowthDisplay(page, info) {
     const membershipConfig = getConfigSection('membership_config') || {};
     const growthProgress = info.growth_progress || {};
     const growthValue = Number(info.growth_value) || 0;
-    const currentTier = growthProgress.current || {};
-    const nextTier = growthProgress.next || null;
-    let percent = Number(growthProgress.percent);
-    if (!Number.isFinite(percent)) percent = 0;
-    const barPercent = Math.min(100, Math.max(0, percent));
-    const nextThreshold = growthProgress.next_threshold;
+    const fallbackCurrentTier = getDisplayTierForGrowth(growthValue);
+    const fallbackNextTier = getDisplayNextTierForGrowth(growthValue);
+    const currentTier = growthProgress.current || growthProgress.tier || fallbackCurrentTier || {};
+    const nextTier = growthProgress.next || growthProgress.nextLevel || fallbackNextTier || null;
+    const fallbackPercent = pickProgressPercent(growthProgress, 0);
+    const nextThreshold = resolveNextThreshold(growthProgress, fallbackNextTier ? fallbackNextTier.min : null);
+    const barPercent = nextTier
+        ? calculateCumulativeGrowthPercent(growthValue, nextThreshold, fallbackPercent)
+        : 100;
 
     let subLine = '';
     if (!nextTier) {
@@ -230,6 +381,7 @@ function scheduleSecondaryLoads(page, forceRefresh = false) {
                     loadOrderCounts(page),
                     loadNotificationsCount(page),
                     loadAssetRow(page),
+                    loadCartPreview(page),
                     loadQuadPreviews(page),
                     loadDistributionInfo(page),
                     loadPickupVerifyScope(page)
@@ -247,16 +399,22 @@ function scheduleSecondaryLoads(page, forceRefresh = false) {
 async function loadDashboardBootstrap(page) {
     if (!app.globalData.isLoggedIn) {
         const localQuad = await buildLocalQuadPreviews();
-        page.setData(localQuad);
+        page.setData({
+            ...localQuad,
+            cartPreview: createEmptyCartPreview(false)
+        });
         return;
     }
 
     const openid = app.globalData.openid || wx.getStorageSync('openid') || '';
-    const response = await cachedGet(get, '/user/dashboard-bootstrap', { _openid_cache_key: openid }, {
-        cacheTTL: USER_DASHBOARD_TTL,
-        showError: false,
-        maxRetries: 0
-    });
+    const [response, cartPreview] = await Promise.all([
+        cachedGet(get, '/user/dashboard-bootstrap', { _openid_cache_key: openid }, {
+            cacheTTL: USER_DASHBOARD_TTL,
+            showError: false,
+            maxRetries: 0
+        }),
+        fetchCartPreview(true)
+    ]);
     if (!response || response.code !== 0 || !response.data) {
         throw new Error('dashboard bootstrap failed');
     }
@@ -298,6 +456,8 @@ async function loadDashboardBootstrap(page) {
         notificationsCount: Number(payload.notificationsCount || 0),
         unusedCouponCount: Number(payload.assetRow?.unusedCouponCount || 0),
         pointsBalanceDisplay: String(payload.assetRow?.pointsBalance != null ? payload.assetRow.pointsBalance : 0),
+        piggyBankBalance: formatMoneyInt(pickPiggyBankLockedAmount(payload.assetRow || {})),
+        cartPreview,
         quadFavorite: favoriteCard,
         quadFootprint: footprintCard,
         stats: { frozenAmount: distributionCard.frozenAmount || '0.00' },
@@ -358,7 +518,9 @@ async function loadUserInfo(page, forceRefresh = false) {
             pointsBalanceDisplay: '--',
             balance: '0',
             commissionBalance: '0',
+            piggyBankBalance: '0',
             couponBanner: null,
+            cartPreview: createEmptyCartPreview(false),
             notificationsCount: 0,
             orderStats: { pending: 0, paid: 0, shipped: 0, pendingReview: 0, refund: 0 },
             displayAgentRoleLevel: 0,
@@ -440,6 +602,7 @@ async function loadUserInfo(page, forceRefresh = false) {
                 loadOrderCounts(page),
                 loadNotificationsCount(page),
                 loadAssetRow(page),
+                loadCartPreview(page),
                 loadQuadPreviews(page),
                 loadDistributionInfo(page),
                 loadPickupVerifyScope(page)
@@ -472,15 +635,39 @@ async function loadUserInfo(page, forceRefresh = false) {
     return page._dashboardRefreshPromise;
 }
 
-async function loadAssetRow(page) {
+async function fetchCartPreview(loggedIn = true) {
+    if (!loggedIn) return createEmptyCartPreview(false);
+    const response = await get('/cart', {}, {
+        showError: false,
+        maxRetries: 0,
+        preventDuplicate: true
+    }).catch(() => null);
+    return buildCartPreview(response, true);
+}
+
+async function loadCartPreview(page) {
     if (!app.globalData.isLoggedIn) {
-        page.setData({ unusedCouponCount: 0, pointsBalanceDisplay: '--', couponBanner: null });
+        page.setData({ cartPreview: createEmptyCartPreview(false) });
         return;
     }
     try {
-        const [couponResponse, pointWrap] = await Promise.all([
+        const cartPreview = await fetchCartPreview(true);
+        page.setData({ cartPreview });
+    } catch (_) {
+        // 购物袋摘要失败不影响账户页主数据。
+    }
+}
+
+async function loadAssetRow(page) {
+    if (!app.globalData.isLoggedIn) {
+        page.setData({ unusedCouponCount: 0, pointsBalanceDisplay: '--', piggyBankBalance: '0', couponBanner: null });
+        return;
+    }
+    try {
+        const [couponResponse, pointWrap, piggyBankBalance] = await Promise.all([
             get('/coupons/mine', { status: 'unused' }).catch(() => ({ code: -1, data: [] })),
-            fetchPointSummary().catch(() => ({ account: {} }))
+            fetchPointSummary().catch(() => ({ account: {} })),
+            loadPiggyBankBalanceDisplay().catch(() => '0')
         ]);
         let coupons = couponResponse.code === 0 ? extractResponseList(couponResponse) : [];
         coupons = coupons.filter((c) => {
@@ -494,6 +681,7 @@ async function loadAssetRow(page) {
         page.setData({
             unusedCouponCount,
             pointsBalanceDisplay: balance != null ? String(balance) : '0',
+            piggyBankBalance,
             couponBanner: null
         });
     } catch (_) {
@@ -611,10 +799,11 @@ function markOrderBadgesSeen(page, statuses) {
 
 async function loadDistributionInfo(page) {
     try {
-        const [overviewResponse, walletResponse, agentWalletResponse] = await Promise.all([
+        const [overviewResponse, walletResponse, agentWalletResponse, piggyBankBalance] = await Promise.all([
             get('/distribution/overview', {}, { showError: false }).catch(() => null),
             get('/wallet/info', {}, { showError: false }).catch(() => null),
-            get('/agent/wallet', {}, { showError: false }).catch(() => null)
+            get('/agent/wallet', {}, { showError: false }).catch(() => null),
+            loadPiggyBankBalanceDisplay().catch(() => '0')
         ]);
 
         const dashboard = overviewResponse && overviewResponse.code === 0 ? (overviewResponse.data || {}) : {};
@@ -690,6 +879,7 @@ async function loadDistributionInfo(page) {
             stats: { frozenAmount },
             balance: formatMoneyInt(goodsFundRaw),
             commissionBalance: formatMoneyInt(commissionRaw),
+            piggyBankBalance,
             teamCount,
             isAgent: roleLevel >= 2,
             displayAgentRoleLevel: roleLevel,
@@ -768,9 +958,12 @@ function clearUserCache() {
 
 module.exports = {
     applyGrowthDisplay,
+    buildCartPreview,
     clearUserCache,
     clearSecondaryLoadState,
+    createEmptyCartPreview,
     loadAssetRow,
+    loadCartPreview,
     loadDistributionInfo,
     loadNotificationsCount,
     loadOrderCounts,

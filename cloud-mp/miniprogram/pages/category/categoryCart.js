@@ -1,5 +1,6 @@
 const { get, put, del } = require('../../utils/request');
 const { getFirstImage, formatMoney } = require('../../utils/dataFormatter');
+const { markCartChanged, markCartStateSeen, shouldRefreshCartState } = require('../../utils/cartState');
 
 const CATEGORY_CART_TTL = 8 * 1000;
 
@@ -11,11 +12,21 @@ function parseCartItems(res) {
     return [];
 }
 
+function getCartItemId(item = {}) {
+    return String(item.cart_id || item._id || item.id || '').trim();
+}
+
+function getCartItemQuantity(item = {}) {
+    const quantity = Number(item.quantity != null ? item.quantity : item.qty);
+    return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+}
+
 async function updateCartData(page, forceRefresh = false) {
-    if (!forceRefresh && page._cartSyncPromise) {
+    const shouldForceRefresh = forceRefresh || shouldRefreshCartState(page);
+    if (!shouldForceRefresh && page._cartSyncPromise) {
         return page._cartSyncPromise;
     }
-    if (!forceRefresh && page._lastCartSyncAt && (Date.now() - page._lastCartSyncAt) < CATEGORY_CART_TTL) {
+    if (!shouldForceRefresh && page._lastCartSyncAt && (Date.now() - page._lastCartSyncAt) < CATEGORY_CART_TTL) {
         return;
     }
 
@@ -29,18 +40,19 @@ async function updateCartData(page, forceRefresh = false) {
             });
             if (res.code === 0) {
                 const items = parseCartItems(res);
-                const count = items.reduce((sum, item) => sum + item.quantity, 0);
+                const count = items.reduce((sum, item) => sum + getCartItemQuantity(item), 0);
                 let total = res.data?.summary?.total_amount || 0;
                 if (!total && items.length > 0) {
-                    total = items.reduce((sum, item) => sum + (parseFloat(item.effective_price || item.sku?.retail_price || 0) * item.quantity), 0);
+                    total = items.reduce((sum, item) => sum + (parseFloat(item.effective_price || item.sku?.retail_price || 0) * getCartItemQuantity(item)), 0);
                 }
 
                 page.setData({
                     cartCount: count,
                     cartTotal: parseFloat(total).toFixed(2),
-                    _cartItemIds: items.map((item) => item.id).join(',')
+                    _cartItemIds: items.map((item) => getCartItemId(item)).filter(Boolean).join(',')
                 });
                 page._lastCartSyncAt = Date.now();
+                markCartStateSeen(page);
             }
         } catch (err) {
             console.error('更新购物袋失败:', err);
@@ -79,8 +91,8 @@ async function openCartPopup(page) {
         });
         const items = parseCartItems(res);
         const popupItems = (Array.isArray(items) ? items : []).map((item) => ({
-            id: item.id,
-            quantity: item.quantity || 1,
+            id: getCartItemId(item),
+            quantity: getCartItemQuantity(item),
             selected: item.selected !== false,
             name: item.product?.name || '商品',
             image: item.sku?.image || getFirstImage(item.product?.images),
@@ -121,7 +133,7 @@ function popupCheckout(page) {
     }
     closeCartPopup(page);
     wx.navigateTo({
-        url: `/pages/order/confirm?from=cart&cart_ids=${selectedIds.join(',')}`
+        url: `/pages/order/confirm?from=cart&cart_ids=${encodeURIComponent(selectedIds.join(','))}`
     });
 }
 
@@ -140,9 +152,10 @@ function clearCartPopup(page) {
                 const ids = page.data.cartPopupItems.map((item) => item.id);
                 Promise.all(ids.map((id) => del(`/cart/${id}`).catch(() => null)))
                     .then(() => {
+                        markCartChanged('category_cart_clear');
                         page.setData({ cartPopupItems: [], cartPopupSelectedIds: [], cartPopupAllSelected: false });
                         calcCartPopupTotal(page);
-                        updateCartData(page);
+                        updateCartData(page, true);
                     });
             }
         }
@@ -155,11 +168,12 @@ async function changeCartItemQty(page, index, nextQty) {
     if (nextQty <= 0) {
         try {
             await del(`/cart/${item.id}`);
+            markCartChanged('category_cart_remove');
             const items = [...page.data.cartPopupItems];
             items.splice(index, 1);
             page.setData({ cartPopupItems: items }, () => {
                 syncPopupSelection(page);
-                updateCartData(page);
+                updateCartData(page, true);
             });
         } catch (_err) {
             wx.showToast({ title: '删除失败', icon: 'none' });
@@ -168,10 +182,11 @@ async function changeCartItemQty(page, index, nextQty) {
     }
 
     try {
-        await put(`/cart/${item.id}`, { quantity: nextQty });
+        await put(`/cart/${item.id}`, { qty: nextQty, quantity: nextQty });
+        markCartChanged('category_cart_quantity');
         page.setData({ [`cartPopupItems[${index}].quantity`]: nextQty }, () => {
             calcCartPopupTotal(page);
-            updateCartData(page);
+            updateCartData(page, true);
         });
     } catch (_err) {
         wx.showToast({ title: '操作失败', icon: 'none' });

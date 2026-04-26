@@ -44,6 +44,51 @@ function toMoney(value) {
     return toNumber(value).toFixed(2);
 }
 
+function roundMoney(value) {
+    return Math.round(toNumber(value, 0) * 100) / 100;
+}
+
+function nearlyEqual(left, right, tolerance = 0.01) {
+    return Math.abs(toNumber(left, 0) - toNumber(right, 0)) <= tolerance;
+}
+
+function resolveOrderPayAmountForDisplay(order = {}, originalAmount = 0, discounts = {}) {
+    const fallbackTotal = toNumber(order.total_amount != null ? order.total_amount : originalAmount, originalAmount);
+    const rawPayAmount = toNumber(
+        order.pay_amount != null
+            ? order.pay_amount
+            : (order.actual_price != null ? order.actual_price : fallbackTotal),
+        fallbackTotal
+    );
+    const expectedPayAmount = roundMoney(Math.max(0,
+        toNumber(originalAmount, fallbackTotal)
+        - toNumber(discounts.bundle_discount, 0)
+        - toNumber(discounts.coupon_discount, 0)
+        - toNumber(discounts.points_discount, 0)
+    ));
+    const remainingRefundableCash = toNumber(order.remaining_refundable_cash, NaN);
+    const hasDiscountBreakdown = (
+        toNumber(discounts.bundle_discount, 0) > 0
+        || toNumber(discounts.coupon_discount, 0) > 0
+        || toNumber(discounts.points_discount, 0) > 0
+    );
+
+    if (hasDiscountBreakdown && expectedPayAmount > 0 && rawPayAmount > 0) {
+        if (nearlyEqual(rawPayAmount * 100, expectedPayAmount)) {
+            return expectedPayAmount;
+        }
+        if (
+            Number.isFinite(remainingRefundableCash)
+            && remainingRefundableCash > rawPayAmount
+            && nearlyEqual(remainingRefundableCash, expectedPayAmount)
+        ) {
+            return expectedPayAmount;
+        }
+    }
+
+    return rawPayAmount;
+}
+
 function normalizePaymentMethodCode(raw) {
     const method = String(raw || '').trim().toLowerCase();
     if (['wechat', 'wx', 'wxpay', 'jsapi', 'miniapp', 'wechatpay', 'wechat_pay', 'weixin'].includes(method)) {
@@ -100,15 +145,14 @@ function normalizeOrderConsumer(order = {}) {
     );
     const totalAmount = toNumber(order.total_amount != null ? order.total_amount : order.original_amount);
     const originalAmount = toNumber(order.original_amount != null ? order.original_amount : totalAmount, totalAmount);
-    const payAmount = toNumber(
-        order.pay_amount != null
-            ? order.pay_amount
-            : (order.actual_price != null ? order.actual_price : totalAmount),
-        totalAmount
-    );
     const couponDiscount = toNumber(order.coupon_discount);
     const pointsDiscount = toNumber(order.points_discount);
     const bundleDiscount = toNumber(order.bundle_discount);
+    const payAmount = resolveOrderPayAmountForDisplay(order, originalAmount, {
+        coupon_discount: couponDiscount,
+        points_discount: pointsDiscount,
+        bundle_discount: bundleDiscount
+    });
     const refundedCashTotal = toNumber(order.refunded_cash_total);
     const remainingRefundableCash = toNumber(order.remaining_refundable_cash);
     const statusText = refundFailed ? '退款失败' : (order.status_text || getOrderStatusText(order.status));

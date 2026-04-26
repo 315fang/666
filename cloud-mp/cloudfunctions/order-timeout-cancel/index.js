@@ -123,18 +123,23 @@ function buildCouponRestorePatch() {
 
 async function restoreUsedCoupon(order) {
     if (order.user_coupon_id) {
-        const restored = await db.collection('user_coupons')
-            .doc(String(order.user_coupon_id))
-            .update({ data: buildCouponRestorePatch() })
-            .then(() => true)
-            .catch(() => false);
-        if (restored) return;
+        try {
+            await db.collection('user_coupons')
+                .doc(String(order.user_coupon_id))
+                .update({ data: buildCouponRestorePatch() });
+            return;
+        } catch (e) {
+            console.error('[OrderTimeoutCancel] ⚠️ 恢复优惠券失败(by id) order=%s coupon=%s error=%s', order._id, order.user_coupon_id, e.message);
+        }
     }
     if (order.coupon_id) {
-        await db.collection('user_coupons')
-            .where({ openid: order.openid, coupon_id: order.coupon_id, status: 'used' })
-            .update({ data: buildCouponRestorePatch() })
-            .catch(() => {});
+        try {
+            await db.collection('user_coupons')
+                .where({ openid: order.openid, coupon_id: order.coupon_id, status: 'used' })
+                .update({ data: buildCouponRestorePatch() });
+        } catch (e) {
+            console.error('[OrderTimeoutCancel] ⚠️ 恢复优惠券失败(by query) order=%s coupon_id=%s error=%s', order._id, order.coupon_id, e.message);
+        }
     }
 }
 
@@ -146,35 +151,47 @@ async function releasePickupStationInventory(order, reason = '超时未支付，
         const stockId = String(item && item.pickup_station_stock_id || '').trim();
         const qty = Math.max(0, Number(item && (item.pickup_stock_reserved_qty ?? item.qty ?? item.quantity) || 0));
         if (!stockId || qty <= 0) continue;
-        await db.collection('station_sku_stocks').doc(stockId).update({
+        try {
+            await db.collection('station_sku_stocks').doc(stockId).update({
+                data: {
+                    available_qty: _.inc(qty),
+                    reserved_qty: _.inc(-qty),
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (stationErr) {
+            console.error('[OrderTimeoutCancel] ⚠️ 释放门店库存失败 stockId=%s qty=%s error=%s', stockId, qty, stationErr.message);
+        }
+        try {
+            await db.collection('station_stock_logs').add({
+                data: {
+                    station_id: order.pickup_station_id || '',
+                    stock_id: stockId,
+                    product_id: item.product_id || '',
+                    sku_id: item.sku_id || '',
+                    type: 'release',
+                    quantity: qty,
+                    order_id: order._id || '',
+                    order_no: order.order_no || '',
+                    remark: reason,
+                    created_at: db.serverDate()
+                }
+            });
+        } catch (logErr) {
+            console.error('[OrderTimeoutCancel] ⚠️ 门店库存日志写入失败 stockId=%s error=%s', stockId, logErr.message);
+        }
+    }
+    try {
+        await db.collection('orders').doc(String(order._id)).update({
             data: {
-                available_qty: _.inc(qty),
-                reserved_qty: _.inc(-qty),
+                pickup_stock_reservation_status: 'released',
+                pickup_stock_released_at: db.serverDate(),
                 updated_at: db.serverDate()
             }
-        }).catch(() => {});
-        await db.collection('station_stock_logs').add({
-            data: {
-                station_id: order.pickup_station_id || '',
-                stock_id: stockId,
-                product_id: item.product_id || '',
-                sku_id: item.sku_id || '',
-                type: 'release',
-                quantity: qty,
-                order_id: order._id || '',
-                order_no: order.order_no || '',
-                remark: reason,
-                created_at: db.serverDate()
-            }
-        }).catch(() => {});
+        });
+    } catch (orderErr) {
+        console.error('[OrderTimeoutCancel] ⚠️ 订单预占状态更新失败 orderId=%s error=%s', order._id, orderErr.message);
     }
-    await db.collection('orders').doc(String(order._id)).update({
-        data: {
-            pickup_stock_reservation_status: 'released',
-            pickup_stock_released_at: db.serverDate(),
-            updated_at: db.serverDate()
-        }
-    }).catch(() => {});
 }
 
 async function cancelTimedOutPendingOrders(defaultMinutes, now) {
@@ -225,20 +242,30 @@ async function cancelTimedOutPendingOrders(defaultMinutes, now) {
                 }).catch((e) => console.error('[OrderTimeoutCancel] 退积分失败:', order._id, e.message));
             }
 
-            await restoreUsedCoupon(order).catch(() => {});
+try { await restoreUsedCoupon(order); } catch (e) {
+                console.error('[OrderTimeoutCancel] ⚠️ 恢复优惠券失败 order=%s error=%s', order._id, e.message);
+            }
 
             if (order.stock_deducted_at && Array.isArray(order.items)) {
                 for (const item of order.items) {
                     const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
                     if (item.product_id) {
-                        await db.collection('products').doc(String(item.product_id)).update({
-                            data: { stock: _.inc(qty), updated_at: db.serverDate() }
-                        }).catch(() => {});
+                        try {
+                            await db.collection('products').doc(String(item.product_id)).update({
+                                data: { stock: _.inc(qty), updated_at: db.serverDate() }
+                            });
+                        } catch (stockErr) {
+                            console.error('[OrderTimeoutCancel] ⚠️ 恢复商品库存失败 product=%s qty=%s error=%s', item.product_id, qty, stockErr.message);
+                        }
                     }
                     if (item.sku_id) {
-                        await db.collection('skus').doc(String(item.sku_id)).update({
-                            data: { stock: _.inc(qty), updated_at: db.serverDate() }
-                        }).catch(() => {});
+                        try {
+                            await db.collection('skus').doc(String(item.sku_id)).update({
+                                data: { stock: _.inc(qty), updated_at: db.serverDate() }
+                            });
+                        } catch (skuErr) {
+                            console.error('[OrderTimeoutCancel] ⚠️ 恢复SKU库存失败 sku=%s qty=%s error=%s', item.sku_id, qty, skuErr.message);
+                        }
                     }
                 }
             }

@@ -249,4 +249,5 @@
   </view>
   <!-- 品牌动画（提现成功等） -->
   <brand-animation id="brandAnimation"></brand-animation>
+  <portal-password-dialog id="portalPasswordDialog" />
 </view>

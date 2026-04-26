@@ -293,7 +293,7 @@ const openMediaPicker = (kind, index = -1) => {
 const handleMediaConfirm = (persistIds = [], displayUrls = []) => {
   const persist = Array.isArray(persistIds) ? (persistIds[0] || '') : ''
   const display = Array.isArray(displayUrls) ? (displayUrls[0] || '') : ''
-  const stableUrl = buildPersistentAssetRef({ url: display || persist })
+  const stableUrl = buildPersistentAssetRef({ url: display || persist, fileId: persist })
   if (mediaPickerContext.value.kind === 'banner') {
     props.festival.banner_file_id = persist
     props.festival.banner = stableUrl || ''

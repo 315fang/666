@@ -180,20 +180,20 @@
 }
 
 .buy-btn {
-  background: linear-gradient(135deg, var(--luxury-black) 0%, var(--luxury-black-light) 100%);
+  background: linear-gradient(135deg, #60A5FA 0%, #2563EB 54%, #1D4ED8 100%);
   color: var(--luxury-white);
   font-size: var(--text-xs);
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-full);
   font-weight: var(--font-semibold);
-  box-shadow: var(--shadow-dark);
+  box-shadow: 0 8rpx 18rpx rgba(37, 99, 235, 0.22);
   transition: all var(--duration-fast);
 }
 
 .buy-btn:active {
-  background: var(--luxury-black);
+  background: #1D4ED8;
   transform: scale(0.95);
-  box-shadow: var(--shadow-dark-lg);
+  box-shadow: 0 10rpx 22rpx rgba(37, 99, 235, 0.28);
 }
 
 .card-horizontal .buy-btn {

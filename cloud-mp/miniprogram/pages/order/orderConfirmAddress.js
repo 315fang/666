@@ -40,6 +40,30 @@ async function loadAddresses() {
     return res.list || res.data || [];
 }
 
+function safeDecodeText(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    try {
+        return decodeURIComponent(text);
+    } catch (_) {
+        return text;
+    }
+}
+
+function parseCartIdList(cartIds) {
+    const rawList = Array.isArray(cartIds)
+        ? cartIds
+        : safeDecodeText(cartIds).split(',');
+    return rawList
+        .map((item) => safeDecodeText(item))
+        .map((item) => String(item || '').trim())
+        .filter(Boolean);
+}
+
+function getCartItemId(item = {}) {
+    return String(item.cart_id || item._id || item.id || '').trim();
+}
+
 async function getDefaultAddress() {
     try {
         const addresses = await loadAddresses();
@@ -226,13 +250,34 @@ async function loadCartItems(page, cartIds) {
     try {
         const res = await get('/cart', {}, { showError: false });
         const allItems = res.data?.items || res.data?.list || (Array.isArray(res.data) ? res.data : []) || [];
-        const ids = cartIds.split(',').map(Number);
+        const ids = parseCartIdList(cartIds);
+        const idSet = new Set(ids);
         const { roleLevel } = page.data;
+
+        if (idSet.size === 0) {
+            page.setData({
+                loading: false,
+                orderItems: [],
+                invalidSpecItems: [],
+                totalAmount: '0.00',
+                finalAmount: '0.00',
+                totalCount: 0,
+                cartLoadStatus: 'error',
+                cartLoadError: '购物袋商品已失效，请返回重新选择'
+            });
+            return {
+                ok: false,
+                status: 'error',
+                data: null,
+                errorType: 'empty_cart_ids'
+            };
+        }
 
         const selectedItems = await Promise.all(
             allItems
-                .filter((item) => ids.includes(item.id))
+                .filter((item) => idSet.has(getCartItemId(item)))
                 .map(async (item) => {
+                    const cartId = getCartItemId(item);
                     const resolved = await resolveMissingSkuForCartItem(item);
                     const product = resolved.product || item.product || null;
                     const sku = resolved.sku || item.sku || null;
@@ -247,7 +292,7 @@ async function loadCartItems(page, cartIds) {
                         '/assets/images/placeholder.svg'
                     );
                     return {
-                        cart_id: item.id,
+                        cart_id: cartId,
                         product_id: item.product_id,
                         category_id: product?.category_id || null,
                         sku_id: resolved.skuId,
@@ -266,6 +311,25 @@ async function loadCartItems(page, cartIds) {
                 })
         );
         const normalizedSelectedItems = normalizeOrderItems(selectedItems);
+
+        if (normalizedSelectedItems.length === 0) {
+            page.setData({
+                loading: false,
+                orderItems: [],
+                invalidSpecItems: [],
+                totalAmount: '0.00',
+                finalAmount: '0.00',
+                totalCount: 0,
+                cartLoadStatus: 'error',
+                cartLoadError: '购物袋商品已失效，请返回重新选择'
+            });
+            return {
+                ok: false,
+                status: 'error',
+                data: null,
+                errorType: 'cart_items_not_found'
+            };
+        }
 
         let totalAmountFen = 0;
         let totalCount = 0;
@@ -325,5 +389,7 @@ module.exports = {
     refreshPickupAllowed,
     loadPickupStations,
     loadDefaultAddress,
-    loadCartItems
+    loadCartItems,
+    parseCartIdList,
+    getCartItemId
 };

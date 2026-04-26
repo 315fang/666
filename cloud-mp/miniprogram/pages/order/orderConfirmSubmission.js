@@ -4,6 +4,7 @@ const { ensureLogin } = require('../../utils/auth');
 const { ensurePrivacyAuthorization } = require('../../utils/privacy');
 const { normalizeLimitedSpotPayload } = require('../../utils/limitedSpot');
 const { promptPortalPassword } = require('../../utils/portalPassword');
+const { markCartChanged } = require('../../utils/cartState');
 
 function resolveSubmitOrderMessage(error) {
     if (error && error.message
@@ -167,6 +168,8 @@ async function submitOrder(page, app, brandAnimation) {
 
         if (page.data.from === 'direct') {
             wx.removeStorageSync('directBuyInfo');
+        } else {
+            markCartChanged('order_submit_cart');
         }
 
         const createdOrders = Array.isArray(res.data) ? res.data : (res.data ? [res.data] : []);

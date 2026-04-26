@@ -52,6 +52,10 @@ function analyzeAssetUrl(url) {
   }
 }
 
+function isCloudFileId(value) {
+  return /^cloud:\/\//i.test(String(value || '').trim())
+}
+
 function stripTemporaryQueryKeys(url) {
   const rawUrl = String(url || '').trim()
   if (!rawUrl) return ''
@@ -85,6 +89,9 @@ export function warnTemporaryAssetUrls(urls, label = '素材') {
 
 export function buildPersistentAssetRef({ url = '', fileId = '' } = {}) {
   const normalizedFileId = String(fileId || '').trim()
-  if (/^cloud:\/\//i.test(normalizedFileId)) return normalizedFileId
+  if (isCloudFileId(normalizedFileId)) return normalizedFileId
+  const normalizedUrl = String(url || '').trim()
+  if (isCloudFileId(normalizedUrl)) return normalizedUrl
+  if (analyzeAssetUrl(normalizedUrl).isTemporary) return ''
   return stripTemporaryQueryKeys(url)
 }

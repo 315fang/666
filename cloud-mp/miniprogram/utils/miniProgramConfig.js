@@ -13,7 +13,7 @@ const DEFAULT_CONFIG = {
     customer_service_hours: '9:00-21:00',
     nav_brand_title: '问兰镜像',
     nav_brand_sub: '品牌甄选',
-    coupon_zone_title: '惊喜礼遇',
+    coupon_zone_title: '优惠券中心',
     coupon_zone_subtitle: '领券后下单可用',
     police_registration_title: '公安备案',
     police_registration_number: '苏公网安备32050802012518号',

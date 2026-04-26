@@ -163,4 +163,5 @@
     <text class="empty-title">当前账号未被指派为店长</text>
     <text class="empty-desc">店长与门店绑定由后台完成，绑定后这里会显示你的门店工作台。</text>
   </view>
+  <portal-password-dialog id="portalPasswordDialog" />
 </view>

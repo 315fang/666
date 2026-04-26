@@ -41,6 +41,15 @@ function isCloudFileId(value) {
     return /^cloud:\/\//i.test(pickString(value));
 }
 
+function isTemporarySignedAssetUrl(value) {
+    const text = pickString(value).toLowerCase();
+    if (!text || !/^https?:\/\//i.test(text)) return false;
+    if (/[?&](expires|signature|sign|x-amz-algorithm|x-amz-credential|x-amz-date|x-amz-expires|x-amz-security-token|x-amz-signature|x-oss-signature|x-oss-credential|x-oss-date|x-oss-expires|x-cos-algorithm|x-cos-credential|x-cos-date|x-cos-expires|x-cos-security-token|x-cos-signature)=/i.test(text)) {
+        return true;
+    }
+    return /tcb\.qcloud\.la/i.test(text) && /[?&]sign=/i.test(text) && /[?&]t=/i.test(text);
+}
+
 function isTruthyFlag(value, fallback = false) {
     if (value === undefined || value === null || value === '') return fallback;
     if (value === true || value === 1) return true;
@@ -77,13 +86,15 @@ function extractAssetRef(value) {
     if (!hasValue(value)) return '';
     if (typeof value === 'string') return value.trim();
     if (typeof value === 'object') {
-        const fileId = pickString(value.file_id || value.fileId);
+        const fileId = pickString(value.image_ref || value.imageRef || value.file_id || value.fileId);
         if (isCloudFileId(fileId)) return fileId;
         const direct = pickString(
             value.url
             || value.image_url
             || value.imageUrl
             || value.temp_url
+            || value.image_ref
+            || value.imageRef
             || value.image
             || value.cover_image
             || value.coverImage
@@ -124,6 +135,7 @@ async function batchResolveCloudAssetUrls(fileIds = []) {
 function resolveAssetEntry(value, resolvedMap = new Map(), options = {}) {
     const ref = extractAssetRef(value);
     if (!ref) return '';
+    if (isTemporarySignedAssetUrl(ref)) return '';
     if (isCloudFileId(ref)) {
         if (options && options.preferCloudId) {
             return ref;
@@ -144,6 +156,15 @@ function resolveAssetList(value, resolvedMap = new Map(), options = {}) {
         });
 }
 
+function mergeResolvedAssetLists(...lists) {
+    const seen = new Set();
+    return lists.flat().filter((item) => {
+        if (!item || seen.has(item)) return false;
+        seen.add(item);
+        return true;
+    });
+}
+
 function resolvePrimaryAsset(record = {}, resolvedMap = new Map(), options = {}) {
     const galleryImages = resolveAssetList(record.images, resolvedMap, options);
     if (galleryImages.length) return galleryImages[0];
@@ -156,6 +177,8 @@ function resolvePrimaryAsset(record = {}, resolvedMap = new Map(), options = {})
         || record.cover
         || record.cover_url
         || record.coverUrl
+        || record.image_ref
+        || record.imageRef
         || record.file_id
         || record.fileId
         || record.thumb
@@ -177,11 +200,15 @@ function collectProductAssetFileIds(product = {}, skus = []) {
         ...collectCloudFileIdsFromValue(product.image_url),
         ...collectCloudFileIdsFromValue(product.cover_image),
         ...collectCloudFileIdsFromValue(product.coverImage),
+        ...collectCloudFileIdsFromValue(product.image_ref),
+        ...collectCloudFileIdsFromValue(product.imageRef),
         ...collectCloudFileIdsFromValue(product.file_id),
         ...collectCloudFileIdsFromValue(product.fileId),
         ...(Array.isArray(skus) ? skus.flatMap((sku) => ([
             ...collectCloudFileIdsFromValue(sku.image),
             ...collectCloudFileIdsFromValue(sku.images),
+            ...collectCloudFileIdsFromValue(sku.image_ref),
+            ...collectCloudFileIdsFromValue(sku.imageRef),
             ...collectCloudFileIdsFromValue(sku.file_id),
             ...collectCloudFileIdsFromValue(sku.fileId)
         ])) : [])
@@ -372,12 +399,12 @@ function normalizeSku(sku, resolvedMap = new Map()) {
             : (sku.spec ? [{ name: '规格', value: sku.spec }] : []));
     const skuImages = [
         ...resolveAssetList(sku.images, resolvedMap, { preferCloudId: true }),
-        ...resolveAssetList([sku.image, sku.file_id, sku.fileId, sku.image_url, sku.cover_image], resolvedMap, { preferCloudId: true })
+        ...resolveAssetList([sku.image, sku.image_ref, sku.imageRef, sku.file_id, sku.fileId, sku.image_url, sku.cover_image], resolvedMap, { preferCloudId: true })
     ].filter((url, index, list) => !!url && list.indexOf(url) === index);
     const primaryImage = skuImages[0] || '';
     const previewImages = [
         ...resolveAssetList(sku.images, resolvedMap),
-        ...resolveAssetList([sku.image, sku.file_id, sku.fileId, sku.image_url, sku.cover_image], resolvedMap)
+        ...resolveAssetList([sku.image, sku.image_ref, sku.imageRef, sku.file_id, sku.fileId, sku.image_url, sku.cover_image], resolvedMap)
     ].filter((url, index, list) => !!url && list.indexOf(url) === index);
 
     return {
@@ -404,8 +431,14 @@ function formatProduct(p, resolvedMap = new Map()) {
     const originalPrice = resolveProductOriginalPrice(p, price);
     const images = resolveAssetList(p.images, resolvedMap, { preferCloudId: true });
     const detailImages = resolveAssetList(p.detail_images, resolvedMap, { preferCloudId: true });
-    const previewImages = resolveAssetList(p.preview_images || p.previewImages || p.images, resolvedMap);
-    const previewDetailImages = resolveAssetList(p.preview_detail_images || p.previewDetailImages || p.detail_images, resolvedMap);
+    const previewImages = mergeResolvedAssetLists(
+        resolveAssetList(p.images, resolvedMap),
+        resolveAssetList(p.preview_images || p.previewImages, resolvedMap)
+    );
+    const previewDetailImages = mergeResolvedAssetLists(
+        resolveAssetList(p.detail_images, resolvedMap),
+        resolveAssetList(p.preview_detail_images || p.previewDetailImages, resolvedMap)
+    );
     const primaryImage = images[0] || resolvePrimaryAsset(p, resolvedMap, { preferCloudId: true }) || '';
     const primaryPreviewImage = previewImages[0] || resolvePrimaryAsset(p, resolvedMap) || '';
     return {
@@ -466,7 +499,8 @@ function formatProductCard(product = {}, resolvedMap = new Map()) {
         display_image: displayImage,
         image_ref: imageRef,
         image_url: displayImage,
-        preview_images: displayImage ? [displayImage] : []
+        preview_images: displayImage ? [displayImage] : [],
+        image_candidates: mergeResolvedAssetLists([imageRef], [displayImage])
     };
 }
 

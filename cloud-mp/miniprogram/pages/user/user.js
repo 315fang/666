@@ -2,11 +2,13 @@
 const app = getApp();
 const { requireLogin } = require('../../utils/auth');
 const { getConfigSection, getFeatureFlags, syncCustomTabBar } = require('../../utils/miniProgramConfig');
+const { shouldRefreshCartState } = require('../../utils/cartState');
 const QUAD_PLACEHOLDER = '/assets/images/placeholder.svg';
 const {
     applyGrowthDisplay,
     clearSecondaryLoadState,
     loadAssetRow,
+    loadCartPreview,
     loadDistributionInfo,
     loadNotificationsCount,
     loadOrderCounts,
@@ -81,9 +83,22 @@ Page({
         unusedCouponCount: 0,
         pointsBalanceDisplay: '0',
         commissionBalance: '0',
+        piggyBankBalance: '0',
         quadExpress: { sub: '暂无在途订单', image: QUAD_PLACEHOLDER, orderId: null },
         quadFavorite: { sub: '暂无收藏', image: QUAD_PLACEHOLDER, count: 0 },
         quadFootprint: { sub: '看过的商品', image: QUAD_PLACEHOLDER, count: 0 },
+        cartPreview: {
+            count: 0,
+            total: '0.00',
+            sub: '登录后同步购物袋',
+            meta: '登录后查看待购商品',
+            primaryName: '登录后查看购物袋',
+            hasItems: false,
+            items: [],
+            cartIds: '',
+            remainingCount: 0,
+            actionText: '去登录'
+        },
         quadRecent: {
             title: '会员',
             sub: '查看权益与等级',
@@ -164,13 +179,17 @@ Page({
         });
         this._syncPortalPasswordEntryVisibility();
         clearTimeout(this._pageLayoutLoadTimer);
-        Promise.resolve(this.loadUserInfo())
+        const cartChanged = shouldRefreshCartState(this);
+        Promise.resolve(this.loadUserInfo(cartChanged))
             .finally(() => {
                 this._pageLayoutLoadTimer = setTimeout(() => {
                     this.loadPageLayoutConfig();
                 }, 120);
             })
             .catch(() => null);
+        if (cartChanged) {
+            this.loadCartPreview().catch(() => null);
+        }
         this._refreshBusinessCenterVisibility();
         this._tryPendingRegisterLightTip();
     },
@@ -243,12 +262,12 @@ Page({
         return loadAssetRow(this);
     },
 
-    async loadQuadPreviews() {
-        return loadQuadPreviews(this);
+    async loadCartPreview() {
+        return loadCartPreview(this);
     },
 
-    onAssetCouponsTap() {
-        this.goCoupons();
+    async loadQuadPreviews() {
+        return loadQuadPreviews(this);
     },
 
     onAssetPointsTap() {
@@ -264,6 +283,10 @@ Page({
         this.onWalletTap();
     },
 
+    onPiggyBankTap() {
+        this.goUpgradePiggyBank();
+    },
+
     onQuadExpressTap() {
         return handleQuadExpressTap(this);
     },
@@ -274,6 +297,31 @@ Page({
 
     onQuadFootprintTap() {
         return handleQuadFootprintTap();
+    },
+
+    onAccountCartTap() {
+        if (!this.data.isLoggedIn) {
+            this.onLogin();
+            return;
+        }
+        if (this.data.cartPreview && this.data.cartPreview.hasItems) {
+            wx.navigateTo({ url: '/pages/cart/cart' });
+            return;
+        }
+        wx.switchTab({ url: '/pages/category/category' });
+    },
+
+    onAccountCartCheckout() {
+        if (!this.data.isLoggedIn) {
+            this.onLogin();
+            return;
+        }
+        const cartPreview = this.data.cartPreview || {};
+        if (cartPreview.hasItems && cartPreview.cartIds) {
+            wx.navigateTo({ url: `/pages/order/confirm?from=cart&cart_ids=${encodeURIComponent(cartPreview.cartIds)}` });
+            return;
+        }
+        this.onAccountCartTap();
     },
 
     onQuadRecentTap() {

@@ -958,8 +958,10 @@ function assetUrl(value) {
 function isTemporarySignedAssetUrl(value) {
     const text = pickString(value).toLowerCase();
     if (!text || !/^https?:\/\//i.test(text)) return false;
-    if (!text.includes('tcb.qcloud.la')) return false;
-    return /[?&]sign=/.test(text) && /[?&]t=/.test(text);
+    if (/[?&](expires|signature|sign|x-amz-algorithm|x-amz-credential|x-amz-date|x-amz-expires|x-amz-security-token|x-amz-signature|x-oss-signature|x-oss-credential|x-oss-date|x-oss-expires|x-cos-algorithm|x-cos-credential|x-cos-date|x-cos-expires|x-cos-security-token|x-cos-signature)=/i.test(text)) {
+        return true;
+    }
+    return /tcb\.qcloud\.la/i.test(text) && /[?&]sign=/i.test(text) && /[?&]t=/i.test(text);
 }
 
 function getStorageConfigSnapshot() {
@@ -1018,6 +1020,49 @@ function normalizeManagedMaterialUrl(url, fileId, type) {
 
 function pickAssetRef(source = {}) {
     return pickString(source.file_id || source.image_url || source.url || source.image || source.cover_image || source.coverImage).trim();
+}
+
+function normalizePersistentAssetRef(source) {
+    if (!source) return '';
+    if (typeof source === 'string') return pickString(source);
+    if (typeof source === 'object') {
+        const fileId = pickString(source.file_id || source.fileId);
+        if (isCloudFileId(fileId)) return fileId;
+        return pickString(
+            source.image_ref
+            || source.imageRef
+            || source.url
+            || source.image_url
+            || source.imageUrl
+            || source.image
+            || source.cover_image
+            || source.coverImage
+        );
+    }
+    return pickString(source);
+}
+
+function normalizePersistentAssetList(value, fieldLabel = '图片') {
+    const list = toArray(value);
+    const normalized = [];
+    for (const item of list) {
+        const ref = normalizePersistentAssetRef(item);
+        if (!ref) continue;
+        if (isTemporarySignedAssetUrl(ref)) {
+            return {
+                ok: false,
+                message: `${fieldLabel}包含临时签名链接，请从素材库重新选择云开发存储图片`
+            };
+        }
+        if (/^https?:\/\//i.test(ref)) {
+            return {
+                ok: false,
+                message: `${fieldLabel}必须通过素材库上传并保存 cloud:// file_id，不能直接保存 HTTP 图片链接`
+            };
+        }
+        normalized.push(ref);
+    }
+    return { ok: true, value: [...new Set(normalized)] };
 }
 
 function getManagedCloud() {
@@ -1174,6 +1219,22 @@ function pickBannerProductLookup(banner = {}) {
     return linkValue || null;
 }
 
+const HOME_BANNER_POSITIONS = new Set(['home', 'home_mid', 'home_bottom']);
+
+function isHomeBannerPosition(position = '') {
+    return HOME_BANNER_POSITIONS.has(pickString(position).trim());
+}
+
+function stripHomeBannerTextFields(row = {}) {
+    if (!isHomeBannerPosition(row.position)) return row;
+    return {
+        ...row,
+        title: '',
+        subtitle: '',
+        kicker: ''
+    };
+}
+
 /**
  * 批量解析 URL 数组中的 cloud:// file ID，返回可直接展示的 https URL 数组。
  * 普通 https/本地路径原样处理（走 assetUrl）。
@@ -1211,7 +1272,7 @@ async function normalizeBannerRecordAsync(banner) {
         imageUrl = await resolveProductCoverImageAsync(product);
     }
     const isActive = toBoolean(banner.status ?? banner.is_active ?? 1) ? 1 : 0;
-    return {
+    return stripHomeBannerTextFields({
         ...banner,
         id: banner.id || banner._legacy_id || banner._id,
         file_id: fileId,
@@ -1224,7 +1285,7 @@ async function normalizeBannerRecordAsync(banner) {
         status: isActive,
         created_at: normalizeDateValue(banner.created_at),
         updated_at: normalizeDateValue(banner.updated_at)
-    };
+    });
 }
 
 async function normalizePopupAdConfigAsync(config) {
@@ -1928,8 +1989,136 @@ function sortByUpdatedDesc(rows) {
     });
 }
 
+function productIdentityTokens(product, extraValues = []) {
+    return new Set(
+        [
+            product?._id,
+            product?.id,
+            product?._legacy_id,
+            ...extraValues
+        ].flatMap((item) => valueTokens(item))
+    );
+}
+
+function skuBelongsToProduct(sku, product, extraValues = []) {
+    const tokens = productIdentityTokens(product, extraValues);
+    return valueTokens(sku?.product_id).some((token) => tokens.has(token));
+}
+
+function normalizeSkuSpecInput(sku = {}, fallback = '默认规格') {
+    const specs = Array.isArray(sku.specs)
+        ? sku.specs
+            .map((item) => ({
+                name: pickString(item?.name || item?.spec_name || '规格'),
+                value: pickString(item?.value || item?.spec_value || item?.spec)
+            }))
+            .filter((item) => item.value)
+        : [];
+    if (specs.length > 0) return specs;
+
+    const value = pickString(sku.spec_value || sku.spec, fallback);
+    return [{ name: pickString(sku.spec_name, '规格'), value }];
+}
+
+function firstSkuNumber(values = [], fallback = 0) {
+    for (const value of values) {
+        if (value === null || value === undefined || value === '') continue;
+        const number = Number(value);
+        if (Number.isFinite(number)) return number;
+    }
+    return fallback;
+}
+
+function normalizeSkuRecord(sku, product, productId, index, nextSkuId) {
+    const specs = normalizeSkuSpecInput(sku);
+    const specName = specs.length === 1 ? specs[0].name : specs.map((item) => item.name).join('/');
+    const specValue = specs.length === 1 ? specs[0].value : specs.map((item) => item.value).join('/');
+    const rawSkuId = primaryId(sku);
+    const skuId = rawSkuId !== null && rawSkuId !== undefined && rawSkuId !== '' ? rawSkuId : nextSkuId();
+    const retailPrice = firstSkuNumber([sku.retail_price, sku.price], toNumber(product.retail_price, 0));
+    const marketPrice = firstSkuNumber([sku.market_price, sku.original_price], toNumber(product.market_price, 0));
+    const row = {
+        id: skuId,
+        _legacy_id: sku._legacy_id ?? null,
+        product_id: productId,
+        name: pickString(sku.name, product.name || ''),
+        spec: specValue || '默认规格',
+        spec_name: specName,
+        spec_value: specValue,
+        specs,
+        image: sku.image || '',
+        price: retailPrice,
+        retail_price: retailPrice,
+        original_price: marketPrice,
+        market_price: marketPrice,
+        stock: toNumber(sku.stock, 0),
+        sku_code: pickString(sku.sku_code, ''),
+        sort_order: toNumber(sku.sort_order, index),
+        created_at: sku.created_at || nowIso(),
+        updated_at: nowIso()
+    };
+    if (sku._id) row._id = sku._id;
+    return row;
+}
+
+function replaceProductSkus(product, incomingSkus, productLookup = null) {
+    const skus = getCollection('skus');
+    const productId = primaryId(product) ?? productLookup;
+    const remainingSkus = skus.filter((item) => !skuBelongsToProduct(item, product, [productLookup]));
+    let nextNumericSkuId = nextId(skus);
+    const usedSkuIds = new Set(skus.flatMap((item) => [
+        item?.id,
+        item?._legacy_id,
+        item?._id
+    ].flatMap((value) => valueTokens(value))));
+    const nextSkuId = () => {
+        while (usedSkuIds.has(String(nextNumericSkuId))) nextNumericSkuId += 1;
+        const id = nextNumericSkuId;
+        usedSkuIds.add(String(id));
+        nextNumericSkuId += 1;
+        return id;
+    };
+
+    const normalizedSkus = toArray(incomingSkus).map((sku, index) => (
+        normalizeSkuRecord(sku || {}, product, productId, index, nextSkuId)
+    ));
+
+    saveCollection('skus', [...remainingSkus, ...normalizedSkus]);
+
+    if (normalizedSkus.length === 0) {
+        return {
+            skus: [],
+            productPatch: {
+                default_sku_id: null,
+                specSummary: '',
+                spec_summary: ''
+            }
+        };
+    }
+
+    const defaultSku = normalizedSkus[0];
+    const totalStock = normalizedSkus.reduce((sum, sku) => sum + toNumber(sku.stock, 0), 0);
+    const minPrice = Math.min(...normalizedSkus.map((sku) => toNumber(sku.retail_price ?? sku.price, 0)));
+    const specSummary = normalizedSkus
+        .map((sku) => pickString(sku.spec_value || sku.spec))
+        .filter(Boolean)
+        .join(' / ');
+
+    return {
+        skus: normalizedSkus,
+        productPatch: {
+            stock: totalStock,
+            min_price: minPrice,
+            retail_price: minPrice,
+            default_sku_id: primaryId(defaultSku),
+            specSummary,
+            spec_summary: specSummary
+        }
+    };
+}
+
 function productWithRelations(product, categories, skus, reviews) {
-    const productId = Number(product.id || product._legacy_id || product._id || 0);
+    const productId = primaryId(product);
     // 分类关联：同时支持数字 id 和 CloudBase UUID _id（用字符串比较兜底）
     const catId = product.category_id != null ? String(product.category_id) : null;
     const category = catId
@@ -1938,8 +2127,9 @@ function productWithRelations(product, categories, skus, reviews) {
             return cid != null && String(cid) === catId;
         }) || null
         : null;
-    const productSkus = skus.filter((item) => Number(item.product_id) === productId);
-    const productReviews = reviews.filter((item) => Number(item.product_id) === productId);
+    const productSkus = skus.filter((item) => skuBelongsToProduct(item, product));
+    const productReviewTokens = productIdentityTokens(product);
+    const productReviews = reviews.filter((item) => valueTokens(item.product_id).some((token) => productReviewTokens.has(token)));
 
     // 生成规格摘要
     let specSummary = '';
@@ -5519,9 +5709,14 @@ app.get('/admin/api/products/:id', auth, requirePermission('products'), async (r
 });
 
 app.post('/admin/api/products', auth, requirePermission('products'), async (req, res) => {
-    await ensureFreshCollections(['products']);
+    await ensureFreshCollections(['products', 'skus']);
     const rows = getCollection('products');
     const nextStatus = req.body?.status != null ? (toBoolean(req.body.status) ? 1 : 0) : 1;
+    const normalizedImages = normalizePersistentAssetList(req.body?.images, '商品主图');
+    if (!normalizedImages.ok) return failField(res, 'images', normalizedImages.message);
+    const normalizedDetailImages = normalizePersistentAssetList(req.body?.detail_images, '商品详情图');
+    if (!normalizedDetailImages.ok) return failField(res, 'detail_images', normalizedDetailImages.message);
+    const shouldReplaceSkus = Object.prototype.hasOwnProperty.call(req.body || {}, 'skus');
     const row = {
         id: nextId(rows),
         ...req.body,
@@ -5533,12 +5728,18 @@ app.post('/admin/api/products', auth, requirePermission('products'), async (req,
         stock: toNumber(req.body?.stock, 0),
         status: nextStatus,
         is_active: nextStatus,
-        images: toArray(req.body?.images),
-        detail_images: toArray(req.body?.detail_images),
+        images: normalizedImages.value,
+        detail_images: normalizedDetailImages.value,
         created_at: nowIso(),
         updated_at: nowIso()
     };
+    delete row.skus;
+    delete row.default_sku_index;
     if (!pickString(row.name).trim()) return fail(res, '商品名称不能为空');
+    if (shouldReplaceSkus) {
+        const skuSync = replaceProductSkus(row, req.body.skus, row.id);
+        Object.assign(row, skuSync.productPatch);
+    }
     rows.push(row);
     saveCollection('products', rows);
     // 直写 CloudBase，确保新商品即时持久化（用数字 id 作为文档 _id 方便后续定点更新）
@@ -5553,11 +5754,20 @@ app.post('/admin/api/products', auth, requirePermission('products'), async (req,
 });
 
 app.put('/admin/api/products/:id', auth, requirePermission('products'), async (req, res) => {
-    await ensureFreshCollections(['products']);
+    const shouldReplaceSkus = Object.prototype.hasOwnProperty.call(req.body || {}, 'skus');
+    await ensureFreshCollections(shouldReplaceSkus ? ['products', 'skus'] : ['products']);
     const rows = getCollection('products');
     const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
     if (index === -1) return fail(res, '商品不存在', 404);
     const previousRow = rows[index];
+    const normalizedImages = req.body?.images != null
+        ? normalizePersistentAssetList(req.body.images, '商品主图')
+        : { ok: true, value: rows[index].images };
+    if (!normalizedImages.ok) return failField(res, 'images', normalizedImages.message);
+    const normalizedDetailImages = req.body?.detail_images != null
+        ? normalizePersistentAssetList(req.body.detail_images, '商品详情图')
+        : { ok: true, value: rows[index].detail_images };
+    if (!normalizedDetailImages.ok) return failField(res, 'detail_images', normalizedDetailImages.message);
     const nextStatus = req.body?.status != null
         ? (toBoolean(req.body.status) ? 1 : 0)
         : (toBoolean(rows[index].status ?? rows[index].is_active ?? 1) ? 1 : 0);
@@ -5571,10 +5781,16 @@ app.put('/admin/api/products/:id', auth, requirePermission('products'), async (r
         stock: req.body?.stock != null ? toNumber(req.body.stock, 0) : rows[index].stock,
         status: nextStatus,
         is_active: nextStatus,
-        images: req.body?.images != null ? toArray(req.body.images) : rows[index].images,
-        detail_images: req.body?.detail_images != null ? toArray(req.body.detail_images) : rows[index].detail_images,
+        images: normalizedImages.value,
+        detail_images: normalizedDetailImages.value,
         updated_at: nowIso()
     };
+    delete rows[index].skus;
+    delete rows[index].default_sku_index;
+    if (shouldReplaceSkus) {
+        const skuSync = replaceProductSkus(rows[index], req.body.skus, req.params.id);
+        Object.assign(rows[index], skuSync.productPatch);
+    }
     const updatedRow = rows[index];
 
     const normalizeSpecValue = (value) => String(value == null ? '' : value).trim();
@@ -5601,7 +5817,7 @@ app.put('/admin/api/products/:id', auth, requirePermission('products'), async (r
         return false;
     };
 
-    const shouldSyncDefaultSku = req.body?.retail_price != null || req.body?.market_price != null || req.body?.stock != null;
+    const shouldSyncDefaultSku = !shouldReplaceSkus && (req.body?.retail_price != null || req.body?.market_price != null || req.body?.stock != null);
     if (shouldSyncDefaultSku) {
         await ensureFreshCollections(['skus']);
         const skus = getCollection('skus');
@@ -5851,10 +6067,12 @@ registerDirectedInviteRoutes(app, {
 
 // 获取商品的所有 SKU
 app.get('/admin/api/products/:productId/skus', auth, requirePermission('products'), async (req, res) => {
-    await ensureFreshCollections(['skus']);
-    const productId = Number(req.params.productId);
+    await ensureFreshCollections(['products', 'skus']);
+    const products = getCollection('products');
+    const product = findByLookup(products, req.params.productId);
+    if (!product) return fail(res, '商品不存在', 404);
     const skus = getCollection('skus');
-    const productSkus = skus.filter((item) => Number(item.product_id) === productId).map((item) => ({
+    const productSkus = skus.filter((item) => skuBelongsToProduct(item, product, [req.params.productId])).map((item) => ({
         ...item,
         id: item.id || item._legacy_id || item._id,
         // 兼容：确保 specs 数组可用
@@ -5867,177 +6085,82 @@ app.get('/admin/api/products/:productId/skus', auth, requirePermission('products
 // 批量更新商品 SKU（整体替换，支持多规格）
 app.put('/admin/api/products/:productId/skus', auth, requirePermission('products'), async (req, res) => {
     await ensureFreshCollections(['products', 'skus']);
-    const productId = Number(req.params.productId);
     const products = getCollection('products');
-    const product = products.find((item) => Number(item.id || item._legacy_id || item._id) === productId);
+    const productIndex = products.findIndex((item) => rowMatchesLookup(item, req.params.productId));
+    const product = productIndex >= 0 ? products[productIndex] : null;
     if (!product) return fail(res, '商品不存在', 404);
 
-    const incomingSkus = toArray(req.body.skus);
-    const skus = getCollection('skus');
+    const skuSync = replaceProductSkus(product, req.body.skus, req.params.productId);
+    products[productIndex] = {
+        ...products[productIndex],
+        ...skuSync.productPatch,
+        updated_at: nowIso()
+    };
+    saveCollection('products', products);
 
-    // 删除旧 SKU
-    const remainingSkus = skus.filter((item) => Number(item.product_id) !== productId);
-
-    // 创建新 SKU
-    const newSkus = incomingSkus.map((sku, index) => {
-        const specs = Array.isArray(sku.specs) ? sku.specs : (sku.spec_name && sku.spec_value ? [{ name: sku.spec_name, value: sku.spec_value }] : []);
-        const specName = specs.length === 1 ? specs[0].name : (specs.length > 1 ? specs.map((s) => s.name).join('/') : (sku.spec_name || ''));
-        const specValue = specs.length === 1 ? specs[0].value : (specs.length > 1 ? specs.map((s) => s.value).join('/') : (sku.spec_value || sku.spec || ''));
-
-        return {
-            id: sku.id || nextId(remainingSkus.concat(newSkus)),
-            _legacy_id: null,
-            product_id: productId,
-            name: sku.name || product.name,
-            spec: specValue || '默认规格',
-            spec_name: specName,
-            spec_value: specValue,
-            specs: specs,
-            image: sku.image || '',
-            price: toNumber(sku.price, 0),
-            original_price: toNumber(sku.original_price || sku.market_price, 0),
-            stock: toNumber(sku.stock, 0),
-            sku_code: pickString(sku.sku_code, ''),
-            sort_order: toNumber(sku.sort_order, index),
-            created_at: sku.created_at || nowIso(),
-            updated_at: nowIso()
-        };
-    });
-
-    const finalSkus = [...remainingSkus, ...newSkus];
-    saveCollection('skus', finalSkus);
-
-    // 同步更新商品库存和最低价
-    const totalStock = newSkus.reduce((sum, s) => sum + toNumber(s.stock, 0), 0);
-    const minPrice = newSkus.length > 0 ? Math.min(...newSkus.map((s) => toNumber(s.price, 0))) : toNumber(product.retail_price, 0);
-    const productIndex = products.findIndex((item) => Number(item.id || item._legacy_id || item._id) === productId);
-    if (productIndex !== -1) {
-        products[productIndex] = {
-            ...products[productIndex],
-            stock: totalStock,
-            min_price: minPrice,
-            retail_price: minPrice,
-            updated_at: nowIso()
-        };
-        saveCollection('products', products);
-    }
-
-    createAuditLog(req.admin, 'product.skus.update', 'products', { product_id: productId, sku_count: newSkus.length });
-    ok(res, { list: newSkus, total: newSkus.length });
+    createAuditLog(req.admin, 'product.skus.update', 'products', { product_id: primaryId(product) ?? req.params.productId, sku_count: skuSync.skus.length });
+    ok(res, { list: skuSync.skus, total: skuSync.skus.length });
 });
 
 // 新增单个 SKU
 app.post('/admin/api/products/:productId/skus', auth, requirePermission('products'), async (req, res) => {
     await ensureFreshCollections(['products', 'skus']);
-    const productId = Number(req.params.productId);
     const products = getCollection('products');
-    const product = products.find((item) => Number(item.id || item._legacy_id || item._id) === productId);
+    const productIndex = products.findIndex((item) => rowMatchesLookup(item, req.params.productId));
+    const product = productIndex >= 0 ? products[productIndex] : null;
     if (!product) return fail(res, '商品不存在', 404);
 
     const skus = getCollection('skus');
-    const specs = Array.isArray(req.body.specs) ? req.body.specs : (req.body.spec_name && req.body.spec_value ? [{ name: req.body.spec_name, value: req.body.spec_value }] : []);
-    const specName = specs.length === 1 ? specs[0].name : (specs.length > 1 ? specs.map((s) => s.name).join('/') : (req.body.spec_name || ''));
-    const specValue = specs.length === 1 ? specs[0].value : (specs.length > 1 ? specs.map((s) => s.value).join('/') : (req.body.spec_value || req.body.spec || ''));
+    const productSkus = skus.filter((item) => skuBelongsToProduct(item, product, [req.params.productId]));
+    const skuSync = replaceProductSkus(product, [...productSkus, req.body], req.params.productId);
+    const sku = skuSync.skus[skuSync.skus.length - 1];
+    products[productIndex] = { ...products[productIndex], ...skuSync.productPatch, updated_at: nowIso() };
+    saveCollection('products', products);
 
-    const sku = {
-        id: nextId(skus),
-        _legacy_id: null,
-        product_id: productId,
-        name: req.body.name || product.name,
-        spec: specValue || '默认规格',
-        spec_name: specName,
-        spec_value: specValue,
-        specs: specs,
-        image: req.body.image || '',
-        price: toNumber(req.body.price, 0),
-        original_price: toNumber(req.body.original_price || req.body.market_price, 0),
-        stock: toNumber(req.body.stock, 0),
-        sku_code: pickString(req.body.sku_code, ''),
-        sort_order: toNumber(req.body.sort_order, skus.filter((s) => Number(s.product_id) === productId).length),
-        created_at: nowIso(),
-        updated_at: nowIso()
-    };
-
-    skus.push(sku);
-    saveCollection('skus', skus);
-
-    // 同步商品库存/最低价
-    const productSkus = skus.filter((s) => Number(s.product_id) === productId);
-    const totalStock = productSkus.reduce((sum, s) => sum + toNumber(s.stock, 0), 0);
-    const minPrice = Math.min(...productSkus.map((s) => toNumber(s.price, 0)));
-    const productIndex = products.findIndex((item) => Number(item.id || item._legacy_id || item._id) === productId);
-    if (productIndex !== -1) {
-        products[productIndex] = { ...products[productIndex], stock: totalStock, min_price: minPrice, retail_price: minPrice, updated_at: nowIso() };
-        saveCollection('products', products);
-    }
-
-    createAuditLog(req.admin, 'product.sku.create', 'products', { product_id: productId, sku_id: sku.id });
+    createAuditLog(req.admin, 'product.sku.create', 'products', { product_id: primaryId(product) ?? req.params.productId, sku_id: primaryId(sku) });
     ok(res, sku);
 });
 
 // 更新单个 SKU
 app.put('/admin/api/products/:productId/skus/:skuId', auth, requirePermission('products'), async (req, res) => {
     await ensureFreshCollections(['products', 'skus']);
-    const productId = Number(req.params.productId);
-    const skuId = Number(req.params.skuId);
-    const skus = getCollection('skus');
-    const index = skus.findIndex((item) => Number(item.id) === skuId && Number(item.product_id) === productId);
-    if (index === -1) return fail(res, 'SKU不存在', 404);
-
-    const specs = Array.isArray(req.body.specs) ? req.body.specs : (req.body.spec_name && req.body.spec_value ? [{ name: req.body.spec_name, value: req.body.spec_value }] : skus[index].specs || []);
-    const specName = specs.length === 1 ? specs[0].name : (specs.length > 1 ? specs.map((s) => s.name).join('/') : (req.body.spec_name || skus[index].spec_name || ''));
-    const specValue = specs.length === 1 ? specs[0].value : (specs.length > 1 ? specs.map((s) => s.value).join('/') : (req.body.spec_value || req.body.spec || skus[index].spec_value || ''));
-
-    skus[index] = {
-        ...skus[index],
-        ...req.body,
-        spec: specValue || skus[index].spec,
-        spec_name: specName,
-        spec_value: specValue,
-        specs: specs,
-        price: req.body.price != null ? toNumber(req.body.price, 0) : skus[index].price,
-        original_price: req.body.original_price != null ? toNumber(req.body.original_price, 0) : skus[index].original_price,
-        stock: req.body.stock != null ? toNumber(req.body.stock, 0) : skus[index].stock,
-        updated_at: nowIso()
-    };
-    saveCollection('skus', skus);
-
-    // 同步商品库存/最低价
     const products = getCollection('products');
-    const productSkus = skus.filter((s) => Number(s.product_id) === productId);
-    const totalStock = productSkus.reduce((sum, s) => sum + toNumber(s.stock, 0), 0);
-    const minPrice = productSkus.length > 0 ? Math.min(...productSkus.map((s) => toNumber(s.price, 0))) : 0;
-    const productIndex = products.findIndex((item) => Number(item.id || item._legacy_id || item._id) === productId);
-    if (productIndex !== -1) {
-        products[productIndex] = { ...products[productIndex], stock: totalStock, min_price: minPrice, retail_price: minPrice, updated_at: nowIso() };
-        saveCollection('products', products);
-    }
+    const productIndex = products.findIndex((item) => rowMatchesLookup(item, req.params.productId));
+    const product = productIndex >= 0 ? products[productIndex] : null;
+    if (!product) return fail(res, '商品不存在', 404);
 
-    ok(res, skus[index]);
+    const skus = getCollection('skus');
+    const productSkus = skus.filter((item) => skuBelongsToProduct(item, product, [req.params.productId]));
+    const target = productSkus.find((item) => rowMatchesLookup(item, req.params.skuId));
+    if (!target) return fail(res, 'SKU不存在', 404);
+
+    const skuSync = replaceProductSkus(product, productSkus.map((item) => (
+        rowMatchesLookup(item, req.params.skuId) ? { ...item, ...req.body } : item
+    )), req.params.productId);
+    products[productIndex] = { ...products[productIndex], ...skuSync.productPatch, updated_at: nowIso() };
+    saveCollection('products', products);
+
+    const updatedSku = skuSync.skus.find((item) => rowMatchesLookup(item, req.params.skuId)) || skuSync.skus[0];
+    ok(res, updatedSku);
 });
 
 // 删除单个 SKU
 app.delete('/admin/api/products/:productId/skus/:skuId', auth, requirePermission('products'), async (req, res) => {
     await ensureFreshCollections(['products', 'skus']);
-    const productId = Number(req.params.productId);
-    const skuId = Number(req.params.skuId);
-    const skus = getCollection('skus');
-    const nextSkus = skus.filter((item) => !(Number(item.id) === skuId && Number(item.product_id) === productId));
-    if (skus.length === nextSkus.length) return fail(res, 'SKU不存在', 404);
-    saveCollection('skus', nextSkus);
-
-    // 同步商品库存/最低价
     const products = getCollection('products');
-    const productSkus = nextSkus.filter((s) => Number(s.product_id) === productId);
-    const totalStock = productSkus.reduce((sum, s) => sum + toNumber(s.stock, 0), 0);
-    const minPrice = productSkus.length > 0 ? Math.min(...productSkus.map((s) => toNumber(s.price, 0))) : 0;
-    const productIndex = products.findIndex((item) => Number(item.id || item._legacy_id || item._id) === productId);
-    if (productIndex !== -1) {
-        products[productIndex] = { ...products[productIndex], stock: totalStock, min_price: minPrice, retail_price: minPrice, updated_at: nowIso() };
-        saveCollection('products', products);
-    }
+    const productIndex = products.findIndex((item) => rowMatchesLookup(item, req.params.productId));
+    const product = productIndex >= 0 ? products[productIndex] : null;
+    if (!product) return fail(res, '商品不存在', 404);
 
-    createAuditLog(req.admin, 'product.sku.delete', 'products', { product_id: productId, sku_id: skuId });
+    const skus = getCollection('skus');
+    const productSkus = skus.filter((item) => skuBelongsToProduct(item, product, [req.params.productId]));
+    const nextProductSkus = productSkus.filter((item) => !rowMatchesLookup(item, req.params.skuId));
+    if (productSkus.length === nextProductSkus.length) return fail(res, 'SKU不存在', 404);
+    const skuSync = replaceProductSkus(product, nextProductSkus, req.params.productId);
+    products[productIndex] = { ...products[productIndex], ...skuSync.productPatch, updated_at: nowIso() };
+    saveCollection('products', products);
+
+    createAuditLog(req.admin, 'product.sku.delete', 'products', { product_id: primaryId(product) ?? req.params.productId, sku_id: req.params.skuId });
     ok(res, { success: true });
 });
 
@@ -6414,7 +6537,8 @@ app.get('/admin/api/banners', auth, requirePermission('content'), async (req, re
 app.post('/admin/api/banners', auth, requirePermission('content'), async (req, res) => {
     await ensureFreshCollections(['banners']);
     const rows = getCollection('banners');
-    const row = {
+    const position = pickString(req.body?.position, 'home');
+    const row = stripHomeBannerTextFields({
         id: nextId(rows),
         title: pickString(req.body?.title),
         subtitle: pickString(req.body?.subtitle),
@@ -6424,12 +6548,12 @@ app.post('/admin/api/banners', auth, requirePermission('content'), async (req, r
         image_url: pickString(req.body?.image_url || req.body?.url || req.body?.file_id),
         link_type: pickString(req.body?.link_type, 'product'),
         link_value: pickString(req.body?.link_value),
-        position: pickString(req.body?.position, 'home'),
+        position,
         sort_order: toNumber(req.body?.sort_order, 0),
         status: req.body?.status != null ? (toBoolean(req.body.status) ? 1 : 0) : 1,
         created_at: nowIso(),
         updated_at: nowIso()
-    };
+    });
     rows.push(row);
     saveCollection('banners', rows);
     ok(res, await normalizeBannerRecordAsync(row));
@@ -6440,15 +6564,19 @@ app.put('/admin/api/banners/:id', auth, requirePermission('content'), async (req
     const rows = getCollection('banners');
     const index = rows.findIndex((item) => rowMatchesLookup(item, req.params.id));
     if (index === -1) return fail(res, 'Banner 不存在', 404);
-    rows[index] = {
+    const position = req.body?.position != null
+        ? pickString(req.body.position, rows[index].position || 'home')
+        : pickString(rows[index].position || 'home');
+    rows[index] = stripHomeBannerTextFields({
         ...rows[index],
         ...req.body,
+        position,
         file_id: req.body?.file_id != null ? pickString(req.body.file_id) : rows[index].file_id || '',
         image_url: req.body?.image_url != null || req.body?.url != null || req.body?.file_id != null || req.body?.image != null || req.body?.cover_image != null
             ? pickString(req.body?.image_url || req.body?.url || req.body?.image || req.body?.cover_image || req.body?.file_id)
             : rows[index].image_url,
         updated_at: nowIso()
-    };
+    });
     saveCollection('banners', rows);
     ok(res, await normalizeBannerRecordAsync(rows[index]));
 });
@@ -9164,6 +9292,7 @@ registerSystemRoutes(app, {
     STRONG_CONSISTENCY_COLLECTIONS,
     okStrongRead,
     configContract,
+    resolveManagedFileUrl,
     createAuditLog,
     pickString,
     toObject,

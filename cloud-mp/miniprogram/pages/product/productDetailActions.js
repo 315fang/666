@@ -1,6 +1,7 @@
 const { post } = require('../../utils/request');
 const { normalizeProductId } = require('../../utils/dataFormatter');
 const { normalizeLimitedSpotMode } = require('../../utils/limitedSpot');
+const { markCartChanged } = require('../../utils/cartState');
 const { buildSkuText } = require('./productDetailData');
 
 function hasSkuOptions(page) {
@@ -201,6 +202,10 @@ async function addToCart(page) {
         loadingShown = false;
 
         page.triggerFlyAnim();
+        markCartChanged('product_detail_add');
+        if (typeof page.loadCartSummary === 'function') {
+            page.loadCartSummary().catch(() => null);
+        }
         wx.showToast({ title: '已加入购物袋', icon: 'success' });
     } catch (err) {
         const msg = err && err.message ? String(err.message) : '加入失败';

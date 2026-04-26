@@ -90,6 +90,12 @@ function pickString(value, fallback = '') {
     return text || fallback;
 }
 
+const HOME_BANNER_POSITIONS = new Set(['home', 'home_mid', 'home_bottom']);
+
+function isHomeBannerPosition(position = '') {
+    return HOME_BANNER_POSITIONS.has(pickString(position).trim());
+}
+
 function isCloudFileId(value) {
     return /^cloud:\/\//i.test(pickString(value));
 }
@@ -167,6 +173,55 @@ function buildResolvedAssetUrl(record = {}, resolvedMap = new Map()) {
     const fallback = pickAssetRef(record);
     if (!isHttpAsset(fallback)) return '';
     return fallback;
+}
+
+function buildRuntimeAssetUrl(record = {}, resolvedMap = new Map()) {
+    const fileId = pickFileId(record);
+    if (fileId) {
+        return pickString(resolvedMap.get(fileId)) || fileId;
+    }
+    const fallback = pickAssetRef(record);
+    if (isTemporarySignedAsset(fallback)) return '';
+    if (isHttpAsset(fallback) || isCloudFileId(fallback)) return fallback;
+    return pickString(fallback);
+}
+
+async function normalizeFestivalConfigPayload(config = {}) {
+    const raw = config && typeof config === 'object' ? config : {};
+    const bannerFileId = pickFileId({
+        file_id: raw.banner_file_id,
+        image: raw.banner
+    });
+    const posters = toArray(raw.card_posters);
+    const posterFileIds = posters.map((item) => pickFileId({
+        file_id: item && item.file_id,
+        image: item && item.image
+    }));
+    const resolvedMap = await batchResolveManagedFileUrls([bannerFileId, ...posterFileIds]);
+    return {
+        ...raw,
+        banner_file_id: bannerFileId || pickString(raw.banner_file_id),
+        banner: buildRuntimeAssetUrl({
+            file_id: bannerFileId,
+            image: raw.banner
+        }, resolvedMap),
+        card_posters: posters.map((item = {}) => {
+            const fileId = pickFileId({
+                file_id: item.file_id,
+                image: item.image
+            });
+            return {
+                ...item,
+                file_id: fileId || pickString(item.file_id),
+                image: buildRuntimeAssetUrl({
+                    file_id: fileId,
+                    image: item.image,
+                    url: item.url,
+                    image_url: item.image_url
+                }, resolvedMap)
+            };
+        })
+    };
 }
 
 function normalizeLotteryPrizeType(value) {
@@ -296,8 +351,14 @@ async function normalizeBannerRecords(records = []) {
                 imageUrl = await resolveProductCoverImage(product);
             }
         }
+        const position = pickString(item.position, 'home');
+        const imageOnly = isHomeBannerPosition(position);
         return {
             ...item,
+            title: imageOnly ? '' : pickString(item.title),
+            subtitle: imageOnly ? '' : pickString(item.subtitle),
+            kicker: imageOnly ? '' : pickString(item.kicker),
+            position,
             file_id: fileId,
             image_url: imageUrl,
             image: imageUrl,
@@ -1314,7 +1375,7 @@ const handleAction = {
     }),
 
     'festivalConfig': asyncHandler(async (params) => {
-        return success(await getConfigValueByKeys([
+        const config = await getConfigValueByKeys([
             'festival_config'
         ], {
             active: false,
@@ -1324,7 +1385,8 @@ const handleAction = {
             tags: [],
             card_posters: [],
             global_wallpaper: { enabled: false, preset: 'default' }
-        }));
+        });
+        return success(await normalizeFestivalConfigPayload(config));
     }),
 
     // ===== 限时商品 =====

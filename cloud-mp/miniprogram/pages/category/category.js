@@ -592,7 +592,7 @@ Page({
         if (cartCount > 0 && _cartItemIds) {
             // 带上购物袋商品 ID 结算（来自当前版本）
             wx.navigateTo({
-                url: `/pages/order/confirm?from=cart&cart_ids=${_cartItemIds}`
+                url: `/pages/order/confirm?from=cart&cart_ids=${encodeURIComponent(_cartItemIds)}`
             });
         } else {
             wx.showToast({ title: '请先选购商品', icon: 'none' });

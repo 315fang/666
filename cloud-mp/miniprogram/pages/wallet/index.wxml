@@ -249,4 +249,5 @@
   </view>
 
   <brand-animation id="brandAnimation"></brand-animation>
+  <portal-password-dialog id="portalPasswordDialog" />
 </view>

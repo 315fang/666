@@ -15,7 +15,7 @@ const FALLBACK_SECTION_CONFIG = {
     bundle_zone: {
         id: 'activity-section-bundle-zone',
         key: 'bundle_zone',
-        title: '惊喜礼遇',
+        title: '优惠券中心',
         subtitle: '查看可领优惠券',
         icon: '/assets/icons/package.svg',
         pillText: '常驻入口',

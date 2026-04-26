@@ -26,74 +26,16 @@ const {
     reverseUpgradePiggyBankForRefund,
     unlockUpgradePiggyBankForRole
 } = require('./upgrade-piggy-bank');
-
-const DEFAULT_ROLE_NAMES = {
-    0: 'VIP用户',
-    1: '初级会员',
-    2: '高级会员',
-    3: '推广合伙人',
-    4: '运营合伙人',
-    5: '区域合伙人',
-    6: '店长'
-};
-
-const DEFAULT_AGENT_UPGRADE_RULES = {
-    enabled: true,
-    // C1 晋升：购买满299（文档要求为"爆单产品"，系统暂以总消费额近似）
-    c1_min_purchase: 299,
-    // C2 晋升：成长值达标，或直推 2 名 C1 + 销售额超580
-    c2_referee_count: 2,
-    c2_min_sales: 580,
-    c2_growth_value: 999,
-    // B1 晋升：成长值达标、推荐10名C1 或充值3000（代理加盟费）
-    b1_referee_count: 10,
-    b1_recharge: 3000,
-    b1_growth_value: 3000,
-    // B2 晋升：推荐10名B1 或 充值30000
-    b2_referee_count: 10,
-    b2_recharge: 30000,
-    // B3 晋升：推荐3名B2 或 30名B1，或充值198000（19.8万）
-    b3_referee_b2_count: 3,
-    b3_referee_b1_count: 30,
-    b3_recharge: 198000,
-    effective_order_days: 7
-};
-
-// 级差矩阵制：MATRIX[上级等级][买家等级] = 佣金百分比（整数，如 20 表示 20%）
-// 直接上级获得 matrix[parent_role][buyer_role]% ；
-// 间接上级获得 max(0, matrix[gp_role][buyer_role] - matrix[parent_role][buyer_role])%（级差）
-const DEFAULT_COMMISSION_MATRIX = {
-    1: { 0: 20 },                              // C1 从 VIP 购买中赚 20%
-    2: { 0: 30, 1: 5 },                        // C2 直推 30%，C1 间推固定 5%
-    3: { 1: 20, 2: 10 },                       // B1 从 C1 赚 20%，C2 赚 10%
-    4: { 1: 30, 2: 20, 3: 10 },                // B2 从 C1 赚 30%，C2 赚 20%，B1 赚 10%
-    5: { 1: 35, 2: 25, 3: 15, 4: 5 }           // B3 从 C1 赚 35%，C2 赚 25%，B1 赚 15%，B2 赚 5%
-};
-
-// 组合商品使用同一套级差矩阵算法，但参数独立配置，避免被普通商品矩阵或旧固定佣金污染。
-const DEFAULT_BUNDLE_COMMISSION_MATRIX = {
-    1: { 0: 20 },
-    2: { 0: 30, 1: 5 },
-    3: { 1: 20, 2: 10 },
-    4: { 1: 30, 2: 20, 3: 10 },
-    5: { 1: 35, 2: 25, 3: 15, 4: 5 }
-};
-
-// 兼容旧格式（供 distribution-commission.js 等引用）
-const DEFAULT_AGENT_COMMISSION_CONFIG = {
-    direct_pct_by_role: { 1: 20, 2: 30, 3: 40, 4: 40, 5: 40 },
-    indirect_pct_by_role: { 2: 0, 3: 0, 4: 10, 5: 10 },
-    commission_matrix: DEFAULT_COMMISSION_MATRIX,
-    bundle_commission_matrix: DEFAULT_BUNDLE_COMMISSION_MATRIX
-};
-
-const DEFAULT_COST_SPLIT = {
-    enabled: true,
-    direct_sales_pct: 40,
-    operations_pct: 25,
-    mirror_operations_pct: 5,
-    profit_pct: 30
-};
+const {
+    DEFAULT_ROLE_NAMES,
+    DEFAULT_AGENT_UPGRADE_RULES,
+    DEFAULT_COMMISSION_MATRIX,
+    DEFAULT_BUNDLE_COMMISSION_MATRIX,
+    DEFAULT_AGENT_COMMISSION_CONFIG,
+    DEFAULT_COST_SPLIT,
+    DEFAULT_PEER_BONUS_CONFIG,
+    DEFAULT_POINT_RULES
+} = require('./shared/agent-config');
 
 const DEFAULT_BRANCH_AGENT_POLICY = {
     enabled: true,
@@ -1444,17 +1386,29 @@ async function ensureStockDeducted(orderId, order) {
         if (item.product_id) {
             const product = await getDocByIdOrLegacy('products', item.product_id);
             if (product && product._id) {
-                await db.collection('products').doc(String(product._id)).update({
-                    data: { stock: _.inc(-qty), sales_count: _.inc(qty), updated_at: db.serverDate() },
-                }).catch(() => {});
+                const productRes = await db.collection('products')
+                    .where({ _id: String(product._id), stock: _.gte(qty) })
+                    .update({ data: { stock: _.inc(-qty), sales_count: _.inc(qty), updated_at: db.serverDate() } });
+                if (!productRes.stats || productRes.stats.updated === 0) {
+                    console.error('[payment-callback] ⚠️ 商品库存并发扣减失败 productId=%s qty=%s', product._id, qty);
+                    await db.collection('products').doc(String(product._id)).update({
+                        data: { stock: _.inc(-qty), sales_count: _.inc(qty), updated_at: db.serverDate() }
+                    }).catch((e) => { console.error('[payment-callback] ⚠️ 商品库存强制扣减失败 productId=%s error=%s', product._id, e.message); });
+                }
             }
         }
         if (item.sku_id) {
             const sku = await getDocByIdOrLegacy('skus', item.sku_id);
             if (sku && sku._id) {
-                await db.collection('skus').doc(String(sku._id)).update({
-                    data: { stock: _.inc(-qty), updated_at: db.serverDate() },
-                }).catch(() => {});
+                const skuRes = await db.collection('skus')
+                    .where({ _id: String(sku._id), stock: _.gte(qty) })
+                    .update({ data: { stock: _.inc(-qty), updated_at: db.serverDate() } });
+                if (!skuRes.stats || skuRes.stats.updated === 0) {
+                    console.error('[payment-callback] ⚠️ SKU库存并发扣减失败 skuId=%s qty=%s', sku._id, qty);
+                    await db.collection('skus').doc(String(sku._id)).update({
+                        data: { stock: _.inc(-qty), updated_at: db.serverDate() }
+                    }).catch((e) => { console.error('[payment-callback] ⚠️ SKU库存强制扣减失败 skuId=%s error=%s', sku._id, e.message); });
+                }
             }
         }
     }

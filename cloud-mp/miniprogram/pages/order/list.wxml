@@ -75,11 +75,14 @@
             <image class="placeholder-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
           </view>
           <view class="product-info">
-            <text class="product-name">{{item.product.name || '商品名称'}}</text>
-            <text class="product-spec" wx:if="{{item.sku && item.sku.spec_value}}">{{item.sku.spec_value}}</text>
+            <text class="product-name">{{item.bundle_meta && item.bundle_meta.title || item.product.name || '商品名称'}}</text>
+            <text class="product-spec" wx:if="{{item.bundle_meta}}">组合商品</text>
+            <text class="product-spec" wx:elif="{{item.sku && item.sku.spec_value}}">{{item.sku.spec_value}}</text>
             <view class="product-price-qty">
-              <text class="product-price">¥{{item.display_price || item.display_total_amount}}</text>
-              <text class="product-qty">x{{item.quantity}}</text>
+              <text class="product-price" wx:if="{{item.bundle_meta}}">组合价 ¥{{item.display_pay_amount}}</text>
+              <text class="product-price" wx:else>¥{{item.display_price || item.display_total_amount}}</text>
+              <text class="product-qty" wx:if="{{item.bundle_meta}}">共{{item.quantity}}件</text>
+              <text class="product-qty" wx:else>x{{item.quantity}}</text>
             </view>
           </view>
         </view>

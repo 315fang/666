@@ -10,8 +10,9 @@ process.env.ADMIN_DATA_SOURCE = process.env.ADMIN_DATA_SOURCE
     || (process.env.ADMIN_CLOUDBASE_ENV_ID || process.env.TCB_ENV || process.env.SCF_NAMESPACE ? 'cloudbase' : 'filesystem');
 if (!process.env.ADMIN_JWT_SECRET) {
     const crypto = require('crypto');
-    process.env.ADMIN_JWT_SECRET = crypto.randomBytes(32).toString('hex');
-    console.warn('[admin-api] ADMIN_JWT_SECRET 未配置，已生成临时随机密钥。请在环境变量中配置固定密钥！');
+    const envSeed = process.env.ADMIN_CLOUDBASE_ENV_ID || process.env.TCB_ENV || process.env.SCF_NAMESPACE || 'zhenuan-admin-dev';
+    process.env.ADMIN_JWT_SECRET = crypto.createHash('sha256').update(`jwt-secret-${envSeed}`).digest('hex');
+    console.warn('[admin-api] ADMIN_JWT_SECRET 未配置，已基于环境 ID 生成确定性密钥。强烈建议在环境变量中配置固定密钥，以避免跨实例/token 不一致问题。');
 }
 
 const { EventEmitter } = require('events');

@@ -30,6 +30,52 @@ const TARGET_COLLECTIONS = [
     candidates: ['file_id', 'url', 'temp_url', 'image_url'],
     titleFields: ['title', 'name', 'type'],
     clearFields: ['url', 'temp_url', 'image_url']
+  },
+  {
+    name: 'products',
+    candidates: ['file_id', 'cover_image', 'image_url', 'image', 'images', 'preview_images', 'detail_images', 'preview_detail_images'],
+    titleFields: ['name', 'title'],
+    clearFields: ['cover_image', 'image_url', 'image', 'preview_images', 'preview_detail_images'],
+    extractEntries(doc) {
+      const entries = [];
+      const productFileId = pickString(doc?.file_id || doc?.image_ref);
+      const primaryAsset = pickString(
+        doc?.cover_image
+        || doc?.image_url
+        || doc?.image
+        || toAssetValues(doc?.images)[0]
+        || toAssetValues(doc?.preview_images)[0]
+      );
+      if (primaryAsset || productFileId) {
+        entries.push(createCollectionAssetEntry(doc, {
+          fieldPath: 'cover_image|image_url|image|images.0',
+          fileId: productFileId,
+          assetValue: primaryAsset,
+          titleFields: ['name', 'title'],
+          clearFields: ['cover_image', 'image_url', 'image', 'preview_images'],
+          allowCloudAssetRef: true
+        }));
+      }
+
+      [
+        { field: 'images', clearFields: ['images'] },
+        { field: 'preview_images', clearFields: ['preview_images'] },
+        { field: 'detail_images', clearFields: ['detail_images'] },
+        { field: 'preview_detail_images', clearFields: ['preview_detail_images'] }
+      ].forEach((config) => {
+        toAssetValues(doc?.[config.field]).forEach((assetValue, index) => {
+          entries.push(createCollectionAssetEntry(doc, {
+            fieldPath: `${config.field}.${index}`,
+            fileId: isCloudFileId(assetValue) ? assetValue : '',
+            assetValue,
+            titleFields: ['name', 'title'],
+            clearFields: config.clearFields,
+            allowCloudAssetRef: true
+          }));
+        });
+      });
+      return entries;
+    }
   }
 ];
 
@@ -229,6 +275,30 @@ function parseMaybeJson(value) {
   }
 }
 
+function toAssetValues(value) {
+  const parsed = parseMaybeJson(value);
+  if (Array.isArray(parsed)) {
+    return parsed.flatMap((item) => toAssetValues(item));
+  }
+  if (parsed && typeof parsed === 'object') {
+    const direct = pickString(
+      parsed.file_id
+      || parsed.fileId
+      || parsed.image_ref
+      || parsed.imageRef
+      || parsed.url
+      || parsed.image_url
+      || parsed.imageUrl
+      || parsed.image
+      || parsed.cover_image
+      || parsed.coverImage
+    );
+    return direct ? [direct] : [];
+  }
+  const direct = pickString(parsed);
+  return direct ? [direct] : [];
+}
+
 function isCloudFileId(value) {
   return /^cloud:\/\//i.test(pickString(value));
 }
@@ -280,10 +350,33 @@ function classifyAssetEntry(entry) {
     return 'healthy';
   }
 
-  if (isCloudFileId(primaryAsset)) return 'cloud_asset_without_file_id';
+  if (isCloudFileId(primaryAsset)) return entry.allow_cloud_asset_ref ? 'healthy' : 'cloud_asset_without_file_id';
   if (isSignedTempUrl(primaryAsset)) return 'signed_url_without_file_id';
   if (isHttpUrl(primaryAsset)) return 'http_url_without_file_id';
   return 'missing_asset_ref';
+}
+
+function createCollectionAssetEntry(doc, options = {}) {
+  const assetValue = pickString(options.assetValue);
+  const fileId = pickString(options.fileId);
+  if (!(assetValue || fileId)) return null;
+  return {
+    source_type: 'collection',
+    collection: options.collection || 'products',
+    doc_id: resolveId(doc),
+    id: resolveId(doc),
+    category: '',
+    field_path: pickString(options.fieldPath),
+    file_id_path: pickString(options.fileIdPath || 'file_id'),
+    asset_value: assetValue,
+    clear_fields: options.clearFields || [],
+    file_id: fileId,
+    image_url: assetValue,
+    url: '',
+    temp_url: '',
+    title: pickTitle(doc, options.titleFields || []),
+    allow_cloud_asset_ref: !!options.allowCloudAssetRef
+  };
 }
 
 function createCollectionSample(doc, config, category) {
@@ -450,28 +543,42 @@ async function main() {
   for (const config of TARGET_COLLECTIONS) {
     const docs = await fetchCollectionDocs(config.name);
     const metrics = buildMetricBucket();
-    docs.list.forEach((doc) => {
-      const category = classifyAssetEntry({
+    let checkedTotal = docs.total;
+    const entries = typeof config.extractEntries === 'function'
+      ? docs.list.flatMap((doc) => (config.extractEntries(doc) || []).filter(Boolean).map((entry) => ({
+        ...entry,
+        collection: config.name
+      })))
+      : docs.list.map((doc) => ({
         file_id: pickString(doc?.file_id),
         image_url: pickString(doc?.image_url),
         url: pickString(doc?.url),
         temp_url: pickString(doc?.temp_url),
-        asset_value: pickAssetField(doc, config.candidates).value
-      });
+        asset_value: pickAssetField(doc, config.candidates).value,
+        doc
+      }));
+    if (typeof config.extractEntries === 'function') {
+      checkedTotal = entries.length;
+    }
+
+    entries.forEach((entry) => {
+      const category = classifyAssetEntry(entry);
       if (!Object.prototype.hasOwnProperty.call(metrics, category)) return;
       metrics[category] += 1;
       if (category !== 'healthy' && report.samples.length < 120) {
-        report.samples.push(createCollectionSample(doc, config, category));
+        report.samples.push(entry.doc
+          ? createCollectionSample(entry.doc, config, category)
+          : { ...entry, category });
       }
     });
 
     report.targets.push({
       name: config.name,
-      total: docs.total,
+      total: checkedTotal,
       metrics
     });
 
-    report.summary.checked_records += docs.total;
+    report.summary.checked_records += checkedTotal;
     Object.keys(report.summary.risk_breakdown).forEach((key) => {
       report.summary.risk_breakdown[key] += metrics[key] || 0;
     });

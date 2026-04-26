@@ -48,7 +48,7 @@ function toRenderableImageList(value) {
 function normalizeHttpCandidate(value) {
     const raw = String(value || '').trim();
     if (!raw) return '';
-    if (/^https?:\/\//i.test(raw)) return raw;
+    if (/^https?:\/\//i.test(raw)) return normalizeAssetUrl(raw);
     if (raw.startsWith('//')) return `https:${raw}`;
     return '';
 }
@@ -82,15 +82,23 @@ function pickDirectAssetUrl(record = {}) {
         record.imageUrl,
         record.url,
         record.temp_url,
+        record.product_image,
+        record.productImage,
         record.image,
+        record.snapshot_image,
+        record.snapshotImage,
         record.cover_image,
         record.coverImage,
         record.cover,
         record.cover_url,
         record.coverUrl,
+        record.image_ref,
+        record.imageRef,
         record.thumb,
         record.thumbnail,
         record.images,
+        record.image_candidates,
+        record.imageCandidates,
         record.preview_images,
         record.previewImages,
         record.detail_images,
@@ -126,7 +134,11 @@ function pickPreferredAssetRef(record = {}) {
         record.imageUrl,
         record.url,
         record.temp_url,
+        record.product_image,
+        record.productImage,
         record.image,
+        record.snapshot_image,
+        record.snapshotImage,
         record.cover_image,
         record.coverImage,
         record.cover,
@@ -135,6 +147,8 @@ function pickPreferredAssetRef(record = {}) {
         record.thumb,
         record.thumbnail,
         record.images,
+        record.image_candidates,
+        record.imageCandidates,
         record.preview_images,
         record.previewImages,
         record.detail_images,

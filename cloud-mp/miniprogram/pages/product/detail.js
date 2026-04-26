@@ -7,7 +7,7 @@ const { safeBack } = require('../../utils/navigator');
 const { requireLogin } = require('../../utils/auth');
 const { fetchLimitedSpotContext, normalizeLimitedSpotMode } = require('../../utils/limitedSpot');
 const { getMiniProgramConfig } = require('../../utils/miniProgramConfig');
-const { loadProduct, resolveDetailImageList, resolvePayableUnitPrice, buildSkuText } = require('./productDetailData');
+const { loadProduct, resolveDetailImageList, resolvePayableUnitPrice, buildSkuText, PRODUCT_PLACEHOLDER } = require('./productDetailData');
 const { refreshFavoriteState, toggleFavorite } = require('./productDetailFavorite');
 const {
     onSpecSelect,
@@ -31,6 +31,23 @@ function extractResultList(payload) {
     if (Array.isArray(payload && payload.data)) return payload.data;
     if (payload && payload.data && Array.isArray(payload.data.list)) return payload.data.list;
     return [];
+}
+
+function extractCartItems(payload) {
+    if (!payload) return [];
+    if (Array.isArray(payload.items)) return payload.items;
+    if (Array.isArray(payload.list)) return payload.list;
+    if (Array.isArray(payload.data)) return payload.data;
+    if (payload.data && Array.isArray(payload.data.items)) return payload.data.items;
+    if (payload.data && Array.isArray(payload.data.list)) return payload.data.list;
+    return [];
+}
+
+function countCartQuantity(items = []) {
+    return (Array.isArray(items) ? items : []).reduce((sum, item) => {
+        const quantity = Number(item.quantity != null ? item.quantity : item.qty);
+        return sum + (Number.isFinite(quantity) && quantity > 0 ? quantity : 1);
+    }, 0);
 }
 
 function formatLimitedSpotMoney(value) {
@@ -179,6 +196,7 @@ Page({
         quantity: 1,
         currentImage: 0,
         imageCount: 0,
+        cartCount: 0,
         isFavorite: false,
         statusBarHeight: 20,
         navTopPadding: 20,
@@ -306,6 +324,7 @@ Page({
     },
 
     onShow() {
+        this.loadCartSummary();
         if (this.data.product && this.data.product.id != null) {
             this.refreshFavoriteState();
             this.loadUserActivitySnapshot(this.data.product.id);
@@ -941,6 +960,23 @@ Page({
     },
 
     // 获取购物袋数量
+    async loadCartSummary() {
+        try {
+            const res = await get('/cart', {}, {
+                showError: false,
+                maxRetries: 0,
+                preventDuplicate: true
+            });
+            this.setData({ cartCount: countCartQuantity(extractCartItems(res)) });
+        } catch (_) {
+            this.setData({ cartCount: 0 });
+        }
+    },
+
+    onOpenCart() {
+        wx.navigateTo({ url: '/pages/cart/cart' });
+    },
+
     // 图片切换
     onImageChange(e) {
         this.setData({ currentImage: e.detail.current });
@@ -970,6 +1006,15 @@ Page({
     onGalleryImageError(e) {
         const index = Number(e.currentTarget.dataset.index || 0);
         const product = this.data.product || {};
+        const originalImages = Array.isArray(product.images) ? product.images : [];
+        if (originalImages[index] !== PRODUCT_PLACEHOLDER && originalImages.length <= 1) {
+            this.setData({
+                'product.images': [PRODUCT_PLACEHOLDER],
+                imageCount: 1,
+                currentImage: 0
+            });
+            return;
+        }
         const images = Array.isArray(product.images)
             ? product.images.filter((_, currentIndex) => currentIndex !== index)
             : [];

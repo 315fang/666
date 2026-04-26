@@ -30,6 +30,7 @@ function registerSystemRoutes(app, deps) {
         STRONG_CONSISTENCY_COLLECTIONS,
         okStrongRead,
         configContract,
+        resolveManagedFileUrl = async (value) => value,
         createAuditLog,
         pickString,
         toObject,
@@ -47,6 +48,51 @@ function registerSystemRoutes(app, deps) {
         ok,
         fail
     } = deps;
+
+    function isCloudFileId(value) {
+        return /^cloud:\/\//i.test(pickString(value));
+    }
+
+    function isTemporarySignedAssetUrl(value) {
+        const text = pickString(value).toLowerCase();
+        if (!text || !/^https?:\/\//i.test(text)) return false;
+        if (/[?&](expires|signature|sign|x-amz-algorithm|x-amz-credential|x-amz-date|x-amz-expires|x-amz-security-token|x-amz-signature|x-oss-signature|x-oss-credential|x-oss-date|x-oss-expires|x-cos-algorithm|x-cos-credential|x-cos-date|x-cos-expires|x-cos-security-token|x-cos-signature)=/i.test(text)) {
+            return true;
+        }
+        return /tcb\.qcloud\.la/i.test(text) && /[?&]sign=/i.test(text) && /[?&]t=/i.test(text);
+    }
+
+    function normalizePosterAssetFields(config = {}) {
+        const next = config && typeof config === 'object' ? JSON.parse(JSON.stringify(config)) : {};
+        const brandConfig = next.brand_config && typeof next.brand_config === 'object' ? next.brand_config : {};
+        const coverFileId = pickString(brandConfig.share_poster_cover_file_id);
+        const posterFileId = pickString(brandConfig.share_poster_file_id);
+        if (isCloudFileId(coverFileId)) {
+            brandConfig.share_poster_cover_url = coverFileId;
+        } else if (brandConfig.share_poster_cover_url && isTemporarySignedAssetUrl(brandConfig.share_poster_cover_url)) {
+            return { ok: false, message: '分享海报封面包含临时签名链接，请重新上传' };
+        }
+        if (isCloudFileId(posterFileId)) {
+            brandConfig.share_poster_url = posterFileId;
+        } else if (brandConfig.share_poster_url && isTemporarySignedAssetUrl(brandConfig.share_poster_url)) {
+            return { ok: false, message: '分享海报包含临时签名链接，请重新上传' };
+        }
+        next.brand_config = brandConfig;
+        return { ok: true, value: next };
+    }
+
+    async function resolveMiniProgramConfigForAdmin(config = {}) {
+        const next = config && typeof config === 'object' ? JSON.parse(JSON.stringify(config)) : {};
+        const brandConfig = next.brand_config && typeof next.brand_config === 'object' ? next.brand_config : {};
+        if (isCloudFileId(brandConfig.share_poster_cover_file_id)) {
+            brandConfig.share_poster_cover_url = await resolveManagedFileUrl(brandConfig.share_poster_cover_file_id);
+        }
+        if (isCloudFileId(brandConfig.share_poster_file_id)) {
+            brandConfig.share_poster_url = await resolveManagedFileUrl(brandConfig.share_poster_file_id);
+        }
+        next.brand_config = brandConfig;
+        return next;
+    }
 
     app.get('/admin/api/system/status', auth, requirePermission('settings_manage'), async (req, res) => {
         const probe = await probeDataStore({ collection: pickString(req.query.collection, 'admins') || 'admins', forceReload: true });
@@ -115,10 +161,14 @@ function registerSystemRoutes(app, deps) {
         ok(res, next);
     });
 
-    app.get('/admin/api/mini-program-config', auth, requirePermission('settings_manage'), (_req, res) => ok(res, getMiniProgramConfigSnapshot()));
+    app.get('/admin/api/mini-program-config', auth, requirePermission('settings_manage'), async (_req, res) => {
+        ok(res, await resolveMiniProgramConfigForAdmin(getMiniProgramConfigSnapshot()));
+    });
 
     app.put('/admin/api/mini-program-config', auth, requirePermission('settings_manage'), (req, res) => {
-        const nextConfig = configContract.normalizeMiniProgramConfig({ ...getMiniProgramConfigSnapshot(), ...toObject(req.body, {}) });
+        const normalizedAssets = normalizePosterAssetFields({ ...getMiniProgramConfigSnapshot(), ...toObject(req.body, {}) });
+        if (!normalizedAssets.ok) return fail(res, normalizedAssets.message, 400);
+        const nextConfig = configContract.normalizeMiniProgramConfig(normalizedAssets.value);
         saveSingleton('mini-program-config', nextConfig);
         upsertConfigRow('mini_program_config', nextConfig, {
             category: 'MINIPROGRAM',

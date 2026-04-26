@@ -1,0 +1,548 @@
+{
+  "kind": "cloudbase_short_fileid_repair_report",
+  "executed_at": "2026-04-25T14:50:44.154Z",
+  "mode": "apply",
+  "environment": {
+    "env_id": "cloud1-9gywyqe49638e46f",
+    "bucket": "636c-cloud1-9gywyqe49638e46f-1419893803",
+    "auth_status": "READY",
+    "env_status": "READY"
+  },
+  "summary": {
+    "collections_scanned": 6,
+    "documents_scanned": 56,
+    "documents_changed": 14,
+    "fileids_repaired": 62,
+    "failures": 0
+  },
+  "collections": [
+    {
+      "name": "admin_singletons",
+      "scanned": 8,
+      "changed": 0,
+      "fileids_repaired": 0,
+      "failed": 0
+    },
+    {
+      "name": "banners",
+      "scanned": 3,
+      "changed": 2,
+      "fileids_repaired": 7,
+      "failed": 0
+    },
+    {
+      "name": "lottery_prizes",
+      "scanned": 13,
+      "changed": 1,
+      "fileids_repaired": 4,
+      "failed": 0
+    },
+    {
+      "name": "products",
+      "scanned": 20,
+      "changed": 5,
+      "fileids_repaired": 25,
+      "failed": 0
+    },
+    {
+      "name": "skus",
+      "scanned": 11,
+      "changed": 5,
+      "fileids_repaired": 20,
+      "failed": 0
+    },
+    {
+      "name": "splash_screens",
+      "scanned": 1,
+      "changed": 1,
+      "fileids_repaired": 6,
+      "failed": 0
+    }
+  ],
+  "changed": [
+    {
+      "collection": "banners",
+      "id": "b8ca528e69d4f8b907f289cb5a8ace12",
+      "fileids_repaired": 3,
+      "fields": [
+        "coverImage",
+        "cover_image",
+        "image"
+      ],
+      "refs": [
+        {
+          "field_path": "coverImage",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/banners/b8ca528e69d4f8b907f289cb5a8ace12-6f913127a7.jpg",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/banners/b8ca528e69d4f8b907f289cb5a8ace12-6f913127a7.jpg"
+        },
+        {
+          "field_path": "cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/banners/b8ca528e69d4f8b907f289cb5a8ace12-6f913127a7.jpg",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/banners/b8ca528e69d4f8b907f289cb5a8ace12-6f913127a7.jpg"
+        },
+        {
+          "field_path": "image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/banners/b8ca528e69d4f8b907f289cb5a8ace12-6f913127a7.jpg",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/banners/b8ca528e69d4f8b907f289cb5a8ace12-6f913127a7.jpg"
+        }
+      ]
+    },
+    {
+      "collection": "banners",
+      "id": "b8ca528e69d4f8b907f289ce546e781f",
+      "fileids_repaired": 4,
+      "fields": [
+        "coverImage",
+        "cover_image",
+        "image",
+        "url"
+      ],
+      "refs": [
+        {
+          "field_path": "coverImage",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/banners/b8ca528e69d4f8b907f289ce546e781f-989d45c395.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/banners/b8ca528e69d4f8b907f289ce546e781f-989d45c395.png"
+        },
+        {
+          "field_path": "cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/banners/b8ca528e69d4f8b907f289ce546e781f-989d45c395.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/banners/b8ca528e69d4f8b907f289ce546e781f-989d45c395.png"
+        },
+        {
+          "field_path": "image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/banners/b8ca528e69d4f8b907f289ce546e781f-989d45c395.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/banners/b8ca528e69d4f8b907f289ce546e781f-989d45c395.png"
+        },
+        {
+          "field_path": "url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/banners/b8ca528e69d4f8b907f289ce546e781f-989d45c395.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/banners/b8ca528e69d4f8b907f289ce546e781f-989d45c395.png"
+        }
+      ]
+    },
+    {
+      "collection": "lottery_prizes",
+      "id": "78167c7f69d50412082a729254548bf9",
+      "fileids_repaired": 4,
+      "fields": [
+        "cover_image",
+        "file_id",
+        "image",
+        "image_url"
+      ],
+      "refs": [
+        {
+          "field_path": "cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/lottery_prizes/78167c7f69d50412082a729254548bf9-0fe5d4249f.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/lottery_prizes/78167c7f69d50412082a729254548bf9-0fe5d4249f.png"
+        },
+        {
+          "field_path": "file_id",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/lottery_prizes/78167c7f69d50412082a729254548bf9-0fe5d4249f.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/lottery_prizes/78167c7f69d50412082a729254548bf9-0fe5d4249f.png"
+        },
+        {
+          "field_path": "image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/lottery_prizes/78167c7f69d50412082a729254548bf9-0fe5d4249f.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/lottery_prizes/78167c7f69d50412082a729254548bf9-0fe5d4249f.png"
+        },
+        {
+          "field_path": "image_url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/lottery_prizes/78167c7f69d50412082a729254548bf9-0fe5d4249f.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/lottery_prizes/78167c7f69d50412082a729254548bf9-0fe5d4249f.png"
+        }
+      ]
+    },
+    {
+      "collection": "products",
+      "id": "6",
+      "fileids_repaired": 4,
+      "fields": [
+        "skus"
+      ],
+      "refs": [
+        {
+          "field_path": "skus.0.cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/6-0e5f224c3e.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/6-0e5f224c3e.png"
+        },
+        {
+          "field_path": "skus.0.file_id",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/6-0e5f224c3e.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/6-0e5f224c3e.png"
+        },
+        {
+          "field_path": "skus.0.image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/6-0e5f224c3e.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/6-0e5f224c3e.png"
+        },
+        {
+          "field_path": "skus.0.image_url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/6-0e5f224c3e.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/6-0e5f224c3e.png"
+        }
+      ]
+    },
+    {
+      "collection": "products",
+      "id": "7",
+      "fileids_repaired": 4,
+      "fields": [
+        "skus"
+      ],
+      "refs": [
+        {
+          "field_path": "skus.0.cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/7-e0b12d06ed.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/7-e0b12d06ed.png"
+        },
+        {
+          "field_path": "skus.0.file_id",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/7-e0b12d06ed.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/7-e0b12d06ed.png"
+        },
+        {
+          "field_path": "skus.0.image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/7-e0b12d06ed.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/7-e0b12d06ed.png"
+        },
+        {
+          "field_path": "skus.0.image_url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/7-e0b12d06ed.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/7-e0b12d06ed.png"
+        }
+      ]
+    },
+    {
+      "collection": "products",
+      "id": "9",
+      "fileids_repaired": 4,
+      "fields": [
+        "skus"
+      ],
+      "refs": [
+        {
+          "field_path": "skus.0.cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-9-0b2826c22b.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-9-0b2826c22b.png"
+        },
+        {
+          "field_path": "skus.0.file_id",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-9-0b2826c22b.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-9-0b2826c22b.png"
+        },
+        {
+          "field_path": "skus.0.image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-9-0b2826c22b.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-9-0b2826c22b.png"
+        },
+        {
+          "field_path": "skus.0.image_url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-9-0b2826c22b.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-9-0b2826c22b.png"
+        }
+      ]
+    },
+    {
+      "collection": "products",
+      "id": "10",
+      "fileids_repaired": 4,
+      "fields": [
+        "skus"
+      ],
+      "refs": [
+        {
+          "field_path": "skus.0.cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-10-69185668b1.jpg",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-10-69185668b1.jpg"
+        },
+        {
+          "field_path": "skus.0.file_id",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-10-69185668b1.jpg",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-10-69185668b1.jpg"
+        },
+        {
+          "field_path": "skus.0.image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-10-69185668b1.jpg",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-10-69185668b1.jpg"
+        },
+        {
+          "field_path": "skus.0.image_url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-10-69185668b1.jpg",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-10-69185668b1.jpg"
+        }
+      ]
+    },
+    {
+      "collection": "products",
+      "id": "5",
+      "fileids_repaired": 9,
+      "fields": [
+        "cover_image",
+        "file_id",
+        "image",
+        "image_url",
+        "images",
+        "skus"
+      ],
+      "refs": [
+        {
+          "field_path": "cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/5-055370a7b4.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/5-055370a7b4.png"
+        },
+        {
+          "field_path": "file_id",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/5-055370a7b4.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/5-055370a7b4.png"
+        },
+        {
+          "field_path": "image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/5-055370a7b4.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/5-055370a7b4.png"
+        },
+        {
+          "field_path": "image_url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/5-055370a7b4.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/5-055370a7b4.png"
+        },
+        {
+          "field_path": "images.0",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/5-055370a7b4.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/5-055370a7b4.png"
+        },
+        {
+          "field_path": "skus.0.cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/5-055370a7b4.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/5-055370a7b4.png"
+        },
+        {
+          "field_path": "skus.0.file_id",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/5-055370a7b4.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/5-055370a7b4.png"
+        },
+        {
+          "field_path": "skus.0.image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/5-055370a7b4.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/5-055370a7b4.png"
+        },
+        {
+          "field_path": "skus.0.image_url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/5-055370a7b4.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/5-055370a7b4.png"
+        }
+      ]
+    },
+    {
+      "collection": "skus",
+      "id": "fallback-sku-5",
+      "fileids_repaired": 4,
+      "fields": [
+        "cover_image",
+        "file_id",
+        "image",
+        "image_url"
+      ],
+      "refs": [
+        {
+          "field_path": "cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/5-055370a7b4.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/5-055370a7b4.png"
+        },
+        {
+          "field_path": "file_id",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/5-055370a7b4.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/5-055370a7b4.png"
+        },
+        {
+          "field_path": "image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/5-055370a7b4.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/5-055370a7b4.png"
+        },
+        {
+          "field_path": "image_url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/5-055370a7b4.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/5-055370a7b4.png"
+        }
+      ]
+    },
+    {
+      "collection": "skus",
+      "id": "fallback-sku-6",
+      "fileids_repaired": 4,
+      "fields": [
+        "cover_image",
+        "file_id",
+        "image",
+        "image_url"
+      ],
+      "refs": [
+        {
+          "field_path": "cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/6-0e5f224c3e.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/6-0e5f224c3e.png"
+        },
+        {
+          "field_path": "file_id",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/6-0e5f224c3e.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/6-0e5f224c3e.png"
+        },
+        {
+          "field_path": "image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/6-0e5f224c3e.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/6-0e5f224c3e.png"
+        },
+        {
+          "field_path": "image_url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/6-0e5f224c3e.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/6-0e5f224c3e.png"
+        }
+      ]
+    },
+    {
+      "collection": "skus",
+      "id": "fallback-sku-7",
+      "fileids_repaired": 4,
+      "fields": [
+        "cover_image",
+        "file_id",
+        "image",
+        "image_url"
+      ],
+      "refs": [
+        {
+          "field_path": "cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/7-e0b12d06ed.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/7-e0b12d06ed.png"
+        },
+        {
+          "field_path": "file_id",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/7-e0b12d06ed.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/7-e0b12d06ed.png"
+        },
+        {
+          "field_path": "image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/7-e0b12d06ed.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/7-e0b12d06ed.png"
+        },
+        {
+          "field_path": "image_url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/products/7-e0b12d06ed.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/products/7-e0b12d06ed.png"
+        }
+      ]
+    },
+    {
+      "collection": "skus",
+      "id": "fallback-sku-9",
+      "fileids_repaired": 4,
+      "fields": [
+        "cover_image",
+        "file_id",
+        "image",
+        "image_url"
+      ],
+      "refs": [
+        {
+          "field_path": "cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-9-0b2826c22b.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-9-0b2826c22b.png"
+        },
+        {
+          "field_path": "file_id",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-9-0b2826c22b.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-9-0b2826c22b.png"
+        },
+        {
+          "field_path": "image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-9-0b2826c22b.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-9-0b2826c22b.png"
+        },
+        {
+          "field_path": "image_url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-9-0b2826c22b.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-9-0b2826c22b.png"
+        }
+      ]
+    },
+    {
+      "collection": "skus",
+      "id": "fallback-sku-10",
+      "fileids_repaired": 4,
+      "fields": [
+        "cover_image",
+        "file_id",
+        "image",
+        "image_url"
+      ],
+      "refs": [
+        {
+          "field_path": "cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-10-69185668b1.jpg",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-10-69185668b1.jpg"
+        },
+        {
+          "field_path": "file_id",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-10-69185668b1.jpg",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-10-69185668b1.jpg"
+        },
+        {
+          "field_path": "image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-10-69185668b1.jpg",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-10-69185668b1.jpg"
+        },
+        {
+          "field_path": "image_url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/skus/fallback-sku-10-69185668b1.jpg",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/skus/fallback-sku-10-69185668b1.jpg"
+        }
+      ]
+    },
+    {
+      "collection": "splash_screens",
+      "id": "78167c7f69d4f8d2082a6c9d07fc7a33",
+      "fileids_repaired": 6,
+      "fields": [
+        "coverImage",
+        "cover_image",
+        "file_id",
+        "image",
+        "image_url",
+        "url"
+      ],
+      "refs": [
+        {
+          "field_path": "coverImage",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/splash_screens/78167c7f69d4f8d2082a6c9d07fc7a33-aa07316855.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/splash_screens/78167c7f69d4f8d2082a6c9d07fc7a33-aa07316855.png"
+        },
+        {
+          "field_path": "cover_image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/splash_screens/78167c7f69d4f8d2082a6c9d07fc7a33-aa07316855.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/splash_screens/78167c7f69d4f8d2082a6c9d07fc7a33-aa07316855.png"
+        },
+        {
+          "field_path": "file_id",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/splash_screens/78167c7f69d4f8d2082a6c9d07fc7a33-aa07316855.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/splash_screens/78167c7f69d4f8d2082a6c9d07fc7a33-aa07316855.png"
+        },
+        {
+          "field_path": "image",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/splash_screens/78167c7f69d4f8d2082a6c9d07fc7a33-aa07316855.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/splash_screens/78167c7f69d4f8d2082a6c9d07fc7a33-aa07316855.png"
+        },
+        {
+          "field_path": "image_url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/splash_screens/78167c7f69d4f8d2082a6c9d07fc7a33-aa07316855.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/splash_screens/78167c7f69d4f8d2082a6c9d07fc7a33-aa07316855.png"
+        },
+        {
+          "field_path": "url",
+          "before": "cloud://cloud1-9gywyqe49638e46f/materials/migrated/splash_screens/78167c7f69d4f8d2082a6c9d07fc7a33-aa07316855.png",
+          "after": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/splash_screens/78167c7f69d4f8d2082a6c9d07fc7a33-aa07316855.png"
+        }
+      ]
+    }
+  ],
+  "failures": []
+}

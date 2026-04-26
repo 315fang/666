@@ -37,8 +37,7 @@ function normalizeStatusForQuery(status) {
 function displayAmount(value) {
     const num = Number(value);
     if (!Number.isFinite(num)) return '0.00';
-    const normalized = Number.isInteger(num) && Math.abs(num) >= 1000 ? num / 100 : num;
-    return normalized.toFixed(2);
+    return num.toFixed(2);
 }
 
 function roundMoney(value) {
@@ -219,6 +218,69 @@ function normalizeImages(images) {
         }
     }
     return [];
+}
+
+function appendImageCandidates(target, value) {
+    if (!hasValue(value)) return;
+    if (Array.isArray(value)) {
+        value.forEach((item) => appendImageCandidates(target, item));
+        return;
+    }
+    if (typeof value === 'string') {
+        const text = value.trim();
+        if (!text) return;
+        if (text.startsWith('[')) {
+            try {
+                appendImageCandidates(target, JSON.parse(text));
+                return;
+            } catch (_) {}
+        }
+        target.push(text);
+        return;
+    }
+    if (typeof value !== 'object') return;
+    [
+        value.display_image,
+        value.displayImage,
+        value.product_image,
+        value.productImage,
+        value.image_url,
+        value.imageUrl,
+        value.url,
+        value.temp_url,
+        value.image,
+        value.snapshot_image,
+        value.snapshotImage,
+        value.cover_image,
+        value.coverImage,
+        value.cover,
+        value.cover_url,
+        value.coverUrl,
+        value.file_id,
+        value.fileId,
+        value.image_ref,
+        value.imageRef,
+        value.thumb,
+        value.thumbnail,
+        value.images,
+        value.preview_images,
+        value.previewImages,
+        value.image_candidates,
+        value.imageCandidates,
+        value.product,
+        value.sku
+    ].forEach((item) => appendImageCandidates(target, item));
+}
+
+function normalizeImageCandidates(...values) {
+    const candidates = [];
+    values.forEach((value) => appendImageCandidates(candidates, value));
+    const seen = new Set();
+    return candidates.filter((candidate) => {
+        if (!candidate || seen.has(candidate)) return false;
+        seen.add(candidate);
+        return true;
+    });
 }
 
 function firstFilled(...values) {
@@ -471,10 +533,24 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         : (item.unit_price != null ? item.unit_price : (order.price || order.unit_price || order.total_amount || order.pay_amount));
     const totalAmount = resolveOrderTotalAmount(order, 0);
     const payAmount = resolveOrderPayAmount(order, totalAmount);
-    const productImages = normalizeImages(firstFilled(order.product?.images, productDoc?.images, productDoc?.image, productDoc?.cover));
+    const productImages = normalizeImageCandidates(
+        order.product?.image_candidates,
+        order.product?.images,
+        order.product?.image,
+        order.product?.cover,
+        item.image_candidates,
+        item.snapshot_image,
+        item.image,
+        skuDoc?.image,
+        productDoc?.images,
+        productDoc?.image,
+        productDoc?.cover_image,
+        productDoc?.cover
+    );
     const image = firstFilled(
         item.image,
         item.snapshot_image,
+        item.image_candidates && normalizeImageCandidates(item.image_candidates)[0],
         order.product?.image,
         order.product?.cover,
         skuDoc?.image,
@@ -514,7 +590,13 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         parsedLogistics.trackingNo
     );
     const orderProduct = order.product && typeof order.product === 'object' ? order.product : {};
-    const orderProductImages = normalizeImages(orderProduct.images);
+    const orderProductImages = normalizeImageCandidates(
+        orderProduct.image_candidates,
+        orderProduct.images,
+        orderProduct.image,
+        orderProduct.cover,
+        productImages
+    );
     const paidAt = firstFilled(
         toIsoString(order.paid_at),
         rawStatus !== 'pending_payment' && rawStatus !== 'cancelled' ? toIsoString(order.created_at) : ''
@@ -610,18 +692,44 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
     } : null;
     const normalizedIndirectReferrer = buildUserRelationSummary(indirectReferrerDoc);
     const normalizedNearestAgent = buildUserRelationSummary(nearestAgentDoc);
-    const settlementItems = buildOrderSettlementItems(order).map((line) => {
-        const lineImages = normalizeImages(firstFilled(line.snapshot_image, line.image));
+    const settlementItemContexts = await Promise.all(buildOrderSettlementItems(order).map(async (line) => ({
+        line,
+        product: await findCollectionDocByAnyId('products', line.product_id, cache),
+        sku: await findCollectionDocByAnyId('skus', line.sku_id, cache)
+    })));
+    const settlementItems = settlementItemContexts.map(({ line, product, sku }) => {
+        const lineQty = Math.max(1, toNumber(line.qty || line.quantity, 1));
+        const lineUnitPrice = line.price != null
+            ? line.price
+            : (line.unit_price != null
+                ? line.unit_price
+                : (line.item_amount != null ? roundMoney(toNumber(line.item_amount, 0) / lineQty) : 0));
+        const lineImages = normalizeImageCandidates(
+            line.image_candidates,
+            line.snapshot_image,
+            line.image,
+            sku?.image,
+            product?.images,
+            product?.image,
+            product?.cover_image,
+            product?.cover
+        );
+        const lineImage = firstFilled(line.snapshot_image, line.image, lineImages[0]);
+        const lineSpec = firstFilled(line.snapshot_spec, line.spec, buildSkuSpecValue(sku));
         return {
             ...line,
+            image_candidates: lineImages,
             product: {
-                id: firstFilled(line.product_id),
-                name: firstFilled(line.snapshot_name, line.name, '商品'),
-                images: lineImages.length > 0 ? lineImages : (line.snapshot_image ? [line.snapshot_image] : []),
-                image: firstFilled(line.snapshot_image, line.image)
+                id: firstFilled(line.product_id, product?._id, product?.id),
+                name: firstFilled(line.snapshot_name, line.name, product?.name, product?.title, '商品'),
+                images: lineImages,
+                image: lineImage,
+                image_candidates: lineImages
             },
-            sku: line.snapshot_spec || line.spec ? { spec_value: firstFilled(line.snapshot_spec, line.spec) } : null,
+            sku: lineSpec ? { spec_value: normalizeSpecDisplayText(lineSpec) } : null,
             display_original_line_amount: displayAmount(line.original_line_amount),
+            display_unit_price: displayAmount(lineUnitPrice),
+            display_line_amount: displayAmount(line.item_amount),
             display_bundle_discount_allocated_amount: displayAmount(line.bundle_discount_allocated_amount),
             display_coupon_allocated_amount: displayAmount(line.coupon_allocated_amount),
             display_points_allocated_amount: displayAmount(line.points_allocated_amount),
@@ -636,12 +744,17 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         _id: firstFilled(orderProduct._id, productDoc?._id),
         name: firstFilled(orderProduct.name, productName),
         images: orderProductImages.length > 0 ? orderProductImages : (productImages.length > 0 ? productImages : (image ? [image] : [])),
-        image: firstFilled(orderProduct.image, orderProduct.cover, image)
+        image: firstFilled(orderProduct.image, orderProduct.cover, image),
+        image_candidates: orderProductImages.length > 0 ? orderProductImages : productImages
     };
     const orderSku = order.sku && typeof order.sku === 'object' ? order.sku : null;
+    const normalizedUnitPrice = roundMoney(unitPrice);
+    const normalizedTotalAmount = roundMoney(totalAmount);
+    const normalizedPayAmount = roundMoney(payAmount);
+    const normalizedOriginalAmount = roundMoney(toNumber(order.original_amount != null ? order.original_amount : totalAmount, totalAmount));
     const refundedCashTotal = roundMoney(toNumber(order.refunded_cash_total, 0));
     const refundedQuantityTotal = Math.max(0, toNumber(order.refunded_quantity_total, 0));
-    const remainingRefundableCash = roundMoney(Math.max(0, payAmount - refundedCashTotal));
+    const remainingRefundableCash = roundMoney(Math.max(0, normalizedPayAmount - refundedCashTotal));
     const hasPartialRefund = refundedCashTotal > 0 && remainingRefundableCash > 0;
 
     return {
@@ -710,10 +823,16 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
         has_partial_refund: hasPartialRefund,
         display_refunded_cash_total: displayAmount(refundedCashTotal),
         display_remaining_refundable_cash: displayAmount(remainingRefundableCash),
-        price: displayAmount(unitPrice),
-        total_amount: displayAmount(totalAmount),
-        pay_amount: displayAmount(payAmount),
-        actual_price: displayAmount(payAmount)
+        price: normalizedUnitPrice,
+        total_amount: normalizedTotalAmount,
+        original_amount: normalizedOriginalAmount,
+        pay_amount: normalizedPayAmount,
+        actual_price: normalizedPayAmount,
+        display_price: displayAmount(normalizedUnitPrice),
+        display_total_amount: displayAmount(normalizedTotalAmount),
+        display_original_amount: displayAmount(normalizedOriginalAmount),
+        display_pay_amount: displayAmount(normalizedPayAmount),
+        display_actual_price: displayAmount(normalizedPayAmount)
     };
 }
 

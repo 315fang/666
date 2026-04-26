@@ -39,7 +39,7 @@
         <swiper wx:if="{{product.images && product.images.length}}" class="gallery-swiper" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}" indicator-color="rgba(250,250,249,0.35)" indicator-active-color="#E2C4A0" bindchange="onImageChange">
           <swiper-item class="gallery-slide" wx:for="{{product.images}}" wx:key="*this">
             <view class="gallery-frame">
-              <image src="{{item}}" mode="aspectFit" class="gallery-image" bindtap="onPreviewImage" binderror="onGalleryImageError" data-index="{{index}}"></image>
+              <image src="{{item}}" mode="aspectFill" class="gallery-image" bindtap="onPreviewImage" binderror="onGalleryImageError" data-index="{{index}}"></image>
             </view>
           </swiper-item>
         </swiper>
@@ -57,12 +57,22 @@
     <scroll-view class="benefit-rail" scroll-x="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}" wx:if="{{estimatedPoints > 0 || productCouponChips.length > 0}}">
       <view class="benefit-rail-track">
         <view class="benefit-rail-item points-benefit-card" wx:if="{{estimatedPoints > 0}}">
-          <text class="benefit-rail-label">预计积分</text>
-          <text class="benefit-rail-value">{{estimatedPoints}}</text>
+          <view class="benefit-points-mark">
+            <view class="benefit-points-core"></view>
+          </view>
+          <view class="benefit-points-copy">
+            <text class="benefit-rail-label">预计积分奖励</text>
+            <text class="benefit-rail-value">+{{estimatedPoints}}</text>
+          </view>
         </view>
         <view class="benefit-rail-item coupon-benefit-card" wx:for="{{productCouponChips}}" wx:key="id">
-          <text class="benefit-rail-value">{{item.valueText}}</text>
+          <view class="benefit-ticket-notch benefit-ticket-notch-left"></view>
+          <view class="benefit-ticket-main">
+            <text class="benefit-rail-value">{{item.valueText}}</text>
+          </view>
+          <view class="benefit-ticket-divider"></view>
           <text class="benefit-rail-label">{{item.thresholdText}}</text>
+          <view class="benefit-ticket-notch benefit-ticket-notch-right"></view>
         </view>
       </view>
     </scroll-view>
@@ -83,6 +93,24 @@
           <view class="price-discount" wx:if="{{limitedSpotOffer}}">限时专享</view>
           <view class="price-discount" wx:elif="{{product.market_price}}">{{discount}}折</view>
         </view>
+      </view>
+      <view class="summary-actions">
+        <view class="summary-action-item" bindtap="onToggleFavorite">
+          <view class="summary-icon-btn">
+            <image
+              class="summary-icon"
+              src="{{isFavorite ? '/assets/icons/heart-filled.svg' : '/assets/icons/heart.svg'}}"
+              mode="aspectFit"
+            />
+          </view>
+          <text class="summary-action-text">收藏</text>
+        </view>
+        <button class="summary-action-item summary-share-btn" open-type="share">
+          <view class="summary-icon-btn">
+            <image class="summary-icon" src="/assets/icons/share.svg" mode="aspectFit" />
+          </view>
+          <text class="summary-action-text">分享</text>
+        </button>
       </view>
     </view>
 
@@ -260,13 +288,12 @@
   <view class="bottom-safe-area"></view>
 
   <view class="action-bar">
-    <view class="action-favorite" bindtap="onToggleFavorite">
-      <image
-        class="action-favorite-icon"
-        src="{{isFavorite ? '/assets/icons/heart-filled.svg' : '/assets/icons/heart.svg'}}"
-        mode="aspectFit"
-      />
-      <text class="action-favorite-text">收藏</text>
+    <view class="action-cart-entry fly-cart-target" bindtap="onOpenCart">
+      <view class="action-cart-icon-wrap">
+        <image class="action-cart-icon" src="/assets/icons/shopping-cart.svg" mode="aspectFit" />
+        <text class="action-cart-badge" wx:if="{{cartCount > 0}}">{{cartCount > 99 ? '99+' : cartCount}}</text>
+      </view>
+      <text class="action-cart-text">购物袋</text>
     </view>
     <view class="action-buttons">
       <view class="action-btn action-btn-cart {{isOutOfStock ? 'btn-disabled' : ''}}" bindtap="onLeftActionTap">

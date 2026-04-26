@@ -184,12 +184,15 @@ class RequestCache {
 const requestCache = new RequestCache();
 
 // 定期清理过期缓存（每 10 分钟）
-setInterval(() => {
+const cleanupTimer = setInterval(() => {
   const cleaned = requestCache.cleanup();
   if (cleaned > 0) {
     console.log(`[RequestCache] 清理了 ${cleaned} 个过期缓存`);
   }
 }, 10 * 60 * 1000);
+if (cleanupTimer && typeof cleanupTimer.unref === 'function') {
+  cleanupTimer.unref();
+}
 
 /**
  * 缓存策略配置

@@ -235,6 +235,97 @@ test('products card view only resolves first list image and omits heavy fields',
     }
 });
 
+test('products ignore persisted signed image urls and recover from cloud file id', async () => {
+    const collections = createCollections({
+        products: [
+            {
+                _id: 'product-temp',
+                id: 88,
+                category_id: 'cat-a',
+                name: '临时图商品',
+                status: 1,
+                manual_weight: 1,
+                retail_price: 99,
+                images: ['https://abc.tcb.qcloud.la/materials/old.jpg?sign=expired&t=9999999999'],
+                preview_images: ['https://abc.tcb.qcloud.la/materials/old-preview.jpg?sign=expired&t=9999999999'],
+                file_id: 'cloud://env/product-temp-cover'
+            }
+        ],
+        skus: []
+    });
+    const { mod, stats, restore } = loadProductsFunction(collections);
+    try {
+        const cardResult = await mod.main({
+            action: 'list',
+            view: 'card',
+            include_skus: 0,
+            include_total: 1,
+            page: 1,
+            limit: 1
+        });
+        assert.equal(cardResult.code, 0);
+        assert.deepEqual(stats.tempFileRequests, ['cloud://env/product-temp-cover']);
+        assert.equal(cardResult.data.list[0].image_ref, 'cloud://env/product-temp-cover');
+        assert.match(cardResult.data.list[0].display_image, /^https:\/\/temp\.example\//);
+
+        const detailResult = await mod.main({ action: 'detail', product_id: 88 });
+        assert.equal(detailResult.code, 0);
+        assert.deepEqual(detailResult.data.images, ['cloud://env/product-temp-cover']);
+        assert.match(detailResult.data.preview_images[0], /^https:\/\/temp\.example\//);
+    } finally {
+        restore();
+    }
+});
+
+test('products recover display assets from image_ref and empty preview arrays', async () => {
+    const collections = createCollections({
+        products: [
+            {
+                _id: 'product-image-ref',
+                id: 89,
+                category_id: 'cat-a',
+                name: '持久引用商品',
+                status: 1,
+                manual_weight: 1,
+                retail_price: 129,
+                images: [],
+                preview_images: [],
+                image_ref: 'cloud://env/product-image-ref-cover',
+                detail_images: ['cloud://env/product-image-ref-detail'],
+                preview_detail_images: []
+            }
+        ],
+        skus: []
+    });
+    const { mod, stats, restore } = loadProductsFunction(collections);
+    try {
+        const cardResult = await mod.main({
+            action: 'list',
+            view: 'card',
+            include_skus: 0,
+            include_total: 1,
+            page: 1,
+            limit: 1
+        });
+        assert.equal(cardResult.code, 0);
+        assert.equal(cardResult.data.list[0].image_ref, 'cloud://env/product-image-ref-cover');
+        assert.match(cardResult.data.list[0].display_image, /^https:\/\/temp\.example\//);
+
+        const detailResult = await mod.main({ action: 'detail', product_id: 89 });
+        assert.equal(detailResult.code, 0);
+        assert.deepEqual(detailResult.data.images, ['cloud://env/product-image-ref-cover']);
+        assert.match(detailResult.data.preview_images[0], /^https:\/\/temp\.example\//);
+        assert.deepEqual(detailResult.data.detail_images, ['cloud://env/product-image-ref-detail']);
+        assert.match(detailResult.data.preview_detail_images[0], /^https:\/\/temp\.example\//);
+        assert.deepEqual(
+            [...new Set(stats.tempFileRequests)].sort(),
+            ['cloud://env/product-image-ref-cover', 'cloud://env/product-image-ref-detail'].sort()
+        );
+    } finally {
+        restore();
+    }
+});
+
 test('products include_total controls count behavior', async () => {
     const { mod, stats, restore } = loadProductsFunction();
     try {

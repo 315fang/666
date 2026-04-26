@@ -122,6 +122,7 @@ Page({
         regLightTipTitle: '',
         regLightTipContent: '',
         homeCoupons: [],
+        homeCouponHasMore: false,
         claimableCouponCount: 0,
         homeBundles: [],
         unusedCouponCount: 0,

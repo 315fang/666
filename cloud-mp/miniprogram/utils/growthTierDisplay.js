@@ -38,6 +38,55 @@ function getDisplayNextTierForGrowth(growthValue) {
     return TIERS_BY_MIN[idx + 1];
 }
 
+function toFiniteNumber(value, fallback = 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function clampPercent(value) {
+    return Math.min(100, Math.max(0, value));
+}
+
+function pickProgressPercent(gp = {}, fallback = 0) {
+    const raw = gp.percent != null ? gp.percent : gp.progress;
+    return clampPercent(toFiniteNumber(raw, fallback));
+}
+
+function resolveNextThreshold(gp = {}, fallback = null) {
+    const raw = gp.next_threshold != null
+        ? gp.next_threshold
+        : (
+            gp.nextThreshold != null
+                ? gp.nextThreshold
+                : (
+                    gp.nextLevel?.threshold != null
+                        ? gp.nextLevel.threshold
+                        : (
+                            gp.next?.threshold != null
+                                ? gp.next.threshold
+                                : gp.next?.min
+                        )
+                )
+        );
+    const n = Number(raw);
+    if (Number.isFinite(n)) return n;
+    return fallback;
+}
+
+/**
+ * 我的页/会员卡展示用：按「累计成长值 / 下一档门槛」展示进度。
+ * 后端 progress 是当前档位段内进度，刚升档时会接近 0，不适合“累计成长值”卡片。
+ */
+function calculateCumulativeGrowthPercent(growthValue, nextThreshold, fallbackPercent = 0) {
+    const threshold = Number(nextThreshold);
+    if (!Number.isFinite(threshold) || threshold <= 0) {
+        return clampPercent(toFiniteNumber(fallbackPercent, 0));
+    }
+    const growth = Math.max(0, toFiniteNumber(growthValue, 0));
+    const raw = (growth / threshold) * 100;
+    return clampPercent(Math.round(raw * 10) / 10);
+}
+
 /**
  * 列表/配置数组：按 min 覆盖 name、desc
  */
@@ -68,17 +117,25 @@ function patchGrowthProgressForDisplay(info = {}) {
             next_threshold: next != null ? next.min : null
         };
     }
+    const currentMeta = gp.current || gp.tier || {};
+    const nextMeta = gp.next || gp.nextLevel || null;
+    const nextThreshold = resolveNextThreshold(gp, next != null ? next.min : null);
     return {
         ...gp,
-        current: { ...(gp.current || {}), name: cur.name },
-        next: next ? { ...(gp.next || {}), name: next.name } : null
+        current: { ...currentMeta, name: cur.name },
+        next: next ? { ...(nextMeta || {}), name: next.name } : null,
+        percent: pickProgressPercent(gp, 0),
+        next_threshold: nextThreshold
     };
 }
 
 module.exports = {
     TIERS_BY_MIN,
+    calculateCumulativeGrowthPercent,
     getDisplayTierForGrowth,
     getDisplayNextTierForGrowth,
     applyGrowthTierDisplayNames,
+    pickProgressPercent,
+    resolveNextThreshold,
     patchGrowthProgressForDisplay
 };

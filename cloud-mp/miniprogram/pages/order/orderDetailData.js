@@ -1,8 +1,7 @@
 const { get, post } = require('../../utils/request');
-const { parseImages } = require('../../utils/dataFormatter');
-const { resolveCloudImageList, resolveCloudImageUrl } = require('./utils/cloudAsset');
 const { logisticsCompanyLabel } = require('./utils/logisticsCompany');
 const { normalizeOrderConsumer, normalizeRefundConsumer, toMoney } = require('./orderConsumerFields');
+const { resolveOrderImageFields } = require('./orderImageResolver');
 
 const PAID_ORDER_POST_PROCESS_STATUSES = new Set([
     'paid',
@@ -82,37 +81,12 @@ async function loadOrder(page, idOrNo) {
         const pathKey = encodeURIComponent(String(idOrNo));
         const orderRes = await get(`/orders/${pathKey}`);
         const rawOrder = orderRes.data;
-        const order = normalizeOrderConsumer(rawOrder);
+        const order = await resolveOrderImageFields(normalizeOrderConsumer(rawOrder));
 
         const refundsRes = await get('/refunds', { page: 1, limit: 100, order_id: order.id }).catch(() => ({
             data: { list: [] }
         }));
 
-        if (order && order.product) {
-            order.product.images = await resolveCloudImageList(
-                order.product.images,
-                parseImages(order.product.images)
-            );
-        }
-        if (order && Array.isArray(order.items) && order.items.length > 0) {
-            order.items = await Promise.all(order.items.map(async (item) => {
-                const product = item.product && typeof item.product === 'object' ? { ...item.product } : null;
-                if (product) {
-                    product.images = await resolveCloudImageList(
-                        product.images,
-                        parseImages(product.images)
-                    );
-                    product.image = await resolveCloudImageUrl(
-                        product.image || '',
-                        product.images
-                    );
-                }
-                return {
-                    ...item,
-                    product
-                };
-            }));
-        }
         if (order) {
             order.logistics_company = order.logistics_company || order.shipping_company || '';
             order.logistics_company_label = logisticsCompanyLabel(order.logistics_company);

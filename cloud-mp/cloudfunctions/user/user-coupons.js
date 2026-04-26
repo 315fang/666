@@ -312,7 +312,7 @@ function resolveTemplateClaimAvailability(coupon = {}, options = {}) {
 
     if (type === 'exchange') {
         result.state = 'unsupported';
-        result.message = '该券不支持在惊喜礼遇入口领取';
+        result.message = '该券不支持在优惠券中心领取';
         result.canClaim = false;
         return result;
     }

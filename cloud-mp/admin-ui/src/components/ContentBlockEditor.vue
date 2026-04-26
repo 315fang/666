@@ -43,7 +43,7 @@
           <div class="picked-name">{{ pickedProduct.name }}</div>
           <div class="picked-price">¥{{ pickedProduct.retail_price || pickedProduct.price }}</div>
           <div class="picked-meta" v-if="pickedProduct.description">{{ pickedProduct.description.slice(0, 40) }}</div>
-          <div class="picked-hint">{{ hideLinkControls ? '已自动填入图片，可继续调整副文案' : '已自动填入：图片、标题、跳转链接' }}</div>
+          <div class="picked-hint">{{ productPickHint }}</div>
         </div>
       </div>
     </template>
@@ -264,6 +264,10 @@ const selectedTargetKey = computed({
 })
 
 const showField = (f) => props.fields.includes(f)
+const productPickHint = computed(() => {
+  if (props.hideLinkControls) return '已自动填入图片，可继续调整副文案'
+  return showField('title') ? '已自动填入：图片、标题、跳转链接' : '已自动填入：图片、跳转链接'
+})
 
 const coverOf = (p) => {
   if (!p) return ''

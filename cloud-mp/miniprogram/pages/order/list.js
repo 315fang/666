@@ -1,9 +1,8 @@
 // pages/order/list.js
 const { get, post } = require('../../utils/request');
-const { parseImages } = require('../../utils/dataFormatter');
-const { resolveCloudImageList, resolveCloudImageUrl } = require('./utils/cloudAsset');
 const { ErrorHandler } = require('../../utils/errorHandler');
 const { normalizeOrderConsumer, normalizeRefundConsumer, getRefundStatusText } = require('./orderConsumerFields');
+const { resolveOrderImageFields, resolveNextProductImage } = require('./orderImageResolver');
 
 function buildOrderActivityInfo(order = {}) {
     const firstItem = Array.isArray(order.items) ? (order.items[0] || {}) : {};
@@ -138,17 +137,7 @@ Page({
 
             // 处理每个订单
             newOrders = await Promise.all(newOrders.map(async (rawOrder) => {
-                const order = normalizeOrderConsumer(rawOrder);
-                if (order.product) {
-                    order.product.images = await resolveCloudImageList(
-                        order.product.images,
-                        parseImages(order.product.images)
-                    );
-                    order.product.image = await resolveCloudImageUrl(
-                        order.product.image || order.product.image_url || '',
-                        order.product.images
-                    );
-                }
+                const order = await resolveOrderImageFields(normalizeOrderConsumer(rawOrder));
                 const quantity = Number(order.quantity || order.qty || 1);
                 const unitPriceBase = order.total_amount != null ? order.total_amount : order.pay_amount;
                 order.price = order.price || order.unit_price || Number((parseFloat(unitPriceBase || 0) / Math.max(quantity, 1)).toFixed(2));
@@ -199,17 +188,7 @@ Page({
             // 将退款记录转换为类订单结构（便于复用同一个模板）
             const newOrders = await Promise.all(refundList.map(async (rawRefund) => {
                 const refund = normalizeRefundConsumer(rawRefund);
-                const order = refund.order || {};
-                if (order.product) {
-                    order.product.images = await resolveCloudImageList(
-                        order.product.images,
-                        parseImages(order.product.images)
-                    );
-                    order.product.image = await resolveCloudImageUrl(
-                        order.product.image || order.product.image_url || '',
-                        order.product.images
-                    );
-                }
+                const order = await resolveOrderImageFields(refund.order || {});
 
                 const item = {
                     ...order,
@@ -473,18 +452,19 @@ Page({
         }
     },
 
-    onOrderProductImageError(e) {
+    async onOrderProductImageError(e) {
         const index = Number(e.currentTarget.dataset.index);
         if (!Number.isInteger(index)) return;
         const orders = (this.data.orders || []).slice();
         const current = orders[index];
         if (!current || !current.product) return;
+        const nextImage = await resolveNextProductImage(current.product);
         orders[index] = {
             ...current,
             product: {
                 ...current.product,
-                image: '',
-                images: []
+                ...nextImage,
+                images: nextImage.image ? [nextImage.image] : []
             }
         };
         this.setData({ orders });

@@ -249,52 +249,41 @@
 
         <!-- SKU（可选，默认折叠）-->
         <div class="form-section-title toggle-title">
-          <span>SKU 规格</span>
-          <el-switch v-model="skuEnabled" inactive-text="" active-text="启用多规格" />
+          <span>商品规格</span>
+          <el-switch v-model="skuEnabled" inactive-text="" active-text="多规格" />
         </div>
         <el-collapse-transition>
           <div v-show="skuEnabled">
-            <p class="sku-hint">启用后，顾客下单需选择规格；请为每条规格填写名称、规格值与价格/库存，并指定一个默认 SKU 作为前台展示与预选真相源。</p>
+            <p class="sku-hint">只填顾客看到的规格和库存即可；默认使用商品零售价，第一条规格作为默认展示。</p>
             <div class="sku-toolbar">
               <el-button size="small" type="primary" plain :icon="Plus" @click="addSku">添加规格</el-button>
+              <el-switch v-model="skuPriceOverride" active-text="单独定价" />
             </div>
-            <el-table :data="form.skus" border size="small" style="width:100%;margin-top:8px">
-              <el-table-column label="默认" width="70" align="center">
-                <template #default="{ $index }">
-                  <el-radio v-model="form.default_sku_index" :label="$index" />
-                </template>
-              </el-table-column>
-              <el-table-column label="规格名" width="90">
-                <template #default="{ row }">
-                  <el-input v-model="row.spec_name" placeholder="颜色" size="small" />
-                </template>
-              </el-table-column>
-              <el-table-column label="规格值" width="90">
-                <template #default="{ row }">
-                  <el-input v-model="row.spec_value" placeholder="红色" size="small" />
-                </template>
-              </el-table-column>
-              <el-table-column label="SKU编码" width="100">
-                <template #default="{ row }">
-                  <el-input v-model="row.sku_code" placeholder="选填" size="small" />
-                </template>
-              </el-table-column>
-              <el-table-column label="价格" width="100">
-                <template #default="{ row }">
-                  <el-input-number v-model="row.retail_price" :min="0" :precision="2" size="small" :controls="false" style="width:100%" />
-                </template>
-              </el-table-column>
-              <el-table-column label="库存" width="80">
-                <template #default="{ row }">
-                  <el-input-number v-model="row.stock" :min="0" :precision="0" size="small" :controls="false" style="width:100%" />
-                </template>
-              </el-table-column>
-              <el-table-column width="50" align="center">
-                <template #default="{ $index }">
-                  <el-button text type="danger" size="small" @click="removeSku($index)">删</el-button>
-                </template>
-              </el-table-column>
-            </el-table>
+            <div class="sku-list">
+              <div v-for="(row, index) in form.skus" :key="row.id || row._id || index" class="sku-row">
+                <span class="sku-row-index">{{ index + 1 }}</span>
+                <el-input v-model="row.spec_value" placeholder="规格，如：红色 / 500g / 大份" size="small" class="sku-name-input" />
+                <el-input-number v-model="row.stock" :min="0" :precision="0" size="small" :controls="false" placeholder="库存" class="sku-stock-input" />
+                <el-input-number
+                  v-if="skuPriceOverride"
+                  v-model="row.retail_price"
+                  :min="0.01"
+                  :precision="2"
+                  size="small"
+                  :controls="false"
+                  placeholder="价格"
+                  class="sku-price-input"
+                />
+                <el-button
+                  text
+                  circle
+                  type="danger"
+                  :icon="Delete"
+                  :title="`删除第 ${index + 1} 个规格`"
+                  @click="removeSku(index)"
+                />
+              </div>
+            </div>
           </div>
         </el-collapse-transition>
 
@@ -446,7 +435,7 @@
 <script setup>
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Delete, Plus } from '@element-plus/icons-vue'
 import { useRoute } from 'vue-router'
 import CompactIdCell from '@/components/CompactIdCell.vue'
 import { getProducts, createProduct, updateProduct, updateProductStatus, getCategories, deleteProduct, createCategory, updateCategory, deleteCategory } from '@/api'
@@ -549,6 +538,7 @@ const formVisible = ref(false)
 const formRef = ref(null)
 const submitting = ref(false)
 const skuEnabled = ref(false)
+const skuPriceOverride = ref(false)
 
 const defaultForm = () => ({
   id: null,
@@ -591,6 +581,59 @@ const rules = {
   cost_price: [{ required: true, type: 'number', message: '请填写成本价', trigger: 'blur' }]
 }
 
+const skuIdentityValues = (sku = {}) => [sku.id, sku._id, sku._legacy_id]
+  .filter((value) => value !== null && value !== undefined && value !== '')
+  .map((value) => String(value))
+
+const normalizeSkuForForm = (sku = {}) => ({
+  ...sku,
+  spec_value: String(sku.spec_value || sku.spec || '').trim(),
+  retail_price: Number(sku.retail_price ?? sku.price ?? form.retail_price ?? 0),
+  stock: Number(sku.stock || 0)
+})
+
+const skuPriceValue = (sku = {}) => Number(sku.retail_price ?? sku.price ?? 0)
+
+const hasCustomSkuPrice = (skus = [], productPrice) => {
+  const basePrice = Number(productPrice || 0)
+  return skus.some((sku) => Math.abs(skuPriceValue(sku) - basePrice) > 0.009)
+}
+
+const orderSkusForForm = (skus = [], defaultSkuId) => {
+  const rows = skus.map(normalizeSkuForForm)
+  const defaultId = String(defaultSkuId || '').trim()
+  if (!defaultId) return rows
+  const defaultIndex = rows.findIndex((sku) => skuIdentityValues(sku).includes(defaultId))
+  if (defaultIndex <= 0) return rows
+  const [defaultSku] = rows.splice(defaultIndex, 1)
+  return [defaultSku, ...rows]
+}
+
+const buildSkuPayloads = () => form.skus.map((sku, index) => {
+  const specValue = String(sku.spec_value || sku.spec || '').trim()
+  const retailPrice = skuPriceOverride.value
+    ? Number(sku.retail_price ?? form.retail_price ?? 0)
+    : Number(form.retail_price || 0)
+  return {
+    id: sku.id,
+    _id: sku._id,
+    _legacy_id: sku._legacy_id,
+    spec: specValue,
+    spec_name: '规格',
+    spec_value: specValue,
+    specs: [{ name: '规格', value: specValue }],
+    retail_price: retailPrice,
+    price: retailPrice,
+    market_price: Number(form.market_price || 0),
+    original_price: Number(form.market_price || 0),
+    stock: Number(sku.stock || 0),
+    sku_code: sku.sku_code || '',
+    image: sku.image || '',
+    sort_order: index,
+    created_at: sku.created_at
+  }
+})
+
 const normalizePersistentAssetList = (urls = []) => (Array.isArray(urls) ? urls : [])
   .map((url) => buildPersistentAssetRef({ url }))
   .filter(Boolean)
@@ -606,8 +649,7 @@ const seedImagePreviewCache = (persistedUrls = [], previewUrls = []) => {
 
 const openForm = (row) => {
   if (row) {
-    const nextSkus = row.skus ? row.skus.map(s => ({ ...s })) : []
-    const matchedDefaultSkuIndex = nextSkus.findIndex((sku) => Number(sku?.id) === Number(row.default_sku_id))
+    const nextSkus = orderSkusForForm(row.skus || [], row.default_sku_id)
     const normalizedImages = normalizePersistentAssetList(row.raw_images?.length ? row.raw_images : row.images)
     const normalizedDetailImages = normalizePersistentAssetList(row.raw_detail_images?.length ? row.raw_detail_images : row.detail_images)
     Object.assign(form, {
@@ -627,7 +669,7 @@ const openForm = (row) => {
       manual_weight: row.manual_weight || 0,
       growth_value_reward: row.growth_value_reward || null,
       skus: nextSkus,
-      default_sku_index: matchedDefaultSkuIndex >= 0 ? matchedDefaultSkuIndex : null,
+      default_sku_index: nextSkus.length ? 0 : null,
       enable_coupon: row.enable_coupon || 0,
       enable_group_buy: row.enable_group_buy || 0,
       custom_commissions: row.custom_commissions || 0,
@@ -642,6 +684,7 @@ const openForm = (row) => {
       commission_amount_2: row.commission_amount_2 || 0
     })
     skuEnabled.value = (row.skus?.length > 0)
+    skuPriceOverride.value = hasCustomSkuPrice(nextSkus, row.retail_price)
     // 编辑已有商品时，后端可能返回带签名的临时预览 URL；
     // 表单里改存稳定引用，预览仍沿用当前可显示地址。
     seedImagePreviewCache(normalizedImages, row.images || [])
@@ -649,13 +692,14 @@ const openForm = (row) => {
   } else {
     Object.assign(form, defaultForm())
     skuEnabled.value = false
+    skuPriceOverride.value = false
   }
   formVisible.value = true
 }
 
 const addSku = () => {
   const nextIndex = form.skus.length
-  form.skus.push({ spec_name: '', spec_value: '', sku_code: '', retail_price: form.retail_price || 0, stock: 0 })
+  form.skus.push({ spec_name: '规格', spec_value: '', sku_code: '', retail_price: form.retail_price || 0, stock: 0 })
   if (form.default_sku_index == null && nextIndex === 0) {
     form.default_sku_index = 0
   }
@@ -668,7 +712,7 @@ const removeSku = (i) => {
     return
   }
   if (form.default_sku_index === i) {
-    form.default_sku_index = form.skus.length === 1 ? 0 : null
+    form.default_sku_index = 0
     return
   }
   if (Number.isInteger(form.default_sku_index) && form.default_sku_index > i) {
@@ -676,6 +720,16 @@ const removeSku = (i) => {
   }
 }
 const removeImg = (key, i) => form[key].splice(i, 1)
+
+watch(skuEnabled, (enabled) => {
+  if (enabled) {
+    if (!form.skus.length) addSku()
+    form.default_sku_index = 0
+  } else {
+    form.default_sku_index = null
+    skuPriceOverride.value = false
+  }
+})
 
 const submitForm = async (status) => {
   // 使用 Promise 方式校验，避免 async callback 与 await 混用导致的校验结果丢失
@@ -695,6 +749,10 @@ const submitForm = async (status) => {
     ElMessage.warning(tempUrlMessage)
     return
   }
+  if ([...form.images, ...form.detail_images].some((url) => /^https?:\/\//i.test(String(url || '').trim()))) {
+    ElMessage.warning('商品图片请从素材库重新选择，保存时必须使用 cloud:// file_id')
+    return
+  }
 
   submitting.value = true
   try {
@@ -703,9 +761,20 @@ const submitForm = async (status) => {
       data.skus = []
       data.default_sku_index = null
     } else {
-      data.default_sku_index = Number.isInteger(Number(form.default_sku_index))
-        ? Number(form.default_sku_index)
-        : null
+      if (!form.skus.length) {
+        ElMessage.warning('请至少添加一个规格')
+        return
+      }
+      if (form.skus.some((sku) => !String(sku.spec_value || sku.spec || '').trim())) {
+        ElMessage.warning('请填写规格名称')
+        return
+      }
+      if (skuPriceOverride.value && form.skus.some((sku) => !(Number(sku.retail_price) > 0))) {
+        ElMessage.warning('请填写规格价格')
+        return
+      }
+      data.skus = buildSkuPayloads()
+      data.default_sku_index = 0
     }
     // 百分比 → 小数（后端存 0~1）
     data.commission_rate_1 = (Number(data.commission_rate_1) || 0) / 100
@@ -917,8 +986,58 @@ onMounted(() => { loadCategories() })
 .sku-hint { font-size: 12px; color: #909399; margin: 0 0 8px; line-height: 1.5; }
 
 /* SKU */
-.sku-toolbar { margin-bottom: 4px; }
+.sku-toolbar {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
 .toggle-title { gap: 12px; }
+.sku-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sku-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: #f9fafb;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+}
+.sku-row-index {
+  width: 22px;
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  border-radius: 50%;
+  background: #eef5ff;
+  color: #409eff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.sku-name-input {
+  min-width: 0;
+  flex: 1;
+}
+.sku-stock-input { width: 88px; }
+.sku-price-input { width: 96px; }
+
+@media (max-width: 720px) {
+  .sku-row {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+  .sku-stock-input,
+  .sku-price-input {
+    width: 100%;
+    margin-left: 30px;
+    flex: 1 0 calc(50% - 34px);
+  }
+}
 
 /* 营销开关网格 */
 .switch-grid { display: flex; flex-direction: column; gap: 0; }

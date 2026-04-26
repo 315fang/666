@@ -78,7 +78,12 @@
                 />
               </template>
             </el-table-column>
-            <el-table-column prop="title" label="标题" min-width="120" />
+            <el-table-column label="标题/备注" min-width="120">
+              <template #default="{ row }">
+                <span v-if="isHomeBannerPosition(row.position)" class="muted-cell">首页图片直出</span>
+                <span v-else>{{ row.title || '-' }}</span>
+              </template>
+            </el-table-column>
             <el-table-column label="跳转类型" width="120">
               <template #default="{ row }">
                 <el-tag size="small" :type="linkTypeTagType(row.link_type)">
@@ -179,13 +184,21 @@
           show-icon
           style="margin-bottom: 16px;"
         />
-        <el-form-item label="标题">
+        <el-alert
+          v-if="isHomeBannerPosition(bannerForm.position)"
+          title="首页轮播/中部/底部 Banner 现在只展示图片，不再下发图片叠字、灰色遮罩和角标。"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px;"
+        />
+        <el-form-item v-if="!isHomeBannerPosition(bannerForm.position)" label="标题">
           <el-input v-model="bannerForm.title" placeholder="Banner 主标题（可选）" />
         </el-form-item>
-        <el-form-item label="副标题">
+        <el-form-item v-if="!isHomeBannerPosition(bannerForm.position)" label="副标题">
           <el-input v-model="bannerForm.subtitle" placeholder="副标题/描述文字（可选）" />
         </el-form-item>
-        <el-form-item label="角标文字">
+        <el-form-item v-if="!isHomeBannerPosition(bannerForm.position)" label="角标文字">
           <el-input v-model="bannerForm.kicker" placeholder="如：NEW / 限时活动（可选）" style="width:200px" />
         </el-form-item>
 
@@ -199,7 +212,7 @@
             {{ currentBannerImageSpec.display }}；{{ currentBannerImageSpec.note }}
           </div>
         </div>
-        <ContentBlockEditor v-model="bannerBlockData" :fields="['title', 'subtitle']" :image-spec="currentBannerImageSpec" />
+        <ContentBlockEditor v-model="bannerBlockData" :fields="bannerTextFields" :image-spec="currentBannerImageSpec" />
         <el-form-item label="展示时段">
           <el-date-picker
             v-model="bannerForm.start_time"
@@ -281,6 +294,9 @@ import {
   bannerPositionMap
 } from './contentPageConfig'
 
+const HOME_BANNER_POSITIONS = new Set(['home', 'home_mid', 'home_bottom'])
+const isHomeBannerPosition = (position) => HOME_BANNER_POSITIONS.has(String(position || '').trim())
+
 const activeTab = ref('banner')
 const submitting = ref(false)
 
@@ -303,9 +319,8 @@ const bannerForm = reactive({
   product_id: null, position: 'home',
   sort_order: 0, status: 1, start_time: null, end_time: null
 })
-const bannerRules = {
-  title: [{ required: true, message: '请填写 Banner 标题', trigger: 'blur' }]
-}
+const bannerTextFields = computed(() => isHomeBannerPosition(bannerForm.position) ? [] : ['title', 'subtitle'])
+const bannerRules = {}
 
 const resolveAssetUrl = (item = {}) => item.image_url || item.url || item.image || item.cover_image || item.file_id || ''
 
@@ -361,8 +376,8 @@ const bannerBlockData = computed({
   get: () => ({
     file_id: bannerForm.file_id,
     image_url: bannerForm.image_url || '',
-    title: bannerForm.title,
-    subtitle: bannerForm.subtitle,
+    title: isHomeBannerPosition(bannerForm.position) ? '' : bannerForm.title,
+    subtitle: isHomeBannerPosition(bannerForm.position) ? '' : bannerForm.subtitle,
     link_type: bannerForm.link_type,
     link_value: bannerForm.link_value,
     product_id: bannerForm.product_id
@@ -371,8 +386,8 @@ const bannerBlockData = computed({
     // 只更新真正有值的字段，避免子组件 emit 空值覆盖父组件已有数据
     if (v.file_id !== undefined) bannerForm.file_id = v.file_id || ''
     if (v.image_url !== undefined) bannerForm.image_url = v.image_url
-    if (v.title !== undefined) bannerForm.title = v.title
-    if (v.subtitle !== undefined) bannerForm.subtitle = v.subtitle
+    if (v.title !== undefined) bannerForm.title = isHomeBannerPosition(bannerForm.position) ? '' : v.title
+    if (v.subtitle !== undefined) bannerForm.subtitle = isHomeBannerPosition(bannerForm.position) ? '' : v.subtitle
     if (v.link_type !== undefined) bannerForm.link_type = v.link_type || 'none'
     if (v.link_value !== undefined) bannerForm.link_value = v.link_value || ''
     if (v.product_id !== undefined) bannerForm.product_id = v.product_id || null
@@ -437,17 +452,19 @@ const handleEditBanner = (row) => {
   bannerIsEdit.value = true
   selectedProduct.value = null
   productOptions.value = []
+  const position = row.position || 'home'
+  const imageOnly = isHomeBannerPosition(position)
   Object.assign(bannerForm, {
     id: row.id,
-    title: row.title || '',
-    subtitle: row.subtitle || '',
-    kicker: row.kicker || '',
+    title: imageOnly ? '' : (row.title || ''),
+    subtitle: imageOnly ? '' : (row.subtitle || ''),
+    kicker: imageOnly ? '' : (row.kicker || ''),
     file_id: row.file_id || '',
     image_url: resolveAssetUrl(row),
     link_type: row.link_type || 'none',
     link_value: row.link_value || '',
     product_id: row.product_id || null,
-    position: row.position || 'home',
+    position,
     sort_order: row.sort_order || 0,
     status: row.status ?? 1,
     start_time: row.start_time || null,
@@ -471,6 +488,11 @@ const handleBannerSubmit = async () => {
   submitting.value = true
   try {
     const payload = { ...bannerForm }
+    if (isHomeBannerPosition(payload.position)) {
+      payload.title = ''
+      payload.subtitle = ''
+      payload.kicker = ''
+    }
     payload.image_url = buildPersistentAssetRef({ url: payload.image_url, fileId: payload.file_id })
     // product类型时，link_value = product_id
     if (payload.link_type === 'product' && payload.product_id) {
@@ -583,6 +605,7 @@ onMounted(fetchBanners)
 <style scoped>
 .content-page { padding: 0; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+.muted-cell { color: #909399; font-size: 12px; }
 .image-spec-card { margin-bottom: 16px; }
 .image-spec-tip {
   margin-bottom: 14px;

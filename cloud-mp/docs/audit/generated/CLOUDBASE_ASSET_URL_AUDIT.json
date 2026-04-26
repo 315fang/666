@@ -1,0 +1,109 @@
+{
+  "kind": "cloudbase_asset_url_audit",
+  "generated_at": "2026-04-25T14:51:39.582Z",
+  "environment": {
+    "env_id": "cloud1-9gywyqe49638e46f",
+    "auth_status": "READY",
+    "env_status": "READY"
+  },
+  "targets": [
+    {
+      "name": "banners",
+      "total": 3,
+      "metrics": {
+        "healthy": 3,
+        "stale_url_but_recoverable": 0,
+        "cloud_asset_without_file_id": 0,
+        "signed_url_without_file_id": 0,
+        "http_url_without_file_id": 0,
+        "missing_asset_ref": 0
+      }
+    },
+    {
+      "name": "splash_screens",
+      "total": 1,
+      "metrics": {
+        "healthy": 1,
+        "stale_url_but_recoverable": 0,
+        "cloud_asset_without_file_id": 0,
+        "signed_url_without_file_id": 0,
+        "http_url_without_file_id": 0,
+        "missing_asset_ref": 0
+      }
+    },
+    {
+      "name": "materials",
+      "total": 200,
+      "metrics": {
+        "healthy": 200,
+        "stale_url_but_recoverable": 0,
+        "cloud_asset_without_file_id": 0,
+        "signed_url_without_file_id": 0,
+        "http_url_without_file_id": 0,
+        "missing_asset_ref": 0
+      }
+    },
+    {
+      "name": "products",
+      "total": 179,
+      "metrics": {
+        "healthy": 179,
+        "stale_url_but_recoverable": 0,
+        "cloud_asset_without_file_id": 0,
+        "signed_url_without_file_id": 0,
+        "http_url_without_file_id": 0,
+        "missing_asset_ref": 0
+      }
+    },
+    {
+      "name": "admin_singletons.settings.homepage",
+      "total": 4,
+      "metrics": {
+        "healthy": 4,
+        "stale_url_but_recoverable": 0,
+        "cloud_asset_without_file_id": 0,
+        "signed_url_without_file_id": 0,
+        "http_url_without_file_id": 0,
+        "missing_asset_ref": 0
+      }
+    },
+    {
+      "name": "admin_singletons.popup-ad-config",
+      "total": 1,
+      "metrics": {
+        "healthy": 1,
+        "stale_url_but_recoverable": 0,
+        "cloud_asset_without_file_id": 0,
+        "signed_url_without_file_id": 0,
+        "http_url_without_file_id": 0,
+        "missing_asset_ref": 0
+      }
+    },
+    {
+      "name": "admin_singletons.mini-program-config.brand_config",
+      "total": 2,
+      "metrics": {
+        "healthy": 2,
+        "stale_url_but_recoverable": 0,
+        "cloud_asset_without_file_id": 0,
+        "signed_url_without_file_id": 0,
+        "http_url_without_file_id": 0,
+        "missing_asset_ref": 0
+      }
+    }
+  ],
+  "samples": [],
+  "summary": {
+    "target_count": 7,
+    "checked_records": 390,
+    "risky_records": 0,
+    "risk_breakdown": {
+      "healthy": 390,
+      "stale_url_but_recoverable": 0,
+      "cloud_asset_without_file_id": 0,
+      "signed_url_without_file_id": 0,
+      "http_url_without_file_id": 0,
+      "missing_asset_ref": 0
+    }
+  }
+}

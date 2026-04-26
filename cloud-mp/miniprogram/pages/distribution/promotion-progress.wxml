@@ -1,117 +1,107 @@
-<view class="page" wx:if="{{!loading}}">
-
-  <!-- 当前等级 -->
-  <view class="current-level" wx:if="{{progress}}">
-    <view class="level-badge">{{progress.current_name}}</view>
-    <view class="level-stats">
-      <view class="stat">
-        <text class="stat-val">¥{{progress.stats.total_spent || 0}}</text>
-        <text class="stat-lbl">累计消费</text>
-      </view>
-      <view class="stat">
-        <text class="stat-val">{{progress.stats.growth_value || 0}}</text>
-        <text class="stat-lbl">成长值</text>
-      </view>
-      <view class="stat">
-        <text class="stat-val">¥{{progress.stats.recharge_total || 0}}</text>
-        <text class="stat-lbl">累计充值</text>
-      </view>
-      <view class="stat">
-        <text class="stat-val">{{progress.stats.c1_count || 0}}</text>
-        <text class="stat-lbl">C1推荐数</text>
-      </view>
-      <view class="stat">
-        <text class="stat-val">{{progress.stats.b1_count || 0}}</text>
-        <text class="stat-lbl">B1推荐数</text>
-      </view>
-    </view>
-  </view>
-
-  <!-- 升级存钱罐 -->
-  <view class="piggy-card" wx:if="{{progress && progress.piggy_bank}}">
-    <view class="piggy-head">
-      <view>
-        <text class="piggy-title">升级存钱罐</text>
-        <text class="piggy-sub" wx:if="{{progress.next_name}}">升至 {{progress.next_name}} 可解锁</text>
-        <text class="piggy-sub" wx:else>已达当前最高目标</text>
-      </view>
-      <view class="piggy-amount-box">
-        <text class="piggy-currency">¥</text>
-        <text class="piggy-amount">{{progress.piggy_bank.next_level_unlock_amount_text}}</text>
-      </view>
-    </view>
-    <view class="piggy-summary">
-      <view class="piggy-summary-item">
-        <text class="piggy-summary-value">¥{{progress.piggy_bank.locked_amount_text}}</text>
-        <text class="piggy-summary-label">锁定中</text>
-      </view>
-      <view class="piggy-summary-item">
-        <text class="piggy-summary-value">¥{{progress.piggy_bank.unlocked_amount_text}}</text>
-        <text class="piggy-summary-label">已解锁</text>
-      </view>
-      <view class="piggy-summary-item">
-        <text class="piggy-summary-value">¥{{progress.piggy_bank.unlockable_amount_text}}</text>
-        <text class="piggy-summary-label">待入账</text>
-      </view>
-    </view>
-    <scroll-view class="piggy-buckets" scroll-x>
-      <view class="piggy-bucket-list">
-        <view class="piggy-bucket {{item.has_amount ? 'active' : ''}}" wx:for="{{progress.piggy_bank.buckets}}" wx:key="target_level">
-          <text class="piggy-bucket-name">{{item.target_name}}</text>
-          <text class="piggy-bucket-amount">¥{{item.locked_amount_text}}</text>
-          <text class="piggy-bucket-sub">已解 ¥{{item.unlocked_amount_text}}</text>
+<view class="container">
+  <view class="overview-card">
+    <view class="overview-inner">
+      <view class="overview-main">
+        <text class="overview-label">已存升级奖励</text>
+        <view class="overview-amount-row">
+          <text class="overview-currency">¥</text>
+          <text class="overview-amount">{{summary.locked_amount_text}}</text>
         </view>
+        <text class="overview-sub">{{summary.next_unlock_text}}</text>
       </view>
-    </scroll-view>
-  </view>
-
-  <!-- 下一级目标 -->
-  <view class="next-target" wx:if="{{progress && progress.next_level != null}}">
-    <view class="section-title">距离 {{progress.next_name}}</view>
-    <view class="conditions">
-      <view class="condition" wx:for="{{progress.conditions}}" wx:key="label">
-        <view class="cond-header">
-          <text class="cond-label">{{item.label}}</text>
-          <text class="cond-status {{item.met ? 'met' : ''}}">{{item.met ? '✓ 已达成' : item.current + ' / ' + item.target}}</text>
+      <view class="overview-side">
+        <view class="side-block">
+          <text class="side-label">已入账</text>
+          <text class="side-amount">¥{{summary.unlocked_amount_text}}</text>
         </view>
-        <view class="progress-bar">
-          <view class="progress-fill {{item.met ? 'full' : ''}}" style="width: {{item.met ? 100 : (item.target > 0 ? (item.current / item.target * 100 > 100 ? 100 : item.current / item.target * 100) : 0)}}%"></view>
+        <view class="side-block">
+          <text class="side-label">待入账</text>
+          <text class="side-amount">¥{{summary.unlockable_amount_text}}</text>
         </view>
       </view>
     </view>
   </view>
-  <view class="max-level" wx:elif="{{progress && progress.next_level == null}}">
-    <text>🎉 已达最高等级</text>
+
+  <view class="filter-bar">
+    <view
+      class="filter-item {{currentStatus === item.status ? 'active' : ''}}"
+      wx:for="{{statusTabs}}"
+      wx:key="status"
+      bindtap="onStatusChange"
+      data-status="{{item.status}}"
+    >
+      <text>{{item.label}}</text>
+      <text class="filter-count" wx:if="{{item.count > 0}}">{{item.count}}</text>
+    </view>
   </view>
 
-  <!-- 晋升历史 -->
-  <view class="history-section" wx:if="{{logs.length > 0}}">
-    <view class="section-title">晋升记录</view>
-    <view class="timeline">
-      <view class="timeline-item" wx:for="{{logs}}" wx:key="_id">
-        <view class="timeline-dot"></view>
-        <view class="timeline-content">
-          <view class="timeline-title">{{item.from_name}} → {{item.to_name}}</view>
-          <view class="timeline-desc">
-            <text wx:if="{{item.trigger_type === 'recharge'}}">通过充值晋升</text>
-            <text wx:elif="{{item.trigger_type === 'growth'}}">通过成长值晋升</text>
-            <text wx:else>通过推荐业绩晋升</text>
+  <scroll-view class="log-scroll" scroll-y>
+    <view class="log-list">
+      <view class="skeleton-wrap" wx:if="{{loading && logs.length === 0}}">
+        <view class="sk-log" wx:for="{{[1,2,3,4,5]}}" wx:key="index">
+          <view class="sk-icon"></view>
+          <view class="sk-info">
+            <view class="sk-line sk-long"></view>
+            <view class="sk-line sk-short"></view>
           </view>
-          <view class="timeline-meta">
-            <text>消费 ¥{{item.total_spent || 0}}</text>
-            <text>成长值 {{item.growth_value || 0}}</text>
-            <text>充值 ¥{{item.recharge_total || 0}}</text>
-            <text>下级 {{item.direct_member_count || 0}} 人</text>
+          <view class="sk-amount-box"></view>
+        </view>
+      </view>
+
+      <view class="log-item" wx:for="{{filteredLogs}}" wx:key="id">
+        <view class="log-icon-wrap">
+          <image src="/assets/icons/dollar-sign.svg" mode="aspectFit" class="log-icon"></image>
+        </view>
+        <view class="log-info">
+          <text class="log-title">{{item.title}}</text>
+          <text class="log-time">{{item.created_at_text}}</text>
+          <text class="log-source">{{item.sourceText}}</text>
+          <text class="log-order" wx:if="{{item.orderNoDisplay}}">订单：{{item.orderNoDisplay}}</text>
+        </view>
+        <view class="log-right">
+          <text class="log-amount">+¥{{item.amount}}</text>
+          <view class="log-status {{item.statusClass}}">{{item.statusText}}</view>
+        </view>
+      </view>
+
+      <view class="load-footer" wx:if="{{!loading && filteredLogs.length > 0}}">
+        <text class="no-more">没有更多了</text>
+      </view>
+
+      <view class="empty-state" wx:if="{{!loading && filteredLogs.length === 0}}">
+        <image src="/assets/icons/dollar-sign.svg" mode="aspectFit" class="empty-icon"></image>
+        <text class="empty-title">暂无存款明细</text>
+        <text class="empty-desc">产生升级奖励后会在这里显示预计收益</text>
+      </view>
+
+      <view class="deposit-guide-card">
+        <view class="deposit-guide-head" bindtap="onToggleDepositGuide">
+          <view class="deposit-guide-title-wrap">
+            <text class="deposit-guide-kicker">说明</text>
+            <text class="deposit-guide-title">我的存款怎么玩</text>
+          </view>
+          <view class="deposit-guide-toggle">
+            <text>{{depositGuideExpanded ? '收起' : '展开'}}</text>
+            <text class="deposit-guide-arrow {{depositGuideExpanded ? 'expanded' : ''}}">⌄</text>
+          </view>
+        </view>
+        <view class="deposit-guide-body" wx:if="{{depositGuideExpanded}}">
+          <view class="deposit-guide-row">
+            <text class="deposit-guide-index">01</text>
+            <text class="deposit-guide-copy">产生升级奖励后，会先记录为预计收益。</text>
+          </view>
+          <view class="deposit-guide-row">
+            <text class="deposit-guide-index">02</text>
+            <text class="deposit-guide-copy">达到对应等级或解锁条件后，预计收益会转为已入账。</text>
+          </view>
+          <view class="deposit-guide-row">
+            <text class="deposit-guide-index">03</text>
+            <text class="deposit-guide-copy">订单退款、取消或奖励回滚时，对应记录会显示为已失效或已扣回。</text>
           </view>
         </view>
       </view>
     </view>
-  </view>
-  <view class="empty" wx:elif="{{!progress}}">
-    <text>暂无晋升数据</text>
-  </view>
-</view>
 
-<view class="loading" wx:else>
-  <text>加载中...</text>
+    <view class="bottom-space"></view>
+  </scroll-view>
 </view>

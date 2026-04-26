@@ -20,7 +20,7 @@ const {
 } = require('../../utils/cloudAssetRuntime');
 const app = getApp();
 
-const PRODUCT_PLACEHOLDER = '';
+const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
 const PLEDGE_ICONS = {
     seven_day: '/assets/icons/refresh-cw.svg',
     return_shipping: '/assets/icons/truck.svg',
@@ -72,14 +72,71 @@ function expandDetailImageSources(value) {
     return [];
 }
 
-function sanitizeDetailImageSources(value) {
+function collectAssetSources(...values) {
     const seen = new Set();
-    return expandDetailImageSources(value).filter((item) => {
+    return values.flatMap((value) => expandDetailImageSources(value)).filter((item) => {
         const key = String(item || '').trim();
         if (!key || seen.has(key)) return false;
         seen.add(key);
         return true;
     });
+}
+
+function collectSkuImageSources(skus = []) {
+    return (Array.isArray(skus) ? skus : []).flatMap((sku) => {
+        if (!sku || typeof sku !== 'object') return [];
+        return [
+            sku.images,
+            sku.preview_images,
+            sku.previewImages,
+            sku.image_ref,
+            sku.imageRef,
+            sku.file_id,
+            sku.fileId,
+            sku.image,
+            sku.image_url,
+            sku.imageUrl,
+            sku.cover_image,
+            sku.coverImage
+        ];
+    });
+}
+
+function collectProductGallerySources(product = {}) {
+    if (!product || typeof product !== 'object') return [];
+    return collectAssetSources(
+        product.images,
+        product.image_candidates,
+        product.imageCandidates,
+        product.image_ref,
+        product.imageRef,
+        product.file_id,
+        product.fileId,
+        product.cover_image,
+        product.coverImage,
+        product.image,
+        product.preview_images,
+        product.previewImages,
+        product.display_image,
+        product.displayImage,
+        product.image_url,
+        product.imageUrl,
+        collectSkuImageSources(product.skus)
+    );
+}
+
+function collectProductDetailImageSources(product = {}) {
+    if (!product || typeof product !== 'object') return [];
+    return collectAssetSources(
+        product.detail_images,
+        product.detailImages,
+        product.preview_detail_images,
+        product.previewDetailImages,
+        product.description_images,
+        product.descriptionImages,
+        product.detail_image,
+        product.detailImage
+    );
 }
 
 function resolveDetailImageList(sources = []) {
@@ -133,17 +190,19 @@ async function loadProduct(page, id) {
     try {
         const res = await get(`/products/${id}`);
         const product = res.data || {};
+        const gallerySources = collectProductGallerySources(product);
 
         product.images = await resolveRenderableImageList(
-            product.preview_images || product.previewImages || product.image_url || product.images || product.image || resolveProductImage(product, PRODUCT_PLACEHOLDER),
+            gallerySources.length ? gallerySources : resolveProductImage(product, PRODUCT_PLACEHOLDER),
             PRODUCT_PLACEHOLDER
         );
         if (!product.images.length) {
-            product.images = sanitizeImageList(resolveProductImage(product, PRODUCT_PLACEHOLDER), PRODUCT_PLACEHOLDER);
+            product.images = await resolveRenderableImageList(
+                sanitizeImageList(resolveProductImage(product, PRODUCT_PLACEHOLDER), PRODUCT_PLACEHOLDER),
+                PRODUCT_PLACEHOLDER
+            );
         }
-        product.detail_image_sources = sanitizeDetailImageSources(
-            product.preview_detail_images || product.previewDetailImages || product.detail_images
-        );
+        product.detail_image_sources = collectProductDetailImageSources(product);
 
         let specs = [];
         if (product.skus && product.skus.length > 0) {
@@ -262,6 +321,8 @@ module.exports = {
     parseApiDisplayPrice,
     parseApiCentPrice,
     buildSkuText,
+    collectProductGallerySources,
+    collectProductDetailImageSources,
     PRODUCT_PLACEHOLDER,
     PLEDGE_ICONS
 };

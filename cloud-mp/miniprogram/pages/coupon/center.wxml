@@ -2,7 +2,7 @@
   <scroll-view scroll-y class="scroll">
     <view class="hero">
       <text class="hero-kicker">优惠服务</text>
-      <text class="hero-title">惊喜礼遇</text>
+      <text class="hero-title">优惠券中心</text>
       <text class="hero-subtitle">领券后下单可直接使用。</text>
 
       <view class="hero-metrics">

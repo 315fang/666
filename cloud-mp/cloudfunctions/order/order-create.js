@@ -150,13 +150,17 @@ async function findSlashActivity(activityId) {
 
 async function markSlashRecordExpired(record = {}) {
     if (!record || !record._id || record.status === 'expired' || record.status === 'purchased') return;
-    await db.collection('slash_records').doc(String(record._id)).update({
-        data: {
-            status: 'expired',
-            expired_at: db.serverDate(),
-            updated_at: db.serverDate()
-        }
-    }).catch(() => {});
+    try {
+        await db.collection('slash_records').doc(String(record._id)).update({
+            data: {
+                status: 'expired',
+                expired_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        });
+    } catch (e) {
+        console.error('[OrderCreate] ⚠️ 砍价记录失效标记失败 recordId=%s error=%s', record._id, e.message);
+    }
 }
 
 async function findUserByOpenid(openid) {
@@ -1354,9 +1358,13 @@ async function createOrder(openid, orderData) {
                     .catch(() => ({ stats: { updated: 0 } }));
                 if (!stockUpdateRes.stats || stockUpdateRes.stats.updated === 0) {
                     // 并发失败，回滚已扣减库存
-                    await Promise.all(stockDeductions.map(({ collection, docId, qty: q }) =>
-                        db.collection(collection).doc(docId).update({ data: { stock: _.inc(q) } }).catch(() => {})
-                    ));
+                    for (const { collection: c, docId: d, qty: q } of stockDeductions) {
+                        try {
+                            await db.collection(c).doc(d).update({ data: { stock: _.inc(q) } });
+                        } catch (rollbackErr) {
+                            console.error('[OrderCreate] ⚠️ 库存回滚失败(并发) collection=%s docId=%s qty=%s error=%s', c, d, q, rollbackErr.message);
+                        }
+                    }
                     throw new Error(`商品库存不足: ${product.name || item.product_id}（请刷新后重试）`);
                 }
                 stockDeductions.push({ collection: stockCollection, docId: stockDocId, qty });
@@ -1415,6 +1423,15 @@ async function createOrder(openid, orderData) {
         const productImages = normalizeImages(product.images);
         const specValue = normalizeSpecValue(sku ? (sku.spec || sku.specs || sku.spec_value || '') : '');
         const image = sku ? (sku.image || productImages[0] || '') : (productImages[0] || '');
+        const imageCandidates = [
+            sku?.image,
+            image,
+            ...productImages,
+            product.image,
+            product.image_url,
+            product.cover_image,
+            product.cover
+        ].filter(Boolean);
         const productName = product.name || sku?.name || '';
         const isExplosive = (product.is_explosive === true || product.is_explosive === 1);
         const isHotProduct = isHotProductTag(product.product_tag);
@@ -1442,6 +1459,7 @@ async function createOrder(openid, orderData) {
             snapshot_spec: specValue,
             image,
             snapshot_image: image,
+            image_candidates: [...new Set(imageCandidates)],
             price: unitPrice,
             unit_price: unitPrice,
             original_unit_price: roundMoney(originalUnitPrice),
@@ -1869,26 +1887,48 @@ async function createOrder(openid, orderData) {
     if (use_goods_fund) {
         const freshUser = await db.collection('users').where({ openid }).limit(1).get();
         const u = freshUser.data[0] || {};
-        const freshBalance = toNumber(u.agent_wallet_balance, 0);
-        if (freshBalance < payAmount) {
-            if (actualPoints > 0) {
-                await db.collection('users').where({ openid }).update({
-                    data: { points: _.inc(actualPoints), growth_value: _.inc(actualPoints), updated_at: db.serverDate() }
-                }).catch(() => {});
-            }
-            await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
-                db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
-            ));
-            if (pickupReservation) {
-                await releasePickupStationInventoryForOrder(db, {
-                    _id: `precheck-${orderNo}`,
-                    id: `precheck-${orderNo}`,
-                    order_no: orderNo,
-                    pickup_station_id: pickup_station_id,
-                    items: normalizedOrderItems,
-                    pickup_stock_reservation_status: 'reserved'
-                }, '货款余额不足，释放自提门店预占库存').catch(() => {});
-            }
+const freshBalance = toNumber(u.agent_wallet_balance, 0);
+            if (freshBalance < payAmount) {
+                if (actualPoints > 0) {
+                    try {
+                        await db.collection('users').where({ openid }).update({
+                            data: { points: _.inc(actualPoints), growth_value: _.inc(actualPoints), updated_at: db.serverDate() }
+                        });
+                    } catch (ptsErr) {
+                        console.error('[OrderCreate] ⚠️ 积分回滚失败(货款余额不足) openid=%s points=%s error=%s', openid, actualPoints, ptsErr.message);
+                    }
+                }
+                for (const { collection, docId, qty } of stockDeductions) {
+                    try {
+                        await db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } });
+                    } catch (stockErr) {
+                        console.error('[OrderCreate] ⚠️ 库存回滚失败(货款余额不足) collection=%s docId=%s qty=%s error=%s', collection, docId, qty, stockErr.message);
+                    }
+                }
+                if (pickupReservation) {
+                    await releasePickupStationInventoryForOrder(db, {
+                        _id: `precheck-${orderNo}`,
+                        id: `precheck-${orderNo}`,
+                        order_no: orderNo,
+                        pickup_station_id: pickup_station_id,
+                        items: normalizedOrderItems,
+                        pickup_stock_reservation_status: 'reserved'
+                    }, '货款余额不足，释放自提门店预占库存').catch((pickupErr) => {
+                        console.error('[OrderCreate] ⚠️ 自提库存回滚失败(货款余额不足):', pickupErr.message);
+                    });
+                }
+                try {
+                    await db.collection('rollback_error_logs').add({
+                        data: {
+                            context: 'goods_fund_insufficient',
+                            openid,
+                            order_no: orderNo,
+                            rollback_errors: [{ step: 'goods_fund_insufficient_rollback', error: 'Balance too low' }],
+                            original_error: `货款余额不足: 当前余额 ¥${freshBalance.toFixed(2)}, 订单金额 ¥${payAmount.toFixed(2)}`,
+                            created_at: db.serverDate()
+                        }
+                    });
+                } catch (_) { }
             throw new Error(`货款余额不足，当前余额 ¥${freshBalance.toFixed(2)}，订单金额 ¥${payAmount.toFixed(2)}`);
         }
     }
@@ -1897,25 +1937,58 @@ async function createOrder(openid, orderData) {
     try {
         result = await db.collection('orders').add({ data: order });
     } catch (addErr) {
-        // 创单失败：回滚已扣积分和库存
-        if (actualPoints > 0) {
-            await db.collection('users').where({ openid }).update({
-                data: { points: _.inc(actualPoints), growth_value: _.inc(actualPoints), updated_at: db.serverDate() }
-            }).catch(() => {});
+        // 创单失败：回滚已扣积分和库存（必须记录回滚结果，防止静默丢失）
+    async function rollbackCreateFailure(context, actualPts, stockDeductionsList, pickupRes, orderNumber, createErr) {
+        const rollbackErrors = [];
+        if (actualPts > 0) {
+            try {
+                await db.collection('users').where({ openid }).update({
+                    data: { points: _.inc(actualPts), growth_value: _.inc(actualPts), updated_at: db.serverDate() }
+                });
+            } catch (ptsErr) {
+                rollbackErrors.push({ step: 'points_rollback', error: ptsErr.message || String(ptsErr) });
+                console.error('[OrderCreate] ⚠️ 积分回滚失败! openid=%s, points=%s, error=%s', openid, actualPts, ptsErr.message);
+            }
         }
-        await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
-            db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
-        ));
-        if (pickupReservation) {
-            await releasePickupStationInventoryForOrder(db, {
-                _id: `failed-create-${orderNo}`,
-                id: `failed-create-${orderNo}`,
-                order_no: orderNo,
-                pickup_station_id: pickup_station_id,
-                items: normalizedOrderItems,
-                pickup_stock_reservation_status: 'reserved'
-            }, '订单创建失败，释放自提门店预占库存').catch(() => {});
+        for (const { collection, docId, qty } of stockDeductionsList) {
+            try {
+                await db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } });
+            } catch (stockErr) {
+                rollbackErrors.push({ step: 'stock_rollback', collection, docId, qty, error: stockErr.message || String(stockErr) });
+                console.error('[OrderCreate] ⚠️ 库存回滚失败! collection=%s, docId=%s, qty=%s, error=%s', collection, docId, qty, stockErr.message);
+            }
         }
+        if (pickupRes) {
+            try {
+                await releasePickupStationInventoryForOrder(db, {
+                    _id: `failed-create-${orderNumber}`,
+                    id: `failed-create-${orderNumber}`,
+                    order_no: orderNumber,
+                    pickup_station_id: pickup_station_id,
+                    items: normalizedOrderItems,
+                    pickup_stock_reservation_status: 'reserved'
+                }, '订单创建失败，释放自提门店预占库存');
+            } catch (pickupErr) {
+                rollbackErrors.push({ step: 'pickup_rollback', error: pickupErr.message || String(pickupErr) });
+                console.error('[OrderCreate] ⚠️ 自提库存回滚失败! error=%s', pickupErr.message);
+            }
+        }
+        if (rollbackErrors.length > 0) {
+            try {
+                await db.collection('rollback_error_logs').add({
+                    data: {
+                        context,
+                        openid,
+                        order_no: orderNumber,
+                        rollback_errors: rollbackErrors,
+                        original_error: createErr.message || String(createErr),
+                        created_at: db.serverDate()
+                    }
+                });
+            } catch (_) { /* 日志写入失败不影响主流程 */ }
+        }
+    }
+        await rollbackCreateFailure('order_add_failed', actualPoints, stockDeductions, pickupReservation, orderNo, addErr);
         throw new Error('创建订单失败，已回滚积分与库存: ' + addErr.message);
     }
 
@@ -1979,15 +2052,23 @@ async function createOrder(openid, orderData) {
             if (!deductRes.stats || deductRes.stats.updated === 0) {
                 await db.collection('orders').doc(orderId).update({
                     data: { status: 'cancelled', cancel_reason: '货款余额不足（并发）', updated_at: db.serverDate() }
+                }).catch((cancelErr) => {
+                    console.error('[OrderCreate] ⚠️ 订单取消写入失败(货款并发不足) orderId=%s error=%s', orderId, cancelErr.message);
                 });
                 if (actualPoints > 0) {
                     await db.collection('users').where({ openid }).update({
                         data: { points: _.inc(actualPoints), growth_value: _.inc(actualPoints), updated_at: db.serverDate() }
-                    }).catch(() => {});
+                    }).catch((ptsErr) => {
+                        console.error('[OrderCreate] ⚠️ 积分回滚失败(货款不足) openid=%s points=%s error=%s', openid, actualPoints, ptsErr.message);
+                    });
                 }
-                await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
-                    db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
-                ));
+                for (const { collection, docId, qty } of stockDeductions) {
+                    try {
+                        await db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } });
+                    } catch (stockErr) {
+                        console.error('[OrderCreate] ⚠️ 库存回滚失败(货款不足) collection=%s docId=%s qty=%s error=%s', collection, docId, qty, stockErr.message);
+                    }
+                }
                 if (deliveryType === 'pickup') {
                     await releasePickupStationInventoryForOrder(db, {
                         _id: orderId,
@@ -1996,7 +2077,9 @@ async function createOrder(openid, orderData) {
                         pickup_station_id: pickup_station_id,
                         items: normalizedOrderItems,
                         pickup_stock_reservation_status: 'reserved'
-                    }, '货款支付并发失败，释放自提门店预占库存').catch(() => {});
+                    }, '货款支付并发失败，释放自提门店预占库存').catch((pickupErr) => {
+                        console.error('[OrderCreate] ⚠️ 自提库存回滚失败(货款并发不足):', pickupErr.message);
+                    });
                 }
                 throw new Error('货款余额不足，请刷新后重试');
             }
@@ -2046,21 +2129,31 @@ async function createOrder(openid, orderData) {
                         goods_fund_total_spent: _.inc(-payAmount),
                         updated_at: db.serverDate()
                     }
-                }).catch(() => {});
+                }).catch((walletErr) => {
+                    console.error('[OrderCreate] ⚠️ 货款余额回滚失败 openid=%s amount=%s error=%s', openid, payAmount, walletErr.message);
+                });
                 await rollbackGoodsFundLedger(openid, payAmount, orderNo, '货款支付回滚').catch((rollbackErr) => {
                     console.error('[OrderCreate] 货款账本回滚失败:', rollbackErr.message);
                 });
                 await db.collection('orders').doc(orderId).update({
                     data: { status: 'cancelled', cancel_reason: '货款支付处理失败', updated_at: db.serverDate() }
-                }).catch(() => {});
+                }).catch((orderCancelErr) => {
+                    console.error('[OrderCreate] ⚠️ 订单取消写入失败:', orderCancelErr.message);
+                });
                 if (actualPoints > 0) {
                     await db.collection('users').where({ openid }).update({
                         data: { points: _.inc(actualPoints), growth_value: _.inc(actualPoints), updated_at: db.serverDate() }
-                    }).catch(() => {});
+                    }).catch((ptsErr) => {
+                        console.error('[OrderCreate] ⚠️ 积分回滚失败(货款支付) openid=%s points=%s error=%s', openid, actualPoints, ptsErr.message);
+                    });
                 }
-                await Promise.all(stockDeductions.map(({ collection, docId, qty }) =>
-                    db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } }).catch(() => {})
-                ));
+                for (const { collection, docId, qty } of stockDeductions) {
+                    try {
+                        await db.collection(collection).doc(docId).update({ data: { stock: _.inc(qty) } });
+                    } catch (stockErr) {
+                        console.error('[OrderCreate] ⚠️ 库存回滚失败(货款支付) collection=%s docId=%s qty=%s error=%s', collection, docId, qty, stockErr.message);
+                    }
+                }
                 if (deliveryType === 'pickup') {
                     await releasePickupStationInventoryForOrder(db, {
                         _id: orderId,
@@ -2069,8 +2162,22 @@ async function createOrder(openid, orderData) {
                         pickup_station_id: pickup_station_id,
                         items: normalizedOrderItems,
                         pickup_stock_reservation_status: 'reserved'
-                    }, '货款支付失败，释放自提门店预占库存').catch(() => {});
+                    }, '货款支付失败，释放自提门店预占库存').catch((pickupErr) => {
+                        console.error('[OrderCreate] ⚠️ 自提库存回滚失败(货款支付):', pickupErr.message);
+                    });
                 }
+                try {
+                    await db.collection('rollback_error_logs').add({
+                        data: {
+                            context: 'goods_fund_payment_failed',
+                            openid,
+                            order_no: orderNo,
+                            rollback_type: 'goods_fund_payment_rollback',
+                            original_error: err.message || String(err),
+                            created_at: db.serverDate()
+                        }
+                    });
+                } catch (_) { /* 日志写入失败不影响主流程 */ }
             }
             if (err.message.includes('货款')) throw err;
             console.error('[OrderCreate] 货款支付处理异常:', err.message);

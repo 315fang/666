@@ -106,7 +106,7 @@ function selectCoupon(page, coupon) {
         let pct = parseFloat(coupon.coupon_value);
         if (pct < 0) pct = 0;
         if (pct > 1) pct = 1;
-        discount = Math.min(parseFloat((total * (1 - pct)).toFixed(2)), total);
+        discount = Math.min(parseFloat((total * pct).toFixed(2)), total);
     }
     page.setData({
         selectedCoupon: coupon,

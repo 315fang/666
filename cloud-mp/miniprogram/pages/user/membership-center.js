@@ -1,7 +1,7 @@
 // pages/user/membership-center.js - 会员权益中心（整合版）
 const { get } = require('../../utils/request');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
-const { applyGrowthTierDisplayNames } = require('../../utils/growthTierDisplay');
+const { applyGrowthTierDisplayNames, calculateCumulativeGrowthPercent } = require('../../utils/growthTierDisplay');
 const { ROLE_NAMES } = require('../../config/constants');
 const {
     buildMembershipCardViewModel,
@@ -116,9 +116,7 @@ Page({
 
             let barPercent = 100;
             if (nextMin != null) {
-                barPercent = Math.min(100, Math.max(0,
-                    Math.round(((g - currentMin) / Math.max(1, nextMin - currentMin)) * 100)
-                ));
+                barPercent = calculateCumulativeGrowthPercent(g, nextMin, 0);
             }
 
             const mc = getConfigSection('membership_config') || {};

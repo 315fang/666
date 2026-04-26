@@ -729,7 +729,7 @@ const handleMediaConfirm = (persistIds = [], displayUrls = []) => {
   if (!target) return
   const persist = Array.isArray(persistIds) ? (persistIds[0] || '') : ''
   const display = Array.isArray(displayUrls) ? (displayUrls[0] || '') : ''
-  const stableUrl = buildPersistentAssetRef({ url: display || persist })
+  const stableUrl = buildPersistentAssetRef({ url: display || persist, fileId: persist })
   if (mediaPickerContext.value.field === 'cover') {
     applyNewsCoverSelection(target, { persist, display: display || stableUrl || '', source: 'material' })
     return

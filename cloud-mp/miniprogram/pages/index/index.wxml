@@ -39,11 +39,6 @@
             <view class="hero-orb orb-b"></view>
             <view class="hero-orb orb-c"></view>
           </view>
-          <view class="hero-mask"></view>
-          <view class="hero-copy">
-            <text class="hero-title">{{item.title}}</text>
-            <text class="hero-subtitle">{{item.subtitle}}</text>
-          </view>
         </view>
       </swiper-item>
     </swiper>
@@ -53,21 +48,17 @@
   <view class="poster-section" wx:if="{{midPosters.length > 0}}">
     <view class="poster-card" wx:for="{{midPosters}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
       <image class="poster-image" src="{{item.image}}" mode="widthFix" binderror="onAssetImageError" data-scene="mid-poster" data-index="{{index}}"></image>
-      <view class="poster-overlay" wx:if="{{item.title}}">
-        <text class="poster-title">{{item.title}}</text>
-        <text class="poster-sub" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
-      </view>
     </view>
   </view>
 
   <view class="coupon-section">
     <view class="section-head coupon-section-head">
       <view class="section-copy">
-        <text class="section-intro-title">{{homeConfigs.coupon_zone_title || '惊喜礼遇'}}</text>
+        <text class="section-intro-title">{{homeConfigs.coupon_zone_title || '优惠券中心'}}</text>
         <text class="section-intro-sub">{{homeConfigs.coupon_zone_subtitle || '领券后下单可用'}}</text>
       </view>
       <view class="section-link" bindtap="onCouponTap">
-        查看全部 ›
+        更多 ›
       </view>
     </view>
 
@@ -94,7 +85,7 @@
 
     <view wx:else class="coupon-empty-tip" bindtap="onCouponTap" hover-class="press">
       <view class="coupon-empty-copy">
-        <text class="coupon-empty-title">惊喜礼遇</text>
+        <text class="coupon-empty-title">优惠券中心</text>
         <text class="coupon-empty-desc">查看可领取优惠券。</text>
       </view>
       <text class="coupon-empty-cta">去查看 ›</text>
@@ -291,10 +282,6 @@
   <view class="poster-section" wx:if="{{bottomPosters.length > 0}}">
     <view class="poster-card" wx:for="{{bottomPosters}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
       <image class="poster-image" src="{{item.image}}" mode="widthFix" binderror="onAssetImageError" data-scene="bottom-poster" data-index="{{index}}"></image>
-      <view class="poster-overlay" wx:if="{{item.title}}">
-        <text class="poster-title">{{item.title}}</text>
-        <text class="poster-sub" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
-      </view>
     </view>
   </view>
 

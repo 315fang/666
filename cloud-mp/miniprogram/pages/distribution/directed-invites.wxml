@@ -46,4 +46,5 @@
       <text class="empty-desc">发起后可在此查看进度。</text>
     </view>
   </scroll-view>
+  <portal-password-dialog id="portalPasswordDialog" />
 </view>

@@ -121,7 +121,20 @@ function onLogout(page) {
                     pointsBalanceDisplay: '--',
                     balance: '0',
                     commissionBalance: '0',
+                    piggyBankBalance: '0',
                     couponBanner: null,
+                    cartPreview: {
+                        count: 0,
+                        total: '0.00',
+                        sub: '登录后同步购物袋',
+                        meta: '登录后查看待购商品',
+                        primaryName: '登录后查看购物袋',
+                        hasItems: false,
+                        items: [],
+                        cartIds: '',
+                        remainingCount: 0,
+                        actionText: '去登录'
+                    },
                     orderStats: { pending: 0, paid: 0, shipped: 0, pendingReview: 0, refund: 0 }
                 });
                 page.loadQuadPreviews();

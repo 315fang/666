@@ -8,7 +8,7 @@ const DEFAULT_MINI_PROGRAM_CONFIG = {
         customer_service_hours: '9:00-21:00',
         nav_brand_title: '问兰镜像',
         nav_brand_sub: '品牌甄选',
-        coupon_zone_title: '惊喜礼遇',
+        coupon_zone_title: '优惠券中心',
         coupon_zone_subtitle: '领券后下单可用',
         police_registration_title: '公安备案',
         police_registration_number: '苏公网安备32050802012518号',
@@ -128,6 +128,12 @@ function pickString(value, fallback = '') {
     if (value == null) return fallback;
     const text = String(value).trim();
     return text || fallback;
+}
+
+const HOME_BANNER_POSITIONS = new Set(['home', 'home_mid', 'home_bottom']);
+
+function isHomeBannerPosition(position = '') {
+    return HOME_BANNER_POSITIONS.has(pickString(position).trim());
 }
 
 function pickAssetRef(source = {}) {
@@ -294,18 +300,22 @@ function flattenHomeConfigs(miniProgramConfig = {}, homepageSettings = {}) {
 }
 
 function normalizeBannerList(list = []) {
-    return (Array.isArray(list) ? list : []).map((item) => ({
-        id: item.id || item._legacy_id || item._id || '',
-        title: pickString(item.title),
-        subtitle: pickString(item.subtitle),
-        file_id: pickString(item.file_id),
-        image_url: pickAssetRef(item),
-        link_type: pickString(item.link_type, 'none'),
-        link_value: pickString(item.link_value),
-        position: pickString(item.position, 'home'),
-        sort_order: Number(item.sort_order || 0),
-        status: toBoolean(item.status ?? item.is_active ?? true)
-    }));
+    return (Array.isArray(list) ? list : []).map((item) => {
+        const position = pickString(item.position, 'home');
+        const imageOnly = isHomeBannerPosition(position);
+        return {
+            id: item.id || item._legacy_id || item._id || '',
+            title: imageOnly ? '' : pickString(item.title),
+            subtitle: imageOnly ? '' : pickString(item.subtitle),
+            file_id: pickString(item.file_id),
+            image_url: pickAssetRef(item),
+            link_type: pickString(item.link_type, 'none'),
+            link_value: pickString(item.link_value),
+            position,
+            sort_order: Number(item.sort_order || 0),
+            status: toBoolean(item.status ?? item.is_active ?? true)
+        };
+    });
 }
 
 function normalizePopupAdConfig(config = {}) {

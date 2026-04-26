@@ -1,0 +1,131 @@
+{
+  "kind": "cloudbase_asset_risk_migration_report",
+  "executed_at": "2026-04-25T13:04:12.676Z",
+  "mode": "apply",
+  "source_audit": "docs\\audit\\generated\\CLOUDBASE_ASSET_URL_AUDIT.json",
+  "environment": {
+    "env_id": "cloud1-9gywyqe49638e46f",
+    "auth_status": "READY",
+    "env_status": "READY"
+  },
+  "summary": {
+    "input_samples": 28,
+    "result_records": 8,
+    "ok": 8,
+    "failed": 0
+  },
+  "results": [
+    {
+      "collection": "products",
+      "id": "4",
+      "title": "问兰灯塔皮脂膜精华乳",
+      "ok": true,
+      "changed": false,
+      "uploaded": [],
+      "error": "",
+      "patch": {}
+    },
+    {
+      "collection": "products",
+      "id": "7",
+      "title": "问兰燕窝精萃露",
+      "ok": true,
+      "changed": true,
+      "uploaded": [
+        {
+          "source_url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016128608_422eafcde0f1d017.png",
+          "file_id": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/audit/products/7-f5ffe999bdb4.png"
+        },
+        {
+          "source_url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016133076_495a911604dbb3ab.png",
+          "file_id": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/audit/products/7-1b0a026261e7.png"
+        }
+      ],
+      "error": "",
+      "patch": {
+        "images": [
+          "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/2026-04-20/1776665154327_a7e0f497444e.png",
+          "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/2026-04-20/1776665155008_7735751d8f96.png",
+          "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/audit/products/7-f5ffe999bdb4.png",
+          "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/audit/products/7-1b0a026261e7.png"
+        ],
+        "file_id": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/2026-04-20/1776665154327_a7e0f497444e.png",
+        "updated_at": "2026-04-25T13:04:28.029Z"
+      }
+    },
+    {
+      "collection": "products",
+      "id": "8",
+      "title": "绿魔方抗皱焕颜霜/",
+      "ok": true,
+      "changed": false,
+      "uploaded": [],
+      "error": "",
+      "patch": {}
+    },
+    {
+      "collection": "products",
+      "id": "9",
+      "title": "小极光焕彩面霜",
+      "ok": true,
+      "changed": false,
+      "uploaded": [],
+      "error": "",
+      "patch": {}
+    },
+    {
+      "collection": "products",
+      "id": "11",
+      "title": "问兰护肤尊享礼盒",
+      "ok": true,
+      "changed": false,
+      "uploaded": [],
+      "error": "",
+      "patch": {}
+    },
+    {
+      "collection": "products",
+      "id": "5",
+      "title": "玻色因紧致面霜",
+      "ok": true,
+      "changed": false,
+      "uploaded": [],
+      "error": "",
+      "patch": {}
+    },
+    {
+      "collection": "admin_singletons",
+      "id": "popup-ad-config",
+      "singleton_key": "popup-ad-config",
+      "field_path": "value.image_url",
+      "ok": true,
+      "changed": true,
+      "uploaded": [
+        {
+          "source_url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1773442002338_e2c0135b1b16e32e.jpg",
+          "file_id": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/audit/admin_singletons/popup-ad-config-6f913127a719.jpg"
+        }
+      ],
+      "error": "",
+      "patch": {
+        "updated_at": "2026-04-25T13:04:42.045Z",
+        "value.file_id": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/audit/admin_singletons/popup-ad-config-6f913127a719.jpg",
+        "value.image_url": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/materials/migrated/audit/admin_singletons/popup-ad-config-6f913127a719.jpg"
+      }
+    },
+    {
+      "collection": "admin_singletons",
+      "id": "mini-program-config",
+      "singleton_key": "mini-program-config",
+      "field_path": "value.brand_config.share_poster_cover_url",
+      "ok": true,
+      "changed": true,
+      "uploaded": [],
+      "error": "",
+      "patch": {
+        "updated_at": "2026-04-25T13:04:52.013Z",
+        "value.brand_config.share_poster_cover_url": "cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/share_poster/2026-04-25/1777119144053_efd0255dc72e.jpg"
+      }
+    }
+  ]
+}

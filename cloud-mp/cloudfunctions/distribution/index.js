@@ -23,40 +23,12 @@ const { buildWalletAccountSyncDoc } = require('./shared/wallet-account');
 const db = cloud.database();
 const _ = db.command;
 
-const DEFAULT_COST_SPLIT = {
-    enabled: true,
-    direct_sales_pct: 40,
-    operations_pct: 25,
-    mirror_operations_pct: 5,
-    profit_pct: 30
-};
-
-const DEFAULT_AGENT_UPGRADE_RULES = {
-    enabled: true,
-    c1_min_purchase: 299,
-    c2_referee_count: 2,
-    c2_min_sales: 580,
-    c2_growth_value: 999,
-    b1_referee_count: 10,
-    b1_recharge: 3000,
-    b1_growth_value: 3000,
-    b2_referee_count: 10,
-    b2_recharge: 30000,
-    b3_referee_b2_count: 3,
-    b3_referee_b1_count: 30,
-    b3_recharge: 198000,
-    effective_order_days: 7
-};
-
-const ROLE_NAMES = {
-    0: 'VIP用户',
-    1: '初级会员',
-    2: '高级会员',
-    3: '推广合伙人',
-    4: '运营合伙人',
-    5: '区域合伙人',
-    6: '店长'
-};
+const {
+    DEFAULT_ROLE_NAMES: ROLE_NAMES,
+    DEFAULT_AGENT_UPGRADE_RULES,
+    DEFAULT_COST_SPLIT,
+    DEFAULT_PEER_BONUS_CONFIG
+} = require('./shared/agent-config');
 
 // ==================== 子模块导入 ====================
 const distributionQuery = require('./distribution-query');
@@ -595,12 +567,16 @@ async function resolveCommissionWalletState(user = {}) {
     if (user.balance == null || shouldUseDerivedBalance) updates.balance = commissionBalance;
 
     if (Object.keys(updates).length && user._id) {
-        await db.collection('users').doc(String(user._id)).update({
-            data: {
-                ...updates,
-                updated_at: db.serverDate()
-            }
-        }).catch(() => {});
+        try {
+            await db.collection('users').doc(String(user._id)).update({
+                data: {
+                    ...updates,
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (e) {
+            console.error('[distribution] ⚠️ 钱包状态同步失败 userId=%s error=%s', user._id, e.message);
+        }
         return { ...user, ...updates, _commission_balance: commissionBalance, _agent_wallet_balance: agentWalletBalance };
     }
 
@@ -934,24 +910,43 @@ const handleAction = {
 
     'settleMatured': asyncHandler(async () => {
         const now = new Date();
-        // 查找已过退款期限的冻结佣金（refund_deadline < now 且状态为 frozen）
         const frozenRes = await db.collection('commissions')
             .where({ status: 'frozen', refund_deadline: _.lt(now) })
             .limit(200)
             .get().catch(() => ({ data: [] }));
-        // 同时处理旧流程 pending_approval 状态的佣金（兼容历史数据）
         const pendingRes = await db.collection('commissions')
             .where({ status: 'pending_approval', refund_deadline: _.lt(now) })
             .limit(200)
             .get().catch(() => ({ data: [] }));
         const allComms = [...(frozenRes.data || []), ...(pendingRes.data || [])];
         let settledCount = 0;
+        let skippedCount = 0;
         let totalAmount = 0;
         for (const comm of allComms) {
+            if (comm.order_id || comm.order_no) {
+                const orderId = comm.order_id || comm.order_no;
+                const pendingRefund = await db.collection('refunds')
+                    .where({
+                        order_id: orderId,
+                        status: _.in(['pending', 'approved', 'processing'])
+                    })
+                    .limit(1)
+                    .get()
+                    .catch(() => ({ data: [] }));
+                if (pendingRefund.data && pendingRefund.data.length > 0) {
+                    skippedCount++;
+                    continue;
+                }
+            }
             const amount = toNumber(comm.amount, 0);
-            await db.collection('commissions').doc(comm._id).update({
-                data: { status: 'settled', settled_at: db.serverDate(), updated_at: db.serverDate() }
-            }).catch(() => {});
+            try {
+                await db.collection('commissions').doc(comm._id).update({
+                    data: { status: 'settled', settled_at: db.serverDate(), updated_at: db.serverDate() }
+                });
+            } catch (e) {
+                console.error('[distribution] ⚠️ 佣金状态更新失败 commissionId=%s error=%s', comm._id, e.message);
+                continue;
+            }
             if (amount > 0) {
                 await distributionCommission.settleCommission(comm.openid, amount, {
                     order_id: comm.order_id,
@@ -963,7 +958,7 @@ const handleAction = {
             }
             settledCount++;
         }
-        return success({ settled: settledCount, total_amount: totalAmount });
+        return success({ settled: settledCount, skipped: skippedCount, total_amount: totalAmount });
     }),
 
     'withdrawRules': asyncHandler(async () => {
@@ -1032,17 +1027,25 @@ const handleAction = {
                 },
             });
         } catch (createErr) {
-            await db.collection('users')
-                .where({ openid })
-                .update({
-                    data: {
-                        commission_balance: _.inc(amount),
-                        balance: _.inc(amount),
-                        total_withdrawn: _.inc(-amount),
-                        updated_at: db.serverDate()
-                    }
-                })
-                .catch(() => {});
+            try {
+                await db.collection('users')
+                    .where({ openid })
+                    .update({
+                        data: {
+                            commission_balance: _.inc(amount),
+                            balance: _.inc(amount),
+                            total_withdrawn: _.inc(-amount),
+                            updated_at: db.serverDate()
+                        }
+                    });
+            } catch (rollbackErr) {
+                console.error('[distribution] ⚠️ 提现创建失败后余额回滚也失败 openid=%s amount=%s error=%s', openid, amount, rollbackErr.message);
+                try {
+                    await db.collection('rollback_error_logs').add({
+                        data: { context: 'withdraw_create_rollback', openid, amount, original_error: createErr.message, rollback_error: rollbackErr.message, created_at: db.serverDate() }
+                    });
+                } catch (_) {}
+            }
             throw serverError(`提现申请创建失败，余额已回滚：${createErr.message || '未知错误'}`);
         }
 
@@ -1058,18 +1061,30 @@ const handleAction = {
                 description: `提现${amount}元${feeDesc}`,
             });
         } catch (logErr) {
-            await db.collection('users')
-                .where({ openid })
-                .update({
-                    data: {
-                        commission_balance: _.inc(amount),
-                        balance: _.inc(amount),
-                        total_withdrawn: _.inc(-amount),
-                        updated_at: db.serverDate()
-                    }
-                })
-                .catch(() => {});
-            await db.collection('withdrawals').doc(String(result._id)).remove().catch(() => {});
+            try {
+                await db.collection('users')
+                    .where({ openid })
+                    .update({
+                        data: {
+                            commission_balance: _.inc(amount),
+                            balance: _.inc(amount),
+                            total_withdrawn: _.inc(-amount),
+                            updated_at: db.serverDate()
+                        }
+                    });
+            } catch (rollbackErr) {
+                console.error('[distribution] ⚠️ 提现日志失败后余额回滚也失败 openid=%s amount=%s error=%s', openid, amount, rollbackErr.message);
+                try {
+                    await db.collection('rollback_error_logs').add({
+                        data: { context: 'withdraw_log_rollback', openid, amount, original_error: logErr.message, rollback_error: rollbackErr.message, created_at: db.serverDate() }
+                    });
+                } catch (_) {}
+            }
+            try {
+                await db.collection('withdrawals').doc(String(result._id)).remove();
+            } catch (removeErr) {
+                console.error('[distribution] ⚠️ 提现记录删除失败 withdrawalId=%s error=%s', result._id, removeErr.message);
+            }
             throw serverError(`提现流水写入失败：${logErr.message}`);
         }
 
@@ -1140,17 +1155,25 @@ const handleAction = {
                 })
             ]);
         } catch (logErr) {
-            await db.collection('users')
-                .where({ openid })
-                .update({
-                    data: {
-                        commission_balance: _.inc(amount),
-                        balance: _.inc(amount),
-                        agent_wallet_balance: _.inc(-amount),
-                        updated_at: db.serverDate()
-                    }
-                })
-                .catch(() => {});
+            try {
+                await db.collection('users')
+                    .where({ openid })
+                    .update({
+                        data: {
+                            commission_balance: _.inc(amount),
+                            balance: _.inc(amount),
+                            agent_wallet_balance: _.inc(-amount),
+                            updated_at: db.serverDate()
+                        }
+                    });
+            } catch (rollbackErr) {
+                console.error('[distribution] ⚠️ 佣金转货款日志失败后余额回滚也失败 openid=%s amount=%s error=%s', openid, amount, rollbackErr.message);
+                try {
+                    await db.collection('rollback_error_logs').add({
+                        data: { context: 'commissionToGoodsFund_log_rollback', openid, amount, original_error: logErr.message, rollback_error: rollbackErr.message, created_at: db.serverDate() }
+                    });
+                } catch (_) {}
+            }
             throw serverError(`佣金转货款流水写入失败：${logErr.message}`);
         }
 
@@ -1635,9 +1658,13 @@ const handleAction = {
 
         const payParams = wxPay.buildMiniPayParams(wxResult.prepay_id, privateKey);
 
-        await db.collection('wallet_recharge_orders').doc(rechargeId).update({
-            data: { prepay_id: wxResult.prepay_id, updated_at: db.serverDate() },
-        }).catch(() => {});
+        try {
+            await db.collection('wallet_recharge_orders').doc(rechargeId).update({
+                data: { prepay_id: wxResult.prepay_id, updated_at: db.serverDate() },
+            });
+        } catch (e) {
+            console.error('[distribution] ⚠️ 充值订单prepay_id写入失败 rechargeId=%s error=%s', rechargeId, e.message);
+        }
 
         return success({
             recharge_id: rechargeId,

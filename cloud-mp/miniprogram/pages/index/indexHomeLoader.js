@@ -11,7 +11,7 @@ const {
 const { getApiBaseUrl } = require('../../config/env');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
 
-const HOME_COUPON_PREVIEW_LIMIT = 10;
+const HOME_COUPON_PREVIEW_LIMIT = 4;
 
 const FIXED_BRAND_CARD_PRESETS = [
     {
@@ -213,6 +213,7 @@ function isExpiredSignedAssetUrl(url = '') {
     const text = String(url || '').trim();
     if (!/^https?:\/\//i.test(text)) return false;
     if (!/[?&]sign=/.test(text)) return false;
+    if (/tcb\.qcloud\.la/i.test(text)) return false;
     const expireAt = parseSignedAssetExpireAt(text);
     return expireAt > 0 && expireAt <= Date.now();
 }
@@ -504,7 +505,7 @@ function applyHomeConfig(page, data) {
 
 async function loadCoupons(page) {
     if (!app.globalData.isLoggedIn) {
-        page.setData({ homeCoupons: [] });
+        page.setData({ homeCoupons: [], homeCouponHasMore: false, unusedCouponCount: 0 });
         return;
     }
     try {
@@ -538,7 +539,11 @@ async function loadCoupons(page) {
                     expire_at_formatted: formatCouponExpire(c.expire_at)
                 };
             });
-            page.setData({ homeCoupons: coupons.slice(0, HOME_COUPON_PREVIEW_LIMIT), unusedCouponCount: coupons.length });
+            page.setData({
+                homeCoupons: coupons.slice(0, HOME_COUPON_PREVIEW_LIMIT),
+                homeCouponHasMore: coupons.length > HOME_COUPON_PREVIEW_LIMIT,
+                unusedCouponCount: coupons.length
+            });
         }
     } catch (_) {
         // 静默失败

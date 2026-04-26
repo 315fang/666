@@ -139,18 +139,21 @@
     </view>
     <view class="bundle-order-items" wx:if="{{order.bundle_meta && order.items && order.items.length > 0}}">
       <view class="bundle-order-item" wx:for="{{order.items}}" wx:key="refund_item_key">
-        <image class="product-img" src="{{item.product && item.product.images && item.product.images[0] || item.product && item.product.image || ''}}" mode="aspectFill" wx:if="{{item.product && ((item.product.images && item.product.images.length > 0) || item.product.image)}}"></image>
+        <image class="product-img" src="{{item.product && item.product.images && item.product.images[0] || item.product && item.product.image || ''}}" mode="aspectFill" wx:if="{{item.product && ((item.product.images && item.product.images.length > 0) || item.product.image)}}" binderror="onBundleItemImageError" data-index="{{index}}"></image>
+        <view class="product-img-placeholder" wx:else>
+          <image class="placeholder-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
+        </view>
         <view class="product-info">
           <text class="product-name">{{item.product && item.product.name || item.snapshot_name || item.name || '商品'}}</text>
           <text class="product-spec" wx:if="{{item.sku && item.sku.spec_value}}">{{item.sku.spec_value}}</text>
           <text class="product-spec" wx:elif="{{item.snapshot_spec}}">{{item.snapshot_spec}}</text>
-          <text class="product-price">¥{{item.display_cash_paid_allocated_amount || item.item_amount}}</text>
+          <text class="product-price">¥{{item.display_unit_price || item.display_price || item.price || item.unit_price || item.item_amount}}</text>
         </view>
         <text class="product-qty">×{{item.qty || item.quantity || 1}}</text>
       </view>
     </view>
     <view class="product-row" wx:elif="{{order.product}}">
-      <image class="product-img" src="{{order.product.images && order.product.images[0] || ''}}" mode="aspectFill" wx:if="{{order.product.images && order.product.images.length > 0}}" binderror="onProductImageError"></image>
+      <image class="product-img" src="{{order.product.images && order.product.images[0] || order.product.image || ''}}" mode="aspectFill" wx:if="{{(order.product.images && order.product.images.length > 0) || order.product.image}}" binderror="onProductImageError"></image>
       <view class="product-img-placeholder" wx:else>
         <image class="placeholder-icon" src="/assets/icons/package.svg" mode="aspectFit"/>
       </view>
@@ -296,7 +299,10 @@
         <!-- 代理商：货款余额支付 + 微信支付两个选项 -->
         <block wx:if="{{isAgent && walletBalance > 0}}">
           <view class="bar-action-group">
-            <view class="wallet-pay-hint">货款余额 ¥{{walletBalanceDisplay}} 可用</view>
+            <view class="wallet-pay-hint">
+              <text class="wallet-pay-label">货款余额可用</text>
+              <text class="wallet-pay-value">¥{{walletBalanceDisplay}}</text>
+            </view>
             <view class="bar-action-row">
               <view class="btn-outline" bindtap="onCancelOrder">取消订单</view>
               <view class="btn-wallet" bindtap="onPayOrderWithWallet">货款余额支付</view>
@@ -377,3 +383,4 @@
 
 <!-- 品牌动画（复制单号反馈等） -->
 <brand-animation id="brandAnimation"></brand-animation>
+<portal-password-dialog id="portalPasswordDialog" />

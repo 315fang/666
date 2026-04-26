@@ -398,6 +398,8 @@
     bind:close="onLightTipClose"
   />
 
+  <portal-password-dialog id="portalPasswordDialog" />
+
   <view class="success-popup {{showSuccess ? 'show' : ''}}">
     <view class="success-mask"></view>
     <view class="success-content">

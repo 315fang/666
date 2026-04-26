@@ -211,7 +211,7 @@ Page({
 
     onShareAppMessage() {
         return {
-            title: '惊喜礼遇',
+            title: '优惠券中心',
             path: '/pages/coupon/center'
         };
     }

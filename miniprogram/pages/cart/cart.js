@@ -50,7 +50,8 @@ Page({
             const items = res.data?.items || res.data || [];
             const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
                 // 使用统一工具函数处理商品
-                const processed = processProducts([item.product], roleLevel)[0];
+                const productData = item.product || {};
+                const processed = processProducts([productData], roleLevel)[0] || {};
 
                 return {
                     ...item,

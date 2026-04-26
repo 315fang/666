@@ -1,5 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
-  <rect width="400" height="400" fill="#F3F4F6"/>
-  <path d="M160 140 L160 260 L240 260 L240 180 L200 180 L200 140 Z M200 140 L200 180 L240 180 Z" fill="none" stroke="#9CA3AF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-  <line x1="175" y1="290" x2="225" y2="290" stroke="#9CA3AF" stroke-width="10" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F7F1EA"/>
+      <stop offset="1" stop-color="#E9D8C4"/>
+    </linearGradient>
+    <linearGradient id="box" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#C99A63"/>
+      <stop offset="1" stop-color="#8B5E34"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" rx="28" fill="url(#bg)"/>
+  <circle cx="306" cy="92" r="54" fill="#FFFFFF" opacity=".42"/>
+  <circle cx="84" cy="318" r="68" fill="#FFFFFF" opacity=".3"/>
+  <path d="M126 164 L200 121 L274 164 L274 252 L200 296 L126 252 Z" fill="#FDF8F2" stroke="#B88752" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M126 164 L200 207 L274 164" fill="none" stroke="#B88752" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M200 207 L200 296" fill="none" stroke="#B88752" stroke-width="10" stroke-linecap="round"/>
+  <path d="M158 145 L232 188" fill="none" stroke="url(#box)" stroke-width="10" stroke-linecap="round"/>
+  <rect x="146" y="318" width="108" height="12" rx="6" fill="#B88752" opacity=".5"/>
 </svg>

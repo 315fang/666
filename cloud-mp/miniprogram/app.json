@@ -1,7 +1,10 @@
 {
+    "usingComponents": {
+        "portal-password-dialog": "/components/portal-password-dialog/portal-password-dialog"
+    },
     "pages": [
-        "pages/splash/splash",
         "pages/index/index",
+        "pages/splash/splash",
         "pages/index/brand-zone-detail",
         "pages/index/brand-news-list",
         "pages/category/category",

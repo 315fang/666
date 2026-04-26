@@ -2,6 +2,7 @@
 const { get, post, put, del } = require('../../utils/request');
 const { parseImages, getFirstImage, formatMoney, processProducts } = require('../../utils/dataFormatter');
 const { ErrorHandler, showError, showSuccess } = require('../../utils/errorHandler');
+const { markCartChanged, markCartStateSeen } = require('../../utils/cartState');
 const app = getApp();
 
 Page({
@@ -40,12 +41,16 @@ Page({
             const res = await get('/cart');
             // 后端返回 { list: [...], total: n } 或 { items: [...], summary: {...} }
             const items = res.data?.items || res.data?.list || (Array.isArray(res.data) ? res.data : []) || [];
-            const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
+const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
                 // 使用统一工具函数处理商品
-                const processed = processProducts([item.product], roleLevel)[0];
+                const productData = item.product || {};
+                const processed = processProducts([productData], roleLevel)[0] || {};
+                const cartId = item.cart_id || item._id || item.id;
 
                 return {
                     ...item,
+                    id: cartId,
+                    cart_id: cartId,
                     selected: item.selected !== false,
                     // 获取价格：优先用后端按用户等级计算的 effective_price，
                     // 再 fallback 到工具函数计算出的等级价
@@ -76,6 +81,7 @@ Page({
             }, 800);
 
             this.calculateTotal();
+            markCartStateSeen(this);
 
             // 如果是空购物袋，显示动画
             if (cartItems.length === 0) {
@@ -203,7 +209,8 @@ Page({
         this.calculateTotal();
 
         try {
-            await put(`/cart/${item.id}`, { quantity: newQuantity });
+            await put(`/cart/${item.id}`, { qty: newQuantity, quantity: newQuantity });
+            markCartChanged('cart_quantity');
 
             // 触发动画
             const animKey = `cartItems[${index}].quantityAnim`;
@@ -233,6 +240,7 @@ Page({
                 if (res.confirm) {
                     try {
                         await del(`/cart/${item.id}`);
+                        markCartChanged('cart_remove');
 
                         // 请求成功后再触发删除动画
                         const deleteKey = `cartItems[${index}].deleting`;
@@ -267,7 +275,15 @@ Page({
         }
 
         // 将选中的商品 ID 传递给订单确认页
-        const ids = selectedItems.map(item => item.id).join(',');
-        wx.navigateTo({ url: `/pages/order/confirm?cart_ids=${ids}` });
+        const ids = selectedItems
+            .map(item => item.cart_id || item._id || item.id)
+            .filter(Boolean)
+            .map(id => String(id).trim())
+            .filter(Boolean);
+        if (ids.length === 0) {
+            wx.showToast({ title: '购物袋商品已失效，请刷新后重试', icon: 'none' });
+            return;
+        }
+        wx.navigateTo({ url: `/pages/order/confirm?cart_ids=${encodeURIComponent(ids.join(','))}` });
     }
 });

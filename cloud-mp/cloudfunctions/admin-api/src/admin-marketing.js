@@ -90,6 +90,95 @@ function registerMarketingRoutes(app, deps) {
         return value;
     }
 
+    function isCloudFileId(value) {
+        return /^cloud:\/\//i.test(pickString(value));
+    }
+
+    function isTemporarySignedAssetUrl(value) {
+        const text = pickString(value).toLowerCase();
+        if (!text || !/^https?:\/\//i.test(text)) return false;
+        if (/[?&](expires|signature|sign|x-amz-algorithm|x-amz-credential|x-amz-date|x-amz-expires|x-amz-security-token|x-amz-signature|x-oss-signature|x-oss-credential|x-oss-date|x-oss-expires|x-cos-algorithm|x-cos-credential|x-cos-date|x-cos-expires|x-cos-security-token|x-cos-signature)=/i.test(text)) {
+            return true;
+        }
+        return /tcb\.qcloud\.la/i.test(text) && /[?&]sign=/i.test(text) && /[?&]t=/i.test(text);
+    }
+
+    function normalizePersistentAssetRef({ value = '', fileId = '' } = {}) {
+        const normalizedFileId = pickString(fileId);
+        if (isCloudFileId(normalizedFileId)) return normalizedFileId;
+        const normalizedValue = pickString(value);
+        if (isCloudFileId(normalizedValue)) return normalizedValue;
+        if (isTemporarySignedAssetUrl(normalizedValue)) return '';
+        return normalizedValue;
+    }
+
+    function normalizeFestivalAssetConfig(rawValue = {}) {
+        const config = rawValue && typeof rawValue === 'object' ? rawValue : {};
+        const banner = normalizePersistentAssetRef({
+            value: config.banner,
+            fileId: config.banner_file_id
+        });
+        if (config.banner && !banner && isTemporarySignedAssetUrl(config.banner)) {
+            return { ok: false, message: '节日横幅包含临时签名链接，请从素材库重新选择图片' };
+        }
+
+        let hasTemporaryPosterImage = false;
+        const posters = toArray(config.card_posters).map((item) => {
+            const poster = item && typeof item === 'object' ? item : {};
+            const image = normalizePersistentAssetRef({
+                value: poster.image,
+                fileId: poster.file_id
+            });
+            if (poster.image && !image && isTemporarySignedAssetUrl(poster.image)) {
+                hasTemporaryPosterImage = true;
+            }
+            return {
+                ...poster,
+                file_id: pickString(poster.file_id),
+                image
+            };
+        });
+        if (hasTemporaryPosterImage) {
+            return { ok: false, message: '节日海报包含临时签名链接，请从素材库重新选择图片' };
+        }
+
+        return {
+            ok: true,
+            value: {
+                ...config,
+                banner,
+                banner_file_id: pickString(config.banner_file_id),
+                card_posters: posters
+            }
+        };
+    }
+
+    async function resolveFestivalAssetPreviewConfig(rawValue = {}) {
+        const normalized = normalizeFestivalAssetConfig(rawValue);
+        const config = normalized.ok
+            ? normalized.value
+            : (rawValue && typeof rawValue === 'object' ? rawValue : {});
+        const bannerFileId = pickString(config.banner_file_id);
+        const banner = isCloudFileId(bannerFileId)
+            ? await resolveManagedFileUrl(bannerFileId)
+            : config.banner;
+        const posters = await Promise.all(toArray(config.card_posters).map(async (item) => {
+            const poster = item && typeof item === 'object' ? item : {};
+            const fileId = pickString(poster.file_id);
+            return {
+                ...poster,
+                image: isCloudFileId(fileId) ? await resolveManagedFileUrl(fileId) : poster.image,
+                file_id: fileId
+            };
+        }));
+        return {
+            ...config,
+            banner,
+            banner_file_id: bannerFileId,
+            card_posters: posters
+        };
+    }
+
     function roundMoney(value) {
         return Math.round(toNumber(value, 0) * 100) / 100;
     }
@@ -1800,7 +1889,7 @@ function registerMarketingRoutes(app, deps) {
         const products = getCollection('products');
         const staticOptions = [
             { key: 'flash_sale:current', link_type: 'flash_sale', link_value: '', title: '当前有效限时商品', badge: '固定入口' },
-            { key: 'coupon_center:default', link_type: 'coupon_center', link_value: '__coupon_center__', title: '惊喜礼遇入口', badge: '固定入口' }
+            { key: 'coupon_center:default', link_type: 'coupon_center', link_value: '__coupon_center__', title: '优惠券中心入口', badge: '固定入口' }
         ];
         const limitedSaleOptions = (await Promise.all(
             sortLimitedSaleSlots(getCollection('limited_sale_slots'))
@@ -1834,12 +1923,14 @@ function registerMarketingRoutes(app, deps) {
 
     app.get('/admin/api/festival-config', auth, requirePermission('products'), async (_req, res) => {
         await ensureFreshCollections(['configs']);
-        ok(res, getConfigValue('festival_config', { active: false, name: '', theme: '', theme_colors: {}, tags: [], card_posters: [] }));
+        ok(res, await resolveFestivalAssetPreviewConfig(getConfigValue('festival_config', { active: false, name: '', theme: '', theme_colors: {}, tags: [], card_posters: [] })));
     });
 
     app.put('/admin/api/festival-config', auth, requirePermission('products'), async (req, res) => {
         await ensureFreshCollections(['configs']);
-        ok(res, setConfigValue('festival_config', req.body || {}, 'marketing'));
+        const normalized = normalizeFestivalAssetConfig(req.body || {});
+        if (!normalized.ok) return fail(res, normalized.message, 400);
+        ok(res, setConfigValue('festival_config', normalized.value, 'marketing'));
     });
 
     app.get('/admin/api/global-ui-config', auth, requirePermission('products'), async (_req, res) => {

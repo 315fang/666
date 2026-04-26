@@ -1,9 +1,10 @@
 /* pages/order/detail.wxss */
 .container {
   padding: 20rpx 24rpx;
-  padding-bottom: 140rpx;
+  padding-bottom: calc(360rpx + env(safe-area-inset-bottom));
   background: linear-gradient(180deg, #E3EDF4 0%, #F4F8FA 30%, #EDF5F2 100%);
   min-height: 100vh;
+  box-sizing: border-box;
 }
 
 .order-bubble {
@@ -326,20 +327,23 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(255,255,255,0.96);
-  padding: 20rpx 30rpx;
-  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+  z-index: 40;
+  background: rgba(255,255,255,0.98);
+  padding: 18rpx 28rpx;
+  padding-bottom: calc(18rpx + env(safe-area-inset-bottom));
   display: flex;
   justify-content: flex-end;
-  box-shadow: 0 -8rpx 24rpx rgba(31, 25, 20, 0.06);
+  border-top: 1rpx solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 -10rpx 28rpx rgba(30, 74, 109, 0.08);
+  box-sizing: border-box;
 }
 
 .bar-action-group {
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 10rpx;
+  align-items: stretch;
+  gap: 12rpx;
 }
 
 .bar-action-row {
@@ -347,8 +351,8 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 14rpx;
-  flex-wrap: wrap;
+  gap: 16rpx;
+  flex-wrap: nowrap;
 }
 
 .bar-action-row.single {
@@ -359,6 +363,14 @@
   width: 100%;
   display: flex;
   justify-content: flex-end;
+}
+
+.btn-primary,
+.btn-soft,
+.btn-outline,
+.btn-wallet,
+.btn-primary-ghost {
+  min-width: 0;
 }
 
 .btn-primary {
@@ -396,7 +408,7 @@
 .btn-outline {
   background: #fff;
   color: #475569;
-  padding: 0 34rpx;
+  padding: 0 30rpx;
   min-height: 76rpx;
   border-radius: 40rpx;
   font-size: 28rpx;
@@ -582,15 +594,30 @@
 
 /* 货款余额支付（代理商待付款） */
 .wallet-pay-hint {
+  min-height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 0 6rpx;
+  color: #7A5A25;
   font-size: 22rpx;
-  color: #B98B58;
-  text-align: center;
-  margin-bottom: 12rpx;
-  font-weight: 600;
+  line-height: 1.2;
 }
+
+.wallet-pay-label {
+  color: #64748B;
+}
+
+.wallet-pay-value {
+  color: #9A6A21;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
 .btn-wallet {
   flex: 1;
-  height: 88rpx;
+  height: 84rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -602,7 +629,7 @@
 }
 .btn-primary-ghost {
   flex: 1;
-  height: 80rpx;
+  height: 72rpx;
   display: flex;
   align-items: center;
   justify-content: center;

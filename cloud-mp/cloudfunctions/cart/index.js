@@ -101,9 +101,12 @@ function normalizeCartRow(row, product, sku) {
         row.snapshot_price != null ? row.snapshot_price : (sku?.price != null ? sku.price : product?.retail_price),
         0
     );
+    const cartId = row._id || row.id;
     return {
         ...row,
-        id: row.id || row._id,  // ★ 确保前端可用 item.id
+        id: cartId,  // 前端操作购物袋项必须使用云数据库文档 ID
+        cart_id: cartId,
+        legacy_id: row.id && row.id !== cartId ? row.id : row._legacy_id,
         openid: row.openid || row.user_id || '',
         qty: toNumber(row.qty != null ? row.qty : row.quantity, 1),
         quantity: toNumber(row.qty != null ? row.qty : row.quantity, 1),
@@ -138,6 +141,13 @@ function chunk(values = [], size = 100) {
         result.push(values.slice(i, i + size));
     }
     return result;
+}
+
+function normalizeCartIdList(value) {
+    return toArray(value)
+        .flatMap((item) => String(item || '').split(','))
+        .map((item) => String(item || '').trim())
+        .filter(Boolean);
 }
 
 async function preloadProducts(rows = []) {
@@ -272,6 +282,20 @@ exports.main = cloudFunctionWrapper(async (event) => {
                 throw notFound('商品不存在');
             }
 
+            const productStatus = String(product.status || '').trim().toLowerCase();
+            if (productStatus === 'off' || productStatus === 'draft' || productStatus === 'deleted' || product.status === false || product.status === 0) {
+                throw badRequest('商品已下架');
+            }
+            if (product.is_on_sale === false || product.is_on_sale === 0 || product.visible_in_mall === false || product.visible_in_mall === 0) {
+                throw badRequest('商品已下架');
+            }
+
+            const effectiveStockHolder = sku || product;
+            const effectiveStock = toNumber(effectiveStockHolder.stock, null);
+            if (effectiveStock !== null && effectiveStock !== -1 && effectiveStock <= 0) {
+                throw badRequest('商品已售罄');
+            }
+
             const productSkus = await getProductSkuList(product);
             if (productSkus.length > 1 && !skuId) {
                 throw badRequest('请选择商品规格');
@@ -328,7 +352,7 @@ exports.main = cloudFunctionWrapper(async (event) => {
     if (action === 'update') {
         try {
             const cartId = params.cart_id || params.id || params._id;
-            const qty = toNumber(params.qty, 0);
+            const qty = toNumber(params.qty != null ? params.qty : params.quantity, 0);
 
             if (!cartId) {
                 throw badRequest('缺少必要参数: cart_id');
@@ -397,9 +421,9 @@ exports.main = cloudFunctionWrapper(async (event) => {
     if (action === 'check') {
         try {
             const rows = await queryCartRows(openid);
-            const cartIds = toArray(params.cart_ids);
+            const cartIds = normalizeCartIdList(params.cart_ids);
             const selectedRows = cartIds.length
-                ? rows.filter((item) => cartIds.includes(item._id))
+                ? rows.filter((item) => cartIds.includes(String(item._id || item.id || '')))
                 : rows.filter((item) => item.selected !== false);
 
             const errors = [];
