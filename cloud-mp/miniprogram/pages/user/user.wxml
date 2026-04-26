@@ -130,7 +130,7 @@
       <view class="order-tab" bindtap="onOrderTap" data-type="pending">
         <view class="order-tab-icon-wrap">
           <image class="order-tab-icon" src="/assets/icons/credit-card.svg" mode="aspectFit"></image>
-          <view class="order-tab-badge order-tab-dot" wx:if="{{orderFreshFlags.pending}}">{{orderStats.pending > 99 ? '99+' : orderStats.pending}}</view>
+          <view class="order-tab-badge order-tab-dot" wx:if="{{orderStats.pending > 0}}">{{orderStats.pending > 99 ? '99+' : orderStats.pending}}</view>
         </view>
         <text class="order-tab-text">待付款</text>
       </view>

@@ -105,11 +105,13 @@ function formatMoneyInt(value, fallback = '0') {
 
 function pickPiggyBankLockedAmount(source = {}) {
     const piggyBank = source.piggyBank || source.piggy_bank || {};
-    return source.piggyBankLockedAmount
-        ?? source.piggy_bank_locked_amount
-        ?? piggyBank.locked_amount
-        ?? piggyBank.lockedAmount
-        ?? 0;
+    const lockedAmount = Number(source.piggyBankLockedAmount ?? source.piggy_bank_locked_amount ?? piggyBank.locked_amount ?? piggyBank.lockedAmount ?? 0) || 0;
+    const availableAmount = Number(source.piggyBankAvailableAmount ?? source.piggy_bank_available_amount ?? piggyBank.available_amount ?? piggyBank.availableAmount ?? piggyBank.unlocked_amount ?? piggyBank.unlockedAmount ?? 0) || 0;
+    return source.piggyBankTotalAmount
+        ?? source.piggy_bank_total_amount
+        ?? piggyBank.total_amount
+        ?? piggyBank.totalAmount
+        ?? (lockedAmount + availableAmount);
 }
 
 async function loadPiggyBankBalanceDisplay() {
@@ -183,8 +185,8 @@ function createEmptyCartPreview(loggedIn = true) {
     return {
         count: 0,
         total: '0.00',
-        sub: loggedIn ? '购物袋空空如也' : '登录后同步购物袋',
-        meta: loggedIn ? '去挑选喜欢的商品' : '登录后查看待购商品',
+        sub: loggedIn ? '购物袋待装入你的特惠组合' : '登录后同步购物袋',
+        meta: loggedIn ? '先挑选商品，再一起结算' : '登录后查看待购商品',
         primaryName: loggedIn ? '暂无待购商品' : '登录后查看购物袋',
         hasItems: false,
         items: [],
@@ -289,7 +291,7 @@ async function buildCartPreview(response, loggedIn = true) {
     return {
         count,
         total: formatMoney(total),
-        sub: `共 ${count} 件，合计 ¥${formatMoney(total)}`,
+        sub: `已选 ${count} 件，可直接结算`,
         meta: primary.spec ? `${primary.spec} · x${primary.quantity}` : `x${primary.quantity || 1}`,
         primaryName: primary.name || '购物袋商品',
         hasItems: true,

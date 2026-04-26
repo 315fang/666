@@ -244,9 +244,13 @@ function getPickupQrToken(order = {}) {
 }
 
 function generatePickupQrToken(orderId, pickupCode) {
+    const secret = process.env.PICKUP_TOKEN_SECRET || process.env.JWT_SECRET;
+    if (!secret) {
+        console.error('[order-interactive] ⚠️ PICKUP_TOKEN_SECRET 和 JWT_SECRET 均未配置，自提验证令牌不安全');
+    }
     return crypto
         .createHash('sha256')
-        .update(`${String(orderId || '')}:${pickupCode}:${process.env.JWT_SECRET || 'pickup_salt'}`)
+        .update(`${String(orderId || '')}:${pickupCode}:${secret || 'pickup_salt_fallback_do_not_use_in_prod'}`)
         .digest('hex');
 }
 
@@ -278,7 +282,7 @@ async function ensurePickupCredentials(order) {
     };
 
     if (order._id) {
-        await db.collection('orders').doc(order._id).update({ data: patch }).catch(() => null);
+        await db.collection('orders').doc(order._id).update({ data: patch }).catch((err) => { console.error('[order-interactive] 订单状态更新失败:', err.message || err); });
     }
 
     Object.assign(order, patch);
@@ -1716,12 +1720,12 @@ async function finalizePickupVerification(order, openid, stationId, stationLooku
         throw new Error(`订单状态不允许核销: ${order.status}`);
     }
 
-    await consumePickupStationInventoryForOrder(db, order, openid).catch(() => null);
-    await ensurePickupSubsidyCommission(order, openid).catch(() => null);
-    await freezeCommissionsForOrder(order._id, { refund_deadline: refundDeadlineDate() }).catch(() => null);
-    await settlePickupStationPrincipalForOrder(db, order, {
+    try { await consumePickupStationInventoryForOrder(db, order, openid); } catch (err) { console.error('[order-interactive] 门店库存扣减失败:', err.message || err); }
+    try { await ensurePickupSubsidyCommission(order, openid); } catch (err) { console.error('[order-interactive] 门店补贴佣金确认失败:', err.message || err); }
+    try { await freezeCommissionsForOrder(order._id, { refund_deadline: refundDeadlineDate() }); } catch (err) { console.error('[order-interactive] 佣金冻结失败:', err.message || err); }
+    try { await settlePickupStationPrincipalForOrder(db, order, {
         claimantOpenid: order.pickup_station_claimant_openid
-    }).catch(() => null);
+    }); } catch (err) { console.error('[order-interactive] 门店进货本金结算失败:', err.message || err); }
 
     await db.collection('orders').doc(order._id).update({
         data: {

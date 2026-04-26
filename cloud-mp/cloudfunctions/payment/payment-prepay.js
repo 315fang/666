@@ -76,7 +76,7 @@ async function ensureWalletAccountForUser(user, seedBalance) {
 async function decreaseGoodsFundLedger(openid, amount, refId, remark) {
     const { user, account: existingAccount } = await getWalletAccountByOpenid(openid);
     if (!user) throw new Error('货款账本同步失败：用户不存在');
-    const account = existingAccount || await ensureWalletAccountForUser(user, getUserGoodsFundBalance(user) + amount);
+    const account = existingAccount || await ensureWalletAccountForUser(user, getUserGoodsFundBalance(user));
     if (!account) throw new Error('货款账本同步失败：无法创建钱包账户');
     const before = toNumber(account.balance, 0);
     const after = before - amount;
@@ -111,7 +111,7 @@ async function decreaseGoodsFundLedger(openid, amount, refId, remark) {
 async function rollbackGoodsFundLedger(openid, amount, refId, remark) {
     const { user, account: existingAccount } = await getWalletAccountByOpenid(openid);
     if (!user) throw new Error('货款账本回滚失败：用户不存在');
-    const account = existingAccount || await ensureWalletAccountForUser(user, getUserGoodsFundBalance(user) - amount);
+    const account = existingAccount || await ensureWalletAccountForUser(user, getUserGoodsFundBalance(user));
     if (!account) throw new Error('货款账本回滚失败：无法创建钱包账户');
     const before = toNumber(account.balance, 0);
     const after = before + amount;

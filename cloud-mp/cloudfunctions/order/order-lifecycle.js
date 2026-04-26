@@ -398,7 +398,7 @@ async function ensureWalletAccountForUser(user, seedBalance) {
 async function increaseGoodsFundLedger(openid, amount, refId, remark) {
     const { user, account: existingAccount } = await getWalletAccountByUser(openid);
     if (!user) throw new Error('货款账本同步失败：用户不存在');
-    const account = existingAccount || await ensureWalletAccountForUser(user, getUserGoodsFundBalance(user) - amount);
+    const account = existingAccount || await ensureWalletAccountForUser(user, getUserGoodsFundBalance(user));
     if (!account) throw new Error('货款账本同步失败：无法创建钱包账户');
     const before = toNumber(account.balance, 0);
     const after = before + amount;
@@ -527,7 +527,7 @@ async function ensureGoodsFundRefundCredited(openid, order = {}, refund = {}, am
 
         await db.collection('wallet_accounts').doc(String(walletAccountId)).update({
             data: {
-                balance: nextGoodsFund,
+                balance: _.inc(amount),
                 updated_at: db.serverDate()
             }
         });
@@ -586,7 +586,7 @@ async function ensureGoodsFundRefundCredited(openid, order = {}, refund = {}, am
         try {
             await db.collection('users').where({ openid }).update({
                 data: {
-                    agent_wallet_balance: previousGoodsFund,
+                    agent_wallet_balance: _.inc(-amount),
                     updated_at: db.serverDate()
                 }
             });
@@ -601,7 +601,7 @@ async function ensureGoodsFundRefundCredited(openid, order = {}, refund = {}, am
         try {
             await db.collection('wallet_accounts').doc(String(walletAccountId)).update({
                 data: {
-                    balance: previousGoodsFund,
+                    balance: _.inc(-amount),
                     updated_at: db.serverDate()
                 }
             });

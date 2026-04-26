@@ -1,23 +1,23 @@
 <view class="page">
   <view class="hero-card">
     <view class="hero-copy">
-      <text class="hero-title">自由组合</text>
-      <text class="hero-subtitle">固定套餐价，自由挑选套餐内商品；结算按整套套餐价统一处理。</text>
+      <text class="hero-title">特惠随心选</text>
+      <text class="hero-subtitle">固定套餐价，自由搭配你的专属套装；结算按整套套餐价统一处理。</text>
     </view>
   </view>
 
   <view class="state-wrap" wx:if="{{loading}}">
-    <text class="state-title">加载自由组合中...</text>
+    <text class="state-title">加载特惠随心选中...</text>
   </view>
 
   <view class="state-wrap" wx:elif="{{loadError}}">
-    <text class="state-title">自由组合加载失败</text>
+    <text class="state-title">特惠随心选加载失败</text>
     <text class="state-desc">请稍后重试，或返回活动页查看其他入口。</text>
     <view class="retry-btn" bindtap="onRetry">重新加载</view>
   </view>
 
   <view class="state-wrap" wx:elif="{{bundles.length === 0}}">
-    <text class="state-title">暂未上架自由组合</text>
+    <text class="state-title">暂未上架特惠随心选</text>
     <text class="state-desc">当前没有可购买套餐，稍后再来看看。</text>
   </view>
 
@@ -36,7 +36,7 @@
         wx:if="{{item.cover_preview_url || item.cover_image}}"
       ></image>
       <view class="bundle-cover bundle-cover-placeholder" wx:else>
-        <text class="bundle-cover-placeholder-text">自由组合</text>
+        <text class="bundle-cover-placeholder-text">特惠随心选</text>
       </view>
       <view class="bundle-info">
         <view class="bundle-tag-row">

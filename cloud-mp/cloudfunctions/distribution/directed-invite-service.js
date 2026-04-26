@@ -487,20 +487,33 @@ async function releaseInviteFrozenFunds(db, invite = {}, reason = 'manual_releas
     });
     await db.collection('users').doc(String(inviter._id || inviter.id)).update({
         data: {
-            agent_wallet_balance: nextUser.agent_wallet_balance,
-            wallet_balance: nextUser.wallet_balance,
-            agent_wallet_frozen_amount: nextUser.agent_wallet_frozen_amount,
-            goods_fund_frozen_amount: nextUser.goods_fund_frozen_amount,
+            agent_wallet_balance: db.command.inc(frozenAmount),
+            wallet_balance: db.command.inc(frozenAmount),
+            agent_wallet_frozen_amount: db.command.inc(-frozenAmount),
+            goods_fund_frozen_amount: db.command.inc(-frozenAmount),
             updated_at: now
         }
-    }).catch(() => null);
+    }).catch((err) => {
+        console.error('[directed-invite] 释放冻结货款更新用户余额失败:', err.message || err);
+        return null;
+    });
 
     const walletAccount = await findWalletAccountByUser(db, inviter);
-    await saveWalletAccount(db, nextUser, walletAccount, {
-        balance: nextBalance,
-        frozen: nextFrozen,
-        now
-    });
+    if (walletAccount) {
+        await db.collection('wallet_accounts').doc(String(walletAccount._id || walletAccount.id)).update({
+            data: {
+                balance: db.command.inc(frozenAmount),
+                frozen_balance: db.command.inc(-frozenAmount),
+                updated_at: now
+            }
+        }).catch((err) => { console.error('[directed-invite] 释放冻结货款更新钱包账户失败:', err.message || err); });
+    } else {
+        await saveWalletAccount(db, nextUser, null, {
+            balance: nextBalance,
+            frozen: nextFrozen,
+            now
+        });
+    }
 
     const transferNo = pickString(invite.frozen_transfer_no || invite.transfer_txn_no || `DIRREL_${pickString(invite.invite_id || invite._id)}`);
     await appendDirectedInviteGoodsFundLogs(db, {
@@ -680,20 +693,30 @@ async function createDirectedInvite(db, _, openid, params = {}) {
 
         await conn.collection('users').doc(String(inviter._id || inviter.id)).update({
             data: {
-                agent_wallet_balance: nextInviter.agent_wallet_balance,
-                wallet_balance: nextInviter.wallet_balance,
-                agent_wallet_frozen_amount: nextInviter.agent_wallet_frozen_amount,
-                goods_fund_frozen_amount: nextInviter.goods_fund_frozen_amount,
+                agent_wallet_balance: conn.command.inc(-transferCheck.amount),
+                wallet_balance: conn.command.inc(-transferCheck.amount),
+                agent_wallet_frozen_amount: conn.command.inc(transferCheck.amount),
+                goods_fund_frozen_amount: conn.command.inc(transferCheck.amount),
                 updated_at: createdAt
             }
         });
 
         const inviterWallet = await findWalletAccountByUser(conn, inviter);
-        await saveWalletAccount(conn, nextInviter, inviterWallet, {
-            balance: inviterBalanceAfter,
-            frozen: inviterFrozenAfter,
-            now: createdAt
-        });
+        if (inviterWallet) {
+            await conn.collection('wallet_accounts').doc(String(inviterWallet._id || inviterWallet.id)).update({
+                data: {
+                    balance: conn.command.inc(-transferCheck.amount),
+                    frozen_balance: conn.command.inc(transferCheck.amount),
+                    updated_at: createdAt
+                }
+            });
+        } else {
+            await saveWalletAccount(conn, nextInviter, null, {
+                balance: inviterBalanceAfter,
+                frozen: inviterFrozenAfter,
+                now: createdAt
+            });
+        }
 
         const inviteDoc = {
             invite_id: inviteId,

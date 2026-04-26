@@ -321,7 +321,7 @@ function registerRefundRoutes(app, deps) {
                     if (walletAccount) {
                         await db.collection('wallet_accounts').doc(String(accountId)).update({
                             data: {
-                                balance: nextGoodsFund,
+                                balance: _.inc(refundAmount),
                                 updated_at: new Date().toISOString()
                             }
                         });
@@ -341,18 +341,13 @@ function registerRefundRoutes(app, deps) {
                     rollbackInternalFunds = async () => {
                         await db.collection('users').where({ openid: buyerOpenid }).update({
                             data: {
-                                agent_wallet_balance: previousGoodsFund,
+                                agent_wallet_balance: _.inc(-refundAmount),
                                 updated_at: new Date().toISOString()
                             }
                         }).catch((err) => { console.error('[admin-refunds] ⚠️ 货款退款回滚用户余额失败:', err.message || err); });
-                        await db.collection('wallet_accounts').doc(String(accountId)).set({
+                        await db.collection('wallet_accounts').doc(String(accountId)).update({
                             data: {
-                                user_id: walletAccountUserIds[0],
-                                openid: buyerOpenid,
-                                balance: previousGoodsFund,
-                                account_type: 'goods_fund',
-                                status: 'active',
-                                created_at: pickString(walletAccount?.created_at || new Date().toISOString()),
+                                balance: _.inc(-refundAmount),
                                 updated_at: new Date().toISOString()
                             }
                         }).catch((err) => { console.error('[admin-refunds] ⚠️ 货款退款回滚钱包账户失败:', err.message || err); });

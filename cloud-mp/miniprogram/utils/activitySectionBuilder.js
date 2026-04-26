@@ -28,8 +28,8 @@ const FALLBACK_SECTION_CONFIG = {
     flex_bundle: {
         id: 'activity-section-flex-bundle',
         key: 'flex_bundle',
-        title: '自由组合',
-        subtitle: '固定套餐价，自由挑选',
+        title: '特惠随心选',
+        subtitle: '自由搭配你的专属套装',
         icon: '/assets/icons/package.svg',
         pillText: '常驻入口',
         tag: '',
@@ -79,7 +79,7 @@ const FALLBACK_SECTION_CONFIG = {
     }
 };
 
-const SECTION_ORDER = ['flash_sale', 'flex_bundle', 'bundle_zone', 'lottery', 'group', 'slash'];
+const SECTION_ORDER = ['flex_bundle', 'bundle_zone', 'flash_sale', 'lottery', 'group', 'slash'];
 
 function normalizeText(value) {
     return typeof value === 'string' ? value.trim() : '';
@@ -115,8 +115,8 @@ function detectSectionKey(item = {}) {
     if (linkValue.includes('/pages/group/')) return 'group';
     if (linkValue.includes('/pages/lottery/')) return 'lottery';
 
+    if (title.includes('特惠随心选') || title.includes('自由组合') || title.includes('自由选') || title.includes('套餐')) return 'flex_bundle';
     if (title.includes('秒杀') || title.includes('特惠')) return 'flash_sale';
-    if (title.includes('自由组合') || title.includes('自由选') || title.includes('套餐')) return 'flex_bundle';
     if (title.includes('优惠券') || title.includes('组合') || title.includes('礼遇')) return 'bundle_zone';
     if (title.includes('砍价')) return 'slash';
     if (title.includes('拼团')) return 'group';
@@ -142,12 +142,13 @@ function buildSectionRow(key, sourceMap, overrides = {}) {
     const styleKey = normalizeText(source.style_key || source.styleKey) || key;
     const stylePreset = FALLBACK_SECTION_CONFIG[styleKey] || fallback;
     const isBundleZone = key === 'bundle_zone';
+    const isFlexBundle = key === 'flex_bundle';
     return {
         id: source.id || fallback.id,
         key,
         styleKey,
-        title: isBundleZone ? fallback.title : (normalizeText(source.title) || fallback.title),
-        subtitle: isBundleZone ? fallback.subtitle : (normalizeText(source.subtitle || source.subTitle) || fallback.subtitle),
+        title: (isBundleZone || isFlexBundle) ? fallback.title : (normalizeText(source.title) || fallback.title),
+        subtitle: (isBundleZone || isFlexBundle) ? fallback.subtitle : (normalizeText(source.subtitle || source.subTitle) || fallback.subtitle),
         icon: normalizeText(source.icon) || stylePreset.icon,
         pillText: normalizeText(source.pill_text || source.pillText) || stylePreset.pillText || '',
         tag: normalizeText(source.tag),

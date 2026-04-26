@@ -618,7 +618,7 @@ async function issueGoodsFundReward(openid, user, record, snapshot) {
             wallet_balance: _.inc(amount),
             updated_at: db.serverDate()
         }
-    }).catch(() => null);
+    }).catch((err) => { console.error('[lottery] 更新用户货款余额失败:', err.message || err); });
     const logRes = await db.collection('goods_fund_logs').add({
         data: {
             openid,

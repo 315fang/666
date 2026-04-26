@@ -113,10 +113,21 @@ Page({
         }, {})
     },
 
-    onLoad(options = {}) {
+    async onLoad(options = {}) {
+        const lotteryId = String(options.lottery_id || options.pool_id || 'default').trim() || 'default';
+        this.setData({
+            lotteryId,
+            statusBarHeight: app.globalData.statusBarHeight || 20,
+            navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
+            navBarHeight: app.globalData.navBarHeight || 44
+        });
+
+        if (app && typeof app.fetchMiniProgramConfig === 'function') {
+            await app.fetchMiniProgramConfig({ forceRefresh: true }).catch(() => null);
+        }
+
         const lotteryConfig = getConfigSection('lottery_config');
         const featureFlags = getFeatureFlags();
-        const lotteryId = String(options.lottery_id || options.pool_id || 'default').trim() || 'default';
         if (featureFlags.enable_lottery_entry === false) {
             this.setData({ lotteryDisabled: true });
             wx.showToast({ title: '积分抽奖暂未开放', icon: 'none' });
@@ -124,10 +135,6 @@ Page({
             return;
         }
         this.setData({
-            lotteryId,
-            statusBarHeight: app.globalData.statusBarHeight || 20,
-            navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
-            navBarHeight: app.globalData.navBarHeight || 44,
             heroTitle: lotteryConfig.hero_title || '用积分试一次手气',
             heroSubtitle: lotteryConfig.hero_subtitle || '把账户里的积分换成一次轻量抽奖，命中结果后会同步进入中奖记录。',
             panelTitle: lotteryConfig.panel_title || '积分抽奖机',

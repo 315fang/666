@@ -1,44 +1,113 @@
 <view class="container">
-  <view class="overview-card">
-    <view class="overview-inner">
-      <view class="overview-main">
-        <text class="overview-label">已存升级奖励</text>
-        <view class="overview-amount-row">
-          <text class="overview-currency">¥</text>
-          <text class="overview-amount">{{summary.locked_amount_text}}</text>
+  <scroll-view class="page-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <view class="vault-card">
+      <view class="vault-head">
+        <view>
+          <text class="vault-kicker">升级存钱罐</text>
+          <text class="vault-title">我的存款</text>
         </view>
-        <text class="overview-sub">{{summary.next_unlock_text}}</text>
+        <view class="vault-state">{{summary.vault_state_text}}</view>
       </view>
-      <view class="overview-side">
-        <view class="side-block">
-          <text class="side-label">已入账</text>
-          <text class="side-amount">¥{{summary.unlocked_amount_text}}</text>
+
+      <view class="vault-hero">
+        <view class="vault-copy">
+          <view class="vault-amount-row">
+            <text class="vault-currency">¥</text>
+            <text class="vault-amount">{{summary.total_amount_text}}</text>
+          </view>
+          <text class="vault-hint">{{summary.vault_hint_text}}</text>
         </view>
-        <view class="side-block">
-          <text class="side-label">待入账</text>
-          <text class="side-amount">¥{{summary.unlockable_amount_text}}</text>
+        <view class="piggy-visual {{summary.claimable_amount > 0 ? 'piggy-ready' : ''}}">
+          <view class="piggy-coin piggy-coin-back">¥</view>
+          <view class="piggy-coin piggy-coin-front">¥</view>
+          <view class="piggy-ear"></view>
+          <view class="piggy-body">
+            <view class="piggy-slot"></view>
+            <view class="piggy-eye"></view>
+            <view class="piggy-snout">
+              <view class="piggy-nostril piggy-nostril-left"></view>
+              <view class="piggy-nostril piggy-nostril-right"></view>
+            </view>
+          </view>
+          <view class="piggy-leg piggy-leg-left"></view>
+          <view class="piggy-leg piggy-leg-right"></view>
+          <view class="piggy-tail"></view>
+        </view>
+      </view>
+
+      <view class="vault-progress">
+        <view class="vault-progress-fill" style="width: {{summary.progress_percent}}%;"></view>
+      </view>
+      <view class="vault-stages">
+        <text>入罐</text>
+        <text class="{{summary.claimable_amount > 0 ? 'stage-active' : ''}}">可领取</text>
+        <text class="{{summary.unlocked_amount > 0 ? 'stage-active' : ''}}">已入账</text>
+      </view>
+
+      <button
+        class="vault-claim {{summary.claimable_amount > 0 && !summary.claim_disabled ? 'vault-claim-ready' : 'vault-claim-wait'}}"
+        loading="{{depositSubmitting}}"
+        disabled="{{depositSubmitting}}"
+        bindtap="onClaimToCommission"
+      >{{summary.claim_button_text}}</button>
+
+      <view class="vault-metrics">
+        <view class="vault-metric">
+          <text class="metric-label">可申请转佣金</text>
+          <text class="metric-value metric-value-gold">¥{{summary.claimable_amount_text}}</text>
+        </view>
+        <view class="vault-metric">
+          <text class="metric-label">已入账佣金</text>
+          <text class="metric-value">¥{{summary.unlocked_amount_text}}</text>
+        </view>
+        <view class="vault-metric">
+          <text class="metric-label">继续升级可解锁</text>
+          <text class="metric-value">¥{{summary.next_level_unlock_amount_text}}</text>
         </view>
       </view>
     </view>
-  </view>
 
-  <view class="filter-bar">
-    <view
-      class="filter-item {{currentStatus === item.status ? 'active' : ''}}"
-      wx:for="{{statusTabs}}"
-      wx:key="status"
-      bindtap="onStatusChange"
-      data-status="{{item.status}}"
-    >
-      <text>{{item.label}}</text>
-      <text class="filter-count" wx:if="{{item.count > 0}}">{{item.count}}</text>
+    <view class="rule-strip {{depositGuideExpanded ? 'rule-strip-expanded' : ''}}" bindtap="onToggleDepositGuide">
+      <view class="rule-main">
+        <text class="rule-label">规则</text>
+        <view class="rule-copy-wrap">
+          <view class="rule-ticker-window" wx:if="{{!depositGuideExpanded}}">
+            <text class="rule-copy rule-ticker-copy {{ruleTipFlip ? 'rule-slide-b' : 'rule-slide-a'}}">{{currentRuleTip}}</text>
+          </view>
+          <view class="rule-detail-list" wx:else>
+            <view class="rule-detail-item" wx:for="{{depositRuleDetails}}" wx:key="no">
+              <text class="rule-detail-no">{{item.no}}</text>
+              <text class="rule-detail-text">{{item.text}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+      <text class="rule-toggle">{{depositGuideExpanded ? '收起' : '展开'}}</text>
     </view>
-  </view>
 
-  <scroll-view class="log-scroll" scroll-y>
-    <view class="log-list">
+    <view class="records-panel">
+      <view class="records-head">
+        <view>
+          <text class="records-title">存款明细</text>
+          <text class="records-sub">每一笔奖励都会留下状态</text>
+        </view>
+      </view>
+
+      <scroll-view class="filter-bar" scroll-x enhanced show-scrollbar="{{false}}">
+        <view
+          class="filter-item {{currentStatus === item.status ? 'active' : ''}}"
+          wx:for="{{statusTabs}}"
+          wx:key="status"
+          bindtap="onStatusChange"
+          data-status="{{item.status}}"
+        >
+          <text>{{item.label}}</text>
+          <text class="filter-count" wx:if="{{item.count > 0}}">{{item.count}}</text>
+        </view>
+      </scroll-view>
+
       <view class="skeleton-wrap" wx:if="{{loading && logs.length === 0}}">
-        <view class="sk-log" wx:for="{{[1,2,3,4,5]}}" wx:key="index">
+        <view class="sk-log" wx:for="{{[1,2,3]}}" wx:key="index">
           <view class="sk-icon"></view>
           <view class="sk-info">
             <view class="sk-line sk-long"></view>
@@ -54,9 +123,8 @@
         </view>
         <view class="log-info">
           <text class="log-title">{{item.title}}</text>
-          <text class="log-time">{{item.created_at_text}}</text>
           <text class="log-source">{{item.sourceText}}</text>
-          <text class="log-order" wx:if="{{item.orderNoDisplay}}">订单：{{item.orderNoDisplay}}</text>
+          <text class="log-time">{{item.created_at_text}}</text>
         </view>
         <view class="log-right">
           <text class="log-amount">+¥{{item.amount}}</text>
@@ -71,34 +139,7 @@
       <view class="empty-state" wx:if="{{!loading && filteredLogs.length === 0}}">
         <image src="/assets/icons/dollar-sign.svg" mode="aspectFit" class="empty-icon"></image>
         <text class="empty-title">暂无存款明细</text>
-        <text class="empty-desc">产生升级奖励后会在这里显示预计收益</text>
-      </view>
-
-      <view class="deposit-guide-card">
-        <view class="deposit-guide-head" bindtap="onToggleDepositGuide">
-          <view class="deposit-guide-title-wrap">
-            <text class="deposit-guide-kicker">说明</text>
-            <text class="deposit-guide-title">我的存款怎么玩</text>
-          </view>
-          <view class="deposit-guide-toggle">
-            <text>{{depositGuideExpanded ? '收起' : '展开'}}</text>
-            <text class="deposit-guide-arrow {{depositGuideExpanded ? 'expanded' : ''}}">⌄</text>
-          </view>
-        </view>
-        <view class="deposit-guide-body" wx:if="{{depositGuideExpanded}}">
-          <view class="deposit-guide-row">
-            <text class="deposit-guide-index">01</text>
-            <text class="deposit-guide-copy">产生升级奖励后，会先记录为预计收益。</text>
-          </view>
-          <view class="deposit-guide-row">
-            <text class="deposit-guide-index">02</text>
-            <text class="deposit-guide-copy">达到对应等级或解锁条件后，预计收益会转为已入账。</text>
-          </view>
-          <view class="deposit-guide-row">
-            <text class="deposit-guide-index">03</text>
-            <text class="deposit-guide-copy">订单退款、取消或奖励回滚时，对应记录会显示为已失效或已扣回。</text>
-          </view>
-        </view>
+        <text class="empty-desc">升级奖励产生后，会先放进存钱罐</text>
       </view>
     </view>
 

@@ -3814,6 +3814,313 @@ function getWithdrawalAccountType(withdrawal = {}) {
     return pickString(withdrawal.withdraw_account?.type || withdrawal.method || withdrawal.type || '');
 }
 
+function isDepositWithdrawalApplication(withdrawal = {}) {
+    const sourceType = pickString(withdrawal.source_type).toLowerCase();
+    const applicationType = pickString(withdrawal.application_type).toLowerCase();
+    return sourceType === 'upgrade_piggy_bank' || applicationType.startsWith('deposit_');
+}
+
+function isDepositGoodsFundApplication(withdrawal = {}) {
+    const applicationType = pickString(withdrawal.application_type).toLowerCase();
+    const accountType = getWithdrawalAccountType(withdrawal).toLowerCase();
+    return applicationType === 'deposit_goods_fund' || accountType === 'deposit_goods_fund';
+}
+
+function isDepositCommissionApplication(withdrawal = {}) {
+    const applicationType = pickString(withdrawal.application_type).toLowerCase();
+    const accountType = getWithdrawalAccountType(withdrawal).toLowerCase();
+    return applicationType === 'deposit_commission' || accountType === 'deposit_commission';
+}
+
+async function completeDepositCommissionApplication(req, res, current, currentStatus, remark) {
+    const amountToTransfer = roundMoney(toNumber(current.actual_amount, toNumber(current.amount, 0)));
+    if (amountToTransfer <= 0) return fail(res, '转佣金金额无效，无法确认入账', 400);
+
+    const user = findUserByAnyId(getCollection('users'), current.user_id || current.openid);
+    if (!user) return fail(res, '申请用户不存在，无法确认转佣金', 400);
+    const userDocId = pickString(user._id || user.id);
+    const userLookup = userDocId || primaryId(user) || current.user_id || current.openid;
+    if (dataStore._internals?.db && !userDocId) return fail(res, '申请用户文档不存在，无法确认转佣金', 500);
+
+    const logIds = toArray(current.piggy_bank_log_ids)
+        .map((item) => pickString(item))
+        .filter(Boolean);
+    if (!logIds.length) return fail(res, '申请缺少存钱罐记录，无法确认转佣金', 400);
+
+    const logIdSet = new Set(logIds);
+    const piggyRows = getCollection('upgrade_piggy_bank_logs');
+    const selectedRows = piggyRows.filter((row) => logIdSet.has(pickString(row._id || row.id)));
+    const availableRows = selectedRows.filter((row) => pickString(row.status || 'locked') === 'locked');
+    const availableAmount = roundMoney(availableRows.reduce((sum, row) => sum + toNumber(row.incremental_amount, 0), 0));
+    if (availableRows.length !== logIds.length || availableAmount < amountToTransfer) {
+        return fail(res, '可转佣金的存款记录不足，请核对存款状态后再处理', 400);
+    }
+
+    const processingAt = nowIso();
+    const claimed = await patchWithdrawalStatusIf(
+        current,
+        [currentStatus],
+        {
+            status: 'processing',
+            processing_at: processingAt,
+            remark,
+            updated_at: processingAt
+        },
+        (row) => pickString(row.status) === currentStatus
+    );
+    if (!claimed.ok) return fail(res, '申请状态已变化，请刷新后重试', 409);
+    const claimedApplication = claimed.row || { ...current, status: 'processing', processing_at: processingAt, remark };
+
+    const completedAt = nowIso();
+    const db = dataStore._internals?.db;
+    const patchedLogIds = [];
+    let userPatched = false;
+    const currentCommission = roundMoney(toNumber(user.commission_balance != null ? user.commission_balance : user.balance, 0));
+    const currentEarned = roundMoney(toNumber(user.total_earned, 0));
+    const currentLocked = roundMoney(toNumber(user.piggy_bank_locked_amount, amountToTransfer));
+    const currentUnlocked = roundMoney(toNumber(user.piggy_bank_unlocked_amount, 0));
+    const userPatch = {
+        commission_balance: roundMoney(currentCommission + amountToTransfer),
+        balance: roundMoney(currentCommission + amountToTransfer),
+        total_earned: roundMoney(currentEarned + amountToTransfer),
+        piggy_bank_locked_amount: Math.max(0, roundMoney(currentLocked - amountToTransfer)),
+        piggy_bank_unlocked_amount: roundMoney(currentUnlocked + amountToTransfer),
+        updated_at: completedAt
+    };
+
+    try {
+        if (db) {
+            for (const row of availableRows) {
+                const docId = pickString(row._id || row.id);
+                const ok = await directPatchDocument('upgrade_piggy_bank_logs', docId, {
+                    status: 'unlocked',
+                    unlock_order_id: '',
+                    application_no: pickString(current.withdraw_no),
+                    unlocked_at: completedAt,
+                    updated_at: completedAt
+                });
+                if (!ok) throw new Error('存钱罐记录更新失败');
+                patchedLogIds.push(docId);
+            }
+            const userWriteOk = await directPatchDocument('users', userDocId, userPatch);
+            if (!userWriteOk) throw new Error('用户佣金余额写入失败');
+        } else {
+            saveCollection('upgrade_piggy_bank_logs', piggyRows.map((row) => {
+                if (!logIdSet.has(pickString(row._id || row.id))) return row;
+                return {
+                    ...row,
+                    status: 'unlocked',
+                    unlock_order_id: '',
+                    application_no: pickString(current.withdraw_no),
+                    unlocked_at: completedAt,
+                    updated_at: completedAt
+                };
+            }));
+            const patchedUser = patchCollectionRow('users', userLookup, (row) => ({ ...row, ...userPatch }));
+            if (!patchedUser) throw new Error('用户佣金余额写入失败');
+        }
+        userPatched = true;
+
+        const commissionRecord = {
+            _id: String(Date.now()) + Math.random().toString(36).slice(2, 8),
+            openid: pickString(user.openid || current.openid),
+            user_id: primaryId(user),
+            from_openid: '',
+            order_id: '',
+            order_no: '',
+            amount: amountToTransfer,
+            level: toNumber(current.role_level, toNumber(user.role_level ?? user.distributor_level ?? user.level, 0)),
+            type: 'upgrade_piggy_bank_unlock',
+            status: 'settled',
+            source: 'upgrade_piggy_bank',
+            withdraw_id: primaryId(current),
+            application_no: pickString(current.withdraw_no),
+            remark,
+            settled_at: completedAt,
+            created_at: completedAt,
+            updated_at: completedAt
+        };
+        if (db) {
+            await db.collection('commissions').add({ data: commissionRecord });
+        } else {
+            saveCollection('commissions', [...getCollection('commissions'), commissionRecord]);
+        }
+
+        await appendWalletLogEntry({
+            openid: pickString(user.openid || current.openid),
+            user_id: primaryId(user),
+            type: 'upgrade_piggy_bank_unlock',
+            amount: amountToTransfer,
+            withdraw_id: primaryId(current),
+            application_no: pickString(current.withdraw_no),
+            source_type: current.source_type,
+            description: `我的存款转佣金 ${amountToTransfer} 元`,
+            remark
+        });
+
+        const patch = {
+            status: 'completed',
+            completed_at: completedAt,
+            transferred_at: completedAt,
+            transfer_channel: 'commission',
+            remark,
+            updated_at: completedAt
+        };
+        const persisted = await persistPatchedRow('withdrawals', req.params.id, claimedApplication, patch);
+        if (!persisted.ok) throw new Error('申请完成状态写入失败');
+        const updated = persisted.row || { ...claimedApplication, ...patch };
+        createAuditLog(req.admin, 'withdrawal.deposit_commission.complete', 'withdrawals', {
+            withdrawal_id: primaryId(updated || current),
+            amount: amountToTransfer,
+            remark
+        });
+        const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.withdrawals);
+        const freshCurrent = findByLookup(ensureWithdrawalNumericIds(), req.params.id);
+        return okStrongWrite(res, freshCurrent || updated, {
+            persisted: true,
+            reloaded_collections: reloadMeta.reloaded_collections,
+            read_at: reloadMeta.read_at
+        });
+    } catch (error) {
+        if (userPatched) {
+            const rollbackPatch = {
+                commission_balance: currentCommission,
+                balance: currentCommission,
+                total_earned: currentEarned,
+                piggy_bank_locked_amount: currentLocked,
+                piggy_bank_unlocked_amount: currentUnlocked,
+                updated_at: nowIso()
+            };
+            if (db && userDocId) {
+                await directPatchDocument('users', userDocId, rollbackPatch);
+            } else {
+                patchCollectionRow('users', userLookup, (row) => ({ ...row, ...rollbackPatch }));
+            }
+        }
+        if (db && patchedLogIds.length) {
+            await Promise.all(patchedLogIds.map((docId) => directPatchDocument('upgrade_piggy_bank_logs', docId, {
+                status: 'locked',
+                unlock_order_id: '',
+                application_no: '',
+                unlocked_at: null,
+                updated_at: nowIso()
+            }).catch(() => null)));
+        } else if (!db) {
+            saveCollection('upgrade_piggy_bank_logs', piggyRows);
+        }
+        await persistPatchedRow('withdrawals', req.params.id, claimedApplication, {
+            status: 'failed',
+            fail_reason: error.message || '转佣金失败',
+            remark,
+            updated_at: nowIso()
+        }).catch(() => null);
+        return fail(res, `存款转佣金失败：${error.message || '未知错误'}`, 500);
+    }
+}
+
+async function completeDepositGoodsFundApplication(req, res, current, currentStatus, remark) {
+    const amountToTransfer = roundMoney(toNumber(current.actual_amount, toNumber(current.amount, 0)));
+    if (amountToTransfer <= 0) return fail(res, '转入金额无效，无法确认转入', 400);
+
+    const user = findUserByAnyId(getCollection('users'), current.user_id || current.openid);
+    if (!user) return fail(res, '申请用户不存在，无法确认转入', 400);
+    const userDocId = pickString(user._id || user.id);
+    const userLookup = userDocId || primaryId(user) || current.user_id || current.openid;
+    if (dataStore._internals?.db && !userDocId) return fail(res, '申请用户文档不存在，无法确认转入', 500);
+
+    const claimedAt = nowIso();
+    const claimed = await patchWithdrawalStatusIf(
+        current,
+        [currentStatus],
+        {
+            status: 'processing',
+            processing_at: claimedAt,
+            remark,
+            updated_at: claimedAt
+        },
+        (row) => pickString(row.status) === currentStatus
+    );
+    if (!claimed.ok) return fail(res, '申请状态已变化，请刷新后重试', 409);
+    const claimedApplication = claimed.row || { ...current, status: 'processing', processing_at: claimedAt, remark };
+
+    const currentGoodsFund = roundMoney(toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0));
+    const nextGoodsFund = roundMoney(currentGoodsFund + amountToTransfer);
+    const userPatch = {
+        agent_wallet_balance: nextGoodsFund,
+        wallet_balance: nextGoodsFund,
+        updated_at: nowIso()
+    };
+    let userPatched = false;
+    try {
+        if (dataStore._internals?.db) {
+            const writeOk = await directPatchDocument('users', userDocId, userPatch);
+            if (!writeOk) throw new Error('用户货款余额写入失败');
+        } else {
+            const patchedUser = patchCollectionRow('users', userLookup, (row) => ({ ...row, ...userPatch }));
+            if (!patchedUser) throw new Error('用户货款余额写入失败');
+        }
+        userPatched = true;
+
+        await appendGoodsFundLogEntry({
+            openid: pickString(current.openid || user.openid),
+            user_id: primaryId(user),
+            type: 'deposit_transfer',
+            amount: amountToTransfer,
+            withdraw_id: primaryId(current),
+            application_no: pickString(current.withdraw_no),
+            description: `我的存款转入金 ${amountToTransfer} 元`,
+            balance_before: currentGoodsFund,
+            balance_after: nextGoodsFund,
+            remark
+        });
+
+        const completedAt = nowIso();
+        const patch = {
+            status: 'completed',
+            completed_at: completedAt,
+            transferred_at: completedAt,
+            transfer_channel: 'goods_fund',
+            remark,
+            updated_at: completedAt
+        };
+        const persisted = await persistPatchedRow('withdrawals', req.params.id, claimedApplication, patch);
+        if (!persisted.ok) throw new Error('申请完成状态写入失败');
+        const updated = persisted.row || { ...claimedApplication, ...patch };
+        createAuditLog(req.admin, 'withdrawal.deposit_goods_fund.complete', 'withdrawals', {
+            withdrawal_id: primaryId(updated || current),
+            amount: amountToTransfer,
+            remark
+        });
+        const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.withdrawals);
+        const freshCurrent = findByLookup(ensureWithdrawalNumericIds(), req.params.id);
+        return okStrongWrite(res, freshCurrent || updated, {
+            persisted: true,
+            reloaded_collections: reloadMeta.reloaded_collections,
+            read_at: reloadMeta.read_at
+        });
+    } catch (error) {
+        if (userPatched) {
+            const rollbackPatch = {
+                agent_wallet_balance: currentGoodsFund,
+                wallet_balance: currentGoodsFund,
+                updated_at: nowIso()
+            };
+            if (dataStore._internals?.db && userDocId) {
+                await directPatchDocument('users', userDocId, rollbackPatch);
+            } else {
+                patchCollectionRow('users', userLookup, (row) => ({ ...row, ...rollbackPatch }));
+            }
+        }
+        await persistPatchedRow('withdrawals', req.params.id, claimedApplication, {
+            status: 'failed',
+            fail_reason: error.message || '转入失败',
+            remark,
+            updated_at: nowIso()
+        }).catch(() => null);
+        return fail(res, `存款转入金失败：${error.message || '未知错误'}`, 500);
+    }
+}
+
 function ensureWithdrawalNumericIds() {
     const rows = getCollection('withdrawals');
     let maxId = rows.reduce((max, row) => {
@@ -4491,25 +4798,32 @@ async function deductAgentFulfillmentGoodsFund(order = {}, admin = {}) {
         if (db) {
             await db.collection('users').where({ openid: claimant.openid }).update({
                 data: {
-                    agent_wallet_balance: currentGoodsFund,
+                    agent_wallet_balance: db.command.inc(amount),
                     updated_at: nowIso()
                 }
             }).catch((err) => { console.error('[admin-api] ⚠️ 货款退款回滚用户余额失败:', err.message || err); });
             if (walletAccountId) {
-                const walletWriteModel = buildWalletAccountWriteModel({
-                    existingAccount: existingWalletAccount,
-                    accountId: walletAccountId,
-                    userId: getWalletAccountUserIds(claimant)[0],
-                    openid: claimant.openid,
-                    patch: {
-                        balance: previousWalletBalance,
-                        updated_at: nowIso()
-                    },
-                    createdAt: pickString(existingWalletAccount?.created_at || nowIso())
-                });
-                await db.collection('wallet_accounts').doc(String(walletAccountId)).set({
-                    data: walletWriteModel.cloudData
-                }).catch((err) => { console.error('[admin-api] ⚠️ 货款退款回滚钱包账户失败:', err.message || err); });
+                const walletCmd = db.command;
+                if (existingWalletAccount) {
+                    await db.collection('wallet_accounts').doc(String(walletAccountId)).update({
+                        data: {
+                            balance: walletCmd.inc(amount),
+                            updated_at: nowIso()
+                        }
+                    }).catch((err) => { console.error('[admin-api] ⚠️ 货款退款回滚钱包账户失败:', err.message || err); });
+                } else {
+                    await db.collection('wallet_accounts').doc(String(walletAccountId)).set({
+                        data: {
+                            user_id: getWalletAccountUserIds(claimant)[0],
+                            openid: claimant.openid,
+                            balance: previousWalletBalance,
+                            account_type: 'goods_fund',
+                            status: 'active',
+                            created_at: nowIso(),
+                            updated_at: nowIso()
+                        }
+                    }).catch((err) => { console.error('[admin-api] ⚠️ 货款退款回滚钱包账户创建失败:', err.message || err); });
+                }
             }
         } else {
             patchCollectionRow('users', claimant.openid || primaryId(claimant), (row) => ({
@@ -4561,20 +4875,27 @@ async function deductAgentFulfillmentGoodsFund(order = {}, admin = {}) {
             };
         }
         if (walletAccountId) {
-            const walletWriteModel = buildWalletAccountWriteModel({
-                existingAccount: existingWalletAccount,
-                accountId: walletAccountId,
-                userId: getWalletAccountUserIds(claimant)[0],
-                openid: claimant.openid,
-                patch: {
-                    balance: nextGoodsFund,
-                    updated_at: nowIso()
-                },
-                createdAt: pickString(existingWalletAccount?.created_at || nowIso())
-            });
-            await db.collection('wallet_accounts').doc(String(walletAccountId)).set({
-                data: walletWriteModel.cloudData
-            });
+            const walletCmd = db.command;
+            if (existingWalletAccount) {
+                await db.collection('wallet_accounts').doc(String(walletAccountId)).update({
+                    data: {
+                        balance: walletCmd.inc(-amount),
+                        updated_at: nowIso()
+                    }
+                });
+            } else {
+                await db.collection('wallet_accounts').doc(String(walletAccountId)).set({
+                    data: {
+                        user_id: getWalletAccountUserIds(claimant)[0],
+                        openid: claimant.openid,
+                        balance: nextGoodsFund,
+                        account_type: 'goods_fund',
+                        status: 'active',
+                        created_at: nowIso(),
+                        updated_at: nowIso()
+                    }
+                });
+            }
         }
     } else {
         patchCollectionRow('users', claimant.openid || primaryId(claimant), (row) => ({
@@ -8193,18 +8514,24 @@ app.put('/admin/api/withdrawals/:id/reject', auth, requirePermission('withdrawal
 
     const refundAmount = toNumber(current.amount, 0);
     const refundOpenid = current.openid || '';
-    if (refundAmount > 0) {
+    const isDepositCommission = isDepositCommissionApplication(current);
+    if (refundAmount > 0 && !isDepositCommission) {
         const user = findUserByAnyId(getCollection('users'), current.user_id || current.openid);
         if (!user) return fail(res, '提现用户不存在，无法回退余额', 400);
         const userDocId = pickString(user._id || user.id);
         const currentBalance = toNumber(user.commission_balance ?? user.balance, 0);
         const currentWithdrawn = toNumber(user.total_withdrawn, 0);
+        const isDepositApplication = isDepositWithdrawalApplication(current);
+        const currentPiggyBankUnlocked = toNumber(user.piggy_bank_unlocked_amount, 0);
         const userPatch = {
             balance: roundMoney(currentBalance + refundAmount),
             commission_balance: roundMoney(currentBalance + refundAmount),
             total_withdrawn: Math.max(0, roundMoney(currentWithdrawn - refundAmount)),
             updated_at: nowIso()
         };
+        if (isDepositApplication) {
+            userPatch.piggy_bank_unlocked_amount = roundMoney(currentPiggyBankUnlocked + refundAmount);
+        }
         if (dataStore._internals?.db) {
             if (!userDocId) return fail(res, '提现用户文档不存在，无法回退余额', 500);
             const userWriteOk = await directPatchDocument('users', userDocId, userPatch);
@@ -8216,10 +8543,11 @@ app.put('/admin/api/withdrawals/:id/reject', auth, requirePermission('withdrawal
             try {
                 await appendWalletLogEntry({
                     openid: refundOpenid,
-                    type: 'withdraw_reject_refund',
+                    type: isDepositApplication ? 'deposit_application_reject_refund' : 'withdraw_reject_refund',
                     amount: refundAmount,
                     withdraw_id: primaryId(current),
-                    description: `提现驳回退回 ${refundAmount} 元`,
+                    source_type: current.source_type,
+                    description: isDepositApplication ? `存款申请驳回退回 ${refundAmount} 元` : `提现驳回退回 ${refundAmount} 元`,
                     remark: reasonCheck.reason
                 });
             } catch (error) {
@@ -8229,6 +8557,9 @@ app.put('/admin/api/withdrawals/:id/reject', auth, requirePermission('withdrawal
                     total_withdrawn: currentWithdrawn,
                     updated_at: nowIso()
                 };
+                if (isDepositApplication) {
+                    rollbackPatch.piggy_bank_unlocked_amount = currentPiggyBankUnlocked;
+                }
                 if (dataStore._internals?.db && userDocId) {
                     await directPatchDocument('users', userDocId, rollbackPatch);
                 } else {
@@ -8286,7 +8617,7 @@ app.put('/admin/api/withdrawals/:id/sync', auth, requirePermission('withdrawals'
 });
 
 app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdrawals'), async (req, res) => {
-    await ensureFreshCollections(['withdrawals', 'users']);
+    await ensureFreshCollections(['withdrawals', 'users', 'upgrade_piggy_bank_logs', 'commissions', 'wallet_logs']);
     const current = findByLookup(ensureWithdrawalNumericIds(), req.params.id);
     if (!current) return fail(res, '提现记录不存在', 404);
     const currentStatus = pickString(current.status);
@@ -8296,9 +8627,17 @@ app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdraw
     }
     const reasonCheck = requireManualAdjustmentReason(req.body?.remark, '打款备注');
     if (!reasonCheck.ok) return fail(res, reasonCheck.message);
-    if (getWithdrawalAccountType(buildWithdrawalRecord(current, getCollection('users'))) !== 'wechat') {
+    const withdrawalRecord = buildWithdrawalRecord(current, getCollection('users'));
+    if (isDepositCommissionApplication(withdrawalRecord)) {
+        return completeDepositCommissionApplication(req, res, current, currentStatus, reasonCheck.reason);
+    }
+    if (isDepositGoodsFundApplication(withdrawalRecord)) {
+        return completeDepositGoodsFundApplication(req, res, current, currentStatus, reasonCheck.reason);
+    }
+    if (getWithdrawalAccountType(withdrawalRecord) !== 'wechat') {
         return fail(res, '当前仅支持微信提现自动打款', 400);
     }
+    const isDepositApplication = isDepositWithdrawalApplication(withdrawalRecord);
 
     const user = findUserByAnyId(getCollection('users'), current.user_id || current.openid);
     const payoutOpenid = pickString(current.openid || user?.openid);
@@ -8357,8 +8696,8 @@ app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdraw
                 out_detail_no: outDetailNo,
                 openid: payoutOpenid,
                 amount: amountToTransfer,
-                batch_name: '佣金提现',
-                batch_remark: '佣金提现',
+                batch_name: isDepositApplication ? '存款提现' : '佣金提现',
+                batch_remark: isDepositApplication ? '存款提现' : '佣金提现',
                 transfer_remark: reasonCheck.reason,
                 user_name: payoutRealName
             }

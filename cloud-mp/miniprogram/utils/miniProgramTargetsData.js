@@ -105,11 +105,11 @@ module.exports = {
         },
         {
             key: 'page:flex-bundles',
-            title: '自由组合列表',
+            title: '特惠随心选列表',
             group: '营销入口',
             link_type: 'page',
             link_value: '/pages/activity/flex-bundles',
-            note: '活动页自由组合入口'
+            note: '活动页特惠随心选入口'
         },
         {
             key: 'page:product-bundle-detail',

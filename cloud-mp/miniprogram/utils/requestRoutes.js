@@ -20,6 +20,9 @@ const ROUTE_TABLE = {
     'GET /coupons/info': { fn: 'user', action: 'getCouponInfo' },
     'POST /deposit-orders/prepay': { fn: 'payment', action: 'depositPrepay' },
     'GET /deposit-orders/mine': { fn: 'user', action: 'listDepositOrders' },
+    'GET /deposit/applications': { fn: 'distribution', action: 'depositApplications' },
+    'POST /deposit/applications': { fn: 'distribution', action: 'createDepositApplication' },
+    'POST /deposit/claim': { fn: 'distribution', action: 'claimDepositToCommission' },
     'GET /user/dashboard-bootstrap': { fn: 'user', action: 'dashboardBootstrap' },
 
     // ── 商品 ──────────────────────────────────

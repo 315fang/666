@@ -370,6 +370,10 @@ async function addPiggyRows(context, rows = []) {
     let created = 0;
     let amount = 0;
     for (const row of rows) {
+        const incrementalAmount = roundMoney(row.incremental_amount);
+        if (incrementalAmount <= 0) continue;
+
+        // 原子幂等插入：用 where 条件尝试插入，防止并发重复
         const existing = await db.collection('upgrade_piggy_bank_logs')
             .where({
                 order_id: row.order_id,
@@ -382,8 +386,6 @@ async function addPiggyRows(context, rows = []) {
             .catch(() => ({ data: [] }));
         if (existing.data && existing.data.length > 0) continue;
 
-        const incrementalAmount = roundMoney(row.incremental_amount);
-        if (incrementalAmount <= 0) continue;
         await db.collection('upgrade_piggy_bank_logs').add({
             data: {
                 ...row,
@@ -393,12 +395,16 @@ async function addPiggyRows(context, rows = []) {
                 updated_at: db.serverDate()
             }
         });
-        await db.collection('users').where({ openid: row.openid }).update({
-            data: {
-                piggy_bank_locked_amount: command.inc(incrementalAmount),
-                updated_at: db.serverDate()
-            }
-        }).catch((err) => console.error('[UpgradePiggyBank] 更新用户锁定金额失败:', err.message));
+        try {
+            await db.collection('users').where({ openid: row.openid, piggy_bank_locked_amount: command.gte(0) }).update({
+                data: {
+                    piggy_bank_locked_amount: command.inc(incrementalAmount),
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (err) {
+            console.error('[piggy-bank] 更新用户锁定金额失败:', err.message);
+        }
         created += 1;
         amount = roundMoney(amount + incrementalAmount);
     }
@@ -412,6 +418,15 @@ async function createUpgradePiggyBankForOrder(context, orderId, order = {}, runt
     if (!orderId || order.piggy_bank_created_at) return { skipped: true, reason: 'already_created' };
     if (pickString(order.order_type || order.type) === 'exchange' || order.exchange_mode === true) {
         return { skipped: true, reason: 'exchange_order' };
+    }
+
+    // 原子幂等锁：只允许一个调用通过
+    const lockRes = await db.collection('orders')
+        .where({ _id: String(orderId), piggy_bank_created_at: command.exists(false) })
+        .update({ data: { piggy_bank_created_at: db.serverDate(), updated_at: db.serverDate() } });
+    if (!lockRes || !lockRes.stats || lockRes.stats.updated === 0) {
+        console.log('[piggy-bank] 存钱罐创建已被并发处理，跳过 orderId=%s', orderId);
+        return { skipped: true, reason: 'concurrent_lock' };
     }
 
     const buyer = await findUserByAny(context, order.openid || order.buyer_id || order.user_id);
@@ -429,7 +444,6 @@ async function createUpgradePiggyBankForOrder(context, orderId, order = {}, runt
     try {
         await db.collection('orders').doc(String(orderId)).update({
             data: {
-                piggy_bank_created_at: db.serverDate(),
                 piggy_bank_log_count: result.created,
                 piggy_bank_locked_amount: result.amount,
                 updated_at: db.serverDate()

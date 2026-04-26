@@ -441,24 +441,31 @@ async function creditInternalBalance(order = {}, method = 'wallet', amount = 0) 
             updated_at: db.serverDate(),
         }
     });
-    await db.collection('wallet_accounts').doc(accountId).update({
-        data: {
-            balance: _.inc(amount),
-            updated_at: db.serverDate(),
-        }
-    }).catch(async () => {
-        await db.collection('wallet_accounts').doc(accountId).set({
+    try {
+        await db.collection('wallet_accounts').doc(accountId).update({
             data: {
-                user_id: userId,
-                openid: order.openid,
-                balance: nextAccountBalance,
-                account_type: method,
-                status: 'active',
-                created_at: db.serverDate(),
+                balance: _.inc(amount),
                 updated_at: db.serverDate(),
             }
         });
-    });
+    } catch (updateErr) {
+        console.error('[system-refund] ⚠️ wallet_accounts.update 失败，尝试创建文档 accountId=%s error=%s', accountId, updateErr.message);
+        try {
+            await db.collection('wallet_accounts').doc(accountId).set({
+                data: {
+                    user_id: userId,
+                    openid: order.openid,
+                    balance: nextAccountBalance,
+                    account_type: method,
+                    status: 'active',
+                    created_at: db.serverDate(),
+                    updated_at: db.serverDate(),
+                }
+            });
+        } catch (setErr) {
+            console.error('[system-refund] ⚠️ wallet_accounts.set 创建文档也失败 accountId=%s error=%s', accountId, setErr.message);
+        }
+    }
 
     await writeWalletRefundLogs({
         openid: order.openid,
@@ -476,7 +483,7 @@ async function creditInternalBalance(order = {}, method = 'wallet', amount = 0) 
         try {
             await db.collection('users').where({ openid: order.openid }).update({
                 data: {
-                    [userBalanceInfo.field]: userBalanceInfo.balance,
+                    [userBalanceInfo.field]: _.inc(-amount),
                     updated_at: db.serverDate(),
                 }
             });
@@ -489,19 +496,29 @@ async function creditInternalBalance(order = {}, method = 'wallet', amount = 0) 
             } catch (_) {}
         }
         try {
-            await db.collection('wallet_accounts').doc(accountId).set({
+            await db.collection('wallet_accounts').doc(accountId).update({
                 data: {
-                    user_id: userId,
-                    openid: order.openid,
-                    balance: previousAccountBalance,
-                    account_type: method,
-                    status: 'active',
-                    created_at: account.created_at || db.serverDate(),
+                    balance: _.inc(-amount),
                     updated_at: db.serverDate(),
                 }
             });
         } catch (rollbackErr) {
-            console.error('[system-refund] ⚠️ 余额回滚失败(钱包账户) accountId=%s error=%s', accountId, rollbackErr.message);
+            console.error('[system-refund] ⚠️ 余额回滚失败(钱包账户update) accountId=%s error=%s', accountId, rollbackErr.message);
+            try {
+                await db.collection('wallet_accounts').doc(accountId).set({
+                    data: {
+                        user_id: userId,
+                        openid: order.openid,
+                        balance: previousAccountBalance,
+                        account_type: method,
+                        status: 'active',
+                        created_at: account.created_at || db.serverDate(),
+                        updated_at: db.serverDate(),
+                    }
+                });
+            } catch (setErr) {
+                console.error('[system-refund] ⚠️ 余额回滚失败(钱包账户set兜底) accountId=%s error=%s', accountId, setErr.message);
+            }
             try {
                 await db.collection('rollback_error_logs').add({
                     data: { context: 'creditInternalBalance_rollback_wallet_account', openid: order.openid, accountId, previousBalance: previousAccountBalance, error: rollbackErr.message, created_at: db.serverDate() }

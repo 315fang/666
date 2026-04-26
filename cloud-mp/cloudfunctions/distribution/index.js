@@ -371,13 +371,51 @@ function buildUpgradePiggyBankSummary(rows = [], currentLevel = 0, nextLevel = n
     const nextLevelUnlockAmount = nextLevel == null ? 0 : roundMoney(rows
         .filter((row) => row.status === 'locked' && toNumber(row.target_role_level, 0) === nextLevel)
         .reduce((sum, row) => sum + toNumber(row.incremental_amount, 0), 0));
+    const totalAmount = roundMoney(lockedAmount + unlockedAmount);
     return {
+        total_amount: totalAmount,
         locked_amount: lockedAmount,
         unlocked_amount: unlockedAmount,
+        available_amount: unlockedAmount,
         reversed_amount: reversedAmount,
         unlockable_amount: unlockableAmount,
         next_level_unlock_amount: nextLevelUnlockAmount,
         buckets
+    };
+}
+
+function normalizeDepositApplicationType(value) {
+    const raw = pickString(value || 'withdraw').toLowerCase();
+    if (['commission', 'deposit_commission', 'transfer_to_commission', 'claim', 'claim_to_commission'].includes(raw)) {
+        return 'deposit_commission';
+    }
+    if (['goods_fund', 'goodsfund', 'transfer', 'transfer_to_goods_fund', 'deposit_goods_fund'].includes(raw)) {
+        return 'deposit_goods_fund';
+    }
+    return 'deposit_withdrawal';
+}
+
+function depositApplicationTypeText(type) {
+    const normalized = normalizeDepositApplicationType(type);
+    if (normalized === 'deposit_commission') return '申请转佣金';
+    if (normalized === 'deposit_goods_fund') return '申请转入金';
+    return '申请提现';
+}
+
+function normalizeDepositApplicationRow(row = {}) {
+    const applicationType = normalizeDepositApplicationType(row.application_type || row.method || row.type);
+    const status = pickString(row.status || 'pending');
+    const amount = roundMoney(row.amount);
+    const fee = roundMoney(row.fee);
+    return {
+        ...row,
+        id: row._id || row.id || row.withdraw_no || '',
+        application_type: applicationType,
+        application_type_text: depositApplicationTypeText(applicationType),
+        amount,
+        fee,
+        actual_amount: roundMoney(row.actual_amount != null ? row.actual_amount : amount - fee),
+        status
     };
 }
 
@@ -1108,9 +1146,258 @@ const handleAction = {
         const res = await db.collection('withdrawals')
             .where({ openid })
             .orderBy('created_at', 'desc')
-            .limit(50)
+            .limit(100)
             .get().catch(() => ({ data: [] }));
-        return success({ list: res.data || [] });
+        const list = (res.data || []).filter((row) => row.source_type !== 'upgrade_piggy_bank').slice(0, 50);
+        return success({ list });
+    }),
+
+    'depositApplications': asyncHandler(async (openid, params = {}) => {
+        const limit = Math.min(50, Math.max(1, toNumber(params.limit || params.pageSize, 20)));
+        const res = await db.collection('withdrawals')
+            .where({ openid, source_type: 'upgrade_piggy_bank' })
+            .orderBy('created_at', 'desc')
+            .limit(limit)
+            .get()
+            .catch(() => ({ data: [] }));
+        return success({ list: (res.data || []).map(normalizeDepositApplicationRow) });
+    }),
+
+    'createDepositApplication': asyncHandler(async (openid, params) => {
+        await assertPortalPassword(db, openid, params.portal_password || params.password);
+        const amount = roundMoney(params.amount);
+        if (amount <= 0) throw badRequest('申请金额必须大于0');
+        if (amount < 1) throw badRequest('最低申请1元');
+
+        const applicationType = normalizeDepositApplicationType(params.application_type || params.type);
+        const userRes = await db.collection('users').where({ openid }).limit(1).get();
+        if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
+
+        let user = await resolveCommissionWalletState(userRes.data[0]);
+        const roleLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+        if (roleLevel <= 0) throw forbidden('升级后才可以申请使用存款');
+
+        if (user.piggy_bank_unlocked_amount == null) {
+            const rows = await listUpgradePiggyBankRows(openid, 500);
+            const summary = buildUpgradePiggyBankSummary(rows, roleLevel, null);
+            const initialAmount = Math.max(0, roundMoney(summary.unlocked_amount));
+            if (user._id) {
+                await db.collection('users').doc(String(user._id)).update({
+                    data: {
+                        piggy_bank_unlocked_amount: initialAmount,
+                        updated_at: db.serverDate()
+                    }
+                }).catch((error) => {
+                    console.error('[distribution] ⚠️ 初始化存款余额失败 openid=%s error=%s', openid, error.message);
+                });
+            }
+            user = { ...user, piggy_bank_unlocked_amount: initialAmount };
+        }
+
+        const availableDeposit = roundMoney(user.piggy_bank_unlocked_amount);
+        if (amount > availableDeposit) {
+            throw badRequest(`可用存款不足，当前可用¥${availableDeposit.toFixed(2)}`);
+        }
+        const commissionBalance = toNumber(user.commission_balance != null ? user.commission_balance : user.balance, 0);
+        if (amount > commissionBalance) {
+            throw badRequest('存款已被其他资金操作占用，请刷新后重试');
+        }
+
+        const applicationNoPrefix = applicationType === 'deposit_goods_fund' ? 'DPT' : 'DPW';
+        const applicationNo = applicationNoPrefix + Date.now() + Math.floor(Math.random() * 1000);
+        const applicationText = depositApplicationTypeText(applicationType);
+        const isGoodsFund = applicationType === 'deposit_goods_fund';
+        const withdrawAccountType = isGoodsFund ? 'deposit_goods_fund' : 'wechat';
+
+        const updateRes = await db.collection('users')
+            .where({
+                openid,
+                piggy_bank_unlocked_amount: _.gte(amount),
+                commission_balance: _.gte(amount)
+            })
+            .update({
+                data: {
+                    piggy_bank_unlocked_amount: _.inc(-amount),
+                    commission_balance: _.inc(-amount),
+                    balance: _.inc(-amount),
+                    total_withdrawn: _.inc(amount),
+                    updated_at: db.serverDate()
+                }
+            });
+        if (!updateRes.stats || updateRes.stats.updated === 0) {
+            throw badRequest('可用存款不足或并发冲突，请稍后重试');
+        }
+
+        let result;
+        try {
+            result = await db.collection('withdrawals').add({
+                data: {
+                    openid,
+                    user_id: user._id || user.id || user._legacy_id || '',
+                    withdraw_no: applicationNo,
+                    amount,
+                    fee: 0,
+                    actual_amount: amount,
+                    role_level: roleLevel,
+                    type: withdrawAccountType,
+                    method: withdrawAccountType,
+                    application_type: applicationType,
+                    source_type: 'upgrade_piggy_bank',
+                    source_name: '我的存款',
+                    title: `我的存款${applicationText}`,
+                    withdraw_account: {
+                        type: withdrawAccountType,
+                        name: pickString(user.real_name || user.contact_name || user.nickname || ''),
+                        account: isGoodsFund ? '转入货款账户' : '',
+                        openid
+                    },
+                    status: 'pending',
+                    created_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (createErr) {
+            try {
+                await db.collection('users').where({ openid }).update({
+                    data: {
+                        piggy_bank_unlocked_amount: _.inc(amount),
+                        commission_balance: _.inc(amount),
+                        balance: _.inc(amount),
+                        total_withdrawn: _.inc(-amount),
+                        updated_at: db.serverDate()
+                    }
+                });
+            } catch (rollbackErr) {
+                console.error('[distribution] ⚠️ 存款申请创建失败后余额回滚也失败 openid=%s amount=%s error=%s', openid, amount, rollbackErr.message);
+            }
+            throw serverError(`存款申请创建失败，余额已回滚：${createErr.message || '未知错误'}`);
+        }
+
+        try {
+            await appendWalletLog({
+                openid,
+                type: isGoodsFund ? 'deposit_goods_fund_apply' : 'deposit_withdraw_apply',
+                amount: -amount,
+                withdraw_id: result._id,
+                application_no: applicationNo,
+                source_type: 'upgrade_piggy_bank',
+                description: `我的存款${applicationText}${amount}元`
+            });
+        } catch (logErr) {
+            try {
+                await db.collection('users').where({ openid }).update({
+                    data: {
+                        piggy_bank_unlocked_amount: _.inc(amount),
+                        commission_balance: _.inc(amount),
+                        balance: _.inc(amount),
+                        total_withdrawn: _.inc(-amount),
+                        updated_at: db.serverDate()
+                    }
+                });
+                await db.collection('withdrawals').doc(String(result._id)).remove();
+            } catch (rollbackErr) {
+                console.error('[distribution] ⚠️ 存款申请流水失败后回滚失败 openid=%s amount=%s error=%s', openid, amount, rollbackErr.message);
+            }
+            throw serverError(`存款申请流水写入失败：${logErr.message || '未知错误'}`);
+        }
+
+        return success({
+            application_id: result._id,
+            application_no: applicationNo,
+            application_type: applicationType,
+            amount,
+            status: 'pending'
+        });
+    }),
+
+    'claimDepositToCommission': asyncHandler(async (openid) => {
+        const userRes = await db.collection('users').where({ openid }).limit(1).get();
+        if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
+        const user = userRes.data[0];
+        const currentLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
+        if (currentLevel <= 0) throw forbidden('升级后才可以申请转佣金');
+
+        const existingRes = await db.collection('withdrawals')
+            .where({
+                openid,
+                source_type: 'upgrade_piggy_bank',
+                application_type: 'deposit_commission',
+                status: _.in(['pending', 'approved', 'processing'])
+            })
+            .orderBy('created_at', 'desc')
+            .limit(1)
+            .get()
+            .catch(() => ({ data: [] }));
+        const existing = existingRes.data && existingRes.data[0];
+        if (existing) {
+            return success({
+                applied: false,
+                pending: true,
+                application_id: existing._id || existing.id,
+                application_no: existing.withdraw_no,
+                amount: roundMoney(existing.amount),
+                status: existing.status
+            });
+        }
+
+        const rows = await listUpgradePiggyBankRows(openid, 500);
+        const claimableRows = rows.filter((row) => (
+            row.status === 'locked'
+            && toNumber(row.target_role_level, 0) <= currentLevel
+            && roundMoney(row.incremental_amount) > 0
+        ));
+        if (!claimableRows.length) {
+            return success({ applied: false, pending: false, amount: 0 });
+        }
+
+        const amount = roundMoney(claimableRows.reduce((sum, row) => sum + roundMoney(row.incremental_amount), 0));
+        if (amount <= 0) {
+            return success({ applied: false, pending: false, amount: 0 });
+        }
+
+        const applicationNo = 'DPC' + Date.now() + Math.floor(Math.random() * 1000);
+        const userId = user._id || user.id || user._legacy_id || '';
+        let result;
+        try {
+            result = await db.collection('withdrawals').add({
+                data: {
+                    openid,
+                    user_id: userId,
+                    withdraw_no: applicationNo,
+                    amount,
+                    fee: 0,
+                    actual_amount: amount,
+                    role_level: currentLevel,
+                    type: 'deposit_commission',
+                    method: 'deposit_commission',
+                    application_type: 'deposit_commission',
+                    source_type: 'upgrade_piggy_bank',
+                    source_name: '我的存款',
+                    title: '我的存款申请转佣金',
+                    piggy_bank_log_ids: claimableRows.map((row) => String(row._id || row.id)).filter(Boolean),
+                    withdraw_account: {
+                        type: 'deposit_commission',
+                        name: pickString(user.real_name || user.contact_name || user.nickname || ''),
+                        account: '审核通过后转入佣金余额',
+                        openid
+                    },
+                    status: 'pending',
+                    created_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (error) {
+            throw serverError(`转佣金申请创建失败：${error.message || '未知错误'}`);
+        }
+
+        return success({
+            applied: true,
+            pending: true,
+            application_id: result._id,
+            application_no: applicationNo,
+            amount,
+            status: 'pending'
+        });
     }),
 
     // ===== 佣金 1:1 转货款 =====
@@ -1461,6 +1748,10 @@ const handleAction = {
 
         const piggyRows = await listUpgradePiggyBankRows(openid, 500);
         const piggyBank = buildUpgradePiggyBankSummary(piggyRows, currentLevel, normalizedNextLevel);
+        if (user.piggy_bank_unlocked_amount != null) {
+            piggyBank.available_amount = Math.max(0, roundMoney(user.piggy_bank_unlocked_amount));
+            piggyBank.total_amount = roundMoney(piggyBank.locked_amount + piggyBank.available_amount);
+        }
 
         return success({
             current_level: currentLevel,
@@ -1787,14 +2078,17 @@ exports.main = cloudFunctionWrapper(async (event) => {
     }
 
     // 查看类 action：非分销员也可访问（返回基础数据）
-    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench', 'stats', 'team', 'teamDetail', 'commissionPreview', 'estimatedCommission', 'promotionProgress', 'promotionLogs', 'upgradePiggyBankLogs', 'myFundPoolSummary', 'agentWallet', 'agentGoodsFund', 'agentWalletLogs', 'getDirectedInviteTicket', 'goodsFundTransferApplications', 'withdrawRules'];
+    const viewActions = ['center', 'dashboard', 'wxacodeInvite', 'agentWorkbench', 'stats', 'team', 'teamDetail', 'commissionPreview', 'estimatedCommission', 'promotionProgress', 'promotionLogs', 'upgradePiggyBankLogs', 'depositApplications', 'myFundPoolSummary', 'agentWallet', 'agentGoodsFund', 'agentWalletLogs', 'getDirectedInviteTicket', 'goodsFundTransferApplications', 'withdrawRules'];
     const openWriteActions = new Set(['acceptDirectedInvite']);
+    const depositWriteActions = new Set(['createDepositApplication', 'claimDepositToCommission']);
 
     if (!viewActions.includes(action) && !openWriteActions.has(action)) {
         // 写操作需要分销权限
         const user = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
         const userDoc = user.data && user.data[0];
-        if (!userDoc || (!userDoc.distributor_level && !userDoc.agent_level)) {
+        const hasDistributionLevel = !!(userDoc && (userDoc.distributor_level || userDoc.agent_level));
+        const hasDepositLevel = !!(userDoc && toNumber(userDoc.role_level ?? userDoc.distributor_level ?? userDoc.level, 0) > 0);
+        if (!userDoc || (!hasDistributionLevel && !(depositWriteActions.has(action) && hasDepositLevel))) {
             throw forbidden('您没有分销权限');
         }
     }

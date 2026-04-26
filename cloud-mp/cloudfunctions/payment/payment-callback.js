@@ -646,7 +646,7 @@ async function ensureWalletAccountForUser(user, seedBalance) {
 async function increaseGoodsFundLedger(openid, amount, refId, remark, refType = 'wx_recharge') {
     const { user, account: existingAccount } = await getWalletAccountByOpenid(openid);
     if (!user) throw new Error('货款账本同步失败：用户不存在');
-    const account = existingAccount || await ensureWalletAccountForUser(user, getUserGoodsFundBalance(user) - amount);
+    const account = existingAccount || await ensureWalletAccountForUser(user, getUserGoodsFundBalance(user));
     if (!account) throw new Error('货款账本同步失败：无法创建钱包账户');
     const before = toNumber(account.balance, 0);
     const after = before + amount;
@@ -1084,6 +1084,8 @@ async function ensureAgentRoleSynced(orderId, order) {
         return { skipped: true, reason: 'exchange_order' };
     }
     if (!order.openid) return { skipped: true };
+    // 幂等守卫：已同步的角色升级不重复执行
+    if (order.role_synced_at) return { skipped: true, reason: 'already_synced' };
     const user = await findUserByAny(order.openid);
     if (!user) return { skipped: true };
 
@@ -1100,6 +1102,9 @@ async function ensureAgentRoleSynced(orderId, order) {
     const growthValue = toNumber(user.growth_value, 0);
     const nextRoleLevel = deriveEligibleRoleLevel(currentRoleLevel, effectiveSales, directMembers, rechargeTotal, upgradeRules, growthValue);
     if (nextRoleLevel <= currentRoleLevel) {
+        await db.collection('orders').doc(orderId).update({
+            data: { role_synced_at: db.serverDate(), updated_at: db.serverDate() },
+        }).catch((e) => { console.error('[payment-callback] role_synced_at标记失败(无升级)', e.message); });
         return { skipped: true, currentRoleLevel, nextRoleLevel };
     }
 
@@ -1188,6 +1193,11 @@ async function ensureAgentRoleSynced(orderId, order) {
         piggyBankUnlock = { error: err.message };
         console.error('[RoleSync] 升级存钱罐解锁失败:', err.message);
     }
+
+    // 标记幂等守卫
+    await db.collection('orders').doc(orderId).update({
+        data: { role_synced_at: db.serverDate(), updated_at: db.serverDate() },
+    }).catch((e) => { console.error('[payment-callback] role_synced_at标记失败', e.message); });
 
     return {
         upgraded: true,
@@ -1317,6 +1327,16 @@ async function ensurePointsAwarded(orderId, order) {
         return { skipped: true, reason: 'test_order', awarded: 0, growth: 0, multiplier: 0, buyerRole: 0 };
     }
     if (order.points_awarded_at) return { skipped: true };
+
+    // 原子幂等锁：用 where 条件确保只有一个调用能通过
+    const lockRes = await db.collection('orders')
+        .where({ _id: orderId, points_awarded_at: _.exists(false) })
+        .update({ data: { points_awarded_at: db.serverDate(), updated_at: db.serverDate() } });
+    if (!lockRes || !lockRes.stats || lockRes.stats.updated === 0) {
+        console.log('[payment-callback] 积分发放已被并发处理，跳过 orderId=%s', orderId);
+        return { skipped: true, reason: 'concurrent_lock' };
+    }
+
     const payAmount = getOrderTotalAmount(order);
     if (payAmount <= 0 || !order.openid) {
         await db.collection('orders').doc(orderId).update({
@@ -1379,7 +1399,7 @@ async function ensurePointsAwarded(orderId, order) {
     }
 
     await db.collection('orders').doc(orderId).update({
-        data: { points_awarded_at: db.serverDate(), points_earned: pointsEarned, updated_at: db.serverDate() },
+        data: { points_earned: pointsEarned, updated_at: db.serverDate() },
     });
     return { awarded: pointsEarned, growth: growthEarned, multiplier: purchasePointsPerHundred, buyerRole };
 }
@@ -1431,6 +1451,15 @@ async function ensureCommissionsCreated(orderId, order) {
         return { skipped: true, reason: 'exchange_order', created: 0 };
     }
     if (order.commissions_created_at) return { skipped: true };
+
+    // 原子幂等锁：用 where 条件确保只有一个调用能通过
+    const lockRes = await db.collection('orders')
+        .where({ _id: orderId, commissions_created_at: _.exists(false) })
+        .update({ data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() } });
+    if (!lockRes || !lockRes.stats || lockRes.stats.updated === 0) {
+        console.log('[payment-callback] 佣金创建已被并发处理，跳过 orderId=%s', orderId);
+        return { skipped: true, reason: 'concurrent_lock' };
+    }
     const orderPayAmount = getOrderTotalAmount(order);
     const commissionBase = orderPayAmount;
     const branchRegion = commissionBase > 0
@@ -1621,9 +1650,6 @@ async function ensureCommissionsCreated(orderId, order) {
         created += 1;
     }
 
-    await db.collection('orders').doc(orderId).update({
-        data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
-    });
     return { created, commission_base: commissionBase, branch_region: branchRegion };
 }
 
@@ -2632,7 +2658,7 @@ async function handleRechargeCallback(outTradeNo, transaction) {
         }).catch((err) => {
             console.error('[RechargeCallback] 到账失败:', err.message);
         });
-    await increaseGoodsFundLedger(openid, amount, outTradeNo, '货款余额充值', 'wx_recharge').catch(() => false);
+    await increaseGoodsFundLedger(openid, amount, outTradeNo, '货款余额充值', 'wx_recharge').catch((err) => { console.error('[RechargeCallback] 货款充值账本同步失败:', err.message || err); });
 
     // 写流水日志
     try {

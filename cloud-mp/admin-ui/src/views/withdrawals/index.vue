@@ -3,7 +3,7 @@
     <el-card>
       <template #header>
         <div class="card-header">
-          <span>提现审核</span>
+          <span>提现/存款审核</span>
           <div class="header-actions">
             <span class="sync-text">最后同步：{{ lastSyncedAt ? formatDateTime(lastSyncedAt) : '—' }}</span>
             <el-button size="small" @click="refreshWithdrawals" :loading="loading">刷新</el-button>
@@ -42,7 +42,7 @@
         <el-table-column label="用户" width="150">
           <template #default="{ row }">{{ displayUserName(row.user, row.user_id) }}</template>
         </el-table-column>
-        <el-table-column label="提现账号" min-width="200">
+        <el-table-column label="申请类型/账户" min-width="220">
           <template #default="{ row }">
             <div v-if="getWithdrawAccountText(row)">
               <el-tag size="small" :type="getWithdrawAccountType(row) === 'wechat' ? 'success' : 'primary'" style="margin-right:6px">
@@ -53,7 +53,7 @@
             <span v-else class="text-gray">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="提现金额" width="110">
+        <el-table-column label="申请金额" width="110">
           <template #default="{ row }">¥{{ parseFloat(row.amount || 0).toFixed(2) }}</template>
         </el-table-column>
         <el-table-column label="手续费" width="90" class-name="hide-mobile">
@@ -64,7 +64,7 @@
         </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
+            <el-tag :type="getStatusType(row.status)">{{ getStatusText(row) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="申请时间" width="170" class-name="hide-mobile">
@@ -74,7 +74,7 @@
           <template #default="{ row }">
             <el-button v-if="row.status === 'pending'" text type="success" size="small" @click="handleApprove(row)">通过</el-button>
             <el-button v-if="row.status === 'pending'" text type="danger" size="small" @click="handleReject(row)">拒绝</el-button>
-            <el-button v-if="canAutoCompleteWithdrawal(row)" text type="primary" size="small" @click="handleComplete(row)">确认打款</el-button>
+            <el-button v-if="canAutoCompleteWithdrawal(row)" text type="primary" size="small" @click="handleComplete(row)">{{ getCompleteActionText(row) }}</el-button>
             <el-button v-if="canSyncWithdrawal(row)" text type="warning" size="small" @click="handleSync(row)">同步状态</el-button>
             <el-button text size="small" @click="handleDetail(row)">详情</el-button>
           </template>
@@ -95,7 +95,7 @@
     </el-card>
 
     <!-- 拒绝对话框 -->
-    <el-dialog v-model="rejectDialogVisible" title="拒绝提现" width="min(500px, 94vw)">
+    <el-dialog v-model="rejectDialogVisible" title="拒绝申请" width="min(500px, 94vw)">
       <el-form :model="rejectForm" label-width="100px">
         <el-form-item label="拒绝原因">
           <el-input v-model="rejectForm.reason" type="textarea" :rows="4" placeholder="请输入拒绝原因" />
@@ -108,22 +108,23 @@
     </el-dialog>
 
     <!-- 详情对话框 -->
-    <el-dialog v-model="detailDialogVisible" title="提现详情" width="min(480px, 94vw)">
+    <el-dialog v-model="detailDialogVisible" title="申请详情" width="min(480px, 94vw)">
       <el-descriptions :column="1" border v-if="currentRow">
         <el-descriptions-item label="申请 ID">{{ currentRow.id }}</el-descriptions-item>
         <el-descriptions-item label="用户">{{ displayUserName(currentRow.user, currentRow.user_id) }}</el-descriptions-item>
-        <el-descriptions-item label="提现账号">
+        <el-descriptions-item label="申请类型">{{ getApplicationKindLabel(currentRow) }}</el-descriptions-item>
+        <el-descriptions-item label="收款/转入账户">
           <template v-if="getWithdrawAccountText(currentRow)">
             <el-tag size="small" style="margin-right:6px">{{ getWithdrawAccountLabel(currentRow) }}</el-tag>
             {{ getWithdrawAccountText(currentRow) }}
           </template>
           <span v-else>—</span>
         </el-descriptions-item>
-        <el-descriptions-item label="提现金额">¥{{ parseFloat(currentRow.amount || 0).toFixed(2) }}</el-descriptions-item>
+        <el-descriptions-item label="申请金额">¥{{ parseFloat(currentRow.amount || 0).toFixed(2) }}</el-descriptions-item>
         <el-descriptions-item label="手续费">¥{{ parseFloat(currentRow.fee || 0).toFixed(2) }}</el-descriptions-item>
         <el-descriptions-item label="实际到账">¥{{ parseFloat(currentRow.actual_amount || 0).toFixed(2) }}</el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-tag :type="getStatusType(currentRow.status)">{{ getStatusText(currentRow.status) }}</el-tag>
+          <el-tag :type="getStatusType(currentRow.status)">{{ getStatusText(currentRow) }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="微信批次" v-if="currentRow.wx_transfer?.batch_id || currentRow.wx_transfer?.out_batch_no">
           {{ currentRow.wx_transfer?.batch_id || '-' }} / {{ currentRow.wx_transfer?.out_batch_no || '-' }}
@@ -180,6 +181,22 @@ const rejectForm = reactive({
   reason: ''
 })
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
+const isDepositApplication = (row) => row?.source_type === 'upgrade_piggy_bank' || String(row?.application_type || '').startsWith('deposit_')
+const isDepositCommissionApplication = (row) => row?.application_type === 'deposit_commission' || getWithdrawAccountType(row) === 'deposit_commission'
+const isDepositGoodsFundApplication = (row) => {
+  const type = getWithdrawAccountType(row)
+  return row?.application_type === 'deposit_goods_fund' || type === 'deposit_goods_fund'
+}
+const getApplicationKindLabel = (row) => {
+  if (isDepositCommissionApplication(row)) return '存款转佣金'
+  if (isDepositGoodsFundApplication(row)) return '存款转入金'
+  if (isDepositApplication(row)) return '存款提现'
+  return '佣金提现'
+}
+const getCompleteActionText = (row) => {
+  if (isDepositCommissionApplication(row)) return '确认转佣金'
+  return isDepositGoodsFundApplication(row) ? '确认转入' : '确认打款'
+}
 
 const patchWithdrawalRow = (id, patch) => {
   const applyPatch = (row) => ({ ...row, ...patch })
@@ -266,14 +283,14 @@ const handleDetail = (row) => {
 
 const handleApprove = async (row) => {
   try {
-    await ElMessageBox.confirm(`确认通过该提现申请？\n到账金额：¥${parseFloat(row.actual_amount || 0).toFixed(2)}`, '审核确认', {
+    await ElMessageBox.confirm(`确认通过该${getApplicationKindLabel(row)}申请？\n处理金额：¥${parseFloat(row.actual_amount || 0).toFixed(2)}`, '审核确认', {
       confirmButtonText: '确定通过',
       cancelButtonText: '取消',
       type: 'warning'
     })
     await runWithdrawalMutation(
       () => approveWithdrawal(row.id),
-      '审核通过，请尽快完成打款'
+      isDepositGoodsFundApplication(row) ? '审核通过，请确认转入金' : '审核通过，请尽快完成打款'
     )
   } catch (error) {
     if (error !== 'cancel') {
@@ -307,14 +324,17 @@ const handleRejectSubmit = async () => {
 
 const handleComplete = async (row) => {
   try {
+    const isGoodsFundTransfer = isDepositGoodsFundApplication(row)
     const { value } = await ElMessageBox.prompt(
-      `该操作将尝试向用户「${displayUserName(row.user, row.user_id)}」自动打款 ¥${parseFloat(row.actual_amount || 0).toFixed(2)}。仅微信收款方式支持自动打款，请先确认账户信息，并填写打款备注。`,
-      '确认执行打款',
+      isGoodsFundTransfer
+        ? `该操作将把用户「${displayUserName(row.user, row.user_id)}」的存款 ¥${parseFloat(row.actual_amount || 0).toFixed(2)} 转入货款账户。请确认金额，并填写处理备注。`
+        : `该操作将尝试向用户「${displayUserName(row.user, row.user_id)}」自动打款 ¥${parseFloat(row.actual_amount || 0).toFixed(2)}。仅微信收款方式支持自动打款，请先确认账户信息，并填写打款备注。`,
+      isGoodsFundTransfer ? '确认转入金' : '确认执行打款',
       {
-        confirmButtonText: '确认打款',
+        confirmButtonText: isGoodsFundTransfer ? '确认转入' : '确认打款',
         cancelButtonText: '取消',
         type: 'warning',
-        inputPlaceholder: '例如：微信企业付款已执行 / 银行流水号',
+        inputPlaceholder: isGoodsFundTransfer ? '例如：审核通过，转入货款账户' : '例如：微信企业付款已执行 / 银行流水号',
         inputValidator: (input) => {
           if (!input || String(input).trim().length < 2) return '请填写至少 2 个字符的打款备注'
           return true
@@ -323,7 +343,10 @@ const handleComplete = async (row) => {
     )
     await runWithdrawalMutation(
       () => completeWithdrawal(row.id, { remark: value }),
-      (result) => result?.status === 'completed' ? '微信提现已完成' : '微信提现已受理，等待微信处理'
+      (result) => {
+        if (isGoodsFundTransfer) return '存款已转入金'
+        return result?.status === 'completed' ? '微信提现已完成' : '微信提现已受理，等待微信处理'
+      }
     )
   } catch (error) {
     if (error !== 'cancel') {
@@ -335,7 +358,7 @@ const handleComplete = async (row) => {
   }
 }
 
-const canAutoCompleteWithdrawal = (row) => ['approved', 'failed'].includes(row?.status) && getWithdrawAccountType(row) === 'wechat'
+const canAutoCompleteWithdrawal = (row) => ['approved', 'failed'].includes(row?.status) && (getWithdrawAccountType(row) === 'wechat' || isDepositGoodsFundApplication(row))
 const canSyncWithdrawal = (row) => ['processing', 'approved'].includes(row?.status) && !!row?.wx_transfer?.batch_id
 
 const handleSync = async (row) => {
@@ -353,11 +376,14 @@ const getWithdrawAccountType = (row) => row?.withdraw_account?.type || row?.meth
 
 const getWithdrawAccountLabel = (row) => {
   const type = getWithdrawAccountType(row)
+  if (type === 'deposit_goods_fund') return '转入金'
+  if (isDepositApplication(row) && type === 'wechat') return '存款提现'
   return type === 'wechat' ? '微信' : type === 'alipay' ? '支付宝' : '银行卡'
 }
 
 const getWithdrawAccountText = (row) => {
   const account = row?.withdraw_account
+  if (isDepositGoodsFundApplication(row)) return '转入货款账户'
   if (account) {
     return account.account || account.name || account.account_no || '-'
   }
@@ -372,7 +398,13 @@ const getStatusType = (status) => {
   return map[status] || 'info'
 }
 
-const getStatusText = (status) => {
+const getStatusText = (rowOrStatus) => {
+  const status = typeof rowOrStatus === 'string' ? rowOrStatus : rowOrStatus?.status
+  if (typeof rowOrStatus === 'object' && isDepositGoodsFundApplication(rowOrStatus)) {
+    if (status === 'approved') return '待转入'
+    if (status === 'processing') return '转入中'
+    if (status === 'completed') return '已转入金'
+  }
   const map = { pending: '待审核', approved: '待打款', processing: '打款中', rejected: '已拒绝', failed: '打款失败', completed: '已到账' }
   return map[status] || status
 }

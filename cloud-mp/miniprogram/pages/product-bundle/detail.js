@@ -170,6 +170,9 @@ Page({
                 cover_preview_url: await resolveRenderableImageUrl(coverSource, ''),
                 groups
             };
+            wx.setNavigationBarTitle({
+                title: bundle.scene_type === 'flex_bundle' ? '特惠随心选' : '组合套装'
+            });
             const selectedMap = {};
             groups.forEach((group) => {
                 const options = Array.isArray(group.options) ? group.options : [];
