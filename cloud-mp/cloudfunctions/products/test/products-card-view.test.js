@@ -26,7 +26,7 @@ function createWxServerSdkMock(collections, stats) {
         return Object.entries(condition).every(([key, expected]) => {
             const actual = row[key];
             if (expected && expected.__op === 'in') {
-                return expected.values.map(String).includes(String(actual));
+                return expected.values.includes(actual);
             }
             return String(actual) === String(expected);
         });
@@ -192,6 +192,47 @@ test('products list keeps default full shape with skus and detail images', async
         assert.ok(Array.isArray(result.data.list[0].detail_images));
         assert.ok(Array.isArray(result.data.list[0].skus));
         assert.equal(result.data.list[0].specSummary, '红色');
+    } finally {
+        restore();
+    }
+});
+
+test('products detail matches sku product_id stored as a number', async () => {
+    const collections = createCollections({
+        products: [
+            {
+                _id: '10',
+                id: 10,
+                category_id: 'cat-a',
+                name: '数字规格商品',
+                status: 1,
+                retail_price: 189,
+                market_price: 378,
+                stock: 105,
+                images: ['cloud://env/product-10-cover']
+            }
+        ],
+        skus: [
+            {
+                _id: 'fallback-sku-10',
+                id: 'fallback-sku-10',
+                product_id: 10,
+                retail_price: 189,
+                market_price: 378,
+                stock: 105,
+                spec: '1.5ml*30支',
+                spec_name: '规格',
+                spec_value: '1.5ml*30支'
+            }
+        ]
+    });
+    const { mod, restore } = loadProductsFunction(collections);
+    try {
+        const result = await mod.main({ action: 'detail', product_id: '10' });
+        assert.equal(result.code, 0);
+        assert.equal(result.data.skus.length, 1);
+        assert.equal(result.data.skus[0].id, 'fallback-sku-10');
+        assert.deepEqual(result.data.skus[0].specs, [{ name: '规格', value: '1.5ml*30支' }]);
     } finally {
         restore();
     }

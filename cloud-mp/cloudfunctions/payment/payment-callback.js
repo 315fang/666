@@ -32,9 +32,7 @@ const {
     DEFAULT_COMMISSION_MATRIX,
     DEFAULT_BUNDLE_COMMISSION_MATRIX,
     DEFAULT_AGENT_COMMISSION_CONFIG,
-    DEFAULT_COST_SPLIT,
-    DEFAULT_PEER_BONUS_CONFIG,
-    DEFAULT_POINT_RULES
+    DEFAULT_COST_SPLIT
 } = require('./shared/agent-config');
 
 const DEFAULT_BRANCH_AGENT_POLICY = {
@@ -65,6 +63,7 @@ const PAID_POST_PROCESS_STATUSES = [
     'shipped',
     'completed'
 ];
+const SELF_PURCHASE_COMMISSION_ENABLED = false;
 
 const DEFAULT_PEER_BONUS_CONFIG = {
     enabled: true,
@@ -98,7 +97,7 @@ const DEFAULT_POINT_RULES = {
         3: 300,
         4: 400,
         5: 500,
-        6: 400
+        6: 500
     },
     group_start: {
         points: 0,
@@ -279,6 +278,11 @@ function resolveBenefitRoleLevel(roleLevel) {
     return normalized === 6 ? 4 : normalized;
 }
 
+function resolvePointBenefitRoleLevel(roleLevel) {
+    const normalized = Math.max(0, Math.floor(toNumber(roleLevel, 0)));
+    return normalized >= 5 ? 5 : normalized;
+}
+
 function normalizeIdList(values) {
     return toArray(values).map((value) => String(value || '').trim()).filter(Boolean);
 }
@@ -424,12 +428,23 @@ function directRelationWhere(user = {}) {
 
 async function getDirectMembers(user = {}) {
     if (!user || !user.openid) return [];
-    return db.collection('users')
-        .where(directRelationWhere(user))
-        .limit(200)
-        .get()
-        .then((res) => res.data || [])
-        .catch(() => []);
+    const where = directRelationWhere(user);
+    const rows = [];
+    const pageSize = 200;
+    let skip = 0;
+    while (true) {
+        const res = await db.collection('users')
+            .where(where)
+            .skip(skip)
+            .limit(pageSize)
+            .get()
+            .catch((err) => { console.error('[getDirectMembers] 查询失败, skip=' + skip + ':', err.message); return { data: [] }; });
+        const batch = res.data || [];
+        rows.push(...batch);
+        if (batch.length < pageSize) break;
+        skip += pageSize;
+    }
+    return rows;
 }
 
 async function getRechargeTotal(openid) {
@@ -683,6 +698,12 @@ function getOrderPayFen(order = {}) {
 
 function getOrderTotalAmount(order = {}) {
     return resolveOrderPayAmount(order, 0);
+}
+
+function calculateOrderPayPoints(payAmount, purchasePointsPerHundred) {
+    const amount = Math.max(0, toNumber(payAmount, 0));
+    const pointsPerHundred = Math.max(0, toNumber(purchasePointsPerHundred, 0));
+    return Math.max(0, Math.floor((amount * pointsPerHundred) / 100));
 }
 
 function normalizeAdministrativeRegionText(value) {
@@ -1084,8 +1105,33 @@ async function ensureAgentRoleSynced(orderId, order) {
         return { skipped: true, reason: 'exchange_order' };
     }
     if (!order.openid) return { skipped: true };
-    // 幂等守卫：已同步的角色升级不重复执行
-    if (order.role_synced_at) return { skipped: true, reason: 'already_synced' };
+    // 原子幂等锁：使用条件更新确保并发安全
+    const lockRes = await db.collection('orders').where({
+        _id: orderId,
+        role_synced_at: _.exists(false)
+    }).update({
+        data: { role_synced_at: db.serverDate(), updated_at: db.serverDate() }
+    }).catch(() => ({ stats: { updated: 0 } }));
+    if (!lockRes || !lockRes.stats || lockRes.stats.updated === 0) {
+        return { skipped: true, reason: 'already_synced_or_concurrent' };
+    }
+
+    try {
+        return await _doRoleSync(orderId, order);
+    } catch (err) {
+        // 锁后失败：回滚幂等标记，允许重试
+        try {
+            await db.collection('orders').doc(orderId).update({
+                data: { role_synced_at: _.remove(), updated_at: db.serverDate() }
+            });
+        } catch (rollbackErr) {
+            console.error('[RoleSync] 幂等锁回滚失败:', rollbackErr.message);
+        }
+        throw err;
+    }
+}
+
+async function _doRoleSync(orderId, order) {
     const user = await findUserByAny(order.openid);
     if (!user) return { skipped: true };
 
@@ -1102,9 +1148,6 @@ async function ensureAgentRoleSynced(orderId, order) {
     const growthValue = toNumber(user.growth_value, 0);
     const nextRoleLevel = deriveEligibleRoleLevel(currentRoleLevel, effectiveSales, directMembers, rechargeTotal, upgradeRules, growthValue);
     if (nextRoleLevel <= currentRoleLevel) {
-        await db.collection('orders').doc(orderId).update({
-            data: { role_synced_at: db.serverDate(), updated_at: db.serverDate() },
-        }).catch((e) => { console.error('[payment-callback] role_synced_at标记失败(无升级)', e.message); });
         return { skipped: true, currentRoleLevel, nextRoleLevel };
     }
 
@@ -1177,6 +1220,21 @@ async function ensureAgentRoleSynced(orderId, order) {
         }
     }
 
+    // 脱离成功后，为原上级创建脱离奖励佣金
+    if (separation.separated && previousParent && previousParent.openid) {
+        try {
+            await ensureSeparationBonusCreated(orderId, order, {
+                user,
+                previousParent,
+                previousRoleLevel: currentRoleLevel,
+                nextRoleLevel,
+                separation
+            });
+        } catch (err) {
+            console.error('[RoleSync] 脱离奖励创建失败:', err.message);
+        }
+    }
+
     let piggyBankUnlock = { skipped: true, reason: 'not_checked' };
     try {
         piggyBankUnlock = await unlockUpgradePiggyBankForRole({
@@ -1194,11 +1252,6 @@ async function ensureAgentRoleSynced(orderId, order) {
         console.error('[RoleSync] 升级存钱罐解锁失败:', err.message);
     }
 
-    // 标记幂等守卫
-    await db.collection('orders').doc(orderId).update({
-        data: { role_synced_at: db.serverDate(), updated_at: db.serverDate() },
-    }).catch((e) => { console.error('[payment-callback] role_synced_at标记失败', e.message); });
-
     return {
         upgraded: true,
         previousRoleLevel: currentRoleLevel,
@@ -1211,6 +1264,82 @@ async function ensureAgentRoleSynced(orderId, order) {
         separation,
         piggyBankUnlock
     };
+}
+
+async function ensureSeparationBonusCreated(orderId, order, ctx) {
+    const { user, previousParent, previousRoleLevel, nextRoleLevel, separation } = ctx;
+    if (!separation || !separation.separated) return { skipped: true, reason: 'not_separated' };
+    if (!previousParent || !previousParent.openid) return { skipped: true, reason: 'no_parent' };
+
+    // 原子幂等锁：同一订单对同一上级只创建一次脱离奖励
+    const lockKey = `separation_bonus_synced_at`;
+    const lockRes = await db.collection('orders').where({
+        _id: orderId,
+        separation_bonus_synced_at: _.exists(false)
+    }).update({
+        data: { [lockKey]: db.serverDate(), updated_at: db.serverDate() }
+    }).catch(() => ({ stats: { updated: 0 } }));
+    if (!lockRes || !lockRes.stats || lockRes.stats.updated === 0) {
+        return { skipped: true, reason: 'already_created_or_concurrent' };
+    }
+
+    const config = (await loadAgentRuntimeConfig()).upgradeRules || {};
+    const bonusPct = toNumber(config.separation_bonus_pct, 0);
+    if (bonusPct <= 0) {
+        // 配置为0时不发奖励，但需写标记防止重试
+        return { skipped: true, reason: 'no_bonus_config' };
+    }
+
+    const orderAmount = getOrderTotalAmount(order);
+    const bonusAmount = roundMoney(orderAmount * bonusPct / 100);
+    if (bonusAmount <= 0) return { skipped: true, reason: 'zero_amount' };
+
+    // 冷却期配置，默认90天后释放
+    const cooldownDays = toNumber(config.separation_bonus_cooldown_days, 90);
+    const releaseAt = new Date(Date.now() + cooldownDays * 24 * 60 * 60 * 1000);
+
+    await db.collection('commissions').add({
+        data: {
+            openid: previousParent.openid,
+            user_id: previousParent.id || previousParent._legacy_id || previousParent._id || previousParent.openid,
+            from_openid: user.openid || order.openid,
+            order_id: orderId,
+            order_no: order.order_no || '',
+            amount: bonusAmount,
+            level: nextRoleLevel,
+            type: 'n_separation_bonus',
+            status: 'frozen',
+            bonus_role_level: nextRoleLevel,
+            separated_user_openid: user.openid || order.openid,
+            separated_from_role_level: previousRoleLevel,
+            peer_bonus_release_at: releaseAt,
+            refund_deadline: releaseAt,
+            description: '脱离奖励：下级晋升脱离后奖励',
+            created_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    });
+
+    // 同时写一条钱包流水
+    await db.collection('wallet_logs').add({
+        data: {
+            openid: previousParent.openid,
+            user_id: previousParent.id || previousParent._legacy_id || previousParent._id || previousParent.openid,
+            type: 'n_separation_bonus',
+            amount: bonusAmount,
+            balance_after: 0,
+            order_id: orderId,
+            order_no: order.order_no || '',
+            from_openid: user.openid || order.openid,
+            description: '脱离奖励到账',
+            status: 'frozen',
+            released_at: releaseAt,
+            created_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    }).catch((err) => { console.error('[SeparationBonus] 钱包流水写入失败:', err.message); });
+
+    return { created: true, amount: bonusAmount, bonusPct };
 }
 
 async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
@@ -1350,13 +1479,13 @@ async function ensurePointsAwarded(orderId, order) {
     const buyerRole = buyerRes.data && buyerRes.data[0]
         ? toNumber(buyerRes.data[0].role_level ?? buyerRes.data[0].distributor_level ?? buyerRes.data[0].level, 0)
         : 0;
-    const benefitBuyerRole = resolveBenefitRoleLevel(buyerRole);
+    const benefitBuyerRole = resolvePointBenefitRoleLevel(buyerRole);
     const { pointRules, growthRules } = await loadAgentRuntimeConfig();
     const purchasePointsPerHundred = Math.max(
         0,
         toNumber(pointRules.purchase_multiplier_by_role?.[benefitBuyerRole], pointRules.purchase_multiplier_by_role?.[0] || DEFAULT_POINT_RULES.purchase_multiplier_by_role[0])
     );
-    const pointsEarned = Math.floor((payAmount * purchasePointsPerHundred) / 100);
+    const pointsEarned = calculateOrderPayPoints(payAmount, purchasePointsPerHundred);
 
     const purchaseGrowthRule = growthRules.purchase || DEFAULT_GROWTH_RULES.purchase;
     const growthBaseAmount = purchaseGrowthRule.use_original_amount
@@ -1497,7 +1626,7 @@ async function ensureCommissionsCreated(orderId, order) {
         return { created: 0, reason: 'all_points_payment', branch_region: branchRegion };
     }
 
-    if (isAgentSelfPurchase) {
+    if (isAgentSelfPurchase && SELF_PURCHASE_COMMISSION_ENABLED) {
         const existingSelfRes = await db.collection('commissions')
             .where({ order_id: orderId, openid: buyer.openid, type: 'self' })
             .limit(1)
@@ -2601,7 +2730,6 @@ async function reverseBuyerAssetsForRefund(orderId, order = {}, refund = {}) {
             await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'growth_clawback_log', error: e.message, order_id: orderId, created_at: db.serverDate() } }).catch(() => {});
         }
     }
-    }
 }
 
 /**
@@ -3078,4 +3206,8 @@ module.exports = {
     handleCallback,
     handleRefundCallback,
     processPaidOrder,
+    _test: {
+        calculateOrderPayPoints,
+        resolvePointBenefitRoleLevel
+    }
 };

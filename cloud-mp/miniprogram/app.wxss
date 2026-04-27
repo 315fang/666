@@ -1,21 +1,24 @@
 /**
- * 臻选商城 — 设计系统（主色：蓝 / 绿 / 金）
- * - 深海蓝：导航、层次、信息态
- * - 松石绿：成功、生机、健康关联
- * - 香槟金：CTA、价位与尊贵强调
- * - 中性色：冷灰辅色，避免与主色抢戏
+ * 臻选商城 — 设计系统（主色：深海蓝 / 珍珠白 / 香槟金）
+ * - 深海蓝：导航、资产卡、关键层级
+ * - 雾蓝与珍珠白：页面底色、内容容器、留白呼吸
+ * - 香槟金：价格、权益、CTA 的轻奢强调
+ * - 松石绿：成功与健康关联，控制为辅助色
  */
 
 page {
   /* ==================== 品牌色彩系统 ==================== */
   
   /* 深海蓝系 */
-  --brand-blue-deep: #1E4A6D;
-  --brand-blue: #2E6B94;
-  --brand-blue-soft: #5B8FB8;
-  --brand-blue-muted: #64748B;
-  --brand-blue-bg: #E3EDF4;
-  --brand-blue-bg-light: #F0F6FA;
+  --brand-blue-deep: #3D6BB3;
+  --brand-blue-ink: #2B579A;
+  --brand-blue: #5B9BD5;
+  --brand-blue-soft: #6F9FC4;
+  --brand-blue-muted: #5F748A;
+  --brand-blue-bg: #DDEAF3;
+  --brand-blue-bg-light: #EEF6FA;
+  --brand-pearl: #F7FBFF;
+  --brand-pearl-deep: #EAF2F8;
 
   /* 松石绿系 */
   --brand-green: #0F766E;
@@ -25,9 +28,9 @@ page {
   --brand-green-bg-strong: #CCFBF1;
 
   /* 主色调 - 深字色（略带蓝调的岩灰） */
-  --luxury-black: #0F172A;
-  --luxury-black-light: #1E293B;
-  --luxury-black-lighter: #334155;
+  --luxury-black: #1E3A5C;
+  --luxury-black-light: #3D6BB3;
+  --luxury-black-lighter: #3D6B9C;
   
   /* 强调色 - 香槟金（与 Tab 选中色一致） */
   --luxury-gold: #C6A16E;
@@ -38,19 +41,19 @@ page {
   
   /* 中性色 - 冷灰辅色 */
   --luxury-white: #FFFFFF;
-  --luxury-cream: #F4F8FA;
-  --luxury-ivory: #EDF2F6;
-  --luxury-warm-gray: #CBD5E1;
-  --luxury-border: #CBD5E1;
-  --luxury-divider: #94A3B8;
+  --luxury-cream: #F5F9FC;
+  --luxury-ivory: #EAF2F8;
+  --luxury-warm-gray: #C8D7E4;
+  --luxury-border: #D2E0EA;
+  --luxury-divider: #9CB0C1;
   
   /* 文字色 */
-  --text-primary: #0F172A;
-  --text-secondary: #475569;
-  --text-tertiary: #64748B;
-  --text-muted: #94A3B8;
-  --text-placeholder: #CBD5E1;
-  --text-inverse: #F8FAFC;
+  --text-primary: #132235;
+  --text-secondary: #46596B;
+  --text-tertiary: #6B7F91;
+  --text-muted: #99AABA;
+  --text-placeholder: #C6D4E0;
+  --text-inverse: #F7FBFF;
   
   /* 功能色 */
   --color-success: #0D9488;
@@ -65,14 +68,14 @@ page {
   --color-error-bg: #FEF2F2;
   --color-error-light: #FEE2E2;
   
-  --color-info: #1E4A6D;
+  --color-info: #5B9BD5;
   --color-info-bg: #E3EDF4;
   
   /* 兼容：原「暖棕」变量改为蓝灰辅色，供旧样式引用 */
-  --brand-warm: #64748B;
-  --brand-warm-light: #94A3B8;
-  --brand-warm-dark: #475569;
-  --brand-warm-bg: #E8F2F5;
+  --brand-warm: #6B7F91;
+  --brand-warm-light: #99AABA;
+  --brand-warm-dark: #46596B;
+  --brand-warm-bg: #EAF2F8;
   --brand-warm-card: rgba(255,255,255,0.92);
   --brand-price: #B45309;
   --brand-price-origin: #94A3B8;
@@ -115,17 +118,17 @@ page {
   --space-3xl: 96rpx;
   
   /* 阴影 - 精致悬浮感 */
-  --shadow-xs: 0 1rpx 2rpx rgba(15, 23, 42, 0.04);
-  --shadow-sm: 0 2rpx 8rpx rgba(15, 23, 42, 0.05);
-  --shadow-md: 0 4rpx 16rpx rgba(15, 23, 42, 0.07);
-  --shadow-lg: 0 8rpx 32rpx rgba(15, 23, 42, 0.09);
-  --shadow-xl: 0 16rpx 48rpx rgba(15, 23, 42, 0.12);
+  --shadow-xs: 0 1rpx 2rpx rgba(16, 42, 67, 0.04);
+  --shadow-sm: 0 2rpx 8rpx rgba(16, 42, 67, 0.05);
+  --shadow-md: 0 6rpx 18rpx rgba(16, 42, 67, 0.07);
+  --shadow-lg: 0 12rpx 34rpx rgba(16, 42, 67, 0.10);
+  --shadow-xl: 0 20rpx 56rpx rgba(16, 42, 67, 0.14);
   
   --shadow-gold: 0 4rpx 20rpx rgba(198, 161, 110, 0.28);
   --shadow-gold-lg: 0 8rpx 32rpx rgba(198, 161, 110, 0.32);
   
-  --shadow-dark: 0 4rpx 20rpx rgba(30, 74, 109, 0.18);
-  --shadow-dark-lg: 0 8rpx 32rpx rgba(30, 74, 109, 0.22);
+  --shadow-dark: 0 6rpx 22rpx rgba(23, 50, 77, 0.18);
+  --shadow-dark-lg: 0 12rpx 36rpx rgba(23, 50, 77, 0.23);
   
   /* ==================== 字体系统 ==================== */
   --font-display: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -161,7 +164,7 @@ page {
   --leading-loose: 2;
   
   /* 字间距 */
-  --tracking-tight: -0.02em;
+  --tracking-tight: 0;
   --tracking-normal: 0;
   --tracking-wide: 0.02em;
   --tracking-wider: 0.05em;
@@ -970,7 +973,7 @@ button::after {
   height: 120rpx;
   margin-bottom: 24rpx;
   border-radius: 50%;
-  background: rgba(185,139,88,0.08);
+  background: rgba(36, 95, 147, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -978,19 +981,19 @@ button::after {
 
 .state-icon-text {
   font-size: 48rpx;
-  color: #B98B58;
+  color: #5B9BD5;
 }
 
 .state-title {
   font-size: 28rpx;
-  color: #57534E;
+  color: #132235;
   font-weight: 500;
   margin-bottom: 12rpx;
 }
 
 .state-desc {
   font-size: 24rpx;
-  color: #A8A29E;
+  color: #6B7F91;
   line-height: 1.6;
   margin-bottom: 32rpx;
 }
@@ -998,7 +1001,7 @@ button::after {
 .state-action {
   padding: 16rpx 48rpx;
   border-radius: 999rpx;
-  background: linear-gradient(135deg, #B98B58, #D4B896);
+  background: linear-gradient(135deg, #3D6BB3, #5B9BD5);
   color: #FFFFFF;
   font-size: 26rpx;
   font-weight: 500;
@@ -1009,7 +1012,7 @@ button::after {
 
 /* 骨架屏统一样式 */
 .skeleton-block {
-  background: linear-gradient(90deg, #F5F0EB 25%, #EDE8E2 50%, #F5F0EB 75%);
+  background: linear-gradient(90deg, #EAF2F8 25%, #DDEAF3 50%, #EAF2F8 75%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.4s infinite;
   border-radius: 12rpx;
@@ -1018,6 +1021,19 @@ button::after {
 @keyframes skeleton-shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* ══ 流动渐变动画 ══ */
+@keyframes gradient-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* 应用流动渐变的通用类（仅适用于单层渐变） */
+.gradient-flow {
+  background-size: 200% 200%;
+  animation: gradient-flow 6s ease infinite;
 }
 
 .press { opacity: 0.7; transition: opacity 150ms; }

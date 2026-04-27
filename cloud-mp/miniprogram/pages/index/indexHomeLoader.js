@@ -371,6 +371,9 @@ async function loadFeaturedProducts(page, options = {}) {
             };
         });
         page.setData({ featuredProducts: products });
+        if (typeof page._setupScrollReveal === 'function') {
+            wx.nextTick(() => page._setupScrollReveal());
+        }
     } catch (err) {
         console.error('[Index] 加载精选商品失败:', err);
     }
@@ -480,17 +483,21 @@ function applyHomeConfig(page, data) {
     const configs = data.configs || data.resources?.configs || {};
     const showBrandLogo = configs.show_brand_logo !== 'false' && configs.show_brand_logo !== false;
     const brandZone = normalizeBrandZone(configs);
-    page.setData({
+page.setData({
         homeConfigs: configs,
         showBrandLogo,
         brandLogo: configs.brand_logo || '',
         navBrandTitle: configs.nav_brand_title || brandConfig.nav_brand_title || '问兰镜像',
-        navBrandSub: configs.nav_brand_sub || brandConfig.nav_brand_sub || '品牌甄选',
+        navBrandSub: configs.nav_brand_sub || brandConfig.nav_sub || '品牌甄选',
         latestActivity: page._normalizeLatestActivity(data.latestActivity || data.resources?.latest_activity || {}),
         brandZone,
         heroBanners,
         loading: false
     });
+
+    if (typeof page._setupScrollReveal === 'function') {
+        wx.nextTick(() => page._setupScrollReveal());
+    }
 
     const popupAd = data.popupAd || data.resources?.popup_ad || {};
     if (popupAd.enabled && (popupAd.file_id || popupAd.image_url || popupAd.url)) {

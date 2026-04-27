@@ -24,9 +24,9 @@ const DEFAULT_CONFIG = {
     activity_share_title: '问兰 · 当季品牌活动进行中',
     logistics_page_title: '物流跟踪',
     tab_bar: {
-      color: '#64748B',
+      color: '#6B7F91',
       selectedColor: '#C6A16E',
-      backgroundColor: '#F8FCFD',
+      backgroundColor: '#F7FBFF',
       borderStyle: 'white',
       items: [
         { index: 0, text: '商城首页' },

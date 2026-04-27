@@ -2,7 +2,7 @@
 
 .container {
   min-height: 100vh;
-  background: #F4F6F8;
+  background: linear-gradient(180deg, #DDEAF3 0%, #F7FBFF 30%, #F4F8FB 100%);
   padding-bottom: calc(132rpx + env(safe-area-inset-bottom));
 }
 
@@ -11,8 +11,8 @@
   position: sticky;
   top: 0;
   z-index: 200;
-  background: rgba(244, 248, 250, 0.92);
-  backdrop-filter: blur(16px);
+  background: rgba(247, 251, 255, 0.94);
+  border-bottom: 1rpx solid rgba(157, 177, 194, 0.18);
 }
 
 .detail-nav-inner {
@@ -42,7 +42,7 @@
 .detail-nav-back-chevron {
   font-size: 44rpx;
   font-weight: 300;
-  color: #1C1917;
+  color: #132235;
   line-height: 1;
   margin-top: -4rpx;
 }
@@ -50,8 +50,8 @@
 .detail-nav-back-text {
   font-size: 28rpx;
   font-weight: 500;
-  color: #1C1917;
-  letter-spacing: 0.02em;
+  color: #132235;
+  letter-spacing: 0;
 }
 
 .detail-nav-title {
@@ -60,7 +60,7 @@
   transform: translateX(-50%);
   font-size: 30rpx;
   font-weight: 600;
-  color: #1C1917;
+  color: #132235;
 }
 
 .gallery-section {
@@ -68,7 +68,6 @@
   width: 100%;
   padding: 20rpx 24rpx 0;
   box-sizing: border-box;
-  background: linear-gradient(180deg, #2B2018 0%, #1A1511 100%);
 }
 
 /* 与首页精选一致：主图区 1:1（按内容区宽度为正方形边长） */
@@ -101,14 +100,14 @@
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(circle at top, rgba(255,255,255,0.42), transparent 48%),
-    linear-gradient(135deg, #F4E6D8 0%, #E8D4BE 100%);
+    linear-gradient(135deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0) 42%),
+    linear-gradient(145deg, #DDEAF3 0%, #F7FBFF 100%);
 }
 
 .gallery-fallback-label {
-  color: rgba(89, 63, 38, 0.75);
+  color: rgba(23, 50, 77, 0.68);
   font-size: 26rpx;
-  letter-spacing: 2rpx;
+  letter-spacing: 0;
 }
 
 /* swiper-item 默认高度在部分基础库下不跟随父级，会露出 gallery-frame 底色形成「黑边」 */
@@ -125,7 +124,7 @@
   height: 100%;
   border-radius: 36rpx;
   overflow: hidden;
-  background-color: #F5F0EB;
+  background-color: #EAF2F8;
 }
 
 /* 与首页 product-card-img 一致：绝对定位铺满，避免 flex + image 在真机上未撑满 */
@@ -154,7 +153,6 @@
   background: rgba(17, 14, 10, 0.48);
   padding: 10rpx 18rpx;
   border-radius: 999rpx;
-  backdrop-filter: blur(8px);
 }
 
 .product-info-card {
@@ -164,6 +162,8 @@
   padding: 28rpx 24rpx;
   position: relative;
   z-index: 2;
+  box-shadow: 0 12rpx 32rpx rgba(16, 42, 67, 0.08);
+  border: 1rpx solid rgba(210, 224, 234, 0.72);
 }
 
 .benefit-rail {
@@ -198,22 +198,22 @@
 .points-benefit-card {
   min-width: 242rpx;
   padding-left: 12rpx;
-  color: #6F4B1C;
+  color: #3D6BB3;
   background:
-    radial-gradient(circle at 24rpx 16rpx, rgba(255,255,255,0.72), transparent 17rpx),
-    linear-gradient(135deg, #FFF6E7 0%, #F1D39A 100%);
-  border: 1rpx solid rgba(216, 170, 82, 0.45);
+    linear-gradient(135deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0) 36%),
+    linear-gradient(135deg, #F7FBFF 0%, #F5EBD8 100%);
+  border: 1rpx solid rgba(198, 161, 110, 0.34);
   box-shadow: inset 0 0 0 1rpx rgba(255,255,255,0.46);
 }
 
 .coupon-benefit-card {
   min-width: 166rpx;
   padding: 0 16rpx 0 18rpx;
-  color: #B65A42;
+  color: #9A7348;
   background:
     linear-gradient(90deg, rgba(255,255,255,0.65) 0, rgba(255,255,255,0) 34rpx),
-    #FFF0EA;
-  border: 1rpx solid rgba(182, 90, 66, 0.32);
+    #F7FBFF;
+  border: 1rpx solid rgba(198, 161, 110, 0.30);
   box-shadow: inset 0 0 0 1rpx rgba(255,255,255,0.58);
 }
 
@@ -289,7 +289,7 @@
   width: 1rpx;
   height: 28rpx;
   margin: 0 10rpx;
-  background: rgba(182, 90, 66, 0.22);
+  background: rgba(198, 161, 110, 0.28);
 }
 
 .coupon-benefit-card .benefit-rail-value {
@@ -309,7 +309,7 @@
   height: 18rpx;
   border-radius: 50%;
   background: #FFFFFF;
-  border: 1rpx solid rgba(182, 90, 66, 0.22);
+  border: 1rpx solid rgba(198, 161, 110, 0.24);
   transform: translateY(-50%);
   box-sizing: border-box;
 }
@@ -329,6 +329,8 @@
   padding: 28rpx 24rpx;
   position: relative;
   z-index: 2;
+  box-shadow: 0 10rpx 28rpx rgba(16, 42, 67, 0.07);
+  border: 1rpx solid rgba(210, 224, 234, 0.70);
 }
 
 .selection-card .embedded-section {
@@ -399,8 +401,8 @@
   padding: 0;
   margin: 0;
   border-radius: 50%;
-  background: #FFF8F1;
-  border: 1rpx solid rgba(185, 139, 88, 0.20);
+  background: #F7FBFF;
+  border: 1rpx solid rgba(111, 159, 196, 0.24);
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -419,7 +421,7 @@
   text-align: center;
   font-size: 20rpx;
   line-height: 1.1;
-  color: #8A7A6A;
+  color: #6B7F91;
   white-space: nowrap;
 }
 
@@ -432,7 +434,7 @@
 .qty-section.with-specs-border {
   margin-top: 24rpx;
   padding-top: 24rpx;
-  border-top: 1rpx solid rgba(125, 110, 96, 0.10);
+  border-top: 1rpx solid rgba(157, 177, 194, 0.18);
 }
 
 .qty-section-head {
@@ -461,14 +463,14 @@
 
 .price-symbol {
   font-size: 30rpx;
-  color: #B98B58;
+  color: #9A7348;
   margin-right: 4rpx;
 }
 
 .price-value {
   font-size: 70rpx;
   line-height: 1;
-  color: #1F1915;
+  color: #132235;
   font-weight: 700;
 }
 
@@ -491,15 +493,15 @@
 
 .price-discount {
   font-size: 20rpx;
-  color: #8E6B47;
-  background: #F6E9D7;
+  color: #9A7348;
+  background: #F5EBD8;
   padding: 6rpx 12rpx;
   border-radius: 999rpx;
 }
 
 .product-title {
   font-size: 38rpx;
-  color: #211A15;
+  color: #132235;
   font-weight: 700;
   line-height: 1.28;
   margin-bottom: 10rpx;
@@ -507,7 +509,7 @@
 
 .product-subtitle {
   font-size: 24rpx;
-  color: #72675D;
+  color: #6B7F91;
   line-height: 1.7;
 }
 
@@ -515,8 +517,8 @@
   margin-top: 24rpx;
   padding: 22rpx 20rpx;
   border-radius: 20rpx;
-  background: rgba(250, 246, 240, 0.92);
-  border: 1rpx solid rgba(185, 139, 88, 0.16);
+  background: rgba(247, 251, 255, 0.94);
+  border: 1rpx solid rgba(210, 224, 234, 0.86);
 }
 
 .purchase-mode-head {
@@ -530,14 +532,14 @@
 .purchase-mode-title {
   font-size: 28rpx;
   font-weight: 600;
-  color: #1F1B17;
+  color: #132235;
 }
 
 .purchase-mode-hint {
   flex: 1;
   text-align: right;
   font-size: 22rpx;
-  color: #8D6A3F;
+  color: #9A7348;
   line-height: 1.5;
 }
 
@@ -553,7 +555,7 @@
   padding: 18rpx 18rpx 16rpx;
   border-radius: 18rpx;
   background: #FFFFFF;
-  border: 2rpx solid rgba(185, 139, 88, 0.12);
+  border: 2rpx solid rgba(210, 224, 234, 0.86);
   display: flex;
   flex-direction: column;
   gap: 8rpx;
@@ -561,29 +563,29 @@
 }
 
 .purchase-mode-option.active {
-  background: linear-gradient(135deg, rgba(244, 232, 214, 0.92), rgba(255, 249, 240, 0.98));
-  border-color: rgba(185, 139, 88, 0.42);
-  box-shadow: 0 8rpx 18rpx rgba(185, 139, 88, 0.10);
+  background: linear-gradient(135deg, rgba(234, 242, 248, 0.98), rgba(255, 255, 255, 0.98));
+  border-color: rgba(198, 161, 110, 0.46);
+  box-shadow: 0 8rpx 18rpx rgba(16, 42, 67, 0.08);
 }
 
 .purchase-mode-option-label {
   font-size: 26rpx;
   font-weight: 600;
-  color: #2A211A;
+  color: #3D6BB3;
 }
 
 .purchase-mode-option-desc {
   font-size: 22rpx;
   line-height: 1.5;
-  color: #8A7A6A;
+  color: #6B7F91;
 }
 
 .activity-status-card {
   margin-top: 18rpx;
   padding: 20rpx;
   border-radius: 20rpx;
-  background: linear-gradient(135deg, rgba(30, 74, 109, 0.08), rgba(216, 154, 91, 0.10));
-  border: 1rpx solid rgba(30, 74, 109, 0.10);
+  background: linear-gradient(135deg, rgba(36, 95, 147, 0.08), rgba(198, 161, 110, 0.12));
+  border: 1rpx solid rgba(36, 95, 147, 0.12);
 }
 
 .activity-status-head {
@@ -597,15 +599,15 @@
   flex-shrink: 0;
   padding: 6rpx 14rpx;
   border-radius: 999rpx;
-  background: rgba(30, 74, 109, 0.12);
-  color: #1E4A6D;
+  background: rgba(36, 95, 147, 0.12);
+  color: #3D6BB3;
   font-size: 20rpx;
   font-weight: 700;
 }
 
 .activity-status-title {
   font-size: 24rpx;
-  color: #1F2937;
+  color: #132235;
   font-weight: 600;
   line-height: 1.5;
 }
@@ -613,7 +615,7 @@
 .activity-status-desc {
   display: block;
   font-size: 22rpx;
-  color: #64748B;
+  color: #6B7F91;
   line-height: 1.65;
 }
 
@@ -632,7 +634,7 @@
   padding: 18rpx 20rpx;
   border-radius: 18rpx;
   background: rgba(255, 255, 255, 0.84);
-  border: 1rpx solid rgba(15, 23, 42, 0.06);
+  border: 1rpx solid rgba(210, 224, 234, 0.78);
 }
 
 .activity-quick-copy {
@@ -645,13 +647,13 @@
 
 .activity-quick-label {
   font-size: 24rpx;
-  color: #1F2937;
+  color: #132235;
   font-weight: 600;
 }
 
 .activity-quick-desc {
   font-size: 20rpx;
-  color: #8A7A6A;
+  color: #6B7F91;
   line-height: 1.5;
 }
 
@@ -682,9 +684,9 @@
   height: 22rpx;
 }
 
-.tag-blue { background: #EEF5FF; color: #4E6C8D; }
-.tag-green { background: #EDF8F1; color: #55785A; }
-.tag-orange { background: #FCF2E8; color: #A16E45; }
+.tag-blue { background: #EAF2F8; color: #5B9BD5; }
+.tag-green { background: #ECFDF8; color: #0F766E; }
+.tag-orange { background: #F5EBD8; color: #9A7348; }
 
 /* 商详服务承诺说明（与后台 product_detail_pledges 联动） */
 .pledges-detail-card {
@@ -692,7 +694,7 @@
   padding: 22rpx 20rpx;
   border-radius: 20rpx;
   background: rgba(255, 255, 255, 0.72);
-  border: 1rpx solid rgba(76, 94, 112, 0.12);
+  border: 1rpx solid rgba(157, 177, 194, 0.20);
 }
 
 .pledge-detail-block {
@@ -710,14 +712,14 @@
   display: block;
   font-size: 26rpx;
   font-weight: 600;
-  color: #36312D;
+  color: #132235;
   margin-bottom: 8rpx;
 }
 
 .pledge-detail-copy {
   display: block;
   font-size: 24rpx;
-  color: #72675D;
+  color: #46596B;
   line-height: 1.65;
 }
 
@@ -725,7 +727,7 @@
 .service-note-card {
   padding: 22rpx;
   border-radius: 20rpx;
-  background: linear-gradient(135deg, #FDF7F1 0%, #F6ECDF 100%);
+  background: linear-gradient(135deg, #F7FBFF 0%, #F5EBD8 100%);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -740,22 +742,22 @@
 
 .service-note-title {
   font-size: 26rpx;
-  color: #7B5D40;
+  color: #3D6BB3;
   font-weight: 600;
 }
 
 .service-note-desc {
   font-size: 22rpx;
   line-height: 1.6;
-  color: #8B7460;
+  color: #6B7F91;
 }
 
 .service-note-btn {
   min-width: 150rpx;
   height: 64rpx;
   border-radius: 999rpx;
-  background: #2A211A;
-  color: #FFF7F0;
+  background: #3D6BB3;
+  color: #F7FBFF;
   font-size: 22rpx;
   display: flex;
   align-items: center;
@@ -779,7 +781,7 @@
 
 .embedded-title {
   font-size: 28rpx;
-  color: #211A15;
+  color: #132235;
   font-weight: 600;
 }
 
@@ -796,7 +798,7 @@
 
 .section-title {
   font-size: 30rpx;
-  color: #211A15;
+  color: #132235;
   font-weight: 600;
 }
 
@@ -816,7 +818,7 @@
   width: 72rpx;
   height: 72rpx;
   border-radius: 50%;
-  background: #F5EFE9;
+  background: #EAF2F8;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -829,7 +831,7 @@
 
 .service-text {
   font-size: 22rpx;
-  color: #6F645B;
+  color: #46596B;
 }
 
 .spec-group {
@@ -842,7 +844,7 @@
 
 .spec-title {
   font-size: 26rpx;
-  color: #2A211A;
+  color: #132235;
   font-weight: 500;
   margin-bottom: 14rpx;
 }
@@ -856,14 +858,14 @@
 .spec-option {
   padding: 14rpx 26rpx;
   border-radius: 18rpx;
-  background: #F5F1EC;
+  background: #EAF2F8;
   font-size: 24rpx;
-  color: #74685D;
+  color: #46596B;
 }
 
 .spec-option.active {
-  background: #F1E0CA;
-  color: #7A583A;
+  background: #F5EBD8;
+  color: #9A7348;
   font-weight: 600;
 }
 
@@ -875,7 +877,7 @@
 .stepper {
   display: flex;
   align-items: center;
-  border: 1rpx solid #E8DED3;
+  border: 1rpx solid #D2E0EA;
   border-radius: 18rpx;
   overflow: hidden;
 }
@@ -902,23 +904,23 @@
   min-width: 152rpx;
   justify-content: center;
   height: 64rpx;
-  background: #F8F3ED;
+  background: #EAF2F8;
 }
 
 .stepper-static-value {
   font-size: 28rpx;
   font-weight: 600;
-  color: #6F5A48;
+  color: #3D6BB3;
 }
 
 .stock-text {
   font-size: 22rpx;
-  color: #918476;
+  color: #6B7F91;
 }
 
 .review-count {
   font-size: 24rpx;
-  color: #A08E7B;
+  color: #6B7F91;
 }
 
 .review-tags {
@@ -930,8 +932,8 @@
 
 .review-tag {
   font-size: 22rpx;
-  color: #6F645B;
-  background: #F6F1EB;
+  color: #46596B;
+  background: #EAF2F8;
   padding: 10rpx 18rpx;
   border-radius: 999rpx;
 }
@@ -975,7 +977,7 @@
 
 .review-name {
   font-size: 24rpx;
-  color: #241D18;
+  color: #132235;
   font-weight: 600;
 }
 
@@ -996,14 +998,14 @@
 
 .review-date {
   font-size: 20rpx;
-  color: #A59586;
+  color: #99AABA;
 }
 
 .review-content,
 .detail-content {
   font-size: 24rpx;
   line-height: 1.8;
-  color: #6F645B;
+  color: #46596B;
 }
 
 .detail-description {
@@ -1011,7 +1013,7 @@
   margin-bottom: 20rpx;
   font-size: 24rpx;
   line-height: 1.8;
-  color: #6F645B;
+  color: #46596B;
 }
 
 .detail-images {
@@ -1025,7 +1027,7 @@
   display: block;
   border-radius: 24rpx;
   overflow: hidden;
-  background: #F3EDE6;
+  background: #EAF2F8;
 }
 
 .detail-content {
@@ -1036,7 +1038,7 @@
   display: block;
   font-size: 24rpx;
   line-height: 1.8;
-  color: #9A8D80;
+  color: #6B7F91;
 }
 
 .detail-content image,
@@ -1063,7 +1065,8 @@
   display: flex;
   align-items: center;
   gap: 18rpx;
-  box-shadow: 0 -8rpx 24rpx rgba(31, 25, 20, 0.06);
+  box-shadow: 0 -12rpx 32rpx rgba(16, 42, 67, 0.10);
+  border-top: 1rpx solid rgba(210, 224, 234, 0.74);
   z-index: 100;
 }
 
@@ -1088,8 +1091,8 @@
   width: 52rpx;
   height: 52rpx;
   border-radius: 50%;
-  background: #FFF8F1;
-  border: 1rpx solid rgba(185, 139, 88, 0.22);
+  background: #F7FBFF;
+  border: 1rpx solid rgba(111, 159, 196, 0.24);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1111,7 +1114,7 @@
   line-height: 30rpx;
   padding: 0 7rpx;
   border-radius: 999rpx;
-  background: #EF4444;
+  background: #9A7348;
   color: #FFFFFF;
   font-size: 18rpx;
   font-weight: 700;
@@ -1121,7 +1124,7 @@
 
 .action-cart-text {
   font-size: 20rpx;
-  color: #57534E;
+  color: #46596B;
   font-weight: 500;
 }
 
@@ -1145,30 +1148,30 @@
 /* 左：加入购物袋浅色；右：立即购买主蓝色 */
 .action-btn-cart {
   background: #ffffff;
-  color: #2563EB;
-  border: 2rpx solid #BFDBFE;
+  color: #3D6BB3;
+  border: 2rpx solid #D2E0EA;
   box-sizing: border-box;
-  box-shadow: 0 6rpx 18rpx rgba(37, 99, 235, 0.08);
+  box-shadow: 0 6rpx 18rpx rgba(16, 42, 67, 0.06);
 }
 
 .action-btn-buy {
-  background: linear-gradient(135deg, #60A5FA 0%, #2563EB 54%, #1D4ED8 100%);
+  background: linear-gradient(135deg, #3D6BB3 0%, #5B9BD5 58%, #6F9FC4 100%);
   color: #FFFFFF;
-  border: 2rpx solid #2563EB;
+  border: 2rpx solid #5B9BD5;
   box-sizing: border-box;
-  box-shadow: 0 10rpx 24rpx rgba(37, 99, 235, 0.26);
+  box-shadow: 0 12rpx 26rpx rgba(36, 95, 147, 0.26);
 }
 
 .action-btn-group {
-  background: linear-gradient(135deg, #60A5FA 0%, #2563EB 54%, #1D4ED8 100%);
-  border-color: #2563EB;
-  box-shadow: 0 10rpx 24rpx rgba(37, 99, 235, 0.26);
+  background: linear-gradient(135deg, #3D6BB3 0%, #5B9BD5 58%, #6F9FC4 100%);
+  border-color: #5B9BD5;
+  box-shadow: 0 12rpx 26rpx rgba(36, 95, 147, 0.26);
 }
 
 .action-btn-slash {
-  background: linear-gradient(135deg, #60A5FA 0%, #2563EB 54%, #1D4ED8 100%);
-  border-color: #2563EB;
-  box-shadow: 0 10rpx 24rpx rgba(37, 99, 235, 0.26);
+  background: linear-gradient(135deg, #3D6BB3 0%, #5B9BD5 58%, #6F9FC4 100%);
+  border-color: #5B9BD5;
+  box-shadow: 0 12rpx 26rpx rgba(36, 95, 147, 0.26);
 }
 
 /* 缺货状态按钮 */
@@ -1188,7 +1191,7 @@
 
 /* 评价更多按钮 */
 .review-title-wrap { display: flex; align-items: center; gap: 8rpx; }
-.review-more { font-size: 22rpx; color: #8A7A6A; display: flex; align-items: center; gap: 4rpx; }
+.review-more { font-size: 22rpx; color: #6B7F91; display: flex; align-items: center; gap: 4rpx; }
 .review-more-arrow { font-size: 28rpx; line-height: 1; }
 
 /* 页面骨架屏 */
@@ -1196,19 +1199,18 @@
 .sk-gallery-section {
   padding: 20rpx 24rpx 0;
   box-sizing: border-box;
-  background: linear-gradient(180deg, #2B2018 0%, #1A1511 100%);
 }
 .sk-gallery {
   width: 100%;
   height: 100%;
   border-radius: 36rpx;
-  background: linear-gradient(90deg, #EDE8E2 25%, #F5F0EB 50%, #EDE8E2 75%);
+  background: linear-gradient(90deg, #DDEAF3 25%, #EAF2F8 50%, #DDEAF3 75%);
   background-size: 200% 100%;
   animation: sk-shimmer 1.4s infinite;
 }
 .sk-info-card { margin: 24rpx; background: #fff; border-radius: 28rpx; padding: 30rpx; }
-.sk-price-line { height: 52rpx; width: 40%; border-radius: 8rpx; background: linear-gradient(90deg, #F5F0EB 25%, #EDE8E2 50%, #F5F0EB 75%); background-size: 200% 100%; animation: sk-shimmer 1.4s infinite; margin-bottom: 20rpx; }
-.sk-title-line { height: 24rpx; border-radius: 6rpx; background: linear-gradient(90deg, #F5F0EB 25%, #EDE8E2 50%, #F5F0EB 75%); background-size: 200% 100%; animation: sk-shimmer 1.4s infinite; margin-bottom: 14rpx; }
+.sk-price-line { height: 52rpx; width: 40%; border-radius: 8rpx; background: linear-gradient(90deg, #EAF2F8 25%, #DDEAF3 50%, #EAF2F8 75%); background-size: 200% 100%; animation: sk-shimmer 1.4s infinite; margin-bottom: 20rpx; }
+.sk-title-line { height: 24rpx; border-radius: 6rpx; background: linear-gradient(90deg, #EAF2F8 25%, #DDEAF3 50%, #EAF2F8 75%); background-size: 200% 100%; animation: sk-shimmer 1.4s infinite; margin-bottom: 14rpx; }
 .sk-long { width: 85%; }
 .sk-short { width: 60%; }
 .sk-tiny { width: 40%; }

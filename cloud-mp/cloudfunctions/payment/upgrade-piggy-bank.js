@@ -14,11 +14,12 @@ const DEFAULT_UPGRADE_PIGGY_BANK_CONFIG = {
     enabled: true,
     include_team_direct: true,
     include_team_indirect: true,
-    include_self_purchase: true,
+    include_self_purchase: false,
     max_target_level: 5,
     min_incremental_amount: 0.01,
     unlock_to_commission_balance: true
 };
+const SELF_PURCHASE_COMMISSION_ENABLED = false;
 
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
@@ -73,7 +74,7 @@ function normalizePiggyBankConfig(config = {}) {
         enabled: merged.enabled !== false,
         include_team_direct: merged.include_team_direct !== false,
         include_team_indirect: merged.include_team_indirect !== false,
-        include_self_purchase: merged.include_self_purchase !== false,
+        include_self_purchase: SELF_PURCHASE_COMMISSION_ENABLED && merged.include_self_purchase !== false,
         max_target_level: Math.min(5, Math.max(1, normalizeRoleLevel(merged.max_target_level))),
         min_incremental_amount: Math.max(0.01, toNumber(merged.min_incremental_amount, 0.01)),
         unlock_to_commission_balance: merged.unlock_to_commission_balance !== false
@@ -412,7 +413,7 @@ async function addPiggyRows(context, rows = []) {
 }
 
 async function createUpgradePiggyBankForOrder(context, orderId, order = {}, runtimeConfig = {}) {
-    const { db } = context;
+    const { db, command } = context;
     const config = normalizePiggyBankConfig(runtimeConfig.piggyBank || runtimeConfig.piggyBankConfig || {});
     if (!config.enabled) return { skipped: true, reason: 'disabled' };
     if (!orderId || order.piggy_bank_created_at) return { skipped: true, reason: 'already_created' };
@@ -578,7 +579,7 @@ async function unlockUpgradePiggyBankForRole(context, payload = {}) {
     const userId = primaryId(user);
 
     if (config.unlock_to_commission_balance) {
-        const unlockRes = await db.collection('users').where({ openid, piggy_bank_locked_amount: _.gte(total) }).update({
+        const unlockRes = await db.collection('users').where({ openid, piggy_bank_locked_amount: command.gte(total) }).update({
             data: {
                 commission_balance: command.inc(total),
                 balance: command.inc(total),

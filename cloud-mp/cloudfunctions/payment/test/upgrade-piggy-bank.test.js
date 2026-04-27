@@ -20,11 +20,23 @@ function createFakeDb(seed = {}) {
         orders: seed.orders || []
     };
     const command = {
-        inc: (value) => ({ __op: 'inc', value })
+        inc: (value) => ({ __op: 'inc', value }),
+        gte: (value) => ({ __op: 'gte', value }),
+        exists: (value) => ({ __op: 'exists', value })
     };
 
     function matches(row, criteria = {}) {
-        return Object.keys(criteria).every((key) => String(row[key]) === String(criteria[key]));
+        return Object.keys(criteria).every((key) => {
+            const expected = criteria[key];
+            if (expected && expected.__op === 'gte') {
+                return Number(row[key] || 0) >= Number(expected.value || 0);
+            }
+            if (expected && expected.__op === 'exists') {
+                const exists = Object.prototype.hasOwnProperty.call(row, key);
+                return expected.value ? exists : !exists;
+            }
+            return String(row[key]) === String(expected);
+        });
     }
 
     function applyPatch(row, patch = {}) {
@@ -166,7 +178,8 @@ test('direct team order creates target-level piggy bank deltas', async () => {
             { _id: 'buyer', openid: 'buyer-openid', role_level: 0 },
             { _id: 'parent', openid: 'parent-openid', role_level: 1, piggy_bank_locked_amount: 0 }
         ],
-        products: [{ _id: 'product-1' }]
+        products: [{ _id: 'product-1' }],
+        orders: [{ _id: 'order-1' }]
     });
 
     const result = await createUpgradePiggyBankForOrder(context, 'order-1', {
@@ -191,7 +204,8 @@ test('indirect team order uses level-difference matrix deltas', async () => {
             { _id: 'parent', openid: 'parent-openid', role_level: 3 },
             { _id: 'grand', openid: 'grand-openid', role_level: 3, piggy_bank_locked_amount: 0 }
         ],
-        products: [{ _id: 'product-1' }]
+        products: [{ _id: 'product-1' }],
+        orders: [{ _id: 'order-2' }]
     });
 
     await createUpgradePiggyBankForOrder(context, 'order-2', {
@@ -216,7 +230,8 @@ test('fixed product commission creates no piggy bank delta', async () => {
             { _id: 'buyer', openid: 'buyer-openid', role_level: 0 },
             { _id: 'parent', openid: 'parent-openid', role_level: 1, piggy_bank_locked_amount: 0 }
         ],
-        products: [{ _id: 'product-1', commission_amount_1: 20 }]
+        products: [{ _id: 'product-1', commission_amount_1: 20 }],
+        orders: [{ _id: 'order-3' }]
     });
 
     const result = await createUpgradePiggyBankForOrder(context, 'order-3', {
@@ -231,11 +246,12 @@ test('fixed product commission creates no piggy bank delta', async () => {
     assert.equal(collections.upgrade_piggy_bank_logs.length, 0);
 });
 
-test('self purchase creates piggy bank only when target reaches agent role', async () => {
+test('self purchase no longer creates piggy bank buckets', async () => {
     const { context, collections } = createContext({
         users: [
             { _id: 'buyer', openid: 'buyer-openid', role_level: 2, piggy_bank_locked_amount: 0 }
-        ]
+        ],
+        orders: [{ _id: 'order-4' }]
     });
 
     await createUpgradePiggyBankForOrder(context, 'order-4', {
@@ -245,9 +261,8 @@ test('self purchase creates piggy bank only when target reaches agent role', asy
         items: [{ subtotal: 100 }]
     }, runtimeConfig({ piggyBank: { max_target_level: 4 } }));
 
-    assert.equal(collections.upgrade_piggy_bank_logs.length, 1);
-    assert.equal(collections.upgrade_piggy_bank_logs[0].target_role_level, 3);
-    assert.equal(collections.upgrade_piggy_bank_logs[0].incremental_amount, 40);
+    assert.equal(collections.upgrade_piggy_bank_logs.length, 0);
+    assert.equal(collections.users[0].piggy_bank_locked_amount, 0);
 });
 
 test('createUpgradePiggyBankForOrder is idempotent per order user source and target level', async () => {
@@ -256,7 +271,8 @@ test('createUpgradePiggyBankForOrder is idempotent per order user source and tar
             { _id: 'buyer', openid: 'buyer-openid', role_level: 0 },
             { _id: 'parent', openid: 'parent-openid', role_level: 1, piggy_bank_locked_amount: 0 }
         ],
-        products: [{ _id: 'product-1' }]
+        products: [{ _id: 'product-1' }],
+        orders: [{ _id: 'order-5' }]
     });
     const order = {
         _id: 'order-5',

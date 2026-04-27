@@ -105,7 +105,6 @@
   border-radius: 24rpx;
   padding: 32rpx;
   position: relative;
-  backdrop-filter: blur(10rpx);
 }
 
 .balance-label {

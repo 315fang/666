@@ -36,7 +36,7 @@
             </view>
             <view class="hero-meta-row" wx:if="{{isLoggedIn && userInfo.invite_code}}">
               <view class="hero-member-code" catchtap="onCopyMemberCode">
-                <text class="member-code-label">ID</text>
+                <text class="member-code-label member-code-label-id">ID</text>
                 <text class="member-code-value" user-select="true">{{userInfo.invite_code}}</text>
                 <text class="member-code-action">复制</text>
               </view>

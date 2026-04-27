@@ -290,7 +290,9 @@ const handleApprove = async (row) => {
     })
     await runWithdrawalMutation(
       () => approveWithdrawal(row.id),
-      isDepositGoodsFundApplication(row) ? '审核通过，请确认转入金' : '审核通过，请尽快完成打款'
+      isDepositCommissionApplication(row)
+        ? '审核通过，请确认转佣金'
+        : (isDepositGoodsFundApplication(row) ? '审核通过，请确认转入金' : '审核通过，请尽快完成打款')
     )
   } catch (error) {
     if (error !== 'cancel') {
@@ -325,16 +327,22 @@ const handleRejectSubmit = async () => {
 const handleComplete = async (row) => {
   try {
     const isGoodsFundTransfer = isDepositGoodsFundApplication(row)
-    const { value } = await ElMessageBox.prompt(
-      isGoodsFundTransfer
+    const isCommissionTransfer = isDepositCommissionApplication(row)
+    const actionCopy = isCommissionTransfer
+      ? `该操作将把用户「${displayUserName(row.user, row.user_id)}」的存款 ¥${parseFloat(row.actual_amount || 0).toFixed(2)} 转入佣金余额。请确认金额，并填写处理备注。`
+      : (isGoodsFundTransfer
         ? `该操作将把用户「${displayUserName(row.user, row.user_id)}」的存款 ¥${parseFloat(row.actual_amount || 0).toFixed(2)} 转入货款账户。请确认金额，并填写处理备注。`
-        : `该操作将尝试向用户「${displayUserName(row.user, row.user_id)}」自动打款 ¥${parseFloat(row.actual_amount || 0).toFixed(2)}。仅微信收款方式支持自动打款，请先确认账户信息，并填写打款备注。`,
-      isGoodsFundTransfer ? '确认转入金' : '确认执行打款',
+        : `该操作将尝试向用户「${displayUserName(row.user, row.user_id)}」自动打款 ¥${parseFloat(row.actual_amount || 0).toFixed(2)}。仅微信收款方式支持自动打款，请先确认账户信息，并填写打款备注。`)
+    const { value } = await ElMessageBox.prompt(
+      actionCopy,
+      isCommissionTransfer ? '确认转佣金' : (isGoodsFundTransfer ? '确认转入金' : '确认执行打款'),
       {
-        confirmButtonText: isGoodsFundTransfer ? '确认转入' : '确认打款',
+        confirmButtonText: isCommissionTransfer ? '确认转佣金' : (isGoodsFundTransfer ? '确认转入' : '确认打款'),
         cancelButtonText: '取消',
         type: 'warning',
-        inputPlaceholder: isGoodsFundTransfer ? '例如：审核通过，转入货款账户' : '例如：微信企业付款已执行 / 银行流水号',
+        inputPlaceholder: isCommissionTransfer
+          ? '例如：审核通过，转入佣金余额'
+          : (isGoodsFundTransfer ? '例如：审核通过，转入货款账户' : '例如：微信企业付款已执行 / 银行流水号'),
         inputValidator: (input) => {
           if (!input || String(input).trim().length < 2) return '请填写至少 2 个字符的打款备注'
           return true
@@ -344,6 +352,7 @@ const handleComplete = async (row) => {
     await runWithdrawalMutation(
       () => completeWithdrawal(row.id, { remark: value }),
       (result) => {
+        if (isCommissionTransfer) return '存款已转入佣金'
         if (isGoodsFundTransfer) return '存款已转入金'
         return result?.status === 'completed' ? '微信提现已完成' : '微信提现已受理，等待微信处理'
       }
@@ -376,6 +385,7 @@ const getWithdrawAccountType = (row) => row?.withdraw_account?.type || row?.meth
 
 const getWithdrawAccountLabel = (row) => {
   const type = getWithdrawAccountType(row)
+  if (isDepositCommissionApplication(row)) return '转佣金'
   if (type === 'deposit_goods_fund') return '转入金'
   if (isDepositApplication(row) && type === 'wechat') return '存款提现'
   return type === 'wechat' ? '微信' : type === 'alipay' ? '支付宝' : '银行卡'
@@ -383,6 +393,7 @@ const getWithdrawAccountLabel = (row) => {
 
 const getWithdrawAccountText = (row) => {
   const account = row?.withdraw_account
+  if (isDepositCommissionApplication(row)) return '转入佣金余额'
   if (isDepositGoodsFundApplication(row)) return '转入货款账户'
   if (account) {
     return account.account || account.name || account.account_no || '-'

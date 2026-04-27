@@ -43,13 +43,14 @@
   display: flex;
   gap: 16rpx;
   margin-top: 28rpx;
+  align-items: stretch;
 }
 
 .metric-card {
   flex: 1;
-  min-height: 144rpx;
-  padding: 24rpx;
-  border-radius: 28rpx;
+  height: 144rpx;
+  padding: 22rpx 24rpx;
+  border-radius: 24rpx;
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 12rpx 28rpx rgba(30, 74, 109, 0.08);
   display: flex;
@@ -58,7 +59,6 @@
 }
 
 .metric-card-main {
-  margin-top: 24rpx;
   background: linear-gradient(135deg, #1E4A6D 0%, #355F83 100%);
 }
 

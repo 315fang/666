@@ -1,7 +1,6 @@
 'use strict';
 
 const DEFAULT_MIN_SEPARATION_ROLE_LEVEL = 3;
-const DIRECT_MEMBER_PREFETCH_LIMIT = 200;
 
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
@@ -23,7 +22,20 @@ function primaryId(user = {}) {
 }
 
 function userRelationIds(user = {}) {
-    return [user._id, user.id, user._legacy_id].filter(hasValue);
+    const raw = [user._id, user.id, user._legacy_id].filter(hasValue);
+    const out = [];
+    raw.forEach((id) => {
+        if (hasValue(id)) {
+            const num = Number(id);
+            if (Number.isFinite(num)) out.push(num);
+            out.push(String(id));
+        }
+    });
+    return [...new Set(out.map((item) => `${typeof item}:${item}`))].map((key) => {
+        const [, value] = key.split(':');
+        const numeric = Number(value);
+        return key.startsWith('number:') && Number.isFinite(numeric) ? numeric : value;
+    });
 }
 
 function getUserRoleLevel(user = {}) {
@@ -69,13 +81,14 @@ function buildDirectRelationWhere(command, user = {}) {
 async function listDirectMembers(db, command, user = {}, maxRows = 1000) {
     const where = buildDirectRelationWhere(command, user);
     const rows = [];
-    const pageSize = 100;
+    const pageSize = 200;
     let skip = 0;
     while (rows.length < maxRows) {
-        let query = db.collection('users').where(where);
-        if (typeof query.skip === 'function') query = query.skip(skip);
-        if (typeof query.limit === 'function') query = query.limit(Math.min(pageSize, maxRows - rows.length));
-        const res = await query.get().catch(() => ({ data: [] }));
+        let query = db.collection('users').where(where).skip(skip).limit(Math.min(pageSize, maxRows - rows.length));
+        const res = await query.get().catch((err) => {
+            console.error('[listDirectMembers] 查询失败, skip=' + skip + ':', err.message);
+            return { data: [] };
+        });
         const batch = res.data || [];
         rows.push(...batch);
         if (batch.length < pageSize) break;
@@ -114,7 +127,7 @@ function buildInvitedByPatch(target = {}, fallbackInviter = {}, now) {
 }
 
 async function resolveDirectMembers(db, command, user = {}, directMembers = []) {
-    if (Array.isArray(directMembers) && directMembers.length > 0 && directMembers.length < DIRECT_MEMBER_PREFETCH_LIMIT) {
+    if (Array.isArray(directMembers) && directMembers.length > 0) {
         return directMembers;
     }
     return listDirectMembers(db, command, user);
@@ -156,41 +169,54 @@ async function applyPromotionSeparation(db, command, payload = {}) {
         return !sameIdentity(member, user) && !sameIdentity(member, parent);
     });
 
-    await updateUserByIdentity(db, user, {
-        ...buildInvitedByPatch(user, parent, now),
-        referrer_openid: '',
-        parent_openid: '',
-        parent_id: null,
-        inviter_openid: '',
-        inviter_id: null,
-        promotion_separated_at: now,
-        promotion_separated_order_id: payload.triggerOrderId || '',
-        separated_from_parent_id: parentId,
-        separated_from_parent_openid: parentOpenid,
-        separated_from_role_level: parentRoleLevel,
-        updated_at: now
-    });
-
-    let movedCount = 0;
-    for (const member of movableMembers) {
-        await updateUserByIdentity(db, member, {
-            ...buildInvitedByPatch(member, user, now),
-            referrer_openid: parentOpenid,
-            parent_openid: parentOpenid,
-            parent_id: parentId,
-            previous_parent_id: member.parent_id ?? null,
-            previous_parent_openid: pickString(member.parent_openid || member.referrer_openid),
-            lineage_rebased_from_openid: userOpenid,
-            lineage_rebased_from_id: userId,
-            lineage_rebased_to_openid: parentOpenid,
-            lineage_rebased_to_id: parentId,
-            lineage_rebased_order_id: payload.triggerOrderId || '',
-            lineage_rebased_at: now,
+    // 更新脱离人：清空上级关系
+    try {
+        await updateUserByIdentity(db, user, {
+            ...buildInvitedByPatch(user, parent, now),
+            referrer_openid: '',
+            parent_openid: '',
+            parent_id: null,
+            inviter_openid: '',
+            inviter_id: null,
+            promotion_separated_at: now,
+            promotion_separated_order_id: payload.triggerOrderId || '',
+            separated_from_parent_id: parentId,
+            separated_from_parent_openid: parentOpenid,
+            separated_from_role_level: parentRoleLevel,
             updated_at: now
         });
-        movedCount += 1;
+    } catch (err) {
+        console.error('[PromotionLineage] 脱离人更新失败, 中止脱离:', err.message);
+        throw err;
     }
 
+    let movedCount = 0;
+    const failedMemberIds = [];
+    for (const member of movableMembers) {
+        try {
+            await updateUserByIdentity(db, member, {
+                ...buildInvitedByPatch(member, user, now),
+                referrer_openid: parentOpenid,
+                parent_openid: parentOpenid,
+                parent_id: parentId,
+                previous_parent_id: member.parent_id ?? null,
+                previous_parent_openid: pickString(member.parent_openid || member.referrer_openid),
+                lineage_rebased_from_openid: userOpenid,
+                lineage_rebased_from_id: userId,
+                lineage_rebased_to_openid: parentOpenid,
+                lineage_rebased_to_id: parentId,
+                lineage_rebased_order_id: payload.triggerOrderId || '',
+                lineage_rebased_at: now,
+                updated_at: now
+            });
+            movedCount += 1;
+        } catch (err) {
+            console.error('[PromotionLineage] 下级改线失败, openid=' + (member.openid || '?') + ':', err.message);
+            failedMemberIds.push(pickString(member.openid));
+        }
+    }
+
+    // 写入脱离审计日志
     await appendSeparationLog(db, {
         type: 'promotion_separation',
         openid: userOpenid,
@@ -203,15 +229,32 @@ async function applyPromotionSeparation(db, command, payload = {}) {
         trigger_order_id: payload.triggerOrderId || '',
         reparented_member_count: movedCount,
         reparented_member_openids: movableMembers.map((member) => pickString(member.openid)).filter(Boolean).slice(0, 50),
+        failed_member_openids: failedMemberIds,
         created_at: now
     });
+
+    // 如果有改线失败的成员，在用户身上标记
+    if (failedMemberIds.length > 0) {
+        try {
+            await db.collection('users').where({ openid: userOpenid }).update({
+                data: {
+                    promotion_separation_partial: true,
+                    promotion_separation_failed_members: failedMemberIds,
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (e) {
+            console.error('[PromotionLineage] 脱离部分失败标记写入失败:', e.message);
+        }
+    }
 
     return {
         separated: true,
         previousParentOpenid: parentOpenid,
         previousParentId: parentId,
         parentRoleLevel,
-        movedCount
+        movedCount,
+        failedCount: failedMemberIds.length
     };
 }
 

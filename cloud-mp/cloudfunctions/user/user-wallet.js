@@ -79,6 +79,11 @@ function parseConfigValue(row, fallback) {
     return value;
 }
 
+function resolvePointBenefitRoleLevel(roleLevel) {
+    const normalized = Math.max(0, Math.floor(toNumber(roleLevel, 0)));
+    return normalized >= 5 ? 5 : normalized;
+}
+
 async function getConfigByKey(key) {
     const res = await db.collection('configs')
         .where(_.or([{ config_key: key }, { key }]))
@@ -768,9 +773,10 @@ async function pointsTasks(openid) {
     const lastSignIn = userData.last_sign_in_at ? new Date(userData.last_sign_in_at) : null;
     const signedToday = lastSignIn && lastSignIn >= today;
     const roleLevel = toNumber(userData.role_level ?? userData.distributor_level ?? userData.level, 0);
+    const benefitRoleLevel = resolvePointBenefitRoleLevel(roleLevel);
     const orderPayPoints = Math.max(
         0,
-        toNumber(pointRules.purchase_multiplier_by_role?.[roleLevel], DEFAULT_POINT_RULES.purchase_multiplier_by_role[String(roleLevel)] || 0)
+        toNumber(pointRules.purchase_multiplier_by_role?.[benefitRoleLevel], DEFAULT_POINT_RULES.purchase_multiplier_by_role[String(benefitRoleLevel)] || 0)
     );
     const reviewPoints = Math.max(0, toNumber(pointRules.review.points, DEFAULT_POINT_RULES.review.points));
     const invitePoints = Math.max(0, toNumber(pointRules.invite_success.points, DEFAULT_POINT_RULES.invite_success.points));

@@ -4,6 +4,7 @@ const { get, post } = require('../../utils/request');
 const { ROLE_NAMES, USER_ROLES } = require('../../config/constants');
 const { copyAgentPortalLink } = require('./utils/agentPortal');
 const { promptPortalPassword } = require('../../utils/portalPassword');
+const { callFn } = require('../../utils/cloud');
 
 // 状态字典
 const COMMISSION_STATUS_MAP = {
@@ -463,15 +464,12 @@ Page({
                         placeholderText: '请输入6位数字业务密码'
                     });
                     if (!portalPassword) return;
-                    const r = await wx.cloud.callFunction({
-                        name: 'distribution',
-                        data: { action: 'commissionToGoodsFund', amount, portal_password: portalPassword }
-                    });
-                    if (r.result && r.result.code === 0) {
+                    const r = await callFn('distribution', { action: 'commissionToGoodsFund', amount, portal_password: portalPassword });
+                    if (r && r.success !== false && r.code === 0) {
                         wx.showToast({ title: `成功转入${amount}元`, icon: 'success' });
                         this.refreshDashboard(true);
                     } else {
-                        wx.showToast({ title: r.result?.message || '转入失败', icon: 'none' });
+                        wx.showToast({ title: r.message || '转入失败', icon: 'none' });
                     }
                 } catch (err) {
                     wx.showToast({ title: '操作失败', icon: 'none' });

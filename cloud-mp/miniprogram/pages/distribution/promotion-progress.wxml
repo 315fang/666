@@ -3,10 +3,8 @@
     <view class="vault-card">
       <view class="vault-head">
         <view>
-          <text class="vault-kicker">升级存钱罐</text>
           <text class="vault-title">我的存款</text>
         </view>
-        <view class="vault-state">{{summary.vault_state_text}}</view>
       </view>
 
       <view class="vault-hero">
@@ -40,7 +38,7 @@
       </view>
       <view class="vault-stages">
         <text>入罐</text>
-        <text class="{{summary.claimable_amount > 0 ? 'stage-active' : ''}}">可领取</text>
+        <text class="{{summary.claimable_amount > 0 ? 'stage-active' : ''}}">可提取</text>
         <text class="{{summary.unlocked_amount > 0 ? 'stage-active' : ''}}">已入账</text>
       </view>
 
@@ -53,15 +51,11 @@
 
       <view class="vault-metrics">
         <view class="vault-metric">
-          <text class="metric-label">可申请转佣金</text>
+          <text class="metric-label">可提取转佣金</text>
           <text class="metric-value metric-value-gold">¥{{summary.claimable_amount_text}}</text>
         </view>
         <view class="vault-metric">
-          <text class="metric-label">已入账佣金</text>
-          <text class="metric-value">¥{{summary.unlocked_amount_text}}</text>
-        </view>
-        <view class="vault-metric">
-          <text class="metric-label">继续升级可解锁</text>
+          <text class="metric-label">升级可解锁</text>
           <text class="metric-value">¥{{summary.next_level_unlock_amount_text}}</text>
         </view>
       </view>
@@ -69,12 +63,9 @@
 
     <view class="rule-strip {{depositGuideExpanded ? 'rule-strip-expanded' : ''}}" bindtap="onToggleDepositGuide">
       <view class="rule-main">
-        <text class="rule-label">规则</text>
-        <view class="rule-copy-wrap">
-          <view class="rule-ticker-window" wx:if="{{!depositGuideExpanded}}">
-            <text class="rule-copy rule-ticker-copy {{ruleTipFlip ? 'rule-slide-b' : 'rule-slide-a'}}">{{currentRuleTip}}</text>
-          </view>
-          <view class="rule-detail-list" wx:else>
+        <text class="rule-label">存款提取规则</text>
+        <view class="rule-copy-wrap" wx:if="{{depositGuideExpanded}}">
+          <view class="rule-detail-list">
             <view class="rule-detail-item" wx:for="{{depositRuleDetails}}" wx:key="no">
               <text class="rule-detail-no">{{item.no}}</text>
               <text class="rule-detail-text">{{item.text}}</text>
@@ -89,11 +80,10 @@
       <view class="records-head">
         <view>
           <text class="records-title">存款明细</text>
-          <text class="records-sub">每一笔奖励都会留下状态</text>
         </view>
       </view>
 
-      <scroll-view class="filter-bar" scroll-x enhanced show-scrollbar="{{false}}">
+      <view class="filter-bar">
         <view
           class="filter-item {{currentStatus === item.status ? 'active' : ''}}"
           wx:for="{{statusTabs}}"
@@ -104,7 +94,7 @@
           <text>{{item.label}}</text>
           <text class="filter-count" wx:if="{{item.count > 0}}">{{item.count}}</text>
         </view>
-      </scroll-view>
+      </view>
 
       <view class="skeleton-wrap" wx:if="{{loading && logs.length === 0}}">
         <view class="sk-log" wx:for="{{[1,2,3]}}" wx:key="index">

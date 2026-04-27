@@ -72,8 +72,8 @@ function toFiniteNumber(value, fallback = 0) {
 }
 
 function resolveBenefitRoleLevel(roleLevel) {
-    const normalized = toFiniteNumber(roleLevel, 0);
-    return normalized === 6 ? 4 : normalized;
+    const normalized = Math.max(0, Math.floor(toFiniteNumber(roleLevel, 0)));
+    return normalized >= 5 ? 5 : normalized;
 }
 
 function getPurchasePointsPerHundred(roleLevel) {

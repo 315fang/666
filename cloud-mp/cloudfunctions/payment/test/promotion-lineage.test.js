@@ -122,3 +122,70 @@ test('applyPromotionSeparation skips when parent level is not lower', async () =
     assert.equal(result.reason, 'parent_not_lower');
     assert.equal(db.collections.users[1].referrer_openid, 'openid-a');
 });
+
+test('applyPromotionSeparation continues rebasing remaining members when one fails', async () => {
+    const db = createFakeDb({
+        users: [
+            { _id: 'u-a', openid: 'openid-a', nick_name: 'A', role_level: 3 },
+            { _id: 'u-b', openid: 'openid-b', nick_name: 'B', role_level: 4, referrer_openid: 'openid-a', parent_openid: 'openid-a', parent_id: 'u-a' },
+            { _id: 'u-c', openid: 'openid-c', nick_name: 'C', role_level: 1, referrer_openid: 'openid-b', parent_openid: 'openid-b', parent_id: 'u-b' },
+            { _id: 'u-d', openid: 'openid-d', nick_name: 'D', role_level: 1, referrer_openid: 'openid-b', parent_openid: 'openid-b', parent_id: 'u-b', _fail_update: true },
+            { _id: 'u-e', openid: 'openid-e', nick_name: 'E', role_level: 1, referrer_openid: 'openid-b', parent_openid: 'openid-b', parent_id: 'u-b' }
+        ]
+    });
+
+    const patchedUpdate = async ({ data }) => {
+        const row = db.collections.users.find((r) => r._id === 'u-d');
+        if (row && row._fail_update) throw new Error('simulated update failure');
+        Object.assign(row || {}, data);
+        return { stats: { updated: 1 } };
+    };
+
+    const originalDoc = db.collection('users').doc;
+    db.collection = function(name) {
+        if (name !== 'users') {
+            return {
+                where: () => ({ update: async () => ({ stats: { updated: 0 } }) }),
+                add: async ({ data }) => {
+                    db.collections.promotion_lineage_logs.push({ ...data, _id: `log-${Date.now()}` });
+                    return { _id: `log-${Date.now()}` };
+                }
+            };
+        }
+        return {
+            doc: (id) => ({
+                update: async ({ data }) => {
+                    const row = db.collections.users.find((r) => String(r._id) === String(id));
+                    if (row && row._fail_update) throw new Error('simulated update failure');
+                    if (row) Object.assign(row, data);
+                    return { stats: { updated: 1 } };
+                }
+            }),
+            where: () => ({ update: async ({ data }) => {
+                Object.keys(data).forEach((k) => {
+                    db.collections.users.forEach((r) => { r[k] = data[k]; });
+                });
+                return { stats: { updated: db.collections.users.length } };
+            }}),
+            add: async ({ data }) => {
+                db.collections.promotion_lineage_logs.push({ ...data, _id: `log-${Date.now()}` });
+                return { _id: `log-${Date.now()}` };
+            }
+        };
+    };
+
+    const parent = db.collections.users[0];
+    const upgraded = db.collections.users[1];
+    const result = await applyPromotionSeparation(db, {}, {
+        user: upgraded,
+        parent,
+        directMembers: db.collections.users.slice(2),
+        previousRoleLevel: 3,
+        nextRoleLevel: 4,
+        triggerOrderId: 'order-1'
+    });
+
+    assert.equal(result.separated, true);
+    assert.equal(result.movedCount, 2);
+    assert.equal(result.failedCount, 1);
+});

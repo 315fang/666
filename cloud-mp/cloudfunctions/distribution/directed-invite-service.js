@@ -356,6 +356,11 @@ function buildUserGoodsFundPatch(user = {}, { balance, frozen, now }) {
     };
 }
 
+function commandIncOrValue(db, delta, fallbackValue) {
+    const inc = db?.command?.inc;
+    return typeof inc === 'function' ? inc.call(db.command, delta) : fallbackValue;
+}
+
 async function findWalletAccountByUser(db, user = {}) {
     const candidates = [user._id, user.id, user._legacy_id, user.openid]
         .filter((value) => value !== null && value !== undefined && value !== '');
@@ -487,10 +492,10 @@ async function releaseInviteFrozenFunds(db, invite = {}, reason = 'manual_releas
     });
     await db.collection('users').doc(String(inviter._id || inviter.id)).update({
         data: {
-            agent_wallet_balance: db.command.inc(frozenAmount),
-            wallet_balance: db.command.inc(frozenAmount),
-            agent_wallet_frozen_amount: db.command.inc(-frozenAmount),
-            goods_fund_frozen_amount: db.command.inc(-frozenAmount),
+            agent_wallet_balance: commandIncOrValue(db, frozenAmount, nextUser.agent_wallet_balance),
+            wallet_balance: commandIncOrValue(db, frozenAmount, nextUser.wallet_balance),
+            agent_wallet_frozen_amount: commandIncOrValue(db, -frozenAmount, nextUser.agent_wallet_frozen_amount),
+            goods_fund_frozen_amount: commandIncOrValue(db, -frozenAmount, nextUser.goods_fund_frozen_amount),
             updated_at: now
         }
     }).catch((err) => {
@@ -500,10 +505,12 @@ async function releaseInviteFrozenFunds(db, invite = {}, reason = 'manual_releas
 
     const walletAccount = await findWalletAccountByUser(db, inviter);
     if (walletAccount) {
+        const walletBalanceAfter = roundMoney(toNumber(walletAccount.balance, beforeBalance) + frozenAmount);
+        const walletFrozenAfter = roundMoney(Math.max(0, toNumber(walletAccount.frozen_balance, beforeFrozen) - frozenAmount));
         await db.collection('wallet_accounts').doc(String(walletAccount._id || walletAccount.id)).update({
             data: {
-                balance: db.command.inc(frozenAmount),
-                frozen_balance: db.command.inc(-frozenAmount),
+                balance: commandIncOrValue(db, frozenAmount, walletBalanceAfter),
+                frozen_balance: commandIncOrValue(db, -frozenAmount, walletFrozenAfter),
                 updated_at: now
             }
         }).catch((err) => { console.error('[directed-invite] 释放冻结货款更新钱包账户失败:', err.message || err); });
@@ -693,20 +700,22 @@ async function createDirectedInvite(db, _, openid, params = {}) {
 
         await conn.collection('users').doc(String(inviter._id || inviter.id)).update({
             data: {
-                agent_wallet_balance: conn.command.inc(-transferCheck.amount),
-                wallet_balance: conn.command.inc(-transferCheck.amount),
-                agent_wallet_frozen_amount: conn.command.inc(transferCheck.amount),
-                goods_fund_frozen_amount: conn.command.inc(transferCheck.amount),
+                agent_wallet_balance: commandIncOrValue(conn, -transferCheck.amount, nextInviter.agent_wallet_balance),
+                wallet_balance: commandIncOrValue(conn, -transferCheck.amount, nextInviter.wallet_balance),
+                agent_wallet_frozen_amount: commandIncOrValue(conn, transferCheck.amount, nextInviter.agent_wallet_frozen_amount),
+                goods_fund_frozen_amount: commandIncOrValue(conn, transferCheck.amount, nextInviter.goods_fund_frozen_amount),
                 updated_at: createdAt
             }
         });
 
         const inviterWallet = await findWalletAccountByUser(conn, inviter);
         if (inviterWallet) {
+            const walletBalanceAfter = roundMoney(toNumber(inviterWallet.balance, inviterBalance) - transferCheck.amount);
+            const walletFrozenAfter = roundMoney(toNumber(inviterWallet.frozen_balance, inviterFrozenBefore) + transferCheck.amount);
             await conn.collection('wallet_accounts').doc(String(inviterWallet._id || inviterWallet.id)).update({
                 data: {
-                    balance: conn.command.inc(-transferCheck.amount),
-                    frozen_balance: conn.command.inc(transferCheck.amount),
+                    balance: commandIncOrValue(conn, -transferCheck.amount, walletBalanceAfter),
+                    frozen_balance: commandIncOrValue(conn, transferCheck.amount, walletFrozenAfter),
                     updated_at: createdAt
                 }
             });

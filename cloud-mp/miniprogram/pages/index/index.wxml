@@ -4,7 +4,7 @@
     <view class="nav-inner" style="height: {{navBarHeight}}px;">
       <!-- 气泡足迹：替换品牌 Logo 区，暂不展示 Logo/品牌甄选 -->
       <view class="nav-bubble-bar {{navScrolled ? 'nav-hidden' : 'nav-visible'}}" wx:if="{{bubbles.length > 0}}">
-        <view class="nav-bubble-icon">🔥</view>
+        <image class="nav-bubble-icon" src="/assets/icons/hot.svg" mode="aspectFit"></image>
         <view class="nav-bubble-scroll">
           <view class="nav-bubble-item" animation="{{bubbleAnim}}">
             <text class="nav-bubble-text">{{currentBubble}}</text>
@@ -29,7 +29,8 @@
   </view>
 
   <!-- 全屏 Hero 轮播（第一屏，对标麦吉丽全屏大图） -->
-  <view class="hero-editorial" style="height: {{heroViewportHeight}}px; min-height: {{heroViewportHeight}}px;">
+  <view class="hero-editorial" style="height: {{heroViewportHeight}}px; min-height: {{heroViewportHeight}}px; opacity: {{heroOpacity}};">
+    <view class="hero-parallax-inner" style="transform: {{heroTransform}};">
     <swiper class="hero-swiper" indicator-dots="{{true}}" autoplay="{{true}}" circular="{{true}}" interval="5000" duration="600" indicator-color="rgba(255,255,255,0.25)" indicator-active-color="#FFFFFF">
       <swiper-item wx:for="{{heroBanners}}" wx:key="id">
         <view class="hero-slide" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
@@ -42,16 +43,17 @@
         </view>
       </swiper-item>
     </swiper>
+    </view>
   </view>
 
   <!-- 中部海报区（后端 banners position=home_mid，对标麦吉丽的多海报铺排） -->
-  <view class="poster-section" wx:if="{{midPosters.length > 0}}">
+  <view id="reveal_mid_posters" class="poster-section scroll-reveal {{revealMidPosters ? 'revealed' : ''}}" wx:if="{{midPosters.length > 0}}">
     <view class="poster-card" wx:for="{{midPosters}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
       <image class="poster-image" src="{{item.image}}" mode="widthFix" binderror="onAssetImageError" data-scene="mid-poster" data-index="{{index}}"></image>
     </view>
   </view>
 
-  <view class="coupon-section">
+  <view id="reveal_coupons" class="coupon-section scroll-reveal {{revealCoupons ? 'revealed' : ''}}">
     <view class="section-head coupon-section-head">
       <view class="section-copy">
         <text class="section-intro-title">{{homeConfigs.coupon_zone_title || '优惠券中心'}}</text>
@@ -93,7 +95,7 @@
   </view>
 
   <!-- 分类商品编排 -->
-  <view class="products-section products-section-grouped" wx:if="{{featuredSections.length > 0}}">
+  <view id="reveal_products" class="products-section products-section-grouped scroll-reveal {{revealProducts ? 'revealed' : ''}}" wx:if="{{featuredSections.length > 0}}">
     <view class="products-section-block" wx:for="{{featuredSections}}" wx:key="key">
       <view class="section-head">
         <view class="section-copy">
@@ -116,26 +118,7 @@
             <view wx:else class="product-card-img-fallback">
               <text class="product-card-img-fallback-label">暂无商品图片</text>
             </view>
-            <view class="product-card-badge" wx:if="{{item.market_price && item.market_price > item.retail_price && item.discount_label}}">
-              {{item.discount_label}}
-            </view>
             <view class="product-card-soldout" wx:if="{{item.stock === 0}}">已售罄</view>
-          </view>
-          <view class="product-card-info">
-            <view>
-              <text class="product-card-name">{{item.name}}</text>
-              <text class="product-card-spec" wx:if="{{item.specSummary}}">{{item.specSummary}}</text>
-              <view class="heat-tag" wx:if="{{item.heat_label}}">
-                <text class="heat-icon">🔥</text>
-                <text class="heat-text">{{item.heat_label}}</text>
-              </view>
-            </view>
-            <view class="product-card-price-row">
-              <view class="product-card-price">
-                <text class="price-sym">¥</text>
-                <text class="price-num">{{item.displayPrice || item.retail_price || item.price}}</text>
-              </view>
-            </view>
           </view>
         </view>
       </view>
@@ -143,7 +126,7 @@
   </view>
 
   <!-- 精选单品回退 -->
-  <view class="products-section" wx:else>
+  <view id="reveal_featured" class="products-section scroll-reveal {{revealFeatured ? 'revealed' : ''}}" wx:else>
     <view class="section-head">
       <text class="section-intro-title">精选单品</text>
       <view class="section-link" bindtap="onGoCategory">更多 ›</view>
@@ -160,51 +143,31 @@
     </view>
 
     <view class="products-grid" wx:if="{{featuredProducts.length > 0}}">
-      <view class="product-card" wx:for="{{featuredProducts}}" wx:key="id" bindtap="onProductTap" data-id="{{item.id}}" hover-class="press">
-        <view class="product-card-img-wrap">
-          <image
-            wx:if="{{item.display_image || item.cover_image || item.image}}"
-            class="product-card-img"
-            src="{{item.display_image || item.cover_image || item.image}}"
-            mode="aspectFill"
-            lazy-load="{{true}}"
-            binderror="onFeaturedImageError"
-            data-index="{{index}}"
-          ></image>
-          <view wx:else class="product-card-img-fallback">
-            <text class="product-card-img-fallback-label">暂无商品图片</text>
-          </view>
-          <view class="product-card-badge" wx:if="{{item.market_price && item.market_price > item.retail_price && item.discount_label}}">
-            {{item.discount_label}}
-          </view>
-          <view class="product-card-soldout" wx:if="{{item.stock === 0}}">已售罄</view>
-        </view>
-        <!-- 信息层悬浮在图片底部 -->
-        <view class="product-card-info">
-          <view>
-            <text class="product-card-name">{{item.name}}</text>
-            <text class="product-card-spec" wx:if="{{item.specSummary}}">{{item.specSummary}}</text>
-            <view class="heat-tag" wx:if="{{item.heat_label}}">
-              <text class="heat-icon">🔥</text>
-              <text class="heat-text">{{item.heat_label}}</text>
+<view class="product-card" wx:for="{{featuredProducts}}" wx:key="id" bindtap="onProductTap" data-id="{{item.id}}" hover-class="press">
+          <view class="product-card-img-wrap">
+            <image
+              wx:if="{{item.display_image || item.cover_image || item.image}}"
+              class="product-card-img"
+              src="{{item.display_image || item.cover_image || item.image}}"
+              mode="aspectFill"
+              lazy-load="{{true}}"
+              binderror="onFeaturedImageError"
+              data-index="{{index}}"
+            ></image>
+            <view wx:else class="product-card-img-fallback">
+              <text class="product-card-img-fallback-label">暂无商品图片</text>
             </view>
-          </view>
-          <view class="product-card-price-row">
-            <view class="product-card-price">
-              <text class="price-sym">¥</text>
-              <text class="price-num">{{item.displayPrice || item.retail_price || item.price}}</text>
-            </view>
+            <view class="product-card-soldout" wx:if="{{item.stock === 0}}">已售罄</view>
           </view>
         </view>
       </view>
-    </view>
 
     <view class="products-empty" wx:if="{{!loading && featuredProducts.length === 0}}">
       <text>暂无商品，请稍后查看</text>
     </view>
   </view>
 
-  <view class="brand-zone-section" wx:if="{{brandZone.enabled}}">
+  <view id="reveal_brand" class="brand-zone-section scroll-reveal {{revealBrand ? 'revealed' : ''}}" wx:if="{{brandZone.enabled}}">
     <view class="brand-zone-header">
       <view class="brand-zone-header-line"></view>
       <text class="brand-zone-header-title">{{brandZone.title || '品牌专区'}}</text>
@@ -279,7 +242,7 @@
   </view>
 
   <!-- 底部海报区（后端 banners position=home_bottom） -->
-  <view class="poster-section" wx:if="{{bottomPosters.length > 0}}">
+  <view id="reveal_bottom_posters" class="poster-section scroll-reveal {{revealBottomPosters ? 'revealed' : ''}}" wx:if="{{bottomPosters.length > 0}}">
     <view class="poster-card" wx:for="{{bottomPosters}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
       <image class="poster-image" src="{{item.image}}" mode="widthFix" binderror="onAssetImageError" data-scene="bottom-poster" data-index="{{index}}"></image>
     </view>

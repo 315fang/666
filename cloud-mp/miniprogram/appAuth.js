@@ -9,6 +9,7 @@
 const { cloneDefaults, mergeDeep } = require('./utils/miniProgramConfig');
 const { syncLocalFavoritesToCloud } = require('./utils/favoriteSync');
 const { normalizeUserInfo } = require('./utils/userProfile');
+const { callFn } = require('./utils/cloud');
 
 function isPlainObject(value) {
     return value && typeof value === 'object' && !Array.isArray(value);
@@ -141,14 +142,10 @@ module.exports = {
             } catch (e) { /* ignore */ }
 
             // ★ 调用云函数 login（云函数内部通过 getWXContext() 获取 openid，无需 code）
-            const res = await wx.cloud.callFunction({
-                name: 'login',
-                data: {
-                    invite_code: inviteCode || undefined
-                }
-            });
+            const result = await callFn('login', {
+                invite_code: inviteCode || undefined
+            }, { showError: false });
 
-            const result = res.result;
             if (!result || !result.success) {
                 throw new Error((result && result.message) || '登录失败');
             }

@@ -11,8 +11,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(8rpx);
+  background: rgba(0, 0, 0, 0.80);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -696,8 +695,7 @@
   justify-content: center;
   gap: 12rpx;
   padding: 28rpx 40rpx;
-  background: rgba(28, 25, 23, 0.85);
-  backdrop-filter: blur(8rpx);
+  background: rgba(28, 25, 23, 0.92);
   border-radius: 20rpx;
   z-index: 9999;
   opacity: 0;

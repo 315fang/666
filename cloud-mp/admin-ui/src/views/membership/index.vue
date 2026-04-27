@@ -177,7 +177,7 @@
               </el-alert>
             </el-form-item>
             <el-divider content-position="left">复购积分倍率（按每消费100元）</el-divider>
-            <div class="form-tip" style="margin-bottom:12px">影响路径：订单支付回调发分；这里填写的是每消费 100 元赠送的积分数。</div>
+            <div class="form-tip" style="margin-bottom:12px">影响路径：订单支付回调发分；这里填写的是每消费 100 元最终赠送的积分数，不再叠加 1 倍基础积分。</div>
             <el-form-item label="VIP用户">
               <el-input-number v-model="pointRules.purchase_multiplier_by_role[0]" :min="0" :step="1" style="width:140px" />
             </el-form-item>

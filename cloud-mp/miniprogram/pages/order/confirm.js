@@ -37,7 +37,7 @@ const DEFAULT_PURCHASE_POINTS_BY_ROLE = {
     3: 300,
     4: 400,
     5: 500,
-    6: 400
+    6: 500
 };
 
 function toFiniteNumber(value, fallback = 0) {
@@ -46,8 +46,8 @@ function toFiniteNumber(value, fallback = 0) {
 }
 
 function resolveBenefitRoleLevel(roleLevel) {
-    const normalized = toFiniteNumber(roleLevel, 0);
-    return normalized === 6 ? 4 : normalized;
+    const normalized = Math.max(0, Math.floor(toFiniteNumber(roleLevel, 0)));
+    return normalized >= 5 ? 5 : normalized;
 }
 
 function getPurchasePointsPerHundred(roleLevel) {

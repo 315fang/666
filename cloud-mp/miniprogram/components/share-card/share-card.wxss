@@ -30,7 +30,6 @@
   border-radius: 16rpx;
   padding: 24rpx;
   margin-bottom: 32rpx;
-  backdrop-filter: blur(10px);
 }
 
 .invite-label {

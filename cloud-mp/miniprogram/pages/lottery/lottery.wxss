@@ -611,8 +611,7 @@
   right: 0;
   bottom: 0;
   left: 0;
-  background: rgba(16, 37, 56, 0.42);
-  backdrop-filter: blur(4rpx);
+background: rgba(16, 37, 56, 0.42);
 }
 
 .result-card {

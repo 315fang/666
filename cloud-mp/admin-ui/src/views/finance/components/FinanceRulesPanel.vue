@@ -48,6 +48,12 @@
             <el-divider content-position="left">成本结构（内部核算）</el-divider>
             <el-form-item label="启用成本结构"><el-switch v-model="commission.cost_split.enabled" /></el-form-item>
             <el-form-item label="直销收益 %"><el-input-number v-model="commission.cost_split.direct_sales_pct" :min="0" :max="100" /></el-form-item>
+            <el-alert
+              type="info"
+              :closable="false"
+              style="margin-bottom:12px"
+              title="代理自购返利已停用；直销收益比例仅保留为内部成本结构/历史记录口径，不再用于新订单给买家本人发放自购佣金。"
+            />
             <el-form-item label="运营成本 %"><el-input-number v-model="commission.cost_split.operations_pct" :min="0" :max="100" /></el-form-item>
             <el-form-item label="镜像运营成本 %"><el-input-number v-model="commission.cost_split.mirror_operations_pct" :min="0" :max="100" /></el-form-item>
             <el-form-item label="利润 %"><el-input-number v-model="commission.cost_split.profit_pct" :min="0" :max="100" /></el-form-item>

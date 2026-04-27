@@ -242,6 +242,30 @@ function buildCategoryIdCandidates(categoryId) {
     return [...new Set(values)];
 }
 
+function buildTypedIdCandidates(...values) {
+    const candidates = [];
+    const seen = new Set();
+
+    function add(value) {
+        if (value === null || value === undefined || value === '') return;
+        const key = `${typeof value}:${String(value)}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        candidates.push(value);
+    }
+
+    values.flat().forEach((value) => {
+        add(value);
+        const raw = String(value == null ? '' : value).trim();
+        if (!raw) return;
+        add(raw);
+        const numeric = toNumber(raw, NaN);
+        if (Number.isFinite(numeric)) add(numeric);
+    });
+
+    return candidates;
+}
+
 function matchesCategoryId(value, candidates = []) {
     if (!candidates.length) return true;
     const normalized = String(value == null ? '' : value).trim();
@@ -521,13 +545,15 @@ const handleAction = {
         let skuList = [];
         if (includeSkus) {
             try {
-                const productIds = list.map((p) => p._id || p.id).filter(Boolean);
-                const productIdStrs = [...new Set(productIds.map(String))];
-                if (productIdStrs.length > 0) {
+                const productIds = [];
+                list.forEach((p) => {
+                    productIds.push(...buildTypedIdCandidates(p && p._id, p && p.id, p && p._legacy_id));
+                });
+                if (productIds.length > 0) {
                     // 微信云开发 _.in() 最多支持 100 个元素
                     const chunks = [];
-                    for (let i = 0; i < productIdStrs.length; i += 100) {
-                        chunks.push(productIdStrs.slice(i, i + 100));
+                    for (let i = 0; i < productIds.length; i += 100) {
+                        chunks.push(productIds.slice(i, i + 100));
                     }
                     const chunkResults = await Promise.all(chunks.map((ids) =>
                         db.collection('skus').where({ product_id: _.in(ids) }).limit(500).get().catch(() => ({ data: [] }))
@@ -606,15 +632,13 @@ const handleAction = {
         let skus = [];
         let specSummary = '';
         try {
-            const productIdStr = String(product._id || product.id);
-            const queryIds = [productIdStr];
-            if (product.id && String(product.id) !== productIdStr) queryIds.push(String(product.id));
-            if (product._legacy_id) queryIds.push(String(product._legacy_id));
+            const queryIds = buildTypedIdCandidates(product._id, product.id, product._legacy_id);
+            const queryIdStrings = queryIds.map((value) => String(value));
             const skuRes = await db.collection('skus').where({ product_id: _.in(queryIds) }).limit(100).get().catch(() => ({ data: [] }));
             const skuList = skuRes.data || [];
             skus = skuList.filter((sku) => {
                 const pid = String(sku.product_id);
-                return queryIds.includes(pid);
+                return queryIdStrings.includes(pid);
             });
 
             // 生成规格摘要

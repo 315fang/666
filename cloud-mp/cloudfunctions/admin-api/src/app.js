@@ -61,6 +61,7 @@ const BRANCH_AGENT_COMMISSION_ORDER_STATUSES = [
     'shipped',
     'completed'
 ];
+const SELF_PURCHASE_COMMISSION_ENABLED = false;
 
 // Express 4 async handler patch: auto-catch rejected promises (Express 5 does this natively)
 const Layer = require('express/lib/router/layer');
@@ -3956,6 +3957,8 @@ async function completeDepositCommissionApplication(req, res, current, currentSt
             source_type: current.source_type,
             description: `我的存款转佣金 ${amountToTransfer} 元`,
             remark
+        }).catch((error) => {
+            console.error('[withdrawal.deposit_commission.complete] wallet log failed:', error.message || error);
         });
 
         const patch = {
@@ -4640,7 +4643,7 @@ function ensurePlatformSettlementCommissionsForOrder(order = {}) {
     const buyer = findUserByAnyId(users, order.openid || order.buyer_id || order.user_id);
     const buyerRole = toNumber(order.buyer_role_level ?? buyer?.role_level ?? buyer?.distributor_level, 0);
     const benefitBuyerRole = resolveBenefitRoleLevelSnapshot(buyerRole);
-    if (buyerRole >= 3 && buyer?.openid) {
+    if (buyerRole >= 3 && buyer?.openid && SELF_PURCHASE_COMMISSION_ENABLED) {
         const existingSelf = rows.find((row) =>
             rowMatchesLookup(row, order._id || order.id || order.order_no, [row.order_id, row.order_no])
             && rowMatchesLookup(row, buyer.openid, [row.openid, row.user_id])

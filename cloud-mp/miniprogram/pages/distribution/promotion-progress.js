@@ -59,20 +59,12 @@ const SOURCE_TYPE_MAP = {
     self_purchase: '自购订单'
 };
 
-const RULE_TIPS = [
-    '升级奖励先入罐，达标可申请',
-    '转佣金需要审核，通过后入账',
-    '待审核期间，金额会先锁定',
-    '每笔存款都有状态，明细可查',
-    '退款或取消，对应奖励会失效',
-    '审核驳回后，可重新按规则申请'
-];
-
 const RULE_DETAILS = [
-    { no: '1.', text: '升级或活动奖励会先进入存钱罐，显示为预计收益。' },
-    { no: '2.', text: '达到对应等级或解锁条件后，可以提交转佣金申请。' },
-    { no: '3.', text: '申请提交后进入后台审核，审核通过才会入账佣金。' },
-    { no: '4.', text: '订单退款、取消或奖励追回时，对应记录会显示为失效或扣回。' }
+    { no: '1.', text: '升级奖励先进入我的存款，未达对应等级前显示为预计收益。' },
+    { no: '2.', text: '当前代理等级达到奖励对应等级后，该笔存款自动进入可提取范围。' },
+    { no: '3.', text: '点击佣金提取会一次性提交当前全部可提取存款，生成转佣金申请。' },
+    { no: '4.', text: '转佣金申请需后台审核，审核通过后转入佣金余额；审核中不能重复提交。' },
+    { no: '5.', text: '关联订单退款、取消或奖励追回时，对应存款会显示为已失效或已扣回。' }
 ];
 
 function normalizePiggyBank(piggyBank = {}) {
@@ -160,11 +152,11 @@ function buildSummary(progress = {}, logsSummary = {}, pendingCommissionApplicat
             ? `¥${formatMoney(pendingAmount)} 转佣金申请审核中。`
             : '转佣金申请审核中，请等待后台处理。';
     } else if (claimableAmount > 0) {
-        vaultHint = '有奖励可申请转佣金，审核通过后入账。';
+        vaultHint = '有奖励可提取转佣金，审核通过后入账。';
     } else if (lockedAmount > 0) {
-        vaultHint = nextName ? `继续升级，下一档可解锁 ¥${formatMoney(nextUnlock)}` : '继续积累，达标后再收进佣金。';
+        vaultHint = nextName ? `继续升级，下一档可解锁 ¥${formatMoney(nextUnlock)}` : '继续积累，达标后可提取转佣金。';
     } else if (unlockedAmount > 0) {
-        vaultHint = '奖励已入账佣金，可在钱包继续处理。';
+        vaultHint = '奖励已入账，可在钱包继续处理。';
     }
     return {
         ...piggyBank,
@@ -174,9 +166,8 @@ function buildSummary(progress = {}, logsSummary = {}, pendingCommissionApplicat
         pending_commission_amount: pendingAmount,
         pending_commission_amount_text: formatMoney(pendingAmount),
         progress_percent: progressPercent,
-        vault_state_text: pendingCommissionApplication ? '审核中' : (claimableAmount > 0 ? '可申请' : (lockedAmount > 0 ? '积累中' : '待启动')),
         vault_hint_text: vaultHint,
-        claim_button_text: pendingCommissionApplication ? '转佣金审核中' : (claimableAmount > 0 ? '申请转佣金' : '继续升级解锁存款'),
+        claim_button_text: pendingCommissionApplication ? '转佣金审核中' : '佣金提取',
         claim_disabled: !!pendingCommissionApplication,
         next_unlock_text: nextName
             ? `升至${nextName}预计解锁 ¥${formatMoney(nextUnlock)}`
@@ -185,8 +176,6 @@ function buildSummary(progress = {}, logsSummary = {}, pendingCommissionApplicat
 }
 
 Page({
-    ruleTipTimer: null,
-
     data: {
         loading: true,
         currentStatus: 'all',
@@ -195,24 +184,12 @@ Page({
         statusTabs: buildTabs([]),
         summary: buildSummary(),
         depositGuideExpanded: false,
-        currentRuleIndex: 0,
-        currentRuleTip: RULE_TIPS[0],
-        ruleTipFlip: false,
         depositRuleDetails: RULE_DETAILS,
         depositSubmitting: false
     },
 
     onShow() {
         this._load();
-        this.startRuleTipTimer();
-    },
-
-    onHide() {
-        this.stopRuleTipTimer();
-    },
-
-    onUnload() {
-        this.stopRuleTipTimer();
     },
 
     onPullDownRefresh() {
@@ -261,34 +238,9 @@ Page({
     },
 
     onToggleDepositGuide() {
-        const nextExpanded = !this.data.depositGuideExpanded;
         this.setData({
-            depositGuideExpanded: nextExpanded
+            depositGuideExpanded: !this.data.depositGuideExpanded
         });
-        if (nextExpanded) {
-            this.stopRuleTipTimer();
-        } else {
-            this.startRuleTipTimer();
-        }
-    },
-
-    startRuleTipTimer() {
-        this.stopRuleTipTimer();
-        if (this.data.depositGuideExpanded || RULE_TIPS.length <= 1) return;
-        this.ruleTipTimer = setInterval(() => {
-            const nextIndex = (this.data.currentRuleIndex + 1) % RULE_TIPS.length;
-            this.setData({
-                currentRuleIndex: nextIndex,
-                currentRuleTip: RULE_TIPS[nextIndex],
-                ruleTipFlip: !this.data.ruleTipFlip
-            });
-        }, 15000);
-    },
-
-    stopRuleTipTimer() {
-        if (!this.ruleTipTimer) return;
-        clearInterval(this.ruleTipTimer);
-        this.ruleTipTimer = null;
     },
 
     async onClaimToCommission() {
@@ -299,7 +251,7 @@ Page({
         }
         const claimableAmount = toMoneyNumber(this.data.summary && this.data.summary.claimable_amount);
         if (claimableAmount <= 0) {
-            wx.showToast({ title: '暂无可申请转佣金存款', icon: 'none' });
+            wx.showToast({ title: '暂无可提取转佣金存款', icon: 'none' });
             return;
         }
         const { post } = require('../../utils/request');
@@ -309,13 +261,14 @@ Page({
             const res = await post('/deposit/claim', {}, { showError: false });
             wx.hideLoading();
             if (res && res.code === 0) {
-                const amount = toMoneyNumber(res.amount != null ? res.amount : res.data && res.data.amount);
+                const payload = res.data || res;
+                const amount = toMoneyNumber(payload.amount);
                 await this._load();
                 wx.showModal({
-                    title: res.pending ? '已提交审核' : '申请已处理',
+                    title: payload.pending ? '已提交审核' : '申请已处理',
                     content: amount > 0
                         ? `¥${formatMoney(amount)} 转佣金申请已提交，审核通过后会入账佣金。`
-                        : '当前没有可申请转佣金的存款，继续升级可解锁更多奖励。',
+                        : '当前没有可提取转佣金的存款，升级后可解锁更多奖励。',
                     showCancel: false
                 });
             } else {

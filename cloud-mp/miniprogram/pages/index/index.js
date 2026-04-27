@@ -109,6 +109,14 @@ Page({
         todaySigned: false,
         latestActivity: {},
         navScrolled: false,
+        heroOpacity: 1,
+        heroTransform: 'scale(1) translateY(0px)',
+        revealMidPosters: false,
+        revealCoupons: false,
+        revealProducts: false,
+        revealFeatured: false,
+        revealBrand: false,
+        revealBottomPosters: false,
         navBrandTitle: '问兰镜像',
         navBrandSub: '品牌甄选',
         statusBarHeight: 20,
@@ -136,6 +144,7 @@ Page({
         const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
         const viewportHeight = windowInfo.windowHeight || windowInfo.screenHeight || 667;
         const heroTeaserHeight = 72;
+        this._viewportHeight = viewportHeight;
         this.setData({
             heroViewportHeight: Math.max(620, viewportHeight - heroTeaserHeight),
             statusBarHeight: app.globalData.statusBarHeight || 20,
@@ -215,15 +224,56 @@ Page({
         }, 800);
     },
 
-    onReady() {
+onReady() {
         this.brandAnimation = this.selectComponent('#brandAnimation');
     },
 
+    _revealObservers: [],
+
+    _setupScrollReveal() {
+        this._revealObservers.forEach(o => o.disconnect());
+        this._revealObservers = [];
+        const idToKey = {
+            'reveal_mid_posters': 'revealMidPosters',
+            'reveal_coupons': 'revealCoupons',
+            'reveal_products': 'revealProducts',
+            'reveal_featured': 'revealFeatured',
+            'reveal_brand': 'revealBrand',
+            'reveal_bottom_posters': 'revealBottomPosters'
+        };
+        Object.keys(idToKey).forEach((id) => {
+            const dataKey = idToKey[id];
+            if (this.data[dataKey]) return;
+            const observer = this.createIntersectionObserver({ thresholds: [0.1] });
+            observer.relativeToViewport({ bottom: -40 }).observe('#' + id, (res) => {
+                if (res.intersectionRatio < 0.1) return;
+                this.setData({ [dataKey]: true });
+                observer.disconnect();
+                const idx = this._revealObservers.indexOf(observer);
+                if (idx > -1) this._revealObservers.splice(idx, 1);
+            });
+            this._revealObservers.push(observer);
+        });
+    },
+
+    _heroLastScroll: 0,
+
     onPageScroll(e) {
-        const scrolled = e.scrollTop > 40;
-        if (scrolled !== this.data.navScrolled) {
-            this.setData({ navScrolled: scrolled });
-        }
+        const now = Date.now();
+        if (now - this._heroLastScroll < 16) return;
+        this._heroLastScroll = now;
+
+        const scrollTop = e.scrollTop;
+        const vh = this._viewportHeight || 667;
+        const progress = Math.min(scrollTop / (vh * 0.5), 1);
+        const heroOpacity = Math.max(0.6, 1 - progress * 0.4);
+        const scale = 1 + progress * 0.06;
+        const translateY = Math.min(scrollTop * 0.12, 120);
+        const heroTransform = 'scale(' + scale + ') translateY(' + translateY + 'px)';
+        const scrolled = scrollTop > 40;
+        const updates = { heroOpacity, heroTransform };
+        if (scrolled !== this.data.navScrolled) updates.navScrolled = scrolled;
+        this.setData(updates);
     },
 
     onPullDownRefresh() {
@@ -335,6 +385,10 @@ Page({
     onUnload() {
         this._clearBubbleTimers();
         this._restoreNativeTabBar();
+        if (Array.isArray(this._revealObservers)) {
+            this._revealObservers.forEach(o => o.disconnect());
+            this._revealObservers = [];
+        }
     },
 
     _applyHomeConfig(data) {

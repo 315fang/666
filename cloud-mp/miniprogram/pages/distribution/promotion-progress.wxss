@@ -22,32 +22,16 @@
 .vault-head {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 20rpx;
-}
-
-.vault-kicker {
-  display: block;
-  font-size: 22rpx;
-  color: rgba(255, 247, 239, 0.58);
-  margin-bottom: 8rpx;
 }
 
 .vault-title {
   display: block;
   font-size: 34rpx;
+  line-height: 1.15;
   font-weight: 800;
   color: #FFFFFF;
-}
-
-.vault-state {
-  flex-shrink: 0;
-  padding: 8rpx 18rpx;
-  border-radius: 999rpx;
-  font-size: 22rpx;
-  font-weight: 700;
-  color: #2A1D09;
-  background: #C8A464;
 }
 
 .vault-hero {
@@ -296,7 +280,7 @@
 
 .vault-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12rpx;
   margin-top: 22rpx;
 }
@@ -360,54 +344,18 @@
 
 .rule-label {
   flex-shrink: 0;
-  padding: 4rpx 12rpx;
+  padding: 6rpx 14rpx;
   border-radius: 999rpx;
-  font-size: 20rpx;
+  font-size: 24rpx;
   line-height: 1.2;
-  color: #6F4B1C;
-  background: rgba(200, 164, 100, 0.16);
+  color: #5E3B10;
+  font-weight: 800;
+  background: rgba(200, 164, 100, 0.24);
 }
 
 .rule-copy-wrap {
   flex: 1;
   min-width: 0;
-}
-
-.rule-ticker-window {
-  height: 34rpx;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-}
-
-.rule-copy {
-  font-size: 23rpx;
-  line-height: 1.45;
-  color: #64748B;
-}
-
-.rule-ticker-copy {
-  display: block;
-  width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.rule-slide-a,
-.rule-slide-b {
-  animation: ruleDropIn 420ms ease both;
-}
-
-@keyframes ruleDropIn {
-  0% {
-    opacity: 0;
-    transform: translateY(-22rpx);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .rule-detail-list {
@@ -462,7 +410,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24rpx 18rpx;
+  padding: 0 24rpx 20rpx;
 }
 
 .records-title {
@@ -472,15 +420,10 @@
   color: #111827;
 }
 
-.records-sub {
-  display: block;
-  margin-top: 6rpx;
-  font-size: 22rpx;
-  color: #8C7E72;
-}
-
 .filter-bar {
-  white-space: nowrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12rpx;
   padding: 0 24rpx 18rpx;
   box-sizing: border-box;
 }
@@ -491,14 +434,15 @@
   justify-content: center;
   gap: 8rpx;
   height: 58rpx;
-  padding: 0 24rpx;
-  margin-right: 12rpx;
+  min-width: 0;
+  padding: 0 8rpx;
   font-size: 24rpx;
   color: #84786D;
   background: #F7FAFC;
   border-radius: 999rpx;
   border: 1rpx solid rgba(122, 108, 94, 0.12);
   box-sizing: border-box;
+  white-space: nowrap;
 }
 
 .filter-item.active {

@@ -37,6 +37,7 @@ const directedInviteService = require('./directed-invite-service');
 const goodsFundTransferService = require('./goods-fund-transfer');
 const { assertPortalPassword } = require('./shared/portal-password');
 const internalActionToken = String(process.env.DISTRIBUTION_INTERNAL_TOKEN || '').trim();
+const SELF_PURCHASE_COMMISSION_ENABLED = false;
 
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
@@ -911,7 +912,7 @@ const handleAction = {
         let selfCommission = 0;
         let selfCommissionRate = 0;
         let selfCommissionEligible = false;
-        if (selfPurchase && baseAmount > 0) {
+        if (SELF_PURCHASE_COMMISSION_ENABLED && selfPurchase && baseAmount > 0) {
             const user = await findUserByOpenid(openid);
             const roleLevel = user ? resolveRoleLevel(user) : 0;
             selfCommissionEligible = roleLevel >= 3;
@@ -932,7 +933,9 @@ const handleAction = {
             self_purchase: selfPurchase,
             self_commission_eligible: selfCommissionEligible,
             self_commission_rate: selfCommissionRate,
-            self_commission: selfCommission
+            self_commission: selfCommission,
+            self_commission_disabled: selfPurchase && !SELF_PURCHASE_COMMISSION_ENABLED,
+            self_commission_message: selfPurchase && !SELF_PURCHASE_COMMISSION_ENABLED ? '代理自购返利已停用' : ''
         });
     }),
 
@@ -1170,6 +1173,9 @@ const handleAction = {
         if (amount < 1) throw badRequest('最低申请1元');
 
         const applicationType = normalizeDepositApplicationType(params.application_type || params.type);
+        if (applicationType === 'deposit_commission') {
+            throw badRequest('请使用转佣金申请入口');
+        }
         const userRes = await db.collection('users').where({ openid }).limit(1).get();
         if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
 

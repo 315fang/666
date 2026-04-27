@@ -1405,8 +1405,7 @@ async function mySlashList(openid, params = {}) {
         return map;
     }, {});
 
-    return {
-        list: records.map(r => {
+    const list = await Promise.all(records.map(async (r) => {
             const related = activityMap[r.slash_no] || {};
             const activity = related.activity || {};
             const timing = buildSlashTimingPayload(r, activity);
@@ -1433,7 +1432,10 @@ async function mySlashList(openid, params = {}) {
                 ...timing,
                 created_at: r.created_at,
             };
-        }),
+        }));
+
+    return {
+        list,
         total: totalRes.total || 0,
         page,
         pageSize,
