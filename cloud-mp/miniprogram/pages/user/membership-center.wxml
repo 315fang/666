@@ -1,15 +1,16 @@
 <!--pages/user/membership-center.wxml - 会员权益中心（整合版）-->
+<import src="/styles/effects.wxss"/>
 <view class="page">
   <view class="state-wrap" wx:if="{{loading}}">
     <text class="state-text">加载中…</text>
   </view>
   <view class="state-wrap" wx:elif="{{loadError}}">
     <text class="state-text">加载失败</text>
-    <view class="retry-btn" bindtap="onRetry">重试</view>
+    <view class="retry-btn ripple" bindtap="onRetry">重试</view>
   </view>
 
   <scroll-view scroll-y class="scroll" wx:else>
-    <view class="cards-wrap" wx:if="{{cardReady}}">
+    <view class="cards-wrap card-enter" wx:if="{{cardReady}}">
       <view class="card-switch-tabs">
         <view
           class="card-switch-tab {{activeCard === 'consume' ? 'card-switch-tab-active' : ''}}"
@@ -87,7 +88,7 @@
       <view
         wx:for="{{growthTiers}}"
         wx:key="min"
-        class="tier-card {{item.active ? 'tier-active' : ''}} {{item.passed ? 'tier-passed' : ''}} {{item.isNext ? 'tier-next' : ''}}"
+        class="tier-card card-enter delay-{{index < 8 ? index : 7}} {{item.active ? 'tier-active' : ''}} {{item.passed ? 'tier-passed' : ''}} {{item.isNext ? 'tier-next' : ''}}"
       >
         <view class="tier-head">
           <text class="tier-name">{{item.name || '档位'}}</text>
@@ -116,7 +117,7 @@
         <view
           wx:for="{{memberLevels}}"
           wx:key="level"
-          class="tier-card {{item.level === currentRoleLevel ? 'tier-active' : ''}}"
+          class="tier-card card-enter delay-{{index < 8 ? index : 7}} {{item.level === currentRoleLevel ? 'tier-active' : ''}}"
         >
           <view class="tier-head">
             <text class="tier-name">{{item.name}}</text>

@@ -1,0 +1,70 @@
+/* 彩蛋粒子效果 */
+.confetti-container {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.confetti-particle {
+  position: absolute;
+  top: -40rpx;
+  opacity: 0;
+}
+
+.confetti-confetti {
+  animation: confettiFall ease-in forwards;
+  transform-origin: center;
+}
+
+.confetti-stars {
+  animation: starFall ease-out forwards;
+  box-shadow: 0 0 8rpx currentColor;
+}
+
+@keyframes confettiFall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) translateX(0);
+  }
+  25% {
+    opacity: 1;
+    transform: translateY(25vh) rotate(180deg) translateX(var(--swing));
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(50vh) rotate(360deg) translateX(calc(var(--swing) * -0.5));
+  }
+  75% {
+    opacity: 0.8;
+    transform: translateY(75vh) rotate(540deg) translateX(var(--swing));
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(110vh) rotate(720deg) translateX(0);
+  }
+}
+
+@keyframes starFall {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0) rotate(0deg);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(10vh) scale(1.2) rotate(90deg);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(35vh) scale(1) rotate(200deg) translateX(var(--swing));
+  }
+  70% {
+    opacity: 0.7;
+    transform: translateY(65vh) scale(0.8) rotate(400deg) translateX(calc(var(--swing) * -0.3));
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(100vh) scale(0) rotate(720deg);
+  }
+}

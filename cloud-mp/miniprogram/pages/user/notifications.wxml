@@ -1,13 +1,22 @@
+<import src="/styles/effects.wxss"/>
 <view class="container">
   <view class="message-topbar">
-    <view class="privacy-icon-btn" bindtap="onPrivacyTap" aria-label="隐私协议">
+    <view class="privacy-icon-btn ripple" bindtap="onPrivacyTap" aria-label="隐私协议">
       <image class="privacy-icon-img" src="/assets/icons/shield.svg" mode="aspectFit"></image>
       <view class="privacy-icon-dot"></view>
     </view>
   </view>
 
   <view class="notif-list" wx:if="{{notifications.length > 0}}">
-    <view class="notif-item {{item.is_read ? '' : 'unread'}}" wx:for="{{notifications}}" wx:key="id" bindtap="onRead" data-id="{{item.id}}" data-index="{{index}}">
+    <view
+      class="notif-item card-enter delay-{{index < 8 ? index : 7}} {{item.is_read ? '' : 'unread'}}"
+      wx:for="{{notifications}}"
+      wx:key="id"
+      bindtap="onRead"
+      data-id="{{item.id}}"
+      data-index="{{index}}"
+      hover-class="notif-item--hover"
+    >
       <view class="notif-icon-box {{item.type}}-bg">
         <image class="notif-icon-img" wx:if="{{item.type === 'upgrade'}}" src="/assets/icons/rocket.svg" mode="aspectFit"/>
         <image class="notif-icon-img" wx:if="{{item.type === 'commission'}}" src="/assets/icons/dollar-sign.svg" mode="aspectFit"/>
@@ -27,8 +36,12 @@
   </view>
 
   <!-- Empty State -->
-  <view class="empty" wx:else>
-    <image class="empty-icon-img" src="/assets/icons/inbox.svg" mode="aspectFit"/>
-    <text class="empty-text">暂无消息通知</text>
+  <view class="empty card-enter" wx:else>
+    <text class="empty-emoji">🔔</text>
+    <text class="empty-text">消息躲起来了~</text>
+    <text class="empty-sub">暂时没有新通知，去逛逛商城吧</text>
+    <view class="empty-action ripple" bindtap="goHome">
+      <text class="empty-action-text">去首页看看</text>
+    </view>
   </view>
 </view>

@@ -1,0 +1,9 @@
+<!-- 彩蛋粒子效果 -->
+<view wx:if="{{active}}" class="confetti-container" catchtouchmove="noop">
+  <view
+    wx:for="{{particles}}"
+    wx:key="id"
+    class="confetti-particle confetti-{{item.type}}"
+    style="left:{{item.left}}%;width:{{item.size}}rpx;height:{{item.type === 'confetti' ? item.size * 1.5 : item.size}}rpx;background:{{item.color}};animation-delay:{{item.delay}}ms;animation-duration:{{item.duration}}ms;--swing:{{item.swingRange}}rpx;border-radius:{{item.type === 'stars' ? '50%' : '4rpx'}};"
+  ></view>
+</view>

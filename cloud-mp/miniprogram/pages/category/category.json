@@ -2,6 +2,7 @@
     "navigationBarTitleText": "商品分类",
     "navigationStyle": "custom",
     "usingComponents": {
-        "page-loading": "/components/page-loading/page-loading"
+        "page-loading": "/components/page-loading/page-loading",
+        "fade-image": "/components/ui/fade-image/fade-image"
     }
 }

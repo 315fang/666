@@ -3,6 +3,8 @@
     "navigationBarBackgroundColor": "#2d241c",
     "navigationBarTextStyle": "white",
     "usingComponents": {
-        "light-tip-modal": "/components/light-tip-modal/light-tip-modal"
+        "light-tip-modal": "/components/light-tip-modal/light-tip-modal",
+        "context-menu": "/components/ui/context-menu/context-menu",
+        "confetti": "/components/ui/confetti/confetti"
     }
 }

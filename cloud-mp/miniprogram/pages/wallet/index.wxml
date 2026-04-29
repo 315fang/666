@@ -1,23 +1,24 @@
 <!-- pages/wallet/index.wxml -->
+<import src="/styles/effects.wxss"/>
 <view class="container">
   <scroll-view class="main-scroll" scroll-y enable-back-to-top>
 
     <!-- ═══ 顶部余额卡 ═══ -->
-    <view class="balance-card">
+    <view class="balance-card card-enter">
       <view class="balance-card-inner">
         <text class="balance-label">可提现佣金（元）</text>
         <view class="balance-amount-row">
           <text class="balance-symbol">¥</text>
-          <text class="balance-amount">{{balance}}</text>
+          <text class="balance-amount neon-blue">{{balance}}</text>
         </view>
         <view class="balance-meta-row">
           <text class="balance-meta-text">累计佣金 ¥{{commissionTotal}}</text>
         </view>
         <view class="balance-action-row">
-          <view class="withdraw-btn" bindtap="onWithdrawTap">
+          <view class="withdraw-btn ripple" bindtap="onWithdrawTap">
             <text class="withdraw-btn-text">立即提现</text>
           </view>
-          <view class="withdraw-history-btn" bindtap="onWithdrawHistoryTap">
+          <view class="withdraw-history-btn ripple" bindtap="onWithdrawHistoryTap">
             <text class="withdraw-history-btn-text">提现记录</text>
           </view>
         </view>
@@ -25,7 +26,7 @@
     </view>
 
     <!-- ═══ 佣金概览（四格）═══ -->
-    <view class="section-card">
+    <view class="section-card card-enter delay-1">
       <text class="section-title">佣金概览</text>
       <view class="overview-grid">
         <view class="overview-item">
@@ -49,7 +50,7 @@
     </view>
 
     <!-- ═══ 收益阶段明细（可展开）═══ -->
-    <view class="pending-card" bindtap="togglePendingExpand">
+    <view class="pending-card card-enter delay-2" bindtap="togglePendingExpand">
       <view class="pc-header">
         <view class="pc-header-left">
           <text class="pc-title">收益阶段明细</text>
@@ -106,7 +107,7 @@
     </view>
 
     <!-- ═══ 代理商货款入口 ═══ -->
-    <view class="goods-fund-entry" wx:if="{{isAgent}}" bindtap="onGoGoodsFund">
+    <view class="goods-fund-entry card-enter delay-3" wx:if="{{isAgent}}" bindtap="onGoGoodsFund">
       <view class="gfe-left">
         <text class="gfe-icon">💰</text>
         <view class="gfe-info">
@@ -121,7 +122,7 @@
     </view>
 
     <!-- ═══ 提现记录 ═══ -->
-    <view class="section-card">
+    <view class="section-card card-enter delay-4">
       <view class="section-header">
         <text class="section-title section-title-inline">提现记录</text>
         <view class="section-more" bindtap="onWithdrawHistoryTap">查看全部 ›</view>
@@ -162,7 +163,7 @@
     </view>
 
     <!-- ═══ 佣金明细 ═══ -->
-    <view class="section-card">
+    <view class="section-card card-enter delay-5">
       <view class="section-header">
         <text class="section-title">佣金明细</text>
       </view>

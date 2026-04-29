@@ -1,4 +1,8 @@
 {
   "navigationBarTitleText": "近期浏览与收藏",
-  "usingComponents": {}
+  "usingComponents": {
+    "swipe-cell": "/components/ui/swipe-cell/swipe-cell",
+    "fade-image": "/components/ui/fade-image/fade-image",
+    "context-menu": "/components/ui/context-menu/context-menu"
+  }
 }

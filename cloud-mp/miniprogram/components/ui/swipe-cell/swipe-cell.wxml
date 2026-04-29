@@ -1,0 +1,27 @@
+<!-- 左滑删除组件 -->
+<view class="swipe-cell">
+  <view
+    class="swipe-cell-content"
+    style="transform:translateX({{moveX}}rpx);{{transitioning ? 'transition:transform 0.3s cubic-bezier(0.23,1,0.32,1);' : ''}}"
+    catchtouchstart="onTouchStart"
+    catchtouchmove="onTouchMove"
+    catchtouchend="onTouchEnd"
+  >
+    <slot></slot>
+  </view>
+  <view
+    class="swipe-cell-actions"
+    style="width:{{rightWidth}}rpx;"
+  >
+    <slot name="right">
+      <view
+        class="swipe-cell-action swipe-cell-action--delete"
+        data-action="delete"
+        bindtap="onActionTap"
+      >
+        <text class="swipe-cell-action-icon">🗑️</text>
+        <text class="swipe-cell-action-text">删除</text>
+      </view>
+    </slot>
+  </view>
+</view>

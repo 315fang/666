@@ -115,5 +115,9 @@ Page({
         if (this.data.hasMore) {
             this.loadNotifications(true);
         }
+    },
+
+    goHome() {
+        wx.switchTab({ url: '/pages/index/index' });
     }
 });

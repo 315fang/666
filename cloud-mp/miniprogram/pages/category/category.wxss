@@ -2,14 +2,16 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: linear-gradient(180deg, #E3EDF4 0%, #F4F8FA 24%, #EBF5F2 100%);
+  background: linear-gradient(180deg, #E8E0F0 0%, #F0EBF8 24%, #F7F5FF 100%);
   overflow: hidden;
 }
 
 
 .header-shell {
   padding: 8rpx 24rpx 10rpx;
-  background: rgba(244, 248, 250, 0.96);
+  background: rgba(232, 224, 240, 0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .header-title-row {
@@ -68,7 +70,9 @@
 /* ── 左侧：外卖平台扁平列表 ── */
 .left-sidebar {
   width: 160rpx;
-  background: #F4F0EB;
+  background: rgba(232, 224, 240, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   padding: 0 0 200rpx;
   flex-shrink: 0;
 }
@@ -100,7 +104,7 @@
   width: 6rpx;
   height: 44rpx;
   border-radius: 0 4rpx 4rpx 0;
-  background: #B98B58;
+  background: linear-gradient(180deg, #667eea, #764ba2);
 }
 
 /* 未选中：浅灰色 */
@@ -120,7 +124,9 @@
 /* ── 右侧内容区 ── */
 .right-content {
   flex: 1;
-  background: #FFFFFF;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-radius: 0;
   padding: 0 0 0 0;
 }
@@ -222,8 +228,8 @@
   gap: 18rpx;
   padding: 18rpx;
   border-radius: 18rpx;
-  background: linear-gradient(135deg, #FFF8F0 0%, #F9F3EA 100%);
-  border: 1rpx solid #F0E6D8;
+  background: rgba(102, 126, 234, 0.06);
+  border: 1rpx solid rgba(102, 126, 234, 0.12);
 }
 
 .bundle-zone-image {
@@ -278,8 +284,8 @@
   padding: 4rpx 12rpx;
   border-radius: 999rpx;
   font-size: 20rpx;
-  color: #8b5e34;
-  background: rgba(185, 139, 88, 0.14);
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.12);
 }
 
 .bundle-zone-meta {
@@ -292,7 +298,7 @@
 .bundle-zone-price {
   font-size: 34rpx;
   font-weight: 700;
-  color: #B95E46;
+  color: #667eea;
 }
 
 .bundle-zone-count {
@@ -396,8 +402,8 @@
 
 .discount-tag-text {
   font-size: 20rpx;
-  color: #B98B58;
-  background: rgba(185, 139, 88, 0.10);
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.10);
   padding: 2rpx 10rpx;
   border-radius: 6rpx;
 }
@@ -414,7 +420,7 @@
 .product-points-tip {
   display: block;
   font-size: 18rpx;
-  color: #B98B58;
+  color: #667eea;
   margin-top: 2rpx;
 }
 
@@ -434,13 +440,13 @@
 
 .price-symbol {
   font-size: 20rpx;
-  color: #B95E46;
+  color: #667eea;
   font-weight: 600;
 }
 
 .product-price {
   font-size: 34rpx;
-  color: #B95E46;
+  color: #667eea;
   font-weight: 700;
 }
 
@@ -449,11 +455,11 @@
   width: 56rpx;
   height: 56rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, #B98B58, #D4B896);
+  background: linear-gradient(135deg, #667eea, #764ba2);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4rpx 12rpx rgba(185, 139, 88, 0.35);
+  box-shadow: 0 4rpx 12rpx rgba(102, 126, 234, 0.35);
   flex-shrink: 0;
   align-self: flex-end;
   margin-bottom: 2rpx;
@@ -475,8 +481,8 @@
 .spinner {
   width: 40rpx;
   height: 40rpx;
-  border: 4rpx solid #f3f3f3;
-  border-top: 4rpx solid #B98B58;
+  border: 4rpx solid rgba(102, 126, 234, 0.15);
+  border-top: 4rpx solid #667eea;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto;
@@ -495,8 +501,11 @@
   bottom: 16rpx;
   height: 100rpx;
   border-radius: 999rpx;
-  background: rgba(28, 25, 23, 0.92);
-  box-shadow: 0 12rpx 30rpx rgba(28, 25, 23, 0.22);
+  background: rgba(15, 15, 35, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1rpx solid rgba(102, 126, 234, 0.2);
+  box-shadow: 0 12rpx 30rpx rgba(0, 0, 0, 0.22);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -534,7 +543,7 @@
   min-width: 32rpx;
   height: 32rpx;
   border-radius: 16rpx;
-  background: #F29D77;
+  background: #667eea;
   color: #FFF;
   font-size: 18rpx;
   display: flex;
@@ -567,8 +576,8 @@
 }
 
 .floating-cart-cta.active {
-  background: linear-gradient(135deg, #D4B896 0%, #B98B58 100%);
-  color: #2A2018;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
 }
 
 .cart-popup-mask {
@@ -646,8 +655,8 @@
 }
 
 .cart-popup-check.checked {
-  background: #B98B58;
-  border-color: #B98B58;
+  background: #667eea;
+  border-color: #667eea;
 }
 
 .cart-popup-check.checked::after {
@@ -757,8 +766,8 @@
   min-width: 180rpx;
   height: 74rpx;
   border-radius: 999rpx;
-  background: linear-gradient(135deg, #D4B896 0%, #B98B58 100%);
-  color: #2A2018;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -788,23 +797,23 @@
   align-items: center;
   gap: 6rpx;
   font-size: 20rpx;
-  color: #8D6A3F;
-  background: rgba(185, 139, 88, 0.08);
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.08);
   padding: 6rpx 14rpx;
   border-radius: 999rpx;
 }
 
 .tag-dot {
-  color: #B98B58;
+  color: #667eea;
   font-size: 18rpx;
 }
 
 .view-detail-link {
   padding: 16rpx 0;
   font-size: 24rpx;
-  color: #B98B58;
+  color: #667eea;
   text-align: center;
-  border-top: 1rpx solid rgba(185,139,88,0.12);
+  border-top: 1rpx solid rgba(102, 126, 234, 0.12);
   margin-top: 16rpx;
 }
 

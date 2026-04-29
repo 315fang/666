@@ -1,0 +1,41 @@
+<!-- 图片淡入组件 -->
+<view
+  class="fade-image-wrap"
+  style="width:{{width}};height:{{height}};border-radius:{{radius}};"
+>
+  <!-- 占位层 -->
+  <view
+    class="fade-placeholder"
+    wx:if="{{!loaded}}"
+    style="border-radius:{{radius}};"
+  >
+    <image
+      wx:if="{{placeholder}}"
+      class="fade-placeholder-img"
+      src="{{placeholder}}"
+      mode="aspectFit"
+    />
+    <view wx:else class="fade-placeholder-shimmer" style="border-radius:{{radius}};"></view>
+  </view>
+
+  <!-- 实际图片 -->
+  <image
+    class="fade-image"
+    src="{{src}}"
+    mode="{{mode}}"
+    lazy-load="{{lazyLoad}}"
+    style="border-radius:{{radius}};{{fadeInStyle}}"
+    bindload="onImageLoad"
+    binderror="onImageError"
+  />
+
+  <!-- 错误态 -->
+  <view
+    wx:if="{{error}}"
+    class="fade-error"
+    style="border-radius:{{radius}};"
+  >
+    <text class="fade-error-icon">📷</text>
+    <text class="fade-error-text">加载失败</text>
+  </view>
+</view>

@@ -1,3 +1,4 @@
+<import src="/styles/effects.wxss"/>
 <view class="container">
   <page-loading show="{{loading && categories.length === 0}}" text="分类加载中..."></page-loading>
   <view class="header-shell" style="padding-top: {{headerTopPadding}}px;">
@@ -15,7 +16,7 @@
       scroll-with-animation
     >
       <view
-        class="sidebar-item {{currentCategory === item.id ? 'active' : ''}}"
+        class="sidebar-item ripple-dark {{currentCategory === item.id ? 'active' : ''}}"
         wx:for="{{sidebarCategories}}"
         wx:key="id"
         id="left-{{item.id}}"
@@ -48,7 +49,7 @@
           interval="4500"
           circular="{{categoryBanners.length > 1}}"
           indicator-color="rgba(0,0,0,0.2)"
-          indicator-active-color="#B98B58"
+          indicator-active-color="#667eea"
         >
           <swiper-item wx:for="{{categoryBanners}}" wx:key="id">
             <view
@@ -75,7 +76,7 @@
         </swiper>
       </view>
 
-      <view class="cat-section cat-section-anchor" wx:if="{{productBundles.length > 0}}" id="cat-bundle-zone">
+      <view class="cat-section cat-section-anchor card-enter" wx:if="{{productBundles.length > 0}}" id="cat-bundle-zone">
         <view class="cat-section-header">
           <text class="cat-section-title">组合专区</text>
         </view>
@@ -107,7 +108,7 @@
         </view>
       </view>
 
-      <view class="cat-section cat-section-anchor" wx:for="{{renderedCategories}}" wx:key="id" id="cat-{{item.id}}">
+      <view class="cat-section cat-section-anchor card-enter delay-{{index < 8 ? index : 7}}" wx:for="{{renderedCategories}}" wx:key="id" id="cat-{{item.id}}">
         <view class="cat-section-header">
           <text class="cat-section-title">{{item.name}}</text>
         </view>
@@ -116,7 +117,7 @@
         </view>
         <view class="product-list" wx:elif="{{visibleProducts[item.id] && visibleProducts[item.id].length > 0}}">
           <view
-            class="product-item"
+            class="product-item ripple-dark"
             wx:for="{{visibleProducts[item.id]}}"
             wx:for-item="prod"
             wx:key="id"
@@ -126,7 +127,7 @@
           >
             <!-- 正方形缩略图 -->
             <view class="product-img-wrap">
-              <image class="product-img" src="{{prod.display_image || prod.image || prod.image_url || prod.image_ref || '/assets/images/placeholder.svg'}}" mode="aspectFill" lazy-load binderror="onProductImageError" data-category-id="{{item.id}}" data-id="{{prod.id}}"></image>
+              <fade-image class="product-img" src="{{prod.display_image || prod.image || prod.image_url || prod.image_ref || '/assets/images/placeholder.svg'}}" mode="aspectFill" width="150rpx" height="150rpx" radius="12rpx" lazy-load></fade-image>
             </view>
             <!-- 中间信息 -->
             <view class="product-info">
@@ -159,7 +160,7 @@
               <text class="product-points-tip" wx:if="{{prod.lowestTip}}">到手约¥{{prod.lowestTip}}</text>
             </view>
             <!-- 右侧加购按钮 -->
-            <view class="add-btn" catchtap="onOpenProductDetail" data-id="{{prod.id}}">
+            <view class="add-btn btn-spring" catchtap="onOpenProductDetail" data-id="{{prod.id}}">
               <text class="add-btn-text">+</text>
             </view>
           </view>
@@ -173,7 +174,7 @@
   </view>
 
   <!-- 悬浮购物袋（外卖平台模式） -->
-  <view class="floating-cart-shell" bindtap="onToggleCartPopup">
+  <view class="floating-cart-shell glass-dark" bindtap="onToggleCartPopup">
     <view class="floating-cart-main cart-fly-target">
       <view class="floating-cart-bag">
         <image class="cart-bag-icon" src="/assets/icons/shopping-bag.svg" mode="aspectFit"></image>
@@ -187,8 +188,8 @@
   </view>
 
   <!-- 底部购物袋弹层 -->
-  <view class="cart-popup-mask" wx:if="{{showCartPopup}}" bindtap="closeCartPopup">
-    <view class="cart-popup-panel" catchtap="stopProp">
+  <view class="cart-popup-mask modal-enter" wx:if="{{showCartPopup}}" bindtap="closeCartPopup">
+    <view class="cart-popup-panel modal-panel-enter" catchtap="stopProp">
       <!-- 头部：全选 + 清空 -->
       <view class="cart-popup-header">
         <view class="cart-popup-header-left" bindtap="onPopupToggleAll">

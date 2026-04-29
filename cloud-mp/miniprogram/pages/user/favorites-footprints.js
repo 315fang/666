@@ -1,8 +1,25 @@
-const { get, post, del } = require('../../utils/request');
-const { hasLoginSession } = require('../../utils/auth');
-const { resolveCloudImageUrl } = require('../../utils/cloudAssetRuntime');
-const { normalizeAssetUrl, isTemporarySignedAssetUrl } = require('../../utils/dataFormatter');
-const { listFavorites, replaceFavorites, removeFavorite, clearFavorites, listFootprints, replaceFootprints, removeFootprint, clearFootprints } = require('../../utils/localUserContent');
+var request = require('../../utils/request');
+var auth = require('../../utils/auth');
+var cloudAssetRuntime = require('../../utils/cloudAssetRuntime');
+var dataFormatter = require('../../utils/dataFormatter');
+var localUserContent = require('../../utils/localUserContent');
+var vibrateManager = require('../../utils/vibrateManager');
+
+var get = request.get;
+var post = request.post;
+var del = request.del;
+var hasLoginSession = auth.hasLoginSession;
+var resolveCloudImageUrl = cloudAssetRuntime.resolveCloudImageUrl;
+var normalizeAssetUrl = dataFormatter.normalizeAssetUrl;
+var isTemporarySignedAssetUrl = dataFormatter.isTemporarySignedAssetUrl;
+var listFavorites = localUserContent.listFavorites;
+var replaceFavorites = localUserContent.replaceFavorites;
+var removeFavorite = localUserContent.removeFavorite;
+var clearFavorites = localUserContent.clearFavorites;
+var listFootprints = localUserContent.listFootprints;
+var replaceFootprints = localUserContent.replaceFootprints;
+var removeFootprint = localUserContent.removeFootprint;
+var clearFootprints = localUserContent.clearFootprints;
 
 function formatFavoriteTime(ts) {
     if (!ts) return '';
@@ -134,7 +151,11 @@ Page({
     data: {
         activeTab: 'favorites',
         favoriteItems: [],
-        footprintItems: []
+        footprintItems: [],
+        contextActions: [
+            { name: '查看详情', icon: '👁️' },
+            { name: '删除', icon: '🗑️', color: '#ef4444' }
+        ]
     },
 
     onLoad(options) {
@@ -150,7 +171,63 @@ Page({
     switchTab(e) {
         const tab = e.currentTarget.dataset.tab;
         if (!tab || tab === this.data.activeTab) return;
+        vibrateManager.getVibrateManager().short();
         this.setData({ activeTab: tab });
+    },
+
+    onSwipeFavoriteAction(e) {
+        const { action } = e.detail;
+        const id = e.currentTarget.dataset.id;
+        if (action === 'delete' && id) {
+            vibrateManager.getVibrateManager().short();
+            this._removeFavoriteById(id);
+        }
+    },
+
+    onSwipeFootprintAction(e) {
+        const { action } = e.detail;
+        const id = e.currentTarget.dataset.id;
+        if (action === 'delete' && id) {
+            vibrateManager.getVibrateManager().short();
+            removeFootprint(id);
+            this.refreshFootprints();
+        }
+    },
+
+    onItemLongPress(e) {
+        const id = e.currentTarget.dataset.id;
+        this._longPressId = id;
+        this._longPressType = e.currentTarget.dataset.type || 'item';
+        this.selectComponent('#contextMenu').show(e);
+    },
+
+    onContextMenuSelect(e) {
+        const { index } = e.detail;
+        const id = this._longPressId;
+        if (!id) return;
+
+        if (index === 0) {
+            // 查看详情
+            wx.navigateTo({ url: `/pages/product/detail?id=${id}` });
+        } else if (index === 1) {
+            // 删除
+            vibrateManager.getVibrateManager().short();
+            if (this.data.activeTab === 'favorites') {
+                this._removeFavoriteById(id);
+            } else {
+                removeFootprint(id);
+                this.refreshFootprints();
+            }
+        }
+    },
+
+    async _removeFavoriteById(id) {
+        if (hasLoginSession()) {
+            try { await del(`/user/favorites/${id}`, {}, { showError: false }); } catch (_) {}
+        } else {
+            removeFavorite(id);
+        }
+        this.refreshFavorites();
     },
 
     async refreshFavorites() {

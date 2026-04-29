@@ -1,0 +1,20 @@
+<!-- 长按上下文菜单 -->
+<view wx:if="{{visible}}" class="ctx-menu-mask" bindtap="onMaskTap">
+  <view
+    class="ctx-menu {{animating ? 'ctx-menu-exit' : 'ctx-menu-enter'}}"
+    style="left:{{x}}px;top:{{y}}px;"
+    catchtap="stopPropagation"
+  >
+    <view
+      wx:for="{{actions}}"
+      wx:key="name"
+      class="ctx-menu-item"
+      data-index="{{index}}"
+      bindtap="onActionTap"
+      hover-class="ctx-menu-item--hover"
+    >
+      <text wx:if="{{item.icon}}" class="ctx-menu-icon">{{item.icon}}</text>
+      <text class="ctx-menu-text" style="color:{{item.color || '#1c1917'}};">{{item.name}}</text>
+    </view>
+  </view>
+</view>
