@@ -2,6 +2,7 @@
 // 结构：二级商城（侧边栏分类 → 商品列表）+ 分页加载
 // 联动：当前版本 scroll sync（calculateCategoryHeights + onRightScroll + leftToView）
 // 购物袋：当前版本改进逻辑（items / summary.total_amount + cart_ids 结算）
+var vibrateManager = require('../../utils/vibrateManager');
 const { get } = require('../../utils/request');
 const { cachedGet } = require('../../utils/requestCache');
 const { normalizeProductId } = require('../../utils/dataFormatter');
@@ -431,6 +432,7 @@ Page({
     // ===== 侧边栏点击 =====
 
     onCategoryTap(e) {
+        vibrateManager.getVibrateManager().short();
         const categoryId = e.currentTarget.dataset.id;
         this.setData({
             currentCategory: categoryId,
@@ -508,6 +510,7 @@ Page({
     },
 
     onOpenProductDetail(e) {
+        vibrateManager.getVibrateManager().short();
         const rawId = e.currentTarget.dataset.id;
         const id = normalizeProductId(rawId);
         if (id === null || id === undefined || id === '') {
@@ -588,6 +591,7 @@ Page({
     },
 
     onCheckout() {
+        vibrateManager.getVibrateManager().short();
         const { cartCount, _cartItemIds } = this.data;
         if (cartCount > 0 && _cartItemIds) {
             // 带上购物袋商品 ID 结算（来自当前版本）

@@ -704,7 +704,7 @@
   margin-top: 6rpx;
   font-size: 26rpx;
   font-weight: 700;
-  color: #B95E46;
+  color: #667eea;
 }
 
 /* 步进器 */
@@ -759,7 +759,7 @@
 .cart-popup-total-price {
   font-size: 32rpx;
   font-weight: 700;
-  color: #B95E46;
+  color: #667eea;
 }
 
 .cart-popup-checkout {
