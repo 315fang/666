@@ -1,26 +1,30 @@
 <view class="container">
-  <view class="nav-bar">
-    <view class="nav-back" bindtap="onBack">‹</view>
+  <view class="nav-bar glass-dark">
+    <view class="nav-back ripple" bindtap="onBack">‹</view>
     <text class="nav-title">兑换专区</text>
     <view class="nav-placeholder"></view>
   </view>
 
-  <view class="hero-card" wx:if="{{coupon}}">
-    <text class="hero-title">{{coupon.exchange_meta.title || coupon.coupon_name}}</text>
+  <view class="hero-card card-enter" wx:if="{{coupon}}">
+    <text class="hero-title">🎁 {{coupon.exchange_meta.title || coupon.coupon_name}}</text>
     <text class="hero-sub">请选择要兑换的商品，提交后将生成 0 元兑换订单。</text>
   </view>
 
   <view class="empty-wrap" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
     <text class="empty-text">加载中...</text>
   </view>
 
-  <view class="empty-wrap" wx:elif="{{!products.length}}">
+  <view class="empty-wrap card-enter" wx:elif="{{!products.length}}">
+    <text class="empty-emoji">📦</text>
     <text class="empty-text">{{emptyText || '暂无可兑换商品'}}</text>
   </view>
 
   <view class="product-list" wx:else>
-    <view class="product-card" wx:for="{{products}}" wx:key="id" bindtap="onPickProduct" data-id="{{item.id}}">
-      <image class="product-image" src="{{item.image}}" mode="aspectFill"></image>
+    <view class="product-card card-enter delay-{{index < 6 ? index : 5}} ripple" wx:for="{{products}}" wx:key="id" bindtap="onPickProduct" data-id="{{item.id}}">
+      <view class="product-image-wrap">
+        <image class="product-image" src="{{item.image}}" mode="aspectFill"></image>
+      </view>
       <view class="product-copy">
         <text class="product-name">{{item.name}}</text>
         <text class="product-desc">{{item.description}}</text>

@@ -1,5 +1,8 @@
 {
   "navigationBarTitleText": "推广合伙人邀约",
   "navigationBarBackgroundColor": "#1E4A6D",
-  "navigationBarTextStyle": "white"
+  "navigationBarTextStyle": "white",
+  "usingComponents": {
+    "portal-password-dialog": "/components/portal-password-dialog/portal-password-dialog"
+  }
 }

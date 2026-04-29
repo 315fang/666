@@ -2,5 +2,7 @@
     "navigationBarTitleText": "活动中心",
     "navigationStyle": "custom",
     "backgroundColor": "#F5F5F5",
-    "usingComponents": {}
+    "usingComponents": {
+        "fade-image": "/components/ui/fade-image/fade-image"
+    }
 }

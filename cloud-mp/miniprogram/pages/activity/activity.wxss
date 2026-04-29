@@ -6,19 +6,19 @@
 
 .container {
   min-height: 100vh;
-  background: linear-gradient(180deg, #E3EDF4 0%, #F4F8FA 32%, #ECF5F2 100%);
+  background: linear-gradient(180deg, #E8E0F0 0%, #F0EBF8 32%, #F7F5FF 100%);
 }
 
 /* ── 壁纸主题 ── */
 .container.wallpaper-warm-gold { background: linear-gradient(180deg,#F5EBD4 0%,#FCF6E8 35%,#EDE4D0 100%); }
-.container.wallpaper-mist-blue { background: linear-gradient(180deg,#D9E8F2 0%,#F0F7FB 40%,#D4E8E4 100%); }
-.container.wallpaper-dark      { background: linear-gradient(180deg,#20252D 0%,#2B313A 36%,#1E232A 100%); }
+.container.wallpaper-mist-blue { background: linear-gradient(180deg,#E8E0F0 0%,#F0EBF8 40%,#E8E0F0 100%); }
+.container.wallpaper-dark      { background: linear-gradient(180deg,#0f0f23 0%,#1a1a2e 36%,#16213e 100%); }
 
 /* ══ Banner 区 ══ */
 .banner-wrap {
   position: relative;
   width: 100%;
-  background: #1E4A6D;
+  background: linear-gradient(135deg, #667eea, #764ba2);
 }
 
 .banner-wrap-empty {
@@ -117,12 +117,13 @@
 .banner-dot.active {
   width: 28rpx;
   border-radius: 5rpx;
-  background: rgba(255,255,255,0.90);
+  background: linear-gradient(90deg, #667eea, #764ba2);
 }
 
 /* ══ 主内容区 ══ */
 .content-area {
   padding: 24rpx 24rpx 0;
+  background: transparent;
 }
 
 /* ── 品牌新闻 ── */
@@ -139,10 +140,13 @@
 .news-card {
   display: flex;
   align-items: stretch;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 20rpx;
   overflow: hidden;
-  box-shadow: 0 4rpx 16rpx rgba(30, 74, 109, 0.08);
+  box-shadow: 0 4rpx 16rpx rgba(102, 126, 234, 0.06);
+  border: 1rpx solid rgba(255, 255, 255, 0.5);
   min-height: 140rpx;
 }
 
@@ -206,7 +210,7 @@
 .section-title {
   font-size: 34rpx;
   font-weight: 700;
-  color: #201A15;
+  color: #1c1917;
 }
 
 .section-desc {
@@ -255,23 +259,23 @@
 }
 
 .activity-sub-card-fallback--flash_sale {
-  background: linear-gradient(135deg, #7A1F1F 0%, #C2410C 52%, #F97316 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 52%, #a78bfa 100%);
 }
 
 .activity-sub-card-fallback--bundle_zone {
-  background: linear-gradient(135deg, #1D4ED8 0%, #2563EB 56%, #38BDF8 100%);
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 56%, #667eea 100%);
 }
 
 .activity-sub-card-fallback--lottery {
-  background: linear-gradient(135deg, #115E59 0%, #0F766E 52%, #14B8A6 100%);
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 52%, #667eea 100%);
 }
 
 .activity-sub-card-fallback--group {
-  background: linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 56%, #60A5FA 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 56%, #a78bfa 100%);
 }
 
 .activity-sub-card-fallback--slash {
-  background: linear-gradient(135deg, #7C2D12 0%, #B45309 56%, #F59E0B 100%);
+  background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 56%, #667eea 100%);
 }
 
 .quick-entry-card {
@@ -294,23 +298,23 @@
 }
 
 .quick-entry-card--flash_sale {
-  background: linear-gradient(135deg, #7A1F1F 0%, #C2410C 52%, #F97316 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 52%, #a78bfa 100%);
 }
 
 .quick-entry-card--bundle_zone {
-  background: linear-gradient(135deg, #1D4ED8 0%, #2563EB 56%, #38BDF8 100%);
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 56%, #667eea 100%);
 }
 
 .quick-entry-card--lottery {
-  background: linear-gradient(135deg, #115E59 0%, #0F766E 52%, #14B8A6 100%);
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 52%, #667eea 100%);
 }
 
 .quick-entry-card--group {
-  background: linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 56%, #60A5FA 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 56%, #a78bfa 100%);
 }
 
 .quick-entry-card--slash {
-  background: linear-gradient(135deg, #7C2D12 0%, #B45309 56%, #F59E0B 100%);
+  background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 56%, #667eea 100%);
 }
 
 .quick-entry-sheen {
@@ -529,7 +533,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6rpx;
-  background: rgba(220, 80, 40, 0.82);
+  background: rgba(102, 126, 234, 0.82);
   border-radius: 999rpx;
   padding: 4rpx 14rpx;
 }
@@ -546,9 +550,9 @@
   white-space: nowrap;
 }
 
-/* 限时卡片给左边加一条暖红细边 */
+/* 限时卡片给左边加一条紫色细边 */
 .limited-card {
-  border-left: 4rpx solid rgba(220, 80, 40, 0.7);
+  border-left: 4rpx solid rgba(102, 126, 234, 0.7);
 }
 
 /* ── 空态 ── */
@@ -584,11 +588,12 @@
 .state-action {
   margin-top: 8rpx;
   padding: 16rpx 40rpx;
-  background: #2563EB;
+  background: linear-gradient(135deg, #667eea, #764ba2);
   color: #fff;
   font-size: 26rpx;
   border-radius: 999rpx;
   border: none;
+  box-shadow: 0 8rpx 24rpx rgba(102, 126, 234, 0.25);
 }
 
 .state-action::after { border: none; }

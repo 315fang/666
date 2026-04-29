@@ -1,5 +1,7 @@
 <view class="page">
-  <view class="hero" wx:if="{{!loading && inviteCard}}">
+  <!-- Hero 区域 -->
+  <view class="hero card-enter" wx:if="{{!loading && inviteCard}}">
+    <view class="hero-glow"></view>
     <view class="hero-badge">{{inviteCard.role_label}}</view>
     <image class="avatar" src="{{inviteCard.avatar || inviteCard.avatar_url || '/assets/images/default-avatar.svg'}}" mode="aspectFill"></image>
     <text class="title">{{inviteCard.invite_title}}</text>
@@ -16,62 +18,74 @@
     </view>
   </view>
 
-  <view class="card loading-card" wx:if="{{loading}}">
+  <!-- 加载中 -->
+  <view class="card loading-card card-enter" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
     <text class="loading-text">邀请信息加载中...</text>
   </view>
 
-  <view class="card invalid-card" wx:elif="{{!inviteCard}}">
+  <!-- 无效邀请 -->
+  <view class="card invalid-card card-enter" wx:elif="{{!inviteCard}}">
+    <text class="invalid-emoji">😔</text>
     <text class="invalid-title">邀请暂不可用</text>
     <text class="invalid-desc">{{invalidMessage || '该邀请可能已失效，请联系邀请人重新发送。'}}</text>
   </view>
 
   <block wx:elif="{{inviteCard}}">
-    <view class="card benefit-card">
+    <!-- 权益说明 -->
+    <view class="card benefit-card card-enter delay-1">
       <text class="section-title">加入后你可以获得什么</text>
       <view class="benefit-item">
-        <text class="benefit-dot"></text>
+        <view class="benefit-icon">🎯</view>
         <text class="benefit-text">成为 N1 代理，进入专属 N 路径体系</text>
       </view>
       <view class="benefit-item">
-        <text class="benefit-dot"></text>
+        <view class="benefit-icon">🤝</view>
         <text class="benefit-text">审核通过后，由上级 N 代理承接团队与货款支持</text>
       </view>
       <view class="benefit-item">
-        <text class="benefit-dot"></text>
+        <view class="benefit-icon">🚀</view>
         <text class="benefit-text">后续可继续发展团队，并具备升级 N2 的成长路径</text>
       </view>
     </view>
 
-    <view class="card flow-card">
+    <!-- 流程说明 -->
+    <view class="card flow-card card-enter delay-2">
       <text class="section-title">流程说明</text>
       <view class="flow-step">
-        <text class="step-index">1</text>
+        <view class="step-index">1</view>
+        <view class="step-line"></view>
         <text class="step-text">点击下方按钮提交加入申请</text>
       </view>
       <view class="flow-step">
-        <text class="step-index">2</text>
+        <view class="step-index">2</view>
+        <view class="step-line"></view>
         <text class="step-text">提交后进入审核</text>
       </view>
       <view class="flow-step">
-        <text class="step-index">3</text>
+        <view class="step-index">3</view>
         <text class="step-text">审核通过后，正式成为 N1 代理</text>
       </view>
     </view>
 
-    <view class="card action-card" wx:if="{{isOwner}}">
+    <!-- 操作区 - 分享 -->
+    <view class="card action-card card-enter delay-3" wx:if="{{isOwner}}">
       <text class="section-title">分享给好友</text>
       <text class="action-desc" wx:if="{{canInviteN1}}">把这张小程序卡片发给好友，对方打开后即可直接提交加入 N1 的申请。</text>
       <text class="action-desc" wx:else>当前账号暂无 N1 邀约权限，仅 N2 及以上可发起定向邀约。</text>
-      <button class="primary-btn" open-type="share" wx:if="{{canInviteN1}}">微信分享给好友</button>
+      <button class="primary-btn ripple" open-type="share" wx:if="{{canInviteN1}}">微信分享给好友</button>
       <button class="primary-btn disabled-btn" disabled wx:else>暂无邀约权限</button>
     </view>
 
-    <view class="card action-card" wx:else>
+    <!-- 操作区 - 接受邀请 -->
+    <view class="card action-card card-enter delay-3" wx:else>
       <text class="section-title">接受定向邀约</text>
       <text class="action-desc">提交后进入审核，通过后即可加入该团队。</text>
-      <button class="primary-btn" bindtap="onAcceptInvite" loading="{{applyLoading}}" disabled="{{applied}}">
+      <button class="primary-btn ripple" bindtap="onAcceptInvite" loading="{{applyLoading}}" disabled="{{applied}}">
         {{applied ? '已提交申请' : '接受邀请并提交申请'}}
       </button>
     </view>
   </block>
+
+  <view class="safe-bottom"></view>
 </view>

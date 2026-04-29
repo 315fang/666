@@ -1,7 +1,4 @@
 {
-    "usingComponents": {
-        "portal-password-dialog": "/components/portal-password-dialog/portal-password-dialog"
-    },
     "pages": [
         "pages/index/index",
         "pages/splash/splash",
@@ -29,7 +26,8 @@
             "root": "pages/product",
             "name": "packageProduct",
             "pages": [
-                "detail"
+                "detail",
+                "poster"
             ]
         },
         {
@@ -182,9 +180,9 @@
     },
     "tabBar": {
         "custom": true,
-        "color": "#64748B",
-        "selectedColor": "#C6A16E",
-        "backgroundColor": "#F8FCFD",
+        "color": "#94A3B8",
+        "selectedColor": "#667eea",
+        "backgroundColor": "rgba(255,255,255,0.72)",
         "borderStyle": "white",
         "list": [
             {

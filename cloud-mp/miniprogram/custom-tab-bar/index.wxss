@@ -6,8 +6,11 @@
   z-index: 9999;
   display: flex;
   padding-bottom: env(safe-area-inset-bottom);
-  border-top: 1rpx solid rgba(159, 178, 193, 0.28);
-  box-shadow: 0 -12rpx 34rpx rgba(16, 42, 67, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-top: 1rpx solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 -4rpx 24rpx rgba(102, 126, 234, 0.06);
 }
 
 .tab-bar-item {
@@ -16,31 +19,60 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 7px 0 5px;
-  min-height: 48px;
+  padding: 10rpx 0 8rpx;
+  min-height: 100rpx;
   position: relative;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.tab-bar-item-active::before {
-  content: '';
-  position: absolute;
-  top: 4px;
-  width: 18px;
-  height: 2px;
-  border-radius: 999px;
-  background: #C6A16E;
-  box-shadow: 0 2px 8px rgba(198, 161, 110, 0.36);
+.tab-bar-item:active {
+  opacity: 0.7;
+}
+
+.tab-bar-icon-wrap {
+  position: relative;
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.tab-bar-item-active .tab-bar-icon-wrap {
+  transform: scale(1.1) translateY(-2rpx);
 }
 
 .tab-bar-icon {
-  width: 24px;
-  height: 24px;
-  margin-top: 2px;
+  width: 48rpx;
+  height: 48rpx;
+  transition: transform 0.3s ease;
 }
 
 .tab-bar-text {
-  font-size: 10px;
-  margin-top: 3px;
+  font-size: 20rpx;
+  margin-top: 6rpx;
   line-height: 1.2;
   font-weight: 500;
+  transition: color 0.3s ease, font-weight 0.3s ease;
+}
+
+.tab-bar-item-active .tab-bar-text {
+  font-weight: 700;
+}
+
+.tab-bar-indicator {
+  position: absolute;
+  top: 4rpx;
+  width: 36rpx;
+  height: 6rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  box-shadow: 0 4rpx 12rpx rgba(102, 126, 234, 0.35);
+  animation: indicatorPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes indicatorPop {
+  0% { transform: scaleX(0.3) translateY(-4rpx); opacity: 0; }
+  100% { transform: scaleX(1) translateY(0); opacity: 1; }
 }

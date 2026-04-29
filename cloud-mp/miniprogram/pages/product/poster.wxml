@@ -1,0 +1,49 @@
+<view class="poster-page">
+  <view class="poster-nav" style="padding-top: {{statusBarHeight}}px;">
+    <view class="poster-nav-inner" style="height: {{navBarHeight}}px;">
+      <view class="poster-back" bindtap="onBack">
+        <image class="poster-back-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"></image>
+      </view>
+      <text class="poster-title">商品分享海报</text>
+    </view>
+  </view>
+
+  <view class="poster-body">
+    <view class="poster-preview-shell">
+      <canvas id="productPosterCanvas" type="2d" class="poster-canvas"></canvas>
+      <image
+        wx:if="{{posterImagePath}}"
+        class="poster-result"
+        src="{{posterImagePath}}"
+        mode="aspectFit"
+        show-menu-by-longpress
+        bindload="onPosterImageLoad"
+        binderror="onPosterImageError"
+      ></image>
+      <view class="poster-loading" wx:if="{{posterGenerating || (posterImagePath && !posterPreviewReady)}}">
+        <view class="poster-spin"></view>
+        <text class="poster-loading-text">{{posterGenerating ? '海报生成中...' : '海报加载中...'}}</text>
+      </view>
+      <view class="poster-empty" wx:if="{{loadError && !posterGenerating}}">
+        <text>{{loadError}}</text>
+      </view>
+    </view>
+
+    <view class="poster-actions">
+      <button class="poster-action poster-action-share" open-type="share">
+        <image class="poster-action-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
+        <text>分享好友</text>
+      </button>
+      <view class="poster-action poster-action-secondary" bindtap="onRegeneratePoster">
+        <image class="poster-action-icon" src="/assets/icons/refresh-cw.svg" mode="aspectFit"></image>
+        <text>重新生成</text>
+      </view>
+      <view class="poster-action poster-action-primary {{!posterPreviewReady ? 'poster-action-disabled' : ''}}" bindtap="onSavePoster">
+        <image class="poster-action-icon poster-action-icon-light" src="/assets/icons/download.svg" mode="aspectFit"></image>
+        <text>保存海报</text>
+      </view>
+    </view>
+
+    <text class="poster-tip">长按海报可直接转发或保存</text>
+  </view>
+</view>

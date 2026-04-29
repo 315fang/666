@@ -230,29 +230,62 @@ onReady() {
 
     _revealObservers: [],
 
+    _getRevealTargetMap() {
+        const hasFeaturedSections = Array.isArray(this.data.featuredSections) && this.data.featuredSections.length > 0;
+        return {
+            'reveal_mid_posters': {
+                key: 'revealMidPosters',
+                enabled: Array.isArray(this.data.midPosters) && this.data.midPosters.length > 0
+            },
+            'reveal_coupons': { key: 'revealCoupons', enabled: true },
+            'reveal_products': { key: 'revealProducts', enabled: hasFeaturedSections },
+            'reveal_featured': { key: 'revealFeatured', enabled: !hasFeaturedSections },
+            'reveal_brand': { key: 'revealBrand', enabled: !!(this.data.brandZone && this.data.brandZone.enabled) },
+            'reveal_bottom_posters': {
+                key: 'revealBottomPosters',
+                enabled: Array.isArray(this.data.bottomPosters) && this.data.bottomPosters.length > 0
+            }
+        };
+    },
+
     _setupScrollReveal() {
         this._revealObservers.forEach(o => o.disconnect());
         this._revealObservers = [];
-        const idToKey = {
-            'reveal_mid_posters': 'revealMidPosters',
-            'reveal_coupons': 'revealCoupons',
-            'reveal_products': 'revealProducts',
-            'reveal_featured': 'revealFeatured',
-            'reveal_brand': 'revealBrand',
-            'reveal_bottom_posters': 'revealBottomPosters'
-        };
-        Object.keys(idToKey).forEach((id) => {
-            const dataKey = idToKey[id];
-            if (this.data[dataKey]) return;
-            const observer = this.createIntersectionObserver({ thresholds: [0.1] });
-            observer.relativeToViewport({ bottom: -40 }).observe('#' + id, (res) => {
-                if (res.intersectionRatio < 0.1) return;
-                this.setData({ [dataKey]: true });
-                observer.disconnect();
-                const idx = this._revealObservers.indexOf(observer);
-                if (idx > -1) this._revealObservers.splice(idx, 1);
+
+        const targetMap = this._getRevealTargetMap();
+        const targets = Object.keys(targetMap).filter((id) => {
+            const target = targetMap[id];
+            return target.enabled && !this.data[target.key];
+        });
+        if (!targets.length) return;
+
+        const query = wx.createSelectorQuery().in(this);
+        targets.forEach((id) => query.select('#' + id).boundingClientRect());
+        query.exec((rects = []) => {
+            const revealImmediately = {};
+            targets.forEach((id, index) => {
+                const target = targetMap[id];
+                const dataKey = target.key;
+                if (this.data[dataKey]) return;
+                if (!rects[index]) {
+                    revealImmediately[dataKey] = true;
+                    return;
+                }
+
+                const observer = this.createIntersectionObserver({ thresholds: [0.1] });
+                observer.relativeToViewport({ bottom: -40 }).observe('#' + id, (res) => {
+                    if (res.intersectionRatio < 0.1) return;
+                    this.setData({ [dataKey]: true });
+                    observer.disconnect();
+                    const idx = this._revealObservers.indexOf(observer);
+                    if (idx > -1) this._revealObservers.splice(idx, 1);
+                });
+                this._revealObservers.push(observer);
             });
-            this._revealObservers.push(observer);
+
+            if (Object.keys(revealImmediately).length > 0) {
+                this.setData(revealImmediately);
+            }
         });
     },
 

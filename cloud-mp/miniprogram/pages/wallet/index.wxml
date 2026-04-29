@@ -1,5 +1,4 @@
 <!-- pages/wallet/index.wxml -->
-<import src="/styles/effects.wxss"/>
 <view class="container">
   <scroll-view class="main-scroll" scroll-y enable-back-to-top>
 
@@ -9,7 +8,7 @@
         <text class="balance-label">可提现佣金（元）</text>
         <view class="balance-amount-row">
           <text class="balance-symbol">¥</text>
-          <text class="balance-amount neon-blue">{{balance}}</text>
+          <text class="balance-amount">{{balance}}</text>
         </view>
         <view class="balance-meta-row">
           <text class="balance-meta-text">累计佣金 ¥{{commissionTotal}}</text>

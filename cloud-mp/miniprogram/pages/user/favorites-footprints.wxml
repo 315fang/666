@@ -1,4 +1,3 @@
-<import src="/styles/effects.wxss"/>
 <view class="page-combo">
   <!-- 长按菜单 -->
   <context-menu id="contextMenu" actions="{{contextActions}}" bind:select="onContextMenuSelect" />

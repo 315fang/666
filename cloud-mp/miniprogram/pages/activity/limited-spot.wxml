@@ -1,7 +1,7 @@
 <view class="page">
-  <view class="nav-bar" style="padding-top: {{statusBarHeight}}px;">
+  <view class="nav-bar glass-dark" style="padding-top: {{statusBarHeight}}px;">
     <view class="nav-inner" style="height: {{navBarHeight}}px;">
-      <view class="nav-back" bindtap="onBack">
+      <view class="nav-back ripple" bindtap="onBack">
         <image class="back-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"></image>
       </view>
       <text class="nav-title">限时专享</text>
@@ -9,24 +9,27 @@
   </view>
 
   <scroll-view scroll-y class="scroll" wx:if="{{!loading && card}}">
+    <!-- 档期选择 -->
     <scroll-view scroll-x class="slot-strip" wx:if="{{slots.length > 0}}" show-scrollbar="{{false}}">
       <view class="slot-strip-inner">
         <view
-        wx:for="{{slots}}"
-        wx:key="id"
-        class="slot-chip {{item.id == slotId ? 'active' : ''}}"
-        data-slot-id="{{item.id}}"
-        bindtap="onSelectSlot"
-      >
+          wx:for="{{slots}}"
+          wx:key="id"
+          class="slot-chip {{item.id == slotId ? 'active' : ''}}"
+          data-slot-id="{{item.id}}"
+          bindtap="onSelectSlot"
+        >
           <text class="slot-chip-title">{{item.title}}</text>
           <text class="slot-chip-sub">{{item.runtime_status === 'running' ? '进行中' : (item.runtime_status === 'upcoming' ? '即将开始' : '已结束')}}</text>
         </view>
       </view>
     </scroll-view>
 
-    <view class="hero">
+    <!-- Hero 区域 -->
+    <view class="hero card-enter">
+      <view class="hero-glow"></view>
       <view class="hero-top">
-        <text class="hero-kicker">限时商品</text>
+        <text class="hero-kicker">⚡ 限时商品</text>
         <view class="hero-countdown" wx:if="{{countdownText}}">
           <text class="hero-countdown-label">{{countdownLabel}}</text>
           <text class="hero-countdown-value">{{countdownText}}</text>
@@ -36,28 +39,43 @@
       <text class="hero-sub" wx:if="{{card.subtitle}}">{{card.subtitle}}</text>
     </view>
 
-    <view class="list-title">当前档期商品</view>
-    <view class="empty" wx:if="{{!products.length}}">当前档期暂未配置商品</view>
+    <!-- 商品列表 -->
+    <view class="list-header">
+      <text class="list-title">当前档期商品</text>
+      <text class="list-count" wx:if="{{products.length}}">{{products.length}} 件</text>
+    </view>
+    <view class="empty card-enter" wx:if="{{!products.length}}">
+      <text class="empty-emoji">⏰</text>
+      <text class="empty-text">当前档期暂未配置商品</text>
+      <text class="empty-sub">稍后再来看看吧~</text>
+    </view>
 
-    <view class="goods-card" wx:for="{{products}}" wx:key="offer_id">
-      <image
-        class="goods-img"
-        src="{{item.product && item.product.images && item.product.images[0] || '/assets/images/placeholder.svg'}}"
-        mode="aspectFill"
-        binderror="onGoodsImageError"
-        data-index="{{index}}"
-      ></image>
+    <view class="goods-card card-enter delay-{{index < 8 ? index : 7}}" wx:for="{{products}}" wx:key="offer_id">
+      <view class="goods-img-wrap">
+        <fade-image
+          class="goods-img"
+          src="{{item.product && item.product.images && item.product.images[0] || '/assets/images/placeholder.svg'}}"
+          mode="aspectFill"
+          width="208rpx"
+          height="208rpx"
+          radius="18rpx"
+        ></fade-image>
+        <view class="goods-sold-out" wx:if="{{item.sold_out}}">已售罄</view>
+      </view>
       <view class="goods-body">
         <view class="goods-head">
           <text class="goods-name">{{item.product.name}}</text>
           <view class="mode-tags">
-            <text class="mode-tag mode-tag-money" wx:if="{{item.enable_money}}">现金秒杀</text>
-            <text class="mode-tag mode-tag-points" wx:if="{{item.enable_points}}">积分兑换</text>
+            <text class="mode-tag mode-tag-money" wx:if="{{item.enable_money}}">💰 现金秒杀</text>
+            <text class="mode-tag mode-tag-points" wx:if="{{item.enable_points}}">🎯 积分兑换</text>
           </view>
         </view>
         <text class="goods-desc" wx:if="{{item.product.description}}">{{item.product.description}}</text>
         <view class="goods-meta">
-          <text class="goods-remain">{{item.stock_label || ('剩余 ' + item.remaining + ' / ' + item.stock_limit)}}</text>
+          <view class="goods-remain-bar">
+            <view class="goods-remain-fill" style="width:{{item.remaining / item.stock_limit * 100}}%"></view>
+          </view>
+          <text class="goods-remain-text">{{item.stock_label || ('剩余 ' + item.remaining + ' / ' + item.stock_limit)}}</text>
         </view>
         <view class="price-row">
           <text class="p-money" wx:if="{{item.enable_money}}">¥{{item.money_price}}</text>
@@ -66,23 +84,9 @@
           <text class="p-origin" wx:if="{{item.product && (item.product.market_price || item.product.displayPrice)}}">原价 ¥{{item.product.market_price || item.product.displayPrice}}</text>
         </view>
         <view class="btn-row">
-          <view
-            class="btn btn-detail"
-            data-offer-id="{{item.offer_id}}"
-            bindtap="onOpenDetail"
-          >查看详情</view>
-          <view
-            class="btn btn-points {{item.sold_out || !item.enable_points ? 'disabled' : ''}}"
-            wx:if="{{item.enable_points}}"
-            data-offer-id="{{item.offer_id}}"
-            bindtap="onOpenPoints"
-          >积分兑换</view>
-          <view
-            class="btn btn-money {{item.sold_out || !item.enable_money ? 'disabled' : ''}}"
-            wx:if="{{item.enable_money}}"
-            data-offer-id="{{item.offer_id}}"
-            bindtap="onOpenMoney"
-          >立即秒杀</view>
+          <view class="btn btn-detail ripple" data-offer-id="{{item.offer_id}}" bindtap="onOpenDetail">查看详情</view>
+          <view class="btn btn-points ripple {{item.sold_out || !item.enable_points ? 'disabled' : ''}}" wx:if="{{item.enable_points}}" data-offer-id="{{item.offer_id}}" bindtap="onOpenPoints">积分兑换</view>
+          <view class="btn btn-money ripple {{item.sold_out || !item.enable_money ? 'disabled' : ''}}" wx:if="{{item.enable_money}}" data-offer-id="{{item.offer_id}}" bindtap="onOpenMoney">立即秒杀</view>
         </view>
       </view>
     </view>
@@ -90,10 +94,14 @@
   </scroll-view>
 
   <view class="state-loading" wx:if="{{loading}}">
-    <text>加载中…</text>
+    <view class="loading-spinner-wrap">
+      <view class="loading-spinner"></view>
+    </view>
+    <text class="loading-text">加载中…</text>
   </view>
 
-  <view class="empty-state" wx:if="{{!loading && !card}}">
+  <view class="empty-state card-enter" wx:if="{{!loading && !card}}">
+    <text class="empty-emoji">🎁</text>
     <text class="empty-state-title">当前限时商品暂不可用</text>
     <text class="empty-state-desc">请稍后再试，或返回活动页查看其他入口。</text>
   </view>

@@ -105,7 +105,7 @@
           </view>
           <text class="summary-action-text">收藏</text>
         </view>
-        <button class="summary-action-item summary-share-btn" open-type="share">
+        <button class="summary-action-item summary-share-btn" bindtap="onOpenSharePanel">
           <view class="summary-icon-btn">
             <image class="summary-icon" src="/assets/icons/share.svg" mode="aspectFit" />
           </view>
@@ -306,5 +306,38 @@
   </view>
 
   <brand-animation id="brandAnimation" fly-image="{{product.images && product.images[0] || ''}}"></brand-animation>
+
+  <view class="share-panel-mask" wx:if="{{showSharePanel}}" bindtap="onCloseSharePanel"></view>
+  <view class="share-panel" wx:if="{{showSharePanel}}">
+    <view class="share-panel-handle"></view>
+    <view class="share-panel-head">
+      <text class="share-panel-title">分享商品</text>
+      <text class="share-panel-subtitle">转发卡片、朋友圈或生成商品海报</text>
+    </view>
+    <view class="share-panel-options">
+      <button class="share-panel-option" open-type="share">
+        <view class="share-panel-icon-wrap">
+          <image class="share-panel-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
+        </view>
+        <text class="share-panel-option-title">好友</text>
+      </button>
+      <view class="share-panel-option" bindtap="onShareTimelineTap">
+        <view class="share-panel-icon-wrap">
+          <image class="share-panel-icon" src="/assets/icons/globe.svg" mode="aspectFit"></image>
+        </view>
+        <text class="share-panel-option-title">朋友圈</text>
+      </view>
+      <view class="share-panel-option" bindtap="onCreateProductPoster">
+        <view class="share-panel-icon-wrap share-panel-icon-primary">
+          <image class="share-panel-icon share-panel-icon-light" src="/assets/icons/download.svg" mode="aspectFit"></image>
+        </view>
+        <text class="share-panel-option-title">海报</text>
+      </view>
+    </view>
+    <view class="share-panel-tip" wx:if="{{showTimelineTip}}">
+      <text class="share-panel-tip-dot"></text>
+      <text class="share-panel-tip-text">点右上角菜单，选择分享到朋友圈</text>
+    </view>
+  </view>
 </view>
 <!-- /container -->

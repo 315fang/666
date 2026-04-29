@@ -1,9 +1,8 @@
-/** pages/lottery/lottery.wxss **/
-
+/* 积分抽奖 — 2026 青春版 */
 .container {
   min-height: 100vh;
   background:
-    linear-gradient(180deg, #1e4a6d 0, #1e4a6d 420rpx, #edf5fb 420rpx, #f7fbff 100%);
+    linear-gradient(180deg, #667eea 0, #764ba2 420rpx, #E8E0F0 420rpx, #F7F5FF 100%);
   padding-bottom: 72rpx;
 }
 
@@ -12,6 +11,9 @@
   align-items: center;
   justify-content: space-between;
   padding: 12rpx 28rpx;
+  background: rgba(15, 15, 35, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .nav-back,
@@ -21,6 +23,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
 }
 
 .nav-icon {
@@ -32,7 +35,7 @@
 .nav-title {
   font-size: 32rpx;
   font-weight: 700;
-  color: #F8FAFC;
+  color: #fff;
 }
 
 .wheel-panel,
@@ -52,39 +55,30 @@
   box-shadow: none;
 }
 
-.panel-head,
 .section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-top: 34rpx;
+  margin-bottom: 18rpx;
 }
 
-.panel-title,
 .section-title {
   display: block;
   font-size: 32rpx;
   font-weight: 700;
-  color: #16324d;
+  color: #1c1917;
 }
 
-.panel-subtitle,
 .section-subtitle {
   display: block;
   margin-top: 8rpx;
   font-size: 22rpx;
   line-height: 1.6;
-  color: #6b8297;
+  color: #78716c;
 }
 
-.panel-chip {
-  padding: 10rpx 18rpx;
-  border-radius: 999rpx;
-  background: rgba(36, 95, 147, 0.1);
-  color: #245f93;
-  font-size: 22rpx;
-  font-weight: 600;
-}
-
+/* 扭蛋机 */
 .gacha-stage {
   display: flex;
   flex-direction: column;
@@ -96,9 +90,9 @@
   width: 100%;
   border-radius: 32rpx;
   padding: 24rpx 24rpx 30rpx;
-  background: linear-gradient(180deg, #245f93 0%, #1e4a6d 72%, #16324d 100%);
-  border: 1rpx solid rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.08), 0 18rpx 36rpx rgba(30, 74, 109, 0.18);
+  background: linear-gradient(180deg, #667eea 0%, #764ba2 72%, #5b3a8a 100%);
+  border: 1rpx solid rgba(255, 255, 255, 0.15);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.1), 0 18rpx 36rpx rgba(102, 126, 234, 0.25);
 }
 
 .gacha-machine.is-running {
@@ -115,7 +109,7 @@
 .machine-brand {
   font-size: 22rpx;
   letter-spacing: 3rpx;
-  color: #EAF3FB;
+  color: rgba(255, 255, 255, 0.85);
   font-weight: 700;
 }
 
@@ -128,12 +122,13 @@
   width: 12rpx;
   height: 12rpx;
   border-radius: 50%;
-  background: #F8FAFC;
-  box-shadow: 0 0 12rpx rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 12rpx rgba(255, 255, 255, 0.4);
 }
 
 .gacha-machine.is-running .machine-light:nth-child(odd) {
-  background: #C58B47;
+  background: #f59e0b;
+  box-shadow: 0 0 16rpx rgba(245, 158, 11, 0.6);
 }
 
 .machine-window {
@@ -141,8 +136,8 @@
   height: 360rpx;
   overflow: hidden;
   border-radius: 28rpx 28rpx 18rpx 18rpx;
-  background: radial-gradient(circle at top, rgba(196, 223, 247, 0.26), rgba(19, 41, 61, 0.94) 62%);
-  border: 6rpx solid rgba(226, 232, 240, 0.22);
+  background: radial-gradient(circle at top, rgba(167, 139, 250, 0.3), rgba(30, 15, 60, 0.94) 62%);
+  border: 6rpx solid rgba(255, 255, 255, 0.15);
 }
 
 .machine-glass {
@@ -168,8 +163,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 4rpx solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 14rpx 24rpx rgba(15, 23, 42, 0.32);
+  border: 4rpx solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 14rpx 24rpx rgba(15, 23, 42, 0.35);
 }
 
 .gacha-machine.is-running .capsule-sample {
@@ -200,7 +195,7 @@
   flex: 1;
   min-height: 120rpx;
   border-radius: 18rpx;
-  background: linear-gradient(180deg, rgba(19, 41, 61, 0.92), rgba(30, 74, 109, 0.96));
+  background: linear-gradient(180deg, rgba(30, 15, 60, 0.92), rgba(102, 126, 234, 0.96));
   border: 1rpx solid rgba(255, 255, 255, 0.14);
   display: flex;
   align-items: center;
@@ -230,7 +225,7 @@
 .capsule-top {
   top: 0;
   border-radius: 54rpx 54rpx 22rpx 22rpx;
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .capsule-bottom {
@@ -246,7 +241,7 @@
 }
 
 .capsule-placeholder {
-  background: linear-gradient(180deg, #d7e8f6, #5f7690);
+  background: linear-gradient(180deg, rgba(255,255,255,0.3), rgba(102,126,234,0.5));
   opacity: 0.75;
 }
 
@@ -270,7 +265,7 @@
   width: 78rpx;
   height: 78rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, #d7e8f6, #7da7ca);
+  background: linear-gradient(135deg, rgba(255,255,255,0.3), rgba(167,139,250,0.5));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -281,7 +276,7 @@
   width: 34rpx;
   height: 34rpx;
   border-radius: 50%;
-  background: #16324d;
+  background: #5b3a8a;
 }
 
 .machine-handle {
@@ -297,7 +292,7 @@
   width: 12rpx;
   height: 88rpx;
   border-radius: 999rpx;
-  background: linear-gradient(180deg, #e5eef7, #7f9db7);
+  background: linear-gradient(180deg, rgba(255,255,255,0.5), rgba(167,139,250,0.6));
 }
 
 .machine-handle-knob {
@@ -307,7 +302,7 @@
   width: 52rpx;
   height: 52rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, #c58b47, #efd1a6);
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
   box-shadow: 0 10rpx 18rpx rgba(0, 0, 0, 0.26);
 }
 
@@ -329,8 +324,8 @@
   min-height: 84rpx;
   padding: 0 18rpx;
   border-radius: 22rpx;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1rpx solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1rpx solid rgba(255, 255, 255, 0.12);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -339,39 +334,35 @@
 
 .machine-footer-label {
   font-size: 20rpx;
-  color: rgba(234, 243, 251, 0.66);
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .machine-footer-value {
   margin-top: 8rpx;
   font-size: 24rpx;
   font-weight: 700;
-  color: #f7fbff;
+  color: #fff;
 }
 
 .machine-start-btn {
   flex: 1;
   min-height: 84rpx;
   border-radius: 999rpx;
-  background: linear-gradient(135deg, #d6e6f5 0%, #7fa7c8 100%);
-  color: #16324d;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #fff;
   font-size: 30rpx;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: inset 0 2rpx 0 rgba(255,255,255,0.35), 0 12rpx 24rpx rgba(12, 29, 45, 0.22);
+  box-shadow: 0 12rpx 24rpx rgba(245, 158, 11, 0.3);
 }
 
 .machine-start-btn.disabled {
   opacity: 0.55;
 }
 
-.section-head {
-  margin-top: 34rpx;
-  margin-bottom: 18rpx;
-}
-
+/* 奖池网格 */
 .prize-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -381,13 +372,15 @@
 .prize-item {
   min-height: 220rpx;
   border-radius: 24rpx;
-  border: 1rpx solid rgba(36, 95, 147, 0.12);
+  border: 1rpx solid rgba(102, 126, 234, 0.1);
   padding: 22rpx;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  background: linear-gradient(180deg, #ffffff 0%, #f4f9fd 100%);
-  box-shadow: 0 12rpx 24rpx rgba(30, 74, 109, 0.06);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8rpx 20rpx rgba(102, 126, 234, 0.06);
 }
 
 .prize-item-top {
@@ -401,8 +394,8 @@
   padding: 8rpx 16rpx;
   border-radius: 999rpx;
   font-size: 20rpx;
-  color: #245f93;
-  background: rgba(36, 95, 147, 0.08);
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.08);
   font-weight: 600;
 }
 
@@ -418,7 +411,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 10rpx 20rpx rgba(30, 74, 109, 0.12);
+  background: linear-gradient(135deg, rgba(102,126,234,0.12), rgba(118,75,162,0.12));
 }
 
 .prize-emoji {
@@ -429,16 +422,17 @@
 .prize-name {
   font-size: 28rpx;
   line-height: 1.4;
-  color: #17324d;
+  color: #1c1917;
   font-weight: 700;
 }
 
 .prize-value {
   margin-top: 10rpx;
   font-size: 22rpx;
-  color: #6f8399;
+  color: #78716c;
 }
 
+/* 记录列表 */
 .records-list {
   display: flex;
   flex-direction: column;
@@ -447,7 +441,7 @@
 
 .empty-tip {
   text-align: center;
-  color: #6f8399;
+  color: #78716c;
   font-size: 24rpx;
   padding: 40rpx 0;
   display: flex;
@@ -456,11 +450,13 @@
   gap: 12rpx;
 }
 
-.empty-icon {
-  width: 64rpx;
-  height: 64rpx;
-  opacity: 0.5;
-  filter: invert(38%) sepia(14%) saturate(938%) hue-rotate(169deg) brightness(89%) contrast(86%);
+.empty-emoji {
+  font-size: 64rpx;
+}
+
+.empty-text {
+  font-size: 26rpx;
+  color: #78716c;
 }
 
 .record-item {
@@ -470,9 +466,11 @@
   gap: 18rpx;
   padding: 22rpx 24rpx;
   border-radius: 22rpx;
-  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(245,249,253,0.96));
-  border: 1rpx solid rgba(36, 95, 147, 0.08);
-  box-shadow: 0 10rpx 24rpx rgba(30, 74, 109, 0.06);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1rpx solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 6rpx 16rpx rgba(102, 126, 234, 0.05);
 }
 
 .record-icon {
@@ -481,7 +479,7 @@
   line-height: 64rpx;
   text-align: center;
   border-radius: 18rpx;
-  background: linear-gradient(135deg, rgba(36, 95, 147, 0.16), rgba(125, 167, 202, 0.16));
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12), rgba(118, 75, 162, 0.12));
   font-size: 34rpx;
 }
 
@@ -501,18 +499,18 @@
 
 .record-prize {
   font-size: 26rpx;
-  color: #17324d;
+  color: #1c1917;
   font-weight: 600;
 }
 
 .record-time {
   font-size: 20rpx;
-  color: #6f8399;
+  color: #78716c;
 }
 
 .record-substatus {
   font-size: 20rpx;
-  color: #b45309;
+  color: #d97706;
   line-height: 1.5;
 }
 
@@ -521,40 +519,40 @@
   font-weight: 600;
   border-radius: 999rpx;
   padding: 10rpx 16rpx;
-  background: rgba(36, 95, 147, 0.08);
-  color: #245f93;
+  background: rgba(102, 126, 234, 0.08);
+  color: #667eea;
 }
 
 .record-status.pending {
-  background: rgba(197, 139, 71, 0.14);
-  color: #b77923;
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
 }
 
 .record-status.issued,
 .record-status.completed {
-  background: rgba(15, 118, 110, 0.12);
-  color: #0f766e;
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
 }
 
 .record-status.claim_required,
 .record-status.claim_submitted,
 .record-status.approved,
 .record-status.shipped {
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
+  background: rgba(102, 126, 234, 0.12);
+  color: #667eea;
 }
 
 .record-status.failed,
 .record-status.cancelled {
   background: rgba(239, 68, 68, 0.12);
-  color: #b91c1c;
+  color: #ef4444;
 }
 
 .record-action {
   padding: 8rpx 18rpx;
   border-radius: 999rpx;
-  background: rgba(36, 95, 147, 0.1);
-  color: #245f93;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
   font-size: 22rpx;
   font-weight: 600;
 }
@@ -562,8 +560,8 @@
 .records-toggle {
   min-height: 76rpx;
   border-radius: 20rpx;
-  background: rgba(36, 95, 147, 0.08);
-  border: 1rpx solid rgba(36, 95, 147, 0.08);
+  background: rgba(102, 126, 234, 0.06);
+  border: 1rpx solid rgba(102, 126, 234, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -576,23 +574,24 @@
 .records-toggle-text {
   font-size: 24rpx;
   font-weight: 600;
-  color: #245f93;
+  color: #667eea;
 }
 
 .records-toggle-arrow {
   font-size: 22rpx;
-  color: #245f93;
+  color: #667eea;
   line-height: 1;
 }
 
 .records-toggle-hover {
-  background: rgba(36, 95, 147, 0.14);
+  background: rgba(102, 126, 234, 0.12);
 }
 
 .prize-toggle {
   margin: 14rpx 28rpx 0;
 }
 
+/* 结果弹窗 */
 .result-modal {
   position: fixed;
   top: 0;
@@ -611,7 +610,8 @@
   right: 0;
   bottom: 0;
   left: 0;
-background: rgba(16, 37, 56, 0.42);
+  background: rgba(15, 15, 35, 0.5);
+  backdrop-filter: blur(8px);
 }
 
 .result-card {
@@ -620,10 +620,12 @@ background: rgba(16, 37, 56, 0.42);
   width: 580rpx;
   padding: 48rpx 40rpx 40rpx;
   border-radius: 32rpx;
-  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
-  border: 1rpx solid rgba(36, 95, 147, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1rpx solid rgba(255, 255, 255, 0.5);
   text-align: center;
-  box-shadow: 0 24rpx 60rpx rgba(30, 74, 109, 0.16);
+  box-shadow: 0 24rpx 60rpx rgba(102, 126, 234, 0.2);
 }
 
 .result-icon-ring {
@@ -634,7 +636,8 @@ background: rgba(16, 37, 56, 0.42);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 18rpx 36rpx rgba(0, 0, 0, 0.2);
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  box-shadow: 0 18rpx 36rpx rgba(102, 126, 234, 0.3);
 }
 
 .result-emoji {
@@ -648,11 +651,11 @@ background: rgba(16, 37, 56, 0.42);
 }
 
 .result-type.win {
-  color: #b77923;
+  color: #667eea;
 }
 
 .result-type.miss {
-  color: #245f93;
+  color: #78716c;
 }
 
 .result-prize-name {
@@ -660,14 +663,14 @@ background: rgba(16, 37, 56, 0.42);
   margin-top: 16rpx;
   font-size: 42rpx;
   font-weight: 700;
-  color: #17324d;
+  color: #1c1917;
 }
 
 .result-value {
   display: block;
   margin-top: 12rpx;
   font-size: 24rpx;
-  color: #6f8399;
+  color: #78716c;
 }
 
 .result-badge {
@@ -676,8 +679,8 @@ background: rgba(16, 37, 56, 0.42);
   padding: 10rpx 18rpx;
   border-radius: 999rpx;
   font-size: 22rpx;
-  color: #245f93;
-  background: rgba(36, 95, 147, 0.08);
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.08);
 }
 
 .result-actions {
@@ -693,15 +696,17 @@ background: rgba(16, 37, 56, 0.42);
   border-radius: 999rpx;
   font-size: 26rpx;
   font-weight: 600;
-  background: rgba(36, 95, 147, 0.08);
-  color: #245f93;
+  background: rgba(102, 126, 234, 0.08);
+  color: #667eea;
 }
 
 .result-btn.primary {
-  background: linear-gradient(135deg, #245f93, #1e4a6d);
-  color: #f7fbff;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  box-shadow: 0 8rpx 20rpx rgba(102, 126, 234, 0.25);
 }
 
+/* 动画 */
 @keyframes machinePulse {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-4rpx); }

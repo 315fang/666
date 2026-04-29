@@ -3,7 +3,7 @@ var auth = require('../../utils/auth');
 var cloudAssetRuntime = require('../../utils/cloudAssetRuntime');
 var dataFormatter = require('../../utils/dataFormatter');
 var localUserContent = require('../../utils/localUserContent');
-var vibrateManager = require('../../utils/vibrateManager');
+
 
 var get = request.get;
 var post = request.post;
@@ -171,7 +171,7 @@ Page({
     switchTab(e) {
         const tab = e.currentTarget.dataset.tab;
         if (!tab || tab === this.data.activeTab) return;
-        vibrateManager.getVibrateManager().short();
+
         this.setData({ activeTab: tab });
     },
 
@@ -179,7 +179,7 @@ Page({
         const { action } = e.detail;
         const id = e.currentTarget.dataset.id;
         if (action === 'delete' && id) {
-            vibrateManager.getVibrateManager().short();
+    
             this._removeFavoriteById(id);
         }
     },
@@ -188,7 +188,7 @@ Page({
         const { action } = e.detail;
         const id = e.currentTarget.dataset.id;
         if (action === 'delete' && id) {
-            vibrateManager.getVibrateManager().short();
+    
             removeFootprint(id);
             this.refreshFootprints();
         }
@@ -211,7 +211,7 @@ Page({
             wx.navigateTo({ url: `/pages/product/detail?id=${id}` });
         } else if (index === 1) {
             // 删除
-            vibrateManager.getVibrateManager().short();
+    
             if (this.data.activeTab === 'favorites') {
                 this._removeFavoriteById(id);
             } else {

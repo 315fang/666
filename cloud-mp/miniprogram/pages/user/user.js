@@ -3,7 +3,7 @@ const app = getApp();
 const { requireLogin } = require('../../utils/auth');
 const { getConfigSection, getFeatureFlags, syncCustomTabBar } = require('../../utils/miniProgramConfig');
 const { shouldRefreshCartState } = require('../../utils/cartState');
-var vibrateManager = require('../../utils/vibrateManager');
+
 const QUAD_PLACEHOLDER = '/assets/images/placeholder.svg';
 const {
     applyGrowthDisplay,
@@ -274,23 +274,23 @@ Page({
     },
 
     onAssetPointsTap() {
-        vibrateManager.getVibrateManager().short();
+
         this.goPoints();
     },
 
     onAssetBalanceTap() {
         if (!requireLogin()) return;
-        vibrateManager.getVibrateManager().short();
+
         wx.navigateTo({ url: '/pages/wallet/agent-wallet' });
     },
 
     onCommissionWalletTap() {
-        vibrateManager.getVibrateManager().short();
+
         this.onWalletTap();
     },
 
     onPiggyBankTap() {
-        vibrateManager.getVibrateManager().short();
+
         this.goUpgradePiggyBank();
     },
 
@@ -529,33 +529,33 @@ Page({
     // ======== 订单入口 ========
     onOrderAllTap() {
         if (!requireLogin()) return;
-        vibrateManager.getVibrateManager().short();
+
         this.markOrderBadgesSeen();
         wx.navigateTo({ url: '/pages/order/list' });
     },
 
     onOrderTap(e) {
-        vibrateManager.getVibrateManager().short();
+
         return handleOrderTap(this, e);
     },
 
     // ======== ★ 售后/退款入口 ========
     onRefundTap() {
         if (!requireLogin()) return;
-        vibrateManager.getVibrateManager().short();
+
         this.markOrderBadgesSeen(['refund']);
         wx.navigateTo({ url: '/pages/order/refund-list' });
     },
 
     // ======== 通知入口 ========
     onNotificationsTap() {
-        vibrateManager.getVibrateManager().short();
+
         navigateIfLoggedIn('/pages/user/notifications');
     },
 
     // ======== 设置 ========
     onSettingsTap() {
-        vibrateManager.getVibrateManager().short();
+
         return handleSettingsTap(this);
     },
 

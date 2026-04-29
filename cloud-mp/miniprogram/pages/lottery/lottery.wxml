@@ -1,7 +1,7 @@
 <!--pages/lottery/lottery.wxml-->
 <view class="container">
-  <view class="nav-bar" style="padding-top: {{navTopPadding}}px;">
-    <view class="nav-back" bindtap="onBack">
+  <view class="nav-bar glass-dark" style="padding-top: {{navTopPadding}}px;">
+    <view class="nav-back ripple" bindtap="onBack">
       <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
     </view>
     <text class="nav-title">积分抽奖</text>
@@ -9,10 +9,10 @@
   </view>
 
   <view class="wheel-panel" wx:if="{{mode === 'spin'}}">
-    <view class="gacha-stage">
+    <view class="gacha-stage card-enter">
       <view class="gacha-machine {{spinning ? 'is-running' : ''}} {{opening ? 'is-opening' : ''}}">
         <view class="machine-top">
-          <text class="machine-brand">POINTS DRAW</text>
+          <text class="machine-brand">✨ POINTS DRAW</text>
           <view class="machine-lights">
             <view class="machine-light" wx:for="{{[1,2,3,4,5]}}" wx:key="index"></view>
           </view>
@@ -61,29 +61,30 @@
             <text class="machine-footer-label">投币</text>
             <text class="machine-footer-value">{{costPoints}} 积分</text>
           </view>
-          <view class="machine-start-btn {{spinning || !prizes.length ? 'disabled' : ''}}" bindtap="onDraw">
+          <view class="machine-start-btn ripple {{spinning || !prizes.length ? 'disabled' : ''}}" bindtap="onDraw">
             <text wx:if="{{opening}}">正在开球...</text>
             <text wx:elif="{{spinning}}">机器出货中...</text>
             <text wx:elif="{{!prizes.length}}">奖池加载中</text>
-            <text wx:else>开始抽奖</text>
+            <text wx:else>🎰 开始抽奖</text>
           </view>
         </view>
       </view>
     </view>
   </view>
 
-  <view class="section-head">
+  <!-- 中奖记录 -->
+  <view class="section-head card-enter delay-1">
     <view>
       <text class="section-title">我的中奖记录</text>
       <text class="section-subtitle">默认展示最近 3 条，展开后可查看完整记录。</text>
     </view>
   </view>
   <view class="records-list">
-    <view class="empty-tip" wx:if="{{!records.length}}">
-      <image src="/assets/icons/package.svg" class="empty-icon" mode="aspectFit"/>
-      <text>{{emptyRecordText}}</text>
+    <view class="empty-tip card-enter" wx:if="{{!records.length}}">
+      <text class="empty-emoji">🎰</text>
+      <text class="empty-text">{{emptyRecordText}}</text>
     </view>
-    <view class="record-item" wx:for="{{records}}" wx:key="id" wx:if="{{recordsExpanded || index < defaultRecordCount}}">
+    <view class="record-item card-enter delay-{{index < 4 ? index : 3}}" wx:for="{{records}}" wx:key="id" wx:if="{{recordsExpanded || index < defaultRecordCount}}">
       <view class="record-icon">{{item.display_emoji}}</view>
       <view class="record-left">
         <text class="record-prize">{{item.prize_name}}</text>
@@ -95,7 +96,7 @@
           <text>{{item.status_text}}</text>
         </view>
         <view
-          class="record-action"
+          class="record-action ripple"
           wx:if="{{item.can_action}}"
           bindtap="onRecordActionTap"
           data-record-id="{{item.record_id || item.id}}"
@@ -106,7 +107,7 @@
       </view>
     </view>
     <view
-      class="records-toggle"
+      class="records-toggle ripple"
       wx:if="{{records.length > defaultRecordCount}}"
       bindtap="toggleRecords"
       hover-class="records-toggle-hover"
@@ -116,7 +117,8 @@
     </view>
   </view>
 
-  <view class="section-head">
+  <!-- 奖池预览 -->
+  <view class="section-head card-enter delay-2">
     <view>
       <text class="section-title">奖池预览</text>
       <text class="section-subtitle">默认收起展示，展开后可查看全部奖项。</text>
@@ -124,16 +126,15 @@
   </view>
   <view class="prize-grid">
     <view
-      class="prize-item"
+      class="prize-item card-enter delay-{{index < 4 ? index : 3}}"
       wx:for="{{prizes}}"
       wx:key="id"
       wx:if="{{prizesExpanded || index < defaultPrizeCount}}"
-      style="border-color: {{item.accent_color}};"
     >
       <view class="prize-item-top">
         <text class="prize-badge">{{item.badge_text}}</text>
         <image wx:if="{{item.image_url}}" class="prize-img" src="{{item.image_url}}" mode="aspectFit"/>
-        <view wx:else class="prize-icon-shell" style="background: linear-gradient(135deg, {{item.theme_color}} 0%, {{item.accent_color}} 100%);">
+        <view wx:else class="prize-icon-shell">
           <text class="prize-emoji">{{item.display_emoji || prizeEmoji[item.type] || '🎁'}}</text>
         </view>
       </view>
@@ -142,7 +143,7 @@
     </view>
   </view>
   <view
-    class="records-toggle prize-toggle"
+    class="records-toggle prize-toggle ripple"
     wx:if="{{prizes.length > defaultPrizeCount}}"
     bindtap="togglePrizes"
     hover-class="records-toggle-hover"
@@ -151,10 +152,11 @@
     <text class="records-toggle-arrow">{{prizesExpanded ? '˄' : '˅'}}</text>
   </view>
 
-  <view class="result-modal" wx:if="{{showResult && lastPrize}}">
+  <!-- 结果弹窗 -->
+  <view class="result-modal modal-enter" wx:if="{{showResult && lastPrize}}">
     <view class="result-overlay" bindtap="closeResult"/>
-    <view class="result-card">
-      <view class="result-icon-ring" style="background: linear-gradient(135deg, {{lastPrize.theme_color}} 0%, {{lastPrize.accent_color}} 100%);">
+    <view class="result-card modal-center-enter">
+      <view class="result-icon-ring">
         <text class="result-emoji">{{lastPrize.display_emoji}}</text>
       </view>
       <text class="result-type {{lastPrize.type === 'miss' ? 'miss' : 'win'}}">
@@ -164,8 +166,8 @@
       <text class="result-value">{{lastPrize.display_value}}</text>
       <text class="result-badge">{{lastPrize.badge_text}}</text>
       <view class="result-actions">
-        <view class="result-btn primary" bindtap="closeResult">我知道了</view>
-        <view class="result-btn" bindtap="onDraw" wx:if="{{lastPrize.type === 'miss'}}">再抽一次</view>
+        <view class="result-btn primary ripple" bindtap="closeResult">我知道了</view>
+        <view class="result-btn ripple" bindtap="onDraw" wx:if="{{lastPrize.type === 'miss'}}">再抽一次</view>
       </view>
     </view>
   </view>

@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "店长专属"
+  "navigationBarTitleText": "店长专属",
+  "usingComponents": {
+    "portal-password-dialog": "/components/portal-password-dialog/portal-password-dialog"
+  }
 }

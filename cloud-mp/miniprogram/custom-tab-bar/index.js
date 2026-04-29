@@ -1,10 +1,20 @@
-const {
-  isActivityCenterEnabled,
-  normalizeTabBarConfig,
-  getMiniProgramConfig
-} = require('../utils/miniProgramConfig');
 
-const TAB_META = [
+var isActivityCenterEnabled;
+var normalizeTabBarConfig;
+var getMiniProgramConfig;
+
+try {
+  var config = require('../utils/miniProgramConfig');
+  isActivityCenterEnabled = config.isActivityCenterEnabled;
+  normalizeTabBarConfig = config.normalizeTabBarConfig;
+  getMiniProgramConfig = config.getMiniProgramConfig;
+} catch (e) {
+  isActivityCenterEnabled = function() { return true; };
+  normalizeTabBarConfig = function() { return { items: [], color: '#94A3B8', selectedColor: '#667eea', backgroundColor: '#FFFFFF' }; };
+  getMiniProgramConfig = function() { return { brand_config: { tab_bar: {} } }; };
+}
+
+var TAB_META = [
   {
     pagePath: 'pages/index/index',
     tabIndex: 0,
@@ -31,39 +41,38 @@ const TAB_META = [
   }
 ];
 
-const FALLBACK_TEXT = ['商城首页', '全部商品', '热门活动', '我的会员'];
+var FALLBACK_TEXT = ['商城首页', '全部商品', '热门活动', '我的会员'];
 
 Component({
   data: {
     list: [],
     selected: 0,
-    color: '#64748B',
-    selectedColor: '#C6A16E',
-    backgroundColor: '#F8FCFD',
+    color: '#94A3B8',
+    selectedColor: '#667eea',
+    backgroundColor: '#FFFFFF',
     borderStyle: 'white',
     hidden: false
   },
 
   lifetimes: {
-    attached() {
+    attached: function() {
       this.refresh();
     }
   },
 
   pageLifetimes: {
-    show() {
+    show: function() {
       this.refresh();
     }
   },
 
   methods: {
-    /** 购物袋/弹窗等盖住底栏时由页面 syncPageTabBar 调用，勿使用 wx.showTabBar */
-    setHidden(hide) {
+    setHidden: function(hide) {
       this._overlayHidden = !!hide;
       this.setData({ hidden: !!hide });
     },
 
-    refresh() {
+    refresh: function() {
       this._rebuild();
       this._updateSelected();
       if (this._overlayHidden) {
@@ -71,48 +80,63 @@ Component({
       }
     },
 
-    _rebuild() {
-      const showActivity = isActivityCenterEnabled();
-      const cfg = getMiniProgramConfig();
-      const tb = normalizeTabBarConfig(cfg.brand_config.tab_bar);
-      const textOf = (idx) => {
-        const it = tb.items.find((x) => Number(x.index) === idx);
+    _rebuild: function() {
+      var showActivity = isActivityCenterEnabled();
+      var cfg = getMiniProgramConfig();
+      var tb = normalizeTabBarConfig(cfg.brand_config.tab_bar);
+      var textOf = function(idx) {
+        var it = null;
+        for (var i = 0; i < tb.items.length; i++) {
+          if (Number(tb.items[i].index) === idx) { it = tb.items[i]; break; }
+        }
         return it && it.text ? it.text : FALLBACK_TEXT[idx] || '';
       };
-      let list = TAB_META.map((m) => ({
-        pagePath: m.pagePath,
-        iconPath: m.iconPath,
-        selectedIconPath: m.selectedIconPath,
-        text: textOf(m.tabIndex)
-      }));
+      var list = TAB_META.map(function(m) {
+        return {
+          pagePath: m.pagePath,
+          iconPath: m.iconPath,
+          selectedIconPath: m.selectedIconPath,
+          text: textOf(m.tabIndex)
+        };
+      });
       if (!showActivity) {
         list.splice(2, 1);
       }
       this.setData({
-        list,
-        color: tb.color,
-        selectedColor: tb.selectedColor,
-        backgroundColor: tb.backgroundColor,
+        list: list,
+        color: tb.color || '#94A3B8',
+        selectedColor: tb.selectedColor || '#667eea',
+        backgroundColor: tb.backgroundColor || 'rgba(255,255,255,0.72)',
         borderStyle: tb.borderStyle
       });
     },
 
-    _updateSelected() {
-      const pages = getCurrentPages();
+    _updateSelected: function() {
+      var pages = getCurrentPages();
       if (!pages.length) return;
-      const route = pages[pages.length - 1].route || '';
-      const { list } = this.data;
-      const idx = list.findIndex((x) => x.pagePath === route);
+      var route = pages[pages.length - 1].route || '';
+      var list = this.data.list;
+      var idx = -1;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].pagePath === route) { idx = i; break; }
+      }
       if (idx >= 0) {
         this.setData({ selected: idx });
       }
     },
 
-    onSwitchTab(e) {
-      const i = e.currentTarget.dataset.index;
-      const item = this.data.list[i];
+    onSwitchTab: function(e) {
+      var i = e.currentTarget.dataset.index;
+      var item = this.data.list[i];
       if (!item) return;
-      wx.switchTab({ url: `/${item.pagePath}` });
+      var pages = getCurrentPages();
+      var currentRoute = pages.length ? (pages[pages.length - 1].route || '') : '';
+      if (currentRoute === item.pagePath) {
+        this._updateSelected();
+        return;
+      }
+
+      wx.switchTab({ url: '/' + item.pagePath });
     }
   }
 });

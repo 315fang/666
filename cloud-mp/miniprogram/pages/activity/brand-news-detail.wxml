@@ -1,18 +1,23 @@
 <view class="page">
-  <view class="state-loading" wx:if="{{loading}}">加载中…</view>
+  <view class="state-loading" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">加载中…</text>
+  </view>
   <view class="state-error" wx:elif="{{loadError}}">
-    <text>文章不存在或已下架</text>
+    <text class="error-emoji">😔</text>
+    <text class="error-text">文章不存在或已下架</text>
   </view>
   <scroll-view scroll-y class="scroll" wx:else>
     <image wx:if="{{article.cover_image}}" class="cover" src="{{article.cover_image}}" mode="widthFix" />
-    <view class="body">
+    <view class="body card-enter">
       <text class="title">{{article.title}}</text>
       <text class="summary" wx:if="{{article.summary}}">{{article.summary}}</text>
       <view class="rich-wrap" wx:if="{{article.content_html}}">
         <rich-text nodes="{{article.content_html}}"></rich-text>
       </view>
       <view class="empty-rich" wx:else>
-        <text>暂无内容</text>
+        <text class="empty-emoji">📝</text>
+        <text class="empty-text">暂无内容</text>
       </view>
     </view>
   </scroll-view>

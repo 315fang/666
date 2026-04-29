@@ -1,4 +1,4 @@
-<view wx:if="{{!hidden}}" class="tab-bar" style="background-color: {{backgroundColor}};">
+<view wx:if="{{!hidden}}" class="tab-bar">
   <view
     wx:for="{{list}}"
     wx:for-index="idx"
@@ -7,11 +7,14 @@
     data-index="{{idx}}"
     bindtap="onSwitchTab"
   >
-    <image
-      class="tab-bar-icon"
-      src="{{selected === idx ? item.selectedIconPath : item.iconPath}}"
-      mode="aspectFit"
-    />
+    <view class="tab-bar-icon-wrap">
+      <image
+        class="tab-bar-icon"
+        src="{{selected === idx ? item.selectedIconPath : item.iconPath}}"
+        mode="aspectFit"
+      />
+    </view>
     <text class="tab-bar-text" style="color: {{selected === idx ? selectedColor : color}};">{{item.text}}</text>
+    <view wx:if="{{selected === idx}}" class="tab-bar-indicator"></view>
   </view>
 </view>

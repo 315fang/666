@@ -1,7 +1,7 @@
 <view class="container {{wallpaperClass}}">
 
   <!-- ══ 顶部 Banner 轮播 ══ -->
-  <view class="banner-wrap {{bannerSlides.length ? '' : 'banner-wrap-empty'}}">
+  <view class="banner-wrap card-enter {{bannerSlides.length ? '' : 'banner-wrap-empty'}}">
     <!-- 状态栏占位 -->
     <view style="height: {{statusBarHeight}}px; background: transparent;"></view>
 
@@ -61,7 +61,7 @@
 
   <!-- ══ 主内容区：活动入口 ══ -->
   <view class="content-area">
-    <view class="section-block" wx:for="{{activitySections}}" wx:key="key">
+    <view class="section-block card-enter delay-{{index < 8 ? index : 7}}" wx:for="{{activitySections}}" wx:key="key">
       <view class="section-header">
         <text class="section-title">{{item.title}}</text>
       </view>
@@ -69,7 +69,7 @@
       <!-- 常驻活动：展示多个子卡片 -->
       <view wx:if="{{item.key === 'permanent' && item.subCards}}" class="sub-cards-container">
         <view
-          class="activity-card section-main-card activity-sub-card"
+          class="activity-card section-main-card activity-sub-card ripple"
           wx:for="{{item.subCards}}"
           wx:for-item="card"
           wx:for-index="cardIndex"
@@ -115,7 +115,7 @@
       <!-- 其他类型的活动区域 -->
       <view
         wx:if="{{item.key !== 'permanent'}}"
-        class="activity-card section-main-card"
+        class="activity-card section-main-card ripple"
         bindtap="onSectionTap"
         data-section="{{item}}"
         hover-class="card-press"

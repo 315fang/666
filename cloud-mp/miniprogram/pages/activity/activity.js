@@ -1,4 +1,5 @@
 // pages/activity/activity.js
+
 const { navigate } = require('../../utils/navigator');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
 const {
@@ -486,6 +487,7 @@ Page({
     },
 
     onBannerTap(e) {
+
         const item = e.currentTarget.dataset.item || {};
         const nav = deriveActivityNav(item);
         if (nav.link_type !== 'none' && nav.link_value) {
@@ -528,12 +530,14 @@ Page({
     },
 
     onSectionTap(e) {
+
         const section = e.currentTarget.dataset.section || {};
         if (!(section.moreLinkType && section.moreLinkValue)) return;
         navigate(section.moreLinkType, section.moreLinkValue);
     },
 
     onSubCardTap(e) {
+
         const card = e.currentTarget.dataset.card || {};
         if (!(card.moreLinkType && card.moreLinkValue)) return;
         navigate(card.moreLinkType, card.moreLinkValue);

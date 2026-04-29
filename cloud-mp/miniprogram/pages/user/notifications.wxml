@@ -1,4 +1,3 @@
-<import src="/styles/effects.wxss"/>
 <view class="container">
   <view class="message-topbar">
     <view class="privacy-icon-btn ripple" bindtap="onPrivacyTap" aria-label="隐私协议">

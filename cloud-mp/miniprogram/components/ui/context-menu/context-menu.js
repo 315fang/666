@@ -1,5 +1,3 @@
-var vibrateManager = require('../../../utils/vibrateManager');
-
 Component({
   properties: {
     actions: {
@@ -33,9 +31,6 @@ Component({
       if (y + menuHeight > windowHeight) y = clientY - menuHeight;
       if (x < 16) x = 16;
       if (y < 16) y = 16;
-
-      var vib = vibrateManager.getVibrateManager();
-      vib.short();
 
       var self = this;
       this.setData({ visible: true, x: x, y: y, animating: true });

@@ -1,4 +1,6 @@
 {
   "navigationStyle": "custom",
-  "usingComponents": {}
+  "usingComponents": {
+    "fade-image": "/components/ui/fade-image/fade-image"
+  }
 }

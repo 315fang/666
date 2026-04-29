@@ -1,4 +1,3 @@
-<import src="/styles/effects.wxss"/>
 <view class="container">
 
   <!-- 彩蛋粒子 -->

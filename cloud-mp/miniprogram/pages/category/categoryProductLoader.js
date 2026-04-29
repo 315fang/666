@@ -492,10 +492,22 @@ function refreshPricePreviewHints(page) {
 
     const nextAllProducts = {};
     categoryIds.forEach((categoryId) => {
-        nextAllProducts[categoryId] = mapProductsForCategory(page, currentProducts[categoryId] || []);
+        const previousList = currentProducts[categoryId] || [];
+        const previousById = new Map((Array.isArray(previousList) ? previousList : []).map((item) => [getProductIdKey(item), item]));
+        nextAllProducts[categoryId] = mapProductsForCategory(page, previousList).map((item) => {
+            const previous = previousById.get(getProductIdKey(item)) || {};
+            const previousImage = String(previous.image || '').trim();
+            if (previousImage && previousImage !== PRODUCT_PLACEHOLDER && !/^cloud:\/\//i.test(previousImage)) {
+                return { ...item, image: previousImage };
+            }
+            return item;
+        });
     });
 
-    page.setData({ allProducts: nextAllProducts });
+    page.setData({
+        allProducts: nextAllProducts,
+        visibleProducts: nextAllProducts
+    });
 }
 
 module.exports = {

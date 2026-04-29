@@ -394,6 +394,10 @@
   border: none;
 }
 
+.summary-share-btn {
+  line-height: 1;
+}
+
 .summary-icon-btn {
   position: relative;
   width: 58rpx;
@@ -1228,3 +1232,141 @@
 .tag-explosive { display: inline-block; padding: 4rpx 14rpx; border-radius: 6rpx; font-size: 22rpx; font-weight: 600; color: #fff; background: linear-gradient(135deg, #F5222D, #CF1322); }
 .explosive-notice { margin-bottom: 12rpx; padding: 12rpx 16rpx; background: #FFF2F0; border-radius: 8rpx; }
 .explosive-notice-text { font-size: 24rpx; color: #F5222D; }
+
+.share-panel-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 380;
+  background: rgba(19, 34, 53, 0.38);
+}
+
+.share-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 390;
+  padding: 16rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  border-radius: 32rpx 32rpx 0 0;
+  background: #FFFFFF;
+  box-shadow: 0 -18rpx 46rpx rgba(16, 42, 67, 0.18);
+  box-sizing: border-box;
+}
+
+.share-panel-handle {
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 999rpx;
+  background: #D2E0EA;
+  margin: 0 auto 24rpx;
+}
+
+.share-panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  margin-bottom: 26rpx;
+}
+
+.share-panel-title {
+  font-size: 32rpx;
+  color: #132235;
+  font-weight: 700;
+}
+
+.share-panel-subtitle {
+  font-size: 24rpx;
+  color: #6B7F91;
+}
+
+.share-panel-options {
+  display: flex;
+  gap: 18rpx;
+}
+
+.share-panel-option {
+  flex: 1;
+  min-width: 0;
+  padding: 22rpx 10rpx 18rpx;
+  margin: 0;
+  border: 1rpx solid rgba(210, 224, 234, 0.82);
+  border-radius: 22rpx;
+  background: #F7FBFF;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.share-panel-option::after {
+  border: none;
+}
+
+.share-panel-option:active {
+  opacity: 0.72;
+}
+
+.share-panel-icon-wrap {
+  width: 58rpx;
+  height: 58rpx;
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 1rpx solid rgba(111, 159, 196, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.share-panel-icon-primary {
+  background: #D93448;
+  border-color: #D93448;
+}
+
+.share-panel-icon {
+  width: 30rpx;
+  height: 30rpx;
+}
+
+.share-panel-icon-light {
+  filter: brightness(0) invert(1);
+}
+
+.share-panel-option-title {
+  font-size: 24rpx;
+  color: #132235;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.share-panel-tip {
+  margin-top: 18rpx;
+  min-height: 54rpx;
+  padding: 0 18rpx;
+  border-radius: 16rpx;
+  background: rgba(61, 107, 179, 0.08);
+  border: 1rpx solid rgba(61, 107, 179, 0.12);
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  box-sizing: border-box;
+}
+
+.share-panel-tip-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: #3D6BB3;
+  flex-shrink: 0;
+}
+
+.share-panel-tip-text {
+  font-size: 23rpx;
+  line-height: 1.35;
+  color: #3D6BB3;
+}

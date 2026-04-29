@@ -1,8 +1,9 @@
 {
     "navigationBarTitleText": "我的钱包",
-    "navigationBarBackgroundColor": "#1a1a2e",
+    "navigationBarBackgroundColor": "#667eea",
     "navigationBarTextStyle": "white",
     "usingComponents": {
-        "brand-animation": "/components/brand-animation/brand-animation"
+        "brand-animation": "/components/brand-animation/brand-animation",
+        "portal-password-dialog": "/components/portal-password-dialog/portal-password-dialog"
     }
 }

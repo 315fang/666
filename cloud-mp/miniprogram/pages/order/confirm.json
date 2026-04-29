@@ -2,6 +2,7 @@
     "navigationBarTitleText": "确认订单",
     "usingComponents": {
         "brand-animation": "/components/brand-animation/brand-animation",
-        "light-tip-modal": "/components/light-tip-modal/light-tip-modal"
+        "light-tip-modal": "/components/light-tip-modal/light-tip-modal",
+        "portal-password-dialog": "/components/portal-password-dialog/portal-password-dialog"
     }
 }

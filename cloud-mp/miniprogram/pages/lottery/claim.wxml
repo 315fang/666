@@ -1,21 +1,22 @@
 <view class="claim-page">
   <view class="loading-wrap" wx:if="{{loading}}">
-    <text>加载中...</text>
+    <view class="loading-spinner"></view>
+    <text class="loading-text">加载中...</text>
   </view>
 
   <block wx:else>
-    <view class="claim-card" wx:if="{{record}}">
-      <text class="claim-title">{{record.prize_name}}</text>
+    <view class="claim-card card-enter" wx:if="{{record}}">
+      <text class="claim-title">🎉 {{record.prize_name}}</text>
       <text class="claim-status">{{record.fulfillment_status_text}}</text>
       <text class="claim-value">{{record.display_value}}</text>
       <text class="claim-tip" wx:if="{{record.claim_instruction}}">{{record.claim_instruction}}</text>
       <text class="claim-tip" wx:if="{{record.claim_deadline_at}}">领取截止：{{record.claim_deadline_at}}</text>
     </view>
 
-    <view class="claim-card" wx:if="{{requiresClaim || claim}}">
+    <view class="claim-card card-enter delay-1" wx:if="{{requiresClaim || claim}}">
       <view class="section-head">
         <text class="section-title">收货信息</text>
-        <text class="section-action" bindtap="onChooseAddress" wx:if="{{canSubmit}}">选择地址</text>
+        <text class="section-action ripple" bindtap="onChooseAddress" wx:if="{{canSubmit}}">选择地址</text>
       </view>
       <view wx:if="{{address}}">
         <text class="address-name">{{address.receiver_name || address.name}} {{phone || address.phone}}</text>
@@ -24,7 +25,7 @@
       <text class="empty-text" wx:else>请选择收货地址</text>
     </view>
 
-    <view class="claim-card" wx:if="{{canSubmit}}">
+    <view class="claim-card card-enter delay-2" wx:if="{{canSubmit}}">
       <view class="form-row">
         <text class="form-label">联系电话</text>
         <input class="form-input" type="number" value="{{phone}}" bindinput="onPhoneInput" placeholder="请填写联系电话" />
@@ -33,15 +34,15 @@
         <text class="form-label">备注</text>
         <textarea class="form-textarea" value="{{remark}}" bindinput="onRemarkInput" placeholder="可填写领奖备注"></textarea>
       </view>
-      <button class="submit-btn" loading="{{submitting}}" bindtap="onSubmit">提交领取信息</button>
+      <button class="submit-btn ripple" loading="{{submitting}}" bindtap="onSubmit">提交领取信息</button>
     </view>
 
-    <view class="claim-card" wx:if="{{!requiresClaim}}">
+    <view class="claim-card card-enter delay-2" wx:if="{{!requiresClaim}}">
       <text class="section-title">发放说明</text>
       <text class="claim-tip">{{autoIssuedHint}}</text>
     </view>
 
-    <view class="claim-card" wx:if="{{claim}}">
+    <view class="claim-card card-enter delay-3" wx:if="{{claim}}">
       <text class="section-title">领取进度</text>
       <text class="claim-tip">当前状态：{{claim.status || '-'}}</text>
       <text class="claim-tip" wx:if="{{claim.review_remark}}">处理备注：{{claim.review_remark}}</text>

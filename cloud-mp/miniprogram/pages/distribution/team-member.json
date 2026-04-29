@@ -1,5 +1,8 @@
 {
   "navigationStyle": "custom",
   "backgroundColor": "#0F58BC",
-  "backgroundTextStyle": "light"
+  "backgroundTextStyle": "light",
+  "usingComponents": {
+    "portal-password-dialog": "/components/portal-password-dialog/portal-password-dialog"
+  }
 }

@@ -1,52 +1,70 @@
 <view class="page">
-  <view class="hero-card">
+  <!-- Hero 卡片 -->
+  <view class="hero-card card-enter">
+    <view class="hero-glow"></view>
     <view class="hero-copy">
+      <text class="hero-badge">✨ 精选套餐</text>
       <text class="hero-title">特惠随心选</text>
       <text class="hero-subtitle">固定套餐价，自由搭配你的专属套装；结算按整套套餐价统一处理。</text>
     </view>
   </view>
 
+  <!-- 加载中 -->
   <view class="state-wrap" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
     <text class="state-title">加载特惠随心选中...</text>
   </view>
 
+  <!-- 加载失败 -->
   <view class="state-wrap" wx:elif="{{loadError}}">
+    <text class="state-emoji">😵</text>
     <text class="state-title">特惠随心选加载失败</text>
     <text class="state-desc">请稍后重试，或返回活动页查看其他入口。</text>
-    <view class="retry-btn" bindtap="onRetry">重新加载</view>
+    <view class="retry-btn ripple" bindtap="onRetry">重新加载</view>
   </view>
 
+  <!-- 空状态 -->
   <view class="state-wrap" wx:elif="{{bundles.length === 0}}">
+    <text class="state-emoji">📦</text>
     <text class="state-title">暂未上架特惠随心选</text>
     <text class="state-desc">当前没有可购买套餐，稍后再来看看。</text>
   </view>
 
+  <!-- 套餐列表 -->
   <view class="bundle-list" wx:else>
     <view
-      class="bundle-card"
+      class="bundle-card card-enter delay-{{index < 8 ? index : 7}} ripple"
       wx:for="{{bundles}}"
       wx:key="id"
       data-id="{{item.id}}"
       bindtap="onOpenBundle"
     >
-      <image
-        class="bundle-cover"
-        src="{{item.cover_preview_url || item.cover_image}}"
-        mode="aspectFill"
-        wx:if="{{item.cover_preview_url || item.cover_image}}"
-      ></image>
-      <view class="bundle-cover bundle-cover-placeholder" wx:else>
-        <text class="bundle-cover-placeholder-text">特惠随心选</text>
+      <view class="bundle-cover-wrap">
+        <image
+          class="bundle-cover"
+          src="{{item.cover_preview_url || item.cover_image}}"
+          mode="aspectFill"
+          wx:if="{{item.cover_preview_url || item.cover_image}}"
+        ></image>
+        <view class="bundle-cover bundle-cover-placeholder" wx:else>
+          <text class="bundle-cover-placeholder-text">🎁</text>
+        </view>
+        <view class="bundle-cover-overlay">
+          <text class="bundle-price-tag">¥{{item.bundle_price}}</text>
+        </view>
       </view>
       <view class="bundle-info">
         <view class="bundle-tag-row">
           <text class="bundle-tag">固定套餐价</text>
-          <text class="bundle-tag bundle-tag-soft" wx:for="{{item.channel_tags}}" wx:key="index">{{item}}</text>
+          <text class="bundle-tag bundle-tag-soft" wx:for="{{item.channel_tags}}" wx:key="index" wx:for-item="tag">{{tag}}</text>
         </view>
         <text class="bundle-title">{{item.hero_title || item.title}}</text>
         <text class="bundle-subtitle" wx:if="{{item.hero_subtitle || item.subtitle}}">{{item.hero_subtitle || item.subtitle}}</text>
         <view class="bundle-meta">
-          <text class="bundle-price">¥{{item.bundle_price}}</text>
+          <view class="bundle-price-wrap">
+            <text class="bundle-price-symbol">¥</text>
+            <text class="bundle-price">{{item.bundle_price}}</text>
+          </view>
           <text class="bundle-count">{{item.group_count}} 组 / {{item.option_count}} 个候选</text>
         </view>
         <view class="bundle-entry">
@@ -56,4 +74,6 @@
       </view>
     </view>
   </view>
+
+  <view class="safe-bottom"></view>
 </view>

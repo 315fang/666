@@ -1,5 +1,3 @@
-var vibrateManager = require('../../../utils/vibrateManager');
-
 Component({
   properties: {
     disabled: { type: Boolean, value: false },
@@ -58,13 +56,11 @@ Component({
       var moveX = this.data.moveX;
       var threshold = this.data.threshold;
       var rightWidth = this.data.rightWidth;
-      var vib = vibrateManager.getVibrateManager();
 
       this.setData({ transitioning: true });
 
       if (moveX < -threshold) {
         this.setData({ moveX: -rightWidth, isOpen: true });
-        vib.short();
       } else {
         this.setData({ moveX: 0, isOpen: false });
       }

@@ -1,26 +1,49 @@
+/* 特惠随心选 — 2026 青春版 */
 .page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #f5f2ea 0%, #f7fafc 200rpx, #f7fafc 100%);
+  background: linear-gradient(180deg, #E8E0F0 0%, #F0EBF8 20%, #F7F5FF 100%);
   padding: 24rpx;
   box-sizing: border-box;
 }
 
+/* Hero 卡片 */
 .hero-card {
   margin-bottom: 24rpx;
-  padding: 30rpx 28rpx;
+  padding: 36rpx 32rpx;
   border-radius: 28rpx;
-  background: linear-gradient(135deg, #5b3716 0%, #c77b30 100%);
-  box-shadow: 0 12rpx 30rpx rgba(91, 55, 22, 0.18);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #a78bfa 100%);
+  box-shadow: 0 16rpx 40rpx rgba(102, 126, 234, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-glow {
+  position: absolute;
+  top: -80rpx;
+  right: -60rpx;
+  width: 240rpx;
+  height: 240rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  filter: blur(2rpx);
 }
 
 .hero-copy {
   display: flex;
   flex-direction: column;
   gap: 12rpx;
+  position: relative;
+  z-index: 1;
+}
+
+.hero-badge {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 2rpx;
 }
 
 .hero-title {
-  font-size: 42rpx;
+  font-size: 44rpx;
   font-weight: 700;
   color: #fff;
 }
@@ -31,24 +54,47 @@
   color: rgba(255, 255, 255, 0.84);
 }
 
+/* 状态页 */
 .state-wrap {
   padding: 140rpx 40rpx;
   text-align: center;
-  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.state-emoji {
+  font-size: 80rpx;
+  margin-bottom: 24rpx;
 }
 
 .state-title {
   display: block;
   font-size: 30rpx;
   font-weight: 600;
-  color: #0f172a;
+  color: #1c1917;
+  margin-bottom: 12rpx;
 }
 
 .state-desc {
   display: block;
-  margin-top: 16rpx;
   font-size: 24rpx;
   line-height: 1.7;
+  color: #a8a29e;
+}
+
+.loading-spinner {
+  width: 48rpx;
+  height: 48rpx;
+  border: 4rpx solid rgba(102, 126, 234, 0.15);
+  border-top: 4rpx solid #667eea;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 20rpx;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .retry-btn {
@@ -56,12 +102,14 @@
   margin: 32rpx auto 0;
   padding: 20rpx 0;
   border-radius: 999rpx;
-  background: #0f172a;
+  background: linear-gradient(135deg, #667eea, #764ba2);
   color: #fff;
   font-size: 26rpx;
   font-weight: 600;
+  box-shadow: 0 8rpx 24rpx rgba(102, 126, 234, 0.25);
 }
 
+/* 套餐列表 */
 .bundle-list {
   display: flex;
   flex-direction: column;
@@ -72,27 +120,48 @@
 .bundle-card {
   overflow: hidden;
   border-radius: 28rpx;
-  background: #fff;
-  box-shadow: 0 12rpx 30rpx rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8rpx 24rpx rgba(102, 126, 234, 0.06);
+  border: 1rpx solid rgba(255, 255, 255, 0.5);
+}
+
+.bundle-cover-wrap {
+  position: relative;
 }
 
 .bundle-cover {
   width: 100%;
   height: 360rpx;
-  background: #e2e8f0;
+  background: rgba(102, 126, 234, 0.06);
 }
 
 .bundle-cover-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #5b3716 0%, #d4a56c 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 .bundle-cover-placeholder-text {
-  font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.84);
-  font-weight: 600;
+  font-size: 64rpx;
+}
+
+.bundle-cover-overlay {
+  position: absolute;
+  bottom: 16rpx;
+  right: 16rpx;
+}
+
+.bundle-price-tag {
+  padding: 10rpx 20rpx;
+  border-radius: 999rpx;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 700;
 }
 
 .bundle-info {
@@ -113,8 +182,8 @@
   align-items: center;
   padding: 8rpx 16rpx;
   border-radius: 999rpx;
-  background: rgba(199, 123, 48, 0.12);
-  color: #8b5e34;
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
   font-size: 20rpx;
   font-weight: 600;
 }
@@ -127,13 +196,13 @@
 .bundle-title {
   font-size: 34rpx;
   line-height: 1.4;
-  color: #0f172a;
+  color: #1c1917;
   font-weight: 700;
 }
 
 .bundle-subtitle {
   font-size: 24rpx;
-  color: #64748b;
+  color: #78716c;
   line-height: 1.7;
 }
 
@@ -144,10 +213,22 @@
   gap: 16rpx;
 }
 
+.bundle-price-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 4rpx;
+}
+
+.bundle-price-symbol {
+  font-size: 24rpx;
+  color: #667eea;
+  font-weight: 600;
+}
+
 .bundle-price {
-  font-size: 40rpx;
+  font-size: 42rpx;
   font-weight: 700;
-  color: #b05a46;
+  color: #667eea;
 }
 
 .bundle-count {
@@ -161,17 +242,21 @@
   justify-content: space-between;
   margin-top: 8rpx;
   padding-top: 18rpx;
-  border-top: 1rpx solid #eef2f7;
+  border-top: 1rpx solid rgba(102, 126, 234, 0.08);
 }
 
 .bundle-entry-text {
   font-size: 24rpx;
-  color: #5b3716;
+  color: #667eea;
   font-weight: 600;
 }
 
 .bundle-entry-arrow {
   font-size: 30rpx;
-  color: #c77b30;
+  color: #764ba2;
   font-weight: 600;
+}
+
+.safe-bottom {
+  height: calc(40rpx + env(safe-area-inset-bottom));
 }

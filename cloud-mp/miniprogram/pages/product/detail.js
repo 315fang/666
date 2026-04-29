@@ -10,6 +10,12 @@ const { getMiniProgramConfig } = require('../../utils/miniProgramConfig');
 const { loadProduct, resolveDetailImageList, resolvePayableUnitPrice, buildSkuText, PRODUCT_PLACEHOLDER } = require('./productDetailData');
 const { refreshFavoriteState, toggleFavorite } = require('./productDetailFavorite');
 const {
+    normalizeProductLaunchOptions,
+    captureShareInvite,
+    buildProductSharePayload,
+    openProductPoster
+} = require('./productDetailShare');
+const {
     onSpecSelect,
     getMaxStock,
     onMinus,
@@ -242,10 +248,13 @@ Page({
         limitedSpotOriginalPrice: '',
         limitedSpotLockedSkuId: '',
         productCouponChips: [],
-        estimatedPoints: 0
+        estimatedPoints: 0,
+        showSharePanel: false,
+        showTimelineTip: false
     },
 
     onLoad(options) {
+        options = captureShareInvite(app, normalizeProductLaunchOptions(options || {}));
         // Get status bar height for nav
         const roleLevel = app.globalData.userInfo?.role_level || 0;
 
@@ -324,6 +333,7 @@ Page({
     },
 
     onShow() {
+        wx.showShareMenu({ withShareTicket: true, menus: ['shareAppMessage', 'shareTimeline'] });
         this.loadCartSummary();
         if (this.data.product && this.data.product.id != null) {
             this.refreshFavoriteState();
@@ -340,6 +350,10 @@ Page({
         if (this._benefitsRefreshTimer) {
             clearTimeout(this._benefitsRefreshTimer);
             this._benefitsRefreshTimer = null;
+        }
+        if (this._timelineTipTimer) {
+            clearTimeout(this._timelineTipTimer);
+            this._timelineTipTimer = null;
         }
         this._clearDetailSectionObserver();
     },
@@ -1365,21 +1379,45 @@ Page({
         wx.navigateTo({ url: '/pages/distribution/stock-logs' });
     },
 
+    onOpenSharePanel() {
+        this.setData({ showSharePanel: true, showTimelineTip: false });
+    },
+
+    onCloseSharePanel() {
+        if (this._timelineTipTimer) {
+            clearTimeout(this._timelineTipTimer);
+            this._timelineTipTimer = null;
+        }
+        this.setData({ showSharePanel: false, showTimelineTip: false });
+    },
+
+    onShareTimelineTap() {
+        wx.showShareMenu({ withShareTicket: true, menus: ['shareAppMessage', 'shareTimeline'] });
+        if (this._timelineTipTimer) clearTimeout(this._timelineTipTimer);
+        this.setData({ showTimelineTip: true });
+        this._timelineTipTimer = setTimeout(() => {
+            this._timelineTipTimer = null;
+            this.setData({ showTimelineTip: false });
+        }, 3600);
+    },
+
+    onCreateProductPoster() {
+        this.setData({ showSharePanel: false });
+        openProductPoster(this);
+    },
+
     // 分享商品详情
     onShareAppMessage() {
-        const { product } = this.data;
-        let path = `/pages/product/detail?id=${product.id}`;
-        if (this.data.limitedSpotCardId && this.data.limitedSpotOfferId) {
-            if (this.data.limitedSpotSource === 'limited_spot') {
-                path += `&limited_spot_card_id=${encodeURIComponent(this.data.limitedSpotCardId)}&limited_spot_offer_id=${encodeURIComponent(this.data.limitedSpotOfferId)}&limited_spot_mode=${encodeURIComponent(this.data.limitedSpotMode || 'money')}`;
-            } else {
-                path += `&limited_sale_slot_id=${encodeURIComponent(this.data.limitedSpotCardId)}&limited_sale_item_id=${encodeURIComponent(this.data.limitedSpotOfferId)}&limited_spot_mode=${encodeURIComponent(this.data.limitedSpotMode || 'money')}`;
-            }
-        }
+        this.setData({ showSharePanel: false });
+        return buildProductSharePayload(this);
+    },
+
+    onShareTimeline() {
+        const payload = buildProductSharePayload(this);
         return {
-            title: product.name,
-            path,
-            imageUrl: (product.images && product.images[0]) || ''
+            title: payload.title,
+            query: payload.query,
+            imageUrl: payload.imageUrl
         };
     }
 });
